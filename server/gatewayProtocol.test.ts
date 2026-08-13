@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowGatewayCommand, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, parseAllowedCommands } from "./gatewayProtocol";
+import { allowGatewayCommand, createPairingToken, defaultGatewayCommands, digestPairingToken, isGatewayGrantActive, isStrictlyIncreasingSequence, normalizeAurionCommand, parseAllowedCommands } from "./gatewayProtocol";
 
 describe("Aurion gateway protocol", () => {
   it("normalizes only explicit game commands", () => {
@@ -19,6 +19,22 @@ describe("Aurion gateway protocol", () => {
     expect(allowGatewayCommand(" w ", allowed)).toBe("W");
     expect(allowGatewayCommand("9", allowed)).toBeNull();
     expect(allowGatewayCommand("attack", allowed)).toBeNull();
+  });
+
+  it("accepts only a strict positive command sequence", () => {
+    expect(isStrictlyIncreasingSequence(1, undefined)).toBe(true);
+    expect(isStrictlyIncreasingSequence(2, 1)).toBe(true);
+    expect(isStrictlyIncreasingSequence(1, 1)).toBe(false);
+    expect(isStrictlyIncreasingSequence(1, 2)).toBe(false);
+    expect(isStrictlyIncreasingSequence(0, undefined)).toBe(false);
+    expect(isStrictlyIncreasingSequence(1.5, undefined)).toBe(false);
+  });
+
+  it("rejects revoked and expired pairing grants before transport creation", () => {
+    const now = new Date("2026-08-13T10:00:00.000Z");
+    expect(isGatewayGrantActive("active", new Date("2026-08-13T10:00:01.000Z"), now)).toBe(true);
+    expect(isGatewayGrantActive("revoked", new Date("2026-08-13T10:00:01.000Z"), now)).toBe(false);
+    expect(isGatewayGrantActive("active", new Date("2026-08-13T10:00:00.000Z"), now)).toBe(false);
   });
 
   it("creates non-empty opaque pairing secrets and stable digests", () => {

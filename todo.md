@@ -17,7 +17,7 @@
 - [ ] End-to-End testen: Als angemeldeter Nutzer eine Gateway-Session erstellen, den gültigen Bearer-Token am MCP-Endpunkt nutzen und die Annahme im Missions-HUD bestätigen.
 - [ ] Den End-to-End-Test über den verbundenen Browser des Nutzers statt über die Sandbox-Anmeldung durchführen.
 - [ ] Blocker beheben: Persönliche Browserkopplung ist derzeit nicht verfügbar; E2E-Test erst nach erfolgreicher Browserverbindung erneut anstoßen.
-- [ ] Serverseitig nachweisen, dass ausgeschlossene Befehle und nicht steigende Sequenzen abgewiesen werden.
+- [x] Serverseitig nachweisen, dass ausgeschlossene Befehle und nicht steigende Sequenzen abgewiesen werden.
 - [x] Unit-Test nachweisen: Auch formal gültige Befehle außerhalb der Sitzung-Allowlist werden vor der Datenbankannahme verworfen.
 - [ ] Widerruf und Ablauf verifizieren: Ein widerrufener oder abgelaufener Bearer-Token darf keine MCP-Befehle mehr annehmen oder ausliefern.
 - [x] Aktuellen MCP-Gateway-Stand nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit prüfen.
@@ -83,3 +83,5 @@
 - [ ] Saisonstart und -rotation in einer isolierten Testumgebung mit Snapshot-Readback nachweisen, ohne Produktivpunkte zu verändern.
 - [ ] Linear-Meilensteine und Projektbeschreibung per Readback mit der GitHub-PR- und Revisionsbindung ergänzen.
 - [x] Revisionsgebundene GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen oder die Roadmapaufgabe auf den belegten PR-Umfang präzisieren.
+- [ ] Transportnahen `/mcp`-Test ergänzen, der widerrufene und abgelaufene Bearer-Tokens mit HTTP 401 abweist und keine Befehlsannahme zulässt.
+- [ ] Sitzungsabruf-Test ergänzen, der den Entzug der Befehlsauslieferung über `pullCommands` nach Widerruf oder Ablauf nachweist.

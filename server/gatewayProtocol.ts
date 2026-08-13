@@ -16,6 +16,16 @@ export function allowGatewayCommand(value: string, allowedCommands: readonly str
   return normalized && allowedCommands.includes(normalized) ? normalized : null;
 }
 
+/** Reject duplicate, stale, non-positive, and non-integer command counters before persistence. */
+export function isStrictlyIncreasingSequence(sequence: number, previousSequence: number | undefined): boolean {
+  return Number.isSafeInteger(sequence) && sequence > 0 && (previousSequence === undefined || sequence > previousSequence);
+}
+
+/** A bearer grant is usable only while its persisted status is active and its expiry is still in the future. */
+export function isGatewayGrantActive(status: string, expiresAt: Date, now = new Date()): boolean {
+  return status === "active" && expiresAt.getTime() > now.getTime();
+}
+
 export function parseAllowedCommands(serialized: string): AurionCommand[] {
   try {
     const candidate = JSON.parse(serialized);

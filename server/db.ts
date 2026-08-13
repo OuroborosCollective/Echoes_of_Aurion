@@ -4,6 +4,7 @@ import { gatewayCommands, gatewaySessions, glbAssets, glbAssignments, guildMembe
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
+import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration } from "./adminProtocol";
 import { storagePut } from "./storage";
 
@@ -124,7 +125,8 @@ export async function getActiveGatewaySessionByTokenDigest(tokenDigest: string) 
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(gatewaySessions).where(and(eq(gatewaySessions.tokenDigest, tokenDigest), eq(gatewaySessions.status, "active"), gt(gatewaySessions.expiresAt, new Date()))).limit(1);
-  return result[0];
+  const session = result[0];
+  return session && isGatewayGrantActive(session.status, session.expiresAt) ? session : undefined;
 }
 
 export async function revokeGatewaySession(id: string, userId: number) {
@@ -137,7 +139,7 @@ export async function appendGatewayCommand(values: { gatewaySessionId: string; s
   const db = await getDb();
   if (!db) throw new Error("Gateway database is not available");
   const latest = await db.select({ sequence: gatewayCommands.sequence }).from(gatewayCommands).where(eq(gatewayCommands.gatewaySessionId, values.gatewaySessionId)).orderBy(desc(gatewayCommands.sequence)).limit(1);
-  if (latest[0] && values.sequence <= latest[0].sequence) return { accepted: false as const, reason: "sequence_not_increasing" };
+  if (!isStrictlyIncreasingSequence(values.sequence, latest[0]?.sequence)) return { accepted: false as const, reason: "sequence_not_increasing" };
   await db.insert(gatewayCommands).values({ id: `agc_${crypto.randomUUID().replaceAll("-", "")}`, ...values });
   return { accepted: true as const };
 }
