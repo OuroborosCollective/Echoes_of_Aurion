@@ -1,9 +1,11 @@
-import { and, desc, eq, gt, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gt, gte, like, lte, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { gatewayCommands, gatewaySessions, glbAssets, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, monetizationPlacements, playerProfiles, progressionLedger, treasureClasses, users, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
+import { gatewayCommands, gatewaySessions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, monetizationPlacements, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, treasureClasses, users, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
+import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration } from "./adminProtocol";
+import { storagePut } from "./storage";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -291,6 +293,24 @@ export async function listSetBonusesForUser(userId: number) {
   });
 }
 
+export async function listInventoryForUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const items = await db.select().from(itemInstances).where(eq(itemInstances.ownerUserId, userId)).orderBy(desc(itemInstances.createdAt)).limit(100);
+  return items.map(item => {
+    let affixes: LootAffix[] = [];
+    try {
+      const parsed: unknown = JSON.parse(item.affixesJson);
+      if (Array.isArray(parsed)) {
+        affixes = parsed.filter((affix): affix is LootAffix => Boolean(affix) && typeof affix === "object" && !Array.isArray(affix) && typeof (affix as { key?: unknown }).key === "string" && ((affix as { slot?: unknown }).slot === "prefix" || (affix as { slot?: unknown }).slot === "suffix") && Boolean((affix as { stats?: unknown }).stats) && typeof (affix as { stats: unknown }).stats === "object");
+      }
+    } catch {
+      affixes = [];
+    }
+    return { ...item, affixes };
+  });
+}
+
 export async function recordValidatedWeaponEvent(values: { userId: number; expeditionKey: string; weaponTrack: WeaponTrack; actionKey: string; xpGranted: number; idempotencyKey: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
@@ -320,4 +340,231 @@ export async function listMonetizationPlacements() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(monetizationPlacements).orderBy(monetizationPlacements.placementKey).limit(100);
+}
+
+type AssetType = "character" | "enemy" | "weapon" | "armor" | "arena";
+type AssetReviewStatus = "approved" | "rejected" | "archived";
+type MonetizationKind = "banner" | "offerwall" | "vote_list";
+
+export async function listAdminPlayers(values: { limit: number; query?: string }) {
+  const db = await getDb();
+  if (!db) return [];
+  const query = values.query?.trim();
+  const base = db.select({
+    userId: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    lastSignedIn: users.lastSignedIn,
+    level: playerProfiles.level,
+    totalXp: playerProfiles.totalXp,
+    aurionPoints: playerProfiles.aurionPoints,
+    victories: playerProfiles.victories,
+    selectedClass: playerProfiles.selectedClass,
+    guildName: guilds.name,
+    guildTag: guilds.tag,
+    guildRole: guildMemberships.role,
+  }).from(users)
+    .leftJoin(playerProfiles, eq(playerProfiles.userId, users.id))
+    .leftJoin(guildMemberships, and(eq(guildMemberships.userId, users.id), eq(guildMemberships.status, "active")))
+    .leftJoin(guilds, eq(guilds.id, guildMemberships.guildId));
+  const filtered = query ? base.where(or(like(users.name, `%${query}%`), like(users.email, `%${query}%`))) : base;
+  return filtered.orderBy(desc(users.lastSignedIn)).limit(values.limit);
+}
+
+export async function getGlbAsset(assetId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(glbAssets).where(eq(glbAssets.id, assetId)).limit(1);
+  return result[0];
+}
+
+export async function uploadGlbAsset(values: { displayName: string; assetType: AssetType; contentBase64: string; createdByUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const payload = decodeValidatedGlbBase64(values.contentBase64);
+  const existing = await db.select().from(glbAssets).where(eq(glbAssets.sha256, payload.sha256)).limit(1);
+  if (existing[0]) return { asset: existing[0], deduplicated: true as const };
+
+  const stored = await storagePut(`aurion/glb/${values.createdByUserId}/${payload.sha256}.glb`, payload.bytes, "model/gltf-binary");
+  const id = newEndgameId("glb");
+  await db.insert(glbAssets).values({
+    id,
+    displayName: values.displayName,
+    assetType: values.assetType,
+    storageKey: stored.key,
+    storageUrl: stored.url,
+    sha256: payload.sha256,
+    bytes: payload.bytes.length,
+    status: "draft",
+    createdByUserId: values.createdByUserId,
+  });
+  const asset = await getGlbAsset(id);
+  if (!asset) throw new Error("GLB metadata readback failed");
+  return { asset, deduplicated: false as const };
+}
+
+export async function setGlbAssetReview(values: { assetId: string; status: AssetReviewStatus; reviewedByUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const existing = await getGlbAsset(values.assetId);
+  if (!existing) throw new Error("GLB asset does not exist");
+  await db.update(glbAssets).set({ status: values.status, reviewedByUserId: values.reviewedByUserId, reviewedAt: new Date() }).where(eq(glbAssets.id, values.assetId));
+  const asset = await getGlbAsset(values.assetId);
+  if (!asset || asset.status !== values.status || asset.reviewedByUserId !== values.reviewedByUserId) throw new Error("GLB review readback failed");
+  return asset;
+}
+
+export async function listGlbAssignments() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: glbAssignments.id,
+    assetId: glbAssignments.assetId,
+    targetType: glbAssignments.targetType,
+    targetKey: glbAssignments.targetKey,
+    active: glbAssignments.active,
+    createdAt: glbAssignments.createdAt,
+    displayName: glbAssets.displayName,
+    assetStatus: glbAssets.status,
+  }).from(glbAssignments).innerJoin(glbAssets, eq(glbAssets.id, glbAssignments.assetId)).orderBy(desc(glbAssignments.createdAt)).limit(100);
+}
+
+export async function assignApprovedGlbAsset(values: { assetId: string; targetType: AssetType; targetKey: string; assignedByUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const asset = await getGlbAsset(values.assetId);
+  if (!asset || asset.status !== "approved") throw new Error("Only approved GLB assets can be assigned");
+  if (asset.assetType !== values.targetType) throw new Error("GLB asset type does not match assignment target");
+
+  const assignmentId = newEndgameId("assign");
+  await db.transaction(async tx => {
+    await tx.update(glbAssignments).set({ active: 0 }).where(and(eq(glbAssignments.targetType, values.targetType), eq(glbAssignments.targetKey, values.targetKey), eq(glbAssignments.active, 1)));
+    await tx.insert(glbAssignments).values({ id: assignmentId, assetId: values.assetId, targetType: values.targetType, targetKey: values.targetKey, active: 1, assignedByUserId: values.assignedByUserId });
+  });
+  const assignment = (await listGlbAssignments()).find(entry => entry.id === assignmentId);
+  if (!assignment || assignment.active !== 1) throw new Error("GLB assignment readback failed");
+  return assignment;
+}
+
+export async function upsertMonetizationPlacement(values: { placementKey: string; kind: MonetizationKind; providerLabel: string; active: boolean; consentRequired: boolean; configurationJson: string; updatedByUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const configurationJson = normalizeSafePlacementConfiguration(values.configurationJson);
+  const existing = await db.select().from(monetizationPlacements).where(eq(monetizationPlacements.placementKey, values.placementKey)).limit(1);
+  const update = { kind: values.kind, providerLabel: values.providerLabel, active: values.active ? 1 : 0, consentRequired: values.consentRequired ? 1 : 0, configurationJson, updatedByUserId: values.updatedByUserId };
+  if (existing[0]) {
+    await db.update(monetizationPlacements).set(update).where(eq(monetizationPlacements.id, existing[0].id));
+  } else {
+    await db.insert(monetizationPlacements).values({ id: newEndgameId("placement"), placementKey: values.placementKey, ...update });
+  }
+  const persisted = await db.select().from(monetizationPlacements).where(eq(monetizationPlacements.placementKey, values.placementKey)).limit(1);
+  if (!persisted[0] || persisted[0].configurationJson !== configurationJson) throw new Error("Monetization placement readback failed");
+  return persisted[0];
+}
+
+type UserRole = "user" | "admin";
+
+export async function setManagedUserRole(values: { actorUserId: number; targetUserId: number; role: UserRole }) {
+  if (values.actorUserId === values.targetUserId) throw new Error("Administrators cannot change their own role");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const target = await db.select().from(users).where(eq(users.id, values.targetUserId)).limit(1);
+  if (!target[0]) throw new Error("Managed user does not exist");
+  if (target[0].openId === ENV.ownerOpenId) throw new Error("The project owner role is immutable through this route");
+  await db.update(users).set({ role: values.role }).where(eq(users.id, values.targetUserId));
+  const readback = await db.select().from(users).where(eq(users.id, values.targetUserId)).limit(1);
+  if (!readback[0] || readback[0].role !== values.role) throw new Error("Managed user role readback failed");
+  return readback[0];
+}
+
+export async function listAdminLiveLeaderboard(limit: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    userId: playerProfiles.userId,
+    name: users.name,
+    email: users.email,
+    level: playerProfiles.level,
+    seasonPoints: playerProfiles.seasonPoints,
+    victories: playerProfiles.victories,
+    selectedClass: playerProfiles.selectedClass,
+  }).from(playerProfiles).leftJoin(users, eq(users.id, playerProfiles.userId)).orderBy(desc(playerProfiles.seasonPoints), desc(playerProfiles.victories), desc(playerProfiles.level)).limit(limit);
+}
+
+export async function listSeasons(limit: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(seasons).orderBy(desc(seasons.startsAt)).limit(limit);
+}
+
+async function getSeasonById(seasonId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(seasons).where(eq(seasons.id, seasonId)).limit(1);
+  return result[0];
+}
+
+export async function listSeasonSnapshots(seasonId: string, limit: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    userId: seasonLeaderboardSnapshots.userId,
+    name: users.name,
+    level: seasonLeaderboardSnapshots.level,
+    seasonPoints: seasonLeaderboardSnapshots.seasonPoints,
+    victories: seasonLeaderboardSnapshots.victories,
+    selectedClass: seasonLeaderboardSnapshots.selectedClass,
+    capturedAt: seasonLeaderboardSnapshots.capturedAt,
+  }).from(seasonLeaderboardSnapshots).leftJoin(users, eq(users.id, seasonLeaderboardSnapshots.userId)).where(eq(seasonLeaderboardSnapshots.seasonId, seasonId)).orderBy(desc(seasonLeaderboardSnapshots.seasonPoints), desc(seasonLeaderboardSnapshots.victories), desc(seasonLeaderboardSnapshots.level)).limit(limit);
+}
+
+export async function startSeason(values: { seasonKey: string; displayName: string; actorUserId: number; idempotencyKey: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const prior = await db.select().from(seasonTransitionReceipts).where(eq(seasonTransitionReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+  if (prior[0]) {
+    const season = await getSeasonById(prior[0].toSeasonId);
+    if (!season) throw new Error("Prior season transition has no readback season");
+    return { applied: false as const, season };
+  }
+  const seasonId = newEndgameId("season");
+  await db.transaction(async tx => {
+    const active = await tx.select().from(seasons).where(eq(seasons.status, "active")).limit(1);
+    if (active[0]) throw new Error("An active season already exists; use a confirmed rotation");
+    await tx.insert(seasons).values({ id: seasonId, seasonKey: values.seasonKey, displayName: values.displayName, createdByUserId: values.actorUserId });
+    await tx.insert(seasonTransitionReceipts).values({ id: newEndgameId("seasonrec"), action: "start", toSeasonId: seasonId, actorUserId: values.actorUserId, idempotencyKey: values.idempotencyKey });
+  });
+  const season = await getSeasonById(seasonId);
+  if (!season || season.status !== "active") throw new Error("Season start readback failed");
+  return { applied: true as const, season };
+}
+
+export async function rotateSeason(values: { confirmedSeasonKey: string; nextSeasonKey: string; nextDisplayName: string; actorUserId: number; idempotencyKey: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const prior = await db.select().from(seasonTransitionReceipts).where(eq(seasonTransitionReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+  if (prior[0]) {
+    const season = await getSeasonById(prior[0].toSeasonId);
+    if (!season) throw new Error("Prior season transition has no readback season");
+    return { applied: false as const, season, snapshotsCaptured: 0 };
+  }
+  const nextSeasonId = newEndgameId("season");
+  let snapshotsCaptured = 0;
+  await db.transaction(async tx => {
+    const active = await tx.select().from(seasons).where(eq(seasons.status, "active")).limit(1);
+    if (!active[0] || active[0].seasonKey !== values.confirmedSeasonKey) throw new Error("Confirmed active season does not match the current server state");
+    const profiles = await tx.select({ userId: playerProfiles.userId, level: playerProfiles.level, seasonPoints: playerProfiles.seasonPoints, victories: playerProfiles.victories, selectedClass: playerProfiles.selectedClass }).from(playerProfiles);
+    if (profiles.length) {
+      await tx.insert(seasonLeaderboardSnapshots).values(profiles.map(profile => ({ id: newEndgameId("seasonsnap"), seasonId: active[0]!.id, ...profile })));
+    }
+    snapshotsCaptured = profiles.length;
+    await tx.update(seasons).set({ status: "closed", endsAt: new Date(), closedByUserId: values.actorUserId }).where(eq(seasons.id, active[0].id));
+    await tx.insert(seasons).values({ id: nextSeasonId, seasonKey: values.nextSeasonKey, displayName: values.nextDisplayName, createdByUserId: values.actorUserId });
+    await tx.update(playerProfiles).set({ seasonPoints: 0 });
+    await tx.insert(seasonTransitionReceipts).values({ id: newEndgameId("seasonrec"), action: "rotate", fromSeasonId: active[0].id, toSeasonId: nextSeasonId, actorUserId: values.actorUserId, idempotencyKey: values.idempotencyKey });
+  });
+  const season = await getSeasonById(nextSeasonId);
+  if (!season || season.status !== "active") throw new Error("Season rotation readback failed");
+  return { applied: true as const, season, snapshotsCaptured };
 }

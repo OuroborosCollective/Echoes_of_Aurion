@@ -6,6 +6,7 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_
 import * as db from "./db";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
 import { isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
+import { MAX_GLB_BASE64_CHARS } from "./adminProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -49,7 +50,13 @@ export const appRouter = router({
     }),
   }),
   player: router({
-    me: protectedProcedure.query(async ({ ctx }) => ({ profile: await db.getOrCreatePlayerProfile(ctx.user.id), weaponMasteries: await db.listWeaponMasteries(ctx.user.id), guild: await db.getActiveGuildForUser(ctx.user.id) })),
+    me: protectedProcedure.query(async ({ ctx }) => ({
+      profile: await db.getOrCreatePlayerProfile(ctx.user.id),
+      weaponMasteries: await db.listWeaponMasteries(ctx.user.id),
+      guild: await db.getActiveGuildForUser(ctx.user.id),
+      inventory: await db.listInventoryForUser(ctx.user.id),
+      setBonuses: await db.listSetBonusesForUser(ctx.user.id),
+    })),
     chooseClass: protectedProcedure.input(z.object({ playerClass: z.enum(["vanguard", "seer", "warden"]) })).mutation(async ({ ctx, input }) => {
       if (!isPlayerClass(input.playerClass)) throw new Error("Unsupported class");
       return db.choosePlayerClass(ctx.user.id, input.playerClass);
@@ -63,6 +70,17 @@ export const appRouter = router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
   }),
   admin: router({
+    players: router({
+      list: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25), query: z.string().trim().max(64).regex(/^[A-Za-z0-9@._ -]*$/).optional() }).optional()).query(({ input }) => db.listAdminPlayers(input ?? { limit: 25 })),
+      setRole: adminProcedure.input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin"]) })).mutation(({ ctx, input }) => db.setManagedUserRole({ actorUserId: ctx.user.id, targetUserId: input.userId, role: input.role })),
+    }),
+    rankings: router({
+      live: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listAdminLiveLeaderboard(input?.limit ?? 25)),
+      seasons: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listSeasons(input?.limit ?? 25)),
+      snapshots: adminProcedure.input(z.object({ seasonId: z.string().min(8).max(64), limit: z.number().int().min(1).max(100).default(50) })).query(({ input }) => db.listSeasonSnapshots(input.seasonId, input.limit)),
+      startSeason: adminProcedure.input(z.object({ seasonKey: z.string().trim().min(3).max(64).regex(/^[a-z0-9_-]+$/), displayName: z.string().trim().min(3).max(120), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => db.startSeason({ ...input, actorUserId: ctx.user.id })),
+      rotateSeason: adminProcedure.input(z.object({ confirmedSeasonKey: z.string().trim().min(3).max(64).regex(/^[a-z0-9_-]+$/), nextSeasonKey: z.string().trim().min(3).max(64).regex(/^[a-z0-9_-]+$/), nextDisplayName: z.string().trim().min(3).max(120), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => db.rotateSeason({ ...input, actorUserId: ctx.user.id })),
+    }),
     progression: router({
       grant: adminProcedure.input(z.object({ userId: z.number().int().positive(), kind: z.enum(["xp", "points", "victory", "weapon_xp"]), delta: z.number().int().positive().max(100000), source: z.string().trim().min(3).max(64), reason: z.string().trim().min(3).max(240), idempotencyKey: z.string().trim().min(12).max(128), weaponTrack: z.enum(["blade", "staff", "spear", "focus"]).optional() })).mutation(async ({ input }) => {
         const weaponTrack = input.weaponTrack && isWeaponTrack(input.weaponTrack) ? input.weaponTrack as WeaponTrack : undefined;
@@ -74,9 +92,14 @@ export const appRouter = router({
     assets: router({
       list: adminProcedure.query(() => db.listGlbAssets()),
       createMetadata: adminProcedure.input(z.object({ displayName: z.string().trim().min(3).max(120), assetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), storageKey: z.string().trim().min(5).max(512), storageUrl: z.string().trim().min(5).max(768), sha256: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().positive().max(100_000_000) })).mutation(({ ctx, input }) => db.createGlbAssetMetadata({ ...input, createdByUserId: ctx.user.id })),
+      upload: adminProcedure.input(z.object({ displayName: z.string().trim().min(3).max(120), assetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), contentBase64: z.string().min(16).max(MAX_GLB_BASE64_CHARS) })).mutation(({ ctx, input }) => db.uploadGlbAsset({ ...input, createdByUserId: ctx.user.id })),
+      setReview: adminProcedure.input(z.object({ assetId: z.string().min(8).max(64), status: z.enum(["approved", "rejected", "archived"]) })).mutation(({ ctx, input }) => db.setGlbAssetReview({ ...input, reviewedByUserId: ctx.user.id })),
+      listAssignments: adminProcedure.query(() => db.listGlbAssignments()),
+      assign: adminProcedure.input(z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().trim().min(2).max(120).regex(/^[A-Za-z0-9_-]+$/) })).mutation(({ ctx, input }) => db.assignApprovedGlbAsset({ ...input, assignedByUserId: ctx.user.id })),
     }),
     monetization: router({
       list: adminProcedure.query(() => db.listMonetizationPlacements()),
+      upsert: adminProcedure.input(z.object({ placementKey: z.string().trim().min(3).max(96).regex(/^[a-z0-9_-]+$/), kind: z.enum(["banner", "offerwall", "vote_list"]), providerLabel: z.string().trim().min(2).max(96), active: z.boolean(), consentRequired: z.boolean(), configurationJson: z.string().trim().min(2).max(12_000) })).mutation(({ ctx, input }) => db.upsertMonetizationPlacement({ ...input, updatedByUserId: ctx.user.id })),
     }),
     lootCatalog: router({
       listSetBonusesForUser: adminProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ input }) => db.listSetBonusesForUser(input.userId)),

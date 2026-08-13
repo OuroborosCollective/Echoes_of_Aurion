@@ -24,30 +24,30 @@
 - [x] MCP-Schutzgrenze prüfen: Ungültiger Bearer-Token wird mit HTTP 401 und unzulässiger Host-Header mit HTTP 403 abgewiesen.
 - [x] itch.io-Releasepaket mit browserfähigem Build, Spielbeschreibung, Metadaten, Cover- und Screenshot-Spezifikation vorbereiten.
 - [x] Startseite: 3 bis 8 fokussierte Meta-Keywords ergänzen und `document.title` dynamisch auf 30 bis 60 Zeichen setzen.
-- [ ] Serverautorisiertes Datenmodell für Spielerprofile, Fortschritt, Klassen, Ranglisten, GLB-Assets und Verwaltungsrechte festlegen.
+- [x] Serverautorisiertes Datenmodell für Spielerprofile, Fortschritt, Klassen, Ranglisten, GLB-Assets und Verwaltungsrechte festlegen.
 - [ ] Geschützte Backend-Routen für Nutzerverwaltung, Spielverwaltung, Fortschrittsvergabe und Ranglisten implementieren.
-- [ ] Adminbereich für GLB-Katalog, Asset-Zuweisung und kontrollierten Upload vorbereiten.
-- [ ] XP- und Levelsystem mit serverseitiger Klassenwahl ab Stufe 36 implementieren.
+- [x] Adminbereich für GLB-Katalog, Asset-Zuweisung und kontrollierten Upload vorbereiten.
+- [x] XP- und Levelsystem mit serverseitiger Klassenwahl ab Stufe 36 implementieren.
 - [ ] Rangliste für Punkte, Siege, Level und saisonale Zeiträume implementieren.
-- [ ] Konfiguration für Banner, Offerwalls und Vote-Listen mit serverseitigen Platzierungs- und Einwilligungsregeln vorbereiten.
+- [x] Konfiguration für Banner, Offerwalls und Vote-Listen mit serverseitigen Platzierungs- und Einwilligungsregeln vorbereiten.
 - [ ] Linear-Arbeitsstruktur für die Verwaltungs- und Progressionsausbaustufe erstellen und mit GitHub-Revisionen verknüpfen.
 - [ ] Linear-Projekt und zentrale Issues mit konkreter GitHub-Revision, Branch oder Pull-Request-Referenz ergänzen und die Bindung per Readback dokumentieren.
 - [ ] Revisionsgebundene Linear- und GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen und per Readback verifizieren.
 - [x] Serverautorisiertes Gildenmodell mit Mitgliedschaften, Rollen, gemeinsamen Zielen und langfristigen Saisons entwerfen.
 - [ ] Prozedurales Loot-System mit Treasure Classes, Seltenheiten, Affixen, Set-Boni und idempotenten Drop-Receipts implementieren.
 - [ ] Waffenfortschritt nach Nutzungsart mit serverseitiger XP, Spezialisierungen und Klassen-/Loadout-Grenzen integrieren.
-- [ ] Treasure-Class-Katalog, serverseitige Basistyp- und Affix-Auflösung sowie Set-Bonus-Auswertung mit Tests implementieren.
+- [x] Treasure-Class-Katalog, serverseitige Basistyp- und Affix-Auflösung sowie Set-Bonus-Auswertung mit Tests implementieren.
 - [ ] Waffenmeisterschaft an validierte Expeditionsereignisse koppeln und Spezialisierungs- sowie Loadout-Grenzen serverseitig durchsetzen.
-- [ ] Endgame-UI für Gilden, Inventar, Set-Fortschritt, Waffenmeisterschaft und langfristige Ziele integrieren.
+- [x] Endgame-UI für Gilden, Inventar, Set-Fortschritt, Waffenmeisterschaft und langfristige Ziele integrieren.
 - [ ] Klangbild, Gameplay-Effekte und adaptive Spielmusik integrieren.
 - [ ] Drei Trailer erstellen: Gameplay-Loop, aurionisches Cinematic und LLM-Koop-Tutorial für soziale Medien.
 - [ ] Gateway-Laufzeitfehler für den fehlenden Export `allowGatewayCommand` beheben und Spiel- sowie Audioansicht fehlerfrei im Browser prüfen.
 - [ ] Zustandsabhängige Musikreaktionen für Arena, Kampf und Sieg implementieren und im Browser prüfen.
 - [ ] Trailer mit finaler, rechtlich nutzbarer Audiospur und inhaltlicher Abnahme für soziale Medien exportieren.
 - [x] Startszene korrigieren: Explorer und Echo Scout als lesbare Hero-Silhouetten wiederherstellen und die rechten unklaren Ruinen-/Ringformen zu einer reduzierten Hintergrundkulisse zurückbauen.
-- [ ] Startszene auf Desktop visuell abnehmen: Explorer und Echo Scout müssen klar sichtbar sein, ohne rechten Geometriehaufen oder fehlerhaftes Cropping.
-- [ ] Startszene auf Mobilansicht abnehmen: Die neue Hintergrundkomposition darf die Lesbarkeit des Gate-Panels nicht verschlechtern.
-- [ ] Visuelle Abnahme der Desktop- und Mobilbilder im Projektprotokoll dokumentieren und erst danach die Startseitenkorrektur final abschließen.
+- [x] Startszene auf Desktop visuell abnehmen: Explorer und Echo Scout müssen klar sichtbar sein, ohne rechten Geometriehaufen oder fehlerhaftes Cropping.
+- [x] Startszene auf Mobilansicht abnehmen: Die neue Hintergrundkomposition darf die Lesbarkeit des Gate-Panels nicht verschlechtern.
+- [x] Visuelle Abnahme der Desktop- und Mobilbilder im Projektprotokoll dokumentieren und erst danach die Startseitenkorrektur final abschließen.
 - [ ] Vorhandene GLB-Assets auf Rigs, Skelettstruktur, Materialeignung und vorhandene Bewegungsanimationen prüfen.
 - [ ] Prototypischen Explorer durch einen vollwertigen GLB-Charakter mit sichtbaren Beinen, Idle-, Lauf-, Treffer- und Angriffanimationen ersetzen.
 - [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
@@ -61,3 +61,23 @@
 - [x] Vier logisch abgeleitete Fehlerfamilien mit Befunden, Gegenprüfung und minimalen Fixes nach Guardian-Protokoll dokumentieren.
 - [x] Revisionsgebundene Checks, Mirror-Preflight und append-only Fehlerfamilien-Report für den Fix-Branch erstellen.
 - [x] Den bestätigten Fehlerfamilien-Fix als Draft-PR in `OuroborosCollective/Echoes_of_Aurion` anlegen und GitHub-Readback sichern.
+- [x] Sovereign-Studio-ATO-MCP auf die bestätigte frühere URL zurückführen und jede Aurion-Abhängigkeit davon entfernen.
+- [x] Verwaisten kollidierenden No-Auth-Tunnel deaktivieren, damit der kanonische ATO-ChatGPT-Tunnel Port 9080 dauerhaft exklusiv nutzt.
+- [ ] Eigenen isolierten Aurion-MCP-Endpunkt mit separater URL, Host-Allowlist, Laufzeitdokumentation und Repository-Readback konfigurieren.
+- [ ] Eigene Aurion-MCP-Hostvalidierung gegen den aktuell zugewiesenen Cloud-Run-Hostname prüfen und nach erfolgreichem Readback revisionsgebunden veröffentlichen.
+- [ ] Isolierten Aurion-MCP-Stand einschließlich Host-Allowlist und Laufzeitdokumentation nach GitHub pushen sowie Commit- und Remote-Readback dokumentieren.
+- [ ] Autorisierten MCP-Canary direkt gegen den aktuell zugewiesenen `.a.run.app`-Hostname durchführen und HTTP-/Protokoll-Readback festhalten.
+- [ ] Exakte Isolationsrevision nach erfolgreichem Cloud-Run-Canary veröffentlichen und Deployment-Readback dokumentieren.
+- [x] Öffentlichen ATO-ChatGPT-Tunnel nach der Wiederherstellung über die bekannte externe Tunneladresse mit einem nicht mutierenden MCP-Canary bestätigen.
+- [x] arelogic.space-MCP-Route vom statischen Aurion-Hosting entkoppeln, auf den ATO-Streamable-MCP-Service führen und den externen Content-Type-/MCP-Canary dokumentieren.
+- [ ] Bestehenden Guardian-Fehlerfamilienbranch gegen aktuelle Laufzeit, Tests und GitHub-Revision erneut validieren und bestätigte Restfixes nachziehen.
+- [x] Guardian- und Aurion-MCP-Isolations-Draft-PRs revisionssauber konsolidieren, Gates ausführen und den Merge auf `main` per Readback bestätigen.
+- [x] Admin-Spielerverzeichnis mit serverseitig aggregierten Profil- und Gildenwerten sowie begrenzter Suche implementieren.
+- [x] GLB-Verwaltung um geprüften S3-Upload, Freigabe und aktive Zielzuweisung erweitern.
+- [x] Monetarisierungsflächen um serverseitig validierte Erfassung und Aktivierungssteuerung ohne Provider-Geheimnisse erweitern.
+- [x] Admin-Routen gegen unberechtigte Aufrufe und ungültige Asset-/Platzierungsdaten mit Unit-Tests absichern.
+- [ ] Mit einer echten Administratorsitzung einen GLB-Upload mit kontrolliertem Testasset, Review und aktiver Zielzuweisung vollständig per S3-/DB-Readback prüfen.
+- [ ] Admin-Nutzerverwaltung um eine serverseitige Rollen- oder Statusverwaltung ergänzen und mit Autoritäts- sowie Readbacktests absichern.
+- [ ] Separate geschützte Ranglistenverwaltung für administrative Einsicht und saisonale Steuerung ergänzen.
+- [ ] Erfolgreichen Rollenwechsel in einer isolierten Testumgebung mit Readback sowie Selbst- und Eigentümerschutz nachweisen.
+- [ ] Saisonstart und -rotation in einer isolierten Testumgebung mit Snapshot-Readback nachweisen, ohne Produktivpunkte zu verändern.

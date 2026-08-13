@@ -32,9 +32,15 @@ describe("endgame protocol", () => {
     expect(loot.affixes.every(affix => affix.slot === "prefix" || affix.slot === "suffix")).toBe(true);
   });
 
+  it("keeps the archive and solarium treasure pools bounded to their canonical bases", () => {
+    expect(["archive_staff", "warden_focus", "asterion_blade"]).toContain(resolveLoot("archive_t3_weapons", 200, 31, 0).baseItemKey);
+    expect(["solarium_blade", "sunspike_spear", "ember_focus"]).toContain(resolveLoot("solarium_t4_weapons", 200, 31, 0).baseItemKey);
+  });
+
   it("calculates a set bonus only when enough owned pieces are present", () => {
     expect(setBonusForOwnedPieces("asterion_regalia", ["aurion_spear"])).toEqual({});
     expect(setBonusForOwnedPieces("asterion_regalia", ["aurion_spear", "asterion_blade"])).toMatchObject({ resonance: 6, guard: 4 });
+    expect(setBonusForOwnedPieces("archive_vigil", ["archive_staff", "warden_focus", "ember_focus"])).toMatchObject({ resonance: 12, guard: 8, echoPower: 6 });
   });
 
   it("enforces class weapon boundaries after specialization", () => {
