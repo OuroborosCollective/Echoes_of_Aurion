@@ -244,7 +244,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const keys = new Set<string>(); const pulses: Pulse[] = [];
   let started = false; let elapsed = 0; let arenaIndex = 0; let sentinelHp = arenas[0].health; let explorerHp = 100; let echoHp = 100;
   let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let lastStateEmit = -1;
-  let explorerAttackUntil = 0; let explorerHurtUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0;
+  let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0;
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
@@ -302,6 +302,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     const code = (event as CustomEvent<{ code: string }>).detail.code.toUpperCase(); const distance = 0.95;
     if (code === "W") explorer.position.z -= distance; if (code === "S") explorer.position.z += distance; if (code === "A") explorer.position.x -= distance; if (code === "D") explorer.position.x += distance;
     explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z));
+    explorerMotionUntil = elapsed + 0.22;
   };
   const onHumanAction = (): void => { explorerAttackUntil = elapsed + 0.34; dealSentinel(17, "Speersignal des Explorers", Color3.FromHexString("#F5D995")); };
   const onCommand = (event: Event): void => {
@@ -327,7 +328,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     }
     const follow = echoTarget.subtract(echo.position);
     if (follow.lengthSquared() > 0.02) { follow.normalize().scaleInPlace(dt * 2.9); echo.position.addInPlace(follow); echo.rotation.y = Math.atan2(follow.x, follow.z); }
-    const explorerMoving = keys.size > 0 ? 1 : 0;
+    const explorerMoving = keys.size > 0 || elapsed < explorerMotionUntil ? 1 : 0;
     animateExplorer(explorerRig, elapsed, explorerMoving, elapsed < explorerAttackUntil, elapsed < explorerHurtUntil);
     animateEcho(echoRig, elapsed, follow.lengthSquared() > 0.03, elapsed < echoActionUntil, elapsed < echoHurtUntil);
     animateSentinel(sentinel, elapsed, elapsed < sentinelAttackUntil, elapsed < sentinelHurtUntil);

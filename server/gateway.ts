@@ -1,12 +1,10 @@
 import type { Express, Request, Response } from "express";
-import { hostHeaderValidation } from "@modelcontextprotocol/express";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import * as db from "./db";
 import { allowGatewayCommand, digestPairingToken, parseAllowedCommands } from "./gatewayProtocol";
-
-const allowedHosts = ["arelogic.space", "aurion3d-6hpapr2g.manus.space", "localhost", "localhost:3000", "127.0.0.1", "127.0.0.1:3000"];
+import { resolveApprovedGatewayHost } from "./gatewayHost";
 
 function bearerToken(request: Request): string | null {
   const header = request.header("authorization");
@@ -44,13 +42,21 @@ function createMcpServer(grant: { id: string; providerLabel: string; allowedComm
 }
 
 export function registerMcpGateway(app: Express) {
-  app.use("/mcp", hostHeaderValidation(allowedHosts));
+  app.use("/mcp", (request, response, next) => {
+    const approvedHost = resolveApprovedGatewayHost(request.headers.host, request.header("x-forwarded-host"));
+    if (!approvedHost) {
+      response.status(403).json({ jsonrpc: "2.0", error: { code: -32000, message: `Invalid Host: ${request.headers.host ?? ""}` }, id: null });
+      return;
+    }
+    response.locals.approvedGatewayHost = approvedHost;
+    next();
+  });
   app.all("/mcp", async (request: Request, response: Response) => {
     const token = bearerToken(request);
     const grant = token ? await db.getActiveGatewaySessionByTokenDigest(digestPairingToken(token)) : undefined;
     if (!grant) {
       const protocol = request.header("x-forwarded-proto") ?? request.protocol;
-      const publicGatewayUrl = `${protocol}://${request.get("host") ?? "arelogic.space"}/mcp`;
+      const publicGatewayUrl = `${protocol}://${String(response.locals.approvedGatewayHost ?? "arelogic.space")}/mcp`;
       response.setHeader("WWW-Authenticate", `Bearer realm="Echoes of Aurion", resource="${publicGatewayUrl}"`);
       response.status(401).json({ error: "authorized_pairing_required" });
       return;
