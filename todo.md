@@ -44,3 +44,12 @@
 - [ ] Gateway-Laufzeitfehler für den fehlenden Export `allowGatewayCommand` beheben und Spiel- sowie Audioansicht fehlerfrei im Browser prüfen.
 - [ ] Zustandsabhängige Musikreaktionen für Arena, Kampf und Sieg implementieren und im Browser prüfen.
 - [ ] Trailer mit finaler, rechtlich nutzbarer Audiospur und inhaltlicher Abnahme für soziale Medien exportieren.
+- [x] Startszene korrigieren: Explorer und Echo Scout als lesbare Hero-Silhouetten wiederherstellen und die rechten unklaren Ruinen-/Ringformen zu einer reduzierten Hintergrundkulisse zurückbauen.
+- [ ] Startszene auf Desktop visuell abnehmen: Explorer und Echo Scout müssen klar sichtbar sein, ohne rechten Geometriehaufen oder fehlerhaftes Cropping.
+- [ ] Startszene auf Mobilansicht abnehmen: Die neue Hintergrundkomposition darf die Lesbarkeit des Gate-Panels nicht verschlechtern.
+- [ ] Visuelle Abnahme der Desktop- und Mobilbilder im Projektprotokoll dokumentieren und erst danach die Startseitenkorrektur final abschließen.
+- [ ] Vorhandene GLB-Assets auf Rigs, Skelettstruktur, Materialeignung und vorhandene Bewegungsanimationen prüfen.
+- [ ] Prototypischen Explorer durch einen vollwertigen GLB-Charakter mit sichtbaren Beinen, Idle-, Lauf-, Treffer- und Angriffanimationen ersetzen.
+- [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
+- [ ] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
+- [ ] Zustandsgebundene Idle-, Lauf-, Treffer- und Angriffsanimationen für die verbesserten Babylon-Live-Modelle implementieren.

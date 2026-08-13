@@ -24,6 +24,8 @@ type CommandCode = "W" | "A" | "S" | "D" | "1" | "2" | "3" | "4" | "5" | "6" | "
 type Pulse = { mesh: Mesh; age: number };
 type ArenaDefinition = { name: string; objective: string; health: number; floor: Color3; glow: Color3; sun: Color3; enemy: Color3; reward: string };
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "victory" };
+type LiveRig = { root: TransformNode; torso: TransformNode; head: TransformNode; arms: TransformNode[]; legs: TransformNode[]; weapon?: TransformNode; halo?: TransformNode; eye?: StandardMaterial; shell?: StandardMaterial; crown?: StandardMaterial };
+type SentinelRig = LiveRig & { eye: StandardMaterial; shell: StandardMaterial; crown: StandardMaterial };
 
 const aurion = Color3.FromHexString("#2DE2CF");
 const bronze = Color3.FromHexString("#9A7043");
@@ -44,61 +46,123 @@ function material(scene: Scene, name: string, diffuse: Color3, emissive?: Color3
   return result;
 }
 
-function makeExplorer(scene: Scene): TransformNode {
+function makeExplorer(scene: Scene): LiveRig {
   const root = new TransformNode("explorer-root", scene);
   root.position = new Vector3(-3.2, 0.2, 1.6);
   const armour = material(scene, "explorer-ivory", Color3.FromHexString("#D7D2B5"));
   const trim = material(scene, "explorer-trim", bronze, aurion.scale(0.12));
   const skin = material(scene, "explorer-skin", Color3.FromHexString("#6B4636"));
-  const body = MeshBuilder.CreateCapsule("explorer-body", { height: 1.7, radius: 0.3, tessellation: 12 }, scene);
-  body.parent = root; body.position.y = 1.1; body.material = armour;
+  const leather = material(scene, "explorer-leather", Color3.FromHexString("#3C2B22"));
+  const torso = new TransformNode("explorer-torso", scene); torso.parent = root; torso.position.y = 1.62;
+  const body = MeshBuilder.CreateCapsule("explorer-body", { height: 1.18, radius: 0.34, tessellation: 12 }, scene);
+  body.parent = torso; body.material = armour;
+  const belt = MeshBuilder.CreateTorus("explorer-belt", { diameter: 0.72, thickness: 0.065, tessellation: 14 }, scene);
+  belt.parent = torso; belt.position.y = -0.36; belt.rotation.x = Math.PI / 2; belt.material = trim;
   const head = MeshBuilder.CreateSphere("explorer-head", { diameter: 0.48, segments: 12 }, scene);
-  head.parent = root; head.position.y = 2.1; head.material = skin;
+  head.parent = torso; head.position.y = 0.75; head.material = skin;
+  const hood = MeshBuilder.CreateSphere("explorer-hood", { diameterX: 0.58, diameterY: 0.42, diameterZ: 0.54, segments: 12 }, scene);
+  hood.parent = torso; hood.position.y = 0.79; hood.scaling.y = 1.15; hood.material = leather;
   const mantle = MeshBuilder.CreateTorus("explorer-mantle", { diameter: 0.88, thickness: 0.1, tessellation: 16 }, scene);
-  mantle.parent = root; mantle.position.y = 1.65; mantle.rotation.x = Math.PI / 2; mantle.material = trim;
+  mantle.parent = torso; mantle.position.y = 0.18; mantle.rotation.x = Math.PI / 2; mantle.material = trim;
+  const arms: TransformNode[] = []; const legs: TransformNode[] = [];
+  [-1, 1].forEach((side, index) => {
+    const shoulder = new TransformNode(`explorer-shoulder-${index}`, scene); shoulder.parent = torso; shoulder.position = new Vector3(side * 0.43, 0.28, 0); shoulder.rotation.z = side * 0.12;
+    const upperArm = MeshBuilder.CreateCapsule(`explorer-upper-arm-${index}`, { height: 0.72, radius: 0.115, tessellation: 8 }, scene); upperArm.parent = shoulder; upperArm.position.y = -0.33; upperArm.material = armour;
+    const forearm = MeshBuilder.CreateCapsule(`explorer-forearm-${index}`, { height: 0.52, radius: 0.095, tessellation: 8 }, scene); forearm.parent = shoulder; forearm.position = new Vector3(0, -0.76, 0.02); forearm.material = leather;
+    const hand = MeshBuilder.CreateSphere(`explorer-hand-${index}`, { diameter: 0.2, segments: 8 }, scene); hand.parent = shoulder; hand.position.y = -1.05; hand.material = skin; arms.push(shoulder);
+    const hip = new TransformNode(`explorer-hip-${index}`, scene); hip.parent = root; hip.position = new Vector3(side * 0.19, 1.05, 0); hip.rotation.z = side * 0.025;
+    const thigh = MeshBuilder.CreateCapsule(`explorer-thigh-${index}`, { height: 0.84, radius: 0.15, tessellation: 9 }, scene); thigh.parent = hip; thigh.position.y = -0.39; thigh.material = armour;
+    const shin = MeshBuilder.CreateCapsule(`explorer-shin-${index}`, { height: 0.68, radius: 0.12, tessellation: 9 }, scene); shin.parent = hip; shin.position = new Vector3(0, -0.98, 0.02); shin.material = leather;
+    const boot = MeshBuilder.CreateSphere(`explorer-boot-${index}`, { diameterX: 0.25, diameterY: 0.18, diameterZ: 0.38, segments: 8 }, scene); boot.parent = hip; boot.position = new Vector3(0, -1.34, 0.09); boot.material = trim; legs.push(hip);
+  });
   const spear = MeshBuilder.CreateCylinder("explorer-spear", { height: 2.05, diameter: 0.055, tessellation: 8 }, scene);
-  spear.parent = root; spear.position = new Vector3(0.52, 1.12, 0.1); spear.rotation.z = -0.34; spear.material = trim;
+  spear.parent = arms[1]; spear.position = new Vector3(0.1, -0.68, 0.12); spear.rotation.z = -0.42; spear.rotation.x = 0.14; spear.material = trim;
   const tip = MeshBuilder.CreateCylinder("explorer-spear-tip", { height: 0.32, diameterTop: 0, diameterBottom: 0.18, tessellation: 6 }, scene);
   tip.parent = spear; tip.position.y = 1.12; tip.material = trim;
-  return root;
+  return { root, torso, head: torso, arms, legs, weapon: spear };
 }
 
-function makeEchoScout(scene: Scene): TransformNode {
+function makeEchoScout(scene: Scene): LiveRig {
   const root = new TransformNode("echo-scout-root", scene);
   root.position = new Vector3(-0.7, 0.2, 0.4);
   const plates = material(scene, "echo-bronze", Color3.FromHexString("#2E665F"), aurion.scale(0.08));
   const glow = material(scene, "echo-core", Color3.FromHexString("#104A50"), aurion);
-  const body = MeshBuilder.CreateCapsule("echo-body", { height: 1.42, radius: 0.28, tessellation: 12 }, scene);
-  body.parent = root; body.position.y = 1.06; body.material = plates;
+  const torso = new TransformNode("echo-torso", scene); torso.parent = root; torso.position.y = 1.48;
+  const body = MeshBuilder.CreateCapsule("echo-body", { height: 1.05, radius: 0.29, tessellation: 12 }, scene);
+  body.parent = torso; body.material = plates;
   const core = MeshBuilder.CreateSphere("echo-aurion-core", { diameter: 0.32, segments: 12 }, scene);
-  core.parent = root; core.position = new Vector3(0, 1.12, -0.26); core.material = glow;
+  core.parent = torso; core.position = new Vector3(0, -0.08, -0.29); core.material = glow;
   const head = MeshBuilder.CreateSphere("echo-head", { diameterX: 0.52, diameterY: 0.38, diameterZ: 0.48, segments: 12 }, scene);
-  head.parent = root; head.position.y = 1.92; head.material = plates;
+  head.parent = torso; head.position.y = 0.68; head.material = plates;
   const halo = MeshBuilder.CreateTorus("echo-halo", { diameter: 0.82, thickness: 0.06, tessellation: 18 }, scene);
-  halo.parent = root; halo.position.y = 2.08; halo.rotation.x = Math.PI / 2; halo.material = glow;
+  halo.parent = torso; halo.position.y = 0.82; halo.rotation.x = Math.PI / 2; halo.material = glow;
+  const arms: TransformNode[] = []; const legs: TransformNode[] = [];
   [-1, 1].forEach((side, index) => {
-    const shoulder = MeshBuilder.CreateSphere(`echo-shoulder-${index}`, { diameter: 0.34, segments: 10 }, scene);
-    shoulder.parent = root; shoulder.position = new Vector3(side * 0.43, 1.46, 0); shoulder.material = plates;
+    const shoulder = new TransformNode(`echo-shoulder-${index}`, scene); shoulder.parent = torso; shoulder.position = new Vector3(side * 0.43, 0.2, 0); shoulder.rotation.z = side * 0.22;
+    const shoulderMesh = MeshBuilder.CreateSphere(`echo-shoulder-mesh-${index}`, { diameter: 0.34, segments: 10 }, scene); shoulderMesh.parent = shoulder; shoulderMesh.material = plates;
     const arm = MeshBuilder.CreateCapsule(`echo-arm-${index}`, { height: 0.82, radius: 0.11, tessellation: 8 }, scene);
-    arm.parent = root; arm.position = new Vector3(side * 0.5, 0.98, 0.02); arm.rotation.z = side * 0.28; arm.material = plates;
+    arm.parent = shoulder; arm.position.y = -0.41; arm.material = plates; arms.push(shoulder);
+    const hip = new TransformNode(`echo-hip-${index}`, scene); hip.parent = root; hip.position = new Vector3(side * 0.17, 1.05, 0);
+    const leg = MeshBuilder.CreateCapsule(`echo-leg-${index}`, { height: 0.95, radius: 0.13, tessellation: 8 }, scene); leg.parent = hip; leg.position.y = -0.43; leg.material = plates;
+    const foot = MeshBuilder.CreateSphere(`echo-foot-${index}`, { diameterX: 0.25, diameterY: 0.17, diameterZ: 0.34, segments: 8 }, scene); foot.parent = hip; foot.position = new Vector3(0, -0.93, 0.08); foot.material = glow; legs.push(hip);
   });
-  return root;
+  return { root, torso, head: torso, arms, legs, halo };
 }
 
-function makeSentinel(scene: Scene): { root: TransformNode; shell: StandardMaterial; eye: StandardMaterial; crown: StandardMaterial } {
+function makeSentinel(scene: Scene): SentinelRig {
   const root = new TransformNode("sentinel-root", scene);
   root.position = new Vector3(3.25, 0.15, -1.8);
   const shell = material(scene, "sentinel-shell", Color3.FromHexString("#59493C"));
   const eye = material(scene, "sentinel-eye", Color3.FromHexString("#7A281B"), Color3.FromHexString("#FF744A"));
-  const body = MeshBuilder.CreateCylinder("sentinel-body", { height: 2.05, diameterTop: 0.62, diameterBottom: 0.9, tessellation: 8 }, scene);
-  body.parent = root; body.position.y = 1.16; body.material = shell;
+  const torso = new TransformNode("sentinel-torso", scene); torso.parent = root; torso.position.y = 1.82;
+  const body = MeshBuilder.CreateCylinder("sentinel-body", { height: 1.65, diameterTop: 0.72, diameterBottom: 1.02, tessellation: 8 }, scene);
+  body.parent = torso; body.material = shell;
   const lens = MeshBuilder.CreateSphere("sentinel-lens", { diameter: 0.36, segments: 12 }, scene);
-  lens.parent = root; lens.position = new Vector3(0, 1.48, -0.47); lens.material = eye;
+  lens.parent = torso; lens.position = new Vector3(0, 0.18, -0.56); lens.material = eye;
   const crownMesh = MeshBuilder.CreateTorus("sentinel-crown", { diameter: 1.32, thickness: 0.09, tessellation: 16 }, scene);
-  crownMesh.parent = root; crownMesh.position.y = 2.12; crownMesh.rotation.x = Math.PI / 2; crownMesh.material = shell;
+  crownMesh.parent = torso; crownMesh.position.y = 0.92; crownMesh.rotation.x = Math.PI / 2; crownMesh.material = shell;
+  const arms: TransformNode[] = []; const legs: TransformNode[] = [];
+  [-1, 1].forEach((side, index) => {
+    const shoulder = new TransformNode(`sentinel-shoulder-${index}`, scene); shoulder.parent = torso; shoulder.position = new Vector3(side * 0.74, 0.46, 0); shoulder.rotation.z = side * 0.24;
+    const arm = MeshBuilder.CreateCapsule(`sentinel-arm-${index}`, { height: 1.35, radius: 0.17, tessellation: 8 }, scene); arm.parent = shoulder; arm.position.y = -0.63; arm.material = shell;
+    const claw = MeshBuilder.CreatePolyhedron(`sentinel-claw-${index}`, { type: 1, size: 0.32 }, scene); claw.parent = shoulder; claw.position.y = -1.38; claw.material = eye; arms.push(shoulder);
+    const hip = new TransformNode(`sentinel-hip-${index}`, scene); hip.parent = root; hip.position = new Vector3(side * 0.32, 1.05, 0);
+    const leg = MeshBuilder.CreateCapsule(`sentinel-leg-${index}`, { height: 1.2, radius: 0.22, tessellation: 8 }, scene); leg.parent = hip; leg.position.y = -0.52; leg.material = shell;
+    const foot = MeshBuilder.CreateBox(`sentinel-foot-${index}`, { width: 0.42, height: 0.25, depth: 0.6 }, scene); foot.parent = hip; foot.position = new Vector3(0, -1.16, 0.12); foot.material = shell; legs.push(hip);
+  });
   const staff = MeshBuilder.CreateCylinder("sentinel-staff", { height: 2.8, diameter: 0.09, tessellation: 8 }, scene);
-  staff.parent = root; staff.position = new Vector3(-0.74, 1.28, 0.06); staff.rotation.z = 0.28; staff.material = shell;
-  return { root, shell, eye, crown: shell };
+  staff.parent = arms[0]; staff.position = new Vector3(0.05, -0.72, 0.1); staff.rotation.z = 0.18; staff.material = shell;
+  return { root, torso, head: torso, arms, legs, weapon: staff, eye, shell, crown: shell };
+}
+
+function animateExplorer(rig: LiveRig, time: number, moving: number, attacking: boolean, hurt: boolean): void {
+  const stride = Math.sin(time * (moving > 0.1 ? 10 : 2.2)) * (moving > 0.1 ? 0.62 : 0.045);
+  rig.legs.forEach((leg, index) => { leg.rotation.x = (index === 0 ? stride : -stride); leg.rotation.z = (index === 0 ? -0.025 : 0.025); });
+  rig.arms.forEach((arm, index) => { arm.rotation.x = (index === 0 ? -stride * 0.52 : stride * 0.52) + (attacking && index === 1 ? -1.08 : 0); arm.rotation.z = (index === 0 ? -0.12 : 0.12) + (attacking && index === 1 ? 0.18 : 0); });
+  rig.torso.rotation.z = Math.sin(time * 2.2) * 0.025 + (hurt ? -0.16 : 0);
+  rig.torso.rotation.x = attacking ? -0.18 : 0;
+  rig.root.scaling.y = hurt ? 0.92 : 1;
+  if (rig.weapon) rig.weapon.rotation.x = attacking ? -0.68 : 0.14;
+}
+
+function animateEcho(rig: LiveRig, time: number, moving: boolean, acting: boolean, hurt: boolean): void {
+  const float = Math.sin(time * 2.5) * 0.07;
+  rig.torso.position.y = 1.48 + float;
+  rig.legs.forEach((leg, index) => { leg.rotation.x = moving ? Math.sin(time * 9 + index * Math.PI) * 0.42 : Math.sin(time * 2 + index) * 0.045; });
+  rig.arms.forEach((arm, index) => { arm.rotation.z = (index === 0 ? -0.22 : 0.22) + (acting ? (index === 0 ? -0.34 : 0.34) : 0); arm.rotation.x = acting ? -0.48 : Math.sin(time * 2 + index) * 0.12; });
+  rig.halo?.rotation.y && (rig.halo.rotation.y = time * 1.8);
+  rig.torso.rotation.z = hurt ? 0.13 : Math.sin(time * 1.8) * 0.045;
+  rig.root.scaling.setAll(hurt ? 0.9 : 1);
+}
+
+function animateSentinel(rig: SentinelRig, time: number, attacking: boolean, hurt: boolean): void {
+  const sway = Math.sin(time * 1.25) * 0.1;
+  rig.legs.forEach((leg, index) => { leg.rotation.x = Math.sin(time * 1.25 + index * Math.PI) * 0.11; });
+  rig.arms.forEach((arm, index) => { arm.rotation.z = (index === 0 ? -0.24 : 0.24) + (attacking ? (index === 0 ? -0.42 : 0.42) : 0); arm.rotation.x = attacking ? -0.62 : sway; });
+  rig.torso.rotation.z = hurt ? Math.sin(time * 28) * 0.13 : 0;
+  rig.torso.rotation.x = attacking ? 0.18 : 0;
+  rig.root.scaling.setAll(hurt ? 0.94 : 1);
+  rig.eye.emissiveColor = hurt ? Color3.FromHexString("#FFF1AA") : rig.eye.diffuseColor;
 }
 
 function makeRuin(scene: Scene, group: TransformNode, position: Vector3, scale: number, rotation = 0, tone = sandstone): void {
@@ -173,12 +237,14 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     shard.material = material(scene, `shard-mat-${index}`, index % 2 ? sandstone : bronze, index % 3 === 0 ? aurion.scale(0.18) : undefined);
   }
 
-  const explorer = makeExplorer(scene); const echo = makeEchoScout(scene); const sentinel = makeSentinel(scene);
+  const explorerRig = makeExplorer(scene); const echoRig = makeEchoScout(scene); const sentinel = makeSentinel(scene);
+  const explorer = explorerRig.root; const echo = echoRig.root;
   const tether = MeshBuilder.CreateLines("team-tether", { points: [explorer.position.add(new Vector3(0, 1.1, 0)), echo.position.add(new Vector3(0, 1.2, 0))], updatable: true }, scene);
   tether.color = aurion;
   const keys = new Set<string>(); const pulses: Pulse[] = [];
   let started = false; let elapsed = 0; let arenaIndex = 0; let sentinelHp = arenas[0].health; let explorerHp = 100; let echoHp = 100;
   let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let lastStateEmit = -1;
+  let explorerAttackUntil = 0; let explorerHurtUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0;
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
@@ -211,10 +277,12 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const dealSentinel = (damage: number, label: string, tone: Color3): void => {
     if (!started || transitioning || victory || sentinelHp <= 0) return;
     const applied = Math.round(damage * (markTime > 0 ? 1.35 : 1)); sentinelHp = Math.max(0, sentinelHp - applied); actionHeat = Math.max(actionHeat, 0.65); createPulse(sentinel.root.position.add(new Vector3(0, 0.18, 0)), tone, 0.8);
+    sentinelHurtUntil = elapsed + 0.26;
     emitGameEvent("combat", `${label} trifft den Sentinel für ${applied} Resonanzschaden.`); emitState(true); if (sentinelHp === 0) completeArena();
   };
   const runEchoAbility = (code: CommandCode): void => {
     const arena = arenas[arenaIndex];
+    echoActionUntil = elapsed + 0.44;
     if (code === "1") { echoTarget = sentinel.root.position.add(new Vector3(-1.1, 0, 1.1)); dealSentinel(15, "Prisma-Schritt", arena.glow); return; }
     if (code === "2" || code === "6") { shieldTime = Math.max(shieldTime, code === "6" ? 5.2 : 3.7); createPulse(explorer.position, arena.glow, 0.9); emitGameEvent("combat", code === "6" ? "Aegis-Knoten schützt das gesamte Team." : "Echoschild fängt den nächsten Impuls ab."); emitState(true); return; }
     if (code === "3") { echoHp = Math.min(100, echoHp + 8); explorerHp = Math.min(100, explorerHp + 6); markTime = Math.max(markTime, 3.4); createPulse(echo.position, arena.glow, 0.82); emitGameEvent("combat", "Sternenfaden stabilisiert das Team und markiert den Sentinel."); emitState(true); return; }
@@ -235,7 +303,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     if (code === "W") explorer.position.z -= distance; if (code === "S") explorer.position.z += distance; if (code === "A") explorer.position.x -= distance; if (code === "D") explorer.position.x += distance;
     explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z));
   };
-  const onHumanAction = (): void => dealSentinel(17, "Speersignal des Explorers", Color3.FromHexString("#F5D995"));
+  const onHumanAction = (): void => { explorerAttackUntil = elapsed + 0.34; dealSentinel(17, "Speersignal des Explorers", Color3.FromHexString("#F5D995")); };
   const onCommand = (event: Event): void => {
     const code = (event as CustomEvent<{ code: CommandCode }>).detail.code; if (!started || victory) return;
     const movement = 1.2;
@@ -254,10 +322,15 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       shieldTime = Math.max(0, shieldTime - dt); markTime = Math.max(0, markTime - dt);
       if (!transitioning && elapsed >= nextEnemyStrike && sentinelHp > 0) {
         const rawDamage = 9 + arenaIndex * 3; const damage = shieldTime > 0 ? Math.ceil(rawDamage * 0.22) : rawDamage; explorerHp = Math.max(0, explorerHp - damage); echoHp = Math.max(0, echoHp - Math.ceil(damage * 0.38)); nextEnemyStrike = elapsed + 3.85 - Math.min(markTime, 1.2); createPulse(explorer.position, Color3.FromHexString("#FF7045"), 0.9); emitGameEvent("combat", `Der Sentinel entfesselt einen Spaltimpuls: Team verliert ${damage} Integrität.`); emitState(true);
+        sentinelAttackUntil = elapsed + 0.46; explorerHurtUntil = elapsed + 0.3; echoHurtUntil = elapsed + 0.28;
       }
     }
     const follow = echoTarget.subtract(echo.position);
     if (follow.lengthSquared() > 0.02) { follow.normalize().scaleInPlace(dt * 2.9); echo.position.addInPlace(follow); echo.rotation.y = Math.atan2(follow.x, follow.z); }
+    const explorerMoving = keys.size > 0 ? 1 : 0;
+    animateExplorer(explorerRig, elapsed, explorerMoving, elapsed < explorerAttackUntil, elapsed < explorerHurtUntil);
+    animateEcho(echoRig, elapsed, follow.lengthSquared() > 0.03, elapsed < echoActionUntil, elapsed < echoHurtUntil);
+    animateSentinel(sentinel, elapsed, elapsed < sentinelAttackUntil, elapsed < sentinelHurtUntil);
     echo.position.y = 0.2 + Math.sin(elapsed * 2.4) * 0.07; MeshBuilder.CreateLines("team-tether", { points: [explorer.position.add(new Vector3(0, 1.14, 0)), echo.position.add(new Vector3(0, 1.2, 0))], instance: tether });
     actionHeat = Math.max(0, actionHeat - dt * 1.9); beaconLight.intensity = 8 + Math.sin(elapsed * 2.3) * 1.7 + actionHeat * 6;
     for (let index = pulses.length - 1; index >= 0; index -= 1) { const pulse = pulses[index]; pulse.age += dt; pulse.mesh.scaling.setAll(1 + pulse.age * 4.3); const pulseMaterial = pulse.mesh.material as StandardMaterial; pulseMaterial.alpha = Math.max(0, 1 - pulse.age * 1.8); if (pulse.age > 0.58) { pulse.mesh.dispose(); pulses.splice(index, 1); } }

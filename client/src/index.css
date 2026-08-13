@@ -129,6 +129,35 @@ kbd { min-width: 27px; height: 27px; display: inline-grid; place-items: center; 
 .ability-rail { position: fixed; right: 24px; bottom: 26px; display: flex; align-items: end; gap: 7px; pointer-events: auto; }.ability-rail > span { writing-mode: vertical-rl; transform: rotate(180deg); height: 48px; display: flex; align-items: center; gap: 4px; }.ability-rail button { width: 58px; height: 58px; display: grid; place-items: center; gap: 3px; color: #e5f5ed; background: linear-gradient(150deg, rgb(15 95 88 / 82%), rgb(5 30 33 / 89%)); border: 1px solid rgb(45 226 207 / 57%); clip-path: polygon(0 0, 100% 0, 100% 84%, 84% 100%, 0 100%); }.ability-rail button:hover { background: #218f86; }.ability-rail kbd { width: 21px; min-width: 21px; height: 20px; background: rgb(4 19 22 / 53%); color: #f4db9b; font-size: 9px; }.ability-rail small { max-width: 52px; font-size: 7px; line-height: 1.1; text-align: center; }.ledger-reset { position: fixed; bottom: 6px; left: 171px; padding: 4px 7px; border: 0; background: rgb(1 12 15 / 57%); color: #94b0a7; font-size: 8px; display: flex; gap: 4px; align-items: center; }
 
 .boss-readout { position: fixed; top: 141px; left: 50%; transform: translateX(-50%); min-width: 166px; display: flex; align-items: center; justify-content: center; gap: 6px; color: #f6c886; font-size: 9px; font-weight: 900; letter-spacing: .1em; text-shadow: 0 2px 8px #000; }.boss-readout svg { color: #ff7657; }.boss-readout span b { color: #fff0c8; margin-left: 5px; }.boss-readout > i { width: 7px; height: 7px; border-radius: 50%; background: #5d392d; }.boss-readout > i.marked { background: #8dadff; box-shadow: 0 0 12px #8dadff; }
+
+/* The landing composition is a single readable explorer/Echo tableau, not a stack of decorative primitives. */
+.ruin-constellation {
+  right: 0;
+  top: 72px;
+  width: min(61vw, 790px);
+  height: calc(100dvh - 72px);
+  overflow: hidden;
+  opacity: .94;
+  background:
+    linear-gradient(90deg, #04171d 0%, rgb(4 23 29 / 74%) 15%, rgb(4 20 26 / 10%) 46%, rgb(2 12 16 / 13%) 100%),
+    linear-gradient(0deg, rgb(1 11 15 / 42%) 0%, transparent 35%),
+    url("/manus-storage/aurion-social-keyframe_5edc4882.png") center bottom / 100% auto no-repeat;
+  filter: saturate(.93) contrast(1.04);
+}
+.ruin-constellation::before,
+.ruin-constellation::after,
+.ruin-constellation > span { display: none; }
+
+@media (max-width: 720px) {
+  .ruin-constellation {
+    top: 58px;
+    width: 100vw;
+    height: 48vh;
+    opacity: .32;
+    background-position: center 86%;
+    background-size: 100% auto;
+  }
+}
 .spear-action { width: 128px; height: 31px; border: 1px solid rgb(245 211 142 / 55%); background: linear-gradient(90deg, rgb(113 76 37 / 93%), rgb(42 51 39 / 88%)); color: #ffe1a0; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 8px; font-weight: 900; letter-spacing: .09em; clip-path: polygon(0 0, 94% 0, 100% 20%, 100% 100%, 6% 100%, 0 80%); }.spear-action:active { background: #f5c776; color: #382106; transform: scale(.96); }
 .arena-track { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 7px; padding: 7px 11px; background: rgb(4 24 28 / 68%); border: 1px solid rgb(152 201 187 / 15%); }.arena-track span { display: flex; align-items: center; gap: 5px; color: #6c8981; font-size: 8px; font-weight: 900; letter-spacing: .08em; }.arena-track span::before { content: ""; width: 14px; height: 1px; background: rgb(129 165 152 / 28%); }.arena-track span:first-child::before { display: none; }.arena-track span small { font-size: 7px; }.arena-track span.current { color: #77fae9; text-shadow: 0 0 8px rgb(45 226 207 / 47%); }.arena-track span.current small { color: #d9f8ee; }.arena-track span.cleared { color: #e2bd7e; }.arena-track span.cleared::before { background: #d6ad6c; }
 
