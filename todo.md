@@ -21,3 +21,4 @@
 - [ ] Widerruf und Ablauf verifizieren: Ein widerrufener oder abgelaufener Bearer-Token darf keine MCP-Befehle mehr annehmen oder ausliefern.
 - [x] Aktuellen MCP-Gateway-Stand nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit prüfen.
 - [x] MCP-Schutzgrenze prüfen: Ungültiger Bearer-Token wird mit HTTP 401 und unzulässiger Host-Header mit HTTP 403 abgewiesen.
+- [x] itch.io-Releasepaket mit browserfähigem Build, Spielbeschreibung, Metadaten, Cover- und Screenshot-Spezifikation vorbereiten.
