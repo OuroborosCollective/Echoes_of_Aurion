@@ -87,8 +87,12 @@
 - [ ] Sitzungsabruf-Test ergänzen, der den Entzug der Befehlsauslieferung über `pullCommands` nach Widerruf oder Ablauf nachweist.
 - [x] Babylon.js-Vertex-Shaderfehler der Canvasinitialisierung durch explizite GLSL-ShaderStore-Registrierung beheben und nach frischem Canvas-Reload prüfen.
 - [x] Längeren narrativen Aurion-Hero-Trailer mit englischer Erzählung, deutschen Untertiteln, Welt, autorisiertem LLM-Koop, MCP-Pairing, Expeditionen, Loot, Gilden und transparentem Call-to-Action produzieren und technisch abnehmen.
-- [ ] Bilingualen Hero-Trailer im Startbereich dauerhaft bereitstellen und einen mobil nutzbaren Trailerzugang vor der MCP-Paarung integrieren.
-- [ ] Veraltete Auslieferung unter `arelogic.space` ausschließlich gegen den Aurion-Releaseweg prüfen und gegebenenfalls nur Aurion korrigieren; Sovereign-Studio-ATO und areloria.de sind ausdrücklich ausgenommen.
-- [ ] Aktuellen Aurion-Stand einschließlich Hero-Trailerzugang revisionsgebunden in einen GitHub-Kandidaten überführen und die Head-Checks erneut ausführen.
-- [ ] Ausschließlich Aurion-spezifischen GitHub-Workflow für den Static-Release unter `arelogic.space` mit Appleboy-Passwortauthentisierung, getrenntem Webroot und ohne Schlüsselworkflow vorbereiten und per Readback prüfen.
-- [ ] Finalen bilingualen Hero-Trailer als abrufbare Videodatei bereitstellen.
+- [x] Bilingualen Hero-Trailer im Startbereich dauerhaft bereitstellen und einen mobil nutzbaren Trailerzugang vor der MCP-Paarung integrieren.
+- [x] Veraltete Auslieferung unter `arelogic.space` ausschließlich gegen den Aurion-Releaseweg prüfen und gegebenenfalls nur Aurion korrigieren; Sovereign-Studio-ATO und areloria.de sind ausdrücklich ausgenommen.
+- [x] Aktuellen Aurion-Stand einschließlich Hero-Trailerzugang revisionsgebunden in einen GitHub-Kandidaten überführen und die Head-Checks erneut ausführen.
+- [x] Ausschließlich Aurion-spezifischen GitHub-Workflow für den Static-Release unter `arelogic.space` mit Appleboy-Passwortauthentisierung vorbereiten; der durch Netzwerk-Readback blockierte Inbound-Transfer wurde revisionsgebunden durch lokalen Artifact-Promotion-Runner ersetzt.
+- [x] Ausschließlich repositorygebundenen Aurion-GitHub-Self-Hosted-Runner als Alternative zum blockierten Inbound-Appleboy-Transfer vorbereiten und dessen Ausführungsgrenze per Readback prüfen.
+- [x] Aurion-Workflow in GitHub-Hosted Build/Test und repositorygebundene lokale Artefaktpromotion aufteilen, damit der VPS-Runner keine speicherintensive TypeScript-Prüfung ausführt.
+- [x] Finalen bilingualen Hero-Trailer als abrufbare Videodatei bereitstellen.
+- [x] Aurion-MP4-Auslieferung im Aurion-Nginx-Serverblock mit `video/mp4` statt `application/octet-stream` kennzeichnen und anschließend Trailerwiedergabe per Browser-Readback prüfen.
+- [x] Nach der MP4-MIME-Korrektur den Hero-Trailer technisch im Browser auf `currentSrc`, `readyState >= 2`, positive Dauer, Fortschritt und fehlenden Videoerror prüfen.
