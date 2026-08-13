@@ -1,6 +1,6 @@
 # Produktiver Lootkatalog — Nachweis
 
-**Zeitpunkt:** 13. August 2026  
+**Zeitpunkt:** 13. August 2026
 **Umfang:** Aktivierung des ersten serverseitigen Aurion-Katalogs für Treasure Classes, Affixe und Setdefinitionen.
 
 ## Katalogbestand

@@ -1,7 +1,7 @@
 # Startszene — visuelle Abnahme
 
-**Zeitpunkt:** 13. August 2026  
-**Geprüfter Stand:** lokaler Entwicklungsserver, Projektversion `4d32e76a`  
+**Zeitpunkt:** 13. August 2026
+**Geprüfter Stand:** lokaler Entwicklungsserver, Projektversion `4d32e76a`
 **Umfang:** Sichtprüfung der gesperrten Koop-Startszene vor MCP-Paarung. Diese Abnahme deckt weder den angemeldeten Gateway-E2E-Pfad noch die Missions-Gameplay-Schleife ab.
 
 | Ansicht | Viewport | Ergebnis | Beobachtung |

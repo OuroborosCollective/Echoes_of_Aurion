@@ -1,6 +1,6 @@
 # Admin- und Progressionsausbau — Nachweis
 
-**Zeitpunkt:** 13. August 2026  
+**Zeitpunkt:** 13. August 2026
 **Umfang:** Serverautorisiertes Spielerverzeichnis, GLB-Aufnahme mit S3-Speicherreferenz, Review/Zuweisung sowie geheimnisfreie Monetarisierungsplatzierungen.
 
 ## Bestätigte Schutzgrenzen

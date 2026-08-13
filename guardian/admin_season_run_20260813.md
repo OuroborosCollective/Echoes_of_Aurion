@@ -1,6 +1,6 @@
 # Rollen- und Saisonverwaltung — Nachweis
 
-**Zeitpunkt:** 13. August 2026  
+**Zeitpunkt:** 13. August 2026
 **Umfang:** Begrenzte serverautoritative Rollenverwaltung, geschützte Live-Rangliste, saisonale Archive und idempotente Saisontransitionen.
 
 ## Datenbankmigrationen

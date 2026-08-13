@@ -1,6 +1,6 @@
 # Endgame-Oberfläche — Nachweis
 
-**Zeitpunkt:** 13. August 2026  
+**Zeitpunkt:** 13. August 2026
 **Umfang:** Eigene Spielerregisterkarte für serverbestätigtes Inventar, Set-Boni, Klassenresonanz, Waffenmeisterschaft und Gildenlangzeitziele.
 
 ## Gelieferter Lese- und UI-Vertrag

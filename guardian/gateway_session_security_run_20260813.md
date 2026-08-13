@@ -1,6 +1,6 @@
 # MCP-Gateway — Sequenz- und Sitzungsgrenzen
 
-**Zeitpunkt:** 13. August 2026  
+**Zeitpunkt:** 13. August 2026
 **Umfang:** Serverseitiger Nachweis für Sitzungs-Allowlist, strikt steigende Sequenzen, Widerruf und Ablauf.
 
 | Grenze | Laufzeitbindung | Automatisierter Nachweis |
