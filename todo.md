@@ -7,4 +7,4 @@
 - [x] Produktionsbuild ausführen, Desktop- und Android-ähnliche Mobilansicht testen und Laufzeitfehler prüfen.
 - [x] Statischen Build mit HTTPS auf der VPS bereitstellen und `arelogic.space` verifizieren.
 - [ ] Root-Zugang nach erfolgreicher Bereitstellung auf schlüsselbasierten Zugriff umstellen und Passwortzugang absichern.
-- [ ] Bestehenden Repository-Stand prüfen, den finalen Spielstand kontrolliert nach `OuroborosCollective/Echoes_of_Aurion` überführen und den Remote-Commit verifizieren.
+- [x] Bestehenden Repository-Stand prüfen, den finalen Spielstand kontrolliert nach `OuroborosCollective/Echoes_of_Aurion` überführen und den Remote-Commit verifizieren.
