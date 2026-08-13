@@ -27,6 +27,9 @@ export default function Operations() {
   const placements = trpc.admin.monetization.list.useQuery(undefined, { enabled: user?.role === "admin" });
   const state = profile.data;
 
+  if (profile.isLoading) return <DashboardLayout><div className="min-h-full bg-[#06131a] p-8 text-sm text-cyan-100/70">Operationsdaten werden serverseitig abgeglichen…</div></DashboardLayout>;
+  if (profile.isError || !state) return <DashboardLayout><div className="min-h-full bg-[#06131a] p-8 text-sm text-red-200">Operationsdaten konnten nicht geladen werden. Bitte starte die Sitzung erneut.</div></DashboardLayout>;
+
   return <DashboardLayout><div className="min-h-full bg-[radial-gradient(circle_at_top_right,rgba(45,226,207,.13),transparent_38%),#06131a] text-slate-100 p-2 sm:p-6">
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-col gap-4 border-b border-cyan-200/10 pb-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs tracking-[.24em] text-cyan-300">AURION // OPERATIONS</p><h1 className="mt-2 text-3xl font-semibold text-amber-100">Expeditionsverwaltung</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Spielwerte, Gilden und Assets werden serverseitig geführt. Der Browser zeigt bestätigte Zustände, setzt sie aber nicht verbindlich.</p></div><Button asChild variant="outline" className="border-amber-300/30 bg-transparent text-amber-100 hover:bg-amber-200/10"><Link href="/"><ExternalLink className="mr-2 h-4 w-4" /> Zum Spiel</Link></Button></header>
