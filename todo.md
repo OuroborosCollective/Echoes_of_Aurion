@@ -30,9 +30,9 @@
 - [x] XP- und Levelsystem mit serverseitiger Klassenwahl ab Stufe 36 implementieren.
 - [ ] Rangliste für Punkte, Siege, Level und saisonale Zeiträume implementieren.
 - [x] Konfiguration für Banner, Offerwalls und Vote-Listen mit serverseitigen Platzierungs- und Einwilligungsregeln vorbereiten.
-- [ ] Linear-Arbeitsstruktur für die Verwaltungs- und Progressionsausbaustufe erstellen und mit GitHub-Revisionen verknüpfen.
-- [ ] Linear-Projekt und zentrale Issues mit konkreter GitHub-Revision, Branch oder Pull-Request-Referenz ergänzen und die Bindung per Readback dokumentieren.
-- [ ] Revisionsgebundene Linear- und GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen und per Readback verifizieren.
+- [x] Linear-Arbeitsstruktur für die Verwaltungs- und Progressionsausbaustufe erstellen und mit GitHub-Revisionen verknüpfen.
+- [x] Linear-Projekt und zentrale Issues mit konkreter GitHub-Revision, Branch oder Pull-Request-Referenz ergänzen und die Bindung per Readback dokumentieren.
+- [x] Revisionsgebundene Linear- und GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen und per Readback verifizieren.
 - [x] Serverautorisiertes Gildenmodell mit Mitgliedschaften, Rollen, gemeinsamen Zielen und langfristigen Saisons entwerfen.
 - [ ] Prozedurales Loot-System mit Treasure Classes, Seltenheiten, Affixen, Set-Boni und idempotenten Drop-Receipts implementieren.
 - [ ] Waffenfortschritt nach Nutzungsart mit serverseitiger XP, Spezialisierungen und Klassen-/Loadout-Grenzen integrieren.
@@ -81,3 +81,5 @@
 - [ ] Separate geschützte Ranglistenverwaltung für administrative Einsicht und saisonale Steuerung ergänzen.
 - [ ] Erfolgreichen Rollenwechsel in einer isolierten Testumgebung mit Readback sowie Selbst- und Eigentümerschutz nachweisen.
 - [ ] Saisonstart und -rotation in einer isolierten Testumgebung mit Snapshot-Readback nachweisen, ohne Produktivpunkte zu verändern.
+- [ ] Linear-Meilensteine und Projektbeschreibung per Readback mit der GitHub-PR- und Revisionsbindung ergänzen.
+- [x] Revisionsgebundene GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen oder die Roadmapaufgabe auf den belegten PR-Umfang präzisieren.
