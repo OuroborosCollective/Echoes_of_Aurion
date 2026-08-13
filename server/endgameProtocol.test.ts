@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canChooseClass, canUseWeaponWithClass, CLASS_UNLOCK_LEVEL, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
+import { canChooseClass, canUseWeaponWithClass, CLASS_UNLOCK_LEVEL, isServerEvidenceDigest, isWeaponActionAllowed, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
 
 describe("endgame protocol", () => {
   it("keeps the XP requirement monotone through the class unlock", () => {
@@ -47,5 +47,18 @@ describe("endgame protocol", () => {
     expect(canUseWeaponWithClass("vanguard", "spear")).toBe(true);
     expect(canUseWeaponWithClass("vanguard", "staff")).toBe(false);
     expect(canUseWeaponWithClass("unbound", "staff")).toBe(true);
+  });
+
+  it("accepts only digest-shaped server evidence for expedition reward authority", () => {
+    expect(isServerEvidenceDigest("a".repeat(64))).toBe(true);
+    expect(isServerEvidenceDigest("A".repeat(64))).toBe(true);
+    expect(isServerEvidenceDigest("not-a-server-result")).toBe(false);
+    expect(isServerEvidenceDigest("a".repeat(63))).toBe(false);
+  });
+
+  it("allows only canonical actions from the equipped weapon track", () => {
+    expect(isWeaponActionAllowed("blade", "cleave")).toBe(true);
+    expect(isWeaponActionAllowed("blade", "bolt")).toBe(false);
+    expect(isWeaponActionAllowed("focus", "surge")).toBe(true);
   });
 });

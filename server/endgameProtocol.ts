@@ -15,6 +15,11 @@ export type LootQuality = (typeof lootQualities)[number];
 export type LootAffix = { key: string; slot: "prefix" | "suffix"; stats: Record<string, number> };
 export type LootResolution = { baseItemKey: string; quality: LootQuality; affixes: LootAffix[]; setKey?: string };
 
+/** Digest-only evidence prevents clients from substituting raw simulation payloads as result authority. */
+export function isServerEvidenceDigest(value: string): boolean {
+  return /^[a-f0-9]{64}$/i.test(value);
+}
+
 export const CLASS_UNLOCK_LEVEL = 36;
 export const MAX_PLAYER_LEVEL = 50;
 
@@ -64,6 +69,18 @@ export function rollLootQuality(roll: number, magicFind = 0): LootQuality {
 
 export function isWeaponTrack(value: string): value is WeaponTrack {
   return (weaponTracks as readonly string[]).includes(value);
+}
+
+const weaponActions: Record<WeaponTrack, readonly string[]> = {
+  blade: ["melee", "cleave", "parry"],
+  staff: ["bolt", "nova", "ward"],
+  spear: ["thrust", "sweep", "lunge"],
+  focus: ["pulse", "bind", "surge"],
+};
+
+/** Validated result processing accepts only a canonical action from the equipped weapon track. */
+export function isWeaponActionAllowed(track: WeaponTrack, actionKey: string): boolean {
+  return weaponActions[track].includes(actionKey);
 }
 
 const treasureCatalog: Record<string, readonly string[]> = {
