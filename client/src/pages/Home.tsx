@@ -4,15 +4,16 @@
  * hides the isometric sky-city. Every LLM signal is visible, bounded and logged.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, ChevronRight, CircleDot, Copy,
   Compass, Cpu, Download, Gamepad2, LockKeyhole, Radio, ShieldCheck, Sparkles, Swords,
-  UserRound, X,
+  UserRound, Volume2, VolumeX, X,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import GameCanvas from "@/components/GameCanvas";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
+import { AurionSoundscape } from "@/lib/soundscape";
 import { trpc } from "@/lib/trpc";
 import { startLogin } from "@/const";
 
@@ -55,6 +56,10 @@ export default function Home() {
   const [mission, setMission] = useState<MissionState>(initialMission);
   const [gatewayPairing, setGatewayPairing] = useState<GatewayPairing | null>(null);
   const [gatewaySequence, setGatewaySequence] = useState(0);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const expeditionAudio = useRef<HTMLAudioElement | null>(null);
+  const soundscape = useRef<AurionSoundscape | null>(null);
+  const musicResetTimer = useRef<number | null>(null);
   const createGatewaySession = trpc.gateway.createSession.useMutation();
   const revokeGatewaySession = trpc.gateway.revokeSession.useMutation();
   const gatewayCommands = trpc.gateway.pullCommands.useQuery(
@@ -64,6 +69,33 @@ export default function Home() {
 
   const skillNames = useMemo(() => abilityDeck.filter((ability) => selectedSkills.includes(ability.code)), [selectedSkills]);
   const allowedGatewayCommands = useMemo(() => ["W", "A", "S", "D", ...selectedSkills], [selectedSkills]);
+  const shapeMusic = (kind: LedgerEntry["kind"] | "victory"): void => {
+    const audio = expeditionAudio.current;
+    if (!audio || !audioEnabled) return;
+    if (musicResetTimer.current) window.clearTimeout(musicResetTimer.current);
+    const level: Record<LedgerEntry["kind"] | "victory", number> = { system: 0.30, command: 0.36, combat: 0.50, connection: 0.42, warning: 0.22, victory: 0.46 };
+    audio.volume = level[kind];
+    audio.playbackRate = kind === "combat" ? 1.035 : kind === "warning" ? 0.96 : 1;
+    musicResetTimer.current = window.setTimeout(() => { if (expeditionAudio.current) { expeditionAudio.current.volume = 0.34; expeditionAudio.current.playbackRate = 1; } }, kind === "combat" ? 1600 : 900);
+  };
+
+  useEffect(() => {
+    document.title = "Echoes of Aurion – LLM Koop-Action-Abenteuer";
+  }, []);
+
+  useEffect(() => {
+    const audio = new Audio("/manus-storage/aurion-expedition-theme_e8a8afea.mp3");
+    audio.loop = true;
+    audio.volume = 0.34;
+    expeditionAudio.current = audio;
+    return () => { audio.pause(); expeditionAudio.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const mixer = new AurionSoundscape();
+    soundscape.current = mixer;
+    return () => { mixer.dispose(); soundscape.current = null; };
+  }, []);
 
   useEffect(() => {
     const onLedger = (event: Event) => setLedger((event as CustomEvent<LedgerEntry[]>).detail);
@@ -71,8 +103,10 @@ export default function Home() {
       const detail = (event as CustomEvent<{ kind: LedgerEntry["kind"]; detail: string }>).detail;
       setLastSignal(detail.detail);
       appendLedger({ kind: detail.kind ?? "system", title: "Sternwarte", detail: detail.detail });
+      soundscape.current?.cue(detail.kind ?? "system");
+      shapeMusic(detail.kind ?? "system");
     };
-    const onMissionState = (event: Event) => setMission((event as CustomEvent<MissionState>).detail);
+    const onMissionState = (event: Event) => { const next = (event as CustomEvent<MissionState>).detail; setMission(next); if (next.phase === "victory") shapeMusic("victory"); };
     window.addEventListener("aurion:ledger-updated", onLedger);
     window.addEventListener("aurion:game-event", onGameEvent);
     window.addEventListener("aurion:mission-state", onMissionState);
@@ -130,9 +164,17 @@ export default function Home() {
   const toggleSkill = (code: string): void => setSelectedSkills((current) => { if (current.includes(code)) return current.filter((skill) => skill !== code); if (current.length >= 3) return [...current.slice(1), code]; return [...current, code]; });
   const beginMission = (): void => {
     setScreen("mission"); setMissionElapsed(0); setMission(initialMission);
+    soundscape.current?.unlock();
+    if (audioEnabled) void expeditionAudio.current?.play().catch(() => setLastSignal("Die Expeditionmusik ist bereit; aktiviere sie über das Klangsymbol."));
     window.setTimeout(() => window.dispatchEvent(new CustomEvent("aurion:begin-expedition")), 120);
     appendLedger({ kind: "system", title: "Expedition eröffnet", detail: `${operatorName || "Unbenannter Explorer"} und ${provider} betreten die Sternwarte Aurion.` });
     setLastSignal("Die Sternwarte öffnet ihre Resonanzschleuse.");
+  };
+  const toggleAudio = (): void => {
+    const audio = expeditionAudio.current;
+    if (!audio) return;
+    if (audioEnabled) { audio.pause(); setAudioEnabled(false); setLastSignal("Expeditionsmusik pausiert."); return; }
+    void audio.play().then(() => { setAudioEnabled(true); setLastSignal("Expeditionsmusik aktiviert."); }).catch(() => setLastSignal("Der Browser blockiert Audio bis zur nächsten direkten Interaktion."));
   };
   const sendPartnerCommand = (raw?: string): void => {
     const code = codeFromText(raw ?? commandText);
@@ -153,7 +195,7 @@ export default function Home() {
       <GameCanvas />
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
-      <header className="brand-bar"><div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div><div className="brand-status"><span className={connected ? "signal-dot active" : "signal-dot"} /> {connected ? "Partner-Siegel aktiv" : "Zugang versiegelt"}</div></header>
+      <header className="brand-bar"><div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div><div className="brand-status"><a href="/ops" className="mr-4 text-[10px] tracking-[.14em] text-cyan-100/75 hover:text-cyan-200">OPS</a><button type="button" className="audio-toggle header-audio" onClick={toggleAudio} aria-label={audioEnabled ? "Expeditionsmusik pausieren" : "Expeditionsmusik aktivieren"}>{audioEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}</button><span className={connected ? "signal-dot active" : "signal-dot"} /> {connected ? "Partner-Siegel aktiv" : "Zugang versiegelt"}</div></header>
       {screen === "gate" && (
         <section className="gate-panel" aria-labelledby="gate-title">
           <div className="gate-runes" aria-hidden="true">✦ &nbsp; ◌ &nbsp; ⟡</div><p className="eyebrow"><LockKeyhole size={14} /> KOOP-VERBINDUNG ERFORDERLICH</p>

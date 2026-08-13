@@ -23,3 +23,24 @@
 - [x] Aktuellen MCP-Gateway-Stand nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit prüfen.
 - [x] MCP-Schutzgrenze prüfen: Ungültiger Bearer-Token wird mit HTTP 401 und unzulässiger Host-Header mit HTTP 403 abgewiesen.
 - [x] itch.io-Releasepaket mit browserfähigem Build, Spielbeschreibung, Metadaten, Cover- und Screenshot-Spezifikation vorbereiten.
+- [x] Startseite: 3 bis 8 fokussierte Meta-Keywords ergänzen und `document.title` dynamisch auf 30 bis 60 Zeichen setzen.
+- [ ] Serverautorisiertes Datenmodell für Spielerprofile, Fortschritt, Klassen, Ranglisten, GLB-Assets und Verwaltungsrechte festlegen.
+- [ ] Geschützte Backend-Routen für Nutzerverwaltung, Spielverwaltung, Fortschrittsvergabe und Ranglisten implementieren.
+- [ ] Adminbereich für GLB-Katalog, Asset-Zuweisung und kontrollierten Upload vorbereiten.
+- [ ] XP- und Levelsystem mit serverseitiger Klassenwahl ab Stufe 36 implementieren.
+- [ ] Rangliste für Punkte, Siege, Level und saisonale Zeiträume implementieren.
+- [ ] Konfiguration für Banner, Offerwalls und Vote-Listen mit serverseitigen Platzierungs- und Einwilligungsregeln vorbereiten.
+- [ ] Linear-Arbeitsstruktur für die Verwaltungs- und Progressionsausbaustufe erstellen und mit GitHub-Revisionen verknüpfen.
+- [ ] Linear-Projekt und zentrale Issues mit konkreter GitHub-Revision, Branch oder Pull-Request-Referenz ergänzen und die Bindung per Readback dokumentieren.
+- [ ] Revisionsgebundene Linear- und GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen und per Readback verifizieren.
+- [x] Serverautorisiertes Gildenmodell mit Mitgliedschaften, Rollen, gemeinsamen Zielen und langfristigen Saisons entwerfen.
+- [ ] Prozedurales Loot-System mit Treasure Classes, Seltenheiten, Affixen, Set-Boni und idempotenten Drop-Receipts implementieren.
+- [ ] Waffenfortschritt nach Nutzungsart mit serverseitiger XP, Spezialisierungen und Klassen-/Loadout-Grenzen integrieren.
+- [ ] Treasure-Class-Katalog, serverseitige Basistyp- und Affix-Auflösung sowie Set-Bonus-Auswertung mit Tests implementieren.
+- [ ] Waffenmeisterschaft an validierte Expeditionsereignisse koppeln und Spezialisierungs- sowie Loadout-Grenzen serverseitig durchsetzen.
+- [ ] Endgame-UI für Gilden, Inventar, Set-Fortschritt, Waffenmeisterschaft und langfristige Ziele integrieren.
+- [ ] Klangbild, Gameplay-Effekte und adaptive Spielmusik integrieren.
+- [ ] Drei Trailer erstellen: Gameplay-Loop, aurionisches Cinematic und LLM-Koop-Tutorial für soziale Medien.
+- [ ] Gateway-Laufzeitfehler für den fehlenden Export `allowGatewayCommand` beheben und Spiel- sowie Audioansicht fehlerfrei im Browser prüfen.
+- [ ] Zustandsabhängige Musikreaktionen für Arena, Kampf und Sieg implementieren und im Browser prüfen.
+- [ ] Trailer mit finaler, rechtlich nutzbarer Audiospur und inhaltlicher Abnahme für soziale Medien exportieren.

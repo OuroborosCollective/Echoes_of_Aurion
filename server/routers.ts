@@ -2,9 +2,10 @@ import { COOKIE_NAME } from "@shared/const";
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
+import { isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -45,6 +46,40 @@ export const appRouter = router({
       const session = await db.getGatewaySessionForUser(input.sessionId, ctx.user.id);
       if (!session || session.status !== "active" || session.expiresAt <= new Date()) throw new Error("Gateway session unavailable");
       return db.listGatewayCommandsAfter(input.sessionId, input.afterSequence);
+    }),
+  }),
+  player: router({
+    me: protectedProcedure.query(async ({ ctx }) => ({ profile: await db.getOrCreatePlayerProfile(ctx.user.id), weaponMasteries: await db.listWeaponMasteries(ctx.user.id), guild: await db.getActiveGuildForUser(ctx.user.id) })),
+    chooseClass: protectedProcedure.input(z.object({ playerClass: z.enum(["vanguard", "seer", "warden"]) })).mutation(async ({ ctx, input }) => {
+      if (!isPlayerClass(input.playerClass)) throw new Error("Unsupported class");
+      return db.choosePlayerClass(ctx.user.id, input.playerClass);
+    }),
+  }),
+  guild: router({
+    mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
+    create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
+  }),
+  leaderboard: router({
+    list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
+  }),
+  admin: router({
+    progression: router({
+      grant: adminProcedure.input(z.object({ userId: z.number().int().positive(), kind: z.enum(["xp", "points", "victory", "weapon_xp"]), delta: z.number().int().positive().max(100000), source: z.string().trim().min(3).max(64), reason: z.string().trim().min(3).max(240), idempotencyKey: z.string().trim().min(12).max(128), weaponTrack: z.enum(["blade", "staff", "spear", "focus"]).optional() })).mutation(async ({ input }) => {
+        const weaponTrack = input.weaponTrack && isWeaponTrack(input.weaponTrack) ? input.weaponTrack as WeaponTrack : undefined;
+        return db.grantProgress({ ...input, weaponTrack });
+      }),
+      recordLoot: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().min(3).max(96), treasureClass: z.string().min(3).max(96), qualityRoll: z.number().int().min(0).max(9999), affixRoll: z.number().int().min(0).max(9999), magicFind: z.number().int().min(0).max(100), itemLevel: z.number().int().min(1).max(99), seedDigest: z.string().regex(/^[a-f0-9]{64}$/), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ input }) => db.createLootDrop(input)),
+      recordWeaponEvent: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().min(3).max(96), weaponTrack: z.enum(["blade", "staff", "spear", "focus"]), actionKey: z.string().min(3).max(120), xpGranted: z.number().int().min(1).max(1000), idempotencyKey: z.string().min(12).max(128) })).mutation(({ input }) => db.recordValidatedWeaponEvent(input)),
+    }),
+    assets: router({
+      list: adminProcedure.query(() => db.listGlbAssets()),
+      createMetadata: adminProcedure.input(z.object({ displayName: z.string().trim().min(3).max(120), assetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), storageKey: z.string().trim().min(5).max(512), storageUrl: z.string().trim().min(5).max(768), sha256: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().positive().max(100_000_000) })).mutation(({ ctx, input }) => db.createGlbAssetMetadata({ ...input, createdByUserId: ctx.user.id })),
+    }),
+    monetization: router({
+      list: adminProcedure.query(() => db.listMonetizationPlacements()),
+    }),
+    lootCatalog: router({
+      listSetBonusesForUser: adminProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ input }) => db.listSetBonusesForUser(input.userId)),
     }),
   }),
 });

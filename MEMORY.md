@@ -33,3 +33,6 @@
 - `arelogic.space` zeigt nach der Umschaltung über HTTPS auf die statische Spielrelease `20260813T015600Z`; der neue TLS-Nachweis ist für `arelogic.space` bis 11. November 2026 gültig.
 - Die öffentliche Prüfung bestätigte HTTP 200 und das Ausliefern der Babylon-Module. Die Produktansicht wurde zusätzlich auf die sichtbare React-Einbettung geprüft.
 - Nach dem vollständigen Laden zeigt die Produktion Sperrbildschirm, CSS-Aurion-Siegel und 3D-Szene sichtbar; die Browser-Konsole meldet keine Laufzeitfehler.
+- Die Expeditionseinstiegsseite wurde nach Einbindung des Operationslinks erneut visuell geprüft und bleibt auf Desktop lesbar. Die separate `/ops`-Screenshot-Erfassung schlug fehl und wird vor der Übergabe als eigene Route diagnostiziert.
+- Nach dem Fullstack-Neustart wurde der frühere Gateway-Exportfehler nicht mehr im gerenderten Client reproduziert. Die Startseite erscheint nach kurzer Modulinitialisierung wieder vollständig; die globale Klangsteuerung ist sichtbar.
+- Die globale Klangsteuerung wurde im Browser auf Erreichbarkeit getestet: Der Button ist im Kopf interaktiv und wechselt nach zwei direkten Klicks korrekt zwischen dem Pausieren- und Aktivieren-Zustand.
