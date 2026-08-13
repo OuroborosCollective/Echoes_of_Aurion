@@ -28,6 +28,7 @@ jobs:
     environment: production
     env:
       AURION_STATIC_SOURCE: https://aurion3d-6hpapr2g.manus.space
+      NODE_OPTIONS: --max-old-space-size=768
 
     steps:
       - name: Guard repository scope
@@ -49,7 +50,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --network-concurrency=1 --child-concurrency=1
 
       - name: Verify exact source revision
         run: |
