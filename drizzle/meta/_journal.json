@@ -22,6 +22,20 @@
       "when": 1786592716789,
       "tag": "0002_previous_scream",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1786613296290,
+      "tag": "0003_petite_vampiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1786613362695,
+      "tag": "0004_worried_hellcat",
+      "breakpoints": true
     }
   ]
 }

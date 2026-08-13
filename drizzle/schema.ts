@@ -68,6 +68,45 @@ export const playerProfiles = mysqlTable("playerProfiles", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** An active season owns the current `seasonPoints` window; closed seasons retain immutable result snapshots. */
+export const seasons = mysqlTable("seasons", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  seasonKey: varchar("seasonKey", { length: 64 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 120 }).notNull(),
+  status: mysqlEnum("status", ["active", "closed"]).default("active").notNull(),
+  startsAt: timestamp("startsAt").defaultNow().notNull(),
+  endsAt: timestamp("endsAt"),
+  createdByUserId: int("createdByUserId").notNull(),
+  closedByUserId: int("closedByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("seasons_status_starts_idx").on(table.status, table.startsAt)]);
+
+/** Immutable player standings captured immediately before a confirmed season reset. */
+export const seasonLeaderboardSnapshots = mysqlTable("seasonLeaderboardSnapshots", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  seasonId: varchar("seasonId", { length: 64 }).notNull(),
+  userId: int("userId").notNull(),
+  level: int("level").notNull(),
+  seasonPoints: int("seasonPoints").notNull(),
+  victories: int("victories").notNull(),
+  selectedClass: mysqlEnum("selectedClass", ["unbound", "vanguard", "seer", "warden"]).notNull(),
+  capturedAt: timestamp("capturedAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("seasonLeaderboardSnapshots_season_user_uq").on(table.seasonId, table.userId),
+  index("seasonLeaderboardSnapshots_season_rank_idx").on(table.seasonId, table.seasonPoints, table.victories, table.level),
+]);
+
+/** Idempotent administrative evidence for starting or rotating a season. */
+export const seasonTransitionReceipts = mysqlTable("seasonTransitionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  action: mysqlEnum("action", ["start", "rotate"]).notNull(),
+  fromSeasonId: varchar("fromSeasonId", { length: 64 }),
+  toSeasonId: varchar("toSeasonId", { length: 64 }).notNull(),
+  actorUserId: int("actorUserId").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("seasonTransitionReceipts_idempotency_uq").on(table.idempotencyKey)]);
+
 /** Append-only progression evidence. Every grant carries a unique source key to prevent retries from duplicating rewards. */
 export const progressionLedger = mysqlTable("progressionLedger", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -252,6 +291,7 @@ export const rewardReceipts = mysqlTable("rewardReceipts", {
 }, table => [uniqueIndex("rewardReceipts_placement_event_uq").on(table.placementId, table.providerEventId)]);
 
 export type PlayerProfile = typeof playerProfiles.$inferSelect;
+export type Season = typeof seasons.$inferSelect;
 export type Guild = typeof guilds.$inferSelect;
 export type GuildMembership = typeof guildMemberships.$inferSelect;
 export type GlbAsset = typeof glbAssets.$inferSelect;
