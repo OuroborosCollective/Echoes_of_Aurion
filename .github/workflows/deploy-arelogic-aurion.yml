@@ -135,8 +135,6 @@ jobs:
           grep -F "${EXPECTED_SHA}" "${release}/.aurion-release.json"
           ln -sTfn "${release}" "${base}/current.next"
           mv -Tf "${base}/current.next" "${base}/current"
-          nginx -t
-          systemctl reload nginx
           test "$(readlink -f "${base}/current")" = "${release}"
           rm -f "${archive}" "${checksum}"
           REMOTE
