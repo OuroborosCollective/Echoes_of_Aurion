@@ -51,8 +51,8 @@
 - [x] Vorhandene GLB-Assets auf Rigs, Skelettstruktur, Materialeignung und vorhandene Bewegungsanimationen prüfen; Audit ergab keinen lokalen oder katalogisierten GLB-Bestand.
 - [ ] Prototypischen Explorer durch einen vollwertigen GLB-Charakter mit sichtbaren Beinen, Idle-, Lauf-, Treffer- und Angriffanimationen ersetzen.
 - [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
-- [ ] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
-- [ ] Zustandsgebundene Idle-, Lauf-, Treffer- und Angriffsanimationen für die verbesserten Babylon-Live-Modelle implementieren.
+- [x] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
+- [x] Zustandsgebundene Idle-, Lauf-, Treffer- und Angriffsanimationen für die verbesserten Babylon-Live-Modelle implementieren.
 - [x] Aktuellen Live-Figurenstand revisionsgebunden nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit per Readback bestätigen.
 - [ ] Einmalige autorisierte MCP-Paarung gegen den bereitgestellten Endpunkt testen, erlaubte Werkzeuge abrufen und einen zulässigen Spielbefehl ohne Tokenpersistenz validieren.
 - [ ] MCP-Host-Allowlist um den verifizierten Produktions-Host `vchd74l3bk-on7gpcjxhq-ue.a.run.app` ergänzen und erneute Prüfung ohne Bearer-Weitergabe an einen fremden Host durchführen.
@@ -104,4 +104,6 @@
 - [ ] Loot-Receipt und Iteminstanz atomar in einer Datenbanktransaktion persistieren und den Resultat-Receipt-→Drop-→Inventar-Pfad isoliert nachweisen.
 - [ ] Serverseitiges Spezialisierungs-/Loadout-Modell für Waffenereignisse ergänzen und nur gültig ausgerüstete erlaubte Tracks und Aktionen akzeptieren.
 - [ ] Waffen-Receipt und XP-Vergabe transaktional koppeln sowie den Resultat-Receipt-→Waffen-XP-Pfad isoliert nachweisen.
-- [ ] Expeditionsresultat-, atomaren Loot- und Waffenloadoutausbau revisionsgebunden nach GitHub pushen und Hauptbranch-Readback dokumentieren.
+- [x] Expeditionsresultat-, atomaren Loot- und Waffenloadoutausbau revisionsgebunden nach GitHub pushen und Hauptbranch-Readback dokumentieren.
+- [x] Sentinel um einen bewegungsgebundenen Laufzustand ergänzen und alle vier Zustände für Explorer, Echo Scout und Sentinel im Code-/Szenennachweis eindeutig belegen.
+- [ ] Sentinel-Laufzustand und Animationsnachweis revisionsgebunden nach GitHub pushen sowie Workflow-Readback dokumentieren.

@@ -17,6 +17,13 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { ShaderStore } from "@babylonjs/core/Engines/shaderStore";
+import { defaultVertexShader } from "@babylonjs/core/Shaders/default.vertex.js";
+import { defaultPixelShader } from "@babylonjs/core/Shaders/default.fragment.js";
+
+// Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
+ShaderStore.ShadersStore[defaultVertexShader.name] = defaultVertexShader.shader;
+ShaderStore.ShadersStore[defaultPixelShader.name] = defaultPixelShader.shader;
 
 export type GameHandle = { scene: Scene; dispose: () => void };
 
@@ -155,12 +162,14 @@ function animateEcho(rig: LiveRig, time: number, moving: boolean, acting: boolea
   rig.root.scaling.setAll(hurt ? 0.9 : 1);
 }
 
-function animateSentinel(rig: SentinelRig, time: number, attacking: boolean, hurt: boolean): void {
+function animateSentinel(rig: SentinelRig, time: number, moving: boolean, attacking: boolean, hurt: boolean): void {
+  const stride = Math.sin(time * (moving ? 8.4 : 1.25)) * (moving ? 0.42 : 0.11);
   const sway = Math.sin(time * 1.25) * 0.1;
-  rig.legs.forEach((leg, index) => { leg.rotation.x = Math.sin(time * 1.25 + index * Math.PI) * 0.11; });
+  rig.legs.forEach((leg, index) => { leg.rotation.x = index === 0 ? stride : -stride; });
   rig.arms.forEach((arm, index) => { arm.rotation.z = (index === 0 ? -0.24 : 0.24) + (attacking ? (index === 0 ? -0.42 : 0.42) : 0); arm.rotation.x = attacking ? -0.62 : sway; });
   rig.torso.rotation.z = hurt ? Math.sin(time * 28) * 0.13 : 0;
   rig.torso.rotation.x = attacking ? 0.18 : 0;
+  rig.torso.position.y = 1.82 + (moving ? Math.abs(stride) * 0.12 : 0);
   rig.root.scaling.setAll(hurt ? 0.94 : 1);
   rig.eye.emissiveColor = hurt ? Color3.FromHexString("#FFF1AA") : rig.eye.diffuseColor;
 }
@@ -244,7 +253,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const keys = new Set<string>(); const pulses: Pulse[] = [];
   let started = false; let elapsed = 0; let arenaIndex = 0; let sentinelHp = arenas[0].health; let explorerHp = 100; let echoHp = 100;
   let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let lastStateEmit = -1;
-  let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0;
+  let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0; let sentinelMoving = false;
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
@@ -316,10 +325,18 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart);
   const observer = scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05); elapsed += dt; const arena = arenas[arenaIndex];
-    beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.rotation.y = Math.sin(elapsed * 0.46) * 0.3 - 0.2; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08;
+    beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
     if (started && !victory) {
       const direction = new Vector3((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0), 0, (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0));
       if (direction.lengthSquared() > 0) { direction.normalize().scaleInPlace(dt * 3.45); explorer.position.addInPlace(direction); explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z)); explorer.rotation.y = Math.atan2(direction.x, direction.z); }
+      const pursuit = explorer.position.subtract(sentinel.root.position); pursuit.y = 0;
+      const desiredDistance = 3.5;
+      if (!transitioning && sentinelHp > 0 && pursuit.lengthSquared() > desiredDistance * desiredDistance) {
+        const step = pursuit.normalize().scaleInPlace(Math.min(dt * 1.2, Math.max(0, pursuit.length() - desiredDistance)));
+        sentinel.root.position.addInPlace(step); sentinel.root.rotation.y = Math.atan2(step.x, step.z); sentinelMoving = step.lengthSquared() > 0.0001;
+      } else {
+        sentinel.root.rotation.y = Math.sin(elapsed * 0.46) * 0.3 - 0.2;
+      }
       shieldTime = Math.max(0, shieldTime - dt); markTime = Math.max(0, markTime - dt);
       if (!transitioning && elapsed >= nextEnemyStrike && sentinelHp > 0) {
         const rawDamage = 9 + arenaIndex * 3; const damage = shieldTime > 0 ? Math.ceil(rawDamage * 0.22) : rawDamage; explorerHp = Math.max(0, explorerHp - damage); echoHp = Math.max(0, echoHp - Math.ceil(damage * 0.38)); nextEnemyStrike = elapsed + 3.85 - Math.min(markTime, 1.2); createPulse(explorer.position, Color3.FromHexString("#FF7045"), 0.9); emitGameEvent("combat", `Der Sentinel entfesselt einen Spaltimpuls: Team verliert ${damage} Integrität.`); emitState(true);
@@ -331,7 +348,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     const explorerMoving = keys.size > 0 || elapsed < explorerMotionUntil ? 1 : 0;
     animateExplorer(explorerRig, elapsed, explorerMoving, elapsed < explorerAttackUntil, elapsed < explorerHurtUntil);
     animateEcho(echoRig, elapsed, follow.lengthSquared() > 0.03, elapsed < echoActionUntil, elapsed < echoHurtUntil);
-    animateSentinel(sentinel, elapsed, elapsed < sentinelAttackUntil, elapsed < sentinelHurtUntil);
+    animateSentinel(sentinel, elapsed, sentinelMoving, elapsed < sentinelAttackUntil, elapsed < sentinelHurtUntil);
     echo.position.y = 0.2 + Math.sin(elapsed * 2.4) * 0.07; MeshBuilder.CreateLines("team-tether", { points: [explorer.position.add(new Vector3(0, 1.14, 0)), echo.position.add(new Vector3(0, 1.2, 0))], instance: tether });
     actionHeat = Math.max(0, actionHeat - dt * 1.9); beaconLight.intensity = 8 + Math.sin(elapsed * 2.3) * 1.7 + actionHeat * 6;
     for (let index = pulses.length - 1; index >= 0; index -= 1) { const pulse = pulses[index]; pulse.age += dt; pulse.mesh.scaling.setAll(1 + pulse.age * 4.3); const pulseMaterial = pulse.mesh.material as StandardMaterial; pulseMaterial.alpha = Math.max(0, 1 - pulse.age * 1.8); if (pulse.age > 0.58) { pulse.mesh.dispose(); pulses.splice(index, 1); } }
