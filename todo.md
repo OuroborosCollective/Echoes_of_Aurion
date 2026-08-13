@@ -8,3 +8,15 @@
 - [x] Statischen Build mit HTTPS auf der VPS bereitstellen und `arelogic.space` verifizieren.
 - [ ] Root-Zugang nach erfolgreicher Bereitstellung auf schlüsselbasierten Zugriff umstellen und Passwortzugang absichern.
 - [x] Bestehenden Repository-Stand prüfen, den finalen Spielstand kontrolliert nach `OuroborosCollective/Echoes_of_Aurion` überführen und den Remote-Commit verifizieren.
+- [ ] Autorisiertes serverseitiges LLM-Gateway mit Provider-Konfiguration, begrenztem Koop-Befehlsschema, Sitzungsbindung und serverseitigem Ledger implementieren.
+- [x] Providerneutrales MCP-Gateway für individuelle Lieblings-LLMs mit Einwilligungsfluss, Sitzungs-Tokens und strengem Koop-Befehlsschema ausarbeiten.
+- [x] Aktuellen PlayCanvas-Veröffentlichungsweg, Hub-/Spielelisten-Eignung und eine sichere Weiterleitung zum eigenen Game-Server validieren.
+- [x] Nächste Gameplay-Schleife mit Expeditionen, Reliktentscheidungen und längerfristigem Teamfortschritt spezifizieren.
+- [x] MCP-Gateway-Grundlage mit Bearer-Pairing, Befehl-Allowlist, Sequenzschutz, Token-Widerruf und serverseitigem Audit implementieren.
+- [ ] Vollständigen OAuth-2.1-Authorization-Server, produktiven VPS-Proxy und die kompatiblen LLM-Client-Einrichtungsanleitungen bereitstellen.
+- [ ] End-to-End testen: Als angemeldeter Nutzer eine Gateway-Session erstellen, den gültigen Bearer-Token am MCP-Endpunkt nutzen und die Annahme im Missions-HUD bestätigen.
+- [ ] Den End-to-End-Test über den verbundenen Browser des Nutzers statt über die Sandbox-Anmeldung durchführen.
+- [ ] Blocker beheben: Persönliche Browserkopplung ist derzeit nicht verfügbar; E2E-Test erst nach erfolgreicher Browserverbindung erneut anstoßen.
+- [ ] Serverseitig nachweisen, dass ausgeschlossene Befehle und nicht steigende Sequenzen abgewiesen werden.
+- [ ] Widerruf und Ablauf verifizieren: Ein widerrufener oder abgelaufener Bearer-Token darf keine MCP-Befehle mehr annehmen oder ausliefern.
+- [ ] Aktuellen MCP-Gateway-Stand nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit prüfen.

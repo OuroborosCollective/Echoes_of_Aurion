@@ -2,15 +2,15 @@
 
 ## Zielbild
 
-Die veröffentlichte Erstversion nutzt bewusst einen **lokalen Befehlsadapter**. Eine echte Provider-Kopplung wird erst ergänzt, wenn der Betreiber einen eigenen, autorisierten Gateway-Service und eine Datenschutz-/Einwilligungsstrecke bereitstellt. Das Spiel darf weder eine private Chat-Anwendung kontrollieren noch versteckte Befehle an einen Anbieter senden.
+Die veröffentlichte Erstversion nutzte bewusst einen **lokalen Befehlsadapter**. Der aktuelle Ausbaustand ergänzt eine serverseitige, providerneutrale MCP-Grundlage: Ein angemeldeter Explorer kann einen kurzlebigen Pairing-Token ausstellen, den nur ein MCP-fähiger LLM-Client als Bearer-Berechtigung verwenden darf. Das Spiel darf weder eine private Chat-Anwendung kontrollieren noch versteckte Befehle an einen Anbieter senden.
 
 | Bereich | Erstversion | Spätere autorisierte Integration |
 | --- | --- | --- |
-| Partnerwahl | Sichtbare Auswahl und lokale Testkopplung | OAuth-/API-Key-Flow pro Provider, von der Person aktiv bestätigt |
-| Steuerkanal | Browser-Event `aurion:command` | Authentifizierter Server-Endpunkt mit kurzlebigem Session-Token |
+| Partnerwahl | Sichtbare Auswahl und lokale Testkopplung | Einwilligungsgebundener MCP-Pairing-Token pro Spielsession |
+| Steuerkanal | Browser-Event `aurion:command` | Geschützter Streamable-HTTP-Endpunkt `/mcp` mit Bearer-Token |
 | Zulässige Eingaben | `W`, `A`, `S`, `D`, `1` bis `9` | Strikte Allowlist vor jeder Spielmutation |
-| Erinnerung | `localStorage` als exportierbares JSON | Opt-in-Speicher mit klarer Aufbewahrungsdauer und Löschfunktion |
-| Kontrolle | Sichtbarer Feed und Ledger im HUD | Zusätzlich: Nutzer-Pause, Token-Widerruf, Server-Auditlog |
+| Erinnerung | `localStorage` als exportierbares JSON | Zusätzlich serverseitiger Audit nur für Befehl, Reihenfolge und Zeitstempel |
+| Kontrolle | Sichtbarer Feed und Ledger im HUD | Token-Widerruf im UI, Ablauf nach acht Stunden, serverseitiges Auditlog |
 
 ## Normierte Befehlshülle
 
@@ -25,7 +25,9 @@ Die veröffentlichte Erstversion nutzt bewusst einen **lokalen Befehlsadapter**.
 }
 ```
 
-Der Gateway-Service verwirft Nachrichten, deren `protocol` nicht übereinstimmt, deren `command` außerhalb der Allowlist liegt, deren Sequenz nicht streng steigend ist oder deren Session abgelaufen ist. Er speichert niemals Chat-Inhalte im Spiel-Ledger; dort stehen ausschließlich der normalisierte Befehl, ein Zeitstempel und die sichtbare Spielwirkung.
+Der Gateway-Service verwirft Nachrichten, deren `command` außerhalb der Allowlist liegt, deren Sequenz nicht streng steigend ist oder deren Session abgelaufen beziehungsweise widerrufen ist. Er speichert niemals Chat-Inhalte im Spiel-Ledger; dort stehen ausschließlich der normalisierte Befehl, ein Zeitstempel und die sichtbare Spielwirkung. Bearer-Tokens werden nur als SHA-256-Digest gespeichert und nie erneut angezeigt.
+
+Für eine öffentliche Remote-MCP-Veröffentlichung ist Streamable HTTP der aktuelle Transport; MCP-Autorisierung verwendet OAuth 2.1-konforme Bearer-Tokens, die bei jeder Anfrage im Header und nie in der URL übertragen werden sollen.[1] Die bereits implementierte Pairing-Berechtigung ist der spielinterne Zugangsschutz. Vor einer breiten LLM-Client-Kompatibilität muss sie noch durch einen vollständigen OAuth-2.1-Authorization-Server mit Resource Metadata und PKCE erweitert werden.[1]
 
 ## LLM-Verhalten als Spielvertrag
 
@@ -36,3 +38,7 @@ Der Spielpartner erhält keinen Zugriff auf freie Browser- oder Gerätesteuerung
 ## Monetarisierung und Administration
 
 Werbung gehört nicht in die kritische Steuerungsschleife, nicht in das Partner-Gateway und nicht zwischen eine Spieleraktion und deren sichtbare Ausführung. Erst nach einem separaten Consent- und Alters-/Datenschutzkonzept sollte eine optionale Rewarded-Ad-Platzierung zwischen abgeschlossenen Runs ergänzt werden. Die Admin-Steuerung benötigt dafür eine echte Backend-Authentifizierung und ist bewusst nicht in diesem statischen Prototyp enthalten.
+
+## Referenzen
+
+[1] [Model Context Protocol: Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)

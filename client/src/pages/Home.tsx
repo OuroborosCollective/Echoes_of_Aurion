@@ -6,16 +6,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, ChevronRight, CircleDot,
+  Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, ChevronRight, CircleDot, Copy,
   Compass, Cpu, Download, Gamepad2, LockKeyhole, Radio, ShieldCheck, Sparkles, Swords,
   UserRound, X,
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import GameCanvas from "@/components/GameCanvas";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
+import { trpc } from "@/lib/trpc";
+import { startLogin } from "@/const";
 
 type Screen = "gate" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "victory" };
+type GatewayPairing = { sessionId: string; pairingToken: string; mcpUrl: string; expiresAt: Date; allowedCommands: string[] };
 
 const initialMission: MissionState = { arena: 0, arenaName: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", sentinelHp: 112, sentinelMaxHp: 112, explorerHp: 100, echoHp: 100, shield: false, marked: false, phase: "active" };
 const abilityDeck = [
@@ -29,7 +33,7 @@ const abilityDeck = [
   { code: "8", name: "Sonnenbruch", detail: "Flächenstoß", group: "Angriff" },
   { code: "9", name: "Aurion-Resonanz", detail: "Ultimatives Echo", group: "Signatur" },
 ];
-const providers = ["ChatGPT", "Claude", "Gemini", "Mistral", "Lokales LLM", "Eigener Connector"];
+const providers = ["ChatGPT", "Claude", "Gemini", "Mistral", "Lokales LLM", "Eigener MCP-Client"];
 
 function codeFromText(value: string): Command | null {
   const candidate = value.trim().toUpperCase();
@@ -37,6 +41,7 @@ function codeFromText(value: string): Command | null {
 }
 
 export default function Home() {
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [screen, setScreen] = useState<Screen>("gate");
   const [provider, setProvider] = useState(providers[0]);
   const [connected, setConnected] = useState(false);
@@ -48,8 +53,17 @@ export default function Home() {
   const [lastSignal, setLastSignal] = useState("Warten auf die Partnerkopplung.");
   const [missionElapsed, setMissionElapsed] = useState(0);
   const [mission, setMission] = useState<MissionState>(initialMission);
+  const [gatewayPairing, setGatewayPairing] = useState<GatewayPairing | null>(null);
+  const [gatewaySequence, setGatewaySequence] = useState(0);
+  const createGatewaySession = trpc.gateway.createSession.useMutation();
+  const revokeGatewaySession = trpc.gateway.revokeSession.useMutation();
+  const gatewayCommands = trpc.gateway.pullCommands.useQuery(
+    { sessionId: gatewayPairing?.sessionId ?? "unpaired_session", afterSequence: gatewaySequence },
+    { enabled: Boolean(gatewayPairing) && screen === "mission", refetchInterval: 900 }
+  );
 
   const skillNames = useMemo(() => abilityDeck.filter((ability) => selectedSkills.includes(ability.code)), [selectedSkills]);
+  const allowedGatewayCommands = useMemo(() => ["W", "A", "S", "D", ...selectedSkills], [selectedSkills]);
 
   useEffect(() => {
     const onLedger = (event: Event) => setLedger((event as CustomEvent<LedgerEntry[]>).detail);
@@ -75,14 +89,42 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [screen]);
 
+  useEffect(() => {
+    const received = gatewayCommands.data?.filter((entry) => entry.sequence > gatewaySequence) ?? [];
+    if (received.length === 0) return;
+    received.forEach((entry) => {
+      window.dispatchEvent(new CustomEvent("aurion:command", { detail: { code: entry.command } }));
+      appendLedger({ kind: "command", title: `Autorisierter MCP-Impuls ${entry.command}`, detail: `${gatewayPairing?.sessionId ?? "MCP"} bestätigte die Sequenz ${entry.sequence}.` });
+    });
+    const last = received[received.length - 1];
+    setGatewaySequence(last.sequence);
+    setLastSignal(`Autorisierter MCP-Partner: Impuls ${last.command} empfangen.`);
+  }, [gatewayCommands.data, gatewayPairing?.sessionId, gatewaySequence]);
+
   const pairPartner = (): void => {
     if (isPairing) return;
-    setIsPairing(true); setLastSignal(`Autorisierte lokale Testkopplung mit ${provider} wird vorbereitet.`);
-    window.setTimeout(() => {
-      setConnected(true); setIsPairing(false);
-      appendLedger({ kind: "connection", title: "Partner-Siegel gekoppelt", detail: `${provider} wurde als sichtbarer Testpartner registriert. Keine private Chat-App wurde geöffnet.` });
-      setLastSignal(`${provider} ist im lokalen Befehlsadapter bereit.`);
-    }, 640);
+    if (authLoading) { setLastSignal("Expeditionskonto wird geprüft. Bitte einen Moment warten."); return; }
+    if (!isAuthenticated) { setLastSignal("Melde dich an, um einen autorisierten Partner-Slot auszustellen."); startLogin(); return; }
+    setIsPairing(true); setLastSignal(`Autorisierter MCP-Slot für ${provider} wird ausgegeben.`);
+    createGatewaySession.mutate({ providerLabel: provider, allowedCommands: allowedGatewayCommands }, {
+      onSuccess: (pairing) => {
+        setGatewayPairing(pairing); setGatewaySequence(0); setConnected(true); setIsPairing(false);
+        appendLedger({ kind: "connection", title: "MCP-Partner-Siegel ausgestellt", detail: `${provider} erhält einen zeitlich begrenzten, sichtbaren Steuervertrag. Der Token bleibt nur in dieser Sitzung sichtbar.` });
+        setLastSignal(`${provider} kann jetzt über den autorisierten MCP-Steuervertrag beitreten.`);
+      },
+      onError: () => { setIsPairing(false); setLastSignal("Partner-Siegel konnte nicht ausgestellt werden. Prüfe die Konto-Verbindung erneut."); },
+    });
+  };
+  const revokePartner = (): void => {
+    if (!gatewayPairing || revokeGatewaySession.isPending) return;
+    revokeGatewaySession.mutate({ sessionId: gatewayPairing.sessionId }, {
+      onSuccess: () => {
+        appendLedger({ kind: "connection", title: "MCP-Partner-Siegel widerrufen", detail: "Der serverseitige Steuervertrag wurde beendet; der Pairing-Token ist nicht mehr verwendbar." });
+        setGatewayPairing(null); setGatewaySequence(0); setConnected(false); setScreen("gate");
+        setLastSignal("Partner-Siegel widerrufen. Eine neue Kopplung kann ausgestellt werden.");
+      },
+      onError: () => setLastSignal("Der Widerruf konnte nicht bestätigt werden. Bitte erneut versuchen."),
+    });
   };
   const unlockLoadout = (): void => { if (!connected) return; setScreen("loadout"); appendLedger({ kind: "system", title: "Menü freigeschaltet", detail: "Charakter- und Partner-Loadout sind jetzt verfügbar." }); };
   const toggleSkill = (code: string): void => setSelectedSkills((current) => { if (current.includes(code)) return current.filter((skill) => skill !== code); if (current.length >= 3) return [...current.slice(1), code]; return [...current, code]; });
@@ -100,9 +142,7 @@ export default function Home() {
     appendLedger({ kind: /^[1-9]$/.test(code) ? "combat" : "command", title: `Partner-Impuls ${code}`, detail: ability ? `${provider} aktiviert ${ability.name}.` : `${provider} erhält den Bewegungsbefehl ${code}.` });
     setLastSignal(ability ? `${provider}: ${ability.name} ausgelöst.` : `${provider}: Kurs ${code} bestätigt.`); setCommandText("");
   };
-  const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => {
-    window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } }));
-  };
+  const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => { window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } })); };
   const sendHumanAction = (): void => { window.dispatchEvent(new CustomEvent("aurion:human-action")); setLastSignal("Explorer löst ein Speersignal aus."); };
   const downloadLedger = (): void => { const blob = new Blob([exportLedger()], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "aurion-memory-ledger.json"; link.click(); URL.revokeObjectURL(url); };
   const formatTime = (seconds: number): string => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -113,42 +153,19 @@ export default function Home() {
       <GameCanvas />
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
-      <header className="brand-bar">
-        <div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div>
-        <div className="brand-status"><span className={connected ? "signal-dot active" : "signal-dot"} /> {connected ? "Partner-Siegel aktiv" : "Zugang versiegelt"}</div>
-      </header>
+      <header className="brand-bar"><div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div><div className="brand-status"><span className={connected ? "signal-dot active" : "signal-dot"} /> {connected ? "Partner-Siegel aktiv" : "Zugang versiegelt"}</div></header>
       {screen === "gate" && (
         <section className="gate-panel" aria-labelledby="gate-title">
           <div className="gate-runes" aria-hidden="true">✦ &nbsp; ◌ &nbsp; ⟡</div><p className="eyebrow"><LockKeyhole size={14} /> KOOP-VERBINDUNG ERFORDERLICH</p>
           <h2 id="gate-title">Ein Signal.<br /><em>Zwei Willen.</em><br />Eine letzte Sternwarte.</h2>
-          <p className="gate-copy">Aurion öffnet sich erst, wenn du einen LLM-Partner sichtbar mit deinem Expeditionsteam koppelst. Im ersten Build ist dies ein lokaler, prüfbarer Testlink – keine private App wird gelesen oder ferngesteuert.</p>
+          <p className="gate-copy">Aurion öffnet sich erst, wenn du deinen LLM-Partner sichtbar koppelst. Dein bevorzugter MCP-fähiger Client erhält dafür ausschließlich einen zeitlich begrenzten Steuervertrag – keine private Chat-App wird gelesen oder ferngesteuert.</p>
           <div className="duo-tableau" aria-label="Explorer und Echo Scout sind über ein Aurion-Siegel verbunden"><div className="duo-actor explorer-figure"><span className="actor-crown" /><span className="actor-body" /><small>EXPLORER</small></div><div className="split-seal" aria-hidden="true"><i /><b /><i /></div><div className="duo-actor scout-figure"><span className="actor-crown" /><span className="actor-body" /><small>ECHO SCOUT</small></div></div>
-          <div className="gate-divider"><span /></div><div className="connection-form"><label><span>Wähle deinen Team-Partner</span><select value={provider} onChange={(event) => setProvider(event.target.value)} disabled={connected}>{providers.map((item) => <option key={item}>{item}</option>)}</select></label><button type="button" className={connected ? "seal-button connected" : "seal-button"} onClick={pairPartner} disabled={isPairing || connected}>{connected ? <ShieldCheck size={18} /> : <Radio size={18} />}{isPairing ? "KOPPLUNG WIRD GEPRÜFT" : connected ? "PARTNER-SIEGEL BESTÄTIGT" : "LOKALEN PARTNER-LINK KOPPELN"}</button>{connected && <button type="button" className="continue-link" onClick={unlockLoadout}>Expeditionsteam zusammenstellen <ChevronRight size={18} /></button>}</div>
-          <div className="privacy-note"><ShieldCheck size={16} /><span><b>Transparente Testumgebung.</b> Jeder akzeptierte Befehl wird im lokalen JSON-Ledger dieses Geräts protokolliert.</span></div>
+          <div className="gate-divider"><span /></div><div className="connection-form"><label><span>Wähle deinen Team-Partner</span><select value={provider} onChange={(event) => setProvider(event.target.value)} disabled={connected}>{providers.map((item) => <option key={item}>{item}</option>)}</select></label><button type="button" className={connected ? "seal-button connected" : "seal-button"} onClick={pairPartner} disabled={isPairing || connected}>{connected ? <ShieldCheck size={18} /> : <Radio size={18} />}{isPairing ? "STEUERVERTRAG WIRD AUSGESTELLT" : connected ? "MCP-PARTNER-SIEGEL AKTIV" : "AUTORISIERTEN MCP-SLOT ERSTELLEN"}</button>{gatewayPairing && <div className="gateway-pairing"><div><span>DEIN MCP-ENDPUNKT</span><code>{gatewayPairing.mcpUrl}</code></div><div><span>BEARER-PAIRINGTOKEN // NUR JETZT SICHTBAR</span><code>{gatewayPairing.pairingToken}</code><button type="button" onClick={() => { void navigator.clipboard?.writeText(gatewayPairing.pairingToken); }}><Copy size={13} /> TOKEN KOPIEREN</button></div><small>Konfiguriere den Token ausschließlich als <b>Authorization: Bearer</b>-Header in deinem MCP-fähigen LLM-Client. Er gilt bis {gatewayPairing.expiresAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} und steuert nur {gatewayPairing.allowedCommands.join(" · ")}.</small><button type="button" className="revoke-pairing" onClick={revokePartner}>{revokeGatewaySession.isPending ? "WIDERRUF WIRD BESTÄTIGT" : "PARTNER-SIEGEL WIDERRUFEN"}</button></div>}{connected && <button type="button" className="continue-link" onClick={unlockLoadout}>Expeditionsteam zusammenstellen <ChevronRight size={18} /></button>}</div>
+          <div className="privacy-note"><ShieldCheck size={16} /><span><b>Autorisierte Koopsitzung.</b> {user?.name ? `${user.name} stellt den Partner-Slot aus. ` : ""}Der Gateway speichert nur normalisierte Befehle, Reihenfolge und Spielwirkung – keine Chat-Inhalte oder Provider-Tokens.</span></div>
         </section>
       )}
-      {screen === "loadout" && (
-        <section className="loadout-deck" aria-labelledby="loadout-title">
-          <div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed.</p></div>
-          <div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>WASD + Slots 1–9 über den sichtbaren Feed</small></div><span className="signal-dot active" /></div></div>
-          <div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div>
-          <footer className="loadout-footer"><div><p>PARTNER-DECK <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer>
-        </section>
-      )}
-      {screen === "mission" && (
-        <section className="mission-ui" aria-label="Expeditionsoberfläche">
-          <div className="mission-objective"><span>ARENA {mission.arena + 1}/3 // {mission.arenaName}</span><b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b><div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div></div>
-          <div className="boss-readout"><CircleDot size={14} /><span>SENTINEL <b>{mission.sentinelHp}/{mission.sentinelMaxHp}</b></span><i className={mission.marked ? "marked" : ""} /></div>
-          <div className="party-strip human"><UserRound size={17} /><div><span>EXPLORER</span><b>{operatorName || "Unbenannt"}</b></div><strong>{mission.explorerHp}</strong></div>
-          <div className="party-strip echo"><Bot size={17} /><div><span>LLM-PARTNER // {provider}</span><b>Echo Scout</b></div><strong>{mission.echoHp}</strong></div>
-          <div className="combat-timer"><Activity size={14} /> {formatTime(missionElapsed)}</div>
-          <aside className="command-console"><div className="console-head"><div><span className="signal-dot active" /> LIVE COMMAND BRIDGE</div><button type="button" aria-label="Ledger exportieren" onClick={downloadLedger}><Download size={15} /></button></div><p className="console-status"><Cpu size={14} /> {lastSignal}</p><div className="command-input"><input aria-label="LLM-Befehl" value={commandText} onChange={(event) => setCommandText(event.target.value.slice(-1))} onKeyDown={(event) => { if (event.key === "Enter") sendPartnerCommand(); }} placeholder="W / A / S / D / 1–9" /><button type="button" onClick={() => sendPartnerCommand()}><ChevronRight size={18} /></button></div><div className="quick-commands">{["W", "A", "S", "D", ...selectedSkills].map((code) => <button type="button" key={code} onClick={() => sendPartnerCommand(code)}>{code}</button>)}</div><div className="ledger-list">{ledger.slice(-4).reverse().map((entry) => <div className={`ledger-row ${entry.kind}`} key={entry.id}><span>{entry.kind === "warning" ? <X size={13} /> : <Sparkles size={13} />}</span><p><b>{entry.title}</b><small>{entry.detail}</small></p></div>)}</div></aside>
-          <div className="player-control-bridge" aria-label="Touch-Steuerung für Explorer"><span>EXPLORER STEUERUNG</span><div className="dpad"><button type="button" onClick={() => sendHumanCommand("W")} aria-label="Vorwärts"><ArrowUp size={20} /></button><button type="button" onClick={() => sendHumanCommand("A")} aria-label="Links"><ArrowLeft size={20} /></button><button type="button" onClick={() => sendHumanCommand("S")} aria-label="Rückwärts"><ArrowDown size={20} /></button><button type="button" onClick={() => sendHumanCommand("D")} aria-label="Rechts"><ArrowRight size={20} /></button></div><button type="button" className="spear-action" onClick={sendHumanAction}><Swords size={15} /> SPEER // 17</button></div>
-          <div className="ability-rail"><span><Gamepad2 size={15} /> ECHO SLOTS</span>{skillNames.map((ability) => <button type="button" key={ability.code} onClick={() => sendPartnerCommand(ability.code)}><kbd>{ability.code}</kbd><small>{ability.name}</small></button>)}</div>
-          <div className="arena-track" aria-label="Fortschritt durch die Ruinenarenen">{["ASTERION", "ARCHIV", "SOLARIUM"].map((label, index) => <span key={label} className={index < mission.arena ? "cleared" : index === mission.arena ? "current" : ""}>{index + 1}<small>{label}</small></span>)}</div>
-          <button type="button" className="ledger-reset" onClick={() => { resetLedger(); setLastSignal("Lokales Ledger wurde geleert."); }}><X size={13} /> Ledger leeren</button>
-        </section>
-      )}
+      {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed.</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>Autorisierter MCP-Vertrag · WASD + Slots</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>PARTNER-DECK <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer></section>}
+      {screen === "mission" && <section className="mission-ui" aria-label="Expeditionsoberfläche"><div className="mission-objective"><span>ARENA {mission.arena + 1}/3 // {mission.arenaName}</span><b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b><div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div></div><div className="boss-readout"><CircleDot size={14} /><span>SENTINEL <b>{mission.sentinelHp}/{mission.sentinelMaxHp}</b></span><i className={mission.marked ? "marked" : ""} /></div><div className="party-strip human"><UserRound size={17} /><div><span>EXPLORER</span><b>{operatorName || "Unbenannt"}</b></div><strong>{mission.explorerHp}</strong></div><div className="party-strip echo"><Bot size={17} /><div><span>LLM-PARTNER // {provider}</span><b>Echo Scout</b></div><strong>{mission.echoHp}</strong></div><div className="combat-timer"><Activity size={14} /> {formatTime(missionElapsed)}</div><aside className="command-console"><div className="console-head"><div><span className="signal-dot active" /> LIVE COMMAND BRIDGE</div><button type="button" aria-label="Ledger exportieren" onClick={downloadLedger}><Download size={15} /></button></div><p className="console-status"><Cpu size={14} /> {lastSignal}</p><div className="command-input"><input aria-label="LLM-Befehl" value={commandText} onChange={(event) => setCommandText(event.target.value.slice(-1))} onKeyDown={(event) => { if (event.key === "Enter") sendPartnerCommand(); }} placeholder="W / A / S / D / 1–9" /><button type="button" onClick={() => sendPartnerCommand()}><ChevronRight size={18} /></button></div><div className="quick-commands">{["W", "A", "S", "D", ...selectedSkills].map((code) => <button type="button" key={code} onClick={() => sendPartnerCommand(code)}>{code}</button>)}</div><div className="ledger-list">{ledger.slice(-4).reverse().map((entry) => <div className={`ledger-row ${entry.kind}`} key={entry.id}><span>{entry.kind === "warning" ? <X size={13} /> : <Sparkles size={13} />}</span><p><b>{entry.title}</b><small>{entry.detail}</small></p></div>)}</div></aside><div className="player-control-bridge" aria-label="Touch-Steuerung für Explorer"><span>EXPLORER STEUERUNG</span><div className="dpad"><button type="button" onClick={() => sendHumanCommand("W")} aria-label="Vorwärts"><ArrowUp size={20} /></button><button type="button" onClick={() => sendHumanCommand("A")} aria-label="Links"><ArrowLeft size={20} /></button><button type="button" onClick={() => sendHumanCommand("S")} aria-label="Rückwärts"><ArrowDown size={20} /></button><button type="button" onClick={() => sendHumanCommand("D")} aria-label="Rechts"><ArrowRight size={20} /></button></div><button type="button" className="spear-action" onClick={sendHumanAction}><Swords size={15} /> SPEER // 17</button></div><div className="ability-rail"><span><Gamepad2 size={15} /> ECHO SLOTS</span>{skillNames.map((ability) => <button type="button" key={ability.code} onClick={() => sendPartnerCommand(ability.code)}><kbd>{ability.code}</kbd><small>{ability.name}</small></button>)}</div><div className="arena-track" aria-label="Fortschritt durch die Ruinenarenen">{["ASTERION", "ARCHIV", "SOLARIUM"].map((label, index) => <span key={label} className={index < mission.arena ? "cleared" : index === mission.arena ? "current" : ""}>{index + 1}<small>{label}</small></span>)}</div><button type="button" className="ledger-reset" onClick={() => { resetLedger(); setLastSignal("Lokales Ledger wurde geleert."); }}><X size={13} /> Ledger leeren</button></section>}
     </main>
   );
 }
