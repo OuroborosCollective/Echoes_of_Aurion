@@ -125,6 +125,7 @@ jobs:
             archive=/tmp/aurion-static-release.tgz
             checksum=/tmp/aurion-static-release.tgz.sha256
             test -d "${base}/releases"
+            cd /tmp
             sha256sum -c "${checksum}"
             release="${base}/releases/${RELEASE_ID}"
             test ! -e "${release}"
