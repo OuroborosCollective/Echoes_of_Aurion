@@ -48,7 +48,7 @@
 - [x] Startszene auf Desktop visuell abnehmen: Explorer und Echo Scout müssen klar sichtbar sein, ohne rechten Geometriehaufen oder fehlerhaftes Cropping.
 - [x] Startszene auf Mobilansicht abnehmen: Die neue Hintergrundkomposition darf die Lesbarkeit des Gate-Panels nicht verschlechtern.
 - [x] Visuelle Abnahme der Desktop- und Mobilbilder im Projektprotokoll dokumentieren und erst danach die Startseitenkorrektur final abschließen.
-- [ ] Vorhandene GLB-Assets auf Rigs, Skelettstruktur, Materialeignung und vorhandene Bewegungsanimationen prüfen.
+- [x] Vorhandene GLB-Assets auf Rigs, Skelettstruktur, Materialeignung und vorhandene Bewegungsanimationen prüfen; Audit ergab keinen lokalen oder katalogisierten GLB-Bestand.
 - [ ] Prototypischen Explorer durch einen vollwertigen GLB-Charakter mit sichtbaren Beinen, Idle-, Lauf-, Treffer- und Angriffanimationen ersetzen.
 - [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
 - [ ] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
@@ -96,3 +96,12 @@
 - [x] Finalen bilingualen Hero-Trailer als abrufbare Videodatei bereitstellen.
 - [x] Aurion-MP4-Auslieferung im Aurion-Nginx-Serverblock mit `video/mp4` statt `application/octet-stream` kennzeichnen und anschließend Trailerwiedergabe per Browser-Readback prüfen.
 - [x] Nach der MP4-MIME-Korrektur den Hero-Trailer technisch im Browser auf `currentSrc`, `readyState >= 2`, positive Dauer, Fortschritt und fehlenden Videoerror prüfen.
+- [ ] Den früheren `allowGatewayCommand`-Laufzeitfehler gegen den aktuellen Build gezielt über den betroffenen Laufzeitimport oder ein tatsächliches Gateway-Readback nachweisen.
+- [ ] Die echte Missionsansicht mit Browserkonsolen-Readback sowie technischem Audiozustand prüfen, sobald eine autorisierte Testsession verfügbar ist.
+- [x] Produktive Endgame-/GLB-Datenbankmigrationen gegen das Drizzle-Schema prüfen und Tabellenreadback durchführen; die anfängliche `glb_assets`-Meldung war eine falsche snake_case-Abfrage, während `glbAssets` produktiv vorhanden ist.
+- [x] Idempotente serverseitige Expeditionsresultat-Quittung mit Nutzer-, Expeditions-, Seed- und Ergebnisbindung einführen, bevor Loot oder Waffen-XP vergeben werden.
+- [ ] Administrativen Expeditionsresultat-→Loot-→Inventar-Readback in einer isolierten Testumgebung durchführen, ohne Produktivspielerdaten zu erzeugen.
+- [ ] Loot-Receipt und Iteminstanz atomar in einer Datenbanktransaktion persistieren und den Resultat-Receipt-→Drop-→Inventar-Pfad isoliert nachweisen.
+- [ ] Serverseitiges Spezialisierungs-/Loadout-Modell für Waffenereignisse ergänzen und nur gültig ausgerüstete erlaubte Tracks und Aktionen akzeptieren.
+- [ ] Waffen-Receipt und XP-Vergabe transaktional koppeln sowie den Resultat-Receipt-→Waffen-XP-Pfad isoliert nachweisen.
+- [ ] Expeditionsresultat-, atomaren Loot- und Waffenloadoutausbau revisionsgebunden nach GitHub pushen und Hauptbranch-Readback dokumentieren.

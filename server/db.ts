@@ -1,9 +1,9 @@
 import { and, desc, eq, gt, gte, like, lte, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { gatewayCommands, gatewaySessions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, monetizationPlacements, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, treasureClasses, users, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
+import { expeditionResultReceipts, gatewayCommands, gatewaySessions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, monetizationPlacements, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
-import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
+import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
 import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration } from "./adminProtocol";
 import { storagePut } from "./storage";
@@ -154,6 +154,34 @@ function newEndgameId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
+async function getAcceptedExpeditionResult(values: { resultReceiptId: string; userId: number; expeditionKey: string; seedDigest: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const result = await db.select().from(expeditionResultReceipts).where(and(
+    eq(expeditionResultReceipts.id, values.resultReceiptId),
+    eq(expeditionResultReceipts.userId, values.userId),
+    eq(expeditionResultReceipts.expeditionKey, values.expeditionKey),
+    eq(expeditionResultReceipts.seedDigest, values.seedDigest),
+    eq(expeditionResultReceipts.status, "accepted"),
+  )).limit(1);
+  if (!result[0]) throw new Error("A matching accepted expedition result is required before rewards can be granted");
+  return result[0];
+}
+
+export async function recordValidatedExpeditionResult(values: { userId: number; expeditionKey: string; seedDigest: string; resultDigest: string; confirmedByUserId: number; idempotencyKey: string }) {
+  if (!isServerEvidenceDigest(values.seedDigest) || !isServerEvidenceDigest(values.resultDigest)) throw new Error("Expedition evidence must be a SHA-256 digest");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const previous = await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+  if (previous[0]) return { applied: false as const, receipt: previous[0] };
+  await getOrCreatePlayerProfile(values.userId);
+  const receiptId = newEndgameId("expres");
+  await db.insert(expeditionResultReceipts).values({ id: receiptId, ...values });
+  const readback = await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.id, receiptId)).limit(1);
+  if (!readback[0] || readback[0].status !== "accepted") throw new Error("Expedition result receipt readback failed");
+  return { applied: true as const, receipt: readback[0] };
+}
+
 export async function getOrCreatePlayerProfile(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
@@ -242,6 +270,24 @@ export async function listWeaponMasteries(userId: number) {
   return db.select().from(weaponMasteries).where(eq(weaponMasteries.userId, userId));
 }
 
+export async function setWeaponLoadout(values: { userId: number; weaponTrack: WeaponTrack }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const profile = await getOrCreatePlayerProfile(values.userId);
+  if (!canUseWeaponWithClass(profile.selectedClass, values.weaponTrack)) throw new Error("Weapon track is not available for the selected class");
+  await db.insert(weaponLoadouts).values(values).onDuplicateKeyUpdate({ set: { weaponTrack: values.weaponTrack, configuredAt: new Date() } });
+  const readback = await db.select().from(weaponLoadouts).where(eq(weaponLoadouts.userId, values.userId)).limit(1);
+  if (!readback[0] || readback[0].weaponTrack !== values.weaponTrack) throw new Error("Weapon loadout readback failed");
+  return readback[0];
+}
+
+export async function getWeaponLoadout(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(weaponLoadouts).where(eq(weaponLoadouts.userId, userId)).limit(1);
+  return result[0];
+}
+
 type CatalogAffix = { key: string; slot: "prefix" | "suffix"; stats: Record<string, number> };
 
 function parseCatalogEntries(raw: string): string[] {
@@ -257,11 +303,10 @@ function parseAffix(row: { affixKey: string; slot: "prefix" | "suffix"; modifier
   return { key: row.affixKey, slot: row.slot, stats };
 }
 
-export async function createLootDrop(values: { userId: number; expeditionKey: string; treasureClass: string; qualityRoll: number; affixRoll: number; magicFind: number; itemLevel: number; seedDigest: string; idempotencyKey: string }) {
+export async function createLootDrop(values: { userId: number; expeditionKey: string; treasureClass: string; qualityRoll: number; affixRoll: number; magicFind: number; itemLevel: number; seedDigest: string; resultReceiptId: string; idempotencyKey: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  const previous = await db.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
-  if (previous[0]) return { applied: false as const, receiptId: previous[0].id };
+  await getAcceptedExpeditionResult(values);
   const definition = await db.select().from(treasureClasses).where(and(eq(treasureClasses.classKey, values.treasureClass), eq(treasureClasses.active, 1))).limit(1);
   if (!definition[0] || values.itemLevel < definition[0].minLevel || values.itemLevel > definition[0].maxLevel) throw new Error("Treasure class is unavailable for the item level");
   const entries = parseCatalogEntries(definition[0].entriesJson);
@@ -273,11 +318,15 @@ export async function createLootDrop(values: { userId: number; expeditionKey: st
   const affixes: LootAffix[] = quality === "normal" ? [] : [parseAffix(prefix[values.affixRoll % prefix.length] ?? (() => { throw new Error("No prefix affix is available"); })())];
   if (quality !== "normal" && quality !== "magic") affixes.push(parseAffix(suffix[Math.floor(values.affixRoll / 7) % suffix.length] ?? (() => { throw new Error("No suffix affix is available"); })()));
   const setDefinition = quality === "set" ? (await db.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
-  const receiptId = newEndgameId("drop");
-  await db.insert(lootDropReceipts).values({ id: receiptId, userId: values.userId, expeditionKey: values.expeditionKey, treasureClass: values.treasureClass, quality, seedDigest: values.seedDigest, idempotencyKey: values.idempotencyKey });
-  const itemId = newEndgameId("item");
-  await db.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey });
-  return { applied: true as const, receiptId, itemId, quality };
+  return db.transaction(async tx => {
+    const previous = await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+    if (previous[0]) return { applied: false as const, receiptId: previous[0].id };
+    const receiptId = newEndgameId("drop");
+    const itemId = newEndgameId("item");
+    await tx.insert(lootDropReceipts).values({ id: receiptId, userId: values.userId, expeditionKey: values.expeditionKey, treasureClass: values.treasureClass, quality, seedDigest: values.seedDigest, idempotencyKey: values.idempotencyKey });
+    await tx.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey });
+    return { applied: true as const, receiptId, itemId, quality };
+  });
 }
 
 export async function listSetBonusesForUser(userId: number) {
@@ -313,15 +362,30 @@ export async function listInventoryForUser(userId: number) {
   });
 }
 
-export async function recordValidatedWeaponEvent(values: { userId: number; expeditionKey: string; weaponTrack: WeaponTrack; actionKey: string; xpGranted: number; idempotencyKey: string }) {
+export async function recordValidatedWeaponEvent(values: { userId: number; expeditionKey: string; seedDigest: string; resultReceiptId: string; weaponTrack: WeaponTrack; actionKey: string; xpGranted: number; idempotencyKey: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  const previous = await db.select().from(weaponMasteryReceipts).where(eq(weaponMasteryReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
-  if (previous[0]) return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+  await getAcceptedExpeditionResult(values);
   const profile = await getOrCreatePlayerProfile(values.userId);
   if (!canUseWeaponWithClass(profile.selectedClass, values.weaponTrack)) throw new Error("Weapon track is not available for the selected class");
-  await db.insert(weaponMasteryReceipts).values({ id: newEndgameId("wrec"), ...values });
-  return grantProgress({ userId: values.userId, kind: "weapon_xp", delta: values.xpGranted, source: "validated-expedition", reason: `${values.expeditionKey}:${values.actionKey}`, idempotencyKey: `weapon:${values.idempotencyKey}`, weaponTrack: values.weaponTrack });
+  const loadout = await getWeaponLoadout(values.userId);
+  if (!loadout || loadout.weaponTrack !== values.weaponTrack) throw new Error("Weapon track is not equipped in the server loadout");
+  if (!isWeaponActionAllowed(values.weaponTrack, values.actionKey)) throw new Error("Weapon action is not allowed for the equipped track");
+  return db.transaction(async tx => {
+    const previous = await tx.select().from(weaponMasteryReceipts).where(eq(weaponMasteryReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+    if (previous[0]) return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+    const rewardKey = `weapon:${values.idempotencyKey}`;
+    const priorReward = await tx.select().from(progressionLedger).where(eq(progressionLedger.idempotencyKey, rewardKey)).limit(1);
+    if (priorReward[0]) throw new Error("Weapon reward receipt already exists without its matching weapon receipt");
+    const priorMastery = await tx.select().from(weaponMasteries).where(and(eq(weaponMasteries.userId, values.userId), eq(weaponMasteries.weaponTrack, values.weaponTrack))).limit(1);
+    const xp = (priorMastery[0]?.xp ?? 0) + values.xpGranted;
+    const level = levelFromTotalXp(xp);
+    await tx.insert(weaponMasteryReceipts).values({ id: newEndgameId("wrec"), userId: values.userId, expeditionKey: values.expeditionKey, weaponTrack: values.weaponTrack, actionKey: values.actionKey, xpGranted: values.xpGranted, idempotencyKey: values.idempotencyKey });
+    if (priorMastery[0]) await tx.update(weaponMasteries).set({ xp, level }).where(eq(weaponMasteries.id, priorMastery[0].id));
+    else await tx.insert(weaponMasteries).values({ id: newEndgameId("wm"), userId: values.userId, weaponTrack: values.weaponTrack, xp, level });
+    await tx.insert(progressionLedger).values({ id: newEndgameId("prog"), userId: values.userId, kind: "weapon_xp", delta: values.xpGranted, source: "validated-expedition", reason: `${values.expeditionKey}:${values.actionKey}`, idempotencyKey: rewardKey });
+    return { applied: true as const, profile: await getOrCreatePlayerProfile(values.userId) };
+  });
 }
 
 export async function listGlbAssets() {

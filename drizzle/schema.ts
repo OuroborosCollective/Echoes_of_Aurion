@@ -169,6 +169,13 @@ export const weaponMasteries = mysqlTable("weaponMasteries", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [uniqueIndex("weaponMasteries_user_track_uq").on(table.userId, table.weaponTrack)]);
 
+/** Exactly one server-owned active weapon track per player; browser action labels never choose it. */
+export const weaponLoadouts = mysqlTable("weaponLoadouts", {
+  userId: int("userId").primaryKey(),
+  weaponTrack: mysqlEnum("weaponTrack", ["blade", "staff", "spear", "focus"]).notNull(),
+  configuredAt: timestamp("configuredAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /** Approved GLB metadata references S3 objects; bytes never enter the relational database. */
 export const glbAssets = mysqlTable("glbAssets", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -208,6 +215,22 @@ export const lootDropReceipts = mysqlTable("lootDropReceipts", {
 }, table => [
   uniqueIndex("lootDropReceipts_idempotency_uq").on(table.idempotencyKey),
   index("lootDropReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+/** A server-confirmed expedition completion. Loot and weapon XP must name this receipt. */
+export const expeditionResultReceipts = mysqlTable("expeditionResultReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  expeditionKey: varchar("expeditionKey", { length: 96 }).notNull(),
+  seedDigest: varchar("seedDigest", { length: 128 }).notNull(),
+  resultDigest: varchar("resultDigest", { length: 128 }).notNull(),
+  status: mysqlEnum("status", ["accepted", "rejected"]).default("accepted").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  confirmedByUserId: int("confirmedByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("expeditionResultReceipts_idempotency_uq").on(table.idempotencyKey),
+  index("expeditionResultReceipts_user_expedition_idx").on(table.userId, table.expeditionKey, table.createdAt),
 ]);
 
 export const itemInstances = mysqlTable("itemInstances", {

@@ -53,6 +53,7 @@ export const appRouter = router({
     me: protectedProcedure.query(async ({ ctx }) => ({
       profile: await db.getOrCreatePlayerProfile(ctx.user.id),
       weaponMasteries: await db.listWeaponMasteries(ctx.user.id),
+      weaponLoadout: await db.getWeaponLoadout(ctx.user.id),
       guild: await db.getActiveGuildForUser(ctx.user.id),
       inventory: await db.listInventoryForUser(ctx.user.id),
       setBonuses: await db.listSetBonusesForUser(ctx.user.id),
@@ -61,6 +62,7 @@ export const appRouter = router({
       if (!isPlayerClass(input.playerClass)) throw new Error("Unsupported class");
       return db.choosePlayerClass(ctx.user.id, input.playerClass);
     }),
+    setWeaponLoadout: protectedProcedure.input(z.object({ weaponTrack: z.enum(["blade", "staff", "spear", "focus"]) })).mutation(({ ctx, input }) => db.setWeaponLoadout({ userId: ctx.user.id, weaponTrack: input.weaponTrack })),
   }),
   guild: router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
@@ -86,8 +88,9 @@ export const appRouter = router({
         const weaponTrack = input.weaponTrack && isWeaponTrack(input.weaponTrack) ? input.weaponTrack as WeaponTrack : undefined;
         return db.grantProgress({ ...input, weaponTrack });
       }),
-      recordLoot: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().min(3).max(96), treasureClass: z.string().min(3).max(96), qualityRoll: z.number().int().min(0).max(9999), affixRoll: z.number().int().min(0).max(9999), magicFind: z.number().int().min(0).max(100), itemLevel: z.number().int().min(1).max(99), seedDigest: z.string().regex(/^[a-f0-9]{64}$/), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ input }) => db.createLootDrop(input)),
-      recordWeaponEvent: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().min(3).max(96), weaponTrack: z.enum(["blade", "staff", "spear", "focus"]), actionKey: z.string().min(3).max(120), xpGranted: z.number().int().min(1).max(1000), idempotencyKey: z.string().min(12).max(128) })).mutation(({ input }) => db.recordValidatedWeaponEvent(input)),
+      recordExpeditionResult: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().trim().min(3).max(96), seedDigest: z.string().regex(/^[a-f0-9]{64}/i), resultDigest: z.string().regex(/^[a-f0-9]{64}/i), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => db.recordValidatedExpeditionResult({ ...input, confirmedByUserId: ctx.user.id })),
+      recordLoot: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().min(3).max(96), treasureClass: z.string().min(3).max(96), qualityRoll: z.number().int().min(0).max(9999), affixRoll: z.number().int().min(0).max(9999), magicFind: z.number().int().min(0).max(100), itemLevel: z.number().int().min(1).max(99), seedDigest: z.string().regex(/^[a-f0-9]{64}$/), resultReceiptId: z.string().min(8).max(64), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ input }) => db.createLootDrop(input)),
+      recordWeaponEvent: adminProcedure.input(z.object({ userId: z.number().int().positive(), expeditionKey: z.string().min(3).max(96), seedDigest: z.string().regex(/^[a-f0-9]{64}$/), resultReceiptId: z.string().min(8).max(64), weaponTrack: z.enum(["blade", "staff", "spear", "focus"]), actionKey: z.string().min(3).max(120), xpGranted: z.number().int().min(1).max(1000), idempotencyKey: z.string().min(12).max(128) })).mutation(({ input }) => db.recordValidatedWeaponEvent(input)),
     }),
     assets: router({
       list: adminProcedure.query(() => db.listGlbAssets()),
