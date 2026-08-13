@@ -1,0 +1,149 @@
+name: Deploy Echoes of Aurion to arelogic.space
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "drizzle/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "vite*.ts"
+      - ".github/workflows/deploy-arelogic-aurion.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-arelogic-aurion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-build-and-deploy:
+    name: Verify, build and deploy Aurion static release
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      AURION_STATIC_SOURCE: https://aurion3d-6hpapr2g.manus.space
+      DEPLOY_HOST: ${{ secrets.AURION_DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.AURION_DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.AURION_DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.AURION_DEPLOY_SSH_KEY }}
+
+    steps:
+      - name: Guard repository scope
+        run: |
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify exact source revision
+        run: |
+          pnpm check
+          pnpm test
+          git diff --check
+
+      - name: Build static Aurion release
+        run: pnpm build:itch
+
+      - name: Mirror only Aurion media into the static release
+        run: |
+          set -euo pipefail
+          mkdir -p dist/itch/manus-storage
+          for asset in \
+            aurion-expedition-theme_e8a8afea.mp3 \
+            aurion-social-keyframe_5edc4882.png \
+            aurion-sigil_e1fd1a34.png \
+            aurion-hero-trailer-en-de_c44ee2e1.mp4
+          do
+            curl --fail --location --retry 3 --retry-delay 2 \
+              "${AURION_STATIC_SOURCE}/manus-storage/${asset}" \
+              --output "dist/itch/manus-storage/${asset}"
+          done
+          printf '{"revision":"%s","runId":"%s","artifact":"aurion-static"}\n' \
+            "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > dist/itch/.aurion-release.json
+          tar -C dist/itch -czf aurion-static-release.tgz .
+          sha256sum aurion-static-release.tgz > aurion-static-release.tgz.sha256
+
+      - name: Publish immutable build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-static-${{ github.sha }}
+          path: |
+            aurion-static-release.tgz
+            aurion-static-release.tgz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Require Aurion deployment credentials
+        run: |
+          test -n "${DEPLOY_HOST}"
+          test -n "${DEPLOY_USER}"
+          test -n "${DEPLOY_SSH_KEY}"
+
+      - name: Configure deploy key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_aurion_deploy
+          chmod 600 ~/.ssh/id_aurion_deploy
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Upload exact static artifact
+        run: |
+          set -euo pipefail
+          scp -P "${DEPLOY_PORT:-22}" -i ~/.ssh/id_aurion_deploy \
+            aurion-static-release.tgz aurion-static-release.tgz.sha256 \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
+
+      - name: Promote Aurion release only
+        run: |
+          set -euo pipefail
+          release_id="${GITHUB_SHA}-${GITHUB_RUN_ID}"
+          ssh -p "${DEPLOY_PORT:-22}" -i ~/.ssh/id_aurion_deploy "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "RELEASE_ID=${release_id} EXPECTED_SHA=${GITHUB_SHA} bash -s" <<'REMOTE'
+          set -euo pipefail
+          base=/var/www/echoes-of-aurion
+          archive=/tmp/aurion-static-release.tgz
+          checksum=/tmp/aurion-static-release.tgz.sha256
+          test -d "${base}/releases"
+          sha256sum -c "${checksum}"
+          release="${base}/releases/${RELEASE_ID}"
+          test ! -e "${release}"
+          install -d -m 0755 "${release}"
+          tar -xzf "${archive}" -C "${release}"
+          grep -F "${EXPECTED_SHA}" "${release}/.aurion-release.json"
+          ln -sTfn "${release}" "${base}/current.next"
+          mv -Tf "${base}/current.next" "${base}/current"
+          nginx -t
+          systemctl reload nginx
+          test "$(readlink -f "${base}/current")" = "${release}"
+          rm -f "${archive}" "${checksum}"
+          REMOTE
+
+      - name: Read back current Aurion release
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT:-22}" -i ~/.ssh/id_aurion_deploy "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cat /var/www/echoes-of-aurion/current/.aurion-release.json"
+          curl --fail --silent --show-error --location https://arelogic.space/ | grep -q "<div id=\"root\"></div>"

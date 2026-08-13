@@ -39,8 +39,8 @@
 - [x] Treasure-Class-Katalog, serverseitige Basistyp- und Affix-Auflösung sowie Set-Bonus-Auswertung mit Tests implementieren.
 - [ ] Waffenmeisterschaft an validierte Expeditionsereignisse koppeln und Spezialisierungs- sowie Loadout-Grenzen serverseitig durchsetzen.
 - [x] Endgame-UI für Gilden, Inventar, Set-Fortschritt, Waffenmeisterschaft und langfristige Ziele integrieren.
-- [ ] Klangbild, Gameplay-Effekte und adaptive Spielmusik integrieren.
-- [ ] Drei Trailer erstellen: Gameplay-Loop, aurionisches Cinematic und LLM-Koop-Tutorial für soziale Medien.
+- [x] Klangbild, Gameplay-Effekte und adaptive Spielmusik integrieren.
+- [x] Drei Trailer erstellen: Gameplay-Loop, aurionisches Cinematic und LLM-Koop-Tutorial für soziale Medien.
 - [ ] Gateway-Laufzeitfehler für den fehlenden Export `allowGatewayCommand` beheben und Spiel- sowie Audioansicht fehlerfrei im Browser prüfen.
 - [ ] Zustandsabhängige Musikreaktionen für Arena, Kampf und Sieg implementieren und im Browser prüfen.
 - [ ] Trailer mit finaler, rechtlich nutzbarer Audiospur und inhaltlicher Abnahme für soziale Medien exportieren.
@@ -85,3 +85,10 @@
 - [x] Revisionsgebundene GitHub-Issues für GLB/Admin, Progression/Rangliste/Klassen und Monetarisierung anlegen oder die Roadmapaufgabe auf den belegten PR-Umfang präzisieren.
 - [ ] Transportnahen `/mcp`-Test ergänzen, der widerrufene und abgelaufene Bearer-Tokens mit HTTP 401 abweist und keine Befehlsannahme zulässt.
 - [ ] Sitzungsabruf-Test ergänzen, der den Entzug der Befehlsauslieferung über `pullCommands` nach Widerruf oder Ablauf nachweist.
+- [x] Babylon.js-Vertex-Shaderfehler der Canvasinitialisierung durch explizite GLSL-ShaderStore-Registrierung beheben und nach frischem Canvas-Reload prüfen.
+- [x] Längeren narrativen Aurion-Hero-Trailer mit englischer Erzählung, deutschen Untertiteln, Welt, autorisiertem LLM-Koop, MCP-Pairing, Expeditionen, Loot, Gilden und transparentem Call-to-Action produzieren und technisch abnehmen.
+- [ ] Bilingualen Hero-Trailer im Startbereich dauerhaft bereitstellen und einen mobil nutzbaren Trailerzugang vor der MCP-Paarung integrieren.
+- [ ] Veraltete Auslieferung unter `arelogic.space` ausschließlich gegen den Aurion-Releaseweg prüfen und gegebenenfalls nur Aurion korrigieren; Sovereign-Studio-ATO und areloria.de sind ausdrücklich ausgenommen.
+- [ ] Aktuellen Aurion-Stand einschließlich Hero-Trailerzugang revisionsgebunden in einen GitHub-Kandidaten überführen und die Head-Checks erneut ausführen.
+- [ ] Ausschließlich Aurion-spezifischen GitHub-Workflow für den Static-Release unter `arelogic.space` mit getrenntem Webroot vorbereiten und per Readback prüfen.
+- [ ] Finalen bilingualen Hero-Trailer als abrufbare Videodatei bereitstellen.
