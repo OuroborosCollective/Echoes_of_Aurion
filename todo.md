@@ -53,3 +53,4 @@
 - [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
 - [ ] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
 - [ ] Zustandsgebundene Idle-, Lauf-, Treffer- und Angriffsanimationen für die verbesserten Babylon-Live-Modelle implementieren.
+- [ ] Aktuellen Live-Figurenstand revisionsgebunden nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit per Readback bestätigen.
