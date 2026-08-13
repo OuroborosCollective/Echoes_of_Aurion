@@ -53,4 +53,19 @@
 - [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
 - [ ] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
 - [ ] Zustandsgebundene Idle-, Lauf-, Treffer- und Angriffsanimationen für die verbesserten Babylon-Live-Modelle implementieren.
-- [ ] Aktuellen Live-Figurenstand revisionsgebunden nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit per Readback bestätigen.
+- [x] Aktuellen Live-Figurenstand revisionsgebunden nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit per Readback bestätigen.
+- [ ] Einmalige autorisierte MCP-Paarung gegen den bereitgestellten Endpunkt testen, erlaubte Werkzeuge abrufen und einen zulässigen Spielbefehl ohne Tokenpersistenz validieren.
+- [ ] MCP-Host-Allowlist um den verifizierten Produktions-Host `vchd74l3bk-on7gpcjxhq-ue.a.run.app` ergänzen und erneute Prüfung ohne Bearer-Weitergabe an einen fremden Host durchführen.
+- [ ] MCP-Host-Allowlist um den verifizierten Produktions-Host `vchd74l3bk-on7gpcjxhq-ue.a.run.app` ergänzen und erneute Prüfung ohne Bearer-Weitergabe an einen fremden Host durchführen.
+- [ ] Bedeutung und konkrete Reproduktionsschritte der Meldung „8 Bugs“ klären und bestätigte Fehler einzeln priorisieren.
+- [x] Vier logisch abgeleitete Fehlerfamilien mit Befunden, Gegenprüfung und minimalen Fixes nach Guardian-Protokoll dokumentieren.
+- [x] Revisionsgebundene Checks, Mirror-Preflight und append-only Fehlerfamilien-Report für den Fix-Branch erstellen.
+- [x] Den bestätigten Fehlerfamilien-Fix als Draft-PR in `OuroborosCollective/Echoes_of_Aurion` anlegen und GitHub-Readback sichern.
+- [x] Sovereign-Studio-ATO-MCP auf die bestätigte frühere URL zurückführen und jede Aurion-Abhängigkeit davon entfernen.
+- [x] Verwaisten kollidierenden No-Auth-Tunnel deaktivieren, damit der kanonische ATO-ChatGPT-Tunnel Port 9080 dauerhaft exklusiv nutzt.
+- [ ] Eigenen isolierten Aurion-MCP-Endpunkt mit separater URL, Host-Allowlist, Laufzeitdokumentation und Repository-Readback konfigurieren.
+- [ ] Eigene Aurion-MCP-Hostvalidierung gegen den aktuell zugewiesenen Cloud-Run-Hostname prüfen und nach erfolgreichem Readback revisionsgebunden veröffentlichen.
+- [ ] Isolierten Aurion-MCP-Stand einschließlich Host-Allowlist und Laufzeitdokumentation nach GitHub pushen sowie Commit- und Remote-Readback dokumentieren.
+- [ ] Autorisierten MCP-Canary direkt gegen den aktuell zugewiesenen `.a.run.app`-Hostname durchführen und HTTP-/Protokoll-Readback festhalten.
+- [ ] Exakte Isolationsrevision nach erfolgreichem Cloud-Run-Canary veröffentlichen und Deployment-Readback dokumentieren.
+- [ ] Öffentlichen ATO-ChatGPT-Tunnel nach der Wiederherstellung über die bekannte externe Tunneladresse mit einem nicht mutierenden MCP-Canary bestätigen.
