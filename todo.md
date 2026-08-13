@@ -19,4 +19,5 @@
 - [ ] Blocker beheben: Persönliche Browserkopplung ist derzeit nicht verfügbar; E2E-Test erst nach erfolgreicher Browserverbindung erneut anstoßen.
 - [ ] Serverseitig nachweisen, dass ausgeschlossene Befehle und nicht steigende Sequenzen abgewiesen werden.
 - [ ] Widerruf und Ablauf verifizieren: Ein widerrufener oder abgelaufener Bearer-Token darf keine MCP-Befehle mehr annehmen oder ausliefern.
-- [ ] Aktuellen MCP-Gateway-Stand nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit prüfen.
+- [x] Aktuellen MCP-Gateway-Stand nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit prüfen.
+- [x] MCP-Schutzgrenze prüfen: Ungültiger Bearer-Token wird mit HTTP 401 und unzulässiger Host-Header mit HTTP 403 abgewiesen.
