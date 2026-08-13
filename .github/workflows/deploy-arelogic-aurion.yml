@@ -22,18 +22,15 @@ permissions:
   contents: read
 
 jobs:
-  verify-build-and-deploy:
-    name: Verify, build and deploy Aurion static release
-    runs-on: [self-hosted, Linux, X64, aurion-static]
-    environment: production
+  verify-and-build:
+    name: Verify and build immutable Aurion static artifact
+    runs-on: ubuntu-24.04
     env:
       AURION_STATIC_SOURCE: https://aurion3d-6hpapr2g.manus.space
-      NODE_OPTIONS: --max-old-space-size=768
 
     steps:
       - name: Guard repository scope
-        run: |
-          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
 
       - name: Check out exact revision
         uses: actions/checkout@v4
@@ -50,7 +47,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --network-concurrency=1 --child-concurrency=1
+        run: pnpm install --frozen-lockfile
 
       - name: Verify exact source revision
         run: |
@@ -90,17 +87,33 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  promote-aurion-static:
+    name: Promote verified Aurion static artifact
+    needs: verify-and-build
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    env:
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
+      EXPECTED_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Guard repository scope
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Download verified Aurion artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-static-${{ github.sha }}
+          path: release-artifact
+
       - name: Promote Aurion release only
-        env:
-          RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
-          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           base=/var/www/echoes-of-aurion
-          archive="${GITHUB_WORKSPACE}/aurion-static-release.tgz"
-          checksum="${GITHUB_WORKSPACE}/aurion-static-release.tgz.sha256"
+          archive="${GITHUB_WORKSPACE}/release-artifact/aurion-static-release.tgz"
+          checksum="${GITHUB_WORKSPACE}/release-artifact/aurion-static-release.tgz.sha256"
           test -d "${base}/releases"
-          cd "${GITHUB_WORKSPACE}"
+          cd "${GITHUB_WORKSPACE}/release-artifact"
           sha256sum -c "${checksum}"
           release="${base}/releases/${RELEASE_ID}"
           test ! -e "${release}"
