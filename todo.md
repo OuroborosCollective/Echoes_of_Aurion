@@ -53,4 +53,11 @@
 - [ ] Echo Scout und Sentinel als eigenständige GLB-Modelle mit zustandsgebundener Animation an die Live-Gameplay-Szene anbinden.
 - [ ] Bestehende Babylon-Live-Modelle ohne GLB-Quelle anatomisch verbessern: Explorer mit Beinen, Armen, Mantel und Speerhaltung; Echo Scout und Sentinel mit klarer Gliedmaßen- und Silhouettenlogik.
 - [ ] Zustandsgebundene Idle-, Lauf-, Treffer- und Angriffsanimationen für die verbesserten Babylon-Live-Modelle implementieren.
-- [ ] Aktuellen Live-Figurenstand revisionsgebunden nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit per Readback bestätigen.
+- [x] Aktuellen Live-Figurenstand revisionsgebunden nach `OuroborosCollective/Echoes_of_Aurion` pushen und den Remote-Commit per Readback bestätigen.
+- [ ] Einmalige autorisierte MCP-Paarung gegen den bereitgestellten Endpunkt testen, erlaubte Werkzeuge abrufen und einen zulässigen Spielbefehl ohne Tokenpersistenz validieren.
+- [ ] MCP-Host-Allowlist um den verifizierten Produktions-Host `vchd74l3bk-on7gpcjxhq-ue.a.run.app` ergänzen und erneute Prüfung ohne Bearer-Weitergabe an einen fremden Host durchführen.
+- [ ] MCP-Host-Allowlist um den verifizierten Produktions-Host `vchd74l3bk-on7gpcjxhq-ue.a.run.app` ergänzen und erneute Prüfung ohne Bearer-Weitergabe an einen fremden Host durchführen.
+- [ ] Bedeutung und konkrete Reproduktionsschritte der Meldung „8 Bugs“ klären und bestätigte Fehler einzeln priorisieren.
+- [x] Vier logisch abgeleitete Fehlerfamilien mit Befunden, Gegenprüfung und minimalen Fixes nach Guardian-Protokoll dokumentieren.
+- [x] Revisionsgebundene Checks, Mirror-Preflight und append-only Fehlerfamilien-Report für den Fix-Branch erstellen.
+- [x] Den bestätigten Fehlerfamilien-Fix als Draft-PR in `OuroborosCollective/Echoes_of_Aurion` anlegen und GitHub-Readback sichern.

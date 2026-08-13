@@ -18,22 +18,30 @@ export default function GameCanvas() {
     startedRef.current = true;
 
     const engine = new Engine(canvas, true, {
-      preserveDrawingBuffer: true,
       stencil: true,
       adaptToDeviceRatio: true,
     });
     let handle: GameHandle | null = null;
+    let disposed = false;
 
     createGameScene(engine, canvas).then((sceneHandle) => {
+      if (disposed) {
+        sceneHandle.dispose();
+        return;
+      }
       handle = sceneHandle;
       engine.runRenderLoop(() => sceneHandle.scene.render());
+    }).catch(error => {
+      if (!disposed) console.error("[Aurion Canvas] Scene initialization failed", error);
     });
 
     const onResize = () => engine.resize();
     window.addEventListener("resize", onResize);
 
     return () => {
+      disposed = true;
       window.removeEventListener("resize", onResize);
+      engine.stopRenderLoop();
       handle?.dispose();
       engine.dispose();
       startedRef.current = false;
