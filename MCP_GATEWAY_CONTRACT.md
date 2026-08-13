@@ -27,6 +27,12 @@ Die veröffentlichte Erstversion nutzte bewusst einen **lokalen Befehlsadapter**
 
 Der Gateway-Service verwirft Nachrichten, deren `command` außerhalb der Allowlist liegt, deren Sequenz nicht streng steigend ist oder deren Session abgelaufen beziehungsweise widerrufen ist. Er speichert niemals Chat-Inhalte im Spiel-Ledger; dort stehen ausschließlich der normalisierte Befehl, ein Zeitstempel und die sichtbare Spielwirkung. Bearer-Tokens werden nur als SHA-256-Digest gespeichert und nie erneut angezeigt.
 
+## Endpoint-Isolation
+
+Der **Echoes-of-Aurion-MCP** verwendet ausschließlich den projektspezifischen Endpunkt `https://aurion3d-6hpapr2g.manus.space/mcp`. Er ist unabhängig vom Sovereign-Studio-ATO-MCP. Der ATO-ChatGPT-Tunnel bleibt auf seiner eigenen VPS-Laufzeit und seinem bestehenden Tunnelprofil; Aurion verwendet diesen Tunnel weder als Proxy noch als Host- oder Credentialquelle.
+
+Am 13. August 2026 wurde der Aurion-Endpunkt mit einem frischen, nicht persistierten Pairing-Token über Streamable HTTP erfolgreich initialisiert. Die autorisierte Werkzeugliste enthielt ausschließlich `aurion_get_mission_contract` und `aurion_send_command`; der schreibfreie Missionsvertrag antwortete erfolgreich. Dabei wurden weder ein Spielbefehl ausgelöst noch Token, Sitzungskennung oder Chatinhalt protokolliert.
+
 Für eine öffentliche Remote-MCP-Veröffentlichung ist Streamable HTTP der aktuelle Transport; MCP-Autorisierung verwendet OAuth 2.1-konforme Bearer-Tokens, die bei jeder Anfrage im Header und nie in der URL übertragen werden sollen.[1] Die bereits implementierte Pairing-Berechtigung ist der spielinterne Zugangsschutz. Vor einer breiten LLM-Client-Kompatibilität muss sie noch durch einen vollständigen OAuth-2.1-Authorization-Server mit Resource Metadata und PKCE erweitert werden.[1]
 
 ## LLM-Verhalten als Spielvertrag

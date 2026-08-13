@@ -12,11 +12,15 @@ function firstHost(value: string | undefined): string {
   return (value ?? "").split(",", 1)[0]?.trim().toLowerCase() ?? "";
 }
 
+function isApprovedHost(host: string): boolean {
+  return approvedHosts.has(host) || host.endsWith(".a.run.app");
+}
+
 /** Accept only explicitly known public, platform, or local development hosts. */
 export function resolveApprovedGatewayHost(host: string | undefined, forwardedHost: string | undefined): string | null {
   const direct = firstHost(host);
   const forwarded = firstHost(forwardedHost);
-  if (!approvedHosts.has(direct)) return null;
+  if (!isApprovedHost(direct)) return null;
   if (forwarded && approvedHosts.has(forwarded)) return forwarded;
   return direct;
 }
