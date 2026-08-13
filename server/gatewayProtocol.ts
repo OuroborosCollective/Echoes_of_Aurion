@@ -10,6 +10,12 @@ export function normalizeAurionCommand(value: string): AurionCommand | null {
     : null;
 }
 
+/** Converts a raw client signal only when the paired session explicitly allows it. */
+export function allowGatewayCommand(value: string, allowedCommands: readonly string[]): AurionCommand | null {
+  const normalized = normalizeAurionCommand(value);
+  return normalized && allowedCommands.includes(normalized) ? normalized : null;
+}
+
 export function parseAllowedCommands(serialized: string): AurionCommand[] {
   try {
     const candidate = JSON.parse(serialized);

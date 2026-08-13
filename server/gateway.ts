@@ -4,7 +4,7 @@ import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import * as db from "./db";
-import { digestPairingToken, normalizeAurionCommand, parseAllowedCommands } from "./gatewayProtocol";
+import { allowGatewayCommand, digestPairingToken, parseAllowedCommands } from "./gatewayProtocol";
 
 const allowedHosts = ["arelogic.space", "aurion3d-6hpapr2g.manus.space", "localhost", "localhost:3000", "127.0.0.1", "127.0.0.1:3000"];
 
@@ -32,8 +32,8 @@ function createMcpServer(grant: { id: string; providerLabel: string; allowedComm
     description: "Queue exactly one allowed WASD or 1-9 command for the authorized Echo Scout session.",
     inputSchema: z.object({ command: z.string().min(1).max(12), sequence: z.number().int().positive() }),
   }, async ({ command, sequence }) => {
-    const normalized = normalizeAurionCommand(command);
-    if (!normalized || !allowed.includes(normalized)) {
+    const normalized = allowGatewayCommand(command, allowed);
+    if (!normalized) {
       return { isError: true, content: [{ type: "text", text: "Command rejected. Use only the session allowlist." }] };
     }
     const result = await db.appendGatewayCommand({ gatewaySessionId: grant.id, sequence, command: normalized });
