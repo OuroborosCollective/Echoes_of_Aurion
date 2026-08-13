@@ -1,8 +1,8 @@
 # Guardian Error-Family Run 01
 
-**Basisrevision:** `064f24411aea1e820bd4609e647b3fc1f83c8a50` (`origin/main` zum Laufbeginn)  
-**Lokale Arbeitsrevision:** `169c495b6ec64f9465339ba46d61598c1d7a0f1f` vor diesem Fixsatz  
-**Scope:** MCP-Gateway, React↔Babylon-Lebensdauer, Touch-Bewegung und Operationsoberfläche.  
+**Basisrevision:** `064f24411aea1e820bd4609e647b3fc1f83c8a50` (`origin/main` zum Laufbeginn)
+**Lokale Arbeitsrevision:** `169c495b6ec64f9465339ba46d61598c1d7a0f1f` vor diesem Fixsatz
+**Scope:** MCP-Gateway, React↔Babylon-Lebensdauer, Touch-Bewegung und Operationsoberfläche.
 **Status:** Fixsatz implementiert; PR-, Mirror- und exakte Produktionsrevision-Nachweise sind noch offen.
 
 | Familie | Befundklasse | Evidenz | Minimaler Fix | Prüfung | Status |
