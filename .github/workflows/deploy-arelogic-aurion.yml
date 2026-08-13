@@ -31,7 +31,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.AURION_DEPLOY_HOST }}
       DEPLOY_PORT: ${{ secrets.AURION_DEPLOY_PORT }}
       DEPLOY_USER: ${{ secrets.AURION_DEPLOY_USER }}
-      DEPLOY_SSH_KEY: ${{ secrets.AURION_DEPLOY_SSH_KEY }}
+      DEPLOY_PASSWORD: ${{ secrets.AURION_DEPLOY_PASSWORD }}
 
     steps:
       - name: Guard repository scope
@@ -99,49 +99,55 @@ jobs:
         run: |
           test -n "${DEPLOY_HOST}"
           test -n "${DEPLOY_USER}"
-          test -n "${DEPLOY_SSH_KEY}"
-
-      - name: Configure deploy key
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_aurion_deploy
-          chmod 600 ~/.ssh/id_aurion_deploy
-          ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+          test -n "${DEPLOY_PASSWORD}"
 
       - name: Upload exact static artifact
-        run: |
-          set -euo pipefail
-          scp -P "${DEPLOY_PORT:-22}" -i ~/.ssh/id_aurion_deploy \
-            aurion-static-release.tgz aurion-static-release.tgz.sha256 \
-            "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/"
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.AURION_DEPLOY_HOST }}
+          username: ${{ secrets.AURION_DEPLOY_USER }}
+          password: ${{ secrets.AURION_DEPLOY_PASSWORD }}
+          port: ${{ secrets.AURION_DEPLOY_PORT }}
+          source: "aurion-static-release.tgz,aurion-static-release.tgz.sha256"
+          target: "/tmp/"
 
       - name: Promote Aurion release only
-        run: |
-          set -euo pipefail
-          release_id="${GITHUB_SHA}-${GITHUB_RUN_ID}"
-          ssh -p "${DEPLOY_PORT:-22}" -i ~/.ssh/id_aurion_deploy "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "RELEASE_ID=${release_id} EXPECTED_SHA=${GITHUB_SHA} bash -s" <<'REMOTE'
-          set -euo pipefail
-          base=/var/www/echoes-of-aurion
-          archive=/tmp/aurion-static-release.tgz
-          checksum=/tmp/aurion-static-release.tgz.sha256
-          test -d "${base}/releases"
-          sha256sum -c "${checksum}"
-          release="${base}/releases/${RELEASE_ID}"
-          test ! -e "${release}"
-          install -d -m 0755 "${release}"
-          tar -xzf "${archive}" -C "${release}"
-          grep -F "${EXPECTED_SHA}" "${release}/.aurion-release.json"
-          ln -sTfn "${release}" "${base}/current.next"
-          mv -Tf "${base}/current.next" "${base}/current"
-          test "$(readlink -f "${base}/current")" = "${release}"
-          rm -f "${archive}" "${checksum}"
-          REMOTE
+        uses: appleboy/ssh-action@v1
+        env:
+          RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.AURION_DEPLOY_HOST }}
+          username: ${{ secrets.AURION_DEPLOY_USER }}
+          password: ${{ secrets.AURION_DEPLOY_PASSWORD }}
+          port: ${{ secrets.AURION_DEPLOY_PORT }}
+          envs: RELEASE_ID,EXPECTED_SHA
+          script: |
+            set -euo pipefail
+            base=/var/www/echoes-of-aurion
+            archive=/tmp/aurion-static-release.tgz
+            checksum=/tmp/aurion-static-release.tgz.sha256
+            test -d "${base}/releases"
+            sha256sum -c "${checksum}"
+            release="${base}/releases/${RELEASE_ID}"
+            test ! -e "${release}"
+            install -d -m 0755 "${release}"
+            tar -xzf "${archive}" -C "${release}"
+            grep -F "${EXPECTED_SHA}" "${release}/.aurion-release.json"
+            ln -sTfn "${release}" "${base}/current.next"
+            mv -Tf "${base}/current.next" "${base}/current"
+            test "$(readlink -f "${base}/current")" = "${release}"
+            rm -f "${archive}" "${checksum}"
 
       - name: Read back current Aurion release
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.AURION_DEPLOY_HOST }}
+          username: ${{ secrets.AURION_DEPLOY_USER }}
+          password: ${{ secrets.AURION_DEPLOY_PASSWORD }}
+          port: ${{ secrets.AURION_DEPLOY_PORT }}
+          script: cat /var/www/echoes-of-aurion/current/.aurion-release.json
+
+      - name: Verify public Aurion root
         run: |
-          set -euo pipefail
-          ssh -p "${DEPLOY_PORT:-22}" -i ~/.ssh/id_aurion_deploy "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "cat /var/www/echoes-of-aurion/current/.aurion-release.json"
           curl --fail --silent --show-error --location https://arelogic.space/ | grep -q "<div id=\"root\"></div>"

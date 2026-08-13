@@ -90,5 +90,5 @@
 - [ ] Bilingualen Hero-Trailer im Startbereich dauerhaft bereitstellen und einen mobil nutzbaren Trailerzugang vor der MCP-Paarung integrieren.
 - [ ] Veraltete Auslieferung unter `arelogic.space` ausschließlich gegen den Aurion-Releaseweg prüfen und gegebenenfalls nur Aurion korrigieren; Sovereign-Studio-ATO und areloria.de sind ausdrücklich ausgenommen.
 - [ ] Aktuellen Aurion-Stand einschließlich Hero-Trailerzugang revisionsgebunden in einen GitHub-Kandidaten überführen und die Head-Checks erneut ausführen.
-- [ ] Ausschließlich Aurion-spezifischen GitHub-Workflow für den Static-Release unter `arelogic.space` mit getrenntem Webroot vorbereiten und per Readback prüfen.
+- [ ] Ausschließlich Aurion-spezifischen GitHub-Workflow für den Static-Release unter `arelogic.space` mit Appleboy-Passwortauthentisierung, getrenntem Webroot und ohne Schlüsselworkflow vorbereiten und per Readback prüfen.
 - [ ] Finalen bilingualen Hero-Trailer als abrufbare Videodatei bereitstellen.
