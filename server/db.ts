@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, gte, isNull, like, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
+import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -94,6 +94,46 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createLocalUser(values: { handle: string; passwordHash: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const existing = await db.select({ userId: localCredentials.userId }).from(localCredentials).where(eq(localCredentials.handle, values.handle)).limit(1);
+  if (existing[0]) throw new Error("Dieser Rufname ist bereits vergeben.");
+
+  const openId = `local:${values.handle}`;
+  await db.transaction(async tx => {
+    await tx.insert(users).values({ openId, name: values.handle, loginMethod: "aurion-local", role: "user", lastSignedIn: new Date() });
+    const created = await tx.select({ id: users.id }).from(users).where(eq(users.openId, openId)).limit(1);
+    if (!created[0]) throw new Error("Das Aurion-Konto konnte nicht angelegt werden.");
+    await tx.insert(localCredentials).values({ userId: created[0].id, handle: values.handle, passwordHash: values.passwordHash });
+  });
+  const user = await getUserByOpenId(openId);
+  if (!user) throw new Error("Das Aurion-Konto konnte nicht gelesen werden.");
+  return user;
+}
+
+export async function getLocalCredential(handle: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const result = await db.select({ user: users, credential: localCredentials }).from(localCredentials).innerJoin(users, eq(localCredentials.userId, users.id)).where(eq(localCredentials.handle, handle)).limit(1);
+  return result[0];
+}
+
+export async function recordLocalAuthFailure(handle: string, failedAttempts: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const nextAttempts = failedAttempts + 1;
+  const lockedUntil = nextAttempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null;
+  await db.update(localCredentials).set({ failedAttempts: nextAttempts, lockedUntil }).where(eq(localCredentials.handle, handle));
+  return { lockedUntil };
+}
+
+export async function clearLocalAuthFailures(handle: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  await db.update(localCredentials).set({ failedAttempts: 0, lockedUntil: null }).where(eq(localCredentials.handle, handle));
 }
 
 export async function createGatewaySession(values: {

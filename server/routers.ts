@@ -1,6 +1,7 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
@@ -8,6 +9,7 @@ import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, dig
 import { isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
+import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -19,6 +21,30 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    registerLocal: publicProcedure.input(z.object({ handle: z.string().trim().min(3).max(32), password: z.string().min(12).max(128) })).mutation(async ({ ctx, input }) => {
+      const handle = assertLocalHandle(input.handle);
+      const password = assertLocalPassword(input.password);
+      const user = await db.createLocalUser({ handle, passwordHash: await hashLocalPassword(password) });
+      const token = await sdk.createSessionToken(user.openId, { name: user.name ?? handle, expiresInMs: ONE_YEAR_MS });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: ONE_YEAR_MS });
+      return user;
+    }),
+    loginLocal: publicProcedure.input(z.object({ handle: z.string().trim().min(3).max(32), password: z.string().min(1).max(128) })).mutation(async ({ ctx, input }) => {
+      const handle = normalizeLocalHandle(input.handle);
+      const record = await db.getLocalCredential(handle);
+      if (record.credential.lockedUntil && record.credential.lockedUntil.getTime() > Date.now()) {
+        throw new Error("Zu viele Fehlversuche. Versuche es in einigen Minuten erneut.");
+      }
+      if (!record || !(await verifyLocalPassword(input.password, record.credential.passwordHash))) {
+        if (record) await db.recordLocalAuthFailure(handle, record.credential.failedAttempts);
+        throw new Error("Rufname oder Passwort stimmen nicht.");
+      }
+      await db.clearLocalAuthFailures(handle);
+      await db.upsertUser({ openId: record.user.openId, lastSignedIn: new Date() });
+      const token = await sdk.createSessionToken(record.user.openId, { name: record.user.name ?? handle, expiresInMs: ONE_YEAR_MS });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: ONE_YEAR_MS });
+      return record.user;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
