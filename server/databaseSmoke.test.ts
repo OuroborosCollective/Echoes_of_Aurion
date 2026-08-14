@@ -11,7 +11,9 @@ function rowsFrom(result: unknown): QueryRow[] {
   return candidate.filter((row): row is QueryRow => Boolean(row) && typeof row === "object" && !Array.isArray(row));
 }
 
-describe("database smoke", () => {
+const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
+
+describeWithDatabase("database smoke", () => {
   it("reads the central market, asset and team tables without mutating game data", async () => {
     const db = await getDb();
     expect(db).not.toBeNull();
