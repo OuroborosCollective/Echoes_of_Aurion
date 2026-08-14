@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import LocalAuthPanel from "./components/LocalAuthPanel";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Operations from "./pages/Operations";
@@ -15,7 +16,7 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <TooltipProvider><Toaster /><Switch><Route path="/" component={Home} /><Route path="/ops" component={Operations} /><Route component={Home} /></Switch></TooltipProvider>
+        <TooltipProvider><Toaster /><LocalAuthPanel /><Switch><Route path="/" component={Home} /><Route path="/ops" component={Operations} /><Route component={Home} /></Switch></TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
