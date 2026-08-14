@@ -26,12 +26,14 @@ describe("admin routes", () => {
     await expect(caller.admin.players.list({ limit: 25 })).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
     await expect(caller.admin.assets.list()).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
     await expect(caller.admin.monetization.list()).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
+    await expect(caller.admin.community.updateForumThread({ threadId: "thread_12345678", category: "announcements", title: "Testtitel", body: "Ein ausreichend langer redaktioneller Testbeitrag.", pinned: false })).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
   });
 
   it("rejects anonymous access to new administrative operations", async () => {
     const caller = appRouter.createCaller(contextFor(null));
     await expect(caller.admin.assets.listAssignments()).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
     await expect(caller.admin.monetization.upsert({ placementKey: "mission_banner", kind: "banner", providerLabel: "provider", active: false, consentRequired: true, configurationJson: "{}" })).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
+    await expect(caller.admin.community.listEditorialThreads()).rejects.toMatchObject({ code: "FORBIDDEN", message: "You do not have required permission (10002)" });
   });
 
   it("validates role and season inputs before a database mutation is reached", async () => {

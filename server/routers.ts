@@ -6,7 +6,8 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_
 import * as db from "./db";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
 import { isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
-import { MAX_GLB_BASE64_CHARS } from "./adminProtocol";
+import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
+import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -68,6 +69,52 @@ export const appRouter = router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
     create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
   }),
+  market: router({
+    inventory: protectedProcedure.query(({ ctx }) => db.listInventoryForUser(ctx.user.id)),
+    activeListings: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional()).query(({ input }) => db.listActiveMarketListings(input?.limit ?? 50)),
+    myListings: protectedProcedure.query(({ ctx }) => db.listMyMarketListings(ctx.user.id)),
+    sellToSystem: protectedProcedure.input(z.object({ itemId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.sellItemToSystem({ itemId: input.itemId, sellerUserId: ctx.user.id })),
+    createListing: protectedProcedure.input(z.object({ itemId: z.string().min(8).max(64), askingPrice: z.number().int().min(1).max(1_000_000) })).mutation(({ ctx, input }) => db.createMarketListing({ ...input, sellerUserId: ctx.user.id })),
+    cancelListing: protectedProcedure.input(z.object({ listingId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.cancelMarketListing({ listingId: input.listingId, sellerUserId: ctx.user.id })),
+    buyListing: protectedProcedure.input(z.object({ listingId: z.string().min(8).max(64), idempotencyKey: z.string().min(16).max(128) })).mutation(({ ctx, input }) => db.buyMarketListing({ ...input, buyerUserId: ctx.user.id })),
+  }),
+  assetSubmissions: router({
+    publicCatalog: publicProcedure.query(() => db.listPublicGlbCatalog()),
+    activeArenaAsset: publicProcedure.input(z.object({ targetKey: z.string().trim().min(2).max(120).regex(/^[A-Za-z0-9_-]+$/).default("asterion_courtyard") }).optional()).query(({ input }) => db.getActiveGlbAssignment("arena", input?.targetKey ?? "asterion_courtyard")),
+    mine: protectedProcedure.query(({ ctx }) => db.listMyGlbSubmissions(ctx.user.id)),
+    catalog: protectedProcedure.query(({ ctx }) => db.listVisibleGlbCatalog(ctx.user.id)),
+    characterAppearance: protectedProcedure.query(async ({ ctx }) => (await db.getPlayerCharacterAppearance(ctx.user.id)) ?? null),
+    equipCharacter: protectedProcedure.input(z.object({ assetId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.equipPlayerCharacterAppearance({ userId: ctx.user.id, assetId: input.assetId })),
+    submit: protectedProcedure.input(z.object({ assetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), subcategory: z.string().trim().min(2).max(80).regex(/^[^<>]+$/), displayName: z.string().trim().min(3).max(120).regex(/^[^<>]+$/), description: z.string().trim().min(12).max(1000).regex(/^[^<>]+$/), visibility: z.enum(["private", "public"]), contentBase64: z.string().min(16).max(USER_GLB_MAX_BASE64_CHARS) })).mutation(({ ctx, input }) => db.submitPlayerGlbAsset({ ...input, submittedByUserId: ctx.user.id })),
+  }),
+  community: router({
+    chat: router({
+      list: protectedProcedure.query(() => db.listExpeditionChatMessages()),
+      send: protectedProcedure.input(z.object({ body: z.string().max(500) })).mutation(({ ctx, input }) => db.sendExpeditionChatMessage({ userId: ctx.user.id, body: normalizeCommunityText(input.body, 500, "Die Chatnachricht") })),
+    }),
+    partners: router({
+      open: protectedProcedure.query(() => db.listOpenPartnerRequests()),
+      create: protectedProcedure.input(z.object({ note: z.string().max(280) })).mutation(({ ctx, input }) => db.createPartnerRequest({ requesterUserId: ctx.user.id, note: normalizeCommunityText(input.note, 280, "Das Partnergesuch") })),
+      cancel: protectedProcedure.input(z.object({ requestId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.cancelPartnerRequest(input.requestId, ctx.user.id)),
+      accept: protectedProcedure.input(z.object({ requestId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.acceptPartnerRequest({ requestId: input.requestId, responderUserId: ctx.user.id })),
+    }),
+    team: router({
+      active: protectedProcedure.query(async ({ ctx }) => (await db.getActiveExpeditionTeam(ctx.user.id)) ?? null),
+      leave: protectedProcedure.mutation(({ ctx }) => db.leaveActiveExpeditionTeam(ctx.user.id)),
+      signals: protectedProcedure.query(({ ctx }) => db.listActiveTeamSignals(ctx.user.id)),
+      sendSignal: protectedProcedure.input(z.object({ command: z.string().trim().length(1) })).mutation(({ ctx, input }) => {
+        const command = normalizeAurionCommand(input.command);
+        if (!command) throw new Error("Nur die Steuerimpulse W, A, S, D und 1–9 sind zulässig.");
+        return db.sendActiveTeamSignal({ userId: ctx.user.id, command });
+      }),
+    }),
+    forum: router({
+      list: publicProcedure.input(z.object({ category: z.enum(forumCategories).optional() }).optional()).query(({ input }) => db.listForumThreads(input?.category)),
+      get: publicProcedure.input(z.object({ threadId: z.string().min(8).max(64) })).query(({ input }) => db.getForumThread(input.threadId)),
+      createQuestion: protectedProcedure.input(z.object({ title: z.string().max(160), body: z.string().max(8000) })).mutation(({ ctx, input }) => db.createForumThread({ authorUserId: ctx.user.id, category: "general", title: normalizeCommunityText(input.title, 160, "Der Fragentitel"), body: normalizeCommunityBody(input.body, 8000, "Der Fragetext") })),
+      reply: protectedProcedure.input(z.object({ threadId: z.string().min(8).max(64), body: z.string().max(4000) })).mutation(({ ctx, input }) => db.createForumReply({ threadId: input.threadId, authorUserId: ctx.user.id, body: normalizeCommunityBody(input.body, 4000, "Die Antwort") })),
+    }),
+  }),
   leaderboard: router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
   }),
@@ -99,6 +146,8 @@ export const appRouter = router({
       setReview: adminProcedure.input(z.object({ assetId: z.string().min(8).max(64), status: z.enum(["approved", "rejected", "archived"]) })).mutation(({ ctx, input }) => db.setGlbAssetReview({ ...input, reviewedByUserId: ctx.user.id })),
       listAssignments: adminProcedure.query(() => db.listGlbAssignments()),
       assign: adminProcedure.input(z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().trim().min(2).max(120).regex(/^[A-Za-z0-9_-]+$/) })).mutation(({ ctx, input }) => db.assignApprovedGlbAsset({ ...input, assignedByUserId: ctx.user.id })),
+      pendingSubmissions: adminProcedure.query(() => db.listPendingGlbSubmissions()),
+      reviewSubmission: adminProcedure.input(z.object({ submissionId: z.string().min(8).max(64), decision: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().max(500).regex(/^[^<>]*$/).optional() })).mutation(({ ctx, input }) => db.reviewPlayerGlbSubmission({ ...input, reviewedByUserId: ctx.user.id })),
     }),
     monetization: router({
       list: adminProcedure.query(() => db.listMonetizationPlacements()),
@@ -106,6 +155,17 @@ export const appRouter = router({
     }),
     lootCatalog: router({
       listSetBonusesForUser: adminProcedure.input(z.object({ userId: z.number().int().positive() })).query(({ input }) => db.listSetBonusesForUser(input.userId)),
+    }),
+    community: router({
+      listEditorialThreads: adminProcedure.query(async () => (await db.listForumThreads()).filter(thread => thread.category !== "general")),
+      createForumThread: adminProcedure.input(z.object({ category: z.enum(forumCategories), title: z.string().max(160), body: z.string().max(8000), pinned: z.boolean().default(false) })).mutation(({ ctx, input }) => {
+        if (!mayPublishForumCategory(ctx.user.role, input.category)) throw new Error("Diese Forumskategorie ist nur der Redaktion vorbehalten.");
+        return db.createForumThread({ authorUserId: ctx.user.id, category: input.category, title: normalizeCommunityText(input.title, 160, "Der Beitragstitel"), body: normalizeCommunityBody(input.body, 8000, "Der Beitrag"), pinned: input.pinned });
+      }),
+      updateForumThread: adminProcedure.input(z.object({ threadId: z.string().min(8).max(64), category: z.enum(forumCategories), title: z.string().max(160), body: z.string().max(8000), pinned: z.boolean() })).mutation(({ ctx, input }) => {
+        if (!mayPublishForumCategory(ctx.user.role, input.category)) throw new Error("Diese Forumskategorie ist nur der Redaktion vorbehalten.");
+        return db.updateForumThread({ threadId: input.threadId, category: input.category, title: normalizeCommunityText(input.title, 160, "Der Beitragstitel"), body: normalizeCommunityBody(input.body, 8000, "Der Beitrag"), pinned: input.pinned });
+      }),
     }),
   }),
 });

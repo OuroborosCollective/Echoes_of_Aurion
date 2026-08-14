@@ -15,8 +15,10 @@ export function useAuth(options?: UseAuthOptions) {
   // desync it from an in-flight login's `state`.
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
   const utils = trpc.useUtils();
+  const staticDistribution = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION === "true";
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
+    enabled: !staticDistribution,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -57,7 +59,7 @@ export function useAuth(options?: UseAuthOptions) {
     );
     return {
       user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
+      loading: (!staticDistribution && meQuery.isLoading) || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
       isAuthenticated: Boolean(meQuery.data),
     };

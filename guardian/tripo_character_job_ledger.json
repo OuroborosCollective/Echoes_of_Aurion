@@ -1,0 +1,21 @@
+{
+  "policy": "Exactly one external task per stage. Never create a new task while the recorded task is queued or running. The second character remains blocked until the first character has passed generation, rigging, animation and GLB validation.",
+  "characters": {
+    "aurion-wayfinder": {
+      "requestKey": "aurion-wayfinder-20260813-v1",
+      "generation": { "status": "success", "taskId": "0fa272d4-e0b9-4249-9096-490892654639", "submittedAt": "2026-08-13T14:13:37Z", "completedAt": "2026-08-13T14:14:51Z", "creditsConsumed": 40 },
+      "rigCheck": { "status": "success", "taskId": "4c812bf6-d3b5-4972-a757-cd657fd78ee9", "riggable": true, "rigType": "biped", "creditsConsumed": 0 },
+      "rig": { "status": "success", "taskId": "6db99b58-7db1-48ac-b617-2b91147434e7", "creditsConsumed": 25, "lastPreflightRejection": "2026-08-13: API defaulted to deprecated non-humanoid version; no rig task was created." },
+      "retarget": { "status": "success", "taskId": "232cb32e-e72a-4a77-a113-4f5fd491fd61", "animations": ["idle", "walk", "run"], "creditsConsumed": 30 },
+      "validation": { "status": "success", "bytes": 1992236, "triangles": 4987, "materials": 1, "skins": 1, "animations": 3, "assetPath": "/manus-storage/aurion-wayfinder-animated_6bf370ef.glb" }
+    },
+    "aurion-veilguard": {
+      "requestKey": "aurion-veilguard-20260813-v1",
+      "generation": { "status": "success", "taskId": "3582871b-632a-4f59-ba15-ce59b3d2e697", "submittedAt": "2026-08-13T14:22:56Z", "completedAt": "2026-08-13T14:24:14Z", "creditsConsumed": 40 },
+      "rigCheck": { "status": "success", "taskId": "46cb603c-2c8c-4652-9dc0-e42f6c1a32a2", "riggable": true, "rigType": "biped", "creditsConsumed": 0 },
+      "rig": { "status": "success", "taskId": "2dca58ed-7984-41b9-b150-5b09824d7b76", "creditsConsumed": 25 },
+      "retarget": { "status": "success", "taskId": "a7a6cf20-9f28-4902-84e6-794f37d7a6b8", "animations": ["idle", "walk", "run"], "creditsConsumed": 30 },
+      "validation": { "status": "success", "bytes": 2237768, "triangles": 4955, "materials": 1, "skins": 1, "animations": 3, "assetPath": "/manus-storage/aurion-veilguard-animated_d6b28a5b.glb" }
+    }
+  }
+}

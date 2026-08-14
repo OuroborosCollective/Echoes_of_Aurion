@@ -18,14 +18,18 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { ShaderStore } from "@babylonjs/core/Engines/shaderStore";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import { defaultVertexShader } from "@babylonjs/core/Shaders/default.vertex.js";
 import { defaultPixelShader } from "@babylonjs/core/Shaders/default.fragment.js";
+import { aurionAssets } from "@/lib/aurionAssets";
+import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
 ShaderStore.ShadersStore[defaultVertexShader.name] = defaultVertexShader.shader;
 ShaderStore.ShadersStore[defaultPixelShader.name] = defaultPixelShader.shader;
 
-export type GameHandle = { scene: Scene; dispose: () => void };
+export type GameHandle = { scene: Scene; setCharacterModel: (sourceUrl?: string) => Promise<void>; setArenaModel: (sourceUrl?: string) => Promise<void>; dispose: () => void };
 
 type CommandCode = "W" | "A" | "S" | "D" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type Pulse = { mesh: Mesh; age: number };
@@ -38,6 +42,8 @@ const aurion = Color3.FromHexString("#2DE2CF");
 const bronze = Color3.FromHexString("#9A7043");
 const sandstone = Color3.FromHexString("#A88254");
 const ink = Color3.FromHexString("#071B24");
+const asterionFloorKitUrl = aurionAssets.floorKit;
+const asterionArchwayUrl = aurionAssets.archway;
 
 const arenas: ArenaDefinition[] = [
   { name: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", health: 112, floor: Color3.FromHexString("#183B3D"), glow: aurion, sun: Color3.FromHexString("#FFD890"), enemy: Color3.FromHexString("#9A4B35"), reward: "Asterion-Splitter" },
@@ -209,6 +215,42 @@ function makeArenaSet(scene: Scene): TransformNode[] {
   return [astronomic, archive, solarium];
 }
 
+function loadAsterionFloorKit(scene: Scene, parent: TransformNode): void {
+  void SceneLoader.ImportMeshAsync("", "", asterionFloorKitUrl, scene).then(result => {
+    const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
+    if (!topLevelMeshes.length) throw new Error("Das Asterion-Bodenkit enthält keine sichtbare Topologie.");
+    const root = new TransformNode("asterion-floor-kit-root", scene);
+    root.parent = parent;
+    topLevelMeshes.forEach(mesh => { mesh.parent = root; });
+    const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+    let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
+    bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
+    const span = maximum.subtract(minimum);
+    const scale = 2.35 / Math.max(0.1, span.x, span.z);
+    root.scaling.setAll(scale);
+    root.position = new Vector3(-4.0, -minimum.y * scale + 0.012, -3.85);
+    root.rotation.y = Math.PI / 4;
+  }).catch(error => console.warn("[Aurion Scene] Das optionale Asterion-Bodenkit konnte nicht geladen werden", error));
+}
+
+function loadAsterionArchway(scene: Scene, parent: TransformNode): void {
+  void SceneLoader.ImportMeshAsync("", "", asterionArchwayUrl, scene).then(result => {
+    const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
+    if (!topLevelMeshes.length) throw new Error("Der Asterion-Strukturprop enthält keine sichtbare Topologie.");
+    const root = new TransformNode("asterion-archway-root", scene);
+    root.parent = parent;
+    topLevelMeshes.forEach(mesh => { mesh.parent = root; });
+    const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+    let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
+    bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
+    const span = maximum.subtract(minimum);
+    const scale = 4.35 / Math.max(0.1, span.y);
+    root.scaling.setAll(scale);
+    root.position = new Vector3(4.7, -minimum.y * scale + 0.01, 3.4);
+    root.rotation.y = -0.72;
+  }).catch(error => console.warn("[Aurion Scene] Der optionale Asterion-Strukturprop konnte nicht geladen werden", error));
+}
+
 function emitGameEvent(kind: string, detail: string): void {
   window.dispatchEvent(new CustomEvent("aurion:game-event", { detail: { kind, detail } }));
 }
@@ -238,6 +280,8 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const beaconStem = MeshBuilder.CreateCylinder("beacon-stem", { height: 3.5, diameterTop: 0.15, diameterBottom: 0.7, tessellation: 8 }, scene);
   beaconStem.position.y = 1.6; beaconStem.material = material(scene, "beacon-stem-mat", bronze);
   const arenaSets = makeArenaSet(scene);
+  loadAsterionFloorKit(scene, arenaSets[0]);
+  loadAsterionArchway(scene, arenaSets[0]);
   for (let index = 0; index < 10; index += 1) {
     const angle = index * 0.63; const radius = 7.8 + (index % 2) * 1.4;
     const shard = MeshBuilder.CreatePolyhedron(`floating-shard-${index}`, { type: 2, size: 0.65 + (index % 3) * 0.18 }, scene);
@@ -248,6 +292,62 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
 
   const explorerRig = makeExplorer(scene); const echoRig = makeEchoScout(scene); const sentinel = makeSentinel(scene);
   const explorer = explorerRig.root; const echo = echoRig.root;
+  const baseExplorerNodes = [explorerRig.torso, ...explorerRig.arms, ...explorerRig.legs, explorerRig.weapon].filter((node): node is TransformNode => Boolean(node));
+  let customCharacterRoot: TransformNode | null = null;
+  let customCharacterAnimations: AnimationGroup[] = [];
+  let customArenaRoot: TransformNode | null = null;
+  const setArenaModel = async (sourceUrl?: string): Promise<void> => {
+    customArenaRoot?.dispose(false, true);
+    customArenaRoot = null;
+    if (!sourceUrl) return;
+    const result = await SceneLoader.ImportMeshAsync("", "", sourceUrl, scene);
+    const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
+    if (!topLevelMeshes.length) throw new Error("Das freigegebene Arenaasset enthält keine sichtbare Topologie.");
+    const root = new TransformNode("community-approved-arena-asset", scene);
+    root.parent = arenaSets[0];
+    topLevelMeshes.forEach(mesh => { mesh.parent = root; });
+    const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+    let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
+    bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
+    const span = maximum.subtract(minimum);
+    const scale = 2.8 / Math.max(0.1, span.x, span.z);
+    root.scaling.setAll(scale); root.position = new Vector3(0, -minimum.y * scale + 0.012, -4.9); root.rotation.y = Math.PI;
+    customArenaRoot = root;
+  };
+  const setCharacterModel = async (sourceUrl?: string): Promise<void> => {
+    customCharacterAnimations.forEach(group => { group.stop(); group.dispose(); });
+    customCharacterAnimations = [];
+    customCharacterRoot?.dispose(false, true);
+    customCharacterRoot = null;
+    baseExplorerNodes.forEach(node => node.setEnabled(true));
+    if (!sourceUrl) return;
+    try {
+      const result = await SceneLoader.ImportMeshAsync("", "", sourceUrl, scene);
+      const root = new TransformNode("player-approved-character", scene);
+      root.parent = explorer;
+      root.position = new Vector3(0, 0, 0);
+      const topLevelMeshes = result.meshes.filter(mesh => !mesh.parent);
+      topLevelMeshes.forEach(mesh => { mesh.parent = root; });
+      if (!topLevelMeshes.length) throw new Error("Das Charaktermodell enthält keine sichtbare Topologie.");
+      const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+      let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
+      bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
+      const height = Math.max(0.1, maximum.y - minimum.y);
+      root.scaling.setAll(1.95 / height);
+      root.position.y = -minimum.y * root.scaling.y;
+      customCharacterRoot = root;
+      customCharacterAnimations = result.animationGroups;
+      const idle = customCharacterAnimations.find(group => /idle/i.test(group.name)) ?? customCharacterAnimations[0];
+      idle?.start(true, 1);
+      baseExplorerNodes.forEach(node => node.setEnabled(false));
+    } catch (error) {
+      customCharacterRoot?.dispose(false, true);
+      customCharacterRoot = null;
+      customCharacterAnimations = [];
+      baseExplorerNodes.forEach(node => node.setEnabled(true));
+      throw error;
+    }
+  };
   const tether = MeshBuilder.CreateLines("team-tether", { points: [explorer.position.add(new Vector3(0, 1.1, 0)), echo.position.add(new Vector3(0, 1.2, 0))], updatable: true }, scene);
   tether.color = aurion;
   const keys = new Set<string>(); const pulses: Pulse[] = [];
@@ -354,5 +454,5 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     for (let index = pulses.length - 1; index >= 0; index -= 1) { const pulse = pulses[index]; pulse.age += dt; pulse.mesh.scaling.setAll(1 + pulse.age * 4.3); const pulseMaterial = pulse.mesh.material as StandardMaterial; pulseMaterial.alpha = Math.max(0, 1 - pulse.age * 1.8); if (pulse.age > 0.58) { pulse.mesh.dispose(); pulses.splice(index, 1); } }
     emitState();
   });
-  return { scene, dispose: () => { scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); scene.dispose(); } };
+  return { scene, setCharacterModel, setArenaModel, dispose: () => { customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); scene.dispose(); } };
 }

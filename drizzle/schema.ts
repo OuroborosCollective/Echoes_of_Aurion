@@ -202,6 +202,38 @@ export const glbAssignments = mysqlTable("glbAssignments", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("glbAssignments_target_active_idx").on(table.targetType, table.targetKey, table.active)]);
 
+/** Player-created GLB assets wait for an explicit administrator review before entering the game catalog. */
+export const glbAssetSubmissions = mysqlTable("glbAssetSubmissions", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  submittedByUserId: int("submittedByUserId").notNull(),
+  assetType: mysqlEnum("assetType", ["character", "enemy", "weapon", "armor", "arena"]).notNull(),
+  subcategory: varchar("subcategory", { length: 80 }).notNull(),
+  displayName: varchar("displayName", { length: 120 }).notNull(),
+  description: varchar("description", { length: 1000 }).notNull(),
+  visibility: mysqlEnum("visibility", ["private", "public"]).default("private").notNull(),
+  storageKey: varchar("storageKey", { length: 512 }).notNull().unique(),
+  storageUrl: varchar("storageUrl", { length: 768 }).notNull(),
+  sha256: varchar("sha256", { length: 64 }).notNull(),
+  bytes: int("bytes").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewNote: varchar("reviewNote", { length: 500 }),
+  reviewedByUserId: int("reviewedByUserId"),
+  reviewedAt: timestamp("reviewedAt"),
+  approvedAssetId: varchar("approvedAssetId", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("glbAssetSubmissions_status_created_idx").on(table.status, table.createdAt),
+  index("glbAssetSubmissions_submitter_created_idx").on(table.submittedByUserId, table.createdAt),
+]);
+
+/** Approved private character models may be equipped only by their submitting player. */
+export const playerCharacterAppearances = mysqlTable("playerCharacterAppearances", {
+  userId: int("userId").primaryKey(),
+  assetId: varchar("assetId", { length: 64 }).notNull(),
+  visibility: mysqlEnum("visibility", ["private", "public"]).notNull(),
+  equippedAt: timestamp("equippedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /** Each drop is a server-created item instance plus an idempotent receipt. */
 export const lootDropReceipts = mysqlTable("lootDropReceipts", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -242,8 +274,43 @@ export const itemInstances = mysqlTable("itemInstances", {
   itemLevel: int("itemLevel").notNull(),
   affixesJson: text("affixesJson").notNull(),
   setKey: varchar("setKey", { length: 96 }),
+  status: mysqlEnum("status", ["owned", "listed", "sold"]).default("owned").notNull(),
+  soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [index("itemInstances_owner_created_idx").on(table.ownerUserId, table.createdAt)]);
+}, table => [index("itemInstances_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt)]);
+
+/** System sales remove an item from an inventory and grant a deterministic Aurion value exactly once. */
+export const systemSaleReceipts = mysqlTable("systemSaleReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  itemId: varchar("itemId", { length: 64 }).notNull().unique(),
+  sellerUserId: int("sellerUserId").notNull(),
+  aurionGranted: int("aurionGranted").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("systemSaleReceipts_seller_created_idx").on(table.sellerUserId, table.createdAt)]);
+
+/** Active listings reserve an item until a player buys it or the seller cancels the offer. */
+export const marketListings = mysqlTable("marketListings", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  itemId: varchar("itemId", { length: 64 }).notNull(),
+  sellerUserId: int("sellerUserId").notNull(),
+  askingPrice: int("askingPrice").notNull(),
+  status: mysqlEnum("status", ["active", "sold", "cancelled"]).default("active").notNull(),
+  buyerUserId: int("buyerUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  settledAt: timestamp("settledAt"),
+}, table => [index("marketListings_status_created_idx").on(table.status, table.createdAt)]);
+
+/** Immutable purchase receipts make monetary transfers and inventory ownership changes traceable. */
+export const marketTransactionReceipts = mysqlTable("marketTransactionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  listingId: varchar("listingId", { length: 64 }).notNull().unique(),
+  itemId: varchar("itemId", { length: 64 }).notNull(),
+  sellerUserId: int("sellerUserId").notNull(),
+  buyerUserId: int("buyerUserId").notNull(),
+  aurionTransferred: int("aurionTransferred").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("marketTransactionReceipts_buyer_created_idx").on(table.buyerUserId, table.createdAt)]);
 
 /** Server-owned loot catalog. Clients never supply a base item or affix payload. */
 export const treasureClasses = mysqlTable("treasureClasses", {
@@ -313,9 +380,96 @@ export const rewardReceipts = mysqlTable("rewardReceipts", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [uniqueIndex("rewardReceipts_placement_event_uq").on(table.placementId, table.providerEventId)]);
 
+/** Short, authenticated messages visible to explorers in the current game community. */
+export const expeditionChatMessages = mysqlTable("expeditionChatMessages", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  body: varchar("body", { length: 500 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("expeditionChatMessages_created_idx").on(table.createdAt)]);
+
+/** A lightweight human teammate request made when a player does not connect an LLM partner. */
+export const partnerRequests = mysqlTable("partnerRequests", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  requesterUserId: int("requesterUserId").notNull(),
+  note: varchar("note", { length: 280 }).notNull(),
+  status: mysqlEnum("status", ["open", "accepted", "cancelled"]).default("open").notNull(),
+  responderUserId: int("responderUserId"),
+  teamId: varchar("teamId", { length: 64 }),
+  respondedAt: timestamp("respondedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("partnerRequests_open_created_idx").on(table.status, table.createdAt),
+  index("partnerRequests_requester_status_idx").on(table.requesterUserId, table.status),
+]);
+
+/** A server-owned two-player expedition team; member rows hold the participant identities. */
+export const expeditionTeams = mysqlTable("expeditionTeams", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  createdByUserId: int("createdByUserId").notNull(),
+  status: mysqlEnum("status", ["active", "disbanded"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  disbandedAt: timestamp("disbandedAt"),
+});
+
+/** The activeUserKey unique index lets a player occupy at most one active two-player team. */
+export const expeditionTeamMembers = mysqlTable("expeditionTeamMembers", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  teamId: varchar("teamId", { length: 64 }).notNull(),
+  userId: int("userId").notNull(),
+  role: mysqlEnum("role", ["leader", "partner"]).notNull(),
+  status: mysqlEnum("status", ["active", "left"]).default("active").notNull(),
+  activeUserKey: varchar("activeUserKey", { length: 64 }),
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  leftAt: timestamp("leftAt"),
+}, table => [
+  uniqueIndex("expeditionTeamMembers_team_user_uq").on(table.teamId, table.userId),
+  uniqueIndex("expeditionTeamMembers_active_user_uq").on(table.activeUserKey),
+  index("expeditionTeamMembers_team_status_idx").on(table.teamId, table.status),
+]);
+
+/** Normalized teammate inputs are relayed through the shared team record; prose is never accepted here. */
+export const expeditionTeamSignals = mysqlTable("expeditionTeamSignals", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  teamId: varchar("teamId", { length: 64 }).notNull(),
+  senderUserId: int("senderUserId").notNull(),
+  command: varchar("command", { length: 1 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("expeditionTeamSignals_team_created_idx").on(table.teamId, table.createdAt)]);
+
+/** Community forum threads include staff notices and player-created general questions. */
+export const forumThreads = mysqlTable("forumThreads", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  category: mysqlEnum("category", ["announcements", "patch_notes", "events", "general"]).notNull(),
+  authorUserId: int("authorUserId").notNull(),
+  title: varchar("title", { length: 160 }).notNull(),
+  body: text("body").notNull(),
+  pinned: int("pinned").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("forumThreads_category_created_idx").on(table.category, table.createdAt)]);
+
+/** Replies keep questions and staff posts conversational without mixing them into in-game chat. */
+export const forumReplies = mysqlTable("forumReplies", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  threadId: varchar("threadId", { length: 64 }).notNull(),
+  authorUserId: int("authorUserId").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("forumReplies_thread_created_idx").on(table.threadId, table.createdAt)]);
+
 export type PlayerProfile = typeof playerProfiles.$inferSelect;
 export type Season = typeof seasons.$inferSelect;
 export type Guild = typeof guilds.$inferSelect;
 export type GuildMembership = typeof guildMemberships.$inferSelect;
 export type GlbAsset = typeof glbAssets.$inferSelect;
+export type GlbAssetSubmission = typeof glbAssetSubmissions.$inferSelect;
 export type LootDropReceipt = typeof lootDropReceipts.$inferSelect;
+export type MarketListing = typeof marketListings.$inferSelect;
+export type ExpeditionChatMessage = typeof expeditionChatMessages.$inferSelect;
+export type PartnerRequest = typeof partnerRequests.$inferSelect;
+export type ExpeditionTeam = typeof expeditionTeams.$inferSelect;
+export type ExpeditionTeamMember = typeof expeditionTeamMembers.$inferSelect;
+export type ExpeditionTeamSignal = typeof expeditionTeamSignals.$inferSelect;
+export type ForumThread = typeof forumThreads.$inferSelect;
+export type ForumReply = typeof forumReplies.$inferSelect;

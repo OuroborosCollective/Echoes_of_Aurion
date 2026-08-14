@@ -13,6 +13,15 @@ const itchDocumentPlugin = {
   },
 };
 
+function babylonCdnPath(id: string): string {
+  if (id.startsWith("@babylonjs/core/")) {
+    const modulePath = id.slice("@babylonjs/core/".length);
+    return `https://cdn.jsdelivr.net/npm/@babylonjs/core@9.20.1/${modulePath.endsWith(".js") ? modulePath : `${modulePath}.js`}`;
+  }
+  if (id === "@babylonjs/loaders/glTF") return "https://cdn.jsdelivr.net/npm/@babylonjs/loaders@9.20.1/glTF/index.js";
+  return id;
+}
+
 /**
  * Static HTML5 distribution for itch.io.
  * Relative asset paths are mandatory because itch.io hosts HTML games below a CDN subdirectory.
@@ -20,6 +29,9 @@ const itchDocumentPlugin = {
  */
 export default defineConfig({
   base: "./",
+  define: {
+    "import.meta.env.VITE_AURION_STATIC_DISTRIBUTION": JSON.stringify("true"),
+  },
   plugins: [react(), tailwindcss(), itchDocumentPlugin],
   resolve: {
     alias: {
@@ -32,5 +44,15 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist", "itch"),
     emptyOutDir: true,
+    reportCompressedSize: false,
+    rollupOptions: {
+      external: id => id.startsWith("@babylonjs/core/") || id === "@babylonjs/loaders/glTF",
+      output: {
+        paths: babylonCdnPath,
+        manualChunks(id) {
+          if (id.includes("node_modules")) return "vendor-runtime";
+        },
+      },
+    },
   },
 });

@@ -1,11 +1,13 @@
-import { and, desc, eq, gt, gte, like, lte, or } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, like, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { expeditionResultReceipts, gatewayCommands, gatewaySessions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, monetizationPlacements, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
+import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
 import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
-import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration } from "./adminProtocol";
+import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
+import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
+import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQuality } from "./marketProtocol";
 import { storagePut } from "./storage";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -347,7 +349,7 @@ export async function listSetBonusesForUser(userId: number) {
 export async function listInventoryForUser(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const items = await db.select().from(itemInstances).where(eq(itemInstances.ownerUserId, userId)).orderBy(desc(itemInstances.createdAt)).limit(100);
+  const items = await db.select().from(itemInstances).where(and(eq(itemInstances.ownerUserId, userId), eq(itemInstances.status, "owned"))).orderBy(desc(itemInstances.createdAt)).limit(100);
   return items.map(item => {
     let affixes: LootAffix[] = [];
     try {
@@ -359,6 +361,89 @@ export async function listInventoryForUser(userId: number) {
       affixes = [];
     }
     return { ...item, affixes };
+  });
+}
+
+export async function listMyMarketListings(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: marketListings.id, askingPrice: marketListings.askingPrice, status: marketListings.status, createdAt: marketListings.createdAt, itemId: itemInstances.id, baseItemKey: itemInstances.baseItemKey, quality: itemInstances.quality, itemLevel: itemInstances.itemLevel })
+    .from(marketListings).innerJoin(itemInstances, eq(itemInstances.id, marketListings.itemId)).where(eq(marketListings.sellerUserId, userId)).orderBy(desc(marketListings.createdAt)).limit(100);
+}
+
+export async function listActiveMarketListings(limit: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: marketListings.id, itemId: itemInstances.id, askingPrice: marketListings.askingPrice, createdAt: marketListings.createdAt, sellerUserId: marketListings.sellerUserId, sellerName: users.name, baseItemKey: itemInstances.baseItemKey, quality: itemInstances.quality, itemLevel: itemInstances.itemLevel })
+    .from(marketListings).innerJoin(itemInstances, eq(itemInstances.id, marketListings.itemId)).leftJoin(users, eq(users.id, marketListings.sellerUserId)).where(eq(marketListings.status, "active")).orderBy(desc(marketListings.createdAt)).limit(limit);
+}
+
+export async function sellItemToSystem(values: { itemId: string; sellerUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).limit(1))[0];
+    if (!item) throw new Error("Der Gegenstand ist nicht verfügbar oder gehört dir nicht.");
+    const aurionGranted = systemSaleValue(item.itemLevel, item.quality as MarketQuality);
+    const now = new Date();
+    await tx.insert(playerProfiles).values({ userId: values.sellerUserId }).onDuplicateKeyUpdate({ set: { userId: values.sellerUserId } });
+    await tx.insert(systemSaleReceipts).values({ id: newCommunityId("syssale"), itemId: item.id, sellerUserId: values.sellerUserId, aurionGranted });
+    await tx.update(itemInstances).set({ status: "sold", soldAt: now }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
+    await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} + ${aurionGranted}` }).where(eq(playerProfiles.userId, values.sellerUserId));
+    return { aurionGranted, itemId: item.id };
+  });
+}
+
+export async function createMarketListing(values: { itemId: string; sellerUserId: number; askingPrice: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const askingPrice = assertMarketPrice(values.askingPrice);
+  return db.transaction(async tx => {
+    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).limit(1))[0];
+    if (!item) throw new Error("Dieser Gegenstand kann nicht angeboten werden.");
+    const id = newCommunityId("listing");
+    await tx.insert(marketListings).values({ id, itemId: item.id, sellerUserId: values.sellerUserId, askingPrice });
+    await tx.update(itemInstances).set({ status: "listed" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
+    return { id, askingPrice };
+  });
+}
+
+export async function cancelMarketListing(values: { listingId: string; sellerUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.sellerUserId, values.sellerUserId), eq(marketListings.status, "active"))).limit(1))[0];
+    if (!listing) throw new Error("Dieses Angebot kann nicht zurückgenommen werden.");
+    await tx.update(marketListings).set({ status: "cancelled", settledAt: new Date() }).where(and(eq(marketListings.id, listing.id), eq(marketListings.status, "active")));
+    await tx.update(itemInstances).set({ status: "owned" }).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed")));
+    return { cancelled: true as const };
+  });
+}
+
+export async function buyMarketListing(values: { listingId: string; buyerUserId: number; idempotencyKey: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const prior = (await tx.select().from(marketTransactionReceipts).where(eq(marketTransactionReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (prior) return { applied: false as const, receipt: prior };
+    const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.status, "active"))).limit(1))[0];
+    if (!listing) throw new Error("Dieses Angebot ist nicht mehr verfügbar.");
+    assertNotOwnListing(listing.sellerUserId, values.buyerUserId);
+    await tx.insert(playerProfiles).values([{ userId: values.buyerUserId }, { userId: listing.sellerUserId }]).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+    const buyer = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.buyerUserId)).limit(1))[0];
+    if (!buyer || buyer.aurionPoints < listing.askingPrice) throw new Error("Deine Aurion-Währung reicht für dieses Angebot nicht aus.");
+    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed"), eq(itemInstances.ownerUserId, listing.sellerUserId))).limit(1))[0];
+    if (!item) throw new Error("Der angebotene Gegenstand ist nicht mehr verfügbar.");
+    const receiptId = newCommunityId("marketrec");
+    const now = new Date();
+    await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} - ${listing.askingPrice}` }).where(eq(playerProfiles.userId, values.buyerUserId));
+    await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} + ${listing.askingPrice}` }).where(eq(playerProfiles.userId, listing.sellerUserId));
+    await tx.update(itemInstances).set({ ownerUserId: values.buyerUserId, status: "owned" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "listed")));
+    await tx.update(marketListings).set({ status: "sold", buyerUserId: values.buyerUserId, settledAt: now }).where(and(eq(marketListings.id, listing.id), eq(marketListings.status, "active")));
+    await tx.insert(marketTransactionReceipts).values({ id: receiptId, listingId: listing.id, itemId: item.id, sellerUserId: listing.sellerUserId, buyerUserId: values.buyerUserId, aurionTransferred: listing.askingPrice, idempotencyKey: values.idempotencyKey });
+    const receipt = (await tx.select().from(marketTransactionReceipts).where(eq(marketTransactionReceipts.id, receiptId)).limit(1))[0];
+    if (!receipt) throw new Error("Markttransaktion readback failed");
+    return { applied: true as const, receipt };
   });
 }
 
@@ -470,6 +555,87 @@ export async function uploadGlbAsset(values: { displayName: string; assetType: A
   return { asset, deduplicated: false as const };
 }
 
+export async function submitPlayerGlbAsset(values: { submittedByUserId: number; assetType: AssetType; subcategory: string; displayName: string; description: string; visibility: "private" | "public"; contentBase64: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  if (values.assetType !== "character" && values.visibility !== "public") throw new Error("Nur persönliche Charaktermodelle dürfen privat eingereicht werden.");
+  const payload = decodeValidatedGlbBase64(values.contentBase64, USER_GLB_MAX_BYTES);
+  const duplicate = (await db.select().from(glbAssetSubmissions).where(and(eq(glbAssetSubmissions.submittedByUserId, values.submittedByUserId), eq(glbAssetSubmissions.sha256, payload.sha256), eq(glbAssetSubmissions.status, "pending"))).limit(1))[0];
+  if (duplicate) return { submission: duplicate, deduplicated: true as const };
+  const id = newEndgameId("glbsub");
+  const stored = await storagePut(`aurion/submissions/glb/${values.submittedByUserId}/${id}-${payload.sha256}.glb`, payload.bytes, "model/gltf-binary");
+  await db.insert(glbAssetSubmissions).values({ id, submittedByUserId: values.submittedByUserId, assetType: values.assetType, subcategory: values.subcategory, displayName: values.displayName, description: values.description, visibility: values.visibility, storageKey: stored.key, storageUrl: stored.url, sha256: payload.sha256, bytes: payload.bytes.length });
+  const submission = (await db.select().from(glbAssetSubmissions).where(eq(glbAssetSubmissions.id, id)).limit(1))[0];
+  if (!submission) throw new Error("GLB submission readback failed");
+  return { submission, deduplicated: false as const };
+}
+
+export async function listMyGlbSubmissions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(glbAssetSubmissions).where(eq(glbAssetSubmissions.submittedByUserId, userId)).orderBy(desc(glbAssetSubmissions.createdAt)).limit(100);
+}
+
+export async function listVisibleGlbCatalog(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: glbAssets.id, displayName: glbAssets.displayName, assetType: glbAssets.assetType, storageUrl: glbAssets.storageUrl, bytes: glbAssets.bytes, createdAt: glbAssets.createdAt, visibility: glbAssetSubmissions.visibility, submittedByUserId: glbAssetSubmissions.submittedByUserId, subcategory: glbAssetSubmissions.subcategory, description: glbAssetSubmissions.description })
+    .from(glbAssets).leftJoin(glbAssetSubmissions, eq(glbAssetSubmissions.approvedAssetId, glbAssets.id))
+    .where(and(eq(glbAssets.status, "approved"), or(isNull(glbAssetSubmissions.id), eq(glbAssetSubmissions.visibility, "public"), eq(glbAssetSubmissions.submittedByUserId, userId))))
+    .orderBy(desc(glbAssets.createdAt)).limit(100);
+}
+
+export async function listPublicGlbCatalog() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: glbAssets.id, displayName: glbAssets.displayName, assetType: glbAssets.assetType, storageUrl: glbAssets.storageUrl, bytes: glbAssets.bytes, createdAt: glbAssets.createdAt, visibility: glbAssetSubmissions.visibility, subcategory: glbAssetSubmissions.subcategory, description: glbAssetSubmissions.description })
+    .from(glbAssets).innerJoin(glbAssetSubmissions, eq(glbAssetSubmissions.approvedAssetId, glbAssets.id))
+    .where(and(eq(glbAssets.status, "approved"), eq(glbAssetSubmissions.visibility, "public"))).orderBy(desc(glbAssets.createdAt)).limit(100);
+}
+
+export async function getPlayerCharacterAppearance(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  return (await db.select({ assetId: playerCharacterAppearances.assetId, visibility: playerCharacterAppearances.visibility, equippedAt: playerCharacterAppearances.equippedAt, displayName: glbAssets.displayName, storageUrl: glbAssets.storageUrl }).from(playerCharacterAppearances).innerJoin(glbAssets, eq(glbAssets.id, playerCharacterAppearances.assetId)).where(eq(playerCharacterAppearances.userId, userId)).limit(1))[0];
+}
+
+export async function equipPlayerCharacterAppearance(values: { userId: number; assetId: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const asset = (await db.select({ id: glbAssets.id, assetType: glbAssets.assetType, status: glbAssets.status, visibility: glbAssetSubmissions.visibility, submittedByUserId: glbAssetSubmissions.submittedByUserId }).from(glbAssets).leftJoin(glbAssetSubmissions, eq(glbAssetSubmissions.approvedAssetId, glbAssets.id)).where(eq(glbAssets.id, values.assetId)).limit(1))[0];
+  if (!asset || asset.assetType !== "character" || asset.status !== "approved") throw new Error("Dieses Charaktermodell ist nicht freigegeben.");
+  if (asset.visibility === "private" && asset.submittedByUserId !== values.userId) throw new Error("Private Charaktermodelle dürfen nur vom einreichenden Explorer verwendet werden.");
+  await db.insert(playerCharacterAppearances).values({ userId: values.userId, assetId: asset.id, visibility: asset.visibility ?? "public" }).onDuplicateKeyUpdate({ set: { assetId: asset.id, visibility: asset.visibility ?? "public" } });
+  const appearance = await getPlayerCharacterAppearance(values.userId);
+  if (!appearance || appearance.assetId !== asset.id) throw new Error("Charakterauswahl konnte nicht bestätigt werden.");
+  return appearance;
+}
+
+export async function listPendingGlbSubmissions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: glbAssetSubmissions.id, submittedByUserId: glbAssetSubmissions.submittedByUserId, assetType: glbAssetSubmissions.assetType, subcategory: glbAssetSubmissions.subcategory, displayName: glbAssetSubmissions.displayName, description: glbAssetSubmissions.description, visibility: glbAssetSubmissions.visibility, storageUrl: glbAssetSubmissions.storageUrl, bytes: glbAssetSubmissions.bytes, sha256: glbAssetSubmissions.sha256, createdAt: glbAssetSubmissions.createdAt, submitterName: users.name, submitterEmail: users.email }).from(glbAssetSubmissions).leftJoin(users, eq(users.id, glbAssetSubmissions.submittedByUserId)).where(eq(glbAssetSubmissions.status, "pending")).orderBy(desc(glbAssetSubmissions.createdAt)).limit(100);
+}
+
+export async function reviewPlayerGlbSubmission(values: { submissionId: string; reviewedByUserId: number; decision: "approved" | "rejected"; reviewNote?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const submission = (await tx.select().from(glbAssetSubmissions).where(and(eq(glbAssetSubmissions.id, values.submissionId), eq(glbAssetSubmissions.status, "pending"))).limit(1))[0];
+    if (!submission) throw new Error("Diese Einreichung ist nicht mehr offen.");
+    const reviewedAt = new Date();
+    if (values.decision === "rejected") {
+      await tx.update(glbAssetSubmissions).set({ status: "rejected", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt }).where(eq(glbAssetSubmissions.id, submission.id));
+      return { approved: false as const, assetId: null };
+    }
+    const assetId = newEndgameId("glb");
+    await tx.insert(glbAssets).values({ id: assetId, displayName: submission.displayName, assetType: submission.assetType, storageKey: submission.storageKey, storageUrl: submission.storageUrl, sha256: submission.sha256, bytes: submission.bytes, status: "approved", createdByUserId: submission.submittedByUserId, reviewedByUserId: values.reviewedByUserId, reviewedAt });
+    if (submission.assetType === "character") await tx.insert(playerCharacterAppearances).values({ userId: submission.submittedByUserId, assetId, visibility: submission.visibility }).onDuplicateKeyUpdate({ set: { assetId, visibility: submission.visibility } });
+    await tx.update(glbAssetSubmissions).set({ status: "approved", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt, approvedAssetId: assetId }).where(eq(glbAssetSubmissions.id, submission.id));
+    return { approved: true as const, assetId };
+  });
+}
+
 export async function setGlbAssetReview(values: { assetId: string; status: AssetReviewStatus; reviewedByUserId: number }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
@@ -494,6 +660,14 @@ export async function listGlbAssignments() {
     displayName: glbAssets.displayName,
     assetStatus: glbAssets.status,
   }).from(glbAssignments).innerJoin(glbAssets, eq(glbAssets.id, glbAssignments.assetId)).orderBy(desc(glbAssignments.createdAt)).limit(100);
+}
+
+export async function getActiveGlbAssignment(targetType: AssetType, targetKey: string) {
+  const db = await getDb();
+  if (!db) return null;
+  return (await db.select({ assetId: glbAssets.id, displayName: glbAssets.displayName, assetType: glbAssets.assetType, storageUrl: glbAssets.storageUrl, targetKey: glbAssignments.targetKey })
+    .from(glbAssignments).innerJoin(glbAssets, eq(glbAssets.id, glbAssignments.assetId))
+    .where(and(eq(glbAssignments.targetType, targetType), eq(glbAssignments.targetKey, targetKey), eq(glbAssignments.active, 1), eq(glbAssets.status, "approved"))).limit(1))[0] ?? null;
 }
 
 export async function assignApprovedGlbAsset(values: { assetId: string; targetType: AssetType; targetKey: string; assignedByUserId: number }) {
@@ -633,4 +807,218 @@ export async function rotateSeason(values: { confirmedSeasonKey: string; nextSea
   const season = await getSeasonById(nextSeasonId);
   if (!season || season.status !== "active") throw new Error("Season rotation readback failed");
   return { applied: true as const, season, snapshotsCaptured };
+}
+
+function newCommunityId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
+}
+
+export async function listExpeditionChatMessages(limit = 40) {
+  const db = await getDb();
+  if (!db) return [];
+  const messages = await db.select({
+    id: expeditionChatMessages.id,
+    userId: expeditionChatMessages.userId,
+    body: expeditionChatMessages.body,
+    createdAt: expeditionChatMessages.createdAt,
+    authorName: users.name,
+  }).from(expeditionChatMessages).leftJoin(users, eq(users.id, expeditionChatMessages.userId)).orderBy(desc(expeditionChatMessages.createdAt)).limit(limit);
+  return messages.reverse();
+}
+
+export async function sendExpeditionChatMessage(values: { userId: number; body: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const id = newCommunityId("chat");
+  await db.insert(expeditionChatMessages).values({ id, ...values });
+  const message = (await listExpeditionChatMessages(1)).find(entry => entry.id === id);
+  if (!message) throw new Error("Chat message readback failed");
+  return message;
+}
+
+async function findActiveTeamForUser(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select({ teamId: expeditionTeams.id }).from(expeditionTeamMembers)
+    .innerJoin(expeditionTeams, eq(expeditionTeams.id, expeditionTeamMembers.teamId))
+    .where(and(eq(expeditionTeamMembers.userId, userId), eq(expeditionTeamMembers.status, "active"), eq(expeditionTeams.status, "active"))).limit(1);
+  return result[0];
+}
+
+export async function listOpenPartnerRequests(limit = 40) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: partnerRequests.id,
+    requesterUserId: partnerRequests.requesterUserId,
+    note: partnerRequests.note,
+    createdAt: partnerRequests.createdAt,
+    requesterName: users.name,
+  }).from(partnerRequests).innerJoin(users, eq(users.id, partnerRequests.requesterUserId))
+    .where(eq(partnerRequests.status, "open")).orderBy(desc(partnerRequests.createdAt)).limit(limit);
+}
+
+export async function createPartnerRequest(values: { requesterUserId: number; note: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  if (await findActiveTeamForUser(values.requesterUserId)) throw new Error("Dein bestehendes Expeditionsteam muss zuerst verlassen werden.");
+  const existing = await db.select().from(partnerRequests).where(and(eq(partnerRequests.requesterUserId, values.requesterUserId), eq(partnerRequests.status, "open"))).limit(1);
+  if (existing[0]) throw new Error("Du hast bereits ein offenes Partnergesuch.");
+  const id = newCommunityId("req");
+  await db.insert(partnerRequests).values({ id, ...values });
+  const request = await db.select().from(partnerRequests).where(eq(partnerRequests.id, id)).limit(1);
+  if (!request[0]) throw new Error("Partnergesuch readback failed");
+  return request[0];
+}
+
+export async function cancelPartnerRequest(requestId: string, requesterUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  await db.update(partnerRequests).set({ status: "cancelled" }).where(and(eq(partnerRequests.id, requestId), eq(partnerRequests.requesterUserId, requesterUserId), eq(partnerRequests.status, "open")));
+  return { cancelled: true as const };
+}
+
+export async function acceptPartnerRequest(values: { requestId: string; responderUserId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const request = (await tx.select().from(partnerRequests).where(and(eq(partnerRequests.id, values.requestId), eq(partnerRequests.status, "open"))).limit(1))[0];
+    if (!request) throw new Error("Dieses Partnergesuch ist nicht mehr offen.");
+    assertDistinctTeammates(request.requesterUserId, values.responderUserId);
+    const occupied = await tx.select({ userId: expeditionTeamMembers.userId }).from(expeditionTeamMembers)
+      .innerJoin(expeditionTeams, eq(expeditionTeams.id, expeditionTeamMembers.teamId))
+      .where(and(eq(expeditionTeamMembers.status, "active"), eq(expeditionTeams.status, "active"), or(eq(expeditionTeamMembers.userId, request.requesterUserId), eq(expeditionTeamMembers.userId, values.responderUserId)))).limit(1);
+    if (occupied[0]) throw new Error("Mindestens ein Explorer ist bereits in einem aktiven Expeditionsteam.");
+    const teamId = newCommunityId("team");
+    const now = new Date();
+    await tx.insert(expeditionTeams).values({ id: teamId, createdByUserId: request.requesterUserId });
+    await tx.insert(expeditionTeamMembers).values([
+      { id: newCommunityId("member"), teamId, userId: request.requesterUserId, role: "leader", activeUserKey: activeTeamMemberKey(request.requesterUserId) },
+      { id: newCommunityId("member"), teamId, userId: values.responderUserId, role: "partner", activeUserKey: activeTeamMemberKey(values.responderUserId) },
+    ]);
+    await tx.update(partnerRequests).set({ status: "accepted", responderUserId: values.responderUserId, teamId, respondedAt: now }).where(and(eq(partnerRequests.id, request.id), eq(partnerRequests.status, "open")));
+    const accepted = (await tx.select().from(partnerRequests).where(eq(partnerRequests.id, request.id)).limit(1))[0];
+    if (!accepted || accepted.status !== "accepted" || accepted.teamId !== teamId) throw new Error("Team acceptance readback failed");
+    return { teamId, request: accepted };
+  });
+}
+
+export async function getActiveExpeditionTeam(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const membership = await findActiveTeamForUser(userId);
+  if (!membership) return undefined;
+  const members = await db.select({ userId: expeditionTeamMembers.userId, role: expeditionTeamMembers.role, name: users.name })
+    .from(expeditionTeamMembers).leftJoin(users, eq(users.id, expeditionTeamMembers.userId))
+    .where(and(eq(expeditionTeamMembers.teamId, membership.teamId), eq(expeditionTeamMembers.status, "active"))).orderBy(expeditionTeamMembers.joinedAt);
+  return { id: membership.teamId, members };
+}
+
+export async function leaveActiveExpeditionTeam(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const active = await findActiveTeamForUser(userId);
+  if (!active) return { disbanded: false as const };
+  const now = new Date();
+  await db.transaction(async tx => {
+    await tx.update(expeditionTeams).set({ status: "disbanded", disbandedAt: now }).where(and(eq(expeditionTeams.id, active.teamId), eq(expeditionTeams.status, "active")));
+    await tx.update(expeditionTeamMembers).set({ status: "left", activeUserKey: null, leftAt: now }).where(and(eq(expeditionTeamMembers.teamId, active.teamId), eq(expeditionTeamMembers.status, "active")));
+  });
+  return { disbanded: true as const };
+}
+
+export async function listActiveTeamSignals(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const active = await findActiveTeamForUser(userId);
+  if (!active) return [];
+  const signals = await db.select({
+    id: expeditionTeamSignals.id,
+    senderUserId: expeditionTeamSignals.senderUserId,
+    command: expeditionTeamSignals.command,
+    createdAt: expeditionTeamSignals.createdAt,
+    senderName: users.name,
+  }).from(expeditionTeamSignals).leftJoin(users, eq(users.id, expeditionTeamSignals.senderUserId))
+    .where(eq(expeditionTeamSignals.teamId, active.teamId)).orderBy(desc(expeditionTeamSignals.createdAt)).limit(60);
+  return signals.reverse();
+}
+
+export async function sendActiveTeamSignal(values: { userId: number; command: AurionCommand }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const active = await findActiveTeamForUser(values.userId);
+  if (!active) throw new Error("Du bist aktuell in keinem aktiven Expeditionsteam.");
+  const id = newCommunityId("signal");
+  await db.insert(expeditionTeamSignals).values({ id, teamId: active.teamId, senderUserId: values.userId, command: values.command });
+  const signal = (await listActiveTeamSignals(values.userId)).find(entry => entry.id === id);
+  if (!signal) throw new Error("Team signal readback failed");
+  return signal;
+}
+
+export async function listForumThreads(category?: ForumCategory) {
+  const db = await getDb();
+  if (!db) return [];
+  const query = db.select({
+    id: forumThreads.id,
+    category: forumThreads.category,
+    authorUserId: forumThreads.authorUserId,
+    title: forumThreads.title,
+    body: forumThreads.body,
+    pinned: forumThreads.pinned,
+    createdAt: forumThreads.createdAt,
+    updatedAt: forumThreads.updatedAt,
+    authorName: users.name,
+  }).from(forumThreads).leftJoin(users, eq(users.id, forumThreads.authorUserId));
+  return category ? query.where(eq(forumThreads.category, category)).orderBy(desc(forumThreads.pinned), desc(forumThreads.createdAt)).limit(60) : query.orderBy(desc(forumThreads.pinned), desc(forumThreads.createdAt)).limit(60);
+}
+
+export async function getForumThread(threadId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const thread = (await db.select({
+    id: forumThreads.id,
+    category: forumThreads.category,
+    authorUserId: forumThreads.authorUserId,
+    title: forumThreads.title,
+    body: forumThreads.body,
+    pinned: forumThreads.pinned,
+    createdAt: forumThreads.createdAt,
+    updatedAt: forumThreads.updatedAt,
+    authorName: users.name,
+  }).from(forumThreads).leftJoin(users, eq(users.id, forumThreads.authorUserId)).where(eq(forumThreads.id, threadId)).limit(1))[0];
+  if (!thread) return undefined;
+  const replies = await db.select({ id: forumReplies.id, body: forumReplies.body, createdAt: forumReplies.createdAt, authorUserId: forumReplies.authorUserId, authorName: users.name })
+    .from(forumReplies).leftJoin(users, eq(users.id, forumReplies.authorUserId)).where(eq(forumReplies.threadId, threadId)).orderBy(forumReplies.createdAt).limit(100);
+  return { ...thread, replies };
+}
+
+export async function createForumThread(values: { authorUserId: number; category: ForumCategory; title: string; body: string; pinned?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const id = newCommunityId("thread");
+  await db.insert(forumThreads).values({ id, ...values, pinned: values.pinned ? 1 : 0 });
+  const thread = await getForumThread(id);
+  if (!thread) throw new Error("Forum thread readback failed");
+  return thread;
+}
+
+export async function updateForumThread(values: { threadId: string; category: ForumCategory; title: string; body: string; pinned: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const existing = await db.select({ id: forumThreads.id }).from(forumThreads).where(eq(forumThreads.id, values.threadId)).limit(1);
+  if (!existing[0]) throw new Error("Der redaktionelle Forumseintrag existiert nicht.");
+  await db.update(forumThreads).set({ category: values.category, title: values.title, body: values.body, pinned: values.pinned ? 1 : 0 }).where(eq(forumThreads.id, values.threadId));
+  const thread = await getForumThread(values.threadId);
+  if (!thread || thread.category !== values.category || thread.title !== values.title || thread.body !== values.body || thread.pinned !== (values.pinned ? 1 : 0)) throw new Error("Forum-Bearbeitung konnte nicht bestätigt werden.");
+  return thread;
+}
+
+export async function createForumReply(values: { threadId: string; authorUserId: number; body: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const exists = await db.select({ id: forumThreads.id }).from(forumThreads).where(eq(forumThreads.id, values.threadId)).limit(1);
+  if (!exists[0]) throw new Error("Der Forumseintrag existiert nicht.");
+  const id = newCommunityId("reply");
+  await db.insert(forumReplies).values({ id, ...values });
+  return { id };
 }

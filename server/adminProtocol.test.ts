@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration } from "./adminProtocol";
+import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
 
 function minimalGlbBase64(): string {
   const bytes = Buffer.alloc(12);
@@ -23,6 +23,14 @@ describe("admin protocol", () => {
     invalidLength.writeUInt32LE(2, 4);
     invalidLength.writeUInt32LE(99, 8);
     expect(() => decodeValidatedGlbBase64(invalidLength.toString("base64"))).toThrow("header");
+  });
+
+  it("enforces the smaller player-submission cap when requested", () => {
+    const oversized = Buffer.alloc(USER_GLB_MAX_BYTES + 1);
+    oversized.write("glTF", 0, "ascii");
+    oversized.writeUInt32LE(2, 4);
+    oversized.writeUInt32LE(oversized.length, 8);
+    expect(() => decodeValidatedGlbBase64(oversized.toString("base64"), USER_GLB_MAX_BYTES)).toThrow("size");
   });
 
   it("normalizes public placement configuration while rejecting credential-shaped keys", () => {
