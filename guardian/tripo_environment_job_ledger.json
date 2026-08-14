@@ -1,0 +1,38 @@
+{
+  "assets": {
+    "env_asterion_floor_kit_a01": {
+      "approval": {
+        "source": "Nutzerfreigabe im Projektchat vom 13. August 2026",
+        "scope": "Eine einzige texturierte GLB-Erzeugung für das priorisierte Asterion-Umgebungsasset; keine Batch-Erzeugung."
+      },
+      "generation": {
+        "status": "validated_and_integrated",
+        "taskId": "75467ea0-4c42-405d-a47e-b217c45817e6",
+        "submissionCount": 1,
+        "model": "P1-20260311",
+        "faceLimit": 3500,
+        "texture": true,
+        "pbr": true,
+        "outputUrl": "/manus-storage/env_asterion_floor_kit_a01_ec94e853.glb",
+        "notes": ["Erste Statusprüfung: running bei 53 Prozent; 40 Credits verbraucht; keine Folgeanfrage ausgelöst.", "Fertigstellung nach 70 Sekunden; genau eine Text-zu-3D-Generierung ausgeführt.", "Lokale GLB-Prüfung: 1.044.392 Bytes, 3.324 Dreiecke, 1 Material, 3 eingebettete Texturen, 0 Skins, 0 Animationen, gültige Szene.", "Als optionale, sichtbare Bodenreliquie der Sternwarte Asterion integriert; Dauerpfad erfolgreich hochgeladen."]
+      }
+    },
+    "env_asterion_archway_a01": {
+      "approval": {
+        "source": "Nutzerfreigabe im Projektchat vom 13. August 2026",
+        "scope": "Zweite einzelne texturierte GLB-Erzeugung, erst nach Validierung des Bodenassets; keine Batch-Erzeugung."
+      },
+      "generation": {
+        "status": "validated_and_integrated",
+        "taskId": "6eb5be06-582b-4e22-9529-d8a83701c0f6",
+        "submissionCount": 1,
+        "model": "P1-20260311",
+        "faceLimit": 3200,
+        "texture": true,
+        "pbr": true,
+        "outputUrl": "/manus-storage/env_asterion_archway_a01_fe233f19.glb",
+        "notes": ["Bodenkit validiert und in die Sternwarte integriert; Strukturprop ist der nächste einzeln freigegebene Schritt.", "Erste Statusprüfung: running bei 64 Prozent; 40 Credits verbraucht; keine Folgeanfrage ausgelöst.", "Fertigstellung nach 58 Sekunden; genau eine Text-zu-3D-Generierung ausgeführt.", "Lokale GLB-Prüfung: 806.812 Bytes, 3.126 Dreiecke, 1 Material, 3 eingebettete Texturen, 0 Skins, 0 Animationen, gültige Szene.", "Als optionale, sichtbare Architektursilhouette der Sternwarte Asterion integriert; Dauerpfad erfolgreich hochgeladen."]
+      }
+    }
+  }
+}

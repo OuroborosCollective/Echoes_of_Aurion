@@ -25,3 +25,7 @@ Die Regeln prüfen `blade: cleave`, `focus: surge` als zulässige Aktionen und l
 ## Offene Produktionsgrenze
 
 Es wurden keine künstlichen Spieler, Expeditionen, Lootinstanzen oder Waffenpunkte in der Produktionsdatenbank erzeugt. Die neuen Routen, Transaktionen und die Quittungsbindung sind daher strukturell und automatisiert geprüft, aber vollständige administrative Resultat-→Loot-→Inventar- sowie Resultat-→Waffen-XP-Readbacks bleiben eigene E2E-Nachweise.
+
+## GitHub- und Deploymentreadback
+
+Der geprüfte Kandidat `f5532546df79b4930df57f47faa4d1cb0289b3a6` wurde über PR [#20](https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/20) in `main` gesquasht. Die resultierende Hauptbranch-Revision lautet `cba07638ef5277f90592207b6f8c5b5aa113d169`. Der Workflowlauf [31700160249](https://github.com/OuroborosCollective/Echoes_of_Aurion/actions/runs/31700160249) bestätigte auf exakt dieser Revision den Hosted-Build, das immutable Static-Artifact und die eingeschränkte Aurion-Promotion erfolgreich.

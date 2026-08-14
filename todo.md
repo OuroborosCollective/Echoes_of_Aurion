@@ -106,4 +106,4 @@
 - [ ] Waffen-Receipt und XP-Vergabe transaktional koppeln sowie den Resultat-Receipt-→Waffen-XP-Pfad isoliert nachweisen.
 - [x] Expeditionsresultat-, atomaren Loot- und Waffenloadoutausbau revisionsgebunden nach GitHub pushen und Hauptbranch-Readback dokumentieren.
 - [x] Sentinel um einen bewegungsgebundenen Laufzustand ergänzen und alle vier Zustände für Explorer, Echo Scout und Sentinel im Code-/Szenennachweis eindeutig belegen.
-- [ ] Sentinel-Laufzustand und Animationsnachweis revisionsgebunden nach GitHub pushen sowie Workflow-Readback dokumentieren.
+- [x] Sentinel-Laufzustand und Animationsnachweis revisionsgebunden nach GitHub pushen sowie Workflow-Readback dokumentieren.

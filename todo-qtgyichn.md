@@ -1,0 +1,76 @@
+# Projektaufgaben
+
+- [x] Bestehende Spielarchitektur, Authentifizierung und LLM-Verbindungsablauf prüfen.
+- [x] Persistentes Datenmodell für Chat-Nachrichten, Partnergesuche, Antworten, Teams und Forumseinträge ergänzen.
+- [x] Kleinen authentifizierten In-Game-Chat mit Nachrichtenverlauf integrieren.
+- [x] Partnergesuch als alternative Hilfe im LLM-Verbindungsschritt ermöglichen.
+- [x] Gesuchs-Benachrichtigung mit positivem Antwortablauf und gemeinsamer Team-Bildung ohne LLM implementieren.
+- [x] Team-Status in die Spieloberfläche und den Spielstart einbinden.
+- [x] Zur Gestaltung passendes Forum mit Bereichen für Ankündigungen, Patch Notes, Events und allgemeinen Nutzerfragen einbinden.
+- [x] Admin-Berechtigungen für das Erstellen und Bearbeiten redaktioneller Forumseinträge umsetzen.
+- [x] General-Forum für authentifizierte Nutzerfragen umsetzen.
+- [x] Bereitgestellte Hintergrundmusik regelkonform ausliefern und mit einer unaufdringlichen Spielsteuerung einbinden.
+- [x] Backend- und Oberflächenlogik mit Vitest prüfen sowie Darstellung auf Desktop und Mobilgeräten kontrollieren.
+- [x] Bestehende Inventar-, GLB- und Veröffentlichungsfunktionen gegen die neuen Anforderungen abgleichen.
+- [x] In-Game-Verkauf nicht benötigter Gegenstände gegen Aurion-Währung implementieren.
+- [x] Auktionshaus für spielinterne Währung mit Angebots-, Kauf- und Eigentumswechsel-Logik implementieren.
+- [x] Spieler-GLB-Einreichung mit Kategorie, Unterkategorie, Name, Beschreibung, Vorschau und serverseitiger Größen-/Formatprüfung ergänzen.
+- [x] Persönliche und öffentliche Charakter-GLB-Einreichungen mit Sichtbarkeitsentscheidung und Admin-Freigabe ergänzen.
+- [x] Freigegebene Community-Assets kontrolliert in den sichtbaren Spiel-Asset-Katalog übernehmen.
+- [x] Solo-Abenteuer ohne LLM und ohne menschlichen Team-Partner als gleichwertigen Spieleinstieg integrieren.
+- [x] PlayCanvas-Verfügbarkeit und Veröffentlichungsvoraussetzungen prüfen und dokumentieren.
+- [x] itch.io-Anbindung und die nötige Nutzeranleitung prüfen sowie projektseitig vorbereiten.
+- [x] Android-APK-Build-Workflow für GitHub Actions ergänzen und dokumentieren.
+- [x] Vorschläge für Taverne, Housing, neue Welten und weitere Spielmodi als priorisierte Roadmap ausarbeiten.
+- [x] Premium-Modus für eine spätere, separat zu konfigurierende Bezahl-Integration als Roadmap festhalten.
+- [x] Gemeinsame Runtime-Validierungsbibliothek für Spieleingaben, Inventartransaktionen, GLB-Einreichungen und Veröffentlichungsgrenzen integrieren.
+- [x] Fehlergrenzen, nutzerverständliche Fallbacks und strukturierte Laufzeitdiagnostik für Spiel- und Community-Oberflächen ergänzen.
+- [x] Serverseitige Vertrags-, Datenbank- und Architektur-Smoke-Tests für zentrale Spielflüsse ergänzen.
+- [x] Browsernahe End-to-End-Smoke-Tests für Login-unabhängige Oberflächen, Solo-Einstieg, Community-Menü und Fehlerfallbacks integrieren.
+- [x] Abschließlichen Fehlerfamilien-Run mit zehn abgeleiteten Prüffällen, Behebungen und vollständigen Wiederholungschecks durchführen.
+- [x] Marktoberfläche um echte Lade-, Fehler- und Leerezustände für Inventar, Angebote und Auktionen ergänzen.
+- [x] Nutzerverständliche Fehlermeldungen für Systemverkauf, Angebot, Kauf und Rücknahme im Markt anzeigen.
+- [ ] Smoke- und Integrationsprüfungen für Systemverkauf, Angebot, Rücknahme, Kauf, unzureichende Währung, Eigenkauf und konkurrierend beendete Angebote ergänzen.
+- [x] Öffentlichen und privaten Charakter-Asset-Fluss bis zur tatsächlichen Auswahl und Nutzung im Spiel vervollständigen.
+- [x] Spieler- und öffentlich sichtbaren Asset-Katalog für freigegebene GLB-Assets implementieren und an den Spiel-Asset-Katalog anbinden.
+- [ ] Smoke- und Integrationsprüfung für Einreichung, Admin-Freigabe/Ablehnung und anschließende Sichtbarkeit beziehungsweise Charakter-Nutzung ergänzen.
+- [x] Race-Condition der Charaktermodell-Laufzeitintegration beheben und Modell nach Szeneninitialisierung zuverlässig anwenden.
+- [x] Öffentlichen GLB-Katalog über einen klar getrennten, lesenden Gastzugang bereitstellen.
+- [ ] Freigegebene Nicht-Charakter-Assets an sichtbare Spielverwendung oder konkrete Spielkatalog-Ziele anbinden und end-to-end prüfen.
+- [x] Verfügbarkeit und Aufgabenstand der verlangten Gemini-, Parallel- und Linear-Integrationen sicher prüfen.
+- [x] Produktionsspezifikation für zwei stilistisch passende, riggte und animierte Aurion-Charaktermodelle erstellen.
+- [x] Erstes Charaktermodell nur einmal zustandsbasiert generieren, Fertigstellungsstatus abwarten und Ergebnis validieren.
+- [x] Zweites Charaktermodell erst nach erfolgreicher Prüfung des ersten Modells einmal zustandsbasiert generieren und validieren.
+- [x] Beide geprüften Charaktermodelle als wählbare Standardoptionen in den sichtbaren Spiel- und Asset-Katalog integrieren.
+- [x] Die zwei validierten Standardcharaktere zusätzlich im sichtbaren Asset-Katalog der Community-Konsole aufführen und von dort auswählbar machen.
+- [x] Nach der Katalog-Einbindung einen Runtime-Smoketest der Auswahl beider Standardmodelle im gerenderten UI dokumentieren.
+- [x] Für nicht angemeldete Nutzer einen klar getrennten, rein lesenden Gast-Katalog im Asset-Bereich rendern und Upload-/Einreichungsformulare vollständig ausblenden.
+- [x] Einen UI-Smoketest für den Gastzustand dokumentieren, der zeigt, dass Gäste nur den öffentlichen Katalog sehen und keine Einreichungs-/Ausrüstungsaktionen angeboten bekommen.
+- [x] Wolfram für nachvollziehbare Skalierungs-, Balance- und Ressourcenberechnungen der verbleibenden MMORPG-Spielsysteme einsetzen.
+- [x] Priorisierte, modulare Umgebung-Asset-Roadmap für Dungeonböden, Architektur, Häuser, Requisiten und austauschbare Textursets erstellen.
+- [x] Wiederverwendungs-, Polygon-, Textur- und Speicherbudgets für kostengünstige Browser- und Android-taugliche Umgebungsassets verbindlich festlegen.
+- [x] Nach ausdrücklicher Freigabe genau einen priorisierten Umgebungsasset-Auftrag (`env_asterion_floor_kit_a01`) einzeln ausführen; keine Stapelerzeugung auslösen.
+- [x] Asterion-Umgebungskit als einzelne GLB-Erzeugung mit passenden PBR-Texturen ausführen, auf Budget und glTF-Struktur prüfen und dokumentieren.
+- [x] Das geprüfte Asterion-GLB als instanziertes Umfeldobjekt direkt in der Sternwarte sichtbar integrieren.
+- [x] Asterion-Strukturprop als nächste einzelne GLB-Erzeugung mit PBR-Texturen ausführen, validieren und als zweite sichtbare Umgebungsform in die Sternwarte integrieren.
+- [x] Runtime-Vertragsbibliothek auch für Markt-/Inventartransaktionen, GLB-Einreichungsvalidierung und Veröffentlichungsgrenzen tatsächlich verwenden.
+- [x] Gezielte Spiel- und Community-Fallbacks mit strukturierten Diagnosedaten ergänzen und pro Oberfläche mindestens einen Laufzeitfehlerpfad absichern.
+- [x] Serverseitige Smoke-Tests zentraler Flüsse einschließlich Datenbankpfaden für Markt, Asset-Freigabe und Team-/Gateway-Fluss ergänzen.
+- [x] Browsernahen E2E-Test für den abgesicherten Fehlerfallback einschließlich WebGL- oder Modell-Fallback ergänzen.
+- [x] Android-Shell lokal einmal erzeugen, synchronisieren und den Debug-APK-Pfad ohne Testdaten verifizieren.
+- [x] Lokale Android-Skripte und Dokumentation für einen reproduzierbaren Erstlauf ohne vorhandenes `android/`-Verzeichnis korrigieren.
+- [x] Admin-Editierfunktion für bestehende Ankündigungen, Patch Notes und Events mit abgesicherter Update-Mutation und Operations-UI ergänzen.
+- [x] Clientseitige Vitest-Tests für Home, CommunityOverlay und GameCanvas-Fallbacks ergänzen.
+- [ ] Freigegebene Nicht-Charakter-Community-Assets aus dem echten Katalog-/Freigabefluss an eine konkrete Spielverwendung anbinden und end-to-end nachweisen.
+- [x] Generierte große itch.io-Buildmedien außerhalb des Projektbaums bereinigen, ohne die dauerhaften Quellassets zu entfernen.
+- [x] Bereinigte Projektversion sichern und veröffentlichen.
+- [ ] Gesicherte Projektversion in das verbundene GitHub-Repository übertragen.
+- [x] VPS unter 46.202.154.25 auf Aurion-Dienst, Reverse Proxy, TLS und Laufzeitstatus prüfen.
+- [x] DNS-, HTTPS- und Host-Routing für arelogic.space gegen den VPS verifizieren und behebbar konfigurieren.
+- [x] Aurion-Laufzeit unter arelogic.space mit HTTP-, Browser- und Log-Prüfungen bestätigen und Ergebnisse dokumentieren.
+- [x] VPS-Prüfergebnisdatei lesen und ihre persistierte Dokumentation verifizieren.
+- [x] Öffentlichen Release-Marker unter arelogic.space nach dem finalen Deploy extern erfolgreich abrufen und dokumentieren.
+- [ ] Manuelle Zusammenführung des lokalen Aurion-Stands mit dem abweichenden GitHub-Hauptzweig gemäß Option B durchführen und prüfbar veröffentlichen.
+- [ ] Anleitung für erste Anmeldung, Kontopromotion und sichere Nutzung eines Admin-Kontos bereitstellen.
+- [x] Anleitung für erste Anmeldung, Kontopromotion und sichere Nutzung eines Admin-Kontos bereitstellen.
+- [ ] Unklare Videoanforderung zu Ziel-App, Spielabschnitt, Figuren, Ausgabemedium und gewünschter Fehleranalyse präzisieren und danach umsetzen.

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Echoes of Aurion</string>
+    <string name="title_activity_main">Echoes of Aurion</string>
+    <string name="package_name">im.aurion.echoes</string>
+    <string name="custom_url_scheme">im.aurion.echoes</string>
+</resources>
