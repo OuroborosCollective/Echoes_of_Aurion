@@ -28,7 +28,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
       setWebglUnavailable(true);
       window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false, unavailable: true } }));
     };
-    if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("aurion_runtime") === "no-webgl") {
+    if (new URLSearchParams(window.location.search).get("aurion_runtime") === "no-webgl") {
       markUnavailable();
       return;
     }
