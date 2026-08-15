@@ -16,7 +16,7 @@ import GameCanvas from "@/components/GameCanvas";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
-import { aurionAssets } from "@/lib/aurionAssets";
+import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { trpc } from "@/lib/trpc";
 import { startLogin } from "@/const";
 
@@ -48,8 +48,8 @@ function codeFromText(value: string): Command | null {
 
 export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
-  const isStaticDistribution = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION === "true";
-  const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: !isStaticDistribution });
+  const apiAvailable = hasAurionApi();
+  const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: apiAvailable });
   const [screen, setScreen] = useState<Screen>("gate");
   const [provider, setProvider] = useState(providers[0]);
   const [connected, setConnected] = useState(false);
@@ -84,7 +84,7 @@ export default function Home() {
     refetchInterval: humanTeamPartner && screen === "mission" ? 900 : false,
   });
   const sendTeamSignal = trpc.community.team.sendSignal.useMutation();
-  const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: isAuthenticated });
+  const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: apiAvailable && isAuthenticated });
   const activeCharacterUrl = characterAppearance.data?.storageUrl ?? starterCharacter.assetPath;
   const processedTeamSignals = useRef(new Set<string>());
   const processedGatewaySequence = useRef(0);

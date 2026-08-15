@@ -1,5 +1,10 @@
 const staticDistribution = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION === "true";
 
+export function hasAurionApi(): boolean {
+  if (!staticDistribution) return true;
+  return typeof window !== "undefined" && window.location.hostname === "arelogic.space";
+}
+
 function resolveAurionAsset(filename: string, manuscriptPath: string): string {
   return staticDistribution ? `${import.meta.env.BASE_URL}aurion-assets/${filename}` : manuscriptPath;
 }
