@@ -27,8 +27,9 @@ export function validateRuntimeModelSource(sourceUrl?: string): { valid: boolean
   try {
     const url = new URL(sourceUrl, "https://aurion.local");
     const isRelativeStoragePath = sourceUrl.startsWith("/manus-storage/");
-    const isSecureRemoteUrl = url.protocol === "https:";
-    if (!isRelativeStoragePath && !isSecureRemoteUrl) return { valid: false, reason: "Quelle muss über HTTPS oder den Aurion-Speicher geladen werden." };
+    const isBundledStaticAsset = sourceUrl.startsWith("./aurion-assets/") || sourceUrl.startsWith("aurion-assets/");
+    const isSecureRemoteUrl = sourceUrl.startsWith("https://") && url.protocol === "https:";
+    if (!isRelativeStoragePath && !isBundledStaticAsset && !isSecureRemoteUrl) return { valid: false, reason: "Quelle muss über HTTPS oder den Aurion-Speicher geladen werden." };
     if (!url.pathname.toLowerCase().endsWith(".glb")) return { valid: false, reason: "Quelle ist kein GLB-Modell." };
     if (sourceUrl.length > 2048) return { valid: false, reason: "Quelladresse überschreitet die sichere Runtime-Grenze." };
     return { valid: true };

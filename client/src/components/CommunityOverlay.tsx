@@ -2,6 +2,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import GlbPreview from "@/components/GlbPreview";
 import { starterCharacters, type StarterCharacter } from "@/game/starterCharacters";
+import { hasAurionApi } from "@/lib/aurionAssets";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
 import {
   BellRing,
@@ -87,7 +88,7 @@ export default function CommunityOverlay({
   const [assetPreviewUrl, setAssetPreviewUrl] = useState<string | null>(null);
   const lastTeamId = useRef<string | null>(null);
   const utils = trpc.useUtils();
-  const apiAvailable = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION !== "true";
+  const apiAvailable = hasAurionApi();
 
   const chat = trpc.community.chat.list.useQuery(undefined, {
     enabled: apiAvailable && isAuthenticated && panel === "chat",

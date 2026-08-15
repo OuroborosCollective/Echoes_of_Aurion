@@ -8,8 +8,10 @@ describe("runtime contracts", () => {
     expect(aurionRuntimeCommandSchema.safeParse("DROP TABLE").success).toBe(false);
   });
 
-  it("allows Aurion storage and HTTPS GLBs but rejects unsafe sources", () => {
+  it("allows Aurion storage, bundled static and HTTPS GLBs but rejects unsafe sources", () => {
     expect(validateRuntimeModelSource("/manus-storage/wayfinder.glb").valid).toBe(true);
+    expect(validateRuntimeModelSource("./aurion-assets/wayfinder.glb").valid).toBe(true);
+    expect(validateRuntimeModelSource("../aurion-assets/wayfinder.glb").valid).toBe(false);
     expect(validateRuntimeModelSource("https://assets.example.test/veilguard.glb?version=2").valid).toBe(true);
     expect(validateRuntimeModelSource("http://assets.example.test/veilguard.glb").valid).toBe(false);
     expect(validateRuntimeModelSource("/manus-storage/readme.txt").valid).toBe(false);
