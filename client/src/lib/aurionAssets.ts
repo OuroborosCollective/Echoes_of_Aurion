@@ -6,7 +6,9 @@ export function hasAurionApi(): boolean {
 }
 
 function resolveAurionAsset(filename: string, manuscriptPath: string): string {
-  return staticDistribution ? `${import.meta.env.BASE_URL}aurion-assets/${filename}` : manuscriptPath;
+  if (!staticDistribution) return manuscriptPath;
+  if (typeof window !== "undefined" && window.location.hostname === "arelogic.space") return `/aurion-assets/${filename}`;
+  return `${import.meta.env.BASE_URL}aurion-assets/${filename}`;
 }
 
 export const aurionAssets = {

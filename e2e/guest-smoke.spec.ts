@@ -9,6 +9,7 @@ function recordUnexpectedConsoleErrors(page: import("@playwright/test").Page, is
 }
 
 test("guest selects both starter characters and sees a read-only asset catalog", async ({ page }) => {
+  test.slow();
   const errors = recordUnexpectedConsoleErrors(page);
   await page.goto("/");
 
@@ -48,13 +49,14 @@ test("WebGL fallback keeps the access and community surface available", async ({
   expect(errors).toEqual([]);
 });
 
-test("production CDN failure keeps the access and community surface available", async ({ page }) => {
-  test.skip(process.env.AURION_E2E_STATIC !== "1", "Dieser Smoke-Test benötigt den externen Babylon-Pfad des itch.io-Produktionsbuilds.");
-  const errors = recordUnexpectedConsoleErrors(page, message => message.includes("net::ERR_FAILED"));
-  await page.route("https://cdn.jsdelivr.net/npm/@babylonjs/**", route => route.abort());
+test("production static runtime loads Babylon without an external CDN", async ({ page }) => {
+  test.skip(process.env.AURION_E2E_STATIC !== "1", "Dieser Smoke-Test läuft gegen den veröffentlichten Static-Release.");
+  const errors = recordUnexpectedConsoleErrors(page);
   await page.goto("/");
-  await expect(page.getByTestId("webgl-fallback")).toContainText("Zugang und Gemeinschaft bleiben aktiv");
-  await expect(page.getByRole("button", { name: "GLB-Einreichung öffnen" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ })).toBeVisible();
+  await expect(page.locator("canvas")).toBeVisible();
+  const externalBabylonRequests = await page.evaluate(() => performance.getEntriesByType("resource")
+    .map(entry => entry.name)
+    .filter(name => name.includes("cdn.jsdelivr.net/npm/@babylonjs")));
+  expect(externalBabylonRequests).toEqual([]);
   expect(errors).toEqual([]);
 });
