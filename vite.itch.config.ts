@@ -13,19 +13,11 @@ const itchDocumentPlugin = {
   },
 };
 
-function babylonCdnPath(id: string): string {
-  if (id.startsWith("@babylonjs/core/")) {
-    const modulePath = id.slice("@babylonjs/core/".length);
-    return `https://cdn.jsdelivr.net/npm/@babylonjs/core@9.20.1/${modulePath.endsWith(".js") ? modulePath : `${modulePath}.js`}`;
-  }
-  if (id === "@babylonjs/loaders/glTF") return "https://cdn.jsdelivr.net/npm/@babylonjs/loaders@9.20.1/glTF/index.js";
-  return id;
-}
-
 /**
  * Static HTML5 distribution for itch.io.
  * Relative asset paths are mandatory because itch.io hosts HTML games below a CDN subdirectory.
- * The MCP/API service is intentionally external and is not packaged into this archive.
+ * The API service is intentionally external. The Babylon runtime itself is bundled
+ * with the game so a player's 3D scene never depends on a separate public CDN.
  */
 export default defineConfig({
   base: "./",
@@ -46,9 +38,7 @@ export default defineConfig({
     emptyOutDir: true,
     reportCompressedSize: false,
     rollupOptions: {
-      external: id => id.startsWith("@babylonjs/core/") || id === "@babylonjs/loaders/glTF",
       output: {
-        paths: babylonCdnPath,
         manualChunks(id) {
           if (id.includes("node_modules")) return "vendor-runtime";
         },
