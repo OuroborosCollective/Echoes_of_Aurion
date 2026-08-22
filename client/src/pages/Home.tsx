@@ -4,7 +4,7 @@
  * hides the isometric sky-city. Every LLM signal is visible, bounded and logged.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, ChevronRight, CircleDot, Copy,
   Compass, Cpu, Download, Gamepad2, LockKeyhole, Radio, ShieldCheck, Sparkles, Swords,
@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import CommunityOverlay from "@/components/CommunityOverlay";
-import GameCanvas from "@/components/GameCanvas";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
@@ -40,6 +39,7 @@ const providers = ["ChatGPT", "Claude", "Gemini", "Mistral", "Lokales LLM", "Eig
 const heroTrailerUrl = aurionAssets.trailer;
 const heroTrailerPoster = aurionAssets.trailerPoster;
 const expanseReference = aurionAssets.expanseReference;
+const GameCanvas = lazy(() => import("@/components/GameCanvas"));
 
 function codeFromText(value: string): Command | null {
   const candidate = value.trim().toUpperCase();
@@ -388,7 +388,9 @@ export default function Home() {
 
   return (
     <main className={`aurion-app${immersiveMode ? " is-immersive" : ""}`} style={{ "--aurion-hero-poster": `url("${heroTrailerPoster}")` } as CSSProperties}>
-      <GameCanvas characterModelUrl={activeCharacterUrl} arenaModelUrl={activeArenaAsset.data?.storageUrl} />
+      <Suspense fallback={<div className="aurion-canvas-boot" role="status"><span className="aurion-canvas-boot__sigil">✦</span><span>3D-Szene wird vorbereitet</span></div>}>
+        <GameCanvas characterModelUrl={activeCharacterUrl} arenaModelUrl={activeArenaAsset.data?.storageUrl} />
+      </Suspense>
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
       <header className="brand-bar"><div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div><div className="brand-status"><a href="/ops" className="mr-4 text-[10px] tracking-[.14em] text-cyan-100/75 hover:text-cyan-200">OPS</a><button type="button" className="audio-toggle header-audio" onClick={toggleAudio} aria-label={audioEnabled ? "Expeditionsmusik pausieren" : "Expeditionsmusik aktivieren"}>{audioEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}</button><span className={connected ? "signal-dot active" : "signal-dot"} /> {soloMode ? "Solo-Siegel aktiv" : connected ? "Partner-Siegel aktiv" : "Zugang versiegelt"}</div></header>
