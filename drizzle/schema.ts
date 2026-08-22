@@ -62,8 +62,24 @@ export const gatewayCommands = mysqlTable("gatewayCommands", {
   index("gatewayCommands_session_created_idx").on(table.gatewaySessionId, table.createdAt),
 ]);
 
+/** One-time, short-lived authority for a browser to enter one read-only realtime zone. */
+export const zoneConnectionTickets = mysqlTable("zoneConnectionTickets", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  zoneId: mysqlEnum("zoneId", ["observatory_threshold"]).notNull(),
+  ticketDigest: varchar("ticketDigest", { length: 128 }).notNull().unique(),
+  clientBuild: varchar("clientBuild", { length: 120 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("zoneConnectionTickets_user_created_idx").on(table.userId, table.createdAt),
+  index("zoneConnectionTickets_zone_expiry_idx").on(table.zoneId, table.expiresAt),
+]);
+
 export type GatewaySession = typeof gatewaySessions.$inferSelect;
 export type GatewayCommand = typeof gatewayCommands.$inferSelect;
+export type ZoneConnectionTicket = typeof zoneConnectionTickets.$inferSelect;
 
 /** Server-authoritative player state. Browser clients render this state but never mutate it directly. */
 export const playerProfiles = mysqlTable("playerProfiles", {

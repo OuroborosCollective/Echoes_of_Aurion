@@ -12,6 +12,7 @@ import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, norma
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
 import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
+import type { ZoneId } from "./zoneProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -97,6 +98,7 @@ export const appRouter = router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),
     acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
     completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(({ ctx, input }) => db.completeGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey, giver: input.giver })),
     startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),

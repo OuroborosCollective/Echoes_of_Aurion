@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, isNull, like, lte, or, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
+import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -12,6 +12,7 @@ import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQua
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
+import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -97,6 +98,55 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+const ZONE_TICKET_TTL_MS = 60_000;
+
+function affectedRowCount(result: unknown): number {
+  const candidate = Array.isArray(result) ? result[0] : result;
+  if (!candidate || typeof candidate !== "object") return 0;
+  return Number((candidate as { affectedRows?: number }).affectedRows ?? 0);
+}
+
+/** Issues an opaque one-time browser authority; the raw ticket is never persisted. */
+export async function issueZoneConnectionTicket(values: { userId: number; zoneId: ZoneId; clientBuild: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const ticket = createZoneTicket();
+  const expiresAt = new Date(Date.now() + ZONE_TICKET_TTL_MS);
+  await db.insert(zoneConnectionTickets).values({
+    id: `zone_ticket_${randomBytes(12).toString("base64url")}`,
+    userId: values.userId,
+    zoneId: values.zoneId,
+    ticketDigest: digestZoneTicket(ticket),
+    clientBuild: values.clientBuild,
+    expiresAt,
+  });
+  return { ticket, zoneId: values.zoneId, expiresAt };
+}
+
+/** Consumes a valid ticket exactly once before a socket is allowed to join a zone. */
+export async function consumeZoneConnectionTicket(values: { ticket: string; zoneId: ZoneId }) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const ticketDigest = digestZoneTicket(values.ticket);
+  const now = new Date();
+  return db.transaction(async tx => {
+    const candidate = (await tx.select().from(zoneConnectionTickets).where(and(
+      eq(zoneConnectionTickets.ticketDigest, ticketDigest),
+      eq(zoneConnectionTickets.zoneId, values.zoneId),
+      isNull(zoneConnectionTickets.consumedAt),
+      gt(zoneConnectionTickets.expiresAt, now),
+    )).limit(1))[0];
+    if (!candidate) return undefined;
+    const updated = await tx.update(zoneConnectionTickets).set({ consumedAt: now }).where(and(
+      eq(zoneConnectionTickets.id, candidate.id),
+      isNull(zoneConnectionTickets.consumedAt),
+      gt(zoneConnectionTickets.expiresAt, now),
+    ));
+    if (affectedRowCount(updated) !== 1) return undefined;
+    return { userId: candidate.userId, zoneId: candidate.zoneId as ZoneId, clientBuild: candidate.clientBuild, expiresAt: candidate.expiresAt };
+  });
 }
 
 export async function createLocalUser(values: { handle: string; passwordHash: string }) {
