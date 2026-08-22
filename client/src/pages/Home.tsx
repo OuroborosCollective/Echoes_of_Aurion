@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import {
   Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, ChevronRight, CircleDot, Copy,
   Compass, Cpu, Download, Gamepad2, LockKeyhole, Radio, ShieldCheck, Sparkles, Swords,
-  UserRound, UsersRound, Volume2, VolumeX, X, Play,
+  Maximize2, Minimize2, UserRound, UsersRound, Volume2, VolumeX, X, Play,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import CommunityOverlay from "@/components/CommunityOverlay";
@@ -18,7 +18,6 @@ import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry }
 import { AurionSoundscape } from "@/lib/soundscape";
 import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { trpc } from "@/lib/trpc";
-import { startLogin } from "@/const";
 
 type Screen = "gate" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
@@ -71,6 +70,7 @@ export default function Home() {
   const [soloMode, setSoloMode] = useState(false);
   const [activeWorldNpc, setActiveWorldNpc] = useState<"lyra" | "orun" | null>(null);
   const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);
+  const [immersiveMode, setImmersiveMode] = useState(false);
   const expeditionAudio = useRef<HTMLAudioElement | null>(null);
   const soundscape = useRef<AurionSoundscape | null>(null);
   const musicResetTimer = useRef<number | null>(null);
@@ -130,6 +130,13 @@ export default function Home() {
     const mixer = new AurionSoundscape();
     soundscape.current = mixer;
     return () => { mixer.dispose(); soundscape.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreen = () => setImmersiveMode(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    syncFullscreen();
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
   }, []);
 
   useEffect(() => {
@@ -228,6 +235,28 @@ export default function Home() {
     return () => window.removeEventListener("aurion:request-action", onRequestedAction);
   }, [applyGameplayAction, gameplayProgress]);
 
+  const openAccountAccess = useCallback(() => {
+    window.dispatchEvent(new Event("aurion:open-local-auth"));
+    setLastSignal("Öffne den sicheren Aurion-Konto-Zugang für Anmeldung oder Registrierung.");
+  }, []);
+
+  const toggleImmersiveMode = useCallback(async () => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen?.().catch(() => setLastSignal("Der Browser konnte den Vollbildmodus nicht schließen."));
+      return;
+    }
+    if (!document.documentElement.requestFullscreen) {
+      setLastSignal("Dieser Browser unterstützt keinen Vollbildmodus. Die Touchsteuerung bleibt verfügbar.");
+      return;
+    }
+    try {
+      await document.documentElement.requestFullscreen();
+      setLastSignal("Spielmodus aktiviert: Vollbild und Touchsteuerung sind bereit.");
+    } catch {
+      setLastSignal("Der Browser hat Vollbild blockiert. Tippe auf das Vollbildsymbol, um es erneut zu versuchen.");
+    }
+  }, []);
+
   const activateHumanTeam = useCallback((partnerName: string) => {
     if (gatewayPairing) void revokeGatewaySession.mutateAsync({ sessionId: gatewayPairing.sessionId });
     processedTeamSignals.current.clear();
@@ -254,7 +283,7 @@ export default function Home() {
     if (isPairing) return;
     if (humanTeamPartner) { setLastSignal("Dein menschliches Zweierteam ist bereits bereit für die Sternwarte."); return; }
     if (authLoading) { setLastSignal("Expeditionskonto wird geprüft. Bitte einen Moment warten."); return; }
-    if (!isAuthenticated) { setLastSignal("Melde dich an, um einen autorisierten Partner-Slot auszustellen."); startLogin(); return; }
+    if (!isAuthenticated) { setLastSignal("Melde dich an, um einen autorisierten Partner-Slot auszustellen."); openAccountAccess(); return; }
     setSoloMode(false);
     setIsPairing(true); setLastSignal(`Autorisierter MCP-Slot für ${provider} wird ausgegeben.`);
     createGatewaySession.mutate({ providerLabel: provider, allowedCommands: allowedGatewayCommands }, {
@@ -288,7 +317,7 @@ export default function Home() {
   const unlockLoadout = (): void => { if (!connected) return; setScreen("loadout"); appendLedger({ kind: "system", title: "Menü freigeschaltet", detail: "Charakter- und Partner-Loadout sind jetzt verfügbar." }); };
   const toggleSkill = (code: string): void => setSelectedSkills((current) => { if (current.includes(code)) return current.filter((skill) => skill !== code); if (current.length >= 3) return [...current.slice(1), code]; return [...current, code]; });
   const startServerEncounter = (encounterKey: "asterion" | "archive" | "solarium" | "cinder_vault"): void => {
-    if (!isAuthenticated) { setLastSignal("Melde dich für serverbestätigte Quest- und Belohnungsfortschritte an."); return; }
+    if (!isAuthenticated) { setLastSignal("Melde dich für serverbestätigte Quest- und Belohnungsfortschritte an."); openAccountAccess(); return; }
     startGameplayEncounter.mutate({ encounterKey }, {
       onSuccess: ({ session }) => {
         gameplaySession.current = { id: session.id, nextSequence: session.nextSequence };
@@ -300,7 +329,7 @@ export default function Home() {
     });
   };
   const enterAurionExpanse = (): void => {
-    if (!isAuthenticated) { setLastSignal("Melde dich an, um die serverbestätigte Aurion-Expanse zu betreten."); return; }
+    if (!isAuthenticated) { setLastSignal("Melde dich an, um die serverbestätigte Aurion-Expanse zu betreten."); openAccountAccess(); return; }
     if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
     enterOpenWorld.mutate(undefined, {
       onSuccess: (snapshot) => {
@@ -314,6 +343,7 @@ export default function Home() {
   };
   const beginMission = (): void => {
     setScreen("mission"); setMissionElapsed(0); setMission(initialMission); setConfirmedDrop(null);
+    void toggleImmersiveMode();
     soundscape.current?.unlock();
     if (audioEnabled) void expeditionAudio.current?.play().catch(() => setLastSignal("Die Expeditionmusik ist bereit; aktiviere sie über das Klangsymbol."));
     window.setTimeout(() => {
@@ -357,7 +387,7 @@ export default function Home() {
   const activeWeaponTrack = playerSnapshot.data?.weaponLoadout?.weaponTrack ?? "spear";
 
   return (
-    <main className="aurion-app" style={{ "--aurion-hero-poster": `url("${heroTrailerPoster}")` } as CSSProperties}>
+    <main className={`aurion-app${immersiveMode ? " is-immersive" : ""}`} style={{ "--aurion-hero-poster": `url("${heroTrailerPoster}")` } as CSSProperties}>
       <GameCanvas characterModelUrl={activeCharacterUrl} arenaModelUrl={activeArenaAsset.data?.storageUrl} />
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
@@ -370,11 +400,16 @@ export default function Home() {
         starterCharacterId={starterCharacter.id}
         onStarterCharacterSelected={setStarterCharacter}
       />
+      <div className="account-game-tools" aria-label="Konto- und Spielmodus">
+        {!isAuthenticated && <button type="button" className="account-game-tools__account" onClick={openAccountAccess}><UserRound size={15} /> KONTO ANLEGEN / ANMELDEN</button>}
+        <button type="button" className="account-game-tools__fullscreen" onClick={() => void toggleImmersiveMode()} aria-label={immersiveMode ? "Vollbildmodus beenden" : "Vollbildmodus aktivieren"}>{immersiveMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{immersiveMode ? "VOLLBILD ENDE" : "VOLLBILD"}</span></button>
+      </div>
       {screen === "gate" && (
         <section className="gate-panel" aria-labelledby="gate-title">
           <div className="gate-runes" aria-hidden="true">✦ &nbsp; ◌ &nbsp; ⟡</div><p className="eyebrow"><LockKeyhole size={14} /> KOOP-VERBINDUNG ERFORDERLICH</p>
           <h2 id="gate-title">Ein Signal.<br /><em>Zwei Willen.</em><br />Eine letzte Sternwarte.</h2>
           <p className="gate-copy">Aurion kann mit einem sichtbar gekoppelten LLM, einem menschlichen Zweierteam oder allein betreten werden. Ein MCP-fähiger Client erhält ausschließlich einen zeitlich begrenzten Steuervertrag – keine private Chat-App wird gelesen oder ferngesteuert.</p>
+          {!isAuthenticated && <button type="button" className="gate-account-cta" onClick={openAccountAccess}><UserRound size={16} /><span><b>KONTO ANLEGEN / ANMELDEN</b><small>Für Expanse, Quests, Gilden und serverbestätigte Beute</small></span><ChevronRight size={18} /></button>}
           <button type="button" className="trailer-link" onClick={() => setTrailerOpen(true)}><Play size={15} fill="currentColor" /> HERO TRAILER ANSEHEN <span>EN VO · DE SUBS</span></button>
           <div className="duo-tableau" aria-label="Explorer und Echo Scout sind über ein Aurion-Siegel verbunden"><div className="duo-actor explorer-figure"><span className="actor-crown" /><span className="actor-body" /><small>EXPLORER</small></div><div className="split-seal" aria-hidden="true"><i /><b /><i /></div><div className="duo-actor scout-figure"><span className="actor-crown" /><span className="actor-body" /><small>ECHO SCOUT</small></div></div>
           {!characterAppearance.data && <div className="starter-character-select" aria-label="Standard-Charaktermodell wählen"><p>EXPLORER-MODELL // RIGGT + ANIMIERT</p><div>{starterCharacters.map(character => <button type="button" key={character.id} onClick={() => setStarterCharacter(character)} className={starterCharacter.id === character.id ? "active" : ""}><b>{character.name}</b><span>{character.role}</span><small>{character.detail}</small></button>)}</div></div>}
@@ -410,7 +445,7 @@ export default function Home() {
             <div className="open-world-card__veil" />
             <div className="open-world-card__head"><div><span>OPEN WORLD // SERVER SNAPSHOT</span><b>{openWorld.data?.displayName ?? "Weltkarte wird gelesen"}</b></div><em>REV {openWorld.data?.revision ?? "—"}</em></div>
             <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
-            <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span></div>
+            <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span><span>TILES <b>{openWorld.data?.terrain ? `${openWorld.data.terrain.tiles.length}/${openWorld.data.terrain.atlas.surfaces.length}` : "—"}</b></span></div>
             <div className="open-world-card__pois">{openWorld.data?.pointsOfInterest.slice(0, 3).map(point => <span key={point.id} data-state={point.state}>{point.label}</span>)}</div>
             <div className="open-world-card__npcs">{openWorld.data?.npcs.map(npc => <div key={npc.id}><b>{npc.displayName}</b><small>{npc.memory.quest[0] ?? npc.memory.local[0]}</small></div>)}</div>
             {openWorld.data?.primaryEncounter && <div className="world-encounter"><div><span>WELTBEGEGNUNG // BESTÄTIGT</span><b>{openWorld.data.primaryEncounter.label}</b><p>{openWorld.data.primaryEncounter.narrative}</p></div><button type="button" disabled={startGameplayEncounter.isPending || Boolean(gameplaySession.current)} onClick={() => startServerEncounter(openWorld.data!.primaryEncounter!.encounterKey)}>Begegnung beginnen</button></div>}

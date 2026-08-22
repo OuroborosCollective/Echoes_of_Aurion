@@ -11,7 +11,7 @@ describe("Aurion gateway protocol", () => {
   it("keeps a deduplicated allowlist and rejects malformed storage", () => {
     expect(parseAllowedCommands(JSON.stringify(["w", "9", "W", "invalid"]))).toEqual(["W", "9"]);
     expect(parseAllowedCommands("not-json")).toEqual([]);
-    expect(defaultGatewayCommands()).toEqual(["W", "A", "S", "D", "1", "2", "9"]);
+    expect(defaultGatewayCommands()).toEqual(["W", "A", "S", "D", "E", "F", "1", "2", "9"]);
   });
 
   it("rejects well-formed commands outside of the paired session allowlist", () => {

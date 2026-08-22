@@ -16,6 +16,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
   const characterModelUrlRef = useRef(characterModelUrl);
   const arenaModelUrlRef = useRef(arenaModelUrl);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
+  const [sceneStatus, setSceneStatus] = useState<"booting" | "ready" | "unavailable">("booting");
   characterModelUrlRef.current = characterModelUrl;
   arenaModelUrlRef.current = arenaModelUrl;
 
@@ -26,6 +27,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
 
     const markUnavailable = () => {
       setWebglUnavailable(true);
+      setSceneStatus("unavailable");
       window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false, unavailable: true } }));
     };
     if (new URLSearchParams(window.location.search).get("aurion_runtime") === "no-webgl") {
@@ -47,6 +49,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
       }
       handle = sceneHandle;
       handleRef.current = sceneHandle;
+      setSceneStatus("ready");
       void sceneHandle.setCharacterModel(characterModelUrlRef.current).then(() => {
         if (characterModelUrlRef.current) window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: true } }));
       }).catch(() => window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false } })));
@@ -92,5 +95,5 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     void handleRef.current.setArenaModel(arenaModelUrl).catch(() => undefined);
   }, [arenaModelUrl]);
 
-  return <><canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} />{webglUnavailable && <div className="game-canvas-fallback" data-testid="webgl-fallback" role="status">3D-Ansicht nicht verfügbar · Zugang und Gemeinschaft bleiben aktiv.</div>}</>;
+  return <><canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} />{sceneStatus === "booting" && <div className="game-canvas-boot" data-testid="webgl-boot" role="status"><span className="game-canvas-boot__sigil" aria-hidden="true">◌</span><div><b>STERNWARTE WIRD KALIBRIERT</b><small>3D-Welt und Steuerbrücke werden geladen…</small></div></div>}{webglUnavailable && <div className="game-canvas-fallback" data-testid="webgl-fallback" role="status">3D-Ansicht nicht verfügbar · Zugang und Gemeinschaft bleiben aktiv.</div>}</>;
 }

@@ -14,4 +14,10 @@ describe("Home", () => {
     expect(await screen.findByRole("heading", { name: /Setze den Resonanzkurs/i })).toBeTruthy();
     expect(screen.getByText("SOLO // ECHO-AUTOMATIK", { exact: true })).toBeTruthy();
   });
+
+  it("macht die echte Kontoerstellung bereits am Startzugang auffindbar", () => {
+    window.history.replaceState({}, "", "/?aurion_runtime=no-webgl");
+    render(<RealClientHarness><Home /></RealClientHarness>);
+    expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0);
+  });
 });

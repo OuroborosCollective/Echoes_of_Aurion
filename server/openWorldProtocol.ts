@@ -3,6 +3,18 @@ import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
 export type PointOfInterestKind = "portal" | "npc" | "encounter" | "landmark";
+export type TerrainSurfaceKey = "grass" | "flower_meadow" | "earth" | "farmland" | "garden_parcels" | "starpath" | "starpath_crossing";
+export type TerrainTile = { x: number; z: number; surface: TerrainSurfaceKey };
+export type WorldPropKind = "flower_shrub" | "starpath_marker" | "garden_border";
+export type OpenWorldTerrainSnapshot = {
+  chunkSizeMeters: 32;
+  tileSizeMeters: 4;
+  columns: 8;
+  rows: 8;
+  atlas: { sizePixels: 1024; cellsPerAxis: 4; cellPixels: 256; surfaces: readonly TerrainSurfaceKey[] };
+  roads: { tileCount: 14; fieldTileTarget: 20; gardenTileTarget: 5 };
+  tiles: readonly TerrainTile[];
+};
 
 export type OpenWorldProfile = {
   level: number;
@@ -21,6 +33,8 @@ export type OpenWorldSnapshot = {
   primaryEncounter: null | { id: string; label: string; encounterKey: EncounterKey; narrative: string };
   pointsOfInterest: readonly { id: string; kind: PointOfInterestKind; state: "locked" | "available" | "completed"; label: string }[];
   npcs: readonly { id: "lyra" | "orun"; displayName: string; role: string; memory: { local: readonly string[]; social: readonly string[]; quest: readonly string[] } }[];
+  terrain: OpenWorldTerrainSnapshot;
+  props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -30,6 +44,56 @@ export function encounterBudget(level: number, zoneTier: number): number {
 
 export function maximumVisibleEnemies(level: number): number {
   return Math.min(18, 10 + 2 * Math.floor(Math.max(1, level) / 10));
+}
+
+const terrainAtlasSurfaces = ["grass", "flower_meadow", "earth", "farmland", "garden_parcels", "starpath", "starpath_crossing"] as const;
+const starpathRoads = new Set(["3:0", "3:1", "3:2", "3:3", "3:4", "3:5", "3:6", "0:4", "1:4", "2:4", "4:4", "5:4", "6:4", "7:4"]);
+const fieldTiles = new Set(["0:0", "1:0", "0:1", "1:1", "0:2", "5:0", "6:0", "7:0", "5:1", "6:1", "7:1", "5:2", "6:2", "7:2", "0:5", "1:5", "0:6", "1:6", "0:7", "1:7"]);
+const gardenTiles = new Set(["5:5", "6:5", "7:5", "6:6", "7:6"]);
+
+function terrainBaseFor(zoneId: OpenWorldZoneKey): TerrainSurfaceKey {
+  if (zoneId === "windhollow") return "flower_meadow";
+  if (zoneId === "emberfall" || zoneId === "cinder_vault") return "earth";
+  return "grass";
+}
+
+export function buildOpenWorldTerrain(zoneId: OpenWorldZoneKey): OpenWorldTerrainSnapshot {
+  const base = terrainBaseFor(zoneId);
+  const tiles: TerrainTile[] = [];
+  for (let z = 0; z < 8; z += 1) {
+    for (let x = 0; x < 8; x += 1) {
+      const key = `${x}:${z}`;
+      let surface: TerrainSurfaceKey = base;
+      if (key === "3:4") surface = "starpath_crossing";
+      else if (starpathRoads.has(key)) surface = "starpath";
+      else if (zoneId === "emberfall" && gardenTiles.has(key)) surface = "garden_parcels";
+      else if (fieldTiles.has(key)) surface = zoneId === "emberfall" ? "farmland" : zoneId === "cinder_vault" ? "earth" : base;
+      tiles.push({ x, z, surface });
+    }
+  }
+  return {
+    chunkSizeMeters: 32,
+    tileSizeMeters: 4,
+    columns: 8,
+    rows: 8,
+    atlas: { sizePixels: 1024, cellsPerAxis: 4, cellPixels: 256, surfaces: terrainAtlasSurfaces },
+    roads: { tileCount: 14, fieldTileTarget: 20, gardenTileTarget: 5 },
+    tiles,
+  };
+}
+
+function propsForZone(zoneId: OpenWorldZoneKey): OpenWorldSnapshot["props"] {
+  if (zoneId === "windhollow") return [
+    { kind: "starpath_marker", tileX: 3, tileZ: 4, rotationY: 0, scale: 1 },
+    { kind: "flower_shrub", tileX: 1, tileZ: 6, rotationY: 0.4, scale: 0.85 },
+    { kind: "flower_shrub", tileX: 6, tileZ: 2, rotationY: -0.6, scale: 0.72 },
+  ];
+  if (zoneId === "emberfall") return [
+    { kind: "starpath_marker", tileX: 3, tileZ: 4, rotationY: 0, scale: 1 },
+    { kind: "garden_border", tileX: 1, tileZ: 1, rotationY: 0, scale: 0.85 },
+    { kind: "garden_border", tileX: 5, tileZ: 6, rotationY: Math.PI / 2, scale: 0.78 },
+  ];
+  return [{ kind: "starpath_marker", tileX: 3, tileZ: 4, rotationY: 0, scale: 1 }];
 }
 
 export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZoneKey {
@@ -112,6 +176,8 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     primaryEncounter: primaryEncounterFor(input),
     pointsOfInterest: zone.pois,
     npcs: npcReadModels(input),
+    terrain: buildOpenWorldTerrain(zoneId),
+    props: propsForZone(zoneId),
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
