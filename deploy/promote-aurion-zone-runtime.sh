@@ -33,10 +33,14 @@ sha256sum -c "$checksum"
 
 install -d -o aurion-deploy -g aurion-deploy -m 0755 "${base}/releases"
 release="${base}/releases/${release_id}"
-test ! -e "$release"
-install -d -o aurion-deploy -g aurion-deploy -m 0755 "$release"
-tar -xzf "$archive" -C "$release"
-chown -R aurion-deploy:aurion-deploy "$release"
+if [[ -e "$release" ]]; then
+  [[ -f "${release}/.aurion-zone-runtime-release.json" ]]
+  [[ -f "${release}/zoneService.cjs" ]]
+else
+  install -d -o aurion-deploy -g aurion-deploy -m 0755 "$release"
+  tar -xzf "$archive" -C "$release"
+  chown -R aurion-deploy:aurion-deploy "$release"
+fi
 grep -F "$expected_sha" "${release}/.aurion-zone-runtime-release.json"
 
 ln -sTfn "$release" "${base}/current.next"
