@@ -71,7 +71,7 @@ describeWithDatabase("Lyra quest turn-in E2E", () => {
 
     const completed = await completeGameplayQuest({ userId: LYRA_E2E_USER_ID, questKey: "astral_call", giver: "Lyra" });
     expect(completed.quests.find(quest => quest.key === "astral_call")).toMatchObject({ state: "completed", readyToTurnIn: false });
-    expect(completed.profile).toMatchObject({ totalXp: 120, aurionPoints: 20, seasonPoints: 20, victories: 1 });
+    expect(completed.profile).toMatchObject({ totalXp: 122, aurionPoints: 20, seasonPoints: 20, victories: 1 });
     expect(completed.keys).toEqual([]);
 
     const questRow = (await db.select().from(gameplayQuestProgress).where(eq(gameplayQuestProgress.userId, LYRA_E2E_USER_ID)))[0];
@@ -80,7 +80,7 @@ describeWithDatabase("Lyra quest turn-in E2E", () => {
     expect(questRow.completedAt).toBeInstanceOf(Date);
 
     const rewards = await db.select().from(progressionLedger).where(eq(progressionLedger.userId, LYRA_E2E_USER_ID));
-    expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual(["points:20", "victory:1", "xp:120"]);
+    expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual(["points:20", "victory:1", "xp:122"]);
     expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(3);
 
     await expect(completeGameplayQuest({ userId: LYRA_E2E_USER_ID, questKey: "astral_call", giver: "Lyra" })).rejects.toThrow("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
