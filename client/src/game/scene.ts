@@ -6,7 +6,7 @@
 
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
@@ -15,6 +15,7 @@ import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { ShaderStore } from "@babylonjs/core/Engines/shaderStore.js";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
@@ -75,7 +76,9 @@ type CommandCode = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "
 type Pulse = { mesh: Mesh; age: number };
 type ArenaDefinition = { name: string; objective: string; health: number; floor: Color3; glow: Color3; sun: Color3; enemy: Color3; reward: string };
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
-type OpenWorldSceneState = { revision: number; zoneId: "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault"; zoneTier: number; displayName: string; entryNarrative: string; encounter: { activeCount: number; budget: number; maximumVisible: number }; npcs: readonly { id: "lyra" | "orun"; displayName: string }[] };
+type TerrainSurfaceKey = "grass" | "flower_meadow" | "earth" | "farmland" | "garden_parcels" | "starpath" | "starpath_crossing";
+type WorldPropKind = "flower_shrub" | "starpath_marker" | "garden_border";
+type OpenWorldSceneState = { revision: number; zoneId: "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault"; zoneTier: number; displayName: string; entryNarrative: string; encounter: { activeCount: number; budget: number; maximumVisible: number }; terrain: { chunkSizeMeters: 32; tileSizeMeters: 4; columns: 8; rows: 8; atlas: { sizePixels: 1024; cellsPerAxis: 4; cellPixels: 256; surfaces: readonly TerrainSurfaceKey[] }; roads: { tileCount: number; fieldTileTarget: number; gardenTileTarget: number }; tiles: readonly { x: number; z: number; surface: TerrainSurfaceKey }[] }; props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[]; npcs: readonly { id: "lyra" | "orun"; displayName: string }[] };
 type LiveRig = { root: TransformNode; torso: TransformNode; head: TransformNode; arms: TransformNode[]; legs: TransformNode[]; weapon?: TransformNode; halo?: TransformNode; eye?: StandardMaterial; shell?: StandardMaterial; crown?: StandardMaterial };
 type SentinelRig = LiveRig & { eye: StandardMaterial; shell: StandardMaterial; crown: StandardMaterial };
 
@@ -98,6 +101,26 @@ function material(scene: Scene, name: string, diffuse: Color3, emissive?: Color3
   result.diffuseColor = diffuse;
   result.specularColor = Color3.FromHexString("#24140A");
   result.emissiveColor = emissive ?? Color3.Black();
+  return result;
+}
+
+const terrainTextureUrls: Record<TerrainSurfaceKey, string> = {
+  grass: aurionAssets.terrain.grass,
+  flower_meadow: aurionAssets.terrain.flowerMeadow,
+  earth: aurionAssets.terrain.earth,
+  farmland: aurionAssets.terrain.farmland,
+  garden_parcels: aurionAssets.terrain.gardenParcels,
+  starpath: aurionAssets.terrain.starpath,
+  starpath_crossing: aurionAssets.terrain.starpathCrossing,
+};
+
+function terrainMaterial(scene: Scene, name: string, surface: TerrainSurfaceKey, tint: Color3): StandardMaterial {
+  const result = material(scene, name, tint, Color3.Black());
+  const texture = new Texture(terrainTextureUrls[surface], scene, true, false);
+  texture.uScale = 1;
+  texture.vScale = 1;
+  result.diffuseTexture = texture;
+  result.specularColor = Color3.Black();
   return result;
 }
 
@@ -403,6 +426,13 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let awaitingQuest = false; let dungeonUnlocked = false; let dungeonActive = false; let lastStateEmit = -1;
   let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0; let sentinelMoving = false;
   let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
+  const tripoPropTemplates = new Map<WorldPropKind, { root: TransformNode; minimumY: number; height: number }>();
+  const tripoPropUrls: Record<WorldPropKind, string> = {
+    flower_shrub: aurionAssets.glbCandidates.tripoFlowerShrub,
+    starpath_marker: aurionAssets.glbCandidates.tripoStarpathMarker,
+    garden_border: aurionAssets.glbCandidates.tripoGardenBorder,
+  };
+  const tripoPropHeights: Record<WorldPropKind, number> = { flower_shrub: 1.5, starpath_marker: 2.35, garden_border: 0.9 };
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
@@ -440,10 +470,54 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       emberfall: { floor: Color3.FromHexString("#3D2D25"), accent: Color3.FromHexString("#F2B85B"), stone: Color3.FromHexString("#8A5942") },
       cinder_vault: { floor: Color3.FromHexString("#292031"), accent: Color3.FromHexString("#D976FF"), stone: Color3.FromHexString("#57435E") },
     }[detail.zoneId];
-    const floor = MeshBuilder.CreateCylinder(`expanse-floor-${detail.zoneId}`, { diameter: 18, height: 0.28, tessellation: 48 }, scene);
-    floor.parent = root; floor.position.y = -0.08; floor.material = material(scene, `expanse-floor-mat-${detail.zoneId}`, zoneColors.floor, zoneColors.accent.scale(0.025));
-    const path = MeshBuilder.CreateBox(`expanse-path-${detail.zoneId}`, { width: 2.35, depth: 12, height: 0.08 }, scene);
-    path.parent = root; path.position = new Vector3(0, 0.08, -2.5); path.material = material(scene, `expanse-path-mat-${detail.zoneId}`, zoneColors.stone.scale(0.72), zoneColors.accent.scale(0.04));
+    const groupedTiles = detail.terrain.tiles.reduce<Record<TerrainSurfaceKey, { x: number; z: number }[]>>((groups, tile) => {
+      groups[tile.surface].push(tile);
+      return groups;
+    }, { grass: [], flower_meadow: [], earth: [], farmland: [], garden_parcels: [], starpath: [], starpath_crossing: [] });
+    const terrainTint: Record<TerrainSurfaceKey, Color3> = {
+      grass: zoneColors.floor.scale(1.35), flower_meadow: zoneColors.floor.scale(1.48), earth: zoneColors.stone.scale(0.86), farmland: Color3.FromHexString("#8C6540"), garden_parcels: Color3.FromHexString("#6D5A36"), starpath: zoneColors.stone.scale(0.92), starpath_crossing: zoneColors.accent.scale(0.62),
+    };
+    (Object.keys(groupedTiles) as TerrainSurfaceKey[]).forEach(surface => {
+      const tiles = groupedTiles[surface];
+      if (!tiles.length) return;
+      const first = tiles[0];
+      const source = MeshBuilder.CreateGround(`expanse-terrain-${detail.zoneId}-${surface}`, { width: detail.terrain.tileSizeMeters, height: detail.terrain.tileSizeMeters, subdivisions: 1 }, scene);
+      source.parent = root;
+      source.position = new Vector3((first.x - 3.5) * detail.terrain.tileSizeMeters, 0, (first.z - 3.5) * detail.terrain.tileSizeMeters);
+      source.material = terrainMaterial(scene, `expanse-terrain-mat-${detail.zoneId}-${surface}`, surface, terrainTint[surface]);
+      tiles.slice(1).forEach(tile => source.thinInstanceAdd(Matrix.Translation((tile.x - first.x) * detail.terrain.tileSizeMeters, 0, (tile.z - first.z) * detail.terrain.tileSizeMeters)));
+    });
+    const spawnTripoProp = (prop: OpenWorldSceneState["props"][number], template: { root: TransformNode; minimumY: number; height: number }): void => {
+      const instance = template.root.clone(`expanse-prop-${detail.zoneId}-${prop.kind}-${prop.tileX}-${prop.tileZ}`, root, false);
+      if (!instance) return;
+      const uniformScale = (tripoPropHeights[prop.kind] / Math.max(0.1, template.height)) * prop.scale;
+      instance.setEnabled(true);
+      instance.scaling.setAll(uniformScale);
+      instance.position = new Vector3((prop.tileX - 3.5) * detail.terrain.tileSizeMeters, -template.minimumY * uniformScale + 0.012, (prop.tileZ - 3.5) * detail.terrain.tileSizeMeters);
+      instance.rotation.y = prop.rotationY;
+    };
+    const propsByKind: Record<WorldPropKind, Array<OpenWorldSceneState["props"][number]>> = { flower_shrub: [], starpath_marker: [], garden_border: [] };
+    detail.props.forEach(prop => propsByKind[prop.kind].push(prop));
+    (Object.keys(propsByKind) as WorldPropKind[]).forEach(kind => {
+      const placements = propsByKind[kind];
+      if (!placements.length) return;
+      const cached = tripoPropTemplates.get(kind);
+      if (cached) { placements.forEach(prop => spawnTripoProp(prop, cached)); return; }
+      void SceneLoader.ImportMeshAsync("", "", tripoPropUrls[kind], scene).then(result => {
+        if (!openWorldActive || openWorldRoot !== root) { result.meshes.forEach(mesh => mesh.dispose(false, true)); return; }
+        const visibleMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
+        if (!visibleMeshes.length) throw new Error(`Tripo-Prop ${kind} enthält keine sichtbare Topologie.`);
+        const templateRoot = new TransformNode(`tripo-template-${kind}`, scene);
+        visibleMeshes.forEach(mesh => { mesh.parent = templateRoot; });
+        const bounds = visibleMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+        let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
+        bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
+        const template = { root: templateRoot, minimumY: minimum.y, height: Math.max(0.1, maximum.y - minimum.y) };
+        templateRoot.setEnabled(false);
+        tripoPropTemplates.set(kind, template);
+        placements.forEach(prop => spawnTripoProp(prop, template));
+      }).catch(error => console.warn(`[Aurion Scene] Der optionale Tripo-Prop ${kind} konnte nicht geladen werden`, error));
+    });
     const portal = MeshBuilder.CreateTorus(`expanse-return-${detail.zoneId}`, { diameter: 2.65, thickness: 0.11, tessellation: 36 }, scene);
     portal.parent = root; portal.position = new Vector3(-5.25, 1.5, 3.5); portal.rotation.x = Math.PI / 2; portal.material = material(scene, `expanse-return-mat-${detail.zoneId}`, zoneColors.accent.scale(0.25), zoneColors.accent);
     const portalLight = new PointLight(`expanse-return-light-${detail.zoneId}`, new Vector3(-5.25, 1.35, 3.5), scene); portalLight.parent = root; portalLight.diffuse = zoneColors.accent; portalLight.intensity = 2.2; portalLight.range = 8;
@@ -469,7 +543,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     const gate = MeshBuilder.CreateTorus(`expanse-gate-${detail.zoneId}`, { diameter: 3.8, thickness: 0.22, tessellation: 8 }, scene);
     gate.parent = root; gate.position = new Vector3(0, 2.05, -6.15); gate.rotation.x = Math.PI / 2; gate.material = material(scene, `expanse-gate-mat-${detail.zoneId}`, zoneColors.stone, zoneColors.accent.scale(0.14));
     sentinel.root.setEnabled(false); arenaSets.forEach(set => set.setEnabled(false)); groundMat.diffuseColor = zoneColors.floor; ringMat.emissiveColor = zoneColors.accent.scale(0.18); beaconMat.emissiveColor = zoneColors.accent; beaconLight.diffuse = zoneColors.accent;
-    explorer.position = new Vector3(-1.35, 0.2, 3.1); echo.position = new Vector3(0.25, 0.2, 3.5); echoTarget = echo.position.clone();
+    explorer.position = new Vector3(-1.35, 0.2, 11.1); echo.position = new Vector3(0.25, 0.2, 11.5); echoTarget = echo.position.clone();
     createPulse(portal.position, zoneColors.accent, 1.25);
     emitGameEvent("system", `${detail.displayName} entfaltet sich als bestätigte Expanse-Ansicht. Rückkehrstein und ${detail.encounter.activeCount} sichtbare Begegnungssignale sind kartiert.`);
   };
@@ -514,7 +588,8 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const onHumanCommand = (event: Event): void => {
     const code = (event as CustomEvent<{ code: string }>).detail.code.toUpperCase(); const distance = 0.95;
     if (code === "W") explorer.position.z -= distance; if (code === "S") explorer.position.z += distance; if (code === "A") explorer.position.x -= distance; if (code === "D") explorer.position.x += distance;
-    explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z));
+    const worldLimit = openWorldActive ? 14.5 : 5.6;
+    explorer.position.x = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.x)); explorer.position.z = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.z));
     explorerMotionUntil = elapsed + 0.22;
   };
   const requestNpcInteraction = (): boolean => {
@@ -553,7 +628,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   };
   const onLoadOpenWorld = (event: Event): void => {
     const detail = (event as CustomEvent<OpenWorldSceneState>).detail;
-    if (!detail || detail.revision !== 1 || !["observatory_threshold", "windhollow", "emberfall", "cinder_vault"].includes(detail.zoneId) || !Number.isInteger(detail.zoneTier) || detail.zoneTier < 0 || detail.zoneTier > 3) return;
+    if (!detail || detail.revision !== 1 || !["observatory_threshold", "windhollow", "emberfall", "cinder_vault"].includes(detail.zoneId) || !Number.isInteger(detail.zoneTier) || detail.zoneTier < 0 || detail.zoneTier > 3 || detail.terrain?.chunkSizeMeters !== 32 || detail.terrain.tileSizeMeters !== 4 || detail.terrain.columns !== 8 || detail.terrain.rows !== 8 || detail.terrain.tiles.length !== 64) return;
     started = true; awaitingQuest = false; victory = false; dungeonActive = false; dungeonUnlocked = false; createOpenWorldVisuals(detail); emitState(true);
   };
   window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld);
@@ -562,7 +637,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
     if (started && !victory) {
       const direction = new Vector3((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0), 0, (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0));
-      if (direction.lengthSquared() > 0) { direction.normalize().scaleInPlace(dt * 3.45); explorer.position.addInPlace(direction); explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z)); explorer.rotation.y = Math.atan2(direction.x, direction.z); }
+      if (direction.lengthSquared() > 0) { direction.normalize().scaleInPlace(dt * 3.45); explorer.position.addInPlace(direction); const worldLimit = openWorldActive ? 14.5 : 5.6; explorer.position.x = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.x)); explorer.position.z = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.z)); explorer.rotation.y = Math.atan2(direction.x, direction.z); }
       const pursuit = explorer.position.subtract(sentinel.root.position); pursuit.y = 0;
       const desiredDistance = 3.5;
       if (!openWorldActive && !transitioning && sentinelHp > 0 && pursuit.lengthSquared() > desiredDistance * desiredDistance) {

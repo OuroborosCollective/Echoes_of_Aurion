@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-export const AURION_COMMANDS = ["W", "A", "S", "D", "1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
+export const AURION_COMMANDS = ["W", "A", "S", "D", "E", "F", "1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 export type AurionCommand = (typeof AURION_COMMANDS)[number];
 
 export function normalizeAurionCommand(value: string): AurionCommand | null {
@@ -48,4 +48,4 @@ export function createGatewaySessionId(): string {
   return `ags_${randomUUID().replaceAll("-", "")}`;
 }
 
-export const defaultGatewayCommands = (): AurionCommand[] => ["W", "A", "S", "D", "1", "2", "9"];
+export const defaultGatewayCommands = (): AurionCommand[] => ["W", "A", "S", "D", "E", "F", "1", "2", "9"];
