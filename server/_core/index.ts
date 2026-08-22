@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
 import { registerZoneGateway } from "../zoneGateway";
+import { consumeZoneConnectionTicket } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,7 +40,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);
-  registerZoneGateway(server);
+  registerZoneGateway(server, undefined, consumeZoneConnectionTicket);
   // tRPC API
   app.use(
     "/api/trpc",

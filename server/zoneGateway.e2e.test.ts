@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { eq } from "drizzle-orm";
 import { zoneConnectionTickets } from "../drizzle/schema";
-import { getDb } from "./db";
+import { consumeZoneConnectionTicket, getDb } from "./db";
 import { registerZoneGateway } from "./zoneGateway";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -45,7 +45,7 @@ function waitForMessage(socket: WebSocket, type: string): Promise<ZoneMessage> {
 
 async function startZoneServer(): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
   const server = createServer();
-  const gateway = registerZoneGateway(server);
+  const gateway = registerZoneGateway(server, undefined, consumeZoneConnectionTicket);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => resolve());

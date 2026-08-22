@@ -1,12 +1,20 @@
 import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { consumeZoneConnectionTicket } from "./db";
 import { isAllowedZoneOrigin, parseZoneHello, type ZoneReject } from "./zoneProtocol";
 import { ZoneRegistry } from "./zoneRuntime";
 
 const HELLO_TIMEOUT_MS = 5_000;
 const MAX_MESSAGE_BYTES = 2_048;
+
+export type ZoneTicketReceipt = {
+  userId: number;
+  zoneId: "observatory_threshold";
+  clientBuild: string;
+  expiresAt: Date;
+};
+
+export type ZoneTicketConsumer = (values: { ticket: string; zoneId: "observatory_threshold" }) => Promise<ZoneTicketReceipt | undefined>;
 
 function closePolicyViolation(socket: WebSocket): void {
   socket.close(1008, "zone authorization rejected");
@@ -25,7 +33,7 @@ function rejectReadOnlyInput(socket: WebSocket): void {
 }
 
 /** Adds `/v1/ws` to the existing HTTP server without altering tRPC or MCP routes. */
-export function registerZoneGateway(server: HttpServer, registry = new ZoneRegistry()) {
+export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry = new ZoneRegistry(), consumeTicket: ZoneTicketConsumer) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
 
   server.on("upgrade", (request, socket, head) => {
@@ -53,7 +61,7 @@ export function registerZoneGateway(server: HttpServer, registry = new ZoneRegis
       const hello = parseZoneHello(raw);
       if (!hello) return closePolicyViolation(socket);
       try {
-        const ticket = await consumeZoneConnectionTicket({ ticket: hello.ticket, zoneId: hello.zoneId });
+        const ticket = await consumeTicket({ ticket: hello.ticket, zoneId: hello.zoneId });
         if (!ticket) return closePolicyViolation(socket);
         const zone = registry.get(ticket.zoneId);
         const welcome = zone.join({ userId: ticket.userId, socket });
