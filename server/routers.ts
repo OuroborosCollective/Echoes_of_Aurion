@@ -98,6 +98,7 @@ export const appRouter = router({
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
+    completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(({ ctx, input }) => db.completeGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey, giver: input.giver })),
     startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
     act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
   }),
