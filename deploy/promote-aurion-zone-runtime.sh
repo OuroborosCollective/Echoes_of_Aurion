@@ -9,6 +9,7 @@ fi
 artifact_dir="$1"
 expected_sha="$2"
 release_id="$3"
+deploy_dir="${artifact_dir}/deploy"
 base=/opt/aurion-zone-runtime
 service=aurion-zone-runtime.service
 site=/etc/nginx/sites-enabled/arelogic.space
@@ -21,10 +22,11 @@ checksum="${artifact_dir}/aurion-zone-runtime-release.tgz.sha256"
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]]
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+$ ]]
 [[ -d "$artifact_dir" && -f "$archive" && -f "$checksum" ]]
-[[ -f "${artifact_dir}/aurion-zone-runtime.service" ]]
-[[ -f "${artifact_dir}/aurion-zone-runtime.environment.template" ]]
-[[ -f "${artifact_dir}/arelogic-zone-runtime.nginx.conf" ]]
-[[ -f "${artifact_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" ]]
+[[ -f "${deploy_dir}/aurion-zone-runtime.service" ]]
+[[ -f "${deploy_dir}/aurion-zone-runtime.environment.template" ]]
+[[ -f "${deploy_dir}/arelogic-zone-runtime.nginx.conf" ]]
+[[ -f "${deploy_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" ]]
+[[ -f "${deploy_dir}/promote-aurion-zone-runtime.sh" ]]
 
 cd "$artifact_dir"
 sha256sum -c "$checksum"
@@ -41,13 +43,13 @@ ln -sTfn "$release" "${base}/current.next"
 mv -Tf "${base}/current.next" "${base}/current"
 test "$(readlink -f "${base}/current")" = "$release"
 
-install -D -m 0755 "${artifact_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
-install -D -m 0644 "${artifact_dir}/aurion-zone-runtime.service" "/etc/systemd/system/${service}"
-install -D -m 0644 "${artifact_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" "$rate_limit"
-install -D -m 0644 "${artifact_dir}/arelogic-zone-runtime.nginx.conf" "$snippet"
+install -D -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+install -D -m 0644 "${deploy_dir}/aurion-zone-runtime.service" "/etc/systemd/system/${service}"
+install -D -m 0644 "${deploy_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" "$rate_limit"
+install -D -m 0644 "${deploy_dir}/arelogic-zone-runtime.nginx.conf" "$snippet"
 
 if [[ ! -f "$env_file" ]]; then
-  install -D -m 0600 "${artifact_dir}/aurion-zone-runtime.environment.template" "$env_file"
+  install -D -m 0600 "${deploy_dir}/aurion-zone-runtime.environment.template" "$env_file"
 fi
 sed -i "s|^AURION_RUNTIME_REVISION=.*|AURION_RUNTIME_REVISION=${expected_sha}|" "$env_file"
 
