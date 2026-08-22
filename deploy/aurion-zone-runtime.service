@@ -1,0 +1,25 @@
+[Unit]
+Description=Echoes of Aurion read-only zone runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aurion-deploy
+Group=aurion-deploy
+WorkingDirectory=/opt/aurion-zone-runtime/current
+EnvironmentFile=/etc/aurion-zone-runtime.env
+Environment=NODE_ENV=production
+Environment=PORT=3100
+ExecStart=/usr/bin/node /opt/aurion-zone-runtime/current/dist-zone/zoneService.cjs
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/aurion-zone-runtime
+
+[Install]
+WantedBy=multi-user.target

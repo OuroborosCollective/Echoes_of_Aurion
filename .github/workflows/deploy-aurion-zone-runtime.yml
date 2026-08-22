@@ -1,0 +1,105 @@
+name: Deploy Aurion zone runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "drizzle/**"
+      - "deploy/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aurion-zone-runtime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    name: Verify and build immutable Aurion zone runtime
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Guard repository scope
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify exact source revision
+        run: |
+          pnpm check
+          pnpm test
+          git diff --check
+
+      - name: Build zone runtime
+        run: |
+          pnpm build:zone-runtime
+          printf '{"revision":"%s","runId":"%s","artifact":"aurion-zone-runtime"}\n' \
+            "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > dist-zone/.aurion-zone-runtime-release.json
+          tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
+          sha256sum aurion-zone-runtime-release.tgz > aurion-zone-runtime-release.tgz.sha256
+
+      - name: Publish immutable runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: |
+            aurion-zone-runtime-release.tgz
+            aurion-zone-runtime-release.tgz.sha256
+            deploy/aurion-zone-runtime.service
+            deploy/aurion-zone-runtime.environment.template
+            deploy/arelogic-zone-runtime.nginx.conf
+            deploy/arelogic-zone-runtime-rate-limit.nginx.conf
+            deploy/promote-aurion-zone-runtime.sh
+          if-no-files-found: error
+          retention-days: 30
+
+  promote-zone-runtime:
+    name: Promote verified Aurion zone runtime
+    needs: verify-and-build
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    env:
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
+      EXPECTED_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Guard repository scope
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Download verified runtime artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: runtime-artifact
+
+      - name: Promote node runtime and routing
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/runtime-artifact"
+          sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+
+      - name: Verify public runtime health
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error https://arelogic.space/_runtime/healthz | grep -F "${EXPECTED_SHA}"
