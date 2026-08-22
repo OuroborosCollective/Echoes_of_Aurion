@@ -133,6 +133,65 @@ export const progressionLedger = mysqlTable("progressionLedger", {
   index("progressionLedger_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
+/** One player-owned row per authored quest. Completion may only be written by the encounter resolver. */
+export const gameplayQuestProgress = mysqlTable("gameplayQuestProgress", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  questKey: varchar("questKey", { length: 64 }).notNull(),
+  state: mysqlEnum("state", ["active", "completed"]).notNull(),
+  acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  completionSessionId: varchar("completionSessionId", { length: 64 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("gameplayQuestProgress_user_quest_uq").on(table.userId, table.questKey),
+  index("gameplayQuestProgress_user_state_idx").on(table.userId, table.state),
+]);
+
+/** Dungeon keys are non-transferable progression entitlements, not client-held strings. */
+export const gameplayDungeonKeys = mysqlTable("gameplayDungeonKeys", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  keyName: varchar("keyName", { length: 64 }).notNull(),
+  grantedByQuest: varchar("grantedByQuest", { length: 64 }).notNull(),
+  grantedAt: timestamp("grantedAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("gameplayDungeonKeys_user_key_uq").on(table.userId, table.keyName),
+  index("gameplayDungeonKeys_user_granted_idx").on(table.userId, table.grantedAt),
+]);
+
+/** A server-owned boss-state container. Browser rendering must synchronize from this record. */
+export const gameplaySessions = mysqlTable("gameplaySessions", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  encounterKey: varchar("encounterKey", { length: 64 }).notNull(),
+  status: mysqlEnum("status", ["active", "completed", "abandoned"]).default("active").notNull(),
+  bossHp: int("bossHp").notNull(),
+  maxBossHp: int("maxBossHp").notNull(),
+  nextSequence: int("nextSequence").default(1).notNull(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("gameplaySessions_user_status_idx").on(table.userId, table.status, table.updatedAt),
+]);
+
+/** Append-only accepted action evidence. Damage is calculated on the server from the normalized command. */
+export const gameplayActionReceipts = mysqlTable("gameplayActionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+  userId: int("userId").notNull(),
+  sequence: int("sequence").notNull(),
+  command: varchar("command", { length: 1 }).notNull(),
+  action: varchar("action", { length: 24 }).notNull(),
+  source: mysqlEnum("source", ["human", "gateway"]).notNull(),
+  damage: int("damage").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("gameplayActionReceipts_session_sequence_uq").on(table.sessionId, table.sequence),
+  index("gameplayActionReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 /** Guild identity is deliberately separate from membership and contribution history. */
 export const guilds = mysqlTable("guilds", {
   id: varchar("id", { length: 64 }).primaryKey(),
