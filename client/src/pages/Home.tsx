@@ -17,6 +17,7 @@ import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry }
 import { AurionSoundscape } from "@/lib/soundscape";
 import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { trpc } from "@/lib/trpc";
+import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 
 type Screen = "gate" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
@@ -71,6 +72,7 @@ export default function Home() {
   const [activeWorldNpc, setActiveWorldNpc] = useState<"lyra" | "orun" | null>(null);
   const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);
   const [immersiveMode, setImmersiveMode] = useState(false);
+  const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const expeditionAudio = useRef<HTMLAudioElement | null>(null);
   const soundscape = useRef<AurionSoundscape | null>(null);
   const musicResetTimer = useRef<number | null>(null);
@@ -99,9 +101,28 @@ export default function Home() {
   const startGameplayEncounter = trpc.gameplay.startEncounter.useMutation();
   const applyGameplayAction = trpc.gameplay.act.useMutation();
   const gameplaySession = useRef<{ id: string; nextSequence: number } | null>(null);
+  const zoneClient = useRef<ZoneMovementClient | null>(null);
   const activeCharacterUrl = characterAppearance.data?.storageUrl ?? starterCharacter.assetPath;
   const processedTeamSignals = useRef(new Set<string>());
   const processedGatewaySequence = useRef(0);
+  const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
+
+  useEffect(() => () => zoneClient.current?.close(), []);
+
+  useEffect(() => {
+    const sendMovement = (event: Event) => zoneClient.current?.sendMovement((event as CustomEvent<ZoneMovementInput>).detail);
+    const tapMovement = (event: Event) => {
+      const input = (event as CustomEvent<ZoneMovementInput>).detail;
+      zoneClient.current?.sendMovement(input);
+      window.setTimeout(() => zoneClient.current?.sendMovement({ x: 0, z: 0 }), 110);
+    };
+    window.addEventListener("aurion:zone-movement-state", sendMovement);
+    window.addEventListener("aurion:zone-movement-tap", tapMovement);
+    return () => {
+      window.removeEventListener("aurion:zone-movement-state", sendMovement);
+      window.removeEventListener("aurion:zone-movement-tap", tapMovement);
+    };
+  }, []);
 
   const skillNames = useMemo(() => abilityDeck.filter((ability) => selectedSkills.includes(ability.code)), [selectedSkills]);
   const allowedGatewayCommands = useMemo(() => ["W", "A", "S", "D", "E", "F", ...selectedSkills], [selectedSkills]);
@@ -342,6 +363,29 @@ export default function Home() {
       onError: () => setLastSignal("Der Weltübergang wurde nicht bestätigt. Die Szene bleibt im sicheren Turmzustand."),
     });
   };
+  const connectAuthoritativeZone = (): void => {
+    if (!isAuthenticated || !user?.id) { openAccountAccess(); return; }
+    issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "aurion-browser-movement-v1" }, {
+      onSuccess: ({ ticket }) => {
+        zoneClient.current?.close();
+        const client = new ZoneMovementClient({
+          onStatus: (status) => {
+            setZoneStatus(status);
+            if (status === "connected") window.dispatchEvent(new CustomEvent("aurion:zone-connected", { detail: { userId: user.id } }));
+            if (status === "closed" || status === "rejected") window.dispatchEvent(new CustomEvent("aurion:zone-disconnected"));
+          },
+          onSnapshot: (snapshot) => {
+            const self = snapshot.presences.find(presence => presence.userId === user.id);
+            if (self) window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
+          },
+          onReject: (code) => setLastSignal(`Zonenbewegung wurde serverseitig verworfen: ${code}.`),
+        });
+        zoneClient.current = client;
+        client.connect(ticket);
+      },
+      onError: () => setLastSignal("Das Zonenticket konnte nicht bestätigt werden."),
+    });
+  };
   const beginMission = (): void => {
     setScreen("mission"); setMissionElapsed(0); setMission(initialMission); setConfirmedDrop(null);
     void toggleImmersiveMode();
@@ -460,6 +504,7 @@ export default function Home() {
               return <div className="world-npc-dialogue" role="status"><div><span>NPC-INTERAKTION // {activeWorldNpc.toUpperCase()}</span><b>{npc?.displayName ?? activeWorldNpc}</b><p>{npc?.memory.quest[0] ?? npc?.memory.local[0] ?? "Der bestätigte Erinnerungskern wird gelesen."}</p></div>{readyNpcQuest ? <button type="button" disabled={completeGameplayQuest.isPending} onClick={() => completeGameplayQuest.mutate({ questKey: readyNpcQuest.key, giver: readyNpcQuest.giver }, { onSuccess: () => { void gameplayProgress.refetch(); void openWorld.refetch(); setLastSignal(`${readyNpcQuest.giver} hat „${readyNpcQuest.title}“ abgeschlossen und die Belohnung bestätigt.`); }, onError: () => setLastSignal("Die Questübergabe wurde nicht bestätigt.") })}>{readyNpcQuest.title} übergeben</button> : availableQuest ? <button type="button" disabled={acceptGameplayQuest.isPending} onClick={() => acceptGameplayQuest.mutate({ questKey: availableQuest.key }, { onSuccess: () => { void gameplayProgress.refetch(); void openWorld.refetch(); setLastSignal(`${availableQuest.giver} bestätigt „${availableQuest.title}“.`); }, onError: () => setLastSignal("Die Questannahme wurde nicht bestätigt.") })}>{availableQuest.title} annehmen</button> : activeNpcQuest ? <small>AKTIVER AUFTRAG: {activeNpcQuest.title}</small> : <small>KEIN ZULÄSSIGER AUFTRAG</small>}<button type="button" className="world-npc-dialogue__close" onClick={() => setActiveWorldNpc(null)}>Dialog schließen</button></div>;
             })()}
             <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={enterAurionExpanse}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
+            <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>
           </section>
 
           {mission.phase === "transition" && <p className="mission-transition" role="status">Bossabschluss wird serverseitig bestätigt…</p>}

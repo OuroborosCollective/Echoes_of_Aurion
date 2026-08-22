@@ -18,7 +18,7 @@ describe("zone service runtime", () => {
     await expect(response.json()).resolves.toEqual({
       service: "aurion-zone-runtime",
       revision: "zone-service-test-revision",
-      mode: "read-only-presence",
+      mode: "authoritative-movement",
     });
   });
 });

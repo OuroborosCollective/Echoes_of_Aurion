@@ -31,12 +31,12 @@ function makeContext(userId: number): TrpcContext {
   };
 }
 
-function waitForMessage(socket: WebSocket, type: string): Promise<ZoneMessage> {
+function waitForMessage(socket: WebSocket, type: string, predicate: (message: ZoneMessage) => boolean = () => true): Promise<ZoneMessage> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${type}`)), 5_000);
     socket.on("message", raw => {
       const parsed = JSON.parse(raw.toString("utf8")) as ZoneMessage;
-      if (parsed.type !== type) return;
+      if (parsed.type !== type || !predicate(parsed)) return;
       clearTimeout(timeout);
       resolve(parsed);
     });
@@ -85,7 +85,7 @@ describeWithDatabase("zone gateway e2e", () => {
     clientBuild = `zone-e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   });
 
-  it("issues a protected ticket, persists only its digest, admits it once and blocks gameplay input", async () => {
+  it("issues a protected ticket, persists only its digest, admits it once and authoritatively replicates ordered movement", async () => {
     const db = await getDb();
     expect(db).not.toBeNull();
     if (!db) return;
@@ -106,21 +106,36 @@ describeWithDatabase("zone gateway e2e", () => {
       const joined = await openWithTicket(runtime.url, issued.ticket);
       socket = joined.socket;
       expect(joined.welcome.zoneId).toBe("observatory_threshold");
-      expect(joined.welcome.presences).toEqual([{ entityId: `player:${userId}`, userId }]);
+      expect(joined.welcome.presences).toEqual([{ entityId: `player:${userId}`, userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 }]);
 
       const presenceAfterPeerJoin = waitForMessage(socket, "snapshot");
       const peerJoined = await openWithTicket(runtime.url, peerIssued.ticket);
       peerSocket = peerJoined.socket;
       const expectedPresences = [
-        { entityId: `player:${userId}`, userId },
-        { entityId: `player:${peerUserId}`, userId: peerUserId },
+        { entityId: `player:${userId}`, userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 },
+        { entityId: `player:${peerUserId}`, userId: peerUserId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 },
       ];
       expect(peerJoined.welcome.presences).toEqual(expectedPresences);
       await expect(presenceAfterPeerJoin).resolves.toMatchObject({ presences: expectedPresences });
 
+      const movementSnapshot = waitForMessage(peerSocket, "snapshot", message => {
+        const presences = message.presences as Array<{ userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number }>;
+        const self = presences.find(presence => presence.userId === userId);
+        return Boolean(self && self.position.x > 0 && self.lastAcceptedClientSeq === 1);
+      });
+      socket.send(JSON.stringify({ type: "move", clientSeq: 1, input: { x: 1, z: 0 } }));
+      await expect(movementSnapshot).resolves.toMatchObject({
+        type: "snapshot",
+        presences: expect.arrayContaining([expect.objectContaining({ userId, position: expect.objectContaining({ x: expect.any(Number), z: 0 }), lastAcceptedClientSeq: 1 })]),
+      });
+
+      const stale = waitForMessage(socket, "reject");
+      socket.send(JSON.stringify({ type: "move", clientSeq: 1, input: { x: -1, z: 0 } }));
+      await expect(stale).resolves.toMatchObject({ code: "STALE_CLIENT_SEQUENCE" });
+
       const rejection = waitForMessage(socket, "reject");
       socket.send(JSON.stringify({ type: "input", clientSeq: 1, command: "attack" }));
-      await expect(rejection).resolves.toMatchObject({ code: "READ_ONLY_PRESENCE" });
+      await expect(rejection).resolves.toMatchObject({ code: "UNSUPPORTED_ZONE_COMMAND" });
 
       const reused = new WebSocket(runtime.url, { headers: { Origin: "http://127.0.0.1" } });
       await once(reused, "open");

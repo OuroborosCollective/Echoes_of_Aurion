@@ -3,6 +3,8 @@ import { z } from "zod";
 
 export const zoneIdSchema = z.literal("observatory_threshold");
 export type ZoneId = z.infer<typeof zoneIdSchema>;
+export const ZONE_FIXED_POINT_SCALE = 1_000;
+export const ZONE_TICK_MS = 100;
 
 export const zoneHelloSchema = z.object({
   type: z.literal("hello"),
@@ -13,10 +15,21 @@ export const zoneHelloSchema = z.object({
 
 export type ZoneHello = z.infer<typeof zoneHelloSchema>;
 
-export type ZonePresence = { entityId: string; userId: number };
-export type ZoneWelcome = { type: "welcome"; connectionId: string; zoneId: ZoneId; snapshotSeq: number; presences: ZonePresence[] };
-export type ZoneSnapshot = { type: "snapshot"; zoneId: ZoneId; snapshotSeq: number; presences: ZonePresence[] };
-export type ZoneReject = { type: "reject"; code: "READ_ONLY_PRESENCE" | "INVALID_MESSAGE" };
+export const zoneMoveSchema = z.object({
+  type: z.literal("move"),
+  clientSeq: z.number().int().min(1).max(2_147_483_647),
+  input: z.object({
+    x: z.number().int().min(-1).max(1),
+    z: z.number().int().min(-1).max(1),
+  }),
+});
+
+export type ZoneMove = z.infer<typeof zoneMoveSchema>;
+export type ZonePosition = { x: number; z: number };
+export type ZonePresence = { entityId: string; userId: number; position: ZonePosition; lastAcceptedClientSeq: number };
+export type ZoneWelcome = { type: "welcome"; connectionId: string; zoneId: ZoneId; snapshotSeq: number; tick: number; presences: ZonePresence[] };
+export type ZoneSnapshot = { type: "snapshot"; zoneId: ZoneId; snapshotSeq: number; tick: number; presences: ZonePresence[] };
+export type ZoneReject = { type: "reject"; code: "INVALID_MESSAGE" | "STALE_CLIENT_SEQUENCE" | "UNSUPPORTED_ZONE_COMMAND" };
 
 export function createZoneTicket(): string {
   return `aurion_zone_${randomBytes(32).toString("base64url")}`;
@@ -28,6 +41,11 @@ export function digestZoneTicket(ticket: string): string {
 
 export function parseZoneHello(value: unknown): ZoneHello | null {
   const parsed = zoneHelloSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+export function parseZoneMove(value: unknown): ZoneMove | null {
+  const parsed = zoneMoveSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
 
