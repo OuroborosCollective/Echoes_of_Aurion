@@ -243,6 +243,7 @@ type GameplayQuestView = {
   objective: string;
   requiredLevel: number;
   state: "locked" | "available" | "active" | "completed";
+  readyToTurnIn: boolean;
   reward: { xp: number; points: number; dungeonKey?: "ember_key" };
 };
 
@@ -256,6 +257,7 @@ export async function getGameplayProgress(userId: number) {
   const completed = questRows.filter(row => row.state === "completed").map(row => row.questKey).filter((key): key is QuestKey => aurionQuestline.some(quest => quest.key === key));
   const active = questRows.find(row => row.state === "active")?.questKey;
   const activeQuest = aurionQuestline.some(quest => quest.key === active) ? active as QuestKey : null;
+  const readyToTurnIn = questRows.filter(row => row.state === "ready_to_turn_in").map(row => row.questKey).filter((key): key is QuestKey => aurionQuestline.some(quest => quest.key === key));
   const quests: GameplayQuestView[] = aurionQuestline.map(quest => ({
     key: quest.key,
     giver: quest.giver,
@@ -263,6 +265,7 @@ export async function getGameplayProgress(userId: number) {
     objective: quest.objective,
     requiredLevel: quest.requiredLevel,
     state: resolveQuestState({ key: quest.key, level: profile.level, completed, active: activeQuest }),
+    readyToTurnIn: readyToTurnIn.includes(quest.key),
     reward: quest.reward,
   }));
   const keys = keyRows.map(row => row.keyName);
@@ -271,6 +274,7 @@ export async function getGameplayProgress(userId: number) {
     quests,
     keys,
     activeQuest,
+    readyToTurnIn,
     completed,
     canEnterDungeon: mayEnterDungeon({ level: profile.level, completed, keys }),
   };
@@ -294,6 +298,35 @@ export async function acceptGameplayQuest(values: { userId: number; questKey: Qu
   const quest = progress.quests.find(candidate => candidate.key === values.questKey);
   if (!quest || quest.state !== "available") throw new Error("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
   await db.insert(gameplayQuestProgress).values({ id: newEndgameId("quest"), userId: values.userId, questKey: values.questKey, state: "active" });
+  return getGameplayProgress(values.userId);
+}
+
+/** Rewards are held until the player returns to the authored NPC after a confirmed boss kill. */
+export async function completeGameplayQuest(values: { userId: number; questKey: QuestKey; giver: "Lyra" | "Orun" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const quest = getQuest(values.questKey);
+  if (quest.giver !== values.giver) throw new Error("Dieser Questgeber kann den Auftrag nicht abschließen.");
+  await db.transaction(async tx => {
+    const row = (await tx.select().from(gameplayQuestProgress).where(and(
+      eq(gameplayQuestProgress.userId, values.userId),
+      eq(gameplayQuestProgress.questKey, values.questKey),
+      eq(gameplayQuestProgress.state, "ready_to_turn_in"),
+    )).limit(1))[0];
+    if (!row) throw new Error("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
+    if (!profile) throw new Error("Spielerprofil fehlt beim Questabschluss.");
+    const now = new Date();
+    const totalXp = profile.totalXp + quest.reward.xp;
+    await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now }).where(eq(gameplayQuestProgress.id, row.id));
+    await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + quest.reward.points, seasonPoints: profile.seasonPoints + quest.reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
+    await tx.insert(progressionLedger).values([
+      { id: newEndgameId("prog"), userId: values.userId, kind: "xp", delta: quest.reward.xp, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:xp` },
+      { id: newEndgameId("prog"), userId: values.userId, kind: "points", delta: quest.reward.points, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:points` },
+      { id: newEndgameId("prog"), userId: values.userId, kind: "victory", delta: 1, source: `encounter:${row.completionSessionId}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:victory` },
+    ]);
+    if (quest.reward.dungeonKey) await tx.insert(gameplayDungeonKeys).values({ id: newEndgameId("dkey"), userId: values.userId, keyName: quest.reward.dungeonKey, grantedByQuest: quest.key }).onDuplicateKeyUpdate({ set: { grantedByQuest: quest.key } });
+  });
   return getGameplayProgress(values.userId);
 }
 
@@ -345,22 +378,8 @@ export async function applyGameplayAction(values: { userId: number; sessionId: s
         const quest = getQuest(encounter.questKey);
         const questProgress = (await tx.select().from(gameplayQuestProgress).where(and(eq(gameplayQuestProgress.userId, values.userId), eq(gameplayQuestProgress.questKey, quest.key), eq(gameplayQuestProgress.state, "active"))).limit(1))[0];
         if (!questProgress) throw new Error("Die aktive Quest konnte beim Bossabschluss nicht bestätigt werden.");
-        const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
-        if (!profile) throw new Error("Spielerprofil fehlt beim Bossabschluss.");
-        reward = { xp: quest.reward.xp, points: quest.reward.points };
         completedQuest = quest.key;
-        dungeonKeyGranted = quest.reward.dungeonKey ?? null;
-        const totalXp = profile.totalXp + reward.xp;
-        await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now, completionSessionId: session.id }).where(eq(gameplayQuestProgress.id, questProgress.id));
-        await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + reward.points, seasonPoints: profile.seasonPoints + reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
-        await tx.insert(progressionLedger).values([
-          { id: newEndgameId("prog"), userId: values.userId, kind: "xp", delta: reward.xp, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${session.id}:xp` },
-          { id: newEndgameId("prog"), userId: values.userId, kind: "points", delta: reward.points, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${session.id}:points` },
-          { id: newEndgameId("prog"), userId: values.userId, kind: "victory", delta: 1, source: `encounter:${encounter.key}`, reason: encounter.enemyName, idempotencyKey: `quest:${session.id}:victory` },
-        ]);
-        if (quest.reward.dungeonKey) {
-          await tx.insert(gameplayDungeonKeys).values({ id: newEndgameId("dkey"), userId: values.userId, keyName: quest.reward.dungeonKey, grantedByQuest: quest.key }).onDuplicateKeyUpdate({ set: { grantedByQuest: quest.key } });
-        }
+        await tx.update(gameplayQuestProgress).set({ state: "ready_to_turn_in", readyAt: now, completionSessionId: session.id }).where(eq(gameplayQuestProgress.id, questProgress.id));
       } else if (encounter.key === "cinder_vault") {
         const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
         if (!profile) throw new Error("Spielerprofil fehlt beim Dungeonabschluss.");

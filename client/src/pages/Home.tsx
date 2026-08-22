@@ -95,6 +95,7 @@ export default function Home() {
   const choosePlayerClass = trpc.player.chooseClass.useMutation();
   const setWeaponLoadout = trpc.player.setWeaponLoadout.useMutation();
   const acceptGameplayQuest = trpc.gameplay.acceptQuest.useMutation();
+  const completeGameplayQuest = trpc.gameplay.completeQuest.useMutation();
   const startGameplayEncounter = trpc.gameplay.startEncounter.useMutation();
   const applyGameplayAction = trpc.gameplay.act.useMutation();
   const gameplaySession = useRef<{ id: string; nextSequence: number } | null>(null);
@@ -225,7 +226,7 @@ export default function Home() {
           if (result.completed) {
             void gameplayProgress.refetch();
             if (result.drop) setConfirmedDrop(result.drop);
-            setLastSignal(result.completedQuest ? `Questabschluss bestätigt: ${result.completedQuest}. XP und Aurion-Punkte wurden serverseitig gebucht.` : result.drop ? `Dungeonfund bestätigt: ${result.drop.baseItemKey}.` : "Der Glutwächter ist bestätigt gefallen.");
+            setLastSignal(result.completedQuest ? `Der Auftrag ist bereit. Kehre für die Belohnung zu ${gameplayProgress.data?.quests.find(quest => quest.key === result.completedQuest)?.giver ?? "deinem Questgeber"} zurück.` : result.drop ? `Dungeonfund bestätigt: ${result.drop.baseItemKey}.` : "Der Glutwächter ist bestätigt gefallen.");
           }
         },
         onError: () => setLastSignal("Die Aktion wurde nicht bestätigt. Die lokale Szene übernimmt keinen unbestätigten Schaden."),
@@ -454,8 +455,9 @@ export default function Home() {
             {activeWorldNpc && (() => {
               const npc = openWorld.data?.npcs.find(candidate => candidate.id === activeWorldNpc);
               const availableQuest = gameplayProgress.data?.quests.find(quest => quest.state === "available" && quest.giver.toLowerCase() === activeWorldNpc);
+              const readyNpcQuest = gameplayProgress.data?.quests.find(quest => quest.readyToTurnIn && quest.giver.toLowerCase() === activeWorldNpc);
               const activeNpcQuest = gameplayProgress.data?.quests.find(quest => quest.state === "active" && quest.giver.toLowerCase() === activeWorldNpc);
-              return <div className="world-npc-dialogue" role="status"><div><span>NPC-INTERAKTION // {activeWorldNpc.toUpperCase()}</span><b>{npc?.displayName ?? activeWorldNpc}</b><p>{npc?.memory.quest[0] ?? npc?.memory.local[0] ?? "Der bestätigte Erinnerungskern wird gelesen."}</p></div>{availableQuest ? <button type="button" disabled={acceptGameplayQuest.isPending} onClick={() => acceptGameplayQuest.mutate({ questKey: availableQuest.key }, { onSuccess: () => { void gameplayProgress.refetch(); void openWorld.refetch(); setLastSignal(`${availableQuest.giver} bestätigt „${availableQuest.title}“.`); }, onError: () => setLastSignal("Die Questannahme wurde nicht bestätigt.") })}>{availableQuest.title} annehmen</button> : activeNpcQuest ? <small>AKTIVER AUFTRAG: {activeNpcQuest.title}</small> : <small>KEIN ZULÄSSIGER AUFTRAG</small>}<button type="button" className="world-npc-dialogue__close" onClick={() => setActiveWorldNpc(null)}>Dialog schließen</button></div>;
+              return <div className="world-npc-dialogue" role="status"><div><span>NPC-INTERAKTION // {activeWorldNpc.toUpperCase()}</span><b>{npc?.displayName ?? activeWorldNpc}</b><p>{npc?.memory.quest[0] ?? npc?.memory.local[0] ?? "Der bestätigte Erinnerungskern wird gelesen."}</p></div>{readyNpcQuest ? <button type="button" disabled={completeGameplayQuest.isPending} onClick={() => completeGameplayQuest.mutate({ questKey: readyNpcQuest.key, giver: readyNpcQuest.giver }, { onSuccess: () => { void gameplayProgress.refetch(); void openWorld.refetch(); setLastSignal(`${readyNpcQuest.giver} hat „${readyNpcQuest.title}“ abgeschlossen und die Belohnung bestätigt.`); }, onError: () => setLastSignal("Die Questübergabe wurde nicht bestätigt.") })}>{readyNpcQuest.title} übergeben</button> : availableQuest ? <button type="button" disabled={acceptGameplayQuest.isPending} onClick={() => acceptGameplayQuest.mutate({ questKey: availableQuest.key }, { onSuccess: () => { void gameplayProgress.refetch(); void openWorld.refetch(); setLastSignal(`${availableQuest.giver} bestätigt „${availableQuest.title}“.`); }, onError: () => setLastSignal("Die Questannahme wurde nicht bestätigt.") })}>{availableQuest.title} annehmen</button> : activeNpcQuest ? <small>AKTIVER AUFTRAG: {activeNpcQuest.title}</small> : <small>KEIN ZULÄSSIGER AUFTRAG</small>}<button type="button" className="world-npc-dialogue__close" onClick={() => setActiveWorldNpc(null)}>Dialog schließen</button></div>;
             })()}
             <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={enterAurionExpanse}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
           </section>

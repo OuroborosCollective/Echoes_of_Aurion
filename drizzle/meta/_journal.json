@@ -99,6 +99,13 @@
       "when": 1787352615291,
       "tag": "0013_panoramic_agent_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1787428096901,
+      "tag": "0014_naive_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }
