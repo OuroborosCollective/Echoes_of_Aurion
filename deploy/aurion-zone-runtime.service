@@ -11,7 +11,7 @@ WorkingDirectory=/opt/aurion-zone-runtime/current
 EnvironmentFile=/etc/aurion-zone-runtime.env
 Environment=NODE_ENV=production
 Environment=PORT=3100
-ExecStart=/usr/bin/node /opt/aurion-zone-runtime/current/dist-zone/zoneService.cjs
+ExecStart=/usr/bin/node /opt/aurion-zone-runtime/current/zoneService.cjs
 Restart=always
 RestartSec=3
 TimeoutStopSec=20
