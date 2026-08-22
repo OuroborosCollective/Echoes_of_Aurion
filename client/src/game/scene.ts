@@ -425,6 +425,8 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   let started = false; let elapsed = 0; let arenaIndex = 0; let sentinelHp = arenas[0].health; let explorerHp = 100; let echoHp = 100;
   let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let awaitingQuest = false; let dungeonUnlocked = false; let dungeonActive = false; let lastStateEmit = -1;
   let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0; let sentinelMoving = false;
+  let authoritativeZoneUserId: number | null = null;
+  let authoritativeExplorerTarget: Vector3 | null = null;
   let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
   const tripoPropTemplates = new Map<WorldPropKind, { root: TransformNode; minimumY: number; height: number }>();
   const tripoPropUrls: Record<WorldPropKind, string> = {
@@ -579,14 +581,29 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     if (code === "8") { requestAction(code, "gateway"); return; }
     if (code === "9") { requestAction(code, "gateway"); return; }
   };
+  const emitZoneMovementState = (): void => {
+    if (authoritativeZoneUserId === null) return;
+    const x = ((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0)) as -1 | 0 | 1;
+    const z = ((keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0)) as -1 | 0 | 1;
+    window.dispatchEvent(new CustomEvent("aurion:zone-movement-state", { detail: { x, z } }));
+  };
   const onKeyDown = (event: KeyboardEvent): void => {
     const code = event.key.toLowerCase();
-    if (["w", "a", "s", "d"].includes(code)) { keys.add(code); event.preventDefault(); }
+    if (["w", "a", "s", "d"].includes(code)) { keys.add(code); emitZoneMovementState(); event.preventDefault(); }
     if ((code === "f" || code === "e") && started) { if (code === "e" && requestNpcInteraction()) { event.preventDefault(); return; } requestAction(code.toUpperCase() as CommandCode, "human"); event.preventDefault(); }
   };
-  const onKeyUp = (event: KeyboardEvent): void => { keys.delete(event.key.toLowerCase()); };
+  const onKeyUp = (event: KeyboardEvent): void => { keys.delete(event.key.toLowerCase()); emitZoneMovementState(); };
   const onHumanCommand = (event: Event): void => {
     const code = (event as CustomEvent<{ code: string }>).detail.code.toUpperCase(); const distance = 0.95;
+    if (authoritativeZoneUserId !== null) {
+      const x = (code === "D" ? 1 : code === "A" ? -1 : 0) as -1 | 0 | 1;
+      const z = (code === "S" ? 1 : code === "W" ? -1 : 0) as -1 | 0 | 1;
+      if (x !== 0 || z !== 0) {
+        window.dispatchEvent(new CustomEvent("aurion:zone-movement-tap", { detail: { x, z } }));
+        explorerMotionUntil = elapsed + 0.18;
+      }
+      return;
+    }
     if (code === "W") explorer.position.z -= distance; if (code === "S") explorer.position.z += distance; if (code === "A") explorer.position.x -= distance; if (code === "D") explorer.position.x += distance;
     const worldLimit = openWorldActive ? 14.5 : 5.6;
     explorer.position.x = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.x)); explorer.position.z = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.z));
@@ -631,13 +648,32 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     if (!detail || detail.revision !== 1 || !["observatory_threshold", "windhollow", "emberfall", "cinder_vault"].includes(detail.zoneId) || !Number.isInteger(detail.zoneTier) || detail.zoneTier < 0 || detail.zoneTier > 3 || detail.terrain?.chunkSizeMeters !== 32 || detail.terrain.tileSizeMeters !== 4 || detail.terrain.columns !== 8 || detail.terrain.rows !== 8 || detail.terrain.tiles.length !== 64) return;
     started = true; awaitingQuest = false; victory = false; dungeonActive = false; dungeonUnlocked = false; createOpenWorldVisuals(detail); emitState(true);
   };
-  window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld);
+  const onZoneConnected = (event: Event): void => {
+    const userId = (event as CustomEvent<{ userId?: number }>).detail.userId;
+    if (typeof userId !== "number" || !Number.isInteger(userId)) return;
+    authoritativeZoneUserId = userId;
+    authoritativeExplorerTarget = explorer.position.clone();
+  };
+  const onZoneDisconnected = (): void => { authoritativeZoneUserId = null; authoritativeExplorerTarget = null; };
+  const onZoneSnapshot = (event: Event): void => {
+    const detail = (event as CustomEvent<{ userId: number; position: { x: number; z: number } }>).detail;
+    if (detail?.userId !== authoritativeZoneUserId || !Number.isInteger(detail.position?.x) || !Number.isInteger(detail.position?.z)) return;
+    authoritativeExplorerTarget = new Vector3(detail.position.x / 1_000, explorer.position.y, detail.position.z / 1_000);
+  };
+  window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld); window.addEventListener("aurion:zone-connected", onZoneConnected); window.addEventListener("aurion:zone-disconnected", onZoneDisconnected); window.addEventListener("aurion:zone-snapshot", onZoneSnapshot);
   const observer = scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05); elapsed += dt; const arena = arenas[arenaIndex];
     beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
     if (started && !victory) {
       const direction = new Vector3((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0), 0, (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0));
-      if (direction.lengthSquared() > 0) { direction.normalize().scaleInPlace(dt * 3.45); explorer.position.addInPlace(direction); const worldLimit = openWorldActive ? 14.5 : 5.6; explorer.position.x = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.x)); explorer.position.z = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.z)); explorer.rotation.y = Math.atan2(direction.x, direction.z); }
+      if (authoritativeExplorerTarget) {
+        const towardAuthoritative = authoritativeExplorerTarget.subtract(explorer.position);
+        towardAuthoritative.y = 0;
+        if (towardAuthoritative.lengthSquared() > 0.0001) {
+          explorer.position.addInPlace(towardAuthoritative.scale(Math.min(1, dt * 12)));
+          explorer.rotation.y = Math.atan2(towardAuthoritative.x, towardAuthoritative.z);
+        }
+      } else if (direction.lengthSquared() > 0) { direction.normalize().scaleInPlace(dt * 3.45); explorer.position.addInPlace(direction); const worldLimit = openWorldActive ? 14.5 : 5.6; explorer.position.x = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.x)); explorer.position.z = Math.max(-worldLimit, Math.min(worldLimit, explorer.position.z)); explorer.rotation.y = Math.atan2(direction.x, direction.z); }
       const pursuit = explorer.position.subtract(sentinel.root.position); pursuit.y = 0;
       const desiredDistance = 3.5;
       if (!openWorldActive && !transitioning && sentinelHp > 0 && pursuit.lengthSquared() > desiredDistance * desiredDistance) {
@@ -663,5 +699,5 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     for (let index = pulses.length - 1; index >= 0; index -= 1) { const pulse = pulses[index]; pulse.age += dt; pulse.mesh.scaling.setAll(1 + pulse.age * 4.3); const pulseMaterial = pulse.mesh.material as StandardMaterial; pulseMaterial.alpha = Math.max(0, 1 - pulse.age * 1.8); if (pulse.age > 0.58) { pulse.mesh.dispose(); pulses.splice(index, 1); } }
     emitState();
   });
-  return { scene, setCharacterModel, setArenaModel, dispose: () => { clearOpenWorld(); customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); window.removeEventListener("aurion:enter-dungeon", onEnterDungeon); window.removeEventListener("aurion:authoritative-action", onAuthoritativeAction); window.removeEventListener("aurion:load-encounter", onLoadEncounter); window.removeEventListener("aurion:load-open-world", onLoadOpenWorld); scene.dispose(); } };
+  return { scene, setCharacterModel, setArenaModel, dispose: () => { clearOpenWorld(); customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); window.removeEventListener("aurion:enter-dungeon", onEnterDungeon); window.removeEventListener("aurion:authoritative-action", onAuthoritativeAction); window.removeEventListener("aurion:load-encounter", onLoadEncounter); window.removeEventListener("aurion:load-open-world", onLoadOpenWorld); window.removeEventListener("aurion:zone-connected", onZoneConnected); window.removeEventListener("aurion:zone-disconnected", onZoneDisconnected); window.removeEventListener("aurion:zone-snapshot", onZoneSnapshot); scene.dispose(); } };
 }

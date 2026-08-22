@@ -16,7 +16,7 @@ export function createZoneServiceRuntime(revision = process.env.AURION_RUNTIME_R
     res.status(200).json({
       service: "aurion-zone-runtime",
       revision,
-      mode: "read-only-presence",
+      mode: "authoritative-movement",
     });
   });
 
