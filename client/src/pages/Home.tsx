@@ -21,8 +21,8 @@ import { trpc } from "@/lib/trpc";
 import { startLogin } from "@/const";
 
 type Screen = "gate" | "loadout" | "mission";
-type Command = "W" | "A" | "S" | "D" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
-type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "victory" };
+type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
 type GatewayPairing = { sessionId: string; pairingToken: string; mcpUrl: string; expiresAt: Date; allowedCommands: string[] };
 
 const initialMission: MissionState = { arena: 0, arenaName: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", sentinelHp: 112, sentinelMaxHp: 112, explorerHp: 100, echoHp: 100, shield: false, marked: false, phase: "active" };
@@ -40,10 +40,11 @@ const abilityDeck = [
 const providers = ["ChatGPT", "Claude", "Gemini", "Mistral", "Lokales LLM", "Eigener MCP-Client"];
 const heroTrailerUrl = aurionAssets.trailer;
 const heroTrailerPoster = aurionAssets.trailerPoster;
+const expanseReference = aurionAssets.expanseReference;
 
 function codeFromText(value: string): Command | null {
   const candidate = value.trim().toUpperCase();
-  return /^[WASD1-9]$/.test(candidate) ? (candidate as Command) : null;
+  return /^[WASDEF1-9]$/.test(candidate) ? (candidate as Command) : null;
 }
 
 export default function Home() {
@@ -61,12 +62,14 @@ export default function Home() {
   const [lastSignal, setLastSignal] = useState("Warten auf die Partnerkopplung.");
   const [missionElapsed, setMissionElapsed] = useState(0);
   const [mission, setMission] = useState<MissionState>(initialMission);
+  const [confirmedDrop, setConfirmedDrop] = useState<{ id: string; baseItemKey: string; quality: string; itemLevel: number } | null>(null);
   const [gatewayPairing, setGatewayPairing] = useState<GatewayPairing | null>(null);
   const [gatewaySequence, setGatewaySequence] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [humanTeamPartner, setHumanTeamPartner] = useState<string | null>(null);
   const [soloMode, setSoloMode] = useState(false);
+  const [activeWorldNpc, setActiveWorldNpc] = useState<"lyra" | "orun" | null>(null);
   const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);
   const expeditionAudio = useRef<HTMLAudioElement | null>(null);
   const soundscape = useRef<AurionSoundscape | null>(null);
@@ -85,12 +88,22 @@ export default function Home() {
   });
   const sendTeamSignal = trpc.community.team.sendSignal.useMutation();
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: apiAvailable && isAuthenticated });
+  const gameplayProgress = trpc.gameplay.progress.useQuery(undefined, { enabled: isAuthenticated });
+  const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
+  const enterOpenWorld = trpc.gameplay.enterOpenWorld.useMutation();
+  const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: isAuthenticated });
+  const choosePlayerClass = trpc.player.chooseClass.useMutation();
+  const setWeaponLoadout = trpc.player.setWeaponLoadout.useMutation();
+  const acceptGameplayQuest = trpc.gameplay.acceptQuest.useMutation();
+  const startGameplayEncounter = trpc.gameplay.startEncounter.useMutation();
+  const applyGameplayAction = trpc.gameplay.act.useMutation();
+  const gameplaySession = useRef<{ id: string; nextSequence: number } | null>(null);
   const activeCharacterUrl = characterAppearance.data?.storageUrl ?? starterCharacter.assetPath;
   const processedTeamSignals = useRef(new Set<string>());
   const processedGatewaySequence = useRef(0);
 
   const skillNames = useMemo(() => abilityDeck.filter((ability) => selectedSkills.includes(ability.code)), [selectedSkills]);
-  const allowedGatewayCommands = useMemo(() => ["W", "A", "S", "D", ...selectedSkills], [selectedSkills]);
+  const allowedGatewayCommands = useMemo(() => ["W", "A", "S", "D", "E", "F", ...selectedSkills], [selectedSkills]);
   const shapeMusic = (kind: LedgerEntry["kind"] | "victory"): void => {
     const audio = expeditionAudio.current;
     if (!audio || !audioEnabled) return;
@@ -179,6 +192,42 @@ export default function Home() {
     return () => window.removeEventListener("aurion:character-model-status", onCharacterModelStatus);
   }, []);
 
+  useEffect(() => {
+    const onWorldNpcInteraction = (event: Event) => {
+      const npcId = (event as CustomEvent<{ npcId?: "lyra" | "orun" }>).detail?.npcId;
+      if (!npcId) return;
+      setActiveWorldNpc(npcId);
+      setLastSignal(`${npcId === "lyra" ? "Lyra" : "Orun"} öffnet einen bestätigten Dialogpfad.`);
+    };
+    window.addEventListener("aurion:world-npc-interaction", onWorldNpcInteraction);
+    return () => window.removeEventListener("aurion:world-npc-interaction", onWorldNpcInteraction);
+  }, []);
+
+  useEffect(() => {
+    const onRequestedAction = (event: Event) => {
+      const detail = (event as CustomEvent<{ command: Command; source: "human" | "gateway" }>).detail;
+      const session = gameplaySession.current;
+      if (!detail || !session) {
+        setLastSignal("Die Aktion wartet auf eine bestätigte Quest- und Begegnungssitzung.");
+        return;
+      }
+      applyGameplayAction.mutate({ sessionId: session.id, sequence: session.nextSequence, command: detail.command, source: detail.source }, {
+        onSuccess: (result) => {
+          gameplaySession.current = result.completed ? null : { id: result.sessionId, nextSequence: result.nextSequence };
+          window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { command: detail.command, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
+          if (result.completed) {
+            void gameplayProgress.refetch();
+            if (result.drop) setConfirmedDrop(result.drop);
+            setLastSignal(result.completedQuest ? `Questabschluss bestätigt: ${result.completedQuest}. XP und Aurion-Punkte wurden serverseitig gebucht.` : result.drop ? `Dungeonfund bestätigt: ${result.drop.baseItemKey}.` : "Der Glutwächter ist bestätigt gefallen.");
+          }
+        },
+        onError: () => setLastSignal("Die Aktion wurde nicht bestätigt. Die lokale Szene übernimmt keinen unbestätigten Schaden."),
+      });
+    };
+    window.addEventListener("aurion:request-action", onRequestedAction);
+    return () => window.removeEventListener("aurion:request-action", onRequestedAction);
+  }, [applyGameplayAction, gameplayProgress]);
+
   const activateHumanTeam = useCallback((partnerName: string) => {
     if (gatewayPairing) void revokeGatewaySession.mutateAsync({ sessionId: gatewayPairing.sessionId });
     processedTeamSignals.current.clear();
@@ -238,11 +287,40 @@ export default function Home() {
   };
   const unlockLoadout = (): void => { if (!connected) return; setScreen("loadout"); appendLedger({ kind: "system", title: "Menü freigeschaltet", detail: "Charakter- und Partner-Loadout sind jetzt verfügbar." }); };
   const toggleSkill = (code: string): void => setSelectedSkills((current) => { if (current.includes(code)) return current.filter((skill) => skill !== code); if (current.length >= 3) return [...current.slice(1), code]; return [...current, code]; });
+  const startServerEncounter = (encounterKey: "asterion" | "archive" | "solarium" | "cinder_vault"): void => {
+    if (!isAuthenticated) { setLastSignal("Melde dich für serverbestätigte Quest- und Belohnungsfortschritte an."); return; }
+    startGameplayEncounter.mutate({ encounterKey }, {
+      onSuccess: ({ session }) => {
+        gameplaySession.current = { id: session.id, nextSequence: session.nextSequence };
+        const arenaIndex = encounterKey === "asterion" ? 0 : encounterKey === "archive" ? 1 : encounterKey === "solarium" ? 2 : 3;
+        window.dispatchEvent(new CustomEvent("aurion:load-encounter", { detail: { arenaIndex, dungeon: encounterKey === "cinder_vault" } }));
+        setLastSignal(`${session.encounterKey} ist als serverseitige Begegnung bestätigt.`);
+      },
+      onError: () => setLastSignal("Die Begegnung ist noch nicht freigeschaltet. Sprich zuerst mit dem zuständigen Questgeber."),
+    });
+  };
+  const enterAurionExpanse = (): void => {
+    if (!isAuthenticated) { setLastSignal("Melde dich an, um die serverbestätigte Aurion-Expanse zu betreten."); return; }
+    if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
+    enterOpenWorld.mutate(undefined, {
+      onSuccess: (snapshot) => {
+        window.dispatchEvent(new CustomEvent("aurion:load-open-world", { detail: snapshot }));
+        appendLedger({ kind: "system", title: "Aurion-Expanse bestätigt", detail: `${snapshot.displayName} wurde als Weltansicht der Revision ${snapshot.revision} geöffnet.` });
+        setLastSignal(`${snapshot.displayName} ist bestätigt. ${snapshot.encounter.activeCount} Begegnungen sind im sichtbaren Bereich aktiv.`);
+        void openWorld.refetch();
+      },
+      onError: () => setLastSignal("Der Weltübergang wurde nicht bestätigt. Die Szene bleibt im sicheren Turmzustand."),
+    });
+  };
   const beginMission = (): void => {
-    setScreen("mission"); setMissionElapsed(0); setMission(initialMission);
+    setScreen("mission"); setMissionElapsed(0); setMission(initialMission); setConfirmedDrop(null);
     soundscape.current?.unlock();
     if (audioEnabled) void expeditionAudio.current?.play().catch(() => setLastSignal("Die Expeditionmusik ist bereit; aktiviere sie über das Klangsymbol."));
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent("aurion:begin-expedition")), 120);
+    window.setTimeout(() => {
+      const activeQuest = gameplayProgress.data?.activeQuest;
+      if (isAuthenticated && activeQuest) startServerEncounter(activeQuest === "astral_call" ? "asterion" : activeQuest === "archive_of_echoes" ? "archive" : "solarium");
+      else window.dispatchEvent(new CustomEvent("aurion:begin-expedition"));
+    }, 120);
     appendLedger({ kind: "system", title: "Expedition eröffnet", detail: soloMode ? `${operatorName || "Unbenannter Explorer"} betritt die Sternwarte allein und führt die Echo-Slots direkt.` : `${operatorName || "Unbenannter Explorer"} und ${humanTeamPartner ? `Team-Partner ${humanTeamPartner}` : provider} betreten die Sternwarte Aurion.` });
     setLastSignal("Die Sternwarte öffnet ihre Resonanzschleuse.");
   };
@@ -254,7 +332,7 @@ export default function Home() {
   };
   const sendPartnerCommand = (raw?: string): void => {
     const code = codeFromText(raw ?? commandText);
-    if (!code) { appendLedger({ kind: "warning", title: "Befehl verworfen", detail: "Erlaubt sind ausschließlich W, A, S, D und die Slots 1–9." }); setLastSignal("Ungültiger Steuerimpuls: erlaubt sind W, A, S, D, 1–9."); return; }
+    if (!code) { appendLedger({ kind: "warning", title: "Befehl verworfen", detail: "Erlaubt sind ausschließlich W, A, S, D, E, F und die Slots 1–9." }); setLastSignal("Ungültiger Steuerimpuls: erlaubt sind W, A, S, D, E, F, 1–9."); return; }
     if (humanTeamPartner) {
       sendTeamSignal.mutate({ command: code }, {
         onSuccess: () => setLastSignal(`Team-Impuls ${code} wurde an ${humanTeamPartner} übermittelt.`),
@@ -270,10 +348,13 @@ export default function Home() {
     setLastSignal(ability ? `${provider}: ${ability.name} ausgelöst.` : `${provider}: Kurs ${code} bestätigt.`); setCommandText("");
   };
   const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => { window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } })); };
-  const sendHumanAction = (): void => { window.dispatchEvent(new CustomEvent("aurion:human-action")); setLastSignal("Explorer löst ein Speersignal aus."); };
+  const sendHumanAction = (code: "F" | "E" = "F"): void => { window.dispatchEvent(new CustomEvent("aurion:human-action", { detail: { code } })); setLastSignal(code === "F" ? "Explorer fordert ein Speersignal an." : "Explorer fordert eine Interaktion an."); };
   const downloadLedger = (): void => { const blob = new Blob([exportLedger()], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "aurion-memory-ledger.json"; link.click(); URL.revokeObjectURL(url); };
   const formatTime = (seconds: number): string => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const bossPercent = Math.max(0, Math.min(100, (mission.sentinelHp / mission.sentinelMaxHp) * 100));
+  const activeQuest = gameplayProgress.data?.quests.find(quest => quest.state === "active") ?? null;
+  const visibleProfile = gameplayProgress.data?.profile;
+  const activeWeaponTrack = playerSnapshot.data?.weaponLoadout?.weaponTrack ?? "spear";
 
   return (
     <main className="aurion-app" style={{ "--aurion-hero-poster": `url("${heroTrailerPoster}")` } as CSSProperties}>
@@ -304,7 +385,115 @@ export default function Home() {
       )}
       {trailerOpen && <section className="trailer-modal" role="dialog" aria-modal="true" aria-labelledby="trailer-title"><div className="trailer-modal-backdrop" onClick={() => setTrailerOpen(false)} /><div className="trailer-modal-card"><header><div><p className="eyebrow">AURION // HERO TRAILER</p><h2 id="trailer-title">One Signal.<br /><em>Two Wills.</em></h2></div><button type="button" onClick={() => setTrailerOpen(false)} aria-label="Hero-Trailer schließen"><X size={20} /></button></header><video className="hero-trailer-video" src={heroTrailerUrl} poster={heroTrailerPoster} controls autoPlay playsInline preload="metadata">Dein Browser unterstützt die Hero-Trailer-Wiedergabe nicht.</video><footer><span>ENGLISH VOICE-OVER</span><b>DEUTSCHE UNTERTITEL</b><small>Autorisierte MCP-Koop · keine private Chat-Automatisierung</small></footer></div></section>}
       {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed.</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>Autorisierter MCP-Vertrag · WASD + Slots</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>PARTNER-DECK <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer></section>}
-      {screen === "mission" && <section className="mission-ui" aria-label="Expeditionsoberfläche"><div className="mission-objective"><span>ARENA {mission.arena + 1}/3 // {mission.arenaName}</span><b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b><div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div></div><div className="boss-readout"><CircleDot size={14} /><span>SENTINEL <b>{mission.sentinelHp}/{mission.sentinelMaxHp}</b></span><i className={mission.marked ? "marked" : ""} /></div><div className="party-strip human"><UserRound size={17} /><div><span>EXPLORER</span><b>{operatorName || "Unbenannt"}</b></div><strong>{mission.explorerHp}</strong></div><div className="party-strip echo"><Bot size={17} /><div><span>LLM-PARTNER // {provider}</span><b>Echo Scout</b></div><strong>{mission.echoHp}</strong></div><div className="combat-timer"><Activity size={14} /> {formatTime(missionElapsed)}</div><aside className="command-console"><div className="console-head"><div><span className="signal-dot active" /> LIVE COMMAND BRIDGE</div><button type="button" aria-label="Ledger exportieren" onClick={downloadLedger}><Download size={15} /></button></div><p className="console-status"><Cpu size={14} /> {lastSignal}</p><div className="command-input"><input aria-label="LLM-Befehl" value={commandText} onChange={(event) => setCommandText(event.target.value.slice(-1))} onKeyDown={(event) => { if (event.key === "Enter") sendPartnerCommand(); }} placeholder="W / A / S / D / 1–9" /><button type="button" onClick={() => sendPartnerCommand()}><ChevronRight size={18} /></button></div><div className="quick-commands">{["W", "A", "S", "D", ...selectedSkills].map((code) => <button type="button" key={code} onClick={() => sendPartnerCommand(code)}>{code}</button>)}</div><div className="ledger-list">{ledger.slice(-4).reverse().map((entry) => <div className={`ledger-row ${entry.kind}`} key={entry.id}><span>{entry.kind === "warning" ? <X size={13} /> : <Sparkles size={13} />}</span><p><b>{entry.title}</b><small>{entry.detail}</small></p></div>)}</div></aside><div className="player-control-bridge" aria-label="Touch-Steuerung für Explorer"><span>EXPLORER STEUERUNG</span><div className="dpad"><button type="button" onClick={() => sendHumanCommand("W")} aria-label="Vorwärts"><ArrowUp size={20} /></button><button type="button" onClick={() => sendHumanCommand("A")} aria-label="Links"><ArrowLeft size={20} /></button><button type="button" onClick={() => sendHumanCommand("S")} aria-label="Rückwärts"><ArrowDown size={20} /></button><button type="button" onClick={() => sendHumanCommand("D")} aria-label="Rechts"><ArrowRight size={20} /></button></div><button type="button" className="spear-action" onClick={sendHumanAction}><Swords size={15} /> SPEER // 17</button></div><div className="ability-rail"><span><Gamepad2 size={15} /> ECHO SLOTS</span>{skillNames.map((ability) => <button type="button" key={ability.code} onClick={() => sendPartnerCommand(ability.code)}><kbd>{ability.code}</kbd><small>{ability.name}</small></button>)}</div><div className="arena-track" aria-label="Fortschritt durch die Ruinenarenen">{["ASTERION", "ARCHIV", "SOLARIUM"].map((label, index) => <span key={label} className={index < mission.arena ? "cleared" : index === mission.arena ? "current" : ""}>{index + 1}<small>{label}</small></span>)}</div><button type="button" className="ledger-reset" onClick={() => { resetLedger(); setLastSignal("Lokales Ledger wurde geleert."); }}><X size={13} /> Ledger leeren</button></section>}
+      {screen === "mission" && (
+        <section className="mission-ui" aria-label="Expeditionsoberfläche">
+          <div className="mission-objective">
+            <span>ARENA {mission.arena + 1}/4 // {mission.arenaName}</span>
+            <b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b>
+            <div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div>
+          </div>
+
+          <div className="progression-readout" aria-label="Bestätigte Charakterentwicklung">
+            <span>LEVEL <b>{visibleProfile?.level ?? 1}</b></span>
+            <span>XP <b>{visibleProfile?.totalXp ?? 0}</b></span>
+            <span>KLASSE <b>{visibleProfile?.selectedClass ?? "unbound"}</b></span>
+            <span>WAFFE <b>{activeWeaponTrack}</b></span>
+          </div>
+
+          <section className="character-doctrine" aria-label="Klassen- und Waffenklasse">
+            <div><span>CHARAKTERDOKTRIN // SERVERBESTÄTIGT</span><b>{visibleProfile?.selectedClass ? `${visibleProfile.selectedClass} · ${activeWeaponTrack}` : visibleProfile && visibleProfile.level >= 36 ? "Wähle deine Klassenresonanz" : `Klassenresonanz ab Level 36 · ${activeWeaponTrack}`}</b></div>
+            {visibleProfile && visibleProfile.level >= 36 && !visibleProfile.selectedClass && <div className="character-doctrine__choices">{(["vanguard", "seer", "warden"] as const).map(playerClass => <button type="button" key={playerClass} disabled={choosePlayerClass.isPending} onClick={() => choosePlayerClass.mutate({ playerClass }, { onSuccess: () => { void gameplayProgress.refetch(); void playerSnapshot.refetch(); setLastSignal(`${playerClass} wurde serverseitig als Klassenresonanz bestätigt.`); }, onError: () => setLastSignal("Die Klassenwahl wurde nicht bestätigt.") })}>{playerClass}</button>)}</div>}
+            <div className="character-doctrine__weapons">{(["blade", "staff", "spear", "focus"] as const).map(weaponTrack => <button type="button" key={weaponTrack} data-active={weaponTrack === activeWeaponTrack} disabled={setWeaponLoadout.isPending} onClick={() => setWeaponLoadout.mutate({ weaponTrack }, { onSuccess: () => { void playerSnapshot.refetch(); setLastSignal(`${weaponTrack} ist als Waffenpfad bestätigt.`); }, onError: () => setLastSignal("Der Waffenpfad wurde nicht bestätigt.") })}>{weaponTrack}</button>)}</div>
+          </section>
+
+          <section className="open-world-card" aria-label="Bestätigte Aurion-Expanse" style={{ "--expanse-reference": `url("${expanseReference}")` } as CSSProperties}>
+            <div className="open-world-card__veil" />
+            <div className="open-world-card__head"><div><span>OPEN WORLD // SERVER SNAPSHOT</span><b>{openWorld.data?.displayName ?? "Weltkarte wird gelesen"}</b></div><em>REV {openWorld.data?.revision ?? "—"}</em></div>
+            <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
+            <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span></div>
+            <div className="open-world-card__pois">{openWorld.data?.pointsOfInterest.slice(0, 3).map(point => <span key={point.id} data-state={point.state}>{point.label}</span>)}</div>
+            <div className="open-world-card__npcs">{openWorld.data?.npcs.map(npc => <div key={npc.id}><b>{npc.displayName}</b><small>{npc.memory.quest[0] ?? npc.memory.local[0]}</small></div>)}</div>
+            {openWorld.data?.primaryEncounter && <div className="world-encounter"><div><span>WELTBEGEGNUNG // BESTÄTIGT</span><b>{openWorld.data.primaryEncounter.label}</b><p>{openWorld.data.primaryEncounter.narrative}</p></div><button type="button" disabled={startGameplayEncounter.isPending || Boolean(gameplaySession.current)} onClick={() => startServerEncounter(openWorld.data!.primaryEncounter!.encounterKey)}>Begegnung beginnen</button></div>}
+            {activeWorldNpc && (() => {
+              const npc = openWorld.data?.npcs.find(candidate => candidate.id === activeWorldNpc);
+              const availableQuest = gameplayProgress.data?.quests.find(quest => quest.state === "available" && quest.giver.toLowerCase() === activeWorldNpc);
+              const activeNpcQuest = gameplayProgress.data?.quests.find(quest => quest.state === "active" && quest.giver.toLowerCase() === activeWorldNpc);
+              return <div className="world-npc-dialogue" role="status"><div><span>NPC-INTERAKTION // {activeWorldNpc.toUpperCase()}</span><b>{npc?.displayName ?? activeWorldNpc}</b><p>{npc?.memory.quest[0] ?? npc?.memory.local[0] ?? "Der bestätigte Erinnerungskern wird gelesen."}</p></div>{availableQuest ? <button type="button" disabled={acceptGameplayQuest.isPending} onClick={() => acceptGameplayQuest.mutate({ questKey: availableQuest.key }, { onSuccess: () => { void gameplayProgress.refetch(); void openWorld.refetch(); setLastSignal(`${availableQuest.giver} bestätigt „${availableQuest.title}“.`); }, onError: () => setLastSignal("Die Questannahme wurde nicht bestätigt.") })}>{availableQuest.title} annehmen</button> : activeNpcQuest ? <small>AKTIVER AUFTRAG: {activeNpcQuest.title}</small> : <small>KEIN ZULÄSSIGER AUFTRAG</small>}<button type="button" className="world-npc-dialogue__close" onClick={() => setActiveWorldNpc(null)}>Dialog schließen</button></div>;
+            })()}
+            <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={enterAurionExpanse}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
+          </section>
+
+          {mission.phase === "transition" && <p className="mission-transition" role="status">Bossabschluss wird serverseitig bestätigt…</p>}
+          {mission.phase === "quest_ready" && (
+            <div className="mission-victory quest-dialogue" role="status">
+              <b>QUESTGEBER WARTET</b>
+              <span>{gameplayProgress.data?.quests.find(quest => quest.state === "available") ? "Der nächste Auftrag ist freigeschaltet. Akzeptiere ihn bei Lyra oder Orun und öffne die nächste Instanz." : "Der Abschluss wurde verbucht. Prüfe deinen Questpfad oder kehre später zurück."}</span>
+              {gameplayProgress.data?.quests.filter(quest => quest.state === "available").map(quest => (
+                <button type="button" key={quest.key} disabled={acceptGameplayQuest.isPending} onClick={() => acceptGameplayQuest.mutate({ questKey: quest.key }, {
+                  onSuccess: () => { void gameplayProgress.refetch(); setLastSignal(`${quest.giver} bestätigt „${quest.title}“. Die Begegnung kann gestartet werden.`); },
+                  onError: () => setLastSignal("Die Questannahme wurde nicht bestätigt."),
+                })}>
+                  {quest.giver}: {quest.title} annehmen
+                </button>
+              ))}
+            </div>
+          )}
+          {activeQuest && !gameplaySession.current && mission.phase !== "victory" && mission.phase !== "dungeon_ready" && (
+            <div className="mission-victory quest-dialogue">
+              <b>{activeQuest.giver.toUpperCase()} // AKTIVER AUFTRAG</b>
+              <span>{activeQuest.title}: {activeQuest.objective}</span>
+              <button type="button" onClick={() => startServerEncounter(activeQuest.key === "astral_call" ? "asterion" : activeQuest.key === "archive_of_echoes" ? "archive" : "solarium")}>
+                Bestätigte Begegnung beginnen
+              </button>
+            </div>
+          )}
+          {mission.phase === "dungeon_ready" && (
+            <div className="mission-victory" role="status">
+              <b>GLUTSCHLÜSSEL GEBORGEN</b>
+              <span>Lyra öffnet den Zugang zum Aschengewölbe. Der Schlüssel und der Questabschluss werden vor Eintritt erneut geprüft.</span>
+              <button type="button" onClick={() => startServerEncounter("cinder_vault")}>Aschengewölbe betreten</button>
+            </div>
+          )}
+          {mission.phase === "victory" && (
+            <div className="mission-victory" role="status">
+              <b>EXPEDITION ABGESCHLOSSEN</b>
+              <span>Der Glutwächter ist gefallen. Eine neue Expedition kann vorbereitet werden.</span>
+              <button type="button" onClick={() => { gameplaySession.current = null; setMission(initialMission); setMissionElapsed(0); setScreen("loadout"); setLastSignal("Neue Expedition kann vorbereitet werden."); }}>Neue Expedition vorbereiten</button>
+            </div>
+          )}
+          {confirmedDrop && (
+            <div className={`confirmed-drop ${confirmedDrop.quality}`} role="status">
+              <span>BESTÄTIGTER DUNGEONFUND</span>
+              <b>{confirmedDrop.baseItemKey.replaceAll("_", " ")}</b>
+              <small>{confirmedDrop.quality.toUpperCase()} · GEGENSTANDSSTUFE {confirmedDrop.itemLevel}</small>
+              <button type="button" onClick={() => { setConfirmedDrop(null); setLastSignal("Der bestätigte Fund liegt im Inventar- und Endgamebereich bereit."); }}>EINSAMMELN</button>
+            </div>
+          )}
+
+          <div className="boss-readout"><CircleDot size={14} /><span>SENTINEL <b>{mission.sentinelHp}/{mission.sentinelMaxHp}</b></span><i className={mission.marked ? "marked" : ""} /></div>
+          <div className="party-strip human"><UserRound size={17} /><div><span>EXPLORER</span><b>{operatorName || "Unbenannt"}</b></div><strong>{mission.explorerHp}</strong></div>
+          <div className="party-strip echo"><Bot size={17} /><div><span>LLM-PARTNER // {provider}</span><b>Echo Scout</b></div><strong>{mission.echoHp}</strong></div>
+          <div className="combat-timer"><Activity size={14} /> {formatTime(missionElapsed)}</div>
+
+          <aside className="command-console">
+            <div className="console-head"><div><span className="signal-dot active" /> LIVE COMMAND BRIDGE</div><button type="button" aria-label="Ledger exportieren" onClick={downloadLedger}><Download size={15} /></button></div>
+            <p className="console-status"><Cpu size={14} /> {lastSignal}</p>
+            <div className="command-input"><input aria-label="LLM-Befehl" value={commandText} onChange={(event) => setCommandText(event.target.value.slice(-1))} onKeyDown={(event) => { if (event.key === "Enter") sendPartnerCommand(); }} placeholder="W / A / S / D / E / F / 1–9" /><button type="button" onClick={() => sendPartnerCommand()}><ChevronRight size={18} /></button></div>
+            <div className="quick-commands">{["W", "A", "S", "D", "E", "F", ...selectedSkills].map((code) => <button type="button" key={code} onClick={() => sendPartnerCommand(code)}>{code}</button>)}</div>
+            <div className="ledger-list">{ledger.slice(-4).reverse().map((entry) => <div className={`ledger-row ${entry.kind}`} key={entry.id}><span>{entry.kind === "warning" ? <X size={13} /> : <Sparkles size={13} />}</span><p><b>{entry.title}</b><small>{entry.detail}</small></p></div>)}</div>
+          </aside>
+
+          <div className="player-control-bridge" aria-label="Touch-Steuerung für Explorer">
+            <span>EXPLORER STEUERUNG</span>
+            <div className="dpad"><button type="button" onClick={() => sendHumanCommand("W")} aria-label="Vorwärts"><ArrowUp size={20} /></button><button type="button" onClick={() => sendHumanCommand("A")} aria-label="Links"><ArrowLeft size={20} /></button><button type="button" onClick={() => sendHumanCommand("S")} aria-label="Rückwärts"><ArrowDown size={20} /></button><button type="button" onClick={() => sendHumanCommand("D")} aria-label="Rechts"><ArrowRight size={20} /></button></div>
+            <button type="button" className="spear-action" onClick={() => sendHumanAction("F")}><Swords size={15} /> SPEER // 17</button>
+            <button type="button" className="interact-action" onClick={() => sendHumanAction("E")}>E // INTERAGIEREN</button>
+          </div>
+          <div className="ability-rail"><span><Gamepad2 size={15} /> ECHO SLOTS</span>{skillNames.map((ability) => <button type="button" key={ability.code} onClick={() => sendPartnerCommand(ability.code)}><kbd>{ability.code}</kbd><small>{ability.name}</small></button>)}</div>
+          <div className="arena-track" aria-label="Fortschritt durch die Ruinenarenen">{["ASTERION", "ARCHIV", "SOLARIUM", "GEWÖLBE"].map((label, index) => <span key={label} className={index < mission.arena ? "cleared" : index === mission.arena ? "current" : ""}>{index + 1}<small>{label}</small></span>)}</div>
+          <button type="button" className="ledger-reset" onClick={() => { resetLedger(); setLastSignal("Lokales Ledger wurde geleert."); }}><X size={13} /> Ledger leeren</button>
+        </section>
+      )}
     </main>
   );
 }

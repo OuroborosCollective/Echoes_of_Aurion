@@ -15,26 +15,67 @@ import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { ShaderStore } from "@babylonjs/core/Engines/shaderStore";
+import { ShaderStore } from "@babylonjs/core/Engines/shaderStore.js";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import { defaultVertexShader } from "@babylonjs/core/Shaders/default.vertex.js";
 import { defaultPixelShader } from "@babylonjs/core/Shaders/default.fragment.js";
+import { pbrVertexShader } from "@babylonjs/core/Shaders/pbr.vertex.js";
+import { pbrPixelShader } from "@babylonjs/core/Shaders/pbr.fragment.js";
+import { glowMapGenerationVertexShader } from "@babylonjs/core/Shaders/glowMapGeneration.vertex.js";
+import { glowMapGenerationPixelShader } from "@babylonjs/core/Shaders/glowMapGeneration.fragment.js";
+import { glowMapMergeVertexShader } from "@babylonjs/core/Shaders/glowMapMerge.vertex.js";
+import { glowMapMergePixelShader } from "@babylonjs/core/Shaders/glowMapMerge.fragment.js";
+import { glowBlurPostProcessPixelShader } from "@babylonjs/core/Shaders/glowBlurPostProcess.fragment.js";
+import { layerVertexShader } from "@babylonjs/core/Shaders/layer.vertex.js";
+import { layerPixelShader } from "@babylonjs/core/Shaders/layer.fragment.js";
+import { kernelBlurVertexShader } from "@babylonjs/core/Shaders/kernelBlur.vertex.js";
+import { kernelBlurPixelShader } from "@babylonjs/core/Shaders/kernelBlur.fragment.js";
+import { postprocessVertexShader } from "@babylonjs/core/Shaders/postprocess.vertex.js";
+import { passPixelShader } from "@babylonjs/core/Shaders/pass.fragment.js";
+import { rgbdDecodePixelShader } from "@babylonjs/core/Shaders/rgbdDecode.fragment.js";
+import { colorVertexShader } from "@babylonjs/core/Shaders/color.vertex.js";
+import { colorPixelShader } from "@babylonjs/core/Shaders/color.fragment.js";
 import { aurionAssets } from "@/lib/aurionAssets";
 import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
 ShaderStore.ShadersStore[defaultVertexShader.name] = defaultVertexShader.shader;
 ShaderStore.ShadersStore[defaultPixelShader.name] = defaultPixelShader.shader;
+ShaderStore.ShadersStore[pbrVertexShader.name] = pbrVertexShader.shader;
+ShaderStore.ShadersStore[pbrPixelShader.name] = pbrPixelShader.shader;
+ShaderStore.ShadersStore[glowMapGenerationVertexShader.name] = glowMapGenerationVertexShader.shader;
+ShaderStore.ShadersStore[glowMapGenerationPixelShader.name] = glowMapGenerationPixelShader.shader;
+ShaderStore.ShadersStore[glowMapMergeVertexShader.name] = glowMapMergeVertexShader.shader;
+ShaderStore.ShadersStore[glowMapMergePixelShader.name] = glowMapMergePixelShader.shader;
+ShaderStore.ShadersStore[glowBlurPostProcessPixelShader.name] = glowBlurPostProcessPixelShader.shader;
+ShaderStore.ShadersStore[layerVertexShader.name] = layerVertexShader.shader;
+ShaderStore.ShadersStore[layerPixelShader.name] = layerPixelShader.shader;
+ShaderStore.ShadersStore[kernelBlurVertexShader.name] = kernelBlurVertexShader.shader;
+ShaderStore.ShadersStore[kernelBlurPixelShader.name] = kernelBlurPixelShader.shader;
+ShaderStore.ShadersStore[postprocessVertexShader.name] = postprocessVertexShader.shader;
+ShaderStore.ShadersStore[passPixelShader.name] = passPixelShader.shader;
+ShaderStore.ShadersStore[rgbdDecodePixelShader.name] = rgbdDecodePixelShader.shader;
+ShaderStore.ShadersStore[colorVertexShader.name] = colorVertexShader.shader;
+ShaderStore.ShadersStore[colorPixelShader.name] = colorPixelShader.shader;
+console.info("[aurion:shader-store]", {
+  defaultVertex: ShaderStore.ShadersStore.defaultVertexShader?.slice(0, 32),
+  defaultPixel: ShaderStore.ShadersStore.defaultPixelShader?.slice(0, 32),
+  pbrVertex: ShaderStore.ShadersStore.pbrVertexShader?.slice(0, 32),
+  defaultUbo: Boolean(ShaderStore.IncludesShadersStore.defaultUboDeclaration),
+  defaultVertexDeclaration: Boolean(ShaderStore.IncludesShadersStore.defaultVertexDeclaration),
+  bonesDeclaration: Boolean(ShaderStore.IncludesShadersStore.bonesDeclaration),
+  glowMapGenerationVertex: Boolean(ShaderStore.ShadersStore.glowMapGenerationVertexShader),
+});
 
 export type GameHandle = { scene: Scene; setCharacterModel: (sourceUrl?: string) => Promise<void>; setArenaModel: (sourceUrl?: string) => Promise<void>; dispose: () => void };
 
-type CommandCode = "W" | "A" | "S" | "D" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+type CommandCode = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type Pulse = { mesh: Mesh; age: number };
 type ArenaDefinition = { name: string; objective: string; health: number; floor: Color3; glow: Color3; sun: Color3; enemy: Color3; reward: string };
-type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "victory" };
+type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
+type OpenWorldSceneState = { revision: number; zoneId: "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault"; zoneTier: number; displayName: string; entryNarrative: string; encounter: { activeCount: number; budget: number; maximumVisible: number }; npcs: readonly { id: "lyra" | "orun"; displayName: string }[] };
 type LiveRig = { root: TransformNode; torso: TransformNode; head: TransformNode; arms: TransformNode[]; legs: TransformNode[]; weapon?: TransformNode; halo?: TransformNode; eye?: StandardMaterial; shell?: StandardMaterial; crown?: StandardMaterial };
 type SentinelRig = LiveRig & { eye: StandardMaterial; shell: StandardMaterial; crown: StandardMaterial };
 
@@ -49,6 +90,7 @@ const arenas: ArenaDefinition[] = [
   { name: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", health: 112, floor: Color3.FromHexString("#183B3D"), glow: aurion, sun: Color3.FromHexString("#FFD890"), enemy: Color3.FromHexString("#9A4B35"), reward: "Asterion-Splitter" },
   { name: "Versunkene Archivhalle", objective: "Entschlüssele den Echo-Schlüssel unter gegnerischem Druck.", health: 154, floor: Color3.FromHexString("#29394B"), glow: Color3.FromHexString("#75A8FF"), sun: Color3.FromHexString("#B4C8FF"), enemy: Color3.FromHexString("#7A4FAA"), reward: "Archiv-Siegel" },
   { name: "Solarium der letzten Flamme", objective: "Beende die Resonanz, bevor das Solarium kollabiert.", health: 198, floor: Color3.FromHexString("#473226"), glow: Color3.FromHexString("#F2C15B"), sun: Color3.FromHexString("#FFB34E"), enemy: Color3.FromHexString("#B5422F"), reward: "Aurion-Kern" },
+  { name: "Aschengewölbe", objective: "Besiege den Glutwächter und sichere den ersten Dungeonfund.", health: 258, floor: Color3.FromHexString("#241D2B"), glow: Color3.FromHexString("#D976FF"), sun: Color3.FromHexString("#E8A1FF"), enemy: Color3.FromHexString("#61284B"), reward: "Glutwächter-Relikt" },
 ];
 
 function material(scene: Scene, name: string, diffuse: Color3, emissive?: Color3): StandardMaterial {
@@ -211,8 +253,16 @@ function makeArenaSet(scene: Scene): TransformNode[] {
     flame.parent = solarium; flame.position = new Vector3(Math.cos(index) * 5.6, 1.45 + (index % 3) * 0.45, Math.sin(index) * 5.6);
     flame.material = material(scene, `solar-shard-mat-${index}`, Color3.FromHexString("#5B2B22"), Color3.FromHexString("#F4A13D"));
   }
-  archive.setEnabled(false); solarium.setEnabled(false);
-  return [astronomic, archive, solarium];
+  const dungeon = new TransformNode("arena-cinder-vault", scene);
+  makeRuin(scene, dungeon, new Vector3(-4.8, 0, -3.6), 1.04, 0.35, Color3.FromHexString("#5D3F70"));
+  makeRuin(scene, dungeon, new Vector3(4.7, 0, 3.5), 0.94, -0.6, Color3.FromHexString("#4C315E"));
+  for (let index = 0; index < 8; index += 1) {
+    const ember = MeshBuilder.CreateSphere(`dungeon-ember-${index}`, { diameter: 0.23 + (index % 3) * 0.08, segments: 8 }, scene);
+    ember.parent = dungeon; ember.position = new Vector3(Math.cos(index * 0.78) * 5.7, 0.72 + (index % 4) * 0.38, Math.sin(index * 0.78) * 4.8);
+    ember.material = material(scene, `dungeon-ember-mat-${index}`, Color3.FromHexString("#402046"), Color3.FromHexString("#D976FF"));
+  }
+  archive.setEnabled(false); solarium.setEnabled(false); dungeon.setEnabled(false);
+  return [astronomic, archive, solarium, dungeon];
 }
 
 function loadAsterionFloorKit(scene: Scene, parent: TransformNode): void {
@@ -258,7 +308,6 @@ function emitGameEvent(kind: string, detail: string): void {
 export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement): Promise<GameHandle> {
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0.012, 0.06, 0.082, 1);
-  scene.fogMode = Scene.FOGMODE_EXP2; scene.fogColor = new Color3(0.025, 0.11, 0.14); scene.fogDensity = 0.018;
   const camera = new ArcRotateCamera("expedition-camera", -2.27, 1.05, 20.5, new Vector3(0, 0.9, 0), scene);
   camera.lowerRadiusLimit = 14; camera.upperRadiusLimit = 23; camera.lowerBetaLimit = 0.73; camera.upperBetaLimit = 1.24; camera.wheelDeltaPercentage = 0.012; camera.attachControl(canvas, true);
   const sky = new HemisphericLight("sky-light", new Vector3(0.2, 1, 0.4), scene);
@@ -267,7 +316,6 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   sun.position = new Vector3(4, 12, -4); sun.intensity = 2.2; sun.diffuse = arenas[0].sun;
   const beaconLight = new PointLight("beacon-light", new Vector3(0, 3.2, 0), scene);
   beaconLight.diffuse = arenas[0].glow; beaconLight.intensity = 9; beaconLight.range = 13;
-  const glowLayer = new GlowLayer("aurion-glow", scene, { blurKernelSize: 48 }); glowLayer.intensity = 0.64;
   const groundMat = material(scene, "observatory-floor", arenas[0].floor);
   const ground = MeshBuilder.CreateCylinder("star-observatory", { height: 0.36, diameter: 14.6, tessellation: 48 }, scene);
   ground.material = groundMat; ground.position.y = -0.18;
@@ -352,8 +400,9 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   tether.color = aurion;
   const keys = new Set<string>(); const pulses: Pulse[] = [];
   let started = false; let elapsed = 0; let arenaIndex = 0; let sentinelHp = arenas[0].health; let explorerHp = 100; let echoHp = 100;
-  let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let lastStateEmit = -1;
+  let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let awaitingQuest = false; let dungeonUnlocked = false; let dungeonActive = false; let lastStateEmit = -1;
   let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0; let sentinelMoving = false;
+  let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
@@ -363,7 +412,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     if (!force && elapsed - lastStateEmit < 0.16) return;
     lastStateEmit = elapsed;
     const arena = arenas[arenaIndex];
-    const state: MissionState = { arena: arenaIndex, arenaName: arena.name, objective: victory ? "Aurion ist stabilisiert. Der Weg zum Himmelsarchiv ist offen." : arena.objective, sentinelHp: Math.max(0, sentinelHp), sentinelMaxHp: arena.health, explorerHp: Math.max(0, explorerHp), echoHp: Math.max(0, echoHp), shield: shieldTime > 0, marked: markTime > 0, phase: victory ? "victory" : transitioning ? "transition" : "active" };
+    const state: MissionState = { arena: arenaIndex, arenaName: arena.name, objective: victory ? "Aurion ist stabilisiert. Der Weg zum Himmelsarchiv ist offen." : dungeonUnlocked && !dungeonActive ? "Lyra hat den Glutschlüssel geborgen. Öffne das Aschengewölbe." : awaitingQuest ? "Der Sieg ist bestätigt. Kehre zum Questgeber zurück, um die nächste Resonanz freizugeben." : arena.objective, sentinelHp: Math.max(0, sentinelHp), sentinelMaxHp: arena.health, explorerHp: Math.max(0, explorerHp), echoHp: Math.max(0, echoHp), shield: shieldTime > 0, marked: markTime > 0, phase: victory ? "victory" : dungeonUnlocked && !dungeonActive ? "dungeon_ready" : awaitingQuest ? "quest_ready" : transitioning ? "transition" : "active" };
     window.dispatchEvent(new CustomEvent("aurion:mission-state", { detail: state }));
   };
   const applyArena = (index: number): void => {
@@ -374,37 +423,92 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     sentinel.root.position = new Vector3(3.25, 0.15, -1.8); echoTarget = echo.position.clone(); createPulse(new Vector3(0, 0.15, 0), arena.glow, 1.15);
     emitGameEvent("system", `${arena.name} entfaltet sich. Ziel: ${arena.objective}`); emitState(true);
   };
+  const clearOpenWorld = (): void => {
+    openWorldRoot?.dispose(false, true);
+    openWorldRoot = null;
+    worldNpcTargets = [];
+    openWorldActive = false;
+  };
+  const createOpenWorldVisuals = (detail: OpenWorldSceneState): void => {
+    clearOpenWorld();
+    openWorldActive = true;
+    const root = new TransformNode(`expanse-${detail.zoneId}`, scene);
+    openWorldRoot = root;
+    const zoneColors = {
+      observatory_threshold: { floor: Color3.FromHexString("#17363B"), accent: aurion, stone: Color3.FromHexString("#8C6A45") },
+      windhollow: { floor: Color3.FromHexString("#173A35"), accent: Color3.FromHexString("#4EEEDB"), stone: Color3.FromHexString("#5B766A") },
+      emberfall: { floor: Color3.FromHexString("#3D2D25"), accent: Color3.FromHexString("#F2B85B"), stone: Color3.FromHexString("#8A5942") },
+      cinder_vault: { floor: Color3.FromHexString("#292031"), accent: Color3.FromHexString("#D976FF"), stone: Color3.FromHexString("#57435E") },
+    }[detail.zoneId];
+    const floor = MeshBuilder.CreateCylinder(`expanse-floor-${detail.zoneId}`, { diameter: 18, height: 0.28, tessellation: 48 }, scene);
+    floor.parent = root; floor.position.y = -0.08; floor.material = material(scene, `expanse-floor-mat-${detail.zoneId}`, zoneColors.floor, zoneColors.accent.scale(0.025));
+    const path = MeshBuilder.CreateBox(`expanse-path-${detail.zoneId}`, { width: 2.35, depth: 12, height: 0.08 }, scene);
+    path.parent = root; path.position = new Vector3(0, 0.08, -2.5); path.material = material(scene, `expanse-path-mat-${detail.zoneId}`, zoneColors.stone.scale(0.72), zoneColors.accent.scale(0.04));
+    const portal = MeshBuilder.CreateTorus(`expanse-return-${detail.zoneId}`, { diameter: 2.65, thickness: 0.11, tessellation: 36 }, scene);
+    portal.parent = root; portal.position = new Vector3(-5.25, 1.5, 3.5); portal.rotation.x = Math.PI / 2; portal.material = material(scene, `expanse-return-mat-${detail.zoneId}`, zoneColors.accent.scale(0.25), zoneColors.accent);
+    const portalLight = new PointLight(`expanse-return-light-${detail.zoneId}`, new Vector3(-5.25, 1.35, 3.5), scene); portalLight.parent = root; portalLight.diffuse = zoneColors.accent; portalLight.intensity = 2.2; portalLight.range = 8;
+    const landmarkPositions = [new Vector3(4.6, 0.2, 1.1), new Vector3(2.2, 0.2, -4.6), new Vector3(-2.7, 0.2, -4.0), new Vector3(5.1, 0.2, -4.2)];
+    landmarkPositions.slice(0, Math.min(4, detail.encounter.activeCount + 1)).forEach((position, index) => {
+      const pillar = MeshBuilder.CreateCylinder(`expanse-landmark-${detail.zoneId}-${index}`, { height: 2.2 + (index % 2) * 0.8, diameterTop: 0.46, diameterBottom: 0.74, tessellation: 6 }, scene);
+      pillar.parent = root; pillar.position = position.add(new Vector3(0, 1.05, 0)); pillar.rotation.y = index * 0.73; pillar.material = material(scene, `expanse-landmark-mat-${detail.zoneId}-${index}`, zoneColors.stone, zoneColors.accent.scale(index % 2 ? 0.16 : 0.06));
+      const crystal = MeshBuilder.CreatePolyhedron(`expanse-crystal-${detail.zoneId}-${index}`, { type: 1, size: 0.35 + index * 0.05 }, scene);
+      crystal.parent = root; crystal.position = position.add(new Vector3(0, 2.45 + (index % 2) * 0.8, 0)); crystal.material = material(scene, `expanse-crystal-mat-${detail.zoneId}-${index}`, zoneColors.accent.scale(0.35), zoneColors.accent.scale(0.62));
+    });
+    detail.npcs.forEach((npc, index) => {
+      const position = index === 0 ? new Vector3(-3.45, 0.2, 0.75) : new Vector3(3.25, 0.2, -0.35);
+      const npcRoot = new TransformNode(`expanse-npc-${npc.id}`, scene); npcRoot.parent = root; npcRoot.position = position;
+      const robe = material(scene, `expanse-npc-robe-${npc.id}`, npc.id === "lyra" ? Color3.FromHexString("#245B58") : Color3.FromHexString("#5D4C73"), zoneColors.accent.scale(0.14));
+      const trim = material(scene, `expanse-npc-trim-${npc.id}`, bronze, zoneColors.accent.scale(0.3));
+      const headMat = material(scene, `expanse-npc-head-${npc.id}`, Color3.FromHexString(npc.id === "lyra" ? "#8B604A" : "#6E4A3F"));
+      const body = MeshBuilder.CreateCylinder(`expanse-npc-body-${npc.id}`, { height: 1.55, diameterTop: 0.62, diameterBottom: 0.94, tessellation: 8 }, scene); body.parent = npcRoot; body.position.y = 0.88; body.material = robe;
+      const head = MeshBuilder.CreateSphere(`expanse-npc-head-${npc.id}`, { diameter: 0.52, segments: 12 }, scene); head.parent = npcRoot; head.position.y = 1.86; head.material = headMat;
+      const halo = MeshBuilder.CreateTorus(`expanse-npc-halo-${npc.id}`, { diameter: 1.28, thickness: 0.045, tessellation: 24 }, scene); halo.parent = npcRoot; halo.position.y = 0.16; halo.rotation.x = Math.PI / 2; halo.material = trim;
+      const sigil = MeshBuilder.CreatePolyhedron(`expanse-npc-sigil-${npc.id}`, { type: 1, size: 0.17 }, scene); sigil.parent = npcRoot; sigil.position = new Vector3(0, 2.37, 0); sigil.material = material(scene, `expanse-npc-sigil-mat-${npc.id}`, zoneColors.accent.scale(0.3), zoneColors.accent);
+      worldNpcTargets.push({ id: npc.id, displayName: npc.displayName, position, root: npcRoot });
+    });
+    const gate = MeshBuilder.CreateTorus(`expanse-gate-${detail.zoneId}`, { diameter: 3.8, thickness: 0.22, tessellation: 8 }, scene);
+    gate.parent = root; gate.position = new Vector3(0, 2.05, -6.15); gate.rotation.x = Math.PI / 2; gate.material = material(scene, `expanse-gate-mat-${detail.zoneId}`, zoneColors.stone, zoneColors.accent.scale(0.14));
+    sentinel.root.setEnabled(false); arenaSets.forEach(set => set.setEnabled(false)); groundMat.diffuseColor = zoneColors.floor; ringMat.emissiveColor = zoneColors.accent.scale(0.18); beaconMat.emissiveColor = zoneColors.accent; beaconLight.diffuse = zoneColors.accent;
+    explorer.position = new Vector3(-1.35, 0.2, 3.1); echo.position = new Vector3(0.25, 0.2, 3.5); echoTarget = echo.position.clone();
+    createPulse(portal.position, zoneColors.accent, 1.25);
+    emitGameEvent("system", `${detail.displayName} entfaltet sich als bestätigte Expanse-Ansicht. Rückkehrstein und ${detail.encounter.activeCount} sichtbare Begegnungssignale sind kartiert.`);
+  };
   const completeArena = (): void => {
     if (transitioning || victory) return;
     transitioning = true; createPulse(sentinel.root.position.add(new Vector3(0, 0.2, 0)), arenas[arenaIndex].glow, 1.35);
     emitGameEvent("combat", `${arenas[arenaIndex].name} gesichert: ${arenas[arenaIndex].reward} geborgen.`); emitState(true);
     window.setTimeout(() => {
-      if (arenaIndex === arenas.length - 1) { victory = true; transitioning = false; sentinel.root.setEnabled(false); emitGameEvent("system", "Aurion stabilisiert. Das Team hat die letzte Resonanz bestanden."); emitState(true); return; }
-      transitioning = false; applyArena(arenaIndex + 1);
+      if (arenaIndex === 2 && !dungeonActive) { dungeonUnlocked = true; transitioning = false; sentinel.root.setEnabled(false); emitGameEvent("system", "Der bestätigte Abschluss hat den Glutschlüssel freigegeben. Das Aschengewölbe kann jetzt betreten werden."); emitState(true); return; }
+      if (arenaIndex === arenas.length - 1) { victory = true; transitioning = false; sentinel.root.setEnabled(false); emitGameEvent("system", "Der Glutwächter ist gefallen. Aurion stabilisiert sich um das geborgene Relikt."); emitState(true); return; }
+      transitioning = false; awaitingQuest = true; sentinel.root.setEnabled(false); emitGameEvent("system", "Der Bossabschluss ist serverseitig bestätigt. Sprich mit dem Questgeber, bevor die nächste Resonanz beginnt."); emitState(true);
     }, 1100);
   };
-  const dealSentinel = (damage: number, label: string, tone: Color3): void => {
-    if (!started || transitioning || victory || sentinelHp <= 0) return;
-    const applied = Math.round(damage * (markTime > 0 ? 1.35 : 1)); sentinelHp = Math.max(0, sentinelHp - applied); actionHeat = Math.max(actionHeat, 0.65); createPulse(sentinel.root.position.add(new Vector3(0, 0.18, 0)), tone, 0.8);
+  const requestAction = (command: CommandCode, source: "human" | "gateway"): void => {
+    if (!started || transitioning || victory || awaitingQuest || sentinelHp <= 0) return;
+    window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source } }));
+  };
+  const applyAuthoritativeDamage = (damage: number, bossHp: number, label: string, tone: Color3): void => {
+    if (!started || transitioning || victory) return;
+    sentinelHp = Math.max(0, bossHp); actionHeat = Math.max(actionHeat, 0.65); createPulse(sentinel.root.position.add(new Vector3(0, 0.18, 0)), tone, 0.8);
     sentinelHurtUntil = elapsed + 0.26;
-    emitGameEvent("combat", `${label} trifft den Sentinel für ${applied} Resonanzschaden.`); emitState(true); if (sentinelHp === 0) completeArena();
+    emitGameEvent("combat", `${label} trifft den Sentinel für ${damage} bestätigten Resonanzschaden.`); emitState(true); if (sentinelHp === 0) completeArena();
   };
   const runEchoAbility = (code: CommandCode): void => {
     const arena = arenas[arenaIndex];
     echoActionUntil = elapsed + 0.44;
-    if (code === "1") { echoTarget = sentinel.root.position.add(new Vector3(-1.1, 0, 1.1)); dealSentinel(15, "Prisma-Schritt", arena.glow); return; }
+    if (code === "1") { echoTarget = sentinel.root.position.add(new Vector3(-1.1, 0, 1.1)); requestAction(code, "gateway"); return; }
     if (code === "2" || code === "6") { shieldTime = Math.max(shieldTime, code === "6" ? 5.2 : 3.7); createPulse(explorer.position, arena.glow, 0.9); emitGameEvent("combat", code === "6" ? "Aegis-Knoten schützt das gesamte Team." : "Echoschild fängt den nächsten Impuls ab."); emitState(true); return; }
     if (code === "3") { echoHp = Math.min(100, echoHp + 8); explorerHp = Math.min(100, explorerHp + 6); markTime = Math.max(markTime, 3.4); createPulse(echo.position, arena.glow, 0.82); emitGameEvent("combat", "Sternenfaden stabilisiert das Team und markiert den Sentinel."); emitState(true); return; }
     if (code === "4") { markTime = Math.max(markTime, 5.1); createPulse(sentinel.root.position, Color3.FromHexString("#75A8FF"), 1); emitGameEvent("combat", "Kartenblick legt eine verwundbare Resonanzlinie offen."); emitState(true); return; }
-    if (code === "5") { dealSentinel(22, "Ruinenschnitt", Color3.FromHexString("#F6D083")); return; }
-    if (code === "7") { markTime = Math.max(markTime, 6.2); nextEnemyStrike += 2.4; dealSentinel(10, "Ankerwurf", arena.glow); return; }
-    if (code === "8") { dealSentinel(29, "Sonnenbruch", Color3.FromHexString("#F4A13D")); return; }
-    if (code === "9") { dealSentinel(43, "Aurion-Resonanz", Color3.FromHexString("#FFB34E")); return; }
+    if (code === "5") { requestAction(code, "gateway"); return; }
+    if (code === "7") { markTime = Math.max(markTime, 6.2); nextEnemyStrike += 2.4; requestAction(code, "gateway"); return; }
+    if (code === "8") { requestAction(code, "gateway"); return; }
+    if (code === "9") { requestAction(code, "gateway"); return; }
   };
   const onKeyDown = (event: KeyboardEvent): void => {
     const code = event.key.toLowerCase();
     if (["w", "a", "s", "d"].includes(code)) { keys.add(code); event.preventDefault(); }
-    if (code === "f" && started) { dealSentinel(17, "Speersignal des Explorers", Color3.FromHexString("#F5D995")); event.preventDefault(); }
+    if ((code === "f" || code === "e") && started) { if (code === "e" && requestNpcInteraction()) { event.preventDefault(); return; } requestAction(code.toUpperCase() as CommandCode, "human"); event.preventDefault(); }
   };
   const onKeyUp = (event: KeyboardEvent): void => { keys.delete(event.key.toLowerCase()); };
   const onHumanCommand = (event: Event): void => {
@@ -413,16 +517,46 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z));
     explorerMotionUntil = elapsed + 0.22;
   };
-  const onHumanAction = (): void => { explorerAttackUntil = elapsed + 0.34; dealSentinel(17, "Speersignal des Explorers", Color3.FromHexString("#F5D995")); };
+  const requestNpcInteraction = (): boolean => {
+    if (!openWorldActive) return false;
+    const candidate = worldNpcTargets.map(target => ({ target, distance: Vector3.Distance(explorer.position, target.position) })).sort((a, b) => a.distance - b.distance)[0];
+    if (!candidate || candidate.distance > 3.35) { emitGameEvent("command", "Kein Questgeber in Interaktionsreichweite. Folge den goldenen Wegmarken der Expanse."); return true; }
+    candidate.target.root.scaling.setAll(1.07); window.setTimeout(() => candidate.target.root.scaling.setAll(1), 150);
+    window.dispatchEvent(new CustomEvent("aurion:world-npc-interaction", { detail: { npcId: candidate.target.id } }));
+    emitGameEvent("command", `${candidate.target.displayName} reagiert auf die bestätigte Interaktion.`);
+    return true;
+  };
+  const onHumanAction = (event: Event): void => { const code = ((event as CustomEvent<{ code?: "F" | "E" }>).detail.code ?? "F"); if (code === "E" && requestNpcInteraction()) return; if (code === "F") explorerAttackUntil = elapsed + 0.34; if (code === "E") emitGameEvent("command", "Explorer bestätigt die Interaktion in der aktuellen Resonanzzone."); requestAction(code, "human"); };
   const onCommand = (event: Event): void => {
     const code = (event as CustomEvent<{ code: CommandCode }>).detail.code; if (!started || victory) return;
     const movement = 1.2;
     if (code === "W") echoTarget.z -= movement; if (code === "S") echoTarget.z += movement; if (code === "A") echoTarget.x -= movement; if (code === "D") echoTarget.x += movement;
     echoTarget.x = Math.max(-5.7, Math.min(5.7, echoTarget.x)); echoTarget.z = Math.max(-5.2, Math.min(5.2, echoTarget.z));
-    if (/^[1-9]$/.test(code)) runEchoAbility(code); else emitGameEvent("command", `Echo Scout bestätigt Kurs ${code}.`);
+    if (/^[1-9]$/.test(code)) runEchoAbility(code); else if (code === "E" && requestNpcInteraction()) return; else if (code === "F" || code === "E") requestAction(code, "gateway"); else { requestAction(code, "gateway"); emitGameEvent("command", `Echo Scout bestätigt Kurs ${code}.`); }
   };
-  const onStart = (): void => { started = true; emitGameEvent("system", "Sternwarten-Instanz geöffnet. Die erste Sentinel-Phase reagiert auf das Team-Siegel."); applyArena(0); };
-  window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart);
+  const onStart = (): void => { clearOpenWorld(); started = true; dungeonUnlocked = false; dungeonActive = false; victory = false; awaitingQuest = false; sentinel.root.setEnabled(true); emitGameEvent("system", "Sternwarten-Instanz geöffnet. Die erste Sentinel-Phase reagiert auf das Team-Siegel."); applyArena(0); };
+  const onEnterDungeon = (): void => {
+    if (!started || !dungeonUnlocked || dungeonActive || victory) return;
+    dungeonActive = true; sentinel.root.setEnabled(true); emitGameEvent("system", "Das Aschengewölbe öffnet sich. Der Glutwächter reagiert auf den geborgenen Schlüssel."); applyArena(3);
+  };
+  const onAuthoritativeAction = (event: Event): void => {
+    const detail = (event as CustomEvent<{ damage: number; bossHp: number; command: CommandCode; completed: boolean }>).detail;
+    if (!detail) return;
+    if (detail.command === "F") explorerAttackUntil = elapsed + 0.34;
+    if (detail.damage > 0) applyAuthoritativeDamage(detail.damage, detail.bossHp, detail.command === "F" ? "Speersignal des Explorers" : `Echo-Impuls ${detail.command}`, arenas[arenaIndex].glow);
+    else emitState(true);
+  };
+  const onLoadEncounter = (event: Event): void => {
+    const detail = (event as CustomEvent<{ arenaIndex: number; dungeon?: boolean }>).detail;
+    if (!detail || !Number.isInteger(detail.arenaIndex) || detail.arenaIndex < 0 || detail.arenaIndex >= arenas.length) return;
+    clearOpenWorld(); started = true; awaitingQuest = false; victory = false; dungeonActive = Boolean(detail.dungeon); dungeonUnlocked = Boolean(detail.dungeon); sentinel.root.setEnabled(true); applyArena(detail.arenaIndex);
+  };
+  const onLoadOpenWorld = (event: Event): void => {
+    const detail = (event as CustomEvent<OpenWorldSceneState>).detail;
+    if (!detail || detail.revision !== 1 || !["observatory_threshold", "windhollow", "emberfall", "cinder_vault"].includes(detail.zoneId) || !Number.isInteger(detail.zoneTier) || detail.zoneTier < 0 || detail.zoneTier > 3) return;
+    started = true; awaitingQuest = false; victory = false; dungeonActive = false; dungeonUnlocked = false; createOpenWorldVisuals(detail); emitState(true);
+  };
+  window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld);
   const observer = scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05); elapsed += dt; const arena = arenas[arenaIndex];
     beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
@@ -431,14 +565,14 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       if (direction.lengthSquared() > 0) { direction.normalize().scaleInPlace(dt * 3.45); explorer.position.addInPlace(direction); explorer.position.x = Math.max(-5.6, Math.min(5.6, explorer.position.x)); explorer.position.z = Math.max(-5.1, Math.min(5.1, explorer.position.z)); explorer.rotation.y = Math.atan2(direction.x, direction.z); }
       const pursuit = explorer.position.subtract(sentinel.root.position); pursuit.y = 0;
       const desiredDistance = 3.5;
-      if (!transitioning && sentinelHp > 0 && pursuit.lengthSquared() > desiredDistance * desiredDistance) {
+      if (!openWorldActive && !transitioning && sentinelHp > 0 && pursuit.lengthSquared() > desiredDistance * desiredDistance) {
         const step = pursuit.normalize().scaleInPlace(Math.min(dt * 1.2, Math.max(0, pursuit.length() - desiredDistance)));
         sentinel.root.position.addInPlace(step); sentinel.root.rotation.y = Math.atan2(step.x, step.z); sentinelMoving = step.lengthSquared() > 0.0001;
       } else {
         sentinel.root.rotation.y = Math.sin(elapsed * 0.46) * 0.3 - 0.2;
       }
       shieldTime = Math.max(0, shieldTime - dt); markTime = Math.max(0, markTime - dt);
-      if (!transitioning && elapsed >= nextEnemyStrike && sentinelHp > 0) {
+      if (!openWorldActive && !transitioning && elapsed >= nextEnemyStrike && sentinelHp > 0) {
         const rawDamage = 9 + arenaIndex * 3; const damage = shieldTime > 0 ? Math.ceil(rawDamage * 0.22) : rawDamage; explorerHp = Math.max(0, explorerHp - damage); echoHp = Math.max(0, echoHp - Math.ceil(damage * 0.38)); nextEnemyStrike = elapsed + 3.85 - Math.min(markTime, 1.2); createPulse(explorer.position, Color3.FromHexString("#FF7045"), 0.9); emitGameEvent("combat", `Der Sentinel entfesselt einen Spaltimpuls: Team verliert ${damage} Integrität.`); emitState(true);
         sentinelAttackUntil = elapsed + 0.46; explorerHurtUntil = elapsed + 0.3; echoHurtUntil = elapsed + 0.28;
       }
@@ -454,5 +588,5 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     for (let index = pulses.length - 1; index >= 0; index -= 1) { const pulse = pulses[index]; pulse.age += dt; pulse.mesh.scaling.setAll(1 + pulse.age * 4.3); const pulseMaterial = pulse.mesh.material as StandardMaterial; pulseMaterial.alpha = Math.max(0, 1 - pulse.age * 1.8); if (pulse.age > 0.58) { pulse.mesh.dispose(); pulses.splice(index, 1); } }
     emitState();
   });
-  return { scene, setCharacterModel, setArenaModel, dispose: () => { customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); scene.dispose(); } };
+  return { scene, setCharacterModel, setArenaModel, dispose: () => { clearOpenWorld(); customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); window.removeEventListener("aurion:enter-dungeon", onEnterDungeon); window.removeEventListener("aurion:authoritative-action", onAuthoritativeAction); window.removeEventListener("aurion:load-encounter", onLoadEncounter); window.removeEventListener("aurion:load-open-world", onLoadOpenWorld); scene.dispose(); } };
 }

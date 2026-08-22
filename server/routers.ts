@@ -10,6 +10,8 @@ import { isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtoco
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
+import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
+import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -91,6 +93,14 @@ export const appRouter = router({
     }),
     setWeaponLoadout: protectedProcedure.input(z.object({ weaponTrack: z.enum(["blade", "staff", "spear", "focus"]) })).mutation(({ ctx, input }) => db.setWeaponLoadout({ userId: ctx.user.id, weaponTrack: input.weaponTrack })),
   }),
+  gameplay: router({
+    progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
+    openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
+    startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
+    act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
+  }),
   guild: router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
     create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
@@ -145,6 +155,12 @@ export const appRouter = router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
   }),
   admin: router({
+    developer: router({
+      propose: adminProcedure.input(z.object({
+        changeKind: z.enum(["world", "quest", "npc_behavior", "content_model"]),
+        request: z.string().trim().min(12).max(1_800),
+      })).mutation(({ input }) => proposeAurionDeveloperChange({ ...input, actorRole: "admin" })),
+    }),
     players: router({
       list: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25), query: z.string().trim().max(64).regex(/^[A-Za-z0-9@._ -]*$/).optional() }).optional()).query(({ input }) => db.listAdminPlayers(input ?? { limit: 25 })),
       setRole: adminProcedure.input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin"]) })).mutation(({ ctx, input }) => db.setManagedUserRole({ actorUserId: ctx.user.id, targetUserId: input.userId, role: input.role })),

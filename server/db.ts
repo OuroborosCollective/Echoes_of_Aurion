@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, gte, isNull, like, lte, or, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
+import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -9,6 +10,8 @@ import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB
 import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
 import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQuality } from "./marketProtocol";
 import { storagePut } from "./storage";
+import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
+import { buildOpenWorldSnapshot } from "./openWorldProtocol";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -231,6 +234,178 @@ export async function getOrCreatePlayerProfile(userId: number) {
   const result = await db.select().from(playerProfiles).where(eq(playerProfiles.userId, userId)).limit(1);
   if (!result[0]) throw new Error("Could not load player profile");
   return result[0];
+}
+
+type GameplayQuestView = {
+  key: QuestKey;
+  giver: "Lyra" | "Orun";
+  title: string;
+  objective: string;
+  requiredLevel: number;
+  state: "locked" | "available" | "active" | "completed";
+  reward: { xp: number; points: number; dungeonKey?: "ember_key" };
+};
+
+/** Returns only server-derived quest availability. The browser receives this for display, never as a mutation source. */
+export async function getGameplayProgress(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const profile = await getOrCreatePlayerProfile(userId);
+  const questRows = await db.select().from(gameplayQuestProgress).where(eq(gameplayQuestProgress.userId, userId));
+  const keyRows = await db.select().from(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, userId));
+  const completed = questRows.filter(row => row.state === "completed").map(row => row.questKey).filter((key): key is QuestKey => aurionQuestline.some(quest => quest.key === key));
+  const active = questRows.find(row => row.state === "active")?.questKey;
+  const activeQuest = aurionQuestline.some(quest => quest.key === active) ? active as QuestKey : null;
+  const quests: GameplayQuestView[] = aurionQuestline.map(quest => ({
+    key: quest.key,
+    giver: quest.giver,
+    title: quest.title,
+    objective: quest.objective,
+    requiredLevel: quest.requiredLevel,
+    state: resolveQuestState({ key: quest.key, level: profile.level, completed, active: activeQuest }),
+    reward: quest.reward,
+  }));
+  const keys = keyRows.map(row => row.keyName);
+  return {
+    profile,
+    quests,
+    keys,
+    activeQuest,
+    completed,
+    canEnterDungeon: mayEnterDungeon({ level: profile.level, completed, keys }),
+  };
+}
+
+/** A display-only world view derived from authoritative player progression. */
+export async function getOpenWorldSnapshot(userId: number) {
+  const progress = await getGameplayProgress(userId);
+  return buildOpenWorldSnapshot({
+    level: progress.profile.level,
+    completed: progress.completed,
+    activeQuest: progress.activeQuest,
+    canEnterDungeon: progress.canEnterDungeon,
+  });
+}
+
+export async function acceptGameplayQuest(values: { userId: number; questKey: QuestKey }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const progress = await getGameplayProgress(values.userId);
+  const quest = progress.quests.find(candidate => candidate.key === values.questKey);
+  if (!quest || quest.state !== "available") throw new Error("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
+  await db.insert(gameplayQuestProgress).values({ id: newEndgameId("quest"), userId: values.userId, questKey: values.questKey, state: "active" });
+  return getGameplayProgress(values.userId);
+}
+
+export async function startGameplayEncounter(values: { userId: number; encounterKey: EncounterKey }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const encounter = getEncounter(values.encounterKey);
+  const progress = await getGameplayProgress(values.userId);
+  if (encounter.questKey && progress.quests.find(quest => quest.key === encounter.questKey)?.state !== "active") {
+    throw new Error("Die zugehörige Quest muss vor dieser Begegnung aktiv sein.");
+  }
+  if (encounter.requiresDungeonKey && !progress.canEnterDungeon) {
+    throw new Error("Der Glutschlüssel und der abgeschlossene Questpfad sind für das Aschengewölbe erforderlich.");
+  }
+  const sessionId = newEndgameId("game");
+  await db.transaction(async tx => {
+    await tx.update(gameplaySessions).set({ status: "abandoned" }).where(and(eq(gameplaySessions.userId, values.userId), eq(gameplaySessions.status, "active")));
+    await tx.insert(gameplaySessions).values({ id: sessionId, userId: values.userId, encounterKey: values.encounterKey, bossHp: encounter.maxBossHp, maxBossHp: encounter.maxBossHp });
+  });
+  const session = await db.select().from(gameplaySessions).where(eq(gameplaySessions.id, sessionId)).limit(1);
+  if (!session[0]) throw new Error("Die Spielsitzung konnte nicht bestätigt werden.");
+  return { session: session[0], progress };
+}
+
+export async function applyGameplayAction(values: { userId: number; sessionId: string; sequence: number; command: string; source: "human" | "gateway" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const normalized = values.command.trim().toUpperCase();
+  const action = mcpActionFromCommand(normalized);
+  if (!action) throw new Error("Der Spielbefehl ist nicht zulässig.");
+  const resolution = await db.transaction(async tx => {
+    const session = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id, values.sessionId), eq(gameplaySessions.userId, values.userId))).limit(1))[0];
+    if (!session || session.status !== "active") throw new Error("Die Spielsitzung ist nicht aktiv.");
+    if (!Number.isSafeInteger(values.sequence) || values.sequence !== session.nextSequence) throw new Error("Die Aktionssequenz ist nicht gültig.");
+    const encounterKey = session.encounterKey as EncounterKey;
+    const encounter = getEncounter(encounterKey);
+    const damage = damageForMcpAction(action);
+    const bossHp = Math.max(0, session.bossHp - damage);
+    await tx.insert(gameplayActionReceipts).values({ id: newEndgameId("gact"), sessionId: session.id, userId: values.userId, sequence: values.sequence, command: normalized, action, source: values.source, damage });
+    await tx.update(gameplaySessions).set({ bossHp, nextSequence: session.nextSequence + 1 }).where(eq(gameplaySessions.id, session.id));
+    let completedQuest: QuestKey | null = null;
+    let dungeonKeyGranted: string | null = null;
+    let reward = { xp: 0, points: 0 };
+    let completedDungeon = false;
+    if (bossHp === 0) {
+      const now = new Date();
+      await tx.update(gameplaySessions).set({ status: "completed", completedAt: now }).where(eq(gameplaySessions.id, session.id));
+      if (encounter.questKey) {
+        const quest = getQuest(encounter.questKey);
+        const questProgress = (await tx.select().from(gameplayQuestProgress).where(and(eq(gameplayQuestProgress.userId, values.userId), eq(gameplayQuestProgress.questKey, quest.key), eq(gameplayQuestProgress.state, "active"))).limit(1))[0];
+        if (!questProgress) throw new Error("Die aktive Quest konnte beim Bossabschluss nicht bestätigt werden.");
+        const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
+        if (!profile) throw new Error("Spielerprofil fehlt beim Bossabschluss.");
+        reward = { xp: quest.reward.xp, points: quest.reward.points };
+        completedQuest = quest.key;
+        dungeonKeyGranted = quest.reward.dungeonKey ?? null;
+        const totalXp = profile.totalXp + reward.xp;
+        await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now, completionSessionId: session.id }).where(eq(gameplayQuestProgress.id, questProgress.id));
+        await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + reward.points, seasonPoints: profile.seasonPoints + reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
+        await tx.insert(progressionLedger).values([
+          { id: newEndgameId("prog"), userId: values.userId, kind: "xp", delta: reward.xp, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${session.id}:xp` },
+          { id: newEndgameId("prog"), userId: values.userId, kind: "points", delta: reward.points, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${session.id}:points` },
+          { id: newEndgameId("prog"), userId: values.userId, kind: "victory", delta: 1, source: `encounter:${encounter.key}`, reason: encounter.enemyName, idempotencyKey: `quest:${session.id}:victory` },
+        ]);
+        if (quest.reward.dungeonKey) {
+          await tx.insert(gameplayDungeonKeys).values({ id: newEndgameId("dkey"), userId: values.userId, keyName: quest.reward.dungeonKey, grantedByQuest: quest.key }).onDuplicateKeyUpdate({ set: { grantedByQuest: quest.key } });
+        }
+      } else if (encounter.key === "cinder_vault") {
+        const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
+        if (!profile) throw new Error("Spielerprofil fehlt beim Dungeonabschluss.");
+        reward = { xp: dungeonCompletionReward.xp, points: dungeonCompletionReward.points };
+        completedDungeon = true;
+        const totalXp = profile.totalXp + reward.xp;
+        await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + reward.points, seasonPoints: profile.seasonPoints + reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
+        await tx.insert(progressionLedger).values([
+          { id: newEndgameId("prog"), userId: values.userId, kind: "xp", delta: reward.xp, source: "dungeon:cinder_vault", reason: "Aschengewölbe gesichert", idempotencyKey: `dungeon:${session.id}:xp` },
+          { id: newEndgameId("prog"), userId: values.userId, kind: "points", delta: reward.points, source: "dungeon:cinder_vault", reason: "Aschengewölbe gesichert", idempotencyKey: `dungeon:${session.id}:points` },
+          { id: newEndgameId("prog"), userId: values.userId, kind: "victory", delta: 1, source: "dungeon:cinder_vault", reason: encounter.enemyName, idempotencyKey: `dungeon:${session.id}:victory` },
+        ]);
+      }
+    }
+    return { sessionId: session.id, encounterKey, action, damage, bossHp, maxBossHp: session.maxBossHp, completed: bossHp === 0, completedQuest, dungeonKeyGranted, completedDungeon, reward, nextSequence: session.nextSequence + 1 };
+  });
+  if (!resolution.completedDungeon) return { ...resolution, drop: null };
+  const profile = await getOrCreatePlayerProfile(values.userId);
+  const catalog = await db.select().from(treasureClasses).where(eq(treasureClasses.active, 1));
+  const treasureClass = catalog.find(candidate => profile.level >= candidate.minLevel && profile.level <= candidate.maxLevel);
+  if (!treasureClass) return { ...resolution, drop: null };
+  const seedDigest = createHash("sha256").update(`aurion:dungeon:${resolution.sessionId}:seed`, "utf8").digest("hex");
+  const resultDigest = createHash("sha256").update(`aurion:dungeon:${resolution.sessionId}:result`, "utf8").digest("hex");
+  const resultReceipt = await recordValidatedExpeditionResult({
+    userId: values.userId,
+    expeditionKey: `dungeon:${resolution.sessionId}`,
+    seedDigest,
+    resultDigest,
+    confirmedByUserId: values.userId,
+    idempotencyKey: `dungeon:${resolution.sessionId}:result`,
+  });
+  const dropResult = await createLootDrop({
+    userId: values.userId,
+    expeditionKey: `dungeon:${resolution.sessionId}`,
+    treasureClass: treasureClass.classKey,
+    qualityRoll: (values.sequence * 631) % 10_000,
+    affixRoll: (values.sequence * 929) % 10_000,
+    magicFind: 0,
+    itemLevel: Math.max(treasureClass.minLevel, Math.min(profile.level, treasureClass.maxLevel)),
+    seedDigest,
+    resultReceiptId: resultReceipt.receipt.id,
+    idempotencyKey: `dungeon:${resolution.sessionId}:drop`,
+  });
+  const item = dropResult.itemId ? (await db.select().from(itemInstances).where(eq(itemInstances.id, dropResult.itemId)).limit(1))[0] : undefined;
+  return { ...resolution, drop: item ? { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality, itemLevel: item.itemLevel } : null };
 }
 
 export async function listLeaderboard(limit: number) {
