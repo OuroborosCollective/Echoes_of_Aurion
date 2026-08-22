@@ -21,7 +21,7 @@ export const aurionQuestline: readonly QuestDefinition[] = [
     objective: "Besiege den Asterion-Sentinel und bringe Lyra einen Resonanzsplitter.",
     requiredLevel: 1,
     requires: null,
-    reward: { xp: 120, points: 20 },
+    reward: { xp: 122, points: 20 },
   },
   {
     key: "archive_of_echoes",
