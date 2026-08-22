@@ -102,4 +102,15 @@ jobs:
       - name: Verify public runtime health
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error https://arelogic.space/_runtime/healthz | grep -F "${EXPECTED_SHA}"
+          public_ready=0
+          for _attempt in $(seq 1 20); do
+            if health_json="$(curl --fail --silent --show-error https://arelogic.space/_runtime/healthz 2>/dev/null)"; then
+              if grep -Fq "${EXPECTED_SHA}" <<<"$health_json"; then
+                printf '%s\n' "$health_json"
+                public_ready=1
+                break
+              fi
+            fi
+            sleep 1
+          done
+          [[ "$public_ready" -eq 1 ]]
