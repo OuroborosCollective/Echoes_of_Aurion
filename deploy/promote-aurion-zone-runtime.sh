@@ -61,6 +61,18 @@ fi
 systemctl daemon-reload
 systemctl enable "$service"
 systemctl restart "$service"
-curl --fail --silent --show-error http://127.0.0.1:3100/_runtime/healthz | grep -F "$expected_sha"
+
+runtime_ready=0
+for _attempt in $(seq 1 20); do
+  if health_json="$(curl --fail --silent --show-error http://127.0.0.1:3100/_runtime/healthz 2>/dev/null)"; then
+    if grep -Fq "$expected_sha" <<<"$health_json"; then
+      printf '%s\n' "$health_json"
+      runtime_ready=1
+      break
+    fi
+  fi
+  sleep 1
+done
+[[ "$runtime_ready" -eq 1 ]]
 nginx -t
 systemctl reload nginx
