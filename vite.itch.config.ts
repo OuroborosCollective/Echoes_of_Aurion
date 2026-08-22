@@ -37,6 +37,7 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist", "itch"),
     emptyOutDir: true,
     reportCompressedSize: false,
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
