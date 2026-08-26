@@ -13,6 +13,8 @@ import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLoc
 import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
+import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
+import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -96,6 +98,7 @@ export const appRouter = router({
   }),
   gameplay: router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
+    wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),
@@ -104,6 +107,7 @@ export const appRouter = router({
     completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(({ ctx, input }) => db.completeGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey, giver: input.giver })),
     startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
     act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
+    interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(["lyra", "orun"]), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),
   }),
   guild: router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
@@ -159,6 +163,37 @@ export const appRouter = router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
   }),
   admin: router({
+    world: router({
+      resolve: adminProcedure.input(z.object({
+        worldSeed: z.string().trim().min(3).max(160),
+        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault"]),
+        resolutionIndex: z.number().int().min(0),
+        signals: z.array(z.object({
+          id: z.string().trim().min(3).max(96),
+          kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]),
+          regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault"]),
+          magnitude: z.number().min(-1).max(1),
+          sourceReceiptId: z.string().trim().min(3).max(128),
+          resolutionIndex: z.number().int().min(0),
+        })).max(128),
+      })).mutation(({ input }) => resolveAndRecordWorld(input)),
+      resolveNpc: adminProcedure.input(z.object({
+        npcId: z.enum(["lyra", "orun"]),
+        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault"]),
+        resolutionIndex: z.number().int().min(0),
+        needEvents: z.array(z.object({ id: z.string().trim().min(3).max(96), need: z.enum(["safety", "resources", "belonging", "status", "wealth", "power"]), delta: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
+        observationIds: z.array(z.string().trim().min(1).max(120)).max(128),
+        memory: z.array(z.string().trim().min(1).max(280)).max(24),
+      })).mutation(({ input }) => resolveAndRecordNpc(input)),
+      resolvePolity: adminProcedure.input(z.object({
+        polityId: z.string().trim().min(3).max(96),
+        governmentType: z.enum(["monarchy", "council", "theocracy", "trade_republic", "warband"]),
+        territoryIds: z.array(z.string().trim().min(2).max(96)).min(1).max(32),
+        stability: z.number().min(0).max(1),
+        activeDiplomacy: z.array(z.enum(["alliance", "trade", "non_aggression", "tribute", "sanction"])).max(5),
+        warSignals: z.array(z.object({ id: z.string().trim().min(3).max(96), kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]), regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault"]), magnitude: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
+      })).mutation(({ input }) => resolveAndRecordPolity(input)),
+    }),
     developer: router({
       propose: adminProcedure.input(z.object({
         changeKind: z.enum(["world", "quest", "npc_behavior", "content_model"]),

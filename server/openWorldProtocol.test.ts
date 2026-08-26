@@ -24,7 +24,32 @@ describe("open-world protocol", () => {
     expect(snapshot.npcs.find(npc => npc.id === "orun")?.memory.quest[0]).toContain("versunkene Halle");
     expect(snapshot.primaryEncounter).toMatchObject({ id: "archive-warden", encounterKey: "archive" });
     expect(snapshot.props.map(prop => prop.kind)).toEqual(["starpath_marker", "flower_shrub", "flower_shrub"]);
+    expect(snapshot.worldKernel.integrity).toMatchObject({ ok: true, kappa: 1000 });
+    expect(snapshot.worldKernel.cityLayout.sector).toBe(0);
+    expect(snapshot.aiProposal).toMatchObject({ state: "proposal", intent: "trade_decision", commandType: "AURION_TRADE_PROPOSAL" });
+    expect(snapshot.skillProgression).toMatchObject({ skillId: "combat", progression: { totalXpExact: "25", levelExact: "1" }, appliedReceiptIds: ["quest-completed:astral_call"] });
     expect(JSON.stringify(snapshot)).not.toContain("reward");
+  });
+
+  it("renders a versioned deterministic world reaction without adding a reward authority", () => {
+    const first = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    const second = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    expect(first.world).toEqual(second.world);
+    expect(first.world.worldSeed).toBe("echoes-of-aurion-v1");
+    expect(first.world.reaction.ruleSetVersion).toBe("aurion-wasd-rules-v1");
+    expect(first.world.reaction.dialogueTone).toBe("calm");
+    expect(JSON.stringify(first.world)).not.toContain("reward");
+  });
+
+  it("exposes bounded NPC autonomy, dialect profiles and a deterministic fictional polity", () => {
+    const snapshot = buildOpenWorldSnapshot({ level: 1, completed: [], activeQuest: "astral_call", canEnterDungeon: false });
+    const lyra = snapshot.npcs.find(npc => npc.id === "lyra");
+    expect(lyra?.autonomy.dialectId).toBe("observatory");
+    expect(lyra?.autonomy.goal).toBe("expand_influence");
+    expect(lyra?.autonomy.decisionHash).toHaveLength(64);
+    expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "windhollow"]);
+    expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 
   it("exposes only the encounter unlocked by confirmed active quest or dungeon access", () => {

@@ -1,0 +1,34 @@
+services:
+  aurion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: echoes-of-aurion:${AURION_IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      STRICT_PORT: "true"
+      TRUST_PROXY_HOPS: "1"
+    env_file:
+      - .env.production
+    expose:
+      - "3000"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}
+      - traefik.http.routers.aurion.rule=Host(`${AURION_DOMAIN:-arelogic.space}`)
+      - traefik.http.routers.aurion.entrypoints=websecure
+      - traefik.http.routers.aurion.tls=true
+      - traefik.http.routers.aurion.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.aurion.loadbalancer.server.port=3000
+      - traefik.http.services.aurion.loadbalancer.healthcheck.path=/healthz
+      - traefik.http.services.aurion.loadbalancer.healthcheck.interval=10s
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
+    name: ${TRAEFIK_NETWORK:-areloria_arelorian-network}

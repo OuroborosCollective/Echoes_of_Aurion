@@ -263,6 +263,75 @@ export const weaponLoadouts = mysqlTable("weaponLoadouts", {
   configuredAt: timestamp("configuredAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Immutable, versioned world resolution evidence. Effects are rendered only after this row is confirmed. */
+export const aurionWorldResolutions = mysqlTable("aurionWorldResolutions", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  regionId: varchar("regionId", { length: 96 }).notNull(),
+  worldSeedDigest: varchar("worldSeedDigest", { length: 64 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  signalsJson: text("signalsJson").notNull(),
+  reactionJson: text("reactionJson").notNull(),
+  reactionHash: varchar("reactionHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldResolutions_region_index_uq").on(table.regionId, table.resolutionIndex),
+  uniqueIndex("aurionWorldResolutions_reaction_hash_uq").on(table.reactionHash),
+  index("aurionWorldResolutions_region_created_idx").on(table.regionId, table.createdAt),
+]);
+
+/** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
+export const aurionNpcStates = mysqlTable("aurionNpcStates", {
+  npcId: varchar("npcId", { length: 96 }).primaryKey(),
+  regionId: varchar("regionId", { length: 96 }).notNull(),
+  needsJson: text("needsJson").notNull(),
+  memoryJson: text("memoryJson").notNull(),
+  languageProfileId: varchar("languageProfileId", { length: 96 }).notNull(),
+  lastResolutionIndex: int("lastResolutionIndex").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("aurionNpcStates_region_updated_idx").on(table.regionId, table.updatedAt)]);
+
+/** One NPC decision per stable resolution prevents retries from producing new behaviour. */
+export const aurionNpcDecisionReceipts = mysqlTable("aurionNpcDecisionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  regionId: varchar("regionId", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  observationIdsJson: text("observationIdsJson").notNull(),
+  goal: varchar("goal", { length: 64 }).notNull(),
+  decisionHash: varchar("decisionHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcDecisionReceipts_npc_index_uq").on(table.npcId, table.resolutionIndex),
+  uniqueIndex("aurionNpcDecisionReceipts_hash_uq").on(table.decisionHash),
+  index("aurionNpcDecisionReceipts_region_created_idx").on(table.regionId, table.createdAt),
+]);
+
+/** Versioned polity snapshot; conflicts are fictional game state and never trigger destructive real-world actions. */
+export const aurionPolityStates = mysqlTable("aurionPolityStates", {
+  polityId: varchar("polityId", { length: 96 }).primaryKey(),
+  stateJson: text("stateJson").notNull(),
+  reactionHash: varchar("reactionHash", { length: 64 }).notNull().unique(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Auditable dialogue parsing keeps player text separate from game commands and rewards. */
+export const aurionDialogueReceipts = mysqlTable("aurionDialogueReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  utteranceDigest: varchar("utteranceDigest", { length: 64 }).notNull(),
+  interpretationJson: text("interpretationJson").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionDialogueReceipts_idempotency_uq").on(table.idempotencyKey),
+  index("aurionDialogueReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 /** Approved GLB metadata references S3 objects; bytes never enter the relational database. */
 export const glbAssets = mysqlTable("glbAssets", {
   id: varchar("id", { length: 64 }).primaryKey(),

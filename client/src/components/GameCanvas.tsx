@@ -17,6 +17,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
   const arenaModelUrlRef = useRef(arenaModelUrl);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [sceneStatus, setSceneStatus] = useState<"booting" | "ready" | "unavailable">("booting");
+  const [arenaModelStatus, setArenaModelStatus] = useState<"idle" | "active" | "failed">("idle");
   characterModelUrlRef.current = characterModelUrl;
   arenaModelUrlRef.current = arenaModelUrl;
 
@@ -53,7 +54,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
       void sceneHandle.setCharacterModel(characterModelUrlRef.current).then(() => {
         if (characterModelUrlRef.current) window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: true } }));
       }).catch(() => window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false } })));
-      void sceneHandle.setArenaModel(arenaModelUrlRef.current);
+      void sceneHandle.setArenaModel(arenaModelUrlRef.current).then(() => setArenaModelStatus(arenaModelUrlRef.current ? "active" : "idle")).catch(() => setArenaModelStatus("failed"));
       engine.runRenderLoop(() => sceneHandle.scene.render());
     }).catch(error => {
       if (!disposed) {
@@ -92,8 +93,8 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     if (!handleRef.current) return;
     const source = validateRuntimeModelSource(arenaModelUrl);
     if (!source.valid) return;
-    void handleRef.current.setArenaModel(arenaModelUrl).catch(() => undefined);
+    void handleRef.current.setArenaModel(arenaModelUrl).then(() => setArenaModelStatus(arenaModelUrl ? "active" : "idle")).catch(() => setArenaModelStatus("failed"));
   }, [arenaModelUrl]);
 
-  return <><canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} />{sceneStatus === "booting" && <div className="game-canvas-boot" data-testid="webgl-boot" role="status"><span className="game-canvas-boot__sigil" aria-hidden="true">◌</span><div><b>STERNWARTE WIRD KALIBRIERT</b><small>3D-Welt und Steuerbrücke werden geladen…</small></div></div>}{webglUnavailable && <div className="game-canvas-fallback" data-testid="webgl-fallback" role="status">3D-Ansicht nicht verfügbar · Zugang und Gemeinschaft bleiben aktiv.</div>}</>;
+  return <><canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} />{sceneStatus === "booting" && <div className="game-canvas-boot" data-testid="webgl-boot" role="status"><span className="game-canvas-boot__sigil" aria-hidden="true">◌</span><div><b>STERNWARTE WIRD KALIBRIERT</b><small>3D-Welt und Steuerbrücke werden geladen…</small></div></div>}{arenaModelUrl && <div data-testid="arena-model-status" className="sr-only" role="status">Arena-GLB {arenaModelStatus}</div>}{webglUnavailable && <div className="game-canvas-fallback" data-testid="webgl-fallback" role="status">3D-Ansicht nicht verfügbar · Zugang und Gemeinschaft bleiben aktiv.</div>}</>;
 }

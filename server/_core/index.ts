@@ -33,10 +33,16 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // The production container is reachable only through Traefik. Trust precisely
+  // one proxy hop so HTTPS and host information survive TLS termination.
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", parseInt(process.env.TRUST_PROXY_HOPS || "1", 10));
+  }
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok", service: "echoes-of-aurion" }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);
@@ -56,16 +62,21 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const preferredPort = parseInt(process.env.PORT || "3000", 10);
+  const strictPort = process.env.STRICT_PORT === "true";
+  const port = strictPort ? preferredPort : await findAvailablePort(preferredPort);
+  const host = process.env.HOST || "0.0.0.0";
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, host, () => {
+    console.log(`Server running on http://${host}:${port}/`);
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

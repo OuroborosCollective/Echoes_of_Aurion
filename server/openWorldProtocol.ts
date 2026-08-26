@@ -1,4 +1,13 @@
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
+import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
+import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
+import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
+import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, resolveHouse, resolveStructureDamage } from "./wasdAurionStewardshipProtocol";
+import { resolveInventory } from "./wasdAurionItemProtocol";
+import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
+import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
+import { resolveSkillProgressionReadmodel } from "./wasdAurionSkillProgressionProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -32,9 +41,48 @@ export type OpenWorldSnapshot = {
   encounter: { activeCount: number; budget: number; maximumVisible: number };
   primaryEncounter: null | { id: string; label: string; encounterKey: EncounterKey; narrative: string };
   pointsOfInterest: readonly { id: string; kind: PointOfInterestKind; state: "locked" | "available" | "completed"; label: string }[];
-  npcs: readonly { id: "lyra" | "orun"; displayName: string; role: string; memory: { local: readonly string[]; social: readonly string[]; quest: readonly string[] } }[];
+  npcs: readonly { id: "lyra" | "orun"; displayName: string; role: string; memory: { local: readonly string[]; social: readonly string[]; quest: readonly string[] }; autonomy: { needs: Readonly<Record<NpcNeedKey, number>>; goal: string; decisionHash: string; dialectId: string; comprehensionThreshold: number } }[];
   terrain: OpenWorldTerrainSnapshot;
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
+  world: { worldSeed: "echoes-of-aurion-v1"; resolutionIndex: number; reaction: WorldReaction };
+  polity: PolityState;
+  civilization: {
+    settlement: ReturnType<typeof resolveSettlement>;
+    market: readonly ReturnType<typeof resolveMarketPrices>[number][];
+    caravanMissions: readonly ReturnType<typeof resolveCaravanMissions>[number][];
+    guild: ReturnType<typeof resolveGuild>;
+    territoryEffect: ReturnType<typeof resolveGuildTerritoryEffect>;
+    scarcityForecast: ReturnType<typeof resolveScarcityForecast>;
+    aggressionHazard: ReturnType<typeof resolveAggressionHazard>;
+  };
+  expedition: {
+    layout: ReturnType<typeof resolveExpeditionLayout>;
+    leadMonster: ReturnType<typeof resolveMonsterSpawn>;
+    openingStrike: ReturnType<typeof resolveCombatStrike>;
+    spellPreview: ReturnType<typeof resolveSpellCast>;
+  };
+  society: {
+    lyraAge: ReturnType<typeof resolveAge>;
+    playerRelationship: ReturnType<typeof resolveRelationship>;
+    starwardenFamily: ReturnType<typeof resolveFamilyRecord>;
+    achievements: ReturnType<typeof resolveAchievements>;
+    party: ReturnType<typeof resolvePartyAction>;
+  };
+  stewardship: {
+    farm: ReturnType<typeof resolveFarmPlot>;
+    construction: ReturnType<typeof resolveConstructionQueue>;
+    house: ReturnType<typeof resolveHouse>;
+    faith: ReturnType<typeof resolveFaith>;
+    gate: ReturnType<typeof resolveGate>;
+    structure: ReturnType<typeof resolveStructureDamage>;
+  };
+  inventory: ReturnType<typeof resolveInventory>;
+  worldKernel: {
+    integrity: ReturnType<typeof resolveWorldIntegrity>;
+    cityLayout: ReturnType<typeof resolveCityLayout>;
+  };
+  aiProposal: ReturnType<typeof resolveAiProposal>;
+  skillProgression: ReturnType<typeof resolveSkillProgressionReadmodel>;
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -103,10 +151,20 @@ export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZone
   return "observatory_threshold";
 }
 
-function npcReadModels(input: OpenWorldProfile) {
+function npcAutonomy(input: { npcId: "lyra" | "orun"; reaction: WorldReaction; resolutionIndex: number; dialectId: string; baseNeeds: Readonly<Record<NpcNeedKey, number>> }) {
+  const needs = resolveNpcNeeds({
+    current: input.baseNeeds,
+    events: (Object.entries(input.reaction.npcNeedDeltas) as [NpcNeedKey, number][]).map(([need, delta]) => ({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex })),
+  });
+  const decision = decideNpcGoal({ npcId: input.npcId, needs, observationIds: input.reaction.signalIds, resolutionIndex: input.resolutionIndex });
+  return { needs, goal: decision.goal, decisionHash: decision.decisionHash, dialectId: input.dialectId, comprehensionThreshold: 0.6 };
+}
+
+function npcReadModels(input: OpenWorldProfile, reaction: WorldReaction) {
   const hasAstralCall = input.completed.includes("astral_call");
   const hasArchive = input.completed.includes("archive_of_echoes");
   const active = input.activeQuest;
+  const resolutionIndex = reaction.resolutionIndex;
   return [
     {
       id: "lyra" as const,
@@ -117,6 +175,7 @@ function npcReadModels(input: OpenWorldProfile) {
         social: hasArchive ? ["Die Archivwächter sprechen wieder von einem sicheren Übergang durch den Windhain."] : ["Windhollow meldet unstete Wisps nahe der ersten Brücke."],
         quest: active === "ember_key" ? ["Das Solarium wartet auf deine letzte Stabilisierung."] : ["Kein weiterer Auftrag von Lyra ist zurzeit aktiv."],
       },
+      autonomy: npcAutonomy({ npcId: "lyra", reaction, resolutionIndex, dialectId: "observatory", baseNeeds: { safety: 0.78, resources: 0.52, belonging: 0.62, status: 0.58, wealth: 0.4, power: 0.35 } }),
     },
     {
       id: "orun" as const,
@@ -127,8 +186,17 @@ function npcReadModels(input: OpenWorldProfile) {
         social: hasAstralCall ? ["Die Windhollow-Karten zeigen eine neue Resonanzlinie am Rand des Sonnenfalls."] : ["Keine bestätigte Außenroute wurde an das Archiv gemeldet."],
         quest: active === "archive_of_echoes" ? ["Die versunkene Halle ist dein nächster klarer Auftrag."] : ["Orun bewahrt die Karte, bis der Questpfad es zulässt."],
       },
+      autonomy: npcAutonomy({ npcId: "orun", reaction, resolutionIndex, dialectId: "archive", baseNeeds: { safety: 0.7, resources: 0.5, belonging: 0.46, status: 0.64, wealth: 0.38, power: 0.28 } }),
     },
   ] as const;
+}
+
+function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, resolutionIndex: number): WorldSignal[] {
+  const signals: WorldSignal[] = [];
+  if (input.activeQuest) signals.push({ id: `quest:${input.activeQuest}`, kind: "resonance", regionId: zoneId, magnitude: 0.3, sourceReceiptId: `quest-state:${input.activeQuest}`, resolutionIndex });
+  if (input.completed.length > 0) signals.push({ id: `progress:${input.completed.length}`, kind: "player_event", regionId: zoneId, magnitude: Math.min(1, input.completed.length * 0.2), sourceReceiptId: `quest-completed:${input.completed.slice().sort().join(",")}`, resolutionIndex });
+  if (zoneId === "emberfall" || zoneId === "cinder_vault") signals.push({ id: `hazard:${zoneId}`, kind: "hazard", regionId: zoneId, magnitude: zoneId === "cinder_vault" ? 0.7 : 0.35, sourceReceiptId: `zone:${zoneId}`, resolutionIndex });
+  return signals;
 }
 
 function primaryEncounterFor(input: OpenWorldProfile): OpenWorldSnapshot["primaryEncounter"] {
@@ -166,6 +234,91 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     ] },
   }[zoneId];
   const maximumVisible = maximumVisibleEnemies(input.level);
+  const resolutionIndex = input.level * 1_000 + input.completed.length * 10 + (input.activeQuest ? 1 : 0);
+  const signals = worldSignalsFor(input, zoneId, resolutionIndex);
+  const world = {
+    worldSeed: "echoes-of-aurion-v1" as const,
+    resolutionIndex,
+    reaction: resolveWorldReaction({ worldSeed: "echoes-of-aurion-v1", regionId: zoneId, resolutionIndex, signals }),
+  };
+  const polity = resolvePolityState({
+    polityId: "asterion_compact",
+    governmentType: "council",
+    territoryIds: ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"],
+    stability: 0.74,
+    activeDiplomacy: ["alliance", "trade"],
+    warSignals: signals,
+  });
+  const scarcity = [{
+    regionId: zoneId,
+    itemId: "resonance_tonic",
+    shiftPercentage: -world.reaction.resourceDelta * 0.25 + world.reaction.threatDelta * 0.12,
+    x: zone.tier * 16,
+    y: 0,
+    z: 24,
+    resolutionIndex,
+    sourceReceiptId: world.reaction.id,
+  }];
+  const market = resolveMarketPrices({
+    regionId: zoneId,
+    weatherTone: world.reaction.weatherTone,
+    resolutionIndex,
+    scarcity,
+    listings: [
+      { itemId: "resonance_tonic", basePrice: 50, category: "provisions" },
+      { itemId: "asterion_iron", basePrice: 140, category: "material" },
+    ],
+  });
+  const aggressionHazard = resolveAggressionHazard({ samples: [0.25, 0.3 + world.reaction.threatDelta * 0.15, 0.35 + world.reaction.threatDelta * 0.2, 0.4 + world.reaction.threatDelta * 0.25], receiptId: world.reaction.id });
+  const civilization = {
+    settlement: resolveSettlement({ id: `${zoneId}_settlement`, kind: zone.tier >= 2 ? "city" : "village", ownerId: "asterion_compact", regionId: zoneId, foundedResolutionIndex: 0, prosperity: 0.55 + world.reaction.resourceDelta * 0.15, stability: polity.stability }),
+    market,
+    caravanMissions: resolveCaravanMissions({ traders: [{ npcId: "asterion_caravan" }], signals: scarcity }),
+    guild: resolveGuild({ id: "starwardens", name: "Sternenwächter", founderId: "lyra", members: ["orun"], treasury: 120 }),
+    territoryEffect: resolveGuildTerritoryEffect({ npcGuildId: "starwardens", x: zone.tier * 16, y: 24, territoryOwners: { [`${Math.floor((zone.tier * 16) / 64)}:0`]: "starwardens" } }),
+    scarcityForecast: resolveScarcityForecast({ resourceId: "resonance_tonic", regionId: zoneId, referencePrice: 50, currentPrice: market[0]?.price ?? 50, referenceStock: 100, currentStock: Math.max(0, Math.floor(100 * (1 - world.reaction.resourceDelta * 0.5 - world.reaction.threatDelta * 0.15))), affectedNpcIds: ["lyra", "orun"], receiptId: world.reaction.id }),
+    aggressionHazard,
+  };
+  const layout = resolveExpeditionLayout({ expeditionId: `${zoneId}_expedition`, seed: `echoes-of-aurion-v1:${zoneId}`, tier: zone.tier + 1, resolutionIndex });
+  const leadMonster = resolveMonsterSpawn({ spawnerId: `${zoneId}_spawner`, biome: zoneId === "emberfall" || zoneId === "cinder_vault" ? "desert" : zoneId === "windhollow" ? "mountain" : "forest", packIndex: 0, resolutionIndex });
+  const openingStrike = resolveCombatStrike({ action: "melee", attacker: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100 }, defender: { id: leadMonster.id, combatLevel: Math.max(1, leadMonster.strength), stamina: 100, health: 40 + leadMonster.resilience * 4 }, weaponBonus: Math.floor(input.level / 3), receiptId: `preview:${layout.receiptHash}`, resolutionIndex });
+  const spellPreview = resolveSpellCast({ caster: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100, mana: 30 }, spell: { id: "starfall_spark", kind: "lightning", cost: 8, potency: 14, effect: "resonance_burst" }, weatherTone: world.reaction.weatherTone, receiptId: `preview:spell:${layout.receiptHash}`, resolutionIndex });
+  const expedition = { layout, leadMonster, openingStrike, spellPreview };
+  const society = {
+    lyraAge: resolveAge({ entityId: "lyra", currentAge: 31, years: Math.floor(input.completed.length / 3), receiptId: world.reaction.id, resolutionIndex }),
+    playerRelationship: resolveRelationship({ sourceId: "lyra", targetId: "aurion_player", currentValue: 0.2, delta: Math.min(0.6, input.completed.length * 0.1), receiptId: world.reaction.id }),
+    starwardenFamily: resolveFamilyRecord({ parents: ["lyra", "orun"], houseId: `${zoneId}_observatory`, resolutionIndex, receiptId: world.reaction.id }),
+    achievements: resolveAchievements({ playerId: "aurion_player", current: input.completed, candidates: [{ id: "first_blood", eligible: input.completed.includes("astral_call") }, { id: "ruin_discoverer", eligible: input.completed.includes("archive_of_echoes") }, { id: "master_smith", eligible: input.level >= 12 }], receiptId: world.reaction.id }),
+    party: resolvePartyAction({ action: "create", actorId: "aurion_player", receiptId: world.reaction.id, resolutionIndex }),
+  };
+  const stewardship = {
+    farm: resolveFarmPlot({ plotId: `${zoneId}_plot`, seedId: "moonwheat", currentStage: zone.tier, growSteps: input.completed.length > 0 ? 1 : 0, receiptId: world.reaction.id, resolutionIndex }),
+    construction: resolveConstructionQueue({ tasks: [{ structureId: `${zoneId}_gate`, targetLevel: zone.tier + 1 }, { structureId: `${zoneId}_observatory`, targetLevel: 1 }], receiptId: world.reaction.id }),
+    house: resolveHouse({ ownerId: "starwardens", plotId: `${zoneId}_house`, currentUpgrades: zone.tier, targetUpgrade: input.level >= 12 ? zone.tier + 1 : zone.tier, receiptId: world.reaction.id }),
+    faith: resolveFaith({ religionId: "aurion_accord", adherents: ["lyra", "orun"], influence: 0.35 + polity.stability * 0.3, receiptId: world.reaction.id }),
+    gate: resolveGate({ gateId: `${zoneId}_gate`, state: zoneId === "cinder_vault" && !input.canEnterDungeon ? "locked" : "open", actorPermissions: input.canEnterDungeon ? ["gate_access"] : [], receiptId: world.reaction.id }),
+    structure: resolveStructureDamage({ structureId: `${zoneId}_wall`, currentHitpoints: 100, damage: Math.max(0, Math.round(world.reaction.threatDelta * 20)), receiptId: world.reaction.id }),
+  };
+  const inventory = resolveInventory({
+    definitions: [
+      { id: "resonance_tonic", kind: "consumable", rarity: "common", maxStack: 10, weight: 0.2 },
+      { id: "asterion_iron", kind: "misc", rarity: "uncommon", maxStack: 25, weight: 0.5 },
+      { id: "starwardens_blade", kind: "weapon", rarity: input.level >= 12 ? "epic" : "rare", stackable: false, weight: 3.5, boundOnAcquire: true, tradeable: false },
+    ],
+    items: [{ itemId: "resonance_tonic", quantity: 3 + input.completed.length }, { itemId: "asterion_iron", quantity: 5 + zone.tier * 2 }, { itemId: "starwardens_blade", quantity: 1 }],
+    capacity: 30 + input.level * 2,
+    receiptId: world.reaction.id,
+  });
+  const worldKernel = {
+    integrity: resolveWorldIntegrity({ kappa: 1000, deterministicSeed: `${world.worldSeed}:${zoneId}`, resolutionIndex, receiptId: world.reaction.id }),
+    cityLayout: resolveCityLayout({ sector: 0, receiptId: world.reaction.id, entities: [
+      { id: `${zoneId}_road`, type: "road", position: { x: 4, y: 0, z: 0 } },
+      { id: `${zoneId}_hall`, type: "hall", position: { x: 0, y: 0, z: 0 } },
+      { id: `${zoneId}_forge`, type: "forge", position: { x: 0, y: 0, z: 0 } },
+    ] }),
+  };
+  const aiProposal = resolveAiProposal({ text: `NPC market proposal for ${zoneId}; scarcity ${civilization.scarcityForecast.recommendedAction}.`, mode: "npc", receiptId: world.reaction.id, resolutionIndex });
+  const skillProgression = resolveSkillProgressionReadmodel({ playerId: "aurion_player", skillId: "combat", events: input.completed.slice().sort().map((questKey, index) => ({ idempotencyKey: `quest-skill:${questKey}`, skillId: "combat" as const, amountExact: "25", source: "quest_reward" as const, receiptId: `quest-completed:${questKey}`, resolutionIndex: index + 1 })) });
   return {
     revision: 1,
     zoneId,
@@ -175,9 +328,19 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     encounter: { activeCount: Math.min(maximumVisible, Math.max(2, zone.tier + Math.floor(Math.max(1, input.level) / 12) + 1)), budget: encounterBudget(input.level, zone.tier), maximumVisible },
     primaryEncounter: primaryEncounterFor(input),
     pointsOfInterest: zone.pois,
-    npcs: npcReadModels(input),
+    npcs: npcReadModels(input, world.reaction),
     terrain: buildOpenWorldTerrain(zoneId),
     props: propsForZone(zoneId),
+    world,
+    polity,
+    civilization,
+    expedition,
+    society,
+    stewardship,
+    inventory,
+    worldKernel,
+    aiProposal,
+    skillProgression,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }

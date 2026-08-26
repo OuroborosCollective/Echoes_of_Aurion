@@ -249,6 +249,20 @@ function newEndgameId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
+function deterministicRoll(seed: string, label: string): number {
+  return Number.parseInt(createHash("sha256").update(`${seed}:${label}`, "utf8").digest("hex").slice(0, 8), 16) % 10_000;
+}
+
+function treasureClassForLevel(level: number): string {
+  if (level >= 37) return "solarium_t4_weapons";
+  if (level >= 21) return "archive_t3_weapons";
+  return "asterion_t2_weapons";
+}
+
+function canonicalActionForWeapon(track: WeaponTrack): string {
+  return { blade: "melee", staff: "bolt", spear: "thrust", focus: "pulse" }[track];
+}
+
 async function getAcceptedExpeditionResult(values: { resultReceiptId: string; userId: number; expeditionKey: string; seedDigest: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
@@ -357,13 +371,15 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
   if (!db) throw new Error("Game database is not available");
   const quest = getQuest(values.questKey);
   if (quest.giver !== values.giver) throw new Error("Dieser Questgeber kann den Auftrag nicht abschließen.");
+  let completionSessionId: string | null = null;
   await db.transaction(async tx => {
     const row = (await tx.select().from(gameplayQuestProgress).where(and(
       eq(gameplayQuestProgress.userId, values.userId),
       eq(gameplayQuestProgress.questKey, values.questKey),
       eq(gameplayQuestProgress.state, "ready_to_turn_in"),
     )).limit(1))[0];
-    if (!row) throw new Error("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
+    if (!row?.completionSessionId) throw new Error("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
+    completionSessionId = row.completionSessionId;
     const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
     if (!profile) throw new Error("Spielerprofil fehlt beim Questabschluss.");
     const now = new Date();
@@ -377,7 +393,45 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
     ]);
     if (quest.reward.dungeonKey) await tx.insert(gameplayDungeonKeys).values({ id: newEndgameId("dkey"), userId: values.userId, keyName: quest.reward.dungeonKey, grantedByQuest: quest.key }).onDuplicateKeyUpdate({ set: { grantedByQuest: quest.key } });
   });
-  return getGameplayProgress(values.userId);
+  if (!completionSessionId) throw new Error("Quest completion receipt is missing");
+  const profile = await getOrCreatePlayerProfile(values.userId);
+  const seedDigest = createHash("sha256").update(`aurion:quest:${completionSessionId}:seed`, "utf8").digest("hex");
+  const resultDigest = createHash("sha256").update(`aurion:quest:${completionSessionId}:result`, "utf8").digest("hex");
+  const resultReceipt = await recordValidatedExpeditionResult({
+    userId: values.userId,
+    expeditionKey: `quest:${completionSessionId}`,
+    seedDigest,
+    resultDigest,
+    confirmedByUserId: values.userId,
+    idempotencyKey: `quest:${completionSessionId}:result`,
+  });
+  const dropResult = await createLootDrop({
+    userId: values.userId,
+    expeditionKey: `quest:${completionSessionId}`,
+    treasureClass: treasureClassForLevel(profile.level),
+    qualityRoll: deterministicRoll(seedDigest, "quality"),
+    affixRoll: deterministicRoll(seedDigest, "affix"),
+    magicFind: 0,
+    itemLevel: Math.max(1, Math.min(profile.level, 50)),
+    seedDigest,
+    resultReceiptId: resultReceipt.receipt.id,
+    idempotencyKey: `quest:${completionSessionId}:drop`,
+  });
+  const loadout = await getWeaponLoadout(values.userId);
+  if (loadout) {
+    await recordValidatedWeaponEvent({
+      userId: values.userId,
+      expeditionKey: `quest:${completionSessionId}`,
+      seedDigest,
+      resultReceiptId: resultReceipt.receipt.id,
+      weaponTrack: loadout.weaponTrack as WeaponTrack,
+      actionKey: canonicalActionForWeapon(loadout.weaponTrack as WeaponTrack),
+      xpGranted: Math.max(8, Math.floor(quest.reward.xp / 12)),
+      idempotencyKey: `quest:${completionSessionId}:weapon`,
+    });
+  }
+  const item = dropResult.itemId ? (await db.select().from(itemInstances).where(eq(itemInstances.id, dropResult.itemId)).limit(1))[0] : undefined;
+  return { ...(await getGameplayProgress(values.userId)), questDrop: item ? { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality, itemLevel: item.itemLevel, setKey: item.setKey } : null };
 }
 
 export async function startGameplayEncounter(values: { userId: number; encounterKey: EncounterKey }) {
