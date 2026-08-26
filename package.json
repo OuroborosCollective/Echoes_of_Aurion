@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build:sandbox": "NODE_OPTIONS=--max-old-space-size=1536 pnpm build",
     "build:zone-runtime": "esbuild server/zoneService.ts --platform=node --bundle --format=cjs --outfile=dist-zone/zoneService.cjs",
     "verify:release-assets": "tsx scripts/validate-release-assets.ts",
     "build:itch": "pnpm verify:release-assets && vite build --config vite.itch.config.ts && node scripts/package-itch-assets.mjs",
