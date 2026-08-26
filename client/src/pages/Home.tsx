@@ -16,6 +16,7 @@ import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
 import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
+import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 
@@ -106,6 +107,11 @@ export default function Home() {
   const gameplaySession = useRef<{ id: string; nextSequence: number } | null>(null);
   const zoneClient = useRef<ZoneMovementClient | null>(null);
   const activeCharacterUrl = characterAppearance.data?.storageUrl ?? starterCharacter.assetPath;
+  const localWasdScenePreview = useMemo(() => {
+    if (!import.meta.env.DEV || typeof window === "undefined") return undefined;
+    if (new URLSearchParams(window.location.search).get("wasd_scene_preview") !== "emberfall_water_source") return undefined;
+    return wasdAurionSceneAssetAssignments.find(assignment => assignment.target === "emberfall_settlement_water_source");
+  }, []);
   const processedTeamSignals = useRef(new Set<string>());
   const processedGatewaySequence = useRef(0);
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
@@ -437,7 +443,7 @@ export default function Home() {
   return (
     <main className={`aurion-app${immersiveMode ? " is-immersive" : ""}`} style={{ "--aurion-hero-poster": `url("${heroTrailerPoster}")` } as CSSProperties}>
       <Suspense fallback={<div className="aurion-canvas-boot" role="status"><span className="aurion-canvas-boot__sigil">✦</span><span>3D-Szene wird vorbereitet</span></div>}>
-        <GameCanvas characterModelUrl={activeCharacterUrl} arenaModelUrl={activeArenaAsset.data?.storageUrl} />
+        <GameCanvas characterModelUrl={activeCharacterUrl} arenaModelUrl={localWasdScenePreview?.asset.sourceUrl ?? activeArenaAsset.data?.storageUrl} />
       </Suspense>
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
