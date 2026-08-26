@@ -24,6 +24,7 @@ Dieser Draft-PR dokumentiert einen **revisionsgebundenen Integrationscheckpoint*
 | Stewardship und Gegenstände | Tickfreie Farming-/Bau-/Haus-/Glaubens-/Tor-/Belagerungsreadmodelle sowie Stapel, Traglast und Bindungs-/Handelsrestriktionen |
 | ARE-Weltkern und Siedlungsform | Kappa-geprüfte Weltintegrität und deterministischer Siedlungs-Layoutcompiler als sichtbare Readmodelle |
 | AI-Vorschlagsgrenze | Receipt- und indexgebundene NPC-/Schwarmvorschläge; Health-/Diagnosefälle führen niemals Befehle aus oder umgehen Aurions Autoritätsgrenze |
+| Exakte Skillprogression | Cap-freie, String-exakte ARE-Progressionskurve für Kampf, Sammeln und Crafting als bestätigtes Questreceipt-Readmodel; ohne neue Persistenz- oder Belohnungsautorität |
 
 ## Vollständige Wasd-Inventur und Quellenbindung
 
@@ -53,12 +54,12 @@ Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.
 | Prüfung | Ergebnis |
 | --- | --- |
 | TypeScript | bestanden |
-| Vollständige Testausführung | 108 bestanden, 7 umgebungsbedingt übersprungen |
+| Vollständige Testausführung | 115 bestanden, 7 umgebungsbedingt übersprungen |
 | Modulquellkatalog | 712 adaptierbare Module, revisionsgebunden getestet |
 | GLB-2.0-Einzelprüfung | 149/149 gültig |
 | GLB-Detailinventur | 72 eindeutige Assets, Budgets und Rollen katalogisiert |
 | Anonyme Browseransicht | geladen; keine sichtbare Laufzeitausnahme |
-| Zusätzliche Adaptertests | Zivilisation/Knappheit 7, Expedition/Kampf/Magie/Reise 5, Gesellschaft/Party 5, Stewardship 4, Gegenstände 2, Weltintegrität/Siedlungsform 2 und AI-Vorschläge 3 bestanden |
+| Zusätzliche Adaptertests | Zivilisation/Knappheit 7, Expedition/Kampf/Magie/Reise 5, Gesellschaft/Party 5, Stewardship 4, Gegenstände 2, Weltintegrität/Siedlungsform 2, AI-Vorschläge 3 und exakte Skillprogression 4 bestanden |
 | Produktionsbuild | in dieser Sandbox dreimal beim Vite-Chunk-Rendering per `SIGTERM` beendet; keine erfolgreiche Buildfreigabe |
 
 Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Der Produktionsbuildblocker wird explizit als **nicht freigegeben** behandelt; er ist kein Nachweis eines Produktfehlers, aber vor Merge/Release in einer ausreichend dimensionierten CI- oder Entwicklungsumgebung zu reproduzieren und zu beheben.
