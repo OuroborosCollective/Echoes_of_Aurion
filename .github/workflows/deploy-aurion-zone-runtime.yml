@@ -1,15 +1,8 @@
 name: Deploy Aurion zone runtime
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "server/**"
-      - "drizzle/**"
-      - "deploy/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+  # Die separate Zonenruntime bleibt ein expliziter Fallback.
+  # Die maßgebliche Aurion-Laufzeit wird containerisiert ausgeliefert.
   workflow_dispatch:
 
 concurrency:

@@ -32,6 +32,12 @@ export default function LocalAuthPanel() {
     }
   }
 
+  function startOidcLogin() {
+    // The backend owns issuer, client ID, PKCE verifier, state, nonce and all
+    // exchange secrets. The browser only initiates a same-origin navigation.
+    window.location.assign("/api/oauth/start");
+  }
+
   if (!open) return null;
   return <div className="fixed inset-0 z-[100] grid place-items-center bg-[#061317]/90 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="aurion-auth-title">
     <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-cyan-300/35 bg-[#0b2024] p-5 text-slate-100 shadow-2xl shadow-cyan-950/50 sm:p-7">
@@ -39,7 +45,9 @@ export default function LocalAuthPanel() {
         <div><p className="mb-2 text-[0.68rem] font-semibold tracking-[0.22em] text-cyan-300">AURION // SICHERER ZUGANG</p><h2 id="aurion-auth-title" className="font-serif text-2xl text-amber-100">{mode === "login" ? "In die Sternwarte eintreten" : "Eigenes Aurion-Konto anlegen"}</h2></div>
         <button type="button" onClick={() => setOpen(false)} className="grid size-12 place-items-center rounded-lg border border-slate-400/35 text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300" aria-label="Anmeldedialog schließen"><X size={20} /></button>
       </header>
-      <p className="mb-5 text-sm leading-6 text-slate-300">{mode === "login" ? "Melde dich mit deinem Aurion-Rufnamen an. Die Spielsitzung bleibt ausschließlich in einem geschützten Cookie." : "Registrierte Konten starten als Spieler. Die Admin-Rolle wird anschließend gezielt und serverseitig vergeben."}</p>
+      <p className="mb-5 text-sm leading-6 text-slate-300">{mode === "login" ? "Melde dich mit deinem Aurion-Rufnamen an oder nutze den föderierten Zugang. Die Spielsitzung bleibt ausschließlich in einem geschützten Cookie." : "Registrierte Konten starten als Spieler. Die Admin-Rolle wird anschließend gezielt und serverseitig vergeben."}</p>
+      <button type="button" onClick={startOidcLogin} className="mb-4 min-h-12 w-full rounded-lg border border-cyan-300/55 bg-cyan-300/10 px-4 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/20"><ShieldCheck className="mr-2 inline size-4" />Mit föderiertem Aurion-Zugang anmelden</button>
+      <div className="mb-5 flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-400"><span className="h-px flex-1 bg-slate-600/60" />oder lokal<span className="h-px flex-1 bg-slate-600/60" /></div>
       <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-black/20 p-1" role="tablist" aria-label="Aurion-Kontoaktion">
         <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => { setMode("login"); setMessage(""); }} className={`min-h-12 rounded-lg text-sm font-semibold transition ${mode === "login" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/10"}`}><KeyRound className="mr-2 inline size-4" />Anmelden</button>
         <button type="button" role="tab" aria-selected={mode === "register"} onClick={() => { setMode("register"); setMessage(""); }} className={`min-h-12 rounded-lg text-sm font-semibold transition ${mode === "register" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/10"}`}><UserRoundPlus className="mr-2 inline size-4" />Konto anlegen</button>

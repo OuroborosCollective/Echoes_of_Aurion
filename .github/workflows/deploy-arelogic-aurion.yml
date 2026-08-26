@@ -1,18 +1,8 @@
 name: Deploy Echoes of Aurion to arelogic.space
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "client/**"
-      - "server/**"
-      - "shared/**"
-      - "drizzle/**"
-      - "scripts/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "vite*.ts"
-      - ".github/workflows/deploy-arelogic-aurion.yml"
+  # Der statische Root-Release ist nur ein expliziter Fallback.
+  # Die maßgebliche Aurion-Laufzeit wird containerisiert ausgeliefert.
   workflow_dispatch:
 
 concurrency:
