@@ -10,7 +10,7 @@ ENV AURION_BUILD_HEAP_MB=${AURION_BUILD_HEAP_MB}
 RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --network-concurrency=1 --child-concurrency=1
 COPY . .
 RUN pnpm check && pnpm build:sandbox
 
@@ -26,7 +26,7 @@ ENV NODE_ENV=production \
 RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
-RUN pnpm install --prod --frozen-lockfile && pnpm store prune
+RUN pnpm install --prod --frozen-lockfile --network-concurrency=1 --child-concurrency=1 && pnpm store prune
 COPY --from=build /app/dist ./dist
 
 USER node
