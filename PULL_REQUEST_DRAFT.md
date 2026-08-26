@@ -21,6 +21,9 @@ Dieser Draft-PR dokumentiert einen **revisionsgebundenen Integrationscheckpoint*
 | Zivilisation, Ökonomie und Handwerk | Deterministische Siedlungsauflösung, Marktpreise, Knappheitsprognose, Karawanenmissionen, Crafting, Gildenterritorium und aggressionsbasierte Weltgefahr |
 | Expedition, Kampf und Magie | Seedgebundene Raumlayouts und Monster, receiptgebundene Kampfvorschau, wetterabhängige Zauberpotenz sowie begrenzte Reiseresolution |
 | Gesellschaft | Versionierte Alterung, Beziehungen, Familie, Erfolge sowie Partyführung, Kapazitäts- und Übergaberegeln |
+| Stewardship und Gegenstände | Tickfreie Farming-/Bau-/Haus-/Glaubens-/Tor-/Belagerungsreadmodelle sowie Stapel, Traglast und Bindungs-/Handelsrestriktionen |
+| ARE-Weltkern und Siedlungsform | Kappa-geprüfte Weltintegrität und deterministischer Siedlungs-Layoutcompiler als sichtbare Readmodelle |
+| AI-Vorschlagsgrenze | Receipt- und indexgebundene NPC-/Schwarmvorschläge; Health-/Diagnosefälle führen niemals Befehle aus oder umgehen Aurions Autoritätsgrenze |
 
 ## Vollständige Wasd-Inventur und Quellenbindung
 
@@ -50,18 +53,18 @@ Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.
 | Prüfung | Ergebnis |
 | --- | --- |
 | TypeScript | bestanden |
-| Vollständige Testausführung | 83 bestanden, 7 umgebungsbedingt übersprungen |
+| Vollständige Testausführung | 108 bestanden, 7 umgebungsbedingt übersprungen |
 | Modulquellkatalog | 712 adaptierbare Module, revisionsgebunden getestet |
 | GLB-2.0-Einzelprüfung | 149/149 gültig |
 | GLB-Detailinventur | 72 eindeutige Assets, Budgets und Rollen katalogisiert |
 | Anonyme Browseransicht | geladen; keine sichtbare Laufzeitausnahme |
-| Zusätzliche Adaptertests | Zivilisation/Knappheit 7, Expedition/Kampf/Magie/Reise 5, Gesellschaft/Party 5 bestanden |
+| Zusätzliche Adaptertests | Zivilisation/Knappheit 7, Expedition/Kampf/Magie/Reise 5, Gesellschaft/Party 5, Stewardship 4, Gegenstände 2, Weltintegrität/Siedlungsform 2 und AI-Vorschläge 3 bestanden |
 | Produktionsbuild | in dieser Sandbox dreimal beim Vite-Chunk-Rendering per `SIGTERM` beendet; keine erfolgreiche Buildfreigabe |
 
 Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Der Produktionsbuildblocker wird explizit als **nicht freigegeben** behandelt; er ist kein Nachweis eines Produktfehlers, aber vor Merge/Release in einer ausreichend dimensionierten CI- oder Entwicklungsumgebung zu reproduzieren und zu beheben.
 
 ## Nicht enthalten / weitere Integrationspakete
 
-Die vollständige Implementierung aller 712 adaptierbaren Wasd-Semantiken ist nach diesem Checkpoint noch offen. Die nächsten Pakete folgen der vorhandenen Migrationsmatrix pro Domäne (Zivilisation, Farming, Konstruktion, Gilden, Magie, Religion, Territorium, Ökonomie, Kampf, Content) mit Zieladapter, Test und sichtbarem Spielerreadback. Globales Balancing, Produktionsmigration, Deployment, MSW/Lua-Portierung und ein Merge nach `main` sind nicht Bestandteil dieses Draft-PR.
+Die vollständige Implementierung aller 712 adaptierbaren Wasd-Semantiken ist nach diesem Checkpoint noch offen. Die nächsten Pakete folgen der vorhandenen Migrationsmatrix pro Domäne (tieferes Charakter-/Skill- und Kampfruleset, Weltgenerator/Biome/Spawns, Lore-/Content-Importe, kontrollierte Dialoge sowie GLB-Szenenzuordnung) mit Zieladapter, Test und sichtbarem Spielerreadback. Globale Balancierung, Produktionsmigration, Deployment, MSW/Lua-Portierung und ein Merge nach `main` sind nicht Bestandteil dieses Draft-PR.
 
 > Reviewende sollten zuerst `WASD_AURION_SEMANTICS.md`, `WASD_AURION_MIGRATION_MATRIX.md`, `WASD_BROAD_GAMEPLAY_MODULE_LEDGER.md`, `WASD_GLB_AUDIT.md`, `WASD_GLB_DETAIL_INVENTORY.md`, `guardian/wasd_aurion_browser_qa.md` und die beiden Additivmigrationen lesen.
