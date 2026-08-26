@@ -27,6 +27,7 @@ Die folgenden Kriterien sind vor einer Bereitstellung nachzuweisen:
 | Compose-Konfiguration | `docker compose -f docker-compose.traefik.yml config` löst erfolgreich auf, ohne Werte aus `.env.production` zu drucken.                                                        |
 | Netzwerk              | Das externe Docker-Netzwerk `areloria_arelorian-network` ist vorhanden und der Traefik-Container verwendet es.                                                                  |
 | TLS                   | Traefik lauscht auf 80/443, hat einen funktionierenden Let’s-Encrypt-Resolver und kann die Domain bedienen.                                                                     |
+| Runtime-Artefakt      | `dist/.aurion-runtime-build.json` enthält genau die ausgewählte 40-stellige Quellrevision; ein Vite-Build auf dem VPS ist nicht zulässig.                                       |
 | Rückkehrpunkt         | Der aktuell ausgerollte Git-SHA und der Zustand vor Containerstart sind schriftlich festgehalten.                                                                               |
 
 ## Kontrollierter Bereitstellungsablauf
@@ -35,11 +36,13 @@ Nach einer separaten Produktivfreigabe erfolgt die Bereitstellung in dieser Reih
 
 1. Den ausgewählten Merge-Commit auf dem VPS in einem revisionsbenannten Checkout bereitstellen und seine 40-stellige `HEAD`-Revision gegen den PR-Merge-Commit prüfen.
 2. Die `.env.production` auf das Vorhandensein der erforderlichen Namen und die restriktiven Dateirechte prüfen, ohne Werte auszugeben.
-3. `docker compose -f docker-compose.traefik.yml config` ausführen und die Traefik-Labels, das externe Netzwerk sowie den Healthcheck validieren.
-4. Ein lokal gebautes Containerimage nur für die gebundene Revision erstellen und mit `docker compose -f docker-compose.traefik.yml up -d aurion` starten.
-5. Den lokalen Healthcheck und den Traefik-Servicezustand prüfen. Erst danach das öffentliche TLS-Zertifikat und `https://arelogic.space/healthz` ohne Zertifikatsumgehung prüfen.
-6. Den vollständigen OIDC-Login mit PKCE durchlaufen und nachweisen, dass der Callback auf dieselbe Origin zurückkehrt, eine Aurion-Sitzung entsteht und keine Geheimniswerte in Logs vorkommen.
-7. Den aktiven Containerimage-Digest, die Git-Revision, den Traefik-Readback und das Ergebnis der OIDC-Abnahme protokollieren.
+3. In einer ausreichend dimensionierten, geprüften Buildumgebung `AURION_RELEASE_SHA=<Revision> pnpm build:runtime-artifact` ausführen. Das erzeugte `dist` muss zusammen mit seiner Manifestrevision geprüft und als Artefakt an den VPS übertragen werden.
+4. `docker compose -f docker-compose.traefik.yml config` ausführen und die Traefik-Labels, das externe Netzwerk sowie den Healthcheck validieren.
+5. Ein Runtime-Image ausschließlich aus der gebundenen Revision und dem übertragenen `dist`-Artefakt erstellen. Die Build-Argumentrevision muss mit `dist/.aurion-runtime-build.json` übereinstimmen; auf dem VPS darf kein Vite-Build stattfinden.
+6. Das verifizierte Image mit `docker compose -f docker-compose.traefik.yml up -d aurion` starten.
+7. Den lokalen Healthcheck und den Traefik-Servicezustand prüfen. Erst danach das öffentliche TLS-Zertifikat und `https://arelogic.space/healthz` ohne Zertifikatsumgehung prüfen.
+8. Den vollständigen OIDC-Login mit PKCE durchlaufen und nachweisen, dass der Callback auf dieselbe Origin zurückkehrt, eine Aurion-Sitzung entsteht und keine Geheimniswerte in Logs vorkommen.
+9. Den aktiven Containerimage-Digest, die Git-Revision, den Traefik-Readback und das Ergebnis der OIDC-Abnahme protokollieren.
 
 ## Nicht zulässige Abkürzungen
 

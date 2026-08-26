@@ -1,5 +1,5 @@
 node_modules
-dist
+# Das revisionsgebundene Runtime-Artefakt wird absichtlich in das Image kopiert.
 dist-zone
 .git
 .github
