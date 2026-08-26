@@ -4,6 +4,7 @@ import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveG
 import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
 import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
 import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, resolveHouse, resolveStructureDamage } from "./wasdAurionStewardshipProtocol";
+import { resolveInventory } from "./wasdAurionItemProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -72,6 +73,7 @@ export type OpenWorldSnapshot = {
     gate: ReturnType<typeof resolveGate>;
     structure: ReturnType<typeof resolveStructureDamage>;
   };
+  inventory: ReturnType<typeof resolveInventory>;
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -288,6 +290,16 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     gate: resolveGate({ gateId: `${zoneId}_gate`, state: zoneId === "cinder_vault" && !input.canEnterDungeon ? "locked" : "open", actorPermissions: input.canEnterDungeon ? ["gate_access"] : [], receiptId: world.reaction.id }),
     structure: resolveStructureDamage({ structureId: `${zoneId}_wall`, currentHitpoints: 100, damage: Math.max(0, Math.round(world.reaction.threatDelta * 20)), receiptId: world.reaction.id }),
   };
+  const inventory = resolveInventory({
+    definitions: [
+      { id: "resonance_tonic", kind: "consumable", rarity: "common", maxStack: 10, weight: 0.2 },
+      { id: "asterion_iron", kind: "misc", rarity: "uncommon", maxStack: 25, weight: 0.5 },
+      { id: "starwardens_blade", kind: "weapon", rarity: input.level >= 12 ? "epic" : "rare", stackable: false, weight: 3.5, boundOnAcquire: true, tradeable: false },
+    ],
+    items: [{ itemId: "resonance_tonic", quantity: 3 + input.completed.length }, { itemId: "asterion_iron", quantity: 5 + zone.tier * 2 }, { itemId: "starwardens_blade", quantity: 1 }],
+    capacity: 30 + input.level * 2,
+    receiptId: world.reaction.id,
+  });
   return {
     revision: 1,
     zoneId,
@@ -306,6 +318,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     expedition,
     society,
     stewardship,
+    inventory,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
