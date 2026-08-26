@@ -17,7 +17,9 @@ ENV NODE_ENV=production \
 RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
-RUN pnpm install --prod --frozen-lockfile --network-concurrency=1 --child-concurrency=1 && pnpm store prune
+# Der Produktionsserver importiert den Vite-Adapter zur statischen Auslieferung.
+# Deshalb müssen die vollständigen, gesperrten Runtime-Abhängigkeiten im Image vorliegen.
+RUN pnpm install --frozen-lockfile --network-concurrency=1 --child-concurrency=1 && pnpm store prune
 
 COPY dist ./dist
 RUN test -n "$AURION_RELEASE_SHA" \
