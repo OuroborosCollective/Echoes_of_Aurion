@@ -1,5 +1,7 @@
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
+import { resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -38,6 +40,19 @@ export type OpenWorldSnapshot = {
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
   world: { worldSeed: "echoes-of-aurion-v1"; resolutionIndex: number; reaction: WorldReaction };
   polity: PolityState;
+  civilization: {
+    settlement: ReturnType<typeof resolveSettlement>;
+    market: readonly ReturnType<typeof resolveMarketPrices>[number][];
+    caravanMissions: readonly ReturnType<typeof resolveCaravanMissions>[number][];
+    guild: ReturnType<typeof resolveGuild>;
+    territoryEffect: ReturnType<typeof resolveGuildTerritoryEffect>;
+  };
+  expedition: {
+    layout: ReturnType<typeof resolveExpeditionLayout>;
+    leadMonster: ReturnType<typeof resolveMonsterSpawn>;
+    openingStrike: ReturnType<typeof resolveCombatStrike>;
+    spellPreview: ReturnType<typeof resolveSpellCast>;
+  };
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -204,6 +219,38 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     activeDiplomacy: ["alliance", "trade"],
     warSignals: signals,
   });
+  const scarcity = [{
+    regionId: zoneId,
+    itemId: "resonance_tonic",
+    shiftPercentage: -world.reaction.resourceDelta * 0.25 + world.reaction.threatDelta * 0.12,
+    x: zone.tier * 16,
+    y: 0,
+    z: 24,
+    resolutionIndex,
+    sourceReceiptId: world.reaction.id,
+  }];
+  const market = resolveMarketPrices({
+    regionId: zoneId,
+    weatherTone: world.reaction.weatherTone,
+    resolutionIndex,
+    scarcity,
+    listings: [
+      { itemId: "resonance_tonic", basePrice: 50, category: "provisions" },
+      { itemId: "asterion_iron", basePrice: 140, category: "material" },
+    ],
+  });
+  const civilization = {
+    settlement: resolveSettlement({ id: `${zoneId}_settlement`, kind: zone.tier >= 2 ? "city" : "village", ownerId: "asterion_compact", regionId: zoneId, foundedResolutionIndex: 0, prosperity: 0.55 + world.reaction.resourceDelta * 0.15, stability: polity.stability }),
+    market,
+    caravanMissions: resolveCaravanMissions({ traders: [{ npcId: "asterion_caravan" }], signals: scarcity }),
+    guild: resolveGuild({ id: "starwardens", name: "Sternenwächter", founderId: "lyra", members: ["orun"], treasury: 120 }),
+    territoryEffect: resolveGuildTerritoryEffect({ npcGuildId: "starwardens", x: zone.tier * 16, y: 24, territoryOwners: { [`${Math.floor((zone.tier * 16) / 64)}:0`]: "starwardens" } }),
+  };
+  const layout = resolveExpeditionLayout({ expeditionId: `${zoneId}_expedition`, seed: `echoes-of-aurion-v1:${zoneId}`, tier: zone.tier + 1, resolutionIndex });
+  const leadMonster = resolveMonsterSpawn({ spawnerId: `${zoneId}_spawner`, biome: zoneId === "emberfall" || zoneId === "cinder_vault" ? "desert" : zoneId === "windhollow" ? "mountain" : "forest", packIndex: 0, resolutionIndex });
+  const openingStrike = resolveCombatStrike({ action: "melee", attacker: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100 }, defender: { id: leadMonster.id, combatLevel: Math.max(1, leadMonster.strength), stamina: 100, health: 40 + leadMonster.resilience * 4 }, weaponBonus: Math.floor(input.level / 3), receiptId: `preview:${layout.receiptHash}`, resolutionIndex });
+  const spellPreview = resolveSpellCast({ caster: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100, mana: 30 }, spell: { id: "starfall_spark", kind: "lightning", cost: 8, potency: 14, effect: "resonance_burst" }, weatherTone: world.reaction.weatherTone, receiptId: `preview:spell:${layout.receiptHash}`, resolutionIndex });
+  const expedition = { layout, leadMonster, openingStrike, spellPreview };
   return {
     revision: 1,
     zoneId,
@@ -218,6 +265,8 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     props: propsForZone(zoneId),
     world,
     polity,
+    civilization,
+    expedition,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
