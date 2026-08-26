@@ -21,7 +21,7 @@
 | Assets | Keine Assetänderung; GLB-Katalog bleibt unverändert. | `NOT_APPLICABLE` |
 | Tests | Negative, PKCE-, State-, Nonce-, Claim- und Wiederholungstests ausführen. | `DONE` — TypeScriptprüfung, sechs OIDC-Vertragstests und vollständige Testsuite bestanden. |
 | Readback | OIDC-Discovery lokal sowie nach späterer Freigabe Browser-Callback und Sitzungsreadback prüfen. | `BLOCKED` — dedizierter FusionAuth-Client, gültiges TLS und produktive Runtime fehlen noch. |
-| Release | Kandidatenbranch, isolierter Commit, Push und Draft-PR; kein Merge, keine Produktion ohne ausdrückliche Freigabe. | `TODO` |
+| Release | Kandidatenbranch, isolierter Commit, Push und Draft-PR; kein Merge, keine Produktion ohne ausdrückliche Freigabe. | `DONE` — Draft-PR #55, lokaler/Remote-/PR-Head vor Dokumentationsupdate identisch auf `cb69702be6de8226881972dea4e8b30d12cd310f`; keine erforderliche CI ausgeführt. |
 
 ## 12-Domänen-Abdeckungsmatrix
 
