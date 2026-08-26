@@ -25,7 +25,7 @@ Dieser Draft-PR dokumentiert einen **revisionsgebundenen Integrationscheckpoint*
 | ARE-Weltkern und Siedlungsform | Kappa-geprüfte Weltintegrität und deterministischer Siedlungs-Layoutcompiler als sichtbare Readmodelle |
 | AI-Vorschlagsgrenze | Receipt- und indexgebundene NPC-/Schwarmvorschläge; Health-/Diagnosefälle führen niemals Befehle aus oder umgehen Aurions Autoritätsgrenze |
 | Exakte Skillprogression | Cap-freie, String-exakte ARE-Progressionskurve für Kampf, Sammeln und Crafting als bestätigtes Questreceipt-Readmodel; ohne neue Persistenz- oder Belohnungsautorität |
-| Hostinger-Traefik-Vorbereitung | Additives Dockerfile und `docker-compose.traefik.yml` mit internem Port 3000, `websecure`-/Let’s-Encrypt-Labels, externem `traefik-proxy`-Netzwerk, `/healthz`, sicherem Proxy-Hop und strikt gebundenem Containerport; nicht auf den VPS ausgerollt |
+| Hostinger-Traefik-Vorbereitung | Additives Dockerfile und `docker-compose.traefik.yml` mit internem Port 3000, `websecure`-/Let’s-Encrypt-Labels, dem auf dem VPS vorhandenen `areloria_arelorian-network`, `/healthz`, sicherem Proxy-Hop und strikt gebundenem Containerport; nicht auf den VPS ausgerollt |
 
 ## Vollständige Wasd-Inventur und Quellenbindung
 
@@ -66,6 +66,8 @@ Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.
 Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Der frühere `SIGTERM`-Befund wurde als zu knappes Ausführungszeitbudget eingegrenzt: Der Vite-Build benötigt hier rund 46 Sekunden und ist mit mindestens 120 Sekunden, für Diagnosen 300 Sekunden, sowie dem verifizierten `pnpm build:sandbox` reproduzierbar. Die Umami-Placeholder- und Babylon-Chunkwarnungen bleiben sichtbar, sind aber keine Buildfehler. Der erfolgreiche Build ersetzt weder die übersprungenen E2E-Tests noch Review, Merge- oder Releasefreigabe.
 
 ## Nicht enthalten / weitere Integrationspakete
+
+Der schreibgeschützte Paramiko-Check des VPS `46.202.154.25` bestätigte Docker 29.7.2, Compose 5.5.0, Traefik im `host`-Netzwerk mit `websecure` und `letsencrypt`; ein Netzwerk `traefik-proxy` existiert dort nicht. Deshalb wurde die lokale Vorlage auf `areloria_arelorian-network` angepasst. Es wurden keine VPS-Dateien verändert und kein Container gestartet.
 
 Die vollständige Implementierung aller 712 adaptierbaren Wasd-Semantiken ist nach diesem Checkpoint noch offen. Die nächsten Pakete folgen der vorhandenen Migrationsmatrix pro Domäne (tieferes Charakter-/Skill- und Kampfruleset, Weltgenerator/Biome/Spawns, Lore-/Content-Importe, kontrollierte Dialoge sowie weitere GLB-Szenenzuordnung nach erfolgreichem isolierten Babylonreadback) mit Zieladapter, Test und sichtbarem Spielerreadback. Globale Balancierung, Produktionsmigration, Deployment, MSW/Lua-Portierung und ein Merge nach `main` sind nicht Bestandteil dieses Draft-PR.
 

@@ -17,7 +17,7 @@ services:
       - "3000"
     labels:
       - traefik.enable=true
-      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik-proxy}
+      - traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}
       - traefik.http.routers.aurion.rule=Host(`${AURION_DOMAIN:-arelogic.space}`)
       - traefik.http.routers.aurion.entrypoints=websecure
       - traefik.http.routers.aurion.tls=true
@@ -31,4 +31,4 @@ services:
 networks:
   traefik-proxy:
     external: true
-    name: ${TRAEFIK_NETWORK:-traefik-proxy}
+    name: ${TRAEFIK_NETWORK:-areloria_arelorian-network}

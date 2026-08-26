@@ -15,17 +15,17 @@ Diese Vorlage ersetzt die bestehende Nginx-Produktionsbereitstellung **nicht aut
 
 ## Abgeleitete Traefik-Zuordnung
 
-| Traefik-Anforderung | Aurion-Wert                                                  |
-| ------------------- | ------------------------------------------------------------ |
-| Routername          | `aurion`                                                     |
-| Domainregel         | `Host(arelogic.space)` — über `AURION_DOMAIN` konfigurierbar |
-| Entrypoint          | `websecure`                                                  |
-| Zertifikatsresolver | `letsencrypt` — über `TRAEFIK_CERTRESOLVER` konfigurierbar   |
-| Interner Dienstport | `3000`                                                       |
-| Docker-Netzwerk     | `traefik-proxy` — über `TRAEFIK_NETWORK` konfigurierbar      |
-| Healthcheck         | `GET /healthz`                                               |
+| Traefik-Anforderung | Aurion-Wert                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| Routername          | `aurion`                                                                                       |
+| Domainregel         | `Host(arelogic.space)` — über `AURION_DOMAIN` konfigurierbar                                   |
+| Entrypoint          | `websecure`                                                                                    |
+| Zertifikatsresolver | `letsencrypt` — über `TRAEFIK_CERTRESOLVER` konfigurierbar                                     |
+| Interner Dienstport | `3000`                                                                                         |
+| Docker-Netzwerk     | `areloria_arelorian-network` — auf dem VPS vorhanden und über `TRAEFIK_NETWORK` konfigurierbar |
+| Healthcheck         | `GET /healthz`                                                                                 |
 
-Die Bezeichnung `traefik-proxy`, der Entrypoint `websecure` und der Resolver `letsencrypt` entsprechen der erhaltenen Hostinger-Vorlage. Vor einer Ausführung auf dem VPS müssen sie gegen die tatsächlich vorhandene Traefik-Installation geprüft werden.
+Der Entrypoint `websecure` und der Resolver `letsencrypt` entsprechen der vorhandenen Hostinger-Traefik-Konfiguration. Der Read-only-VPS-Check bestätigte, dass Traefik im `host`-Netzwerk läuft und kein Netzwerk `traefik-proxy` existiert. Das vorhandene `areloria_arelorian-network` ist daher als Docker-Netzwerk für den Aurion-Container hinter dem Host-Netzwerk-Traefik vorgesehen. Vor einer Ausführung muss diese Zuordnung nochmals gegen die laufende Traefik-Installation geprüft werden.
 
 ## Erforderliche Geheimnisse
 
@@ -45,11 +45,11 @@ Erstelle auf dem VPS eine **nicht versionierte** Datei `.env.production`. Sie wi
 Führe diese Kontrollen zuerst **lesend** im Verzeichnis des geklonten Repositories aus:
 
 ```bash
-docker network inspect traefik-proxy
+docker network inspect areloria_arelorian-network
 docker compose --env-file .env.traefik -f docker-compose.traefik.yml config
 ```
 
-Die erste Ausgabe muss ein existierendes externes Traefik-Netzwerk bestätigen. Die zweite Ausgabe muss insbesondere diese Werte zeigen: Router `aurion`, `websecure`, den korrekten Zertifikatsresolver, `Host(arelogic.space)` und `loadbalancer.server.port=3000`.
+Die erste Ausgabe muss das existierende externe Areloria-Netzwerk bestätigen; Traefik selbst läuft auf diesem VPS im Host-Netzwerk und wird nicht als Mitglied eines Docker-Bridge-Netzwerks geführt. Die zweite Ausgabe muss insbesondere diese Werte zeigen: Router `aurion`, `websecure`, den korrekten Zertifikatsresolver, `Host(arelogic.space)` und `loadbalancer.server.port=3000`.
 
 Erst nach Freigabe der gerenderten Compose-Konfiguration und nach Bestätigung, dass `arelogic.space` auf die VPS-IP zeigt, kann ein verantwortlicher Betreiber den Build und Start durchführen. Vor einer Umschaltung sind die bestehende Nginx-Konfiguration, das aktuelle Release und die DNS-Zone zu sichern.
 
