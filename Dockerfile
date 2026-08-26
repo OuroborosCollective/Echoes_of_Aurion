@@ -3,6 +3,10 @@
 FROM node:22.13.0-bookworm-slim AS build
 WORKDIR /app
 
+# Das Container-Buildbudget ist getrennt vom lokalen Standard konfigurierbar.
+ARG AURION_BUILD_HEAP_MB=4096
+ENV AURION_BUILD_HEAP_MB=${AURION_BUILD_HEAP_MB}
+
 RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
