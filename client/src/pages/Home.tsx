@@ -92,6 +92,7 @@ export default function Home() {
   const sendTeamSignal = trpc.community.team.sendSignal.useMutation();
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: apiAvailable && isAuthenticated });
   const gameplayProgress = trpc.gameplay.progress.useQuery(undefined, { enabled: isAuthenticated });
+  const wasdCoverage = trpc.gameplay.wasdCoverage.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const enterOpenWorld = trpc.gameplay.enterOpenWorld.useMutation();
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: isAuthenticated });
@@ -496,6 +497,7 @@ export default function Home() {
             <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
             <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span><span>TILES <b>{openWorld.data?.terrain ? `${openWorld.data.terrain.tiles.length}/${openWorld.data.terrain.atlas.surfaces.length}` : "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>WETTER <b>{openWorld.data?.world.reaction.weatherTone ?? "—"}</b></span><span>DIALOGTON <b>{openWorld.data?.world.reaction.dialogueTone ?? "—"}</b></span><span>RESOLUTION <b>{openWorld.data?.world.resolutionIndex ?? "—"}</b></span><span>POLITY <b>{openWorld.data?.polity.governmentType ?? "—"}</b></span></div>
+            <div className="open-world-card__metrics"><span>WASD-REV <b>{wasdCoverage.data?.sourceRevision.slice(0, 7) ?? "—"}</b></span><span>REGELMODULE <b>{wasdCoverage.data?.adaptedModuleCount ?? "—"}</b></span><span>WELT-PFADE <b>{wasdCoverage.data?.domainCounts.world ?? "—"}</b></span><span>KATALOG <b>{wasdCoverage.data?.catalogHash.slice(0, 7) ?? "—"}</b></span></div>
             <div className="open-world-card__pois">{openWorld.data?.pointsOfInterest.slice(0, 3).map(point => <span key={point.id} data-state={point.state}>{point.label}</span>)}</div>
             <div className="open-world-card__npcs">{openWorld.data?.npcs.map(npc => <div key={npc.id}><b>{npc.displayName} · {npc.autonomy.dialectId}</b><small>{npc.memory.quest[0] ?? npc.memory.local[0]}</small><small>ZIEL: {npc.autonomy.goal} · SICHERHEIT: {Math.round(npc.autonomy.needs.safety * 100)}%</small></div>)}</div>
             {openWorld.data?.primaryEncounter && <div className="world-encounter"><div><span>WELTBEGEGNUNG // BESTÄTIGT</span><b>{openWorld.data.primaryEncounter.label}</b><p>{openWorld.data.primaryEncounter.narrative}</p></div><button type="button" disabled={startGameplayEncounter.isPending || Boolean(gameplaySession.current)} onClick={() => startServerEncounter(openWorld.data!.primaryEncounter!.encounterKey)}>Begegnung beginnen</button></div>}

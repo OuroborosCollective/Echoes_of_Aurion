@@ -1,3 +1,5 @@
+import { wasdGlbCatalog, wasdGlbCatalogSummary, wasdGlbSourceRevision } from "./wasdGlbCatalog";
+
 const staticDistribution = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION === "true";
 
 export function hasAurionApi(): boolean {
@@ -36,5 +38,11 @@ export const aurionAssets = {
     tripoFlowerShrub: "/manus-storage/aurion-tripo-flower-shrub_e4191cad.glb",
     tripoStarpathMarker: "/manus-storage/aurion-tripo-starpath-marker_da5fe3a7.glb",
     tripoGardenBorder: "/manus-storage/aurion-tripo-garden-border_8032d87a.glb",
+  },
+  wasdGlb: {
+    sourceRevision: wasdGlbSourceRevision,
+    summary: wasdGlbCatalogSummary,
+    catalog: wasdGlbCatalog,
+    streamable: wasdGlbCatalog.filter(asset => asset.budgetStatus === "streamable"),
   },
 } as const;

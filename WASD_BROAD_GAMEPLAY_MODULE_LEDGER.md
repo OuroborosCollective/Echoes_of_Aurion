@@ -1,0 +1,930 @@
+# Wasd: breite Gameplay-/Weltmodul-Inventur
+
+> Quellrevision: `a4d99432e47b82ce98105eadb30360cd8040ad13`. Der Umfang umfasst Gameplaymodule auch dann, wenn ihr Pfad keinen der engeren Keywords enthält.
+
+| Kennzahl | Wert |
+| --- | ---: |
+| Breite Gameplay-/Weltmodule | 906 |
+
+| Domäne | Module |
+| --- | ---: |
+| combat | 36 |
+| economy | 93 |
+| language_lore | 61 |
+| loot_items | 123 |
+| npc | 155 |
+| politics_war | 58 |
+| progression | 57 |
+| quest | 72 |
+| world | 238 |
+
+| Wasd-Pfad | SHA-256 | Domänen | Migrationsstatus |
+| --- | --- | --- | --- |
+| `server/src/ai/AICommandMapper.ts` | `45b81b7cacf889f0f7c233a596c8267871e2d58c24c50fa02b4e51b0d18d2268` | unclassified | unmapped |
+| `server/src/ai/AIDecisionRules.ts` | `206a7c1e8af02948282a4ffc8e63c27af716deacaeb2ef70703e3cbe237476f9` | unclassified | unmapped |
+| `server/src/ai/AIHealBridge.ts` | `a45b6a353d7135920f43291969171e675be71c60ac7014d890c629f71e90a078` | unclassified | unmapped |
+| `server/src/ai/AILocalLearningStore.ts` | `8a2c525582b47476aafe0e73b0796dfa111bcaebc8a9d78f7be571e13eac5acc` | unclassified | unmapped |
+| `server/src/ai/AIReasoningCore.ts` | `110fe59cece3dba2889d2520ce1ee68e5fca3af36ce3714a83bf66ef3d6e3f54` | unclassified | unmapped |
+| `server/src/ai/AISafetyFilter.ts` | `c98ed99d673efc9a2d915e2453f7efa3f05ac8478340b61e0b7324a9a6fe0a51` | unclassified | unmapped |
+| `server/src/ai/AIService.ts` | `54b079fa013eb0a0fcd7c0d27a6c0fad0e927ea20410e2132266d1e9345f0262` | unclassified | unmapped |
+| `server/src/ai/AIService.types.ts` | `74d9879ea7218b9fe3dd3ebebc26116838c7edfc1c9dca690c3d00b9604c53e1` | unclassified | unmapped |
+| `server/src/ai/AIServiceSkillTool.ts` | `d8ce63864c8db8a306c74fe9ea2c7bdfe5f941f3dd90660ede7479fe812fc958` | progression | unmapped |
+| `server/src/ai/AutonomousBugfixAgent.ts` | `bae602e399880edb22735ecd1314d0b83381ca2564dbc6387fc89cfe78f59b77` | npc | unmapped |
+| `server/src/ai/MiniMax.types.ts` | `2a0c88b828e407b3d6fb86519cb2a0c71824508e593d440ab9e3204ef8284f25` | unclassified | unmapped |
+| `server/src/ai/MiniMaxClient.ts` | `067993724e08374b67868294d72a00413910801d4f19193b55b897cfc47a5184` | unclassified | unmapped |
+| `server/src/ai/index.ts` | `75e27dfc22ec055fb08136b4e752ebea79ad07fc8cdc9aeac9c95d05ed26632b` | unclassified | unmapped |
+| `server/src/ai/services/AIService.ts` | `4da84728e54b2443ba87a1294115d6912e33960b9785115b651f384a303c5d37` | unclassified | unmapped |
+| `server/src/are/AREAutoRepairService.ts` | `6d128e98938aa882df0eda0413b0dd36699198788c720809c306025b8bf57903` | world | unmapped |
+| `server/src/are/AREInvariantGuard.ts` | `cd64d30157017592805da53b6850b5db1904adc0c913caa9dee0107af349a9c3` | world | unmapped |
+| `server/src/are/ARETopologyNetwork.ts` | `3f84501e8036ee6061040edcd6358193cc6c3526f4a6d87fc6a808b4c952196a` | world | unmapped |
+| `server/src/are/AREValidationState.ts` | `a5f8a953e0f3bd73ec5d8d2da4e0ef102638eadc50c2a0fe5365988c594a798f` | world | unmapped |
+| `server/src/are/CityLayoutCompiler.ts` | `76a39271d3d7560c3ed91dfa02ffc506280c31bccf4c4e1a2e6a132e9d113d02` | world | unmapped |
+| `server/src/are/DeterministicTickRecorder.ts` | `409965e6cb0a8947ac7563cf6e2a1be69e2bf76f73fe3de2accb18a894bf3d42` | world | unmapped |
+| `server/src/are/DeterministicUsageTracker.ts` | `08a9f4357ea1499793ad241295212a61689581c46d77e9f729405455f614a333` | world | unmapped |
+| `server/src/are/OuroborosOracle.ts` | `38d3eb71e9114044600cef7420c5d9ffd39959cda50325e0c327a4d16b2c1ae5` | world | unmapped |
+| `server/src/are/WorldHashSnapshot.ts` | `88bbc3236d3af4f6fcd8eb7aad065277bd50042cc6bcefba5c9598e103f562e6` | world | unmapped |
+| `server/src/assets/AssetHealthService.ts` | `81a2db3d7824e1416a33c6dec71bfe8d3f963c827b2e54df2444329ab042da4c` | loot_items | unmapped |
+| `server/src/assets/AssetQuarantineService.ts` | `02babf26a132885f3538d8a87f40969c3decd3bf38ac0ccc189c02be1c62de18` | loot_items | unmapped |
+| `server/src/assets/AssetValidationCache.ts` | `74b5df5a09e82b3590118df8c701d2a339fa5f3e8dd3d3dcdc66403c4601e6c0` | loot_items | unmapped |
+| `server/src/assets/GLBAssetValidator.ts` | `e46ef2cdbf0c9ca7b46edecc17a859665adb4854db9173da9e04c1876759474a` | loot_items | unmapped |
+| `server/src/assets/index.ts` | `74ecca22d7adbfd5c3c6c43bfafa93af651784b767abbaa325dd6af869443547` | loot_items | unmapped |
+| `server/src/character/CharacterPersistence.ts` | `09f47ca44cf4e42111fdd45044d7128925a35a79dac23f6f5235b5cb0eef7b03` | progression | unmapped |
+| `server/src/character/CharacterService.ts` | `2b31b4f228e4d9544a9a54e0dfc644a9310fe019b4f490e9c128504101d98454` | progression | unmapped |
+| `server/src/character/CharacterStore.ts` | `9d64bb20db0532c277a75dfd2550924ab1bedbd11e1bd0e2c019a5552a94f5b7` | progression | unmapped |
+| `server/src/character/CharacterTypes.ts` | `9a18b1b7de7c109aa0e3b3603594f4dc9cffccc8e3e0cf4cb8470106ac69c87a` | progression | unmapped |
+| `server/src/character/JsonCharacterPersistenceAdapter.ts` | `c17f1b01cdfb9f016a2d3ed3c19d8f5e14b20dfa0fe0cce549dc57432144b410` | progression | unmapped |
+| `server/src/character/PaperdollTypes.ts` | `9b66794322f10cc9b22e112eccd2a588f63b7dbf0704fbab91dd5d31d30c0d2d` | progression | unmapped |
+| `server/src/character/PgCharacterPersistenceAdapter.ts` | `bb967cd92f583be49e2d0f39481e41a762dcc2596ce68a367b53bbf505966632` | progression | unmapped |
+| `server/src/character/StartPathQuestLine.ts` | `19c21bd0b38d8ae30f57281f6294d9fbb0b189714401c29fd5237671571496ff` | progression, quest | unmapped |
+| `server/src/character/StartPathStarterKits.ts` | `b1d0044547efcd8898ac08759fbc3280bf014a7e5edb610015ccdda4d288ff78` | progression | unmapped |
+| `server/src/character/characterRoute.ts` | `63db8043b99dc15e93505862a89868fbf705c018079185a2c5a24939fea0d713` | progression | unmapped |
+| `server/src/character/characterRuntime.ts` | `30c5328eae1c0131aee90110ed4ef35bdd9a05602da848da19b60314af646f62` | progression | unmapped |
+| `server/src/character/createCharacterPersistenceAdapter.ts` | `2ae6a960daf641c0e6b71a36e816923eddfd047a79bc228f5a5fa5217f45a8af` | progression | unmapped |
+| `server/src/collective/CollectiveIngressRuntime.ts` | `15f362c11d6da6a3e6605e69065eba69543ebec89cb6120858310d348531f540` | unclassified | unmapped |
+| `server/src/collective/SovereignIdentity.ts` | `ab8891f032a098aebc8f6099f185f2568be6deb1775f2168f1dbc153a6690c18` | unclassified | unmapped |
+| `server/src/core/AIOrchestrator.ts` | `b27b917eddea7caa3206828eccd084ce23b33315727cfb2aaeac6b58ab6d5f06` | unclassified | unmapped |
+| `server/src/core/AREEnvelope.ts` | `7bc563b3efb0713bd8f855fd454d8850e695fb59fe8d275679826912b8242c60` | world | unmapped |
+| `server/src/core/EmergentMarket.ts` | `d4a6e1bc43bead72eee578cfa54b8b6b6bd783ffdb15f258f9b5788e1b618e87` | economy | unmapped |
+| `server/src/core/Engine.ts` | `1bac9f660ab93026a0b2c0503f7c53530e45a8e0e8d9a2965841a7f477daea81` | unclassified | unmapped |
+| `server/src/core/GameState.ts` | `5846eac98746bcbf6f0fa22a5c027e264391a73735275a31053afef1da36f800` | unclassified | unmapped |
+| `server/src/core/GameStateManager.ts` | `d41c53b7dc60d852f2b58ad39161a27af57a3d82a25f2b48a95cf5b72971ea13` | unclassified | unmapped |
+| `server/src/core/GlobalCrisisManager.ts` | `653fc3f44218a18db66098dd0bc78024c27aeb9840acd91602b4d6ad5c05726b` | unclassified | unmapped |
+| `server/src/core/ImpactBusterHandler.ts` | `cef0f64603d18250346f6cf2f169b88c99151c0f4b4730b357ea1d7e3428280e` | unclassified | unmapped |
+| `server/src/core/PayloadFactory.ts` | `fa5fe7d34b52b3a2d9f974b26e76ca69e1bcc7facf90279e80bb74ca923bdd21` | unclassified | unmapped |
+| `server/src/core/ServerTickEmitter.ts` | `d199b61e6da43a498778c275a8d551423a9ae6baf19fd2cf3a63e4e9b62bd313` | unclassified | unmapped |
+| `server/src/core/WeatherResonance.ts` | `a8d2297c9bb54342fbdf2d1ad25bba9c7f4e98ae218262e24ad8beafc8102b59` | world | unmapped |
+| `server/src/core/WorldBossDungeonSystem.ts` | `2135fd0bf5baf85dc2dcdf38926bd3f067961b6a50f4acf0648c12ab8691cd4f` | combat, world | unmapped |
+| `server/src/core/WorldEventBus.ts` | `e960f75a0805385607a88f94163a4e27cf9d56234f31d9679a884875667bcb60` | world | unmapped |
+| `server/src/core/WorldResonanceAdapter.ts` | `0c829ba9f484e930fc6acc071a93cafacc5d0fa02c2b92e089a0beb5f9468ae1` | world | unmapped |
+| `server/src/core/WorldTickPolicy.guard.ts` | `ffc79617fa15440d4b11bd83b235247b5fc4bda6747591df52b29233d2fe23e3` | world | unmapped |
+| `server/src/core/WorldTickPolicy.ts` | `e82c56011a9107821706886e1601ce808a8393cdf7233a018b6f279d524a87c6` | world | unmapped |
+| `server/src/core/WorldTickTimeAdapter.ts` | `d5b9c1278d3f02234d34978f797e738a91d3520b91cc8fa9fbe20cc5d2cb94eb` | world | unmapped |
+| `server/src/core/api/APIServer.ts` | `5c0bf3f7e4a740da21f4de4306114564408e7c0bafdba60902fafa7794e100fc` | unclassified | unmapped |
+| `server/src/core/are/AREBrain.ts` | `c05c9cecdf39606701f79cc37348521031ee97cca40b7f6d72ab9462285d45b6` | npc, world | unmapped |
+| `server/src/core/are/AREConfig.ts` | `383dc1bdf9e15e81cbb26d4f4dc63b11000dd1ee801c17ccf8a7e9d94f91c321` | world | unmapped |
+| `server/src/core/are/ARECycle.ts` | `0b5692459ce4c3890434ef9dc7490ee6048616a3872a2a8c811a35dfd88e0a6d` | world | unmapped |
+| `server/src/core/are/AREDivergenceGuard.ts` | `e1a8a04ac922e0e41674f0f1642c5cf1ef68343e3f665ee5354062279a8a40eb` | world | unmapped |
+| `server/src/core/are/AREDriftEntropy.ts` | `96538ca26ae51d01ff3d2f78e698f6dc6dcac72bfbbf22264ea9240c76b52b52` | world | unmapped |
+| `server/src/core/are/AREEconomyAdapter.ts` | `a935d113eea8b2dddd6fa79ea61980c7ef3636b73402c2314bd20288b5a76650` | economy, world | unmapped |
+| `server/src/core/are/AREElectroweakPruning.ts` | `342678da6d3b8b7a60ccee6a2fe9782d31d737b8b55e6ab5b34834114c6edeb9` | world | unmapped |
+| `server/src/core/are/AREGuard.ts` | `cc7ec319e801390a088a76d4065a1b6356fc8110b95070ce1640335533538668` | world | unmapped |
+| `server/src/core/are/AREHash.ts` | `91497e1b5149af57f90c1c79baad5a9e45830e1444d0b646ed5db5e5dd3151c5` | world | unmapped |
+| `server/src/core/are/ARENpcEvolution.ts` | `0efaf5459c5e9c1b67a20901177c00f413477551087ff5fdc3d171d49c08da68` | npc, world | unmapped |
+| `server/src/core/are/AREPayload.ts` | `6cc798308dd08b1edbfa23c707df00fad104d67e39489e0ffcefdde6e3e850f3` | world | unmapped |
+| `server/src/core/are/AREReplayBuffer.ts` | `bfdc09b78a4ced85666e445f0765ebfdae3e1ccf769a38b3d88333c48b853945` | world | unmapped |
+| `server/src/core/are/AREShadowAdapter.ts` | `a3b2916580fde8cf533a498da4fc23dee1e9843bd019ad321feab04b7d799c68` | world | unmapped |
+| `server/src/core/are/AREShadowLogSink.ts` | `82bdb1e0d2311c97b71c5b381b80437235f9f55ae65f095d291f4627b9b2da6e` | world | unmapped |
+| `server/src/core/are/AREShadowState.ts` | `2f4b1de3c95fb10340a79ed16bc238123d272c7488c123b7b15dda1c5def99b2` | world | unmapped |
+| `server/src/core/are/ARETick.ts` | `598bdc191edfbda75ff36b48d9ef9b855d523ed0d7b484daed0e7123f8740013` | world | unmapped |
+| `server/src/core/are/AurionTransitionTickSystem.ts` | `e78a36402d8cbd21a878b7de420b7b05c8e69cff0d82d37093712c2c701cc3ce` | world | unmapped |
+| `server/src/core/are/AutoModuleKatalysator.ts` | `55af7fd9228f63a53d77ccf38f4bf1d9e1da023e93f0d7a26170e60b10daa4ab` | world | unmapped |
+| `server/src/core/are/CanonicalLayerSeed.ts` | `0dfe6258e88694da4a0cf6066539aaa87173bfccab93025bbd5bc8de24f3a699` | world | unmapped |
+| `server/src/core/are/CanonicalLayerSeedSignals.ts` | `7bc7a2e2117d26f0795f2de1129c7980b83ffe08773283a1bd1031463ffba902` | world | unmapped |
+| `server/src/core/are/CanonicalLayerSignalBalance.ts` | `9a2792e7a56d4578cf1160cd514f97f8da857d628318f70cdfc8d486726ceeaf` | world | unmapped |
+| `server/src/core/are/CanonicalLayerSignalBalanceRuntime.ts` | `c830cd5cffc8c3623d01c4f5a25aa6fa2cb19332385cef0391f75b27c847763b` | world | unmapped |
+| `server/src/core/are/ChunkLayerState.ts` | `67f6479466e053e7c5b37d18079d47caf8fe0c9819fabd97e5cffb00ea399905` | world | unmapped |
+| `server/src/core/are/CombatTickSystem.ts` | `0cd66017719a23a8970916c80f8c91ed642169cf095bfa831c8522058bbdf896` | combat, world | unmapped |
+| `server/src/core/are/CoreTickSystemRegistration.ts` | `e0156f7e2ec557ce5781b61d8fa625991f1017aba39405abc7a7ab60da66d49b` | world | unmapped |
+| `server/src/core/are/DeterministicEventFactory.ts` | `09f0170cfb4484e52aa7742fc7d805c6b6631083f5be2d66e4ca1b541711a2ba` | world | unmapped |
+| `server/src/core/are/DeterministicPrng.ts` | `412cdf760847529a38e00d46f7abf475926e65862956dab40498bcc70a83a33e` | world | unmapped |
+| `server/src/core/are/EconomyTickSystem.ts` | `dbdb4ae66f28a3c20f379f771b27db6734fd6d6e019c6d0d96358770ca8b85e1` | economy, world | unmapped |
+| `server/src/core/are/GuildTickSystem.ts` | `80fba6f63987150bcbd4db8de1054fab34a7612bf601546f1cc7434103c8a799` | world | unmapped |
+| `server/src/core/are/IARELogicLayers.ts` | `4c665258f078d21155d2a232d74a6c812ccd28945aec44d8e5217354ac500501` | world | unmapped |
+| `server/src/core/are/JsonLayerPersistenceAdapter.ts` | `ad66d506e7c9da0bdc0262ca2883860ff34d735cf8e9c23b732d660843558390` | world | unmapped |
+| `server/src/core/are/Kappa.ts` | `738aedaa54aa16bda98a33ec1141eee3db3e4a1bbbd746878b118f7c9b757b22` | world | unmapped |
+| `server/src/core/are/KappaLayers.ts` | `4d7a546c2f38d03e98eca85a91d673ba820d1f5850956b5c85acced82bcd00ed` | world | unmapped |
+| `server/src/core/are/LayerPersistencePort.ts` | `1a3020dddb65210893b471b4bb40a87f3993d727ca99a9e46fb70132da03a296` | world | unmapped |
+| `server/src/core/are/LayerPersistenceQueue.ts` | `84490fd97e489a3af5bb72ffd88b04f8c4f6d77f37c5c12cbf21c70236645eb8` | world | unmapped |
+| `server/src/core/are/ManifestTickSystem.ts` | `3e2bfd2a122f9a8df8a1f0afbb15ebd3fc45d6001fcc84e11beb4813479d5cab` | world | unmapped |
+| `server/src/core/are/NPCTickSystem.ts` | `42cfe120c252e070697f7597cc48976327bd425b66a134557f582b5e876e6fe1` | npc, world | unmapped |
+| `server/src/core/are/OracleTickSystem.ts` | `f60129170ff1ad3375bb3b9abd0966d7e18ec5c45d46b20cf8ff2a485402d072` | world | unmapped |
+| `server/src/core/are/OuroborosTickSystem.ts` | `d4cce3f1c0e048623329ab5a75a8ae9a4deac3990ff0d1dfd44a9b11a19023dd` | world | unmapped |
+| `server/src/core/are/PgLayerPersistenceAdapter.ts` | `01cd5c68db8478f313f7e8cf5e14c6df2601de9a576d983cb635eaa0346f1a9b` | world | unmapped |
+| `server/src/core/are/QuestTickSystem.ts` | `1d72c59fe1a913632cb0eff111ad7d0de32c7f38ad1caf0ffe40a7e3e3610097` | quest, world | unmapped |
+| `server/src/core/are/RuntimeDomainPorts.ts` | `38676a44bc464ddbf20e3d411395d3b93af35c3a56e87070eb5473ac3480bef4` | world | unmapped |
+| `server/src/core/are/RuntimeValidation.ts` | `66db54b468f832a88283e238d59ea44c2b00af00e99a58062c76f236417613e8` | world | unmapped |
+| `server/src/core/are/RuntimeWorldStateProviders.ts` | `8f5f05cedf04d9f8620422e43f999dd68d4c5d59988da448726f0e35f9bc936f` | world | unmapped |
+| `server/src/core/are/SnapshotComposer.ts` | `538b2f3be6a458be6350cb034b992380fe15f257408ccb970ed271297f05a108` | world | unmapped |
+| `server/src/core/are/SpatialBroadcastTickSystem.ts` | `1ad9c3ed67c17aad492a603830e355ba99d0cab11dfa6a4dd6acc738f86f8143` | world | unmapped |
+| `server/src/core/are/StateHash.ts` | `9c585804f1fb5caff4292fca7e591f04549cdad49d5da24ba8a50bad72c13050` | world | unmapped |
+| `server/src/core/are/TickFailureFamilyProbeSystem.ts` | `cdb082674e045bcabc56a04e86bf48a1649732b231d5184ce3a49ceec733e946` | world | unmapped |
+| `server/src/core/are/TickFailureFamilyRuntime.ts` | `45b8a46f8849b5796805d60a24295f638bc214920ec6af78ab7c9837008a3dcb` | world | unmapped |
+| `server/src/core/are/TickSystem.ts` | `e5da898f9b79a09b06547a8f679336cff51e6b0e452ccb412b96c771ad3b4700` | world | unmapped |
+| `server/src/core/are/TickSystemContextProvider.ts` | `468e262af5cb7fe3d038e312641fdb04714c84bd0569e67ffffa8eed4fbb531e` | world | unmapped |
+| `server/src/core/are/TickSystemRegistry.ts` | `92b8f9219bbd2a456a56f53d952642f73426cfb1f08d0b78538f3b619142f002` | world | unmapped |
+| `server/src/core/are/ValidationMonitor.ts` | `e260d6b1ff961bf1221f6d1c65aaae3a347f05f587341e6ee7b83ba3fd4c339f` | world | unmapped |
+| `server/src/core/are/WarfrontTickSystem.ts` | `8e74ee8cf20ac58823c5468216581c1920aacef1f8bf9a6cd83d38dfe2a35283` | politics_war, world | unmapped |
+| `server/src/core/are/WorldBrainRuntimePort.ts` | `8cf9f7cca4eefbec396ca2e71b18c6f0fff11d8ecefcaaa0e3f59f9fb7551262` | npc, world | unmapped |
+| `server/src/core/are/WorldBrainScheduler.ts` | `1ae87dfd7f2ea1c4531a31dbbc46de462f68a0c8749fafd8bcf3f4b1e20b266d` | npc, world | unmapped |
+| `server/src/core/are/WorldBrainTickSystem.ts` | `d7c25d4b8e844d9b578433760af204a71b028acbcb1d7edf004d6881c9e6a5e6` | npc, world | unmapped |
+| `server/src/core/are/WorldTickRegistryAdapter.ts` | `64e0bad0c856e97f044b0f18caca7dfa1b2814ab8bdd1d45e3740fe34eddd86a` | world | unmapped |
+| `server/src/core/are/WorldTickScheduler.ts` | `d3d536819df64979a8a1868d3b70b112974a6b9de15483b3a3036cf479354a8c` | world | unmapped |
+| `server/src/core/are/WorldTickThinShell.ts` | `33c4600a781336f48ee5d8403f7ff9eec24ef107918fedb65cf64a9f3127501b` | world | unmapped |
+| `server/src/core/are/WorldTickThinShellAdapter.ts` | `5c83e6f4c02b512ced8af0fba9e189efa2f8021bbfdc04f4e134a5719889e5d5` | world | unmapped |
+| `server/src/core/are/createLayerPersistenceAdapter.ts` | `bfb4ff4aba1891f2b8fbf64c97ddfe28c6dea170e1e20e8dd4ad7ca2854d09bd` | world | unmapped |
+| `server/src/core/are/index.ts` | `547a52f47c44cb652fb73774a31a5f01375b92c9a4d2580cc7bc6556ba75b1f9` | world | unmapped |
+| `server/src/core/are/shell-compat.d.ts` | `9e5f3f55d703bf8640fee9627f4199b8880f3d910b0eac5005a80aefa9eb93ec` | world | unmapped |
+| `server/src/core/are/types.ts` | `d6e922e4eb1e1da5c27c978c7b99f6587364cf43b24ef8659b1096d335b08448` | world | unmapped |
+| `server/src/core/axiomatic-event-bus.ts` | `04ea3852747b52de70f5c0cbda6692bb27f9d00d66051420698090171622d1f4` | unclassified | unmapped |
+| `server/src/core/determinism/AREDeterminism.ts` | `8e338ee30c89e009876fba16513786431348840490f44abd1b754102881411d7` | world | unmapped |
+| `server/src/core/determinism/AREDeterministicTime.ts` | `ffa59e7cbb2dde45f2698dc7840898da281bfa03374f265126882b2402302596` | world | unmapped |
+| `server/src/core/determinism/AREUnboundedProgression.ts` | `fcc322527e145e144a7dc46da711e266ee8f23662c1e0faae30e811b23e57628` | progression, world | unmapped |
+| `server/src/core/events/EventTypes.ts` | `147dbefba4cbed503feaddfd9eacb75a4f00e714c63b837f4ebec2b37cd14f95` | unclassified | unmapped |
+| `server/src/core/events/GameEventBus.ts` | `38614566c9344eb2ecdf1f312e151d2980d827a2cb4fed0d7468bba138c0fc7c` | unclassified | unmapped |
+| `server/src/core/index.ts` | `069dbfaf0a861a65dc406784184f4394b0f06f2018882ceacd6d579c417d0cc5` | unclassified | unmapped |
+| `server/src/core/installClient2DPublicKeyLoginBridge.ts` | `df2f71aed598065002a13e82ee45ba4b6820d39d8a3717072b5afefc8611025c` | unclassified | unmapped |
+| `server/src/core/installDeterministicWatchdog.ts` | `d1bd7cd26ec631b8396120f3afd18fe637c52eb9c572ef1b00c066c91de00496` | unclassified | unmapped |
+| `server/src/core/installWorldTickWatchdogBridge.ts` | `50d17cfea2dc63d23e57eb746e4e09da24272b4a3b73141a18d6fcf72b2e7bcf` | world | unmapped |
+| `server/src/core/integrity/OuroborosAnchor.ts` | `20e52a9e97f0e2bdd582c796d572f2626be38462fbd6f89a905d14b8cd088236` | unclassified | unmapped |
+| `server/src/core/language/ArelorianConlangEngine.ts` | `c7bd2c5679f442445a317d469d0e52968a47ceca7b580b5066f70fff1ce046c1` | language_lore, world | unmapped |
+| `server/src/core/language/ArelorianLinguisticKernel.ts` | `be220f5b2479b01c2853b69b368ba4a501468ac86fd4b80324a9fcd4537d93e8` | language_lore, world | unmapped |
+| `server/src/core/language/DialectStores.ts` | `94674b261226e018e566cd83d89c8345d5aa094b94ab57a3f6a21a42cd67c481` | language_lore | unmapped |
+| `server/src/core/language/DialogueBridge.ts` | `eb3466ef5c56ca200a7a55725f87001a73355b869c37a437aab17a328b0b35a2` | language_lore, quest | unmapped |
+| `server/src/core/language/DialogueDecisionKernel.ts` | `c965fb3cdd46a790e522bb84b0870d257695cc9175ad621718b37d82df0473d7` | language_lore, quest | unmapped |
+| `server/src/core/language/DialogueSafetyQuarantine.ts` | `3527a1b7f1d9975e983b35eaa46695b941d147a4ed2917c022879c417ad5c980` | language_lore, quest | unmapped |
+| `server/src/core/language/LanguageGameDataStore.ts` | `2388d345506d12de6394d5646d3907f92565110527e4c6aee0bba250b818dd1b` | language_lore | unmapped |
+| `server/src/core/language/LanguageOutcomeLearner.ts` | `929eb5df95ca75009a3a1660022760206bbe94006f8457a6367f2ace98843041` | language_lore | unmapped |
+| `server/src/core/language/LanguageShadowTelemetry.ts` | `f293652189cad10565a897f02427171bce6fae8604df2a50ff917dce837b7cce` | language_lore | unmapped |
+| `server/src/core/language/LanguageTypes.ts` | `83a504b4074279d8e082861dbbf41131b0d09e9c09c6215f3bf578676fa15eda` | language_lore | unmapped |
+| `server/src/core/language/LivingDudenArchive.ts` | `cb3257c4df532afb5ef2020401795b8586509f96206ab315db0ecb52bd51a645` | language_lore | unmapped |
+| `server/src/core/language/LivingLanguageInitializer.ts` | `7d456cf175be3eae90a79d087219a8b255df73f9f327bff314d3142f7274e324` | language_lore | unmapped |
+| `server/src/core/language/MorphemeMutationEngine.ts` | `5ed1bd79066966520ad50f4e597a5c81817f7c2ec157c5ba7f6b3c65adae41e4` | language_lore | unmapped |
+| `server/src/core/language/PhraseGenomeGameDataStore.ts` | `7bf7a801645f9bfa538011f959900305b208d9b5da3f7787432d5ff066c533ac` | language_lore | unmapped |
+| `server/src/core/language/PhraseGenomeRegistry.ts` | `11c99c95c085efa91dcc8510228b2561a321d72acb71c0373ad504c3588c1456` | language_lore | unmapped |
+| `server/src/core/language/ProceduralGrammarEngine.ts` | `36f2350024396cadcfa6fc22f55496bdf4a5232bbcecd4aef17fd0f301d880f7` | language_lore, world | unmapped |
+| `server/src/core/language/RumorSpeechBridge.ts` | `0871c7d243d4244a0e675f0b7101eb4825db37905793546a04dc3f17afee50a2` | language_lore | unmapped |
+| `server/src/core/language/index.ts` | `ad8388a70ad777a50700b5d9c8f656d0a770ec8296b83444ea116b3b34b38f80` | language_lore | unmapped |
+| `server/src/core/liveheal/LiveHealAnomalyDetector.ts` | `73ca6db8b7f9c833139c06101ec10df085073eb5a012cace5f47af26da1000ad` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealDependencyGraph.ts` | `a4b40b9cc6ea983326fdc2a56692d472b3611b985a9a4c1d9791e4f7b00fae5a` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealEngine.ts` | `db5701a06d60276db8f30e67c33dc4034cd4a4303829fd2b97cb38e9efa3daa2` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealIntegration.ts` | `8b9c8ef9e22b08b2fac36f975637ba82b31d5ab2dd44df0b71c92b00acbc6909` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealLearningStore.ts` | `15a7b73e7f820824d884cbcd3287d521825bffbce9173816d6752675ed6b80a8` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealPatchLog.ts` | `dffb0e7792cd25a45924fea4d45458976098be505d9631b62ef02358b0cd826f` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealPolicyEngine.ts` | `4b553350f794cec90303e14199bed6afc73e02659334a0c7ad3e89338c50eec9` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealRegistry.ts` | `74d1a6a5f54fdd866fa321c67f48e902e3729d747da6a4c3fc576da337c8129a` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealRootCauseAnalyzer.ts` | `b2de269bac36ebd6c954378cb01a284a74bc526abb99b034cac033f217759c50` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealStateMachine.ts` | `42b761d99cddec0cf4751822f46425baa0a69dcac942d52f0e444bed8a579521` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealStrategyRegistry.ts` | `b3deb94d62302f281e93baae617cbf04bceafa5a59b7b3ef02bff023458b776f` | unclassified | unmapped |
+| `server/src/core/liveheal/LiveHealTypes.ts` | `8ae420bdad28d456ca1695f2b37f9ebe02be102d79d41cd83917c3f20559ba20` | unclassified | unmapped |
+| `server/src/core/liveheal/index.ts` | `9868d6a1651ddbab793ada8d4a93fdddb165e13f7cf386ccf673d9ba5c0271ac` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestCanonicalizer.ts` | `8a7119b431ad741ec0e30c0c5da56c29532ecc66b9c28ad7d53e13a872fce2af` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestFactory.ts` | `03f19b5e9c2e7f3c2af3d6ec0773e67e97c6b5c4c5be49db3dc8222bd385cf60` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestHasher.ts` | `2a7a88df2a683f830fb863a799bf0a8ed9929757db5ea05a679378b61ce03527` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestReplayGuard.ts` | `2e78af26f83df1f8daa495625f0320e5ede03c91d7c8c3c6d14f5e95442762ee` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestSigner.ts` | `e6a3414a355f6e4f05cdc79252c760eac1ece7b6f0d7f08ad02255f1f17f8741` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestTypes.ts` | `9ca6d6e3f1ff1c3fa37b0aa376902dcc9895261d9b26035957ac58a9b62599cf` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestUsage.ts` | `4a0acb516dc16f753bcdc081951c36cd3660612adbc02410a83cc22e980d9550` | unclassified | unmapped |
+| `server/src/core/manifest/ManifestVerifier.ts` | `6ac3a40cf9cc8cfd9c5a5bc849c76e6edf34da8abee2134ef74f9320095bcf15` | unclassified | unmapped |
+| `server/src/core/manifest/WorldTickManifestManager.ts` | `b3986bd1d43cec993ef2963fd32dfc2c9bb0bcfc21848f3daa099f0c49c7c824` | world | unmapped |
+| `server/src/core/manifest/index.ts` | `2d0777ad47d17aa9ffaa216eed9dc9889c9f8b96d3768861c28a23ba5a3572ec` | unclassified | unmapped |
+| `server/src/core/ouroboros/ErdosStringManager.ts` | `5b6a620feb72d1138e82396c3db22ba0545c4b2cb9089c6a551ca565ca3d5dfa` | unclassified | unmapped |
+| `server/src/core/ouroboros/GenesisEngine.ts` | `e5e051f14705fd420a78464f4cdd6fd849adb54b828c8c2fc74351e76df27d63` | unclassified | unmapped |
+| `server/src/core/ouroboros/LayerResonanceTickSystem.ts` | `3db82878ae4e003bb136bd452b3bcdd515c4951b963a9cc6451bd35263bfa4ef` | world | unmapped |
+| `server/src/core/ouroboros/NPCSemanticsEngine.ts` | `716fac8f77f18e4e69464143abe766589e9b4f64bddc8714b7da6e5bf37a8524` | npc | unmapped |
+| `server/src/core/ouroboros/OuroborosCycleSystem.ts` | `9f9f22e7399a47fa11d6061b2fe15eb0d2efec4b9433564f70b319bfd3e38c86` | unclassified | unmapped |
+| `server/src/core/ouroboros/OuroborosLootGenerator.ts` | `55a8570b278f5ec86587ca2ab1d907f3699b6c47f08c1c4ea0a0a47c1ad08a77` | loot_items | unmapped |
+| `server/src/core/ouroboros/OuroborosTypes.ts` | `d51fd5bb6d368d7cfd09e17d2c68cc7e76aecf44bbb99387509abba33f95d08c` | unclassified | unmapped |
+| `server/src/core/ouroboros/OuroborosWatchdog.ts` | `564b81a5dd85a38cc8e8ac171b4b9e29cd62379cf7fe6d753a942700d2078a73` | unclassified | unmapped |
+| `server/src/core/ouroboros/index.ts` | `ca12397283e34e8e779919dc17689304973ca6ee8624119db2d1b26f449432c4` | unclassified | unmapped |
+| `server/src/core/ports/GameplayPorts.ts` | `889e3bd58d24c490d448ff0da0a0f66a6a7994fda9a278af8dbfb96d08a8cea5` | unclassified | unmapped |
+| `server/src/core/ports/NullGameplayPorts.ts` | `65608744bf3bb0e0a9ff25c1c6b84613ab9aa2fa18cd8dc6dabd299f447638ae` | unclassified | unmapped |
+| `server/src/core/resolveMirroredWorldAssetsDir.ts` | `31cfc24721e0eadce39a3fed329e42b264eb37b122966af8e5ed91644a7af380` | loot_items, world | unmapped |
+| `server/src/core/resolveWorldAssetsDir.ts` | `603ea2e30c57d04942937645d5c73c33a26dbd7f91b4025ec8d850cb684344c8` | loot_items, world | unmapped |
+| `server/src/core/spatial/ChunkMath.ts` | `730434923e106e7ff2702d2139b1f46d9a9469fdc8a1ce3dae053ed17cfd074a` | unclassified | unmapped |
+| `server/src/core/spatial/InterestGrid.ts` | `7ff079dd3a58bb40a0e1c6cc474aaf2fdfd0aa72aa133b7d87c34639df2f5275` | unclassified | unmapped |
+| `server/src/core/spatial/MortonCode.ts` | `f557ee8f28613c734d8523e0318cad28436bd0390cec678f4554ada600a75279` | unclassified | unmapped |
+| `server/src/core/spatial/ObservedChunkSet.ts` | `4c9c403e0dbb9608ce4c79863c724d0ebffffc876ac8301452ef5f9ce54bdf9d` | unclassified | unmapped |
+| `server/src/core/spatial/UnifiedChunkContract.ts` | `74962e6a55ab117a0ee387fe0250943f3480fd8d395abebbf2c11e37740435e6` | unclassified | unmapped |
+| `server/src/core/spatial/index.ts` | `99229f8501257bce15eedc5971bdd54d87796c6048c771d46d37cfbeca0dbd82` | unclassified | unmapped |
+| `server/src/core/state/RegionState.ts` | `870ca1d28a94b7260861d5c5501bd55113399a648fa60a3b19ce112bf292fad5` | world | unmapped |
+| `server/src/core/state/WorldStateRegistry.ts` | `10c41c5c88c2164c4825c67e426f6bbf8d73d34b344417f33fc264a2042964b7` | world | unmapped |
+| `server/src/core/systems/ArelorianKernel.ts` | `fccbb0ef12712681c2a889d18d543572237c18a992d159731ca8845be7cd210c` | world | unmapped |
+| `server/src/core/systems/AxiomValidationLayer.ts` | `70f55beb0f1c3e52054c9a59b4035f2c717483eee94f02ceb95d75c11b33466d` | unclassified | unmapped |
+| `server/src/core/systems/CombatSystem.ts` | `c5f1a1c912544a511b7bc37199745189e6a2748beecd4438c2deffbd991a1f78` | combat | unmapped |
+| `server/src/core/systems/EconomySimulation.ts` | `ecd7080726516d23edbf38eff949c267a122ea0f03a790d69313b751a68cc331` | economy | unmapped |
+| `server/src/core/systems/EvolutionSystem.ts` | `6afc39cf5f6448ee3a29d2ca56a28c2ab2d56ef9a8200db97d55ac234b765c0d` | unclassified | unmapped |
+| `server/src/core/systems/LiveHealSystem.ts` | `a713ec76d015ee7770cc24c4b9921b249ab24319234f3c375f0417dad5f27d3d` | unclassified | unmapped |
+| `server/src/core/systems/NPCSimulation.ts` | `34fe664d17767a3917fb05dea050711e47c1fc793ca812b3279e7c70c1406cc3` | npc | unmapped |
+| `server/src/core/systems/ObserverEngine.ts` | `09ea0303c6faac5176689af6622a88b60b52882f37e7087bb7d5d78aac039c8e` | unclassified | unmapped |
+| `server/src/core/systems/OracleSystem.ts` | `f4073370826ae13c9f83fd8aa01d362c9d56c60ff9e347ba7a27e67a9e72d192` | unclassified | unmapped |
+| `server/src/core/systems/QuestDerivationEngine.ts` | `582629e8a5c58f6d231e41ce9bd1b82b387edd4a339f77f45a8b0dae8549a29f` | quest | unmapped |
+| `server/src/core/watchdog-determinism.ts` | `cf456999721f6e128dcb0c0fc1ff69d144b5f898796ac1d5df9c37c600fcf51d` | unclassified | unmapped |
+| `server/src/core/watchdog-emitter.ts` | `134700c530d0d04e11144dc2c181e514cef6deaeddb70ab48093c3fe6f2cc281` | unclassified | unmapped |
+| `server/src/core/watchdog-live-sensors.ts` | `dacd183b3b9187a49f848627a84f25398c75bd16a906077fa8dfa8c0cdd0e1c1` | unclassified | unmapped |
+| `server/src/crafting/CraftingGameData.ts` | `7c142093a64df9f6ea6e22fbda04e4bc6170e6fefffa07c2c2ff1e3e341a528e` | loot_items | unmapped |
+| `server/src/crafting/CraftingReceiptPersistence.ts` | `dff02fb7c701edfbcdfb61545898b43f682225321f693a24e8450235decc60ee` | loot_items | unmapped |
+| `server/src/crafting/CraftingService.ts` | `4eb8dcd9ae5d1af5ef3da34e5bcd16b20112acf1d34aa83a5ad0acc443899de8` | loot_items | unmapped |
+| `server/src/crafting/CraftingTypes.ts` | `d22fe987f89e95dd9844ff51a026a4335f5b4740ab6962369da6386f89511412` | loot_items | unmapped |
+| `server/src/crafting/JsonCraftingReceiptPersistenceAdapter.ts` | `5d5e3640a7fb3afeb837aadc360f31b772ead213804ff14dc8167981e96d5a2a` | loot_items | unmapped |
+| `server/src/crafting/ProcessingStations.ts` | `7a078b41f860d86809eb385dfd7638a850e458144ad9dd2f101acf22627e2db9` | loot_items | unmapped |
+| `server/src/crafting/StarterRecipes.ts` | `e966ab6a1b6a3eac062f7d0367fa4947c9b77a3b4d0c646747c97c58895d3328` | loot_items | unmapped |
+| `server/src/crafting/UpgradeRecipes.ts` | `a32dbe8176206df930e833d610bdeb1508d8d816b7bde351b46d59da334a54e1` | loot_items | unmapped |
+| `server/src/economy/CampStockPrices.ts` | `744f17e54c37e0ef65dc8b7f5b4a8be977ec5acb9e2a705d6b18ab43ee759dd9` | economy | unmapped |
+| `server/src/economy/DemandPricing.ts` | `70db581275726e7dca26fce829a929b29fa7166e8f9f0001a95406a8f29f4235` | economy | unmapped |
+| `server/src/economy/EconomyGameData.ts` | `d12f55496d2c075bc1cf89c79b9fefa373c94243a85a00eca8d43fb02c23f518` | economy | unmapped |
+| `server/src/economy/EconomyService.ts` | `f8fe40f0463b0d9a4f4a3a4f7668b5785526c9f2397a53a7191e69a2a05be153` | economy | unmapped |
+| `server/src/economy/EconomySnapshotAdapter.ts` | `2bae25ddf1ec4bc7a0074bba5851bcae89b0fae31ca5350b70ba4ee283b4fcd7` | economy | unmapped |
+| `server/src/economy/JsonVendorStockPersistenceAdapter.ts` | `117542810a52a06bdf19b9cc7e9d1a2dc3d50e456cec0d9fc5475e67258384ab` | economy | unmapped |
+| `server/src/economy/JsonWalletPersistenceAdapter.ts` | `5fb11652ec67bf6936106f2c8936f0f945d37bbacdfb370f380db68bb8425e8d` | economy | unmapped |
+| `server/src/economy/LocalMarketTypes.ts` | `e8a3d1f4e9e9d000d1c4fc87a757c9bb64c47e2e37bb0fd19e9364486ff982a2` | economy | unmapped |
+| `server/src/economy/LocalPriceResolver.ts` | `39527e22f1a2143c23f5be252c4a07f12477220e6f025a93846498b34675fc4f` | economy | unmapped |
+| `server/src/economy/MarketOrderBookService.ts` | `929e9f037217c025b1f438b209daa9f5d91a7dae7b06073982aa26f063f68e74` | economy | unmapped |
+| `server/src/economy/ResourceSellPrices.ts` | `c00b53031b726071e6ab0e3ba9998dfad37e269cedd9b39234bd0c15b4b5b249` | economy, world | unmapped |
+| `server/src/economy/TradeRouteGraph.ts` | `989d756b6c098d03995857458b29ed075bec154ee41849b3174542acaf8345ad` | economy | unmapped |
+| `server/src/economy/VendorStockPersistence.ts` | `0b7c0c0e0a01b9df99cede7b86730fde6687af6ee9a202c547e664f2153ce87b` | economy | unmapped |
+| `server/src/economy/VendorStockService.ts` | `0023498e81b56f68a5727cad44c86af9ccf8621dfc2102ddd56108d30341c780` | economy | unmapped |
+| `server/src/economy/VendorStockStore.ts` | `bcb07c9a82880893505ccdc26faf736d1583692e0edfd5927b64f7f329fc88d6` | economy | unmapped |
+| `server/src/economy/VendorStockTypes.ts` | `68fa4630064add02df90b7b9734df44d64ec913141114b510814c045ca55ebfb` | economy | unmapped |
+| `server/src/economy/VillageVendors.ts` | `c4a614cdcc84f034f5a6bf99ea0b40906084ad78971d900cbaa014c0b9275d59` | economy | unmapped |
+| `server/src/economy/WalletPersistence.ts` | `fcce8c4c670a8e4e4a10f4060e06990a5676fa350fcdc7a02f73bf1e73ce2813` | economy | unmapped |
+| `server/src/economy/WalletService.ts` | `bbe30ce3469428bb2def58ba7cb30efdaba40696a81136c4b43a412feb734505` | economy | unmapped |
+| `server/src/economy/WalletStore.ts` | `c5b34e39cdb3bf5d1478f3248d679d60ed5c83024c7ac87cc20498872d9c26c8` | economy | unmapped |
+| `server/src/economy/WalletTypes.ts` | `7002ed81710e90533d6513b318041c1870bba856db9e024c5758551e84fcc620` | economy | unmapped |
+| `server/src/economy/WorkOrderGameData.ts` | `663c83ed7eb5b611b0475ebadb3ed8196d71ed8abf908e292c4fc648a3e58429` | economy | unmapped |
+| `server/src/economy/WorkOrderService.ts` | `98b3cbc1a125a49ca5d11db48b053c1c352a4f151d4df0208a7285d23f0fcf87` | economy | unmapped |
+| `server/src/economy/WorkOrderStore.ts` | `d5685bedaea4685c58b8c33c0981ff52cb9053f0fc280b82a8a8082cff01e99d` | economy | unmapped |
+| `server/src/economy/WorkOrderTypes.ts` | `f1030fccac49aaa3126291c4aa9dd80a77ecf7747004e0ca643b8425ce43b4ae` | economy | unmapped |
+| `server/src/economy/economyRoute.ts` | `bb6afb79313a8b7d980eb385edb8dcfa53495b5d44941b0be341d782c234e7ef` | economy | unmapped |
+| `server/src/economy/economyRuntime.ts` | `743e29bbb856f9f83e9b1282314eef10ac7eb9e0537c5bf3b140e18216ba9c37` | economy | unmapped |
+| `server/src/economy/index.ts` | `2956aa46d1f74e431cc71e6c77695a8249780ce188baae2ab8e86baf2262e8d5` | economy | unmapped |
+| `server/src/engine/AREEngineBox.ts` | `55729773f4a895e1b33e14003eb35437743059313c46ef41678af41f1b277a6a` | world | unmapped |
+| `server/src/engine/AREStateCompiler.ts` | `b864d9fc7339aed89a17e20cdd47998c9697ca8cfa38a355def4a4f3b164e894` | world | unmapped |
+| `server/src/engine/EngineInstanceHost.ts` | `84a1dba616d46b2d1e844b764a22fd01a8aba6cd2edc33011135e1b71906d08c` | unclassified | unmapped |
+| `server/src/engine/PlexityEngine.ts` | `eddafb59ce627f2ba95849bba7fa38e14426cf9d3a5024c0f225f570a41e0700` | unclassified | unmapped |
+| `server/src/engine/StateLogger.ts` | `14f247a1cc7ef75f45223098f5ad7cbfd13410ed68461675e29036558a054ec2` | unclassified | unmapped |
+| `server/src/engine/TickManager.ts` | `a24515658818c401497b3836c063ecc560eedec5d2ba508bf3b0f0c776562f0f` | unclassified | unmapped |
+| `server/src/engine/core/AREPayload.ts` | `ddc6af5d7141b27d3ff6dea9923c1340597e5e565f1c9c04eaf982c9ef21eca7` | world | unmapped |
+| `server/src/engine/npc/HeuristicGoalPruner.ts` | `caa6b7683abe426e3f47943d0a8ffe1d31d6deb2fb9ff8c59f2c28638b66ba23` | npc | unmapped |
+| `server/src/engine/npc/NPCEngine.ts` | `d40d2f48eaa104c90289969511c8b80f17627ff8143c6884783bf2ec74e3eaa4` | npc | unmapped |
+| `server/src/engine/npc/NPCMemoryCache.ts` | `4e588c3b16837a55311c98489582893da8716a75bca58dd121b7857783db6b40` | npc | unmapped |
+| `server/src/engines/AREEngineBox.ts` | `40b7022a9f574def034f92b8940dd09ee8755dd678066488f84bde717a547880` | world | unmapped |
+| `server/src/engines/FactionEvolutionEngine.ts` | `1cc9a50d726d2d480533f2dce9cc032f38d0f26fabdb1c381059e099545ea217` | politics_war | unmapped |
+| `server/src/equipment/AffixStatMapping.ts` | `2c83da3fd0b373cc2bc7889ce24920fd07b61ec075a8061a9b8e2b72edf1ec9a` | loot_items | unmapped |
+| `server/src/equipment/CombatEquipmentHook.ts` | `194f43e93cedf40d555e635d250084db0754e60024a84b1225f6d4ecf69ca561` | combat, loot_items | unmapped |
+| `server/src/equipment/EquipmentBonus.ts` | `8f653ed543f2acb93266ea5ee644dc13f01c6ccc2704b3e9578c35c5464557d0` | loot_items | unmapped |
+| `server/src/equipment/EquipmentPersistence.ts` | `ac0e97a844fe14b4617578bd7b2ec7d396e3ae322a6f47a5fc2af43b7ba24b35` | loot_items | unmapped |
+| `server/src/equipment/EquipmentRequirementValidator.ts` | `c1e02700e597604d85c4504f76e332c7638d06532387666badd32e03b528245c` | loot_items | unmapped |
+| `server/src/equipment/EquipmentService.ts` | `40a16339a3c2c043557301d7ff10faffa347e7bec5b05c87f4562301bdf9dcc4` | loot_items | unmapped |
+| `server/src/equipment/EquipmentStatService.ts` | `58f118d95e8bdf15c1a18c8528a5e3678fcc2784252901e525305fe682d9847d` | loot_items | unmapped |
+| `server/src/equipment/EquipmentStatTypes.ts` | `98854a7f7a89cc0dcbba08a554f980db07650e7c835a453fce7c5d5a8b164ec7` | loot_items | unmapped |
+| `server/src/equipment/EquipmentStore.ts` | `802e68d041d2c81aace8d731d92c784aac46bbff72f540d500b067655dd6c5a0` | loot_items | unmapped |
+| `server/src/equipment/EquipmentTransactionPlanner.ts` | `d6b981689c1d698d844064f555bfac759ef0c86eb4520fd145d40557bd7e43cd` | loot_items | unmapped |
+| `server/src/equipment/EquipmentTypes.ts` | `1ceafa621720d122ad47f5029109c4759759f15a161e888c375b20c88eeb2d20` | loot_items | unmapped |
+| `server/src/equipment/GatheringEquipmentHook.ts` | `7ec1cc6ae44f83f06cd4a81b287cec97eb2d87e0e370e5616938c2f43105102b` | loot_items | unmapped |
+| `server/src/equipment/JsonEquipmentPersistenceAdapter.ts` | `dd43416ec8d962762b6f52d589742ae299dd626e7e7d2fe0ae2bf21d00aa50d9` | loot_items | unmapped |
+| `server/src/equipment/LootEquipmentHook.ts` | `748c23cf619652a04f7dbc8e7acf7bbd580b50e9e407fcfd27c3f23df2349d9d` | loot_items | unmapped |
+| `server/src/equipment/LootEquipmentSlots.ts` | `33e04da0d0dee6fd7c7dbbdbde47af757041b7e50bb5fdb43b2bd8cca75de356` | loot_items | unmapped |
+| `server/src/equipment/PgEquipmentPersistenceAdapter.ts` | `b01e6a1be2084865e854105a2447c7c232e9b95c8b66742163cbe95e3635a24b` | loot_items | unmapped |
+| `server/src/equipment/createEquipmentPersistenceAdapter.ts` | `fa5cf4eaecc3288f5e0ea40099298c68f3e6b5cb335752a8182d71ea73578e91` | loot_items | unmapped |
+| `server/src/equipment/equipmentRuntime.ts` | `cc1d3026e95daf9003a8c0ab6bf693eae62d208afc97dbc4f5aeb28417c4d8bf` | loot_items | unmapped |
+| `server/src/events/WorldEventBus.ts` | `cf2d5a510e9375c1ef381f430947c1443329a8b9602ffe8170c1f0f0d42a5eca` | world | unmapped |
+| `server/src/gameplay/ActivityResolver.ts` | `ef2c5f62d014f378c221eefcd12d6f2809849fefa0bebc4ae7ca0a1467ec1a56` | unclassified | unmapped |
+| `server/src/gameplay/BoundedMemoryEvents.ts` | `4a5508527d73922aab2660d64eabcd2e01ba6b7fbfd0f9a0cb7ba385cafbb3af` | npc | unmapped |
+| `server/src/gameplay/CausalCatchupCompressor.ts` | `f77dc192a6aa8ac72b16b01ebc91e4747e81c5e9e9493fb114e9a69ef12f050b` | unclassified | unmapped |
+| `server/src/gameplay/CausalCatchupTypes.ts` | `32e751ec28a55ff9544d68922866435434394cb71a162202dec10cc452014551` | unclassified | unmapped |
+| `server/src/gameplay/LiveGameplaySnapshotComposer.ts` | `a0ef30e036a97c1b605d0e09f45fcbfe1c353263ba248b9465ccb6e7cb13be39` | unclassified | unmapped |
+| `server/src/gameplay/LiveGameplaySnapshotTypes.ts` | `b9872247528a7c9d5ccf03d164aaa5fdfa6b5a48613abb83752947fa25a0640d` | unclassified | unmapped |
+| `server/src/gameplay/NPCActivitySnapshot.ts` | `82293bfd7c39151ecdf1f6426e7f89abd207dbec4392544451f657e175a34135` | npc | unmapped |
+| `server/src/gameplay/NPCActivitySnapshotGenerator.ts` | `811f7b9a82f25de3581f8c007a82c6d0e7f07016b9b821df07c44fe729d16c19` | npc | unmapped |
+| `server/src/gameplay/NPCManager.ts` | `05625f24cbf060178ab70cf4b5d984501b28c3c1a73bd245dafecf3712a744f7` | npc | unmapped |
+| `server/src/gameplay/StableTargetSelection.ts` | `6c3d8fc15b5a17bbf94c952da31c1ce84bafa8e8a9119e233fd0055eaa1731bd` | unclassified | unmapped |
+| `server/src/gameplay/WarfrontHeraldController.ts` | `5ecab7d1c4999654b9641fdc20c829d4cf1f32b453153ffc636775d9cbb025e1` | politics_war | unmapped |
+| `server/src/gameplay/adapters/EquipmentSnapshotAdapter.ts` | `0ee6f923ab479f98ef4c06bbb947d8fb72584efd16bae51e93e8c76405852aa2` | loot_items | unmapped |
+| `server/src/gameplay/adapters/InventorySnapshotAdapter.ts` | `6000387a66139232794d48d9325ab9f7f29f81d4fb8f0e4e238bfa64525cbb79` | loot_items | unmapped |
+| `server/src/gameplay/adapters/LegacySkillSnapshotAdapter.ts` | `ec6bdd80f5c8d4f3f731e7f082de358a864aad6ff02aeb1022e250d55563cacc` | progression | unmapped |
+| `server/src/gameplay/composeLiveGameplaySnapshotFromLegacy.ts` | `2a220126bc463e554b889f4473a80e39436e16eed93e076f09913144e64a7412` | unclassified | unmapped |
+| `server/src/gameplay/gameplaySession.ts` | `9b718254b53c0644f9c023f2bccbe7da3eeb8853057f92d1c22c3c7c50955cb1` | unclassified | unmapped |
+| `server/src/gameplay/identity/characterService.ts` | `711e1507e1b87d5dff6b4637438b5ddca2adcfc888ff3ec94608e7c8c8700335` | progression | unmapped |
+| `server/src/gameplay/identity/identityRepository.ts` | `cda4b3b743c87b936fe56f9d0b58c1ca821025b150706e5955cbabd3123f6411` | unclassified | unmapped |
+| `server/src/gameplay/identity/identityService.ts` | `0741a8f5688daa8712b879ace5c2384fbac2b2e252cfc1de869bea108eb03a70` | unclassified | unmapped |
+| `server/src/gameplay/identity/identitySideChannel.ts` | `765b26f6cefa14750a589e3ada4052526dd905a506620c346ef9571cf1891bcc` | unclassified | unmapped |
+| `server/src/gameplay/identity/ownershipService.ts` | `abef0dca1d735fafd34f01735518417375a6b929a7fb625c9b7328abfb509b58` | unclassified | unmapped |
+| `server/src/gameplay/identity/sessionTokenService.ts` | `11b6317c249f0baf92ce529a51e672f89af8ae3a68623c1a23c3a4ea7ca0675b` | unclassified | unmapped |
+| `server/src/gameplay/identity/types.ts` | `1bc0f9d3b7b27c9be399bf34a185b72e6dd287b7b43eb94daa66cc82d8093495` | unclassified | unmapped |
+| `server/src/gameplay/index.ts` | `2c34b173ed978e7514d542f5340f3cce7e33cd12735259a74017f73cf4f72f6e` | unclassified | unmapped |
+| `server/src/gameplay/persistence/equipmentRepository.ts` | `70f04413e9c3eeda3dc374f83aafd7bafc9598b3a81a9883c247f7de84614c13` | loot_items | unmapped |
+| `server/src/gameplay/persistence/gameplayPersistence.ts` | `cdaeb0a3e3ecadae5326c4841db7e3a29ec9d451ceedd608809134ab88687679` | unclassified | unmapped |
+| `server/src/gameplay/persistence/inventoryRepository.ts` | `fa0a9c125fa768a88b2cbd3748208f8158945d0c6f49e5237ddef69aa5b3c28b` | loot_items | unmapped |
+| `server/src/gameplay/persistence/playerRepository.ts` | `1e2ce6419967f49e4a5fe5af62d6088088de6620eb678c9514e1838f6123ae36` | progression | unmapped |
+| `server/src/gameplay/persistence/questRepository.ts` | `358e89682ad11f06254dc5317d26d6631be1193896005c7478b590e5b3b0bc10` | quest | unmapped |
+| `server/src/gameplay/persistence/sessionRepository.ts` | `ace9b00cd14923e3b48fba056edfdf52ad1b54080283eaf0a2e205ff2d4a0353` | unclassified | unmapped |
+| `server/src/gameplay/persistence/types.ts` | `7d0bcb2e51f7701559f539d2650c5a151243d08b77b79d159106d8e49c5e3520` | unclassified | unmapped |
+| `server/src/gameplay/persistence/worldEntityRepository.ts` | `35e03f920fcb811d7487dce445c3ec9b0cdfe8bf334f109cbbf11f243f91e365` | world | unmapped |
+| `server/src/gameplay/protocol.ts` | `f610918186f1ebfe5c2c8c217773ff43ba170775d430f30fe63b57a44440e702` | unclassified | unmapped |
+| `server/src/governance/GovernanceActionContract.ts` | `f6f1dd6436f755838b90b4cab0e83a620b344b0c0725b8d8a230e2d6776b3146` | politics_war | unmapped |
+| `server/src/governance/GovernanceService.ts` | `37a83431a6dd4151ee6e9f3b0f698af98e41a97f521c4e82be20a3a81340ea78` | politics_war | unmapped |
+| `server/src/governance/GovernanceSnapshotAdapter.ts` | `b963afc26d69621898b3397c660d5eb9a5a94b50fd9fa89a6275ede01b0ad8a6` | politics_war | unmapped |
+| `server/src/governance/GovernanceTickSystem.ts` | `08616981c37f3f48a904050348ba866bb1de743589584af1db19f62a6b0d4ffd` | politics_war | unmapped |
+| `server/src/governance/GovernanceTypes.ts` | `cc129617f8d2eae3c1227cac520a63bc2346d3ca41bd05725d775b9ddf02edea` | politics_war | unmapped |
+| `server/src/governance/SovereignGovernance.ts` | `bdbf879d7d4c8a8e4f0dfe004a29766d6526d8c88af434c2873e1ddccc50797a` | politics_war | unmapped |
+| `server/src/governance/TerritoryModel.ts` | `e5922f40dfaa39a73fa4978cb7ec9344a626f959ca279fae6bac9ca8d09d3c16` | politics_war | unmapped |
+| `server/src/governance/TerritoryRegistry.ts` | `0f3db956f3a685999f828a5d6aa9245c7d43a4b29bd59fdf92d8816d7c269395` | politics_war | unmapped |
+| `server/src/guild/GuildSovereigntyEngine.ts` | `d2bb8618ca30dde17e6d4b0add24627d56f327c9c296bb984217d33a00d56d80` | unclassified | unmapped |
+| `server/src/history/RuntimeHistoryLog.ts` | `66fda48d5d0cd04610b8109c565bb40ecbc3ccd31bb50f1c47a3f0e2b835fd3c` | language_lore, quest | unmapped |
+| `server/src/history/RuntimeHistoryTypes.ts` | `22f6c3e11af6e5853264c8f27b2bcdb5c6d2850092ae5c21e3e2080861d1db62` | language_lore, quest | unmapped |
+| `server/src/intents/CanonicalIntentIntake.ts` | `bbbb1d6deccdba61b9820eb1559bb4bf8dbc5e2376ecd44e81f801e0ac1fe6a4` | unclassified | unmapped |
+| `server/src/intents/ServerCanonicalIntent.ts` | `172cc63912154a6e1af66a483bbef2c0381a9163fd244b7abc7635e40a043f6e` | unclassified | unmapped |
+| `server/src/inventory/InventoryPersistence.ts` | `ceda292bcbbb46e18b5202a0a3d918a070ae34d5d08249c9c7501dabe472e05e` | loot_items | unmapped |
+| `server/src/inventory/InventoryService.ts` | `61512a4f70eba4d86c2a05f9a612c6f6012ee9d338f0f73562da45d03b0623f1` | loot_items | unmapped |
+| `server/src/inventory/InventoryStore.ts` | `2334e1508eb29400bcf579402bc6cec04e44706fe47185ac7e3cea2fd19972f4` | loot_items | unmapped |
+| `server/src/inventory/InventoryTransferService.ts` | `82868aeeaec26e36140883aedfa40cf19a7b45eceb680166e1556ccbde3750dd` | loot_items | unmapped |
+| `server/src/inventory/InventoryTypes.ts` | `73388090bd937bbab5b10aa027d6ad8e1c842a9b796cb4a82f8e58966074ffc4` | loot_items | unmapped |
+| `server/src/inventory/JsonInventoryPersistenceAdapter.ts` | `53b34535a2cb5eb551cbe62ccb181d12a8c13820acb355c43bc9d6b0648fa6cf` | loot_items | unmapped |
+| `server/src/inventory/PgInventoryPersistenceAdapter.ts` | `29b76c1e6dccbb2e34cab7e8e1d12ef0c7259af32dba62f39ecc3ef984cd8139` | loot_items | unmapped |
+| `server/src/inventory/createInventoryPersistenceAdapter.ts` | `6f61cff521d209e51faf546e7236b8a63264334570d7a42dc3f5410c9693cac2` | loot_items | unmapped |
+| `server/src/inventory/inventoryRuntime.ts` | `b1358c96dbb450d1c68610941e2849d0f696e077ae717127b32e473fdbf34635` | loot_items | unmapped |
+| `server/src/legends/LegendRecordTypes.ts` | `f0fe20ad53a9c02f9c7fdaa13e802775e1cdda58c1ad2637b352f455a20fbe3b` | language_lore, quest | unmapped |
+| `server/src/legends/WorldEventSignificance.ts` | `276b0f281835b21e664c58af55a69d9be3f4c40c48e6f7537a5953050c13a6e0` | language_lore, quest, world | unmapped |
+| `server/src/logic/AREStateCompiler.ts` | `7a8c1d6689dcb76cbd446acd5145365765bd048927826e249536cf71552a13d9` | world | unmapped |
+| `server/src/logic/CascadePlexity.ts` | `9bd88a3a9d2e7925fd956e38e52fb4228d972e26b1dc0c008b43d58a681906e8` | unclassified | unmapped |
+| `server/src/logic/ChronoPlexity.ts` | `b9b387b0d4dac1d8b6a8bb9e5e56c7e862ecdf4f0bc625e8913c99574c3e375f` | unclassified | unmapped |
+| `server/src/logic/ConstructionScheduler.ts` | `6b0b2dc949754719e25df14cb91b6462fccd69ab4e22d982f9fdd6ff7703f871` | economy | unmapped |
+| `server/src/logic/DreamWeavePlexity.ts` | `0fa902567981b132cdf0e7a634f2650580d68b6f92f39b694feb17630eb0edd4` | unclassified | unmapped |
+| `server/src/logic/EclipsePlexity.ts` | `f21f9074ba367a950605b6c8c9f09c10d91d28f62c2d28b01ee223352ef77054` | unclassified | unmapped |
+| `server/src/logic/GravityAnvilPlexity.ts` | `dcd846855046c0f5bdffbf641ee207f3cd363c81ca2fd74b48bac0e79fdb345a` | unclassified | unmapped |
+| `server/src/logic/HivemindPlexity.ts` | `f85e9a378261d7362626fa310b760744a6f86fecdd0030b97e29c9254972453b` | unclassified | unmapped |
+| `server/src/logic/LeylinePlexity.ts` | `01b29b1b71afd86f9a969d7f616c6f0fc36de6d1c0c1adad614dcbbf64ff66b4` | unclassified | unmapped |
+| `server/src/logic/MasterExpansionOrchestrator.ts` | `d67a7f9f8aee38af80f8b20ac9f2ea4e59d8ad4649e71970f0407429d7fe454c` | unclassified | unmapped |
+| `server/src/logic/PlexityLogic.ts` | `7a6d637723390a1f72fc8074e5f438dbc97670b4c43e1bb5299d3d30b787a6d6` | unclassified | unmapped |
+| `server/src/logic/QuantumNebulaPlexity.ts` | `f09558662f9ef5ae72a5c36952e690a5953224027a95bff597b0ab859f43680c` | unclassified | unmapped |
+| `server/src/logic/TectonicPlexity.ts` | `712fc69e35f196a3eabcc708ae6f5efc5a73b82b0a538ce19e15fd422fbd3f59` | unclassified | unmapped |
+| `server/src/loot/AffixEngine.ts` | `eb56c7fcd2a6d235694d56ab408f50db151630f891add53f10f6366162a3dbc9` | loot_items | unmapped |
+| `server/src/loot/DeterministicRng.ts` | `aaf25b2d26098418ff2c4145906d7aa3a8f83795062aea7f2cfd037f9beb6da6` | loot_items | unmapped |
+| `server/src/loot/LootAxioms.ts` | `0e43fbfb0033e512e9da201035f4acf29e30d4a295ee5e455481e72f0465bab8` | loot_items | unmapped |
+| `server/src/loot/LootDelta.ts` | `03e17b637f2947ce98d3f11e1d6bc6380ea1f20a74bb66135973ab1744606357` | loot_items | unmapped |
+| `server/src/loot/LootDirector.ts` | `1a5a8f189116148a5bf5c5d034c0aa24fdf2ea2c51b5707a25be1767bc385937` | loot_items | unmapped |
+| `server/src/loot/LootGovernor.ts` | `2d0dda5718aad4ee101a4ecad77aac56b4c60e23f33ee2ddafc87f50abdbb0cf` | loot_items | unmapped |
+| `server/src/loot/ProceduralLootMachine.ts` | `8d344b9778cc2d22fce560416e778e0dd9c7177fbd0a50627b1c2e9ec68b61c1` | loot_items | unmapped |
+| `server/src/loot/RarityResolver.ts` | `7ba6ea0a724a877095354a66d9e6a25f78b36effd13f2d652e53079fdad4f1cf` | loot_items | unmapped |
+| `server/src/loot/SocialStringMutationEngine.ts` | `e967a6e67361162954681eccd3f90f7b09117f375dd1d4abad749920165b0e0a` | loot_items, npc | unmapped |
+| `server/src/loot/TreasureClassRegistry.ts` | `6d7fc03ead8262ab577becd4bebb81e23faf785198445f08cddaf40dbd1eee6c` | loot_items | unmapped |
+| `server/src/loot/index.ts` | `e197224be1b645add05edcc3238d74e828fbcc4e8dbdc3e16fb2dc2540fca311` | loot_items | unmapped |
+| `server/src/managers/FactionManager.ts` | `81638ad566b869cc74004292a9949149d0af1d4a00944759431b686bc69c6595` | politics_war | unmapped |
+| `server/src/managers/LegendManager.ts` | `c8742e90a51a51d22d16f01602ed02d1076437c1e9793dd0d06773e8c754a0d5` | language_lore, quest | unmapped |
+| `server/src/managers/NPCManager.ts` | `3dbed8320639d8f696028157b5e03f2d7c84980f75b62309a61d1bc23c40e85e` | npc | unmapped |
+| `server/src/models/Legend.ts` | `93d1e77792f4f0e15719bd2ce96fd8db528afee754764944e9184404dab258f5` | language_lore, quest | unmapped |
+| `server/src/models/NPC.ts` | `6f36611e6f935aecf7ba356ef9d3f3956f7b3cd9ece439d00378f49783771b11` | npc | unmapped |
+| `server/src/modules/WeatherResonance.ts` | `a8d2297c9bb54342fbdf2d1ad25bba9c7f4e98ae218262e24ad8beafc8102b59` | world | unmapped |
+| `server/src/modules/achievements/AchievementRegistry.ts` | `b08654c68adb15325ce21d4eb6643e767dc2c4ea9dbc2f11b2a5504c42148da5` | progression | unmapped |
+| `server/src/modules/achievements/AchievementSystem.ts` | `c31dd1f1c2f3f67dc4eb59c72975248e67ae2d921594e4584cc620de84996ac5` | progression | unmapped |
+| `server/src/modules/aging/AgingSystem.ts` | `d95e1df567978104aa9f9178faaef01aca0a7d47684b8af2f420d6968273e29c` | progression | unmapped |
+| `server/src/modules/agora/AgoraMonitorApi.ts` | `c08e6020d29bc3baa4887169ed0b582beb2f3d653fc7f88549b2cc252f2949b7` | unclassified | unmapped |
+| `server/src/modules/agora/AgoraTypes.ts` | `19d366c11bc63bdbfc1732da3a99dd2833fa490e905b22bf8687108c4fd17826` | unclassified | unmapped |
+| `server/src/modules/agora/GitHubWebhook.ts` | `91110db24bc499a1a2dcab89befe326a7d385ce13052587661af21d0ef81a7bf` | unclassified | unmapped |
+| `server/src/modules/agora/OpenCollectiveAuth.ts` | `f5f08d4c5f5f000a8bd88dbb862d6218c73737cf66d4e912eecfca5e202b0502` | unclassified | unmapped |
+| `server/src/modules/ai/AgingSystem.ts` | `12f6a86280f9fd42e4699b81946509e1eff68d4f373d4254aa3daf633e7412b2` | progression | unmapped |
+| `server/src/modules/ai/BehaviorTree.ts` | `7348a16f478e8027010fae0165a00ecb4695b5d4c1db590e917f00f6beb19674` | npc | unmapped |
+| `server/src/modules/ai/FamilyGenerationSystem.ts` | `830a0202d7fd0a4f1b2915d30335bfed6fc41da0568c12e4dc1611d04d1399d9` | unclassified | unmapped |
+| `server/src/modules/ai/LLMConnector.ts` | `6b8777aa8bf775780c95cc03692db4a4fc61f050760ecca47a78fed60eb82eba` | unclassified | unmapped |
+| `server/src/modules/ai/MonsterDirector.ts` | `c532a57e26c30ec2066d522b188c425dff0b2642994d545fe41cf125c8d050af` | combat | unmapped |
+| `server/src/modules/ai/NPCBrain.ts` | `d5bc904a3b24457fa789962c05d492852565fb26e7a1511948a1cf37269c37fc` | npc | unmapped |
+| `server/src/modules/ai/NPCSchedules.ts` | `d30a2d6f860dd8697fe8e680696890f7fe0ea14fadf0721bd6265797d6151335` | npc | unmapped |
+| `server/src/modules/ai/TaskSystem.ts` | `64b7336f6a5fb5cf23fc53d7959f6694be4d19ef08708be544c88d242aa1e2fb` | unclassified | unmapped |
+| `server/src/modules/ai/WorldGenerationFlow.ts` | `bbabe1f2a57e73492559f2df428fadcd88721521ee8ae4bf12764c4a3504a9ba` | world | unmapped |
+| `server/src/modules/asset-brain/AssetBrainAnalytics.ts` | `85a54fea995cf0be4aa0417eaf3d445d0933515c6c009d69fc66d79a55948d63` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/AssetBrainCache.ts` | `85020f0e7368af8756cdf2348f18c323420ea0a9fcf116c05159295bd770c3de` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/AssetBrainDatabase.ts` | `ad4fdbe31b947a03feb5e117c0423d59921d09bc340e6da1e101ccb68b37049c` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/AssetBrainSchema.ts` | `1ffb8acd51af35de983b9a84896f41e337fa66a5da69f3e2529bbe65d14aee16` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/AssetPipeline.ts` | `50b449d41b32947f67ab12616a6e2db199e5e194fe074e246530836b841c8801` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/TripoService.ts` | `0145afa3f7fdce76b5612e0ffb1523e8024af0760a0ed6030abdbdada872ba72` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/assetBrainEngine.ts` | `67667b8c8733df8656b2bbcb1add20aaed08661cdd63c2f8e04883bf65597131` | loot_items, npc | unmapped |
+| `server/src/modules/asset-brain/prompts.ts` | `50f41280b939d9028d5cf7642c84e2503b02a24bb3688d57da95f322259ceac1` | loot_items, npc | unmapped |
+| `server/src/modules/asset-registry/AssetRegistry.ts` | `09ee9ee8a8d9f4d8adf2af81b5c6d6170afd0b91a3708f362d4af4ea97193020` | loot_items | unmapped |
+| `server/src/modules/asset-registry/GLBRegistry.ts` | `d4c4e47a0c1ff72d5f5a47549f24a30cf0bd3e1d968d5dc167f598073eab6ae3` | loot_items | unmapped |
+| `server/src/modules/asset-registry/NPCAssets.ts` | `9fee8630faa06e070243e91051410a85e35ee533b2ffa365843f5c67fd6d7d01` | loot_items, npc | unmapped |
+| `server/src/modules/asset-registry/StructureAssets.ts` | `7ca3894a4e2f0df676c212399f534faed77a8f1e62e65a5ef263188525b3af58` | loot_items, world | unmapped |
+| `server/src/modules/asset-registry/VegetationAssets.ts` | `f64b401f0e9bd8ff4a65c600f20412107a0a9969d778549123730a473b3ca15e` | loot_items | unmapped |
+| `server/src/modules/asset-registry/builtinModelFallbacks.ts` | `131ba7d2761ee106b5ba88f6988b1a0931b83385415fa3e97dd59cd71b128d27` | loot_items | unmapped |
+| `server/src/modules/assets/AssetImportQueue.ts` | `e1ab4f5af0e9d4f3bcc5e7e448ffc317ec83084f427b871a79a50bfd8847d4b8` | loot_items | unmapped |
+| `server/src/modules/assets/AssetValidationReport.ts` | `2cb360ff7c8c113c93caa749fac46735f683fe890e59bcd0de0da1c9da160035` | loot_items | unmapped |
+| `server/src/modules/assets/ContentManifest.ts` | `fb47abb23ca0af15a2c2b13016252c96df8adafff323ce4bb2db41e96d410c66` | language_lore, loot_items | unmapped |
+| `server/src/modules/auction/AuctionFees.ts` | `1d25a7239f43935a10f1f03c988798ac74442a1a6ec852a7a9ebae863868d973` | economy | unmapped |
+| `server/src/modules/auction/AuctionHouse.ts` | `3ca8e8552c51ed46575ecf0aa1fab77e64b7d7ae33deb6c2774c67e91e8e38a4` | economy | unmapped |
+| `server/src/modules/auction/AuctionSettlement.ts` | `dbb0c5473bab2eb4ab881946db462aa10541b4de0ca84f3707e519fe5bf13cb5` | economy | unmapped |
+| `server/src/modules/audio/AmbienceRegistry.ts` | `695a3f5c031c8ed21fa7584047f8cced47c6e8755135ae57500d30e5f5efa97e` | unclassified | unmapped |
+| `server/src/modules/audio/MusicZones.ts` | `9655258b54962eaed163a014efd76e3f80fe3ad60c1b59cc55368523c8100422` | world | unmapped |
+| `server/src/modules/bootstrap/ModuleRegistry.ts` | `c0018c6037ff9956774d51a30a1222c40c9f8f7bcac0eea4a386a9e7494c9c07` | unclassified | unmapped |
+| `server/src/modules/bootstrap/SystemWiring.ts` | `888b41f32e6085a2204f60e54a5c9ef8e155cd5eaee83b688628e41c06ba82d0` | unclassified | unmapped |
+| `server/src/modules/brain/BrainFieldAnalyzer.ts` | `54e07d1407d3daedb9dfaf41dfc5eb786f36c110d389e4d0f41d2b06ff944096` | npc | unmapped |
+| `server/src/modules/brain/CascadeBrain.ts` | `f05eeabf5098e8d16d00f50c50c456981fece87ad273c8c3988c22427cec652b` | npc | unmapped |
+| `server/src/modules/brain/ChronoBrain.ts` | `b33a46daeead0b0ebaa6885220eb5f8a0ffaf7c9052bdf4f2b44813baf8ee8e4` | npc | unmapped |
+| `server/src/modules/brain/ChronoSwarmBrain.ts` | `da80b7f612adc9eae1345e747bcc6c6d05cd648812388d76e6c99bb32c151a08` | combat, npc, politics_war | unmapped |
+| `server/src/modules/brain/DreamWeaveBrain.ts` | `106936c3085e8b3e32aa6c0657494c1c038c2c83aed0723a3f99fabd0080d35f` | npc | unmapped |
+| `server/src/modules/brain/EclipseBrain.ts` | `c58d16a039df5c4ba444ae5f42168b5465e5624b5de65c8e142eaa49bde55597` | npc | unmapped |
+| `server/src/modules/brain/GravityAnvilBrain.ts` | `d407a4fab8613f52587549efb5a960f3e452353caeb55175082f6a57861e8381` | npc | unmapped |
+| `server/src/modules/brain/HeuristicWorldBrain.ts` | `893da183418670ca7507ce3b88df05ea7e53d831640c9a43e228eb3e0a2593ec` | npc, world | unmapped |
+| `server/src/modules/brain/HivemindBrain.ts` | `91bceee379207711f42c1fe07a70bee0d02124353de4b21d4939a53fc160cd08` | npc | unmapped |
+| `server/src/modules/brain/LeylineBrain.ts` | `2e16e1f97d730a108127decaa631aea0b1ebd6684f879f85df98f57e0c46c4da` | npc | unmapped |
+| `server/src/modules/brain/MatrixPrecognitionBrain.ts` | `2bf711c9018fe033d6b36fb6b5536c371656f5804ce2eeed644592a116d30b96` | npc | unmapped |
+| `server/src/modules/brain/QuantumNebulaBrain.ts` | `ee5351b29f64e72170533b5b0111d0a2dfedd9ea8f1e6918f90e8c5dd7f1ac25` | npc | unmapped |
+| `server/src/modules/brain/RealityFissureBrain.ts` | `df9de7f9f42ac00dc6f962291632f0b3167e653a67b08fea25416a439b879703` | npc | unmapped |
+| `server/src/modules/brain/ResonanceBrainLogic.ts` | `8ba0bddf2c03ffe610af48a026127930ad78c4cb78838e4aff3bc4d26c8ef9b2` | npc, world | unmapped |
+| `server/src/modules/brain/SynapticLoadBrain.ts` | `6e2dbf28ac95f8603dfba983ac2f15838de0d76041141515baabed9c6eb99282` | npc | unmapped |
+| `server/src/modules/brain/TectonicBrain.ts` | `4b630da14903a05aa20bf92afe37728929ba481551ae8baf5b0cbfc6ee661278` | npc | unmapped |
+| `server/src/modules/brain/WorldBrainCacheService.ts` | `50d77df0fc7f869e7dcbd49e044278befc651ea9bf887f87a130febe963e177b` | npc, world | unmapped |
+| `server/src/modules/character/CharacterAssemblySystem.ts` | `afa1b9b5f478f7b258a969e00b6bc82473393c32e7f82830149c260c69e02b90` | progression | unmapped |
+| `server/src/modules/chat/ChatChannelRouter.ts` | `fe5c583886aff0f6175a0ce4c4210f9505f4af51d0f27a7a660cac4fc3ba61b2` | unclassified | unmapped |
+| `server/src/modules/chat/ChatChannels.ts` | `7c544f95b829064a7f420a3dbb5efb7588e24cc19fea70f9dcef605563cdda32` | unclassified | unmapped |
+| `server/src/modules/chat/ChatModeration.ts` | `34e87804efbe9ae4f201601407aa3c67d5ebd6c996b93d454dbc376afa7c6a13` | unclassified | unmapped |
+| `server/src/modules/chat/ChatService.ts` | `c8ee93c5425ecbdb6b685ccbfbb3db2edf307207bf4e30deb9218b1bf89d3a13` | unclassified | unmapped |
+| `server/src/modules/chat/ChatSystem.ts` | `baf0b1c4b9767eb8288b28792184fb13afd6283d790658f2fed7e28a4cd1257f` | unclassified | unmapped |
+| `server/src/modules/chat/RedisChatRelay.ts` | `91223cb5c79d1c043db067f6c8aa6fde71e65f4899469e693313f6a136786fb3` | unclassified | unmapped |
+| `server/src/modules/chat/StatusEmitter.ts` | `ff7a68c21a0b614762e5a4de93dc8e89d907722ce3e0820c838eee3a61c051a4` | unclassified | unmapped |
+| `server/src/modules/chat/chatChannelTypes.ts` | `fc394b577e4aaed69bc7db5d43ee80ec56fb3b612f6823e9b0b4c4eee918e02c` | unclassified | unmapped |
+| `server/src/modules/chat/installRuntimeChatRelay.ts` | `5abcbb0745b975142205a2e4d9b3da1ec51c828f0a46197a26478553fdfafeea` | unclassified | unmapped |
+| `server/src/modules/civilization/CivilizationRankings.ts` | `89761ed2c6f58f887bc46b8b4fd6c80d1213c1e7d8c886f9a864d0078330c268` | politics_war | unmapped |
+| `server/src/modules/civilization/KingdomLedger.ts` | `f2cce443adf136a4d0dbdfa611369879b209acb6f9deb4ebd377332f6f6ff5a3` | politics_war | unmapped |
+| `server/src/modules/civilization/SettlementSystem.ts` | `98a1f06d3692b4a01e244cc5258c3684d645e5fbe51e1f983295c0a920b0f91b` | politics_war | unmapped |
+| `server/src/modules/combat/CombatDeltaResolver.ts` | `2739e5214f5ae37e9ad5acc59c8a761a5f96a1346fb4d90691eeec87dac2ce98` | combat, world | unmapped |
+| `server/src/modules/combat/CombatDeltaStore.ts` | `24f65bd24fc31bd335deee67516c34c33820bfa5f86d335a1412bc5678fa34d0` | combat | unmapped |
+| `server/src/modules/combat/CombatDirector.ts` | `f55c65e67f15f6c9eaa30780013cd1806dd49f2c65e9a3b2e18907a4573907ca` | combat | unmapped |
+| `server/src/modules/combat/CombatService.ts` | `55a848f8e9bc5672853da61aa3ebe835449dc09c13f3471a029bdb6b10584d4c` | combat | unmapped |
+| `server/src/modules/combat/CombatSystem.ts` | `a4a3f9f4d0257fbb4625b02fadeefb8bfa20e837927a0a0e0e9a5bd31710e39c` | combat | unmapped |
+| `server/src/modules/combat/ComboValidator.ts` | `9cf68f7b735188f61ec9ca5afb578b177d2e4760af515a27d8f95ce494a60161` | combat | unmapped |
+| `server/src/modules/combat/deathRespawnSystem.ts` | `994f64d5937f5bf3af6ada09d39c1fb77212b5261069e5e3ddf765f27ff64053` | combat | unmapped |
+| `server/src/modules/combat/hookTypes.ts` | `f4a7f34b04edc922ca693cc83f6f9b880cc792c9e4b71778791fc315db6c04b7` | combat | unmapped |
+| `server/src/modules/combat/respawnPoints.ts` | `86aa9f528eb37578910b5beafadde04b5e8970beb275d49a0c2e253a1e19e707` | combat | unmapped |
+| `server/src/modules/combat/selectAttackTarget.ts` | `8b788f27bfd4fcff5d706875a462ecfba4995e7ae63afac804e069599a755f27` | combat | unmapped |
+| `server/src/modules/combat/types.ts` | `50b63ec7f3e443e0da107f07ee593ef6ff907e7b0bdfa7c5c5a4abeeadfd3369` | combat | unmapped |
+| `server/src/modules/construction/ConstructionQueue.ts` | `82fc35941268c1b321b51a42b9c102925dff305d431795005e4d0a5bc245d5f6` | economy | unmapped |
+| `server/src/modules/construction/UpgradeSystem.ts` | `050612446de74f9b1630c918365683d3447bc4f29744f31f62b26b31f355f6eb` | economy | unmapped |
+| `server/src/modules/content/GameDataStorageProvider.ts` | `4285d2ee3a95da40f95fc0e15a90cf0ac618db8e45dc8f9d200016a30d9ade1d` | language_lore | unmapped |
+| `server/src/modules/content/adminContentChoices.ts` | `9a05c7aa80d3b010c189be4ddfbf9ecfe15908f0afd9aed6cb25d7480e138300` | language_lore | unmapped |
+| `server/src/modules/content/adminGlbGallery.ts` | `e6fa5530010a39b816a980c89f2047e6be99658eee6bffccd8bb4e96ca5ec904` | language_lore | unmapped |
+| `server/src/modules/content/adminGlbModelNeeds.ts` | `293b668dc898caaf4c3e13068343d5bef7e56fd0acd7b79754c158dc34e03532` | language_lore | unmapped |
+| `server/src/modules/content/adminGlbPathCheck.ts` | `a985ceefd332a5d34a97231c3436020a6ce16ffdc99cfdc291643b6d23c9e379` | language_lore | unmapped |
+| `server/src/modules/content/adminGlbSmartLink.ts` | `4fc8a4c033e58079f0f1c95d822f11bc184b3e13c0cbd9d3ab55d1f27f51a2fa` | language_lore | unmapped |
+| `server/src/modules/content/auditContentModelPaths.ts` | `41eb0a1c4bb30545f56e37e376f6191a4cdc457f7671444bfffe25ce1bdc7fe1` | language_lore | unmapped |
+| `server/src/modules/content/contentDataRoot.ts` | `869c68d9505c2a8b1be9457ac9af0447a9d210facc205aac8e37164c30647114` | language_lore | unmapped |
+| `server/src/modules/content/publishContentPackFromRepo.ts` | `b8dc1575d29a01d738d25281393d7aef37337951ef49b1c9e9d9627eae8c464f` | language_lore | unmapped |
+| `server/src/modules/content/repoRoot.ts` | `0d9e4b7a93ec003f686b899dea54a3c527b520f6c11e6e5d7d5f845b10d183ef` | language_lore | unmapped |
+| `server/src/modules/content/validateContentCore.ts` | `319e0c5cb6860463ba7e83a5f16789428d5db144cb9fb59bb8df63deccceb984` | language_lore | unmapped |
+| `server/src/modules/crafting/CraftingDirector.ts` | `bd956badc93f19472b0991db513db20b3e15ea5f336b9c036ab7ff78827bfefc` | loot_items | unmapped |
+| `server/src/modules/crafting/CraftingStationRegistry.ts` | `fd2e2bfb313d78ce03db6e9039dc0fc5db56790c83ac812685b7628f2b987e1c` | loot_items | unmapped |
+| `server/src/modules/crafting/CraftingSystem.ts` | `e4ad564de64b71900bb54a97d671fbf17dcc3a1c8a7dc52457f4e70f9388a212` | loot_items | unmapped |
+| `server/src/modules/crafting/RecipeMatcher.ts` | `f6ef220021cfb1d033fa6427f916cd610068f9004ae10203b60477dbd5b2885f` | loot_items | unmapped |
+| `server/src/modules/crafting/RecipeRegistry.ts` | `a10433d1e077bf88f02f161cffd01220bd542758350c9ad68aede90826ffda05` | loot_items | unmapped |
+| `server/src/modules/dialogue/DialogueContext.ts` | `1d39c63f37b2aaf698490f1a31072f21d835c535898d74fa27027d4c7c42c9f9` | language_lore, quest | unmapped |
+| `server/src/modules/dialogue/DialogueDirector.ts` | `d98f7d14ea51cfa7eb4db94642a9ff2e40def93192c85eb38a3686573a034379` | language_lore, quest | unmapped |
+| `server/src/modules/dialogue/DialogueEngine.ts` | `a49a587bd0406c62fe170e2ba94c4fc4e27556044adfac044a011d2d52efa50f` | language_lore, quest | unmapped |
+| `server/src/modules/dialogue/DialogueGenerator.ts` | `3d1418881ea30c0d1c4486e8525811ebee7a7386ef77998dc46a9b744cd21c1d` | language_lore, quest | unmapped |
+| `server/src/modules/dialogue/DialogueMemoryBridge.ts` | `8a27e89759c2fd17fb472c224ca0b84ccb4cf18c31091f983fdda54e7fef6988` | language_lore, npc, quest | unmapped |
+| `server/src/modules/dialogue/DialogueTagRules.ts` | `cc08ef4c22b20767ce08b9f7332b93987eaebb9447708d3972e051d58e12308a` | language_lore, quest | unmapped |
+| `server/src/modules/dialogue/DialogueTemplates.ts` | `d6e016e86dd8e93ef8efcc9ff470baca79f4f51766bfdd4cbd6af6fe96521b5d` | language_lore, quest | unmapped |
+| `server/src/modules/diplomacy/DiplomacyEngine.ts` | `698fcce08fb1796d5f4f4ddeb11d9615483293083dafcb756fcdd84152e7eec8` | politics_war | unmapped |
+| `server/src/modules/dungeon/DungeonGenerator.ts` | `517641d89ce0c4c76967215a8393481f5fb8709a8d6a2d6c16286652135d7c6e` | combat | unmapped |
+| `server/src/modules/dungeon/dungeonInstance.ts` | `3ee665a2083351296712654a30c04337270a712716df66ac0c266a5393e4efcd` | combat | unmapped |
+| `server/src/modules/economy/BuyOrders.ts` | `c2b11195f92d00b28ca780c2c9f20209905efa6f93f8eab48288ce8ffae76923` | economy | unmapped |
+| `server/src/modules/economy/CaravanLogic.ts` | `55bf377bf294f652ed8444a7c7fa8af01b8c8b92b720be9d5953e302fea7fc5d` | economy | unmapped |
+| `server/src/modules/economy/EconomyEngine.ts` | `2b1408846e4bdba0cec19d76e10815b936f4b233cb19af36f6793bb8ffd841b9` | economy | unmapped |
+| `server/src/modules/economy/EconomySystem.ts` | `316a72c2dbb50a1629edc0f655a958270cc71305b2bf366180bb3d25418db506` | economy | unmapped |
+| `server/src/modules/economy/EmergentMarket.ts` | `b0e2ae8f65f97fc509e273ec59c989f902c31c2a29ec439bb262572c0fc79c92` | economy | unmapped |
+| `server/src/modules/economy/MarketExpansion.ts` | `93563a4c8be08dac09660f72fa13a1a6effc96f9ff7c0ac8bdc5f2b2b0a056c2` | economy | unmapped |
+| `server/src/modules/economy/MarketLedger.ts` | `6df4475aa03decf6ffacc96f6a249422e3084a3adfca4d058fce298f12dd44d0` | economy | unmapped |
+| `server/src/modules/economy/MarketMonitor.ts` | `42c3cc5c80e3f969effe74174a35b5d479696c041891d68d2017e20fb5fbacc6` | economy | unmapped |
+| `server/src/modules/economy/MarketOrders.ts` | `7e5e9ccca97cc5fec097656a11176e95469c1fc20b8296b51ebaf9ea7408ec2d` | economy | unmapped |
+| `server/src/modules/economy/MatrixEnergySystem.ts` | `69965d4ef9b55ba36869bca5b8caa7333f728b83abecd1fcc393bba2b42b2ac7` | economy | unmapped |
+| `server/src/modules/economy/NPCTradeAI.ts` | `55d165a63152baec7fad01d6362533d0520bad4ce859f81e7c75b406f2a6293a` | economy, npc | unmapped |
+| `server/src/modules/economy/PlayerMarket.ts` | `6457aa75853f9ef93c80299b8a1938915eacdd6622849a4b696bcbc60547b0b3` | economy, progression | unmapped |
+| `server/src/modules/economy/PriceBalancer.ts` | `3311da6229e882947124dddf0a83e6274d88e45e975d9ea239d28d259401f03e` | economy | unmapped |
+| `server/src/modules/economy/ScarcityPredictor.ts` | `d8d0acb6443c4480f0332cc0d44099491de44b6b1f5325b0c2e5fefe0fbbee48` | economy | unmapped |
+| `server/src/modules/economy/SellOrders.ts` | `9009fd6edcc7854e9f7cd3a98f24c58041a04d62311277d1832a28880eb4c13e` | economy | unmapped |
+| `server/src/modules/economy/TaxLedger.ts` | `dd19879ddf5f3d155fcd636222437013495b425cc507ff07abf09f45ff63df72` | economy | unmapped |
+| `server/src/modules/economy/TradeRoutes.ts` | `350ba2ca3e1befa575d7fb884d1b83c30fc5df3465549d5e508525451d0ab383` | economy | unmapped |
+| `server/src/modules/economy/WeatherEconomyBridge.ts` | `23f3017782bc7ab136f3ff89a4eb621fb16398e0d65762737f46d1ff17117181` | economy, world | unmapped |
+| `server/src/modules/economy/WorldEventBus.ts` | `c444cf19108cbe993964623651936368d7152289e53e24e35151669ba0920e2f` | economy, world | unmapped |
+| `server/src/modules/economy/auctionListing.ts` | `38c815e3cd1cba0f9e217bf4ddf9c8a86808ddb0e80c2c605151dee6e6f55b80` | economy | unmapped |
+| `server/src/modules/engine/ObserverEngine.ts` | `0021bab2fcab92089f0c994042c771e34596e22d8f04d6531275b8aae92bd9e5` | unclassified | unmapped |
+| `server/src/modules/equipment/EquipmentSystem.ts` | `31aeda76cf55c357f22da1eaeb8a15ee9f4006138859cc605367772de0b29c62` | loot_items | unmapped |
+| `server/src/modules/events/DisasterEngine.ts` | `d21e546ec5245a57ce018ee346767d8d412e33681506d286da859534f622aac6` | unclassified | unmapped |
+| `server/src/modules/events/EventScheduler.ts` | `1c6a695ea3efb553c3d8a4bf45d7e13168c75e5e42390e4b70a7dfa9aeb22ecf` | unclassified | unmapped |
+| `server/src/modules/events/MigrationEngine.ts` | `29d3d30049a1efb32324f01fb40e5b86bc4cb0f3e2b4bdb29361e7c973215e81` | unclassified | unmapped |
+| `server/src/modules/events/WarForecast.ts` | `a2c5671da0d903a991561ff8d9e2edaee0dcd6cc47c40c1db0fc2c25b30002e6` | politics_war | unmapped |
+| `server/src/modules/events/WorldEventLayer.ts` | `de6f1e7b8e00538042fc5ac56f10030206893c49e03074f8c878d318e034f7b0` | world | unmapped |
+| `server/src/modules/faction/FactionMemory.ts` | `3cec082323230286147d2fc547ae006d3f81838906adcbfebf4099877aca16f3` | npc, politics_war | unmapped |
+| `server/src/modules/faction/FactionSystem.ts` | `4cf431ca1e47eefbc961938f29368f1896e1bdd446aca3b63a7dfe504257b3dc` | politics_war | unmapped |
+| `server/src/modules/faction/NPCFactionAdapter.ts` | `35050649a3e03ba9896136ccd98da7a3de37b95162eb93873eaec0d16f155a61` | npc, politics_war | unmapped |
+| `server/src/modules/farming/FarmingSystem.ts` | `3e490859ad27061f79689a96812e6c6a4e8f432f864bad9ef41089ea79e3f8cd` | economy | unmapped |
+| `server/src/modules/farming/TreeGrowthSystem.ts` | `c5cdeb0451076c30a6361134081c39bb38c481a7b880ffe6cccb6629a02ffabb` | economy, progression | unmapped |
+| `server/src/modules/gameplay/ConstructionScheduler.ts` | `4f89a253f5a3603ce7bc2423b1c5c3a7d08286fe2dc5a89a7db0b117307d668b` | economy | unmapped |
+| `server/src/modules/gameplay/ContractManager.ts` | `975802a9b222ad43d5f6f5f639c6a657a1ed9d05c3dfc30c22aa8380b598b20a` | unclassified | unmapped |
+| `server/src/modules/gameplay/FactionConstruction.ts` | `4eb9a81e83ac1db0abad63d49d925a24e072f4c5fd63a155d5a2abcbdb9120cc` | economy, politics_war | unmapped |
+| `server/src/modules/gameplay/GameplayFusionDirector.ts` | `4d346e87d9ef49fd0dc0bed1f6943a97f3d39eccc5dc6a1a144c801e89ef3bd3` | unclassified | unmapped |
+| `server/src/modules/gameplay/InventorySystem.ts` | `1d65098efc191b6b4d127e3a191bb9f33cf0530bef86c0b395301a31ac868076` | loot_items | unmapped |
+| `server/src/modules/genealogy/FamilyGenerationSystem.ts` | `a579238886180106666026b07b857d2be11bac97657839399ea184d293f6410e` | politics_war | unmapped |
+| `server/src/modules/gm/AdminAuditLog.ts` | `8f72a5974cbd1484a3359bcb2654b5fb915dbdc44d0aeaaa9e37e296bffa0eef` | unclassified | unmapped |
+| `server/src/modules/gm/GMCommandLayer.ts` | `143e4d150140486735a0f85fd8c5feb79002f7529f41c1d94edd01364f99eb1b` | unclassified | unmapped |
+| `server/src/modules/growth/AgingSystem.ts` | `a247bf94ba7301afd58cd067b0e961993aa5086eed53faafd57f1eb5ae35c9ff` | progression | unmapped |
+| `server/src/modules/growth/FamilyGenerationSystem.ts` | `edfbee3853519ef6338696229cb385c48b8050bd91a7793ca66e41fc8991b941` | progression | unmapped |
+| `server/src/modules/growth/FarmingSystem.ts` | `183e3c3b922d362278e96c67315a33584e2eb42d774312e42ed63ca675c2af4a` | economy, progression | unmapped |
+| `server/src/modules/growth/TreeGrowthSystem.ts` | `a940046805ed0f63f6d38c1d764894da55477b5b36a3b79f760f35ede83e530c` | progression | unmapped |
+| `server/src/modules/guild/GuildSovereigntyEngine.ts` | `fc36cc10acfb4fff47eb7481a42fe9232ddc499688318b248b01cf599e6ae47a` | unclassified | unmapped |
+| `server/src/modules/guild/GuildStorage.ts` | `dd0f582b536b00655d219d27f79df1b2613dc3c69c1ee8e52c449cb44ef83355` | unclassified | unmapped |
+| `server/src/modules/guild/GuildSystem.ts` | `026f9596527a184d9e319be5a4e6330730bedad533f111cd2334f8599b6f243c` | unclassified | unmapped |
+| `server/src/modules/guild/TerritoryControl.ts` | `d81efb181fe76966508d41bcaa3e7b61e6595e011a0d89901140726423617aaf` | politics_war | unmapped |
+| `server/src/modules/history/DudenregisterHistory.ts` | `7bb6d9a0eab80a2c1daa2e1e9c942ca3fc766737f9b38494249bc53cdba87bc0` | language_lore, quest | unmapped |
+| `server/src/modules/history/HistoricalMapEngine.ts` | `d0bebc5f86b151387c5d10d5f95c22dfd37bec6e1ae5d2bca6efb3dd8fe78ea3` | language_lore, quest | unmapped |
+| `server/src/modules/history/ProphecyArchive.ts` | `8b244500c92b0ee888ecd5a1d7916c3587a2eeacc01ff2fa0105ae8dc955f1f6` | language_lore, quest | unmapped |
+| `server/src/modules/history/RuinEvolutionEngine.ts` | `40076823338778674b2e0aa71bc1ea69f37a3508992d2f9e785b3801cf65cc05` | language_lore, quest | unmapped |
+| `server/src/modules/history/WorldHistory.ts` | `fe8e7f61a1d77897fc2673e4e44e7ca806101421c8c456092feb2b400f80d4d6` | language_lore, quest, world | unmapped |
+| `server/src/modules/history/WorldSnapshotSystem.ts` | `4c886f21e963bfbf5f86a5e5577d5a5e618079504b2b34f506bb0f059af9e354` | language_lore, quest, world | unmapped |
+| `server/src/modules/housing/HousingSystem.ts` | `c1135415c20010acb4b0f4e8c0c1b69ec85d8de8e29918161eb1d452b5e619d0` | economy | unmapped |
+| `server/src/modules/housing/OwnershipRegistry.ts` | `c70a925694f35dc1327f4db0716b41d584842c93f7db00364225e8323e71f4d3` | economy | unmapped |
+| `server/src/modules/inventory/InventoryDirector.ts` | `d6cad1ba9d1707e1be9d9e6f904450528e96e05c84027c0aac151bd635dedc65` | loot_items | unmapped |
+| `server/src/modules/inventory/InventoryService.ts` | `6d0c77ce51bc3eb1ecf0b39192c8dd57c721b15a956640d2337796555ce17bf1` | loot_items | unmapped |
+| `server/src/modules/inventory/InventorySystem.ts` | `7fe1b01f88e1f48fadbf671fa71f49ecec1578fd41e18f72a640fa278cf16f0b` | loot_items | unmapped |
+| `server/src/modules/inventory/ItemRegistry.ts` | `8f9344d6db861c92864433876d02ecb3967ee2d48203244d0c25ccac7e3f052b` | loot_items | unmapped |
+| `server/src/modules/inventory/index.ts` | `616a5073f4350a9c1e8e27389976f74163c40a549bb1c5ec9d753dee98da82a3` | loot_items | unmapped |
+| `server/src/modules/inventory/inventoryStacks.ts` | `6e7d5bc9b18ee92382b6b51e0ef13ca66b94d52cc19d1c65528ed34165f34a73` | loot_items | unmapped |
+| `server/src/modules/items/AffixSystem.ts` | `3ccd1a68e7d19c6ff8471149e779151f324859e70a7c169d490958510a07682f` | loot_items | unmapped |
+| `server/src/modules/items/EquipmentSystem.ts` | `8fb1009c3d9cdc5c0155f4aa8858de0a3aaaabfea8bf5f07a46d4eed583459ea` | loot_items | unmapped |
+| `server/src/modules/items/ItemGenerator.ts` | `a79d8a68a35ff1307b58b3632bf5fcb48367aeb300892be0334f705704ee3b4c` | loot_items | unmapped |
+| `server/src/modules/items/dualInventoryTypes.ts` | `37f1bd7d0f3f8b787278a606827046278948aa8e5e347cfb104acbdf8a1c1eb6` | loot_items | unmapped |
+| `server/src/modules/items/itemBindingPolicy.ts` | `683c395140709fa81bdee193eebeef3fd0e2fc3f2a65c4d5a9767506356b9ee8` | loot_items | unmapped |
+| `server/src/modules/items/legendaryPowers.ts` | `2eea5b8a00e8a323d2a0606e766223978a3ba10ed4363c83a8aac42a3e8250b6` | language_lore, loot_items, quest | unmapped |
+| `server/src/modules/items/setBonuses.ts` | `1371c1bad8d7f2d467fc71cb696a115cffda546cbaa7bec63d6d8216a13cd4f5` | loot_items | unmapped |
+| `server/src/modules/land/LandSystem.ts` | `c7b9197344a671924981f668b0338a3859b77fefdc5998546ae819add6bc040f` | world | unmapped |
+| `server/src/modules/legend/LegendDistiller.ts` | `c9cad557759099fb305b29db17e7caed5cca7f70a0019550f5fd6128a3b7726d` | language_lore, quest | unmapped |
+| `server/src/modules/llm/LLMService.ts` | `6343f65eff5c272774c8f2a1421cfe1bafd667cef635b9217b80fe32528ad1df` | unclassified | unmapped |
+| `server/src/modules/localization/LocaleDictionary.ts` | `20688b905a5a4aaa8dae30bece6bf10e4a7b9003106bef9425de7df423adf528` | language_lore | unmapped |
+| `server/src/modules/localization/LocaleRegistry.ts` | `5d080e8bb6be43b4c9bbcd2e99ac5a8fb518040e74fa1847a2c576c91bb8b5e3` | language_lore | unmapped |
+| `server/src/modules/localization/TextKeyResolver.ts` | `5994ce4acd0513340222cc31611e2810e14888336ca7e49a22c7e40fcc9e08f2` | language_lore | unmapped |
+| `server/src/modules/loot/AffixSystem.ts` | `d7ea0874d02ab4d747a34637775d5009252aa58d57940e81a1d277fea3e3bb73` | loot_items | unmapped |
+| `server/src/modules/loot/ItemGenerator.ts` | `f19d589f14c63ad94a147da5f80b6f0200e66456a2c8db3ff8b99f9e3d4f3efe` | loot_items | unmapped |
+| `server/src/modules/loot/LootSystem.ts` | `737b93b7898e4353967fd89d9b9c317a499ac42e333698ddcb6c281a0b70213d` | loot_items | unmapped |
+| `server/src/modules/loot/LootTables.ts` | `3e8112b73778c9cc2b1b8c930c26397e2bd97fe413a721820f007d3c718cd4e4` | loot_items | unmapped |
+| `server/src/modules/loot/WeaponVisualPool.ts` | `1fa8b78dffe82c511e7ac334d1286240fdd354e371fc8bfef94d50b0d90eefdf` | loot_items | unmapped |
+| `server/src/modules/loot/diabloItemGen.ts` | `8b7217de1be2ce0bccf69739574572f5a92fa7819d36ce84efce7f75dd44fd95` | loot_items | unmapped |
+| `server/src/modules/loot/diabloSampleData.ts` | `b2f734e8a8590692e45bce0e90c6172ca3332ae0574b8da4a52ead3176036092` | loot_items | unmapped |
+| `server/src/modules/loot/diabloTreasure.ts` | `51c5ea011dcd3af27f9f09dd038add181bb29b39d0ed0777b2b12d2495030edd` | loot_items | unmapped |
+| `server/src/modules/loot/gearConvert.ts` | `e4a4a5a7312e545aa748aba941c961b46e4a8bb57f1bec261ac609786603dc73` | loot_items | unmapped |
+| `server/src/modules/loot/installARELootIntegration.ts` | `0553436b45853b085ca4791c61c41487950c2fa8ee4b0cfce4fd4d93280a907b` | loot_items, world | unmapped |
+| `server/src/modules/loot/installDecompositionLootRelay.ts` | `00b43622c77e1d301981f0eb67c674567019ef4a96cdbf6d9e1477c9766361c2` | loot_items | unmapped |
+| `server/src/modules/loot/installLootBridge.ts` | `b5cb7ae5ef5bf6f01f8630e691c25cb6da990ef121e90219d497def8803588ac` | loot_items | unmapped |
+| `server/src/modules/loot/itemEnchant.ts` | `982188f0895c52185fd48edd6d9c0f2049442c5072e5bf3b0837baae29dd753c` | loot_items | unmapped |
+| `server/src/modules/loot/itemIdentify.ts` | `8db1e944757da2dbd82e19e5bf4249e6acd75c049a2339e3528fef2bab3dfeea` | loot_items | unmapped |
+| `server/src/modules/loot/lootBag.ts` | `30acd6a812ebe1eaa4b1d25c91177d19a1b49627b513f34675d3d2a823d8bea7` | loot_items | unmapped |
+| `server/src/modules/loot/pity.ts` | `c0004d1a5e009f9e5635fa4bb86e234034a12744d97db4d372d5e3d8df41308a` | loot_items | unmapped |
+| `server/src/modules/loot/rollScale.ts` | `16adef20a71e12155581bb98bd0e587f2dacac289d989c144a7c8777458c960a` | loot_items | unmapped |
+| `server/src/modules/loot/smartLoot.ts` | `16af4596d2c77ce41a270956ecb9b8f293832ba4e81fd98d087ad7e16651c7a4` | loot_items | unmapped |
+| `server/src/modules/loot/socketedItem.ts` | `31a874ba121f4ca81c202ebc6ecd6ab1be0d5f05297dac973769ef341baa3e00` | loot_items | unmapped |
+| `server/src/modules/lore/worldFragments.ts` | `70e88aa9cc71951b41dbbb7fef5e37583e2226216a23be7a141c8671b1945b99` | language_lore, world | unmapped |
+| `server/src/modules/magic/MagicSystem.ts` | `14fedd9fd0d48963ef65ffdee06430bbec73dd643b41f1c7ecab04db1e0d094f` | combat | unmapped |
+| `server/src/modules/mail/MailAttachments.ts` | `222ad524e68470f5fa8d7cca348fbec6219d91dabdbffd127a9de20b9b867e41` | unclassified | unmapped |
+| `server/src/modules/mail/MailService.ts` | `e1e9bd540a7e9ef001cf141b4fd8b9654851f99b6ff578c0e9ea5be23eac287c` | unclassified | unmapped |
+| `server/src/modules/market/MarketExpansion.ts` | `54b0b8001c3b8036c2212a02ec2bd62a819811fcf92f980161cfbbc590b72199` | economy | unmapped |
+| `server/src/modules/market/NPCTradeAI.ts` | `57fef93536d93a927a55863aebb4dfece8e52c1f3441e866d51464efc9932269` | economy, npc | unmapped |
+| `server/src/modules/market/PriceBalancer.ts` | `1d7c5d46c20df4d47c1abc98aa2c5420467a9782645034256da8cd4126958e1e` | economy | unmapped |
+| `server/src/modules/migration/MigrationEngine.ts` | `3cfeed67ad5dae633a966742ae7148598497011d33560d896b59ef9c86a7b790` | unclassified | unmapped |
+| `server/src/modules/monster/MonsterDNA.ts` | `67184d582a871f9e54339904f50648cade81c8185ffba280b60356fde2c3dbf1` | combat | unmapped |
+| `server/src/modules/monster/MonsterMutation.ts` | `43686805958aae90235e65b987421064bdb9265234d531344ddd0463fa6cb7c3` | combat | unmapped |
+| `server/src/modules/monster/MonsterSpawnTable.ts` | `b349b4d935de945fe67332a4792ff7e8e6f6a227044f5772269abe42df5f509a` | combat | unmapped |
+| `server/src/modules/monster/MonsterSpawner.ts` | `76fa56b799af2fd92c5023352bb5eda5762291d589ba245bb9522db285315ddd` | combat | unmapped |
+| `server/src/modules/mounts/MountRegistry.ts` | `60cf968bdf9dd01ad249ddfd8e901cba5c0d77a254b25e5626476f806bec0d11` | progression | unmapped |
+| `server/src/modules/mounts/TravelSystem.ts` | `f9136b3319726173892dd3a428e74c9c4ed23e7f02ababe2ef031b8ba5366e72` | progression | unmapped |
+| `server/src/modules/npc/CaravanLogic.ts` | `0288c64225d5c0005fa44c937f310a7a1bda310cf2078a5246e969e1a8f2f98d` | npc | unmapped |
+| `server/src/modules/npc/EmergentBrain.ts` | `b850e6399013e061bc084dc887adb85c192af4fb5890b30fe4179101ee571fbe` | npc | unmapped |
+| `server/src/modules/npc/EmergentThermalAdapter.ts` | `e048ff41a70259fc582f8abe2bcd2ccdf4ef7ae2014d7ff6462ed09f1bafa68b` | npc | unmapped |
+| `server/src/modules/npc/FactionLegacyEngine.ts` | `3cc6f14651f9e4e1a30f64c5832e41015567efab9cb8fc140266fe12c5144718` | npc, politics_war | unmapped |
+| `server/src/modules/npc/FamilyHouseRegistry.ts` | `f827100a4417d5dce4dbeeeb63a3bb27ddcda21b4083dba84e87b2f8a91af075` | npc | unmapped |
+| `server/src/modules/npc/HeritageResolver.ts` | `8d396d8c9409809c40df318d1e7dbc6cd6877ba55529e0c3a7a4282eeefef037` | npc | unmapped |
+| `server/src/modules/npc/HeuristicGoalPruner.ts` | `d21b6d09770191547dcd468a300a12e087f5450025987eedc2ffd9a53872f0f9` | npc | unmapped |
+| `server/src/modules/npc/LineageBirthSnapshotBridge.ts` | `917c2475339722860fee43c88feb58c420a13c741681ae3459e7e980ee847371` | npc | unmapped |
+| `server/src/modules/npc/LineageBirthTickIntegration.ts` | `3d445a1e02f84b481421500050048305b4bef77ca35e016570740d071f3c4b4c` | npc | unmapped |
+| `server/src/modules/npc/LineageGameDataWriter.ts` | `6869a81a188ea1c0f3830d95224e1813b3b8dc76e3bc21cf767547b82d4e13b8` | npc | unmapped |
+| `server/src/modules/npc/LineagePoiRuntimeStateProvider.ts` | `6c72b65f0b6a39e63cc3a1cd2de334eda3038ea371be282c23d1f2363ad6cb52` | npc | unmapped |
+| `server/src/modules/npc/LineageRuntimeSelection.ts` | `b41a451660e474a994ecbf6216488908bba6c7565909f6450b153dfa39b1ad7c` | npc | unmapped |
+| `server/src/modules/npc/LineageRuntimeStateProviderRegistry.ts` | `4a2d7aeabb8d6c3d7da8759b5c15c64289fa8f4c74ff29dd506394ffcf6a2e2e` | npc | unmapped |
+| `server/src/modules/npc/LineageRuntimeTickAdapter.ts` | `7efc89ab071575a326e2a26ebbf51374dae390f0e448168d410a9b8536b37543` | npc | unmapped |
+| `server/src/modules/npc/LineageSelectionPure.ts` | `0a6c8de2ae8d390adf1a0e4553d41679f7fb685b928592a16d885a285e6885f4` | npc | unmapped |
+| `server/src/modules/npc/LineageSurfaceModel.ts` | `0352d31328fa6d41ff9d083114d1e9c7a689d1369bb7ea0941b846740dc333b0` | npc | unmapped |
+| `server/src/modules/npc/LineageTickRunner.ts` | `7ddfa3b5f593b5b1ac55bf8679fc37fc34b40a73a42a15bb243740cd4278671b` | npc | unmapped |
+| `server/src/modules/npc/LineageWorldSurfaceAdapter.ts` | `43a71d6cf7d083bb6750b0f1f3a7045049f99afbe7687acef2ebf31bd19a654e` | npc, world | unmapped |
+| `server/src/modules/npc/NPCChatAgent.ts` | `26f86e16f9665d407f8b8c4542f1f327426450e455489d9a6c6afc8678f9971a` | npc | unmapped |
+| `server/src/modules/npc/NPCChatBridge.ts` | `1b8776c9fd27776bb4fcf023d4d72c4413b6689a07e3716dd9b88e042d5505f9` | npc | unmapped |
+| `server/src/modules/npc/NPCChatTypes.ts` | `aed134f36a5507be93d71246bcbc19162941181de930db6d829dd6426e2da17b` | npc | unmapped |
+| `server/src/modules/npc/NPCCraftingAdapter.ts` | `0b47759f5ee41a572a55dcf0956bebd0fd732553f8be57c4bbf7b46eff4a9321` | loot_items, npc | unmapped |
+| `server/src/modules/npc/NPCDialogueSystem.ts` | `f00def18181656b0dca0e9439677809921ff4138f6f9e591913eef7945db759e` | language_lore, npc, quest | unmapped |
+| `server/src/modules/npc/NPCFactionMoodBroadcaster.ts` | `c4e508cf409bffd01cc12c6914fd9676128c7895b7a861791c7013c78e1fc088` | npc, politics_war | unmapped |
+| `server/src/modules/npc/NPCGameDataStore.ts` | `ade0eb4c56fb865407507d9531cc28022f3b57701dd0f3683b880db91eb77044` | npc | unmapped |
+| `server/src/modules/npc/NPCGenealogyEngine.ts` | `00483def22d680b10aee5669f9ed62207b7850ec27e8a78484a55eb05a79b5fc` | npc, politics_war | unmapped |
+| `server/src/modules/npc/NPCGoalPruningRuntime.ts` | `a173d5f3ab098ebd0c43101e1dcf3a11f369203526a9e3f2f2b8271ab43e08cf` | npc | unmapped |
+| `server/src/modules/npc/NPCHeuristics.ts` | `b9d33275399ef579f3e217a46d25aca45b0df84ba8236a4b648bdc1233dcd303` | npc | unmapped |
+| `server/src/modules/npc/NPCInterfaces.ts` | `5ee240fe7fa95ed3db9e431a48292e5f72c89d33df077acfd6deb3c2ff66300a` | npc | unmapped |
+| `server/src/modules/npc/NPCInventoryManager.ts` | `7283bea7ce89f20c737c4ff5e3a7b68e38c8cc094b8392d92463b5c39ac10436` | loot_items, npc | unmapped |
+| `server/src/modules/npc/NPCMemoryBridge.ts` | `1e7fea45f546ed03eec2db89fbc33f14d2659d79df9cbf446dde773aa89ad114` | npc | unmapped |
+| `server/src/modules/npc/NPCMemoryCache.ts` | `802ed9284eee7c0ebef82cbb56678b2421a1a9ed0c4690e0f02823f16aa9bc48` | npc | unmapped |
+| `server/src/modules/npc/NPCMemoryEngine.ts` | `819792ddb222c6b413f319f403d7778452fc0d12af1559c8fa9fa822b6ab325b` | npc | unmapped |
+| `server/src/modules/npc/NPCMemoryPersistence.ts` | `82e76c7ad9fab46c49de29c9903194f30cb3785b37f12e8903b2fd781b851769` | npc | unmapped |
+| `server/src/modules/npc/NPCMemoryTicker.ts` | `4eb0158f263fa936d9d935dee42f2e8631007feb34b8f2648e21c39b6a51ca81` | npc | unmapped |
+| `server/src/modules/npc/NPCPersonalityEngine.ts` | `72f53eebfb258308eab3718ccce72231ebec119d0748d29d1c1be15926cd898f` | npc | unmapped |
+| `server/src/modules/npc/NPCProfessions.ts` | `cdc65b034fa171d4e7456627c459b748d897287cdca39789f98eec26224a42e1` | npc | unmapped |
+| `server/src/modules/npc/NPCRelationshipSystem.ts` | `955a4cad39c6e44235444ea2a63caee305b45cb9b9ab36904ad318d15d6c57ff` | npc | unmapped |
+| `server/src/modules/npc/NPCScheduleRegistry.ts` | `78ff51e57d307d6805f1f77a6a5a1a8bdaf38e5521f64f9a11c75bffc36dee7a` | npc | unmapped |
+| `server/src/modules/npc/NPCSpawnTable.ts` | `4c04fc16923b457a30cf65577f6fa4e130360b59f7a9b91fcf96771910e74d38` | npc | unmapped |
+| `server/src/modules/npc/NPCSystem.ts` | `b08c5e60151807a3780d220a95af871f8168a2d9bc498137491048bafc6b317c` | npc | unmapped |
+| `server/src/modules/npc/NPCThinkingLogService.ts` | `c5e3020c03f74dfab25a1759a9cb862f9d08260689ec58f07cf6ed621736c895` | npc | unmapped |
+| `server/src/modules/npc/NPCTraits.ts` | `979839f5d4e858d26cfaa043ea60da3ea5f217226c2a3a499c9212b7bbe892ee` | npc | unmapped |
+| `server/src/modules/npc/NpcLineageWorldSurfaceRuntime.ts` | `e11cd68d918e57317ed3a535a9fd13249aabcc88d294ac87ace7b21786c6ea94` | npc, world | unmapped |
+| `server/src/modules/npc/PerceptionLogic.ts` | `da2879ae4db76b81378eefe6bd10503dd4a6b60f7e936668c2d64b433b7d9e45` | npc | unmapped |
+| `server/src/modules/npc/SharedMemoryNetwork.ts` | `d012959b3162cd820cf1ea78ec1007d4bb3f1dd420312e2fcc15585ea070af91` | npc, world | unmapped |
+| `server/src/modules/npc/ThermalLogic.ts` | `2e02b9b3c4b1a438a0ba456da62c1da9379e9483cfd7c49c8141c66df9c12a20` | npc | unmapped |
+| `server/src/modules/npc/TradeAIBehavior.ts` | `05b6e8155d9b4bb354c1ad949afa1df07e10b10399acde5084a4d04ea6b57e1f` | economy, npc | unmapped |
+| `server/src/modules/npc/TraitResonanceEngine.ts` | `d52d7dafd0a878510bdfaa6eb035cada3112281fe6ddd3c1397a54c33c12fb7f` | npc, world | unmapped |
+| `server/src/modules/npc/behavior/GoalEvaluator.ts` | `b9644f3100c17f03dcf4e122732c7e138f9ed1d2a2dc597235cbd70e61f0a34a` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCBrainDebugSnapshot.ts` | `83b0a851de931efdc39641d72c588c205e6af2253032f225600a28cbb7d16270` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCBrainRunner.ts` | `d5b28c16fae9e75b37f6a2466407a1e55585d4493e86ecc511901b9cb751cf08` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCBrainScheduler.ts` | `c2acee28ce1c0f5ff5747982de3a4f697f9e0b2869ec4c1a9bb8320ebdc1b0ba` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCDecisionEngine.ts` | `9463b8ad98e68c8cfcaa340a223bc707ce733dcecc8fb5fca2281ed9ce4df7aa` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCMemoryCompression.ts` | `522d49f304c0d98fe5edf948601f061294f137e1278fcaea567d15af9ba82a97` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCMemoryExchange.ts` | `a26fd88c35a762122286e3c035b0d517a5ebed0e980b7616ba078b927eb5a016` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCMemoryScoring.ts` | `acb24271b9f5417167d80027076dabcfaf2e8c29971a3f5b1eac1d97c338cb0b` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCMemoryV3.ts` | `ac0d5c02ec76d7b3531e2bb725db7ce70dcaebb3b75ccfb14bf267e3e3ccb245` | npc | unmapped |
+| `server/src/modules/npc/brain/NPCObservationBus.ts` | `29589434899e9aa666d736a2adb8bf5001940628bdd100530447e5d192d8373a` | npc | unmapped |
+| `server/src/modules/npc/brain/index.ts` | `0c8c5712d5ede8d320492e848fd65b3cfdbcdf60c80d670cac4718bce9a57007` | npc | unmapped |
+| `server/src/modules/npc/createNpcLineageRuntime.ts` | `a33b6e5d534bce116ec88ea3fafcce31b44e2cc045ad1e43b7db30e1fe7cf62b` | npc | unmapped |
+| `server/src/modules/observer/ObserverEngine.ts` | `363581c045e8872bdbdecba75c09c23c6a93dd499823d92b8da5e2f69a93aa87` | unclassified | unmapped |
+| `server/src/modules/oracle/OracleChatBridge.ts` | `9d2118f06e9530839005ca45fa4644af3cd663124e791c69376df9e4cab22f2a` | unclassified | unmapped |
+| `server/src/modules/oracle/OracleEngine.ts` | `d18454d3f4def8bf10e250b0c11f576364879daf9064171891a49330b679fc71` | unclassified | unmapped |
+| `server/src/modules/oracle/OracleMemoryBridge.ts` | `a50a1ee338fe4dd30a11ea73244ee0ad87c730b818235660449290a4d5eb59c1` | npc | unmapped |
+| `server/src/modules/oracle/OracleModule.ts` | `6be449bc43b42c98909c4303760f3a8fa6de198d03065f8327624bd74818e6bc` | unclassified | unmapped |
+| `server/src/modules/oracle/ProphecyArchive.ts` | `4026f4ddd6df1e9519328f63438774960d853f42b604e700493d42d791e1534b` | quest | unmapped |
+| `server/src/modules/oracle/ProphecyGenerator.ts` | `24aca7c8160f47e6528211793e548fdba8310da268d6a7af6d358ff1938dc66a` | quest | unmapped |
+| `server/src/modules/oracle/WarForecast.ts` | `4facebe32819b03e0f1810494b25b667b9cc9cf6dd6a753d8b5b072fa1f96de5` | politics_war | unmapped |
+| `server/src/modules/oracle/index.ts` | `c3740ce33bc77340307bdf03908e3460ebb80ae27a050ef67a7bb22f943697b7` | unclassified | unmapped |
+| `server/src/modules/ouroboros/AgentNeeds.ts` | `c62103a3ded8a7ea2130697ebae46805ecfd84afbb83c32269f0f3341ce00727` | npc | unmapped |
+| `server/src/modules/ouroboros/BountySystem.ts` | `e1c571395d251f7a3dadcc443274a1c6d7d3635885a2b0625591ff4430d4d4bd` | unclassified | unmapped |
+| `server/src/modules/ouroboros/DynamicFactions.ts` | `87e7e0cffac26bb3478dab17702e089bfeb44a7baec8cfd32b942b42ebfedd4e` | politics_war | unmapped |
+| `server/src/modules/ouroboros/EmergentMarket.ts` | `9a4c0d82be9ef722228df6167ea0848a42f6c79d42d42ff1a043af520140ddb0` | economy | unmapped |
+| `server/src/modules/ouroboros/LegendDistiller.ts` | `e8973edf4278c13e205259834254b88bd22ecb809fb33c812f7ad551267ee50b` | language_lore, quest | unmapped |
+| `server/src/modules/ouroboros/NPCRelationshipSystem.ts` | `8c3f9f0d5f8ff6929d9a4f5b2ff18b553d4c899b422828e0f2615753417bac2b` | npc | unmapped |
+| `server/src/modules/ouroboros/OuroborosEngine.ts` | `d378d3726869806a61c02bd28cd6d944582f4fde847af15d847e15d73f7f17ec` | unclassified | unmapped |
+| `server/src/modules/ouroboros/OuroborosLoop.ts` | `4b1c640258cd17e1344b4c32c9fc8a13a95ce3a9718e75591ee7ba3594b2465e` | unclassified | unmapped |
+| `server/src/modules/ouroboros/WorldEventBus.ts` | `418bd8a5f98e17ee88e2460f15941cdef90c479a5cb78c86cd2adc66e4b01959` | world | unmapped |
+| `server/src/modules/ouroboros/WorldHistory.ts` | `65da4a54aed1cab04f91e039cc24c4166894aa7a76f0b41aab9d2c7a2fe131bb` | language_lore, quest, world | unmapped |
+| `server/src/modules/ouroboros/WorldHistoryProcessor.ts` | `16e464fe5dd15d6d4478f03ef7f1b43f90bb1116a49e0c6d6825fa5b9ac028a2` | language_lore, quest, world | unmapped |
+| `server/src/modules/ouroboros/sharedWorldEventBus.ts` | `91141e8d8fe44cdfdc421f94dd37e8ee258fc77953beeb0fc12cbbca337e3081` | world | unmapped |
+| `server/src/modules/party/partySystem.ts` | `4674a4fe5b57669523de179a1c0efbdf3ce6bf860c1d268819451ee09c9c4d01` | unclassified | unmapped |
+| `server/src/modules/payment/PayPalService.ts` | `1cef9d3b0b71b0f5b3af08c850a5f65a034874bc851d950bdcffa5c094f4e8ad` | unclassified | unmapped |
+| `server/src/modules/player/AutonomousPlayerTickSystem.ts` | `93de1018ac0cbf4cfabcb80da32a886b8132770b2558e1171f7482b7fcaa329d` | progression | unmapped |
+| `server/src/modules/player/EquipmentSystem.ts` | `82d84709181635dfcbe1a05505db2a98e1ba1088ec90d2b8ec2885d558af2294` | loot_items, progression | unmapped |
+| `server/src/modules/player/PlayerStatsDirector.ts` | `520b806cba8e359172581fd7aa2bddd624fd3b1e900b6f9e0f5d761100ebc4a9` | progression | unmapped |
+| `server/src/modules/player/PlayerSystem.ts` | `9c8248e449396adf785ac533ee6457128c79c97bea971805ce7e8eb7c92ea2ba` | progression | unmapped |
+| `server/src/modules/player/PlayerTypes.ts` | `2800c7cec68ac37dd4a1b7e6cf3242ede94986caff13ed7be24da1872c10096e` | progression | unmapped |
+| `server/src/modules/player/ReputationTitleBridge.ts` | `b7b6c92fb7fd90982dce76d859828f8b6292701c2bef3bb7190010e53d16dc91` | progression | unmapped |
+| `server/src/modules/player/StaminaRegen.ts` | `005bddcdbe953c334ae5c05979375db4ff31aae8869468997b3e569a55404405` | progression, world | unmapped |
+| `server/src/modules/player/StealthSystem.ts` | `9018223644ee0008eab66de4a26d1010677d3504494cab4bf3c950711678e666` | progression | unmapped |
+| `server/src/modules/player/TitleSystem.ts` | `399cf25b777702f72c72f2034df80491e68b395ad34ef4db3594f7aa0f3bd38e` | progression | unmapped |
+| `server/src/modules/player/XPDeltaRouter.ts` | `b7225d1ef9024d99eebb6f126eea98d1bba02759f10ccaebf0bcc05c1a7435c1` | progression | unmapped |
+| `server/src/modules/politics/DiplomacyEngine.ts` | `e509087fcd1af9e9e152375b05a9428376e71bfa975c7d248f0d58432d712b9a` | politics_war | unmapped |
+| `server/src/modules/politics/DiplomacyTypes.ts` | `dbbedd81ed97c0e8894cb7fcc99417ba9689e1d7005b49ccab9bc5abb1e73c7a` | politics_war | unmapped |
+| `server/src/modules/politics/GovernmentTypes.ts` | `dacae8c5afa3b14898225ec574d89a9adb058a544c8380ae4d5df38012a78283` | politics_war | unmapped |
+| `server/src/modules/politics/PoliticsDataRegistry.ts` | `630ae29418b897acacde39857970c4db66900993f3e6eb717150d05e0670e982` | politics_war, world | unmapped |
+| `server/src/modules/politics/ReputationSystem.ts` | `f828d479866917a3019beda459073bc02e2d46f6334cc4b956521ea0ae713a1e` | politics_war | unmapped |
+| `server/src/modules/politics/WarEngine.ts` | `06e1f5205569410f137dff95010eab900dcbab8a7491839dc73883507dff638c` | politics_war, world | unmapped |
+| `server/src/modules/prediction/ScarcityPredictor.ts` | `5e7cea42c775b0356fa2e694df996346426966394a78f52fc43b26031faeb053` | unclassified | unmapped |
+| `server/src/modules/prophecy/ProphecyArchive.ts` | `ca2a04688be0876ff7ff51d745de27fbad61c1cecc394c0448994500403df163` | quest | unmapped |
+| `server/src/modules/prophecy/ProphecyGenerator.ts` | `1096c77d8ce73ffdb65e423392483cebd192c598004b6bf6c7ec3de58190143c` | quest | unmapped |
+| `server/src/modules/prophecy/WarForecast.ts` | `bb36be3e48233ab273205aab5fe6814611162c60ffb6862787f73db98b00ffa3` | politics_war, quest | unmapped |
+| `server/src/modules/quest/HeuristicGoalPruner.ts` | `a060e81fe5a5f5c3830ede8ff3766b306c21bac7e140d839011df505ff00c8b1` | quest | unmapped |
+| `server/src/modules/quest/QuestEchoSystem.ts` | `c017ecbdbd976f3a37fa054cab6d9bb76c2e1cd3deb6f9163894b2249baa6b46` | quest | unmapped |
+| `server/src/modules/quest/QuestEngine.ts` | `f0cb9e81fbc043df51e8a42ea2ba1ac21d5c255a902df8856ff713b13614426b` | quest | unmapped |
+| `server/src/modules/quest/QuestRewards.ts` | `4b355404ff825e72882399af40ed2e0dfa5421ff850f8b5a36c979d5ceac468f` | politics_war, quest | unmapped |
+| `server/src/modules/quest/QuestService.ts` | `1ab014580075c30f8e9ccb8f85bd94d6758147ae212aecafc392521010006568` | quest | unmapped |
+| `server/src/modules/quest/QuestSystem.ts` | `404856c6ebba60334aa00f53a9f05336346e71abc15cb7363d8d1b18cf004e83` | quest | unmapped |
+| `server/src/modules/questline/crossroadsResolver.ts` | `4fd21b2d23d7ddaf157c8af616d93834bd797552d9b79c74d9f5e42db0f9ffe5` | quest | unmapped |
+| `server/src/modules/questline/factionRegistry.ts` | `58591f7aed34232adbfdc4d4b0cbc14bf4af5e06028f7b29a26a4e04e8d8da8f` | politics_war, quest | unmapped |
+| `server/src/modules/questline/featureTrigger.ts` | `8efa6d0c075f86292b7f377e300236b722a2d5f46d92c2a4326a9b324b77dd15` | quest | unmapped |
+| `server/src/modules/questline/questlineBridge.ts` | `abb954ec28393270e50e605cf0830f33e35cffb70c130e74ec570e0907dbbcae` | quest | unmapped |
+| `server/src/modules/questline/questlineEngine.ts` | `59db89ec283d10422f9a13d982c61e95729af31368dab645e2c02650a1009035` | quest | unmapped |
+| `server/src/modules/questline/questlineGenerator.ts` | `3e34009b91f0ef57466307097a2efba8cd151c2233363cfa14dbdbc9aa3eeec0` | quest | unmapped |
+| `server/src/modules/questline/questlineRepository.ts` | `8e5ccfd3cfa06e9692d5fd1d0483d4ded35ae01755b145e0b47938a999ca408c` | quest | unmapped |
+| `server/src/modules/questline/strandResolver.ts` | `52f298a2162f02d1af012c561a55e7a031e1f2af8b2894b89bb3ed2b9cd07e21` | quest | unmapped |
+| `server/src/modules/questline/worldSpawner.ts` | `f3d9ac46778a1aea133c4f775da06dfcdd6291c88ee612ee4d9f7229aed82acf` | quest, world | unmapped |
+| `server/src/modules/quests/QuestRewards.ts` | `52740ebd1162f8b6ea76b3743c8aa815fb99c880198cf6376fe83839547cf90d` | politics_war, quest | unmapped |
+| `server/src/modules/relationships/NPCRelationshipSystem.ts` | `50f1adeb5741ef8c20d2c263fe76e4269cb9dc26673fcc1b55a75e33ff2bf902` | npc | unmapped |
+| `server/src/modules/relationships/SharedMemoryNetwork.ts` | `0cd18720f3be5619c7b3b8c2c523acca758ceac3e614bd22a17633c66490836c` | npc, world | unmapped |
+| `server/src/modules/religion/ReligionSystem.ts` | `df530c9f15e42d869b1e2e35306a8599c170d9cd4e76851b2627fa04857771fa` | language_lore, politics_war | unmapped |
+| `server/src/modules/reputation/ReputationLedger.ts` | `9f67f9a24b974793ad26568da3bb381369f5add24e3c08d7fee626b17be1d11b` | unclassified | unmapped |
+| `server/src/modules/reputation/ReputationSystem.ts` | `bef39c780b2d7459deed72c30418a161d1137ff7446ecd1ba89250971e80819a` | unclassified | unmapped |
+| `server/src/modules/resolvers/ProfileResolver.ts` | `7e3309c4a8cc75027b9bfc7ff307d845e52403f5a689aab46e01ac0dedb466be` | unclassified | unmapped |
+| `server/src/modules/resonance/TraitResonanceEngine.ts` | `6385671eb262dec74683cb18e5475da5c132c77fb4d2dada5edcccd55012aa1b` | world | unmapped |
+| `server/src/modules/resource/forestMath.ts` | `86e38f0e4f6d80f745f73d1ec29f5a0de6a1f0945a1fb55131975cca2df4d895` | economy, world | unmapped |
+| `server/src/modules/resource/forestResourceCheck.ts` | `b8fcac739da97a61d5cf3919b4adc791a214c26171afc30d24d8f8f55ed07ce3` | economy, world | unmapped |
+| `server/src/modules/resource/forestResourceRules.ts` | `a5a834d3a6b78b3a1155501a39f5289acf70da95ae45bc7ba90d452f975dea63` | economy, world | unmapped |
+| `server/src/modules/siege/SiegeEngine.ts` | `6b9343fc3a68a7d9913d0daa2b429317c3c013ae85f7baae5d2143a29d781701` | politics_war | unmapped |
+| `server/src/modules/skill/SkillSystem.ts` | `f1246ce5e9ef7ab4a5ae7a70baf3421efdf0ea62aaf5360aff3820b6593b77b4` | progression | unmapped |
+| `server/src/modules/skill/impactBusterConfig.ts` | `3d6e25a3772df1ded7bb74f7d130a97e264abcc334e9c58aa67eb27e9cf62884` | progression | unmapped |
+| `server/src/modules/skill/skillDefinitions.ts` | `5139de49b0d445954accc5784ab11f1014953308f8357b6b42e1b3dc54b885d2` | progression | unmapped |
+| `server/src/modules/social/FriendsSystem.ts` | `1be06eef3016e3beca9129f195ab752f4009ce2f801467eca0b6d8792a1b9dd2` | npc | unmapped |
+| `server/src/modules/social/GroupFinder.ts` | `db0514dc1ca00b2b7449241809ad6615883ce1131ac5f5665c734f297f229b33` | npc | unmapped |
+| `server/src/modules/social/IgnoreSystem.ts` | `680dec2b312dfef613b03e0f7bb85195ca5fe98e0fd9dadc3a8fd58898e65a51` | npc | unmapped |
+| `server/src/modules/social/PartySystem.ts` | `277ab3194ece227e0895e00a8a824e910e66bc9d27a8580d46150a7e182ad8ed` | npc | unmapped |
+| `server/src/modules/streaming/StreamController.ts` | `002c006e7f662947baf707ef53fa6473614e06285a3560e35b708f1b5594845c` | unclassified | unmapped |
+| `server/src/modules/structure/ConstructionQueue.ts` | `2c707a83bdcac8cbedf4c3f5fe844da3bbae35f131661b45032a1464d69892cf` | economy, world | unmapped |
+| `server/src/modules/structure/GateController.ts` | `b1319b4c83380b0645fbfa4144181bfd202f58134fd6570554d03087b79022da` | world | unmapped |
+| `server/src/modules/structure/SiegeEngine.ts` | `3c6b3750f56f0c4794c3ecf6d8b65876958c0cde1fed87059609f55b61b2a88e` | politics_war, world | unmapped |
+| `server/src/modules/structure/StorageEntity.ts` | `4b8e78f9f118ae7797cdaa43d0c40bee1d96d929c2754562f2b52d67e65b87da` | world | unmapped |
+| `server/src/modules/structure/StructureTemplates.ts` | `233627350ff743c228929008be0232eab4568297d28e0d0336597e8d3a54503b` | world | unmapped |
+| `server/src/modules/structure/UpgradeSystem.ts` | `d8192dddcbee194f0aad1f078842c78be767c0662630283f42fc9b95544818cb` | world | unmapped |
+| `server/src/modules/swarm/config/swarm.constants.ts` | `db0b7b72e69d185018b6974f632f126072e2a9428fa50d597fdc4bf0b49be6ff` | combat, politics_war | unmapped |
+| `server/src/modules/swarm/orchestrator/SwarmOrchestrator.ts` | `f0e8b060a2e262059c0b8e4b1a011c6a2b4124d7609aee6c7c18f969c8648d87` | combat, politics_war | unmapped |
+| `server/src/modules/swarm/services/AIService.ts` | `de57dfd042b3c07573a1b6dace9150743a8decd8ba758e5c3ce2c38c0580e9b1` | combat, politics_war | unmapped |
+| `server/src/modules/swarm/services/ArchitectAgent.ts` | `f912980b5589a73b3fc66802ef8155c098b1bca182220a2d11f440241771ebcc` | combat, npc, politics_war | unmapped |
+| `server/src/modules/swarm/services/DeveloperAgent.ts` | `1bcd88164863e875baa286ebc38e101018b91da366df9934ee1ba700bf03af29` | combat, npc, politics_war | unmapped |
+| `server/src/modules/swarm/services/ReviewerAgent.ts` | `8663416127263cb024dd22d829f9e3f7ef9d62491c489589b25c1c3f0dd1c11f` | combat, npc, politics_war | unmapped |
+| `server/src/modules/swarm/services/WorldEventBus.ts` | `c444cf19108cbe993964623651936368d7152289e53e24e35151669ba0920e2f` | combat, politics_war, world | unmapped |
+| `server/src/modules/swarm/types/agent.types.ts` | `b561aeb697d032d8cb04a322f9bcf102f28d007cca5009b179d9a10130f11463` | combat, npc, politics_war | unmapped |
+| `server/src/modules/systems/ContractManager.ts` | `f47b09c62eea39bf904bf0f04138683102b89ee6abf7c11d875ab56799139185` | unclassified | unmapped |
+| `server/src/modules/systems/InventorySystem.ts` | `342992f8f9690b933f0ead04801bcc80bf887bccab5ed387c83014eb717bc878` | loot_items | unmapped |
+| `server/src/modules/systems/PathfindingSystem.ts` | `a98c594b1df97123dc304737f7b31dfc6a45c43ab8ec1423761bdfd806dd69fe` | unclassified | unmapped |
+| `server/src/modules/territory/TerritoryControl.ts` | `49a2d063d5da544fac5d6dcb83a61462bf603a1adaadcdddaf06c5f3acd74dc3` | politics_war | unmapped |
+| `server/src/modules/trade/BuyOrders.ts` | `0e53e2af54d06081f71f66ecff96a0144e0ebd19304bbabd60b774238b928f57` | economy | unmapped |
+| `server/src/modules/trade/PlayerMarket.ts` | `91a5a692c0662d269b5f2e17a22c2cb0125f5d45a2783d96eed7d38da968a35c` | economy, progression | unmapped |
+| `server/src/modules/trade/SellOrders.ts` | `0b0fdc7d94dcb9c45d06548bd68e05cc0d22a630849a351f25fab0a3bce4d571` | economy | unmapped |
+| `server/src/modules/vote/VoteBannerStore.ts` | `6ad3a69d4145f94a87b836c847d8b4b81e99229c5295499e3ef9ad36847c6f51` | unclassified | unmapped |
+| `server/src/modules/vote/VoteProviderRegistry.ts` | `36ae9d77c3647b261bf1c993bd233b35658952765ccb873c3fd6c048dcd80cf4` | unclassified | unmapped |
+| `server/src/modules/vote/VoteSystem.ts` | `f4c11e21a8dfb0760ce4b5d56740a01347fa27d78b7eb601d402dc3634ca7dcc` | unclassified | unmapped |
+| `server/src/modules/vote/playerVoteProgress.ts` | `42df4d95ded36829cdd404b77b3bfdb5e264209cf2bea984b0c4b3464c2f11a3` | progression | unmapped |
+| `server/src/modules/vote/voteTypes.ts` | `9c605f1c125b3e1b36d6a23a4240dee7570cf78f0eb78c1fae6456640dd3f7a6` | unclassified | unmapped |
+| `server/src/modules/warfront/WarfrontCombatOrchestrator.ts` | `1e359dc536d9b9b4765718526598526322dc14dab8354b669a69b1965bede91d` | combat, politics_war | unmapped |
+| `server/src/modules/warfront/WarfrontCombatTelemetry.ts` | `af9e95ec4cbb9b5673678d78179f1610aeba9a291181634fcf7837ce560ec81e` | combat, politics_war | unmapped |
+| `server/src/modules/warfront/WarfrontSystem.ts` | `ce8ae07b93e1fb847eeb4ca49e36882dc759b81b71eb25e80d03f35b7bcfef72` | politics_war | unmapped |
+| `server/src/modules/warfront/playerWarfrontProgress.ts` | `1333419ad317346b73c99d3958e9a522490cc65d89e13f93a8e49b64f8e79c34` | politics_war, progression | unmapped |
+| `server/src/modules/warfront/warfrontRng.ts` | `c94f4361e32a11bb8021a95888d7f7d5caf5f180baaf5d2a3dd0d7e5cdad9439` | politics_war | unmapped |
+| `server/src/modules/warfront/warfrontTypes.ts` | `9af8d60b1c6704867f708ca9649ef699058175ec2a4deacd2b1da72c55e6118c` | politics_war | unmapped |
+| `server/src/modules/weather/ClimateModel.ts` | `4f42f6953826944be9122900b173d0925c1af7263601ff16b40b6fc54f38cb23` | world | unmapped |
+| `server/src/modules/weather/SeasonalGrowthBridge.ts` | `1ebe4d853a9a2c445b2853ed485c94cc002a5a5ec9c2667c9d460ad2cf08a3b1` | progression, world | unmapped |
+| `server/src/modules/weather/WeatherEffects.ts` | `29a898beee120ffefeea4f93d2b67d6569cee72ef20d6b9978abf21993c54be6` | world | unmapped |
+| `server/src/modules/weather/WeatherMagicBridge.ts` | `b5d1d9440775ce8e0bdf70e827b83efa20ebda2beb1764c208b48363fa2ae5a6` | combat, world | unmapped |
+| `server/src/modules/weather/WeatherPresets.ts` | `46ae2d469c1839dbc8f45704c25cf3a9792dfc016059aa14cb2baecc6249d920` | world | unmapped |
+| `server/src/modules/weather/WeatherResonance.ts` | `a8d2297c9bb54342fbdf2d1ad25bba9c7f4e98ae218262e24ad8beafc8102b59` | world | unmapped |
+| `server/src/modules/world/AREModeAuditTrail.ts` | `9d6a7e80687fc6f507d223248f1f42bd37308be3758f3d6657579a91150d7e13` | world | unmapped |
+| `server/src/modules/world/AREStateCompiler.ts` | `b9d4d4914afb87aa4d14bc0134ce4f0d904bb75fc874a6469499cde0528a06ea` | world | unmapped |
+| `server/src/modules/world/AssetPoolResolver.ts` | `a691c864b1860c993f9168fbe91ab7b210963ed2eb5a6e79841c7e15ca0c9d1e` | loot_items, world | unmapped |
+| `server/src/modules/world/BiomeGenerator.ts` | `43a90381797969ed8f71922e7eb03d544c8daa369b346026bf17e8f7d59dd7e9` | world | unmapped |
+| `server/src/modules/world/ChunkActivation.ts` | `c7c2734d9623fd01e2425b0c147a08f271036c84c44d9a2d294f3948734c335e` | world | unmapped |
+| `server/src/modules/world/ChunkModificationDirector.ts` | `c2e401c563b00093ed017149b2400feb200096a0fc75ac803fe36f7a954d66ff` | world | unmapped |
+| `server/src/modules/world/ChunkSystem.ts` | `6692f60256fc584d3859d3c079e16bf18b7de99d465c81582d175a11310e3a67` | world | unmapped |
+| `server/src/modules/world/HazardResonance.ts` | `4c8e99b2c5d71bf291b5145edf19c9c21fcbb78027b511ade520d7800df5177b` | world | unmapped |
+| `server/src/modules/world/LootDirector.ts` | `89dc9e9f30807a8521a47de379a3ac4a6b1e6016082c42b84728cfcb1527baef` | loot_items, world | unmapped |
+| `server/src/modules/world/NavMeshNodes.ts` | `d785363953f3ef10b4336ae766fd9afa46c2b62cb48e363fe8d75c85edfc026b` | world | unmapped |
+| `server/src/modules/world/Pathfinding.ts` | `76e1083a5856d03896dce85b01d00d3cacfcf947cba83e89984e7e59d77ef773` | world | unmapped |
+| `server/src/modules/world/ProfileResolver.ts` | `90e716b52cf4c055e3ec1457108af2591ede6bc94949358c9970923a8de8a878` | world | unmapped |
+| `server/src/modules/world/ResourcePopulator.ts` | `ab95e11ea42b7dc142232439b0f889624647f56d2e6c13ca45841ec9b138d0d4` | economy, world | unmapped |
+| `server/src/modules/world/ResourceScatter.ts` | `6e153fdea820e4b219a5072afd176e79c6ae1f0de81f0e072b07d5a563a624e3` | economy, world | unmapped |
+| `server/src/modules/world/ResourceSystem.ts` | `efbc8f5502dae087bc670faa93b5d7a154ea752545ec33d7c8d64ba68270cd6b` | economy, world | unmapped |
+| `server/src/modules/world/RuntimeSettingsStore.ts` | `b0eac6be2e25cbf087b13e4e32fab29cbb821f3a0ec981d7cb8ef957a77f75bf` | world | unmapped |
+| `server/src/modules/world/SeasonSystem.ts` | `87f06bba7e7cfb383b4119d34accaf887e481cd76cae1b212f045343888dff3b` | world | unmapped |
+| `server/src/modules/world/SeasonalEventBridge.ts` | `29afb6df83cc0151cd3b066b0723aec22bf14659f1b7abac24ff0fab9502dcb3` | world | unmapped |
+| `server/src/modules/world/ShadowRegisterPortal.ts` | `cede76843881f2646227d7f61f6cfb32bd206cc4f7de82466baa88271cb65c98` | world | unmapped |
+| `server/src/modules/world/TerrainGenerator.ts` | `d621359a1f40266c312ac5bd4af8f95cbdc89ddd868c84fa141c6854e5680aad` | world | unmapped |
+| `server/src/modules/world/TravelHazards.ts` | `46dbe300d2d4c9bd49f4f739599ba0a8e5d89dfcd37be49a9664e91cb4d7b128` | world | unmapped |
+| `server/src/modules/world/WeatherResonance.ts` | `a8d2297c9bb54342fbdf2d1ad25bba9c7f4e98ae218262e24ad8beafc8102b59` | world | unmapped |
+| `server/src/modules/world/WeatherSystem.ts` | `317a551240135eec99df8f2974a619591172b58e166ab2e593dcc4c9ac49eb5e` | world | unmapped |
+| `server/src/modules/world/WorldEmergenceEvent.ts` | `71c4a4b4bc77c87fa8d57cec9d97bcf6fd1eb76669f7f86cb07ebce059b20d8f` | world | unmapped |
+| `server/src/modules/world/WorldEventBus.ts` | `cd5ad9ee2bbe96863bc0540a95ceecbdf7081eeda6d598d8514e491efcdee75b` | world | unmapped |
+| `server/src/modules/world/WorldObjectSystem.ts` | `2b6f0f6467fb67a47d58d4c0c00f835ddb768a91e77eee78ced83a42616e86fd` | world | unmapped |
+| `server/src/modules/world/WorldResonanceAdapter.ts` | `7a0f136058ecbfcdd42d517562b23920dcb992a248ae5ba689e6dcbb61fb8b0d` | world | unmapped |
+| `server/src/modules/world/WorldSeed.ts` | `d27e4f8d7035e11e22ea9a7bd668605d8688a51a2381f75e6895b7de14d01256` | world | unmapped |
+| `server/src/modules/world/WorldState.ts` | `0917feecd0416c2807f7ccc709698be242127b296fe0767a5820814084cee2eb` | world | unmapped |
+| `server/src/modules/world/WorldSystem.ts` | `2a2c5516e0b114225f208f2ece4584ad7f3f964ad72646d1e08596d35ca390f3` | world | unmapped |
+| `server/src/modules/world/WorldWonderRegistry.ts` | `be121880a7c0f4c085077ca90924f19749f950250fe5dc55b5bed67e058138c5` | world | unmapped |
+| `server/src/modules/world-editor/AdminAuditLog.ts` | `78886abfda58f711685e60b42f8d947ee6daa3a3bb263af67c12c6e4cb3d68db` | world | unmapped |
+| `server/src/modules/world-editor/ObjectPlacement.ts` | `3d0f9c4a243ecd09cbc0ca9cfa226d464b5ce167a699a4b402a5ca72b61e2d99` | world | unmapped |
+| `server/src/modules/world-editor/TerrainBrush.ts` | `36cb23800a8f865827d1ec886ed4f897552fbce0c0d790bb754fe235b1aa64c5` | world | unmapped |
+| `server/src/modules/world-editor/WorldEditorServer.ts` | `5d86429da48451ee3164d9f0b6a7304d579cc45afbd7552db67eb516eac59b7f` | world | unmapped |
+| `server/src/npc/CampNpcRoutes.ts` | `5fc517e37af6171d1f74f208612f411e4f13d26859fce786bbf9698bc9c24a7a` | npc | unmapped |
+| `server/src/npc/CampNpcService.ts` | `5474f8ef5e8a9b88cd90192ddb05fad7fb922995146963fca8115de86201731d` | npc | unmapped |
+| `server/src/npc/CampNpcTypes.ts` | `c8c3765d166a7ce81a764525a99f791f7ec78b40c4a34782b3eef2a4fe69570a` | npc | unmapped |
+| `server/src/npc/CampStockPersistence.ts` | `1ba5f88638fe09ab7a652b6f3ab7e45c270c377a52494c79e15331b85abc45a8` | npc | unmapped |
+| `server/src/npc/CampStockRuntime.ts` | `5df765a258f500bda82270062ecab090e2fbccbff0ea48ee52f1158b6bd7430b` | npc | unmapped |
+| `server/src/npc/CaravanLogic.ts` | `44fbd7109a7b003151c18a30251d7d4c50efd5597412abc9a6c3986c4a5ce04e` | npc | unmapped |
+| `server/src/npc/HeuristicGoalPruner.ts` | `a0bf6c35b902762727a55d053bee67573d534eee5cdef018cb91e00c672b3f27` | npc | unmapped |
+| `server/src/npc/JsonCampStockPersistenceAdapter.ts` | `419cfae99a8a830aac01499069fae3400c69d829192fcf62680e7f3618ac3124` | npc | unmapped |
+| `server/src/npc/NPC.ts` | `56c7a57a864ec1785a3d91807524c2a160abbaa931887225a92830ff24184308` | npc | unmapped |
+| `server/src/npc/NPCInterfaces.ts` | `6174291b3d31e05cf1c402302f1bafe60da45edd0fe9f25b2e7228f304652ecc` | npc | unmapped |
+| `server/src/npc/NPCManager.ts` | `05625f24cbf060178ab70cf4b5d984501b28c3c1a73bd245dafecf3712a744f7` | npc | unmapped |
+| `server/src/npc/NPCMemoryCache.ts` | `21ec01510e38d00cce17b59a4d85808955a9a7f41ba4a2cb2d8b038e64b0acbd` | npc | unmapped |
+| `server/src/npc/NPCTraits.ts` | `4b9291c83c1c9bcfb580ffa23697a5e11de9945d67f66573ca0f9670834f54a4` | npc | unmapped |
+| `server/src/npc/NpcMemoryRoute.ts` | `efe170615889c000079d0b67ea37053987f94e929544fdd4abfd7a02653ba43c` | npc | unmapped |
+| `server/src/npc/NpcMemoryService.ts` | `f9d741e42d0d6cc2369b55c508373c12bd4a734a63f03e99ee3c6947a7fef292` | npc | unmapped |
+| `server/src/npc/NpcMemoryStore.ts` | `1c4b73ba5666863b159a2df354da56a20fa77a9aaf8306c9b8c5dad6303a6982` | npc | unmapped |
+| `server/src/npc/NpcRumorService.ts` | `4899d4020c639b4f7e864041cc550b789fa4dbeda4cf26a2a18fdae60261f6fe` | npc | unmapped |
+| `server/src/npc/NpcRumorTypes.ts` | `046642eb79f84c8708b6288f455673158a40d654ff949414dec2944d8c01a8bf` | npc | unmapped |
+| `server/src/npc/VendorRoutes.ts` | `e0764af40c8abe050970248d05ccb023f5985ce796a250f59535e55fe4566d25` | npc | unmapped |
+| `server/src/oracle/LivingWorldErdosOuroborosSystem.ts` | `6a8efd789533da48f6a7b506ef87999afe8922d1dc9da2444580c6f0cf1b774f` | world | unmapped |
+| `server/src/oracle/OracleEndpoint.ts` | `1299f3a30d00106204a8aaa2b75e87f06773cdac0a9e227351ebeda8506cfb22` | unclassified | unmapped |
+| `server/src/oracle/OracleIntegrationExample.ts` | `7e25727c1b3019ee2c70b8c0b56c0e6f2ca105dd9eb497a636337335eb8a587a` | unclassified | unmapped |
+| `server/src/oracle/OracleOuroborosConnector.ts` | `aa7f6804d30276c219199a79fa0dbfcc5adcf9235dd6d10df9cf876edf728fa8` | unclassified | unmapped |
+| `server/src/oracle/OracleSocialDirector.ts` | `d5b906225ab964faab11289a2f3964d1b8f4f353c12b13cb171df114844bec0a` | npc | unmapped |
+| `server/src/oracle/OracleVisionEngine.ts` | `3dc600c4814d9ff181a4b6b971f8e7cf822f30b835f11444af873fcd5df76dfb` | unclassified | unmapped |
+| `server/src/oracle/index.ts` | `fc821ca6e1e94f2f5e778e7e02b2fa69416c2d0fefa6240e8a6b654b65bbf2bd` | unclassified | unmapped |
+| `server/src/prediction/ScarcityPredictor.ts` | `fbc77a052904ec3d75c8634c736f756a158c30c0ddc13fa5ba5add5cf7bc9e62` | unclassified | unmapped |
+| `server/src/quest/QuestSystem.ts` | `f4b17f5cf8f5c46907f92d06867c57d24eb973f509e410c0f4c73e35c1161fba` | quest | unmapped |
+| `server/src/quests/CampQuestDirector.ts` | `6c21d42535172dd96d8e3c4609d19b43a0e49992be06599c1266e157edd7042e` | quest | unmapped |
+| `server/src/quests/CampQuestService.ts` | `a70e942f2bda88e32a8d223c9bf39d453ae01fbdedcfbb73989fd715c122a02c` | quest | unmapped |
+| `server/src/quests/EconomyWorkOrderService.ts` | `ab97e21a9f29872f4e8c898ca70d4039cadd918fe6c631d1819cff512ee2afcd` | economy, quest | unmapped |
+| `server/src/quests/JsonNpcQuestPersistenceAdapter.ts` | `310d8cad82a86a2a00db75025eef17230583d0b49c7b38e54d93a5fbad013ed6` | npc, quest | unmapped |
+| `server/src/quests/JsonQuestPersistenceAdapter.ts` | `bb3aef91e209c0e4b5c091c8babca1c8d2e007bd8fc6dbb8ca6e91ed6d77b9cc` | quest | unmapped |
+| `server/src/quests/NpcQuestPersistence.ts` | `027e26de063bfa3435c01bfcec178efc145667cdfdb7d94c47f30a8643127100` | npc, quest | unmapped |
+| `server/src/quests/NpcQuestRuntime.ts` | `e7964ff622054631118dca3244d063a8b16fad5e75c260b0660cbfa241f7f3b2` | npc, quest | unmapped |
+| `server/src/quests/NpcQuestService.ts` | `8cada3615a8c5243c82b0d40cfddac86fe42ecd7640c9f9406d92c55620d06c3` | npc, quest | unmapped |
+| `server/src/quests/NpcQuestTypes.ts` | `d92532956f8c10949220fe936684bbe9138247b1b4c283b99e158f7c0b512116` | npc, quest | unmapped |
+| `server/src/quests/PgQuestPersistenceAdapter.ts` | `7773288925bce927568ce928c32a107da53c5f4fafc97cef1b914fd3203cf820` | quest | unmapped |
+| `server/src/quests/QuestGameplayEventBridge.ts` | `d1ee57332b67513d33142a36610311073be6e97107b5cbbdf66f715b2e217fdb` | quest | unmapped |
+| `server/src/quests/QuestPersistence.ts` | `d19b61046500067d1ccf2a637857b1f6c0244c72dc2f1d46968db8cb41418450` | quest | unmapped |
+| `server/src/quests/QuestProgressionStore.ts` | `d91299391285c04199484ea68970e148e0860ef7b7699adf36efd16ad4b30140` | progression, quest | unmapped |
+| `server/src/quests/QuestSnapshotTypes.ts` | `82ac7f9f0a601549464f9d544b94cad631c530181d91f6eef1d07760a0635c52` | quest | unmapped |
+| `server/src/quests/campQuestRuntime.ts` | `81664d659e1fc67dd6761e5b74e9f6b1ee268dcec6f886ddd535bbfd34b54769` | quest | unmapped |
+| `server/src/quests/createQuestPersistenceAdapter.ts` | `df15c6b5e6cd9e634408e99b7208abf0051afd14573f26a2ce59ba3455225d8a` | quest | unmapped |
+| `server/src/quests/npcQuestRoute.ts` | `172cdf3bb0177e4f48f40f02ff8ae62f8f3c2303fc8e8e579ab5fa54e07c6e1a` | npc, quest | unmapped |
+| `server/src/resources/ChunkResourceGenerator.ts` | `4ccb1286fa4aec0d1cf5660c80d3bacd88b19e615b87b46448f25ddd72a939fe` | economy, world | unmapped |
+| `server/src/resources/GatheringService.ts` | `f844f351481404f01b8611e184e837129bf385f468b9092c5743cc7b7977fbcf` | economy, world | unmapped |
+| `server/src/resources/ResourceEcologyService.ts` | `b22ed0e47877d131eb82178e353dc01eb8e3c26af81b1446e545e99bdcde3322` | economy, world | unmapped |
+| `server/src/resources/ResourceEcologySnapshotAdapter.ts` | `2b5138cf01562dd48e72359c5cf77420a5cbbdc21e21cc00d23551e5c20e7b29` | economy, world | unmapped |
+| `server/src/resources/ResourceEcologyTickSystem.ts` | `e22458bcf4484f9b9be574382faa61078bfec6eed02e0fb07e5cabfad4879d0e` | economy, world | unmapped |
+| `server/src/resources/ResourceEcologyTypes.ts` | `4f7544612442c70cf938b1c6dcb24fbbbf6ebb90d479b46eff4f3d4dc4803b0b` | economy, world | unmapped |
+| `server/src/resources/ResourceGameData.ts` | `1d9017ff66f5331ec0ebc59a2e09d3ba97617f6252bc27b03a76c125decdaf06` | economy, world | unmapped |
+| `server/src/resources/ResourceNodeStore.ts` | `c02171a9aa3c8488474beb1952824a22e42de0741413e908abe64eb2de776974` | economy, world | unmapped |
+| `server/src/resources/ResourceSnapshotProjection.ts` | `7b9ba2e4946a2969c16965426134b182f8c6ca1a08ad61cfbc6abbb8a04a9278` | economy, world | unmapped |
+| `server/src/resources/ResourceTypes.ts` | `777e911e81638811d0ab1fb9da3071bf65c390c0483cf0865391af95be0f000b` | economy, world | unmapped |
+| `server/src/resources/ResourceWorldSeedResolver.ts` | `d1f7ea345a53c8baf3779c2b7466c1ac2b28a975461b6de2340e4d45f503080d` | economy, world | unmapped |
+| `server/src/resources/StarterResourceNodes.ts` | `1eb3dda4dc5bb3501eb78b852a1c421010585442408602c8bf4c464a488ec661` | economy, world | unmapped |
+| `server/src/skills/JsonSkillPersistenceAdapter.ts` | `a1578a4112c3db525e2ebefa1883a62e40bc46f1c9701f08cb0f30d24175d04f` | progression | unmapped |
+| `server/src/skills/PgSkillPersistenceAdapter.ts` | `639044ba4bbb9a164c7dc5301678d70e21b7ce20200d7fad4944e3e20eba88b7` | progression | unmapped |
+| `server/src/skills/SkillGameplayEventBridge.ts` | `0d9b27bd4e334e1857a3c4ba3efea6e32acffcf7d2b0464c22f4c683b560baff` | progression | unmapped |
+| `server/src/skills/SkillPersistence.ts` | `4a8e3be3eee213526c438629167ec08c3d7e5fecb5bc827db64a135e1766d8ef` | progression | unmapped |
+| `server/src/skills/SkillProgressionService.ts` | `0b83d6dfc2b7b8a9d11c8521ad17066ff938d6127d5d46c24ed550e2473905e5` | progression | unmapped |
+| `server/src/skills/SkillProgressionStore.ts` | `971dff56a323f91842c02f8c33613d45eb3a95a3ced811ae55de0501c30aa053` | progression | unmapped |
+| `server/src/skills/SkillTypes.ts` | `b60ee413355f833a59d58a4c84b986f8d537e3952fc9ea0f4b5f4e25588bad9d` | progression | unmapped |
+| `server/src/skills/createSkillPersistenceAdapter.ts` | `0b5fdd11b738dc1b698e9dda43a3ec63cad4e2f06f3247f1480616370f69c55d` | progression | unmapped |
+| `server/src/skills/skillRuntime.ts` | `b8ef80da684479a84093d67d526aacbe383d8fe76ec7e63ff4722f366a5384b6` | progression | unmapped |
+| `server/src/social/FamilyGraphTypes.ts` | `357c13fb2b8c344a6d2b871abe5cd38417e6e992659ab03ba44c3d90bee82f6f` | npc | unmapped |
+| `server/src/social/SocialGraphTypes.ts` | `f23e6767c8e7a1b629fee9d7d2f884aa077690f33dbecae2416c102b8ded3fa5` | npc | unmapped |
+| `server/src/systems/ContractManager.ts` | `975802a9b222ad43d5f6f5f639c6a657a1ed9d05c3dfc30c22aa8380b598b20a` | unclassified | unmapped |
+| `server/src/systems/InventorySystem.ts` | `a605e5cf65537d7e598b0e7c287aa23e809c4851feb817d8fab6f3d1ebfaec9f` | loot_items | unmapped |
+| `server/src/systems/LegendPropagationSystem.ts` | `98fa3a823a129d65f2b3be9cc4a909068f15d85e9a6e388b1549c25d3a56f014` | language_lore, quest | unmapped |
+| `server/src/systems/PathfindingSystem.ts` | `0f6ff799461e746afb954fa3ea144e93c75b72802324434e8d44f5a952000a02` | unclassified | unmapped |
+| `server/src/territory/TerritoryControl.ts` | `a6de89c74f1df8a7039de4907529bc8fd5c0c564149ca386fa4b84073ae520ac` | politics_war | unmapped |
+| `server/src/world/Chunk.ts` | `8b0ae16700fca9d92a8df7c4e707778be9a058e11c7b71b62d8ac1766df1f31e` | world | unmapped |
+| `server/src/world/JsonWorldDiscoveryPersistenceAdapter.ts` | `5d5e37d342adbf0518d3e8f2cd5fd58d09f102b6926494dc74f7ed55bf3e7786` | world | unmapped |
+| `server/src/world/ObservationBounds.ts` | `11f25eb83298287a08e02c908d37f4ed6636b24872d7648279fab1564312e941` | world | unmapped |
+| `server/src/world/RegionLodState.ts` | `76d211e7abb94914f25a292ed52663d5b992db48511c49f5b77d34875fccf5d4` | world | unmapped |
+| `server/src/world/RegionPressurePlanner.ts` | `24793c4c0dd729f8e8f265962e29262e70614f07b62c0d81cf3ffbf33b76e6e9` | world | unmapped |
+| `server/src/world/RegionPressureTypes.ts` | `5cf29232d888de223c7be45c22e035209b2bcd5189da46947829ab2881b1a5ce` | world | unmapped |
+| `server/src/world/WorldDiscoveryService.ts` | `a429b43a0163d4a91ffcffa47517b8ba4dca106bb323401c911a5f56aea70314` | world | unmapped |
+| `server/src/world/WorldDiscoveryStore.ts` | `e5c85c157d4e02ff57570c5c5209730e0cbdfcf761154c2b997d07bbad9645a7` | world | unmapped |
+| `server/src/world/WorldDiscoveryTypes.ts` | `e46a93ae2c84fbebd1359795be3c30151429d1afe1a6aa093aa515ac540f8002` | world | unmapped |
+| `server/src/world/WorldPoiGenerator.ts` | `c9f18b7d5009603ae2ecb3dceb9e63a38737412a244130a112134cff98a28474` | world | unmapped |
+| `server/src/world/WorldPoiTypes.ts` | `5b2d559c003779e6cff68d3cdb879abf9a3072e1bbf0450e5e43e7a25f3ac2da` | world | unmapped |
+| `server/src/world/adapters/ExistingDynamicTerrainAdapter.ts` | `8be195ad70ffbd686d10b7502b5f5d1d87805782936a5e36cd08ebce08d77432` | world | unmapped |
+| `server/src/world/adapters/ExistingTreeGeneratorAdapter.ts` | `5d2c52e388cd2689d3174142bb77641dcd75c109db1b5a4da3b86a112db4e11c` | world | unmapped |
+| `server/src/world/debug/PlacementDebugStore.ts` | `77057f2db11f636a48930ef5269df893536653b23563611fc97222c9b1d76e25` | world | unmapped |
+| `server/src/world/events/worldPlacementEvents.ts` | `19bd04c145ea00c8d9510e60912f9bca6f13a078f06009f58549058dc933432d` | world | unmapped |
+| `server/src/world/layout/GLBPlacementValidator.ts` | `5cc51d0e8ef11fa092d3a482595b3545f0bc0e41852575d9b2cdb33e27cc1f6a` | world | unmapped |
+| `server/src/world/layout/TreePlacementValidator.ts` | `4cb565016393450fb1502ba59b50ae009996757701db3619b12c9c34025b02b3` | world | unmapped |
+| `server/src/world/layout/WorldLayoutBuildingPlacementValidator.ts` | `61700abbfa0553e72058dd508d48f87400f045aa128ec898005ce35c6f585816` | world | unmapped |
+| `server/src/world/layout/WorldLayoutConstraintRegistry.ts` | `c2625577d1dcf7987a177cda10220e48c57c087d03465275bbe603a34be8d133` | world | unmapped |
+| `server/src/world/layout/WorldLayoutDoorValidator.ts` | `b2d6b86eb6e9f1a047b642918b3dd3a551080985e7e0dbc401b5362230a19cec` | world | unmapped |
+| `server/src/world/layout/WorldLayoutDungeonDistanceValidator.ts` | `e2ede4482d62ebf66fb1cdb7e8dd290cb8e327a65db7546ad6ba7fcfd3d61698` | combat, world | unmapped |
+| `server/src/world/layout/WorldLayoutFootprintResolver.ts` | `f975f138d8037a26c0ff2e62829cc593ea160d9b032744fc0175b60a63d20d7e` | world | unmapped |
+| `server/src/world/layout/WorldLayoutHealIntegration.ts` | `5ec881b3f779b4ad96d62a4b97bcb03efc69d0ab49bd60608e3642a0cb4c639d` | world | unmapped |
+| `server/src/world/layout/WorldLayoutLearningStore.ts` | `280f7ebf574d83db8d962d7dc3bac576fe0f1795fb12852675866118eb9c8753` | world | unmapped |
+| `server/src/world/layout/WorldLayoutPathValidator.ts` | `aeccbade6a5116147fa803e691f8cc39e8f94008be3406f9030953aeff9cf2e9` | world | unmapped |
+| `server/src/world/layout/WorldLayoutRepairService.ts` | `bf7e9b6283fd937f35895c9f351192eb52dfa62ff0f3c69ecd9e959839bef50a` | world | unmapped |
+| `server/src/world/layout/WorldLayoutReportLog.ts` | `7f97100c5ab35c83838273a1792c4197ffb624b253eb55189f0b4b5c8c5428ab` | world | unmapped |
+| `server/src/world/layout/WorldLayoutRoadConnectivityValidator.ts` | `6502618ccdfed27a19da57e74df4b8db941007f472a01174771f8e38af423efe` | world | unmapped |
+| `server/src/world/layout/WorldLayoutRuleEngine.ts` | `2372b36d188b21a4d0fa051567fa6f20150b29e7663a2749c18760cb1b226f88` | world | unmapped |
+| `server/src/world/layout/WorldLayoutSpatialIndex.ts` | `ae9e0c50f7b8806b353e037abfab482da081084d7fe1f74fafaebebb3220832d` | world | unmapped |
+| `server/src/world/layout/WorldLayoutTypes.ts` | `b1a1232ead5bc3b76214caa317d9e793843818c49e0e0d129374f9f45b4b0fa2` | world | unmapped |
+| `server/src/world/layout/WorldLayoutValidator.ts` | `717bccce9d31313a38f85e8dd0532a6a67369413274701b05896ad1d7169374c` | world | unmapped |
+| `server/src/world/layout/WorldLayoutWallConnectivityValidator.ts` | `0bac6b2ceb9d1792873b76093f75388b53770a04b1c3514a33e66c0f665dc559` | world | unmapped |
+| `server/src/world/layout/index.ts` | `98044e70c09c11738af27859896e6dcdfebb139c20920bde7fcb535096d7d447` | world | unmapped |
+| `server/src/world/rules/assetProfiles.ts` | `1662e73952d81d71ed817811057d6d94439ce450405885ae8158398d18c652e7` | loot_items, world | unmapped |
+| `server/src/world/rules/placementRules.ts` | `21ef77bcf5dd779691d06dbe53608f47b6f42c42cbdba70561201fd2277cf7e4` | world | unmapped |
+| `server/src/world/services/GLBAssetIngestionPipeline.ts` | `0bc82bbb541bd3d78b5fb9d71c0b7488905ce1bfca7ec1185b8afb6473db8225` | loot_items, world | unmapped |
+| `server/src/world/services/WorldPlacementRuleEngine.ts` | `903ccbc27f253cf7f926181969e198f95c42a6865cd532ad13145d59af4d71b6` | world | unmapped |
+| `server/src/world/services/index.ts` | `d4b226a4fd58113577b9b5ac95140b8d5319bfc86564a7bf80b8e028fcf517cf` | world | unmapped |
+
+Diese breite Zahl umfasst Funktionsmodule, nicht lediglich unabhängige Spielmechaniken. Für eine finale Übernahme muss jedes Modul eine Aurion-Zielzuordnung, einen Test und einen Wirkungsnachweis erhalten.

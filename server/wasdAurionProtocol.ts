@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { wasdAurionCatalogSummary, wasdAurionSourceCatalog, wasdAurionSourceRevision } from "./wasdAurionSourceCatalog";
 
 /**
  * Aurion-native contracts distilled from Wasd semantics.
@@ -264,6 +265,18 @@ export function interpretDialogue(input: { text: string; profile: LanguageProfil
   const confidence = clampUnit((semanticIntent === "unknown" ? 0.25 : 0.75) + clampUnit(input.trust) * 0.15 - clampUnit(input.threat) * 0.1);
   const state = confidence >= input.profile.comprehensionThreshold ? "accepted" : "quarantined";
   return { state, semanticIntent, confidence, dialectId: input.profile.dialectId, reason: state === "accepted" ? "recognized_intent" : "insufficient_comprehension" };
+}
+
+export function readWasdAurionCoverage() {
+  const paths = wasdAurionSourceCatalog.map(module => module.path).slice().sort(compareText);
+  const catalogHash = canonicalHash([wasdAurionSourceRevision, ...paths]);
+  return {
+    sourceRevision: wasdAurionSourceRevision,
+    adaptedModuleCount: wasdAurionCatalogSummary.adaptedModuleCount,
+    domainCounts: wasdAurionCatalogSummary.domainCounts,
+    catalogHash,
+    paths,
+  } as const;
 }
 
 export function resolveProgression(input: { totalXp: number; weaponXp: number; xpDelta: number; weaponXpDelta: number; receiptId: string }): ProgressionResolution {

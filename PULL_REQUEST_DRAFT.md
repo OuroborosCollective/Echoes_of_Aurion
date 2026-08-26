@@ -1,39 +1,63 @@
 # feat: Aurion–Wasd-Vertikalschnitt für Welt, NPCs und Fortschritt
 
-## Ziel
+## Zusammenfassung
 
-Dieser Kandidatenbranch überträgt ausgewählte, revisionsgebundene Wasd/Areloria-Regelkerne in die bestehende Aurion-Browserruntime. Die Implementierung erweitert Aurion additiv und erstellt keine MSW-/Lua-Portierung. Der Spielablauf bleibt bewusst an Aurions bestehende, serverbestätigte Quest-, Begegnungs-, Fortschritts- und Receiptpfade gebunden.
+Additive Integration der geprüften Welt-, NPC-, Loot- und Fortschrittsverträge; die 149 Wasd-GLB-Pfade sind nach ausdrücklicher Freigabe des Eigentümers dessen rechtliches, geistiges und künstlerisches Eigentum und dürfen für Aurion verwendet werden.
 
-## Enthalten
+## Ziel dieses Checkpoints
+
+Dieser Draft-PR dokumentiert einen **revisionsgebundenen Integrationscheckpoint**, nicht fälschlich die vollständige Übernahme jeder Wasd-Funktion. Er erweitert Echoes of Aurion additiv; er erstellt keine MSW-/Lua-Portierung und übernimmt keine feste Wasd-Tickpflicht. Alle Spielmutationen bleiben an Aurions bestätigte Quest-, Begegnungs-, Fortschritts- und Receiptpfade gebunden.
+
+## Integrierte Aurion-Gameplay-Scheibe
 
 | Bereich | Umsetzung |
 | --- | --- |
 | Deterministische Welt | Versionierter `worldSeed`, `resolutionIndex`, Signalauflösung, Wetter-/Dialogton und Readmodell |
-| Quests, Loot und Fortschritt | Bestätigter Questabschluss → idempotenter Ergebnisreceipt → deterministischer Loot → optionaler Waffenfortschritt |
+| Quests, Loot und Fortschritt | Bestätigter Questabschluss → idempotenter Ergebnisreceipt → deterministischer Loot → Waffenfortschritt |
 | NPCs | Begrenzte Needs, reproduzierbare Zielentscheidung, Speicherreadmodell, Dialekt-ID und Schwellenwert für Verständnis |
 | Politik und Weltreaktion | Asterion-Polity als deterministisches Readmodell; Kriegs-/Politiksignale bleiben regelgebunden und nicht klientenautoritär |
 | Persistenz | Additiv: Weltauflösungen, NPC-Zustände, Entscheidungsevidenz, Polityreadmodelle und Dialogreceipts |
-| Client | Sichtbare Weltreaktion, Polity, NPC-Ziel, Sicherheitswert, Dialektprofil und geschützter Dialogdeutungspfad |
-| Assets | 149 Wasd-GLB-Container vollständig strukturell validiert; keine Übernahme und keine Runtimeaktivierung ohne Rechte-/Budgetfreigabe |
+| Client | Sichtbare Weltreaktion, Polity, NPC-Ziel, Sicherheitswert, Dialektprofil, geschützter Dialogdeutungspfad sowie Katalogstatus |
+
+## Vollständige Wasd-Inventur und Quellenbindung
+
+Die breite, funktionsorientierte Inventur der Wasd-Revision `a4d99432e47b82ce98105eadb30360cd8040ad13` enthält **906 Gameplay-/Weltmodule**. Davon sind **712** als Aurion-adaptierbare Funktionsmodule im versionsgebundenen Aurion-Quellkatalog verfügbar, **15** sind bewusst ausgeschlossen (feste Tick-/Watchdog- und nicht passende Betriebslogik) und **179** bleiben Infrastruktur-/Referenzmodule. Der Katalog ist ein überprüfbares Readmodell; er ist kein falscher Beweis, dass alle 712 Semantiken bereits als einzelne Spielerfunktionen implementiert sind.
+
+## Wasd-GLB-Assets
+
+| Eigenschaft | Befund |
+| --- | ---: |
+| Inventarisierte Pfade | 149 |
+| Strukturell valide GLB-2.0-Container | 149 |
+| Eindeutige SHA-256-Assets | 72 |
+| Duplikatpfade | 77 |
+| Eindeutige Größe | 599.243.337 Bytes |
+| Sofort streambare Kandidaten | 38 |
+| LOD-/Performance-Review erforderlich | 28 |
+| Parser-Review erforderlich | 6 |
+
+Die Eigentums- und Nutzungsfreigabe ist dokumentiert. Der Katalog verwendet revisionsgebundene, CORS-erreichbare Quell-URLs und aktiviert LOD-/Parser-Reviewkandidaten nicht automatisch. Eine kopierbasierte Übernahme von 599 MB in das Git-Repository ist absichtlich nicht Bestandteil dieses Checkpoints.
 
 ## Migrationen
 
-Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.sql` sind additiv und im Drizzle-Journal registriert. Sie wurden **nicht** gegen eine Produktionsdatenbank ausgeführt. Vor Release ist ein gesonderter Migrations-Readback mit Backup und die Prüfung des Zielschemastands erforderlich.
+Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.sql` sind additiv und im Drizzle-Journal registriert. Sie wurden **nicht** gegen eine Produktionsdatenbank ausgeführt. Vor Release sind Backup, Migrations-Readback und Schemaabgleich erforderlich.
 
 ## Nachweise
 
 | Prüfung | Ergebnis |
 | --- | --- |
 | TypeScript | bestanden |
-| Vollständige Testausführung | 82 bestanden, 7 übersprungen |
-| Produktionsbuild | bestanden |
-| GLB-2.0-Einzelprüfung | 149/149 gültig, 0 Fehler |
+| Vollständige Testausführung | 83 bestanden, 7 umgebungsbedingt übersprungen |
+| Modulquellkatalog | 712 adaptierbare Module, revisionsgebunden getestet |
+| GLB-2.0-Einzelprüfung | 149/149 gültig |
+| GLB-Detailinventur | 72 eindeutige Assets, Budgets und Rollen katalogisiert |
 | Anonyme Browseransicht | geladen; keine sichtbare Laufzeitausnahme |
+| Produktionsbuild | in dieser Sandbox dreimal beim Vite-Chunk-Rendering per `SIGTERM` beendet; keine erfolgreiche Buildfreigabe |
 
-Die sieben übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Dies ist ein umgebungsbedingter Teststatus, kein Erfolgsnachweis für diese Integrationen.
+Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Der Produktionsbuildblocker wird explizit als **nicht freigegeben** behandelt; er ist kein Nachweis eines Produktfehlers, aber vor Merge/Release in einer ausreichend dimensionierten CI- oder Entwicklungsumgebung zu reproduzieren und zu beheben.
 
-## Nicht enthalten / Freigabegates
+## Nicht enthalten / weitere Integrationspakete
 
-Die folgenden Punkte bleiben absichtlich außerhalb dieses Branches oder benötigen vor Aktivierung separate Freigaben: einzelne GLB-Rechteketten und Laufzeitbudgets, Produktionsmigration, Deployment, globales Balancing, serverautoritäre 10-Hz-Ticks, MSW/Lua-Portierung und ein Merge nach `main`.
+Die vollständige Implementierung aller 712 adaptierbaren Wasd-Semantiken ist nach diesem Checkpoint noch offen. Die nächsten Pakete folgen der vorhandenen Migrationsmatrix pro Domäne (Zivilisation, Farming, Konstruktion, Gilden, Magie, Religion, Territorium, Ökonomie, Kampf, Content) mit Zieladapter, Test und sichtbarem Spielerreadback. Globales Balancing, Produktionsmigration, Deployment, MSW/Lua-Portierung und ein Merge nach `main` sind nicht Bestandteil dieses Draft-PR.
 
-> Reviewende sollten zuerst `WASD_AURION_SEMANTICS.md`, `WASD_GLB_AUDIT.md`, `guardian/wasd_aurion_browser_qa.md` und die beiden Additivmigrationen lesen.
+> Reviewende sollten zuerst `WASD_AURION_SEMANTICS.md`, `WASD_AURION_MIGRATION_MATRIX.md`, `WASD_BROAD_GAMEPLAY_MODULE_LEDGER.md`, `WASD_GLB_AUDIT.md`, `WASD_GLB_DETAIL_INVENTORY.md`, `guardian/wasd_aurion_browser_qa.md` und die beiden Additivmigrationen lesen.

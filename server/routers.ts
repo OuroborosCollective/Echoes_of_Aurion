@@ -14,6 +14,7 @@ import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
+import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 
 function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
   const protocol = request.header("x-forwarded-proto") ?? request.protocol;
@@ -97,6 +98,7 @@ export const appRouter = router({
   }),
   gameplay: router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
+    wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),

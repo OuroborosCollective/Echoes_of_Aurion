@@ -5,6 +5,7 @@ import {
   buildWorldSeedDigest,
   decideNpcGoal,
   interpretDialogue,
+  readWasdAurionCoverage,
   resolveNpcNeeds,
   resolvePolityState,
   resolveProgression,
@@ -73,6 +74,17 @@ describe("wasdAurionProtocol", () => {
     const profile = { languageProfileId: "aurion-common", dialectId: "observatory", lexiconVersion: "v1", grammarVersion: "v1", comprehensionThreshold: 0.6 } as const;
     expect(interpretDialogue({ text: "Seid gegrüßt, ich brauche einen Auftrag.", profile, trust: 0.8, threat: 0.1 })).toMatchObject({ state: "accepted", semanticIntent: "ask_quest" });
     expect(interpretDialogue({ text: "Hier ist mein private key", profile, trust: 1, threat: 0 })).toMatchObject({ state: "quarantined", semanticIntent: "unknown" });
+  });
+
+  it("exposes the complete revision-locked Wasd source catalog as a non-authoritative read model", () => {
+    const first = readWasdAurionCoverage();
+    const second = readWasdAurionCoverage();
+    expect(first).toEqual(second);
+    expect(first.sourceRevision).toBe("a4d99432e47b82ce98105eadb30360cd8040ad13");
+    expect(first.adaptedModuleCount).toBe(712);
+    expect(first.domainCounts.world).toBeGreaterThan(0);
+    expect(first.paths).toHaveLength(712);
+    expect(first.catalogHash).toHaveLength(64);
   });
 
   it("derives progression only from non-negative inputs and a receipt", () => {
