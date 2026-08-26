@@ -113,6 +113,20 @@
       "when": 1787435870347,
       "tag": "0015_careless_photon",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1787768781898,
+      "tag": "0016_wasd_aurion_world",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1787768928386,
+      "tag": "0017_wasd_aurion_content_seed",
+      "breakpoints": true
     }
   ]
 }

@@ -27,6 +27,27 @@ describe("open-world protocol", () => {
     expect(JSON.stringify(snapshot)).not.toContain("reward");
   });
 
+  it("renders a versioned deterministic world reaction without adding a reward authority", () => {
+    const first = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    const second = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    expect(first.world).toEqual(second.world);
+    expect(first.world.worldSeed).toBe("echoes-of-aurion-v1");
+    expect(first.world.reaction.ruleSetVersion).toBe("aurion-wasd-rules-v1");
+    expect(first.world.reaction.dialogueTone).toBe("calm");
+    expect(JSON.stringify(first.world)).not.toContain("reward");
+  });
+
+  it("exposes bounded NPC autonomy, dialect profiles and a deterministic fictional polity", () => {
+    const snapshot = buildOpenWorldSnapshot({ level: 1, completed: [], activeQuest: "astral_call", canEnterDungeon: false });
+    const lyra = snapshot.npcs.find(npc => npc.id === "lyra");
+    expect(lyra?.autonomy.dialectId).toBe("observatory");
+    expect(lyra?.autonomy.goal).toBe("expand_influence");
+    expect(lyra?.autonomy.decisionHash).toHaveLength(64);
+    expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "windhollow"]);
+    expect(JSON.stringify(snapshot)).not.toContain("private key");
+  });
+
   it("exposes only the encounter unlocked by confirmed active quest or dungeon access", () => {
     expect(buildOpenWorldSnapshot({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false }).primaryEncounter).toBeNull();
     expect(buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }).primaryEncounter).toMatchObject({ encounterKey: "cinder_vault" });

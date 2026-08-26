@@ -1,4 +1,5 @@
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
+import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -32,9 +33,11 @@ export type OpenWorldSnapshot = {
   encounter: { activeCount: number; budget: number; maximumVisible: number };
   primaryEncounter: null | { id: string; label: string; encounterKey: EncounterKey; narrative: string };
   pointsOfInterest: readonly { id: string; kind: PointOfInterestKind; state: "locked" | "available" | "completed"; label: string }[];
-  npcs: readonly { id: "lyra" | "orun"; displayName: string; role: string; memory: { local: readonly string[]; social: readonly string[]; quest: readonly string[] } }[];
+  npcs: readonly { id: "lyra" | "orun"; displayName: string; role: string; memory: { local: readonly string[]; social: readonly string[]; quest: readonly string[] }; autonomy: { needs: Readonly<Record<NpcNeedKey, number>>; goal: string; decisionHash: string; dialectId: string; comprehensionThreshold: number } }[];
   terrain: OpenWorldTerrainSnapshot;
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
+  world: { worldSeed: "echoes-of-aurion-v1"; resolutionIndex: number; reaction: WorldReaction };
+  polity: PolityState;
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -103,10 +106,20 @@ export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZone
   return "observatory_threshold";
 }
 
-function npcReadModels(input: OpenWorldProfile) {
+function npcAutonomy(input: { npcId: "lyra" | "orun"; reaction: WorldReaction; resolutionIndex: number; dialectId: string; baseNeeds: Readonly<Record<NpcNeedKey, number>> }) {
+  const needs = resolveNpcNeeds({
+    current: input.baseNeeds,
+    events: (Object.entries(input.reaction.npcNeedDeltas) as [NpcNeedKey, number][]).map(([need, delta]) => ({ id: `world:${input.reaction.id}:${input.npcId}:${need}`, need, delta, sourceReceiptId: input.reaction.id, resolutionIndex: input.resolutionIndex })),
+  });
+  const decision = decideNpcGoal({ npcId: input.npcId, needs, observationIds: input.reaction.signalIds, resolutionIndex: input.resolutionIndex });
+  return { needs, goal: decision.goal, decisionHash: decision.decisionHash, dialectId: input.dialectId, comprehensionThreshold: 0.6 };
+}
+
+function npcReadModels(input: OpenWorldProfile, reaction: WorldReaction) {
   const hasAstralCall = input.completed.includes("astral_call");
   const hasArchive = input.completed.includes("archive_of_echoes");
   const active = input.activeQuest;
+  const resolutionIndex = reaction.resolutionIndex;
   return [
     {
       id: "lyra" as const,
@@ -117,6 +130,7 @@ function npcReadModels(input: OpenWorldProfile) {
         social: hasArchive ? ["Die Archivwächter sprechen wieder von einem sicheren Übergang durch den Windhain."] : ["Windhollow meldet unstete Wisps nahe der ersten Brücke."],
         quest: active === "ember_key" ? ["Das Solarium wartet auf deine letzte Stabilisierung."] : ["Kein weiterer Auftrag von Lyra ist zurzeit aktiv."],
       },
+      autonomy: npcAutonomy({ npcId: "lyra", reaction, resolutionIndex, dialectId: "observatory", baseNeeds: { safety: 0.78, resources: 0.52, belonging: 0.62, status: 0.58, wealth: 0.4, power: 0.35 } }),
     },
     {
       id: "orun" as const,
@@ -127,8 +141,17 @@ function npcReadModels(input: OpenWorldProfile) {
         social: hasAstralCall ? ["Die Windhollow-Karten zeigen eine neue Resonanzlinie am Rand des Sonnenfalls."] : ["Keine bestätigte Außenroute wurde an das Archiv gemeldet."],
         quest: active === "archive_of_echoes" ? ["Die versunkene Halle ist dein nächster klarer Auftrag."] : ["Orun bewahrt die Karte, bis der Questpfad es zulässt."],
       },
+      autonomy: npcAutonomy({ npcId: "orun", reaction, resolutionIndex, dialectId: "archive", baseNeeds: { safety: 0.7, resources: 0.5, belonging: 0.46, status: 0.64, wealth: 0.38, power: 0.28 } }),
     },
   ] as const;
+}
+
+function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, resolutionIndex: number): WorldSignal[] {
+  const signals: WorldSignal[] = [];
+  if (input.activeQuest) signals.push({ id: `quest:${input.activeQuest}`, kind: "resonance", regionId: zoneId, magnitude: 0.3, sourceReceiptId: `quest-state:${input.activeQuest}`, resolutionIndex });
+  if (input.completed.length > 0) signals.push({ id: `progress:${input.completed.length}`, kind: "player_event", regionId: zoneId, magnitude: Math.min(1, input.completed.length * 0.2), sourceReceiptId: `quest-completed:${input.completed.slice().sort().join(",")}`, resolutionIndex });
+  if (zoneId === "emberfall" || zoneId === "cinder_vault") signals.push({ id: `hazard:${zoneId}`, kind: "hazard", regionId: zoneId, magnitude: zoneId === "cinder_vault" ? 0.7 : 0.35, sourceReceiptId: `zone:${zoneId}`, resolutionIndex });
+  return signals;
 }
 
 function primaryEncounterFor(input: OpenWorldProfile): OpenWorldSnapshot["primaryEncounter"] {
@@ -166,6 +189,21 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     ] },
   }[zoneId];
   const maximumVisible = maximumVisibleEnemies(input.level);
+  const resolutionIndex = input.level * 1_000 + input.completed.length * 10 + (input.activeQuest ? 1 : 0);
+  const signals = worldSignalsFor(input, zoneId, resolutionIndex);
+  const world = {
+    worldSeed: "echoes-of-aurion-v1" as const,
+    resolutionIndex,
+    reaction: resolveWorldReaction({ worldSeed: "echoes-of-aurion-v1", regionId: zoneId, resolutionIndex, signals }),
+  };
+  const polity = resolvePolityState({
+    polityId: "asterion_compact",
+    governmentType: "council",
+    territoryIds: ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"],
+    stability: 0.74,
+    activeDiplomacy: ["alliance", "trade"],
+    warSignals: signals,
+  });
   return {
     revision: 1,
     zoneId,
@@ -175,9 +213,11 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     encounter: { activeCount: Math.min(maximumVisible, Math.max(2, zone.tier + Math.floor(Math.max(1, input.level) / 12) + 1)), budget: encounterBudget(input.level, zone.tier), maximumVisible },
     primaryEncounter: primaryEncounterFor(input),
     pointsOfInterest: zone.pois,
-    npcs: npcReadModels(input),
+    npcs: npcReadModels(input, world.reaction),
     terrain: buildOpenWorldTerrain(zoneId),
     props: propsForZone(zoneId),
+    world,
+    polity,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
