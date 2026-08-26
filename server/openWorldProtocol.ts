@@ -3,6 +3,7 @@ import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReactio
 import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
 import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
 import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
+import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, resolveHouse, resolveStructureDamage } from "./wasdAurionStewardshipProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -62,6 +63,14 @@ export type OpenWorldSnapshot = {
     starwardenFamily: ReturnType<typeof resolveFamilyRecord>;
     achievements: ReturnType<typeof resolveAchievements>;
     party: ReturnType<typeof resolvePartyAction>;
+  };
+  stewardship: {
+    farm: ReturnType<typeof resolveFarmPlot>;
+    construction: ReturnType<typeof resolveConstructionQueue>;
+    house: ReturnType<typeof resolveHouse>;
+    faith: ReturnType<typeof resolveFaith>;
+    gate: ReturnType<typeof resolveGate>;
+    structure: ReturnType<typeof resolveStructureDamage>;
   };
   allowedCommands: readonly OpenWorldCommand[];
 };
@@ -271,6 +280,14 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     achievements: resolveAchievements({ playerId: "aurion_player", current: input.completed, candidates: [{ id: "first_blood", eligible: input.completed.includes("astral_call") }, { id: "ruin_discoverer", eligible: input.completed.includes("archive_of_echoes") }, { id: "master_smith", eligible: input.level >= 12 }], receiptId: world.reaction.id }),
     party: resolvePartyAction({ action: "create", actorId: "aurion_player", receiptId: world.reaction.id, resolutionIndex }),
   };
+  const stewardship = {
+    farm: resolveFarmPlot({ plotId: `${zoneId}_plot`, seedId: "moonwheat", currentStage: zone.tier, growSteps: input.completed.length > 0 ? 1 : 0, receiptId: world.reaction.id, resolutionIndex }),
+    construction: resolveConstructionQueue({ tasks: [{ structureId: `${zoneId}_gate`, targetLevel: zone.tier + 1 }, { structureId: `${zoneId}_observatory`, targetLevel: 1 }], receiptId: world.reaction.id }),
+    house: resolveHouse({ ownerId: "starwardens", plotId: `${zoneId}_house`, currentUpgrades: zone.tier, targetUpgrade: input.level >= 12 ? zone.tier + 1 : zone.tier, receiptId: world.reaction.id }),
+    faith: resolveFaith({ religionId: "aurion_accord", adherents: ["lyra", "orun"], influence: 0.35 + polity.stability * 0.3, receiptId: world.reaction.id }),
+    gate: resolveGate({ gateId: `${zoneId}_gate`, state: zoneId === "cinder_vault" && !input.canEnterDungeon ? "locked" : "open", actorPermissions: input.canEnterDungeon ? ["gate_access"] : [], receiptId: world.reaction.id }),
+    structure: resolveStructureDamage({ structureId: `${zoneId}_wall`, currentHitpoints: 100, damage: Math.max(0, Math.round(world.reaction.threatDelta * 20)), receiptId: world.reaction.id }),
+  };
   return {
     revision: 1,
     zoneId,
@@ -288,6 +305,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     civilization,
     expedition,
     society,
+    stewardship,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
