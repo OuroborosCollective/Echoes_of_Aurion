@@ -20,6 +20,8 @@ export type MarketListing = { itemId: string; basePrice: number; category: "prov
 export type MarketPrice = MarketListing & { price: number; scarcityDelta: number; weatherMultiplier: number; receiptHash: string };
 export type ScarcitySignal = { regionId: string; itemId: string; shiftPercentage: number; x: number; y: number; z: number; resolutionIndex: number; sourceReceiptId: string };
 export type CaravanMission = { npcId: string; regionId: string; goal: "find_trade_partner"; x: number; y: number; z: number; objectiveType: "scarcity_response"; receiptHash: string };
+export type ScarcityForecast = { state: "stable" | "predicted"; resourceId: string; regionId: string; probability: number; severity: number; recommendedAction: "MIGRATE" | "HOARD" | "NONE"; npcPriorities: Readonly<Record<string, number>>; receiptHash: string };
+export type AggressionHazard = { hazardIndex: number; aggressionTrend: number; aggressionAverage: number; sampleCount: number; receiptHash: string };
 
 export type CraftIngredient = { itemId: string; amount: number };
 export type CraftRecipe = { id: string; requiredLevel: number; ingredients: readonly CraftIngredient[]; result: CraftIngredient; xp: number };
@@ -52,6 +54,40 @@ export function resolveMarketPrices(input: { regionId: string; weatherTone: "cle
     const receiptHash = hash(["wasd:market:v1", input.regionId, listing.itemId, String(input.resolutionIndex), String(price), String(scarcityDelta)]);
     return { ...listing, price, scarcityDelta, weatherMultiplier: multiplier, receiptHash };
   });
+}
+
+export function resolveAggressionHazard(input: { samples: readonly number[]; receiptId: string }): AggressionHazard {
+  const samples = input.samples.filter(Number.isFinite).map(value => clamp(value));
+  if (samples.length === 0) return { hazardIndex: 0, aggressionTrend: 0, aggressionAverage: 0, sampleCount: 0, receiptHash: hash(["wasd:aggression:v1", input.receiptId, "empty"]) };
+  if (samples.length === 1) {
+    const aggressionAverage = samples[0]!;
+    const hazardIndex = clamp((aggressionAverage - 0.25) / 0.75);
+    return { hazardIndex, aggressionTrend: 0, aggressionAverage, sampleCount: 1, receiptHash: hash(["wasd:aggression:v1", input.receiptId, String(aggressionAverage)]) };
+  }
+  const aggressionAverage = samples.reduce((total, value) => total + value, 0) / samples.length;
+  const variance = samples.reduce((total, value) => total + (value - aggressionAverage) ** 2, 0) / samples.length;
+  const standardDeviation = Math.sqrt(Math.max(variance, 0));
+  const xMean = (samples.length - 1) / 2;
+  const regression = samples.reduce((accumulator, value, index) => ({ covariance: accumulator.covariance + (index - xMean) * (value - aggressionAverage), variance: accumulator.variance + (index - xMean) ** 2 }), { covariance: 0, variance: 0 });
+  const aggressionTrend = regression.variance > 1e-12 ? regression.covariance / regression.variance : 0;
+  const meanPressure = clamp((aggressionAverage - 0.22) / 0.73);
+  const trendPressure = Math.max(0, Math.min(1, aggressionTrend * 220));
+  const volatilityPressure = clamp(standardDeviation * 5);
+  const hazardIndex = clamp(0.38 * meanPressure + 0.37 * trendPressure + 0.25 * volatilityPressure);
+  return { hazardIndex, aggressionTrend, aggressionAverage, sampleCount: samples.length, receiptHash: hash(["wasd:aggression:v1", input.receiptId, ...samples.map(String)]) };
+}
+
+export function resolveScarcityForecast(input: { resourceId: string; regionId: string; referencePrice: number; currentPrice: number; referenceStock: number; currentStock: number; affectedNpcIds: readonly string[]; receiptId: string }): ScarcityForecast {
+  const safeReferencePrice = Math.max(1, input.referencePrice);
+  const safeReferenceStock = Math.max(1, input.referenceStock);
+  const priceChange = (Math.max(0, input.currentPrice) - safeReferencePrice) / safeReferencePrice;
+  const stockChange = (Math.max(0, input.currentStock) - safeReferenceStock) / safeReferenceStock;
+  const predicted = stockChange < -0.2 && priceChange > 0.25;
+  const probability = predicted ? clamp(Math.max(0.65, (Math.abs(stockChange) + Math.abs(priceChange)) / 2), 0, 0.99) : 0;
+  const severity = predicted ? Math.max(1, Math.min(10, Math.round(Math.abs(stockChange) * 50))) : 0;
+  const recommendedAction: ScarcityForecast["recommendedAction"] = probability > 0.85 && severity > 7 ? "MIGRATE" : severity > 4 && stockChange < -0.3 ? "HOARD" : "NONE";
+  const npcPriorities = Object.fromEntries(input.affectedNpcIds.slice().sort(compare).map(npcId => [npcId, recommendedAction === "NONE" ? 0 : recommendedAction === "MIGRATE" ? probability : severity / 10]));
+  return { state: predicted ? "predicted" : "stable", resourceId: input.resourceId, regionId: input.regionId, probability, severity, recommendedAction, npcPriorities, receiptHash: hash(["wasd:scarcity:v1", input.receiptId, input.resourceId, input.regionId, String(priceChange), String(stockChange), recommendedAction]) };
 }
 
 export function resolveCaravanMissions(input: { traders: readonly { npcId: string }[]; signals: readonly ScarcitySignal[]; threshold?: number }): readonly CaravanMission[] {

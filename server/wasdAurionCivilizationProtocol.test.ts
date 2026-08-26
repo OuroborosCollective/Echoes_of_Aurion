@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTerritoryChunkKey, resolveCaravanMissions, resolveCraft, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { getTerritoryChunkKey, resolveAggressionHazard, resolveCaravanMissions, resolveCraft, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
 
 describe("wasdAurionCivilizationProtocol", () => {
   it("binds settlements to stable identity and resolution rather than wall time", () => {
@@ -15,6 +15,20 @@ describe("wasdAurionCivilizationProtocol", () => {
     const second = resolveMarketPrices({ ...input, scarcity: input.scarcity.slice().reverse() });
     expect(first).toEqual(second);
     expect(first[0]?.price).toBe(26);
+  });
+
+  it("predicts scarcity and bounded NPC priorities from explicit market deltas", () => {
+    const forecast = resolveScarcityForecast({ resourceId: "iron_bar", regionId: "windhollow", referencePrice: 100, currentPrice: 160, referenceStock: 100, currentStock: 65, affectedNpcIds: ["merchant-b", "merchant-a"], receiptId: "forecast-1" });
+    expect(forecast).toMatchObject({ state: "predicted", severity: 10, recommendedAction: "HOARD" });
+    expect(Object.keys(forecast.npcPriorities)).toEqual(["merchant-a", "merchant-b"]);
+  });
+
+  it("derives aggressive world hazard from stable samples without a runtime tick", () => {
+    const first = resolveAggressionHazard({ samples: [0.2, 0.4, 0.65, 0.8], receiptId: "hazard-1" });
+    const second = resolveAggressionHazard({ samples: [0.2, 0.4, 0.65, 0.8], receiptId: "hazard-1" });
+    expect(first).toEqual(second);
+    expect(first.hazardIndex).toBeGreaterThan(0);
+    expect(first.aggressionTrend).toBeGreaterThan(0);
   });
 
   it("only assigns trade missions above the bounded scarcity threshold", () => {

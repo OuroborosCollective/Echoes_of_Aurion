@@ -1,6 +1,6 @@
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
-import { resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
 import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
@@ -46,6 +46,8 @@ export type OpenWorldSnapshot = {
     caravanMissions: readonly ReturnType<typeof resolveCaravanMissions>[number][];
     guild: ReturnType<typeof resolveGuild>;
     territoryEffect: ReturnType<typeof resolveGuildTerritoryEffect>;
+    scarcityForecast: ReturnType<typeof resolveScarcityForecast>;
+    aggressionHazard: ReturnType<typeof resolveAggressionHazard>;
   };
   expedition: {
     layout: ReturnType<typeof resolveExpeditionLayout>;
@@ -239,12 +241,15 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { itemId: "asterion_iron", basePrice: 140, category: "material" },
     ],
   });
+  const aggressionHazard = resolveAggressionHazard({ samples: [0.25, 0.3 + world.reaction.threatDelta * 0.15, 0.35 + world.reaction.threatDelta * 0.2, 0.4 + world.reaction.threatDelta * 0.25], receiptId: world.reaction.id });
   const civilization = {
     settlement: resolveSettlement({ id: `${zoneId}_settlement`, kind: zone.tier >= 2 ? "city" : "village", ownerId: "asterion_compact", regionId: zoneId, foundedResolutionIndex: 0, prosperity: 0.55 + world.reaction.resourceDelta * 0.15, stability: polity.stability }),
     market,
     caravanMissions: resolveCaravanMissions({ traders: [{ npcId: "asterion_caravan" }], signals: scarcity }),
     guild: resolveGuild({ id: "starwardens", name: "Sternenwächter", founderId: "lyra", members: ["orun"], treasury: 120 }),
     territoryEffect: resolveGuildTerritoryEffect({ npcGuildId: "starwardens", x: zone.tier * 16, y: 24, territoryOwners: { [`${Math.floor((zone.tier * 16) / 64)}:0`]: "starwardens" } }),
+    scarcityForecast: resolveScarcityForecast({ resourceId: "resonance_tonic", regionId: zoneId, referencePrice: 50, currentPrice: market[0]?.price ?? 50, referenceStock: 100, currentStock: Math.max(0, Math.floor(100 * (1 - world.reaction.resourceDelta * 0.5 - world.reaction.threatDelta * 0.15))), affectedNpcIds: ["lyra", "orun"], receiptId: world.reaction.id }),
+    aggressionHazard,
   };
   const layout = resolveExpeditionLayout({ expeditionId: `${zoneId}_expedition`, seed: `echoes-of-aurion-v1:${zoneId}`, tier: zone.tier + 1, resolutionIndex });
   const leadMonster = resolveMonsterSpawn({ spawnerId: `${zoneId}_spawner`, biome: zoneId === "emberfall" || zoneId === "cinder_vault" ? "desert" : zoneId === "windhollow" ? "mountain" : "forest", packIndex: 0, resolutionIndex });
