@@ -7,6 +7,7 @@ import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, r
 import { resolveInventory } from "./wasdAurionItemProtocol";
 import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
 import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
+import { resolveSkillProgressionReadmodel } from "./wasdAurionSkillProgressionProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -81,6 +82,7 @@ export type OpenWorldSnapshot = {
     cityLayout: ReturnType<typeof resolveCityLayout>;
   };
   aiProposal: ReturnType<typeof resolveAiProposal>;
+  skillProgression: ReturnType<typeof resolveSkillProgressionReadmodel>;
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -316,6 +318,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     ] }),
   };
   const aiProposal = resolveAiProposal({ text: `NPC market proposal for ${zoneId}; scarcity ${civilization.scarcityForecast.recommendedAction}.`, mode: "npc", receiptId: world.reaction.id, resolutionIndex });
+  const skillProgression = resolveSkillProgressionReadmodel({ playerId: "aurion_player", skillId: "combat", events: input.completed.slice().sort().map((questKey, index) => ({ idempotencyKey: `quest-skill:${questKey}`, skillId: "combat" as const, amountExact: "25", source: "quest_reward" as const, receiptId: `quest-completed:${questKey}`, resolutionIndex: index + 1 })) });
   return {
     revision: 1,
     zoneId,
@@ -337,6 +340,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     inventory,
     worldKernel,
     aiProposal,
+    skillProgression,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }

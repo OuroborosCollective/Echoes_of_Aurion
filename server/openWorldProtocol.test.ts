@@ -27,6 +27,7 @@ describe("open-world protocol", () => {
     expect(snapshot.worldKernel.integrity).toMatchObject({ ok: true, kappa: 1000 });
     expect(snapshot.worldKernel.cityLayout.sector).toBe(0);
     expect(snapshot.aiProposal).toMatchObject({ state: "proposal", intent: "trade_decision", commandType: "AURION_TRADE_PROPOSAL" });
+    expect(snapshot.skillProgression).toMatchObject({ skillId: "combat", progression: { totalXpExact: "25", levelExact: "1" }, appliedReceiptIds: ["quest-completed:astral_call"] });
     expect(JSON.stringify(snapshot)).not.toContain("reward");
   });
 
