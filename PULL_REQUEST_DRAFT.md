@@ -18,6 +18,9 @@ Dieser Draft-PR dokumentiert einen **revisionsgebundenen Integrationscheckpoint*
 | Politik und Weltreaktion | Asterion-Polity als deterministisches Readmodell; Kriegs-/Politiksignale bleiben regelgebunden und nicht klientenautoritär |
 | Persistenz | Additiv: Weltauflösungen, NPC-Zustände, Entscheidungsevidenz, Polityreadmodelle und Dialogreceipts |
 | Client | Sichtbare Weltreaktion, Polity, NPC-Ziel, Sicherheitswert, Dialektprofil, geschützter Dialogdeutungspfad sowie Katalogstatus |
+| Zivilisation, Ökonomie und Handwerk | Deterministische Siedlungsauflösung, Marktpreise, Knappheitsprognose, Karawanenmissionen, Crafting, Gildenterritorium und aggressionsbasierte Weltgefahr |
+| Expedition, Kampf und Magie | Seedgebundene Raumlayouts und Monster, receiptgebundene Kampfvorschau, wetterabhängige Zauberpotenz sowie begrenzte Reiseresolution |
+| Gesellschaft | Versionierte Alterung, Beziehungen, Familie, Erfolge sowie Partyführung, Kapazitäts- und Übergaberegeln |
 
 ## Vollständige Wasd-Inventur und Quellenbindung
 
@@ -52,6 +55,7 @@ Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.
 | GLB-2.0-Einzelprüfung | 149/149 gültig |
 | GLB-Detailinventur | 72 eindeutige Assets, Budgets und Rollen katalogisiert |
 | Anonyme Browseransicht | geladen; keine sichtbare Laufzeitausnahme |
+| Zusätzliche Adaptertests | Zivilisation/Knappheit 7, Expedition/Kampf/Magie/Reise 5, Gesellschaft/Party 5 bestanden |
 | Produktionsbuild | in dieser Sandbox dreimal beim Vite-Chunk-Rendering per `SIGTERM` beendet; keine erfolgreiche Buildfreigabe |
 
 Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Der Produktionsbuildblocker wird explizit als **nicht freigegeben** behandelt; er ist kein Nachweis eines Produktfehlers, aber vor Merge/Release in einer ausreichend dimensionierten CI- oder Entwicklungsumgebung zu reproduzieren und zu beheben.
