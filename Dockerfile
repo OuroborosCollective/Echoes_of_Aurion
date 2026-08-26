@@ -3,7 +3,7 @@
 FROM node:22.13.0-bookworm-slim AS build
 WORKDIR /app
 
-RUN corepack enable
+RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
@@ -18,7 +18,7 @@ ENV NODE_ENV=production \
     STRICT_PORT=true \
     TRUST_PROXY_HOPS=1
 
-RUN corepack enable
+RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile && pnpm store prune
 COPY --from=build /app/dist ./dist
