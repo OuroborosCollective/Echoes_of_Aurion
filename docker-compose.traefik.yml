@@ -1,9 +1,6 @@
 services:
   aurion:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: echoes-of-aurion:${AURION_IMAGE_TAG:-local}
+    image: echoes-of-aurion:${AURION_IMAGE_TAG:?AURION_IMAGE_TAG must identify a verified runtime image}
     restart: unless-stopped
     environment:
       NODE_ENV: production
