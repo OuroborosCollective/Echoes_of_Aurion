@@ -5,6 +5,7 @@ import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, reso
 import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
 import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, resolveHouse, resolveStructureDamage } from "./wasdAurionStewardshipProtocol";
 import { resolveInventory } from "./wasdAurionItemProtocol";
+import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -74,6 +75,10 @@ export type OpenWorldSnapshot = {
     structure: ReturnType<typeof resolveStructureDamage>;
   };
   inventory: ReturnType<typeof resolveInventory>;
+  worldKernel: {
+    integrity: ReturnType<typeof resolveWorldIntegrity>;
+    cityLayout: ReturnType<typeof resolveCityLayout>;
+  };
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -300,6 +305,14 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     capacity: 30 + input.level * 2,
     receiptId: world.reaction.id,
   });
+  const worldKernel = {
+    integrity: resolveWorldIntegrity({ kappa: 1000, deterministicSeed: `${world.worldSeed}:${zoneId}`, resolutionIndex, receiptId: world.reaction.id }),
+    cityLayout: resolveCityLayout({ sector: 0, receiptId: world.reaction.id, entities: [
+      { id: `${zoneId}_road`, type: "road", position: { x: 4, y: 0, z: 0 } },
+      { id: `${zoneId}_hall`, type: "hall", position: { x: 0, y: 0, z: 0 } },
+      { id: `${zoneId}_forge`, type: "forge", position: { x: 0, y: 0, z: 0 } },
+    ] }),
+  };
   return {
     revision: 1,
     zoneId,
@@ -319,6 +332,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     society,
     stewardship,
     inventory,
+    worldKernel,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
