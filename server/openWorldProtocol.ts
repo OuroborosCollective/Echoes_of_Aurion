@@ -2,6 +2,7 @@ import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
 import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
 import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
+import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -54,6 +55,13 @@ export type OpenWorldSnapshot = {
     leadMonster: ReturnType<typeof resolveMonsterSpawn>;
     openingStrike: ReturnType<typeof resolveCombatStrike>;
     spellPreview: ReturnType<typeof resolveSpellCast>;
+  };
+  society: {
+    lyraAge: ReturnType<typeof resolveAge>;
+    playerRelationship: ReturnType<typeof resolveRelationship>;
+    starwardenFamily: ReturnType<typeof resolveFamilyRecord>;
+    achievements: ReturnType<typeof resolveAchievements>;
+    party: ReturnType<typeof resolvePartyAction>;
   };
   allowedCommands: readonly OpenWorldCommand[];
 };
@@ -256,6 +264,13 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
   const openingStrike = resolveCombatStrike({ action: "melee", attacker: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100 }, defender: { id: leadMonster.id, combatLevel: Math.max(1, leadMonster.strength), stamina: 100, health: 40 + leadMonster.resilience * 4 }, weaponBonus: Math.floor(input.level / 3), receiptId: `preview:${layout.receiptHash}`, resolutionIndex });
   const spellPreview = resolveSpellCast({ caster: { id: "aurion_player", combatLevel: input.level, stamina: 100, health: 100, mana: 30 }, spell: { id: "starfall_spark", kind: "lightning", cost: 8, potency: 14, effect: "resonance_burst" }, weatherTone: world.reaction.weatherTone, receiptId: `preview:spell:${layout.receiptHash}`, resolutionIndex });
   const expedition = { layout, leadMonster, openingStrike, spellPreview };
+  const society = {
+    lyraAge: resolveAge({ entityId: "lyra", currentAge: 31, years: Math.floor(input.completed.length / 3), receiptId: world.reaction.id, resolutionIndex }),
+    playerRelationship: resolveRelationship({ sourceId: "lyra", targetId: "aurion_player", currentValue: 0.2, delta: Math.min(0.6, input.completed.length * 0.1), receiptId: world.reaction.id }),
+    starwardenFamily: resolveFamilyRecord({ parents: ["lyra", "orun"], houseId: `${zoneId}_observatory`, resolutionIndex, receiptId: world.reaction.id }),
+    achievements: resolveAchievements({ playerId: "aurion_player", current: input.completed, candidates: [{ id: "first_blood", eligible: input.completed.includes("astral_call") }, { id: "ruin_discoverer", eligible: input.completed.includes("archive_of_echoes") }, { id: "master_smith", eligible: input.level >= 12 }], receiptId: world.reaction.id }),
+    party: resolvePartyAction({ action: "create", actorId: "aurion_player", receiptId: world.reaction.id, resolutionIndex }),
+  };
   return {
     revision: 1,
     zoneId,
@@ -272,6 +287,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     polity,
     civilization,
     expedition,
+    society,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
