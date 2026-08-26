@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-zone
+.git
+.github
+.manus-logs
+.env
+.env.*
+!.env.traefik.example
+coverage
+playwright-report
+test-results
+*.log
+*.sqlite
+*.pem
+*.key
+attached_assets

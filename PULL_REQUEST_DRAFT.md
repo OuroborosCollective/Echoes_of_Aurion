@@ -25,6 +25,7 @@ Dieser Draft-PR dokumentiert einen **revisionsgebundenen Integrationscheckpoint*
 | ARE-Weltkern und Siedlungsform | Kappa-geprüfte Weltintegrität und deterministischer Siedlungs-Layoutcompiler als sichtbare Readmodelle |
 | AI-Vorschlagsgrenze | Receipt- und indexgebundene NPC-/Schwarmvorschläge; Health-/Diagnosefälle führen niemals Befehle aus oder umgehen Aurions Autoritätsgrenze |
 | Exakte Skillprogression | Cap-freie, String-exakte ARE-Progressionskurve für Kampf, Sammeln und Crafting als bestätigtes Questreceipt-Readmodel; ohne neue Persistenz- oder Belohnungsautorität |
+| Hostinger-Traefik-Vorbereitung | Additives Dockerfile und `docker-compose.traefik.yml` mit internem Port 3000, `websecure`-/Let’s-Encrypt-Labels, externem `traefik-proxy`-Netzwerk, `/healthz`, sicherem Proxy-Hop und strikt gebundenem Containerport; nicht auf den VPS ausgerollt |
 
 ## Vollständige Wasd-Inventur und Quellenbindung
 
@@ -60,7 +61,7 @@ Die Migrationen `0016_wasd_aurion_world.sql` und `0017_wasd_aurion_content_seed.
 | GLB-Detailinventur | 72 eindeutige Assets, Budgets und Rollen katalogisiert |
 | Anonyme Browseransicht | Aurion-Startansicht geladen; opt-in Brunnenreadback meldet fehlgeschlagen und hält den Kandidaten inaktiv |
 | Zusätzliche Adaptertests | Zivilisation/Knappheit 7, Expedition/Kampf/Magie/Reise 5, Gesellschaft/Party 5, Stewardship 4, Gegenstände 2, Weltintegrität/Siedlungsform 2, AI-Vorschläge 3, exakte Skillprogression 4 sowie inaktive GLB-Szenenkatalogisierung 1 bestanden |
-| Produktionsbuild | bestanden: `pnpm build:sandbox` mit `NODE_OPTIONS=--max-old-space-size=1536` und 300-Sekunden-Zeitbudget; vollständige Pipeline in 49,31 s erfolgreich |
+| Produktionsbuild | bestanden: `pnpm build:sandbox` mit `NODE_OPTIONS=--max-old-space-size=1536` und 300-Sekunden-Zeitbudget; nach Traefik-Vorbereitung erneut erfolgreich (Vite 46,55 s) |
 
 Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur. Der frühere `SIGTERM`-Befund wurde als zu knappes Ausführungszeitbudget eingegrenzt: Der Vite-Build benötigt hier rund 46 Sekunden und ist mit mindestens 120 Sekunden, für Diagnosen 300 Sekunden, sowie dem verifizierten `pnpm build:sandbox` reproduzierbar. Die Umami-Placeholder- und Babylon-Chunkwarnungen bleiben sichtbar, sind aber keine Buildfehler. Der erfolgreiche Build ersetzt weder die übersprungenen E2E-Tests noch Review, Merge- oder Releasefreigabe.
 
@@ -68,4 +69,4 @@ Die übersprungenen Tests benötigen lokale OAuth-/Datenbank-/Zoneninfrastruktur
 
 Die vollständige Implementierung aller 712 adaptierbaren Wasd-Semantiken ist nach diesem Checkpoint noch offen. Die nächsten Pakete folgen der vorhandenen Migrationsmatrix pro Domäne (tieferes Charakter-/Skill- und Kampfruleset, Weltgenerator/Biome/Spawns, Lore-/Content-Importe, kontrollierte Dialoge sowie weitere GLB-Szenenzuordnung nach erfolgreichem isolierten Babylonreadback) mit Zieladapter, Test und sichtbarem Spielerreadback. Globale Balancierung, Produktionsmigration, Deployment, MSW/Lua-Portierung und ein Merge nach `main` sind nicht Bestandteil dieses Draft-PR.
 
-> Reviewende sollten zuerst `WASD_AURION_SEMANTICS.md`, `WASD_AURION_MIGRATION_MATRIX.md`, `WASD_BROAD_GAMEPLAY_MODULE_LEDGER.md`, `WASD_GLB_AUDIT.md`, `WASD_GLB_DETAIL_INVENTORY.md`, `guardian/wasd_aurion_browser_qa.md`, `guardian/wasd_aurion_glb_scene_preview_qa.md`, `guardian/vite_sigterm_diagnosis.md` und die beiden Additivmigrationen lesen.
+> Reviewende sollten zuerst `WASD_AURION_SEMANTICS.md`, `WASD_AURION_MIGRATION_MATRIX.md`, `WASD_BROAD_GAMEPLAY_MODULE_LEDGER.md`, `WASD_GLB_AUDIT.md`, `WASD_GLB_DETAIL_INVENTORY.md`, `guardian/wasd_aurion_browser_qa.md`, `guardian/wasd_aurion_glb_scene_preview_qa.md`, `guardian/vite_sigterm_diagnosis.md`, `TRAEFIK_DEPLOYMENT.md` und die beiden Additivmigrationen lesen.
