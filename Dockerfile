@@ -5,6 +5,7 @@ WORKDIR /app
 
 RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm check && pnpm build:sandbox
@@ -20,6 +21,7 @@ ENV NODE_ENV=production \
 
 RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --prod --frozen-lockfile && pnpm store prune
 COPY --from=build /app/dist ./dist
 
