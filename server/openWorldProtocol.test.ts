@@ -24,6 +24,9 @@ describe("open-world protocol", () => {
     expect(snapshot.npcs.find(npc => npc.id === "orun")?.memory.quest[0]).toContain("versunkene Halle");
     expect(snapshot.primaryEncounter).toMatchObject({ id: "archive-warden", encounterKey: "archive" });
     expect(snapshot.props.map(prop => prop.kind)).toEqual(["starpath_marker", "flower_shrub", "flower_shrub"]);
+    expect(snapshot.worldKernel.integrity).toMatchObject({ ok: true, kappa: 1000 });
+    expect(snapshot.worldKernel.cityLayout.sector).toBe(0);
+    expect(snapshot.aiProposal).toMatchObject({ state: "proposal", intent: "trade_decision", commandType: "AURION_TRADE_PROPOSAL" });
     expect(JSON.stringify(snapshot)).not.toContain("reward");
   });
 

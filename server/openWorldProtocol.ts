@@ -6,6 +6,7 @@ import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyActio
 import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, resolveHouse, resolveStructureDamage } from "./wasdAurionStewardshipProtocol";
 import { resolveInventory } from "./wasdAurionItemProtocol";
 import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
+import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -79,6 +80,7 @@ export type OpenWorldSnapshot = {
     integrity: ReturnType<typeof resolveWorldIntegrity>;
     cityLayout: ReturnType<typeof resolveCityLayout>;
   };
+  aiProposal: ReturnType<typeof resolveAiProposal>;
   allowedCommands: readonly OpenWorldCommand[];
 };
 
@@ -313,6 +315,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: `${zoneId}_forge`, type: "forge", position: { x: 0, y: 0, z: 0 } },
     ] }),
   };
+  const aiProposal = resolveAiProposal({ text: `NPC market proposal for ${zoneId}; scarcity ${civilization.scarcityForecast.recommendedAction}.`, mode: "npc", receiptId: world.reaction.id, resolutionIndex });
   return {
     revision: 1,
     zoneId,
@@ -333,6 +336,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     stewardship,
     inventory,
     worldKernel,
+    aiProposal,
     allowedCommands: ["move", "attack", "interact", "return_to_tower"],
   };
 }
