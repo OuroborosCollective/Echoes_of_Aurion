@@ -72,4 +72,4 @@ Der vollständige lokale Lauf nach diesem Schnitt ergab **53 bestandene** und **
 
 **Keine Linear-Schließung:** AIM-214 bleibt bis zum echten Browsercanvas-/LRU-Readback offen. AIM-215 und AIM-216 bleiben bis zu ausgeführten isolierten DB-E2E-Readbacks offen. AIM-217 bleibt bis die neue Reactionmigration in einer freigegebenen Testumgebung ausgeführt, der gespeicherte Reactionreadback sichtbar geprüft und alle Domänen nachvollziehbar abgenommen wurden. AIM-218 bleibt bis zu Phone-/Tablet-/Desktop-WebGL-Readbacks, Budget- und Rückkehrpfadnachweisen offen.
 
-> **Implementierungsrevision dieses Nachweises:** wird im nachfolgenden Kandidatencommit als 40-stellige Revision ergänzt; dieser Ledgerabschnitt enthält weder Geheimnisse noch Migrationsausführung.
+> **Implementierungsrevision dieses Nachweises:** `67c57d6588e5dff41ddbd36dd97240c00e51e7cb` (`feat(world): stream chunks and resolve bounded world epochs`). Dieser Ledgerabschnitt enthält weder Geheimnisse noch Migrationsausführung.
