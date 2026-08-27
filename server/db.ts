@@ -1,10 +1,11 @@
-import { and, desc, eq, gt, gte, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
+import { craftingReceiptDigest, resolveAurionCraftingPlan, resolveCraftingResolutionIndex, type CraftingAffix, type CraftingItemQuality } from "./craftingProtocol";
 import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
 import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
@@ -800,6 +801,130 @@ export async function listInventoryForUser(userId: number) {
       affixes = [];
     }
     return { ...item, affixes };
+  });
+}
+
+type CraftingItemView = {
+  id: string;
+  baseItemKey: string;
+  quality: CraftingItemQuality;
+  itemLevel: number;
+  affixes: CraftingAffix[];
+};
+
+function parseCraftingAffixes(value: string): CraftingAffix[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((affix): affix is CraftingAffix => Boolean(affix) && typeof affix === "object" && !Array.isArray(affix) && typeof (affix as { key?: unknown }).key === "string" && ((affix as { slot?: unknown }).slot === "prefix" || (affix as { slot?: unknown }).slot === "suffix") && Boolean((affix as { stats?: unknown }).stats) && typeof (affix as { stats: unknown }).stats === "object");
+  } catch {
+    return [];
+  }
+}
+
+function craftingItemView(item: { id: string; baseItemKey: string; quality: string; itemLevel: number; affixesJson: string }): CraftingItemView {
+  return { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality as CraftingItemQuality, itemLevel: item.itemLevel, affixes: parseCraftingAffixes(item.affixesJson) };
+}
+
+/** Readmodel-only crafting history. The client cannot derive or mutate a recipe result from this view. */
+export async function getCraftingReadmodel(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const [receipts, outputs, progression] = await Promise.all([
+    db.select().from(craftingReceipts).where(eq(craftingReceipts.userId, userId)).orderBy(desc(craftingReceipts.createdAt)).limit(30),
+    db.select().from(itemInstances).where(and(eq(itemInstances.ownerUserId, userId), eq(itemInstances.status, "owned"), eq(itemInstances.sourceKind, "crafting"), isNotNull(itemInstances.craftingReceiptId))).orderBy(desc(itemInstances.createdAt)).limit(100),
+    getExactSkillProgressionReadmodel(userId, "crafting"),
+  ]);
+  return {
+    receipts: receipts.map(receipt => ({ id: receipt.id, recipeKey: receipt.recipeKey, receiptDigest: receipt.receiptDigest, resolutionIndex: receipt.resolutionIndex, createdAt: receipt.createdAt })),
+    outputs: outputs.map(craftingItemView),
+    progression,
+  };
+}
+
+/**
+ * Resolves one Aurion-native recipe through a single database transaction. The browser may name a
+ * recipe and an inventory item, but ownership, eligibility, output, receipt, resolution index and
+ * exact Crafting XP are resolved exclusively by the server.
+ */
+export async function craftItemForUser(values: { userId: number; recipeKey: string; inputItemId: string }) {
+  if (!Number.isSafeInteger(values.userId) || values.userId <= 0) throw new Error("Ungültige Crafting-Spielerkennung.");
+  if (!values.recipeKey || values.recipeKey.length > 96) throw new Error("Ungültiger Crafting-Rezeptschlüssel.");
+  if (!values.inputItemId || values.inputItemId.length > 64) throw new Error("Ungültige Crafting-Eingabe.");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  // One immutable input can resolve one recipe once. The key is server-derived because the client
+  // never supplies an authority-bearing retry token, receipt, XP amount, output or user identity.
+  const idempotencyKey = `craft:${values.userId}:${values.recipeKey}:${values.inputItemId}`;
+  return db.transaction(async tx => {
+    // Serialize every crafting resolution for a player. It makes the persisted count a stable
+    // resolution-index source and lets concurrent retries observe the committed receipt.
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update").limit(1))[0];
+    if (!profile) throw new Error("Ein bestätigtes Aurion-Spielerprofil ist für Crafting erforderlich.");
+
+    const replay = (await tx.select().from(craftingReceipts).where(eq(craftingReceipts.idempotencyKey, idempotencyKey)).limit(1))[0];
+    if (replay) {
+      const output = (await tx.select().from(itemInstances).where(and(eq(itemInstances.craftingReceiptId, replay.id), eq(itemInstances.sourceKind, "crafting"))).limit(1))[0];
+      const event = (await tx.select().from(skillProgressionEvents).where(and(eq(skillProgressionEvents.userId, values.userId), eq(skillProgressionEvents.resultReceiptId, replay.id), eq(skillProgressionEvents.receiptKind, "crafting"), eq(skillProgressionEvents.skillId, "crafting"))).limit(1))[0];
+      if (!output || !event) throw new Error("Crafting-Receipt besitzt keine vollständige bestätigte Wirkung.");
+      return { applied: false as const, receipt: replay, output: craftingItemView(output), skillEvent: event };
+    }
+
+    const inputItem = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.inputItemId), eq(itemInstances.ownerUserId, values.userId), eq(itemInstances.status, "owned"))).for("update").limit(1))[0];
+    if (!inputItem) throw new Error("Der Crafting-Gegenstand ist nicht verfügbar oder gehört dir nicht.");
+    const planResolution = resolveAurionCraftingPlan({ recipeKey: values.recipeKey, playerLevel: profile.level, item: craftingItemView(inputItem) });
+    if (!planResolution.ok) throw new Error(`Crafting abgewiesen: ${planResolution.reason}.`);
+
+    const receiptRows = await tx.select({ count: sql<number>`count(*)` }).from(craftingReceipts).where(eq(craftingReceipts.userId, values.userId));
+    const resolutionIndex = resolveCraftingResolutionIndex(Number(receiptRows[0]?.count ?? 0));
+    const receiptId = newEndgameId("craft");
+    const receiptDigest = craftingReceiptDigest({ userId: values.userId, idempotencyKey, plan: planResolution.plan, resolutionIndex });
+    const outputId = newEndgameId("crafted");
+    const skillEventId = newEndgameId("skillev");
+    const consumed = await tx.update(itemInstances).set({ status: "consumed" }).where(and(eq(itemInstances.id, inputItem.id), eq(itemInstances.ownerUserId, values.userId), eq(itemInstances.status, "owned")));
+    if (affectedRowCount(consumed) !== 1) throw new Error("Der Crafting-Gegenstand wurde parallel verändert.");
+
+    await tx.insert(craftingReceipts).values({
+      id: receiptId,
+      userId: values.userId,
+      recipeKey: planResolution.plan.recipe.key,
+      recipeDigest: planResolution.plan.recipeDigest,
+      ruleSetVersion: planResolution.plan.recipe.ruleSetVersion,
+      contentVersion: planResolution.plan.recipe.contentVersion,
+      inputItemId: inputItem.id,
+      receiptDigest,
+      resolutionIndex,
+      idempotencyKey,
+    });
+    await tx.insert(itemInstances).values({
+      id: outputId,
+      ownerUserId: values.userId,
+      sourceKind: "crafting",
+      craftingReceiptId: receiptId,
+      baseItemKey: planResolution.plan.output.baseItemKey,
+      quality: planResolution.plan.output.quality,
+      itemLevel: inputItem.itemLevel,
+      affixesJson: JSON.stringify(planResolution.plan.output.affixes),
+    });
+    // `recordValidatedSkillProgressionEvent` remains deliberately expedition-only. This sibling
+    // path writes only after its same-player Crafting receipt exists in this transaction and labels
+    // the generic receipt reference explicitly as `crafting` for readmodel and audit consumers.
+    await tx.insert(skillProgressionEvents).values({
+      id: skillEventId,
+      userId: values.userId,
+      skillId: "crafting",
+      amountExact: planResolution.plan.recipe.craftingXpExact,
+      source: "crafting",
+      resultReceiptId: receiptId,
+      receiptKind: "crafting",
+      resolutionIndex,
+      idempotencyKey: `skill:${idempotencyKey}`,
+    });
+    const receipt = (await tx.select().from(craftingReceipts).where(eq(craftingReceipts.id, receiptId)).limit(1))[0];
+    const output = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, outputId), eq(itemInstances.craftingReceiptId, receiptId), eq(itemInstances.sourceKind, "crafting"))).limit(1))[0];
+    const skillEvent = (await tx.select().from(skillProgressionEvents).where(and(eq(skillProgressionEvents.id, skillEventId), eq(skillProgressionEvents.receiptKind, "crafting"))).limit(1))[0];
+    if (!receipt || !output || !skillEvent) throw new Error("Crafting-Readback nach Transaktion fehlgeschlagen.");
+    return { applied: true as const, receipt, output: craftingItemView(output), skillEvent };
   });
 }
 

@@ -21,8 +21,18 @@ describe("CommunityOverlay", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     await user.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Sternwartenschmiede öffnen" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "GLB-Einreichung öffnen" }));
     expect(await screen.findByText("Öffentlicher Aurion-Katalog")).toBeTruthy();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("zeigt die Schmiedefunktion als serverbestätigten Craftingpfad an", async () => {
+    const user = userEvent.setup();
+    render(<RealClientHarness><CommunityOverlay isAuthenticated currentUserId={42} onTeamReady={() => undefined} onTeamCleared={() => undefined} starterCharacterId="wayfinder" onStarterCharacterSelected={() => undefined} /></RealClientHarness>);
+    await user.click(screen.getByRole("button", { name: "Sternwartenschmiede öffnen" }));
+    expect(await screen.findByRole("heading", { name: "Sternwartenschmiede" })).toBeTruthy();
+    expect(screen.getByText(/Craft-Receipt und 6 exakte Crafting-XP entstehen nur nach bestätigter Prüfung/i)).toBeTruthy();
+    expect(screen.getByText("VERFÜGBARE EINGÄNGE")).toBeTruthy();
   });
 });

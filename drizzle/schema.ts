@@ -1,4 +1,5 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { sql } from "drizzle-orm";
+import { check, index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -263,7 +264,7 @@ export const weaponLoadouts = mysqlTable("weaponLoadouts", {
   configuredAt: timestamp("configuredAt").defaultNow().onUpdateNow().notNull(),
 });
 
-/** Append-only exact skill progression derived only from a confirmed Aurion expedition result. */
+/** Append-only exact skill progression derived only from a confirmed Aurion action receipt. */
 export const skillProgressionEvents = mysqlTable("skillProgressionEvents", {
   id: varchar("id", { length: 64 }).primaryKey(),
   userId: int("userId").notNull(),
@@ -271,6 +272,7 @@ export const skillProgressionEvents = mysqlTable("skillProgressionEvents", {
   amountExact: varchar("amountExact", { length: 128 }).notNull(),
   source: mysqlEnum("source", ["npc_kill", "resource_gather", "crafting", "quest_reward"]).notNull(),
   resultReceiptId: varchar("resultReceiptId", { length: 64 }).notNull(),
+  receiptKind: mysqlEnum("receiptKind", ["expedition_result", "crafting"]).default("expedition_result").notNull(),
   resolutionIndex: int("resolutionIndex").notNull(),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -441,16 +443,39 @@ export const expeditionResultReceipts = mysqlTable("expeditionResultReceipts", {
 export const itemInstances = mysqlTable("itemInstances", {
   id: varchar("id", { length: 64 }).primaryKey(),
   ownerUserId: int("ownerUserId").notNull(),
-  lootReceiptId: varchar("lootReceiptId", { length: 64 }).notNull().unique(),
+  sourceKind: mysqlEnum("sourceKind", ["loot", "crafting"]).default("loot").notNull(),
+  lootReceiptId: varchar("lootReceiptId", { length: 64 }).unique(),
+  craftingReceiptId: varchar("craftingReceiptId", { length: 64 }).unique(),
   baseItemKey: varchar("baseItemKey", { length: 96 }).notNull(),
   quality: mysqlEnum("quality", ["normal", "magic", "rare", "set", "unique"]).notNull(),
   itemLevel: int("itemLevel").notNull(),
   affixesJson: text("affixesJson").notNull(),
   setKey: varchar("setKey", { length: 96 }),
-  status: mysqlEnum("status", ["owned", "listed", "sold"]).default("owned").notNull(),
+  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed"]).default("owned").notNull(),
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [index("itemInstances_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt)]);
+}, table => [
+  index("itemInstances_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt),
+  check("itemInstances_exactly_one_provenance_ck", sql`(${table.sourceKind} = 'loot' AND ${table.lootReceiptId} IS NOT NULL AND ${table.craftingReceiptId} IS NULL) OR (${table.sourceKind} = 'crafting' AND ${table.lootReceiptId} IS NULL AND ${table.craftingReceiptId} IS NOT NULL)`),
+]);
+
+/** Immutable evidence for a server-authoritative recipe resolution. */
+export const craftingReceipts = mysqlTable("craftingReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  recipeKey: varchar("recipeKey", { length: 96 }).notNull(),
+  recipeDigest: varchar("recipeDigest", { length: 64 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  inputItemId: varchar("inputItemId", { length: 64 }).notNull().unique(),
+  receiptDigest: varchar("receiptDigest", { length: 64 }).notNull().unique(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("craftingReceipts_user_created_idx").on(table.userId, table.createdAt),
+  uniqueIndex("craftingReceipts_user_resolution_uq").on(table.userId, table.resolutionIndex),
+]);
 
 /** System sales remove an item from an inventory and grant a deterministic Aurion value exactly once. */
 export const systemSaleReceipts = mysqlTable("systemSaleReceipts", {
@@ -638,6 +663,7 @@ export type GuildMembership = typeof guildMemberships.$inferSelect;
 export type GlbAsset = typeof glbAssets.$inferSelect;
 export type GlbAssetSubmission = typeof glbAssetSubmissions.$inferSelect;
 export type LootDropReceipt = typeof lootDropReceipts.$inferSelect;
+export type CraftingReceipt = typeof craftingReceipts.$inferSelect;
 export type MarketListing = typeof marketListings.$inferSelect;
 export type ExpeditionChatMessage = typeof expeditionChatMessages.$inferSelect;
 export type PartnerRequest = typeof partnerRequests.$inferSelect;
