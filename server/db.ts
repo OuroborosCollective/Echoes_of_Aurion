@@ -13,7 +13,7 @@ import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQua
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
-import { buildGlobalWorldPlan } from "./globalWorldProtocol";
+import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor } from "./globalWorldProtocol";
 import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, toWorldChunkDeltaOverlay, type WorldChunkCoordinate, type WorldChunkDelta, type WorldChunkDeltaKind } from "./worldChunkProtocol";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
@@ -439,6 +439,40 @@ const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
  * Resolves the persistent global world plan. Account count is a durable phase-one
  * scale signal; presence-based expansion will be supplied by the zone registry.
  */
+export type GlobalWorldAdminReadModel = {
+  source: "persisted" | "preview";
+  globalWorld: GlobalWorldClientDescriptor;
+  updatedAt: string | null;
+};
+
+/**
+ * Read-only global summary for authenticated administrators and the separate
+ * Admin MCP. It must never advance epochs, persist a snapshot, or issue a
+ * receipt as a side effect of reading.
+ */
+export async function getGlobalWorldAdminReadModel(): Promise<GlobalWorldAdminReadModel> {
+  const db = await getDb();
+  if (!db) {
+    const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
+    return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
+  }
+  const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
+  if (current) {
+    const plan = buildGlobalWorldPlan({
+      worldSeed: current.worldSeed,
+      epoch: current.epoch,
+      activePlayerCount: current.activePlayerCount,
+      highWaterPlayerCount: current.highWaterPlayerCount,
+    });
+    if (plan.deterministicHash !== current.snapshotHash) throw new Error("Der persistierte globale Weltnachweis ist inkonsistent.");
+    return Object.freeze({ source: "persisted", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: current.updatedAt.toISOString() });
+  }
+  const players = await db.select({ id: users.id }).from(users);
+  const count = Math.max(1, players.length);
+  const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: count, highWaterPlayerCount: count });
+  return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
+}
+
 export async function getGlobalWorldPlan() {
   const db = await getDb();
   if (!db) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });

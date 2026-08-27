@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
+import { registerAdminMcp } from "../adminMcp";
 import { registerZoneGateway } from "../zoneGateway";
 import { consumeZoneConnectionTicket } from "../db";
 
@@ -46,6 +47,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);
+  registerAdminMcp(app);
   registerZoneGateway(server, undefined, consumeZoneConnectionTicket);
   // tRPC API
   app.use(
