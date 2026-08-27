@@ -11,6 +11,7 @@ describe("Home", () => {
     render(<RealClientHarness><Home /></RealClientHarness>);
 
     expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Konto erforderlich", { exact: true })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/i })).toBeNull();
     expect(screen.queryByText(/OPTIONAL: MCP-PARTNER VERBINDEN/i)).toBeNull();
     expect(screen.queryByText(/KOOP-VERBINDUNG ERFORDERLICH/i)).toBeNull();
