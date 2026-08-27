@@ -300,6 +300,105 @@ export const aurionWorldResolutions = mysqlTable("aurionWorldResolutions", {
   index("aurionWorldResolutions_region_created_idx").on(table.regionId, table.createdAt),
 ]);
 
+/** Global, server-owned world state. It records the scale high-water mark and the latest confirmed deterministic world snapshot. */
+export const aurionGlobalWorldStates = mysqlTable("aurionGlobalWorldStates", {
+  worldId: varchar("worldId", { length: 64 }).primaryKey(),
+  worldSeed: varchar("worldSeed", { length: 128 }).notNull(),
+  epoch: int("epoch").notNull(),
+  activePlayerCount: int("activePlayerCount").notNull(),
+  highWaterPlayerCount: int("highWaterPlayerCount").notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull().unique(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable replay receipt for each confirmed global world epoch. */
+export const aurionGlobalWorldEpochReceipts = mysqlTable("aurionGlobalWorldEpochReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  activePlayerCount: int("activePlayerCount").notNull(),
+  highWaterPlayerCount: int("highWaterPlayerCount").notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionGlobalWorldEpochReceipts_world_epoch_uq").on(table.worldId, table.epoch),
+  uniqueIndex("aurionGlobalWorldEpochReceipts_hash_uq").on(table.snapshotHash),
+  index("aurionGlobalWorldEpochReceipts_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
+/** Authoritative deviations from the seed-generated chunk base. Untouched terrain and resource nodes are never stored here. */
+export const aurionWorldChunkDeltas = mysqlTable("aurionWorldChunkDeltas", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  chunkX: int("chunkX").notNull(),
+  chunkZ: int("chunkZ").notNull(),
+  baseRevision: int("baseRevision").notNull(),
+  sequence: int("sequence").notNull(),
+  kind: mysqlEnum("kind", ["resource_depleted", "structure_placed", "structure_removed", "road_built"]).notNull(),
+  targetId: varchar("targetId", { length: 128 }).notNull(),
+  actorUserId: int("actorUserId").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+  deterministicHash: varchar("deterministicHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldChunkDeltas_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionWorldChunkDeltas_hash_uq").on(table.deterministicHash),
+  uniqueIndex("aurionWorldChunkDeltas_chunk_sequence_uq").on(table.worldId, table.chunkX, table.chunkZ, table.sequence),
+  index("aurionWorldChunkDeltas_chunk_created_idx").on(table.worldId, table.chunkX, table.chunkZ, table.createdAt),
+]);
+
+/** Server-observed zone connection leases. A browser cannot author a presence record without consuming a one-time zone ticket. */
+export const aurionWorldPresenceLeases = mysqlTable("aurionWorldPresenceLeases", {
+  connectionId: varchar("connectionId", { length: 96 }).primaryKey(),
+  userId: int("userId").notNull(),
+  zoneId: varchar("zoneId", { length: 64 }).notNull(),
+  chunkX: int("chunkX").notNull(),
+  chunkZ: int("chunkZ").notNull(),
+  positionX: int("positionX").notNull(),
+  positionZ: int("positionZ").notNull(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  disconnectedAt: timestamp("disconnectedAt"),
+}, table => [
+  index("aurionWorldPresenceLeases_active_idx").on(table.expiresAt, table.disconnectedAt),
+  index("aurionWorldPresenceLeases_user_active_idx").on(table.userId, table.expiresAt),
+]);
+
+/** Immutable idempotency evidence for a requested global world epoch. */
+export const aurionWorldEpochRequests = mysqlTable("aurionWorldEpochRequests", {
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  requestedByUserId: int("requestedByUserId").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  epoch: int("epoch").notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWorldEpochRequests_world_epoch_idx").on(table.worldId, table.epoch),
+  index("aurionWorldEpochRequests_hash_idx").on(table.snapshotHash),
+]);
+
+/** Immutable, bounded ecology/economy/society reaction derived during the explicit global epoch transaction. */
+export const aurionWorldEpochReactions = mysqlTable("aurionWorldEpochReactions", {
+  receiptId: varchar("receiptId", { length: 96 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  reactionHash: varchar("reactionHash", { length: 64 }).notNull(),
+  reactionJson: text("reactionJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldEpochReactions_world_epoch_uq").on(table.worldId, table.epoch),
+  uniqueIndex("aurionWorldEpochReactions_hash_uq").on(table.reactionHash),
+  index("aurionWorldEpochReactions_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
 /** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
 export const aurionNpcStates = mysqlTable("aurionNpcStates", {
   npcId: varchar("npcId", { length: 96 }).primaryKey(),

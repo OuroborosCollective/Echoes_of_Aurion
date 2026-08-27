@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenWorldSnapshot, buildOpenWorldTerrain, encounterBudget, maximumVisibleEnemies, type OpenWorldProfile, zoneForOpenWorldProgress } from "./openWorldProtocol";
+import { buildGlobalWorldPlan } from "./globalWorldProtocol";
+import { resolveWorldEpochReaction } from "./worldEpochReactionProtocol";
 
 function snapshotInput(input: Omit<OpenWorldProfile, "playerId" | "skillProgressionEvents">, skillProgressionEvents: OpenWorldProfile["skillProgressionEvents"] = []): OpenWorldProfile {
   return { playerId: "aurion-test-player", ...input, skillProgressionEvents };
@@ -33,6 +35,8 @@ describe("open-world protocol", () => {
     expect(snapshot.props.map(prop => prop.kind)).toEqual(["starpath_marker", "flower_shrub", "flower_shrub"]);
     expect(snapshot.worldKernel.integrity).toMatchObject({ ok: true, kappa: 1000 });
     expect(snapshot.worldKernel.cityLayout.sector).toBe(0);
+    expect(snapshot.globalWorld).toMatchObject({ version: "aurion-global-world.v1", worldId: "echoes-of-aurion-global", unlockedSectorCount: 6, worldSeed: "echoes-of-aurion-v1" });
+    expect(JSON.stringify(snapshot.globalWorld)).not.toContain("sectors");
     expect(snapshot.aiProposal).toMatchObject({ state: "proposal", intent: "trade_decision", commandType: "AURION_TRADE_PROPOSAL" });
     expect(snapshot.skillProgression).toMatchObject({ playerId: "aurion-test-player", skillId: "combat", progression: { totalXpExact: "122", levelExact: "2" }, appliedReceiptIds: ["result-session-a"] });
     expect(JSON.stringify(snapshot)).not.toContain("reward");
@@ -43,10 +47,23 @@ describe("open-world protocol", () => {
     const first = buildOpenWorldSnapshot(input);
     const second = buildOpenWorldSnapshot(input);
     expect(first.world).toEqual(second.world);
+    expect(first.globalWorld).toEqual(second.globalWorld);
     expect(first.world.worldSeed).toBe("echoes-of-aurion-v1");
     expect(first.world.reaction.ruleSetVersion).toBe("aurion-wasd-rules-v1");
     expect(first.world.reaction.dialogueTone).toBe("calm");
     expect(JSON.stringify(first.world)).not.toContain("reward");
+  });
+
+  it("uses only a matching confirmed epoch reaction as a world-signal source", () => {
+    const globalWorld = buildGlobalWorldPlan({ worldSeed: "echoes-of-aurion-v1", epoch: 1, activePlayerCount: 4, highWaterPlayerCount: 4 });
+    const epochReaction = resolveWorldEpochReaction({ plan: globalWorld, resolutionIndex: 1, confirmedDeltas: [], observedPresence: [] });
+    const matching = buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false, globalWorld, epochReaction }));
+    const mismatched = buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false, globalWorld, epochReaction: { ...epochReaction, worldSeed: "unbound" } }));
+    expect(matching.world.resolutionIndex).toBe(1);
+    expect(matching.world.reaction.signalIds.some(id => id.includes(":ecology"))).toBe(true);
+    expect(matching.world.reaction.signalIds.some(id => id.includes(":economy"))).toBe(true);
+    expect(matching.world.reaction.signalIds.some(id => id.includes(":politics"))).toBe(true);
+    expect(mismatched.world.resolutionIndex).toBe(1_000);
   });
 
   it("exposes bounded NPC autonomy, dialect profiles and a deterministic fictional polity", () => {

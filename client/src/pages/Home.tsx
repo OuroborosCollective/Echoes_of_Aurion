@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import CommunityOverlay from "@/components/CommunityOverlay";
+import TowerHomePanel from "@/components/TowerHomePanel";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
@@ -19,8 +20,9 @@ import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
+import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
-type Screen = "gate" | "loadout" | "mission";
+type Screen = "gate" | "home" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
 type GatewayPairing = { sessionId: string; pairingToken: string; mcpUrl: string; expiresAt: Date; allowedCommands: string[] };
@@ -29,6 +31,15 @@ type DialogueQuestPrompt = {
   npcId: "lyra" | "orun";
   actionKind: "offer_quest" | "request_turn_in";
   questKey: "astral_call" | "archive_of_echoes" | "ember_key";
+};
+type WorldStreamAnchor = {
+  version: "aurion-global-world.v1";
+  worldId: "echoes-of-aurion-global";
+  worldSeed: string;
+  epoch: number;
+  unlockedSectorCount: number;
+  nextExpansionAtPlayerCount: number | null;
+  deterministicHash: string;
 };
 
 const initialMission: MissionState = { arena: 0, arenaName: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", sentinelHp: 112, sentinelMaxHp: 112, explorerHp: 100, echoHp: 100, shield: false, marked: false, phase: "active" };
@@ -49,6 +60,17 @@ const heroTrailerPoster = aurionAssets.trailerPoster;
 const expanseReference = aurionAssets.expanseReference;
 const GameCanvas = lazy(() => import("@/components/GameCanvas"));
 
+function streamTierForViewport(): WorldChunkStreamingTier {
+  if (typeof window === "undefined") return "phone";
+  const smallestSide = Math.min(window.innerWidth, window.innerHeight);
+  if (window.innerWidth >= 1_200 || smallestSide >= 1_000) return "desktop";
+  return smallestSide >= 600 ? "tablet" : "phone";
+}
+
+function worldChunkCenterForZonePosition(position: { x: number; z: number }): { x: number; z: number } {
+  return { x: Math.floor((position.x + 32_000) / 64_000), z: Math.floor((position.z + 32_000) / 64_000) };
+}
+
 function codeFromText(value: string): Command | null {
   const candidate = value.trim().toUpperCase();
   return /^[WASDEF1-9]$/.test(candidate) ? (candidate as Command) : null;
@@ -58,7 +80,8 @@ export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const apiAvailable = hasAurionApi();
   const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: apiAvailable });
-  const [screen, setScreen] = useState<Screen>("gate");
+  const previewHome = import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("aurion_preview") === "tower-home";
+  const [screen, setScreen] = useState<Screen>(previewHome ? "home" : "gate");
   const [provider, setProvider] = useState(providers[0]);
   const [connected, setConnected] = useState(false);
   const [isPairing, setIsPairing] = useState(false);
@@ -82,6 +105,10 @@ export default function Home() {
   const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
+  const [worldStreamAnchor, setWorldStreamAnchor] = useState<WorldStreamAnchor | null>(null);
+  const [worldStreamTier, setWorldStreamTier] = useState<WorldChunkStreamingTier>(() => streamTierForViewport());
+  const [worldStreamCenter, setWorldStreamCenter] = useState({ x: 0, z: 0 });
+  const [worldStreamCursors, setWorldStreamCursors] = useState<Record<string, number>>({});
   const expeditionAudio = useRef<HTMLAudioElement | null>(null);
   const soundscape = useRef<AurionSoundscape | null>(null);
   const musicResetTimer = useRef<number | null>(null);
@@ -103,6 +130,19 @@ export default function Home() {
   const wasdCoverage = trpc.gameplay.wasdCoverage.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const enterOpenWorld = trpc.gameplay.enterOpenWorld.useMutation();
+  const currentStreamCoordinates = useMemo(() => orderedWorldChunkWindow(worldStreamCenter, worldChunkStreamingBudget(worldStreamTier).visibleRadius), [worldStreamCenter, worldStreamTier]);
+  const worldChunkWindowInput = useMemo(() => ({
+    worldVersion: "aurion-global-world.v1" as const,
+    expectedBaseRevision: 1 as const,
+    chunkX: worldStreamCenter.x,
+    chunkZ: worldStreamCenter.z,
+    tier: worldStreamTier,
+    afterSequences: currentStreamCoordinates.flatMap(coordinate => {
+      const afterSequence = worldStreamCursors[worldChunkCoordinateKey(coordinate)];
+      return afterSequence && afterSequence > 0 ? [{ chunkX: coordinate.x, chunkZ: coordinate.z, afterSequence }] : [];
+    }),
+  }), [currentStreamCoordinates, worldStreamCenter.x, worldStreamCenter.z, worldStreamCursors, worldStreamTier]);
+  const worldChunkWindow = trpc.gameplay.worldChunkWindow.useQuery(worldChunkWindowInput, { enabled: isAuthenticated && Boolean(worldStreamAnchor), refetchInterval: worldStreamAnchor ? 15_000 : false });
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: isAuthenticated });
   const choosePlayerClass = trpc.player.chooseClass.useMutation();
   const setWeaponLoadout = trpc.player.setWeaponLoadout.useMutation();
@@ -125,6 +165,34 @@ export default function Home() {
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
 
   useEffect(() => () => zoneClient.current?.close(), []);
+
+  useEffect(() => {
+    const updateTier = () => setWorldStreamTier(streamTierForViewport());
+    window.addEventListener("resize", updateTier);
+    return () => window.removeEventListener("resize", updateTier);
+  }, []);
+
+  useEffect(() => {
+    if (!worldStreamAnchor || !worldChunkWindow.data) return;
+    const { chunks, tier, center } = worldChunkWindow.data;
+    if (!matchesWorldChunkStreamSelection({ center: worldStreamCenter, tier: worldStreamTier }, { center, tier })) return;
+    const expectedChunkKeys = new Set(currentStreamCoordinates.map(worldChunkCoordinateKey));
+    if (!chunks.every(chunk => expectedChunkKeys.has(worldChunkCoordinateKey(chunk.generation.coordinate)))) return;
+    chunks.forEach(chunk => window.dispatchEvent(new CustomEvent("aurion:stream-world-chunk", { detail: { globalWorld: worldStreamAnchor, tier, center, chunk } })));
+    setWorldStreamCursors(current => {
+      let changed = false;
+      const next = { ...current };
+      chunks.forEach(chunk => {
+        const key = worldChunkCoordinateKey(chunk.generation.coordinate);
+        if (chunk.hasMore && chunk.nextAfterSequence > (current[key] ?? 0)) { next[key] = chunk.nextAfterSequence; changed = true; }
+      });
+      return changed ? next : current;
+    });
+  }, [currentStreamCoordinates, worldChunkWindow.data, worldStreamAnchor, worldStreamCenter, worldStreamTier]);
+
+  useEffect(() => {
+    setWorldStreamCursors({});
+  }, [worldStreamCenter.x, worldStreamCenter.z, worldStreamTier]);
 
   useEffect(() => {
     const sendMovement = (event: Event) => zoneClient.current?.sendMovement((event as CustomEvent<ZoneMovementInput>).detail);
@@ -353,7 +421,7 @@ export default function Home() {
     setGatewayPairing(null); setGatewaySequence(0); setHumanTeamPartner(null); setSoloMode(true); setProvider("SOLO // ECHO-AUTOMATIK"); setConnected(true);
     appendLedger({ kind: "system", title: "Solo-Expedition freigegeben", detail: "Du steuerst Explorer und Echo-Slots direkt; keine LLM- oder Team-Verbindung wird benötigt." });
     setLastSignal("Solo-Modus aktiv: Die Echo-Slots liegen vollständig in deiner Hand.");
-    setScreen("loadout");
+    setScreen("home");
   };
   const unlockLoadout = (): void => { if (!connected) return; setScreen("loadout"); appendLedger({ kind: "system", title: "Menü freigeschaltet", detail: "Charakter- und Partner-Loadout sind jetzt verfügbar." }); };
   const toggleSkill = (code: string): void => setSelectedSkills((current) => { if (current.includes(code)) return current.filter((skill) => skill !== code); if (current.length >= 3) return [...current.slice(1), code]; return [...current, code]; });
@@ -369,18 +437,32 @@ export default function Home() {
       onError: () => setLastSignal("Die Begegnung ist noch nicht freigeschaltet. Sprich zuerst mit dem zuständigen Questgeber."),
     });
   };
-  const enterAurionExpanse = (): void => {
+  const enterAurionExpanse = (onConfirmed?: () => void): void => {
     if (!isAuthenticated) { setLastSignal("Melde dich an, um die serverbestätigte Aurion-Expanse zu betreten."); openAccountAccess(); return; }
     if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
     enterOpenWorld.mutate(undefined, {
       onSuccess: (snapshot) => {
+        setWorldStreamAnchor(snapshot.globalWorld);
+        setWorldStreamCenter({ x: 0, z: 0 });
+        setWorldStreamCursors({});
         window.dispatchEvent(new CustomEvent("aurion:load-open-world", { detail: snapshot }));
         appendLedger({ kind: "system", title: "Aurion-Expanse bestätigt", detail: `${snapshot.displayName} wurde als Weltansicht der Revision ${snapshot.revision} geöffnet.` });
         setLastSignal(`${snapshot.displayName} ist bestätigt. ${snapshot.encounter.activeCount} Begegnungen sind im sichtbaren Bereich aktiv.`);
         void openWorld.refetch();
+        onConfirmed?.();
       },
       onError: () => setLastSignal("Der Weltübergang wurde nicht bestätigt. Die Szene bleibt im sicheren Turmzustand."),
     });
+  };
+  const returnToTowerHome = (): void => {
+    if (gameplaySession.current) { setLastSignal("Eine aktive serverbestätigte Begegnung muss vor der Rückkehr gesichert werden."); return; }
+    zoneClient.current?.close();
+    setWorldStreamAnchor(null);
+    setWorldStreamCursors({});
+    window.dispatchEvent(new Event("aurion:return-to-tower"));
+    setScreen("home");
+    appendLedger({ kind: "system", title: "Sichere Rückkehr zur Sternwarte", detail: "Der lokale Expanse-Stream wurde beendet; dein privates Hauptquartier bleibt der sichere Ausgangspunkt." });
+    setLastSignal("Du bist sicher in deine private Sternwarte zurückgekehrt.");
   };
   const connectAuthoritativeZone = (): void => {
     if (!isAuthenticated || !user?.id) { openAccountAccess(); return; }
@@ -395,7 +477,10 @@ export default function Home() {
           },
           onSnapshot: (snapshot) => {
             const self = snapshot.presences.find(presence => presence.userId === user.id);
-            if (self) window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
+            if (self) {
+              window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
+              setWorldStreamCenter(worldChunkCenterForZonePosition(self.position));
+            }
           },
           onReject: (code) => setLastSignal(`Zonenbewegung wurde serverseitig verworfen: ${code}.`),
         });
@@ -483,6 +568,12 @@ export default function Home() {
           <div className="privacy-note"><ShieldCheck size={16} /><span><b>Dein Konto bleibt der Standard.</b> Aurion speichert geschützte Spielsitzungen und serverbestätigte Wirkung. Die MCP-Kopplung ist optional und überträgt nur normalisierte Befehle, Reihenfolge und Spielwirkung.</span></div>
         </section>
       )}
+      {screen === "home" && <TowerHomePanel
+        playerName={operatorName}
+        onPrepare={unlockLoadout}
+        onEnterExpanse={() => enterAurionExpanse(() => setScreen("mission"))}
+        onSignal={(message) => { appendLedger({ kind: "system", title: "Sternwarten-Handlung", detail: message }); setLastSignal(message); }}
+      />}
       {trailerOpen && <section className="trailer-modal" role="dialog" aria-modal="true" aria-labelledby="trailer-title"><div className="trailer-modal-backdrop" onClick={() => setTrailerOpen(false)} /><div className="trailer-modal-card"><header><div><p className="eyebrow">AURION // HERO TRAILER</p><h2 id="trailer-title">One Signal.<br /><em>Two Wills.</em></h2></div><button type="button" onClick={() => setTrailerOpen(false)} aria-label="Hero-Trailer schließen"><X size={20} /></button></header><video className="hero-trailer-video" src={heroTrailerUrl} poster={heroTrailerPoster} controls autoPlay playsInline preload="metadata">Dein Browser unterstützt die Hero-Trailer-Wiedergabe nicht.</video><footer><span>ENGLISH VOICE-OVER</span><b>DEUTSCHE UNTERTITEL</b><small>Autorisierte MCP-Koop · keine private Chat-Automatisierung</small></footer></div></section>}
       {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>{soloMode ? "Rüste drei sichtbare Protokolle aus. Du steuerst alle Echo-Slots direkt." : "Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed."}</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>{soloMode ? "Lokale Solo-Steuerung · WASD + Slots" : "Autorisierter MCP-Vertrag · WASD + Slots"}</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>{soloMode ? "SOLO-DECK" : "PARTNER-DECK"} <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer></section>}
       {screen === "mission" && (
@@ -512,6 +603,8 @@ export default function Home() {
             <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
             <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span><span>TILES <b>{openWorld.data?.terrain ? `${openWorld.data.terrain.tiles.length}/${openWorld.data.terrain.atlas.surfaces.length}` : "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>WETTER <b>{openWorld.data?.world.reaction.weatherTone ?? "—"}</b></span><span>DIALOGTON <b>{openWorld.data?.world.reaction.dialogueTone ?? "—"}</b></span><span>RESOLUTION <b>{openWorld.data?.world.resolutionIndex ?? "—"}</b></span><span>POLITY <b>{openWorld.data?.polity.governmentType ?? "—"}</b></span></div>
+            <div className="open-world-card__metrics"><span>SEKTOREN <b>{openWorld.data?.globalWorld.unlockedSectorCount ?? "—"}</b></span><span>WELTEPOCHE <b>{openWorld.data?.globalWorld.epoch ?? "—"}</b></span><span>STREAM-ZENTRUM <b>{worldChunkWindow.data ? `${worldChunkWindow.data.center.x}:${worldChunkWindow.data.center.z}` : "wird gelesen"}</b></span><span>TIER <b>{worldChunkWindow.data?.tier ?? worldStreamTier}</b></span></div>
+            <div className="open-world-card__metrics"><span>SICHTCHUNKS <b>{worldChunkWindow.data ? `${worldChunkWindow.data.chunks.length}/${worldChunkStreamingBudget(worldStreamTier).maxVisibleChunks}` : "—"}</b></span><span>STREAM-DELTAS <b>{worldChunkWindow.data?.chunks.reduce((total, chunk) => total + chunk.deltas.length, 0) ?? "—"}</b></span><span>SEITENLIMIT <b>32/Chunk</b></span><span>CACHE-LIMIT <b>{worldChunkStreamingBudget(worldStreamTier).maxCachedChunks}</b></span></div>
             <div className="open-world-card__metrics"><span>WASD-REV <b>{wasdCoverage.data?.sourceRevision.slice(0, 7) ?? "—"}</b></span><span>REGELMODULE <b>{wasdCoverage.data?.adaptedModuleCount ?? "—"}</b></span><span>WELT-PFADE <b>{wasdCoverage.data?.domainCounts.world ?? "—"}</b></span><span>KATALOG <b>{wasdCoverage.data?.catalogHash.slice(0, 7) ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>SIEDLUNG <b>{openWorld.data?.civilization.settlement.kind ?? "—"}</b></span><span>MARKT: TONIC <b>{openWorld.data?.civilization.market[0]?.price ?? "—"}</b></span><span>GILDE <b>{openWorld.data?.civilization.guild.name ?? "—"}</b></span><span>KARAWANEN <b>{openWorld.data?.civilization.caravanMissions.length ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>KNAPPHEIT <b>{openWorld.data?.civilization.scarcityForecast.recommendedAction ?? "—"}</b></span><span>GEFAHR <b>{openWorld.data ? `${Math.round(openWorld.data.civilization.aggressionHazard.hazardIndex * 100)}%` : "—"}</b></span><span>GILDENTERRITORIUM <b>{openWorld.data?.civilization.territoryEffect.ownerGuildId ?? "—"}</b></span><span>GILDENKASSE <b>{openWorld.data?.civilization.guild.treasury ?? "—"}</b></span></div>
@@ -548,7 +641,8 @@ export default function Home() {
                   }
                 }, onError: () => setLastSignal("Die Dialoginterpretation wurde sicher verworfen.") })}>Deutung anfragen</button></div>{dialogueQuestPrompt && dialogueQuestPrompt.npcId === activeWorldNpc && <div className="world-npc-dialogue__intent" role="status"><small>BESTÄTIGTE DIALOGABSICHT // {dialogueQuestPrompt.actionKind === "offer_quest" ? "QUESTANGEBOT" : "ÜBERGABEPRÜFUNG"}</small><button type="button" disabled={requestQuestActionFromDialogue.isPending} onClick={() => requestQuestActionFromDialogue.mutate({ dialogueReceiptId: dialogueQuestPrompt.dialogueReceiptId, actionKind: dialogueQuestPrompt.actionKind, questKey: dialogueQuestPrompt.questKey, idempotencyKey: `dialogue-command:${dialogueQuestPrompt.dialogueReceiptId}:${dialogueQuestPrompt.actionKind}:${dialogueQuestPrompt.questKey}` }, { onSuccess: (result) => { void gameplayProgress.refetch(); setLastSignal(result.receipt.outcome.state === "offer_available_quest" ? "Questangebot serverseitig bestätigt. Die Annahme bleibt deine separate Aktion." : "Übergabeprüfung bestätigt. Die Questübergabe bleibt deine separate Aktion."); }, onError: () => setLastSignal("Die Dialogfolgeaktion wurde sicher verworfen.") })}>{requestQuestActionFromDialogue.isPending ? "FOLGEAKTION WIRD GEPRÜFT" : dialogueQuestPrompt.actionKind === "offer_quest" ? "QUESTANGEBOT BESTÄTIGEN" : "ÜBERGABE PRÜFEN"}</button></div>}<button type="button" className="world-npc-dialogue__close" onClick={() => { setActiveWorldNpc(null); setDialogueQuestPrompt(null); }}>Dialog schließen</button></div>;
             })()}
-            <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={enterAurionExpanse}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
+            <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={() => enterAurionExpanse()}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
+            <button type="button" disabled={Boolean(gameplaySession.current)} onClick={returnToTowerHome}><ChevronRight size={16} /> ZUR STERNWARTE ZURÜCK</button>
             <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>
           </section>
 

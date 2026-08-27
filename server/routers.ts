@@ -13,6 +13,7 @@ import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLoc
 import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
+import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
 import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 
@@ -103,6 +104,28 @@ export const appRouter = router({
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    worldChunk: protectedProcedure.input(z.object({
+      worldVersion: z.literal("aurion-global-world.v1"),
+      expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION),
+      chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      afterSequence: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(db.WORLD_CHUNK_DELTA_PAGE_MAXIMUM).default(db.WORLD_CHUNK_DELTA_PAGE_MAXIMUM),
+    })).query(({ input }) => db.getWorldChunkDeltaPage({ coordinate: { x: input.chunkX, z: input.chunkZ }, afterSequence: input.afterSequence, limit: input.limit })),
+    applyWorldChunkAction: protectedProcedure.input(z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("harvest_resource"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), resourceId: z.string().regex(/^base:-?[0-9]+:-?[0-9]+:resource:[0-7]$/), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
+      z.object({ kind: z.literal("place_structure"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), assetKey: z.enum(["aurion_tripo_starpath_marker", "aurion_tripo_garden_border"]), xMm: z.number().int().min(0).max(63_999), zMm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
+      z.object({ kind: z.literal("remove_structure"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), structureId: z.string().regex(/^structure:[1-9][0-9]*:[0-9a-f]{16}$/), xMm: z.number().int().min(0).max(63_999), zMm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
+      z.object({ kind: z.literal("build_road"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), fromXmm: z.number().int().min(0).max(63_999), fromZmm: z.number().int().min(0).max(63_999), toXmm: z.number().int().min(0).max(63_999), toZmm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
+    ])).mutation(({ ctx, input }) => db.applyWorldChunkAction({ actorUserId: ctx.user.id, intent: input })),
+    worldChunkWindow: protectedProcedure.input(z.object({
+      worldVersion: z.literal("aurion-global-world.v1"),
+      expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION),
+      chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      tier: z.enum(["phone", "tablet", "desktop"]),
+      afterSequences: z.array(z.object({ chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), afterSequence: z.number().int().min(0) })).max(36).optional(),
+    })).query(({ input }) => db.getWorldChunkWindow({ center: { x: input.chunkX, z: input.chunkZ }, tier: input.tier, afterSequences: input.afterSequences?.map(cursor => ({ coordinate: { x: cursor.chunkX, z: cursor.chunkZ }, afterSequence: cursor.afterSequence })) })),
     issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),
     consumeZoneTicket: publicProcedure.input(z.object({ ticket: z.string().trim().min(32).max(128), zoneId: z.literal("observatory_threshold") })).mutation(({ input }) => db.consumeZoneConnectionTicket({ ticket: input.ticket, zoneId: input.zoneId as ZoneId })),
     acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
@@ -182,6 +205,13 @@ export const appRouter = router({
   }),
   admin: router({
     world: router({
+      presence: adminProcedure.query(async () => {
+        const presences = await db.listActiveWorldPresence();
+        return Object.freeze({ activePlayerCount: presences.length, presences });
+      }),
+      resolveEpoch: adminProcedure.input(z.object({
+        idempotencyKey: z.string().trim().min(16).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/),
+      })).mutation(({ ctx, input }) => db.resolveAndRecordGlobalWorldEpoch({ requestedByUserId: ctx.user.id, idempotencyKey: input.idempotencyKey })),
       resolve: adminProcedure.input(z.object({
         worldSeed: z.string().trim().min(3).max(160),
         regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault"]),

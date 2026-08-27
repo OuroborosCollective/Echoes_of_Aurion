@@ -73,6 +73,11 @@ export class AuthoritativeMovementZone {
     this.broadcastSnapshot();
   }
 
+  positionForConnection(connectionId: string): ZonePosition | undefined {
+    const position = this.peers.get(connectionId)?.position;
+    return position ? { ...position } : undefined;
+  }
+
   submitMovement(connectionId: string, move: ZoneMove): "accepted" | "stale" | "missing" {
     const peer = this.peers.get(connectionId);
     if (!peer) return "missing";

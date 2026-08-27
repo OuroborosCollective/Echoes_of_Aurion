@@ -8,6 +8,8 @@ import { resolveInventory } from "./wasdAurionItemProtocol";
 import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
 import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
 import { resolveSkillProgressionReadmodel, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
+import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
+import type { WorldEpochReaction } from "./worldEpochReactionProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -32,6 +34,10 @@ export type OpenWorldProfile = {
   activeQuest: QuestKey | null;
   canEnterDungeon: boolean;
   skillProgressionEvents: readonly SkillProgressionEvent[];
+  /** Confirmed global state; callers without persistence receive the deterministic baseline. */
+  globalWorld?: GlobalWorldPlan;
+  /** Immutable per-epoch reaction, supplied only after matching persisted snapshot/readback validation. */
+  epochReaction?: WorldEpochReaction;
 };
 
 export type OpenWorldSnapshot = {
@@ -47,6 +53,7 @@ export type OpenWorldSnapshot = {
   terrain: OpenWorldTerrainSnapshot;
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
   world: { worldSeed: "echoes-of-aurion-v1"; resolutionIndex: number; reaction: WorldReaction };
+  globalWorld: GlobalWorldClientDescriptor;
   polity: PolityState;
   civilization: {
     settlement: ReturnType<typeof resolveSettlement>;
@@ -193,8 +200,15 @@ function npcReadModels(input: OpenWorldProfile, reaction: WorldReaction) {
   ] as const;
 }
 
-function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, resolutionIndex: number): WorldSignal[] {
+function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, resolutionIndex: number, epochReaction?: WorldEpochReaction): WorldSignal[] {
   const signals: WorldSignal[] = [];
+  const epochSector = epochReaction?.sectors[({ observatory_threshold: 0, windhollow: 1, emberfall: 2, cinder_vault: 3 } as const)[zoneId] % Math.max(1, epochReaction?.sectors.length ?? 1)];
+  if (epochSector) {
+    signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:ecology`, kind: "ecology", regionId: zoneId, magnitude: epochSector.resources.forestHealth - 0.5, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
+    signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:economy`, kind: "economy", regionId: zoneId, magnitude: epochSector.resources.food - 0.5, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
+    signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:politics`, kind: "politics", regionId: zoneId, magnitude: epochSector.polity.stability - epochSector.polity.conflictPressure, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
+    if (epochSector.polity.state === "warfront") signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:war`, kind: "war", regionId: zoneId, magnitude: epochSector.polity.conflictPressure, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
+  }
   if (input.activeQuest) signals.push({ id: `quest:${input.activeQuest}`, kind: "resonance", regionId: zoneId, magnitude: 0.3, sourceReceiptId: `quest-state:${input.activeQuest}`, resolutionIndex });
   if (input.completed.length > 0) signals.push({ id: `progress:${input.completed.length}`, kind: "player_event", regionId: zoneId, magnitude: Math.min(1, input.completed.length * 0.2), sourceReceiptId: `quest-completed:${input.completed.slice().sort().join(",")}`, resolutionIndex });
   if (zoneId === "emberfall" || zoneId === "cinder_vault") signals.push({ id: `hazard:${zoneId}`, kind: "hazard", regionId: zoneId, magnitude: zoneId === "cinder_vault" ? 0.7 : 0.35, sourceReceiptId: `zone:${zoneId}`, resolutionIndex });
@@ -211,6 +225,7 @@ function primaryEncounterFor(input: OpenWorldProfile): OpenWorldSnapshot["primar
 
 export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapshot {
   const zoneId = zoneForOpenWorldProgress(input);
+  const globalWorld = input.globalWorld ?? buildGlobalWorldPlan({ worldSeed: "echoes-of-aurion-v1", epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
   const zone = {
     observatory_threshold: { tier: 0 as const, displayName: "Schwelle der Sternwarte", narrative: "Vor dem Turm öffnen sich bronzene Sternenpfade; ein Rückkehrstein bindet deine erste Außenroute.", pois: [
       { id: "return-stone", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein der Sternwarte" },
@@ -236,8 +251,9 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     ] },
   }[zoneId];
   const maximumVisible = maximumVisibleEnemies(input.level);
-  const resolutionIndex = input.level * 1_000 + input.completed.length * 10 + (input.activeQuest ? 1 : 0);
-  const signals = worldSignalsFor(input, zoneId, resolutionIndex);
+  const epochReaction = input.epochReaction && input.epochReaction.worldId === "echoes-of-aurion-global" && input.epochReaction.worldSeed === globalWorld.worldSeed && input.epochReaction.resolutionIndex === globalWorld.epoch ? input.epochReaction : undefined;
+  const resolutionIndex = epochReaction?.resolutionIndex ?? (input.level * 1_000 + input.completed.length * 10 + (input.activeQuest ? 1 : 0));
+  const signals = worldSignalsFor(input, zoneId, resolutionIndex, epochReaction);
   const world = {
     worldSeed: "echoes-of-aurion-v1" as const,
     resolutionIndex,
@@ -334,6 +350,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     terrain: buildOpenWorldTerrain(zoneId),
     props: propsForZone(zoneId),
     world,
+    globalWorld: toGlobalWorldClientDescriptor(globalWorld),
     polity,
     civilization,
     expedition,
