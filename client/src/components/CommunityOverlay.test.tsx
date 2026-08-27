@@ -13,4 +13,16 @@ describe("CommunityOverlay", () => {
     expect(await screen.findByText("Öffentlicher Aurion-Katalog")).toBeTruthy();
     expect(screen.queryByLabelText(/Datei auswählen/i)).toBeNull();
   });
+
+  it("verdichtet die mobilen Gemeinschaftsfunktionen zu einem zugänglichen Menü ohne Funktionsverlust", async () => {
+    const user = userEvent.setup();
+    render(<RealClientHarness><CommunityOverlay isAuthenticated={false} currentUserId={undefined} onTeamReady={() => undefined} onTeamCleared={() => undefined} starterCharacterId="wayfinder" onStarterCharacterSelected={() => undefined} /></RealClientHarness>);
+    const toggle = screen.getByRole("button", { name: "GEMEINSCHAFT" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "GLB-Einreichung öffnen" }));
+    expect(await screen.findByText("Öffentlicher Aurion-Katalog")).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
 });
