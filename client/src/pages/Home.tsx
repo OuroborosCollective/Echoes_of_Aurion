@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import CommunityOverlay from "@/components/CommunityOverlay";
+import TowerHomePanel from "@/components/TowerHomePanel";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
@@ -20,7 +21,7 @@ import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 
-type Screen = "gate" | "loadout" | "mission";
+type Screen = "gate" | "home" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
 type GatewayPairing = { sessionId: string; pairingToken: string; mcpUrl: string; expiresAt: Date; allowedCommands: string[] };
@@ -58,7 +59,8 @@ export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const apiAvailable = hasAurionApi();
   const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: apiAvailable });
-  const [screen, setScreen] = useState<Screen>("gate");
+  const previewHome = import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("aurion_preview") === "tower-home";
+  const [screen, setScreen] = useState<Screen>(previewHome ? "home" : "gate");
   const [provider, setProvider] = useState(providers[0]);
   const [connected, setConnected] = useState(false);
   const [isPairing, setIsPairing] = useState(false);
@@ -353,7 +355,7 @@ export default function Home() {
     setGatewayPairing(null); setGatewaySequence(0); setHumanTeamPartner(null); setSoloMode(true); setProvider("SOLO // ECHO-AUTOMATIK"); setConnected(true);
     appendLedger({ kind: "system", title: "Solo-Expedition freigegeben", detail: "Du steuerst Explorer und Echo-Slots direkt; keine LLM- oder Team-Verbindung wird benötigt." });
     setLastSignal("Solo-Modus aktiv: Die Echo-Slots liegen vollständig in deiner Hand.");
-    setScreen("loadout");
+    setScreen("home");
   };
   const unlockLoadout = (): void => { if (!connected) return; setScreen("loadout"); appendLedger({ kind: "system", title: "Menü freigeschaltet", detail: "Charakter- und Partner-Loadout sind jetzt verfügbar." }); };
   const toggleSkill = (code: string): void => setSelectedSkills((current) => { if (current.includes(code)) return current.filter((skill) => skill !== code); if (current.length >= 3) return [...current.slice(1), code]; return [...current, code]; });
@@ -369,7 +371,7 @@ export default function Home() {
       onError: () => setLastSignal("Die Begegnung ist noch nicht freigeschaltet. Sprich zuerst mit dem zuständigen Questgeber."),
     });
   };
-  const enterAurionExpanse = (): void => {
+  const enterAurionExpanse = (onConfirmed?: () => void): void => {
     if (!isAuthenticated) { setLastSignal("Melde dich an, um die serverbestätigte Aurion-Expanse zu betreten."); openAccountAccess(); return; }
     if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
     enterOpenWorld.mutate(undefined, {
@@ -378,6 +380,7 @@ export default function Home() {
         appendLedger({ kind: "system", title: "Aurion-Expanse bestätigt", detail: `${snapshot.displayName} wurde als Weltansicht der Revision ${snapshot.revision} geöffnet.` });
         setLastSignal(`${snapshot.displayName} ist bestätigt. ${snapshot.encounter.activeCount} Begegnungen sind im sichtbaren Bereich aktiv.`);
         void openWorld.refetch();
+        onConfirmed?.();
       },
       onError: () => setLastSignal("Der Weltübergang wurde nicht bestätigt. Die Szene bleibt im sicheren Turmzustand."),
     });
@@ -483,6 +486,12 @@ export default function Home() {
           <div className="privacy-note"><ShieldCheck size={16} /><span><b>Dein Konto bleibt der Standard.</b> Aurion speichert geschützte Spielsitzungen und serverbestätigte Wirkung. Die MCP-Kopplung ist optional und überträgt nur normalisierte Befehle, Reihenfolge und Spielwirkung.</span></div>
         </section>
       )}
+      {screen === "home" && <TowerHomePanel
+        playerName={operatorName}
+        onPrepare={unlockLoadout}
+        onEnterExpanse={() => enterAurionExpanse(() => setScreen("mission"))}
+        onSignal={(message) => { appendLedger({ kind: "system", title: "Sternwarten-Handlung", detail: message }); setLastSignal(message); }}
+      />}
       {trailerOpen && <section className="trailer-modal" role="dialog" aria-modal="true" aria-labelledby="trailer-title"><div className="trailer-modal-backdrop" onClick={() => setTrailerOpen(false)} /><div className="trailer-modal-card"><header><div><p className="eyebrow">AURION // HERO TRAILER</p><h2 id="trailer-title">One Signal.<br /><em>Two Wills.</em></h2></div><button type="button" onClick={() => setTrailerOpen(false)} aria-label="Hero-Trailer schließen"><X size={20} /></button></header><video className="hero-trailer-video" src={heroTrailerUrl} poster={heroTrailerPoster} controls autoPlay playsInline preload="metadata">Dein Browser unterstützt die Hero-Trailer-Wiedergabe nicht.</video><footer><span>ENGLISH VOICE-OVER</span><b>DEUTSCHE UNTERTITEL</b><small>Autorisierte MCP-Koop · keine private Chat-Automatisierung</small></footer></div></section>}
       {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>{soloMode ? "Rüste drei sichtbare Protokolle aus. Du steuerst alle Echo-Slots direkt." : "Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed."}</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>{soloMode ? "Lokale Solo-Steuerung · WASD + Slots" : "Autorisierter MCP-Vertrag · WASD + Slots"}</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>{soloMode ? "SOLO-DECK" : "PARTNER-DECK"} <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer></section>}
       {screen === "mission" && (
@@ -548,7 +557,7 @@ export default function Home() {
                   }
                 }, onError: () => setLastSignal("Die Dialoginterpretation wurde sicher verworfen.") })}>Deutung anfragen</button></div>{dialogueQuestPrompt && dialogueQuestPrompt.npcId === activeWorldNpc && <div className="world-npc-dialogue__intent" role="status"><small>BESTÄTIGTE DIALOGABSICHT // {dialogueQuestPrompt.actionKind === "offer_quest" ? "QUESTANGEBOT" : "ÜBERGABEPRÜFUNG"}</small><button type="button" disabled={requestQuestActionFromDialogue.isPending} onClick={() => requestQuestActionFromDialogue.mutate({ dialogueReceiptId: dialogueQuestPrompt.dialogueReceiptId, actionKind: dialogueQuestPrompt.actionKind, questKey: dialogueQuestPrompt.questKey, idempotencyKey: `dialogue-command:${dialogueQuestPrompt.dialogueReceiptId}:${dialogueQuestPrompt.actionKind}:${dialogueQuestPrompt.questKey}` }, { onSuccess: (result) => { void gameplayProgress.refetch(); setLastSignal(result.receipt.outcome.state === "offer_available_quest" ? "Questangebot serverseitig bestätigt. Die Annahme bleibt deine separate Aktion." : "Übergabeprüfung bestätigt. Die Questübergabe bleibt deine separate Aktion."); }, onError: () => setLastSignal("Die Dialogfolgeaktion wurde sicher verworfen.") })}>{requestQuestActionFromDialogue.isPending ? "FOLGEAKTION WIRD GEPRÜFT" : dialogueQuestPrompt.actionKind === "offer_quest" ? "QUESTANGEBOT BESTÄTIGEN" : "ÜBERGABE PRÜFEN"}</button></div>}<button type="button" className="world-npc-dialogue__close" onClick={() => { setActiveWorldNpc(null); setDialogueQuestPrompt(null); }}>Dialog schließen</button></div>;
             })()}
-            <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={enterAurionExpanse}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
+            <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={() => enterAurionExpanse()}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
             <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>
           </section>
 

@@ -39,6 +39,7 @@ import { rgbdDecodePixelShader } from "@babylonjs/core/Shaders/rgbdDecode.fragme
 import { colorVertexShader } from "@babylonjs/core/Shaders/color.vertex.js";
 import { colorPixelShader } from "@babylonjs/core/Shaders/color.fragment.js";
 import { aurionAssets } from "@/lib/aurionAssets";
+import { essentialTowerGlbPlan } from "@/game/glbUsagePlan";
 import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
@@ -324,6 +325,40 @@ function loadAsterionArchway(scene: Scene, parent: TransformNode): void {
   }).catch(error => console.warn("[Aurion Scene] Der optionale Asterion-Strukturprop konnte nicht geladen werden", error));
 }
 
+function loadEssentialTowerGlbs(scene: Scene, parent: TransformNode): void {
+  const placementById: Record<string, { position: Vector3; height: number; rotationY: number }> = {
+    aurion_astralwisp: { position: new Vector3(0, 3.15, 0), height: 1.15, rotationY: 0 },
+    aurion_return_stone: { position: new Vector3(-4.6, 0, 3.65), height: 2.05, rotationY: 0.42 },
+    aurion_starpath_archway: { position: new Vector3(5.15, 0, -2.25), height: 4.1, rotationY: -0.82 },
+  };
+  const orderedPlan = essentialTowerGlbPlan.slice().sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  void (async () => {
+    for (const entry of orderedPlan) {
+      const placement = placementById[entry.id];
+      if (!placement) continue;
+      try {
+        const result = await SceneLoader.ImportMeshAsync("", "", entry.sourceUrl, scene);
+        const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
+        if (!topLevelMeshes.length) throw new Error("Das freigegebene GLB enthält keine sichtbare Topologie.");
+        const root = new TransformNode(`aurion-glb-${entry.id}`, scene);
+        root.parent = parent;
+        topLevelMeshes.forEach(mesh => { mesh.parent = root; });
+        const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+        let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
+        bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
+        const scale = placement.height / Math.max(0.1, maximum.y - minimum.y);
+        root.scaling.setAll(scale);
+        root.position = new Vector3(placement.position.x, placement.position.y - minimum.y * scale, placement.position.z);
+        root.rotation.y = placement.rotationY;
+        emitGameEvent("asset", `${entry.id} ist als ${entry.target} geladen.`);
+      } catch (error) {
+        console.warn(`[Aurion Scene] Der deterministisch geplante GLB-Kandidat ${entry.id} konnte nicht geladen werden`, error);
+        emitGameEvent("asset", `${entry.id} blieb im sicheren Fallbackzustand.`);
+      }
+    }
+  })();
+}
+
 function emitGameEvent(kind: string, detail: string): void {
   window.dispatchEvent(new CustomEvent("aurion:game-event", { detail: { kind, detail } }));
 }
@@ -353,6 +388,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const arenaSets = makeArenaSet(scene);
   loadAsterionFloorKit(scene, arenaSets[0]);
   loadAsterionArchway(scene, arenaSets[0]);
+  loadEssentialTowerGlbs(scene, arenaSets[0]);
   for (let index = 0; index < 10; index += 1) {
     const angle = index * 0.63; const radius = 7.8 + (index % 2) * 1.4;
     const shard = MeshBuilder.CreatePolyhedron(`floating-shard-${index}`, { type: 2, size: 0.65 + (index % 3) * 0.18 }, scene);
