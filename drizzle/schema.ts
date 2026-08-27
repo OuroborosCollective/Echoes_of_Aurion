@@ -263,6 +263,23 @@ export const weaponLoadouts = mysqlTable("weaponLoadouts", {
   configuredAt: timestamp("configuredAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/** Append-only exact skill progression derived only from a confirmed Aurion expedition result. */
+export const skillProgressionEvents = mysqlTable("skillProgressionEvents", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  skillId: mysqlEnum("skillId", ["woodcutting", "mining", "fishing", "combat", "crafting"]).notNull(),
+  amountExact: varchar("amountExact", { length: 128 }).notNull(),
+  source: mysqlEnum("source", ["npc_kill", "resource_gather", "crafting", "quest_reward"]).notNull(),
+  resultReceiptId: varchar("resultReceiptId", { length: 64 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("skillProgressionEvents_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("skillProgressionEvents_user_receipt_skill_uq").on(table.userId, table.resultReceiptId, table.skillId),
+  index("skillProgressionEvents_user_skill_created_idx").on(table.userId, table.skillId, table.createdAt),
+]);
+
 /** Immutable, versioned world resolution evidence. Effects are rendered only after this row is confirmed. */
 export const aurionWorldResolutions = mysqlTable("aurionWorldResolutions", {
   id: varchar("id", { length: 64 }).primaryKey(),

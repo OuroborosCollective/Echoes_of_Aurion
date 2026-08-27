@@ -6,6 +6,8 @@ import {
   completeGameplayQuest,
   getDb,
   getGameplayProgress,
+  getOpenWorldSnapshot,
+  recordValidatedSkillProgressionEvent,
   startGameplayEncounter,
 } from "./db";
 import {
@@ -15,6 +17,7 @@ import {
   gameplaySessions,
   playerProfiles,
   progressionLedger,
+  skillProgressionEvents,
 } from "../drizzle/schema";
 
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
@@ -28,6 +31,7 @@ async function cleanupLyraE2eState() {
     await tx.delete(gameplayActionReceipts).where(eq(gameplayActionReceipts.userId, LYRA_E2E_USER_ID));
     await tx.delete(gameplaySessions).where(eq(gameplaySessions.userId, LYRA_E2E_USER_ID));
     await tx.delete(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, LYRA_E2E_USER_ID));
+    await tx.delete(skillProgressionEvents).where(eq(skillProgressionEvents.userId, LYRA_E2E_USER_ID));
     await tx.delete(progressionLedger).where(eq(progressionLedger.userId, LYRA_E2E_USER_ID));
     await tx.delete(gameplayQuestProgress).where(eq(gameplayQuestProgress.userId, LYRA_E2E_USER_ID));
     await tx.delete(playerProfiles).where(eq(playerProfiles.userId, LYRA_E2E_USER_ID));
@@ -83,7 +87,44 @@ describeWithDatabase("Lyra quest turn-in E2E", () => {
     expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual(["points:20", "victory:1", "xp:122"]);
     expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(3);
 
+    const skillEvents = await db.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.userId, LYRA_E2E_USER_ID));
+    expect(skillEvents).toHaveLength(1);
+    expect(skillEvents[0]).toMatchObject({
+      skillId: "combat",
+      amountExact: "122",
+      source: "quest_reward",
+      resolutionIndex: 3,
+      idempotencyKey: `quest:${encounter.session.id}:combat-skill`,
+    });
+    const world = await getOpenWorldSnapshot(LYRA_E2E_USER_ID);
+    expect(world.skillProgression).toMatchObject({
+      playerId: String(LYRA_E2E_USER_ID),
+      skillId: "combat",
+      progression: { totalXpExact: "122", levelExact: "2" },
+      appliedReceiptIds: [skillEvents[0]!.resultReceiptId],
+    });
+    const repeatedSkillEvent = await recordValidatedSkillProgressionEvent({
+      userId: LYRA_E2E_USER_ID,
+      skillId: "combat",
+      amountExact: "122",
+      source: "quest_reward",
+      resultReceiptId: skillEvents[0]!.resultReceiptId,
+      resolutionIndex: 3,
+      idempotencyKey: `quest:${encounter.session.id}:combat-skill`,
+    });
+    expect(repeatedSkillEvent).toMatchObject({ applied: false, event: { id: skillEvents[0]!.id } });
+    await expect(recordValidatedSkillProgressionEvent({
+      userId: LYRA_E2E_USER_ID + 1,
+      skillId: "combat",
+      amountExact: "122",
+      source: "quest_reward",
+      resultReceiptId: skillEvents[0]!.resultReceiptId,
+      resolutionIndex: 3,
+      idempotencyKey: `quest:${encounter.session.id}:foreign-combat-skill`,
+    })).rejects.toThrow("Ein bestätigtes Aurion-Result-Receipt desselben Spielers ist erforderlich.");
+
     await expect(completeGameplayQuest({ userId: LYRA_E2E_USER_ID, questKey: "astral_call", giver: "Lyra" })).rejects.toThrow("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
     expect(await db.select().from(progressionLedger).where(eq(progressionLedger.userId, LYRA_E2E_USER_ID))).toHaveLength(3);
+    expect(await db.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.userId, LYRA_E2E_USER_ID))).toHaveLength(1);
   }, 30_000);
 });

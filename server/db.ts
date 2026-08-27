@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -12,6 +12,7 @@ import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQua
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
+import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -312,6 +313,88 @@ type GameplayQuestView = {
 };
 
 /** Returns only server-derived quest availability. The browser receives this for display, never as a mutation source. */
+type ServerSkillProgressionSource = SkillProgressionEvent["source"];
+
+function assertExactPositiveDecimal(value: string): void {
+  if (!/^[1-9][0-9]*$/.test(value) || value.length > 128) {
+    throw new Error("Skill-XP muss eine kanonische positive Dezimalzahl sein.");
+  }
+}
+
+/**
+ * Records an exact skill event only after the referenced Aurion expedition result
+ * has been accepted for the same player. This is intentionally server-internal:
+ * browser clients never supply a receipt, source, amount or resolution index.
+ */
+export async function recordValidatedSkillProgressionEvent(values: {
+  userId: number;
+  skillId: AurionSkillId;
+  amountExact: string;
+  source: ServerSkillProgressionSource;
+  resultReceiptId: string;
+  resolutionIndex: number;
+  idempotencyKey: string;
+}) {
+  assertExactPositiveDecimal(values.amountExact);
+  if (!Number.isSafeInteger(values.resolutionIndex) || values.resolutionIndex < 0) {
+    throw new Error("Skill-Resolution-Index ist nicht gültig.");
+  }
+  if (!values.idempotencyKey || values.idempotencyKey.length > 128) {
+    throw new Error("Skill-Idempotenzschlüssel ist nicht gültig.");
+  }
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const prior = (await tx.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (prior) return { applied: false as const, event: prior };
+
+    const result = (await tx.select().from(expeditionResultReceipts).where(and(
+      eq(expeditionResultReceipts.id, values.resultReceiptId),
+      eq(expeditionResultReceipts.userId, values.userId),
+      eq(expeditionResultReceipts.status, "accepted"),
+    )).limit(1))[0];
+    if (!result) throw new Error("Ein bestätigtes Aurion-Result-Receipt desselben Spielers ist erforderlich.");
+    if (values.source !== "quest_reward" || !result.expeditionKey.startsWith("quest:")) {
+      throw new Error("Die gegenwärtige Skillprogression akzeptiert ausschließlich bestätigte Questbelohnungen.");
+    }
+
+    const conflictingEvent = (await tx.select().from(skillProgressionEvents).where(and(
+      eq(skillProgressionEvents.userId, values.userId),
+      eq(skillProgressionEvents.resultReceiptId, values.resultReceiptId),
+      eq(skillProgressionEvents.skillId, values.skillId),
+    )).limit(1))[0];
+    if (conflictingEvent) throw new Error("Dieses Result-Receipt besitzt bereits ein Skillereignis.");
+
+    const id = newEndgameId("skillev");
+    await tx.insert(skillProgressionEvents).values({ id, ...values });
+    const event = (await tx.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.id, id)).limit(1))[0];
+    if (!event) throw new Error("Skillereignis-Readback fehlgeschlagen.");
+    return { applied: true as const, event };
+  });
+}
+
+async function listConfirmedSkillProgressionEvents(userId: number, skillId: AurionSkillId): Promise<SkillProgressionEvent[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const rows = await db.select().from(skillProgressionEvents).where(and(
+    eq(skillProgressionEvents.userId, userId),
+    eq(skillProgressionEvents.skillId, skillId),
+  ));
+  return rows.map(row => ({
+    idempotencyKey: row.idempotencyKey,
+    skillId: row.skillId as AurionSkillId,
+    amountExact: row.amountExact,
+    source: row.source as ServerSkillProgressionSource,
+    receiptId: row.resultReceiptId,
+    resolutionIndex: row.resolutionIndex,
+  }));
+}
+
+export async function getExactSkillProgressionReadmodel(userId: number, skillId: AurionSkillId = "combat") {
+  const events = await listConfirmedSkillProgressionEvents(userId, skillId);
+  return resolveSkillProgressionReadmodel({ playerId: String(userId), skillId, events });
+}
+
 export async function getGameplayProgress(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
@@ -344,14 +427,17 @@ export async function getGameplayProgress(userId: number) {
   };
 }
 
-/** A display-only world view derived from authoritative player progression. */
+/** A display-only world view derived from authoritative player progression and confirmed skill receipts. */
 export async function getOpenWorldSnapshot(userId: number) {
   const progress = await getGameplayProgress(userId);
+  const skillProgressionEvents = await listConfirmedSkillProgressionEvents(userId, "combat");
   return buildOpenWorldSnapshot({
+    playerId: String(userId),
     level: progress.profile.level,
     completed: progress.completed,
     activeQuest: progress.activeQuest,
     canEnterDungeon: progress.canEnterDungeon,
+    skillProgressionEvents,
   });
 }
 
@@ -404,6 +490,21 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
     resultDigest,
     confirmedByUserId: values.userId,
     idempotencyKey: `quest:${completionSessionId}:result`,
+  });
+  const completedSession = (await db.select({ nextSequence: gameplaySessions.nextSequence }).from(gameplaySessions).where(and(
+    eq(gameplaySessions.id, completionSessionId),
+    eq(gameplaySessions.userId, values.userId),
+    eq(gameplaySessions.status, "completed"),
+  )).limit(1))[0];
+  if (!completedSession || completedSession.nextSequence < 2) throw new Error("Die bestätigte Abschlusssequenz fehlt für die Skillprogression.");
+  await recordValidatedSkillProgressionEvent({
+    userId: values.userId,
+    skillId: "combat",
+    amountExact: String(quest.reward.xp),
+    source: "quest_reward",
+    resultReceiptId: resultReceipt.receipt.id,
+    resolutionIndex: completedSession.nextSequence - 1,
+    idempotencyKey: `quest:${completionSessionId}:combat-skill`,
   });
   const dropResult = await createLootDrop({
     userId: values.userId,
