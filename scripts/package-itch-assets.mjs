@@ -8,6 +8,13 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const outputDirectory = path.join(projectRoot, "dist", "itch", "aurion-assets");
 const staticSource = (process.env.AURION_STATIC_SOURCE ?? "https://aurion3d-6hpapr2g.manus.space").replace(/\/$/, "");
 const localAssetCache = process.env.AURION_ASSET_CACHE ?? path.join(process.env.HOME ?? "", "webdev-static-assets", "aurion");
+const sfxFiles = [
+  "combat-attack-sharp.wav", "combat-attack-pointed.wav", "combat-attack-blunt.wav", "combat-spell-heal.wav", "combat-spell-buff.wav",
+  "combat-creature-wolf-attack.wav", "combat-creature-human-attack.wav", "combat-creature-monster-attack.wav",
+  "combat-creature-wolf-death.wav", "combat-creature-human-death.wav", "combat-creature-monster-death.wav",
+  "movement-run-earth.wav", "movement-run-grass.wav", "movement-run-stone.wav", "movement-run-wood.wav", "movement-run-water.wav",
+  "interaction-loot-screw-pouch.wav", "resource-harvest-plant.wav", "resource-harvest-wood.wav", "resource-mine-ore.wav", "crafting-workbench-saw.wav",
+];
 const files = [
   { source: "aurion-wayfinder-animated_6bf370ef.glb", target: "aurion-wayfinder-animated_6bf370ef.glb", cacheSource: "aurion-wayfinder-animated_6bf370ef.glb" },
   { source: "aurion-veilguard-animated_d6b28a5b.glb", target: "aurion-veilguard-animated_d6b28a5b.glb", cacheSource: "aurion-veilguard-animated_d6b28a5b.glb" },
@@ -50,4 +57,7 @@ for (const file of files) {
   const copiedFromCache = await copyCachedAsset(file.cacheSource ?? file.source, file.target);
   if (!copiedFromCache) await downloadReleaseAsset(file.source, file.target);
 }
-console.log(`Aurion itch assets packaged from ${staticSource}: ${files.length} files.`);
+for (const filename of sfxFiles) {
+  await copyFile(path.join(projectRoot, "public", "audio", "sfx", filename), path.join(outputDirectory, filename));
+}
+console.log(`Aurion itch assets packaged from ${staticSource}: ${files.length} remote/cache files and ${sfxFiles.length} local SFX files.`);
