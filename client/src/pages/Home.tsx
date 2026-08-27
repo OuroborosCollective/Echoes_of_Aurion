@@ -31,6 +31,15 @@ type DialogueQuestPrompt = {
   actionKind: "offer_quest" | "request_turn_in";
   questKey: "astral_call" | "archive_of_echoes" | "ember_key";
 };
+type WorldStreamAnchor = {
+  version: "aurion-global-world.v1";
+  worldId: "echoes-of-aurion-global";
+  worldSeed: string;
+  epoch: number;
+  unlockedSectorCount: number;
+  nextExpansionAtPlayerCount: number | null;
+  deterministicHash: string;
+};
 
 const initialMission: MissionState = { arena: 0, arenaName: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", sentinelHp: 112, sentinelMaxHp: 112, explorerHp: 100, echoHp: 100, shield: false, marked: false, phase: "active" };
 const abilityDeck = [
@@ -84,6 +93,7 @@ export default function Home() {
   const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
+  const [worldStreamAnchor, setWorldStreamAnchor] = useState<WorldStreamAnchor | null>(null);
   const expeditionAudio = useRef<HTMLAudioElement | null>(null);
   const soundscape = useRef<AurionSoundscape | null>(null);
   const musicResetTimer = useRef<number | null>(null);
@@ -105,6 +115,7 @@ export default function Home() {
   const wasdCoverage = trpc.gameplay.wasdCoverage.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const enterOpenWorld = trpc.gameplay.enterOpenWorld.useMutation();
+  const worldChunk = trpc.gameplay.worldChunk.useQuery({ worldVersion: "aurion-global-world.v1", expectedBaseRevision: 1, chunkX: 0, chunkZ: 0, afterSequence: 0, limit: 64 }, { enabled: isAuthenticated && Boolean(worldStreamAnchor) });
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: isAuthenticated });
   const choosePlayerClass = trpc.player.chooseClass.useMutation();
   const setWeaponLoadout = trpc.player.setWeaponLoadout.useMutation();
@@ -127,6 +138,11 @@ export default function Home() {
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
 
   useEffect(() => () => zoneClient.current?.close(), []);
+
+  useEffect(() => {
+    if (!worldStreamAnchor || !worldChunk.data) return;
+    window.dispatchEvent(new CustomEvent("aurion:stream-world-chunk", { detail: { globalWorld: worldStreamAnchor, chunk: worldChunk.data } }));
+  }, [worldChunk.data, worldStreamAnchor]);
 
   useEffect(() => {
     const sendMovement = (event: Event) => zoneClient.current?.sendMovement((event as CustomEvent<ZoneMovementInput>).detail);
@@ -376,6 +392,7 @@ export default function Home() {
     if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
     enterOpenWorld.mutate(undefined, {
       onSuccess: (snapshot) => {
+        setWorldStreamAnchor(snapshot.globalWorld);
         window.dispatchEvent(new CustomEvent("aurion:load-open-world", { detail: snapshot }));
         appendLedger({ kind: "system", title: "Aurion-Expanse bestätigt", detail: `${snapshot.displayName} wurde als Weltansicht der Revision ${snapshot.revision} geöffnet.` });
         setLastSignal(`${snapshot.displayName} ist bestätigt. ${snapshot.encounter.activeCount} Begegnungen sind im sichtbaren Bereich aktiv.`);
@@ -521,6 +538,7 @@ export default function Home() {
             <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
             <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span><span>TILES <b>{openWorld.data?.terrain ? `${openWorld.data.terrain.tiles.length}/${openWorld.data.terrain.atlas.surfaces.length}` : "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>WETTER <b>{openWorld.data?.world.reaction.weatherTone ?? "—"}</b></span><span>DIALOGTON <b>{openWorld.data?.world.reaction.dialogueTone ?? "—"}</b></span><span>RESOLUTION <b>{openWorld.data?.world.resolutionIndex ?? "—"}</b></span><span>POLITY <b>{openWorld.data?.polity.governmentType ?? "—"}</b></span></div>
+            <div className="open-world-card__metrics"><span>SEKTOREN <b>{openWorld.data?.globalWorld.unlockedSectorCount ?? "—"}</b></span><span>WELTEPOCHE <b>{openWorld.data?.globalWorld.epoch ?? "—"}</b></span><span>SEED-CHUNK <b>{worldChunk.data ? `${worldChunk.data.generation.coordinate.x}:${worldChunk.data.generation.coordinate.z}` : "wird gelesen"}</b></span><span>DELTAS <b>{worldChunk.data?.deltas.length ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>WASD-REV <b>{wasdCoverage.data?.sourceRevision.slice(0, 7) ?? "—"}</b></span><span>REGELMODULE <b>{wasdCoverage.data?.adaptedModuleCount ?? "—"}</b></span><span>WELT-PFADE <b>{wasdCoverage.data?.domainCounts.world ?? "—"}</b></span><span>KATALOG <b>{wasdCoverage.data?.catalogHash.slice(0, 7) ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>SIEDLUNG <b>{openWorld.data?.civilization.settlement.kind ?? "—"}</b></span><span>MARKT: TONIC <b>{openWorld.data?.civilization.market[0]?.price ?? "—"}</b></span><span>GILDE <b>{openWorld.data?.civilization.guild.name ?? "—"}</b></span><span>KARAWANEN <b>{openWorld.data?.civilization.caravanMissions.length ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>KNAPPHEIT <b>{openWorld.data?.civilization.scarcityForecast.recommendedAction ?? "—"}</b></span><span>GEFAHR <b>{openWorld.data ? `${Math.round(openWorld.data.civilization.aggressionHazard.hazardIndex * 100)}%` : "—"}</b></span><span>GILDENTERRITORIUM <b>{openWorld.data?.civilization.territoryEffect.ownerGuildId ?? "—"}</b></span><span>GILDENKASSE <b>{openWorld.data?.civilization.guild.treasury ?? "—"}</b></span></div>

@@ -76,6 +76,17 @@ export type GlobalWorldPlan = {
   deterministicHash: string;
 };
 
+/** Small, client-safe generation input. Baseline sectors are regenerated locally from this descriptor. */
+export type GlobalWorldClientDescriptor = {
+  version: typeof AURION_GLOBAL_WORLD_VERSION;
+  worldId: "echoes-of-aurion-global";
+  worldSeed: string;
+  epoch: number;
+  unlockedSectorCount: number;
+  nextExpansionAtPlayerCount: number | null;
+  deterministicHash: string;
+};
+
 function clamp(value: number, minimum = 0, maximum = 1): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -186,6 +197,18 @@ function migrationFor(sectorId: string, nextSectorId: string, resources: WorldRe
   if (Math.abs(resources.food - resources.ore) > 0.46) migrations.push({ id: `migration:${sectorId}:trader`, profession: "trader", fromSectorId: sectorId, toSectorId: nextSectorId, reason: "market_demand", count: Math.max(1, Math.floor(professions.trader / 3)) });
   if (polity.state === "warfront" || polity.state === "succession_crisis") migrations.push({ id: `migration:${sectorId}:guard`, profession: "guard", fromSectorId: sectorId, toSectorId: nextSectorId, reason: polity.state === "warfront" ? "war" : "safety", count: Math.max(1, Math.floor(professions.guard / 2)) });
   return migrations.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function toGlobalWorldClientDescriptor(plan: GlobalWorldPlan): GlobalWorldClientDescriptor {
+  return Object.freeze({
+    version: plan.version,
+    worldId: "echoes-of-aurion-global",
+    worldSeed: plan.worldSeed,
+    epoch: plan.epoch,
+    unlockedSectorCount: plan.unlockedSectorCount,
+    nextExpansionAtPlayerCount: plan.nextExpansionAtPlayerCount,
+    deterministicHash: plan.deterministicHash,
+  });
 }
 
 export function buildGlobalWorldPlan(input: GlobalWorldProfile): GlobalWorldPlan {

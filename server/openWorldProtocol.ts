@@ -8,7 +8,7 @@ import { resolveInventory } from "./wasdAurionItemProtocol";
 import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
 import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
 import { resolveSkillProgressionReadmodel, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
-import { buildGlobalWorldPlan, type GlobalWorldPlan } from "./globalWorldProtocol";
+import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -50,7 +50,7 @@ export type OpenWorldSnapshot = {
   terrain: OpenWorldTerrainSnapshot;
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
   world: { worldSeed: "echoes-of-aurion-v1"; resolutionIndex: number; reaction: WorldReaction };
-  globalWorld: GlobalWorldPlan;
+  globalWorld: GlobalWorldClientDescriptor;
   polity: PolityState;
   civilization: {
     settlement: ReturnType<typeof resolveSettlement>;
@@ -339,7 +339,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     terrain: buildOpenWorldTerrain(zoneId),
     props: propsForZone(zoneId),
     world,
-    globalWorld,
+    globalWorld: toGlobalWorldClientDescriptor(globalWorld),
     polity,
     civilization,
     expedition,

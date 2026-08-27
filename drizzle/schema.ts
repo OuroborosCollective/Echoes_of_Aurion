@@ -328,6 +328,28 @@ export const aurionGlobalWorldEpochReceipts = mysqlTable("aurionGlobalWorldEpoch
   index("aurionGlobalWorldEpochReceipts_world_created_idx").on(table.worldId, table.createdAt),
 ]);
 
+/** Authoritative deviations from the seed-generated chunk base. Untouched terrain and resource nodes are never stored here. */
+export const aurionWorldChunkDeltas = mysqlTable("aurionWorldChunkDeltas", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  chunkX: int("chunkX").notNull(),
+  chunkZ: int("chunkZ").notNull(),
+  baseRevision: int("baseRevision").notNull(),
+  sequence: int("sequence").notNull(),
+  kind: mysqlEnum("kind", ["resource_depleted", "structure_placed", "structure_removed", "road_built"]).notNull(),
+  targetId: varchar("targetId", { length: 128 }).notNull(),
+  actorUserId: int("actorUserId").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+  deterministicHash: varchar("deterministicHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldChunkDeltas_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionWorldChunkDeltas_hash_uq").on(table.deterministicHash),
+  uniqueIndex("aurionWorldChunkDeltas_chunk_sequence_uq").on(table.worldId, table.chunkX, table.chunkZ, table.sequence),
+  index("aurionWorldChunkDeltas_chunk_created_idx").on(table.worldId, table.chunkX, table.chunkZ, table.createdAt),
+]);
+
 /** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
 export const aurionNpcStates = mysqlTable("aurionNpcStates", {
   npcId: varchar("npcId", { length: 96 }).primaryKey(),

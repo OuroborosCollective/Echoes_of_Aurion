@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AURION_WORLD_SECTOR_CAP, buildGlobalWorldPlan, unlockedWorldSectorCount } from "./globalWorldProtocol";
+import { AURION_WORLD_SECTOR_CAP, buildGlobalWorldPlan, toGlobalWorldClientDescriptor, unlockedWorldSectorCount } from "./globalWorldProtocol";
 
 describe("globalWorldProtocol", () => {
   it("expands globally from the initial sectors by the durable player high-water mark", () => {
@@ -23,6 +23,21 @@ describe("globalWorldProtocol", () => {
     expect(first.deterministicHash).toBe(replay.deterministicHash);
     expect(new Set(first.sectors.map(sector => sector.id)).size).toBe(first.sectors.length);
     expect(first.sectors.every(sector => sector.settlement.population <= sector.settlement.capacity)).toBe(true);
+  });
+
+  it("publishes a compact, deterministic generation descriptor without baseline sectors", () => {
+    const plan = buildGlobalWorldPlan({ worldSeed: "echoes-of-aurion-v1", epoch: 12, activePlayerCount: 3, highWaterPlayerCount: 17 });
+    const descriptor = toGlobalWorldClientDescriptor(plan);
+    expect(descriptor).toEqual({
+      version: "aurion-global-world.v1",
+      worldId: "echoes-of-aurion-global",
+      worldSeed: "echoes-of-aurion-v1",
+      epoch: 12,
+      unlockedSectorCount: 10,
+      nextExpansionAtPlayerCount: 21,
+      deterministicHash: plan.deterministicHash,
+    });
+    expect("sectors" in descriptor).toBe(false);
   });
 
   it("turns ecological, economic and political pressure into bounded migration and NPC-given quest offers", () => {

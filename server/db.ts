@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldChunkDeltas, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -14,6 +14,7 @@ import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
 import { buildGlobalWorldPlan } from "./globalWorldProtocol";
+import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, toWorldChunkDeltaOverlay, type WorldChunkCoordinate, type WorldChunkDelta, type WorldChunkDeltaKind } from "./worldChunkProtocol";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
@@ -471,6 +472,116 @@ export async function getGlobalWorldPlan() {
     }).onDuplicateKeyUpdate({ set: { activePlayerCount, highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson: JSON.stringify(plan) } });
   });
   return plan;
+}
+
+function parseWorldChunkDelta(row: typeof aurionWorldChunkDeltas.$inferSelect): WorldChunkDelta {
+  let payload: Record<string, string | number | boolean>;
+  try {
+    payload = JSON.parse(row.payloadJson) as Record<string, string | number | boolean>;
+  } catch {
+    throw new Error("Stored chunk delta payload is invalid");
+  }
+  const delta = createWorldChunkDelta({
+    id: row.id,
+    worldId: row.worldId,
+    coordinate: { x: row.chunkX, z: row.chunkZ },
+    baseRevision: row.baseRevision,
+    sequence: row.sequence,
+    kind: row.kind,
+    targetId: row.targetId,
+    actorUserId: row.actorUserId,
+    idempotencyKey: row.idempotencyKey,
+    payload,
+  });
+  if (delta.deterministicHash !== row.deterministicHash) throw new Error("Stored chunk delta hash mismatch");
+  return delta;
+}
+
+export const WORLD_CHUNK_DELTA_PAGE_MAXIMUM = 64 as const;
+
+export async function getWorldChunkDeltaPage(input: {
+  coordinate: WorldChunkCoordinate;
+  afterSequence: number;
+  limit: number;
+}) {
+  if (!Number.isSafeInteger(input.afterSequence) || input.afterSequence < 0) throw new Error("Chunk-Deltacursor muss eine nichtnegative Ganzzahl sein.");
+  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > WORLD_CHUNK_DELTA_PAGE_MAXIMUM) throw new Error(`Chunk-Deltalimit muss zwischen 1 und ${WORLD_CHUNK_DELTA_PAGE_MAXIMUM} liegen.`);
+  const base = generateBaseWorldChunk({ worldId: GLOBAL_WORLD_ID, worldSeed: GLOBAL_WORLD_SEED, coordinate: input.coordinate });
+  const db = await getDb();
+  if (!db) return Object.freeze({
+    generation: Object.freeze({ worldId: base.worldId, coordinate: base.coordinate, baseRevision: base.baseRevision, baseHash: base.deterministicHash }),
+    deltas: Object.freeze([]),
+    nextAfterSequence: input.afterSequence,
+    hasMore: false,
+  });
+  const rows = await db.select().from(aurionWorldChunkDeltas).where(and(
+    eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+    eq(aurionWorldChunkDeltas.chunkX, input.coordinate.x),
+    eq(aurionWorldChunkDeltas.chunkZ, input.coordinate.z),
+    gt(aurionWorldChunkDeltas.sequence, input.afterSequence),
+  )).orderBy(aurionWorldChunkDeltas.sequence, aurionWorldChunkDeltas.id).limit(input.limit + 1);
+  const page = rows.slice(0, input.limit).map(parseWorldChunkDelta).map(toWorldChunkDeltaOverlay);
+  return Object.freeze({
+    generation: Object.freeze({ worldId: base.worldId, coordinate: base.coordinate, baseRevision: base.baseRevision, baseHash: base.deterministicHash }),
+    deltas: Object.freeze(page),
+    nextAfterSequence: page.at(-1)?.sequence ?? input.afterSequence,
+    hasMore: rows.length > page.length,
+  });
+}
+
+export async function getWorldChunkReadModel(coordinate: WorldChunkCoordinate) {
+  const base = generateBaseWorldChunk({ worldId: GLOBAL_WORLD_ID, worldSeed: GLOBAL_WORLD_SEED, coordinate });
+  const db = await getDb();
+  if (!db) return materializeWorldChunk(base, []);
+  const rows = await db.select().from(aurionWorldChunkDeltas).where(and(
+    eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+    eq(aurionWorldChunkDeltas.chunkX, coordinate.x),
+    eq(aurionWorldChunkDeltas.chunkZ, coordinate.z),
+  )).orderBy(aurionWorldChunkDeltas.sequence, aurionWorldChunkDeltas.id);
+  return materializeWorldChunk(base, rows.map(parseWorldChunkDelta));
+}
+
+/** A caller must supply an already server-authorized causal sequence. Clients never invent chunk deltas. */
+export async function recordWorldChunkDelta(input: {
+  actorUserId: number;
+  coordinate: WorldChunkCoordinate;
+  sequence: number;
+  kind: WorldChunkDeltaKind;
+  targetId: string;
+  idempotencyKey: string;
+  payload: Record<string, string | number | boolean>;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const prior = (await db.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.idempotencyKey, input.idempotencyKey)).limit(1))[0];
+  if (prior) return { delta: parseWorldChunkDelta(prior), source: "persisted" as const };
+  const delta = createWorldChunkDelta({
+    id: newCommunityId("chunkdelta"),
+    worldId: GLOBAL_WORLD_ID,
+    coordinate: input.coordinate,
+    baseRevision: 1,
+    sequence: input.sequence,
+    kind: input.kind,
+    targetId: input.targetId,
+    actorUserId: input.actorUserId,
+    idempotencyKey: input.idempotencyKey,
+    payload: input.payload,
+  });
+  await db.insert(aurionWorldChunkDeltas).values({
+    id: delta.id,
+    worldId: delta.worldId,
+    chunkX: delta.coordinate.x,
+    chunkZ: delta.coordinate.z,
+    baseRevision: delta.baseRevision,
+    sequence: delta.sequence,
+    kind: delta.kind,
+    targetId: delta.targetId,
+    actorUserId: delta.actorUserId,
+    idempotencyKey: delta.idempotencyKey,
+    payloadJson: JSON.stringify(delta.payload),
+    deterministicHash: delta.deterministicHash,
+  });
+  return { delta, source: "created" as const };
 }
 
 /** A display-only world view derived from authoritative player progression, global scale state and confirmed skill receipts. */

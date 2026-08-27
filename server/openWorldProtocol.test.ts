@@ -33,9 +33,8 @@ describe("open-world protocol", () => {
     expect(snapshot.props.map(prop => prop.kind)).toEqual(["starpath_marker", "flower_shrub", "flower_shrub"]);
     expect(snapshot.worldKernel.integrity).toMatchObject({ ok: true, kappa: 1000 });
     expect(snapshot.worldKernel.cityLayout.sector).toBe(0);
-    expect(snapshot.globalWorld).toMatchObject({ version: "aurion-global-world.v1", unlockedSectorCount: 6, activePlayerCount: 1 });
-    expect(snapshot.globalWorld.sectors).toHaveLength(6);
-    expect(snapshot.globalWorld.sectors.every(sector => sector.quests.every(quest => quest.sectorId === sector.id))).toBe(true);
+    expect(snapshot.globalWorld).toMatchObject({ version: "aurion-global-world.v1", worldId: "echoes-of-aurion-global", unlockedSectorCount: 6, worldSeed: "echoes-of-aurion-v1" });
+    expect(JSON.stringify(snapshot.globalWorld)).not.toContain("sectors");
     expect(snapshot.aiProposal).toMatchObject({ state: "proposal", intent: "trade_decision", commandType: "AURION_TRADE_PROPOSAL" });
     expect(snapshot.skillProgression).toMatchObject({ playerId: "aurion-test-player", skillId: "combat", progression: { totalXpExact: "122", levelExact: "2" }, appliedReceiptIds: ["result-session-a"] });
     expect(JSON.stringify(snapshot)).not.toContain("reward");

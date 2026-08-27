@@ -13,6 +13,7 @@ import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLoc
 import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
+import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
 import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 
@@ -103,6 +104,14 @@ export const appRouter = router({
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    worldChunk: protectedProcedure.input(z.object({
+      worldVersion: z.literal("aurion-global-world.v1"),
+      expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION),
+      chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      afterSequence: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(db.WORLD_CHUNK_DELTA_PAGE_MAXIMUM).default(db.WORLD_CHUNK_DELTA_PAGE_MAXIMUM),
+    })).query(({ input }) => db.getWorldChunkDeltaPage({ coordinate: { x: input.chunkX, z: input.chunkZ }, afterSequence: input.afterSequence, limit: input.limit })),
     issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),
     consumeZoneTicket: publicProcedure.input(z.object({ ticket: z.string().trim().min(32).max(128), zoneId: z.literal("observatory_threshold") })).mutation(({ input }) => db.consumeZoneConnectionTicket({ ticket: input.ticket, zoneId: input.zoneId as ZoneId })),
     acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
