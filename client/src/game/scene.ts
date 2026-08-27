@@ -41,6 +41,7 @@ import { colorPixelShader } from "@babylonjs/core/Shaders/color.fragment.js";
 import { aurionAssets } from "@/lib/aurionAssets";
 import { essentialTowerGlbPlan } from "@/game/glbUsagePlan";
 import { generateBaseWorldChunk, WORLD_CHUNK_BASE_REVISION, type WorldChunkDeltaOverlay } from "@shared/worldChunkProtocol";
+import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, planWorldChunkCache, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
@@ -81,7 +82,8 @@ type MissionState = { arena: number; arenaName: string; objective: string; senti
 type TerrainSurfaceKey = "grass" | "flower_meadow" | "earth" | "farmland" | "garden_parcels" | "starpath" | "starpath_crossing";
 type WorldPropKind = "flower_shrub" | "starpath_marker" | "garden_border";
 type OpenWorldSceneState = { revision: number; zoneId: "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault"; zoneTier: number; displayName: string; entryNarrative: string; encounter: { activeCount: number; budget: number; maximumVisible: number }; terrain: { chunkSizeMeters: 32; tileSizeMeters: 4; columns: 8; rows: 8; atlas: { sizePixels: 1024; cellsPerAxis: 4; cellPixels: 256; surfaces: readonly TerrainSurfaceKey[] }; roads: { tileCount: number; fieldTileTarget: number; gardenTileTarget: number }; tiles: readonly { x: number; z: number; surface: TerrainSurfaceKey }[] }; props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[]; npcs: readonly { id: "lyra" | "orun"; displayName: string }[]; globalWorld: { version: "aurion-global-world.v1"; worldId: "echoes-of-aurion-global"; worldSeed: string; epoch: number; unlockedSectorCount: number; nextExpansionAtPlayerCount: number | null; deterministicHash: string } };
-type WorldChunkStreamState = { globalWorld: OpenWorldSceneState["globalWorld"]; chunk: { generation: { worldId: "echoes-of-aurion-global"; coordinate: { x: number; z: number }; baseRevision: 1; baseHash: string }; deltas: readonly WorldChunkDeltaOverlay[]; nextAfterSequence: number; hasMore: boolean } };
+type WorldChunkStreamState = { globalWorld: OpenWorldSceneState["globalWorld"]; tier: WorldChunkStreamingTier; center: { x: number; z: number }; chunk: { generation: { worldId: "echoes-of-aurion-global"; coordinate: { x: number; z: number }; baseRevision: 1; baseHash: string }; deltas: readonly WorldChunkDeltaOverlay[]; nextAfterSequence: number; hasMore: boolean } };
+type StreamedChunkRoot = { coordinate: { x: number; z: number }; root: TransformNode; lastAccess: number };
 type LiveRig = { root: TransformNode; torso: TransformNode; head: TransformNode; arms: TransformNode[]; legs: TransformNode[]; weapon?: TransformNode; halo?: TransformNode; eye?: StandardMaterial; shell?: StandardMaterial; crown?: StandardMaterial };
 type SentinelRig = LiveRig & { eye: StandardMaterial; shell: StandardMaterial; crown: StandardMaterial };
 
@@ -465,7 +467,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   let explorerAttackUntil = 0; let explorerHurtUntil = 0; let explorerMotionUntil = 0; let echoActionUntil = 0; let echoHurtUntil = 0; let sentinelAttackUntil = 0; let sentinelHurtUntil = 0; let sentinelMoving = false;
   let authoritativeZoneUserId: number | null = null;
   let authoritativeExplorerTarget: Vector3 | null = null;
-  let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let streamedChunkRoot: TransformNode | null = null; let activeGlobalWorldHash: string | null = null; let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
+  let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let activeGlobalWorldHash: string | null = null; let activeStreamingTier: WorldChunkStreamingTier = "phone"; let activeStreamingCenter = { x: 0, z: 0 }; let streamedChunkAccess = 0; const streamedChunkRoots = new Map<string, StreamedChunkRoot>(); const streamedChunkDeltaCache = new Map<string, Map<string, WorldChunkDeltaOverlay>>(); let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
   const tripoPropTemplates = new Map<WorldPropKind, { root: TransformNode; minimumY: number; height: number }>();
   const tripoPropUrls: Record<WorldPropKind, string> = {
     flower_shrub: aurionAssets.glbCandidates.tripoFlowerShrub,
@@ -494,23 +496,44 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     emitGameEvent("system", `${arena.name} entfaltet sich. Ziel: ${arena.objective}`); emitState(true);
   };
   const clearOpenWorld = (): void => {
-    streamedChunkRoot?.dispose(false, true);
-    streamedChunkRoot = null;
+    streamedChunkRoots.forEach(entry => entry.root.dispose(false, true));
+    streamedChunkRoots.clear();
+    streamedChunkDeltaCache.clear();
+    streamedChunkAccess = 0;
     activeGlobalWorldHash = null;
     openWorldRoot?.dispose(false, true);
     openWorldRoot = null;
     worldNpcTargets = [];
     openWorldActive = false;
+    camera.lowerRadiusLimit = 14; camera.upperRadiusLimit = 23; camera.radius = 20.5;
+  };
+  const trimStreamedChunkCache = (): void => {
+    const plan = planWorldChunkCache({ center: activeStreamingCenter, tier: activeStreamingTier, cached: Array.from(streamedChunkRoots.values()).map(entry => ({ coordinate: entry.coordinate, lastAccess: entry.lastAccess })) });
+    plan.evict.forEach(coordinate => {
+      const key = worldChunkCoordinateKey(coordinate);
+      const entry = streamedChunkRoots.get(key);
+      if (entry) { entry.root.dispose(false, true); streamedChunkRoots.delete(key); streamedChunkDeltaCache.delete(key); }
+    });
   };
   const renderConfirmedWorldChunk = (state: WorldChunkStreamState): void => {
-    if (!openWorldRoot || state.chunk.deltas.length > 64 || !Number.isSafeInteger(state.chunk.generation.coordinate.x) || !Number.isSafeInteger(state.chunk.generation.coordinate.z) || state.chunk.generation.baseRevision !== WORLD_CHUNK_BASE_REVISION) return;
+    if (!openWorldRoot || !Number.isSafeInteger(state.chunk.generation.coordinate.x) || !Number.isSafeInteger(state.chunk.generation.coordinate.z) || state.chunk.generation.baseRevision !== WORLD_CHUNK_BASE_REVISION) return;
+    const expectedWindow = orderedWorldChunkWindow(state.center, worldChunkStreamingBudget(state.tier).visibleRadius);
+    if (!expectedWindow.some(coordinate => coordinate.x === state.chunk.generation.coordinate.x && coordinate.z === state.chunk.generation.coordinate.z)) return;
     const base = generateBaseWorldChunk({ worldId: state.globalWorld.worldId, worldSeed: state.globalWorld.worldSeed, coordinate: state.chunk.generation.coordinate });
     if (base.deterministicHash !== state.chunk.generation.baseHash) { emitGameEvent("warning", "Der bestätigte Chunksnapshot passt nicht zur lokalen Seedbasis und wurde nicht gerendert."); return; }
-    streamedChunkRoot?.dispose(false, true);
+    const centerChanged = state.center.x !== activeStreamingCenter.x || state.center.z !== activeStreamingCenter.z;
+    activeStreamingTier = state.tier;
+    activeStreamingCenter = { ...state.center };
+    if (centerChanged) streamedChunkRoots.forEach(entry => { entry.root.position.x = (entry.coordinate.x - state.center.x) * 64; entry.root.position.z = (entry.coordinate.z - state.center.z) * 64; });
+    const viewRadius = state.tier === "desktop" ? 280 : state.tier === "tablet" ? 150 : 130;
+    camera.lowerRadiusLimit = viewRadius * 0.72; camera.upperRadiusLimit = viewRadius * 1.12; camera.radius = viewRadius; camera.setTarget(Vector3.Zero());
+    const key = worldChunkCoordinateKey(base.coordinate);
+    const previous = streamedChunkRoots.get(key);
+    previous?.root.dispose(false, true);
     const root = new TransformNode(`confirmed-chunk-${base.coordinate.x}-${base.coordinate.z}`, scene);
-    streamedChunkRoot = root;
     root.parent = openWorldRoot;
-    root.position = new Vector3(41, 0, -14);
+    root.position = new Vector3((base.coordinate.x - state.center.x) * 64, 0, (base.coordinate.z - state.center.z) * 64);
+    streamedChunkRoots.set(key, { coordinate: { ...base.coordinate }, root, lastAccess: ++streamedChunkAccess });
     const surfaceColors: Record<typeof base.tiles[number]["surface"], Color3> = {
       grass: Color3.FromHexString("#2E6D51"), forest_floor: Color3.FromHexString("#1D4938"), riverbank: Color3.FromHexString("#407579"), stone: Color3.FromHexString("#67717A"), ash: Color3.FromHexString("#614C50"), ruin_path: Color3.FromHexString("#806B52"),
     };
@@ -519,34 +542,41 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       const tiles = tilesBySurface[surface];
       if (!tiles.length) return;
       const first = tiles[0]!;
-      const source = MeshBuilder.CreateGround(`confirmed-chunk-ground-${surface}`, { width: 4, height: 4, subdivisions: 1 }, scene);
+      const source = MeshBuilder.CreateGround(`confirmed-chunk-ground-${base.coordinate.x}-${base.coordinate.z}-${surface}`, { width: 4, height: 4, subdivisions: 1 }, scene);
       source.parent = root;
       source.position = new Vector3((first.x - 7.5) * 4, first.heightMm / 1_000, (first.z - 7.5) * 4);
-      source.material = material(scene, `confirmed-chunk-ground-mat-${surface}`, surfaceColors[surface], surface === "ruin_path" ? bronze.scale(0.08) : undefined);
+      source.material = material(scene, `confirmed-chunk-ground-mat-${base.coordinate.x}-${base.coordinate.z}-${surface}`, surfaceColors[surface], surface === "ruin_path" ? bronze.scale(0.08) : undefined);
       tiles.slice(1).forEach(tile => source.thinInstanceAdd(Matrix.Translation((tile.x - first.x) * 4, (tile.heightMm - first.heightMm) / 1_000, (tile.z - first.z) * 4)));
     });
     const depleted = new Set(state.chunk.deltas.filter(delta => delta.kind === "resource_depleted").map(delta => delta.targetId));
     base.resources.filter(resource => !depleted.has(resource.id)).forEach((resource, index) => {
       const x = resource.positionMm.x / 1_000 - 32; const z = resource.positionMm.z / 1_000 - 32;
       const resourceColor = resource.kind === "tree" ? Color3.FromHexString("#2D7A55") : resource.kind === "ore" ? Color3.FromHexString("#7D91B0") : resource.kind === "water" ? Color3.FromHexString("#57C8D5") : Color3.FromHexString("#A8C86A");
-      const marker = resource.kind === "tree" ? MeshBuilder.CreateCylinder(`confirmed-resource-${resource.id}`, { height: 2.6, diameterTop: 0.15, diameterBottom: 1.2, tessellation: 6 }, scene) : MeshBuilder.CreatePolyhedron(`confirmed-resource-${resource.id}`, { type: index % 3, size: 0.52 }, scene);
-      marker.parent = root; marker.position = new Vector3(x, resource.kind === "tree" ? 1.32 : 0.48, z); marker.material = material(scene, `confirmed-resource-mat-${resource.id}`, resourceColor, resource.kind === "water" ? resourceColor.scale(0.45) : undefined);
+      const marker = resource.kind === "tree" ? MeshBuilder.CreateCylinder(`confirmed-resource-${base.coordinate.x}-${base.coordinate.z}-${resource.id}`, { height: 2.6, diameterTop: 0.15, diameterBottom: 1.2, tessellation: 6 }, scene) : MeshBuilder.CreatePolyhedron(`confirmed-resource-${base.coordinate.x}-${base.coordinate.z}-${resource.id}`, { type: index % 3, size: 0.52 }, scene);
+      marker.parent = root; marker.position = new Vector3(x, resource.kind === "tree" ? 1.32 : 0.48, z); marker.material = material(scene, `confirmed-resource-mat-${base.coordinate.x}-${base.coordinate.z}-${resource.id}`, resourceColor, resource.kind === "water" ? resourceColor.scale(0.45) : undefined);
     });
-    state.chunk.deltas.filter(delta => delta.kind === "structure_placed").sort((left, right) => left.id.localeCompare(right.id)).slice(0, 8).forEach(delta => {
+    const orderedOverlays = state.chunk.deltas.slice().sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+    const removedStructures = new Set(orderedOverlays.filter(delta => delta.kind === "structure_removed").map(delta => delta.targetId));
+    const visibleStructures = orderedOverlays.filter(delta => delta.kind === "structure_placed" && !removedStructures.has(delta.targetId)).slice(0, 24);
+    visibleStructures.forEach(delta => {
       const x = delta.payload.xMm; const z = delta.payload.zMm;
       if (typeof x !== "number" || typeof z !== "number" || !Number.isSafeInteger(x) || !Number.isSafeInteger(z) || x < 0 || z < 0 || x >= 64_000 || z >= 64_000) return;
       const structure = MeshBuilder.CreateBox(`confirmed-structure-${delta.id}`, { width: 2.5, height: 2.8, depth: 2.5 }, scene);
       structure.parent = root; structure.position = new Vector3(x / 1_000 - 32, 1.4, z / 1_000 - 32); structure.material = material(scene, `confirmed-structure-mat-${delta.id}`, sandstone, aurion.scale(0.15));
     });
-    state.chunk.deltas.filter(delta => delta.kind === "road_built").sort((left, right) => left.id.localeCompare(right.id)).slice(0, 8).forEach(delta => {
+    const roadLines = orderedOverlays.filter(delta => delta.kind === "road_built").flatMap(delta => {
       const fromX = delta.payload.fromXmm; const fromZ = delta.payload.fromZmm; const toX = delta.payload.toXmm; const toZ = delta.payload.toZmm;
-      if (typeof fromX !== "number" || typeof fromZ !== "number" || typeof toX !== "number" || typeof toZ !== "number" || !Number.isSafeInteger(fromX) || !Number.isSafeInteger(fromZ) || !Number.isSafeInteger(toX) || !Number.isSafeInteger(toZ) || fromX < 0 || fromZ < 0 || toX < 0 || toZ < 0 || fromX >= 64_000 || fromZ >= 64_000 || toX >= 64_000 || toZ >= 64_000) return;
-      const road = MeshBuilder.CreateLines(`confirmed-road-${delta.id}`, { points: [new Vector3(fromX / 1_000 - 32, 0.12, fromZ / 1_000 - 32), new Vector3(toX / 1_000 - 32, 0.12, toZ / 1_000 - 32)] }, scene);
-      road.parent = root; road.color = Color3.FromHexString("#D6B374");
+      if (typeof fromX !== "number" || typeof fromZ !== "number" || typeof toX !== "number" || typeof toZ !== "number" || !Number.isSafeInteger(fromX) || !Number.isSafeInteger(fromZ) || !Number.isSafeInteger(toX) || !Number.isSafeInteger(toZ) || fromX < 0 || fromZ < 0 || toX < 0 || toZ < 0 || fromX >= 64_000 || fromZ >= 64_000 || toX >= 64_000 || toZ >= 64_000) return [];
+      return [[new Vector3(fromX / 1_000 - 32, 0.12, fromZ / 1_000 - 32), new Vector3(toX / 1_000 - 32, 0.12, toZ / 1_000 - 32)]];
     });
+    if (roadLines.length) {
+      const road = MeshBuilder.CreateLineSystem(`confirmed-roads-${base.coordinate.x}-${base.coordinate.z}`, { lines: roadLines }, scene);
+      road.parent = root; road.color = Color3.FromHexString("#D6B374");
+    }
     const boundary = MeshBuilder.CreateTorus(`confirmed-chunk-boundary-${base.coordinate.x}-${base.coordinate.z}`, { diameter: 90, thickness: 0.08, tessellation: 64 }, scene);
     boundary.parent = root; boundary.position.y = 0.22; boundary.rotation.x = Math.PI / 2; boundary.material = material(scene, `confirmed-chunk-boundary-mat-${base.coordinate.x}-${base.coordinate.z}`, bronze, aurion.scale(0.32));
-    emitGameEvent("system", `Seed-Chunk ${base.coordinate.x}:${base.coordinate.z} ist aus der bestätigten Weltbasis erzeugt; ${state.chunk.deltas.length} Delta-Receipts liegen als Overlay vor.`);
+    trimStreamedChunkCache();
+    emitGameEvent("system", `Seed-Chunk ${base.coordinate.x}:${base.coordinate.z} ist bestätigt; ${state.chunk.deltas.length} aktuelle Delta-Overlays liegen vor, ${streamedChunkRoots.size} Chunks sind im LRU-Cache.`);
   };
   const createOpenWorldVisuals = (detail: OpenWorldSceneState): void => {
     clearOpenWorld();
@@ -738,9 +768,13 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   };
   const onWorldChunkStream = (event: Event): void => {
     const detail = (event as CustomEvent<WorldChunkStreamState>).detail;
-    if (!openWorldActive || !detail || detail.globalWorld?.version !== "aurion-global-world.v1" || detail.globalWorld.worldId !== "echoes-of-aurion-global" || !detail.globalWorld.worldSeed.trim() || detail.globalWorld.deterministicHash !== activeGlobalWorldHash || !detail.chunk || detail.chunk.generation?.worldId !== detail.globalWorld.worldId || !Array.isArray(detail.chunk.deltas) || detail.chunk.deltas.length > 64 || !Number.isSafeInteger(detail.chunk.nextAfterSequence)) return;
+    if (!openWorldActive || !detail || !["phone", "tablet", "desktop"].includes(detail.tier) || !Number.isSafeInteger(detail.center?.x) || !Number.isSafeInteger(detail.center?.z) || detail.globalWorld?.version !== "aurion-global-world.v1" || detail.globalWorld.worldId !== "echoes-of-aurion-global" || !detail.globalWorld.worldSeed.trim() || detail.globalWorld.deterministicHash !== activeGlobalWorldHash || !detail.chunk || detail.chunk.generation?.worldId !== detail.globalWorld.worldId || !Array.isArray(detail.chunk.deltas) || detail.chunk.deltas.length > WORLD_CHUNK_STREAM_PAGE_LIMIT || !Number.isSafeInteger(detail.chunk.nextAfterSequence)) return;
     if (!detail.chunk.deltas.every(delta => Number.isSafeInteger(delta.sequence) && delta.sequence > 0 && delta.worldId === detail.globalWorld.worldId && delta.coordinate.x === detail.chunk.generation.coordinate.x && delta.coordinate.z === detail.chunk.generation.coordinate.z && delta.baseRevision === detail.chunk.generation.baseRevision && typeof delta.deterministicHash === "string" && delta.deterministicHash.startsWith("fnv1a-"))) return;
-    renderConfirmedWorldChunk(detail);
+    const key = worldChunkCoordinateKey(detail.chunk.generation.coordinate);
+    const cachedDeltas = streamedChunkDeltaCache.get(key) ?? new Map<string, WorldChunkDeltaOverlay>();
+    detail.chunk.deltas.forEach(delta => cachedDeltas.set(delta.id, delta));
+    streamedChunkDeltaCache.set(key, cachedDeltas);
+    renderConfirmedWorldChunk({ ...detail, chunk: { ...detail.chunk, deltas: Array.from(cachedDeltas.values()).sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)) } });
   };
   const onZoneConnected = (event: Event): void => {
     const userId = (event as CustomEvent<{ userId?: number }>).detail.userId;

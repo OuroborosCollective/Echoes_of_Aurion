@@ -33,6 +33,13 @@ describe("world chunk action route", () => {
     await expect(caller.gameplay.applyWorldChunkAction(validHarvestShape)).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
+  it("rejects anonymous and noncanonical tiered chunk-window reads before a server readmodel is exposed", async () => {
+    const anonymous = appRouter.createCaller(contextFor(null));
+    await expect(anonymous.gameplay.worldChunkWindow({ worldVersion: "aurion-global-world.v1", expectedBaseRevision: 1, chunkX: 0, chunkZ: 0, tier: "phone" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    const caller = appRouter.createCaller(contextFor(authenticatedUser));
+    await expect(caller.gameplay.worldChunkWindow({ worldVersion: "aurion-global-world.v1", expectedBaseRevision: 1, chunkX: 0, chunkZ: 0, tier: "ultra" } as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("rejects noncanonical hashes, unapproved asset keys and invalid structure IDs before database access", async () => {
     const caller = appRouter.createCaller(contextFor(authenticatedUser));
     await expect(caller.gameplay.applyWorldChunkAction({ ...validHarvestShape, expectedBaseHash: "incorrect" })).rejects.toMatchObject({ code: "BAD_REQUEST" });

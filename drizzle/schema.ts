@@ -382,6 +382,23 @@ export const aurionWorldEpochRequests = mysqlTable("aurionWorldEpochRequests", {
   index("aurionWorldEpochRequests_hash_idx").on(table.snapshotHash),
 ]);
 
+/** Immutable, bounded ecology/economy/society reaction derived during the explicit global epoch transaction. */
+export const aurionWorldEpochReactions = mysqlTable("aurionWorldEpochReactions", {
+  receiptId: varchar("receiptId", { length: 96 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  reactionHash: varchar("reactionHash", { length: 64 }).notNull(),
+  reactionJson: text("reactionJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldEpochReactions_world_epoch_uq").on(table.worldId, table.epoch),
+  uniqueIndex("aurionWorldEpochReactions_hash_uq").on(table.reactionHash),
+  index("aurionWorldEpochReactions_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
 /** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
 export const aurionNpcStates = mysqlTable("aurionNpcStates", {
   npcId: varchar("npcId", { length: 96 }).primaryKey(),

@@ -16,6 +16,16 @@ export type WorldChunkStreamingBudget = {
   maxVisibleDeltaOverlays: number;
 };
 
+/** A monotone local access index, never wall-clock time, drives deterministic LRU eviction. */
+export type WorldChunkCacheEntry = { coordinate: WorldChunkCoordinate; lastAccess: number };
+
+export type WorldChunkCachePlan = {
+  visible: readonly WorldChunkCoordinate[];
+  request: readonly WorldChunkCoordinate[];
+  retain: readonly WorldChunkCoordinate[];
+  evict: readonly WorldChunkCoordinate[];
+};
+
 const budgets: Readonly<Record<WorldChunkStreamingTier, WorldChunkStreamingBudget>> = Object.freeze({
   // 3×3 window: 9 chunks / 2,304 visible tiles / at most 288 32-item overlays.
   phone: Object.freeze({ tier: "phone", visibleRadius: 1, maxCachedChunks: 12, maxVisibleChunks: 9, maxCachedTiles: 3_072, maxVisibleTiles: 2_304, maxVisibleBaseResources: 72, maxVisibleDeltaOverlays: 288 }),
@@ -56,6 +66,32 @@ export function orderedWorldChunkWindow(center: WorldChunkCoordinate, radius: nu
     for (let x = center.x - radius; x <= center.x + radius; x += 1) coordinates.push({ x, z });
   }
   return Object.freeze(coordinates.sort((left, right) => compareCoordinate(left, right, center)).map(coordinate => Object.freeze(coordinate)));
+}
+
+/**
+ * Produces the pure streaming/cache decision used by both the React request owner
+ * and the Babylon disposer. Visible items are pinned; all retained non-visible
+ * items are chosen by monotone LRU access and a coordinate tie-break.
+ */
+export function planWorldChunkCache(input: { center: WorldChunkCoordinate; tier: WorldChunkStreamingTier; cached: readonly WorldChunkCacheEntry[] }): WorldChunkCachePlan {
+  const budget = worldChunkStreamingBudget(input.tier);
+  const visible = orderedWorldChunkWindow(input.center, budget.visibleRadius);
+  const visibleKeys = new Set(visible.map(worldChunkCoordinateKey));
+  const byKey = new Map<string, WorldChunkCacheEntry>();
+  for (const entry of input.cached) {
+    assertChunkCoordinate(entry.coordinate.x, "cached chunk x");
+    assertChunkCoordinate(entry.coordinate.z, "cached chunk z");
+    if (!Number.isSafeInteger(entry.lastAccess) || entry.lastAccess < 0) throw new Error("cached chunk lastAccess must be a non-negative safe integer");
+    const key = worldChunkCoordinateKey(entry.coordinate);
+    const previous = byKey.get(key);
+    if (!previous || entry.lastAccess > previous.lastAccess) byKey.set(key, Object.freeze({ coordinate: Object.freeze({ ...entry.coordinate }), lastAccess: entry.lastAccess }));
+  }
+  const request = visible.filter(coordinate => !byKey.has(worldChunkCoordinateKey(coordinate)));
+  const retainedBackground = Array.from(byKey.values()).filter(entry => !visibleKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => right.lastAccess - left.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).slice(0, Math.max(0, budget.maxCachedChunks - visible.length));
+  const retain = Object.freeze([...visible, ...retainedBackground.map(entry => entry.coordinate)]);
+  const retainKeys = new Set(retain.map(worldChunkCoordinateKey));
+  const evict = Object.freeze(Array.from(byKey.values()).filter(entry => !retainKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
+  return Object.freeze({ visible, request: Object.freeze(request), retain, evict });
 }
 
 export function isWorldChunkStreamingTier(value: unknown): value is WorldChunkStreamingTier {

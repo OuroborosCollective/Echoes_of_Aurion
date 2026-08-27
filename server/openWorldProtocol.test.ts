@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenWorldSnapshot, buildOpenWorldTerrain, encounterBudget, maximumVisibleEnemies, type OpenWorldProfile, zoneForOpenWorldProgress } from "./openWorldProtocol";
+import { buildGlobalWorldPlan } from "./globalWorldProtocol";
+import { resolveWorldEpochReaction } from "./worldEpochReactionProtocol";
 
 function snapshotInput(input: Omit<OpenWorldProfile, "playerId" | "skillProgressionEvents">, skillProgressionEvents: OpenWorldProfile["skillProgressionEvents"] = []): OpenWorldProfile {
   return { playerId: "aurion-test-player", ...input, skillProgressionEvents };
@@ -50,6 +52,18 @@ describe("open-world protocol", () => {
     expect(first.world.reaction.ruleSetVersion).toBe("aurion-wasd-rules-v1");
     expect(first.world.reaction.dialogueTone).toBe("calm");
     expect(JSON.stringify(first.world)).not.toContain("reward");
+  });
+
+  it("uses only a matching confirmed epoch reaction as a world-signal source", () => {
+    const globalWorld = buildGlobalWorldPlan({ worldSeed: "echoes-of-aurion-v1", epoch: 1, activePlayerCount: 4, highWaterPlayerCount: 4 });
+    const epochReaction = resolveWorldEpochReaction({ plan: globalWorld, resolutionIndex: 1, confirmedDeltas: [], observedPresence: [] });
+    const matching = buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false, globalWorld, epochReaction }));
+    const mismatched = buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false, globalWorld, epochReaction: { ...epochReaction, worldSeed: "unbound" } }));
+    expect(matching.world.resolutionIndex).toBe(1);
+    expect(matching.world.reaction.signalIds.some(id => id.includes(":ecology"))).toBe(true);
+    expect(matching.world.reaction.signalIds.some(id => id.includes(":economy"))).toBe(true);
+    expect(matching.world.reaction.signalIds.some(id => id.includes(":politics"))).toBe(true);
+    expect(mismatched.world.resolutionIndex).toBe(1_000);
   });
 
   it("exposes bounded NPC autonomy, dialect profiles and a deterministic fictional polity", () => {

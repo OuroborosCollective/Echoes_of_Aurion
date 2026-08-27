@@ -20,6 +20,7 @@ import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
+import { orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
 type Screen = "gate" | "home" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
@@ -59,6 +60,17 @@ const heroTrailerPoster = aurionAssets.trailerPoster;
 const expanseReference = aurionAssets.expanseReference;
 const GameCanvas = lazy(() => import("@/components/GameCanvas"));
 
+function streamTierForViewport(): WorldChunkStreamingTier {
+  if (typeof window === "undefined") return "phone";
+  const smallestSide = Math.min(window.innerWidth, window.innerHeight);
+  if (window.innerWidth >= 1_200 || smallestSide >= 1_000) return "desktop";
+  return smallestSide >= 600 ? "tablet" : "phone";
+}
+
+function worldChunkCenterForZonePosition(position: { x: number; z: number }): { x: number; z: number } {
+  return { x: Math.floor((position.x + 32_000) / 64_000), z: Math.floor((position.z + 32_000) / 64_000) };
+}
+
 function codeFromText(value: string): Command | null {
   const candidate = value.trim().toUpperCase();
   return /^[WASDEF1-9]$/.test(candidate) ? (candidate as Command) : null;
@@ -94,6 +106,9 @@ export default function Home() {
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [worldStreamAnchor, setWorldStreamAnchor] = useState<WorldStreamAnchor | null>(null);
+  const [worldStreamTier, setWorldStreamTier] = useState<WorldChunkStreamingTier>(() => streamTierForViewport());
+  const [worldStreamCenter, setWorldStreamCenter] = useState({ x: 0, z: 0 });
+  const [worldStreamCursors, setWorldStreamCursors] = useState<Record<string, number>>({});
   const expeditionAudio = useRef<HTMLAudioElement | null>(null);
   const soundscape = useRef<AurionSoundscape | null>(null);
   const musicResetTimer = useRef<number | null>(null);
@@ -115,7 +130,19 @@ export default function Home() {
   const wasdCoverage = trpc.gameplay.wasdCoverage.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
   const enterOpenWorld = trpc.gameplay.enterOpenWorld.useMutation();
-  const worldChunk = trpc.gameplay.worldChunk.useQuery({ worldVersion: "aurion-global-world.v1", expectedBaseRevision: 1, chunkX: 0, chunkZ: 0, afterSequence: 0, limit: 64 }, { enabled: isAuthenticated && Boolean(worldStreamAnchor) });
+  const currentStreamCoordinates = useMemo(() => orderedWorldChunkWindow(worldStreamCenter, worldChunkStreamingBudget(worldStreamTier).visibleRadius), [worldStreamCenter, worldStreamTier]);
+  const worldChunkWindowInput = useMemo(() => ({
+    worldVersion: "aurion-global-world.v1" as const,
+    expectedBaseRevision: 1 as const,
+    chunkX: worldStreamCenter.x,
+    chunkZ: worldStreamCenter.z,
+    tier: worldStreamTier,
+    afterSequences: currentStreamCoordinates.flatMap(coordinate => {
+      const afterSequence = worldStreamCursors[worldChunkCoordinateKey(coordinate)];
+      return afterSequence && afterSequence > 0 ? [{ chunkX: coordinate.x, chunkZ: coordinate.z, afterSequence }] : [];
+    }),
+  }), [currentStreamCoordinates, worldStreamCenter.x, worldStreamCenter.z, worldStreamCursors, worldStreamTier]);
+  const worldChunkWindow = trpc.gameplay.worldChunkWindow.useQuery(worldChunkWindowInput, { enabled: isAuthenticated && Boolean(worldStreamAnchor), refetchInterval: worldStreamAnchor ? 15_000 : false });
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: isAuthenticated });
   const choosePlayerClass = trpc.player.chooseClass.useMutation();
   const setWeaponLoadout = trpc.player.setWeaponLoadout.useMutation();
@@ -140,9 +167,29 @@ export default function Home() {
   useEffect(() => () => zoneClient.current?.close(), []);
 
   useEffect(() => {
-    if (!worldStreamAnchor || !worldChunk.data) return;
-    window.dispatchEvent(new CustomEvent("aurion:stream-world-chunk", { detail: { globalWorld: worldStreamAnchor, chunk: worldChunk.data } }));
-  }, [worldChunk.data, worldStreamAnchor]);
+    const updateTier = () => setWorldStreamTier(streamTierForViewport());
+    window.addEventListener("resize", updateTier);
+    return () => window.removeEventListener("resize", updateTier);
+  }, []);
+
+  useEffect(() => {
+    if (!worldStreamAnchor || !worldChunkWindow.data) return;
+    const { chunks, tier, center } = worldChunkWindow.data;
+    chunks.forEach(chunk => window.dispatchEvent(new CustomEvent("aurion:stream-world-chunk", { detail: { globalWorld: worldStreamAnchor, tier, center, chunk } })));
+    setWorldStreamCursors(current => {
+      let changed = false;
+      const next = { ...current };
+      chunks.forEach(chunk => {
+        const key = worldChunkCoordinateKey(chunk.generation.coordinate);
+        if (chunk.hasMore && chunk.nextAfterSequence > (current[key] ?? 0)) { next[key] = chunk.nextAfterSequence; changed = true; }
+      });
+      return changed ? next : current;
+    });
+  }, [worldChunkWindow.data, worldStreamAnchor]);
+
+  useEffect(() => {
+    setWorldStreamCursors({});
+  }, [worldStreamCenter.x, worldStreamCenter.z, worldStreamTier]);
 
   useEffect(() => {
     const sendMovement = (event: Event) => zoneClient.current?.sendMovement((event as CustomEvent<ZoneMovementInput>).detail);
@@ -393,6 +440,8 @@ export default function Home() {
     enterOpenWorld.mutate(undefined, {
       onSuccess: (snapshot) => {
         setWorldStreamAnchor(snapshot.globalWorld);
+        setWorldStreamCenter({ x: 0, z: 0 });
+        setWorldStreamCursors({});
         window.dispatchEvent(new CustomEvent("aurion:load-open-world", { detail: snapshot }));
         appendLedger({ kind: "system", title: "Aurion-Expanse bestätigt", detail: `${snapshot.displayName} wurde als Weltansicht der Revision ${snapshot.revision} geöffnet.` });
         setLastSignal(`${snapshot.displayName} ist bestätigt. ${snapshot.encounter.activeCount} Begegnungen sind im sichtbaren Bereich aktiv.`);
@@ -415,7 +464,10 @@ export default function Home() {
           },
           onSnapshot: (snapshot) => {
             const self = snapshot.presences.find(presence => presence.userId === user.id);
-            if (self) window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
+            if (self) {
+              window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
+              setWorldStreamCenter(worldChunkCenterForZonePosition(self.position));
+            }
           },
           onReject: (code) => setLastSignal(`Zonenbewegung wurde serverseitig verworfen: ${code}.`),
         });
@@ -538,7 +590,8 @@ export default function Home() {
             <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
             <div className="open-world-card__metrics"><span>ZONE TIER <b>{openWorld.data?.zoneTier ?? 0}</b></span><span>SICHTBAR <b>{openWorld.data ? `${openWorld.data.encounter.activeCount}/${openWorld.data.encounter.maximumVisible}` : "—"}</b></span><span>BUDGET <b>{openWorld.data?.encounter.budget ?? "—"}</b></span><span>TILES <b>{openWorld.data?.terrain ? `${openWorld.data.terrain.tiles.length}/${openWorld.data.terrain.atlas.surfaces.length}` : "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>WETTER <b>{openWorld.data?.world.reaction.weatherTone ?? "—"}</b></span><span>DIALOGTON <b>{openWorld.data?.world.reaction.dialogueTone ?? "—"}</b></span><span>RESOLUTION <b>{openWorld.data?.world.resolutionIndex ?? "—"}</b></span><span>POLITY <b>{openWorld.data?.polity.governmentType ?? "—"}</b></span></div>
-            <div className="open-world-card__metrics"><span>SEKTOREN <b>{openWorld.data?.globalWorld.unlockedSectorCount ?? "—"}</b></span><span>WELTEPOCHE <b>{openWorld.data?.globalWorld.epoch ?? "—"}</b></span><span>SEED-CHUNK <b>{worldChunk.data ? `${worldChunk.data.generation.coordinate.x}:${worldChunk.data.generation.coordinate.z}` : "wird gelesen"}</b></span><span>DELTAS <b>{worldChunk.data?.deltas.length ?? "—"}</b></span></div>
+            <div className="open-world-card__metrics"><span>SEKTOREN <b>{openWorld.data?.globalWorld.unlockedSectorCount ?? "—"}</b></span><span>WELTEPOCHE <b>{openWorld.data?.globalWorld.epoch ?? "—"}</b></span><span>STREAM-ZENTRUM <b>{worldChunkWindow.data ? `${worldChunkWindow.data.center.x}:${worldChunkWindow.data.center.z}` : "wird gelesen"}</b></span><span>TIER <b>{worldChunkWindow.data?.tier ?? worldStreamTier}</b></span></div>
+            <div className="open-world-card__metrics"><span>SICHTCHUNKS <b>{worldChunkWindow.data ? `${worldChunkWindow.data.chunks.length}/${worldChunkStreamingBudget(worldStreamTier).maxVisibleChunks}` : "—"}</b></span><span>STREAM-DELTAS <b>{worldChunkWindow.data?.chunks.reduce((total, chunk) => total + chunk.deltas.length, 0) ?? "—"}</b></span><span>SEITENLIMIT <b>32/Chunk</b></span><span>CACHE-LIMIT <b>{worldChunkStreamingBudget(worldStreamTier).maxCachedChunks}</b></span></div>
             <div className="open-world-card__metrics"><span>WASD-REV <b>{wasdCoverage.data?.sourceRevision.slice(0, 7) ?? "—"}</b></span><span>REGELMODULE <b>{wasdCoverage.data?.adaptedModuleCount ?? "—"}</b></span><span>WELT-PFADE <b>{wasdCoverage.data?.domainCounts.world ?? "—"}</b></span><span>KATALOG <b>{wasdCoverage.data?.catalogHash.slice(0, 7) ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>SIEDLUNG <b>{openWorld.data?.civilization.settlement.kind ?? "—"}</b></span><span>MARKT: TONIC <b>{openWorld.data?.civilization.market[0]?.price ?? "—"}</b></span><span>GILDE <b>{openWorld.data?.civilization.guild.name ?? "—"}</b></span><span>KARAWANEN <b>{openWorld.data?.civilization.caravanMissions.length ?? "—"}</b></span></div>
             <div className="open-world-card__metrics"><span>KNAPPHEIT <b>{openWorld.data?.civilization.scarcityForecast.recommendedAction ?? "—"}</b></span><span>GEFAHR <b>{openWorld.data ? `${Math.round(openWorld.data.civilization.aggressionHazard.hazardIndex * 100)}%` : "—"}</b></span><span>GILDENTERRITORIUM <b>{openWorld.data?.civilization.territoryEffect.ownerGuildId ?? "—"}</b></span><span>GILDENKASSE <b>{openWorld.data?.civilization.guild.treasury ?? "—"}</b></span></div>

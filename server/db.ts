@@ -1,7 +1,7 @@
-import { and, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldChunkDeltas, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -17,6 +17,8 @@ import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldCl
 import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
 import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, toWorldChunkDeltaOverlay, type WorldChunkCoordinate, type WorldChunkDelta, type WorldChunkDeltaKind } from "./worldChunkProtocol";
 import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldChunkAction, type WorldChunkActionIntent } from "./worldChunkActionProtocol";
+import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "../shared/worldChunkStreamingProtocol";
+import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpochReactionProtocol";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
@@ -269,7 +271,12 @@ export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserI
         } else {
           await tx.insert(aurionGlobalWorldStates).values({ worldId: GLOBAL_WORLD_ID, worldSeed: plan.worldSeed, epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotJson, snapshotHash: plan.deterministicHash });
         }
+        const sourceRows = await tx.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID)).orderBy(
+          asc(aurionWorldChunkDeltas.chunkZ), asc(aurionWorldChunkDeltas.chunkX), asc(aurionWorldChunkDeltas.sequence), asc(aurionWorldChunkDeltas.id),
+        ).limit(192);
+        const reaction = resolveWorldEpochReaction({ plan, resolutionIndex: plan.epoch, confirmedDeltas: sourceRows.map(parseWorldChunkDelta), observedPresence: presence });
         await tx.insert(aurionGlobalWorldEpochReceipts).values({ id: newCommunityId("worldepoch"), worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson });
+        await tx.insert(aurionWorldEpochReactions).values({ receiptId: reaction.receiptId, worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, ruleSetVersion: reaction.ruleSetVersion, contentVersion: reaction.contentVersion, snapshotHash: plan.deterministicHash, reactionHash: reaction.deterministicHash, reactionJson: JSON.stringify(reaction) });
         await tx.insert(aurionWorldEpochRequests).values({ idempotencyKey, worldId: GLOBAL_WORLD_ID, requestedByUserId: input.requestedByUserId, ruleSetVersion: AURION_WORLD_EPOCH_RULESET_VERSION, epoch: plan.epoch, snapshotHash: plan.deterministicHash, snapshotJson });
         return { plan, source: "created" as const };
       });
@@ -614,6 +621,31 @@ export async function getGlobalWorldPlan() {
   return planFromStoredGlobalSnapshot(current.snapshotJson, current.snapshotHash);
 }
 
+function parseStoredWorldEpochReaction(row: typeof aurionWorldEpochReactions.$inferSelect): WorldEpochReaction {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.reactionJson);
+  } catch {
+    throw new Error("Der gespeicherte Weltreaktionsreceipt ist ungültig.");
+  }
+  if (!parsed || typeof parsed !== "object") throw new Error("Der gespeicherte Weltreaktionsreceipt ist ungültig.");
+  const reaction = parsed as Partial<WorldEpochReaction>;
+  if (reaction.receiptId !== row.receiptId || reaction.worldId !== row.worldId || reaction.resolutionIndex !== row.epoch || reaction.ruleSetVersion !== row.ruleSetVersion || reaction.contentVersion !== row.contentVersion || reaction.deterministicHash !== row.reactionHash || !Array.isArray(reaction.sectors)) throw new Error("Der gespeicherte Weltreaktionsreceipt ist inkonsistent.");
+  return reaction as WorldEpochReaction;
+}
+
+/** Reads the immutable reaction for one already confirmed global epoch; it never resolves or writes. */
+export async function getWorldEpochReaction(worldId: string, epoch: number, snapshotHash: string): Promise<WorldEpochReaction | null> {
+  const db = await getDb();
+  if (!db || !Number.isSafeInteger(epoch) || epoch < 1) return null;
+  const row = (await db.select().from(aurionWorldEpochReactions).where(and(
+    eq(aurionWorldEpochReactions.worldId, worldId),
+    eq(aurionWorldEpochReactions.epoch, epoch),
+    eq(aurionWorldEpochReactions.snapshotHash, snapshotHash),
+  )).limit(1))[0];
+  return row ? parseStoredWorldEpochReaction(row) : null;
+}
+
 function parseWorldChunkDelta(row: typeof aurionWorldChunkDeltas.$inferSelect): WorldChunkDelta {
   let payload: Record<string, string | number | boolean>;
   try {
@@ -666,6 +698,26 @@ export async function getWorldChunkDeltaPage(input: {
     deltas: Object.freeze(page),
     nextAfterSequence: page.at(-1)?.sequence ?? input.afterSequence,
     hasMore: rows.length > page.length,
+  });
+}
+
+/** Returns bounded, center-first overlay pages; cursors can address only the current visible window. */
+export async function getWorldChunkWindow(input: { center: WorldChunkCoordinate; tier: WorldChunkStreamingTier; afterSequences?: readonly { coordinate: WorldChunkCoordinate; afterSequence: number }[] }) {
+  const budget = worldChunkStreamingBudget(input.tier);
+  const coordinates = orderedWorldChunkWindow(input.center, budget.visibleRadius);
+  const visibleKeys = new Set(coordinates.map(coordinate => `${coordinate.x}:${coordinate.z}`));
+  const cursors = new Map<string, number>();
+  for (const cursor of input.afterSequences ?? []) {
+    const key = `${cursor.coordinate.x}:${cursor.coordinate.z}`;
+    if (!visibleKeys.has(key) || !Number.isSafeInteger(cursor.afterSequence) || cursor.afterSequence < 0 || cursors.has(key)) throw new Error("Mehrchunkcursor gehört nicht eindeutig zum sichtbaren Fenster.");
+    cursors.set(key, cursor.afterSequence);
+  }
+  const chunks = await Promise.all(coordinates.map(coordinate => getWorldChunkDeltaPage({ coordinate, afterSequence: cursors.get(`${coordinate.x}:${coordinate.z}`) ?? 0, limit: WORLD_CHUNK_STREAM_PAGE_LIMIT })));
+  return Object.freeze({
+    tier: input.tier,
+    center: Object.freeze({ ...input.center }),
+    visibleRadius: budget.visibleRadius,
+    chunks: Object.freeze(chunks),
   });
 }
 
@@ -854,6 +906,7 @@ export async function getOpenWorldSnapshot(userId: number) {
     listConfirmedSkillProgressionEvents(userId, "combat"),
     getGlobalWorldPlan(),
   ]);
+  const epochReaction = await getWorldEpochReaction(GLOBAL_WORLD_ID, globalWorld.epoch, globalWorld.deterministicHash);
   return buildOpenWorldSnapshot({
     playerId: String(userId),
     level: progress.profile.level,
@@ -862,6 +915,7 @@ export async function getOpenWorldSnapshot(userId: number) {
     canEnterDungeon: progress.canEnterDungeon,
     skillProgressionEvents,
     globalWorld,
+    epochReaction: epochReaction ?? undefined,
   });
 }
 
