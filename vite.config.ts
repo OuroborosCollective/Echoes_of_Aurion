@@ -150,10 +150,15 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+const basePlugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusDebugCollector()];
 
-export default defineConfig({
-  plugins,
+export default defineConfig(({ command }) => ({
+  // Der Manus-Previewer kapselt die Anwendung in eine Vorschauoberfläche und ist
+  // ausschließlich im lokalen Vite-Server erforderlich. In Artefaktbuilds für
+  // externe Runtimes muss der reguläre React-Root ohne diese Umleitung starten.
+  plugins: command === "serve"
+    ? [...basePlugins.slice(0, 3), vitePluginManusRuntime(), basePlugins[3]!]
+    : basePlugins,
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -199,4 +204,4 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
-});
+}));
