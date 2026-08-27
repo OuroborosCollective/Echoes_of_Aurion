@@ -42,6 +42,7 @@ import { aurionAssets } from "@/lib/aurionAssets";
 import { essentialTowerGlbPlan } from "@/game/glbUsagePlan";
 import { generateBaseWorldChunk, WORLD_CHUNK_BASE_REVISION, type WorldChunkDeltaOverlay } from "@shared/worldChunkProtocol";
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, planWorldChunkCache, worldChunkCoordinateKey, worldChunkHorizonProfile, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
+import type { AudioEvent, AudioSurface } from "@shared/audioProtocol";
 import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
@@ -363,8 +364,8 @@ function loadEssentialTowerGlbs(scene: Scene, parent: TransformNode): void {
   })();
 }
 
-function emitGameEvent(kind: string, detail: string): void {
-  window.dispatchEvent(new CustomEvent("aurion:game-event", { detail: { kind, detail } }));
+function emitGameEvent(kind: string, detail: string, audio?: AudioEvent): void {
+  window.dispatchEvent(new CustomEvent("aurion:game-event", { detail: { kind, detail, ...(audio ? { audio } : {}) } }));
 }
 
 export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement): Promise<GameHandle> {
@@ -767,7 +768,11 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     const movement = 1.2;
     if (code === "W") echoTarget.z -= movement; if (code === "S") echoTarget.z += movement; if (code === "A") echoTarget.x -= movement; if (code === "D") echoTarget.x += movement;
     echoTarget.x = Math.max(-5.7, Math.min(5.7, echoTarget.x)); echoTarget.z = Math.max(-5.2, Math.min(5.2, echoTarget.z));
-    if (/^[1-9]$/.test(code)) runEchoAbility(code); else if (code === "E" && requestNpcInteraction()) return; else if (code === "F" || code === "E") requestAction(code, "gateway"); else { requestAction(code, "gateway"); emitGameEvent("command", `Echo Scout bestätigt Kurs ${code}.`); }
+    if (/^[1-9]$/.test(code)) runEchoAbility(code); else if (code === "E" && requestNpcInteraction()) return; else if (code === "F" || code === "E") requestAction(code, "gateway"); else {
+      requestAction(code, "gateway");
+      const surface: AudioSurface = openWorldActive ? "grass" : dungeonActive ? "stone" : "wood";
+      emitGameEvent("command", `Echo Scout bestätigt Kurs ${code}.`, { cue: `movement.footstep.${surface}`, category: "movement", surface });
+    }
   };
   const onStart = (): void => { clearOpenWorld(); started = true; dungeonUnlocked = false; dungeonActive = false; victory = false; awaitingQuest = false; sentinel.root.setEnabled(true); emitGameEvent("system", "Sternwarten-Instanz geöffnet. Die erste Sentinel-Phase reagiert auf das Team-Siegel."); applyArena(0); };
   const onEnterDungeon = (): void => {
