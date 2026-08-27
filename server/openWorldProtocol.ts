@@ -8,6 +8,7 @@ import { resolveInventory } from "./wasdAurionItemProtocol";
 import { resolveCityLayout, resolveWorldIntegrity } from "./wasdAurionWorldIntegrityProtocol";
 import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
 import { resolveSkillProgressionReadmodel, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
+import { buildGlobalWorldPlan, type GlobalWorldPlan } from "./globalWorldProtocol";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -32,6 +33,8 @@ export type OpenWorldProfile = {
   activeQuest: QuestKey | null;
   canEnterDungeon: boolean;
   skillProgressionEvents: readonly SkillProgressionEvent[];
+  /** Confirmed global state; callers without persistence receive the deterministic baseline. */
+  globalWorld?: GlobalWorldPlan;
 };
 
 export type OpenWorldSnapshot = {
@@ -47,6 +50,7 @@ export type OpenWorldSnapshot = {
   terrain: OpenWorldTerrainSnapshot;
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
   world: { worldSeed: "echoes-of-aurion-v1"; resolutionIndex: number; reaction: WorldReaction };
+  globalWorld: GlobalWorldPlan;
   polity: PolityState;
   civilization: {
     settlement: ReturnType<typeof resolveSettlement>;
@@ -211,6 +215,7 @@ function primaryEncounterFor(input: OpenWorldProfile): OpenWorldSnapshot["primar
 
 export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapshot {
   const zoneId = zoneForOpenWorldProgress(input);
+  const globalWorld = input.globalWorld ?? buildGlobalWorldPlan({ worldSeed: "echoes-of-aurion-v1", epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
   const zone = {
     observatory_threshold: { tier: 0 as const, displayName: "Schwelle der Sternwarte", narrative: "Vor dem Turm öffnen sich bronzene Sternenpfade; ein Rückkehrstein bindet deine erste Außenroute.", pois: [
       { id: "return-stone", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein der Sternwarte" },
@@ -334,6 +339,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     terrain: buildOpenWorldTerrain(zoneId),
     props: propsForZone(zoneId),
     world,
+    globalWorld,
     polity,
     civilization,
     expedition,

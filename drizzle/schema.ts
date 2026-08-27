@@ -300,6 +300,34 @@ export const aurionWorldResolutions = mysqlTable("aurionWorldResolutions", {
   index("aurionWorldResolutions_region_created_idx").on(table.regionId, table.createdAt),
 ]);
 
+/** Global, server-owned world state. It records the scale high-water mark and the latest confirmed deterministic world snapshot. */
+export const aurionGlobalWorldStates = mysqlTable("aurionGlobalWorldStates", {
+  worldId: varchar("worldId", { length: 64 }).primaryKey(),
+  worldSeed: varchar("worldSeed", { length: 128 }).notNull(),
+  epoch: int("epoch").notNull(),
+  activePlayerCount: int("activePlayerCount").notNull(),
+  highWaterPlayerCount: int("highWaterPlayerCount").notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull().unique(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable replay receipt for each confirmed global world epoch. */
+export const aurionGlobalWorldEpochReceipts = mysqlTable("aurionGlobalWorldEpochReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  activePlayerCount: int("activePlayerCount").notNull(),
+  highWaterPlayerCount: int("highWaterPlayerCount").notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionGlobalWorldEpochReceipts_world_epoch_uq").on(table.worldId, table.epoch),
+  uniqueIndex("aurionGlobalWorldEpochReceipts_hash_uq").on(table.snapshotHash),
+  index("aurionGlobalWorldEpochReceipts_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
 /** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
 export const aurionNpcStates = mysqlTable("aurionNpcStates", {
   npcId: varchar("npcId", { length: 96 }).primaryKey(),

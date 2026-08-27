@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -13,6 +13,7 @@ import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQua
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
+import { buildGlobalWorldPlan } from "./globalWorldProtocol";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
@@ -430,10 +431,55 @@ export async function getGameplayProgress(userId: number) {
   };
 }
 
-/** A display-only world view derived from authoritative player progression and confirmed skill receipts. */
+const GLOBAL_WORLD_ID = "echoes-of-aurion-global";
+const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
+
+/**
+ * Resolves the persistent global world plan. Account count is a durable phase-one
+ * scale signal; presence-based expansion will be supplied by the zone registry.
+ */
+export async function getGlobalWorldPlan() {
+  const db = await getDb();
+  if (!db) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
+  const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
+  const players = await db.select({ id: users.id }).from(users);
+  const activePlayerCount = Math.max(1, players.length);
+  const highWaterPlayerCount = Math.max(activePlayerCount, current?.highWaterPlayerCount ?? 1);
+  const epoch = current ? current.epoch + (highWaterPlayerCount > current.highWaterPlayerCount ? 1 : 0) : 0;
+  const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch, activePlayerCount, highWaterPlayerCount });
+  if (current?.snapshotHash === plan.deterministicHash) return plan;
+  await db.transaction(async tx => {
+    await tx.insert(aurionGlobalWorldStates).values({
+      worldId: GLOBAL_WORLD_ID,
+      worldSeed: GLOBAL_WORLD_SEED,
+      epoch,
+      activePlayerCount,
+      highWaterPlayerCount,
+      snapshotJson: JSON.stringify(plan),
+      snapshotHash: plan.deterministicHash,
+    }).onDuplicateKeyUpdate({
+      set: { epoch, activePlayerCount, highWaterPlayerCount, snapshotJson: JSON.stringify(plan), snapshotHash: plan.deterministicHash },
+    });
+    await tx.insert(aurionGlobalWorldEpochReceipts).values({
+      id: newCommunityId("worldepoch"),
+      worldId: GLOBAL_WORLD_ID,
+      epoch,
+      activePlayerCount,
+      highWaterPlayerCount,
+      snapshotHash: plan.deterministicHash,
+      snapshotJson: JSON.stringify(plan),
+    }).onDuplicateKeyUpdate({ set: { activePlayerCount, highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson: JSON.stringify(plan) } });
+  });
+  return plan;
+}
+
+/** A display-only world view derived from authoritative player progression, global scale state and confirmed skill receipts. */
 export async function getOpenWorldSnapshot(userId: number) {
-  const progress = await getGameplayProgress(userId);
-  const skillProgressionEvents = await listConfirmedSkillProgressionEvents(userId, "combat");
+  const [progress, skillProgressionEvents, globalWorld] = await Promise.all([
+    getGameplayProgress(userId),
+    listConfirmedSkillProgressionEvents(userId, "combat"),
+    getGlobalWorldPlan(),
+  ]);
   return buildOpenWorldSnapshot({
     playerId: String(userId),
     level: progress.profile.level,
@@ -441,6 +487,7 @@ export async function getOpenWorldSnapshot(userId: number) {
     activeQuest: progress.activeQuest,
     canEnterDungeon: progress.canEnterDungeon,
     skillProgressionEvents,
+    globalWorld,
   });
 }
 
