@@ -51,7 +51,7 @@ const horizons: Readonly<Record<WorldChunkStreamingTier, WorldChunkHorizonProfil
   // All profiles retain the full stream window; fog begins only after the near interaction field.
   phone: Object.freeze({ tier: "phone", cameraRadiusMeters: 130, fogStartMeters: 92, fogEndMeters: chunkSizeMeters * 3, landmarkSilhouetteDistanceMeters: 150 }),
   tablet: Object.freeze({ tier: "tablet", cameraRadiusMeters: 150, fogStartMeters: 110, fogEndMeters: chunkSizeMeters * 3.5, landmarkSilhouetteDistanceMeters: 175 }),
-  desktop: Object.freeze({ tier: "desktop", cameraRadiusMeters: 280, fogStartMeters: 176, fogEndMeters: chunkSizeMeters * 5.25, landmarkSilhouetteDistanceMeters: 300 }),
+  desktop: Object.freeze({ tier: "desktop", cameraRadiusMeters: 220, fogStartMeters: 176, fogEndMeters: chunkSizeMeters * 5.25, landmarkSilhouetteDistanceMeters: 300 }),
 });
 
 function assertChunkCoordinate(value: number, label: string) {

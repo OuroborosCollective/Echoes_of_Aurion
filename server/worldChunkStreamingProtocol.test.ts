@@ -29,7 +29,7 @@ describe("worldChunkStreamingProtocol", () => {
   it("keeps the full stream window visible while applying deterministic horizon profiles", () => {
     expect(worldChunkHorizonProfile("phone")).toEqual({ tier: "phone", cameraRadiusMeters: 130, fogStartMeters: 92, fogEndMeters: 192, landmarkSilhouetteDistanceMeters: 150 });
     expect(worldChunkHorizonProfile("tablet")).toEqual({ tier: "tablet", cameraRadiusMeters: 150, fogStartMeters: 110, fogEndMeters: 224, landmarkSilhouetteDistanceMeters: 175 });
-    expect(worldChunkHorizonProfile("desktop")).toEqual({ tier: "desktop", cameraRadiusMeters: 280, fogStartMeters: 176, fogEndMeters: 336, landmarkSilhouetteDistanceMeters: 300 });
+    expect(worldChunkHorizonProfile("desktop")).toEqual({ tier: "desktop", cameraRadiusMeters: 220, fogStartMeters: 176, fogEndMeters: 336, landmarkSilhouetteDistanceMeters: 300 });
     (["phone", "tablet", "desktop"] as const).forEach(tier => {
       const budget = worldChunkStreamingBudget(tier);
       const horizon = worldChunkHorizonProfile(tier);
