@@ -7,6 +7,8 @@ describe("globalWorldProtocol", () => {
     expect(unlockedWorldSectorCount(4)).toBe(6);
     expect(unlockedWorldSectorCount(5)).toBe(7);
     expect(unlockedWorldSectorCount(9)).toBe(8);
+    expect(unlockedWorldSectorCount(2_936)).toBe(AURION_WORLD_SECTOR_CAP - 1);
+    expect(unlockedWorldSectorCount(2_937)).toBe(AURION_WORLD_SECTOR_CAP);
     expect(unlockedWorldSectorCount(100_000)).toBe(AURION_WORLD_SECTOR_CAP);
 
     const plan = buildGlobalWorldPlan({ worldSeed: "echoes-of-aurion-v1", epoch: 12, activePlayerCount: 3, highWaterPlayerCount: 17 });
