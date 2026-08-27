@@ -11,6 +11,7 @@ import {
   Coins,
   FileText,
   Megaphone,
+  Menu,
   MessageCircle,
   Send,
   ShoppingBag,
@@ -70,6 +71,7 @@ export default function CommunityOverlay({
   onStarterCharacterSelected: (character: StarterCharacter) => void;
 }) {
   const [panel, setPanel] = useState<CommunityPanel>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatBody, setChatBody] = useState("");
   const [requestNote, setRequestNote] = useState("");
   const [forumCategory, setForumCategory] = useState<ForumCategory>("announcements");
@@ -217,12 +219,14 @@ export default function CommunityOverlay({
       return;
     }
     setMessage("");
+    setMobileMenuOpen(false);
     setPanel(previous => previous === next ? null : next);
     if (next !== "forum") setSelectedThreadId(null);
   };
 
-  return <aside className="community-overlay" aria-label="Aurion Gemeinschaft">
-    <div className="community-dock">
+  return <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen}>
+    <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18} /><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
+    <div id="aurion-community-dock" className="community-dock">
       <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("chat")} aria-label="Expeditionschat öffnen"><MessageCircle size={16} /><span>CHAT</span></button>
       <button type="button" className={panel === "partners" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("partners")} aria-label="Partnergesuche öffnen"><UsersRound size={16} /><span>TEAM</span>{pendingRequests.length > 0 && <b className="community-badge">{pendingRequests.length}</b>}</button>
       <button type="button" className={panel === "market" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("market")} aria-label="Auktionshaus öffnen"><Store size={16} /><span>MARKT</span></button>
