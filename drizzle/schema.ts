@@ -351,6 +351,24 @@ export const aurionDialogueReceipts = mysqlTable("aurionDialogueReceipts", {
   index("aurionDialogueReceipts_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
+/** One explicit Aurion gameplay command bound to one owned, moderated dialogue receipt. */
+export const aurionDialogueCommandReceipts = mysqlTable("aurionDialogueCommandReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  dialogueReceiptId: varchar("dialogueReceiptId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  actionKind: mysqlEnum("actionKind", ["offer_quest", "request_turn_in"]).notNull(),
+  questKey: varchar("questKey", { length: 64 }).notNull(),
+  outcomeJson: text("outcomeJson").notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionDialogueCommandReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionDialogueCommandReceipts_user_dialogue_action_quest_uq").on(table.userId, table.dialogueReceiptId, table.actionKind, table.questKey),
+  index("aurionDialogueCommandReceipts_user_created_idx").on(table.userId, table.createdAt),
+  index("aurionDialogueCommandReceipts_dialogue_idx").on(table.dialogueReceiptId),
+]);
+
 /** Approved GLB metadata references S3 objects; bytes never enter the relational database. */
 export const glbAssets = mysqlTable("glbAssets", {
   id: varchar("id", { length: 64 }).primaryKey(),
