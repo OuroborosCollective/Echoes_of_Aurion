@@ -367,7 +367,9 @@ function loadEssentialTowerGlbs(scene: Scene, parent: TransformNode): void {
 function emitGameEvent(kind: string, detail: string, audio?: AudioEvent): void {
   window.dispatchEvent(new CustomEvent("aurion:game-event", { detail: { kind, detail, ...(audio ? { audio } : {}) } }));
 }
-
+function emitAudioCue(audio: AudioEvent): void {
+  window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: audio }));
+}
 export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement): Promise<GameHandle> {
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0.012, 0.06, 0.082, 1);
@@ -783,8 +785,11 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     const detail = (event as CustomEvent<{ damage: number; bossHp: number; command: CommandCode; completed: boolean }>).detail;
     if (!detail) return;
     if (detail.command === "F") explorerAttackUntil = elapsed + 0.34;
-    if (detail.damage > 0) applyAuthoritativeDamage(detail.damage, detail.bossHp, detail.command === "F" ? "Speersignal des Explorers" : `Echo-Impuls ${detail.command}`, arenas[arenaIndex].glow);
-    else emitState(true);
+    if (detail.damage > 0) {
+      applyAuthoritativeDamage(detail.damage, detail.bossHp, detail.command === "F" ? "Speersignal des Explorers" : `Echo-Impuls ${detail.command}`, arenas[arenaIndex].glow);
+      emitAudioCue({ cue: detail.command === "F" ? "combat.attack.pointed" : "combat.magic", category: "combat", ...(detail.command === "F" ? { weapon: "pointed" } : { element: "resonance" }) } as AudioEvent);
+      if (detail.completed) emitAudioCue({ cue: "combat.creature.monster.death", category: "combat", creature: "monster", action: "death" });
+    } else emitState(true);
   };
   const onLoadEncounter = (event: Event): void => {
     const detail = (event as CustomEvent<{ arenaIndex: number; dungeon?: boolean }>).detail;
@@ -852,7 +857,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       }
       shieldTime = Math.max(0, shieldTime - dt); markTime = Math.max(0, markTime - dt);
       if (!openWorldActive && !transitioning && elapsed >= nextEnemyStrike && sentinelHp > 0) {
-        const rawDamage = 9 + arenaIndex * 3; const damage = shieldTime > 0 ? Math.ceil(rawDamage * 0.22) : rawDamage; explorerHp = Math.max(0, explorerHp - damage); echoHp = Math.max(0, echoHp - Math.ceil(damage * 0.38)); nextEnemyStrike = elapsed + 3.85 - Math.min(markTime, 1.2); createPulse(explorer.position, Color3.FromHexString("#FF7045"), 0.9); emitGameEvent("combat", `Der Sentinel entfesselt einen Spaltimpuls: Team verliert ${damage} Integrität.`); emitState(true);
+        const rawDamage = 9 + arenaIndex * 3; const damage = shieldTime > 0 ? Math.ceil(rawDamage * 0.22) : rawDamage; explorerHp = Math.max(0, explorerHp - damage); echoHp = Math.max(0, echoHp - Math.ceil(damage * 0.38)); nextEnemyStrike = elapsed + 3.85 - Math.min(markTime, 1.2); createPulse(explorer.position, Color3.FromHexString("#FF7045"), 0.9); emitGameEvent("combat", `Der Sentinel entfesselt einen Spaltimpuls: Team verliert ${damage} Integrität.`, { cue: "combat.creature.monster.attack", category: "combat", creature: "monster", action: "attack" }); emitState(true);
         sentinelAttackUntil = elapsed + 0.46; explorerHurtUntil = elapsed + 0.3; echoHurtUntil = elapsed + 0.28;
       }
     }

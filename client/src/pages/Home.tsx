@@ -16,7 +16,7 @@ import TowerHomePanel from "@/components/TowerHomePanel";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
-import type { AudioEvent } from "@shared/audioProtocol";
+import { isAudioEvent, type AudioEvent } from "@shared/audioProtocol";
 import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
@@ -243,7 +243,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const mixer = new AurionSoundscape();
+    const mixer = new AurionSoundscape(aurionAssets.audio.sfx);
     soundscape.current = mixer;
     return () => { mixer.dispose(); soundscape.current = null; };
   }, []);
@@ -275,13 +275,16 @@ export default function Home() {
     window.addEventListener("aurion:ledger-updated", onLedger);
     window.addEventListener("aurion:game-event", onGameEvent);
     const onNpcInteraction = (event: Event) => { const npcId = (event as CustomEvent<{ npcId?: string }>).detail?.npcId; const voice = npcId === "lyra" ? "feminine" : npcId === "orun" ? "masculine" : "neutral"; soundscape.current?.emit({ cue: `interaction.npc.${voice}`, category: "interaction", voice } as AudioEvent); };
+    const onAudioCue = (event: Event) => { const candidate = (event as CustomEvent<unknown>).detail; if (isAudioEvent(candidate)) soundscape.current?.emit(candidate); };
     window.addEventListener("aurion:mission-state", onMissionState);
     window.addEventListener("aurion:world-npc-interaction", onNpcInteraction);
+    window.addEventListener("aurion:audio-cue", onAudioCue);
     return () => {
       window.removeEventListener("aurion:ledger-updated", onLedger);
       window.removeEventListener("aurion:game-event", onGameEvent);
       window.removeEventListener("aurion:mission-state", onMissionState);
       window.removeEventListener("aurion:world-npc-interaction", onNpcInteraction);
+      window.removeEventListener("aurion:audio-cue", onAudioCue);
     };
   }, []);
 

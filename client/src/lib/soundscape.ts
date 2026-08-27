@@ -1,9 +1,9 @@
 import type { AudioEvent, AudioCueId, AudioSurface } from "@shared/audioProtocol";
 
 type LegacyCue = "system" | "command" | "combat" | "connection" | "warning" | "victory";
-type BusName = "ambient" | "interaction" | "combat" | "movement" | "progression";
+type BusName = "ambient" | "interaction" | "combat" | "movement" | "progression" | "resource" | "crafting";
 
-type CueSpec = { frequency: number; duration: number; type: OscillatorType; gain: number; slide?: number; noise?: boolean };
+type CueSpec = { frequency: number; duration: number; type: OscillatorType; gain: number; slide?: number; noise?: boolean; detune?: number };
 
 const LEGACY_CUES: Record<LegacyCue, AudioCueId> = {
   system: "interaction.npc.neutral",
@@ -14,23 +14,52 @@ const LEGACY_CUES: Record<LegacyCue, AudioCueId> = {
   victory: "progression.level_up",
 };
 
-const BUS_GAIN: Record<BusName, number> = { ambient: 0.06, interaction: 0.08, combat: 0.09, movement: 0.045, progression: 0.1 };
+const BUS_GAIN: Record<BusName, number> = {
+  ambient: 0.06,
+  interaction: 0.08,
+  combat: 0.09,
+  movement: 0.045,
+  progression: 0.1,
+  resource: 0.07,
+  crafting: 0.065,
+};
 
 const CUES: Partial<Record<AudioCueId, CueSpec>> = {
   "interaction.npc.masculine": { frequency: 196, duration: 0.12, type: "triangle", gain: 0.55 },
   "interaction.npc.feminine": { frequency: 440, duration: 0.12, type: "sine", gain: 0.55 },
   "interaction.npc.neutral": { frequency: 330, duration: 0.1, type: "triangle", gain: 0.5 },
+  "interaction.loot.screw_pouch": { frequency: 810, duration: 0.2, type: "square", gain: 0.32, slide: 290, noise: true, detune: 12 },
   "combat.monster": { frequency: 126, duration: 0.18, type: "sawtooth", gain: 0.62, slide: 64, noise: true },
   "combat.magic": { frequency: 330, duration: 0.3, type: "sine", gain: 0.52, slide: 880 },
+  "combat.spell.heal": { frequency: 523.25, duration: 0.44, type: "sine", gain: 0.5, slide: 1046.5 },
+  "combat.spell.buff": { frequency: 293.66, duration: 0.36, type: "triangle", gain: 0.46, slide: 659.25 },
   "combat.attack.blade": { frequency: 180, duration: 0.11, type: "sawtooth", gain: 0.62, slide: 70, noise: true },
   "combat.attack.staff": { frequency: 240, duration: 0.2, type: "triangle", gain: 0.54, slide: 520 },
   "combat.attack.spear": { frequency: 210, duration: 0.13, type: "square", gain: 0.5, slide: 110, noise: true },
   "combat.attack.focus": { frequency: 520, duration: 0.23, type: "sine", gain: 0.5, slide: 1040 },
+  "combat.attack.sharp": { frequency: 920, duration: 0.09, type: "sawtooth", gain: 0.52, slide: 260, noise: true },
+  "combat.attack.pointed": { frequency: 630, duration: 0.12, type: "square", gain: 0.48, slide: 170, noise: true },
+  "combat.attack.blunt": { frequency: 92, duration: 0.16, type: "triangle", gain: 0.65, slide: 55, noise: true },
+  "combat.creature.wolf.attack": { frequency: 156, duration: 0.28, type: "sawtooth", gain: 0.56, slide: 92, noise: true },
+  "combat.creature.human.attack": { frequency: 196, duration: 0.16, type: "square", gain: 0.5, slide: 118, noise: true },
+  "combat.creature.monster.attack": { frequency: 83, duration: 0.34, type: "sawtooth", gain: 0.64, slide: 46, noise: true, detune: -18 },
+  "combat.creature.wolf.death": { frequency: 210, duration: 0.42, type: "triangle", gain: 0.52, slide: 68, noise: true },
+  "combat.creature.human.death": { frequency: 174, duration: 0.36, type: "triangle", gain: 0.48, slide: 58, noise: true },
+  "combat.creature.monster.death": { frequency: 110, duration: 0.56, type: "sawtooth", gain: 0.66, slide: 34, noise: true, detune: -12 },
   "movement.footstep.earth": { frequency: 92, duration: 0.07, type: "triangle", gain: 0.32, noise: true },
   "movement.footstep.grass": { frequency: 180, duration: 0.055, type: "sine", gain: 0.22, noise: true },
   "movement.footstep.stone": { frequency: 540, duration: 0.06, type: "square", gain: 0.27, noise: true },
   "movement.footstep.wood": { frequency: 145, duration: 0.08, type: "triangle", gain: 0.3, noise: true },
   "movement.footstep.water": { frequency: 260, duration: 0.12, type: "sine", gain: 0.25, noise: true },
+  "movement.run.earth": { frequency: 84, duration: 0.11, type: "triangle", gain: 0.38, noise: true },
+  "movement.run.grass": { frequency: 155, duration: 0.09, type: "sine", gain: 0.29, noise: true },
+  "movement.run.stone": { frequency: 480, duration: 0.08, type: "square", gain: 0.34, noise: true },
+  "movement.run.wood": { frequency: 132, duration: 0.1, type: "triangle", gain: 0.36, noise: true },
+  "movement.run.water": { frequency: 230, duration: 0.15, type: "sine", gain: 0.31, noise: true },
+  "resource.harvest.plant": { frequency: 380, duration: 0.16, type: "triangle", gain: 0.35, slide: 160, noise: true },
+  "resource.harvest.wood": { frequency: 104, duration: 0.18, type: "square", gain: 0.62, slide: 68, noise: true },
+  "resource.mine.ore": { frequency: 760, duration: 0.14, type: "square", gain: 0.5, slide: 390, noise: true },
+  "crafting.workbench.saw": { frequency: 250, duration: 0.24, type: "sawtooth", gain: 0.36, slide: 180, noise: true },
   "progression.level_up": { frequency: 523.25, duration: 0.42, type: "sine", gain: 0.72, slide: 1046.5 },
 };
 
@@ -94,7 +123,9 @@ export class AurionSoundscape {
     this.ambientUrl = null;
   }
 
-  cueLegacy(kind: LegacyCue): void { this.emit({ cue: LEGACY_CUES[kind], category: busFor(LEGACY_CUES[kind]) as AudioEvent["category"], ...(kind === "combat" ? { monsterClass: "legacy" } : {}) } as AudioEvent); }
+  cueLegacy(kind: LegacyCue): void {
+    this.emit({ cue: LEGACY_CUES[kind], category: busFor(LEGACY_CUES[kind]) as AudioEvent["category"], ...(kind === "combat" ? { monsterClass: "legacy" } : {}) } as AudioEvent);
+  }
 
   /** Backward-compatible entry point for the existing Home event bridge. */
   cue(kind: LegacyCue): void { this.cueLegacy(kind); }
@@ -104,7 +135,8 @@ export class AurionSoundscape {
     if (!this.context) return;
     const now = this.context.currentTime;
     const dedupeKey = `${event.cue}:${event.category}`;
-    if ((this.recent.get(dedupeKey) ?? -Infinity) > now - (event.category === "movement" ? 0.08 : 0.025)) return;
+    const interval = event.category === "movement" ? 0.08 : event.category === "crafting" ? 0.12 : 0.025;
+    if ((this.recent.get(dedupeKey) ?? -Infinity) > now - interval) return;
     this.recent.set(dedupeKey, now);
     const externalUrl = this.assetUrls[event.cue];
     if (externalUrl) { void this.playOneShot(externalUrl, busFor(event.cue)); return; }
@@ -116,6 +148,7 @@ export class AurionSoundscape {
     const gain = this.context.createGain();
     oscillator.type = spec.type;
     oscillator.frequency.setValueAtTime(spec.frequency, now);
+    if (spec.detune) oscillator.detune.setValueAtTime(spec.detune, now);
     if (spec.slide) oscillator.frequency.exponentialRampToValueAtTime(spec.slide, now + spec.duration);
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(spec.gain, now + Math.min(0.018, spec.duration / 4));

@@ -2,25 +2,33 @@
 
 ## Zweck und Grenze
 
-Das Audiosystem ist eine **reine Präsentationsschicht**. Es liest bestätigte bzw. lokal sichtbare Gameplayereignisse und kann niemals Bewegung, Schaden, Loot, Questfortschritt, XP, Weltzustand oder Persistenz autorisieren. Alle Cues sind an `shared/audioProtocol.ts` gebunden.
+Das Audiosystem ist eine **reine Präsentationsschicht**. Es liest bestätigte beziehungsweise lokal sichtbare Gameplayereignisse und kann niemals Bewegung, Schaden, Loot, Questfortschritt, XP, Weltzustand oder Persistenz autorisieren. Jeder Cue ist an `shared/audioProtocol.ts` gebunden. Die Runtime akzeptiert ausschließlich valide `AudioEvent`-Payloads über `aurion:audio-cue`; unbekannte und kategoriewidrige Payloads werden verworfen.
 
 ## Kategorien und Trigger
 
 | Kategorie | Triggerquelle | Cuefamilie | Verhalten |
 | --- | --- | --- | --- |
-| Ambient | bestätigte Zone/Chunk-/Tower-Sichtbarkeit | Tower, Plains, Forest, Wetland, Stone Ruins, Cinder Vault | ein Loop pro aktiver Zone, optionaler Assetpfad, Fallback-Synthese |
-| Interaction | sichtbare NPC-Interaktion/Questdialog | maskulin, feminin, neutral | kurzer Sprach-/Resonanz-Cue, keine Zustandsmutation |
-| Combat | bestätigte Aktion oder sichtbarer Monster-/Magieimpuls | Monster, Magie, Blade, Staff, Spear, Focus | deduplizierte One-Shots auf Combat-Bus |
-| Movement | lokal sichtbarer Schritt auf bestätigter Oberfläche | Earth, Grass, Stone, Wood, Water | kurzer Surface-Cue mit 80-ms-Deduplizierung |
-| Progression | bestätigter Level-up-/Victory-Event | Level-up | auf Progression-Bus, niemals aus UI-Vorschau |
+| Ambient | bestätigte Zone/Chunk-/Tower-Sichtbarkeit | Tower, Plains, Forest, Wetland, Stone Ruins, Cinder Vault | ein Loop pro aktiver Zone; optionaler Assetpfad plus Fallback |
+| Interaction | sichtbare NPC-Interaktion, bestätigtes Lootreadmodell | maskulin, feminin, neutral, Schraubenbeutel | kurzer Cue ohne Zustandsmutation |
+| Combat | bestätigte Kampfaction oder sichtbar bestätigter Gegnerimpuls | scharf, spitz, stumpf; Magie, Heilung, Buff; Wolf, Mensch, Monster für Angriff und Tod | deduplizierte One-Shots auf dem Combat-Bus |
+| Movement | lokaler Schritt auf bestätigter Oberfläche | Footstep und Run für Erde, Gras, Stein, Holz, Wasser | kurzer Surface-Cue mit 80-ms-Deduplizierung |
+| Resource | bestätigter Ernte-/Abbaureceipt | Pflanzenernte, Holzhacken, Erzabbau mit Picke | erst nach serverseitiger Bestätigung auslösen |
+| Crafting | bestätigter Crafting-Receipt oder sichtbarer bestätigter Arbeitsschritt | Werkbank-Säge | erst nach serverseitiger Bestätigung auslösen |
+| Progression | bestätigter Level-up-/Victory-Event | Level-up | niemals aus UI-Vorschau |
+
+## Aktuelle Ereignisbrücke
+
+Die Babylon-Szene übergibt einen bestätigten Explorerangriff als `combat.attack.pointed`, Echo-Impulse als `combat.magic`, Sentinelangriffe als `combat.creature.monster.attack` und den bestätigten Sentinel-Sieg als `combat.creature.monster.death`. Die Home-Komponente validiert die Payload per `isAudioEvent` und leitet sie anschließend an `AurionSoundscape` weiter. Damit bestehen keine parallelen Autoritätspfade und keine Audioaktion beeinflusst Spielwerte.
+
+Die vollständige SFX-Matrix steht ebenfalls über die typsichere, validierte `aurion:audio-cue`-Brücke bereit. Künftige Waffen-, Heil-/Buff-, Wolf-/Mensch- sowie Loot-/Ernte-/Mining-/Craftingdienste dürfen einen Cue ausschließlich aus einem bestätigten Readmodell oder Receipt ableiten. Der Renderer besitzt für jeden registrierten Cue einen synthetischen Fallback, falls ein optionales WAV nicht geladen oder dekodiert werden kann.
 
 ## Browser- und Mobilverhalten
 
-AudioContext wird ausschließlich durch direkte Nutzerinteraktion freigeschaltet. Autoplay-Fehler werden geschluckt und als UI-Hinweis zurückgegeben; ein fehlendes oder defektes Asset darf den Renderer nicht unterbrechen. Bus-Lautstärken sind mobilfreundlich konservativ voreingestellt. Der Ambient-Loop wird beim Tower-/Expanse-Wechsel ersetzt und beim React-/Babylon-Unmount vollständig beendet.
+AudioContext wird ausschließlich durch direkte Nutzerinteraktion freigeschaltet. Autoplay-Fehler bleiben nicht-blockierend; ein fehlendes oder defektes Asset darf den Renderer nicht unterbrechen. Bus-Lautstärken sind für mobile Lautsprecher konservativ voreingestellt. Der Ambient-Loop wird beim Tower-/Expanse-Wechsel ersetzt und beim React-/Babylon-Unmount vollständig beendet. Kurz-SFX sind mono, 44.1 kHz, 16-bit PCM und belegen gemeinsam gemessene 0.928659 MiB.
 
 ## Assetvertrag
 
-Generierte Musik und SFX werden als `inactive` Kandidaten mit SHA-256, Format, Dauer, Lautheit, Quelle, Prompt-/Contentversion und Zielcue inventarisiert. Ein Asset wird erst nach technischem Decode-Readback als `active` referenziert. Die Runtime besitzt für jeden Cue eine deterministische Synthese als degradierenden Fallback; externe Audio-URLs sind optional und niemals gameplaykritisch.
+Zone-Musik und SFX werden mit SHA-256, Format, Dauer, Quelldefinition, Contentversion und Zielcue inventarisiert. Ein Asset wird erst nach technischem Decode-Readback und Review als `active` geführt. Die 21 SFX sind durch `scripts/generate_aurion_sfx.py` revisionsgebunden renderbar; ein zweiter Renderlauf erzeugte identische SHA-256-Listen. Die Runtime besitzt für alle Cues einen deterministischen Synth-Fallback; externe Audio-URLs sind optional und niemals gameplaykritisch.
 
 ## Rückkehrpunkt
 
