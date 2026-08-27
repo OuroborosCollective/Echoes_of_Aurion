@@ -11,7 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
 import { registerAdminMcp } from "../adminMcp";
 import { registerZoneGateway } from "../zoneGateway";
-import { consumeZoneConnectionTicket } from "../db";
+import { consumeZoneConnectionTicket, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -48,7 +48,10 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerMcpGateway(app);
   registerAdminMcp(app);
-  registerZoneGateway(server, undefined, consumeZoneConnectionTicket);
+  registerZoneGateway(server, undefined, consumeZoneConnectionTicket, {
+    upsert: recordWorldPresenceLease,
+    release: releaseWorldPresenceLease,
+  });
   // tRPC API
   app.use(
     "/api/trpc",

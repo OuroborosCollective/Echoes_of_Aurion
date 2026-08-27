@@ -350,6 +350,38 @@ export const aurionWorldChunkDeltas = mysqlTable("aurionWorldChunkDeltas", {
   index("aurionWorldChunkDeltas_chunk_created_idx").on(table.worldId, table.chunkX, table.chunkZ, table.createdAt),
 ]);
 
+/** Server-observed zone connection leases. A browser cannot author a presence record without consuming a one-time zone ticket. */
+export const aurionWorldPresenceLeases = mysqlTable("aurionWorldPresenceLeases", {
+  connectionId: varchar("connectionId", { length: 96 }).primaryKey(),
+  userId: int("userId").notNull(),
+  zoneId: varchar("zoneId", { length: 64 }).notNull(),
+  chunkX: int("chunkX").notNull(),
+  chunkZ: int("chunkZ").notNull(),
+  positionX: int("positionX").notNull(),
+  positionZ: int("positionZ").notNull(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  disconnectedAt: timestamp("disconnectedAt"),
+}, table => [
+  index("aurionWorldPresenceLeases_active_idx").on(table.expiresAt, table.disconnectedAt),
+  index("aurionWorldPresenceLeases_user_active_idx").on(table.userId, table.expiresAt),
+]);
+
+/** Immutable idempotency evidence for a requested global world epoch. */
+export const aurionWorldEpochRequests = mysqlTable("aurionWorldEpochRequests", {
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  requestedByUserId: int("requestedByUserId").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  epoch: int("epoch").notNull(),
+  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWorldEpochRequests_world_epoch_idx").on(table.worldId, table.epoch),
+  index("aurionWorldEpochRequests_hash_idx").on(table.snapshotHash),
+]);
+
 /** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
 export const aurionNpcStates = mysqlTable("aurionNpcStates", {
   npcId: varchar("npcId", { length: 96 }).primaryKey(),

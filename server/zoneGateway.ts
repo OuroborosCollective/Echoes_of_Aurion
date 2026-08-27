@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { isAllowedZoneOrigin, parseZoneHello, parseZoneMove, ZONE_TICK_MS, type ZoneReject } from "./zoneProtocol";
+import { WORLD_PRESENCE_REFRESH_MS } from "./worldPresenceProtocol";
 import { ZoneRegistry } from "./zoneRuntime";
 
 const HELLO_TIMEOUT_MS = 5_000;
@@ -15,6 +16,12 @@ export type ZoneTicketReceipt = {
 };
 
 export type ZoneTicketConsumer = (values: { ticket: string; zoneId: "observatory_threshold" }) => Promise<ZoneTicketReceipt | undefined>;
+
+/** Optional server-side observation sink; it cannot alter movement or gameplay authority. */
+export type WorldPresenceSink = {
+  upsert(values: { userId: number; connectionId: string; zoneId: "observatory_threshold"; position: { x: number; z: number } }): Promise<unknown>;
+  release(values: { connectionId: string }): Promise<unknown>;
+};
 
 function closePolicyViolation(socket: WebSocket): void {
   socket.close(1008, "zone authorization rejected");
@@ -33,7 +40,7 @@ function rejectZoneInput(socket: WebSocket, code: ZoneReject["code"]): void {
 }
 
 /** Adds `/v1/ws` to the existing HTTP server without altering tRPC or MCP routes. */
-export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry = new ZoneRegistry(), consumeTicket: ZoneTicketConsumer) {
+export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry = new ZoneRegistry(), consumeTicket: ZoneTicketConsumer, worldPresence?: WorldPresenceSink) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
   const tickTimer = setInterval(() => registry.tick(), ZONE_TICK_MS);
 
@@ -66,6 +73,18 @@ export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry =
         if (!ticket) return closePolicyViolation(socket);
         const zone = registry.get(ticket.zoneId);
         const welcome = zone.join({ userId: ticket.userId, socket });
+        const initialPosition = zone.positionForConnection(welcome.connectionId);
+        if (!initialPosition) {
+          zone.leave(welcome.connectionId);
+          return closePolicyViolation(socket);
+        }
+        try {
+          await worldPresence?.upsert({ userId: ticket.userId, connectionId: welcome.connectionId, zoneId: ticket.zoneId, position: initialPosition });
+        } catch (error) {
+          zone.leave(welcome.connectionId);
+          console.error("[Aurion Zone] Presence lease registration failed", error);
+          return closePolicyViolation(socket);
+        }
         socket.send(JSON.stringify(welcome));
         socket.on("message", (nextData, isBinary) => {
           if (isBinary) return rejectZoneInput(socket, "INVALID_MESSAGE");
@@ -81,7 +100,16 @@ export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry =
           if (result === "stale") return rejectZoneInput(socket, "STALE_CLIENT_SEQUENCE");
           if (result === "missing") closePolicyViolation(socket);
         });
-        socket.once("close", () => zone.leave(welcome.connectionId));
+        const refreshTimer = worldPresence ? setInterval(() => {
+          const position = zone.positionForConnection(welcome.connectionId);
+          if (!position) return;
+          void worldPresence.upsert({ userId: ticket.userId, connectionId: welcome.connectionId, zoneId: ticket.zoneId, position }).catch(error => console.error("[Aurion Zone] Presence lease refresh failed", error));
+        }, WORLD_PRESENCE_REFRESH_MS) : undefined;
+        socket.once("close", () => {
+          if (refreshTimer) clearInterval(refreshTimer);
+          zone.leave(welcome.connectionId);
+          void worldPresence?.release({ connectionId: welcome.connectionId }).catch(error => console.error("[Aurion Zone] Presence lease release failed", error));
+        });
       } catch (error) {
         console.error("[Aurion Zone] Ticket handshake failed", error);
         closePolicyViolation(socket);

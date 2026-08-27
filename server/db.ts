@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldChunkDeltas, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldChunkDeltas, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -13,8 +13,10 @@ import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQua
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
-import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor } from "./globalWorldProtocol";
+import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
+import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
 import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, toWorldChunkDeltaOverlay, type WorldChunkCoordinate, type WorldChunkDelta, type WorldChunkDeltaKind } from "./worldChunkProtocol";
+import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldChunkAction, type WorldChunkActionIntent } from "./worldChunkActionProtocol";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
@@ -153,6 +155,132 @@ export async function consumeZoneConnectionTicket(values: { ticket: string; zone
     if (affectedRowCount(updated) !== 1) return undefined;
     return { userId: candidate.userId, zoneId: candidate.zoneId as ZoneId, clientBuild: candidate.clientBuild, expiresAt: candidate.expiresAt };
   });
+}
+
+export async function recordWorldPresenceLease(values: { userId: number; connectionId: string; zoneId: ZoneId; position: { x: number; z: number }; now?: Date }): Promise<WorldPresenceLease> {
+  const now = values.now ?? new Date();
+  const lease = createWorldPresenceLease({ userId: values.userId, connectionId: values.connectionId, zoneId: values.zoneId, position: values.position, now });
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  await db.insert(aurionWorldPresenceLeases).values({
+    connectionId: lease.connectionId,
+    userId: lease.userId,
+    zoneId: lease.zoneId,
+    chunkX: lease.chunk.x,
+    chunkZ: lease.chunk.z,
+    positionX: lease.position.x,
+    positionZ: lease.position.z,
+    lastSeenAt: now,
+    expiresAt: lease.expiresAt,
+    disconnectedAt: null,
+  }).onDuplicateKeyUpdate({
+    set: { userId: lease.userId, zoneId: lease.zoneId, chunkX: lease.chunk.x, chunkZ: lease.chunk.z, positionX: lease.position.x, positionZ: lease.position.z, lastSeenAt: now, expiresAt: lease.expiresAt, disconnectedAt: null },
+  });
+  return lease;
+}
+
+export async function releaseWorldPresenceLease(values: { connectionId: string; now?: Date }): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(aurionWorldPresenceLeases).set({ disconnectedAt: values.now ?? new Date() }).where(and(
+    eq(aurionWorldPresenceLeases.connectionId, values.connectionId),
+    isNull(aurionWorldPresenceLeases.disconnectedAt),
+  ));
+}
+
+export async function listActiveWorldPresence(now = new Date()): Promise<readonly { userId: number; zoneId: string; chunk: WorldChunkCoordinate; position: { x: number; z: number } }[]> {
+  const db = await getDb();
+  if (!db) return Object.freeze([]);
+  const rows = await db.select({
+    userId: aurionWorldPresenceLeases.userId,
+    zoneId: aurionWorldPresenceLeases.zoneId,
+    chunkX: aurionWorldPresenceLeases.chunkX,
+    chunkZ: aurionWorldPresenceLeases.chunkZ,
+    positionX: aurionWorldPresenceLeases.positionX,
+    positionZ: aurionWorldPresenceLeases.positionZ,
+    connectionId: aurionWorldPresenceLeases.connectionId,
+    lastSeenAt: aurionWorldPresenceLeases.lastSeenAt,
+  }).from(aurionWorldPresenceLeases).where(and(
+    gt(aurionWorldPresenceLeases.expiresAt, now),
+    isNull(aurionWorldPresenceLeases.disconnectedAt),
+  ));
+  const latestByUser = new Map<number, { userId: number; zoneId: string; chunk: WorldChunkCoordinate; position: { x: number; z: number } }>();
+  rows.sort((left, right) => left.userId - right.userId || right.lastSeenAt.getTime() - left.lastSeenAt.getTime() || left.connectionId.localeCompare(right.connectionId)).forEach(row => {
+    if (!latestByUser.has(row.userId)) latestByUser.set(row.userId, Object.freeze({ userId: row.userId, zoneId: row.zoneId, chunk: Object.freeze({ x: row.chunkX, z: row.chunkZ }), position: Object.freeze({ x: row.positionX, z: row.positionZ }) }));
+  });
+  return Object.freeze(Array.from(latestByUser.values()));
+}
+
+function planFromStoredGlobalSnapshot(snapshotJson: string, snapshotHash: string): GlobalWorldPlan {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(snapshotJson);
+  } catch {
+    throw new Error("Der gespeicherte globale Weltplan ist ungültig.");
+  }
+  if (!parsed || typeof parsed !== "object") throw new Error("Der gespeicherte globale Weltplan ist ungültig.");
+  const value = parsed as Partial<GlobalWorldPlan>;
+  const worldSeed = value.worldSeed;
+  const epoch = value.epoch;
+  const activePlayerCount = value.activePlayerCount;
+  const highWaterPlayerCount = value.highWaterPlayerCount;
+  if (typeof worldSeed !== "string" || typeof epoch !== "number" || typeof activePlayerCount !== "number" || typeof highWaterPlayerCount !== "number" || !Number.isSafeInteger(epoch) || !Number.isSafeInteger(activePlayerCount) || !Number.isSafeInteger(highWaterPlayerCount)) throw new Error("Der gespeicherte globale Weltplan enthält keine gültigen Kerndaten.");
+  const plan = buildGlobalWorldPlan({ worldSeed, epoch, activePlayerCount, highWaterPlayerCount });
+  if (plan.deterministicHash !== snapshotHash) throw new Error("Der gespeicherte globale Weltnachweis ist inkonsistent.");
+  return plan;
+}
+
+/**
+ * Applies one globally serialised, receipt-bound resolution request. A running
+ * scheduler is deliberately outside this method; callers need an explicit
+ * deployment-approved trigger and an idempotency key.
+ */
+export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserId: number; idempotencyKey: string; now?: Date }): Promise<{ plan: GlobalWorldPlan; source: "created" | "persisted"; activePresenceCount: number }> {
+  const idempotencyKey = canonicalWorldEpochRequestKey(input.idempotencyKey);
+  if (!Number.isSafeInteger(input.requestedByUserId) || input.requestedByUserId < 1) throw new Error("requestedByUserId must be a positive safe integer");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const prior = (await db.select().from(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.idempotencyKey, idempotencyKey)).limit(1))[0];
+  if (prior) return { plan: planFromStoredGlobalSnapshot(prior.snapshotJson, prior.snapshotHash), source: "persisted", activePresenceCount: planFromStoredGlobalSnapshot(prior.snapshotJson, prior.snapshotHash).activePlayerCount };
+
+  const now = input.now ?? new Date();
+  const presence = await listActiveWorldPresence(now);
+  const activePresenceCount = presence.length;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result = await db.transaction(async tx => {
+        const replay = (await tx.select().from(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.idempotencyKey, idempotencyKey)).limit(1))[0];
+        if (replay) return { plan: planFromStoredGlobalSnapshot(replay.snapshotJson, replay.snapshotHash), source: "persisted" as const };
+        const [current] = await tx.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
+        const priorPlan = current ? planFromStoredGlobalSnapshot(current.snapshotJson, current.snapshotHash) : buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 0, highWaterPlayerCount: 1 });
+        const plan = buildGlobalWorldPlan({
+          worldSeed: priorPlan.worldSeed,
+          epoch: nextWorldEpoch(priorPlan.epoch),
+          activePlayerCount: activePresenceCount,
+          highWaterPlayerCount: Math.max(priorPlan.highWaterPlayerCount, activePresenceCount, 1),
+        });
+        const snapshotJson = JSON.stringify(plan);
+        if (current) {
+          const update = await tx.update(aurionGlobalWorldStates).set({ epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotJson, snapshotHash: plan.deterministicHash }).where(and(
+            eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID),
+            eq(aurionGlobalWorldStates.epoch, current.epoch),
+          ));
+          if (affectedRowCount(update) !== 1) throw new Error("world_epoch_contention");
+        } else {
+          await tx.insert(aurionGlobalWorldStates).values({ worldId: GLOBAL_WORLD_ID, worldSeed: plan.worldSeed, epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotJson, snapshotHash: plan.deterministicHash });
+        }
+        await tx.insert(aurionGlobalWorldEpochReceipts).values({ id: newCommunityId("worldepoch"), worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson });
+        await tx.insert(aurionWorldEpochRequests).values({ idempotencyKey, worldId: GLOBAL_WORLD_ID, requestedByUserId: input.requestedByUserId, ruleSetVersion: AURION_WORLD_EPOCH_RULESET_VERSION, epoch: plan.epoch, snapshotHash: plan.deterministicHash, snapshotJson });
+        return { plan, source: "created" as const };
+      });
+      return { ...result, activePresenceCount };
+    } catch (error) {
+      const replay = (await db.select().from(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.idempotencyKey, idempotencyKey)).limit(1))[0];
+      if (replay) return { plan: planFromStoredGlobalSnapshot(replay.snapshotJson, replay.snapshotHash), source: "persisted", activePresenceCount: planFromStoredGlobalSnapshot(replay.snapshotJson, replay.snapshotHash).activePlayerCount };
+      if (!(error instanceof Error) || error.message !== "world_epoch_contention" || attempt === 2) throw error;
+    }
+  }
+  throw new Error("Die globale Weltauflösung konnte nicht serialisiert werden.");
 }
 
 export async function createLocalUser(values: { handle: string; passwordHash: string }) {
@@ -473,39 +601,17 @@ export async function getGlobalWorldAdminReadModel(): Promise<GlobalWorldAdminRe
   return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
 }
 
+/**
+ * Returns the last confirmed global state for player-facing readmodels. This
+ * method intentionally never observes account rows, advances an epoch, or
+ * writes a snapshot; `resolveAndRecordGlobalWorldEpoch` is the sole resolver.
+ */
 export async function getGlobalWorldPlan() {
   const db = await getDb();
   if (!db) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
   const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
-  const players = await db.select({ id: users.id }).from(users);
-  const activePlayerCount = Math.max(1, players.length);
-  const highWaterPlayerCount = Math.max(activePlayerCount, current?.highWaterPlayerCount ?? 1);
-  const epoch = current ? current.epoch + (highWaterPlayerCount > current.highWaterPlayerCount ? 1 : 0) : 0;
-  const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch, activePlayerCount, highWaterPlayerCount });
-  if (current?.snapshotHash === plan.deterministicHash) return plan;
-  await db.transaction(async tx => {
-    await tx.insert(aurionGlobalWorldStates).values({
-      worldId: GLOBAL_WORLD_ID,
-      worldSeed: GLOBAL_WORLD_SEED,
-      epoch,
-      activePlayerCount,
-      highWaterPlayerCount,
-      snapshotJson: JSON.stringify(plan),
-      snapshotHash: plan.deterministicHash,
-    }).onDuplicateKeyUpdate({
-      set: { epoch, activePlayerCount, highWaterPlayerCount, snapshotJson: JSON.stringify(plan), snapshotHash: plan.deterministicHash },
-    });
-    await tx.insert(aurionGlobalWorldEpochReceipts).values({
-      id: newCommunityId("worldepoch"),
-      worldId: GLOBAL_WORLD_ID,
-      epoch,
-      activePlayerCount,
-      highWaterPlayerCount,
-      snapshotHash: plan.deterministicHash,
-      snapshotJson: JSON.stringify(plan),
-    }).onDuplicateKeyUpdate({ set: { activePlayerCount, highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson: JSON.stringify(plan) } });
-  });
-  return plan;
+  if (!current) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
+  return planFromStoredGlobalSnapshot(current.snapshotJson, current.snapshotHash);
 }
 
 function parseWorldChunkDelta(row: typeof aurionWorldChunkDeltas.$inferSelect): WorldChunkDelta {
@@ -575,47 +681,170 @@ export async function getWorldChunkReadModel(coordinate: WorldChunkCoordinate) {
   return materializeWorldChunk(base, rows.map(parseWorldChunkDelta));
 }
 
-/** A caller must supply an already server-authorized causal sequence. Clients never invent chunk deltas. */
+function canonicalChunkDeltaReceiptId(actorUserId: number, idempotencyKey: string): string {
+  const digest = createHash("sha256").update(`aurion:chunk-delta-receipt:v1:${actorUserId}:${idempotencyKey}`, "utf8").digest("hex");
+  return `chunkdelta_${digest.slice(0, 48)}`;
+}
+
+function hasEquivalentChunkDeltaRequest(row: typeof aurionWorldChunkDeltas.$inferSelect, input: {
+  actorUserId: number;
+  coordinate: WorldChunkCoordinate;
+  kind: WorldChunkDeltaKind;
+  targetId: string;
+  payload: Record<string, string | number | boolean>;
+}): boolean {
+  return row.worldId === GLOBAL_WORLD_ID
+    && row.actorUserId === input.actorUserId
+    && row.chunkX === input.coordinate.x
+    && row.chunkZ === input.coordinate.z
+    && row.kind === input.kind
+    && row.targetId === input.targetId
+    && row.payloadJson === JSON.stringify(input.payload);
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "ER_DUP_ENTRY";
+}
+
+/**
+ * Persists one server-authorized chunk receipt. Sequence allocation, duplicate-target
+ * protection and idempotent replay are transactionally serialized; clients never
+ * submit a sequence, canonical delta identifier or receipt hash.
+ */
 export async function recordWorldChunkDelta(input: {
   actorUserId: number;
   coordinate: WorldChunkCoordinate;
-  sequence: number;
+  baseRevision: number;
   kind: WorldChunkDeltaKind;
   targetId: string;
   idempotencyKey: string;
   payload: Record<string, string | number | boolean>;
 }) {
+  if (!Number.isSafeInteger(input.actorUserId) || input.actorUserId < 1) throw new Error("Chunkdelta-Akteur ist ungültig.");
+  if (input.baseRevision !== 1) throw new Error("Chunkdelta-Basisrevision ist ungültig.");
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
-  const prior = (await db.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.idempotencyKey, input.idempotencyKey)).limit(1))[0];
-  if (prior) return { delta: parseWorldChunkDelta(prior), source: "persisted" as const };
-  const delta = createWorldChunkDelta({
-    id: newCommunityId("chunkdelta"),
-    worldId: GLOBAL_WORLD_ID,
-    coordinate: input.coordinate,
-    baseRevision: 1,
-    sequence: input.sequence,
-    kind: input.kind,
-    targetId: input.targetId,
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const prior = (await db.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.idempotencyKey, input.idempotencyKey)).limit(1))[0];
+    if (prior) {
+      if (!hasEquivalentChunkDeltaRequest(prior, input)) throw new Error("Chunkdelta-Idempotenzschlüssel gehört bereits zu einer anderen Aktion.");
+      return { delta: parseWorldChunkDelta(prior), source: "persisted" as const };
+    }
+    try {
+      return await db.transaction(async tx => {
+        const replay = (await tx.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.idempotencyKey, input.idempotencyKey)).limit(1))[0];
+        if (replay) {
+          if (!hasEquivalentChunkDeltaRequest(replay, input)) throw new Error("Chunkdelta-Idempotenzschlüssel gehört bereits zu einer anderen Aktion.");
+          return { delta: parseWorldChunkDelta(replay), source: "persisted" as const };
+        }
+        if (input.kind === "structure_removed") {
+          const placement = (await tx.select().from(aurionWorldChunkDeltas).where(and(
+            eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+            eq(aurionWorldChunkDeltas.chunkX, input.coordinate.x),
+            eq(aurionWorldChunkDeltas.chunkZ, input.coordinate.z),
+            eq(aurionWorldChunkDeltas.targetId, input.targetId),
+            eq(aurionWorldChunkDeltas.kind, "structure_placed"),
+          )).limit(1))[0];
+          if (!placement || placement.actorUserId !== input.actorUserId) throw new Error("Struktur kann nur von ihrer Eigentümerin oder ihrem Eigentümer entfernt werden.");
+          let placementPayload: Record<string, unknown>;
+          try { placementPayload = JSON.parse(placement.payloadJson) as Record<string, unknown>; } catch { throw new Error("Strukturreceipt ist ungültig."); }
+          if (placementPayload.xMm !== input.payload.xMm || placementPayload.zMm !== input.payload.zMm) throw new Error("Strukturposition stimmt nicht mit dem Eigentumsreceipt überein.");
+          const priorRemoval = (await tx.select({ id: aurionWorldChunkDeltas.id }).from(aurionWorldChunkDeltas).where(and(
+            eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+            eq(aurionWorldChunkDeltas.chunkX, input.coordinate.x),
+            eq(aurionWorldChunkDeltas.chunkZ, input.coordinate.z),
+            eq(aurionWorldChunkDeltas.targetId, input.targetId),
+            eq(aurionWorldChunkDeltas.kind, "structure_removed"),
+          )).limit(1))[0];
+          if (priorRemoval) throw new Error("Struktur wurde bereits entfernt.");
+        } else {
+          const occupiedTarget = (await tx.select({ id: aurionWorldChunkDeltas.id }).from(aurionWorldChunkDeltas).where(and(
+            eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+            eq(aurionWorldChunkDeltas.chunkX, input.coordinate.x),
+            eq(aurionWorldChunkDeltas.chunkZ, input.coordinate.z),
+            eq(aurionWorldChunkDeltas.targetId, input.targetId),
+          )).limit(1))[0];
+          if (occupiedTarget) throw new Error("Chunkdelta-Ziel ist bereits verändert worden.");
+        }
+        if (input.kind === "structure_placed" || input.kind === "road_built") {
+          const currentRows = await tx.select().from(aurionWorldChunkDeltas).where(and(
+            eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+            eq(aurionWorldChunkDeltas.chunkX, input.coordinate.x),
+            eq(aurionWorldChunkDeltas.chunkZ, input.coordinate.z),
+          )).orderBy(aurionWorldChunkDeltas.sequence, aurionWorldChunkDeltas.id);
+          const base = generateBaseWorldChunk({ worldId: GLOBAL_WORLD_ID, worldSeed: GLOBAL_WORLD_SEED, coordinate: input.coordinate });
+          const current = materializeWorldChunk(base, currentRows.map(parseWorldChunkDelta));
+          if (input.kind === "structure_placed") {
+            if (current.structures.length >= WORLD_CHUNK_STRUCTURE_MAXIMUM) throw new Error("Strukturlimit des Chunks ist erreicht.");
+            if (current.structures.some(structure => structure.positionMm.x === input.payload.xMm && structure.positionMm.z === input.payload.zMm)) throw new Error("Strukturziel ist bereits besetzt.");
+          }
+          if (input.kind === "road_built" && current.roads.length >= WORLD_CHUNK_ROAD_MAXIMUM) throw new Error("Straßenlimit des Chunks ist erreicht.");
+        }
+        const latest = (await tx.select({ sequence: aurionWorldChunkDeltas.sequence }).from(aurionWorldChunkDeltas).where(and(
+          eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID),
+          eq(aurionWorldChunkDeltas.chunkX, input.coordinate.x),
+          eq(aurionWorldChunkDeltas.chunkZ, input.coordinate.z),
+        )).orderBy(desc(aurionWorldChunkDeltas.sequence)).limit(1))[0];
+        const delta = createWorldChunkDelta({
+          id: canonicalChunkDeltaReceiptId(input.actorUserId, input.idempotencyKey),
+          worldId: GLOBAL_WORLD_ID,
+          coordinate: input.coordinate,
+          baseRevision: input.baseRevision,
+          sequence: (latest?.sequence ?? 0) + 1,
+          kind: input.kind,
+          targetId: input.targetId,
+          actorUserId: input.actorUserId,
+          idempotencyKey: input.idempotencyKey,
+          payload: input.payload,
+        });
+        await tx.insert(aurionWorldChunkDeltas).values({
+          id: delta.id,
+          worldId: delta.worldId,
+          chunkX: delta.coordinate.x,
+          chunkZ: delta.coordinate.z,
+          baseRevision: delta.baseRevision,
+          sequence: delta.sequence,
+          kind: delta.kind,
+          targetId: delta.targetId,
+          actorUserId: delta.actorUserId,
+          idempotencyKey: delta.idempotencyKey,
+          payloadJson: JSON.stringify(delta.payload),
+          deterministicHash: delta.deterministicHash,
+        });
+        return { delta, source: "created" as const };
+      });
+    } catch (error) {
+      if (!isDuplicateKeyError(error) || attempt === 2) throw error;
+    }
+  }
+  throw new Error("Chunkdelta-Sequenz konnte nicht serialisiert werden.");
+}
+
+/**
+ * Applies a browser world intent only from a non-expired server-observed lease.
+ * The user never supplies a position, a target receipt, a sequence, or an asset
+ * outside the manifest-bound allowlist encoded by the pure protocol.
+ */
+export async function applyWorldChunkAction(input: { actorUserId: number; intent: WorldChunkActionIntent }) {
+  const actorPresence = (await listActiveWorldPresence()).find(presence => presence.userId === input.actorUserId && presence.chunk.x === input.intent.coordinate.x && presence.chunk.z === input.intent.coordinate.z);
+  if (!actorPresence) throw new Error("Keine aktive serverbeobachtete Präsenz im Zielchunk.");
+  const resolved = resolveWorldChunkAction({
     actorUserId: input.actorUserId,
-    idempotencyKey: input.idempotencyKey,
-    payload: input.payload,
+    actorPosition: actorPresence.position,
+    worldId: GLOBAL_WORLD_ID,
+    worldSeed: GLOBAL_WORLD_SEED,
+    intent: input.intent,
   });
-  await db.insert(aurionWorldChunkDeltas).values({
-    id: delta.id,
-    worldId: delta.worldId,
-    chunkX: delta.coordinate.x,
-    chunkZ: delta.coordinate.z,
-    baseRevision: delta.baseRevision,
-    sequence: delta.sequence,
-    kind: delta.kind,
-    targetId: delta.targetId,
-    actorUserId: delta.actorUserId,
-    idempotencyKey: delta.idempotencyKey,
-    payloadJson: JSON.stringify(delta.payload),
-    deterministicHash: delta.deterministicHash,
+  return recordWorldChunkDelta({
+    actorUserId: input.actorUserId,
+    coordinate: input.intent.coordinate,
+    baseRevision: input.intent.expectedBaseRevision,
+    kind: resolved.kind,
+    targetId: resolved.targetId,
+    idempotencyKey: input.intent.idempotencyKey,
+    payload: resolved.payload,
   });
-  return { delta, source: "created" as const };
 }
 
 /** A display-only world view derived from authoritative player progression, global scale state and confirmed skill receipts. */
