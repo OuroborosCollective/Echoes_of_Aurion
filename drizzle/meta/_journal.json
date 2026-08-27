@@ -127,6 +127,13 @@
       "when": 1787768928386,
       "tag": "0017_wasd_aurion_content_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1787797466524,
+      "tag": "0018_wasd_aurion_exact_skill_progression",
+      "breakpoints": true
     }
   ]
 }

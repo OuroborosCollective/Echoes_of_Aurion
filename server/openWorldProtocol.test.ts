@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildOpenWorldSnapshot, buildOpenWorldTerrain, encounterBudget, maximumVisibleEnemies, zoneForOpenWorldProgress } from "./openWorldProtocol";
+import { buildOpenWorldSnapshot, buildOpenWorldTerrain, encounterBudget, maximumVisibleEnemies, type OpenWorldProfile, zoneForOpenWorldProgress } from "./openWorldProtocol";
+
+function snapshotInput(input: Omit<OpenWorldProfile, "playerId" | "skillProgressionEvents">, skillProgressionEvents: OpenWorldProfile["skillProgressionEvents"] = []): OpenWorldProfile {
+  return { playerId: "aurion-test-player", ...input, skillProgressionEvents };
+}
 
 describe("open-world protocol", () => {
   it("uses the bounded mobile encounter formulas", () => {
@@ -10,14 +14,17 @@ describe("open-world protocol", () => {
   });
 
   it("derives the deepest permitted zone only from confirmed progress", () => {
-    expect(zoneForOpenWorldProgress({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false })).toBe("observatory_threshold");
-    expect(zoneForOpenWorldProgress({ level: 2, completed: ["astral_call"], activeQuest: null, canEnterDungeon: false })).toBe("windhollow");
-    expect(zoneForOpenWorldProgress({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false })).toBe("emberfall");
-    expect(zoneForOpenWorldProgress({ level: 4, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true })).toBe("cinder_vault");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false }))).toBe("observatory_threshold");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 2, completed: ["astral_call"], activeQuest: null, canEnterDungeon: false }))).toBe("windhollow");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false }))).toBe("emberfall");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 4, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }))).toBe("cinder_vault");
   });
 
-  it("returns an immutable display snapshot without reward fields", () => {
-    const snapshot = buildOpenWorldSnapshot({ level: 12, completed: ["astral_call"], activeQuest: "archive_of_echoes", canEnterDungeon: false });
+  it("returns an immutable display snapshot with only explicitly confirmed skill receipts", () => {
+    const snapshot = buildOpenWorldSnapshot(snapshotInput(
+      { level: 12, completed: ["astral_call"], activeQuest: "archive_of_echoes", canEnterDungeon: false },
+      [{ idempotencyKey: "quest:session-a:combat-skill", skillId: "combat", amountExact: "122", source: "quest_reward", receiptId: "result-session-a", resolutionIndex: 3 }],
+    ));
     expect(snapshot.zoneId).toBe("windhollow");
     expect(snapshot.encounter.activeCount).toBeLessThanOrEqual(snapshot.encounter.maximumVisible);
     expect(snapshot.allowedCommands).toEqual(["move", "attack", "interact", "return_to_tower"]);
@@ -27,13 +34,14 @@ describe("open-world protocol", () => {
     expect(snapshot.worldKernel.integrity).toMatchObject({ ok: true, kappa: 1000 });
     expect(snapshot.worldKernel.cityLayout.sector).toBe(0);
     expect(snapshot.aiProposal).toMatchObject({ state: "proposal", intent: "trade_decision", commandType: "AURION_TRADE_PROPOSAL" });
-    expect(snapshot.skillProgression).toMatchObject({ skillId: "combat", progression: { totalXpExact: "25", levelExact: "1" }, appliedReceiptIds: ["quest-completed:astral_call"] });
+    expect(snapshot.skillProgression).toMatchObject({ playerId: "aurion-test-player", skillId: "combat", progression: { totalXpExact: "122", levelExact: "2" }, appliedReceiptIds: ["result-session-a"] });
     expect(JSON.stringify(snapshot)).not.toContain("reward");
   });
 
   it("renders a versioned deterministic world reaction without adding a reward authority", () => {
-    const first = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
-    const second = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    const input = snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false }, [{ idempotencyKey: "confirmed:a", skillId: "combat", amountExact: "12", source: "quest_reward", receiptId: "result-a", resolutionIndex: 4 }]);
+    const first = buildOpenWorldSnapshot(input);
+    const second = buildOpenWorldSnapshot(input);
     expect(first.world).toEqual(second.world);
     expect(first.world.worldSeed).toBe("echoes-of-aurion-v1");
     expect(first.world.reaction.ruleSetVersion).toBe("aurion-wasd-rules-v1");
@@ -42,7 +50,7 @@ describe("open-world protocol", () => {
   });
 
   it("exposes bounded NPC autonomy, dialect profiles and a deterministic fictional polity", () => {
-    const snapshot = buildOpenWorldSnapshot({ level: 1, completed: [], activeQuest: "astral_call", canEnterDungeon: false });
+    const snapshot = buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: "astral_call", canEnterDungeon: false }));
     const lyra = snapshot.npcs.find(npc => npc.id === "lyra");
     expect(lyra?.autonomy.dialectId).toBe("observatory");
     expect(lyra?.autonomy.goal).toBe("expand_influence");
@@ -53,8 +61,8 @@ describe("open-world protocol", () => {
   });
 
   it("exposes only the encounter unlocked by confirmed active quest or dungeon access", () => {
-    expect(buildOpenWorldSnapshot({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false }).primaryEncounter).toBeNull();
-    expect(buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }).primaryEncounter).toMatchObject({ encounterKey: "cinder_vault" });
+    expect(buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false })).primaryEncounter).toBeNull();
+    expect(buildOpenWorldSnapshot(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true })).primaryEncounter).toMatchObject({ encounterKey: "cinder_vault" });
   });
 
   it("returns the Wolfram-budgeted read-only terrain layout without gameplay rewards", () => {
@@ -69,7 +77,7 @@ describe("open-world protocol", () => {
   });
 
   it("derives Emberfall props from confirmed world progression without reward authority", () => {
-    const snapshot = buildOpenWorldSnapshot({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false });
+    const snapshot = buildOpenWorldSnapshot(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false }));
     expect(snapshot.zoneId).toBe("emberfall");
     expect(snapshot.props.map(prop => prop.kind)).toEqual(["starpath_marker", "garden_border", "garden_border"]);
     expect(snapshot.props.every(prop => prop.tileX >= 0 && prop.tileX < 8 && prop.tileZ >= 0 && prop.tileZ < 8)).toBe(true);
