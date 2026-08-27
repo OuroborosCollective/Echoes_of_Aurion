@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -13,6 +13,8 @@ import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQua
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
+import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
+import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 
@@ -440,6 +442,113 @@ export async function getOpenWorldSnapshot(userId: number) {
     canEnterDungeon: progress.canEnterDungeon,
     skillProgressionEvents,
   });
+}
+
+function parseDialogueInterpretationReceipt(raw: string): DialogueInterpretation {
+  try {
+    const parsed = JSON.parse(raw) as DialogueInterpretation;
+    if (parsed && (parsed.state === "accepted" || parsed.state === "quarantined" || parsed.state === "rejected")) return parsed;
+  } catch {
+    // A malformed stored receipt must never become a gameplay command.
+  }
+  throw new Error("Der gespeicherte Dialogreceipt ist ungültig.");
+}
+
+function parseDialogueQuestIntentOutcome(raw: string): DialogueQuestIntentResolution {
+  try {
+    const parsed = JSON.parse(raw) as DialogueQuestIntentResolution;
+    if (parsed && (parsed.state === "offer_available_quest" || parsed.state === "turn_in_available" || parsed.state === "no_action")) return parsed;
+  } catch {
+    // A malformed command receipt must not silently change its visible outcome.
+  }
+  throw new Error("Der gespeicherte Dialog-Command-Receipt ist ungültig.");
+}
+
+function dialogueCommandReadback(row: typeof aurionDialogueCommandReceipts.$inferSelect) {
+  return {
+    id: row.id,
+    dialogueReceiptId: row.dialogueReceiptId,
+    npcId: row.npcId,
+    actionKind: row.actionKind as DialogueQuestActionKind,
+    questKey: row.questKey as QuestKey,
+    outcome: parseDialogueQuestIntentOutcome(row.outcomeJson),
+    createdAt: row.createdAt,
+  } as const;
+}
+
+/**
+ * Records a player's explicit confirmation of an already moderated dialogue meaning.
+ * This command only returns a bounded quest offer or hand-in prompt; it never accepts,
+ * completes, rewards or otherwise advances the quest. Those remain separate Aurion commands.
+ */
+export async function requestQuestActionFromDialogue(values: {
+  userId: number;
+  dialogueReceiptId: string;
+  actionKind: DialogueQuestActionKind;
+  questKey: QuestKey;
+  idempotencyKey: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+
+  // This command writes one receipt only. Fresh reads avoid a repeatable-read snapshot
+  // hiding a concurrently confirmed receipt after the unique key has collapsed the race.
+  const replay = (await db.select().from(aurionDialogueCommandReceipts).where(eq(aurionDialogueCommandReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+  if (replay) {
+    const sameRequest = replay.userId === values.userId
+      && replay.dialogueReceiptId === values.dialogueReceiptId
+      && replay.actionKind === values.actionKind
+      && replay.questKey === values.questKey;
+    if (!sameRequest) throw new Error("Dieser Idempotenzschlüssel gehört zu einer anderen Dialogaktion.");
+    return { receipt: dialogueCommandReadback(replay), replayed: true as const };
+  }
+
+  const dialogue = (await db.select().from(aurionDialogueReceipts).where(and(
+      eq(aurionDialogueReceipts.id, values.dialogueReceiptId),
+      eq(aurionDialogueReceipts.userId, values.userId),
+  )).limit(1))[0];
+  if (!dialogue) throw new Error("Ein eigener bestätigter Dialogreceipt ist erforderlich.");
+
+  const interpretation = parseDialogueInterpretationReceipt(dialogue.interpretationJson);
+  const progress = await getGameplayProgress(values.userId);
+  const outcome = resolveDialogueQuestIntent({
+    npcId: dialogue.npcId,
+    interpretation,
+    quests: progress.quests,
+  });
+  if (outcome.state === "no_action" || outcome.actionKind !== values.actionKind || outcome.questKey !== values.questKey) {
+    throw new Error("Dieser Dialog erlaubt die angefragte Questaktion nicht.");
+  }
+
+  const id = newEndgameId("dialogue_cmd");
+  await db.insert(aurionDialogueCommandReceipts).values({
+      id,
+      userId: values.userId,
+      dialogueReceiptId: dialogue.id,
+      npcId: dialogue.npcId,
+      actionKind: outcome.actionKind,
+      questKey: outcome.questKey,
+      outcomeJson: JSON.stringify(outcome),
+      idempotencyKey: values.idempotencyKey,
+  }).onDuplicateKeyUpdate({
+    set: { outcomeJson: sql`${aurionDialogueCommandReceipts.outcomeJson}` },
+  });
+  const readback = (await db.select().from(aurionDialogueCommandReceipts).where(or(
+      eq(aurionDialogueCommandReceipts.idempotencyKey, values.idempotencyKey),
+      and(
+        eq(aurionDialogueCommandReceipts.userId, values.userId),
+        eq(aurionDialogueCommandReceipts.dialogueReceiptId, values.dialogueReceiptId),
+        eq(aurionDialogueCommandReceipts.actionKind, values.actionKind),
+        eq(aurionDialogueCommandReceipts.questKey, values.questKey),
+      ),
+  )).limit(1))[0];
+  if (!readback) throw new Error("Dialog-Command-Receipt-Readback fehlgeschlagen.");
+  const sameRequest = readback.userId === values.userId
+    && readback.dialogueReceiptId === values.dialogueReceiptId
+    && readback.actionKind === values.actionKind
+    && readback.questKey === values.questKey;
+  if (!sameRequest) throw new Error("Dieser Idempotenzschlüssel gehört zu einer anderen Dialogaktion.");
+  return { receipt: dialogueCommandReadback(readback), replayed: readback.id !== id };
 }
 
 export async function acceptGameplayQuest(values: { userId: number; questKey: QuestKey }) {

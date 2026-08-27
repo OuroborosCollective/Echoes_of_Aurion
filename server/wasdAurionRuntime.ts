@@ -198,12 +198,15 @@ export async function interpretAndRecordDialogue(input: {
   threat: number;
   idempotencyKey: string;
   profile?: LanguageProfile;
-}): Promise<DialogueInterpretation> {
+}): Promise<DialogueInterpretation & { receiptId: string }> {
   if (!input.idempotencyKey) throw new Error("Dialogue idempotency key is required");
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   const prior = (await db.select().from(aurionDialogueReceipts).where(eq(aurionDialogueReceipts.idempotencyKey, input.idempotencyKey)).limit(1))[0];
-  if (prior) return jsonParse<DialogueInterpretation>(prior.interpretationJson, { state: "quarantined", semanticIntent: "unknown", confidence: 0, dialectId: (input.profile ?? defaultLyraProfile).dialectId, reason: "invalid_persisted_payload" });
+  if (prior) return {
+    ...jsonParse<DialogueInterpretation>(prior.interpretationJson, { state: "quarantined", semanticIntent: "unknown", confidence: 0, dialectId: (input.profile ?? defaultLyraProfile).dialectId, reason: "invalid_persisted_payload" }),
+    receiptId: prior.id,
+  };
   const interpretation = interpretDialogue({ text: input.text, profile: input.profile ?? defaultLyraProfile, trust: input.trust, threat: input.threat });
   await db.insert(aurionDialogueReceipts).values({
     id: runtimeId("dialogue"),
@@ -215,5 +218,8 @@ export async function interpretAndRecordDialogue(input: {
   });
   const readback = (await db.select().from(aurionDialogueReceipts).where(eq(aurionDialogueReceipts.idempotencyKey, input.idempotencyKey)).limit(1))[0];
   if (!readback) throw new Error("Dialogue receipt readback failed");
-  return jsonParse<DialogueInterpretation>(readback.interpretationJson, interpretation);
+  return {
+    ...jsonParse<DialogueInterpretation>(readback.interpretationJson, interpretation),
+    receiptId: readback.id,
+  };
 }
