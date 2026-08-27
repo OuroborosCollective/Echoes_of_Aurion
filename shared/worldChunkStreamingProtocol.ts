@@ -4,6 +4,7 @@ export const WORLD_CHUNK_STREAM_MAX_RADIUS = 2 as const;
 export const WORLD_CHUNK_STREAM_PAGE_LIMIT = 32 as const;
 
 export type WorldChunkStreamingTier = "phone" | "tablet" | "desktop";
+export type WorldChunkStreamSelection = { center: WorldChunkCoordinate; tier: WorldChunkStreamingTier };
 
 export type WorldChunkStreamingBudget = {
   tier: WorldChunkStreamingTier;
@@ -92,6 +93,11 @@ export function planWorldChunkCache(input: { center: WorldChunkCoordinate; tier:
   const retainKeys = new Set(retain.map(worldChunkCoordinateKey));
   const evict = Object.freeze(Array.from(byKey.values()).filter(entry => !retainKeys.has(worldChunkCoordinateKey(entry.coordinate))).sort((left, right) => left.lastAccess - right.lastAccess || left.coordinate.z - right.coordinate.z || left.coordinate.x - right.coordinate.x).map(entry => entry.coordinate));
   return Object.freeze({ visible, request: Object.freeze(request), retain, evict });
+}
+
+/** Rejects a late response for a superseded viewport; cursor pages for the current viewport still merge by immutable receipt ID. */
+export function matchesWorldChunkStreamSelection(expected: WorldChunkStreamSelection, candidate: WorldChunkStreamSelection): boolean {
+  return expected.tier === candidate.tier && expected.center.x === candidate.center.x && expected.center.z === candidate.center.z;
 }
 
 export function isWorldChunkStreamingTier(value: unknown): value is WorldChunkStreamingTier {

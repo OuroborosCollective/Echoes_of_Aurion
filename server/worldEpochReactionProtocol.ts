@@ -169,7 +169,7 @@ export function resolveWorldEpochReaction(input: { plan: GlobalWorldPlan; resolu
     const pressure = pressureBySector.get(sectorId);
     if (!pressure) return;
     pressure.sourceIds.push(delta.id);
-    if (delta.kind === "resource_depleted" && String(delta.targetId).startsWith("tree:")) pressure.treeHarvest += 1;
+    if (delta.kind === "resource_depleted" && delta.payload.resourceKind === "tree") pressure.treeHarvest += 1;
     if (delta.kind === "road_built") pressure.roads += 1;
     if (delta.kind === "structure_placed") pressure.structures += 1;
   });

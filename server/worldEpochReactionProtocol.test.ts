@@ -19,6 +19,14 @@ describe("worldEpochReactionProtocol", () => {
     expect(first.sectors.every(sector => sector.polity.civilianStructuresProtected && sector.polity.playerHomesProtected)).toBe(true);
   });
 
+  it("uses the server-derived resource kind rather than a target-id heuristic for forest pressure", () => {
+    const spoofedTreeNamedDelta = createWorldChunkDelta({ id: "delta:spoofed-tree:001", worldId: "echoes-of-aurion-global", coordinate: { x: 0, z: 0 }, baseRevision: 1, sequence: 1, kind: "resource_depleted", targetId: "tree:untrusted:identifier", actorUserId: 7, idempotencyKey: "epoch:spoofed-tree:0001", payload: { yieldKey: "wood" } });
+    const reaction = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: [spoofedTreeNamedDelta], observedPresence: [] });
+    const affected = reaction.sectors.find(sector => sector.sourceIds.includes(spoofedTreeNamedDelta.id))!;
+    const baseline = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: [], observedPresence: [] }).sectors.find(sector => sector.sectorId === affected.sectorId)!;
+    expect(affected.resources).toEqual(baseline.resources);
+  });
+
   it("adapts deforestation, bounded regrowth and infrastructure into deterministic resource, profession and quest consequences", () => {
     const reaction = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: Array.from({ length: 8 }, (_, index) => createWorldChunkDelta({ id: `delta:tree:${String(index).padStart(3, "0")}`, worldId: "echoes-of-aurion-global", coordinate: { x: 0, z: 0 }, baseRevision: 1, sequence: index + 1, kind: "resource_depleted", targetId: `tree:0:0:${index}`, actorUserId: 7, idempotencyKey: `epoch:tree:pressure:${String(index).padStart(4, "0")}`, payload: { resourceKind: "tree" } })), observedPresence: [presence] });
     const affected = reaction.sectors.find(sector => sector.sourceIds.some(id => id.startsWith("delta:tree:")));

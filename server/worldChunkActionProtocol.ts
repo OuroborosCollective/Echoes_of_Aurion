@@ -79,7 +79,7 @@ export function resolveWorldChunkAction(input: {
     const resource = base.resources.find(candidate => candidate.id === intent.resourceId);
     if (!resource) throw new Error("world action resource is not in the generated chunk base");
     assertReachable(input.actorPosition, resource.positionMm);
-    return Object.freeze({ kind: "resource_depleted", targetId: resource.id, payload: Object.freeze({ yieldKey: resource.yieldKey }) });
+    return Object.freeze({ kind: "resource_depleted", targetId: resource.id, payload: Object.freeze({ yieldKey: resource.yieldKey, resourceKind: resource.kind }) });
   }
 
   if (intent.kind === "place_structure") {

@@ -26,8 +26,8 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     const now = new Date("2026-01-01T00:00:00.000Z");
     await recordWorldPresenceLease({ userId: 2_146_999_970, connectionId: "epoch_e2e_connection_old_0001", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now });
     await releaseWorldPresenceLease({ connectionId: "epoch_e2e_connection_old_0001", now: new Date(now.getTime() + 1_000) });
-    await recordWorldPresenceLease({ userId: 2_146_999_970, connectionId: "epoch_e2e_connection_new_0001", zoneId: "windhollow", position: { x: 1_200, z: -800 }, now: new Date(now.getTime() + 2_000) });
-    expect(await listActiveWorldPresence(new Date(now.getTime() + 3_000))).toEqual([expect.objectContaining({ userId: 2_146_999_970, zoneId: "windhollow", position: { x: 1_200, z: -800 } })]);
+    await recordWorldPresenceLease({ userId: 2_146_999_970, connectionId: "epoch_e2e_connection_new_0001", zoneId: "observatory_threshold", position: { x: 1_200, z: -800 }, now: new Date(now.getTime() + 2_000) });
+    expect(await listActiveWorldPresence(new Date(now.getTime() + 3_000))).toEqual([expect.objectContaining({ userId: 2_146_999_970, zoneId: "observatory_threshold", position: { x: 1_200, z: -800 } })]);
     expect(await listActiveWorldPresence(new Date(now.getTime() + WORLD_PRESENCE_LEASE_MS + 2_001))).toEqual([]);
   }, 30_000);
 

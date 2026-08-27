@@ -18,7 +18,7 @@ describe("worldChunkActionProtocol", () => {
   it("turns a reachable generated resource into a bounded depletion receipt shape", () => {
     expect(resolveWorldChunkAction({ ...common(), intent: {
       kind: "harvest_resource", coordinate, expectedBaseRevision: 1, expectedBaseHash: base.deterministicHash, resourceId: resource.id, idempotencyKey: "harvest:receipt:0001",
-    } })).toEqual({ kind: "resource_depleted", targetId: resource.id, payload: { yieldKey: resource.yieldKey } });
+    } })).toEqual({ kind: "resource_depleted", targetId: resource.id, payload: { yieldKey: resource.yieldKey, resourceKind: resource.kind } });
   });
 
   it("accepts only approved structures and derives stable target identities", () => {

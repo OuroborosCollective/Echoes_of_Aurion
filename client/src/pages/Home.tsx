@@ -20,7 +20,7 @@ import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
-import { orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
+import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
 type Screen = "gate" | "home" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
@@ -175,6 +175,9 @@ export default function Home() {
   useEffect(() => {
     if (!worldStreamAnchor || !worldChunkWindow.data) return;
     const { chunks, tier, center } = worldChunkWindow.data;
+    if (!matchesWorldChunkStreamSelection({ center: worldStreamCenter, tier: worldStreamTier }, { center, tier })) return;
+    const expectedChunkKeys = new Set(currentStreamCoordinates.map(worldChunkCoordinateKey));
+    if (!chunks.every(chunk => expectedChunkKeys.has(worldChunkCoordinateKey(chunk.generation.coordinate)))) return;
     chunks.forEach(chunk => window.dispatchEvent(new CustomEvent("aurion:stream-world-chunk", { detail: { globalWorld: worldStreamAnchor, tier, center, chunk } })));
     setWorldStreamCursors(current => {
       let changed = false;
@@ -185,7 +188,7 @@ export default function Home() {
       });
       return changed ? next : current;
     });
-  }, [worldChunkWindow.data, worldStreamAnchor]);
+  }, [currentStreamCoordinates, worldChunkWindow.data, worldStreamAnchor, worldStreamCenter, worldStreamTier]);
 
   useEffect(() => {
     setWorldStreamCursors({});

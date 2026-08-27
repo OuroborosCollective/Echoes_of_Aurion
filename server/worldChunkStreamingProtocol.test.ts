@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   WORLD_CHUNK_STREAM_PAGE_LIMIT,
+  matchesWorldChunkStreamSelection,
   planWorldChunkCache,
   orderedWorldChunkWindow,
   worldChunkCoordinateKey,
@@ -34,6 +35,13 @@ describe("worldChunkStreamingProtocol", () => {
     const overflow = planWorldChunkCache({ center: { x: 0, z: 0 }, tier: "phone", cached: Array.from({ length: 14 }, (_, index) => ({ coordinate: { x: 50 + index, z: 0 }, lastAccess: index })) });
     expect(overflow.retain).toHaveLength(12);
     expect(overflow.evict.map(worldChunkCoordinateKey)).toEqual(["50:0", "51:0", "52:0", "53:0", "54:0", "55:0", "56:0", "57:0", "58:0", "59:0", "60:0"]);
+  });
+
+  it("accepts only a response matching the latest viewport selection", () => {
+    const current = { center: { x: 7, z: -4 }, tier: "tablet" as const };
+    expect(matchesWorldChunkStreamSelection(current, { center: { x: 7, z: -4 }, tier: "tablet" })).toBe(true);
+    expect(matchesWorldChunkStreamSelection(current, { center: { x: 6, z: -4 }, tier: "tablet" })).toBe(false);
+    expect(matchesWorldChunkStreamSelection(current, { center: { x: 7, z: -4 }, tier: "desktop" })).toBe(false);
   });
 
   it("rejects unsafe radii and windows crossing the canonical world boundary", () => {

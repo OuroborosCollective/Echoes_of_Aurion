@@ -284,7 +284,8 @@ export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserI
     } catch (error) {
       const replay = (await db.select().from(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.idempotencyKey, idempotencyKey)).limit(1))[0];
       if (replay) return { plan: planFromStoredGlobalSnapshot(replay.snapshotJson, replay.snapshotHash), source: "persisted", activePresenceCount: planFromStoredGlobalSnapshot(replay.snapshotJson, replay.snapshotHash).activePlayerCount };
-      if (!(error instanceof Error) || error.message !== "world_epoch_contention" || attempt === 2) throw error;
+      const epochContention = error instanceof Error && error.message === "world_epoch_contention";
+      if ((!epochContention && !isDuplicateKeyError(error)) || attempt === 2) throw error;
     }
   }
   throw new Error("Die globale Weltauflösung konnte nicht serialisiert werden.");
@@ -755,7 +756,9 @@ function hasEquivalentChunkDeltaRequest(row: typeof aurionWorldChunkDeltas.$infe
 }
 
 function isDuplicateKeyError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "ER_DUP_ENTRY";
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; cause?: unknown };
+  return candidate.code === "ER_DUP_ENTRY" || isDuplicateKeyError(candidate.cause);
 }
 
 /**
