@@ -19,6 +19,12 @@ export const aurionAssets = {
   floorKit: resolveAurionAsset("env_asterion_floor_kit_a01.glb", "/manus-storage/env_asterion_floor_kit_a01_ec94e853.glb"),
   archway: resolveAurionAsset("env_asterion_archway_a01.glb", "/manus-storage/env_asterion_archway_a01_fe233f19.glb"),
   expeditionTheme: resolveAurionAsset("aurion-expedition-theme_a8401a12.mp3", "/manus-storage/aurion-expedition-theme_a8401a12.mp3"),
+  audio: {
+    tower: resolveAurionAsset("ambient-tower.wav", "/audio/ambient-tower.wav"),
+    plains: resolveAurionAsset("ambient-plains.wav", "/audio/ambient-plains.wav"),
+    forest: resolveAurionAsset("ambient-forest.wav", "/audio/ambient-forest.wav"),
+    cinderVault: resolveAurionAsset("ambient-cinder-vault.wav", "/audio/ambient-cinder-vault.wav"),
+  },
   trailer: resolveAurionAsset("aurion-hero-trailer-en-de_c44ee2e1.mp4", "/manus-storage/aurion-hero-trailer-en-de_c44ee2e1.mp4"),
   trailerPoster: resolveAurionAsset("aurion-social-keyframe_5edc4882.png", "/manus-storage/aurion-social-keyframe_5edc4882.png"),
   expanseReference: "/manus-storage/aurion-expanse-windhollow-reference_fed3662e.jpg",

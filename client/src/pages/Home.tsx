@@ -16,6 +16,7 @@ import TowerHomePanel from "@/components/TowerHomePanel";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
+import type { AudioEvent } from "@shared/audioProtocol";
 import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
@@ -25,6 +26,14 @@ import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCo
 type Screen = "gate" | "home" | "loadout" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
+
+const audioEventFromLegacy = (kind: "system" | "command" | "combat" | "connection" | "warning", detail: string): AudioEvent => {
+  if (kind === "combat") return { cue: "combat.attack.spear", category: "combat", weapon: "spear" };
+  if (kind === "warning") return { cue: "combat.magic", category: "combat", element: "resonance" };
+  if (detail.toLowerCase().includes("lyra")) return { cue: "interaction.npc.feminine", category: "interaction", voice: "feminine" };
+  if (detail.toLowerCase().includes("orun")) return { cue: "interaction.npc.masculine", category: "interaction", voice: "masculine" };
+  return { cue: "interaction.npc.neutral", category: "interaction", voice: "neutral" };
+};
 type GatewayPairing = { sessionId: string; pairingToken: string; mcpUrl: string; expiresAt: Date; allowedCommands: string[] };
 type DialogueQuestPrompt = {
   dialogueReceiptId: string;
@@ -240,6 +249,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const mixer = soundscape.current;
+    if (!mixer) return;
+    const url = screen === "home" ? aurionAssets.audio.tower : mission.arena === 3 ? aurionAssets.audio.cinderVault : worldStreamAnchor ? aurionAssets.audio.forest : aurionAssets.audio.plains;
+    void mixer.playAmbient(url).catch(() => { /* browser autoplay policy is handled by the visible audio control */ });
+  }, [mission.arena, screen, worldStreamAnchor]);
+
+  useEffect(() => {
     const syncFullscreen = () => setImmersiveMode(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", syncFullscreen);
     syncFullscreen();
@@ -249,20 +265,23 @@ export default function Home() {
   useEffect(() => {
     const onLedger = (event: Event) => setLedger((event as CustomEvent<LedgerEntry[]>).detail);
     const onGameEvent = (event: Event) => {
-      const detail = (event as CustomEvent<{ kind: LedgerEntry["kind"]; detail: string }>).detail;
+      const detail = (event as CustomEvent<{ kind: LedgerEntry["kind"]; detail: string; audio?: AudioEvent }>).detail;
       setLastSignal(detail.detail);
       appendLedger({ kind: detail.kind ?? "system", title: "Sternwarte", detail: detail.detail });
-      soundscape.current?.cue(detail.kind ?? "system");
+      soundscape.current?.emit(detail.audio ?? audioEventFromLegacy(detail.kind ?? "system", detail.detail));
       shapeMusic(detail.kind ?? "system");
     };
-    const onMissionState = (event: Event) => { const next = (event as CustomEvent<MissionState>).detail; setMission(next); if (next.phase === "victory") shapeMusic("victory"); };
+    const onMissionState = (event: Event) => { const next = (event as CustomEvent<MissionState>).detail; setMission(next); if (next.phase === "victory") { soundscape.current?.emit({ cue: "progression.level_up", category: "progression", level: next.arena + 1 }); shapeMusic("victory"); } };
     window.addEventListener("aurion:ledger-updated", onLedger);
     window.addEventListener("aurion:game-event", onGameEvent);
+    const onNpcInteraction = (event: Event) => { const npcId = (event as CustomEvent<{ npcId?: string }>).detail?.npcId; const voice = npcId === "lyra" ? "feminine" : npcId === "orun" ? "masculine" : "neutral"; soundscape.current?.emit({ cue: `interaction.npc.${voice}`, category: "interaction", voice } as AudioEvent); };
     window.addEventListener("aurion:mission-state", onMissionState);
+    window.addEventListener("aurion:world-npc-interaction", onNpcInteraction);
     return () => {
       window.removeEventListener("aurion:ledger-updated", onLedger);
       window.removeEventListener("aurion:game-event", onGameEvent);
       window.removeEventListener("aurion:mission-state", onMissionState);
+      window.removeEventListener("aurion:world-npc-interaction", onNpcInteraction);
     };
   }, []);
 
