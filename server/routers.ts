@@ -16,9 +16,11 @@ import type { ZoneId } from "./zoneProtocol";
 import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 
-function gatewayUrl(request: { protocol: string; get(name: string): string | undefined; header(name: string): string | undefined }) {
-  const protocol = request.header("x-forwarded-proto") ?? request.protocol;
-  return `${protocol}://${request.get("host") ?? "arelogic.space"}/mcp`;
+export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
+
+/** Aurion issues pairing sessions for the separately operated ChatGPT broker only. */
+export function gatewayUrl() {
+  return aurionMcpBrokerUrl;
 }
 
 export const appRouter = router({
@@ -66,7 +68,7 @@ export const appRouter = router({
       const sessionId = createGatewaySessionId();
       const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 8);
       await db.createGatewaySession({ id: sessionId, userId: ctx.user.id, providerLabel: input.providerLabel, tokenDigest: digestPairingToken(pairingToken), allowedCommands: JSON.stringify(allowed), expiresAt });
-      return { sessionId, pairingToken, expiresAt, mcpUrl: gatewayUrl(ctx.req), allowedCommands: allowed };
+      return { sessionId, pairingToken, expiresAt, mcpUrl: gatewayUrl(), allowedCommands: allowed };
     }),
     listSessions: protectedProcedure.query(async ({ ctx }) => {
       return db.listGatewaySessionsForUser(ctx.user.id);

@@ -17,4 +17,8 @@ describe("resolveApprovedGatewayHost", () => {
   it("rejects an unknown direct host even when it claims an approved forwarded host", () => {
     expect(resolveApprovedGatewayHost("attacker.example", "aurion3d-6hpapr2g.manus.space")).toBeNull();
   });
+
+  it("does not authorize the Aurion game domain as an MCP broker host", () => {
+    expect(resolveApprovedGatewayHost("arelorian.de", undefined)).toBeNull();
+  });
 });
