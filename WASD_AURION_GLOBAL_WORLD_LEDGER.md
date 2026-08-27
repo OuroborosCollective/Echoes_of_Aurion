@@ -21,3 +21,17 @@ Der globale Plan beginnt mit sechs Sektoren und schaltet anhand des dauerhaft ge
 ## Persistenz und verbleibende Arbeit
 
 `aurionGlobalWorldStates` speichert den letzten globalen Snapshot; `aurionGlobalWorldEpochReceipts` protokolliert jede Epochenauflösung unveränderlich. Die Datenbankmigration `0021_aurion_global_world_state.sql` legt beide Tabellen an. Noch **nicht** aktiviert ist ein kontinuierlicher serverseitiger Weltzyklus: Dürre, Wiederbewuchs, Handel, NPC-Wanderung und Konflikte werden derzeit bei bestätigter Weltauflösung abgeleitet, aber nicht zeitgesteuert fortgeschrieben. Die Aktivierung verlangt eine bewusste Wahl der permanenten Hostingform, einen idempotenten Epochenjob und ein Player-Presence-Register.
+
+## Fortschreibung: Chunkbasis, Delta-Ledger und erster Clientpfad
+
+> **Aurion-Kandidatenrevision:** `172da45d92670f6da636e002977d2f77e9ea415b` auf `aurion/wasd-unification-continuation`. Dieser additive Schnitt ergänzt die globale Sektorebene, ohne Aurion-`main`, private Turmhausinstanzen oder bestehende Gameplay-Receipts zu überschreiben.
+
+| Vertragsbereich | Realisierung und Nachweis | Status |
+| --- | --- | --- |
+| Gemeinsame mathematische Basis | `shared/worldChunkProtocol.ts` ist die einzige reine Quelle für Browser und Server. `worldId` + Seed + sichere Integer-Chunkkoordinaten erzeugen 64.000-mm-Chunks mit 16 × 16 Basistiles, Ressourcen und deterministischem Hash. `server/worldChunkProtocol.ts` ist ausschließlich ein Kompatibilitäts-Reexport. | integriert und getestet |
+| Delta-only-Persistenz | `aurionWorldChunkDeltas` und additive Migration `0022_aurion_world_chunk_deltas.sql` speichern ausschließlich bestätigte Abweichungen: Ressourcenentnahme, Bauten und Straßen, jeweils mit Basisrevision, kausaler Sequenz, Akteur, Idempotenzschlüssel und Hash. Basisgeometrie und unberührte Ressourcen werden nicht persistiert. | integriert und getestet |
+| Öffentlicher Readmodelpfad | Die geschützte Route `gameplay.worldChunk` nimmt Weltrevision, erwartete Basisrevision, Integerkoordinaten, Cursor und ein Limit von maximal 64 Deltas an. Sie liefert Basishash und einen öffentlichen Delta-Overlayausschnitt, aber weder Basistiles noch Seed, Akteur oder Idempotenzmaterial. | integriert und getestet |
+| Clientdarstellung | Die Expanse erhält den kleinen `globalWorld`-Generatorvertrag statt einer vollständigen Sektorliste. Babylon generiert einen Chunk erst, wenn der serverseitige Basishash zur Shared-Generierung passt; höchstens 64 bestätigte Deltaoverlays werden budgetiert gerendert. React zeigt Sektoren, Weltepoche, Seedchunk und Deltaanzahl. | integriert, GPU-Readback offen |
+| Responsive QA | Die Turmhaus-/Expanse-Bedienwege wurden auf 412 × 915, 800 × 1280 und 1440 × 1000 CSS-Pixel geprüft. Der isolierte Firefox-Runner stellte kein WebGL bereit; die Canvas-Abnahme ist deshalb bewusst nicht behauptet und als eigener QA-Punkt nachverfolgt. | UI bestätigt, Canvas offen |
+
+Die vollständige lokale Regression zu dieser Revision ergab **44 bestandene** und **7 erwartungsgemäß übersprungene** Testdateien; **151 Tests bestanden**, **12 wurden übersprungen**. Die Typprüfung und `git diff --check` waren erfolgreich. Die zwei wichtigsten nachfolgenden Grenzen bleiben unverändert: Erstens existiert keine öffentliche Delta-Schreibroute — der Server muss Sequenz, Sichtbereich, Eigentum, Schutzgebiete und Aktionssemantik autoritativ prüfen. Zweitens ersetzt der einzelne sichtbare Chunk noch keinen Mehrchunkradius mit LRU-/Dispose-Cache oder eine serverseitige Präsenz-/Epochenauslösung.
