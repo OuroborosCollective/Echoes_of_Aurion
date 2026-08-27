@@ -104,3 +104,18 @@ Nach diesen Korrekturen bestanden `pnpm check` und die fokussierten Weltverträg
 **Fortbestehende Annahmegrenze:** Die isolierte Datenbank-Evidenz erfüllt die DB-Anteile für AIM-215, AIM-216 und den gespeicherten Anteil von AIM-217, ist aber ausdrücklich **kein Produktionsmigrationsnachweis**. Der einzige verfügbare automatisierte Chromium-Runner meldet weiter `webgl: false` und `webgl2: false`. Deshalb bleiben der reale Mehrchunk-Canvas-/LRU-/Draw-Call-Readback für Phone, Tablet und Desktop, die visuelle Rückkehr Turm ↔ offene Welt sowie die darauf beruhenden Kriterien von AIM-214 und AIM-218 offen. **AIM-214 bis AIM-218 werden nicht geschlossen; kein Merge, keine Produktionsmigration und kein Deployment erfolgen auf Grundlage dieses Abschnitts.**
 
 > **Nachfolgende Kandidatenrevision:** wird erst nach Commit der vorstehenden, getesteten E2E- und Frischekorrekturen ergänzt. Dieser Ledgerabschnitt enthält keine Geheimnisse und keine Produktionsausführung.
+
+
+## Fortschreibung: Horizontsicht, Nebelprofil und Desktop-Canvasdiagnose
+
+> **Gebundene Kandidatenbasis:** wiederhergestellter Branch `aurion/wasd-unification-continuation`; der Abschnitt ist additiv und enthält weder Produktionsmigration noch Zugangsdaten.
+
+| Prüfbereich | Tatsächlicher Nachweis | Ergebnis |
+| --- | --- | --- |
+| Deterministische Horizontregel | `shared/worldChunkStreamingProtocol.ts` bindet Phone/Tablet/Desktop an die kanonische 64-m-Chunksize. Nebelprofile enden bei 192/224/336 m; die konservativen Fenstergrenzen liegen bei 128/128/192 m. | Wolfram bestätigt `fogStart < fogEnd` und Nebelende außerhalb des jeweiligen sichtbaren Fensterrands. |
+| Babylon-Integration | `scene.ts` verwendet ausschließlich Babylons linearen Standardnebel pro Streaming-Tier; der private Turm schaltet ihn beim Rückkehr-Clear aus. Es wurde kein eigener Shader und keine Weltlogik geändert. | Typprüfung und fokussierte Regression bestanden. |
+| Desktop-VPS-Readback | Bei 1440 × 1000 meldet der Browserless-Readback `webgl2: true`, sichtbaren Canvas mit 1440 × 1000, keinen WebGL-Fallback, 21 initiale Roots, 25 gecachte Roots nach Reanchoring und 0 Roots nach Rückkehr-Clear. | Funktionale Mehrchunk-/LRU-/Rückkehrmetriken bestanden. |
+| Shader-/GPU-Diagnose | Serena meldet keine statischen Befunde. Die Browserkonsole meldet keine Shader-Kompilationsfehler; die 500er betreffen nur nicht ausgelieferte lokale GLB-Pfade und werden durch sichere Fallbacks abgefangen. | Kein belegter Produktionsshaderfehler. |
+| Desktop-Bildpfad | Der vollständige UI-Frame ist sichtbar. Der künstlich freigestellte Canvas-Frame bleibt weiß; direkte Backbuffer-Readbacks erzeugten zusätzlich `ReadPixels`-Stalls und WebGL-Kontextverlust. | Als Headless-Compositor-/ReadPixels-Grenze dokumentiert, nicht als bestandener freier Desktop-Canvas-Screenshot behauptet. |
+
+Die aktuelle Kandidatenregression umfasst **53 bestandene** und **9 erwartungsgemäß übersprungene Testdateien**, **185 bestandene** und **19 übersprungene Tests**; `pnpm check` und `git diff --check` sind erfolgreich. Die unabhängige Wolfram-Prüfung der Horizontgrenzen ist erfolgreich. AIM-214 bis AIM-218 bleiben bis zur abschließenden Linearprüfung und vollständigen Releaseabnahme offen; aus dem Headless-Freistellpfad wird kein unzulässiger visueller Desktopnachweis abgeleitet.

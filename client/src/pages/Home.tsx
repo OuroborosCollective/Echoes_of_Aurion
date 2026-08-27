@@ -454,6 +454,16 @@ export default function Home() {
       onError: () => setLastSignal("Der Weltübergang wurde nicht bestätigt. Die Szene bleibt im sicheren Turmzustand."),
     });
   };
+  const returnToTowerHome = (): void => {
+    if (gameplaySession.current) { setLastSignal("Eine aktive serverbestätigte Begegnung muss vor der Rückkehr gesichert werden."); return; }
+    zoneClient.current?.close();
+    setWorldStreamAnchor(null);
+    setWorldStreamCursors({});
+    window.dispatchEvent(new Event("aurion:return-to-tower"));
+    setScreen("home");
+    appendLedger({ kind: "system", title: "Sichere Rückkehr zur Sternwarte", detail: "Der lokale Expanse-Stream wurde beendet; dein privates Hauptquartier bleibt der sichere Ausgangspunkt." });
+    setLastSignal("Du bist sicher in deine private Sternwarte zurückgekehrt.");
+  };
   const connectAuthoritativeZone = (): void => {
     if (!isAuthenticated || !user?.id) { openAccountAccess(); return; }
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "aurion-browser-movement-v1" }, {
@@ -632,6 +642,7 @@ export default function Home() {
                 }, onError: () => setLastSignal("Die Dialoginterpretation wurde sicher verworfen.") })}>Deutung anfragen</button></div>{dialogueQuestPrompt && dialogueQuestPrompt.npcId === activeWorldNpc && <div className="world-npc-dialogue__intent" role="status"><small>BESTÄTIGTE DIALOGABSICHT // {dialogueQuestPrompt.actionKind === "offer_quest" ? "QUESTANGEBOT" : "ÜBERGABEPRÜFUNG"}</small><button type="button" disabled={requestQuestActionFromDialogue.isPending} onClick={() => requestQuestActionFromDialogue.mutate({ dialogueReceiptId: dialogueQuestPrompt.dialogueReceiptId, actionKind: dialogueQuestPrompt.actionKind, questKey: dialogueQuestPrompt.questKey, idempotencyKey: `dialogue-command:${dialogueQuestPrompt.dialogueReceiptId}:${dialogueQuestPrompt.actionKind}:${dialogueQuestPrompt.questKey}` }, { onSuccess: (result) => { void gameplayProgress.refetch(); setLastSignal(result.receipt.outcome.state === "offer_available_quest" ? "Questangebot serverseitig bestätigt. Die Annahme bleibt deine separate Aktion." : "Übergabeprüfung bestätigt. Die Questübergabe bleibt deine separate Aktion."); }, onError: () => setLastSignal("Die Dialogfolgeaktion wurde sicher verworfen.") })}>{requestQuestActionFromDialogue.isPending ? "FOLGEAKTION WIRD GEPRÜFT" : dialogueQuestPrompt.actionKind === "offer_quest" ? "QUESTANGEBOT BESTÄTIGEN" : "ÜBERGABE PRÜFEN"}</button></div>}<button type="button" className="world-npc-dialogue__close" onClick={() => { setActiveWorldNpc(null); setDialogueQuestPrompt(null); }}>Dialog schließen</button></div>;
             })()}
             <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={() => enterAurionExpanse()}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
+            <button type="button" disabled={Boolean(gameplaySession.current)} onClick={returnToTowerHome}><ChevronRight size={16} /> ZUR STERNWARTE ZURÜCK</button>
             <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>
           </section>
 

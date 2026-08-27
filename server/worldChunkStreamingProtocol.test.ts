@@ -5,6 +5,7 @@ import {
   planWorldChunkCache,
   orderedWorldChunkWindow,
   worldChunkCoordinateKey,
+  worldChunkHorizonProfile,
   worldChunkStreamingBudget,
 } from "../shared/worldChunkStreamingProtocol";
 
@@ -23,6 +24,19 @@ describe("worldChunkStreamingProtocol", () => {
     expect(worldChunkStreamingBudget("phone")).toMatchObject({ visibleRadius: 1, maxVisibleChunks: 9, maxCachedChunks: 12, maxVisibleTiles: 2_304, maxVisibleDeltaOverlays: 9 * WORLD_CHUNK_STREAM_PAGE_LIMIT });
     expect(worldChunkStreamingBudget("tablet")).toMatchObject({ visibleRadius: 1, maxVisibleChunks: 9, maxCachedChunks: 20, maxVisibleTiles: 2_304 });
     expect(worldChunkStreamingBudget("desktop")).toMatchObject({ visibleRadius: 2, maxVisibleChunks: 25, maxCachedChunks: 36, maxVisibleTiles: 6_400, maxVisibleDeltaOverlays: 25 * WORLD_CHUNK_STREAM_PAGE_LIMIT });
+  });
+
+  it("keeps the full stream window visible while applying deterministic horizon profiles", () => {
+    expect(worldChunkHorizonProfile("phone")).toEqual({ tier: "phone", cameraRadiusMeters: 130, fogStartMeters: 92, fogEndMeters: 192, landmarkSilhouetteDistanceMeters: 150 });
+    expect(worldChunkHorizonProfile("tablet")).toEqual({ tier: "tablet", cameraRadiusMeters: 150, fogStartMeters: 110, fogEndMeters: 224, landmarkSilhouetteDistanceMeters: 175 });
+    expect(worldChunkHorizonProfile("desktop")).toEqual({ tier: "desktop", cameraRadiusMeters: 280, fogStartMeters: 176, fogEndMeters: 336, landmarkSilhouetteDistanceMeters: 300 });
+    (["phone", "tablet", "desktop"] as const).forEach(tier => {
+      const budget = worldChunkStreamingBudget(tier);
+      const horizon = worldChunkHorizonProfile(tier);
+      expect(horizon.fogStartMeters).toBeLessThan(horizon.fogEndMeters);
+      expect(horizon.fogEndMeters).toBeGreaterThan((budget.visibleRadius + 1) * 64);
+      expect(horizon.landmarkSilhouetteDistanceMeters).toBeLessThanOrEqual(horizon.fogEndMeters);
+    });
   });
 
   it("pins the visible window, requests missing chunks center-first and evicts only the least-recent background chunks", () => {

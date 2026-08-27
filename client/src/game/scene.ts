@@ -41,7 +41,7 @@ import { colorPixelShader } from "@babylonjs/core/Shaders/color.fragment.js";
 import { aurionAssets } from "@/lib/aurionAssets";
 import { essentialTowerGlbPlan } from "@/game/glbUsagePlan";
 import { generateBaseWorldChunk, WORLD_CHUNK_BASE_REVISION, type WorldChunkDeltaOverlay } from "@shared/worldChunkProtocol";
-import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, planWorldChunkCache, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
+import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, planWorldChunkCache, worldChunkCoordinateKey, worldChunkHorizonProfile, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
@@ -505,7 +505,9 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     openWorldRoot = null;
     worldNpcTargets = [];
     openWorldActive = false;
+    scene.fogMode = Scene.FOGMODE_NONE;
     camera.lowerRadiusLimit = 14; camera.upperRadiusLimit = 23; camera.radius = 20.5;
+    emitWorldChunkMetrics("cleared");
   };
   const trimStreamedChunkCache = (): void => {
     const plan = planWorldChunkCache({ center: activeStreamingCenter, tier: activeStreamingTier, cached: Array.from(streamedChunkRoots.values()).map(entry => ({ coordinate: entry.coordinate, lastAccess: entry.lastAccess })) });
@@ -514,6 +516,24 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       const entry = streamedChunkRoots.get(key);
       if (entry) { entry.root.dispose(false, true); streamedChunkRoots.delete(key); streamedChunkDeltaCache.delete(key); }
     });
+  };
+  const emitWorldChunkMetrics = (phase: "streamed" | "cleared"): void => {
+    const visibleKeys = new Set(orderedWorldChunkWindow(activeStreamingCenter, worldChunkStreamingBudget(activeStreamingTier).visibleRadius).map(worldChunkCoordinateKey));
+    const entries = Array.from(streamedChunkRoots.entries());
+    const visibleChunkRootCount = entries.filter(([key]) => visibleKeys.has(key)).length;
+    const visibleDeltaOverlayCount = Array.from(streamedChunkDeltaCache.entries()).filter(([key]) => visibleKeys.has(key)).reduce((total, [, receipts]) => total + receipts.size, 0);
+    const totalDeltaOverlayCount = Array.from(streamedChunkDeltaCache.values()).reduce((total, receipts) => total + receipts.size, 0);
+    window.dispatchEvent(new CustomEvent("aurion:world-chunk-metrics", { detail: {
+      phase,
+      tier: activeStreamingTier,
+      center: { ...activeStreamingCenter },
+      visibleChunkRootCount,
+      cachedChunkRootCount: streamedChunkRoots.size,
+      visibleDeltaOverlayCount,
+      cachedDeltaOverlayCount: totalDeltaOverlayCount,
+      sceneMeshCount: scene.meshes.length,
+      sceneVertexCount: scene.meshes.reduce((total, mesh) => total + mesh.getTotalVertices(), 0),
+    } }));
   };
   const renderConfirmedWorldChunk = (state: WorldChunkStreamState): void => {
     if (!openWorldRoot || !Number.isSafeInteger(state.chunk.generation.coordinate.x) || !Number.isSafeInteger(state.chunk.generation.coordinate.z) || state.chunk.generation.baseRevision !== WORLD_CHUNK_BASE_REVISION) return;
@@ -525,8 +545,12 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     activeStreamingTier = state.tier;
     activeStreamingCenter = { ...state.center };
     if (centerChanged) streamedChunkRoots.forEach(entry => { entry.root.position.x = (entry.coordinate.x - state.center.x) * 64; entry.root.position.z = (entry.coordinate.z - state.center.z) * 64; });
-    const viewRadius = state.tier === "desktop" ? 280 : state.tier === "tablet" ? 150 : 130;
-    camera.lowerRadiusLimit = viewRadius * 0.72; camera.upperRadiusLimit = viewRadius * 1.12; camera.radius = viewRadius; camera.setTarget(Vector3.Zero());
+    const horizon = worldChunkHorizonProfile(state.tier);
+    scene.fogMode = Scene.FOGMODE_LINEAR;
+    scene.fogColor = Color3.FromHexString("#061820");
+    scene.fogStart = horizon.fogStartMeters;
+    scene.fogEnd = horizon.fogEndMeters;
+    camera.lowerRadiusLimit = horizon.cameraRadiusMeters * 0.72; camera.upperRadiusLimit = horizon.cameraRadiusMeters * 1.12; camera.radius = horizon.cameraRadiusMeters; camera.setTarget(Vector3.Zero());
     const key = worldChunkCoordinateKey(base.coordinate);
     const previous = streamedChunkRoots.get(key);
     previous?.root.dispose(false, true);
@@ -576,6 +600,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     const boundary = MeshBuilder.CreateTorus(`confirmed-chunk-boundary-${base.coordinate.x}-${base.coordinate.z}`, { diameter: 90, thickness: 0.08, tessellation: 64 }, scene);
     boundary.parent = root; boundary.position.y = 0.22; boundary.rotation.x = Math.PI / 2; boundary.material = material(scene, `confirmed-chunk-boundary-mat-${base.coordinate.x}-${base.coordinate.z}`, bronze, aurion.scale(0.32));
     trimStreamedChunkCache();
+    emitWorldChunkMetrics("streamed");
     emitGameEvent("system", `Seed-Chunk ${base.coordinate.x}:${base.coordinate.z} ist bestätigt; ${state.chunk.deltas.length} aktuelle Delta-Overlays liegen vor, ${streamedChunkRoots.size} Chunks sind im LRU-Cache.`);
   };
   const createOpenWorldVisuals = (detail: OpenWorldSceneState): void => {
@@ -766,6 +791,16 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     if (!detail || detail.revision !== 1 || !["observatory_threshold", "windhollow", "emberfall", "cinder_vault"].includes(detail.zoneId) || !Number.isInteger(detail.zoneTier) || detail.zoneTier < 0 || detail.zoneTier > 3 || detail.terrain?.chunkSizeMeters !== 32 || detail.terrain.tileSizeMeters !== 4 || detail.terrain.columns !== 8 || detail.terrain.rows !== 8 || detail.terrain.tiles.length !== 64 || detail.globalWorld?.version !== "aurion-global-world.v1" || detail.globalWorld.worldId !== "echoes-of-aurion-global" || !detail.globalWorld.worldSeed.trim() || !Number.isSafeInteger(detail.globalWorld.epoch) || !Number.isSafeInteger(detail.globalWorld.unlockedSectorCount) || typeof detail.globalWorld.deterministicHash !== "string") return;
     started = true; awaitingQuest = false; victory = false; dungeonActive = false; dungeonUnlocked = false; createOpenWorldVisuals(detail); emitState(true);
   };
+  const onReturnToTower = (): void => {
+    if (!openWorldActive) return;
+    clearOpenWorld();
+    started = false; transitioning = false; awaitingQuest = false; dungeonActive = false;
+    arenaIndex = 0;
+    arenaSets.forEach((set, index) => set.setEnabled(index === 0));
+    groundMat.diffuseColor = arenas[0].floor; ringMat.emissiveColor = arenas[0].glow.scale(0.23); beaconMat.emissiveColor = arenas[0].glow; beaconLight.diffuse = arenas[0].glow; sun.diffuse = arenas[0].sun;
+    explorer.position = new Vector3(-3.2, 0.2, 1.6); echo.position = new Vector3(-0.7, 0.2, 0.4); echoTarget = echo.position.clone(); sentinel.root.setEnabled(false);
+    emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
+  };
   const onWorldChunkStream = (event: Event): void => {
     const detail = (event as CustomEvent<WorldChunkStreamState>).detail;
     if (!openWorldActive || !detail || !["phone", "tablet", "desktop"].includes(detail.tier) || !Number.isSafeInteger(detail.center?.x) || !Number.isSafeInteger(detail.center?.z) || detail.globalWorld?.version !== "aurion-global-world.v1" || detail.globalWorld.worldId !== "echoes-of-aurion-global" || !detail.globalWorld.worldSeed.trim() || detail.globalWorld.deterministicHash !== activeGlobalWorldHash || !detail.chunk || detail.chunk.generation?.worldId !== detail.globalWorld.worldId || !Array.isArray(detail.chunk.deltas) || detail.chunk.deltas.length > WORLD_CHUNK_STREAM_PAGE_LIMIT || !Number.isSafeInteger(detail.chunk.nextAfterSequence)) return;
@@ -788,7 +823,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     if (detail?.userId !== authoritativeZoneUserId || !Number.isInteger(detail.position?.x) || !Number.isInteger(detail.position?.z)) return;
     authoritativeExplorerTarget = new Vector3(detail.position.x / 1_000, explorer.position.y, detail.position.z / 1_000);
   };
-  window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld); window.addEventListener("aurion:stream-world-chunk", onWorldChunkStream); window.addEventListener("aurion:zone-connected", onZoneConnected); window.addEventListener("aurion:zone-disconnected", onZoneDisconnected); window.addEventListener("aurion:zone-snapshot", onZoneSnapshot);
+  window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld); window.addEventListener("aurion:return-to-tower", onReturnToTower); window.addEventListener("aurion:stream-world-chunk", onWorldChunkStream); window.addEventListener("aurion:zone-connected", onZoneConnected); window.addEventListener("aurion:zone-disconnected", onZoneDisconnected); window.addEventListener("aurion:zone-snapshot", onZoneSnapshot);
   const observer = scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05); elapsed += dt; const arena = arenas[arenaIndex];
     beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
@@ -827,5 +862,5 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     for (let index = pulses.length - 1; index >= 0; index -= 1) { const pulse = pulses[index]; pulse.age += dt; pulse.mesh.scaling.setAll(1 + pulse.age * 4.3); const pulseMaterial = pulse.mesh.material as StandardMaterial; pulseMaterial.alpha = Math.max(0, 1 - pulse.age * 1.8); if (pulse.age > 0.58) { pulse.mesh.dispose(); pulses.splice(index, 1); } }
     emitState();
   });
-  return { scene, setCharacterModel, setArenaModel, dispose: () => { clearOpenWorld(); customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); window.removeEventListener("aurion:enter-dungeon", onEnterDungeon); window.removeEventListener("aurion:authoritative-action", onAuthoritativeAction); window.removeEventListener("aurion:load-encounter", onLoadEncounter); window.removeEventListener("aurion:load-open-world", onLoadOpenWorld); window.removeEventListener("aurion:stream-world-chunk", onWorldChunkStream); window.removeEventListener("aurion:zone-connected", onZoneConnected); window.removeEventListener("aurion:zone-disconnected", onZoneDisconnected); window.removeEventListener("aurion:zone-snapshot", onZoneSnapshot); scene.dispose(); } };
+  return { scene, setCharacterModel, setArenaModel, dispose: () => { clearOpenWorld(); customArenaRoot?.dispose(false, true); scene.onBeforeRenderObservable.remove(observer); window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("aurion:human-command", onHumanCommand); window.removeEventListener("aurion:human-action", onHumanAction); window.removeEventListener("aurion:command", onCommand); window.removeEventListener("aurion:begin-expedition", onStart); window.removeEventListener("aurion:enter-dungeon", onEnterDungeon); window.removeEventListener("aurion:authoritative-action", onAuthoritativeAction); window.removeEventListener("aurion:load-encounter", onLoadEncounter); window.removeEventListener("aurion:load-open-world", onLoadOpenWorld); window.removeEventListener("aurion:return-to-tower", onReturnToTower); window.removeEventListener("aurion:stream-world-chunk", onWorldChunkStream); window.removeEventListener("aurion:zone-connected", onZoneConnected); window.removeEventListener("aurion:zone-disconnected", onZoneDisconnected); window.removeEventListener("aurion:zone-snapshot", onZoneSnapshot); scene.dispose(); } };
 }

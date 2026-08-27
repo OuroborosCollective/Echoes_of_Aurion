@@ -1,4 +1,4 @@
-import { WORLD_CHUNK_COORDINATE_LIMIT, WORLD_CHUNK_GRID_SIZE, type WorldChunkCoordinate } from "./worldChunkProtocol";
+import { WORLD_CHUNK_COORDINATE_LIMIT, WORLD_CHUNK_GRID_SIZE, WORLD_CHUNK_SIZE_MM, type WorldChunkCoordinate } from "./worldChunkProtocol";
 
 export const WORLD_CHUNK_STREAM_MAX_RADIUS = 2 as const;
 export const WORLD_CHUNK_STREAM_PAGE_LIMIT = 32 as const;
@@ -17,6 +17,15 @@ export type WorldChunkStreamingBudget = {
   maxVisibleDeltaOverlays: number;
 };
 
+/** Presentation-only camera and linear-fog values. Fog ends beyond the farthest visible chunk edge. */
+export type WorldChunkHorizonProfile = {
+  tier: WorldChunkStreamingTier;
+  cameraRadiusMeters: number;
+  fogStartMeters: number;
+  fogEndMeters: number;
+  landmarkSilhouetteDistanceMeters: number;
+};
+
 /** A monotone local access index, never wall-clock time, drives deterministic LRU eviction. */
 export type WorldChunkCacheEntry = { coordinate: WorldChunkCoordinate; lastAccess: number };
 
@@ -27,6 +36,8 @@ export type WorldChunkCachePlan = {
   evict: readonly WorldChunkCoordinate[];
 };
 
+const chunkSizeMeters = WORLD_CHUNK_SIZE_MM / 1_000;
+
 const budgets: Readonly<Record<WorldChunkStreamingTier, WorldChunkStreamingBudget>> = Object.freeze({
   // 3×3 window: 9 chunks / 2,304 visible tiles / at most 288 32-item overlays.
   phone: Object.freeze({ tier: "phone", visibleRadius: 1, maxCachedChunks: 12, maxVisibleChunks: 9, maxCachedTiles: 3_072, maxVisibleTiles: 2_304, maxVisibleBaseResources: 72, maxVisibleDeltaOverlays: 288 }),
@@ -34,6 +45,13 @@ const budgets: Readonly<Record<WorldChunkStreamingTier, WorldChunkStreamingBudge
   tablet: Object.freeze({ tier: "tablet", visibleRadius: 1, maxCachedChunks: 20, maxVisibleChunks: 9, maxCachedTiles: 5_120, maxVisibleTiles: 2_304, maxVisibleBaseResources: 72, maxVisibleDeltaOverlays: 288 }),
   // 5×5 window: 25 chunks / 6,400 visible tiles / at most 800 32-item overlays.
   desktop: Object.freeze({ tier: "desktop", visibleRadius: 2, maxCachedChunks: 36, maxVisibleChunks: 25, maxCachedTiles: 9_216, maxVisibleTiles: 6_400, maxVisibleBaseResources: 200, maxVisibleDeltaOverlays: 800 }),
+});
+
+const horizons: Readonly<Record<WorldChunkStreamingTier, WorldChunkHorizonProfile>> = Object.freeze({
+  // All profiles retain the full stream window; fog begins only after the near interaction field.
+  phone: Object.freeze({ tier: "phone", cameraRadiusMeters: 130, fogStartMeters: 92, fogEndMeters: chunkSizeMeters * 3, landmarkSilhouetteDistanceMeters: 150 }),
+  tablet: Object.freeze({ tier: "tablet", cameraRadiusMeters: 150, fogStartMeters: 110, fogEndMeters: chunkSizeMeters * 3.5, landmarkSilhouetteDistanceMeters: 175 }),
+  desktop: Object.freeze({ tier: "desktop", cameraRadiusMeters: 280, fogStartMeters: 176, fogEndMeters: chunkSizeMeters * 5.25, landmarkSilhouetteDistanceMeters: 300 }),
 });
 
 function assertChunkCoordinate(value: number, label: string) {
@@ -48,6 +66,10 @@ function compareCoordinate(left: WorldChunkCoordinate, right: WorldChunkCoordina
 
 export function worldChunkStreamingBudget(tier: WorldChunkStreamingTier): WorldChunkStreamingBudget {
   return budgets[tier];
+}
+
+export function worldChunkHorizonProfile(tier: WorldChunkStreamingTier): WorldChunkHorizonProfile {
+  return horizons[tier];
 }
 
 export function worldChunkCoordinateKey(coordinate: WorldChunkCoordinate): string {
