@@ -24,9 +24,33 @@ describe("worldEpochReactionProtocol", () => {
     const affected = reaction.sectors.find(sector => sector.sourceIds.some(id => id.startsWith("delta:tree:")));
     expect(affected).toBeDefined();
     expect(affected!.resources.timber).toBeLessThanOrEqual(plan.sectors.find(sector => sector.id === affected!.sectorId)!.resources.timber);
+    const baseline = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: [], observedPresence: [] }).sectors.find(sector => sector.sectorId === affected!.sectorId)!;
+    const wood = affected!.market.find(stock => stock.itemId === "wood_log")!;
+    const baselineWood = baseline.market.find(stock => stock.itemId === "wood_log")!;
     expect(affected!.professions.forester).toBeGreaterThan(0);
     expect(affected!.market).toHaveLength(3);
+    expect(wood.stock).toBeLessThan(baselineWood.stock);
+    expect(wood.price).toBeGreaterThanOrEqual(baselineWood.price);
+    expect(affected!.migrations).toContainEqual(expect.objectContaining({ profession: "forester", reason: "forest_recovery", protectedRoute: true }));
+    expect(affected!.questOffers).toContainEqual(expect.objectContaining({ id: `epoch-quest:${affected!.sectorId}:restore-forest`, npcRole: "forester" }));
     expect(affected!.migrations.every(migration => migration.protectedRoute)).toBe(true);
+    expect(JSON.stringify(affected!.questOffers)).not.toContain("reward");
+  });
+
+  it("derives bounded deescalation from confirmed infrastructure and replays quest offers exactly", () => {
+    const roads = Array.from({ length: 8 }, (_, index) => createWorldChunkDelta({ id: `delta:road:care:${String(index).padStart(3, "0")}`, worldId: "echoes-of-aurion-global", coordinate: { x: 41, z: -19 }, baseRevision: 1, sequence: index + 1, kind: "road_built", targetId: `road:care:${index.toString(16).padStart(16, "0")}`, actorUserId: 7, idempotencyKey: `epoch:road:care:${String(index).padStart(4, "0")}`, payload: { fromXmm: index * 1_000, fromZmm: 0, toXmm: index * 1_000 + 750, toZmm: 0 } }));
+    const first = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: roads, observedPresence: [presence] });
+    const replay = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: roads.slice().reverse(), observedPresence: [presence] });
+    const affected = first.sectors.find(sector => sector.sourceIds.some(id => id.startsWith("delta:road:care:")))!;
+    const baseline = resolveWorldEpochReaction({ plan, resolutionIndex: 1, confirmedDeltas: [], observedPresence: [] }).sectors.find(sector => sector.sectorId === affected.sectorId)!;
+    expect(replay).toEqual(first);
+    expect(affected.polity.deescalation).toBeGreaterThan(baseline.polity.deescalation);
+    expect(affected.polity.conflictPressure).toBeLessThanOrEqual(baseline.polity.conflictPressure);
+    expect(affected.polity.stability).toBeGreaterThanOrEqual(baseline.polity.stability);
+    expect(affected.polity.conflictPressure).toBeGreaterThanOrEqual(0);
+    expect(affected.polity.conflictPressure).toBeLessThanOrEqual(1);
+    expect(affected.polity.civilianStructuresProtected && affected.polity.playerHomesProtected).toBe(true);
+    expect(affected.questOffers).toEqual(replay.sectors.find(sector => sector.sectorId === affected.sectorId)!.questOffers);
   });
 
   it("bounds accepted delta work and rejects an index that does not equal the persisted global epoch", () => {
