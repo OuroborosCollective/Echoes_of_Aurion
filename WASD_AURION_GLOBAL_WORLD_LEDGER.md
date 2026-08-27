@@ -73,3 +73,13 @@ Der vollständige lokale Lauf nach diesem Schnitt ergab **53 bestandene** und **
 **Keine Linear-Schließung:** AIM-214 bleibt bis zum echten Browsercanvas-/LRU-Readback offen. AIM-215 und AIM-216 bleiben bis zu ausgeführten isolierten DB-E2E-Readbacks offen. AIM-217 bleibt bis die neue Reactionmigration in einer freigegebenen Testumgebung ausgeführt, der gespeicherte Reactionreadback sichtbar geprüft und alle Domänen nachvollziehbar abgenommen wurden. AIM-218 bleibt bis zu Phone-/Tablet-/Desktop-WebGL-Readbacks, Budget- und Rückkehrpfadnachweisen offen.
 
 > **Implementierungsrevision dieses Nachweises:** `67c57d6588e5dff41ddbd36dd97240c00e51e7cb` (`feat(world): stream chunks and resolve bounded world epochs`). Dieser Ledgerabschnitt enthält weder Geheimnisse noch Migrationsausführung.
+
+## Fortschreibung: integrierter Runtimepfad und Browserdiagnose
+
+> **Runtime-Revision:** `9e2a3374231c7cebaaabbc3e063e111f9130fcfb` (`fix(runtime): resolve integrated Vite client root`).
+
+Die integrierte Express/Vite-Laufzeit löst die Vite-Konfigurationsfabrik nun vor dem Middleware-Start auf. Dadurch wird der `client`-Root tatsächlich verwendet: `GET /src/main.tsx` liefert `text/javascript` statt des HTML-Fallbacks. Der optionale Analytics-Loader fordert bei unveränderten Platzhaltern keine falsche URL mehr an. Ein automatisierter Chromium-Readback auf `http://127.0.0.1:3000` meldete danach **0 JavaScriptfehler**; die Seite zeigt weiterhin den korrekten Gäste-/Konto-Einstieg.
+
+Der verwendete isolierte Playwright-Browser stellt jedoch weder WebGL noch WebGL2 bereit (`webgl: false`, `webgl2: false`). Er zeigt deshalb den vorgesehenen 3D-Fallback und darf nicht als GPU-Canvasabnahme gelten. Die verfügbare Chromium-Umgebung wurde damit diagnostisch geprüft, aber kein Mehrchunk-WebGL-Readback behauptet.
+
+Nach dem Runtimefix blieb die vollständige lokale Regression bei **53 bestandenen** und **9 erwartungsgemäß übersprungenen Testdateien** sowie **181 bestandenen** und **17 übersprungenen Tests**; `pnpm check` war erfolgreich. Die übersprungenen Fälle umfassen unter anderem die opt-in Datenbank-E2Es und sind kein physischer DB-Readback. AIM-214 bis AIM-218 bleiben daher offen.
