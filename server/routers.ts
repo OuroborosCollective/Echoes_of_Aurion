@@ -113,6 +113,10 @@ export const appRouter = router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
     create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
   }),
+  crafting: router({
+    read: protectedProcedure.query(({ ctx }) => db.getCraftingReadmodel(ctx.user.id)),
+    craft: protectedProcedure.input(z.object({ recipeKey: z.literal("temper_aurion_spear"), inputItemId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.craftItemForUser({ userId: ctx.user.id, ...input })),
+  }),
   market: router({
     inventory: protectedProcedure.query(({ ctx }) => db.listInventoryForUser(ctx.user.id)),
     activeListings: protectedProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional()).query(({ input }) => db.listActiveMarketListings(input?.limit ?? 50)),

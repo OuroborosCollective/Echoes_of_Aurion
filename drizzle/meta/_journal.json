@@ -134,6 +134,13 @@
       "when": 1787797466524,
       "tag": "0018_wasd_aurion_exact_skill_progression",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1787805012516,
+      "tag": "0019_wasd_aurion_crafting_receipt_inventory",
+      "breakpoints": true
     }
   ]
 }

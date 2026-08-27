@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Coins,
   FileText,
+  Hammer,
   Megaphone,
   Menu,
   MessageCircle,
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type CommunityPanel = "chat" | "partners" | "market" | "assets" | "forum" | null;
+type CommunityPanel = "chat" | "partners" | "market" | "crafting" | "assets" | "forum" | null;
 type ForumCategory = "announcements" | "patch_notes" | "events" | "general";
 
 const forumSections: { id: ForumCategory; label: string; icon: typeof Megaphone }[] = [
@@ -105,7 +106,8 @@ export default function CommunityOverlay({
     refetchInterval: 6000,
   });
   const player = trpc.player.me.useQuery(undefined, { enabled: apiAvailable && isAuthenticated });
-  const marketInventory = trpc.market.inventory.useQuery(undefined, { enabled: apiAvailable && isAuthenticated && panel === "market" });
+  const marketInventory = trpc.market.inventory.useQuery(undefined, { enabled: apiAvailable && isAuthenticated && (panel === "market" || panel === "crafting") });
+  const crafting = trpc.crafting.read.useQuery(undefined, { enabled: apiAvailable && isAuthenticated && panel === "crafting" });
   const marketListings = trpc.market.activeListings.useQuery({ limit: 50 }, { enabled: apiAvailable && isAuthenticated && panel === "market", refetchInterval: apiAvailable && panel === "market" ? 8000 : false });
   const myMarketListings = trpc.market.myListings.useQuery(undefined, { enabled: apiAvailable && isAuthenticated && panel === "market" });
   const mySubmissions = trpc.assetSubmissions.mine.useQuery(undefined, { enabled: apiAvailable && isAuthenticated && panel === "assets" });
@@ -186,6 +188,7 @@ export default function CommunityOverlay({
   const createListing = trpc.market.createListing.useMutation({ onSuccess: async () => { setMessage("Dein Gegenstand ist jetzt im Auktionshaus sichtbar."); await Promise.all([utils.market.inventory.invalidate(), utils.market.activeListings.invalidate(), utils.market.myListings.invalidate()]); }, onError: error => reportRuntimeFailure("Das Auktionsangebot", error) });
   const cancelListing = trpc.market.cancelListing.useMutation({ onSuccess: async () => { setMessage("Das Angebot wurde zurückgenommen."); await Promise.all([utils.market.inventory.invalidate(), utils.market.activeListings.invalidate(), utils.market.myListings.invalidate()]); }, onError: error => reportRuntimeFailure("Das Zurücknehmen", error) });
   const buyListing = trpc.market.buyListing.useMutation({ onSuccess: async () => { setMessage("Kauf bestätigt. Der Gegenstand liegt jetzt in deinem Inventar."); await Promise.all([utils.market.inventory.invalidate(), utils.market.activeListings.invalidate(), utils.market.myListings.invalidate(), utils.player.me.invalidate()]); }, onError: error => reportRuntimeFailure("Der Kauf", error) });
+  const craftItem = trpc.crafting.craft.useMutation({ onSuccess: async result => { setMessage(result.applied ? "Speerveredelung bestätigt. Dein Craft-Receipt und die genaue Crafting-XP wurden serverseitig gespeichert." : "Diese Speerveredelung war bereits bestätigt; das bestehende Receipt wurde erneut gelesen."); await Promise.all([utils.crafting.read.invalidate(), utils.market.inventory.invalidate(), utils.player.me.invalidate()]); }, onError: error => reportRuntimeFailure("Die Speerveredelung", error) });
   const submitAsset = trpc.assetSubmissions.submit.useMutation({ onSuccess: async () => { setAssetSubtype(""); setAssetName(""); setAssetDescription(""); setAssetFile(null); setMessage("Dein GLB wurde serverseitig geprüft und liegt jetzt zur Admin-Freigabe vor."); await utils.assetSubmissions.mine.invalidate(); }, onError: error => reportRuntimeFailure("Die GLB-Einreichung", error) });
   const equipCharacter = trpc.assetSubmissions.equipCharacter.useMutation({ onSuccess: async appearance => { setMessage(`${appearance.displayName} ist nun dein aktives Charaktermodell.`); await utils.assetSubmissions.characterAppearance.invalidate(); }, onError: error => reportRuntimeFailure("Das Ausrüsten des Charaktermodells", error) });
 
@@ -230,13 +233,14 @@ export default function CommunityOverlay({
       <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("chat")} aria-label="Expeditionschat öffnen"><MessageCircle size={16} /><span>CHAT</span></button>
       <button type="button" className={panel === "partners" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("partners")} aria-label="Partnergesuche öffnen"><UsersRound size={16} /><span>TEAM</span>{pendingRequests.length > 0 && <b className="community-badge">{pendingRequests.length}</b>}</button>
       <button type="button" className={panel === "market" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("market")} aria-label="Auktionshaus öffnen"><Store size={16} /><span>MARKT</span></button>
+      <button type="button" className={panel === "crafting" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("crafting")} aria-label="Sternwartenschmiede öffnen"><Hammer size={16} /><span>SCHMIEDE</span></button>
       <button type="button" className={panel === "assets" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("assets")} aria-label="GLB-Einreichung öffnen"><Box size={16} /><span>ASSET</span></button>
       <button type="button" className={panel === "forum" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("forum")} aria-label="Forum öffnen"><FileText size={16} /><span>FORUM</span></button>
     </div>
 
     {panel && <section className={`community-panel ${panel}-panel`} aria-live="polite">
       <header className="community-panel-header">
-        <div><p>EXPEDITION // GEMEINSCHAFT</p><h2>{panel === "chat" ? "Signalraum" : panel === "partners" ? "Partnergesuche" : panel === "market" ? "Auktionshaus" : panel === "assets" ? "Asset-Einreichung" : "Sternwartenforum"}</h2></div>
+        <div><p>EXPEDITION // GEMEINSCHAFT</p><h2>{panel === "chat" ? "Signalraum" : panel === "partners" ? "Partnergesuche" : panel === "market" ? "Auktionshaus" : panel === "crafting" ? "Sternwartenschmiede" : panel === "assets" ? "Asset-Einreichung" : "Sternwartenforum"}</h2></div>
         <button type="button" onClick={() => setPanel(null)} aria-label="Community-Konsole schließen"><X size={18} /></button>
       </header>
       {message && <p className="community-feedback"><BellRing size={13} />{message}</p>}
@@ -274,6 +278,18 @@ export default function CommunityOverlay({
         <div className="market-listings">{myMarketListings.data?.filter(listing => listing.status === "active").map(listing => <article key={listing.id} className="market-listing mine"><div><b>{listing.baseItemKey.replaceAll("_", " ")}</b><span>{listing.askingPrice} Aurion</span></div><button type="button" onClick={() => cancelListing.mutate({ listingId: listing.id })} disabled={cancelListing.isPending}>Zurücknehmen</button></article>)}{!marketLoading && !marketError && !myMarketListings.data?.some(listing => listing.status === "active") && <p className="community-empty">Du hast aktuell keine aktiven Angebote.</p>}</div>
         <div className="community-section-heading"><span>AKTIVE AUKTIONEN</span><i /></div>
         <div className="market-listings">{marketListings.data?.filter(listing => listing.sellerUserId !== currentUserId).map(listing => <article key={listing.id} className="market-listing"><div><b>{listing.baseItemKey.replaceAll("_", " ")}</b><small>{listing.quality} · Stufe {listing.itemLevel} · {participantName(listing.sellerName, listing.sellerUserId)}</small></div><button type="button" disabled={buyListing.isPending || (player.data?.profile.aurionPoints ?? 0) < listing.askingPrice} onClick={() => buyListing.mutate({ listingId: listing.id, idempotencyKey: `market:${crypto.randomUUID()}` })}><ShoppingBag size={13} />{listing.askingPrice} Aurion</button></article>)}{!marketLoading && !marketError && !marketListings.data?.filter(listing => listing.sellerUserId !== currentUserId).length && <p className="community-empty">Noch keine Angebote anderer Explorer. Gib deinem Fundstück einen Wert und eröffne den Handel.</p>}</div>
+      </div>}
+
+      {panel === "crafting" && <div className="community-crafting">
+        {crafting.isLoading && <p className="community-empty">Crafting-Receipts werden aus der Sternwarte abgerufen…</p>}
+        {crafting.error && <p className="community-feedback"><BellRing size={13} />Die Schmiede ist gerade nicht erreichbar. Vorgang {runtimeIssueCode(crafting.error)}.</p>}
+        <div className="community-intro"><Hammer size={18} /><div><b>Aurionspeer tempern</b><p>Ein eigener normaler Aurionspeer wird im selben serverseitigen Vorgang verbraucht. Die magische Ausgabe, das Craft-Receipt und 6 exakte Crafting-XP entstehen nur nach bestätigter Prüfung.</p></div></div>
+        <div className="community-section-heading"><span>VERFÜGBARE EINGÄNGE</span><i /></div>
+        <div className="market-inventory">{marketInventory.data?.filter(item => item.baseItemKey === "aurion_spear" && item.quality === "normal").map(item => <article key={item.id} className="market-item"><header><b>{item.baseItemKey.replaceAll("_", " ")}</b><span className={`market-quality ${item.quality}`}>{item.quality}</span></header><p>Gegenstandsstufe {item.itemLevel} · Rezept und Ergebnis werden serverseitig gebunden.</p><button type="button" className="crafting-action" onClick={() => craftItem.mutate({ recipeKey: "temper_aurion_spear", inputItemId: item.id })} disabled={craftItem.isPending}><Hammer size={15} />{craftItem.isPending ? "Wird geprüft…" : "Speer tempern"}</button></article>)}{!marketInventory.isLoading && !marketInventory.data?.some(item => item.baseItemKey === "aurion_spear" && item.quality === "normal") && <p className="community-empty">Kein passender normaler Aurionspeer im bestätigten Inventar. Beute erscheint nach einer validierten Expedition.</p>}</div>
+        <div className="community-section-heading"><span>BESTÄTIGTE AUSGABEN</span><i /></div>
+        <div className="market-inventory">{crafting.data?.outputs.map(item => <article key={item.id} className="market-item"><header><b>{item.baseItemKey.replaceAll("_", " ")}</b><span className={`market-quality ${item.quality}`}>{item.quality}</span></header><p>Gegenstandsstufe {item.itemLevel} · {item.affixes.map(affix => `${affix.slot}: ${affix.key}`).join(" · ") || "Keine Affixe"}</p></article>)}{!crafting.isLoading && !crafting.data?.outputs.length && <p className="community-empty">Noch keine bestätigte Ausgabe aus der Sternwartenschmiede.</p>}</div>
+        <div className="community-section-heading"><span>CRAFTING-FORTSCHRITT</span><i /></div>
+        <p className="community-empty">{crafting.data ? `${crafting.data.progression.progression.totalXpExact} exakte Crafting-XP · Stufe ${crafting.data.progression.progression.levelExact} · ${crafting.data.receipts.length} bestätigte Receipt${crafting.data.receipts.length === 1 ? "" : "s"}` : "Noch kein bestätigter Crafting-Fortschritt."}</p>
       </div>}
 
       {panel === "assets" && <div className="community-assets">
