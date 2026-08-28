@@ -17,6 +17,7 @@ base=/opt/echoes-of-aurion-schema-reconcile
 current="${base}/current"
 env_file=/opt/echoes-of-aurion/.env.production
 state_dir=/var/lib/echoes-of-aurion/schema-reconciliation
+docker_network=areloria_arelorian-network
 
 [[ -L "$current" ]] || { echo "reconciliation release is not installed" >&2; exit 69; }
 release="$(readlink -f "$current")"
@@ -41,17 +42,41 @@ manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; cons
 [[ -f "$env_file" ]] || { echo "production environment file is absent" >&2; exit 69; }
 [[ "$(stat -c '%U:%G:%a' "$env_file")" == "root:root:600" ]] || { echo "production environment file ownership/mode is not root:root:600" >&2; exit 77; }
 
+image_contract="${release}/deploy/aurion-reconcile-runtime-image.conf"
+[[ -f "$image_contract" ]] || { echo "runtime image contract is absent" >&2; exit 69; }
+
+image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22){process.exit(2)}; process.stdout.write(c.imageTag)' "$image_contract")"
+image_digest="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!c.imageDigest||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageDigest)' "$image_contract")"
+pinned_image="${image_tag}@${image_digest}"
+
+if ! docker image inspect --format='{{index .RepoDigests 0}}' "$pinned_image" >/dev/null 2>&1; then
+  echo "pinned runtime image is not available locally" >&2
+  exit 69
+fi
+
+actual_digest="$(docker image inspect --format='{{index .RepoDigests 0}}' "$pinned_image" 2>/dev/null | head -1)"
+[[ "$actual_digest" == *"${image_digest}" ]] || { echo "runtime image digest mismatch" >&2; exit 70; }
+
 install -d -o root -g root -m 0700 "$state_dir"
 tmp="$(mktemp "${state_dir}/.receipt.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 chmod 0600 "$tmp"
 
 set +e
-env -u DATABASE_URL \
-  AURION_RECONCILIATION_ENV_FILE="$env_file" \
-  AURION_RECONCILIATION_ROOT="$release" \
-  AURION_RECONCILIATION_SOURCE_SHA="$expected_sha" \
-  node "${release}/bin/reconcile.cjs" >"$tmp"
+docker run \
+  --rm \
+  --read-only \
+  --network "$docker_network" \
+  --mount "type=bind,source=${release},destination=/reconcile,readonly" \
+  --mount "type=bind,source=${env_file},destination=/reconcile/.env.production,readonly" \
+  --tmpfs /tmp \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --env AURION_RECONCILIATION_ENV_FILE=/reconcile/.env.production \
+  --env AURION_RECONCILIATION_ROOT=/reconcile \
+  --env AURION_RECONCILIATION_SOURCE_SHA="$expected_sha" \
+  "$pinned_image" \
+  node /reconcile/bin/reconcile.cjs >"$tmp" 2>/dev/null
 status=$?
 set -e
 

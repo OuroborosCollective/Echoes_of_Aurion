@@ -7,6 +7,7 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 
 describe("Aurion post-deploy production schema readback", () => {
   const readback = read(".github/workflows/aurion-production-schema-readback.yml");
+  const runner = read("deploy/aurion-production-schema-reconcile");
 
   it("accepts only a successful main zone deployment event", () => {
     expect(readback).toContain('workflows: ["Deploy Aurion zone runtime"]');
@@ -65,5 +66,32 @@ describe("Aurion post-deploy production schema readback", () => {
     expect(readback).not.toContain("pnpm install");
     expect(readback).not.toContain("drizzle-kit migrate");
     expect(readback).not.toContain("postgres_migration_apply");
+  });
+
+  it("runs the reconciler in a Docker container on the Arelorian network with hardened flags", () => {
+    expect(runner).toContain("--network");
+    expect(runner).toContain("areloria_arelorian-network");
+    expect(runner).toContain("--rm");
+    expect(runner).toContain("--read-only");
+    expect(runner).toContain("--cap-drop ALL");
+    expect(runner).toContain("--security-opt no-new-privileges");
+    expect(runner).toContain("--tmpfs /tmp");
+  });
+
+  it("uses a digest-pinned image contract instead of an unbound node:22 tag", () => {
+    expect(runner).toContain("aurion-reconcile-runtime-image.conf");
+    expect(runner).toContain("pinned_image");
+    expect(runner).toContain("image_digest");
+    expect(runner).not.toMatch(/docker run[\s\S]*?\bnode:22\b[^.]/);
+  });
+
+  it("validates the runtime image identity before container execution", () => {
+    expect(runner).toContain("docker image inspect");
+    expect(runner).toContain("runtime image digest mismatch");
+  });
+
+  it("bind-mounts the release and environment as read-only and suppresses stderr", () => {
+    expect(runner).toMatch(/--mount.*type=bind.*readonly/);
+    expect(runner).toContain("2>/dev/null");
   });
 });
