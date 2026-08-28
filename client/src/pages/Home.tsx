@@ -21,7 +21,8 @@ import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
-import { companionDatasetCount, exportCompanionDataset, loadCompanionSession, recordCompanionObservation, startCompanionSession, transitionCompanionSession } from "@/lib/companionLearning";
+import { companionDatasetCount, exportCompanionDataset, loadCompanionSession, recordCompanionObservation, startCompanionSession, transitionCompanionSession, type CompanionAction } from "@/lib/companionLearning";
+import { captureCompanionFrame } from "@/lib/companionFrameCapture";
 import type { CompanionSession } from "@shared/companionLearningProtocol";
 import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
@@ -181,7 +182,24 @@ export default function Home() {
   const processedTeamSignals = useRef(new Set<string>());
   const processedGatewaySequence = useRef(0);
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
-  const lastCompanionAction = useRef<[number, number, number, number] | undefined>(undefined);
+  const captureCompanionDemonstration = useCallback((action: CompanionAction): void => {
+    if (companionSession?.mode !== "learning" || !companionSession.online) return;
+    const snapshot = mission;
+    void captureCompanionFrame().then(frame => {
+      if (!frame) return;
+      const phaseValue = (["active", "transition", "quest_ready", "dungeon_ready", "victory"] as const).indexOf(snapshot.phase) / 4;
+      const row = recordCompanionObservation({
+        frameDataUrl: frame.dataUrl,
+        featureVector: frame.features,
+        action,
+        stateVector: [snapshot.explorerHp / 100, snapshot.echoHp / 100, snapshot.sentinelHp / Math.max(1, snapshot.sentinelMaxHp), snapshot.shield ? 1 : 0, snapshot.marked ? 1 : 0, phaseValue],
+        stateMask: [1, 1, 1, 1, 1, 1],
+        note: `Menschliche Demonstration in ${snapshot.arenaName}: ${snapshot.objective}`,
+      });
+      if (!row) return;
+      return persistCompanionObservation.mutateAsync({ sessionId: row.session_id, sequenceIndex: row.sequence_index, timestampEpoch: row.timestamp_epoch, sampleId: row.sample_id, featureVector: row.feature_vector, targetAction: row.target_action_chunk[0], stateVector: row.state_vector, stateMask: row.state_mask as Array<0 | 1>, note: row.note }).catch(() => undefined);
+    }).catch(() => undefined);
+  }, [companionSession?.mode, companionSession?.online, mission, persistCompanionObservation]);
 
   useEffect(() => () => zoneClient.current?.close(), []);
 
@@ -330,37 +348,19 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (companionSession?.mode !== "learning") return;
-    const timer = window.setInterval(() => {
-      const canvas = document.querySelector("canvas.game-canvas") as HTMLCanvasElement | null;
-      if (!canvas || canvas.width < 4 || canvas.height < 4) return;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) return;
-      const image = context.getImageData(0, 0, canvas.width, canvas.height);
-      const features: number[] = [];
-      const cellWidth = Math.max(1, Math.floor(canvas.width / 4));
-      const cellHeight = Math.max(1, Math.floor(canvas.height / 4));
-      for (let row = 0; row < 4; row += 1) for (let column = 0; column < 4; column += 1) {
-        let total = 0; let samples = 0;
-        for (let y = row * cellHeight; y < Math.min(canvas.height, (row + 1) * cellHeight); y += 8) for (let x = column * cellWidth; x < Math.min(canvas.width, (column + 1) * cellWidth); x += 8) {
-          const offset = (y * canvas.width + x) * 4;
-          total += (0.299 * image.data[offset]! + 0.587 * image.data[offset + 1]! + 0.114 * image.data[offset + 2]!) / 255;
-          samples += 1;
-        }
-        features.push(samples ? total / samples : 0.5);
-      }
-      const row = recordCompanionObservation({
-        frameDataUrl: canvas.toDataURL("image/webp", 0.55),
-        featureVector: features,
-        action: lastCompanionAction.current,
-        stateVector: [mission.explorerHp / 100, mission.echoHp / 100, mission.sentinelHp / Math.max(1, mission.sentinelMaxHp), mission.shield ? 1 : 0, mission.marked ? 1 : 0],
-        stateMask: [1, 1, 1, 1, 1, 1] as [1, 1, 1, 1, 1, 1],
-        note: `Beobachtung in ${mission.arenaName}: ${mission.objective}`,
-      });
-      if (row) void persistCompanionObservation.mutateAsync({ sessionId: row.session_id, sequenceIndex: row.sequence_index, timestampEpoch: row.timestamp_epoch, sampleId: row.sample_id, featureVector: row.feature_vector, targetAction: row.target_action_chunk[0], stateVector: row.state_vector, stateMask: row.state_mask as Array<0 | 1>, note: row.note }).catch(() => undefined);
-    }, 400);
-    return () => window.clearInterval(timer);
-  }, [companionSession?.mode, mission, persistCompanionObservation]);
+    const coordinates: Record<"W" | "A" | "S" | "D", CompanionAction> = { W: [0.5, 0.25, 1, 1], A: [0.25, 0.5, 1, 1], S: [0.5, 0.75, 1, 1], D: [0.75, 0.5, 1, 1] };
+    const onHumanCommand = (event: Event) => {
+      const code = (event as CustomEvent<{ code?: string }>).detail?.code;
+      if (code === "W" || code === "A" || code === "S" || code === "D") captureCompanionDemonstration(coordinates[code]);
+    };
+    const onHumanAction = () => captureCompanionDemonstration([0.5, 0.5, 1, 1]);
+    window.addEventListener("aurion:human-command", onHumanCommand);
+    window.addEventListener("aurion:human-action", onHumanAction);
+    return () => {
+      window.removeEventListener("aurion:human-command", onHumanCommand);
+      window.removeEventListener("aurion:human-action", onHumanAction);
+    };
+  }, [captureCompanionDemonstration]);
 
   useEffect(() => {
     if (screen !== "mission") return;
@@ -631,13 +631,8 @@ export default function Home() {
     appendLedger({ kind: /^[1-9]$/.test(code) ? "combat" : "command", title: `Partner-Impuls ${code}`, detail: ability ? `${provider} aktiviert ${ability.name}.` : `${provider} erhält den Bewegungsbefehl ${code}.` });
     setLastSignal(ability ? `${provider}: ${ability.name} ausgelöst.` : `${provider}: Kurs ${code} bestätigt.`); setCommandText("");
   };
-  const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => {
-    const coordinates: Record<string, [number, number]> = { W: [0.5, 0.25], A: [0.25, 0.5], S: [0.5, 0.75], D: [0.75, 0.5] };
-    const [x, y] = coordinates[code];
-    lastCompanionAction.current = [x, y, 1, 1];
-    window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } }));
-  };
-  const sendHumanAction = (code: "F" | "E" = "F"): void => { lastCompanionAction.current = [0.5, 0.5, 1, 1]; window.dispatchEvent(new CustomEvent("aurion:human-action", { detail: { code } })); setLastSignal(code === "F" ? "Explorer fordert ein Speersignal an." : "Explorer fordert eine Interaktion an."); };
+  const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => { window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } })); };
+  const sendHumanAction = (code: "F" | "E" = "F"): void => { window.dispatchEvent(new CustomEvent("aurion:human-action", { detail: { code } })); setLastSignal(code === "F" ? "Explorer fordert ein Speersignal an." : "Explorer fordert eine Interaktion an."); };
   const beginCompanionLearn = (): void => {
     if (!companionSession) { setLastSignal("Verbinde zuerst ein LLM, bevor die Lernaufzeichnung startet."); return; }
     try {

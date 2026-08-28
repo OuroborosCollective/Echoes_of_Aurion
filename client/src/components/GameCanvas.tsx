@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { GameHandle } from "@/game/scene";
 import { validateRuntimeModelSource } from "@shared/runtimeContracts";
+import { COMPANION_FRAME_REQUEST_EVENT, COMPANION_FRAME_RESPONSE_EVENT, type CompanionFrameRequestDetail, type CompanionFrameResponseDetail } from "@/lib/companionFrameCapture";
 
 export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { characterModelUrl?: string; arenaModelUrl?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,6 +40,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     let engine: Engine | null = null;
     let handle: GameHandle | null = null;
     let disposed = false;
+    let captureQueue: Promise<void> = Promise.resolve();
 
     void Promise.all([import("@babylonjs/core/Engines/engine"), import("@/game/scene")]).then(async ([{ Engine }, { createGameScene }]) => {
       if (disposed) return;
@@ -64,11 +66,27 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     });
 
     const onResize = () => engine?.resize();
+    const onCompanionFrameRequest = (event: Event) => {
+      const detail = (event as CustomEvent<CompanionFrameRequestDetail>).detail;
+      if (!detail?.requestId) return;
+      const respond = (response: CompanionFrameResponseDetail) => window.dispatchEvent(new CustomEvent<CompanionFrameResponseDetail>(COMPANION_FRAME_RESPONSE_EVENT, { detail: response }));
+      captureQueue = captureQueue.then(async () => {
+        const camera = handle?.scene.activeCamera;
+        if (disposed || !engine || !camera) { respond({ requestId: detail.requestId, error: "not_ready" }); return; }
+        const { CreateScreenshotAsync } = await import("@babylonjs/core/Misc/screenshotTools");
+        const width = Math.max(32, Math.min(256, Math.trunc(detail.width)));
+        const height = Math.max(32, Math.min(256, Math.trunc(detail.height)));
+        const dataUrl = await CreateScreenshotAsync(engine, camera, { width, height }, "image/webp", 0.55, true, true);
+        respond({ requestId: detail.requestId, dataUrl });
+      }).catch(() => { respond({ requestId: detail.requestId, error: "capture_failed" }); });
+    };
     window.addEventListener("resize", onResize);
+    window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, onCompanionFrameRequest);
 
     return () => {
       disposed = true;
       window.removeEventListener("resize", onResize);
+      window.removeEventListener(COMPANION_FRAME_REQUEST_EVENT, onCompanionFrameRequest);
       engine?.stopRenderLoop();
       handle?.dispose();
       handleRef.current = null;

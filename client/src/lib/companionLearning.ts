@@ -23,6 +23,20 @@ export type CompanionDatasetRow = {
 
 const DATASET_KEY = "echoes-of-aurion.companion-dataset.v1";
 const SESSION_KEY = "echoes-of-aurion.companion-session.v1";
+const MINIMUM_STATE_VECTOR_LENGTH = 6;
+const MAXIMUM_STATE_VECTOR_LENGTH = 32;
+
+function normalizedStateVector(values?: number[]): number[] {
+  const result = (values ?? []).slice(0, MAXIMUM_STATE_VECTOR_LENGTH).map(value => Number.isFinite(value) ? value : 0);
+  while (result.length < MINIMUM_STATE_VECTOR_LENGTH) result.push(0);
+  return result;
+}
+
+function normalizedStateMask(values: number[] | undefined, length: number): number[] {
+  const result = (values ?? []).slice(0, length).map(value => value === 1 ? 1 : 0);
+  while (result.length < length) result.push(0);
+  return result;
+}
 
 function hashIdentity(value: string): string {
   let hash = 2166136261;
@@ -100,6 +114,8 @@ export function recordCompanionObservation(input: {
   const session = loadCompanionSession();
   if (!session || session.mode !== "learning" || !session.online || !input.action || input.featureVector.length !== 16) return null;
   const sequenceIndex = session.datasetRows;
+  const stateVector = normalizedStateVector(input.stateVector);
+  const stateMask = normalizedStateMask(input.stateMask, stateVector.length);
   const rowBase = {
     schema_version: "aurion-companion-dataset.v1" as const,
     session_id: session.sessionId,
@@ -108,8 +124,8 @@ export function recordCompanionObservation(input: {
     input_frame_base64: input.frameDataUrl,
     feature_vector: input.featureVector.slice(),
     target_action_chunk: [input.action] as [CompanionAction],
-    state_vector: input.stateVector?.slice() ?? [0, 0, 0, 0, 0, 0],
-    state_mask: input.stateMask?.slice() ?? [0, 0, 0, 0, 0, 0],
+    state_vector: stateVector,
+    state_mask: stateMask,
     note: input.note?.trim().slice(0, 280) ?? "",
   };
   const sampleId = hashIdentity(JSON.stringify(rowBase));
