@@ -1,3 +1,4 @@
+// Trusted-main contract: promotion and read-only classification must bind to the same exact source revision.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
