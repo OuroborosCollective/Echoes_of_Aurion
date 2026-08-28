@@ -130,6 +130,12 @@ jobs:
           test "${GITHUB_REF_NAME}" = "main"
           [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]]
 
+      - name: Reset persistent readback workspace
+        run: |
+          set -euo pipefail
+          rm -rf reconciliation-artifact
+          rm -f production-schema-readback.json production-schema-readback.raw.json production-schema-readback.stderr
+
       - name: Download exact immutable reconciler
         uses: actions/download-artifact@v4
         with:
@@ -141,6 +147,7 @@ jobs:
           set -euo pipefail
           cd reconciliation-artifact
           sha256sum --strict -c "aurion-production-reconcile-${EXPECTED_SHA}.tgz.sha256"
+          rm -rf unpacked
           mkdir unpacked
           tar -xzf "aurion-production-reconcile-${EXPECTED_SHA}.tgz" -C unpacked
           (cd unpacked && sha256sum --strict -c checksums.sha256)
