@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
       - "deploy/aurion-production-schema-reconcile"
       - "deploy/install-aurion-production-schema-reconcile"
@@ -12,6 +13,7 @@ on:
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
+      - "server/aurionProductionReadbackChain.test.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
       - "drizzle/meta/_journal.json"
       - "drizzle/0021_aurion_global_world_state.sql"
@@ -26,8 +28,10 @@ on:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
+      - "server/aurionProductionReadbackChain.test.ts"
 
 permissions:
   contents: read
@@ -55,12 +59,13 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify TypeScript and bootstrap contracts
+      - name: Verify TypeScript and bootstrap/readback contracts
         run: |
           set -euo pipefail
           pnpm check
           pnpm vitest run \
             server/aurionZoneRuntimeSchemaBootstrap.test.ts \
+            server/aurionProductionReadbackChain.test.ts \
             server/aurionProductionSchemaReconciliation.test.ts
           bash -n deploy/promote-aurion-zone-runtime.sh
           bash -n deploy/aurion-production-schema-reconcile
