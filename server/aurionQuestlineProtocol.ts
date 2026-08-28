@@ -32,6 +32,7 @@ export type QuestlineInput = Readonly<{
 export type QuestlineReadmodel = Readonly<{
   faction: AurionFaction;
   preferredApproach: QuestApproach;
+  availableOathQuestIds: readonly string[];
   availableMainQuestIds: readonly string[];
   availableSideQuestIds: readonly string[];
   route: readonly string[];
@@ -79,12 +80,13 @@ export function resolveQuestline(input: QuestlineInput): QuestlineReadmodel {
   const preferredApproach = selectPreferredQuestApproach(input);
   const factionNodes = aurionQuestlineNodes.filter(node => node.faction === input.faction);
   const available = factionNodes.filter(node => node.requires.every(required => completed.has(required)) && !completed.has(node.id) && (node.kind === "main" || node.kind === "side" || node.kind === "oath"));
+  const oath = available.filter(node => node.kind === "oath").map(node => node.id).sort(compare);
   const main = available.filter(node => node.kind === "main").map(node => node.id).sort(compare);
   const side = available.filter(node => node.kind === "side").map(node => node.id).sort(compare);
   const oathStatus = completed.has(`${input.faction}.oath`) || input.faction === "free_haven" && completed.has("free_haven.oath") ? "pledged" : "unpledged";
   const route = factionNodes.filter(node => node.kind !== "warfront" && (node.preferredApproaches.includes(preferredApproach) || node.kind === "oath")).map(node => node.id).sort(compare);
   const warfrontBossKeys = aurionQuestlineNodes.filter(node => node.kind === "warfront").map(node => node.warfrontBossKey).filter((key): key is string => Boolean(key)).sort(compare);
-  return { faction: input.faction, preferredApproach, availableMainQuestIds: main, availableSideQuestIds: side, route, oathStatus, warfrontBossKeys, deterministicHash: hash([AURION_QUESTLINE_RULESET_VERSION, input.playerId, input.faction, String(input.resolutionIndex), preferredApproach, ...main, ...side, ...route, ...warfrontBossKeys]) };
+  return { faction: input.faction, preferredApproach, availableOathQuestIds: oath, availableMainQuestIds: main, availableSideQuestIds: side, route, oathStatus, warfrontBossKeys, deterministicHash: hash([AURION_QUESTLINE_RULESET_VERSION, input.playerId, input.faction, String(input.resolutionIndex), preferredApproach, ...oath, ...main, ...side, ...route, ...warfrontBossKeys]) };
 }
 export function resolveQuestDecision(input: Readonly<{ playerId: string; nodeId: string; decisionKey: string; approach: QuestApproach; receiptId: string; resolutionIndex: number }>): QuestDecision {
   const node = getQuestlineNode(input.nodeId);
