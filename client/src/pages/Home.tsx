@@ -180,6 +180,7 @@ export default function Home() {
   const processedTeamSignals = useRef(new Set<string>());
   const processedGatewaySequence = useRef(0);
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
+  const lastCompanionAction = useRef<[number, number, number, number] | undefined>(undefined);
 
   useEffect(() => () => zoneClient.current?.close(), []);
 
@@ -306,6 +307,17 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const onOffline = () => {
+      const current = loadCompanionSession();
+      if (!current || current.mode === "disconnected" || current.mode === "stopping") return;
+      try { setCompanionSession(transitionCompanionSession("user_offline")); } catch { /* fail closed */ }
+      setLastSignal("Offline: Der LLM-Companion wurde aus der Szene entfernt und darf nicht weiter handeln.");
+    };
+    window.addEventListener("offline", onOffline);
+    return () => window.removeEventListener("offline", onOffline);
+  }, []);
+
+  useEffect(() => {
     const onCompanionState = (event: Event) => setCompanionSession((event as CustomEvent<CompanionSession>).detail);
     const onDatasetUpdated = () => setCompanionRows(companionDatasetCount());
     window.addEventListener("aurion:companion-state", onCompanionState);
@@ -315,6 +327,38 @@ export default function Home() {
       window.removeEventListener("aurion:companion-dataset-updated", onDatasetUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    if (companionSession?.mode !== "learning") return;
+    const timer = window.setInterval(() => {
+      const canvas = document.querySelector("canvas.game-canvas") as HTMLCanvasElement | null;
+      if (!canvas || canvas.width < 4 || canvas.height < 4) return;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return;
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      const features: number[] = [];
+      const cellWidth = Math.max(1, Math.floor(canvas.width / 4));
+      const cellHeight = Math.max(1, Math.floor(canvas.height / 4));
+      for (let row = 0; row < 4; row += 1) for (let column = 0; column < 4; column += 1) {
+        let total = 0; let samples = 0;
+        for (let y = row * cellHeight; y < Math.min(canvas.height, (row + 1) * cellHeight); y += 8) for (let x = column * cellWidth; x < Math.min(canvas.width, (column + 1) * cellWidth); x += 8) {
+          const offset = (y * canvas.width + x) * 4;
+          total += (0.299 * image.data[offset]! + 0.587 * image.data[offset + 1]! + 0.114 * image.data[offset + 2]!) / 255;
+          samples += 1;
+        }
+        features.push(samples ? total / samples : 0.5);
+      }
+      recordCompanionObservation({
+        frameDataUrl: canvas.toDataURL("image/webp", 0.55),
+        featureVector: features,
+        action: lastCompanionAction.current,
+        stateVector: [mission.explorerHp / 100, mission.echoHp / 100, mission.sentinelHp / Math.max(1, mission.sentinelMaxHp), mission.shield ? 1 : 0, mission.marked ? 1 : 0, mission.phase === "active" ? 1 : 0],
+        stateMask: [1, 1, 1, 1, 1, 1],
+        note: `Beobachtung in ${mission.arenaName}: ${mission.objective}`,
+      });
+    }, 400);
+    return () => window.clearInterval(timer);
+  }, [companionSession?.mode, mission]);
 
   useEffect(() => {
     if (screen !== "mission") return;
@@ -446,7 +490,11 @@ export default function Home() {
     createGatewaySession.mutate({ providerLabel: provider, allowedCommands: allowedGatewayCommands }, {
       onSuccess: (pairing) => {
         processedGatewaySequence.current = 0; setGatewayPairing(pairing); setGatewaySequence(0); setConnected(true); setIsPairing(false);
-        appendLedger({ kind: "connection", title: "MCP-Partner-Siegel ausgestellt", detail: `${provider} erhält einen zeitlich begrenzten, sichtbaren Steuervertrag. Der Token bleibt nur in dieser Sitzung sichtbar.` });
+        if (user?.id) {
+          startCompanionSession(user.id, provider);
+          transitionCompanionSession("connect");
+        }
+        appendLedger({ kind: "connection", title: "LLM-Verbindung bestätigt", detail: `${provider} ist verbunden. Der Companion wird erst nach Learn und anschließendem Play gespawnt.` });
         setLastSignal(`${provider} kann jetzt über den autorisierten MCP-Steuervertrag beitreten.`);
       },
       onError: () => { setIsPairing(false); setLastSignal("Partner-Siegel konnte nicht ausgestellt werden. Prüfe die Konto-Verbindung erneut."); },
@@ -456,7 +504,12 @@ export default function Home() {
     if (!gatewayPairing || revokeGatewaySession.isPending) return;
     revokeGatewaySession.mutate({ sessionId: gatewayPairing.sessionId }, {
       onSuccess: () => {
-        appendLedger({ kind: "connection", title: "MCP-Partner-Siegel widerrufen", detail: "Der serverseitige Steuervertrag wurde beendet; der Pairing-Token ist nicht mehr verwendbar." });
+        const current = loadCompanionSession();
+        if (current && current.mode !== "disconnected" && current.mode !== "stopping") {
+          try { transitionCompanionSession("stop"); } catch { /* already fail-closed */ }
+        }
+        if (loadCompanionSession()?.mode === "stopping") { try { transitionCompanionSession("disconnect"); } catch { /* already disconnected */ } }
+        appendLedger({ kind: "connection", title: "LLM-Verbindung widerrufen", detail: "Der serverseitige Steuervertrag wurde beendet; der Companion wurde aus der Szene entfernt." });
         processedGatewaySequence.current = 0; setGatewayPairing(null); setGatewaySequence(0); setConnected(false); setSoloMode(false); setScreen("gate");
         setLastSignal("Partner-Siegel widerrufen. Eine neue Kopplung kann ausgestellt werden.");
       },
@@ -576,8 +629,32 @@ export default function Home() {
     appendLedger({ kind: /^[1-9]$/.test(code) ? "combat" : "command", title: `Partner-Impuls ${code}`, detail: ability ? `${provider} aktiviert ${ability.name}.` : `${provider} erhält den Bewegungsbefehl ${code}.` });
     setLastSignal(ability ? `${provider}: ${ability.name} ausgelöst.` : `${provider}: Kurs ${code} bestätigt.`); setCommandText("");
   };
-  const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => { window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } })); };
-  const sendHumanAction = (code: "F" | "E" = "F"): void => { window.dispatchEvent(new CustomEvent("aurion:human-action", { detail: { code } })); setLastSignal(code === "F" ? "Explorer fordert ein Speersignal an." : "Explorer fordert eine Interaktion an."); };
+  const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => {
+    const coordinates: Record<string, [number, number]> = { W: [0.5, 0.25], A: [0.25, 0.5], S: [0.5, 0.75], D: [0.75, 0.5] };
+    const [x, y] = coordinates[code];
+    lastCompanionAction.current = [x, y, 1, 1];
+    window.dispatchEvent(new CustomEvent("aurion:human-command", { detail: { code } }));
+  };
+  const sendHumanAction = (code: "F" | "E" = "F"): void => { lastCompanionAction.current = [0.5, 0.5, 1, 1]; window.dispatchEvent(new CustomEvent("aurion:human-action", { detail: { code } })); setLastSignal(code === "F" ? "Explorer fordert ein Speersignal an." : "Explorer fordert eine Interaktion an."); };
+  const beginCompanionLearn = (): void => {
+    if (!companionSession) { setLastSignal("Verbinde zuerst ein LLM, bevor die Lernaufzeichnung startet."); return; }
+    try {
+      const next = companionSession.mode === "learning" ? transitionCompanionSession("finish_learning") : transitionCompanionSession("learn");
+      setCompanionSession(next);
+      appendLedger({ kind: "connection", title: next.mode === "learning" ? "LLM-Lernen gestartet" : "LLM-Lernen beendet", detail: next.mode === "learning" ? "Aurion liest den sichtbaren Spiel-Canvas und bindet menschliche Aktionen als Dataset-Labels." : `${next.datasetRows} Beobachtungszeilen sind für den Play-Test bereit.` });
+      setLastSignal(next.mode === "learning" ? "Learn/Record aktiv: Spiele jetzt vor, der Companion sammelt Bildschirm- und Aktionspaare." : "Lernphase beendet. Play/Go kann den gelernten Companion jetzt spawnen.");
+    } catch { setLastSignal("Die Lernphase ist in diesem Companion-Zustand nicht zulässig."); }
+  };
+  const toggleCompanionPlay = (): void => {
+    if (!companionSession) { setLastSignal("Verbinde zuerst ein LLM."); return; }
+    try {
+      const next = transitionCompanionSession(companionSession.mode === "playing" ? "stop" : "play");
+      setCompanionSession(next);
+      appendLedger({ kind: "connection", title: next.mode === "playing" ? "LLM-Companion gespawnt" : "LLM-Companion gestoppt", detail: next.mode === "playing" ? "Der gelernte Begleiter folgt dem Explorer und darf nur serverbestätigte Aktionen vorschlagen." : "Der Begleiter wurde sofort aus der Szene entfernt." });
+      setLastSignal(next.mode === "playing" ? "Play/Go aktiv: Der Companion ist als levelbarer Echo-Charakter in der Szene." : "Stop aktiv: Der Companion ist verschwunden; weitere KI-Aktionen sind gesperrt.");
+    } catch { setLastSignal("Play ist erst nach einer beendeten Lernphase zulässig."); }
+  };
+  const downloadCompanionDataset = (): void => { const blob = new Blob([exportCompanionDataset()], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "aurion-companion-dataset.json"; link.click(); URL.revokeObjectURL(url); };
   const downloadLedger = (): void => { const blob = new Blob([exportLedger()], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "aurion-memory-ledger.json"; link.click(); URL.revokeObjectURL(url); };
   const formatTime = (seconds: number): string => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const bossPercent = Math.max(0, Math.min(100, (mission.sentinelHp / mission.sentinelMaxHp) * 100));
@@ -633,6 +710,15 @@ export default function Home() {
             <b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b>
             <div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div>
           </div>
+
+          <section className="companion-control-card" aria-label="LLM-Companion-Steuerung">
+            <div><span>LLM COMPANION // {companionSession?.llmLabel ?? "NICHT VERBUNDEN"}</span><b>{companionSession?.mode ?? "disconnected"}</b><small>{companionRows} lokale Beobachtungszeilen · {companionSession?.notes ?? 0} Notizen · der Begleiter ist nur während Play/Go gespawnt</small></div>
+            <div className="companion-control-card__actions">
+              <button type="button" onClick={beginCompanionLearn} disabled={!companionSession}>{companionSession?.mode === "learning" ? "LEARN STOP / BEREIT" : "LEARN / RECORD"}</button>
+              <button type="button" onClick={toggleCompanionPlay} disabled={!companionSession || !["ready", "playing"].includes(companionSession.mode)}>{companionSession?.mode === "playing" ? "STOP / DESPAWN" : "GO / PLAY"}</button>
+              <button type="button" onClick={downloadCompanionDataset} disabled={companionRows === 0}><Download size={14} /> DATASET EXPORT</button>
+            </div>
+          </section>
 
           <div className="progression-readout" aria-label="Bestätigte Charakterentwicklung">
             <span>LEVEL <b>{visibleProfile?.level ?? 1}</b></span>
