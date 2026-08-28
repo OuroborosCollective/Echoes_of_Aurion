@@ -21,7 +21,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot --silent || mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
           --health-interval=5s
           --health-timeout=3s
           --health-retries=20
@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm check
-          pnpm vitest run scripts/drizzleMigrationChain.test.ts
+          pnpm vitest run server/drizzleMigrationChain.test.ts
           git diff --check
 
       - name: Prove current repository chain fails closed on 0021 through 0027
