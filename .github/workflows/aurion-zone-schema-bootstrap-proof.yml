@@ -73,6 +73,24 @@ jobs:
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
 
+      - name: Verify direct workflow-run SHA context boundary
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/aurion-production-schema-readback.yml
+          grep -Fq 'EXPECTED_SHA:' "$workflow"
+          grep -Fq 'github.event.workflow_run.head_sha || github.sha' "$workflow"
+          if grep -Fq 'EXPECTED_SHA: ${{ env.TARGET_SHA }}' "$workflow"; then
+            echo 'production job must not self-reference job env' >&2
+            exit 1
+          fi
+          grep -Fq "github.event.workflow_run.conclusion == 'success'" "$workflow"
+          grep -Fq "github.event.workflow_run.head_branch == 'main'" "$workflow"
+          grep -Fq 'sudo -n "$runner" "$EXPECTED_SHA"' "$workflow"
+          if grep -Fq 'drizzle-kit migrate' "$workflow"; then
+            echo 'readback workflow must remain non-mutating' >&2
+            exit 1
+          fi
+
       - name: Build both immutable artifacts at one revision
         env:
           AURION_RELEASE_SHA: ${{ github.sha }}
