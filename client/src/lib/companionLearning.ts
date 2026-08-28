@@ -2,6 +2,8 @@ import {
   applyCompanionIntent,
   assertCompanionInvariants,
   companionCanAct,
+  COMPANION_FEATURE_VECTOR_LENGTH,
+  COMPANION_STATE_VECTOR_LENGTH,
   createCompanionSession,
   type CompanionSession,
 } from "@shared/companionLearningProtocol";
@@ -41,8 +43,12 @@ function finiteVector(values: readonly number[], length: number): boolean {
   return values.length === length && values.every(Number.isFinite);
 }
 
+function validAction(values: readonly number[]): values is CompanionAction {
+  return finiteVector(values, 4) && values.every(value => value >= 0 && value <= 1);
+}
+
 function validStateMask(values: readonly number[]): values is CompanionStateMask {
-  return values.length === 6 && values.every(value => value === 0 || value === 1);
+  return values.length === COMPANION_STATE_VECTOR_LENGTH && values.every(value => value === 0 || value === 1);
 }
 
 function readRows(): CompanionDatasetRow[] {
@@ -55,8 +61,9 @@ function readRows(): CompanionDatasetRow[] {
 }
 
 function persistRows(rows: CompanionDatasetRow[]): void {
-  localStorage.setItem(DATASET_KEY, JSON.stringify(rows.slice(-5000)));
-  window.dispatchEvent(new CustomEvent("aurion:companion-dataset-updated", { detail: { count: rows.length } }));
+  const retained = rows.slice(-5000);
+  localStorage.setItem(DATASET_KEY, JSON.stringify(retained));
+  window.dispatchEvent(new CustomEvent("aurion:companion-dataset-updated", { detail: { count: retained.length } }));
 }
 
 export function readCompanionDataset(): CompanionDatasetRow[] {
@@ -107,22 +114,26 @@ export function recordCompanionObservation(input: {
   action?: CompanionAction;
   stateVector?: number[];
   stateMask?: number[];
+  capturedAt?: number;
   note?: string;
 }): CompanionDatasetRow | null {
   const session = loadCompanionSession();
   if (!session || session.mode !== "learning" || !session.online || !input.action) return null;
-  if (!input.frameDataUrl.startsWith("data:image/") || !finiteVector(input.featureVector, 16) || !finiteVector(input.action, 4)) return null;
+  if (!input.frameDataUrl.startsWith("data:image/") || !finiteVector(input.featureVector, COMPANION_FEATURE_VECTOR_LENGTH) || !validAction(input.action)) return null;
 
   const stateVector = input.stateVector ?? EMPTY_STATE;
   const stateMask = input.stateMask ?? EMPTY_MASK;
-  if (!finiteVector(stateVector, 6) || !validStateMask(stateMask)) return null;
+  if (!finiteVector(stateVector, COMPANION_STATE_VECTOR_LENGTH) || !validStateMask(stateMask)) return null;
+
+  const timestampEpoch = input.capturedAt ?? Date.now();
+  if (!Number.isInteger(timestampEpoch) || timestampEpoch <= 0) return null;
 
   const sequenceIndex = session.datasetRows;
   const rowBase = {
     schema_version: "aurion-companion-dataset.v1" as const,
     session_id: session.sessionId,
     sequence_index: sequenceIndex,
-    timestamp_epoch: Date.now(),
+    timestamp_epoch: timestampEpoch,
     input_frame_base64: input.frameDataUrl,
     feature_vector: input.featureVector.slice(),
     target_action_chunk: [input.action] as [CompanionAction],
