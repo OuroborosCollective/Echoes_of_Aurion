@@ -1,0 +1,151 @@
+name: Aurion schema reconciliation proof
+
+on:
+  pull_request:
+    paths:
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
+      - ".github/workflows/aurion-schema-reconciliation-proof.yml"
+  push:
+    branches:
+      - feature/aim-219-production-schema-reconcile-20260828
+    paths:
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - ".github/workflows/aurion-schema-reconciliation-proof.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reconciliation-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_reconciliation_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_reconciliation_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and reconciliation unit tests
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
+          git diff --check
+
+      - name: Create canonical journal cutoff through 0020
+        run: pnpm exec drizzle-kit migrate
+
+      - name: Prove all seven late migrations classify absent on a 0020-only database
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/reconcile-aurion-production-schema.ts > absent.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt=JSON.parse(fs.readFileSync("absent.json","utf8"));
+          if(receipt.overallState!=="RECONCILIATION_REQUIRED") throw new Error(`unexpected overall state ${receipt.overallState}`);
+          if(receipt.summary.absentCount!==7 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
+          for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
+          console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
+          NODE
+
+      - name: Apply 0021 through 0027 only inside this isolated proof database
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const tags=[
+            "0021_aurion_global_world_state",
+            "0022_aurion_world_chunk_deltas",
+            "0023_aurion_world_presence_epochs",
+            "0024_aurion_world_epoch_reactions",
+            "0025_aurion_loot_mastery_ethos",
+            "0026_aurion_faction_questline_state",
+            "0027_aurion_faction_questline_rewards",
+          ];
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            for(const tag of tags){
+              const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
+              const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+              for(const statement of statements) await connection.query(statement);
+            }
+          } finally { await connection.end(); }
+          console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
+          NODE
+
+      - name: Prove all seven late migrations match after isolated apply
+        run: |
+          set -euo pipefail
+          set +e
+          pnpm exec tsx scripts/reconcile-aurion-production-schema.ts --require-match > matched.json
+          status=$?
+          set -e
+          cat matched.json
+          test "$status" -eq 0
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
+          if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
+          if(receipt.summary.matchCount!==7 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
+          console.log(JSON.stringify({phase:"full-match",summary:receipt.summary}));
+          NODE
+
+      - name: Prove structural drift fails closed
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try { await connection.query("DROP INDEX `aurionFactionQuestlineRewardReceipts_digest_uq` ON `aurionFactionQuestlineRewardReceipts`"); }
+          finally { await connection.end(); }
+          NODE
+          set +e
+          pnpm exec tsx scripts/reconcile-aurion-production-schema.ts --require-match > drift.json
+          status=$?
+          set -e
+          cat drift.json
+          test "$status" -eq 3
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt=JSON.parse(fs.readFileSync("drift.json","utf8"));
+          if(receipt.overallState!=="PRESENT_SCHEMA_DRIFT") throw new Error(`unexpected overall state ${receipt.overallState}`);
+          const reward=receipt.migrations.find(m=>m.tag==="0027_aurion_faction_questline_rewards");
+          if(!reward || reward.state!=="PRESENT_SCHEMA_DRIFT" || !reward.drift.some(v=>v.includes("missing_index:aurionFactionQuestlineRewardReceipts_digest_uq"))) throw new Error("expected digest-index drift was not detected");
+          console.log(JSON.stringify({phase:"intentional-drift",state:reward.state,drift:reward.drift}));
+          NODE
