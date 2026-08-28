@@ -42,8 +42,6 @@ manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; cons
 [[ "$(stat -c '%U:%G:%a' "$env_file")" == "root:root:600" ]] || { echo "production environment file ownership/mode is not root:root:600" >&2; exit 77; }
 
 install -d -o root -g root -m 0700 "$state_dir"
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-receipt="${state_dir}/${expected_sha}-${stamp}.json"
 tmp="$(mktemp "${state_dir}/.receipt.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 chmod 0600 "$tmp"
@@ -66,6 +64,8 @@ node --input-type=module -e '
   if(receipt.sourceRevision!==expected) process.exit(4);
 ' "$tmp" "$expected_sha"
 
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+receipt="$(mktemp "${state_dir}/${expected_sha}-${stamp}.json.XXXXXX")"
 install -o root -g root -m 0600 "$tmp" "$receipt"
 ln -sfn "$receipt" "${state_dir}/latest.json"
 cat "$receipt"
