@@ -2,7 +2,7 @@ import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import mysql, { type RowDataPacket } from "mysql2/promise";
+import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import {
   classifyMigrationContract,
   lateAurionMigrationTags,
@@ -61,7 +61,7 @@ function unreadableReceipt(error: unknown) {
   };
 }
 
-async function readDrizzleJournal(connection: mysql.Connection) {
+async function readDrizzleJournal(connection: Connection) {
   const [tableRows] = await connection.query<RowDataPacket[]>(
     "SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND (TABLE_NAME='__drizzle_migrations' OR LOWER(TABLE_NAME) LIKE '%drizzle%migration%') ORDER BY TABLE_NAME"
   );
