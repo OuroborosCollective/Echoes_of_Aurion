@@ -32,7 +32,7 @@ describe("Aurion post-deploy production schema readback", () => {
     expect(readback).not.toContain("TARGET_SHA:");
   });
 
-  it("downloads the exact immutable artifact from the successful upstream run", () => {
+  it("downloads and verifies the exact immutable artifact from the successful upstream run", () => {
     expect(readback).toContain("actions: read");
     expect(readback).toContain(
       "name: aurion-zone-runtime-${{ github.event.workflow_run.head_sha }}",
@@ -41,7 +41,13 @@ describe("Aurion post-deploy production schema readback", () => {
       "run-id: ${{ github.event.workflow_run.id }}",
     );
     expect(readback).toContain("github-token: ${{ github.token }}");
-    expect(readback).toContain("dist-production-reconcile/checksums.sha256");
+    expect(readback).toContain(
+      'artifact="${GITHUB_WORKSPACE}/deployment-artifact/dist-production-reconcile"',
+    );
+    expect(readback).toContain('test -f "$artifact/checksums.sha256"');
+    expect(readback).toContain(
+      '(cd "$artifact" && sha256sum --strict -c checksums.sha256)',
+    );
   });
 
   it("requires artifact, installed runner and receipt to share one revision without apply", () => {
