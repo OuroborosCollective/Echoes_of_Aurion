@@ -1,0 +1,35 @@
+name: Aurion root bootstrap preflight
+
+on:
+  push:
+    branches:
+      - ops/aurion-root-bootstrap-preflight-20260828
+    paths:
+      - ".github/workflows/_aurion-root-bootstrap-preflight.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect root bootstrap boundary read-only
+        shell: bash
+        run: |
+          set -uo pipefail
+          printf 'host=%s user=%s uid=%s gid=%s\n' "$(hostname)" "$(id -un)" "$(id -u)" "$(id -g)"
+          printf 'groups='; id -Gn
+          printf 'sudo_noninteractive_true='; if sudo -n /bin/true 2>/dev/null; then echo true; else echo false; fi
+          echo 'sudo_policy_begin'
+          sudo -n -l 2>&1 || true
+          echo 'sudo_policy_end'
+          printf 'docker_socket='; stat -c '%U:%G:%a' /var/run/docker.sock 2>/dev/null || echo absent
+          printf 'production_env='; stat -c '%U:%G:%a' /opt/echoes-of-aurion/.env.production 2>/dev/null || echo absent
+          printf 'root_runner='; stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-reconcile 2>/dev/null || echo absent
+          printf 'release_base='; stat -c '%U:%G:%a' /opt/echoes-of-aurion-schema-reconcile 2>/dev/null || echo absent
+          printf 'docker_version='; docker version --format '{{.Server.Version}}' 2>/dev/null || echo unavailable
+          echo 'images_begin'
+          docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}' 2>/dev/null | sort || true
+          echo 'images_end'
