@@ -1,7 +1,5 @@
-import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import {
   classifyMigrationContract,
@@ -12,9 +10,8 @@ import {
   type ObservedTable,
 } from "./aurionProductionSchemaReconciliation";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = path.resolve(process.env.AURION_RECONCILIATION_ROOT?.trim() || process.cwd());
 const requireMatch = process.argv.includes("--require-match");
-const databaseUrl = process.env.DATABASE_URL;
 const sourceRevision = (() => {
   const value = process.env.AURION_RECONCILIATION_SOURCE_SHA?.trim();
   if (!value) return null;
@@ -36,6 +33,36 @@ type IndexRow = RowDataPacket & {
   SEQ_IN_INDEX: number;
   COLUMN_NAME: string;
 };
+
+function parseEnvironmentValue(raw: string): string {
+  const value = raw.trim();
+  if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) return value.slice(1, -1);
+  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+    return value.slice(1, -1).replace(/\\([\\"nrt])/g, (_match, escaped: string) => {
+      if (escaped === "n") return "\n";
+      if (escaped === "r") return "\r";
+      if (escaped === "t") return "\t";
+      return escaped;
+    });
+  }
+  return value;
+}
+
+async function resolveDatabaseUrl(): Promise<string | null> {
+  const direct = process.env.DATABASE_URL?.trim();
+  if (direct) return direct;
+  const envFile = process.env.AURION_RECONCILIATION_ENV_FILE?.trim();
+  if (!envFile) return null;
+  const source = await readFile(envFile, "utf8");
+  for (const line of source.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?DATABASE_URL\s*=([\s\S]*)$/);
+    if (!match) continue;
+    const value = parseEnvironmentValue(match[1]);
+    if (!value || /[\r\n\0]/.test(value)) throw new Error("DATABASE_URL in reconciliation environment is invalid");
+    return value;
+  }
+  return null;
+}
 
 function placeholders(count: number): string {
   return new Array(count).fill("?").join(",");
@@ -103,6 +130,7 @@ async function readDrizzleJournal(connection: Connection) {
 }
 
 async function main() {
+  const databaseUrl = await resolveDatabaseUrl();
   if (!databaseUrl) throw new Error("DATABASE_URL is required for read-only schema reconciliation");
   const expected = await expectedMigrations();
   const expectedTableNames = Array.from(new Set(expected.flatMap(migration => migration.tables.map(table => table.name)))).sort();
