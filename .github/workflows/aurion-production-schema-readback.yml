@@ -103,6 +103,28 @@ jobs:
               const receipt=JSON.parse(fs.readFileSync(process.env.RAW_PATH,"utf8"));
               if(receipt.schemaVersion!==1||receipt.recordType!=="aurion_production_schema_reconciliation") throw new Error("unexpected production receipt contract");
               if(receipt.sourceRevision!==process.env.EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) throw new Error("production receipt boundary mismatch");
+
+              const allowedStages=new Set([
+                "INITIALIZE","READ_ENVIRONMENT","READ_EXPECTED_MIGRATIONS","CONNECT_DATABASE",
+                "READ_SCHEMA_COLUMNS","READ_SCHEMA_INDEXES","READ_DRIZZLE_JOURNAL","CLOSE_DATABASE",
+              ]);
+              const allowedClasses=new Set([
+                "DATABASE_URL_MISSING","DATABASE_URL_INVALID","ENVIRONMENT_FILE_NOT_FOUND",
+                "ENVIRONMENT_FILE_PERMISSION_DENIED","DATABASE_HOST_UNRESOLVABLE",
+                "DATABASE_CONNECTION_REFUSED","DATABASE_CONNECTION_TIMEOUT","DATABASE_CONNECTION_LOST",
+                "DATABASE_AUTH_DENIED","DATABASE_UNKNOWN","DATABASE_ACCESS_DENIED",
+                "DATABASE_METADATA_ACCESS_DENIED","DATABASE_TLS_FAILURE",
+                "DATABASE_QUERY_CONTRACT_FAILURE","OBSERVED_IDENTIFIER_UNSAFE",
+                "RUNTIME_DEPENDENCY_MISSING","UNCLASSIFIED_READ_FAILURE",
+              ]);
+              const unreadable=receipt.overallState==="UNREADABLE_FAIL_CLOSED";
+              const failureStage=unreadable ? receipt.failureStage : null;
+              const errorClass=unreadable ? receipt.errorClass : null;
+              const retryable=unreadable ? receipt.retryable : null;
+              if(unreadable && (!allowedStages.has(failureStage)||!allowedClasses.has(errorClass)||typeof retryable!=="boolean")) {
+                throw new Error("unsafe or incomplete failure classification");
+              }
+
               const migrations=Array.isArray(receipt.migrations)
                 ? receipt.migrations.map(({tag,state})=>({tag,state}))
                 : [];
@@ -114,6 +136,9 @@ jobs:
                 databaseCredentialReturned: false,
                 state: receipt.overallState,
                 runnerStatus: Number(process.env.RUNNER_STATUS),
+                failureStage,
+                errorClass,
+                retryable,
                 summary: receipt.summary ?? null,
                 migrations,
                 drizzleJournalTables: Array.isArray(receipt.drizzleJournal)
@@ -139,6 +164,9 @@ jobs:
                 databaseCredentialReturned: false,
                 state: process.env.RESULT_STATE,
                 runnerStatus: Number(process.env.RUNNER_STATUS),
+                failureStage: null,
+                errorClass: null,
+                retryable: null,
               }, null, 2)+"\n");
             '
           fi
