@@ -1,0 +1,48 @@
+name: Temporary Companion receipt-bound authority repair
+
+on:
+  push:
+    branches:
+      - fix/companion-learning-causality-origin-20260828
+    paths:
+      - ".github/workflows/_companion-authority-receipt-repair.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/companion-learning-causality-origin-20260828
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Apply receipt-bound authority patch
+        run: python3 scripts/_apply_companion_authority_receipt_patch.py
+      - run: pnpm install --frozen-lockfile
+      - name: Type contract
+        run: pnpm check
+      - name: Focused Companion contracts
+        run: pnpm test -- client/src/companionLearningProtocol.test.ts client/src/lib/companionLearning.test.ts client/src/lib/companionFrameCapture.test.ts client/src/game/sceneCompanionAuthority.test.ts server/companionMemory.test.ts
+      - name: Full regression suite
+        run: pnpm test
+      - name: Production bundle
+        run: pnpm build
+      - run: git diff --check
+      - name: Commit verified repair
+        run: |
+          git config user.name "aurion-release-bot"
+          git config user.email "aurion-release-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(companion): require receipts before gameplay presentation"
+          git push origin HEAD:fix/companion-learning-causality-origin-20260828
