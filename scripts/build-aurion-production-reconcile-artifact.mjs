@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "dist-production-reconcile");
 const bin = path.join(out, "bin");
 const drizzle = path.join(out, "drizzle");
+const deploy = path.join(out, "deploy");
 const revision = process.env.AURION_RELEASE_SHA?.trim() ?? "";
 const tags = [
   "0021_aurion_global_world_state",
@@ -19,6 +20,11 @@ const tags = [
   "0025_aurion_loot_mastery_ethos",
   "0026_aurion_faction_questline_state",
   "0027_aurion_faction_questline_rewards",
+];
+const deployFiles = [
+  "aurion-production-schema-reconcile",
+  "aurion-production-schema-reconcile.sudoers",
+  "install-aurion-production-schema-reconcile",
 ];
 
 if (!/^[a-f0-9]{40}$/.test(revision)) {
@@ -30,6 +36,7 @@ const sha256 = async filePath => createHash("sha256").update(await readFile(file
 await rm(out, { recursive: true, force: true });
 await mkdir(bin, { recursive: true });
 await mkdir(drizzle, { recursive: true });
+await mkdir(deploy, { recursive: true });
 
 await execFileAsync(path.join(root, "node_modules", ".bin", "esbuild"), [
   path.join(root, "scripts", "reconcile-aurion-production-schema.ts"),
@@ -43,10 +50,14 @@ await execFileAsync(path.join(root, "node_modules", ".bin", "esbuild"), [
 for (const tag of tags) {
   await copyFile(path.join(root, "drizzle", `${tag}.sql`), path.join(drizzle, `${tag}.sql`));
 }
+for (const filename of deployFiles) {
+  await copyFile(path.join(root, "deploy", filename), path.join(deploy, filename));
+}
 
 const relativeFiles = [
   "bin/reconcile.mjs",
   ...tags.map(tag => `drizzle/${tag}.sql`),
+  ...deployFiles.map(filename => `deploy/${filename}`),
 ];
 const files = {};
 for (const relative of relativeFiles) {
