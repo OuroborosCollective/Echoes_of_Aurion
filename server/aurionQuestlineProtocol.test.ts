@@ -52,6 +52,22 @@ describe("aurion questline protocol", () => {
     }
   });
 
+  it("exposes authored post-mainline consequences for every faction", () => {
+    const cases = [
+      ["sunward_concord", ["concord.return-names", "concord.warfront-scar"]],
+      ["ironwardens", ["ironwardens.field-hospital", "ironwardens.shield-memory"]],
+      ["veiled_covenant", ["veiled_covenant.sister-letter", "veiled_covenant.false-command"]],
+      ["wayfarer_compact", ["wayfarer_compact.return-map", "wayfarer_compact.seventh-beacon"]],
+      ["free_haven", ["free_haven.water-list", "free_haven.shared-key"]],
+    ] as const;
+    for (const [faction, ids] of cases) {
+      const nodes = ids.map(id => getQuestlineNode(id));
+      expect(nodes.every(node => node.faction === faction && node.kind === "side")).toBe(true);
+      expect(nodes.every(node => node.decisionKeys.length >= 3)).toBe(true);
+      expect(nodes.every(node => Object.values(node.objectiveByApproach).every(text => text.length > 20))).toBe(true);
+    }
+  });
+
   it("converges every faction on exactly one authored Warfront boss", () => {
     const bosses = getWarfrontBosses();
     expect(bosses).toHaveLength(5);
