@@ -43,8 +43,8 @@ await execFileAsync(path.join(root, "node_modules", ".bin", "esbuild"), [
   "--bundle",
   "--platform=node",
   "--target=node22",
-  "--format=esm",
-  `--outfile=${path.join(bin, "reconcile.mjs")}`,
+  "--format=cjs",
+  `--outfile=${path.join(bin, "reconcile.cjs")}`,
 ]);
 
 for (const tag of tags) {
@@ -55,7 +55,7 @@ for (const filename of deployFiles) {
 }
 
 const relativeFiles = [
-  "bin/reconcile.mjs",
+  "bin/reconcile.cjs",
   ...tags.map(tag => `drizzle/${tag}.sql`),
   ...deployFiles.map(filename => `deploy/${filename}`),
 ];
@@ -71,6 +71,7 @@ const manifest = {
   recordType: "aurion_production_schema_reconcile_artifact",
   revision,
   nodeTarget: "node22",
+  moduleFormat: "commonjs",
   mode: "read_only",
   files,
 };
