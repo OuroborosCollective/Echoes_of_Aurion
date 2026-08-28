@@ -22,7 +22,9 @@ export const aurionAssets = {
   audio: {
     tower: resolveAurionAsset("ambient-tower.wav", "/audio/ambient-tower.wav"),
     plains: resolveAurionAsset("ambient-plains.wav", "/audio/ambient-plains.wav"),
-    forest: resolveAurionAsset("ambient-forest.wav", "/audio/ambient-forest.wav"),
+    forest: resolveAurionAsset("ambient-forest-world.wav", "/audio/ambient-forest-world.wav"),
+    cave: resolveAurionAsset("ambient-cave-world.wav", "/audio/ambient-cave-world.wav"),
+    city: resolveAurionAsset("ambient-city-world.wav", "/audio/ambient-city-world.wav"),
     cinderVault: resolveAurionAsset("ambient-cinder-vault.wav", "/audio/ambient-cinder-vault.wav"),
     sfx: {
       "combat.attack.sharp": resolveAurionAsset("combat-attack-sharp.wav", "/audio/sfx/combat-attack-sharp.wav"),

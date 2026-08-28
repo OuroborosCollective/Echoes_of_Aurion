@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { aurionAssets } from "@/lib/aurionAssets";
 
 describe("Aurion SFX asset catalog", () => {
+  it("maps the new world ambience tracks to local WAV assets", () => {
+    expect(aurionAssets.audio.forest).toContain("ambient-forest-world.wav");
+    expect(aurionAssets.audio.cave).toContain("ambient-cave-world.wav");
+    expect(aurionAssets.audio.city).toContain("ambient-city-world.wav");
+  });
+
   it("maps the requested combat, creature, loot, resource and crafting cues to local WAV assets", () => {
     const sfx = aurionAssets.audio.sfx;
     expect(sfx["combat.attack.sharp"]).toContain("combat-attack-sharp.wav");

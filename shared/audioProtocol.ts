@@ -7,7 +7,7 @@
 export const AURION_AUDIO_PROTOCOL_VERSION = "aurion-audio.v1" as const;
 
 export type AudioCategory = "ambient" | "interaction" | "combat" | "movement" | "progression" | "resource" | "crafting";
-export type AudioBiome = "tower" | "plains" | "forest" | "wetland" | "stone_ruins" | "cinder_vault";
+export type AudioBiome = "tower" | "plains" | "forest" | "cave" | "city" | "wetland" | "stone_ruins" | "cinder_vault";
 export type AudioSurface = "earth" | "grass" | "stone" | "wood" | "water";
 export type AudioWeapon = "blade" | "staff" | "spear" | "focus" | "sharp" | "pointed" | "blunt";
 export type AudioNpcVoice = "masculine" | "feminine" | "neutral";
@@ -17,6 +17,8 @@ export type AudioCueId =
   | "ambient.tower"
   | "ambient.plains"
   | "ambient.forest"
+  | "ambient.cave"
+  | "ambient.city"
   | "ambient.wetland"
   | "ambient.stone_ruins"
   | "ambient.cinder_vault"
@@ -58,7 +60,7 @@ export type AudioCueId =
   | "progression.level_up";
 
 export type AudioEvent =
-  | { readonly cue: "ambient.tower" | "ambient.plains" | "ambient.forest" | "ambient.wetland" | "ambient.stone_ruins" | "ambient.cinder_vault"; readonly category: "ambient"; readonly biome: AudioBiome; readonly intensity?: number }
+  | { readonly cue: "ambient.tower" | "ambient.plains" | "ambient.forest" | "ambient.cave" | "ambient.city" | "ambient.wetland" | "ambient.stone_ruins" | "ambient.cinder_vault"; readonly category: "ambient"; readonly biome: AudioBiome; readonly intensity?: number }
   | { readonly cue: "interaction.npc.masculine" | "interaction.npc.feminine" | "interaction.npc.neutral"; readonly category: "interaction"; readonly voice: AudioNpcVoice }
   | { readonly cue: "interaction.loot.screw_pouch"; readonly category: "interaction"; readonly lootKind: "screw_pouch" }
   | { readonly cue: "combat.monster"; readonly category: "combat"; readonly monsterClass?: string }

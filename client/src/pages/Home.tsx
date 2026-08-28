@@ -251,7 +251,7 @@ export default function Home() {
   useEffect(() => {
     const mixer = soundscape.current;
     if (!mixer) return;
-    const url = screen === "home" ? aurionAssets.audio.tower : mission.arena === 3 ? aurionAssets.audio.cinderVault : worldStreamAnchor ? aurionAssets.audio.forest : aurionAssets.audio.plains;
+    const url = screen === "home" ? aurionAssets.audio.tower : mission.arena === 3 ? aurionAssets.audio.cinderVault : mission.arena === 2 ? aurionAssets.audio.cave : mission.arena === 1 ? aurionAssets.audio.city : worldStreamAnchor ? aurionAssets.audio.forest : aurionAssets.audio.plains;
     void mixer.playAmbient(url).catch(() => { /* browser autoplay policy is handled by the visible audio control */ });
   }, [mission.arena, screen, worldStreamAnchor]);
 
