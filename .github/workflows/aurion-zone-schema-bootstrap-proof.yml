@@ -101,7 +101,8 @@ jobs:
             "failureStage",
             "errorClass",
             "retryable",
-            "DRIVER_ERROR_CLASSES",
+            "const mapped:",
+            "UNCLASSIFIED_READ_FAILURE",
           ]) {
             if (!classifier.includes(token)) throw new Error(`missing classifier disclosure contract: ${token}`);
           }
