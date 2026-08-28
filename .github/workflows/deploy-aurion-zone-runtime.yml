@@ -1,8 +1,21 @@
 name: Deploy Aurion zone runtime
 
 on:
-  # Die separate Zonenruntime bleibt ein expliziter Fallback.
-  # Die maßgebliche Aurion-Laufzeit wird containerisiert ausgeliefert.
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - "deploy/promote-aurion-zone-runtime.sh"
+      - "deploy/aurion-zone-runtime.service"
+      - "deploy/aurion-zone-runtime.environment.template"
+      - "deploy/arelogic-zone-runtime.nginx.conf"
+      - "deploy/arelogic-zone-runtime-rate-limit.nginx.conf"
+      - "server/zoneService.ts"
+      - "server/zoneServiceRuntime.ts"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "drizzle/meta/_journal.json"
   workflow_dispatch:
 
 concurrency:
