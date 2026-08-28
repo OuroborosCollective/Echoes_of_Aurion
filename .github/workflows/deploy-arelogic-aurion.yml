@@ -54,14 +54,19 @@ jobs:
           set -euo pipefail
           mkdir -p dist/itch/manus-storage
           for asset in \
-            aurion-expedition-theme_e8a8afea.mp3 \
+            aurion-expedition-theme_a8401a12.mp3 \
             aurion-social-keyframe_5edc4882.png \
             aurion-sigil_e1fd1a34.png \
             aurion-hero-trailer-en-de_c44ee2e1.mp4
           do
-            curl --fail --location --retry 3 --retry-delay 2 \
+            if curl --fail --location --retry 3 --retry-delay 2 \
               "${AURION_STATIC_SOURCE}/manus-storage/${asset}" \
-              --output "dist/itch/manus-storage/${asset}"
+              --output "dist/itch/manus-storage/${asset}"; then
+              printf 'mirrored %s\n' "$asset"
+            else
+              printf 'optional historical asset unavailable: %s\n' "$asset"
+              rm -f "dist/itch/manus-storage/${asset}"
+            fi
           done
           printf '{"revision":"%s","runId":"%s","artifact":"aurion-static"}\n' \
             "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > dist/itch/.aurion-release.json
