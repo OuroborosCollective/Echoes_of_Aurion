@@ -7,6 +7,8 @@ import {
 } from "@shared/companionLearningProtocol";
 
 export type CompanionAction = [number, number, number, number];
+export type CompanionStateVector = [number, number, number, number, number, number];
+export type CompanionStateMask = [0 | 1, 0 | 1, 0 | 1, 0 | 1, 0 | 1, 0 | 1];
 export type CompanionDatasetRow = {
   schema_version: "aurion-companion-dataset.v1";
   sample_id: string;
@@ -16,13 +18,15 @@ export type CompanionDatasetRow = {
   input_frame_base64: string;
   feature_vector: number[];
   target_action_chunk: [CompanionAction];
-  state_vector: number[];
-  state_mask: number[];
+  state_vector: CompanionStateVector;
+  state_mask: CompanionStateMask;
   note: string;
 };
 
 const DATASET_KEY = "echoes-of-aurion.companion-dataset.v1";
 const SESSION_KEY = "echoes-of-aurion.companion-session.v1";
+const EMPTY_STATE: CompanionStateVector = [0, 0, 0, 0, 0, 0];
+const EMPTY_MASK: CompanionStateMask = [0, 0, 0, 0, 0, 0];
 
 function hashIdentity(value: string): string {
   let hash = 2166136261;
@@ -31,6 +35,14 @@ function hashIdentity(value: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return `fnv1a-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function finiteVector(values: readonly number[], length: number): boolean {
+  return values.length === length && values.every(Number.isFinite);
+}
+
+function validStateMask(values: readonly number[]): values is CompanionStateMask {
+  return values.length === 6 && values.every(value => value === 0 || value === 1);
 }
 
 function readRows(): CompanionDatasetRow[] {
@@ -98,7 +110,13 @@ export function recordCompanionObservation(input: {
   note?: string;
 }): CompanionDatasetRow | null {
   const session = loadCompanionSession();
-  if (!session || session.mode !== "learning" || !session.online || !input.action || input.featureVector.length !== 16) return null;
+  if (!session || session.mode !== "learning" || !session.online || !input.action) return null;
+  if (!input.frameDataUrl.startsWith("data:image/") || !finiteVector(input.featureVector, 16) || !finiteVector(input.action, 4)) return null;
+
+  const stateVector = input.stateVector ?? EMPTY_STATE;
+  const stateMask = input.stateMask ?? EMPTY_MASK;
+  if (!finiteVector(stateVector, 6) || !validStateMask(stateMask)) return null;
+
   const sequenceIndex = session.datasetRows;
   const rowBase = {
     schema_version: "aurion-companion-dataset.v1" as const,
@@ -108,8 +126,8 @@ export function recordCompanionObservation(input: {
     input_frame_base64: input.frameDataUrl,
     feature_vector: input.featureVector.slice(),
     target_action_chunk: [input.action] as [CompanionAction],
-    state_vector: input.stateVector?.slice() ?? [0, 0, 0, 0, 0, 0],
-    state_mask: input.stateMask?.slice() ?? [0, 0, 0, 0, 0, 0],
+    state_vector: stateVector.slice() as CompanionStateVector,
+    state_mask: stateMask.slice() as CompanionStateMask,
     note: input.note?.trim().slice(0, 280) ?? "",
   };
   const sampleId = hashIdentity(JSON.stringify(rowBase));
