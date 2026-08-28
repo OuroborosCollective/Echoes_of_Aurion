@@ -3,6 +3,8 @@ import {
   applyCompanionIntent,
   assertCompanionInvariants,
   companionCanAct,
+  companionCommandRequiresSpawn,
+  companionGameplayActionSource,
   createCompanionSession,
   transitionCompanion,
 } from "@shared/companionLearningProtocol";
@@ -47,5 +49,14 @@ describe("Aurion companion learning protocol", () => {
     expect(transitionCompanion("playing", "learn")).toBe("learning");
     expect(() => transitionCompanion("connected", "play")).toThrow();
     expect(() => transitionCompanion("disconnected", "play")).toThrow();
+  });
+
+  it("keeps gateway authority separate from human team and local console input", () => {
+    expect(companionCommandRequiresSpawn("gateway")).toBe(true);
+    expect(companionCommandRequiresSpawn("human_team")).toBe(false);
+    expect(companionCommandRequiresSpawn("local_console")).toBe(false);
+    expect(companionGameplayActionSource("gateway")).toBe("gateway");
+    expect(companionGameplayActionSource("human_team")).toBe("human");
+    expect(companionGameplayActionSource("local_console")).toBe("human");
   });
 });
