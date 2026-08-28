@@ -1,8 +1,15 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   classifyReconciliationFailure,
   ReconciliationBoundaryError,
 } from "../scripts/aurionProductionReadbackErrors";
+
+const reconciliationSource = fs.readFileSync(
+  path.resolve(import.meta.dirname, "../scripts/reconcile-aurion-production-schema.ts"),
+  "utf8",
+);
 
 describe("Aurion production readback error taxonomy", () => {
   it("reports an explicit missing database URL without exposing input", () => {
@@ -69,5 +76,16 @@ describe("Aurion production readback error taxonomy", () => {
       errorClass: "UNCLASSIFIED_READ_FAILURE",
       retryable: false,
     });
+  });
+
+  it("preserves the causal read stage and labels close failures only after successful reads", () => {
+    expect(reconciliationSource).toContain("let operationsSucceeded = false;");
+    expect(reconciliationSource).toContain("operationsSucceeded = true;");
+    expect(reconciliationSource).toContain(
+      'if (operationsSucceeded) failureStage = "CLOSE_DATABASE";',
+    );
+    expect(reconciliationSource).not.toContain(
+      'if (connection) {\n      failureStage = "CLOSE_DATABASE";',
+    );
   });
 });
