@@ -130,6 +130,12 @@ jobs:
           test "${GITHUB_REF_NAME}" = "main"
           [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]]
 
+      - name: Reset persistent readback workspace
+        run: |
+          set -euo pipefail
+          rm -rf reconciliation-artifact
+          rm -f production-schema-readback.json production-schema-readback.raw.json production-schema-readback.stderr
+
       - name: Download exact immutable reconciler
         uses: actions/download-artifact@v4
         with:
@@ -141,6 +147,7 @@ jobs:
           set -euo pipefail
           cd reconciliation-artifact
           sha256sum --strict -c "aurion-production-reconcile-${EXPECTED_SHA}.tgz.sha256"
+          rm -rf unpacked
           mkdir unpacked
           tar -xzf "aurion-production-reconcile-${EXPECTED_SHA}.tgz" -C unpacked
           (cd unpacked && sha256sum --strict -c checksums.sha256)
@@ -157,83 +164,71 @@ jobs:
           runner=/usr/local/sbin/aurion-production-schema-reconcile
           raw="${GITHUB_WORKSPACE}/production-schema-readback.raw.json"
           result="${GITHUB_WORKSPACE}/production-schema-readback.json"
-          rm -f "$raw" "$result"
+          stderr_file="${GITHUB_WORKSPACE}/production-schema-readback.stderr"
+          rm -f "$raw" "$result" "$stderr_file"
+
+          write_minimal_result() {
+            RESULT_STATE="$1" RUNNER_STATUS="$2" RESULT_PATH="$result" EXPECTED_SHA="$EXPECTED_SHA" node -e '
+          const fs=require("node:fs");
+          fs.writeFileSync(process.env.RESULT_PATH, JSON.stringify({
+            schemaVersion: 1,
+            recordType: "aurion_production_schema_readback_ci",
+            sourceRevision: process.env.EXPECTED_SHA,
+            readOnly: true,
+            databaseCredentialReturned: false,
+            state: process.env.RESULT_STATE,
+            runnerStatus: Number(process.env.RUNNER_STATUS),
+          }, null, 2)+"\n");
+          '
+          }
 
           if [[ ! -x "$runner" ]]; then
-            READBACK_STATE=ROOT_BOOTSTRAP_REQUIRED RUNNER_STATUS=69 node --input-type=module <<'NODE'
-            import fs from "node:fs";
-            fs.writeFileSync("production-schema-readback.json", `${JSON.stringify({
-              schemaVersion: 1,
-              recordType: "aurion_production_schema_readback_ci",
-              sourceRevision: process.env.EXPECTED_SHA,
-              readOnly: true,
-              databaseCredentialReturned: false,
-              state: process.env.READBACK_STATE,
-              runnerStatus: Number(process.env.RUNNER_STATUS),
-            }, null, 2)}\n`);
-            NODE
+            write_minimal_result ROOT_BOOTSTRAP_REQUIRED 69
           else
             set +e
-            sudo -n "$runner" "$EXPECTED_SHA" >"$raw" 2>"${GITHUB_WORKSPACE}/production-schema-readback.stderr"
+            sudo -n "$runner" "$EXPECTED_SHA" >"$raw" 2>"$stderr_file"
             runner_status=$?
             set -e
 
             if [[ -s "$raw" ]]; then
-              RUNNER_STATUS="$runner_status" node --input-type=module <<'NODE'
-              import fs from "node:fs";
-              const receipt=JSON.parse(fs.readFileSync("production-schema-readback.raw.json","utf8"));
-              if(receipt.schemaVersion!==1||receipt.recordType!=="aurion_production_schema_reconciliation") throw new Error("unexpected production receipt contract");
-              if(receipt.sourceRevision!==process.env.EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) throw new Error("production receipt boundary mismatch");
-              const migrations=Array.isArray(receipt.migrations)
-                ? receipt.migrations.map(({tag,state})=>({tag,state}))
-                : [];
-              fs.writeFileSync("production-schema-readback.json", `${JSON.stringify({
-                schemaVersion: 1,
-                recordType: "aurion_production_schema_readback_ci",
-                sourceRevision: receipt.sourceRevision,
-                readOnly: true,
-                databaseCredentialReturned: false,
-                state: receipt.overallState,
-                runnerStatus: Number(process.env.RUNNER_STATUS),
-                summary: receipt.summary ?? null,
-                migrations,
-                drizzleJournalTables: Array.isArray(receipt.drizzleJournal)
-                  ? receipt.drizzleJournal.map(({tableName,rowCount,rowReadback})=>({tableName,rowCount:rowCount??null,rowReadback:rowReadback??null}))
-                  : [],
-              }, null, 2)}\n`);
-              NODE
+              RAW_PATH="$raw" RESULT_PATH="$result" RUNNER_STATUS="$runner_status" EXPECTED_SHA="$EXPECTED_SHA" node -e '
+          const fs=require("node:fs");
+          const receipt=JSON.parse(fs.readFileSync(process.env.RAW_PATH,"utf8"));
+          if(receipt.schemaVersion!==1||receipt.recordType!=="aurion_production_schema_reconciliation") throw new Error("unexpected production receipt contract");
+          if(receipt.sourceRevision!==process.env.EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) throw new Error("production receipt boundary mismatch");
+          const migrations=Array.isArray(receipt.migrations)
+            ? receipt.migrations.map(({tag,state})=>({tag,state}))
+            : [];
+          fs.writeFileSync(process.env.RESULT_PATH, JSON.stringify({
+            schemaVersion: 1,
+            recordType: "aurion_production_schema_readback_ci",
+            sourceRevision: receipt.sourceRevision,
+            readOnly: true,
+            databaseCredentialReturned: false,
+            state: receipt.overallState,
+            runnerStatus: Number(process.env.RUNNER_STATUS),
+            summary: receipt.summary ?? null,
+            migrations,
+            drizzleJournalTables: Array.isArray(receipt.drizzleJournal)
+              ? receipt.drizzleJournal.map(({tableName,rowCount,rowReadback})=>({tableName,rowCount:rowCount??null,rowReadback:rowReadback??null}))
+              : [],
+          }, null, 2)+"\n");
+          '
             else
-              RUNNER_STATUS="$runner_status" node --input-type=module <<'NODE'
-              import fs from "node:fs";
-              const status=Number(process.env.RUNNER_STATUS);
-              const state=status===69
-                ? "ROOT_RELEASE_OR_ENV_REQUIRED"
-                : status===70
-                  ? "ROOT_RELEASE_IDENTITY_MISMATCH"
-                  : status===77
-                    ? "ROOT_BOUNDARY_PERMISSION_INVALID"
-                    : status===1
-                      ? "ROOT_RUNNER_NOT_AUTHORIZED"
-                      : "ROOT_READBACK_FAILED";
-              fs.writeFileSync("production-schema-readback.json", `${JSON.stringify({
-                schemaVersion: 1,
-                recordType: "aurion_production_schema_readback_ci",
-                sourceRevision: process.env.EXPECTED_SHA,
-                readOnly: true,
-                databaseCredentialReturned: false,
-                state,
-                runnerStatus: status,
-              }, null, 2)}\n`);
-              NODE
+              case "$runner_status" in
+                69) state=ROOT_RELEASE_OR_ENV_REQUIRED ;;
+                70) state=ROOT_RELEASE_IDENTITY_MISMATCH ;;
+                77) state=ROOT_BOUNDARY_PERMISSION_INVALID ;;
+                1) state=ROOT_RUNNER_NOT_AUTHORIZED ;;
+                *) state=ROOT_READBACK_FAILED ;;
+              esac
+              write_minimal_result "$state" "$runner_status"
             fi
           fi
 
           cat "$result"
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const result=JSON.parse(fs.readFileSync("production-schema-readback.json","utf8"));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `state=${result.state}\n`);
-          NODE
+          state="$(RESULT_PATH="$result" node -e 'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.env.RESULT_PATH,"utf8")).state));')"
+          printf 'state=%s\n' "$state" >> "$GITHUB_OUTPUT"
 
       - name: Upload production readback receipt
         if: always()
