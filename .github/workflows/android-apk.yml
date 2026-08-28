@@ -36,6 +36,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # setup-node evaluates `cache: pnpm` immediately, so pnpm must already be on PATH.
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
 
