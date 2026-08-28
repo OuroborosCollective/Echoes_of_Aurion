@@ -9,15 +9,25 @@ import {
   type ObservedIndex,
   type ObservedTable,
 } from "./aurionProductionSchemaReconciliation";
+import {
+  classifyReconciliationFailure,
+  ReconciliationBoundaryError,
+  type ReconciliationFailureStage,
+} from "./aurionProductionReadbackErrors";
 
 const projectRoot = path.resolve(process.env.AURION_RECONCILIATION_ROOT?.trim() || process.cwd());
 const requireMatch = process.argv.includes("--require-match");
-const sourceRevision = (() => {
+let failureStage: ReconciliationFailureStage = "INITIALIZE";
+let sourceRevision: string | null = null;
+
+function resolveSourceRevision(): string | null {
   const value = process.env.AURION_RECONCILIATION_SOURCE_SHA?.trim();
   if (!value) return null;
-  if (!/^[a-f0-9]{40}$/.test(value)) throw new Error("AURION_RECONCILIATION_SOURCE_SHA must be a 40-character lowercase Git SHA");
+  if (!/^[a-f0-9]{40}$/.test(value)) {
+    throw new ReconciliationBoundaryError("UNCLASSIFIED_READ_FAILURE");
+  }
   return value;
-})();
+}
 
 type ColumnRow = RowDataPacket & {
   TABLE_NAME: string;
@@ -54,17 +64,21 @@ async function databaseUrlFromEnvironmentFile(envFile: string): Promise<string |
     const match = line.match(/^\s*(?:export\s+)?DATABASE_URL\s*=([\s\S]*)$/);
     if (!match) continue;
     const value = parseEnvironmentValue(match[1]);
-    if (!value || /[\r\n\0]/.test(value)) throw new Error("DATABASE_URL in reconciliation environment is invalid");
+    if (!value || /[\r\n\0]/.test(value)) {
+      throw new ReconciliationBoundaryError("DATABASE_URL_INVALID");
+    }
     return value;
   }
   return null;
 }
 
-async function resolveDatabaseUrl(): Promise<string | null> {
+async function resolveDatabaseUrl(): Promise<string> {
   const envFile = process.env.AURION_RECONCILIATION_ENV_FILE?.trim();
-  if (envFile) return databaseUrlFromEnvironmentFile(envFile);
-  const direct = process.env.DATABASE_URL?.trim();
-  return direct || null;
+  const value = envFile
+    ? await databaseUrlFromEnvironmentFile(envFile)
+    : process.env.DATABASE_URL?.trim() || null;
+  if (!value) throw new ReconciliationBoundaryError("DATABASE_URL_MISSING");
+  return value;
 }
 
 function placeholders(count: number): string {
@@ -72,7 +86,9 @@ function placeholders(count: number): string {
 }
 
 function safeIdentifier(value: string): string {
-  if (!/^[A-Za-z0-9_$]+$/.test(value)) throw new Error("Unsafe database identifier observed");
+  if (!/^[A-Za-z0-9_$]+$/.test(value)) {
+    throw new ReconciliationBoundaryError("OBSERVED_IDENTIFIER_UNSAFE");
+  }
   return `\`${value}\``;
 }
 
@@ -84,7 +100,7 @@ async function expectedMigrations(): Promise<ExpectedMigration[]> {
 }
 
 function unreadableReceipt(error: unknown) {
-  const errorName = error instanceof Error && /^[A-Za-z0-9_.$ -]{1,120}$/.test(error.name) ? error.name : "UnknownError";
+  const safeFailure = classifyReconciliationFailure(error, failureStage);
   return {
     recordType: "aurion_production_schema_reconciliation",
     schemaVersion: 1,
@@ -93,7 +109,7 @@ function unreadableReceipt(error: unknown) {
     requireMatch,
     databaseCredentialReturned: false,
     overallState: "UNREADABLE_FAIL_CLOSED",
-    errorName,
+    ...safeFailure,
     migrations: lateAurionMigrationTags.map(tag => ({ tag, state: "UNREADABLE_FAIL_CLOSED" })),
   };
 }
@@ -133,16 +149,27 @@ async function readDrizzleJournal(connection: Connection) {
 }
 
 async function main() {
+  sourceRevision = resolveSourceRevision();
+  failureStage = "READ_ENVIRONMENT";
   const databaseUrl = await resolveDatabaseUrl();
-  if (!databaseUrl) throw new Error("DATABASE_URL is required for read-only schema reconciliation");
+  failureStage = "READ_EXPECTED_MIGRATIONS";
   const expected = await expectedMigrations();
   const expectedTableNames = Array.from(new Set(expected.flatMap(migration => migration.tables.map(table => table.name)))).sort();
-  const connection = await mysql.createConnection(databaseUrl);
+
+  let connection: Connection | null = null;
+  let receipt: Record<string, unknown> | null = null;
+  let exitCode = 0;
   try {
+    failureStage = "CONNECT_DATABASE";
+    connection = await mysql.createConnection(databaseUrl);
+
+    failureStage = "READ_SCHEMA_COLUMNS";
     const [columnRows] = await connection.query<ColumnRow[]>(
       `SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE FROM information_schema.columns WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,ORDINAL_POSITION`,
       expectedTableNames,
     );
+
+    failureStage = "READ_SCHEMA_INDEXES";
     const [indexRows] = await connection.query<IndexRow[]>(
       `SELECT TABLE_NAME,INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME FROM information_schema.statistics WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,INDEX_NAME,SEQ_IN_INDEX`,
       expectedTableNames,
@@ -169,6 +196,7 @@ async function main() {
     }
 
     const migrations = expected.map(migration => classifyMigrationContract(migration, observedTables));
+    failureStage = "READ_DRIZZLE_JOURNAL";
     const journal = await readDrizzleJournal(connection);
     const driftCount = migrations.filter(migration => migration.state === "PRESENT_SCHEMA_DRIFT").length;
     const absentCount = migrations.filter(migration => migration.state === "ABSENT_APPLY_REQUIRED").length;
@@ -180,7 +208,7 @@ async function main() {
         : absentCount > 0
           ? "RECONCILIATION_REQUIRED"
           : "PRESENT_SCHEMA_MATCH";
-    const receipt = {
+    receipt = {
       recordType: "aurion_production_schema_reconciliation",
       schemaVersion: 1,
       sourceRevision,
@@ -192,12 +220,18 @@ async function main() {
       migrations,
       drizzleJournal: journal,
     };
-    console.log(JSON.stringify(receipt, null, 2));
-    if (driftCount > 0) process.exitCode = 3;
-    else if (requireMatch && absentCount > 0) process.exitCode = 4;
+    if (driftCount > 0) exitCode = 3;
+    else if (requireMatch && absentCount > 0) exitCode = 4;
   } finally {
-    await connection.end();
+    if (connection) {
+      failureStage = "CLOSE_DATABASE";
+      await connection.end();
+    }
   }
+
+  if (!receipt) throw new ReconciliationBoundaryError("UNCLASSIFIED_READ_FAILURE");
+  console.log(JSON.stringify(receipt, null, 2));
+  process.exitCode = exitCode;
 }
 
 main().catch(error => {
