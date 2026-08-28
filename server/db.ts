@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -22,6 +22,9 @@ import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpoch
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
+import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, resolveEthosAura, resolveMasteryReadmodel, type AurionEthosAxis, type AurionMasteryDisciplineId, type AurionMasterySource } from "./aurionMasteryEthosProtocol";
+import { aurionLootCatalogV2 } from "./aurionLootCatalog";
+import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aurionLootProtocol";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -534,6 +537,171 @@ async function listConfirmedSkillProgressionEvents(userId: number, skillId: Auri
 export async function getExactSkillProgressionReadmodel(userId: number, skillId: AurionSkillId = "combat") {
   const events = await listConfirmedSkillProgressionEvents(userId, skillId);
   return resolveSkillProgressionReadmodel({ playerId: String(userId), skillId, events });
+}
+
+function assertAurionMasteryDiscipline(value: string): asserts value is AurionMasteryDisciplineId {
+  if (!(aurionMasteryDisciplineIds as readonly string[]).includes(value)) throw new Error("Aurion-Meisterschaftsdisziplin ist nicht gültig.");
+}
+
+function assertAurionMasterySource(value: string): asserts value is AurionMasterySource {
+  if (!(aurionMasterySources as readonly string[]).includes(value)) throw new Error("Aurion-Meisterschaftsquelle ist nicht gültig.");
+}
+
+function canonicalEthosDeltasJson(deltas: Readonly<Partial<Record<AurionEthosAxis, number>>>): string {
+  const normalized = Object.fromEntries(aurionEthosAxes.flatMap(axis => {
+    const value = deltas[axis];
+    if (value === undefined) return [];
+    if (!Number.isSafeInteger(value) || value < -2_500 || value > 2_500) throw new Error("Aurion-Ethosdelta liegt außerhalb des sicheren Bereichs.");
+    return [[axis, value]];
+  }));
+  if (Object.keys(normalized).length === 0) throw new Error("Aurion-Ethosereignis benötigt mindestens eine Achse.");
+  return JSON.stringify(normalized);
+}
+
+/** Server-internal, exact mastery evidence. The caller must derive the amount and source from accepted gameplay receipts. */
+export async function recordValidatedAurionMasteryEvent(values: {
+  userId: number;
+  disciplineId: AurionMasteryDisciplineId;
+  source: AurionMasterySource;
+  amountExact: string;
+  sourceReceiptId: string;
+  resolutionIndex: number;
+  ruleSetVersion: string;
+  contentVersion: string;
+  idempotencyKey: string;
+}) {
+  assertAurionMasteryDiscipline(values.disciplineId);
+  assertAurionMasterySource(values.source);
+  assertExactPositiveDecimal(values.amountExact);
+  if (!Number.isSafeInteger(values.userId) || values.userId < 1 || !Number.isSafeInteger(values.resolutionIndex) || values.resolutionIndex < 0) throw new Error("Aurion-Meisterschaftsakteur oder Auflösungsindex ist nicht gültig.");
+  if (!values.sourceReceiptId || !values.ruleSetVersion || !values.contentVersion || !values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("Aurion-Meisterschaftsevidenz ist unvollständig.");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const prior = (await tx.select().from(aurionMasteryEvents).where(eq(aurionMasteryEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (prior) return { applied: false as const, event: prior };
+    const receipt = (await tx.select().from(expeditionResultReceipts).where(and(
+      eq(expeditionResultReceipts.id, values.sourceReceiptId),
+      eq(expeditionResultReceipts.userId, values.userId),
+      eq(expeditionResultReceipts.status, "accepted"),
+    )).limit(1))[0];
+    if (!receipt) throw new Error("Ein akzeptiertes Aurion-Result-Receipt desselben Spielers ist für Meisterschaft erforderlich.");
+    const conflict = (await tx.select().from(aurionMasteryEvents).where(and(
+      eq(aurionMasteryEvents.userId, values.userId),
+      eq(aurionMasteryEvents.sourceReceiptId, values.sourceReceiptId),
+      eq(aurionMasteryEvents.disciplineId, values.disciplineId),
+    )).limit(1))[0];
+    if (conflict) throw new Error("Dieses Result-Receipt besitzt bereits ein Ereignis für diese Meisterschaft.");
+    const id = newEndgameId("mastery");
+    await tx.insert(aurionMasteryEvents).values({ id, ...values });
+    const event = (await tx.select().from(aurionMasteryEvents).where(eq(aurionMasteryEvents.id, id)).limit(1))[0];
+    if (!event) throw new Error("Aurion-Meisterschafts-Readback fehlgeschlagen.");
+    return { applied: true as const, event };
+  });
+}
+
+export async function getAurionMasteryReadmodel(userId: number, disciplineId: AurionMasteryDisciplineId) {
+  assertAurionMasteryDiscipline(disciplineId);
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const rows = await db.select().from(aurionMasteryEvents).where(and(eq(aurionMasteryEvents.userId, userId), eq(aurionMasteryEvents.disciplineId, disciplineId)));
+  return resolveMasteryReadmodel({
+    playerId: String(userId),
+    disciplineId,
+    events: rows.map(row => ({ idempotencyKey: row.idempotencyKey, sourceReceiptId: row.sourceReceiptId, disciplineId: row.disciplineId as AurionMasteryDisciplineId, source: row.source as AurionMasterySource, amountExact: row.amountExact, resolutionIndex: row.resolutionIndex, ruleSetVersion: row.ruleSetVersion, contentVersion: row.contentVersion })),
+  });
+}
+
+/** Ethos is visible game state only; it grants neither office nor any privileged action. */
+export async function recordValidatedAurionEthosEvent(values: {
+  userId: number;
+  sourceReceiptId: string;
+  deltasBps: Readonly<Partial<Record<AurionEthosAxis, number>>>;
+  resolutionIndex: number;
+  ruleSetVersion: string;
+  contentVersion: string;
+  idempotencyKey: string;
+}) {
+  const deltasBpsJson = canonicalEthosDeltasJson(values.deltasBps);
+  if (!Number.isSafeInteger(values.userId) || values.userId < 1 || !Number.isSafeInteger(values.resolutionIndex) || values.resolutionIndex < 0) throw new Error("Aurion-Ethosakteur oder Auflösungsindex ist nicht gültig.");
+  if (!values.sourceReceiptId || !values.ruleSetVersion || !values.contentVersion || !values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("Aurion-Ethosbeleg ist unvollständig.");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const prior = (await tx.select().from(aurionEthosEvents).where(eq(aurionEthosEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (prior) return { applied: false as const, event: prior };
+    const receipt = (await tx.select().from(expeditionResultReceipts).where(and(
+      eq(expeditionResultReceipts.id, values.sourceReceiptId),
+      eq(expeditionResultReceipts.userId, values.userId),
+      eq(expeditionResultReceipts.status, "accepted"),
+    )).limit(1))[0];
+    if (!receipt) throw new Error("Ein akzeptiertes Aurion-Result-Receipt desselben Spielers ist für Ethos erforderlich.");
+    const conflict = (await tx.select().from(aurionEthosEvents).where(and(eq(aurionEthosEvents.userId, values.userId), eq(aurionEthosEvents.sourceReceiptId, values.sourceReceiptId))).limit(1))[0];
+    if (conflict) throw new Error("Dieses Result-Receipt besitzt bereits ein Ethosereignis.");
+    const id = newEndgameId("ethos");
+    await tx.insert(aurionEthosEvents).values({ id, userId: values.userId, sourceReceiptId: values.sourceReceiptId, deltasBpsJson, resolutionIndex: values.resolutionIndex, ruleSetVersion: values.ruleSetVersion, contentVersion: values.contentVersion, idempotencyKey: values.idempotencyKey });
+    const event = (await tx.select().from(aurionEthosEvents).where(eq(aurionEthosEvents.id, id)).limit(1))[0];
+    if (!event) throw new Error("Aurion-Ethos-Readback fehlgeschlagen.");
+    return { applied: true as const, event };
+  });
+}
+
+export async function getAurionEthosReadmodel(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const rows = await db.select().from(aurionEthosEvents).where(eq(aurionEthosEvents.userId, userId));
+  return resolveEthosAura({
+    playerId: String(userId),
+    events: rows.map(row => ({ idempotencyKey: row.idempotencyKey, sourceReceiptId: row.sourceReceiptId, deltasBps: JSON.parse(row.deltasBpsJson) as Partial<Record<AurionEthosAxis, number>>, resolutionIndex: row.resolutionIndex, ruleSetVersion: row.ruleSetVersion, contentVersion: row.contentVersion })),
+  });
+}
+
+/**
+ * Server-internal V2 drop materialization. Encounter, world and zone fields are supplied only by
+ * trusted gameplay resolvers; the accepted receipt binds the user and canonical seed digest.
+ */
+export async function createValidatedAurionLootDropV2(values: {
+  userId: number;
+  context: ServerConfirmedLootContext;
+  idempotencyKey: string;
+}) {
+  if (!Number.isSafeInteger(values.userId) || values.userId < 1 || !values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("Aurion-V2-Lootbeleg ist nicht gültig.");
+  if (values.context.ruleSetVersion !== aurionLootCatalogV2.ruleSetVersion || values.context.contentVersion !== aurionLootCatalogV2.contentVersion) throw new Error("Aurion-V2-Loot verwendet keine bestätigte Katalogversion.");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const prior = (await tx.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (prior) {
+      const item = (await tx.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.lootReceiptId, prior.id)).limit(1))[0];
+      if (!item) throw new Error("Aurion-V2-Lootreceipt besitzt keine Iteminstanz.");
+      return { applied: false as const, receipt: prior, item };
+    }
+    const accepted = (await tx.select().from(expeditionResultReceipts).where(and(
+      eq(expeditionResultReceipts.id, values.context.encounterReceiptId),
+      eq(expeditionResultReceipts.userId, values.userId),
+      eq(expeditionResultReceipts.status, "accepted"),
+    )).limit(1))[0];
+    if (!accepted || accepted.seedDigest !== values.context.serverSeedDigest) throw new Error("V2-Loot benötigt ein akzeptiertes Result-Receipt mit passendem Serversamen.");
+    const receiptConflict = (await tx.select().from(aurionLootDropReceiptsV2).where(and(eq(aurionLootDropReceiptsV2.userId, values.userId), eq(aurionLootDropReceiptsV2.encounterReceiptId, values.context.encounterReceiptId))).limit(1))[0];
+    if (receiptConflict) throw new Error("Dieses Encounter-Receipt besitzt bereits einen V2-Lootdrop.");
+    const resolved = resolveDeterministicLoot({ context: values.context, baseItems: aurionLootCatalogV2.baseItems, affixes: aurionLootCatalogV2.affixes, sets: aurionLootCatalogV2.sets });
+    const receiptId = newEndgameId("lootv2");
+    const itemId = newEndgameId("itemv2");
+    await tx.insert(aurionLootDropReceiptsV2).values({
+      id: receiptId, userId: values.userId, encounterReceiptId: values.context.encounterReceiptId, itemDefinitionId: resolved.itemDefinitionId, category: resolved.category,
+      quality: resolved.quality, itemLevelExact: resolved.itemLevelExact, setId: resolved.setId ?? null, resolvedJson: JSON.stringify(resolved), contextHash: resolved.contextHash,
+      deterministicHash: resolved.deterministicHash, ruleSetVersion: values.context.ruleSetVersion, contentVersion: values.context.contentVersion, idempotencyKey: values.idempotencyKey,
+    });
+    await tx.insert(aurionItemInstancesV2).values({
+      id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemDefinitionId: resolved.itemDefinitionId, category: resolved.category,
+      equipmentSlot: resolved.equipmentSlot ?? null, quality: resolved.quality, itemLevelExact: resolved.itemLevelExact, affixesJson: JSON.stringify(resolved.affixes),
+      setId: resolved.setId ?? null, itemPower: resolved.itemPower, deterministicHash: resolved.deterministicHash,
+    });
+    const receipt = (await tx.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.id, receiptId)).limit(1))[0];
+    const item = (await tx.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id, itemId)).limit(1))[0];
+    if (!receipt || !item || item.lootReceiptId !== receipt.id || item.deterministicHash !== receipt.deterministicHash) throw new Error("Aurion-V2-Loot-Readback fehlgeschlagen.");
+    return { applied: true as const, receipt, item };
+  });
 }
 
 export async function getGameplayProgress(userId: number) {
