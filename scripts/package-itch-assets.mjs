@@ -8,7 +8,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const outputDirectory = path.join(projectRoot, "dist", "itch", "aurion-assets");
 const staticSource = (process.env.AURION_STATIC_SOURCE ?? "https://aurion3d-6hpapr2g.manus.space").replace(/\/$/, "");
 const localAssetCache = process.env.AURION_ASSET_CACHE ?? path.join(process.env.HOME ?? "", "webdev-static-assets", "aurion");
-const ambientWorldFiles = ["ambient-forest-world.wav", "ambient-cave-world.wav", "ambient-city-world.wav"];
+const ambientWorldFiles = ["ambient-forest-world.wav", "ambient-cave-world.wav", "ambient-city-world.wav", "ambient-boss-dungeon-world.wav"];
 const sfxFiles = [
   "combat-attack-sharp.wav", "combat-attack-pointed.wav", "combat-attack-blunt.wav", "combat-spell-heal.wav", "combat-spell-buff.wav",
   "combat-creature-wolf-attack.wav", "combat-creature-human-attack.wav", "combat-creature-monster-attack.wav",

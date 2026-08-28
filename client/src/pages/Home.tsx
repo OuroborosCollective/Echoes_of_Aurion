@@ -115,6 +115,7 @@ export default function Home() {
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [worldStreamAnchor, setWorldStreamAnchor] = useState<WorldStreamAnchor | null>(null);
+  const [bossMusicScope, setBossMusicScope] = useState<"dungeon" | "world" | null>(null);
   const [worldStreamTier, setWorldStreamTier] = useState<WorldChunkStreamingTier>(() => streamTierForViewport());
   const [worldStreamCenter, setWorldStreamCenter] = useState({ x: 0, z: 0 });
   const [worldStreamCursors, setWorldStreamCursors] = useState<Record<string, number>>({});
@@ -251,9 +252,18 @@ export default function Home() {
   useEffect(() => {
     const mixer = soundscape.current;
     if (!mixer) return;
-    const url = screen === "home" ? aurionAssets.audio.tower : mission.arena === 3 ? aurionAssets.audio.cinderVault : mission.arena === 2 ? aurionAssets.audio.cave : mission.arena === 1 ? aurionAssets.audio.city : worldStreamAnchor ? aurionAssets.audio.forest : aurionAssets.audio.plains;
-    void mixer.playAmbient(url).catch(() => { /* browser autoplay policy is handled by the visible audio control */ });
-  }, [mission.arena, screen, worldStreamAnchor]);
+    const url = bossMusicScope ? aurionAssets.audio.boss : screen === "home" ? aurionAssets.audio.tower : mission.arena === 3 ? aurionAssets.audio.cinderVault : mission.arena === 2 ? aurionAssets.audio.cave : mission.arena === 1 ? aurionAssets.audio.city : worldStreamAnchor ? aurionAssets.audio.forest : aurionAssets.audio.plains;
+    void mixer.playAmbient(url, bossMusicScope ? 0.28 : 0.32).catch(() => { /* browser autoplay policy is handled by the visible audio control */ });
+  }, [bossMusicScope, mission.arena, screen, worldStreamAnchor]);
+  useEffect(() => {
+    const onBossEncounter = (event: Event) => {
+      const detail = (event as CustomEvent<{ active?: boolean; scope?: "dungeon" | "world" }>).detail;
+      if (detail?.active === false) setBossMusicScope(null);
+      else if (detail?.scope === "dungeon" || detail?.scope === "world") setBossMusicScope(detail.scope);
+    };
+    window.addEventListener("aurion:boss-encounter", onBossEncounter);
+    return () => window.removeEventListener("aurion:boss-encounter", onBossEncounter);
+  }, []);
 
   useEffect(() => {
     const syncFullscreen = () => setImmersiveMode(Boolean(document.fullscreenElement));

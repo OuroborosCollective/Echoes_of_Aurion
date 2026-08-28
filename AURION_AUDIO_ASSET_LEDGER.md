@@ -57,3 +57,13 @@ The world ambience extension adds three original, loop-oriented candidates. They
 | `public/audio/ambient-city-world.wav` | `ambient.city` | 176.823 s | PCM S16LE, 44.1 kHz, stereo | `e31e43a40909f127001f1621e73cd61b8558c01b85abc3f299fabb65a530df1d` | `inactive` |
 
 The new tracks are mapped deterministically in `Home.tsx`: Tower for Home, Cinder Vault for arena 3, Cave for arena 2, City for arena 1, Forest for the global streamed Expanse, and Plains for the remaining expedition baseline. The files are also copied by the static/Itch packager into the same flattened `aurion-assets` namespace used by `resolveAurionAsset`.
+
+## Dungeon and world boss theme
+
+A separate shared boss theme is available for long Dungeon-Endboss and Weltboss encounters. It is intentionally quieter than a transient combat hit, but more focused than ordinary zone ambience; the boss scope is selected by the encounter event while the same loop remains musically recognizable across both scales.
+
+| Asset | Cue | Scope | Duration | Technical format | SHA-256 | Status |
+| --- | --- | --- | ---: | --- | --- | --- |
+| `public/audio/ambient-boss-dungeon-world.wav` | `ambient.boss` | `dungeon` / `world` | 147.122 s | PCM S16LE, 44.1 kHz, stereo | `e7713ea4aabc3f6f0bb54fe478cc2c8e8c509877281854bf76b1c8363d350daa` | `inactive` |
+
+The runtime activates this track for the Cinder Vault endboss and accepts the same `aurion:boss-encounter` contract with `scope: "world"` for future server-authoritative worldboss encounters. The normal zone track returns when the event is closed. No boss music event can create or modify combat state.

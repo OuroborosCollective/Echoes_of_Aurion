@@ -24,6 +24,11 @@ describe("Aurion audio protocol", () => {
     expect(audioCueForCreature("monster", "death")).toEqual({ cue: "combat.creature.monster.death", category: "combat", creature: "monster", action: "death" });
   });
 
+  it("accepts the shared dungeon and world boss ambience event", () => {
+    expect(isAudioEvent({ cue: "ambient.boss", category: "ambient", biome: "boss", bossScope: "dungeon" })).toBe(true);
+    expect(isAudioEvent({ cue: "ambient.boss", category: "ambient", biome: "boss", bossScope: "world" })).toBe(true);
+  });
+
   it("accepts all requested non-authoritative resource and spell events", () => {
     expect(isAudioEvent({ cue: "combat.spell.heal", category: "combat", spell: "heal" })).toBe(true);
     expect(isAudioEvent({ cue: "combat.spell.buff", category: "combat", spell: "buff" })).toBe(true);

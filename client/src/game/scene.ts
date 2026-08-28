@@ -779,7 +779,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const onStart = (): void => { clearOpenWorld(); started = true; dungeonUnlocked = false; dungeonActive = false; victory = false; awaitingQuest = false; sentinel.root.setEnabled(true); emitGameEvent("system", "Sternwarten-Instanz geöffnet. Die erste Sentinel-Phase reagiert auf das Team-Siegel."); applyArena(0); };
   const onEnterDungeon = (): void => {
     if (!started || !dungeonUnlocked || dungeonActive || victory) return;
-    dungeonActive = true; sentinel.root.setEnabled(true); emitGameEvent("system", "Das Aschengewölbe öffnet sich. Der Glutwächter reagiert auf den geborgenen Schlüssel."); applyArena(3);
+    dungeonActive = true; sentinel.root.setEnabled(true); if (arenaIndex === 3) window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: true, scope: "dungeon" } })); emitGameEvent("system", "Das Aschengewölbe öffnet sich. Der Glutwächter reagiert auf den geborgenen Schlüssel."); applyArena(3);
   };
   const onAuthoritativeAction = (event: Event): void => {
     const detail = (event as CustomEvent<{ damage: number; bossHp: number; command: CommandCode; completed: boolean }>).detail;
@@ -809,7 +809,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     arenaSets.forEach((set, index) => set.setEnabled(index === 0));
     groundMat.diffuseColor = arenas[0].floor; ringMat.emissiveColor = arenas[0].glow.scale(0.23); beaconMat.emissiveColor = arenas[0].glow; beaconLight.diffuse = arenas[0].glow; sun.diffuse = arenas[0].sun;
     explorer.position = new Vector3(-3.2, 0.2, 1.6); echo.position = new Vector3(-0.7, 0.2, 0.4); echoTarget = echo.position.clone(); sentinel.root.setEnabled(false);
-    emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
+    window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: false } })); emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
   };
   const onWorldChunkStream = (event: Event): void => {
     const detail = (event as CustomEvent<WorldChunkStreamState>).detail;
@@ -836,7 +836,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld); window.addEventListener("aurion:return-to-tower", onReturnToTower); window.addEventListener("aurion:stream-world-chunk", onWorldChunkStream); window.addEventListener("aurion:zone-connected", onZoneConnected); window.addEventListener("aurion:zone-disconnected", onZoneDisconnected); window.addEventListener("aurion:zone-snapshot", onZoneSnapshot);
   const observer = scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05); elapsed += dt; const arena = arenas[arenaIndex];
-    beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16; sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
+    beacon.rotation.y += dt * 0.55; beacon.position.y = 2.18 + Math.sin(elapsed * 1.4) * 0.16;     sentinel.root.position.y = 0.15 + Math.sin(elapsed * 1.4) * 0.08; sentinelMoving = false;
     if (started && !victory) {
       const direction = new Vector3((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0), 0, (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0));
       if (authoritativeExplorerTarget) {
