@@ -168,6 +168,19 @@ jobs:
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary,drizzleJournal:r.drizzleJournal}));
           NODE
 
+      - name: Prove reconciliation receipts are append-only and root-only
+        run: |
+          set -euo pipefail
+          state_dir=/var/lib/echoes-of-aurion/schema-reconciliation
+          mapfile -t receipts < <(sudo find "$state_dir" -maxdepth 1 -type f -name "${GITHUB_SHA}-*.json.*" -print)
+          test "${#receipts[@]}" -eq 2
+          for receipt in "${receipts[@]}"; do
+            test "$(sudo stat -c '%U:%G:%a' "$receipt")" = "root:root:600"
+          done
+          latest="$(sudo readlink -f "$state_dir/latest.json")"
+          sudo test -f "$latest"
+          printf '%s\n' "${receipts[@]}" | grep -Fx "$latest" >/dev/null
+
       - name: Prove runner cannot execute caller-supplied code path
         run: |
           set -euo pipefail
