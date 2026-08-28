@@ -1,0 +1,265 @@
+name: Aurion production schema readback
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-production-schema-readback.yml"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aurion-production-schema-readback.yml"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
+  workflow_dispatch:
+
+concurrency:
+  group: aurion-production-schema-readback
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    name: Verify and build immutable read-only reconciler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Guard repository scope
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify read-only reconciliation contracts
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
+          bash -n deploy/aurion-production-schema-reconcile
+          bash -n deploy/install-aurion-production-schema-reconcile
+          sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
+          git diff --check
+
+      - name: Build revision-bound reconciliation artifact
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/build-aurion-production-reconcile-artifact.mjs
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
+          if(manifest.schemaVersion!==1) throw new Error("unexpected artifact schema");
+          if(manifest.recordType!=="aurion_production_schema_reconcile_artifact") throw new Error("unexpected artifact record type");
+          if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("artifact revision mismatch");
+          if(manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("artifact boundary mismatch");
+          NODE
+          (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          tar -C dist-production-reconcile -czf "aurion-production-reconcile-${GITHUB_SHA}.tgz" .
+          sha256sum "aurion-production-reconcile-${GITHUB_SHA}.tgz" > "aurion-production-reconcile-${GITHUB_SHA}.tgz.sha256"
+
+      - name: Upload immutable reconciler
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-production-reconcile-${{ github.sha }}
+          path: |
+            aurion-production-reconcile-${{ github.sha }}.tgz
+            aurion-production-reconcile-${{ github.sha }}.tgz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  production-readback:
+    name: Read production schema through bounded root runner
+    if: github.event_name != 'pull_request'
+    needs: verify-and-build
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Guard trusted main execution
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF_NAME}" = "main"
+          [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]]
+
+      - name: Download exact immutable reconciler
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-production-reconcile-${{ github.sha }}
+          path: reconciliation-artifact
+
+      - name: Verify downloaded artifact identity
+        run: |
+          set -euo pipefail
+          cd reconciliation-artifact
+          sha256sum --strict -c "aurion-production-reconcile-${EXPECTED_SHA}.tgz.sha256"
+          mkdir unpacked
+          tar -xzf "aurion-production-reconcile-${EXPECTED_SHA}.tgz" -C unpacked
+          (cd unpacked && sha256sum --strict -c checksums.sha256)
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("unpacked/manifest.json","utf8"));
+          if(manifest.revision!==process.env.EXPECTED_SHA||manifest.mode!=="read_only") throw new Error("downloaded artifact identity mismatch");
+          NODE
+
+      - name: Execute bounded read-only production classification
+        id: readback
+        run: |
+          set -euo pipefail
+          runner=/usr/local/sbin/aurion-production-schema-reconcile
+          raw="${GITHUB_WORKSPACE}/production-schema-readback.raw.json"
+          result="${GITHUB_WORKSPACE}/production-schema-readback.json"
+          rm -f "$raw" "$result"
+
+          if [[ ! -x "$runner" ]]; then
+            READBACK_STATE=ROOT_BOOTSTRAP_REQUIRED RUNNER_STATUS=69 node --input-type=module <<'NODE'
+            import fs from "node:fs";
+            fs.writeFileSync("production-schema-readback.json", `${JSON.stringify({
+              schemaVersion: 1,
+              recordType: "aurion_production_schema_readback_ci",
+              sourceRevision: process.env.EXPECTED_SHA,
+              readOnly: true,
+              databaseCredentialReturned: false,
+              state: process.env.READBACK_STATE,
+              runnerStatus: Number(process.env.RUNNER_STATUS),
+            }, null, 2)}\n`);
+            NODE
+          else
+            set +e
+            sudo -n "$runner" "$EXPECTED_SHA" >"$raw" 2>"${GITHUB_WORKSPACE}/production-schema-readback.stderr"
+            runner_status=$?
+            set -e
+
+            if [[ -s "$raw" ]]; then
+              RUNNER_STATUS="$runner_status" node --input-type=module <<'NODE'
+              import fs from "node:fs";
+              const receipt=JSON.parse(fs.readFileSync("production-schema-readback.raw.json","utf8"));
+              if(receipt.schemaVersion!==1||receipt.recordType!=="aurion_production_schema_reconciliation") throw new Error("unexpected production receipt contract");
+              if(receipt.sourceRevision!==process.env.EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) throw new Error("production receipt boundary mismatch");
+              const migrations=Array.isArray(receipt.migrations)
+                ? receipt.migrations.map(({tag,state})=>({tag,state}))
+                : [];
+              fs.writeFileSync("production-schema-readback.json", `${JSON.stringify({
+                schemaVersion: 1,
+                recordType: "aurion_production_schema_readback_ci",
+                sourceRevision: receipt.sourceRevision,
+                readOnly: true,
+                databaseCredentialReturned: false,
+                state: receipt.overallState,
+                runnerStatus: Number(process.env.RUNNER_STATUS),
+                summary: receipt.summary ?? null,
+                migrations,
+                drizzleJournalTables: Array.isArray(receipt.drizzleJournal)
+                  ? receipt.drizzleJournal.map(({tableName,rowCount,rowReadback})=>({tableName,rowCount:rowCount??null,rowReadback:rowReadback??null}))
+                  : [],
+              }, null, 2)}\n`);
+              NODE
+            else
+              RUNNER_STATUS="$runner_status" node --input-type=module <<'NODE'
+              import fs from "node:fs";
+              const status=Number(process.env.RUNNER_STATUS);
+              const state=status===69
+                ? "ROOT_RELEASE_OR_ENV_REQUIRED"
+                : status===70
+                  ? "ROOT_RELEASE_IDENTITY_MISMATCH"
+                  : status===77
+                    ? "ROOT_BOUNDARY_PERMISSION_INVALID"
+                    : status===1
+                      ? "ROOT_RUNNER_NOT_AUTHORIZED"
+                      : "ROOT_READBACK_FAILED";
+              fs.writeFileSync("production-schema-readback.json", `${JSON.stringify({
+                schemaVersion: 1,
+                recordType: "aurion_production_schema_readback_ci",
+                sourceRevision: process.env.EXPECTED_SHA,
+                readOnly: true,
+                databaseCredentialReturned: false,
+                state,
+                runnerStatus: status,
+              }, null, 2)}\n`);
+              NODE
+            fi
+          fi
+
+          cat "$result"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const result=JSON.parse(fs.readFileSync("production-schema-readback.json","utf8"));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `state=${result.state}\n`);
+          NODE
+
+      - name: Upload production readback receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-production-schema-readback-${{ github.sha }}
+          path: |
+            production-schema-readback.json
+            production-schema-readback.raw.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce readable production boundary
+        if: always()
+        run: |
+          set -euo pipefail
+          state="${{ steps.readback.outputs.state }}"
+          case "$state" in
+            PRESENT_SCHEMA_MATCH|RECONCILIATION_REQUIRED|ABSENT_APPLY_REQUIRED)
+              ;;
+            PRESENT_SCHEMA_DRIFT)
+              echo "production schema drift detected" >&2
+              exit 3
+              ;;
+            *)
+              echo "production schema readback unavailable: ${state:-NO_STATE}" >&2
+              exit 1
+              ;;
+          esac
