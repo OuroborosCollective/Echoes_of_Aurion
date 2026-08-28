@@ -18,6 +18,9 @@ rate_limit=/etc/nginx/conf.d/zz-aurion-zone-runtime-rate-limit.conf
 env_file=/etc/aurion-zone-runtime.env
 archive="${artifact_dir}/aurion-zone-runtime-release.tgz"
 checksum="${artifact_dir}/aurion-zone-runtime-release.tgz.sha256"
+schema_artifact="${artifact_dir}/dist-production-reconcile"
+schema_installer="${schema_artifact}/deploy/install-aurion-production-schema-reconcile"
+schema_current=/opt/echoes-of-aurion-schema-reconcile/current
 
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]]
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+$ ]]
@@ -27,9 +30,16 @@ checksum="${artifact_dir}/aurion-zone-runtime-release.tgz.sha256"
 [[ -f "${deploy_dir}/arelogic-zone-runtime.nginx.conf" ]]
 [[ -f "${deploy_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" ]]
 [[ -f "${deploy_dir}/promote-aurion-zone-runtime.sh" ]]
+[[ -d "$schema_artifact" ]]
+[[ -f "${schema_artifact}/manifest.json" && -f "${schema_artifact}/checksums.sha256" ]]
+[[ -f "$schema_installer" ]]
 
 cd "$artifact_dir"
 sha256sum -c "$checksum"
+(
+  cd "$schema_artifact"
+  sha256sum --strict -c checksums.sha256 >/dev/null
+)
 
 install -d -o aurion-deploy -g aurion-deploy -m 0755 "${base}/releases"
 release="${base}/releases/${release_id}"
@@ -51,6 +61,16 @@ install -D -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbi
 install -D -m 0644 "${deploy_dir}/aurion-zone-runtime.service" "/etc/systemd/system/${service}"
 install -D -m 0644 "${deploy_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" "$rate_limit"
 install -D -m 0644 "${deploy_dir}/arelogic-zone-runtime.nginx.conf" "$snippet"
+
+# Keep the bounded read-only schema runner revision-identical to the promoted runtime.
+# The installer verifies its own immutable manifest/checksums and only installs the
+# fixed root runner plus its exact sudoers entry. It never applies a migration.
+bash "$schema_installer" "$schema_artifact" "$expected_sha" --enable-runner
+[[ -x /usr/local/sbin/aurion-production-schema-reconcile ]]
+[[ -L "$schema_current" ]]
+[[ "$(readlink -f "$schema_current")" == "/opt/echoes-of-aurion-schema-reconcile/releases/${expected_sha}" ]]
+grep -Fq "${expected_sha}" "${schema_current}/manifest.json"
+visudo -cf /etc/sudoers.d/aurion-production-schema-reconcile >/dev/null
 
 if [[ ! -f "$env_file" ]]; then
   install -D -m 0600 "${deploy_dir}/aurion-zone-runtime.environment.template" "$env_file"
