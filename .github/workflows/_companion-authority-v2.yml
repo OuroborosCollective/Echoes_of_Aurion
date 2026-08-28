@@ -54,6 +54,10 @@ jobs:
               raise SystemExit("Authority test source binding did not match exactly once")
           test.write_text(text.replace(old, new, 1))
           PY
+      - name: Keep workflow mutations out of the token-authenticated product commit
+        run: |
+          git checkout -- .github/workflows/companion-learning-proof.yml
+          git checkout -- .github/workflows/_companion-authority-v2.yml
       - run: pnpm install --frozen-lockfile
       - name: Type contract
         run: pnpm check
@@ -65,7 +69,7 @@ jobs:
         run: pnpm build
       - name: Diff whitespace
         run: git diff --check
-      - name: Commit and publish only the verified candidate
+      - name: Commit and publish only the verified product candidate
         run: |
           git add -A
           git commit -m "fix(companion): require receipts before gameplay presentation"
