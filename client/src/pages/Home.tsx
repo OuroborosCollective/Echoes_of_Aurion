@@ -127,6 +127,7 @@ export default function Home() {
   const soundscape = useRef<AurionSoundscape | null>(null);
   const musicResetTimer = useRef<number | null>(null);
   const createGatewaySession = trpc.gateway.createSession.useMutation();
+  const persistCompanionObservation = trpc.companion.persistObservation.useMutation();
   const revokeGatewaySession = trpc.gateway.revokeSession.useMutation();
   const gatewayCommandInput = useMemo(() => ({ sessionId: gatewayPairing?.sessionId ?? "unpaired_session", afterSequence: gatewaySequence }), [gatewayPairing?.sessionId, gatewaySequence]);
   const shouldPollGateway = Boolean(gatewayPairing) && screen === "mission";
@@ -348,17 +349,18 @@ export default function Home() {
         }
         features.push(samples ? total / samples : 0.5);
       }
-      recordCompanionObservation({
+      const row = recordCompanionObservation({
         frameDataUrl: canvas.toDataURL("image/webp", 0.55),
         featureVector: features,
         action: lastCompanionAction.current,
-        stateVector: [mission.explorerHp / 100, mission.echoHp / 100, mission.sentinelHp / Math.max(1, mission.sentinelMaxHp), mission.shield ? 1 : 0, mission.marked ? 1 : 0, mission.phase === "active" ? 1 : 0],
-        stateMask: [1, 1, 1, 1, 1, 1],
+        stateVector: [mission.explorerHp / 100, mission.echoHp / 100, mission.sentinelHp / Math.max(1, mission.sentinelMaxHp), mission.shield ? 1 : 0, mission.marked ? 1 : 0],
+        stateMask: [1, 1, 1, 1, 1, 1] as [1, 1, 1, 1, 1, 1],
         note: `Beobachtung in ${mission.arenaName}: ${mission.objective}`,
       });
+      if (row) void persistCompanionObservation.mutateAsync({ sessionId: row.session_id, sequenceIndex: row.sequence_index, timestampEpoch: row.timestamp_epoch, sampleId: row.sample_id, featureVector: row.feature_vector, targetAction: row.target_action_chunk[0], stateVector: row.state_vector, stateMask: row.state_mask as Array<0 | 1>, note: row.note }).catch(() => undefined);
     }, 400);
     return () => window.clearInterval(timer);
-  }, [companionSession?.mode, mission]);
+  }, [companionSession?.mode, mission, persistCompanionObservation]);
 
   useEffect(() => {
     if (screen !== "mission") return;
