@@ -23,7 +23,7 @@ import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { companionActionAllowed, companionDatasetCount, exportCompanionDataset, loadCompanionSession, recordCompanionObservation, startCompanionSession, transitionCompanionSession, type CompanionAction, type CompanionStateMask, type CompanionStateVector } from "@/lib/companionLearning";
 import { isFreshCompanionFrame, requestCompanionFrame } from "@/lib/companionFrameCapture";
-import { COMPANION_FRAME_MAX_AGE_MS, type CompanionSession } from "@shared/companionLearningProtocol";
+import { COMPANION_FRAME_MAX_AGE_MS, type CompanionCommandOrigin, type CompanionSession } from "@shared/companionLearningProtocol";
 import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
 type Screen = "gate" | "home" | "loadout" | "mission";
@@ -445,7 +445,7 @@ export default function Home() {
 
   useEffect(() => {
     const onRequestedAction = (event: Event) => {
-      const detail = (event as CustomEvent<{ command: Command; source: "human" | "gateway" }>).detail;
+      const detail = (event as CustomEvent<{ command: Command; source: "human" | "gateway"; origin?: CompanionCommandOrigin }>).detail;
       const session = gameplaySession.current;
       if (!detail || !session) {
         setLastSignal("Die Aktion wartet auf eine bestätigte Quest- und Begegnungssitzung.");
@@ -454,7 +454,7 @@ export default function Home() {
       applyGameplayAction.mutate({ sessionId: session.id, sequence: session.nextSequence, command: detail.command, source: detail.source }, {
         onSuccess: (result) => {
           gameplaySession.current = result.completed ? null : { id: result.sessionId, nextSequence: result.nextSequence };
-          window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { command: detail.command, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
+          window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { command: detail.command, source: detail.source, origin: detail.origin, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
           if (result.completed) {
             void gameplayProgress.refetch();
             if (result.drop) setConfirmedDrop(result.drop);
