@@ -33,6 +33,27 @@ jobs:
           cache: pnpm
       - name: Apply receipt-bound Companion authority patch
         run: python3 scripts/_apply_companion_authority_v2.py
+      - name: Bind source assertions to repository paths
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          test = Path("client/src/game/sceneCompanionAuthority.test.ts")
+          text = test.read_text()
+          old = '''import { readFileSync } from "node:fs";
+          import { describe, expect, it } from "vitest";
+
+          const sceneSource = readFileSync(new URL("./scene.ts", import.meta.url), "utf8");
+          const homeSource = readFileSync(new URL("../pages/Home.tsx", import.meta.url), "utf8");'''
+          new = '''import { readFileSync } from "node:fs";
+          import { resolve } from "node:path";
+          import { describe, expect, it } from "vitest";
+
+          const sceneSource = readFileSync(resolve(process.cwd(), "client/src/game/scene.ts"), "utf8");
+          const homeSource = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");'''
+          if text.count(old) != 1:
+              raise SystemExit("Authority test source binding did not match exactly once")
+          test.write_text(text.replace(old, new, 1))
+          PY
       - run: pnpm install --frozen-lockfile
       - name: Type contract
         run: pnpm check
