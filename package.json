@@ -10,6 +10,7 @@
     "build:runtime-artifact": "pnpm build && node scripts/write-runtime-build-manifest.mjs",
     "build:zone-runtime": "esbuild server/zoneService.ts --platform=node --bundle --format=cjs --outfile=dist-zone/zoneService.cjs",
     "verify:release-assets": "tsx scripts/validate-release-assets.ts",
+    "verify:migrations": "tsx scripts/verify-drizzle-migration-chain.ts",
     "build:itch": "pnpm verify:release-assets && vite build --config vite.itch.config.ts && node scripts/package-itch-assets.mjs",
     "package:itch": "pnpm build:itch && cd dist/itch && zip -r ../echoes-of-aurion-itch.zip .",
     "android:sync": "pnpm build:itch && node scripts/prepare-android.mjs",
@@ -19,7 +20,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "pnpm verify:migrations && drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
     "@babylonjs/core": "^9.20.1",
