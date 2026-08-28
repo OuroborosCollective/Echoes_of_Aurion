@@ -45,6 +45,16 @@ describe("Aurion production schema reconciliation", () => {
     expect(tableNames).toContain("aurionFactionQuestlineRewardReceipts");
   });
 
+  it("does not mistake enum string literals such as 'unique' for UNIQUE constraints", async () => {
+    const migration = await parse("0025_aurion_loot_mastery_ethos");
+    for (const tableName of ["aurionLootDropReceiptsV2", "aurionItemInstancesV2"]) {
+      const table = migration.tables.find(candidate => candidate.name === tableName);
+      expect(table).toBeDefined();
+      expect(table?.columns.find(column => column.name === "quality")?.sqlType).toContain("'unique'");
+      expect(table?.indexes.some(index => index.columns.length === 1 && index.columns[0] === "quality")).toBe(false);
+    }
+  });
+
   it("classifies a migration with no target tables as ABSENT_APPLY_REQUIRED", async () => {
     const migration = await parse("0027_aurion_faction_questline_rewards");
     const result = classifyMigrationContract(migration, new Map());
