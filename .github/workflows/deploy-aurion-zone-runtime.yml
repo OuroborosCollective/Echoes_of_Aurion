@@ -40,13 +40,31 @@ jobs:
 
       - name: Verify exact source revision
         run: |
+          set -euo pipefail
           pnpm check
           pnpm test
+          bash -n deploy/promote-aurion-zone-runtime.sh
+          bash -n deploy/aurion-production-schema-reconcile
+          bash -n deploy/install-aurion-production-schema-reconcile
+          sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
 
-      - name: Build zone runtime
+      - name: Build zone runtime and bounded schema runner
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           pnpm build:zone-runtime
+          node scripts/build-aurion-production-reconcile-artifact.mjs
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
+          if(manifest.schemaVersion!==1) throw new Error("unexpected schema artifact version");
+          if(manifest.recordType!=="aurion_production_schema_reconcile_artifact") throw new Error("unexpected schema artifact type");
+          if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("schema artifact revision mismatch");
+          if(manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("schema artifact boundary mismatch");
+          NODE
+          (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           printf '{"revision":"%s","runId":"%s","artifact":"aurion-zone-runtime"}\n' \
             "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > dist-zone/.aurion-zone-runtime-release.json
           tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
@@ -64,6 +82,7 @@ jobs:
             deploy/arelogic-zone-runtime.nginx.conf
             deploy/arelogic-zone-runtime-rate-limit.nginx.conf
             deploy/promote-aurion-zone-runtime.sh
+            dist-production-reconcile
           if-no-files-found: error
           retention-days: 30
 
@@ -80,17 +99,45 @@ jobs:
       - name: Guard repository scope
         run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
 
+      - name: Reset workflow-owned artifact directory
+        run: rm -rf runtime-artifact
+
       - name: Download verified runtime artifact
         uses: actions/download-artifact@v4
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: runtime-artifact
 
-      - name: Promote node runtime and routing
+      - name: Promote node runtime and bounded schema runner
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact"
+
+          # On the first rollout the already-installed promoter updates itself.
+          # A second invocation is needed only when that old promoter did not yet
+          # install the newly bundled schema runner. Both invocations are exact,
+          # revision-bound and idempotent.
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+          if [[ ! -x /usr/local/sbin/aurion-production-schema-reconcile ]] \
+            || [[ ! -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json ]] \
+            || ! grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json; then
+            sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+          fi
+
+          test -x /usr/local/sbin/aurion-production-schema-reconcile
+          test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+
+      - name: Read back installed release identities
+        run: |
+          set -euo pipefail
+          cat /opt/aurion-zone-runtime/current/.aurion-zone-runtime-release.json
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const manifest=JSON.parse(fs.readFileSync("/opt/echoes-of-aurion-schema-reconcile/current/manifest.json","utf8"));
+            if(manifest.revision!==process.env.EXPECTED_SHA||manifest.mode!=="read_only") throw new Error("installed schema runner identity mismatch");
+            console.log(JSON.stringify({revision:manifest.revision,mode:manifest.mode,recordType:manifest.recordType}));
+          '
 
       - name: Verify public runtime health
         run: |

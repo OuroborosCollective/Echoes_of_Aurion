@@ -1,0 +1,103 @@
+name: Aurion zone schema bootstrap proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - "deploy/promote-aurion-zone-runtime.sh"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - "deploy/promote-aurion-zone-runtime.sh"
+      - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify TypeScript and bootstrap contracts
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run \
+            server/aurionZoneRuntimeSchemaBootstrap.test.ts \
+            server/aurionProductionSchemaReconciliation.test.ts
+          bash -n deploy/promote-aurion-zone-runtime.sh
+          bash -n deploy/aurion-production-schema-reconcile
+          bash -n deploy/install-aurion-production-schema-reconcile
+          sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
+          git diff --check
+
+      - name: Build both immutable artifacts at one revision
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          pnpm build:zone-runtime
+          node scripts/build-aurion-production-reconcile-artifact.mjs
+          (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
+          if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("revision mismatch");
+          if(manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("unsafe schema artifact boundary");
+          if(!fs.existsSync("dist-zone/zoneService.cjs")) throw new Error("zone runtime bundle missing");
+          NODE
+
+      - name: Package combined proof artifact
+        run: |
+          set -euo pipefail
+          printf '{"revision":"%s","artifact":"aurion-zone-runtime"}\n' "$GITHUB_SHA" > dist-zone/.aurion-zone-runtime-release.json
+          tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
+          sha256sum aurion-zone-runtime-release.tgz > aurion-zone-runtime-release.tgz.sha256
+
+      - name: Upload combined immutable proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-zone-schema-bootstrap-${{ github.sha }}
+          path: |
+            aurion-zone-runtime-release.tgz
+            aurion-zone-runtime-release.tgz.sha256
+            dist-production-reconcile
+          if-no-files-found: error
+          retention-days: 30
