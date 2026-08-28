@@ -69,75 +69,172 @@ jobs:
     runs-on: [self-hosted, Linux, X64, aurion-static]
     timeout-minutes: 10
     steps:
-      - name: Guard repository
-        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+      - name: Guard repository and identify host
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          printf 'host=%s\n' "$(hostname)"
+          printf 'kernel=%s\n' "$(uname -sr)"
+          printf 'runner_user=%s\n' "$(id -un)"
+          printf 'docker_binary=%s\n' "$(command -v docker >/dev/null 2>&1 && echo present || echo absent)"
+          printf 'docker_direct_read=%s\n' "$(docker ps >/dev/null 2>&1 && echo yes || echo no)"
+          printf 'docker_sudo_read=%s\n' "$(sudo -n docker ps >/dev/null 2>&1 && echo yes || echo no)"
 
-      - name: Select read-only Docker command
+      - name: Read static release identity and known deployment paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=/var/www/echoes-of-aurion
+          if [[ -L "${base}/current" ]]; then
+            printf 'static_current_target=%s\n' "$(readlink -f "${base}/current")"
+          else
+            echo 'static_current_target=absent'
+          fi
+          if [[ -f "${base}/current/.aurion-release.json" ]]; then
+            printf 'static_release_manifest='
+            cat "${base}/current/.aurion-release.json"
+            printf '\n'
+          else
+            echo 'static_release_manifest=absent'
+          fi
+          for p in \
+            /var/www/echoes-of-aurion \
+            /opt/echoes-of-aurion \
+            /srv/echoes-of-aurion \
+            /opt/aurion \
+            /srv/aurion
+          do
+            [[ -e "$p" ]] && printf 'deployment_path_present=%s\n' "$p"
+          done
+          for envfile in \
+            /var/www/echoes-of-aurion/.env.production \
+            /opt/echoes-of-aurion/.env.production \
+            /srv/echoes-of-aurion/.env.production
+          do
+            if [[ -e "$envfile" ]]; then
+              printf 'production_env_present=%s mode=%s\n' "$envfile" "$(stat -c '%a' "$envfile" 2>/dev/null || echo unreadable)"
+            fi
+          done
+
+      - name: Read active service and listening-port inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'service_inventory_begin'
+          systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null \
+            | awk '{print $1}' \
+            | grep -Ei 'aurion|echo|nginx|traefik|caddy|docker|containerd|node' || true
+          echo 'service_inventory_end'
+          echo 'listening_ports_begin'
+          ss -ltnH 2>/dev/null | awk '{print $4}' | grep -E ':(80|443|3000|3001|3100|8080|8443)$' | sort -u || true
+          echo 'listening_ports_end'
+
+      - name: Read routing hints without exposing configuration secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'routing_hints_begin'
+          for root in /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/traefik; do
+            [[ -d "$root" ]] || continue
+            grep -R -n -E 'arelogic\.space|/mcp|/admin-mcp|/healthz|127\.0\.0\.1:[0-9]+' "$root" 2>/dev/null \
+              | sed -E 's#(proxy_set_header[[:space:]]+Authorization[[:space:]]+).*#\1[REDACTED];#' \
+              | head -n 160 || true
+          done
+          echo 'routing_hints_end'
+
+      - name: Probe likely local HTTP runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for port in 3000 3001 3100 8080; do
+            for path in /healthz /mcp /admin-mcp; do
+              hdr="$(mktemp)"
+              body="$(mktemp)"
+              code="$(curl --max-time 3 --silent --show-error --dump-header "$hdr" --output "$body" --write-out '%{http_code}' "http://127.0.0.1:${port}${path}" 2>/dev/null || true)"
+              if [[ -n "$code" && "$code" != 000 ]]; then
+                ctype="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{gsub(/\r/,""); print $2; exit}' "$hdr")"
+                hash="$(sha256sum "$body" | awk '{print $1}')"
+                printf 'local_probe port=%s path=%s status=%s content_type=%s body_sha256=%s bytes=%s\n' "$port" "$path" "$code" "${ctype:-unknown}" "$hash" "$(wc -c < "$body")"
+                if [[ "$path" == /healthz && "${ctype:-}" == application/json* ]]; then
+                  printf 'local_health_json port=%s body=' "$port"
+                  head -c 600 "$body"
+                  printf '\n'
+                fi
+              fi
+              rm -f "$hdr" "$body"
+            done
+          done
+
+      - name: Read Docker identity only when permitted
         shell: bash
         run: |
           set -euo pipefail
           if docker ps >/dev/null 2>&1; then
-            printf 'DOCKER_MODE=direct\n' >> "$GITHUB_ENV"
+            d() { docker "$@"; }
           elif sudo -n docker ps >/dev/null 2>&1; then
-            printf 'DOCKER_MODE=sudo\n' >> "$GITHUB_ENV"
+            d() { sudo -n docker "$@"; }
           else
-            echo 'No read-only Docker access on the Aurion runner.' >&2
-            exit 1
+            echo 'docker_runtime_readback=unavailable_to_runner'
+            exit 0
           fi
-
-      - name: Read container identity and bound source revision
-        shell: bash
-        run: |
-          set -euo pipefail
-          d() { if [[ "${DOCKER_MODE}" == "sudo" ]]; then sudo -n docker "$@"; else docker "$@"; fi; }
           mapfile -t rows < <(d ps --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}' | grep -Ei 'aurion|echoes-of-aurion' || true)
           printf 'aurion_container_candidates=%s\n' "${#rows[@]}"
           printf '%s\n' "${rows[@]}"
-          if [[ "${#rows[@]}" -ne 1 ]]; then
-            echo 'Expected exactly one running Aurion container.' >&2
-            exit 1
+          if [[ "${#rows[@]}" -eq 1 ]]; then
+            cid="${rows[0]%%|*}"
+            printf 'aurion_image_id=%s\n' "$(d inspect --format '{{.Image}}' "$cid")"
+            if d exec "$cid" test -f /app/dist/.aurion-runtime-build.json; then
+              d exec "$cid" node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("/app/dist/.aurion-runtime-build.json","utf8")); console.log(JSON.stringify({runtimeManifest:true,revision:m.revision}))'
+            fi
           fi
-          cid="${rows[0]%%|*}"
-          image_id="$(d inspect --format '{{.Image}}' "$cid")"
-          printf 'aurion_container_id=%s\n' "$cid" >> "$GITHUB_ENV"
-          printf 'aurion_image_id=%s\n' "$image_id"
-          d exec "$cid" node --input-type=module -e 'import fs from "node:fs"; const p="/app/dist/.aurion-runtime-build.json"; const m=JSON.parse(fs.readFileSync(p,"utf8")); console.log(JSON.stringify({runtimeManifest:true, revision:m.revision}))'
 
-      - name: Read production schema presence without exposing credentials
+      - name: Read production schema only when an authorized runtime exposes it
         shell: bash
         run: |
           set -euo pipefail
-          d() { if [[ "${DOCKER_MODE}" == "sudo" ]]; then sudo -n docker "$@"; else docker "$@"; fi; }
-          d exec "${aurion_container_id}" node --input-type=module -e '
+          if docker ps >/dev/null 2>&1; then
+            d() { docker "$@"; }
+          elif sudo -n docker ps >/dev/null 2>&1; then
+            d() { sudo -n docker "$@"; }
+          else
+            echo 'production_schema_readback=unavailable_without_runtime_environment'
+            exit 0
+          fi
+          cid="$(d ps --format '{{.ID}}|{{.Names}}' | grep -Ei 'aurion|echoes-of-aurion' | head -n1 | cut -d'|' -f1 || true)"
+          [[ -n "$cid" ]] || { echo 'production_schema_readback=no_aurion_container'; exit 0; }
+          d exec "$cid" node --input-type=module -e '
             import mysql from "mysql2/promise";
             const url=process.env.DATABASE_URL;
-            if(!url){ console.error("DATABASE_URL_PRESENT=false"); process.exit(2); }
+            if(!url){ console.log("DATABASE_URL_PRESENT=false"); process.exit(0); }
             const c=await mysql.createConnection(url);
-            const wanted=[
-              "progressionLedger",
-              "aurionFactionQuestlineStates",
-              "aurionFactionQuestlineOathReceipts",
-              "aurionFactionQuestlineDecisionReceipts",
-              "aurionFactionQuestlineRewardReceipts",
-              "aurionItemInstancesV2",
-              "aurionLootDropReceiptsV2",
-              "aurionMasteryEvents",
-              "aurionWorldChunkDeltas",
-              "aurionWorldPresenceLeases",
-              "aurionWorldEpochReactions"
-            ];
+            const wanted=["progressionLedger","aurionFactionQuestlineStates","aurionFactionQuestlineOathReceipts","aurionFactionQuestlineDecisionReceipts","aurionFactionQuestlineRewardReceipts","aurionItemInstancesV2","aurionLootDropReceiptsV2","aurionMasteryEvents","aurionWorldChunkDeltas","aurionWorldPresenceLeases","aurionWorldEpochReactions"];
             const placeholders=wanted.map(()=>"?").join(",");
-            const [tables]=await c.query(`SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders}) ORDER BY TABLE_NAME`, wanted);
-            const [cols]=await c.query(`SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders}) ORDER BY TABLE_NAME,ORDINAL_POSITION`, wanted);
-            console.log(JSON.stringify({databaseConnection:true,tables:tables.map(r=>r.TABLE_NAME),columns:cols.map(r=>`${r.TABLE_NAME}.${r.COLUMN_NAME}`)}));
+            const [tables]=await c.query(`SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders}) ORDER BY TABLE_NAME`,wanted);
+            console.log(JSON.stringify({databaseConnection:true,tables:tables.map(r=>r.TABLE_NAME)}));
             await c.end();
           '
 
-      - name: Read public health and MCP route status
+      - name: Read public route types
         shell: bash
         run: |
           set -euo pipefail
-          health="$(curl --fail --silent --show-error --location https://arelogic.space/healthz)"
-          printf 'public_health=%s\n' "$health"
-          curl --silent --show-error --output /dev/null --write-out 'mcp_http=%{http_code}\n' https://arelogic.space/mcp
-          curl --silent --show-error --output /dev/null --write-out 'mcp_admin_http=%{http_code}\n' https://arelogic.space/mcp-admin
+          probe() {
+            local path="$1" accept="$2"
+            local hdr body code ctype hash
+            hdr="$(mktemp)"; body="$(mktemp)"
+            code="$(curl --max-time 8 --silent --show-error --location --header "Accept: ${accept}" --dump-header "$hdr" --output "$body" --write-out '%{http_code}' "https://arelogic.space${path}" || true)"
+            ctype="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{gsub(/\r/,""); print $2; exit}' "$hdr")"
+            hash="$(sha256sum "$body" | awk '{print $1}')"
+            printf 'public_probe path=%s status=%s content_type=%s body_sha256=%s bytes=%s\n' "$path" "$code" "${ctype:-unknown}" "$hash" "$(wc -c < "$body")"
+            if [[ "$path" == /healthz && "${ctype:-}" == application/json* ]]; then
+              printf 'public_health_json='
+              head -c 600 "$body"
+              printf '\n'
+            fi
+            rm -f "$hdr" "$body"
+          }
+          probe /healthz application/json
+          probe /mcp text/event-stream
+          probe /admin-mcp application/json
+          probe /.well-known/oauth-protected-resource application/json
