@@ -1,7 +1,5 @@
-import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import {
   classifyMigrationContract,
@@ -12,9 +10,14 @@ import {
   type ObservedTable,
 } from "./aurionProductionSchemaReconciliation";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = path.resolve(process.env.AURION_RECONCILIATION_ROOT?.trim() || process.cwd());
 const requireMatch = process.argv.includes("--require-match");
-const databaseUrl = process.env.DATABASE_URL;
+const sourceRevision = (() => {
+  const value = process.env.AURION_RECONCILIATION_SOURCE_SHA?.trim();
+  if (!value) return null;
+  if (!/^[a-f0-9]{40}$/.test(value)) throw new Error("AURION_RECONCILIATION_SOURCE_SHA must be a 40-character lowercase Git SHA");
+  return value;
+})();
 
 type ColumnRow = RowDataPacket & {
   TABLE_NAME: string;
@@ -30,6 +33,39 @@ type IndexRow = RowDataPacket & {
   SEQ_IN_INDEX: number;
   COLUMN_NAME: string;
 };
+
+function parseEnvironmentValue(raw: string): string {
+  const value = raw.trim();
+  if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) return value.slice(1, -1);
+  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+    return value.slice(1, -1).replace(/\\([\\"nrt])/g, (_match, escaped: string) => {
+      if (escaped === "n") return "\n";
+      if (escaped === "r") return "\r";
+      if (escaped === "t") return "\t";
+      return escaped;
+    });
+  }
+  return value;
+}
+
+async function databaseUrlFromEnvironmentFile(envFile: string): Promise<string | null> {
+  const source = await readFile(envFile, "utf8");
+  for (const line of source.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?DATABASE_URL\s*=([\s\S]*)$/);
+    if (!match) continue;
+    const value = parseEnvironmentValue(match[1]);
+    if (!value || /[\r\n\0]/.test(value)) throw new Error("DATABASE_URL in reconciliation environment is invalid");
+    return value;
+  }
+  return null;
+}
+
+async function resolveDatabaseUrl(): Promise<string | null> {
+  const envFile = process.env.AURION_RECONCILIATION_ENV_FILE?.trim();
+  if (envFile) return databaseUrlFromEnvironmentFile(envFile);
+  const direct = process.env.DATABASE_URL?.trim();
+  return direct || null;
+}
 
 function placeholders(count: number): string {
   return new Array(count).fill("?").join(",");
@@ -52,6 +88,7 @@ function unreadableReceipt(error: unknown) {
   return {
     recordType: "aurion_production_schema_reconciliation",
     schemaVersion: 1,
+    sourceRevision,
     readOnly: true,
     requireMatch,
     databaseCredentialReturned: false,
@@ -96,6 +133,7 @@ async function readDrizzleJournal(connection: Connection) {
 }
 
 async function main() {
+  const databaseUrl = await resolveDatabaseUrl();
   if (!databaseUrl) throw new Error("DATABASE_URL is required for read-only schema reconciliation");
   const expected = await expectedMigrations();
   const expectedTableNames = Array.from(new Set(expected.flatMap(migration => migration.tables.map(table => table.name)))).sort();
@@ -145,6 +183,7 @@ async function main() {
     const receipt = {
       recordType: "aurion_production_schema_reconciliation",
       schemaVersion: 1,
+      sourceRevision,
       readOnly: true,
       requireMatch,
       databaseCredentialReturned: false,

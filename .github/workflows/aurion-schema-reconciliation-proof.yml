@@ -6,6 +6,7 @@ on:
       - "scripts/aurionProductionSchemaReconciliation.ts"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "drizzle/meta/_journal.json"
       - "drizzle/0021_aurion_global_world_state.sql"
       - "drizzle/0022_aurion_world_chunk_deltas.sql"
       - "drizzle/0023_aurion_world_presence_epochs.sql"
@@ -15,12 +16,19 @@ on:
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
       - ".github/workflows/aurion-schema-reconciliation-proof.yml"
   push:
-    branches:
-      - feature/aim-219-production-schema-reconcile-20260828
+    branches: [main]
     paths:
       - "scripts/aurionProductionSchemaReconciliation.ts"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
       - ".github/workflows/aurion-schema-reconciliation-proof.yml"
 
 permissions:
@@ -67,8 +75,31 @@ jobs:
           pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
           git diff --check
 
-      - name: Create canonical journal cutoff through 0020
-        run: pnpm exec drizzle-kit migrate
+      - name: Establish canonical database through journaled 0020 only
+        run: |
+          set -euo pipefail
+          backup="$(mktemp)"
+          cp drizzle/meta/_journal.json "$backup"
+          restore_journal() {
+            cp "$backup" drizzle/meta/_journal.json
+            rm -f "$backup"
+          }
+          trap restore_journal EXIT
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path="drizzle/meta/_journal.json";
+          const journal=JSON.parse(fs.readFileSync(path,"utf8"));
+          const cutoff=journal.entries.filter(entry=>Number(entry.idx)<=20);
+          if(cutoff.length!==21 || cutoff.at(-1)?.tag!=="0020_wasd_aurion_dialogue_quest_intents") {
+            throw new Error("unable to construct exact 0020 journal cutoff");
+          }
+          journal.entries=cutoff;
+          fs.writeFileSync(path, `${JSON.stringify(journal,null,2)}\n`);
+          NODE
+          pnpm exec drizzle-kit migrate
+          restore_journal
+          trap - EXIT
+          git diff --exit-code -- drizzle/meta/_journal.json
 
       - name: Prove all seven late migrations classify absent on a 0020-only database
         run: |
@@ -123,7 +154,7 @@ jobs:
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
           if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
           if(receipt.summary.matchCount!==7 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
-          console.log(JSON.stringify({phase:"full-match",summary:receipt.summary}));
+          console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
 
       - name: Prove structural drift fails closed

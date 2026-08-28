@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: aurion-production-schema-reconcile <expected-sha40>" >&2
+  exit 64
+fi
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "aurion-production-schema-reconcile must run as root" >&2
+  exit 77
+fi
+
+expected_sha="$1"
+[[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
+
+base=/opt/echoes-of-aurion-schema-reconcile
+current="${base}/current"
+env_file=/opt/echoes-of-aurion/.env.production
+state_dir=/var/lib/echoes-of-aurion/schema-reconciliation
+
+[[ -L "$current" ]] || { echo "reconciliation release is not installed" >&2; exit 69; }
+release="$(readlink -f "$current")"
+[[ "$release" == "${base}/releases/${expected_sha}" ]] || { echo "installed reconciliation release does not match expected revision" >&2; exit 70; }
+[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -f "${release}/bin/reconcile.cjs" ]] || { echo "reconciliation release is incomplete" >&2; exit 70; }
+
+owner="$(stat -c '%U:%G' "$release")"
+[[ "$owner" == "root:root" ]] || { echo "reconciliation release must be root-owned" >&2; exit 70; }
+if find "$release" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+  echo "reconciliation release contains unsafe ownership or writable content" >&2
+  exit 70
+fi
+
+manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${release}/manifest.json")"
+[[ "$manifest_revision" == "$expected_sha" ]] || { echo "reconciliation manifest revision mismatch" >&2; exit 70; }
+
+(
+  cd "$release"
+  sha256sum --strict -c checksums.sha256 >/dev/null
+)
+
+[[ -f "$env_file" ]] || { echo "production environment file is absent" >&2; exit 69; }
+[[ "$(stat -c '%U:%G:%a' "$env_file")" == "root:root:600" ]] || { echo "production environment file ownership/mode is not root:root:600" >&2; exit 77; }
+
+install -d -o root -g root -m 0700 "$state_dir"
+tmp="$(mktemp "${state_dir}/.receipt.XXXXXX")"
+trap 'rm -f "$tmp"' EXIT
+chmod 0600 "$tmp"
+
+set +e
+env -u DATABASE_URL \
+  AURION_RECONCILIATION_ENV_FILE="$env_file" \
+  AURION_RECONCILIATION_ROOT="$release" \
+  AURION_RECONCILIATION_SOURCE_SHA="$expected_sha" \
+  node "${release}/bin/reconcile.cjs" >"$tmp"
+status=$?
+set -e
+
+node --input-type=module -e '
+  import fs from "node:fs";
+  const receipt=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  const expected=process.argv[2];
+  if(receipt.recordType!=="aurion_production_schema_reconciliation") process.exit(2);
+  if(receipt.schemaVersion!==1||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) process.exit(3);
+  if(receipt.sourceRevision!==expected) process.exit(4);
+' "$tmp" "$expected_sha"
+
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+receipt="$(mktemp "${state_dir}/${expected_sha}-${stamp}.json.XXXXXX")"
+install -o root -g root -m 0600 "$tmp" "$receipt"
+ln -sfn "$receipt" "${state_dir}/latest.json"
+cat "$receipt"
+exit "$status"
