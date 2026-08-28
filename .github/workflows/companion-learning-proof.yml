@@ -6,6 +6,7 @@ on:
       - "client/src/companionLearningProtocol.test.ts"
       - "client/src/components/GameCanvas.tsx"
       - "client/src/game/scene.ts"
+      - "client/src/game/sceneCompanionAuthority.test.ts"
       - "client/src/lib/companionFrameCapture.ts"
       - "client/src/lib/companionFrameCapture.test.ts"
       - "client/src/lib/companionLearning.ts"
@@ -23,6 +24,7 @@ on:
       - "client/src/companionLearningProtocol.test.ts"
       - "client/src/components/GameCanvas.tsx"
       - "client/src/game/scene.ts"
+      - "client/src/game/sceneCompanionAuthority.test.ts"
       - "client/src/lib/companionFrameCapture.ts"
       - "client/src/lib/companionFrameCapture.test.ts"
       - "client/src/lib/companionLearning.ts"
@@ -70,6 +72,7 @@ jobs:
             client/src/companionLearningProtocol.test.ts \
             client/src/lib/companionLearning.test.ts \
             client/src/lib/companionFrameCapture.test.ts \
+            client/src/game/sceneCompanionAuthority.test.ts \
             server/companionMemory.test.ts
 
       - name: Full regression suite
