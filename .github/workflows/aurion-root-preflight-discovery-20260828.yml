@@ -1,0 +1,34 @@
+name: Aurion root preflight discovery 2026-08-28
+
+on:
+  push:
+    branches:
+      - ops/aurion-root-preflight-discovery-20260828
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    timeout-minutes: 10
+    steps:
+      - name: Read only required client availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'host=%s user=%s\n' "$(hostname)" "$(id -un)"
+          for cmd in docker mariadb mysql mysqldump mariadb-dump node python3 jq curl ss systemctl; do
+            if path="$(command -v "$cmd" 2>/dev/null)"; then
+              printf 'command=%s present=true path=%s\n' "$cmd" "$path"
+            else
+              printf 'command=%s present=false\n' "$cmd"
+            fi
+          done
+          python3 - <<'PY'
+          import importlib.util
+          for name in ["pymysql", "mysql.connector"]:
+              print(f"python_module={name} present={bool(importlib.util.find_spec(name))}")
+          PY
+          printf 'docker_socket_mode='; stat -c '%U:%G:%a' /var/run/docker.sock 2>/dev/null || echo absent
+          printf 'production_env_mode='; stat -c '%U:%G:%a' /opt/echoes-of-aurion/.env.production 2>/dev/null || echo absent
