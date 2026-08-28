@@ -15,6 +15,12 @@ import {
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requireMatch = process.argv.includes("--require-match");
 const databaseUrl = process.env.DATABASE_URL;
+const sourceRevision = (() => {
+  const value = process.env.AURION_RECONCILIATION_SOURCE_SHA?.trim();
+  if (!value) return null;
+  if (!/^[a-f0-9]{40}$/.test(value)) throw new Error("AURION_RECONCILIATION_SOURCE_SHA must be a 40-character lowercase Git SHA");
+  return value;
+})();
 
 type ColumnRow = RowDataPacket & {
   TABLE_NAME: string;
@@ -52,6 +58,7 @@ function unreadableReceipt(error: unknown) {
   return {
     recordType: "aurion_production_schema_reconciliation",
     schemaVersion: 1,
+    sourceRevision,
     readOnly: true,
     requireMatch,
     databaseCredentialReturned: false,
@@ -145,6 +152,7 @@ async function main() {
     const receipt = {
       recordType: "aurion_production_schema_reconciliation",
       schemaVersion: 1,
+      sourceRevision,
       readOnly: true,
       requireMatch,
       databaseCredentialReturned: false,
