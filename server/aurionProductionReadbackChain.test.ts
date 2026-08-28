@@ -40,6 +40,10 @@ describe("Aurion production schema readback chain", () => {
     expect(readback).toContain(
       'sudo -n "$runner" "$EXPECTED_SHA"',
     );
+    expect(readback).toContain(
+      "EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}",
+    );
+    expect(readback).not.toContain("EXPECTED_SHA: ${{ env.TARGET_SHA }}");
     expect(readback).not.toContain("drizzle-kit migrate");
     expect(readback).not.toContain("postgres_migration_apply");
   });
