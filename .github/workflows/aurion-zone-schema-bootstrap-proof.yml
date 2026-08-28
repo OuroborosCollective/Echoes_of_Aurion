@@ -10,10 +10,12 @@ on:
       - "deploy/aurion-production-schema-reconcile"
       - "deploy/install-aurion-production-schema-reconcile"
       - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
       - "server/aurionProductionReadbackChain.test.ts"
+      - "server/aurionProductionReadbackErrors.test.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
       - "drizzle/meta/_journal.json"
       - "drizzle/0021_aurion_global_world_state.sql"
@@ -30,8 +32,11 @@ on:
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
       - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
+      - "scripts/aurionProductionReadbackErrors.ts"
+      - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
       - "server/aurionProductionReadbackChain.test.ts"
+      - "server/aurionProductionReadbackErrors.test.ts"
 
 permissions:
   contents: read
@@ -59,19 +64,68 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify TypeScript and post-deploy readback contracts
+      - name: Verify TypeScript, readback and diagnostic contracts
         run: |
           set -euo pipefail
           pnpm check
           pnpm vitest run \
             server/aurionZoneRuntimeSchemaBootstrap.test.ts \
             server/aurionProductionReadbackChain.test.ts \
+            server/aurionProductionReadbackErrors.test.ts \
             server/aurionProductionSchemaReconciliation.test.ts
           bash -n deploy/promote-aurion-zone-runtime.sh
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
+
+      - name: Verify diagnostic disclosure boundary
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const script = fs.readFileSync("scripts/reconcile-aurion-production-schema.ts", "utf8");
+          const classifier = fs.readFileSync("scripts/aurionProductionReadbackErrors.ts", "utf8");
+          const classifierTest = fs.readFileSync("server/aurionProductionReadbackErrors.test.ts", "utf8");
+          const workflow = fs.readFileSync(".github/workflows/aurion-production-schema-readback.yml", "utf8");
+
+          for (const token of [
+            "classifyReconciliationFailure(error, failureStage)",
+            "...safeFailure",
+            "databaseCredentialReturned: false",
+          ]) {
+            if (!script.includes(token)) throw new Error(`missing receipt-builder disclosure contract: ${token}`);
+          }
+          for (const token of [
+            "failureStage",
+            "errorClass",
+            "retryable",
+            "const mapped:",
+            "UNCLASSIFIED_READ_FAILURE",
+          ]) {
+            if (!classifier.includes(token)) throw new Error(`missing classifier disclosure contract: ${token}`);
+          }
+          for (const token of [
+            'expect(serialized).not.toContain("secret")',
+            'expect(serialized).not.toContain("private-host")',
+            'expect(serialized).not.toContain("mysql://")',
+          ]) {
+            if (!classifierTest.includes(token)) throw new Error(`missing non-disclosure regression: ${token}`);
+          }
+          for (const forbidden of ["error.message", "error.stack", "String(error)"]) {
+            if (script.includes(forbidden)) throw new Error(`raw error disclosure forbidden in receipt builder: ${forbidden}`);
+          }
+          for (const token of [
+            "allowedStages",
+            "allowedClasses",
+            "databaseCredentialReturned: false",
+            "unsafe or incomplete failure classification",
+          ]) {
+            if (!workflow.includes(token)) throw new Error(`missing workflow disclosure contract: ${token}`);
+          }
+          if (workflow.includes("drizzle-kit migrate")) throw new Error("readback workflow must remain non-mutating");
+          NODE
 
       - name: Build both immutable artifacts at one revision
         env:
