@@ -86,19 +86,34 @@ jobs:
           import fs from "node:fs";
 
           const script = fs.readFileSync("scripts/reconcile-aurion-production-schema.ts", "utf8");
+          const classifier = fs.readFileSync("scripts/aurionProductionReadbackErrors.ts", "utf8");
+          const classifierTest = fs.readFileSync("server/aurionProductionReadbackErrors.test.ts", "utf8");
           const workflow = fs.readFileSync(".github/workflows/aurion-production-schema-readback.yml", "utf8");
 
+          for (const token of [
+            "classifyReconciliationFailure(error, failureStage)",
+            "...safeFailure",
+            "databaseCredentialReturned: false",
+          ]) {
+            if (!script.includes(token)) throw new Error(`missing receipt-builder disclosure contract: ${token}`);
+          }
           for (const token of [
             "failureStage",
             "errorClass",
             "retryable",
-            "classifyReconciliationFailure",
-            "databaseCredentialReturned: false",
+            "DRIVER_ERROR_CLASSES",
           ]) {
-            if (!script.includes(token)) throw new Error(`missing script disclosure contract: ${token}`);
+            if (!classifier.includes(token)) throw new Error(`missing classifier disclosure contract: ${token}`);
+          }
+          for (const token of [
+            'serialized.includes("mysql://")',
+            'serialized.includes("db.internal")',
+            'serialized.includes("secret")',
+          ]) {
+            if (!classifierTest.includes(token)) throw new Error(`missing non-disclosure regression: ${token}`);
           }
           for (const forbidden of ["error.message", "error.stack", "String(error)"]) {
-            if (script.includes(forbidden)) throw new Error(`raw error disclosure forbidden: ${forbidden}`);
+            if (script.includes(forbidden)) throw new Error(`raw error disclosure forbidden in receipt builder: ${forbidden}`);
           }
           for (const token of [
             "allowedStages",
