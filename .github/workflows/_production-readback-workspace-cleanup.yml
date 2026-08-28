@@ -31,8 +31,12 @@ jobs:
           test ! -e scripts/_patch_production_readback_workspace_cleanup.py
           test ! -e .github/workflows/_production-readback-workspace-cleanup.yml
           git diff --check
-          changed="$(git diff --name-only)"
-          test "$changed" = ".github/workflows/aurion-production-schema-readback.yml"
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/_production-readback-workspace-cleanup.yml' \
+            '.github/workflows/aurion-production-schema-readback.yml' \
+            'scripts/_patch_production_readback_workspace_cleanup.py' | sort)"
+          test "$changed" = "$expected"
 
       - name: Commit cleanup fix
         run: |
