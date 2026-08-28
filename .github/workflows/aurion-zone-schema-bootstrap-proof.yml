@@ -107,9 +107,9 @@ jobs:
             if (!classifier.includes(token)) throw new Error(`missing classifier disclosure contract: ${token}`);
           }
           for (const token of [
-            'serialized.includes("mysql://")',
-            'serialized.includes("db.internal")',
-            'serialized.includes("secret")',
+            'expect(serialized).not.toContain("secret")',
+            'expect(serialized).not.toContain("private-host")',
+            'expect(serialized).not.toContain("mysql://")',
           ]) {
             if (!classifierTest.includes(token)) throw new Error(`missing non-disclosure regression: ${token}`);
           }
