@@ -1,0 +1,73 @@
+name: Apply Aurion readback target context fix
+
+on:
+  push:
+    branches:
+      - fix/aurion-readback-target-sha-context-20260828
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-aurion-readback-target-context-fix
+  cancel-in-progress: false
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Guard exact repository and branch
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF_NAME}" = "fix/aurion-readback-target-sha-context-20260828"
+
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/aurion-readback-target-sha-context-20260828
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply bounded context patch
+        run: python3 scripts/apply_readback_target_context_fix.py
+
+      - name: Verify readback workflow contracts
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run \
+            server/aurionProductionReadbackChain.test.ts \
+            server/aurionProductionSchemaReconciliation.test.ts
+          git diff --check
+
+      - name: Guard final review surface
+        run: |
+          set -euo pipefail
+          changed="$(git status --short | awk '{print $2}' | grep -v -E '^(\.github/workflows/apply-readback-target-context-fix\.yml|scripts/apply_readback_target_context_fix\.py)$' | sort || true)"
+          expected="$(printf '%s\n' \
+            .github/workflows/aurion-production-schema-readback.yml \
+            server/aurionProductionReadbackChain.test.ts | sort)"
+          test "$changed" = "$expected"
+
+      - name: Commit verified fix to same branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(ci): bind readback job env directly to target sha"
+          git push origin HEAD:fix/aurion-readback-target-sha-context-20260828
