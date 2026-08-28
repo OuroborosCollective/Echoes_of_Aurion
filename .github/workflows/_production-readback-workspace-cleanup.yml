@@ -1,0 +1,44 @@
+name: Temporary production readback workspace cleanup
+
+on:
+  push:
+    branches:
+      - fix/production-schema-readback-workspace-cleanup-20260828
+    paths:
+      - ".github/workflows/_production-readback-workspace-cleanup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/production-schema-readback-workspace-cleanup-20260828
+          fetch-depth: 0
+
+      - name: Apply exact self-removing cleanup patch
+        run: python3 scripts/_patch_production_readback_workspace_cleanup.py
+
+      - name: Verify bounded change
+        run: |
+          set -euo pipefail
+          grep -Fq 'rm -rf unpacked' .github/workflows/aurion-production-schema-readback.yml
+          test ! -e scripts/_patch_production_readback_workspace_cleanup.py
+          test ! -e .github/workflows/_production-readback-workspace-cleanup.yml
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = ".github/workflows/aurion-production-schema-readback.yml"
+
+      - name: Commit cleanup fix
+        run: |
+          set -euo pipefail
+          git config user.name "Ouroboros Collective"
+          git config user.email "projectouroboroscollective@gmail.com"
+          git add -A
+          git commit -m "fix(ci): reset reused production readback workspace"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
