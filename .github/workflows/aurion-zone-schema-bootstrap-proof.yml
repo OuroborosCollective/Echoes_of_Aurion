@@ -59,7 +59,7 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify TypeScript and bootstrap/readback contracts
+      - name: Verify TypeScript and post-deploy readback contracts
         run: |
           set -euo pipefail
           pnpm check
