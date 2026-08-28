@@ -661,6 +661,32 @@ export const aurionFactionQuestlineDecisionReceipts = mysqlTable("aurionFactionQ
   index("aurionFactionQuestlineDecisionReceipts_user_resolution_idx").on(table.userId, table.resolutionIndex),
 ]);
 
+/** Immutable, server-confirmed completion and reward evidence for one authored faction quest node. */
+export const aurionFactionQuestlineRewardReceipts = mysqlTable("aurionFactionQuestlineRewardReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  faction: mysqlEnum("faction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"]).notNull(),
+  questId: varchar("questId", { length: 96 }).notNull(),
+  approach: mysqlEnum("approach", ["trade", "craft", "combat", "espionage", "exploration"]).notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  completionResolutionIndex: int("completionResolutionIndex").notNull(),
+  rewardKey: varchar("rewardKey", { length: 160 }).notNull(),
+  xp: int("xp").notNull(),
+  points: int("points").notNull(),
+  victory: int("victory").notNull(),
+  rewardDigest: varchar("rewardDigest", { length: 64 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionFactionQuestlineRewardReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionFactionQuestlineRewardReceipts_user_quest_uq").on(table.userId, table.questId),
+  uniqueIndex("aurionFactionQuestlineRewardReceipts_user_resolution_uq").on(table.userId, table.completionResolutionIndex),
+  uniqueIndex("aurionFactionQuestlineRewardReceipts_digest_uq").on(table.rewardDigest),
+  index("aurionFactionQuestlineRewardReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 /** Approved GLB metadata references S3 objects; bytes never enter the relational database. */
 export const glbAssets = mysqlTable("glbAssets", {
   id: varchar("id", { length: 64 }).primaryKey(),

@@ -148,6 +148,7 @@ export const appRouter = router({
   }),
   factionQuestline: router({
     read: protectedProcedure.query(({ ctx }) => db.getFactionQuestlineReadmodel(ctx.user.id)),
+    rewards: protectedProcedure.query(({ ctx }) => db.listFactionQuestlineRewards(ctx.user.id)),
     pledge: protectedProcedure.input(z.object({
       targetFaction: z.enum(["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact"]),
       idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/),
@@ -158,6 +159,10 @@ export const appRouter = router({
       approach: z.enum(["trade", "craft", "combat", "espionage", "exploration"]),
       idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/),
     })).mutation(({ ctx, input }) => db.resolveFactionQuestDecisionForUser({ userId: ctx.user.id, ...input })),
+    complete: protectedProcedure.input(z.object({
+      questId: z.string().trim().regex(/^[a-z][a-z0-9._-]{2,95}$/),
+      idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/),
+    })).mutation(({ ctx, input }) => db.completeFactionQuestlineQuestForUser({ userId: ctx.user.id, ...input })),
   }),
   guild: router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),

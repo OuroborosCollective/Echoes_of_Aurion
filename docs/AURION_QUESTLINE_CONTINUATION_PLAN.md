@@ -67,3 +67,17 @@ Die Questline-Erweiterung behandelt jede Fraktion als Gemeinschaft mit einem sic
 | Free Haven | Niko Pell, Hüter des Brunnenkreises | Wasser, Waffenstillstand und Verhandlung bewahren | Seine Neutralität ist Wiedergutmachung: Er war einst selbst Befehlshaber einer Plünderergruppe und trägt deren Wasserliste. | Brunnenkreis, geteilte Schlüssel, fünfter Weg |
 
 Jede Geschichte besitzt einen sichtbaren Bedarf, eine private Wunde, eine menschliche Wahrheit, einen authored Wendepunkt und ein Endeversprechen. Die UI zeigt diese Erzählung als serverbestätigte Journalebene; sie kann keine Fraktionszugehörigkeit, Questbedeutung, Belohnung oder Weltreaktion selbst festlegen.
+
+## Server-Reward Layer v1
+
+Ein Fraktionsquest-Abschluss ist nur gültig, wenn ein zuvor gespeicherter authored Entscheidungs-Receipt desselben Spielers existiert, der Questknoten zur aktuellen Fraktion gehört, der Ansatz authored ist und der Abschluss einen neuen monotonen `completionResolutionIndex` erhält. Die Belohnung wird ausschließlich aus dem serverseitigen Questknoten, dem bestätigten Ansatz und der Fraktionszugehörigkeit abgeleitet.
+
+| Questtyp | XP | Aurion-Punkte | Siege | Abschlussbedingung |
+| --- | ---: | ---: | ---: | --- |
+| Hauptquest | 180 plus Ansatzbonus | 70 | 1 | Authored Entscheidung und aktueller Fraktionsknoten |
+| Nebenquest | 90 plus Ansatzbonus | 30 | 0 | Authored Entscheidung und aktueller Fraktionsknoten |
+| Warfront | 260 plus Ansatzbonus | 120 | 1 | Authored Entscheidung, freigeschalteter Warfront-Knoten und aktueller Fraktionsknoten |
+
+Der Ansatzbonus ist deterministisch authored: `trade` 0, `exploration` 1, `craft` 2, `espionage` 3 und `combat` 4 XP. Jede Auszahlung erzeugt genau einen unveränderlichen Reward-Receipt und passende `progressionLedger`-Einträge für XP, Punkte und gegebenenfalls Siege. Die eindeutigen Schlüssel für Spieler/Quest, Idempotenz, Spieler/Resolution und Reward-Digest verhindern doppelte Auszahlung und Intent-Reuse.
+
+Die Migration `0027_aurion_faction_questline_rewards.sql` ist ein Kandidat und wurde nicht ausgeführt. Die isolierten Datenbank-E2E-Nachweise bleiben bis zu einer ausdrücklich bereitgestellten Testdatenbank übersprungen; reine Resolver-, Negativ- und Determinismustests laufen lokal.
