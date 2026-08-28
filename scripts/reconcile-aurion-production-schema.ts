@@ -9,6 +9,7 @@ import {
   type ObservedIndex,
   type ObservedTable,
 } from "./aurionProductionSchemaReconciliation";
+import { classifyAurionProductionReadbackFailure } from "./aurionProductionReadbackFailure";
 
 const projectRoot = path.resolve(process.env.AURION_RECONCILIATION_ROOT?.trim() || process.cwd());
 const requireMatch = process.argv.includes("--require-match");
@@ -85,6 +86,7 @@ async function expectedMigrations(): Promise<ExpectedMigration[]> {
 
 function unreadableReceipt(error: unknown) {
   const errorName = error instanceof Error && /^[A-Za-z0-9_.$ -]{1,120}$/.test(error.name) ? error.name : "UnknownError";
+  const failure = classifyAurionProductionReadbackFailure(error);
   return {
     recordType: "aurion_production_schema_reconciliation",
     schemaVersion: 1,
@@ -94,6 +96,7 @@ function unreadableReceipt(error: unknown) {
     databaseCredentialReturned: false,
     overallState: "UNREADABLE_FAIL_CLOSED",
     errorName,
+    failure,
     migrations: lateAurionMigrationTags.map(tag => ({ tag, state: "UNREADABLE_FAIL_CLOSED" })),
   };
 }
