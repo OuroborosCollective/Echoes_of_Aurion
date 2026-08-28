@@ -147,7 +147,7 @@ jobs:
     environment: production
     timeout-minutes: 10
     env:
-      EXPECTED_SHA: ${{ env.TARGET_SHA }}
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - name: Guard trusted main execution
