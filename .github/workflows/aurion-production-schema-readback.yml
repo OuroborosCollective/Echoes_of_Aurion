@@ -1,6 +1,9 @@
 name: Aurion production schema readback
 
 on:
+  workflow_run:
+    workflows: ["Deploy Aurion zone runtime"]
+    types: [completed]
   pull_request:
     paths:
       - ".github/workflows/aurion-production-schema-readback.yml"
@@ -40,8 +43,11 @@ on:
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
   workflow_dispatch:
 
+env:
+  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
 concurrency:
-  group: aurion-production-schema-readback
+  group: aurion-production-schema-readback-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false
 
 permissions:
@@ -50,17 +56,33 @@ permissions:
 jobs:
   verify-and-build:
     name: Verify and build immutable read-only reconciler
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
-      - name: Guard repository scope
-        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+      - name: Guard repository and target revision
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          [[ "${TARGET_SHA}" =~ ^[a-f0-9]{40}$ ]]
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            TARGET_SHA="${TARGET_SHA}" node -e '
+              const fs=require("node:fs");
+              const event=JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH,"utf8"));
+              if(event.workflow_run?.conclusion!=="success") throw new Error("upstream deployment was not successful");
+              if(event.workflow_run?.head_branch!=="main") throw new Error("upstream deployment was not main");
+              if(event.workflow_run?.head_sha!==process.env.TARGET_SHA) throw new Error("upstream deployment revision mismatch");
+            '
+          fi
 
-      - name: Check out exact revision
+      - name: Check out exact target revision
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ env.TARGET_SHA }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -77,6 +99,7 @@ jobs:
       - name: Verify read-only reconciliation contracts
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${TARGET_SHA}"
           pnpm check
           pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
           bash -n deploy/aurion-production-schema-reconcile
@@ -86,7 +109,7 @@ jobs:
 
       - name: Build revision-bound reconciliation artifact
         env:
-          AURION_RELEASE_SHA: ${{ github.sha }}
+          AURION_RELEASE_SHA: ${{ env.TARGET_SHA }}
         run: |
           set -euo pipefail
           node scripts/build-aurion-production-reconcile-artifact.mjs
@@ -95,40 +118,53 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
           if(manifest.schemaVersion!==1) throw new Error("unexpected artifact schema");
           if(manifest.recordType!=="aurion_production_schema_reconcile_artifact") throw new Error("unexpected artifact record type");
-          if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("artifact revision mismatch");
+          if(manifest.revision!==process.env.TARGET_SHA) throw new Error("artifact revision mismatch");
           if(manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("artifact boundary mismatch");
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
-          tar -C dist-production-reconcile -czf "aurion-production-reconcile-${GITHUB_SHA}.tgz" .
-          sha256sum "aurion-production-reconcile-${GITHUB_SHA}.tgz" > "aurion-production-reconcile-${GITHUB_SHA}.tgz.sha256"
+          tar -C dist-production-reconcile -czf "aurion-production-reconcile-${TARGET_SHA}.tgz" .
+          sha256sum "aurion-production-reconcile-${TARGET_SHA}.tgz" > "aurion-production-reconcile-${TARGET_SHA}.tgz.sha256"
 
       - name: Upload immutable reconciler
         uses: actions/upload-artifact@v4
         with:
-          name: aurion-production-reconcile-${{ github.sha }}
+          name: aurion-production-reconcile-${{ env.TARGET_SHA }}
           path: |
-            aurion-production-reconcile-${{ github.sha }}.tgz
-            aurion-production-reconcile-${{ github.sha }}.tgz.sha256
+            aurion-production-reconcile-${{ env.TARGET_SHA }}.tgz
+            aurion-production-reconcile-${{ env.TARGET_SHA }}.tgz.sha256
           if-no-files-found: error
           retention-days: 30
 
   production-readback:
     name: Read production schema through bounded root runner
-    if: github.event_name != 'pull_request'
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'workflow_dispatch'
     needs: verify-and-build
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
     timeout-minutes: 10
     env:
-      EXPECTED_SHA: ${{ github.sha }}
+      EXPECTED_SHA: ${{ env.TARGET_SHA }}
 
     steps:
       - name: Guard trusted main execution
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
-          test "${GITHUB_REF_NAME}" = "main"
           [[ "${EXPECTED_SHA}" =~ ^[a-f0-9]{40}$ ]]
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            EXPECTED_SHA="${EXPECTED_SHA}" node -e '
+              const fs=require("node:fs");
+              const event=JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH,"utf8"));
+              if(event.workflow_run?.conclusion!=="success"||event.workflow_run?.head_branch!=="main") throw new Error("untrusted upstream deployment");
+              if(event.workflow_run?.head_sha!==process.env.EXPECTED_SHA) throw new Error("upstream revision mismatch");
+            '
+          else
+            test "${GITHUB_REF_NAME}" = "main"
+          fi
 
       - name: Reset persistent readback workspace
         run: |
@@ -139,7 +175,7 @@ jobs:
       - name: Download exact immutable reconciler
         uses: actions/download-artifact@v4
         with:
-          name: aurion-production-reconcile-${{ github.sha }}
+          name: aurion-production-reconcile-${{ env.TARGET_SHA }}
           path: reconciliation-artifact
 
       - name: Verify downloaded artifact identity
@@ -234,7 +270,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aurion-production-schema-readback-${{ github.sha }}
+          name: aurion-production-schema-readback-${{ env.TARGET_SHA }}
           path: |
             production-schema-readback.json
             production-schema-readback.raw.json
