@@ -82,18 +82,34 @@ jobs:
       - name: Verify diagnostic disclosure boundary
         run: |
           set -euo pipefail
-          script=scripts/reconcile-aurion-production-schema.ts
-          workflow=.github/workflows/aurion-production-schema-readback.yml
-          grep -Fq 'failureStage' "$script"
-          grep -Fq 'errorClass' "$script"
-          grep -Fq 'retryable' "$script"
-          if grep -Fq 'error.message' "$script"; then
-            echo 'raw error messages must never enter the receipt' >&2
-            exit 1
-          fi
-          grep -Fq 'allowedStages' "$workflow"
-          grep -Fq 'allowedClasses' "$workflow"
-          grep -Fq 'databaseCredentialReturned: false' "$workflow"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const script = fs.readFileSync("scripts/reconcile-aurion-production-schema.ts", "utf8");
+          const workflow = fs.readFileSync(".github/workflows/aurion-production-schema-readback.yml", "utf8");
+
+          for (const token of [
+            "failureStage",
+            "errorClass",
+            "retryable",
+            "classifyReconciliationFailure",
+            "databaseCredentialReturned: false",
+          ]) {
+            if (!script.includes(token)) throw new Error(`missing script disclosure contract: ${token}`);
+          }
+          for (const forbidden of ["error.message", "error.stack", "String(error)"]) {
+            if (script.includes(forbidden)) throw new Error(`raw error disclosure forbidden: ${forbidden}`);
+          }
+          for (const token of [
+            "allowedStages",
+            "allowedClasses",
+            "databaseCredentialReturned: false",
+            "unsafe or incomplete failure classification",
+          ]) {
+            if (!workflow.includes(token)) throw new Error(`missing workflow disclosure contract: ${token}`);
+          }
+          if (workflow.includes("drizzle-kit migrate")) throw new Error("readback workflow must remain non-mutating");
+          NODE
 
       - name: Build both immutable artifacts at one revision
         env:
