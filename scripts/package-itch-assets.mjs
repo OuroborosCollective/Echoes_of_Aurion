@@ -8,6 +8,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const outputDirectory = path.join(projectRoot, "dist", "itch", "aurion-assets");
 const staticSource = (process.env.AURION_STATIC_SOURCE ?? "https://aurion3d-6hpapr2g.manus.space").replace(/\/$/, "");
 const localAssetCache = process.env.AURION_ASSET_CACHE ?? path.join(process.env.HOME ?? "", "webdev-static-assets", "aurion");
+const ambientWorldFiles = ["ambient-forest-world.wav", "ambient-cave-world.wav", "ambient-city-world.wav"];
 const sfxFiles = [
   "combat-attack-sharp.wav", "combat-attack-pointed.wav", "combat-attack-blunt.wav", "combat-spell-heal.wav", "combat-spell-buff.wav",
   "combat-creature-wolf-attack.wav", "combat-creature-human-attack.wav", "combat-creature-monster-attack.wav",
@@ -57,7 +58,10 @@ for (const file of files) {
   const copiedFromCache = await copyCachedAsset(file.cacheSource ?? file.source, file.target);
   if (!copiedFromCache) await downloadReleaseAsset(file.source, file.target);
 }
+for (const filename of ambientWorldFiles) {
+  await copyFile(path.join(projectRoot, "public", "audio", filename), path.join(outputDirectory, filename));
+}
 for (const filename of sfxFiles) {
   await copyFile(path.join(projectRoot, "public", "audio", "sfx", filename), path.join(outputDirectory, filename));
 }
-console.log(`Aurion itch assets packaged from ${staticSource}: ${files.length} remote/cache files and ${sfxFiles.length} local SFX files.`);
+console.log(`Aurion itch assets packaged from ${staticSource}: ${files.length} remote/cache files, ${ambientWorldFiles.length} local ambient files and ${sfxFiles.length} local SFX files.`);

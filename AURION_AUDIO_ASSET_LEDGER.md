@@ -45,3 +45,15 @@ The SFX pack contains 21 deterministic, original PCM S16LE, 44.1 kHz, mono candi
 | `crafting-workbench-saw.wav` | `crafting.workbench.saw` | 0.620 s | `e1b38d2592b31fcbf7e7d0b3be124d3f2b240a43691fe174f4d876bea99559a6` | `inactive` |
 
 The SFX pack’s measured total raw duration is **11.030 seconds** and its measured payload is **973,770 bytes (0.928659 MiB)** as 44.1-kHz/16-bit/mono PCM, so it remains modest alongside the zone music. A future resource/crafting action must dispatch a fully valid `aurion:audio-cue` event only after the corresponding server-authoritative receipt is confirmed. No SFX can itself grant resources, loot, damage, healing, buffs, experience or crafting output.
+
+## World ambience extension
+
+The world ambience extension adds three original, loop-oriented candidates. They remain `inactive` until release review and browser decode readback.
+
+| Asset | Cue | Duration | Technical format | SHA-256 | Status |
+| --- | --- | ---: | --- | --- | --- |
+| `public/audio/ambient-forest-world.wav` | `ambient.forest` | 116.611 s | PCM S16LE, 44.1 kHz, stereo | `ebcfa648ff20d33f326eef4107a648dd7a61eb191a8b4586b22e67740c76e7a2` | `inactive` |
+| `public/audio/ambient-cave-world.wav` | `ambient.cave` | 118.073 s | PCM S16LE, 44.1 kHz, stereo | `13aa4c6f734d6b6692f69bda64a58cd073d1aa7b6d6f3c13fad4d726473fc0b1` | `inactive` |
+| `public/audio/ambient-city-world.wav` | `ambient.city` | 176.823 s | PCM S16LE, 44.1 kHz, stereo | `e31e43a40909f127001f1621e73cd61b8558c01b85abc3f299fabb65a530df1d` | `inactive` |
+
+The new tracks are mapped deterministically in `Home.tsx`: Tower for Home, Cinder Vault for arena 3, Cave for arena 2, City for arena 1, Forest for the global streamed Expanse, and Plains for the remaining expedition baseline. The files are also copied by the static/Itch packager into the same flattened `aurion-assets` namespace used by `resolveAurionAsset`.
