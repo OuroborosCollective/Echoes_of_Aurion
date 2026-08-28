@@ -68,7 +68,7 @@ function pledgedIronState(decisions: readonly FactionQuestlineDecisionReceipt[] 
     playerId: "player-42",
     pledgedFaction: "ironwardens",
     oathReceipt: ironwardenOath,
-    decisions,
+    decisions: [freeHavenOath, freeHavenMainline, ...decisions],
     lastResolutionIndex,
   };
 }
@@ -144,8 +144,9 @@ describe("aurion faction questline protocol", () => {
     expect(resolveFactionQuestline(permuted)).toEqual(resolveFactionQuestline(ordered));
 
     const foreign = { ...first, faction: "free_haven" as const, deterministicHash: factionQuestlineDecisionHash({ ...first, faction: "free_haven" as const, decisionKey: first.key }) };
-    expect(() => resolveFactionQuestline(pledgedIronState([foreign], 4))).toThrow(/crosses faction boundary/);
+    expect(() => resolveFactionQuestline(pledgedIronState([foreign], 4))).toThrow(/not owned or unique/);
     expect(() => resolveFactionQuestline(pledgedIronState([{ ...first, deterministicHash: "0".repeat(64) }], 4))).toThrow(/hash is not valid/);
-    expect(() => resolveFactionQuestline(pledgedIronState([second], 5))).toThrow(/not currently available/);
+    const lockedWarfront = decision({ playerId: "player-42", faction: "ironwardens", questId: "warfront.ironwardens", key: "converge", approach: "combat", receiptId: "fqdec-locked-warfront", resolutionIndex: 4 });
+    expect(() => resolveFactionQuestline(pledgedIronState([lockedWarfront], 4))).toThrow(/not currently available/);
   });
 });

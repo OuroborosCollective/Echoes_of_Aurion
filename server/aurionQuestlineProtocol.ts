@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const AURION_QUESTLINE_RULESET_VERSION = "aurion-questlines.v1" as const;
+export const AURION_QUESTLINE_RULESET_VERSION = "aurion-questlines.v2-human-stories" as const;
 export const aurionFactions = ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"] as const;
 export type AurionFaction = (typeof aurionFactions)[number];
 export const questApproaches = ["trade", "craft", "combat", "espionage", "exploration"] as const;
@@ -21,6 +21,87 @@ export type QuestNode = Readonly<{
   warfrontBossKey?: string;
 }>;
 export type QuestDecision = Readonly<{ questId: string; key: string; approach: QuestApproach; receiptId: string; resolutionIndex: number }>;
+export type AurionFactionStory = Readonly<{
+  faction: AurionFaction;
+  protagonist: string;
+  title: string;
+  visibleNeed: string;
+  privateWound: string;
+  humanTruth: string;
+  coreQuestline: string;
+  turningPoint: string;
+  endingPromise: string;
+  signatureMotifs: readonly string[];
+}>;
+
+export const aurionFactionStories: readonly AurionFactionStory[] = Object.freeze([
+  {
+    faction: "sunward_concord",
+    protagonist: "Mara Venn, Maurerin des Sonnenwalls",
+    title: "Die Namen, die der Wall behält",
+    visibleNeed: "Mara braucht Stein, Arbeitskräfte und einen geschlossenen Wall, bevor die nächste Flüchtlingswelle eintrifft.",
+    privateWound: "Ihr jüngerer Bruder starb beim ersten Einsturz, doch sein Name wurde aus dem Bürgerbuch gestrichen, weil er als Fremder galt.",
+    humanTruth: "Sie baut nicht nur eine Festung. Sie versucht, einen Ort zu schaffen, an dem niemand erst beweisen muss, dass sein Leben zählt.",
+    coreQuestline: "Die Questline führt von der Rettung einer Wagenkolonne über das Wiederfinden gestrichener Namen bis zur Entscheidung, ob der Wall Zuflucht oder nur ein besseres Gefängnis wird.",
+    turningPoint: "Mara muss wählen, ob sie den letzten Stein für den militärischen Schutzkreis oder für eine offene Pforte der Evakuierung verwendet.",
+    endingPromise: "Die Concord kann lernen, dass Ordnung nicht dasselbe wie Gerechtigkeit ist; der Preis ist, die eigene Familiengeschichte öffentlich zu machen.",
+    signatureMotifs: ["Mörtel", "Bürgerbuch", "offene Pforte", "fremde Namen"],
+  },
+  {
+    faction: "ironwardens",
+    protagonist: "Joren Kest, Träger des ersten Schildes",
+    title: "Die Linie, hinter der Menschen stehen",
+    visibleNeed: "Joren muss eine rote Front halten, damit verstreute Siedlungen nicht voneinander abgeschnitten werden.",
+    privateWound: "Er trägt den Schild seines gefallenen Partners und verschweigt, dass dieser in seiner letzten Stunde nicht nach Ruhm, sondern nach einem Weg für die Verwundeten fragte.",
+    humanTruth: "Seine Härte ist erlernte Angst: Wenn er den Befehl nicht ausspricht, glaubt er, wieder jemanden im Staub zu verlieren.",
+    coreQuestline: "Die Questline führt durch eine kontrollierte Gegenoffensive, eine Schmiede voller Lehrlinge und die Frage, ob Stärke Schutz bedeutet oder nur schneller gehorcht.",
+    turningPoint: "Joren muss den taktisch glänzenden Angriff abbrechen, um eine Gruppe feindlicher und eigener Verwundeter gemeinsam herauszuführen.",
+    endingPromise: "Die Ironwardens können aus einer Armee von Linienhaltern eine Gemeinschaft von Schutzträgern werden, wenn Joren den Namen seines Partners wieder ausspricht.",
+    signatureMotifs: ["Schildleder", "roter Staub", "Lehrlingshände", "Rückzugssignal"],
+  },
+  {
+    faction: "veiled_covenant",
+    protagonist: "Ilyra Senn, Hüterin der stillen Archive",
+    title: "Was eine Maske bewahren soll",
+    visibleNeed: "Ilyra braucht belastbare Informationen, um einen Befehl zu stoppen, der die falschen Menschen treffen würde.",
+    privateWound: "Ihre Schwester lebt unter einem falschen Namen, weil Ilyra sie einst aus einem Spionagenetz löste und dafür die eigene Akte fälschte.",
+    humanTruth: "Für sie ist Geheimhaltung kein Spiel der Macht, sondern die letzte Form von Fürsorge für Menschen, deren Namen sonst zu Waffen werden.",
+    coreQuestline: "Die Questline führt durch einen inneren Riegel, falsche Befehle und die Rettung von Gefangenen, während jede Wahrheit eine neue Gefahr für jemanden zuhause öffnet.",
+    turningPoint: "Ilyra muss entscheiden, ob sie die perfekte Tarnung bewahrt oder eine unvollständige Wahrheit veröffentlicht, die ihre Schwester sichtbar macht.",
+    endingPromise: "Der Covenant kann lernen, dass eine Information nicht erst dann wertvoll ist, wenn sie geheim bleibt, sondern wenn sie Leben bewahrt.",
+    signatureMotifs: ["Maskenfaden", "unvollständige Wahrheit", "Archivstaub", "zwei gleiche Handschriften"],
+  },
+  {
+    faction: "wayfarer_compact",
+    protagonist: "Tava Orr, Kartografin der Randlande",
+    title: "Die siebte Markierung",
+    visibleNeed: "Tava muss einen sicheren Korridor durch Sturmgrat und gebrochenen Fluss finden, bevor die Evakuierungsroute verschwindet.",
+    privateWound: "Sie zeichnet jede verlorene Person in ihre Karten ein, weil sie den letzten Weg ihrer Gefährtin im Aschensturm nie finden konnte.",
+    humanTruth: "Ihre Rastlosigkeit ist Trauer in Bewegung. Sie hilft jedem weiter, damit niemand so namenlos verschwindet wie die Person, die sie liebte.",
+    coreQuestline: "Die Questline verbindet Leuchtfeuer, Wegrechte und eine Gruppe verängstigter Reisender; der eigentliche Schatz ist eine Karte, die nicht Besitz, sondern Rückkehr beschreibt.",
+    turningPoint: "Tava muss eine Route aufgeben, die sie berühmt machen würde, um einen unscheinbaren Umweg für eine langsame, verletzliche Gruppe zu öffnen.",
+    endingPromise: "Der Compact wird einzigartig, wenn seine Wege nicht nach dem schnellsten Durchkommen, sondern nach der Möglichkeit gemessen werden, gemeinsam anzukommen.",
+    signatureMotifs: ["siebte Markierung", "Leuchtfeuer", "Aschenwind", "Karte der Rückkehr"],
+  },
+  {
+    faction: "free_haven",
+    protagonist: "Niko Pell, Hüter des Brunnenkreises",
+    title: "Der fünfte Weg nach Hause",
+    visibleNeed: "Niko muss Wasser, Verhandlungen und einen neutralen Ort bewahren, während alle Fraktionen den Freihafen für sich gewinnen wollen.",
+    privateWound: "Er war einst selbst Befehlshaber einer Plünderergruppe und trägt heimlich die Liste der Menschen, deren Wasser er damals rationierte.",
+    humanTruth: "Seine Neutralität ist keine Unschuld. Sie ist tägliche Wiedergutmachung, die nur funktioniert, solange er niemanden zwingt, ihm zu vergeben.",
+    coreQuestline: "Die Questline beginnt am Brunnen, führt durch eine gemeinsame Versorgungslinie und endet an der Frage, ob Frieden auch dann gilt, wenn niemand die eigene Schuld ablegen darf.",
+    turningPoint: "Niko muss seine Vergangenheit offenlegen, obwohl dadurch der Waffenstillstand zerbrechen kann, oder schweigen und die alte Lüge erneut als Schutzschild verwenden.",
+    endingPromise: "Freihafen bleibt einzigartig, wenn seine Stärke nicht darin liegt, unberührt zu bleiben, sondern Schuld auszuhalten, ohne die nächste Generation dafür bezahlen zu lassen.",
+    signatureMotifs: ["Brunnenkreis", "geteilte Schlüssel", "Wasserliste", "fünfter Weg"],
+  },
+]);
+
+export function getFactionStory(faction: AurionFaction): AurionFactionStory {
+  const story = aurionFactionStories.find(candidate => candidate.faction === faction);
+  if (!story) throw new Error(`Unknown Aurion faction story: ${faction}`);
+  return story;
+}
 export type QuestlineInput = Readonly<{
   playerId: string;
   faction: AurionFaction;
@@ -31,6 +112,7 @@ export type QuestlineInput = Readonly<{
 }>;
 export type QuestlineReadmodel = Readonly<{
   faction: AurionFaction;
+  factionStory: AurionFactionStory;
   preferredApproach: QuestApproach;
   availableOathQuestIds: readonly string[];
   availableMainQuestIds: readonly string[];
@@ -86,7 +168,7 @@ export function resolveQuestline(input: QuestlineInput): QuestlineReadmodel {
   const oathStatus = completed.has(`${input.faction}.oath`) || input.faction === "free_haven" && completed.has("free_haven.oath") ? "pledged" : "unpledged";
   const route = factionNodes.filter(node => node.kind !== "warfront" && (node.preferredApproaches.includes(preferredApproach) || node.kind === "oath")).map(node => node.id).sort(compare);
   const warfrontBossKeys = aurionQuestlineNodes.filter(node => node.kind === "warfront").map(node => node.warfrontBossKey).filter((key): key is string => Boolean(key)).sort(compare);
-  return { faction: input.faction, preferredApproach, availableOathQuestIds: oath, availableMainQuestIds: main, availableSideQuestIds: side, route, oathStatus, warfrontBossKeys, deterministicHash: hash([AURION_QUESTLINE_RULESET_VERSION, input.playerId, input.faction, String(input.resolutionIndex), preferredApproach, ...oath, ...main, ...side, ...route, ...warfrontBossKeys]) };
+  return { faction: input.faction, factionStory: getFactionStory(input.faction), preferredApproach, availableOathQuestIds: oath, availableMainQuestIds: main, availableSideQuestIds: side, route, oathStatus, warfrontBossKeys, deterministicHash: hash([AURION_QUESTLINE_RULESET_VERSION, input.playerId, input.faction, String(input.resolutionIndex), preferredApproach, ...oath, ...main, ...side, ...route, ...warfrontBossKeys]) };
 }
 export function resolveQuestDecision(input: Readonly<{ playerId: string; nodeId: string; decisionKey: string; approach: QuestApproach; receiptId: string; resolutionIndex: number }>): QuestDecision {
   const node = getQuestlineNode(input.nodeId);

@@ -53,3 +53,17 @@ The readmodel is reconstructed from the pledged faction plus sorted persisted co
 No production migration is applied. No WASD runtime, scheduler, deployment setup, GLB, or asset data is copied. No faction change after oath, reward settlement, NPC memory mutation, loot minting, world reaction, or autonomous boss combat is implemented in this slice. Those require separate, receipt-bound contracts and corresponding isolated database/browser evidence.
 
 [1]: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/77 "Existing deterministic faction questline draft PR"
+
+## Human Story Layer v2
+
+Die Questline-Erweiterung behandelt jede Fraktion als Gemeinschaft mit einem sichtbaren politischen Zweck und einer persönlichen Wahrheit, die von außen nicht vollständig erkannt werden kann. Diese Storydaten sind authored Content und verändern keine serverautorisierte Bedeutung: Der Server entscheidet weiterhin ausschließlich anhand stabiler Questschlüssel, authored Entscheidungsschlüssel, Receiptbindung und monotoner `resolutionIndex`-Werte.
+
+| Fraktion | Persönliche Trägerfigur | Sichtbare Aufgabe | Verborgener menschlicher Kern | Signatur |
+| --- | --- | --- | --- | --- |
+| Sunward Concord | Mara Venn, Maurerin des Sonnenwalls | Wall, Vorräte und Evakuierungswege sichern | Ihr Bruder wurde als Fremder aus dem Bürgerbuch gestrichen; sie baut einen Ort, an dem niemand seine Daseinsberechtigung beweisen muss. | Mörtel, Bürgerbuch, offene Pforte |
+| Ironwardens | Joren Kest, Träger des ersten Schildes | Front halten und Siedlungen schützen | Hinter seiner Härte steht die Angst, wieder jemanden zu verlieren; der letzte Wunsch seines Partners galt den Verwundeten, nicht dem Ruhm. | Schildleder, roter Staub, Rückzugssignal |
+| Veiled Covenant | Ilyra Senn, Hüterin der stillen Archive | Einen tödlichen Befehl durch belastbare Information verhindern | Ihre Schwester lebt unter falschem Namen; Geheimhaltung ist für Ilyra eine Form von Fürsorge, nicht bloß Macht. | Maskenfaden, Archivstaub, unvollständige Wahrheit |
+| Wayfarer Compact | Tava Orr, Kartografin der Randlande | Einen sicheren Korridor für Flüchtende öffnen | Ihre Karten sind Trauer in Bewegung, weil sie den letzten Weg ihrer Gefährtin nie finden konnte. | Siebte Markierung, Leuchtfeuer, Karte der Rückkehr |
+| Free Haven | Niko Pell, Hüter des Brunnenkreises | Wasser, Waffenstillstand und Verhandlung bewahren | Seine Neutralität ist Wiedergutmachung: Er war einst selbst Befehlshaber einer Plünderergruppe und trägt deren Wasserliste. | Brunnenkreis, geteilte Schlüssel, fünfter Weg |
+
+Jede Geschichte besitzt einen sichtbaren Bedarf, eine private Wunde, eine menschliche Wahrheit, einen authored Wendepunkt und ein Endeversprechen. Die UI zeigt diese Erzählung als serverbestätigte Journalebene; sie kann keine Fraktionszugehörigkeit, Questbedeutung, Belohnung oder Weltreaktion selbst festlegen.

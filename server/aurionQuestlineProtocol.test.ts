@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getQuestlineNode, getWarfrontBosses, resolveQuestDecision, resolveQuestline, resolveQuestObjective } from "./aurionQuestlineProtocol";
+import { aurionFactionStories, getFactionStory, getQuestlineNode, getWarfrontBosses, resolveQuestDecision, resolveQuestline, resolveQuestObjective } from "./aurionQuestlineProtocol";
 
 const base = {
   playerId: "player-quest-001",
@@ -37,6 +37,19 @@ describe("aurion questline protocol", () => {
   it("rejects unauthored decisions and binds valid decisions to a receipt", () => {
     expect(() => resolveQuestDecision({ playerId: "p", nodeId: "concord.mainline", decisionKey: "teleport", approach: "craft", receiptId: "r-1", resolutionIndex: 1 })).toThrow(/not authored/);
     expect(resolveQuestDecision({ playerId: "p", nodeId: "concord.mainline", decisionKey: "fortify", approach: "craft", receiptId: "receipt-7", resolutionIndex: 3 })).toMatchObject({ questId: "concord.mainline", key: "fortify", approach: "craft", receiptId: "receipt-7" });
+  });
+
+  it("keeps one authored human story for every faction with a hidden personal truth", () => {
+    expect(aurionFactionStories).toHaveLength(5);
+    for (const faction of ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"] as const) {
+      const story = getFactionStory(faction);
+      expect(story.faction).toBe(faction);
+      expect(story.protagonist.length).toBeGreaterThan(8);
+      expect(story.privateWound.length).toBeGreaterThan(24);
+      expect(story.humanTruth.length).toBeGreaterThan(24);
+      expect(story.coreQuestline.length).toBeGreaterThan(24);
+      expect(story.signatureMotifs.length).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it("converges every faction on exactly one authored Warfront boss", () => {

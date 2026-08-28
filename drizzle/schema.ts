@@ -607,6 +607,60 @@ export const aurionDialogueCommandReceipts = mysqlTable("aurionDialogueCommandRe
   index("aurionDialogueCommandReceipts_dialogue_idx").on(table.dialogueReceiptId),
 ]);
 
+/** One player-owned faction questline projection. Its resolution index is advanced only by receipt-producing commands. */
+export const aurionFactionQuestlineStates = mysqlTable("aurionFactionQuestlineStates", {
+  userId: int("userId").primaryKey(),
+  pledgedFaction: mysqlEnum("pledgedFaction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"]).default("free_haven").notNull(),
+  permanentOathReceiptId: varchar("permanentOathReceiptId", { length: 64 }),
+  lastResolutionIndex: int("lastResolutionIndex").default(0).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable receipt for the one-way transition from the neutral route to a permanent faction. */
+export const aurionFactionQuestlineOathReceipts = mysqlTable("aurionFactionQuestlineOathReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  fromFaction: mysqlEnum("fromFaction", ["free_haven"]).notNull(),
+  toFaction: mysqlEnum("toFaction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact"]).notNull(),
+  sourceQuestId: varchar("sourceQuestId", { length: 96 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  receiptDigest: varchar("receiptDigest", { length: 64 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionFactionQuestlineOathReceipts_user_uq").on(table.userId),
+  uniqueIndex("aurionFactionQuestlineOathReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionFactionQuestlineOathReceipts_user_source_uq").on(table.userId, table.sourceReceiptId),
+  uniqueIndex("aurionFactionQuestlineOathReceipts_user_resolution_uq").on(table.userId, table.resolutionIndex),
+]);
+
+/** Immutable player-owned authored quest decision; no reward or world mutation is stored here. */
+export const aurionFactionQuestlineDecisionReceipts = mysqlTable("aurionFactionQuestlineDecisionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  faction: mysqlEnum("faction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"]).notNull(),
+  questId: varchar("questId", { length: 96 }).notNull(),
+  decisionKey: varchar("decisionKey", { length: 96 }).notNull(),
+  approach: mysqlEnum("approach", ["trade", "craft", "combat", "espionage", "exploration"]).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  receiptDigest: varchar("receiptDigest", { length: 64 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionFactionQuestlineDecisionReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionFactionQuestlineDecisionReceipts_user_quest_uq").on(table.userId, table.questId),
+  uniqueIndex("aurionFactionQuestlineDecisionReceipts_user_resolution_uq").on(table.userId, table.resolutionIndex),
+  index("aurionFactionQuestlineDecisionReceipts_user_resolution_idx").on(table.userId, table.resolutionIndex),
+]);
+
 /** Approved GLB metadata references S3 objects; bytes never enter the relational database. */
 export const glbAssets = mysqlTable("glbAssets", {
   id: varchar("id", { length: 64 }).primaryKey(),

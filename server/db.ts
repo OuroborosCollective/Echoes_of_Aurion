@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionFactionQuestlineDecisionReceipts, aurionFactionQuestlineOathReceipts, aurionFactionQuestlineStates, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -12,6 +12,8 @@ import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from
 import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQuality } from "./marketProtocol";
 import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
+import { AURION_FACTION_QUESTLINE_CONTENT_VERSION, AURION_FACTION_QUESTLINE_RULESET_VERSION, factionQuestlineDecisionHash, factionQuestlineNextResolutionIndex, factionQuestlineOathHash, isFactionQuestDecisionAvailable, mayPledgeFaction, permanentFactionChoices, resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineOathReceipt, type FactionQuestlineStateInput, type PermanentAurionFaction } from "./aurionFactionQuestlineProtocol";
+import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
 import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
 import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
@@ -443,6 +445,181 @@ export async function getOrCreatePlayerProfile(userId: number) {
   const result = await db.select().from(playerProfiles).where(eq(playerProfiles.userId, userId)).limit(1);
   if (!result[0]) throw new Error("Could not load player profile");
   return result[0];
+}
+
+const factionQuestlineFactionValues = ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"] as const;
+const factionQuestlineApproachValues = ["trade", "craft", "combat", "espionage", "exploration"] as const;
+
+type FactionQuestlineStateRow = typeof aurionFactionQuestlineStates.$inferSelect;
+type FactionQuestlineOathRow = typeof aurionFactionQuestlineOathReceipts.$inferSelect;
+type FactionQuestlineDecisionRow = typeof aurionFactionQuestlineDecisionReceipts.$inferSelect;
+
+function isFactionQuestlineFaction(value: string): value is AurionFaction {
+  return (factionQuestlineFactionValues as readonly string[]).includes(value);
+}
+
+function isFactionQuestlineApproach(value: string): value is QuestApproach {
+  return (factionQuestlineApproachValues as readonly string[]).includes(value);
+}
+
+function assertFactionQuestlineCommand(values: { userId: number; idempotencyKey: string }): void {
+  if (!Number.isSafeInteger(values.userId) || values.userId < 1) throw new Error("Ungültige Aurion-Spielerkennung für die Fraktionsquestline.");
+  if (!values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("Ungültiger Idempotenzschlüssel für die Fraktionsquestline.");
+}
+
+function toFactionQuestlineStateInput(values: {
+  userId: number;
+  state: FactionQuestlineStateRow | undefined;
+  oath: FactionQuestlineOathRow | undefined;
+  decisions: readonly FactionQuestlineDecisionRow[];
+}): FactionQuestlineStateInput {
+  const pledgedFaction = values.state?.pledgedFaction ?? "free_haven";
+  if (!isFactionQuestlineFaction(pledgedFaction)) throw new Error("Persistierte Fraktionszugehörigkeit ist nicht zulässig.");
+  const oathReceipt: FactionQuestlineOathReceipt | null = values.oath ? (() => {
+    if (values.oath.userId !== values.userId || values.oath.fromFaction !== "free_haven" || !permanentFactionChoices.includes(values.oath.toFaction as PermanentAurionFaction)) {
+      throw new Error("Persistierter Fraktionsschwur ist nicht zulässig.");
+    }
+    return {
+      id: values.oath.id,
+      playerId: String(values.userId),
+      fromFaction: "free_haven",
+      toFaction: values.oath.toFaction as PermanentAurionFaction,
+      sourceQuestId: values.oath.sourceQuestId as "free_haven.mainline",
+      sourceReceiptId: values.oath.sourceReceiptId,
+      resolutionIndex: values.oath.resolutionIndex,
+    };
+  })() : null;
+  const decisions: FactionQuestlineDecisionReceipt[] = values.decisions.map(row => {
+    if (row.userId !== values.userId || !isFactionQuestlineFaction(row.faction) || !isFactionQuestlineApproach(row.approach)) throw new Error("Persistierter Fraktionsquest-Receipt ist nicht zulässig.");
+    return {
+      playerId: String(values.userId),
+      faction: row.faction,
+      questId: row.questId,
+      key: row.decisionKey,
+      approach: row.approach,
+      receiptId: row.id,
+      resolutionIndex: row.resolutionIndex,
+      deterministicHash: row.receiptDigest,
+    };
+  });
+  return {
+    playerId: String(values.userId),
+    pledgedFaction,
+    oathReceipt,
+    decisions,
+    lastResolutionIndex: values.state?.lastResolutionIndex ?? 0,
+  };
+}
+
+async function loadFactionQuestlineState(values: {
+  tx: any;
+  userId: number;
+  lock: boolean;
+  ensureState: boolean;
+}): Promise<FactionQuestlineStateInput> {
+  const { tx, userId, lock, ensureState } = values;
+  if (ensureState) {
+    await tx.insert(aurionFactionQuestlineStates).values({
+      userId,
+      pledgedFaction: "free_haven",
+      lastResolutionIndex: 0,
+      contentVersion: AURION_FACTION_QUESTLINE_CONTENT_VERSION,
+      ruleSetVersion: AURION_FACTION_QUESTLINE_RULESET_VERSION,
+    }).onDuplicateKeyUpdate({ set: { userId } });
+  }
+  const state = lock
+    ? (await tx.select().from(aurionFactionQuestlineStates).where(eq(aurionFactionQuestlineStates.userId, userId)).for("update").limit(1))[0]
+    : (await tx.select().from(aurionFactionQuestlineStates).where(eq(aurionFactionQuestlineStates.userId, userId)).limit(1))[0];
+  const [oath, decisions] = await Promise.all([
+    tx.select().from(aurionFactionQuestlineOathReceipts).where(eq(aurionFactionQuestlineOathReceipts.userId, userId)).limit(1),
+    tx.select().from(aurionFactionQuestlineDecisionReceipts).where(eq(aurionFactionQuestlineDecisionReceipts.userId, userId)).orderBy(asc(aurionFactionQuestlineDecisionReceipts.resolutionIndex), asc(aurionFactionQuestlineDecisionReceipts.id)),
+  ]);
+  return toFactionQuestlineStateInput({ userId, state, oath: oath[0], decisions });
+}
+
+/** Readmodel-only query. A missing row represents the deterministic neutral starting state and is never created by reading. */
+export async function getFactionQuestlineReadmodel(userId: number) {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("Ungültige Aurion-Spielerkennung für die Fraktionsquestline.");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  return resolveFactionQuestline(await loadFactionQuestlineState({ tx: db, userId, lock: false, ensureState: false }));
+}
+
+/** One-way, receipt-bound faction oath. The target faction, prerequisite receipt and resolution index are all validated server-side. */
+export async function pledgeFactionQuestlineForUser(values: { userId: number; targetFaction: PermanentAurionFaction; idempotencyKey: string }) {
+  assertFactionQuestlineCommand(values);
+  if (!permanentFactionChoices.includes(values.targetFaction)) throw new Error("Ungültiger Fraktionsschwur für die Questline.");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  await getOrCreatePlayerProfile(values.userId);
+  return db.transaction(async tx => {
+    const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: true, ensureState: true });
+    const replay = (await tx.select().from(aurionFactionQuestlineOathReceipts).where(eq(aurionFactionQuestlineOathReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (replay) {
+      if (replay.userId !== values.userId || replay.toFaction !== values.targetFaction) throw new Error("Idempotenzschlüssel ist bereits an einen anderen Fraktionsschwur gebunden.");
+      return { applied: false as const, receipt: replay, readmodel: resolveFactionQuestline(state) };
+    }
+    const neutralMainReceipt = state.decisions.find(decision => decision.faction === "free_haven" && decision.questId === "free_haven.mainline");
+    if (!neutralMainReceipt || !mayPledgeFaction(state, values.targetFaction, neutralMainReceipt.receiptId)) throw new Error("Der neutrale Questpfad berechtigt noch nicht zu diesem Fraktionsschwur.");
+    const resolutionIndex = factionQuestlineNextResolutionIndex(state);
+    const receiptId = newEndgameId("fqoath");
+    const oathReceipt: FactionQuestlineOathReceipt = {
+      id: receiptId,
+      playerId: String(values.userId),
+      fromFaction: "free_haven",
+      toFaction: values.targetFaction,
+      sourceQuestId: "free_haven.mainline",
+      sourceReceiptId: neutralMainReceipt.receiptId,
+      resolutionIndex,
+    };
+    const receiptDigest = factionQuestlineOathHash(oathReceipt);
+    const nextState: FactionQuestlineStateInput = { ...state, pledgedFaction: values.targetFaction, oathReceipt, lastResolutionIndex: resolutionIndex };
+    const readmodel = resolveFactionQuestline(nextState);
+    await tx.insert(aurionFactionQuestlineOathReceipts).values({
+      id: receiptId, userId: values.userId, fromFaction: "free_haven", toFaction: values.targetFaction, sourceQuestId: oathReceipt.sourceQuestId,
+      sourceReceiptId: neutralMainReceipt.receiptId, resolutionIndex, receiptDigest, contentVersion: AURION_FACTION_QUESTLINE_CONTENT_VERSION,
+      ruleSetVersion: AURION_FACTION_QUESTLINE_RULESET_VERSION, idempotencyKey: values.idempotencyKey,
+    });
+    const updated = await tx.update(aurionFactionQuestlineStates).set({ pledgedFaction: values.targetFaction, permanentOathReceiptId: receiptId, lastResolutionIndex: resolutionIndex, contentVersion: AURION_FACTION_QUESTLINE_CONTENT_VERSION, ruleSetVersion: AURION_FACTION_QUESTLINE_RULESET_VERSION }).where(and(eq(aurionFactionQuestlineStates.userId, values.userId), eq(aurionFactionQuestlineStates.lastResolutionIndex, state.lastResolutionIndex)));
+    if (affectedRowCount(updated) !== 1) throw new Error("Fraktionsquestline wurde parallel verändert.");
+    const receipt = (await tx.select().from(aurionFactionQuestlineOathReceipts).where(and(eq(aurionFactionQuestlineOathReceipts.id, receiptId), eq(aurionFactionQuestlineOathReceipts.userId, values.userId))).limit(1))[0];
+    if (!receipt || receipt.receiptDigest !== receiptDigest || receipt.resolutionIndex !== resolutionIndex) throw new Error("Fraktionsschwur-Readback fehlgeschlagen.");
+    return { applied: true as const, receipt, readmodel };
+  });
+}
+
+/** Records one authored faction quest decision. The browser never selects the faction, completion state, receipt id, digest, or resolution index. */
+export async function resolveFactionQuestDecisionForUser(values: { userId: number; questId: string; decisionKey: string; approach: QuestApproach; idempotencyKey: string }) {
+  assertFactionQuestlineCommand(values);
+  if (!values.questId || values.questId.length > 96 || !values.decisionKey || values.decisionKey.length > 96 || !isFactionQuestlineApproach(values.approach)) throw new Error("Ungültige Fraktionsquestentscheidung.");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  await getOrCreatePlayerProfile(values.userId);
+  return db.transaction(async tx => {
+    const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: true, ensureState: true });
+    const replay = (await tx.select().from(aurionFactionQuestlineDecisionReceipts).where(eq(aurionFactionQuestlineDecisionReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (replay) {
+      if (replay.userId !== values.userId || replay.questId !== values.questId || replay.decisionKey !== values.decisionKey || replay.approach !== values.approach) throw new Error("Idempotenzschlüssel ist bereits an eine andere Questentscheidung gebunden.");
+      return { applied: false as const, receipt: replay, readmodel: resolveFactionQuestline(state) };
+    }
+    if (!isFactionQuestDecisionAvailable(state, values.questId)) throw new Error("Diese Fraktionsquestentscheidung ist derzeit nicht freigeschaltet.");
+    const current = resolveFactionQuestline(state);
+    const resolutionIndex = factionQuestlineNextResolutionIndex(state);
+    const receiptId = newEndgameId("fqdec");
+    const receiptDigest = factionQuestlineDecisionHash({ playerId: String(values.userId), faction: current.faction, questId: values.questId, decisionKey: values.decisionKey, approach: values.approach, receiptId, resolutionIndex });
+    const pending: FactionQuestlineDecisionReceipt = { playerId: String(values.userId), faction: current.faction, questId: values.questId, key: values.decisionKey, approach: values.approach, receiptId, resolutionIndex, deterministicHash: receiptDigest };
+    const nextState: FactionQuestlineStateInput = { ...state, decisions: [...state.decisions, pending], lastResolutionIndex: resolutionIndex };
+    const readmodel = resolveFactionQuestline(nextState);
+    await tx.insert(aurionFactionQuestlineDecisionReceipts).values({
+      id: receiptId, userId: values.userId, faction: current.faction, questId: values.questId, decisionKey: values.decisionKey, approach: values.approach,
+      resolutionIndex, receiptDigest, contentVersion: AURION_FACTION_QUESTLINE_CONTENT_VERSION, ruleSetVersion: AURION_FACTION_QUESTLINE_RULESET_VERSION, idempotencyKey: values.idempotencyKey,
+    });
+    const updated = await tx.update(aurionFactionQuestlineStates).set({ lastResolutionIndex: resolutionIndex, contentVersion: AURION_FACTION_QUESTLINE_CONTENT_VERSION, ruleSetVersion: AURION_FACTION_QUESTLINE_RULESET_VERSION }).where(and(eq(aurionFactionQuestlineStates.userId, values.userId), eq(aurionFactionQuestlineStates.lastResolutionIndex, state.lastResolutionIndex)));
+    if (affectedRowCount(updated) !== 1) throw new Error("Fraktionsquestline wurde parallel verändert.");
+    const receipt = (await tx.select().from(aurionFactionQuestlineDecisionReceipts).where(and(eq(aurionFactionQuestlineDecisionReceipts.id, receiptId), eq(aurionFactionQuestlineDecisionReceipts.userId, values.userId))).limit(1))[0];
+    if (!receipt || receipt.receiptDigest !== receiptDigest || receipt.resolutionIndex !== resolutionIndex) throw new Error("Fraktionsquestentscheidungs-Readback fehlgeschlagen.");
+    return { applied: true as const, receipt, readmodel };
+  });
 }
 
 type GameplayQuestView = {
