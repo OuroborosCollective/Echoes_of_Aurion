@@ -41,6 +41,19 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Repair patcher type-only return
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/apply_companion_learning_evidence_fix.py")
+          source = path.read_text(encoding="utf-8")
+          old = '.catch(() => respond({ requestId: detail.requestId, error: "capture_failed" }));'
+          new = '.catch(() => {\n          respond({ requestId: detail.requestId, error: "capture_failed" });\n        });'
+          if source.count(old) != 1:
+              raise SystemExit("expected exactly one patcher return expression")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Apply deterministic source patch
         run: python3 scripts/apply_companion_learning_evidence_fix.py
 
