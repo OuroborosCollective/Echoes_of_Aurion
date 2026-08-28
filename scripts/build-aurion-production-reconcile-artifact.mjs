@@ -25,6 +25,7 @@ const deployFiles = [
   "aurion-production-schema-reconcile",
   "aurion-production-schema-reconcile.sudoers",
   "install-aurion-production-schema-reconcile",
+  "aurion-reconcile-runtime-image.conf",
 ];
 
 if (!/^[a-f0-9]{40}$/.test(revision)) {

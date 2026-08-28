@@ -16,7 +16,7 @@ enable_runner="${3:-}"
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
 [[ -d "$artifact_dir" ]] || { echo "artifact directory missing" >&2; exit 66; }
 [[ -f "${artifact_dir}/manifest.json" && -f "${artifact_dir}/checksums.sha256" ]] || { echo "artifact metadata missing" >&2; exit 66; }
-[[ -f "${artifact_dir}/deploy/aurion-production-schema-reconcile" && -f "${artifact_dir}/bin/reconcile.cjs" ]] || { echo "root runner or bundled reconciler missing from artifact" >&2; exit 66; }
+[[ -f "${artifact_dir}/deploy/aurion-production-schema-reconcile" && -f "${artifact_dir}/bin/reconcile.cjs" && -f "${artifact_dir}/deploy/aurion-reconcile-runtime-image.conf" ]] || { echo "root runner, bundled reconciler or runtime image contract missing from artifact" >&2; exit 66; }
 
 manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${artifact_dir}/manifest.json")"
 [[ "$manifest_revision" == "$expected_sha" ]] || { echo "artifact revision mismatch" >&2; exit 70; }
