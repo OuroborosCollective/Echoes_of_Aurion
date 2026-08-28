@@ -1,0 +1,143 @@
+name: Aurion evidence preflight 2026-08-28
+
+on:
+  push:
+    branches:
+      - aurion/migration-truth-snapshot-20260828
+
+concurrency:
+  group: aurion-evidence-preflight-20260828
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_MAIN_SHA: c0ad8967046c52141cf1b5f69874a0c53117fbe2
+
+jobs:
+  verify-main:
+    name: Verify exact Aurion main candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Guard repository and event
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF_NAME}" = "aurion/migration-truth-snapshot-20260828"
+
+      - name: Check out exact main candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+
+      - name: Verify checkout identity
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_MAIN_SHA}"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and regression suite
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm test
+          git diff --check
+
+      - name: Build revision-bound runtime artifact
+        env:
+          AURION_RELEASE_SHA: ${{ env.EXPECTED_MAIN_SHA }}
+        run: |
+          set -euo pipefail
+          pnpm build:runtime-artifact
+          node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("dist/.aurion-runtime-build.json","utf8")); if(m.revision!==process.env.AURION_RELEASE_SHA) process.exit(1); console.log(JSON.stringify({revision:m.revision, manifest:true}))'
+
+  runtime-readback:
+    name: Read current production boundary without mutation
+    needs: verify-main
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    timeout-minutes: 10
+    steps:
+      - name: Guard repository
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Select read-only Docker command
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker ps >/dev/null 2>&1; then
+            printf 'DOCKER_MODE=direct\n' >> "$GITHUB_ENV"
+          elif sudo -n docker ps >/dev/null 2>&1; then
+            printf 'DOCKER_MODE=sudo\n' >> "$GITHUB_ENV"
+          else
+            echo 'No read-only Docker access on the Aurion runner.' >&2
+            exit 1
+          fi
+
+      - name: Read container identity and bound source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          d() { if [[ "${DOCKER_MODE}" == "sudo" ]]; then sudo -n docker "$@"; else docker "$@"; fi; }
+          mapfile -t rows < <(d ps --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}' | grep -Ei 'aurion|echoes-of-aurion' || true)
+          printf 'aurion_container_candidates=%s\n' "${#rows[@]}"
+          printf '%s\n' "${rows[@]}"
+          if [[ "${#rows[@]}" -ne 1 ]]; then
+            echo 'Expected exactly one running Aurion container.' >&2
+            exit 1
+          fi
+          cid="${rows[0]%%|*}"
+          image_id="$(d inspect --format '{{.Image}}' "$cid")"
+          printf 'aurion_container_id=%s\n' "$cid" >> "$GITHUB_ENV"
+          printf 'aurion_image_id=%s\n' "$image_id"
+          d exec "$cid" node --input-type=module -e 'import fs from "node:fs"; const p="/app/dist/.aurion-runtime-build.json"; const m=JSON.parse(fs.readFileSync(p,"utf8")); console.log(JSON.stringify({runtimeManifest:true, revision:m.revision}))'
+
+      - name: Read production schema presence without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          d() { if [[ "${DOCKER_MODE}" == "sudo" ]]; then sudo -n docker "$@"; else docker "$@"; fi; }
+          d exec "${aurion_container_id}" node --input-type=module -e '
+            import mysql from "mysql2/promise";
+            const url=process.env.DATABASE_URL;
+            if(!url){ console.error("DATABASE_URL_PRESENT=false"); process.exit(2); }
+            const c=await mysql.createConnection(url);
+            const wanted=[
+              "progressionLedger",
+              "aurionFactionQuestlineStates",
+              "aurionFactionQuestlineOathReceipts",
+              "aurionFactionQuestlineDecisionReceipts",
+              "aurionFactionQuestlineRewardReceipts",
+              "aurionItemInstancesV2",
+              "aurionLootDropReceiptsV2",
+              "aurionMasteryEvents",
+              "aurionWorldChunkDeltas",
+              "aurionWorldPresenceLeases",
+              "aurionWorldEpochReactions"
+            ];
+            const placeholders=wanted.map(()=>"?").join(",");
+            const [tables]=await c.query(`SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders}) ORDER BY TABLE_NAME`, wanted);
+            const [cols]=await c.query(`SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND TABLE_NAME IN (${placeholders}) ORDER BY TABLE_NAME,ORDINAL_POSITION`, wanted);
+            console.log(JSON.stringify({databaseConnection:true,tables:tables.map(r=>r.TABLE_NAME),columns:cols.map(r=>`${r.TABLE_NAME}.${r.COLUMN_NAME}`)}));
+            await c.end();
+          '
+
+      - name: Read public health and MCP route status
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl --fail --silent --show-error --location https://arelogic.space/healthz)"
+          printf 'public_health=%s\n' "$health"
+          curl --silent --show-error --output /dev/null --write-out 'mcp_http=%{http_code}\n' https://arelogic.space/mcp
+          curl --silent --show-error --output /dev/null --write-out 'mcp_admin_http=%{http_code}\n' https://arelogic.space/mcp-admin
