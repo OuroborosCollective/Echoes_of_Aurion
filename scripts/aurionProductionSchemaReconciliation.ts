@@ -69,6 +69,43 @@ function removeSqlComments(sql: string): string {
   return sql.replace(/^\s*--.*$/gm, "").replace(/^\s*#.*$/gm, "");
 }
 
+function maskQuotedSqlLiterals(value: string): string {
+  let result = "";
+  let quote: "'" | '"' | null = null;
+  let escaped = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (!quote) {
+      if (char === "'" || char === '"') {
+        quote = char;
+        result += " ";
+      } else {
+        result += char;
+      }
+      continue;
+    }
+
+    result += " ";
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === quote) {
+      if (value[index + 1] === quote) {
+        result += " ";
+        index += 1;
+      } else {
+        quote = null;
+      }
+    }
+  }
+  return result;
+}
+
 function scanBalancedBody(sql: string, openingIndex: number): { body: string; end: number } {
   let depth = 1;
   let quote: "'" | '"' | "`" | null = null;
@@ -197,13 +234,14 @@ function parseCreateTable(name: string, body: string): ExpectedTable {
     const columnMatch = clause.match(/^`([^`]+)`\s+([\s\S]+)$/);
     if (columnMatch) {
       const definition = columnMatch[2].trim();
+      const constraintText = maskQuotedSqlLiterals(definition);
       columns.push({
         name: columnMatch[1],
         sqlType: takeSqlType(definition),
-        nullable: !/\bNOT\s+NULL\b/i.test(definition),
+        nullable: !/\bNOT\s+NULL\b/i.test(constraintText),
       });
-      if (/\bPRIMARY\s+KEY\b/i.test(definition)) indexes.push({ name: "PRIMARY", unique: true, columns: [columnMatch[1]] });
-      else if (/\bUNIQUE\b/i.test(definition)) indexes.push({ name: `inline_unique:${columnMatch[1]}`, unique: true, columns: [columnMatch[1]] });
+      if (/\bPRIMARY\s+KEY\b/i.test(constraintText)) indexes.push({ name: "PRIMARY", unique: true, columns: [columnMatch[1]] });
+      else if (/\bUNIQUE\b/i.test(constraintText)) indexes.push({ name: `inline_unique:${columnMatch[1]}`, unique: true, columns: [columnMatch[1]] });
       continue;
     }
     const parsedIndex = parseIndexClause(clause);
