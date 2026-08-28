@@ -4,6 +4,7 @@ import { createClient } from "redis";
 
 type RedisConnection = ReturnType<typeof createClient>;
 import { createHash } from "node:crypto";
+import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
 
 export type CompanionMemoryObservation = {
   sessionId: string;
@@ -27,6 +28,16 @@ function canonicalJson(value: unknown): string {
 
 function safeSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9._:-]/g, "_").slice(0, 128);
+}
+
+function validateObservation(observation: CompanionMemoryObservation): void {
+  if (!observation.sessionId.trim() || !/^[A-Za-z0-9._:-]{8,128}$/.test(observation.sampleId)) throw new Error("Companion memory identity is missing");
+  if (!Number.isInteger(observation.sequenceIndex) || observation.sequenceIndex < 0 || !Number.isInteger(observation.timestampEpoch) || observation.timestampEpoch <= 0) throw new Error("Companion memory sequence is invalid");
+  if (observation.featureVector.length !== COMPANION_FEATURE_VECTOR_LENGTH || !observation.featureVector.every(Number.isFinite)) throw new Error("Companion memory feature vector is invalid");
+  if (observation.targetAction.length !== 4 || !observation.targetAction.every(value => Number.isFinite(value) && value >= 0 && value <= 1)) throw new Error("Companion memory target action is invalid");
+  if (observation.stateVector.length !== COMPANION_STATE_VECTOR_LENGTH || !observation.stateVector.every(Number.isFinite)) throw new Error("Companion memory state vector is invalid");
+  if (observation.stateMask.length !== COMPANION_STATE_VECTOR_LENGTH || !observation.stateMask.every(value => value === 0 || value === 1)) throw new Error("Companion memory state mask is invalid");
+  if (observation.note.length > 280) throw new Error("Companion memory note is too long");
 }
 
 export class CompanionMemoryStore {
@@ -62,7 +73,7 @@ export class CompanionMemoryStore {
 
   async append(userId: number, observation: CompanionMemoryObservation): Promise<{ stored: true; local: true; redis: boolean; memoryHash: string }> {
     if (!Number.isInteger(userId) || userId < 1) throw new Error("Companion memory userId is invalid");
-    if (!observation.sessionId.trim() || !observation.sampleId.trim()) throw new Error("Companion memory identity is missing");
+    validateObservation(observation);
     const envelope: MemoryEnvelope = { ...observation, userId, memoryVersion: "aurion-companion-memory.v1" };
     const serialized = `${canonicalJson(envelope)}\n`;
     const userDir = path.join(this.dataDir, `user-${userId}`);
@@ -75,7 +86,7 @@ export class CompanionMemoryStore {
     if (redis) {
       const key = `aurion:companion:memory:${userId}:${safeSegment(observation.sessionId)}:${observation.sequenceIndex}`;
       const added = await redis.set(key, serialized.trim(), { NX: true });
-      redisStored = added === "OK" || added === null;
+      redisStored = added === "OK";
     }
     return { stored: true, local: true, redis: redisStored, memoryHash: createHash("sha256").update(serialized).digest("hex") };
   }

@@ -1,5 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
+import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
@@ -70,10 +71,10 @@ export const appRouter = router({
       sequenceIndex: z.number().int().min(0),
       timestampEpoch: z.number().int().positive(),
       sampleId: z.string().trim().min(8).max(128),
-      featureVector: z.array(z.number().finite()).length(16),
+      featureVector: z.array(z.number().finite()).length(COMPANION_FEATURE_VECTOR_LENGTH),
       targetAction: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1)]),
-      stateVector: z.array(z.number().finite()).min(6).max(32),
-      stateMask: z.array(z.union([z.literal(0), z.literal(1)])).min(6).max(32),
+      stateVector: z.array(z.number().finite()).length(COMPANION_STATE_VECTOR_LENGTH),
+      stateMask: z.array(z.union([z.literal(0), z.literal(1)])).length(COMPANION_STATE_VECTOR_LENGTH),
       note: z.string().max(280).default(""),
     })).mutation(({ ctx, input }) => companionMemory.append(ctx.user.id, input)),
   }),
