@@ -21,6 +21,8 @@ import { aurionAssets, hasAurionApi } from "@/lib/aurionAssets";
 import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
+import { companionDatasetCount, exportCompanionDataset, loadCompanionSession, recordCompanionObservation, startCompanionSession, transitionCompanionSession } from "@/lib/companionLearning";
+import type { CompanionSession } from "@shared/companionLearningProtocol";
 import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
 type Screen = "gate" | "home" | "loadout" | "mission";
@@ -93,6 +95,8 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>(previewHome ? "home" : "gate");
   const [provider, setProvider] = useState(providers[0]);
   const [connected, setConnected] = useState(false);
+  const [companionSession, setCompanionSession] = useState<CompanionSession | null>(() => loadCompanionSession());
+  const [companionRows, setCompanionRows] = useState(() => companionDatasetCount());
   const [isPairing, setIsPairing] = useState(false);
   const [operatorName, setOperatorName] = useState("Mira Voss");
   const [commandText, setCommandText] = useState("");
@@ -298,6 +302,17 @@ export default function Home() {
       window.removeEventListener("aurion:mission-state", onMissionState);
       window.removeEventListener("aurion:world-npc-interaction", onNpcInteraction);
       window.removeEventListener("aurion:audio-cue", onAudioCue);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onCompanionState = (event: Event) => setCompanionSession((event as CustomEvent<CompanionSession>).detail);
+    const onDatasetUpdated = () => setCompanionRows(companionDatasetCount());
+    window.addEventListener("aurion:companion-state", onCompanionState);
+    window.addEventListener("aurion:companion-dataset-updated", onDatasetUpdated);
+    return () => {
+      window.removeEventListener("aurion:companion-state", onCompanionState);
+      window.removeEventListener("aurion:companion-dataset-updated", onDatasetUpdated);
     };
   }, []);
 
