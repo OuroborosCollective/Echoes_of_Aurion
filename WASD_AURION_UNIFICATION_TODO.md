@@ -1,5 +1,7 @@
 # Wasd–Aurion Unification: Aufgaben- und Nachweisliste
 
+> **SUPERSEDED / HISTORISCHER PLANSTAND.** Diese Liste bleibt für Rückverfolgbarkeit erhalten, ist aber **kein aktueller Completion- oder Release-Ledger**. Sie ist an Aurion `80eb075eea9cec719dc559086968e90417c5bee1` gebunden. Der aktuelle revisionsgebundene Wahrheitspunkt steht in [`AURION_MIGRATION_TRUTH_SNAPSHOT_2026-08-28.md`](./AURION_MIGRATION_TRUTH_SNAPSHOT_2026-08-28.md), aktuell basierend auf `main@c0ad8967046c52141cf1b5f69874a0c53117fbe2`. Offene Checkboxen unten dürfen daher nicht als Beweis für „nicht implementiert“ und vorhandener Code nicht als Beweis für „live“ gelesen werden.
+
 > **Aurion-Basisrevision:** `80eb075eea9cec719dc559086968e90417c5bee1`  
 > **Wasd-Quellrevision:** `a4d99432e47b82ce98105eadb30360cd8040ad13`  
 > **Kandidatenbranch:** `aurion/wasd-unification-vertical-slice`  
