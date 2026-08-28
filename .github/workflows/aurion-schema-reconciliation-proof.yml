@@ -112,7 +112,12 @@ jobs:
       - name: Prove all seven late migrations match after isolated apply
         run: |
           set -euo pipefail
+          set +e
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts --require-match > matched.json
+          status=$?
+          set -e
+          cat matched.json
+          test "$status" -eq 0
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
@@ -134,6 +139,7 @@ jobs:
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts --require-match > drift.json
           status=$?
           set -e
+          cat drift.json
           test "$status" -eq 3
           node --input-type=module <<'NODE'
           import fs from "node:fs";
