@@ -23,6 +23,27 @@ export type CompanionDatasetRow = {
 
 const DATASET_KEY = "echoes-of-aurion.companion-dataset.v1";
 const SESSION_KEY = "echoes-of-aurion.companion-session.v1";
+const MINIMUM_STATE_VECTOR_LENGTH = 6;
+const MAXIMUM_STATE_VECTOR_LENGTH = 32;
+
+function normalizedStateVector(values?: number[]): number[] {
+  const result = (values ?? [])
+    .slice(0, MAXIMUM_STATE_VECTOR_LENGTH)
+    .map(value => (Number.isFinite(value) ? value : 0));
+  while (result.length < MINIMUM_STATE_VECTOR_LENGTH) result.push(0);
+  return result;
+}
+
+function normalizedStateMask(
+  values: number[] | undefined,
+  length: number
+): number[] {
+  const result = (values ?? [])
+    .slice(0, length)
+    .map(value => (value === 1 ? 1 : 0));
+  while (result.length < length) result.push(0);
+  return result;
+}
 
 function hashIdentity(value: string): string {
   let hash = 2166136261;
@@ -35,7 +56,9 @@ function hashIdentity(value: string): string {
 
 function readRows(): CompanionDatasetRow[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(DATASET_KEY) ?? "[]") as CompanionDatasetRow[];
+    const parsed = JSON.parse(
+      localStorage.getItem(DATASET_KEY) ?? "[]"
+    ) as CompanionDatasetRow[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -44,7 +67,11 @@ function readRows(): CompanionDatasetRow[] {
 
 function persistRows(rows: CompanionDatasetRow[]): void {
   localStorage.setItem(DATASET_KEY, JSON.stringify(rows.slice(-5000)));
-  window.dispatchEvent(new CustomEvent("aurion:companion-dataset-updated", { detail: { count: rows.length } }));
+  window.dispatchEvent(
+    new CustomEvent("aurion:companion-dataset-updated", {
+      detail: { count: rows.length },
+    })
+  );
 }
 
 export function readCompanionDataset(): CompanionDatasetRow[] {
@@ -52,12 +79,22 @@ export function readCompanionDataset(): CompanionDatasetRow[] {
 }
 
 export function exportCompanionDataset(): string {
-  return JSON.stringify({ format: "echoes-of-aurion-companion-dataset", version: 1, rows: readRows() }, null, 2);
+  return JSON.stringify(
+    {
+      format: "echoes-of-aurion-companion-dataset",
+      version: 1,
+      rows: readRows(),
+    },
+    null,
+    2
+  );
 }
 
 export function loadCompanionSession(): CompanionSession | null {
   try {
-    const parsed = JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") as CompanionSession | null;
+    const parsed = JSON.parse(
+      localStorage.getItem(SESSION_KEY) ?? "null"
+    ) as CompanionSession | null;
     if (!parsed) return null;
     assertCompanionInvariants(parsed);
     return parsed;
@@ -69,16 +106,27 @@ export function loadCompanionSession(): CompanionSession | null {
 function saveSession(session: CompanionSession): CompanionSession {
   assertCompanionInvariants(session);
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  window.dispatchEvent(new CustomEvent("aurion:companion-state", { detail: session }));
+  window.dispatchEvent(
+    new CustomEvent("aurion:companion-state", { detail: session })
+  );
   return session;
 }
 
-export function startCompanionSession(userId: number, llmLabel: string): CompanionSession {
-  const session = createCompanionSession({ sessionId: `cmp_${Date.now().toString(36)}`, userId, llmLabel });
+export function startCompanionSession(
+  userId: number,
+  llmLabel: string
+): CompanionSession {
+  const session = createCompanionSession({
+    sessionId: `cmp_${Date.now().toString(36)}`,
+    userId,
+    llmLabel,
+  });
   return saveSession(session);
 }
 
-export function transitionCompanionSession(intent: Parameters<typeof applyCompanionIntent>[1]): CompanionSession {
+export function transitionCompanionSession(
+  intent: Parameters<typeof applyCompanionIntent>[1]
+): CompanionSession {
   const current = loadCompanionSession();
   if (!current) throw new Error("Kein verbundener Companion vorhanden");
   return saveSession(applyCompanionIntent(current, intent));
@@ -98,8 +146,17 @@ export function recordCompanionObservation(input: {
   note?: string;
 }): CompanionDatasetRow | null {
   const session = loadCompanionSession();
-  if (!session || session.mode !== "learning" || !session.online || !input.action || input.featureVector.length !== 16) return null;
+  if (
+    !session ||
+    session.mode !== "learning" ||
+    !session.online ||
+    !input.action ||
+    input.featureVector.length !== 16
+  )
+    return null;
   const sequenceIndex = session.datasetRows;
+  const stateVector = normalizedStateVector(input.stateVector);
+  const stateMask = normalizedStateMask(input.stateMask, stateVector.length);
   const rowBase = {
     schema_version: "aurion-companion-dataset.v1" as const,
     session_id: session.sessionId,
@@ -108,17 +165,21 @@ export function recordCompanionObservation(input: {
     input_frame_base64: input.frameDataUrl,
     feature_vector: input.featureVector.slice(),
     target_action_chunk: [input.action] as [CompanionAction],
-    state_vector: input.stateVector?.slice() ?? [0, 0, 0, 0, 0, 0],
-    state_mask: input.stateMask?.slice() ?? [0, 0, 0, 0, 0, 0],
+    state_vector: stateVector,
+    state_mask: stateMask,
     note: input.note?.trim().slice(0, 280) ?? "",
   };
   const sampleId = hashIdentity(JSON.stringify(rowBase));
   const row: CompanionDatasetRow = { ...rowBase, sample_id: sampleId };
   const rows = readRows();
-  const isNew = !rows.some((candidate) => candidate.sample_id === sampleId);
+  const isNew = !rows.some(candidate => candidate.sample_id === sampleId);
   if (!isNew) return row;
   persistRows([...rows, row]);
-  saveSession({ ...session, datasetRows: session.datasetRows + 1, notes: session.notes + (row.note ? 1 : 0) });
+  saveSession({
+    ...session,
+    datasetRows: session.datasetRows + 1,
+    notes: session.notes + (row.note ? 1 : 0),
+  });
   return row;
 }
 

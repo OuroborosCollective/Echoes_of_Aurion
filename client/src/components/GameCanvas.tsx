@@ -8,16 +8,32 @@ import { useEffect, useRef, useState } from "react";
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import type { GameHandle } from "@/game/scene";
 import { validateRuntimeModelSource } from "@shared/runtimeContracts";
+import {
+  COMPANION_FRAME_REQUEST_EVENT,
+  COMPANION_FRAME_RESPONSE_EVENT,
+  type CompanionFrameRequestDetail,
+  type CompanionFrameResponseDetail,
+} from "@/lib/companionFrameCapture";
 
-export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { characterModelUrl?: string; arenaModelUrl?: string }) {
+export default function GameCanvas({
+  characterModelUrl,
+  arenaModelUrl,
+}: {
+  characterModelUrl?: string;
+  arenaModelUrl?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const startedRef = useRef(false);
   const handleRef = useRef<GameHandle | null>(null);
   const characterModelUrlRef = useRef(characterModelUrl);
   const arenaModelUrlRef = useRef(arenaModelUrl);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
-  const [sceneStatus, setSceneStatus] = useState<"booting" | "ready" | "unavailable">("booting");
-  const [arenaModelStatus, setArenaModelStatus] = useState<"idle" | "active" | "failed">("idle");
+  const [sceneStatus, setSceneStatus] = useState<
+    "booting" | "ready" | "unavailable"
+  >("booting");
+  const [arenaModelStatus, setArenaModelStatus] = useState<
+    "idle" | "active" | "failed"
+  >("idle");
   characterModelUrlRef.current = characterModelUrl;
   arenaModelUrlRef.current = arenaModelUrl;
 
@@ -29,9 +45,16 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     const markUnavailable = () => {
       setWebglUnavailable(true);
       setSceneStatus("unavailable");
-      window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false, unavailable: true } }));
+      window.dispatchEvent(
+        new CustomEvent("aurion:character-model-status", {
+          detail: { active: false, unavailable: true },
+        })
+      );
     };
-    if (new URLSearchParams(window.location.search).get("aurion_runtime") === "no-webgl") {
+    if (
+      new URLSearchParams(window.location.search).get("aurion_runtime") ===
+      "no-webgl"
+    ) {
       markUnavailable();
       return;
     }
@@ -39,36 +62,114 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     let engine: Engine | null = null;
     let handle: GameHandle | null = null;
     let disposed = false;
+    let captureQueue: Promise<void> = Promise.resolve();
 
-    void Promise.all([import("@babylonjs/core/Engines/engine"), import("@/game/scene")]).then(async ([{ Engine }, { createGameScene }]) => {
-      if (disposed) return;
-      engine = new Engine(canvas, true, { stencil: true, adaptToDeviceRatio: true });
-      const sceneHandle = await createGameScene(engine, canvas);
-      if (disposed) {
-        sceneHandle.dispose();
-        return;
-      }
-      handle = sceneHandle;
-      handleRef.current = sceneHandle;
-      setSceneStatus("ready");
-      void sceneHandle.setCharacterModel(characterModelUrlRef.current).then(() => {
-        if (characterModelUrlRef.current) window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: true } }));
-      }).catch(() => window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false } })));
-      void sceneHandle.setArenaModel(arenaModelUrlRef.current).then(() => setArenaModelStatus(arenaModelUrlRef.current ? "active" : "idle")).catch(() => setArenaModelStatus("failed"));
-      engine.runRenderLoop(() => sceneHandle.scene.render());
-    }).catch(error => {
-      if (!disposed) {
-        console.warn("[Aurion Canvas] Die optionale 3D-Laufzeit konnte nicht gestartet werden", error);
-        markUnavailable();
-      }
-    });
+    void Promise.all([
+      import("@babylonjs/core/Engines/engine"),
+      import("@/game/scene"),
+    ])
+      .then(async ([{ Engine }, { createGameScene }]) => {
+        if (disposed) return;
+        engine = new Engine(canvas, true, {
+          stencil: true,
+          adaptToDeviceRatio: true,
+        });
+        const sceneHandle = await createGameScene(engine, canvas);
+        if (disposed) {
+          sceneHandle.dispose();
+          return;
+        }
+        handle = sceneHandle;
+        handleRef.current = sceneHandle;
+        setSceneStatus("ready");
+        void sceneHandle
+          .setCharacterModel(characterModelUrlRef.current)
+          .then(() => {
+            if (characterModelUrlRef.current)
+              window.dispatchEvent(
+                new CustomEvent("aurion:character-model-status", {
+                  detail: { active: true },
+                })
+              );
+          })
+          .catch(() =>
+            window.dispatchEvent(
+              new CustomEvent("aurion:character-model-status", {
+                detail: { active: false },
+              })
+            )
+          );
+        void sceneHandle
+          .setArenaModel(arenaModelUrlRef.current)
+          .then(() =>
+            setArenaModelStatus(arenaModelUrlRef.current ? "active" : "idle")
+          )
+          .catch(() => setArenaModelStatus("failed"));
+        engine.runRenderLoop(() => sceneHandle.scene.render());
+      })
+      .catch(error => {
+        if (!disposed) {
+          console.warn(
+            "[Aurion Canvas] Die optionale 3D-Laufzeit konnte nicht gestartet werden",
+            error
+          );
+          markUnavailable();
+        }
+      });
 
     const onResize = () => engine?.resize();
+    const onCompanionFrameRequest = (event: Event) => {
+      const detail = (event as CustomEvent<CompanionFrameRequestDetail>).detail;
+      if (!detail?.requestId) return;
+      const respond = (response: CompanionFrameResponseDetail) =>
+        window.dispatchEvent(
+          new CustomEvent<CompanionFrameResponseDetail>(
+            COMPANION_FRAME_RESPONSE_EVENT,
+            {
+              detail: response,
+            }
+          )
+        );
+      captureQueue = captureQueue
+        .then(async () => {
+          const camera = handle?.scene.activeCamera;
+          if (disposed || !engine || !camera) {
+            respond({ requestId: detail.requestId, error: "not_ready" });
+            return;
+          }
+          const { CreateScreenshotAsync } = await import(
+            "@babylonjs/core/Misc/screenshotTools"
+          );
+          const width = Math.max(32, Math.min(256, Math.trunc(detail.width)));
+          const height = Math.max(32, Math.min(256, Math.trunc(detail.height)));
+          const dataUrl = await CreateScreenshotAsync(
+            engine,
+            camera,
+            { width, height },
+            "image/webp",
+            0.55,
+            true,
+            true
+          );
+          respond({ requestId: detail.requestId, dataUrl });
+        })
+        .catch(() => {
+          respond({ requestId: detail.requestId, error: "capture_failed" });
+        });
+    };
     window.addEventListener("resize", onResize);
+    window.addEventListener(
+      COMPANION_FRAME_REQUEST_EVENT,
+      onCompanionFrameRequest
+    );
 
     return () => {
       disposed = true;
       window.removeEventListener("resize", onResize);
+      window.removeEventListener(
+        COMPANION_FRAME_REQUEST_EVENT,
+        onCompanionFrameRequest
+      );
       engine?.stopRenderLoop();
       handle?.dispose();
       handleRef.current = null;
@@ -81,20 +182,79 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     if (!handleRef.current) return;
     const source = validateRuntimeModelSource(characterModelUrl);
     if (!source.valid) {
-      window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false, reason: source.reason } }));
+      window.dispatchEvent(
+        new CustomEvent("aurion:character-model-status", {
+          detail: { active: false, reason: source.reason },
+        })
+      );
       return;
     }
-    void handleRef.current.setCharacterModel(characterModelUrl).then(() => {
-      if (characterModelUrl) window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: true } }));
-    }).catch(() => window.dispatchEvent(new CustomEvent("aurion:character-model-status", { detail: { active: false } })));
+    void handleRef.current
+      .setCharacterModel(characterModelUrl)
+      .then(() => {
+        if (characterModelUrl)
+          window.dispatchEvent(
+            new CustomEvent("aurion:character-model-status", {
+              detail: { active: true },
+            })
+          );
+      })
+      .catch(() =>
+        window.dispatchEvent(
+          new CustomEvent("aurion:character-model-status", {
+            detail: { active: false },
+          })
+        )
+      );
   }, [characterModelUrl]);
 
   useEffect(() => {
     if (!handleRef.current) return;
     const source = validateRuntimeModelSource(arenaModelUrl);
     if (!source.valid) return;
-    void handleRef.current.setArenaModel(arenaModelUrl).then(() => setArenaModelStatus(arenaModelUrl ? "active" : "idle")).catch(() => setArenaModelStatus("failed"));
+    void handleRef.current
+      .setArenaModel(arenaModelUrl)
+      .then(() => setArenaModelStatus(arenaModelUrl ? "active" : "idle"))
+      .catch(() => setArenaModelStatus("failed"));
   }, [arenaModelUrl]);
 
-  return <><canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} />{sceneStatus === "booting" && <div className="game-canvas-boot" data-testid="webgl-boot" role="status"><span className="game-canvas-boot__sigil" aria-hidden="true">◌</span><div><b>STERNWARTE WIRD KALIBRIERT</b><small>3D-Welt und Steuerbrücke werden geladen…</small></div></div>}{arenaModelUrl && <div data-testid="arena-model-status" className="sr-only" role="status">Arena-GLB {arenaModelStatus}</div>}{webglUnavailable && <div className="game-canvas-fallback" data-testid="webgl-fallback" role="status">3D-Ansicht nicht verfügbar · Zugang und Gemeinschaft bleiben aktiv.</div>}</>;
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        className="game-canvas"
+        style={{ touchAction: "none" }}
+        aria-hidden={webglUnavailable}
+      />
+      {sceneStatus === "booting" && (
+        <div
+          className="game-canvas-boot"
+          data-testid="webgl-boot"
+          role="status"
+        >
+          <span className="game-canvas-boot__sigil" aria-hidden="true">
+            ◌
+          </span>
+          <div>
+            <b>STERNWARTE WIRD KALIBRIERT</b>
+            <small>3D-Welt und Steuerbrücke werden geladen…</small>
+          </div>
+        </div>
+      )}
+      {arenaModelUrl && (
+        <div data-testid="arena-model-status" className="sr-only" role="status">
+          Arena-GLB {arenaModelStatus}
+        </div>
+      )}
+      {webglUnavailable && (
+        <div
+          className="game-canvas-fallback"
+          data-testid="webgl-fallback"
+          role="status"
+        >
+          3D-Ansicht nicht verfügbar · Zugang und Gemeinschaft bleiben aktiv.
+        </div>
+      )}
+    </>
+  );
 }
