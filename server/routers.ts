@@ -16,6 +16,7 @@ import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
 import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
+import { CompanionMemoryStore } from "./companionMemory";
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -23,6 +24,8 @@ export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 export function gatewayUrl() {
   return aurionMcpBrokerUrl;
 }
+
+const companionMemory = new CompanionMemoryStore();
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -60,6 +63,19 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+  }),
+  companion: router({
+    persistObservation: protectedProcedure.input(z.object({
+      sessionId: z.string().trim().min(8).max(128),
+      sequenceIndex: z.number().int().min(0),
+      timestampEpoch: z.number().int().positive(),
+      sampleId: z.string().trim().min(8).max(128),
+      featureVector: z.array(z.number().finite()).length(16),
+      targetAction: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1)]),
+      stateVector: z.array(z.number().finite()).min(6).max(32),
+      stateMask: z.array(z.union([z.literal(0), z.literal(1)])).min(6).max(32),
+      note: z.string().max(280).default(""),
+    })).mutation(({ ctx, input }) => companionMemory.append(ctx.user.id, input)),
   }),
   gateway: router({
     createSession: protectedProcedure.input(z.object({ providerLabel: z.string().trim().min(2).max(120), allowedCommands: z.array(z.string()).min(1).max(13).optional() })).mutation(async ({ ctx, input }) => {
