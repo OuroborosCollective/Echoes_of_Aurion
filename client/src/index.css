@@ -268,3 +268,21 @@ kbd { min-width: 27px; height: 27px; display: inline-grid; place-items: center; 
 @media (min-width: 600px) { .tower-home-panel { left: max(24px, env(safe-area-inset-left)); right: auto; width: min(640px, calc(100vw - 48px)); padding: 22px; } .tower-home-panel__heading { grid-template-columns: minmax(0, 1fr) 66px; } .tower-home-panel__sigil { width: 66px; height: 66px; } .tower-home-panel__actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } .tower-home-panel__actions button { min-height: 118px; } .tower-home-panel__footer { grid-template-columns: 1fr auto; align-items: end; } .tower-home-panel__cta { min-width: 292px; } }
 @media (min-width: 1024px) { .tower-home-panel { width: min(680px, calc(100vw - 64px)); bottom: 28px; } }
 @media (prefers-reduced-motion: reduce) { .tower-home-panel__actions button { transition: none; } }
+.faction-story-card { display: grid; gap: 7px; padding: 9px; background: linear-gradient(135deg, rgb(50 37 23 / 84%), rgb(3 24 29 / 95%)); border: 1px solid rgb(224 178 104 / 50%); border-left: 3px solid #e0b268; box-shadow: inset 0 0 28px rgb(45 226 207 / 8%); }
+.faction-story-card__head { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.faction-story-card__head > div, .faction-story-card__people span, .faction-story-card__objective > div:first-child { display: grid; gap: 2px; }
+.faction-story-card__head span, .faction-story-card__people small, .faction-story-card__pledge > small { color: #76eddd; font-size: 7px; font-weight: 900; letter-spacing: .1em; }
+.faction-story-card__head b { color: #f6dca7; font-family: "Cinzel", serif; font-size: 13px; }
+.faction-story-card__head em { color: #e8bb74; font-size: 7px; font-style: normal; font-weight: 900; letter-spacing: .08em; }
+.faction-story-card > p, .faction-story-card__pledge p { margin: 0; color: #cdded8; font-size: 8px; line-height: 1.45; }
+.faction-story-card__people { display: grid; gap: 5px; }
+.faction-story-card__people b { color: #e2f4eb; font-size: 8px; font-weight: 600; line-height: 1.35; }
+.faction-story-card__motifs { display: flex; flex-wrap: wrap; gap: 4px; }
+.faction-story-card__motifs span { padding: 3px 5px; color: #f5d495; background: rgb(103 68 31 / 34%); border: 1px solid rgb(220 170 95 / 35%); font-size: 7px; }
+.faction-story-card__pledge { display: grid; gap: 5px; padding-top: 6px; border-top: 1px solid rgb(224 178 104 / 25%); }
+.faction-story-card__pledge > div, .faction-story-card__objective > div:last-child { display: flex; flex-wrap: wrap; gap: 4px; }
+.faction-story-card button { min-height: 25px; padding: 4px 7px; color: #06272a; background: #67e7d8; border: 1px solid #a2fff4; font-size: 7px; font-weight: 900; letter-spacing: .05em; }
+.faction-story-card button:disabled { opacity: .5; cursor: wait; }
+.faction-story-card__objective { display: grid; gap: 4px; padding: 6px; background: rgb(2 18 23 / 45%); border: 1px solid rgb(118 237 221 / 20%); }
+.faction-story-card__objective b { color: #f0d5a1; font-size: 9px; }
+.faction-story-card__objective small { color: #a8c8c0; font-size: 8px; line-height: 1.35; }

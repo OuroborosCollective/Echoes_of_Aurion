@@ -282,6 +282,145 @@ export const skillProgressionEvents = mysqlTable("skillProgressionEvents", {
   index("skillProgressionEvents_user_skill_created_idx").on(table.userId, table.skillId, table.createdAt),
 ]);
 
+/** Versioned loot bases cover weapons, armor, accessories, foci and crafting components without client-defined item types. */
+export const aurionLootBaseDefinitions = mysqlTable("aurionLootBaseDefinitions", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  category: mysqlEnum("category", ["weapon", "armor", "accessory", "focus", "relic", "crafting_component", "shaping_component"]).notNull(),
+  equipmentSlot: mysqlEnum("equipmentSlot", ["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet", "belt", "ring", "amulet", "focus", "relic"]),
+  familyId: varchar("familyId", { length: 64 }).notNull(),
+  minItemLevelExact: varchar("minItemLevelExact", { length: 128 }).notNull(),
+  maxItemLevelExact: varchar("maxItemLevelExact", { length: 128 }),
+  baseStatsJson: text("baseStatsJson").notNull(),
+  affixSlotsJson: text("affixSlotsJson").notNull(),
+  tagsJson: text("tagsJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("aurionLootBaseDefinitions_active_category_idx").on(table.active, table.category)]);
+
+/** Data-driven affixes are explicit about level bands, exclusions and integer value ranges. */
+export const aurionLootAffixDefinitions = mysqlTable("aurionLootAffixDefinitions", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  slot: mysqlEnum("slot", ["prefix", "suffix", "implicit", "corruption", "craft"]).notNull(),
+  groupId: varchar("groupId", { length: 64 }).notNull(),
+  minItemLevelExact: varchar("minItemLevelExact", { length: 128 }).notNull(),
+  maxItemLevelExact: varchar("maxItemLevelExact", { length: 128 }),
+  allowedCategoriesJson: text("allowedCategoriesJson").notNull(),
+  requiredTagsJson: text("requiredTagsJson").notNull(),
+  excludesGroupIdsJson: text("excludesGroupIdsJson").notNull(),
+  statRangesJson: text("statRangesJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("aurionLootAffixDefinitions_active_slot_idx").on(table.active, table.slot)]);
+
+/** A set is catalog data; each active threshold derives only from currently equipped confirmed item instances. */
+export const aurionLootSetDefinitions = mysqlTable("aurionLootSetDefinitions", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  pieceBaseItemIdsJson: text("pieceBaseItemIdsJson").notNull(),
+  bonusesByPiecesJson: text("bonusesByPiecesJson").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("aurionLootSetDefinitions_active_idx").on(table.active)]);
+
+/** One confirmed, currently equipped item per player slot. Ownership and slot category are rechecked by the service. */
+export const aurionEquipmentSlots = mysqlTable("aurionEquipmentSlots", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  slot: mysqlEnum("slot", ["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet", "belt", "ring", "amulet", "focus", "relic"]).notNull(),
+  itemRecordVersion: mysqlEnum("itemRecordVersion", ["legacy", "aurion_v2"]).default("aurion_v2").notNull(),
+  itemId: varchar("itemId", { length: 64 }).notNull(),
+  equippedAt: timestamp("equippedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEquipmentSlots_user_slot_uq").on(table.userId, table.slot),
+  uniqueIndex("aurionEquipmentSlots_item_uq").on(table.itemId),
+  index("aurionEquipmentSlots_user_equipped_idx").on(table.userId, table.equippedAt),
+]);
+
+/** Cap-free BigInt mastery events; authorization remains outside this readmodel ledger. */
+export const aurionMasteryEvents = mysqlTable("aurionMasteryEvents", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  disciplineId: varchar("disciplineId", { length: 64 }).notNull(),
+  source: mysqlEnum("source", ["encounter", "quest", "crafting", "shaping", "civic", "diplomacy", "world_stewardship"]).notNull(),
+  amountExact: varchar("amountExact", { length: 128 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionMasteryEvents_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionMasteryEvents_user_receipt_discipline_uq").on(table.userId, table.sourceReceiptId, table.disciplineId),
+  index("aurionMasteryEvents_user_discipline_created_idx").on(table.userId, table.disciplineId, table.createdAt),
+]);
+
+/** Moral alignment uses bounded, receipt-bound integer deltas. Auras are derived readmodel data, not permissions. */
+export const aurionEthosEvents = mysqlTable("aurionEthosEvents", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
+  deltasBpsJson: text("deltasBpsJson").notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEthosEvents_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionEthosEvents_user_receipt_uq").on(table.userId, table.sourceReceiptId),
+  index("aurionEthosEvents_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+/** V2 receipts preserve the complete deterministic loot context and permit exact item levels beyond legacy integer bounds. */
+export const aurionLootDropReceiptsV2 = mysqlTable("aurionLootDropReceiptsV2", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  encounterReceiptId: varchar("encounterReceiptId", { length: 64 }).notNull(),
+  itemDefinitionId: varchar("itemDefinitionId", { length: 96 }).notNull(),
+  category: mysqlEnum("category", ["weapon", "armor", "accessory", "focus", "relic", "crafting_component", "shaping_component"]).notNull(),
+  quality: mysqlEnum("quality", ["normal", "magic", "rare", "set", "unique", "mythic"]).notNull(),
+  itemLevelExact: varchar("itemLevelExact", { length: 128 }).notNull(),
+  setId: varchar("setId", { length: 96 }),
+  resolvedJson: text("resolvedJson").notNull(),
+  contextHash: varchar("contextHash", { length: 64 }).notNull(),
+  deterministicHash: varchar("deterministicHash", { length: 64 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionLootDropReceiptsV2_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionLootDropReceiptsV2_user_encounter_uq").on(table.userId, table.encounterReceiptId),
+  index("aurionLootDropReceiptsV2_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+/** V2 items are immutable snapshots of their resolved receipt and never accept browser-defined affixes or values. */
+export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerUserId: int("ownerUserId").notNull(),
+  lootReceiptId: varchar("lootReceiptId", { length: 64 }).notNull().unique(),
+  baseItemDefinitionId: varchar("baseItemDefinitionId", { length: 96 }).notNull(),
+  category: mysqlEnum("category", ["weapon", "armor", "accessory", "focus", "relic", "crafting_component", "shaping_component"]).notNull(),
+  equipmentSlot: mysqlEnum("equipmentSlot", ["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet", "belt", "ring", "amulet", "focus", "relic"]),
+  quality: mysqlEnum("quality", ["normal", "magic", "rare", "set", "unique", "mythic"]).notNull(),
+  itemLevelExact: varchar("itemLevelExact", { length: 128 }).notNull(),
+  affixesJson: text("affixesJson").notNull(),
+  setId: varchar("setId", { length: 96 }),
+  itemPower: int("itemPower").notNull(),
+  deterministicHash: varchar("deterministicHash", { length: 64 }).notNull(),
+  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed"]).default("owned").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionItemInstancesV2_loot_receipt_uq").on(table.lootReceiptId),
+  index("aurionItemInstancesV2_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt),
+]);
+
 /** Immutable, versioned world resolution evidence. Effects are rendered only after this row is confirmed. */
 export const aurionWorldResolutions = mysqlTable("aurionWorldResolutions", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -466,6 +605,60 @@ export const aurionDialogueCommandReceipts = mysqlTable("aurionDialogueCommandRe
   uniqueIndex("aurionDialogueCommandReceipts_user_dialogue_action_quest_uq").on(table.userId, table.dialogueReceiptId, table.actionKind, table.questKey),
   index("aurionDialogueCommandReceipts_user_created_idx").on(table.userId, table.createdAt),
   index("aurionDialogueCommandReceipts_dialogue_idx").on(table.dialogueReceiptId),
+]);
+
+/** One player-owned faction questline projection. Its resolution index is advanced only by receipt-producing commands. */
+export const aurionFactionQuestlineStates = mysqlTable("aurionFactionQuestlineStates", {
+  userId: int("userId").primaryKey(),
+  pledgedFaction: mysqlEnum("pledgedFaction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"]).default("free_haven").notNull(),
+  permanentOathReceiptId: varchar("permanentOathReceiptId", { length: 64 }),
+  lastResolutionIndex: int("lastResolutionIndex").default(0).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable receipt for the one-way transition from the neutral route to a permanent faction. */
+export const aurionFactionQuestlineOathReceipts = mysqlTable("aurionFactionQuestlineOathReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  fromFaction: mysqlEnum("fromFaction", ["free_haven"]).notNull(),
+  toFaction: mysqlEnum("toFaction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact"]).notNull(),
+  sourceQuestId: varchar("sourceQuestId", { length: 96 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  receiptDigest: varchar("receiptDigest", { length: 64 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionFactionQuestlineOathReceipts_user_uq").on(table.userId),
+  uniqueIndex("aurionFactionQuestlineOathReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionFactionQuestlineOathReceipts_user_source_uq").on(table.userId, table.sourceReceiptId),
+  uniqueIndex("aurionFactionQuestlineOathReceipts_user_resolution_uq").on(table.userId, table.resolutionIndex),
+]);
+
+/** Immutable player-owned authored quest decision; no reward or world mutation is stored here. */
+export const aurionFactionQuestlineDecisionReceipts = mysqlTable("aurionFactionQuestlineDecisionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  faction: mysqlEnum("faction", ["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact", "free_haven"]).notNull(),
+  questId: varchar("questId", { length: 96 }).notNull(),
+  decisionKey: varchar("decisionKey", { length: 96 }).notNull(),
+  approach: mysqlEnum("approach", ["trade", "craft", "combat", "espionage", "exploration"]).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  receiptDigest: varchar("receiptDigest", { length: 64 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionFactionQuestlineDecisionReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionFactionQuestlineDecisionReceipts_user_quest_uq").on(table.userId, table.questId),
+  uniqueIndex("aurionFactionQuestlineDecisionReceipts_user_resolution_uq").on(table.userId, table.resolutionIndex),
+  index("aurionFactionQuestlineDecisionReceipts_user_resolution_idx").on(table.userId, table.resolutionIndex),
 ]);
 
 /** Approved GLB metadata references S3 objects; bytes never enter the relational database. */

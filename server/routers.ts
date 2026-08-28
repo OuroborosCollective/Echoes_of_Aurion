@@ -146,6 +146,19 @@ export const appRouter = router({
       idempotencyKey: input.idempotencyKey,
     })),
   }),
+  factionQuestline: router({
+    read: protectedProcedure.query(({ ctx }) => db.getFactionQuestlineReadmodel(ctx.user.id)),
+    pledge: protectedProcedure.input(z.object({
+      targetFaction: z.enum(["sunward_concord", "ironwardens", "veiled_covenant", "wayfarer_compact"]),
+      idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/),
+    })).mutation(({ ctx, input }) => db.pledgeFactionQuestlineForUser({ userId: ctx.user.id, ...input })),
+    decide: protectedProcedure.input(z.object({
+      questId: z.string().trim().regex(/^[a-z][a-z0-9._-]{2,95}$/),
+      decisionKey: z.string().trim().regex(/^[a-z][a-z0-9_-]{2,95}$/),
+      approach: z.enum(["trade", "craft", "combat", "espionage", "exploration"]),
+      idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/),
+    })).mutation(({ ctx, input }) => db.resolveFactionQuestDecisionForUser({ userId: ctx.user.id, ...input })),
+  }),
   guild: router({
     mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
     create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
