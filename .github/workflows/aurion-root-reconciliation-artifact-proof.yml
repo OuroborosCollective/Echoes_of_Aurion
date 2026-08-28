@@ -1,0 +1,178 @@
+name: Aurion root reconciliation artifact proof
+
+on:
+  pull_request:
+    paths:
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  immutable-root-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_root_reconcile_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_root_reconcile_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify source and shell contracts
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
+          bash -n deploy/aurion-production-schema-reconcile
+          bash -n deploy/install-aurion-production-schema-reconcile
+          sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
+          git diff --check
+
+      - name: Establish canonical database through journaled 0020
+        run: pnpm exec drizzle-kit migrate
+
+      - name: Build standalone revision-bound reconciliation artifact
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/build-aurion-production-reconcile-artifact.mjs
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
+          if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="read_only") throw new Error("artifact revision/mode mismatch");
+          NODE
+          (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+
+      - name: Create root-protected test production environment
+        run: |
+          set -euo pipefail
+          printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > test-production.env
+          sudo install -d -o root -g root -m 0755 /opt/echoes-of-aurion
+          sudo install -o root -g root -m 0600 test-production.env /opt/echoes-of-aurion/.env.production
+
+      - name: Install immutable reconciliation release as root
+        run: |
+          set -euo pipefail
+          sudo bash deploy/install-aurion-production-schema-reconcile dist-production-reconcile "$GITHUB_SHA"
+          test "$(sudo readlink -f /opt/echoes-of-aurion-schema-reconcile/current)" = "/opt/echoes-of-aurion-schema-reconcile/releases/$GITHUB_SHA"
+
+      - name: Prove fixed root runner sees all seven migrations absent
+        run: |
+          set -euo pipefail
+          sudo /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" > root-absent.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("root-absent.json","utf8"));
+          if(r.sourceRevision!==process.env.GITHUB_SHA||r.readOnly!==true||r.databaseCredentialReturned!==false) throw new Error("root receipt boundary mismatch");
+          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==7) throw new Error("expected seven absent late migrations");
+          console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
+          NODE
+
+      - name: Apply 0021 through 0027 only inside ephemeral proof database
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const tags=[
+            "0021_aurion_global_world_state",
+            "0022_aurion_world_chunk_deltas",
+            "0023_aurion_world_presence_epochs",
+            "0024_aurion_world_epoch_reactions",
+            "0025_aurion_loot_mastery_ethos",
+            "0026_aurion_faction_questline_state",
+            "0027_aurion_faction_questline_rewards",
+          ];
+          const db=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            for(const tag of tags){
+              const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
+              for(const statement of sql.split(/\s*-->\s*statement-breakpoint\s*/).map(v=>v.trim()).filter(Boolean)) await db.query(statement);
+            }
+          } finally { await db.end(); }
+          NODE
+
+      - name: Prove fixed root runner sees exact schema match
+        run: |
+          set -euo pipefail
+          sudo /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" > root-match.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("root-match.json","utf8"));
+          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==7) throw new Error("root match proof failed");
+          console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
+          NODE
+
+      - name: Prove runner cannot execute caller-supplied code path
+        run: |
+          set -euo pipefail
+          set +e
+          sudo /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" /tmp/untrusted.mjs >/tmp/extra-arg.out 2>/tmp/extra-arg.err
+          status=$?
+          set -e
+          test "$status" -eq 64
+
+      - name: Prove installed artifact tampering fails before reconciliation
+        run: |
+          set -euo pipefail
+          sudo sh -c 'printf "\n# tampered\n" >> /opt/echoes-of-aurion-schema-reconcile/current/drizzle/0027_aurion_faction_questline_rewards.sql'
+          set +e
+          sudo /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" >/tmp/tampered.out 2>/tmp/tampered.err
+          status=$?
+          set -e
+          test "$status" -ne 0
+          test ! -s /tmp/tampered.out
+
+      - name: Package root-installable artifact
+        run: |
+          tar -C dist-production-reconcile -czf "aurion-production-reconcile-${GITHUB_SHA}.tgz" .
+          sha256sum "aurion-production-reconcile-${GITHUB_SHA}.tgz" > "aurion-production-reconcile-${GITHUB_SHA}.tgz.sha256"
+
+      - name: Upload reconciliation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-production-reconcile-${{ github.sha }}
+          path: |
+            aurion-production-reconcile-${{ github.sha }}.tgz
+            aurion-production-reconcile-${{ github.sha }}.tgz.sha256
+          if-no-files-found: error
+          retention-days: 30
