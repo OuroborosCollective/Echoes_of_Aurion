@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionFactionQuestlineDecisionReceipts, aurionFactionQuestlineOathReceipts, aurionFactionQuestlineStates, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
+import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionFactionQuestlineDecisionReceipts, aurionFactionQuestlineOathReceipts, aurionFactionQuestlineRewardReceipts, aurionFactionQuestlineStates, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -14,6 +14,7 @@ import { storagePut } from "./storage";
 import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { AURION_FACTION_QUESTLINE_CONTENT_VERSION, AURION_FACTION_QUESTLINE_RULESET_VERSION, factionQuestlineDecisionHash, factionQuestlineNextResolutionIndex, factionQuestlineOathHash, isFactionQuestDecisionAvailable, mayPledgeFaction, permanentFactionChoices, resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineOathReceipt, type FactionQuestlineStateInput, type PermanentAurionFaction } from "./aurionFactionQuestlineProtocol";
 import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
+import { AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION, AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION, resolveFactionQuestlineCompletion, getFactionQuestlineRewardDefinition, type FactionQuestlineReward } from "./aurionFactionQuestlineRewardProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
 import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
 import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
@@ -619,6 +620,75 @@ export async function resolveFactionQuestDecisionForUser(values: { userId: numbe
     const receipt = (await tx.select().from(aurionFactionQuestlineDecisionReceipts).where(and(eq(aurionFactionQuestlineDecisionReceipts.id, receiptId), eq(aurionFactionQuestlineDecisionReceipts.userId, values.userId))).limit(1))[0];
     if (!receipt || receipt.receiptDigest !== receiptDigest || receipt.resolutionIndex !== resolutionIndex) throw new Error("Fraktionsquestentscheidungs-Readback fehlgeschlagen.");
     return { applied: true as const, receipt, readmodel };
+  });
+}
+
+/** Returns immutable, server-confirmed faction questline reward receipts for the player. */
+export async function listFactionQuestlineRewards(userId: number) {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("Ungültige Aurion-Spielerkennung für Belohnungen.");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  return db.select().from(aurionFactionQuestlineRewardReceipts)
+    .where(eq(aurionFactionQuestlineRewardReceipts.userId, userId))
+    .orderBy(asc(aurionFactionQuestlineRewardReceipts.completionResolutionIndex));
+}
+
+/** Completes exactly one already-decided authored quest and grants its deterministic reward once. */
+export async function completeFactionQuestlineQuestForUser(values: { userId: number; questId: string; idempotencyKey: string }) {
+  assertFactionQuestlineCommand(values);
+  if (!values.questId || values.questId.length > 96 || !values.idempotencyKey) throw new Error("Ungültiger Fraktionsquestline-Abschluss.");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  await getOrCreatePlayerProfile(values.userId);
+  return db.transaction(async tx => {
+    const replay = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(eq(aurionFactionQuestlineRewardReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (replay) {
+      if (replay.userId !== values.userId || replay.questId !== values.questId) throw new Error("Idempotenzschlüssel ist bereits an eine andere Questbelohnung gebunden.");
+      const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: false, ensureState: false });
+      return { applied: false as const, receipt: replay, reward: replay, readmodel: resolveFactionQuestline(state) };
+    }
+    const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: true, ensureState: true });
+    const previous = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(and(eq(aurionFactionQuestlineRewardReceipts.userId, values.userId), eq(aurionFactionQuestlineRewardReceipts.questId, values.questId))).limit(1))[0];
+    if (previous) throw new Error("Diese Fraktionsquest wurde bereits belohnt.");
+    const completionResolutionIndex = factionQuestlineNextResolutionIndex(state);
+    const completionReceiptId = newEndgameId("fqcomplete");
+    const resolution = resolveFactionQuestlineCompletion({ state, questId: values.questId, completionReceiptId, completionResolutionIndex });
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
+    if (!profile) throw new Error("Spielerprofil fehlt beim Fraktionsquestline-Abschluss.");
+    const reward = resolution.reward;
+    const totalXp = profile.totalXp + reward.xp;
+    const points = profile.aurionPoints + reward.points;
+    const victories = profile.victories + reward.victory;
+    await tx.insert(aurionFactionQuestlineRewardReceipts).values({
+      id: completionReceiptId,
+      userId: values.userId,
+      faction: reward.faction,
+      questId: reward.questId,
+      approach: reward.approach,
+      sourceDecisionReceiptId: state.decisions.find(decision => decision.questId === values.questId)?.receiptId ?? "",
+      completionResolutionIndex,
+      rewardKey: reward.rewardKey,
+      xp: reward.xp,
+      points: reward.points,
+      victory: reward.victory,
+      rewardDigest: resolution.rewardDigest,
+      contentVersion: AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION,
+      ruleSetVersion: AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION,
+      idempotencyKey: values.idempotencyKey,
+    });
+    await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: points, seasonPoints: profile.seasonPoints + reward.points, victories }).where(eq(playerProfiles.userId, values.userId));
+    const ledgerRows = [
+      { id: newEndgameId("prog"), userId: values.userId, kind: "xp" as const, delta: reward.xp, source: reward.rewardKey, reason: reward.reason, idempotencyKey: `${values.idempotencyKey}:xp` },
+      { id: newEndgameId("prog"), userId: values.userId, kind: "points" as const, delta: reward.points, source: reward.rewardKey, reason: reward.reason, idempotencyKey: `${values.idempotencyKey}:points` },
+      ...(reward.victory > 0 ? [{ id: newEndgameId("prog"), userId: values.userId, kind: "victory" as const, delta: reward.victory, source: reward.rewardKey, reason: reward.reason, idempotencyKey: `${values.idempotencyKey}:victory` }] : []),
+    ];
+    await tx.insert(progressionLedger).values(ledgerRows);
+    const updated = await tx.update(aurionFactionQuestlineStates).set({ lastResolutionIndex: completionResolutionIndex, contentVersion: AURION_FACTION_QUESTLINE_CONTENT_VERSION, ruleSetVersion: AURION_FACTION_QUESTLINE_RULESET_VERSION }).where(and(eq(aurionFactionQuestlineStates.userId, values.userId), eq(aurionFactionQuestlineStates.lastResolutionIndex, state.lastResolutionIndex)));
+    if (affectedRowCount(updated) !== 1) throw new Error("Fraktionsquestline wurde während der Belohnung parallel verändert.");
+    const receipt = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(and(eq(aurionFactionQuestlineRewardReceipts.id, completionReceiptId), eq(aurionFactionQuestlineRewardReceipts.userId, values.userId))).limit(1))[0];
+    if (!receipt || receipt.rewardDigest !== resolution.rewardDigest || receipt.xp !== reward.xp || receipt.points !== reward.points) throw new Error("Fraktionsquestline-Reward-Readback fehlgeschlagen.");
+    const nextState: FactionQuestlineStateInput = { ...state, lastResolutionIndex: completionResolutionIndex };
+    return { applied: true as const, receipt, reward, readmodel: resolveFactionQuestline(nextState) };
   });
 }
 
