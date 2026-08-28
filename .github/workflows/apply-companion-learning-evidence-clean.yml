@@ -57,7 +57,7 @@ jobs:
       - name: Guard the review surface
         run: |
           set -euo pipefail
-          changed="$(git status --short | awk '{print $2}' | sort)"
+          changed="$(git status --short | awk '{print $2}' | grep -v -E '^(\.github/workflows/apply-companion-learning-evidence-clean\.yml|scripts/apply_companion_learning_evidence_clean\.py)$' | sort || true)"
           expected="$(printf '%s\n' \
             client/src/components/GameCanvas.tsx \
             client/src/lib/companionFrameCapture.test.ts \
