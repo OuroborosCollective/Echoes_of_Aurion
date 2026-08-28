@@ -43,6 +43,7 @@ import { essentialTowerGlbPlan } from "@/game/glbUsagePlan";
 import { generateBaseWorldChunk, WORLD_CHUNK_BASE_REVISION, type WorldChunkDeltaOverlay } from "@shared/worldChunkProtocol";
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, planWorldChunkCache, worldChunkCoordinateKey, worldChunkHorizonProfile, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 import type { AudioEvent, AudioSurface } from "@shared/audioProtocol";
+import { companionCommandRequiresSpawn, companionGameplayActionSource, type CompanionCommandOrigin } from "@shared/companionLearningProtocol";
 import "@babylonjs/loaders/glTF";
 
 // Vite must receive the literal GLSL modules, not a `.vertex` / `.fragment` asset URL.
@@ -706,9 +707,9 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       transitioning = false; awaitingQuest = true; sentinel.root.setEnabled(false); emitGameEvent("system", "Der Bossabschluss ist serverseitig bestätigt. Sprich mit dem Questgeber, bevor die nächste Resonanz beginnt."); emitState(true);
     }, 1100);
   };
-  const requestAction = (command: CommandCode, source: "human" | "gateway"): void => {
+  const requestAction = (command: CommandCode, source: "human" | "gateway", origin?: CompanionCommandOrigin): void => {
     if (!started || transitioning || victory || awaitingQuest || sentinelHp <= 0) return;
-    window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source } }));
+    window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source, origin } }));
   };
   const applyAuthoritativeDamage = (damage: number, bossHp: number, label: string, tone: Color3): void => {
     if (!started || transitioning || victory) return;
@@ -716,17 +717,24 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     sentinelHurtUntil = elapsed + 0.26;
     emitGameEvent("combat", `${label} trifft den Sentinel für ${damage} bestätigten Resonanzschaden.`); emitState(true); if (sentinelHp === 0) completeArena();
   };
-  const runEchoAbility = (code: CommandCode): void => {
+  const presentAuthoritativeEchoAbility = (code: CommandCode): void => {
     const arena = arenas[arenaIndex];
     echoActionUntil = elapsed + 0.44;
-    if (code === "1") { echoTarget = sentinel.root.position.add(new Vector3(-1.1, 0, 1.1)); requestAction(code, "gateway"); return; }
-    if (code === "2" || code === "6") { shieldTime = Math.max(shieldTime, code === "6" ? 5.2 : 3.7); createPulse(explorer.position, arena.glow, 0.9); emitGameEvent("combat", code === "6" ? "Aegis-Knoten schützt das gesamte Team." : "Echoschild fängt den nächsten Impuls ab."); emitState(true); return; }
-    if (code === "3") { echoHp = Math.min(100, echoHp + 8); explorerHp = Math.min(100, explorerHp + 6); markTime = Math.max(markTime, 3.4); createPulse(echo.position, arena.glow, 0.82); emitGameEvent("combat", "Sternenfaden stabilisiert das Team und markiert den Sentinel."); emitState(true); return; }
-    if (code === "4") { markTime = Math.max(markTime, 5.1); createPulse(sentinel.root.position, Color3.FromHexString("#75A8FF"), 1); emitGameEvent("combat", "Kartenblick legt eine verwundbare Resonanzlinie offen."); emitState(true); return; }
-    if (code === "5") { requestAction(code, "gateway"); return; }
-    if (code === "7") { markTime = Math.max(markTime, 6.2); nextEnemyStrike += 2.4; requestAction(code, "gateway"); return; }
-    if (code === "8") { requestAction(code, "gateway"); return; }
-    if (code === "9") { requestAction(code, "gateway"); return; }
+    if (code === "1") echoTarget = sentinel.root.position.add(new Vector3(-1.1, 0, 1.1));
+    createPulse(echo.position.add(new Vector3(0, 0.35, 0)), arena.glow, code === "9" ? 1.15 : 0.72);
+    emitGameEvent("combat", `Echo-Impuls ${code} wurde durch das serverseitige Aktionsreceipt bestätigt.`);
+  };
+  const presentAuthoritativeEchoMovement = (code: CommandCode): void => {
+    const movement = 1.2;
+    if (code === "W") echoTarget.z -= movement;
+    if (code === "S") echoTarget.z += movement;
+    if (code === "A") echoTarget.x -= movement;
+    if (code === "D") echoTarget.x += movement;
+    echoTarget.x = Math.max(-5.7, Math.min(5.7, echoTarget.x));
+    echoTarget.z = Math.max(-5.2, Math.min(5.2, echoTarget.z));
+    echoActionUntil = elapsed + 0.18;
+    const surface: AudioSurface = openWorldActive ? "grass" : dungeonActive ? "stone" : "wood";
+    emitGameEvent("command", `Echo Scout bestätigt den serverautorisierten Kurs ${code}.`, { cue: `movement.footstep.${surface}`, category: "movement", surface });
   };
   const emitZoneMovementState = (): void => {
     if (authoritativeZoneUserId === null) return;
@@ -767,15 +775,12 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   };
   const onHumanAction = (event: Event): void => { const code = ((event as CustomEvent<{ code?: "F" | "E" }>).detail.code ?? "F"); if (code === "E" && requestNpcInteraction()) return; if (code === "F") explorerAttackUntil = elapsed + 0.34; if (code === "E") emitGameEvent("command", "Explorer bestätigt die Interaktion in der aktuellen Resonanzzone."); requestAction(code, "human"); };
   const onCommand = (event: Event): void => {
-    const code = (event as CustomEvent<{ code: CommandCode }>).detail.code; if (!started || victory || !companionSpawned) return;
-    const movement = 1.2;
-    if (code === "W") echoTarget.z -= movement; if (code === "S") echoTarget.z += movement; if (code === "A") echoTarget.x -= movement; if (code === "D") echoTarget.x += movement;
-    echoTarget.x = Math.max(-5.7, Math.min(5.7, echoTarget.x)); echoTarget.z = Math.max(-5.2, Math.min(5.2, echoTarget.z));
-    if (/^[1-9]$/.test(code)) runEchoAbility(code); else if (code === "E" && requestNpcInteraction()) return; else if (code === "F" || code === "E") requestAction(code, "gateway"); else {
-      requestAction(code, "gateway");
-      const surface: AudioSurface = openWorldActive ? "grass" : dungeonActive ? "stone" : "wood";
-      emitGameEvent("command", `Echo Scout bestätigt Kurs ${code}.`, { cue: `movement.footstep.${surface}`, category: "movement", surface });
-    }
+    const detail = (event as CustomEvent<{ code?: CommandCode; origin?: CompanionCommandOrigin }>).detail;
+    const code = detail?.code;
+    const origin = detail?.origin ?? "gateway";
+    if (!code || !/^[WASDEF1-9]$/.test(code) || !["gateway", "human_team", "local_console"].includes(origin)) return;
+    if (!started || victory || (companionCommandRequiresSpawn(origin) && !companionSpawned)) return;
+    requestAction(code, companionGameplayActionSource(origin), origin);
   };
   const onStart = (): void => { clearOpenWorld(); started = true; dungeonUnlocked = false; dungeonActive = false; victory = false; awaitingQuest = false; sentinel.root.setEnabled(true); emitGameEvent("system", "Sternwarten-Instanz geöffnet. Die erste Sentinel-Phase reagiert auf das Team-Siegel."); applyArena(0); };
   const onEnterDungeon = (): void => {
@@ -783,12 +788,23 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     dungeonActive = true; sentinel.root.setEnabled(true); if (arenaIndex === 3) window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: true, scope: "dungeon" } })); emitGameEvent("system", "Das Aschengewölbe öffnet sich. Der Glutwächter reagiert auf den geborgenen Schlüssel."); applyArena(3);
   };
   const onAuthoritativeAction = (event: Event): void => {
-    const detail = (event as CustomEvent<{ damage: number; bossHp: number; command: CommandCode; completed: boolean }>).detail;
+    const detail = (event as CustomEvent<{ damage: number; bossHp: number; command: CommandCode; source?: "human" | "gateway"; origin?: CompanionCommandOrigin; completed: boolean }>).detail;
     if (!detail) return;
-    if (detail.command === "F") explorerAttackUntil = elapsed + 0.34;
+    const source = detail.source ?? "gateway";
+    const companionOrigin = detail.origin === "gateway" || detail.origin === "human_team" || detail.origin === "local_console";
+    if (companionOrigin && detail.origin !== "gateway") echo.setEnabled(true);
+    if (companionOrigin && /^[WASD]$/.test(detail.command)) presentAuthoritativeEchoMovement(detail.command);
+    if (companionOrigin && /^[1-9]$/.test(detail.command)) presentAuthoritativeEchoAbility(detail.command);
+    if (companionOrigin && detail.command === "E") requestNpcInteraction();
+    if (detail.command === "F") {
+      if (source === "human" && !companionOrigin) explorerAttackUntil = elapsed + 0.34;
+      else echoActionUntil = elapsed + 0.34;
+    }
+    if (detail.command === "E") emitGameEvent("command", "Die Interaktion wurde durch den serverseitigen Aktionspfad bestätigt.");
     if (detail.damage > 0) {
-      applyAuthoritativeDamage(detail.damage, detail.bossHp, detail.command === "F" ? "Speersignal des Explorers" : `Echo-Impuls ${detail.command}`, arenas[arenaIndex].glow);
-      emitAudioCue({ cue: detail.command === "F" ? "combat.attack.pointed" : "combat.magic", category: "combat", ...(detail.command === "F" ? { weapon: "pointed" } : { element: "resonance" }) } as AudioEvent);
+      const explorerStrike = detail.command === "F" && source === "human" && !companionOrigin;
+      applyAuthoritativeDamage(detail.damage, detail.bossHp, explorerStrike ? "Speersignal des Explorers" : `Echo-Impuls ${detail.command}`, arenas[arenaIndex].glow);
+      emitAudioCue({ cue: explorerStrike ? "combat.attack.pointed" : "combat.magic", category: "combat", ...(explorerStrike ? { weapon: "pointed" } : { element: "resonance" }) } as AudioEvent);
       if (detail.completed) emitAudioCue({ cue: "combat.creature.monster.death", category: "combat", creature: "monster", action: "death" });
     } else emitState(true);
   };

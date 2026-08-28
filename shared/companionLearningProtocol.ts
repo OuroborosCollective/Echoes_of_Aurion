@@ -1,7 +1,11 @@
 export const COMPANION_PROTOCOL_VERSION = "aurion-companion-learning.v1" as const;
+export const COMPANION_FEATURE_VECTOR_LENGTH = 16 as const;
+export const COMPANION_STATE_VECTOR_LENGTH = 6 as const;
+export const COMPANION_FRAME_MAX_AGE_MS = 1_250 as const;
 
 export type CompanionMode = "disconnected" | "connected" | "learning" | "ready" | "playing" | "stopping";
 export type CompanionIntent = "connect" | "learn" | "finish_learning" | "play" | "stop" | "disconnect" | "user_offline";
+export type CompanionCommandOrigin = "gateway" | "human_team" | "local_console";
 
 export type CompanionSession = {
   protocol: typeof COMPANION_PROTOCOL_VERSION;
@@ -48,6 +52,16 @@ export function transitionCompanion(mode: CompanionMode, intent: CompanionIntent
 
 export function companionCanAct(session: Pick<CompanionSession, "mode" | "online" | "companionSpawned">): boolean {
   return session.mode === "playing" && session.online && session.companionSpawned;
+}
+
+/** Only commands originating from the paired MCP gateway require the learned companion to be spawned. */
+export function companionCommandRequiresSpawn(origin: CompanionCommandOrigin): boolean {
+  return origin === "gateway";
+}
+
+/** Human team and local-console actions remain human-authorized in gameplay receipts. */
+export function companionGameplayActionSource(origin: CompanionCommandOrigin): "human" | "gateway" {
+  return origin === "gateway" ? "gateway" : "human";
 }
 
 export function applyCompanionIntent(session: CompanionSession, intent: CompanionIntent): CompanionSession {

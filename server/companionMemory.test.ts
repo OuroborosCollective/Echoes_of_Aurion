@@ -27,4 +27,15 @@ describe("CompanionMemoryStore", () => {
     expect(file.trim().split("\n")).toHaveLength(1);
     await expect(readFile(path.join(dir, "user-8", "cmp_test_session.jsonl"))).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it("rejects observations that do not match the dataset-v1 dimensions", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aurion-companion-memory-invalid-"));
+    dirs.push(dir);
+    const store = new CompanionMemoryStore({ dataDir: dir });
+    stores.push(store);
+    const valid = { sessionId: "cmp_test_session", sequenceIndex: 0, timestampEpoch: Date.now(), sampleId: "sample_0002", featureVector: new Array(16).fill(0.25), targetAction: [0.5, 0.25, 1, 1] as [number, number, number, number], stateVector: [1, 1, 1, 0, 0, 1], stateMask: [1, 1, 1, 1, 1, 1], note: "test" };
+    await expect(store.append(7, { ...valid, featureVector: valid.featureVector.slice(0, 15) })).rejects.toThrow(/feature vector/);
+    await expect(store.append(7, { ...valid, stateVector: valid.stateVector.slice(0, 5) })).rejects.toThrow(/state vector/);
+    await expect(store.append(7, { ...valid, stateMask: valid.stateMask.slice(0, 5) })).rejects.toThrow(/state mask/);
+  });
 });

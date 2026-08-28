@@ -1,0 +1,85 @@
+name: Companion learning proof
+
+on:
+  pull_request:
+    paths:
+      - "client/src/companionLearningProtocol.test.ts"
+      - "client/src/components/GameCanvas.tsx"
+      - "client/src/game/scene.ts"
+      - "client/src/game/sceneCompanionAuthority.test.ts"
+      - "client/src/lib/companionFrameCapture.ts"
+      - "client/src/lib/companionFrameCapture.test.ts"
+      - "client/src/lib/companionLearning.ts"
+      - "client/src/lib/companionLearning.test.ts"
+      - "client/src/pages/Home.tsx"
+      - "server/companionMemory.ts"
+      - "server/companionMemory.test.ts"
+      - "server/routers.ts"
+      - "shared/companionLearningProtocol.ts"
+      - ".github/workflows/companion-learning-proof.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "client/src/companionLearningProtocol.test.ts"
+      - "client/src/components/GameCanvas.tsx"
+      - "client/src/game/scene.ts"
+      - "client/src/game/sceneCompanionAuthority.test.ts"
+      - "client/src/lib/companionFrameCapture.ts"
+      - "client/src/lib/companionFrameCapture.test.ts"
+      - "client/src/lib/companionLearning.ts"
+      - "client/src/lib/companionLearning.test.ts"
+      - "client/src/pages/Home.tsx"
+      - "server/companionMemory.ts"
+      - "server/companionMemory.test.ts"
+      - "server/routers.ts"
+      - "shared/companionLearningProtocol.ts"
+      - ".github/workflows/companion-learning-proof.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: companion-learning-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type contract
+        run: pnpm check
+
+      - name: Focused companion contracts
+        run: |
+          pnpm vitest run \
+            client/src/companionLearningProtocol.test.ts \
+            client/src/lib/companionLearning.test.ts \
+            client/src/lib/companionFrameCapture.test.ts \
+            client/src/game/sceneCompanionAuthority.test.ts \
+            server/companionMemory.test.ts
+
+      - name: Full regression suite
+        run: pnpm test
+
+      - name: Production bundle
+        run: pnpm build
+
+      - name: Diff whitespace
+        run: git diff --check

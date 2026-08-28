@@ -6,7 +6,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Engine } from "@babylonjs/core/Engines/engine";
+import { CreateScreenshotUsingRenderTargetAsync } from "@babylonjs/core/Misc/screenshotTools";
 import type { GameHandle } from "@/game/scene";
+import { COMPANION_FRAME_REQUEST_EVENT, COMPANION_FRAME_RESPONSE_EVENT, type CompanionFrameRequestDetail, type CompanionFrameResponseDetail } from "@/lib/companionFrameCapture";
 import { validateRuntimeModelSource } from "@shared/runtimeContracts";
 
 export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { characterModelUrl?: string; arenaModelUrl?: string }) {
@@ -39,6 +41,29 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     let engine: Engine | null = null;
     let handle: GameHandle | null = null;
     let disposed = false;
+    let captureInFlight = false;
+    const dispatchFrameResponse = (detail: CompanionFrameResponseDetail) => window.dispatchEvent(new CustomEvent(COMPANION_FRAME_RESPONSE_EVENT, { detail }));
+    const onCompanionFrameRequest = (event: Event) => {
+      const detail = (event as CustomEvent<CompanionFrameRequestDetail>).detail;
+      if (!detail?.requestId) return;
+      const activeEngine = engine;
+      const camera = handle?.scene.activeCamera;
+      if (!activeEngine || !camera || disposed) {
+        dispatchFrameResponse({ requestId: detail.requestId, error: "unavailable" });
+        return;
+      }
+      if (captureInFlight) {
+        dispatchFrameResponse({ requestId: detail.requestId, error: "busy" });
+        return;
+      }
+      captureInFlight = true;
+      const capturedAt = Date.now();
+      void CreateScreenshotUsingRenderTargetAsync(activeEngine, camera, { width: 256, height: 144 }, "image/webp")
+        .then(frameDataUrl => dispatchFrameResponse({ requestId: detail.requestId, frameDataUrl, capturedAt }))
+        .catch(() => dispatchFrameResponse({ requestId: detail.requestId, error: "capture_failed" }))
+        .finally(() => { captureInFlight = false; });
+    };
+    window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, onCompanionFrameRequest);
 
     void Promise.all([import("@babylonjs/core/Engines/engine"), import("@/game/scene")]).then(async ([{ Engine }, { createGameScene }]) => {
       if (disposed) return;
@@ -69,6 +94,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     return () => {
       disposed = true;
       window.removeEventListener("resize", onResize);
+      window.removeEventListener(COMPANION_FRAME_REQUEST_EVENT, onCompanionFrameRequest);
       engine?.stopRenderLoop();
       handle?.dispose();
       handleRef.current = null;
