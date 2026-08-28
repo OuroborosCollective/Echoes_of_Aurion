@@ -5,45 +5,64 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
 
-describe("Aurion production schema readback chain", () => {
+describe("Aurion post-deploy production schema readback", () => {
   const readback = read(".github/workflows/aurion-production-schema-readback.yml");
 
-  it("starts from a successful main zone promotion and binds its exact head sha", () => {
+  it("accepts only a successful main zone deployment event", () => {
     expect(readback).toContain('workflows: ["Deploy Aurion zone runtime"]');
     expect(readback).toContain("types: [completed]");
     expect(readback).toContain(
-      "TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}",
+      "github.event.workflow_run.conclusion == 'success'",
     );
-    expect(readback).toContain("ref: ${{ env.TARGET_SHA }}");
-    expect(readback).toContain('event.workflow_run?.head_branch!=="main"');
     expect(readback).toContain(
-      'event.workflow_run?.head_sha!==process.env.TARGET_SHA',
+      "github.event.workflow_run.head_branch == 'main'",
     );
+    expect(readback).not.toContain("pull_request:");
+    expect(readback).not.toContain("workflow_dispatch:");
   });
 
-  it("allows production access only after the successful deploy event or explicit main dispatch", () => {
-    expect(readback).toContain("github.event_name == 'workflow_run'");
-    expect(readback).toContain("github.event.workflow_run.conclusion == 'success'");
-    expect(readback).toContain("github.event.workflow_run.head_branch == 'main'");
-    expect(readback).toContain("github.event_name == 'workflow_dispatch'");
-    expect(readback).not.toContain("github.event_name != 'pull_request'");
-  });
-
-  it("keeps artifact, installed runner and receipt on the same revision without apply", () => {
-    expect(readback).toContain("AURION_RELEASE_SHA: ${{ env.TARGET_SHA }}");
+  it("binds the job environment directly to the upstream deployment identity", () => {
     expect(readback).toContain(
-      "aurion-production-reconcile-${{ env.TARGET_SHA }}",
+      "EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}",
     );
     expect(readback).toContain(
-      "aurion-production-schema-readback-${{ env.TARGET_SHA }}",
-    );
-    expect(readback).toContain(
-      'sudo -n "$runner" "$EXPECTED_SHA"',
-    );
-    expect(readback).toContain(
-      "EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}",
+      "UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}",
     );
     expect(readback).not.toContain("EXPECTED_SHA: ${{ env.TARGET_SHA }}");
+    expect(readback).not.toContain("TARGET_SHA:");
+  });
+
+  it("downloads and verifies the exact immutable artifact from the successful upstream run", () => {
+    expect(readback).toContain("actions: read");
+    expect(readback).toContain(
+      "name: aurion-zone-runtime-${{ github.event.workflow_run.head_sha }}",
+    );
+    expect(readback).toContain(
+      "run-id: ${{ github.event.workflow_run.id }}",
+    );
+    expect(readback).toContain("github-token: ${{ github.token }}");
+    expect(readback).toContain(
+      'artifact="${GITHUB_WORKSPACE}/deployment-artifact/dist-production-reconcile"',
+    );
+    expect(readback).toContain('test -f "$artifact/checksums.sha256"');
+    expect(readback).toContain(
+      '(cd "$artifact" && sha256sum --strict -c checksums.sha256)',
+    );
+  });
+
+  it("requires artifact, installed runner and receipt to share one revision without apply", () => {
+    expect(readback).toContain(
+      "/opt/echoes-of-aurion-schema-reconcile/current/manifest.json",
+    );
+    expect(readback).toContain(
+      "/usr/local/sbin/aurion-production-schema-reconcile",
+    );
+    expect(readback).toContain('sudo -n "$runner" "$EXPECTED_SHA"');
+    expect(readback).toContain(
+      "aurion-production-schema-readback-${{ github.event.workflow_run.head_sha }}",
+    );
+    expect(readback).not.toContain("actions/checkout");
+    expect(readback).not.toContain("pnpm install");
     expect(readback).not.toContain("drizzle-kit migrate");
     expect(readback).not.toContain("postgres_migration_apply");
   });
