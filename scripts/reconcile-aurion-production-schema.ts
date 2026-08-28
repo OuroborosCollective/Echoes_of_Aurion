@@ -159,6 +159,7 @@ async function main() {
   let connection: Connection | null = null;
   let receipt: Record<string, unknown> | null = null;
   let exitCode = 0;
+  let operationsSucceeded = false;
   try {
     failureStage = "CONNECT_DATABASE";
     connection = await mysql.createConnection(databaseUrl);
@@ -222,9 +223,10 @@ async function main() {
     };
     if (driftCount > 0) exitCode = 3;
     else if (requireMatch && absentCount > 0) exitCode = 4;
+    operationsSucceeded = true;
   } finally {
     if (connection) {
-      failureStage = "CLOSE_DATABASE";
+      if (operationsSucceeded) failureStage = "CLOSE_DATABASE";
       await connection.end();
     }
   }
