@@ -22,7 +22,7 @@ COPY package.json pnpm-lock.yaml ./
 COPY patches ./patches
 # Der Produktionsserver importiert den Vite-Adapter zur statischen Auslieferung.
 # Deshalb müssen die vollständigen, gesperrten Runtime-Abhängigkeiten im Image vorliegen.
-RUN pnpm install --frozen-lockfile --network-concurrency=1 --child-concurrency=1 && pnpm store prune
+RUN pnpm install --prod --frozen-lockfile --network-concurrency=1 --child-concurrency=1 && pnpm store prune
 
 COPY dist ./dist
 RUN test -n "$AURION_RELEASE_SHA" \
