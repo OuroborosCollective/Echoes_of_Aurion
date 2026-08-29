@@ -34,6 +34,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("aurion-runtime-container-verify failed state=%s health=%s category=%s");
     expect(promoter).toContain("aurion-container-health-diagnostic state=%s health=%s category=%s");
     expect(promoter).toContain('docker logs --tail 200 "$container_id"');
+    expect(workflow).toContain('module_not_found:${safePackageName}');
+    expect(promoter).toContain('module_not_found:${safePackageName}');
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
