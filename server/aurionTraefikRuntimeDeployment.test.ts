@@ -18,7 +18,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(dockerfile).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA}");
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
     expect(artifactBuilder).toContain('const directoriesToCopy = ["dist", "patches"]');
-    expect(workflow).toContain("https://arelogic.space/healthz");
+    expect(workflow).toContain(
+      "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
+    );
     expect(workflow).toContain('health.revision!==process.argv[1]');
   });
 
@@ -65,7 +67,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   });
 
   it("does not accept a local container unless the public labelled route reports its revision", () => {
-    expect(promoter).toContain('"https://${aurion_domain}/healthz"');
+    expect(promoter).toContain(
+      '"https://${aurion_domain}/healthz?revision=${expected_sha}"'
+    );
     expect(promoter).toContain('body.revision !== process.argv[1]');
     expect(promoter).toContain('body.revision !== process.env.EXPECTED_SHA');
     expect(promoter).toContain('"mode":"traefik-labelled"');

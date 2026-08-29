@@ -369,7 +369,7 @@ jobs:
           set -euo pipefail
           public_ready=0
           for _attempt in $(seq 1 20); do
-            if health_json="$(curl --fail --silent --show-error https://arelogic.space/healthz 2>/dev/null)"; then
+            if health_json="$(curl --fail --silent --show-error "https://arelogic.space/healthz?revision=${EXPECTED_SHA}" 2>/dev/null)"; then
               if printf '%s' "$health_json" | node --input-type=module -e '
                 let raw="";
                 for await (const chunk of process.stdin) raw+=chunk;
