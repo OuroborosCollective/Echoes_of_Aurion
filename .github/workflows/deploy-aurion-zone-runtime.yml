@@ -173,6 +173,12 @@ jobs:
           if(canonical.imageDigest!=="sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff") throw new Error("unexpected canonical bootstrap input");
           if(bootstrap.imageDigest!=="sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f") throw new Error("unexpected amd64 bootstrap image");
           NODE
+          bootstrap_runtime_entries="$(tar -tzf runtime-bootstrap-artifact/aurion-traefik-runtime-release.tgz)"
+          if grep -Fq '@' <<<"$bootstrap_runtime_entries"; then
+            echo "bootstrap runtime archive contains a legacy-incompatible path" >&2
+            exit 1
+          fi
+          grep -Fxq './patches/wouter-3.7.1.patch' <<<"$bootstrap_runtime_entries"
           (cd runtime-bootstrap-artifact/dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$GITHUB_SHA"
           bootstrap_image="node:22.13.0-bookworm-slim@sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f"
@@ -275,8 +281,9 @@ jobs:
           # its runtime payload is identical and it installs the canonical
           # promoter before the canonical artifact is ever promoted.
           if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime; then
+            bootstrap_release_id="${EXPECTED_SHA}-0"
             set +e
-            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${EXPECTED_SHA}" "${bootstrap_release_id}"
             bootstrap_status=$?
             set -e
             printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"

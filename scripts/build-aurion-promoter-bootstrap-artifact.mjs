@@ -1,5 +1,15 @@
 import { createHash } from "node:crypto";
-import { cp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -19,6 +29,12 @@ const linuxAmd64ManifestDigest =
   "sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f";
 const schemaRelative = "dist-production-reconcile";
 const imageContractRelative = "deploy/aurion-reconcile-runtime-image.conf";
+const runtimeArchiveRelative = "aurion-traefik-runtime-release.tgz";
+const runtimeChecksumRelative = `${runtimeArchiveRelative}.sha256`;
+const legacyUnsafePatch = "patches/wouter@3.7.1.patch";
+const legacySafePatch = "patches/wouter-3.7.1.patch";
+const canonicalRuntimePath = /^[A-Za-z0-9@._/:-]+$/;
+const legacyRuntimePath = /^[A-Za-z0-9._/:-]+$/;
 
 if (!/^[a-f0-9]{40}$/.test(revision)) {
   throw new Error(
@@ -32,6 +48,215 @@ if (source === output) {
 }
 if (!(await stat(source)).isDirectory()) {
   throw new Error("bootstrap artifact source directory is missing");
+}
+
+const sha256 = async filePath =>
+  createHash("sha256")
+    .update(await readFile(filePath))
+    .digest("hex");
+
+async function listRegularFiles(directory, relative = "") {
+  const files = [];
+  for (const entry of await readdir(path.join(directory, relative), {
+    withFileTypes: true,
+  })) {
+    const entryRelative = path.posix.join(relative, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listRegularFiles(directory, entryRelative)));
+      continue;
+    }
+    if (!entry.isFile()) {
+      throw new Error(
+        `bootstrap runtime artifact has a non-file entry: ${entryRelative}`
+      );
+    }
+    files.push(entryRelative);
+  }
+  return files;
+}
+
+async function validateRuntimeMetadata(directory, pathPattern) {
+  const manifestPath = path.join(directory, "manifest.json");
+  const checksumPath = path.join(directory, "checksums.sha256");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (
+    manifest.schemaVersion !== 1 ||
+    manifest.recordType !== "aurion_traefik_runtime_artifact" ||
+    manifest.revision !== revision ||
+    !manifest.files ||
+    typeof manifest.files !== "object"
+  ) {
+    throw new Error("bootstrap source runtime artifact is not revision-bound");
+  }
+
+  const files = (await listRegularFiles(directory))
+    .filter(
+      relative => !["manifest.json", "checksums.sha256"].includes(relative)
+    )
+    .sort();
+  const manifestFiles = Object.keys(manifest.files).sort();
+  if (JSON.stringify(files) !== JSON.stringify(manifestFiles)) {
+    throw new Error(
+      "bootstrap source runtime manifest does not describe a closed file set"
+    );
+  }
+  for (const relative of files) {
+    if (
+      !pathPattern.test(relative) ||
+      relative.split("/").includes("..") ||
+      !/^[a-f0-9]{64}$/.test(manifest.files[relative]) ||
+      (await sha256(path.join(directory, relative))) !==
+        manifest.files[relative]
+    ) {
+      throw new Error(`bootstrap runtime metadata rejected: ${relative}`);
+    }
+  }
+
+  const expectedChecksums = await Promise.all(
+    [...files, "manifest.json"]
+      .sort()
+      .map(
+        async relative =>
+          `${await sha256(path.join(directory, relative))}  ${relative}`
+      )
+  );
+  if (
+    (await readFile(checksumPath, "utf8")) !==
+    `${expectedChecksums.join("\n")}\n`
+  ) {
+    throw new Error("bootstrap source runtime checksums are not closed");
+  }
+  return { files, manifest };
+}
+
+async function refreshRuntimeMetadata(directory, manifest) {
+  const files = (await listRegularFiles(directory))
+    .filter(
+      relative => !["manifest.json", "checksums.sha256"].includes(relative)
+    )
+    .sort();
+  manifest.files = Object.fromEntries(
+    await Promise.all(
+      files.map(async relative => [
+        relative,
+        await sha256(path.join(directory, relative)),
+      ])
+    )
+  );
+  await writeFile(
+    path.join(directory, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8"
+  );
+  const checksums = await Promise.all(
+    [...files, "manifest.json"]
+      .sort()
+      .map(
+        async relative =>
+          `${await sha256(path.join(directory, relative))}  ${relative}`
+      )
+  );
+  await writeFile(
+    path.join(directory, "checksums.sha256"),
+    `${checksums.join("\n")}\n`,
+    "utf8"
+  );
+}
+
+async function listArchiveEntries(archive) {
+  const { stdout } = await execFileAsync("tar", ["-tzf", archive]);
+  const entries = stdout.split("\n").filter(Boolean);
+  for (const entry of entries) {
+    if (!entry.startsWith("./") || entry.includes("../")) {
+      throw new Error(
+        `bootstrap runtime archive has an unsafe entry: ${entry}`
+      );
+    }
+  }
+  return entries;
+}
+
+async function buildLegacyCompatibleRuntimeArchive() {
+  const archive = path.join(output, runtimeArchiveRelative);
+  const checksum = path.join(output, runtimeChecksumRelative);
+  if (!(await stat(archive)).isFile() || !(await stat(checksum)).isFile()) {
+    throw new Error(
+      "bootstrap source is missing the verified Traefik runtime archive"
+    );
+  }
+  const expectedArchiveChecksum = `${await sha256(archive)}  ${runtimeArchiveRelative}\n`;
+  if ((await readFile(checksum, "utf8")) !== expectedArchiveChecksum) {
+    throw new Error(
+      "bootstrap source Traefik runtime archive checksum is invalid"
+    );
+  }
+
+  const temporary = await mkdtemp(
+    path.join(os.tmpdir(), "aurion-bootstrap-runtime-")
+  );
+  try {
+    await listArchiveEntries(archive);
+    await execFileAsync("tar", ["-xzf", archive, "-C", temporary]);
+    const { manifest } = await validateRuntimeMetadata(
+      temporary,
+      canonicalRuntimePath
+    );
+    const unsafePatch = path.join(temporary, legacyUnsafePatch);
+    const safePatch = path.join(temporary, legacySafePatch);
+    if (
+      !(await stat(unsafePatch)).isFile() ||
+      manifest.files[legacyUnsafePatch] === undefined ||
+      manifest.files[legacySafePatch] !== undefined
+    ) {
+      throw new Error(
+        "bootstrap source is missing the exact legacy-incompatible patch path"
+      );
+    }
+    await rename(unsafePatch, safePatch);
+
+    const packagePath = path.join(temporary, "package.json");
+    const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+    if (
+      packageJson?.pnpm?.patchedDependencies?.["wouter@3.7.1"] !==
+      legacyUnsafePatch
+    ) {
+      throw new Error(
+        "bootstrap source package does not bind the expected Wouter patch"
+      );
+    }
+    packageJson.pnpm.patchedDependencies["wouter@3.7.1"] = legacySafePatch;
+    await writeFile(
+      packagePath,
+      `${JSON.stringify(packageJson, null, 2)}\n`,
+      "utf8"
+    );
+
+    const lockPath = path.join(temporary, "pnpm-lock.yaml");
+    const lockfile = await readFile(lockPath, "utf8");
+    const oldLockPath = `path: ${legacyUnsafePatch}`;
+    if (lockfile.split(oldLockPath).length !== 2) {
+      throw new Error(
+        "bootstrap source lockfile does not bind the expected Wouter patch once"
+      );
+    }
+    await writeFile(
+      lockPath,
+      lockfile.replace(oldLockPath, `path: ${legacySafePatch}`),
+      "utf8"
+    );
+
+    await refreshRuntimeMetadata(temporary, manifest);
+    await validateRuntimeMetadata(temporary, legacyRuntimePath);
+    await execFileAsync("tar", ["-C", temporary, "-czf", archive, "."]);
+    await listArchiveEntries(archive);
+    await writeFile(
+      checksum,
+      `${await sha256(archive)}  ${runtimeArchiveRelative}\n`,
+      "utf8"
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 const sourceSchema = path.join(source, schemaRelative);
@@ -60,6 +285,7 @@ if (
 
 await rm(output, { recursive: true, force: true });
 await cp(source, output, { recursive: true, force: true });
+await buildLegacyCompatibleRuntimeArchive();
 
 const bootstrapSchema = path.join(output, schemaRelative);
 const bootstrapContractPath = path.join(bootstrapSchema, imageContractRelative);
@@ -73,10 +299,6 @@ await writeFile(
   "utf8"
 );
 
-const sha256 = async filePath =>
-  createHash("sha256")
-    .update(await readFile(filePath))
-    .digest("hex");
 const manifestPath = path.join(bootstrapSchema, "manifest.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 if (
@@ -143,6 +365,7 @@ console.log(
     revision,
     artifact: path.relative(root, output),
     bootstrapImageDigest: linuxAmd64ManifestDigest,
+    bootstrapRuntimePatch: legacySafePatch,
     mode: "bootstrap-only",
   })
 );
