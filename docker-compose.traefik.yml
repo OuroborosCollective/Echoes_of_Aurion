@@ -16,6 +16,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}
       - traefik.http.routers.aurion.rule=Host(`${AURION_DOMAIN:-arelogic.space}`)
+      - traefik.http.routers.aurion.priority=1000
       - traefik.http.routers.aurion.entrypoints=websecure
       - traefik.http.routers.aurion.tls=true
       - traefik.http.routers.aurion.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
