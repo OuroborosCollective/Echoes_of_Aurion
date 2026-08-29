@@ -115,7 +115,7 @@ test("workflow keeps the WASD ledger toolchain pinned while inventorying source 
   const workflow = await readFile(new URL("../.github/workflows/aurion-wasd-migration-ledger.yml", import.meta.url), "utf8");
   assert.match(workflow, /ref: e39ee9b6c085a1a02e5feb898532ad0e3085c30a/u);
   assert.match(workflow, /path: \.wasd-ledger-toolchain/u);
-  assert.match(workflow, /node --test \.wasd-ledger-toolchain\/scripts\/__tests__\/build-wasd-aurion-source-ledger\.test\.mjs/u);
+  assert.match(workflow, /env -u WASD_SOURCE_SHA node --test \.wasd-ledger-toolchain\/scripts\/__tests__\/build-wasd-aurion-source-ledger\.test\.mjs/u);
   assert.match(workflow, /node \.\.\/\.wasd-ledger-toolchain\/scripts\/build-wasd-aurion-source-ledger\.mjs/u);
   assert.doesNotMatch(workflow, /cd \.wasd-source\n\s+WASD_SOURCE_SHA=.* node scripts\/build-wasd-aurion-source-ledger\.mjs/u);
 });
