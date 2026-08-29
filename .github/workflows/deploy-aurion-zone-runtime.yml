@@ -170,8 +170,10 @@ jobs:
           import fs from "node:fs";
           const canonical=JSON.parse(fs.readFileSync("runtime-artifact/dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf","utf8"));
           const bootstrap=JSON.parse(fs.readFileSync("runtime-bootstrap-artifact/dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf","utf8"));
+          const identity=JSON.parse(fs.readFileSync("runtime-bootstrap-artifact/bootstrap-identity.json","utf8"));
           if(canonical.imageDigest!=="sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff") throw new Error("unexpected canonical bootstrap input");
           if(bootstrap.imageDigest!=="sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f") throw new Error("unexpected amd64 bootstrap image");
+          if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==process.env.GITHUB_SHA||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===process.env.GITHUB_SHA||identity.mode!=="bootstrap_only") throw new Error("unexpected bootstrap identity");
           NODE
           bootstrap_runtime_entries="$(tar -tzf runtime-bootstrap-artifact/aurion-traefik-runtime-release.tgz)"
           if grep -Fq '@' <<<"$bootstrap_runtime_entries"; then
@@ -179,8 +181,16 @@ jobs:
             exit 1
           fi
           grep -Fxq './patches/wouter-3.7.1.patch' <<<"$bootstrap_runtime_entries"
+          (cd runtime-bootstrap-artifact && sha256sum --strict -c bootstrap-identity.json.sha256)
+          bootstrap_revision="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const [file, expected]=process.argv.slice(1);
+            const identity=JSON.parse(fs.readFileSync(file,"utf8"));
+            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===expected||identity.mode!=="bootstrap_only") process.exit(2);
+            process.stdout.write(identity.bootstrapRevision);
+          ' runtime-bootstrap-artifact/bootstrap-identity.json "$GITHUB_SHA")"
           (cd runtime-bootstrap-artifact/dist-production-reconcile && sha256sum --strict -c checksums.sha256)
-          node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$GITHUB_SHA"
+          node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$bootstrap_revision"
           bootstrap_image="node:22.13.0-bookworm-slim@sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f"
           docker pull "$bootstrap_image"
           bootstrap_image_id="$(docker image inspect --format '{{.Id}}' "$bootstrap_image")"
@@ -274,16 +284,27 @@ jobs:
           bootstrap_artifact="${GITHUB_WORKSPACE}/runtime-bootstrap-artifact"
           test -f "${bootstrap_artifact}/aurion-traefik-runtime-release.tgz"
           test -f "${bootstrap_artifact}/dist-production-reconcile/manifest.json"
+          test -f "${bootstrap_artifact}/bootstrap-identity.json"
+          test -f "${bootstrap_artifact}/bootstrap-identity.json.sha256"
+          (cd "${bootstrap_artifact}" && sha256sum --strict -c bootstrap-identity.json.sha256)
+          bootstrap_expected_sha="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const [file, expected]=process.argv.slice(1);
+            const identity=JSON.parse(fs.readFileSync(file,"utf8"));
+            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===expected||identity.mode!=="bootstrap_only") process.exit(2);
+            process.stdout.write(identity.bootstrapRevision);
+          ' "${bootstrap_artifact}/bootstrap-identity.json" "${EXPECTED_SHA}")"
 
           # A legacy fixed entrypoint cannot safely replace itself before it
           # validates a Docker image. Use the separately verified, one-time
-          # amd64 bootstrap artifact only while that byte comparison differs;
-          # its runtime payload is identical and it installs the canonical
-          # promoter before the canonical artifact is ever promoted.
+          # amd64 bootstrap artifact only while that byte comparison differs.
+          # Its distinct identity and legacy-safe path permit only the old
+          # promoter's self-install; the canonical artifact is then promoted
+          # with its own immutable source revision and release directory.
           if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime; then
-            bootstrap_release_id="${EXPECTED_SHA}-0"
+            bootstrap_release_id="${bootstrap_expected_sha}-0"
             set +e
-            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${EXPECTED_SHA}" "${bootstrap_release_id}"
+            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
             bootstrap_status=$?
             set -e
             printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"

@@ -14,6 +14,13 @@ function digest(file: string) {
   return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function bootstrapRevisionFor(sourceRevision: string) {
+  return createHash("sha256")
+    .update(`aurion-legacy-promoter-bootstrap:${sourceRevision}`)
+    .digest("hex")
+    .slice(0, 40);
+}
+
 function listFiles(directory: string, prefix = ""): string[] {
   return fs.readdirSync(path.join(directory, prefix), { withFileTypes: true }).flatMap(entry => {
     const relative = path.posix.join(prefix, entry.name);
@@ -161,8 +168,8 @@ function makeArtifact() {
   return directory;
 }
 
-function verifyArtifact(directory: string) {
-  execFileSync(process.execPath, [verifier, directory, testRevision], { stdio: "pipe" });
+function verifyArtifact(directory: string, expectedRevision = testRevision) {
+  execFileSync(process.execPath, [verifier, directory, expectedRevision], { stdio: "pipe" });
 }
 
 describe("Aurion production schema reconcile Docker runner contract", () => {
@@ -223,6 +230,7 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
         "aurion-traefik-runtime-release.tgz"
       );
       const canonicalArchiveHash = digest(canonicalArchive);
+      const bootstrapRevision = bootstrapRevisionFor(testRevision);
       execFileSync(process.execPath, [bootstrapBuilder, sourceRoot, outputRoot], {
         env: { ...process.env, AURION_RELEASE_SHA: testRevision },
         stdio: "pipe",
@@ -238,6 +246,28 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
       ));
       expect(canonical.imageDigest).toBe("sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
       expect(bootstrap.imageDigest).toBe("sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f");
+      const bootstrapIdentity = JSON.parse(
+        fs.readFileSync(
+          path.join(outputRoot, "bootstrap-identity.json"),
+          "utf8"
+        )
+      );
+      expect(bootstrapIdentity).toEqual({
+        schemaVersion: 1,
+        recordType: "aurion_legacy_promoter_bootstrap_identity",
+        sourceRevision: testRevision,
+        bootstrapRevision,
+        mode: "bootstrap_only",
+      });
+      expect(
+        fs.readFileSync(
+          path.join(outputRoot, "bootstrap-identity.json.sha256"),
+          "utf8"
+        )
+      ).toBe(
+        `${digest(path.join(outputRoot, "bootstrap-identity.json"))}  bootstrap-identity.json\n`
+      );
+
       expect(digest(canonicalArchive)).toBe(canonicalArchiveHash);
       const bootstrapArchive = path.join(
         outputRoot,
@@ -284,6 +314,23 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
           fs.readFileSync(path.join(bootstrapRuntime, "pnpm-lock.yaml"), "utf8")
         ).toContain("path: patches/wouter-3.7.1.patch");
         expect(
+          JSON.parse(
+            fs.readFileSync(
+              path.join(bootstrapRuntime, "dist/.aurion-runtime-build.json"),
+              "utf8"
+            )
+          ).revision
+        ).toBe(bootstrapRevision);
+        expect(
+          JSON.parse(
+            fs.readFileSync(
+              path.join(bootstrapRuntime, "manifest.json"),
+              "utf8"
+            )
+          ).revision
+        ).toBe(bootstrapRevision);
+
+        expect(
           execFileSync("tar", ["-tzf", bootstrapArchive], {
             encoding: "utf8",
           })
@@ -291,7 +338,10 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
       } finally {
         fs.rmSync(bootstrapRuntime, { recursive: true, force: true });
       }
-      verifyArtifact(path.join(outputRoot, "dist-production-reconcile"));
+      verifyArtifact(
+        path.join(outputRoot, "dist-production-reconcile"),
+        bootstrapRevision
+      );
     } finally {
       fs.rmSync(sourceArtifact, { recursive: true, force: true });
       fs.rmSync(sourceRoot, { recursive: true, force: true });

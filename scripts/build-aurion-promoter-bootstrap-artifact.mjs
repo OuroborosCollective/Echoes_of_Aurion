@@ -18,6 +18,10 @@ import { execFile } from "node:child_process";
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const revision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase() ?? "";
+const bootstrapRevision = createHash("sha256")
+  .update(`aurion-legacy-promoter-bootstrap:${revision}`)
+  .digest("hex")
+  .slice(0, 40);
 const source = path.resolve(root, process.argv[2] ?? "runtime-artifact");
 const output = path.resolve(
   root,
@@ -35,10 +39,17 @@ const legacyUnsafePatch = "patches/wouter@3.7.1.patch";
 const legacySafePatch = "patches/wouter-3.7.1.patch";
 const canonicalRuntimePath = /^[A-Za-z0-9@._/:-]+$/;
 const legacyRuntimePath = /^[A-Za-z0-9._/:-]+$/;
+const bootstrapIdentityRelative = "bootstrap-identity.json";
+const bootstrapIdentityChecksumRelative = `${bootstrapIdentityRelative}.sha256`;
 
 if (!/^[a-f0-9]{40}$/.test(revision)) {
   throw new Error(
     "AURION_RELEASE_SHA must be the exact 40-character source revision"
+  );
+}
+if (bootstrapRevision === revision) {
+  throw new Error(
+    "bootstrap revision must differ from the canonical source revision"
   );
 }
 if (source === output) {
@@ -75,14 +86,18 @@ async function listRegularFiles(directory, relative = "") {
   return files;
 }
 
-async function validateRuntimeMetadata(directory, pathPattern) {
+async function validateRuntimeMetadata(
+  directory,
+  pathPattern,
+  expectedRevision
+) {
   const manifestPath = path.join(directory, "manifest.json");
   const checksumPath = path.join(directory, "checksums.sha256");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (
     manifest.schemaVersion !== 1 ||
     manifest.recordType !== "aurion_traefik_runtime_artifact" ||
-    manifest.revision !== revision ||
+    manifest.revision !== expectedRevision ||
     !manifest.files ||
     typeof manifest.files !== "object"
   ) {
@@ -199,7 +214,8 @@ async function buildLegacyCompatibleRuntimeArchive() {
     await execFileAsync("tar", ["-xzf", archive, "-C", temporary]);
     const { manifest } = await validateRuntimeMetadata(
       temporary,
-      canonicalRuntimePath
+      canonicalRuntimePath,
+      revision
     );
     const unsafePatch = path.join(temporary, legacyUnsafePatch);
     const safePatch = path.join(temporary, legacySafePatch);
@@ -245,8 +261,31 @@ async function buildLegacyCompatibleRuntimeArchive() {
       "utf8"
     );
 
+    const runtimeBuildPath = path.join(
+      temporary,
+      "dist/.aurion-runtime-build.json"
+    );
+    const runtimeBuild = JSON.parse(await readFile(runtimeBuildPath, "utf8"));
+    if (
+      runtimeBuild.revision !== revision ||
+      runtimeBuild.artifact !== "aurion-runtime"
+    ) {
+      throw new Error("bootstrap source runtime build identity is invalid");
+    }
+    runtimeBuild.revision = bootstrapRevision;
+    await writeFile(
+      runtimeBuildPath,
+      `${JSON.stringify(runtimeBuild, null, 2)}\n`,
+      "utf8"
+    );
+
+    manifest.revision = bootstrapRevision;
     await refreshRuntimeMetadata(temporary, manifest);
-    await validateRuntimeMetadata(temporary, legacyRuntimePath);
+    await validateRuntimeMetadata(
+      temporary,
+      legacyRuntimePath,
+      bootstrapRevision
+    );
     await execFileAsync("tar", ["-C", temporary, "-czf", archive, "."]);
     await listArchiveEntries(archive);
     await writeFile(
@@ -315,6 +354,7 @@ if (
 }
 
 const contractStats = await stat(bootstrapContractPath);
+manifest.revision = bootstrapRevision;
 manifest.files[imageContractRelative] = {
   bytes: contractStats.size,
   sha256: await sha256(bootstrapContractPath),
@@ -357,12 +397,32 @@ await execFileAsync(process.execPath, [
     "verify-aurion-production-schema-reconcile-artifact.mjs"
   ),
   bootstrapSchema,
-  revision,
+  bootstrapRevision,
 ]);
+
+const bootstrapIdentity = {
+  schemaVersion: 1,
+  recordType: "aurion_legacy_promoter_bootstrap_identity",
+  sourceRevision: revision,
+  bootstrapRevision,
+  mode: "bootstrap_only",
+};
+const bootstrapIdentityPath = path.join(output, bootstrapIdentityRelative);
+await writeFile(
+  bootstrapIdentityPath,
+  `${JSON.stringify(bootstrapIdentity, null, 2)}\n`,
+  "utf8"
+);
+await writeFile(
+  path.join(output, bootstrapIdentityChecksumRelative),
+  `${await sha256(bootstrapIdentityPath)}  ${bootstrapIdentityRelative}\n`,
+  "utf8"
+);
 
 console.log(
   JSON.stringify({
     revision,
+    bootstrapRevision,
     artifact: path.relative(root, output),
     bootstrapImageDigest: linuxAmd64ManifestDigest,
     bootstrapRuntimePatch: legacySafePatch,

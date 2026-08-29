@@ -46,6 +46,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).not.toContain("{{range .RepoDigests}}");
     expect(workflow).toContain("one-time promoter bootstrap artifact");
     expect(workflow).toContain("runtime-bootstrap-artifact");
+    expect(workflow).toContain('bootstrap_release_id="${bootstrap_expected_sha}-0"');
+    expect(workflow).toContain("bootstrap-identity.json.sha256");
     expect(promoter).not.toContain("systemctl reload nginx");
     expect(promoter).not.toContain("nginx -t");
   });
