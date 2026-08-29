@@ -89,8 +89,12 @@ if ! node --input-type=module -e '
     if(header?.alg!=="RS256"||typeof header.kid!=="string"||!header.kid) fail();
     const now=Math.floor(Date.now()/1000);
     if(!Number.isSafeInteger(payload?.iat)||!Number.isSafeInteger(payload?.exp)||payload.iat>now+120||payload.iat<now-900||payload.exp<now-60||payload.exp>now+900) fail();
-    if(payload.iss!=="https://token.actions.githubusercontent.com"||payload.aud!==audience||payload.sub!=="repo:OuroborosCollective/Echoes_of_Aurion:environment:production") fail();
-    if(payload.repository!=="OuroborosCollective/Echoes_of_Aurion"||payload.repository_owner!=="OuroborosCollective"||payload.ref!=="refs/heads/main"||payload.sha!==expectedSha||payload.event_name!=="workflow_dispatch"||payload.environment!=="production"||payload.runner_environment!=="self-hosted") fail();
+    // Echoes_of_Aurion was created after the GitHub immutable-subject rollout.
+    // Bind its names *and* immutable IDs exactly; do not fall back to the legacy
+    // owner/repository-only subject because that would weaken replay resistance.
+    const expectedSubject="repo:OuroborosCollective@266194342/Echoes_of_Aurion@1313103794:environment:production";
+    if(payload.iss!=="https://token.actions.githubusercontent.com"||payload.aud!==audience||payload.sub!==expectedSubject) fail();
+    if(payload.repository!=="OuroborosCollective/Echoes_of_Aurion"||payload.repository_owner!=="OuroborosCollective"||String(payload.repository_id)!=="1313103794"||String(payload.repository_owner_id)!=="266194342"||payload.ref!=="refs/heads/main"||payload.sha!==expectedSha||payload.event_name!=="workflow_dispatch"||payload.environment!=="production"||payload.runner_environment!=="self-hosted") fail();
     if(payload.workflow_ref!=="OuroborosCollective/Echoes_of_Aurion/.github/workflows/aurion-production-schema-apply.yml@refs/heads/main"||payload.workflow_sha!==expectedSha) fail();
     const response=await fetch("https://token.actions.githubusercontent.com/.well-known/jwks",{redirect:"error",headers:{accept:"application/json"},signal:AbortSignal.timeout(10000)});
     if(!response.ok) fail();
