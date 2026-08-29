@@ -53,6 +53,11 @@ describe("Aurion production schema apply boundary", () => {
     expect(core).toContain("MARIADB_ERROR_");
     expect(core).toContain("recovery_stderr_sha256");
     expect(core).toContain('rm -f "$recovery_stderr"');
+    expect(core).toContain('type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly');
+    expect(core).toContain("RECOVERY_TOOLING_UNAVAILABLE");
+    expect(core).toContain("gzip -t /recovery-input/production.sql.gz");
+    expect(core).toContain('gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot');
+    expect(core).not.toContain('gzip -cd "$backup_file" 2>"$recovery_stderr" | docker exec -i');
     expect(core).not.toContain('cat "$recovery_stderr"');
     expect(core).toContain("schemaSha256");
     expect(core).not.toContain("--privileged");
