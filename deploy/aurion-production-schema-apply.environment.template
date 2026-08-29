@@ -1,0 +1,4 @@
+# Root-only, non-secret host routing for the constrained production schema apply
+# runner. The value must name the MariaDB container attached to
+# echoes-of-aurion-internal; it is never supplied by a GitHub workflow input.
+AURION_PRODUCTION_DATABASE_CONTAINER=echoes-of-aurion-mariadb-1

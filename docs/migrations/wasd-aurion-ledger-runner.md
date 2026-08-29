@@ -29,7 +29,17 @@ Der Runner hat keine Datenbankverbindung, kein Deploy-Recht und keinen Codepfad 
 - `journal_repair`
 - `production_deploy`
 
-Eine spätere Produktivmaßnahme braucht einen frischen root-autorisierten Schema-Readback, Backup-/Recovery-Evidenz und eine ausdrückliche Freigabe des konkreten `planSha256`. Ein vorhandener Workflow-Erfolg ist kein Produktionsmigrationsnachweis.
+Eine Produktivmaßnahme braucht einen frischen root-autorisierten Schema-Readback,
+Backup-/Recovery-Evidenz und eine ausdrückliche Freigabe des konkreten
+`planSha256`. Ein vorhandener Workflow-Erfolg ist kein
+Produktionsmigrationsnachweis.
+
+Der ausschließlich dafür vorgesehene, separate Workflow
+`aurion-production-schema-apply.yml` kann anschließend das immutable Ledger-
+Artefakt über dessen Run-ID und Plan-Hash prüfen. Er ist nicht Teil dieser
+Schleife und akzeptiert nur den geschlossenen Apply-Umfang für die
+Migrationen `0021`–`0027`; Details stehen im
+[`Automatisierungs-Runbook`](./aurion-wasd-automation-runbook.md).
 
 ## Nachweis
 

@@ -2,9 +2,11 @@
 
 Dieses Runbook beschreibt die produktive Automatisierung zwischen
 `OuroborosCollective/Wasd` und `OuroborosCollective/Echoes_of_Aurion`.
-Sie erstellt nachvollziehbare Quellen-, Ziel- und Migrationsnachweise und
-promotet die Aurion-Laufzeit über Traefik. Sie führt **keine** automatische
-Schema-, Daten- oder Journalmutation in Produktion aus.
+Sie erstellt nachvollziehbare Quellen-, Ziel- und Migrationsnachweise,
+promotet die Aurion-Laufzeit über Traefik und stellt einen **getrennten,
+eng begrenzten** Apply-Pfad für die sieben inventarisierten Schema-Migrationen
+bereit. Der Ledger selbst führt weiterhin keine Produktionsschreiboperation
+aus.
 
 ## Leitprinzipien
 
@@ -16,9 +18,10 @@ Schema-, Daten- oder Journalmutation in Produktion aus.
   weder im Workflow noch in einem Artefakt.
 - Traefik wird über Docker-Labels auf dem vorhandenen externen Netzwerk
   `areloria_arelorian-network` betrieben. Dieser Ablauf verwendet kein Nginx.
-- Alle Schreiboperationen an Produktionsdatenbanken brauchen einen eigenen,
-  konkret freigegebenen Change mit Backup-/Recovery-Nachweis und einem
-  benannten `planSha256`.
+- Alle Schreiboperationen an Produktionsdatenbanken laufen nur über den
+  separaten Root-Runner, eine konkrete Zielrevision und einen benannten
+  `planSha256`. Vor dem Schreiben erzwingt er Backup und isolierten
+  Recovery-Nachweis.
 
 ## 1. Gesamtbild
 
@@ -56,6 +59,7 @@ Migration anwenden und verwendet die Ledger-Daten nicht als Schreibauftrag.
 | Aurion-Migrations-Ledger | alle 6 Stunden (`29 */6 * * *`), relevante `main`-Änderung oder manueller Start | Aurion-Zielinventar, `migration-ledger.json`, `planSha256` | Schema-Apply, Backfill, Journal-Reparatur, Produktions-Deploy |
 | Aurion Runtime-Deployment | relevante Änderungen auf `main` oder manueller Start | revisionsgebundenes Artefakt, Root-Proof, Traefik-Container und Health-Receipt | ungebundene Images, unbekannter Root-Promoter, Nginx-Umstellung |
 | Produktions-Readback | nur nach erfolgreicher Promotion | lesender Schema-Receipt für `0021`–`0027` | SQL-Apply, Backfill, Rückgabe von DB-Zugangsdaten |
+| Freigegebener Schema-Apply | manueller Start mit Ledger-Run-ID und `planSha256` | Backup, isolierter Restore-Nachweis, journalierter Apply und Postflight-Receipt | andere Migrationen, Backfills, freie Root-/Docker-Kommandos |
 
 Alle Artefakte werden 30 Tage vorgehalten. Ein späterer Lauf ersetzt nie den
 Hash eines früheren Laufs; beide bleiben über ihre Revision und ihren Hash
@@ -155,26 +159,71 @@ Zugangsdaten oder die private Root-Quittung.
 | `UNREADABLE_FAIL_CLOSED` | Der lesende Zugriff konnte nicht vertrauenswürdig klassifiziert werden. | Host-/DB-Erreichbarkeit oder Berechtigungen beheben und erneut lesen; nicht raten. |
 | `ROOT_*`-Fehler vor dem Receipt | Runner, Release oder Sudo-Grenze stimmt nicht. | Integritätsfehler untersuchen, keine Rechte erweitern und nicht blind wiederholen. |
 
-## 6. Was bewusst manuell bleibt
+## 6. Kontrollierter Produktions-Apply
 
-Eine Produktionsmigration ist ein separater Change und nicht Teil dieser
-Automatisierung. Vor einer Freigabe müssen alle folgenden Punkte erfüllt und
-im zugehörigen Linear-Ticket festgehalten sein:
+Der Produktions-Apply ist bewusst **nicht** Teil der Sechs-Stunden-Ledger-
+Schleife. `aurion-production-schema-apply.yml` wird nur manuell auf `main`
+gestartet und verlangt zwei Werte aus einem erfolgreichen Aurion-Ledger-Lauf:
 
-1. Ein frischer, erfolgreicher Produktions-Readback für die konkrete
-   Zielrevision.
-2. Der konkrete `planSha256`, die sieben betroffenen Migrationen und die
-   erwartete Auswirkung sind geprüft.
-3. Ein getestetes Backup und ein dokumentierter Recovery-/Rollback-Weg liegen
-   vor.
-4. Ein verantwortlicher Owner genehmigt explizit Schema-Apply, gegebenenfalls
-   Backfill und Journal-Reparatur sowie Wartungsfenster und Abbruchkriterium.
-5. Der Apply-Mechanismus wird als eigener, eng begrenzter PR/Workflow geprüft;
-   er darf nicht aus dem Ledger oder dem Readback abgeleitet und sofort
-   ausgeführt werden.
+1. `ledger_run_id` – die GitHub-Run-ID mit dem Artefakt
+   `aurion-wasd-migration-ledger-<planSha256>`.
+2. `plan_sha256` – genau der im Artefakt enthaltene kanonische Plan-Hash.
 
-Bis zu dieser ausdrücklichen Freigabe enthält das System keinen Produktions-
-`drizzle-kit migrate`-, `schema_apply`-, Backfill- oder Journal-Reparaturpfad.
+Der Hosted-Teil lädt ausschließlich dieses Artefakt, prüft dessen Prüfsumme,
+WASD-Quellenrevision, WASD-Manifest-Hash, Aurion-Zielrevision sowie die
+Hashes der Migrationen `0021`–`0027`. Die Zielrevision muss exakt dem
+aktuellen `main`-Commit entsprechen. Anschließend baut er ein separates,
+geschlossenes Apply-Artefakt.
+
+Auf dem Self-hosted Runner akzeptiert der sudo-fähige Account nur den festen
+Root-Einstiegspunkt `aurion-production-schema-apply <SHA> <planSha256>`.
+Der Runner akzeptiert weder Dateipfade, SQL-Text, Docker-Argumente noch eine
+andere Datenbank. Er führt in dieser Reihenfolge aus:
+
+1. frischen lesenden Schema-Readback;
+2. Prüfung, dass die sieben Migrationen entweder alle fehlen oder ein
+   lückenloser, bereits journalierter Präfix vorliegt;
+3. Kapazitätsprüfung für Backup und isolierte Recovery-Datenbank;
+4. vollständigen komprimierten MariaDB-Logical-Dump;
+5. Restore in einem temporären MariaDB-Container ohne Netzwerkzugriff,
+   inklusive Tabellenanzahl- und Schema-Fingerprint-Vergleich;
+6. Datenbank-Advisory-Lock, journalierter Drizzle-Apply ausschließlich für
+   `0021`–`0027` und anschließenden Readback;
+7. root-eigenen, zugangsdatenfreien Receipt.
+
+Die reale Datenbank wird erst in Schritt 6 beschrieben. Ein fehlerhafter
+Readback, Drift, Journalkonflikt, fehlende Kapazität oder fehlgeschlagener
+Restore beendet den Lauf vorher geschlossen.
+
+Die Integration wird auf einer temporären MariaDB vor jedem Deployment
+geprüft. Dort wird ein Stand bis Migration `0020` aufgebaut, der Root-Runner
+führt Backup, Restore und Apply aus, und ein zweiter Lauf muss als
+`ALREADY_APPLIED` ohne neues Backup enden.
+
+### Recovery und Wiederanlauf
+
+- Backups liegen nur root-lesbar unter
+  `/var/backups/echoes-of-aurion/schema-apply/` (`0600`). Der öffentliche
+  Receipt enthält ausschließlich Backup-ID, SHA-256 und Größe – nie Pfad,
+  DB-URL oder Passwort.
+- Der normale Apply führt **keine automatische Wiederherstellung über die
+  Produktion** aus. Der erfolgreiche Restore erfolgt isoliert; damit bleibt
+  ein Fehlversuch analysierbar und überschreibt keinen möglicherweise noch
+  verwertbaren Produktionsstand.
+- Nach einem unterbrochenen Apply darf derselbe Workflow mit derselben
+  Revision und demselben Plan-Hash erneut gestartet werden. Ein bereits
+  vollständig gematchter Stand endet als `ALREADY_APPLIED`. Ein lückenloser,
+  journalierter Präfix wird nach neuem Backup-/Recovery-Nachweis fortgesetzt.
+  Drift oder ein abweichendes Journal werden nie automatisch fortgesetzt.
+- Eine tatsächliche Produktionswiederherstellung erfolgt ausschließlich durch
+  einen Root-Operator anhand des bewiesenen Backups und des zugehörigen
+  Receipts. Danach muss der Readback erneut `PRESENT_SCHEMA_MATCH` oder den
+  erwarteten präzisen Präfix zeigen, bevor ein Apply wiederholt wird.
+
+Backfills, neue Migrationstags außerhalb `0021`–`0027` und freie
+Journal-Reparaturen bleiben außerhalb dieses Runners. Sie brauchen ein neues
+Artefakt, Tests und einen eigenen Change, auch wenn ein Ledger-Lauf bereits
+erfolgreich war.
 
 ## 7. Wiederanlauf und Fehlerbehandlung
 
@@ -183,9 +232,10 @@ Bis zu dieser ausdrücklichen Freigabe enthält das System keinen Produktions-
 - GitHub Actions führt die Ledger-Schleifen automatisch im nächsten
   Sechs-Stunden-Fenster fort.
 - Ein Neustart des Self-hosted Runners oder des Hosts verliert keinen
-  Migrationsfortschritt, weil keine Migration durch diese Schleife gestartet
-  wird. Nach Wiederverbindung verarbeitet GitHub einen neuen oder manuell
-  gestarteten Lauf.
+  Migrationsfortschritt: Backups und Root-Receipts bleiben auf dem Host,
+  während der Drizzle-Journalstand die bereits ausgeführten Tags festhält.
+  Nach Wiederverbindung kann derselbe freigegebene Apply-Lauf erneut gestartet
+  werden; er prüft den realen Zustand immer neu.
 - Artefakte sind revisionsgebunden. Einen fehlgeschlagenen Lauf nur gegen
   dieselbe SHA wiederholen; für neuen Code immer einen neuen Lauf auf `main`
   verwenden.
@@ -227,6 +277,8 @@ Nach jedem beabsichtigten Release:
 - [ ] Der Produktions-Readback hat einen lesbaren Receipt-Zustand.
 - [ ] Ein `RECONCILIATION_REQUIRED` oder Drift wurde als Ticket behandelt,
   nicht als automatische Migration.
+- [ ] Bei einem Apply existieren Ledger-Run-ID, `planSha256`, Backup-/Recovery-
+  Receipt und `PRESENT_SCHEMA_MATCH`-Postflight für dieselbe Revision.
 - [ ] Neue Ledger-Artefakte sind beim zugehörigen Linear-Vorgang verlinkt.
 - [ ] Es gibt keine unreviewten Draft- oder offenen Betriebs-PRs; kleine
   Korrekturen werden getestet, geprüft und direkt gemergt oder begründet
@@ -240,7 +292,7 @@ Nach jedem beabsichtigten Release:
 | Self-hosted Runner | enger Zugriff auf fest installierte Root-Einstiegspunkte, keine freie Shell als Root |
 | Traefik | TLS-Routing über Docker-Labels und das externe Netzwerk |
 | Linear | Change-Entscheidung, Hash-/Receipt-Verweis, Owner-Freigabe, Backup- und Rollback-Nachweis |
-| Menschlicher Owner | einzige Instanz für die Freigabe einer echten Produktions-Schema- oder Datenmutation |
+| Menschlicher Owner | Freigabe der konkreten Produktions-Schema- oder Datenmutation und Verantwortung für eine tatsächliche Produktions-Recovery |
 
 Weitere Details zum reinen Ledger-Format stehen in
 [`wasd-aurion-ledger-runner.md`](./wasd-aurion-ledger-runner.md).

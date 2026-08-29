@@ -1,0 +1,226 @@
+name: Aurion root schema apply artifact proof
+
+on:
+  workflow_call:
+    inputs:
+      use_uploaded_artifact:
+        description: Reuse the caller's verified immutable schema apply artifact.
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
+      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - "scripts/apply-aurion-production-schema.ts"
+      - "scripts/aurionProductionDatabaseClientConfig.ts"
+      - "scripts/build-aurion-production-apply-artifact.mjs"
+      - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "deploy/aurion-production-schema-apply"
+      - "deploy/aurion-production-schema-apply.environment.template"
+      - "deploy/aurion-production-schema-apply.sudoers"
+      - "deploy/install-aurion-production-schema-apply"
+      - "deploy/verify-aurion-production-schema-apply-artifact.mjs"
+      - "deploy/aurion-reconcile-runtime-image.conf"
+      - "deploy/aurion-reconcile-runtime-network.conf"
+      - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
+      - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  backup-recovery-and-apply-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      AURION_APPLY_TEST_NETWORK: echoes-of-aurion-internal
+      AURION_APPLY_TEST_DATABASE: aurion_schema_apply_test
+      AURION_APPLY_TEST_DB: echoes-of-aurion-mariadb-1
+      AURION_APPLY_TEST_ROOT_PASSWORD: aurionapplyroot
+      AURION_APPLY_TEST_PLAN: 7c7c5cf96f3c32fd5700f5af091bc3afc145d35a9c7db9c2210b7bcbd0b82fee
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify source and shell contracts
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+          bash -n deploy/aurion-production-schema-apply
+          bash -n deploy/install-aurion-production-schema-apply
+          sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
+          node --check scripts/build-aurion-production-apply-artifact.mjs
+          node --check deploy/verify-aurion-production-schema-apply-artifact.mjs
+          git diff --check
+
+      - name: Start isolated production-shaped MariaDB
+        run: |
+          set -euo pipefail
+          docker network create --internal "$AURION_APPLY_TEST_NETWORK"
+          docker run -d \
+            --name "$AURION_APPLY_TEST_DB" \
+            --network "$AURION_APPLY_TEST_NETWORK" \
+            --network-alias mariadb \
+            -e MARIADB_ROOT_PASSWORD="$AURION_APPLY_TEST_ROOT_PASSWORD" \
+            -e MARIADB_ROOT_HOST=% \
+            -e MARIADB_DATABASE="$AURION_APPLY_TEST_DATABASE" \
+            mariadb:11.4
+          ready=0
+          for _attempt in $(seq 1 60); do
+            if docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+
+      - name: Establish the canonical database through journaled 0020 only
+        run: |
+          set -euo pipefail
+          backup="$(mktemp)"
+          cp drizzle/meta/_journal.json "$backup"
+          restore_journal() {
+            cp "$backup" drizzle/meta/_journal.json
+            rm -f "$backup"
+          }
+          trap restore_journal EXIT
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const journalPath="drizzle/meta/_journal.json";
+          const journal=JSON.parse(fs.readFileSync(journalPath,"utf8"));
+          journal.entries=journal.entries.filter(entry=>Number(entry.idx)<=20);
+          if(journal.entries.length!==21||journal.entries.at(-1)?.tag!=="0020_wasd_aurion_dialogue_quest_intents") throw new Error("unable to create exact journal cutoff");
+          fs.writeFileSync(journalPath,`${JSON.stringify(journal,null,2)}\n`);
+          NODE
+          root_url="mysql://root:${AURION_APPLY_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_APPLY_TEST_DATABASE}"
+          docker run --rm \
+            --network "$AURION_APPLY_TEST_NETWORK" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace \
+            --env DATABASE_URL="$root_url" \
+            node:22.13.0-bookworm-slim \
+            ./node_modules/.bin/drizzle-kit migrate
+          restore_journal
+          trap - EXIT
+          git diff --exit-code -- drizzle/meta/_journal.json
+
+      - name: Download caller-verified schema apply artifact
+        if: ${{ inputs.use_uploaded_artifact }}
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Build standalone revision-bound schema apply artifact
+        if: ${{ !inputs.use_uploaded_artifact }}
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: node scripts/build-aurion-production-apply-artifact.mjs
+
+      - name: Verify immutable apply artifact and pull its pinned runtime
+        run: |
+          set -euo pipefail
+          artifact=dist-production-apply
+          (cd "$artifact" && sha256sum --strict -c checksums.sha256)
+          node "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$artifact" "$GITHUB_SHA"
+          image="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)) process.exit(2);
+            process.stdout.write(`${c.imageTag}@${c.imageDigest}`);
+          ' "$artifact/deploy/aurion-reconcile-runtime-image.conf")"
+          docker pull "$image"
+          docker image inspect "$image" >/dev/null
+
+      - name: Create root-protected production environment and install fixed runner
+        run: |
+          set -euo pipefail
+          umask 077
+          printf 'DATABASE_URL=mysql://root:%s@mariadb:3306/%s\n' \
+            "$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DATABASE" > test-production.env
+          sudo install -d -o root -g root -m 0755 /opt/echoes-of-aurion
+          sudo install -o root -g root -m 0600 test-production.env /opt/echoes-of-aurion/.env.production
+          rm -f test-production.env
+          sudo bash deploy/install-aurion-production-schema-apply dist-production-apply "$GITHUB_SHA" --enable-runner
+          test "$(sudo readlink -f /opt/echoes-of-aurion-schema-apply/current)" = "/opt/echoes-of-aurion-schema-apply/releases/$GITHUB_SHA"
+          test "$(sudo stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-apply)" = "root:root:755"
+          test "$(sudo stat -c '%U:%G:%a' /etc/aurion-production-schema-apply.env)" = "root:root:600"
+          sudo cmp -s dist-production-apply/deploy/aurion-production-schema-apply /usr/local/sbin/aurion-production-schema-apply
+
+      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0027
+        run: |
+          set -euo pipefail
+          sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > apply-receipt.json
+          test ! -s /tmp/aurion-schema-apply-untrusted
+          AURION_APPLY_TEST_PLAN="$AURION_APPLY_TEST_PLAN" node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const raw=fs.readFileSync("apply-receipt.json","utf8");
+          if(raw.includes("aurionapplyroot")||raw.includes("mysql://")) throw new Error("apply receipt leaked a credential");
+          const r=JSON.parse(raw);
+          const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards"];
+          if(r.recordType!=="aurion_production_schema_apply"||r.schemaVersion!==1||r.sourceRevision!==process.env.GITHUB_SHA||r.planSha256!==process.env.AURION_APPLY_TEST_PLAN||r.mode!=="backup_recovery_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_SUCCEEDED") throw new Error("apply receipt identity mismatch");
+          if(r.preflight?.state!=="RECONCILIATION_REQUIRED"||r.preflight?.summary?.absentCount!==tags.length) throw new Error("apply did not require an absent preflight");
+          if(r.backup?.created!==true||!/^[a-f0-9]{64}$/.test(r.backup?.sha256??"")||!Number.isSafeInteger(r.backup?.bytes)||r.backup.bytes<1) throw new Error("backup receipt invalid");
+          if(r.recovery?.executed!==true||r.recovery?.matched!==true||r.recovery?.sourceTableCount!==r.recovery?.recoveryTableCount||r.recovery.sourceTableCount<1||!/^[a-f0-9]{64}$/.test(r.recovery?.schemaSha256??"")) throw new Error("recovery proof invalid");
+          if(r.apply?.state!=="APPLY_SUCCEEDED"||r.apply?.appliedMigrationTags?.join(",")!==tags.join(",")) throw new Error("unexpected applied migration set");
+          if(r.postflight?.state!=="PRESENT_SCHEMA_MATCH"||r.postflight?.summary?.matchCount!==tags.length) throw new Error("postflight did not match");
+          NODE
+          backup_id="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("apply-receipt.json","utf8")).backup.id)')"
+          backup_file="/var/backups/echoes-of-aurion/schema-apply/${backup_id}"
+          sudo test -f "$backup_file"
+          test "$(sudo stat -c '%U:%G:%a' "$backup_file")" = "root:root:600"
+          sudo gzip -t "$backup_file"
+          rows="$(docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM __drizzle_migrations" "$AURION_APPLY_TEST_DATABASE")"
+          test "$rows" -eq 28
+
+      - name: Prove exact retry is a non-mutating no-op
+        run: |
+          set -euo pipefail
+          sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > retry-receipt.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("retry-receipt.json","utf8"));
+          if(r.overallState!=="ALREADY_APPLIED"||r.backup?.created!==false||r.recovery?.executed!==false||r.apply?.state!=="ALREADY_APPLIED") throw new Error("retry was not a safe no-op");
+          NODE
+
+      - name: Prove the fixed runner rejects caller-supplied code paths
+        run: |
+          set -euo pipefail
+          set +e
+          sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" /tmp/aurion-schema-apply-untrusted >/tmp/extra-arg.out 2>/tmp/extra-arg.err
+          status=$?
+          set -e
+          test "$status" -eq 64
+          test ! -e /tmp/aurion-schema-apply-untrusted
+
+      - name: Remove isolated proof database
+        if: always()
+        run: |
+          set -euo pipefail
+          docker rm -f "$AURION_APPLY_TEST_DB" >/dev/null 2>&1 || true
+          docker network rm "$AURION_APPLY_TEST_NETWORK" >/dev/null 2>&1 || true

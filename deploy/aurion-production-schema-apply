@@ -1,0 +1,398 @@
+#!/usr/bin/env bash
+set -euo pipefail
+unset NODE_OPTIONS
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: aurion-production-schema-apply <expected-sha40> <plan-sha256>" >&2
+  exit 64
+fi
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "aurion-production-schema-apply must run as root" >&2
+  exit 77
+fi
+
+expected_sha="$1"
+plan_sha256="$2"
+[[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
+[[ "$plan_sha256" =~ ^[a-f0-9]{64}$ ]] || { echo "invalid plan hash" >&2; exit 64; }
+
+base=/opt/echoes-of-aurion-schema-apply
+current="${base}/current"
+env_file=/opt/echoes-of-aurion/.env.production
+host_config=/etc/aurion-production-schema-apply.env
+state_dir=/var/lib/echoes-of-aurion/schema-apply
+backup_dir=/var/backups/echoes-of-aurion/schema-apply
+phase=INITIALIZE
+receipt_emitted=0
+recovery_container=""
+backup_created=false
+backup_basename=""
+backup_sha256=""
+backup_bytes=0
+
+cleanup_recovery() {
+  if [[ -n "$recovery_container" ]]; then
+    docker rm -f "$recovery_container" >/dev/null 2>&1 || true
+    recovery_container=""
+  fi
+}
+
+persist_receipt() {
+  local source="$1"
+  local stamp
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  install -d -o root -g root -m 0700 "$state_dir"
+  local receipt
+  receipt="$(mktemp "${state_dir}/${expected_sha}-${stamp}.json.XXXXXX")"
+  install -o root -g root -m 0600 "$source" "$receipt"
+  ln -sTfn "$receipt" "${state_dir}/latest.next"
+  mv -Tf "${state_dir}/latest.next" "${state_dir}/latest.json"
+  cat "$receipt"
+  receipt_emitted=1
+}
+
+emit_failure() {
+  local status="$1"
+  set +e
+  install -d -o root -g root -m 0700 "$state_dir"
+  local tmp
+  tmp="$(mktemp "${state_dir}/.failure.XXXXXX")" || return 0
+  APPLY_SOURCE_REVISION="$expected_sha" \
+  APPLY_PLAN_SHA256="$plan_sha256" \
+  APPLY_FAILURE_STAGE="$phase" \
+  APPLY_FAILURE_STATUS="$status" \
+  APPLY_BACKUP_CREATED="$backup_created" \
+  APPLY_BACKUP_BASENAME="$backup_basename" \
+  APPLY_BACKUP_SHA256="$backup_sha256" \
+  APPLY_BACKUP_BYTES="$backup_bytes" \
+  node --input-type=module -e '
+    import fs from "node:fs";
+    const backupCreated=process.env.APPLY_BACKUP_CREATED==="true";
+    const backup=backupCreated ? {
+      created:true,
+      id:process.env.APPLY_BACKUP_BASENAME,
+      sha256:process.env.APPLY_BACKUP_SHA256,
+      bytes:Number(process.env.APPLY_BACKUP_BYTES),
+    } : {created:false};
+    fs.writeFileSync(process.argv[1], `${JSON.stringify({
+      recordType:"aurion_production_schema_apply",
+      schemaVersion:1,
+      sourceRevision:process.env.APPLY_SOURCE_REVISION,
+      planSha256:process.env.APPLY_PLAN_SHA256,
+      mode:"backup_recovery_apply",
+      databaseCredentialReturned:false,
+      overallState:"APPLY_FAILED",
+      failureStage:process.env.APPLY_FAILURE_STAGE,
+      runnerStatus:Number(process.env.APPLY_FAILURE_STATUS),
+      backup,
+    },null,2)}\n`, {mode:0o600});
+  ' "$tmp" >/dev/null 2>&1
+  persist_receipt "$tmp" || true
+  rm -f "$tmp"
+}
+
+on_exit() {
+  local status=$?
+  set +e
+  cleanup_recovery
+  if [[ "$status" -ne 0 && "$receipt_emitted" -ne 1 ]]; then
+    emit_failure "$status"
+  fi
+  exit "$status"
+}
+trap on_exit EXIT
+
+[[ -L "$current" ]] || { phase=RELEASE_NOT_INSTALLED; exit 69; }
+release="$(readlink -f "$current")"
+[[ "$release" == "${base}/releases/${expected_sha}" ]] || { phase=RELEASE_REVISION_MISMATCH; exit 70; }
+[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -f "${release}/bin/reconcile.cjs" && -f "${release}/bin/apply.cjs" && -f "${release}/bin/mysql-client-config.cjs" && -f "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" ]] || { phase=RELEASE_INCOMPLETE; exit 70; }
+
+owner="$(stat -c '%U:%G' "$release")"
+[[ "$owner" == "root:root" ]] || { phase=RELEASE_OWNERSHIP_INVALID; exit 70; }
+if find "$release" -xdev \( -type l -o ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+  phase=RELEASE_PERMISSIONS_INVALID
+  exit 70
+fi
+
+installed_runner=/usr/local/sbin/aurion-production-schema-apply
+installed_verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+[[ -f "$installed_runner" && ! -L "$installed_runner" && "$(stat -c '%U:%G:%a' "$installed_runner")" == "root:root:755" ]] || { phase=RUNNER_IDENTITY_INVALID; exit 70; }
+[[ -f "$installed_verifier" && ! -L "$installed_verifier" && "$(stat -c '%U:%G:%a' "$installed_verifier")" == "root:root:755" ]] || { phase=VERIFIER_IDENTITY_INVALID; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-apply" "$installed_runner" || { phase=RUNNER_RELEASE_MISMATCH; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$installed_verifier" || { phase=VERIFIER_RELEASE_MISMATCH; exit 70; }
+phase=VERIFY_ARTIFACT
+node "$installed_verifier" "$release" "$expected_sha"
+(
+  cd "$release"
+  sha256sum --strict -c checksums.sha256 >/dev/null
+)
+
+[[ -f "$env_file" ]] || { phase=PRODUCTION_ENV_ABSENT; exit 69; }
+[[ "$(stat -c '%U:%G:%a' "$env_file")" == "root:root:600" ]] || { phase=PRODUCTION_ENV_PERMISSIONS_INVALID; exit 77; }
+[[ -f "$host_config" ]] || { phase=HOST_CONFIG_ABSENT; exit 69; }
+[[ "$(stat -c '%U:%G:%a' "$host_config")" == "root:root:600" ]] || { phase=HOST_CONFIG_PERMISSIONS_INVALID; exit 77; }
+
+image_contract="${release}/deploy/aurion-reconcile-runtime-image.conf"
+network_contract="${release}/deploy/aurion-reconcile-runtime-network.conf"
+image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22||typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)||typeof c.imageDigest!=="string"||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageTag)' "$image_contract")"
+image_digest="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||typeof c.imageDigest!=="string"||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageDigest)' "$image_contract")"
+docker_network="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_network_contract"||c.network!=="echoes-of-aurion-internal"){process.exit(2)}; process.stdout.write(c.network)' "$network_contract")"
+pinned_image="${image_tag}@${image_digest}"
+phase=VERIFY_RUNTIME_BOUNDARY
+docker network inspect "$docker_network" >/dev/null
+image_id="$(docker image inspect --format '{{.Id}}' "$pinned_image" 2>/dev/null)" || { phase=PINNED_RUNTIME_IMAGE_ABSENT; exit 69; }
+[[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || { phase=PINNED_RUNTIME_IMAGE_INVALID; exit 70; }
+
+database_container="$(awk '
+  $0 !~ /^#/ && index($0, "AURION_PRODUCTION_DATABASE_CONTAINER=") == 1 {
+    value = substr($0, length("AURION_PRODUCTION_DATABASE_CONTAINER=") + 1)
+  }
+  END { if (value == "") exit 1; print value }
+' "$host_config")" || { phase=DATABASE_CONTAINER_CONFIG_INVALID; exit 70; }
+[[ "$database_container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]] || { phase=DATABASE_CONTAINER_CONFIG_INVALID; exit 70; }
+[[ "$(docker inspect --format '{{.State.Running}}' "$database_container" 2>/dev/null)" == "true" ]] || { phase=DATABASE_CONTAINER_NOT_RUNNING; exit 69; }
+docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$database_container" | grep -Fxq "$docker_network" || { phase=DATABASE_CONTAINER_NETWORK_INVALID; exit 70; }
+database_image_id="$(docker inspect --format '{{.Image}}' "$database_container")"
+[[ "$database_image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || { phase=DATABASE_IMAGE_INVALID; exit 70; }
+docker image inspect "$database_image_id" >/dev/null
+database_name="$(node "${release}/bin/mysql-client-config.cjs" --env-file "$env_file" --database-name 2>/dev/null)" || { phase=DATABASE_URL_INVALID; exit 70; }
+[[ "$database_name" =~ ^[A-Za-z0-9_$]+$ ]] || { phase=DATABASE_NAME_INVALID; exit 70; }
+
+production_client() {
+  local mode="$1"
+  shift
+  node "${release}/bin/mysql-client-config.cjs" --env-file "$env_file" --my-cnf 2>/dev/null \
+    | docker exec -i "$database_container" /bin/sh -ceu '
+        config="$(mktemp)"
+        cleanup() { rm -f "$config"; }
+        trap cleanup EXIT
+        cat > "$config"
+        mode="$1"
+        shift
+        if [ "$mode" = dump ]; then
+          client="$(command -v mariadb-dump || command -v mysqldump || true)"
+        else
+          client="$(command -v mariadb || command -v mysql || true)"
+        fi
+        test -n "$client"
+        "$client" --defaults-extra-file="$config" "$@"
+      ' sh "$mode" "$@" 2>/dev/null
+}
+
+recovery_client() {
+  local mode="$1"
+  shift
+  docker exec "$recovery_container" /bin/sh -ceu '
+    mode="$1"
+    shift
+    if [ "$mode" = dump ]; then
+      client="$(command -v mariadb-dump || command -v mysqldump || true)"
+    else
+      client="$(command -v mariadb || command -v mysql || true)"
+    fi
+    test -n "$client"
+    "$client" --protocol=socket -uroot "$@"
+  ' sh "$mode" "$@"
+}
+
+run_reconcile() {
+  local output="$1"
+  docker run \
+    --rm \
+    --pull=never \
+    --read-only \
+    --user 0:0 \
+    --network "$docker_network" \
+    --mount "type=bind,source=${release},destination=/apply,readonly" \
+    --mount "type=bind,source=${env_file},destination=/etc/aurion-production.env,readonly" \
+    --tmpfs /tmp \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --env AURION_RECONCILIATION_ENV_FILE=/etc/aurion-production.env \
+    --env AURION_RECONCILIATION_ROOT=/apply \
+    --env AURION_RECONCILIATION_SOURCE_SHA="$expected_sha" \
+    "$pinned_image" \
+    node /apply/bin/reconcile.cjs >"$output" 2>/dev/null
+}
+
+validate_preflight() {
+  local receipt="$1"
+  APPLY_EXPECTED_SHA="$expected_sha" node --input-type=module -e '
+    import fs from "node:fs";
+    const tags=[
+      "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs",
+      "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards",
+    ];
+    const receipt=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    if(receipt.recordType!=="aurion_production_schema_reconciliation"||receipt.schemaVersion!==1||receipt.sourceRevision!==process.env.APPLY_EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) process.exit(2);
+    const migrations=receipt.migrations;
+    if(!Array.isArray(migrations)||migrations.length!==tags.length||migrations.some((m,i)=>m?.tag!==tags[i])) process.exit(3);
+    let prefix=0;
+    while(prefix<tags.length&&migrations[prefix].state==="PRESENT_SCHEMA_MATCH") prefix+=1;
+    if(migrations.slice(0,prefix).some(m=>m.state!=="PRESENT_SCHEMA_MATCH")||migrations.slice(prefix).some(m=>m.state!=="ABSENT_APPLY_REQUIRED")) process.exit(4);
+    const summary=receipt.summary;
+    if(!summary||summary.migrationCount!==tags.length||summary.matchCount!==prefix||summary.absentCount!==tags.length-prefix||summary.driftCount!==0) process.exit(5);
+    if(prefix===tags.length&&receipt.overallState!=="PRESENT_SCHEMA_MATCH") process.exit(6);
+    if(prefix<tags.length&&receipt.overallState!=="RECONCILIATION_REQUIRED") process.exit(7);
+    process.stdout.write(prefix===tags.length?"complete":prefix===0?"initial":"resume");
+  ' "$receipt"
+}
+
+phase=FRESH_READ_ONLY_PREFLIGHT
+install -d -o root -g root -m 0700 "$state_dir"
+preflight_raw="$(mktemp "${state_dir}/.preflight.XXXXXX")"
+set +e
+run_reconcile "$preflight_raw"
+preflight_status=$?
+set -e
+[[ "$preflight_status" -eq 0 && -s "$preflight_raw" ]] || { phase=FRESH_READ_ONLY_PREFLIGHT_FAILED; exit "$preflight_status"; }
+preflight_mode="$(validate_preflight "$preflight_raw")" || { phase=FRESH_READ_ONLY_PREFLIGHT_INVALID; exit 70; }
+
+if [[ "$preflight_mode" == "complete" ]]; then
+  phase=ALREADY_APPLIED
+  success_tmp="$(mktemp "${state_dir}/.success.XXXXXX")"
+  APPLY_SOURCE_REVISION="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" APPLY_PREFLIGHT="$preflight_raw" node --input-type=module -e '
+    import fs from "node:fs";
+    const preflight=JSON.parse(fs.readFileSync(process.env.APPLY_PREFLIGHT,"utf8"));
+    fs.writeFileSync(process.argv[1],`${JSON.stringify({
+      recordType:"aurion_production_schema_apply",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,
+      mode:"backup_recovery_apply",databaseCredentialReturned:false,overallState:"ALREADY_APPLIED",
+      preflight:{state:preflight.overallState,summary:preflight.summary},backup:{created:false},recovery:{executed:false},apply:{state:"ALREADY_APPLIED",appliedMigrationTags:[]},postflight:{state:preflight.overallState,summary:preflight.summary},
+    },null,2)}\n`,{mode:0o600});
+  ' "$success_tmp"
+  persist_receipt "$success_tmp"
+  rm -f "$success_tmp" "$preflight_raw"
+  exit 0
+fi
+
+phase=CHECK_RECOVERY_CAPACITY
+database_bytes="$(production_client query --batch --skip-column-names -e "SELECT COALESCE(SUM(data_length+index_length),0) FROM information_schema.tables WHERE table_schema='${database_name}'")" || { phase=DATABASE_SIZE_READ_FAILED; exit 69; }
+source_table_count="$(production_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=DATABASE_TABLE_COUNT_READ_FAILED; exit 69; }
+[[ "$database_bytes" =~ ^[0-9]+$ && "$source_table_count" =~ ^[0-9]+$ && "$source_table_count" -gt 0 ]] || { phase=DATABASE_SIZE_OR_TABLE_COUNT_INVALID; exit 70; }
+docker_root="$(docker info --format '{{.DockerRootDir}}')"
+[[ "$docker_root" == /* && -d "$docker_root" ]] || { phase=DOCKER_ROOT_INVALID; exit 70; }
+install -d -o root -g root -m 0700 "$backup_dir"
+required_kb=$(( ((database_bytes + 1023) / 1024) * 3 + 524288 ))
+backup_available_kb="$(df -Pk "$backup_dir" | awk 'NR==2 {print $4}')"
+docker_available_kb="$(df -Pk "$docker_root" | awk 'NR==2 {print $4}')"
+[[ "$backup_available_kb" =~ ^[0-9]+$ && "$docker_available_kb" =~ ^[0-9]+$ && "$backup_available_kb" -gt "$required_kb" && "$docker_available_kb" -gt "$required_kb" ]] || { phase=RECOVERY_CAPACITY_INSUFFICIENT; exit 69; }
+
+phase=CREATE_LOGICAL_BACKUP
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_basename="${expected_sha}-${plan_sha256:0:16}-${stamp}.sql.gz"
+backup_tmp="$(mktemp "${backup_dir}/.${backup_basename}.XXXXXX")"
+set +e
+production_client dump --single-transaction --quick --skip-lock-tables --routines --events --triggers --add-drop-database --databases "$database_name" | gzip -n -9 > "$backup_tmp"
+backup_status=$?
+set -e
+[[ "$backup_status" -eq 0 && -s "$backup_tmp" ]] || { phase=LOGICAL_BACKUP_FAILED; rm -f "$backup_tmp"; exit "$backup_status"; }
+gzip -t "$backup_tmp" || { phase=LOGICAL_BACKUP_INVALID; rm -f "$backup_tmp"; exit 70; }
+backup_sha256="$(sha256sum "$backup_tmp" | awk '{print $1}')"
+[[ "$backup_sha256" =~ ^[a-f0-9]{64}$ ]] || { phase=LOGICAL_BACKUP_HASH_INVALID; rm -f "$backup_tmp"; exit 70; }
+backup_bytes="$(stat -c '%s' "$backup_tmp")"
+[[ "$backup_bytes" =~ ^[1-9][0-9]*$ ]] || { phase=LOGICAL_BACKUP_SIZE_INVALID; rm -f "$backup_tmp"; exit 70; }
+backup_file="${backup_dir}/${backup_basename}"
+mv -T "$backup_tmp" "$backup_file"
+chown root:root "$backup_file"
+chmod 0600 "$backup_file"
+backup_created=true
+
+phase=ISOLATED_RECOVERY_PROOF
+source_schema_sha256="$(production_client dump --no-data --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=SOURCE_SCHEMA_FINGERPRINT_FAILED; exit 69; }
+[[ "$source_schema_sha256" =~ ^[a-f0-9]{64}$ ]] || { phase=SOURCE_SCHEMA_FINGERPRINT_INVALID; exit 70; }
+recovery_container="aurion-schema-recovery-${expected_sha:0:12}-${stamp}"
+[[ "$recovery_container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
+docker run --detach --rm --name "$recovery_container" --network none -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 "$database_image_id" >/dev/null
+recovery_ready=0
+for _attempt in $(seq 1 60); do
+  if docker exec "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; "$client" --protocol=socket -uroot -e "SELECT 1" >/dev/null' >/dev/null 2>&1; then
+    recovery_ready=1
+    break
+  fi
+  sleep 1
+done
+[[ "$recovery_ready" -eq 1 ]] || { phase=RECOVERY_DATABASE_NOT_READY; exit 69; }
+set +e
+gzip -cd "$backup_file" | docker exec -i "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; exec "$client" --protocol=socket -uroot' >/dev/null 2>&1
+recovery_restore_status=$?
+set -e
+[[ "$recovery_restore_status" -eq 0 ]] || { phase=RECOVERY_RESTORE_FAILED; exit "$recovery_restore_status"; }
+recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=RECOVERY_TABLE_COUNT_READ_FAILED; exit 69; }
+recovery_schema_sha256="$(recovery_client dump --no-data --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=RECOVERY_SCHEMA_FINGERPRINT_FAILED; exit 69; }
+[[ "$recovery_table_count" =~ ^[0-9]+$ && "$recovery_schema_sha256" =~ ^[a-f0-9]{64}$ && "$recovery_table_count" == "$source_table_count" && "$recovery_schema_sha256" == "$source_schema_sha256" ]] || { phase=RECOVERY_PROOF_MISMATCH; exit 70; }
+cleanup_recovery
+
+phase=APPLY_SCHEMA
+apply_raw="$(mktemp "${state_dir}/.apply.XXXXXX")"
+set +e
+docker run \
+  --rm \
+  --pull=never \
+  --read-only \
+  --user 0:0 \
+  --network "$docker_network" \
+  --mount "type=bind,source=${release},destination=/apply,readonly" \
+  --mount "type=bind,source=${env_file},destination=/etc/aurion-production.env,readonly" \
+  --tmpfs /tmp \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --env AURION_SCHEMA_APPLY_ENV_FILE=/etc/aurion-production.env \
+  --env AURION_SCHEMA_APPLY_ROOT=/apply \
+  --env AURION_SCHEMA_APPLY_SOURCE_SHA="$expected_sha" \
+  --env AURION_SCHEMA_APPLY_PLAN_SHA256="$plan_sha256" \
+  "$pinned_image" \
+  node /apply/bin/apply.cjs >"$apply_raw" 2>/dev/null
+apply_status=$?
+set -e
+[[ "$apply_status" -eq 0 && -s "$apply_raw" ]] || { phase=APPLY_CONTAINER_FAILED; exit "$apply_status"; }
+APPLY_EXPECTED_SHA="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
+  import fs from "node:fs";
+  const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards"];
+  if(r.recordType!=="aurion_production_schema_apply_execution"||r.schemaVersion!==1||r.sourceRevision!==process.env.APPLY_EXPECTED_SHA||r.planSha256!==process.env.APPLY_PLAN_SHA256||r.mode!=="apply"||r.databaseCredentialReturned!==false||r.state!=="APPLY_SUCCEEDED") process.exit(2);
+  if(!Array.isArray(r.appliedMigrationTags)||r.appliedMigrationTags.length<1||r.appliedMigrationTags.some(tag=>!tags.includes(tag))) process.exit(3);
+  if(r.postflight?.migrationCount!==tags.length||r.postflight?.matchCount!==tags.length||r.postflight?.absentCount!==0||r.postflight?.driftCount!==0) process.exit(4);
+' "$apply_raw" || { phase=APPLY_RECEIPT_INVALID; exit 70; }
+
+phase=POST_APPLY_READBACK
+postflight_raw="$(mktemp "${state_dir}/.postflight.XXXXXX")"
+set +e
+run_reconcile "$postflight_raw"
+postflight_status=$?
+set -e
+[[ "$postflight_status" -eq 0 && -s "$postflight_raw" ]] || { phase=POST_APPLY_READBACK_FAILED; exit "$postflight_status"; }
+postflight_mode="$(validate_preflight "$postflight_raw")" || { phase=POST_APPLY_READBACK_INVALID; exit 70; }
+[[ "$postflight_mode" == "complete" ]] || { phase=POST_APPLY_SCHEMA_NOT_MATCHED; exit 70; }
+
+phase=WRITE_SUCCESS_RECEIPT
+success_tmp="$(mktemp "${state_dir}/.success.XXXXXX")"
+APPLY_SOURCE_REVISION="$expected_sha" \
+APPLY_PLAN_SHA256="$plan_sha256" \
+APPLY_PREFLIGHT="$preflight_raw" \
+APPLY_POSTFLIGHT="$postflight_raw" \
+APPLY_EXECUTION="$apply_raw" \
+APPLY_BACKUP_BASENAME="$backup_basename" \
+APPLY_BACKUP_SHA256="$backup_sha256" \
+APPLY_BACKUP_BYTES="$backup_bytes" \
+APPLY_SOURCE_TABLE_COUNT="$source_table_count" \
+APPLY_RECOVERY_TABLE_COUNT="$recovery_table_count" \
+APPLY_SCHEMA_SHA256="$source_schema_sha256" \
+APPLY_DATABASE_IMAGE_ID="$database_image_id" \
+node --input-type=module -e '
+  import fs from "node:fs";
+  const preflight=JSON.parse(fs.readFileSync(process.env.APPLY_PREFLIGHT,"utf8"));
+  const postflight=JSON.parse(fs.readFileSync(process.env.APPLY_POSTFLIGHT,"utf8"));
+  const execution=JSON.parse(fs.readFileSync(process.env.APPLY_EXECUTION,"utf8"));
+  fs.writeFileSync(process.argv[1],`${JSON.stringify({
+    recordType:"aurion_production_schema_apply",schemaVersion:1,sourceRevision:process.env.APPLY_SOURCE_REVISION,planSha256:process.env.APPLY_PLAN_SHA256,
+    mode:"backup_recovery_apply",databaseCredentialReturned:false,overallState:"APPLY_SUCCEEDED",
+    preflight:{state:preflight.overallState,summary:preflight.summary},
+    backup:{created:true,id:process.env.APPLY_BACKUP_BASENAME,sha256:process.env.APPLY_BACKUP_SHA256,bytes:Number(process.env.APPLY_BACKUP_BYTES)},
+    recovery:{executed:true,databaseImageId:process.env.APPLY_DATABASE_IMAGE_ID,sourceTableCount:Number(process.env.APPLY_SOURCE_TABLE_COUNT),recoveryTableCount:Number(process.env.APPLY_RECOVERY_TABLE_COUNT),schemaSha256:process.env.APPLY_SCHEMA_SHA256,matched:true},
+    apply:{state:execution.state,appliedMigrationTags:execution.appliedMigrationTags},
+    postflight:{state:postflight.overallState,summary:postflight.summary},
+  },null,2)}\n`,{mode:0o600});
+' "$success_tmp"
+persist_receipt "$success_tmp"
+rm -f "$success_tmp" "$preflight_raw" "$postflight_raw" "$apply_raw"
+exit 0
