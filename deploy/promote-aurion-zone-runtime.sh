@@ -215,7 +215,7 @@ done
 public_ready=0
 phase=public-health
 for _attempt in $(seq 1 30); do
-  if health_json="$(curl --fail --silent --show-error "https://${aurion_domain}/healthz" 2>/dev/null)"; then
+  if health_json="$(curl --fail --silent --show-error "https://${aurion_domain}/healthz?revision=${expected_sha}" 2>/dev/null)"; then
     if printf '%s' "$health_json" | node --input-type=module -e '
       let raw = "";
       for await (const chunk of process.stdin) raw += chunk;
