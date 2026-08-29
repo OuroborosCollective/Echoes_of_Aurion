@@ -46,6 +46,93 @@ function refreshArtifactMetadata(directory: string) {
   );
 }
 
+function refreshRuntimeArtifactMetadata(directory: string) {
+  const files = listFiles(directory)
+    .filter(
+      relative =>
+        relative !== "manifest.json" && relative !== "checksums.sha256"
+    )
+    .sort();
+  const manifest = {
+    schemaVersion: 1,
+    recordType: "aurion_traefik_runtime_artifact",
+    revision: testRevision,
+    files: Object.fromEntries(
+      files.map(relative => [relative, digest(path.join(directory, relative))])
+    ),
+  };
+  fs.writeFileSync(
+    path.join(directory, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`
+  );
+  const checksumFiles = [...files, "manifest.json"].sort();
+  fs.writeFileSync(
+    path.join(directory, "checksums.sha256"),
+    `${checksumFiles.map(relative => `${digest(path.join(directory, relative))}  ${relative}`).join("\n")}\n`
+  );
+}
+
+function makeRuntimeReleaseArtifact(directory: string) {
+  const runtime = fs.mkdtempSync(
+    path.join(os.tmpdir(), "aurion-bootstrap-runtime-")
+  );
+  try {
+    fs.mkdirSync(path.join(runtime, "deploy"), { recursive: true });
+    fs.mkdirSync(path.join(runtime, "dist"), { recursive: true });
+    fs.mkdirSync(path.join(runtime, "patches"), { recursive: true });
+    fs.writeFileSync(path.join(runtime, "Dockerfile"), "FROM scratch\n");
+    fs.writeFileSync(
+      path.join(runtime, "docker-compose.traefik.yml"),
+      "services: {}\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "deploy/promote-aurion-zone-runtime.sh"),
+      "#!/usr/bin/env bash\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "deploy/aurion-traefik-runtime.environment.template"),
+      "AURION_ENV_FILE=/opt/echoes-of-aurion/.env.production\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "dist/.aurion-runtime-build.json"),
+      `${JSON.stringify({ revision: testRevision, artifact: "aurion-runtime" })}\n`
+    );
+    fs.writeFileSync(
+      path.join(runtime, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "bootstrap-fixture",
+          pnpm: {
+            patchedDependencies: {
+              "wouter@3.7.1": "patches/wouter@3.7.1.patch",
+            },
+          },
+        },
+        null,
+        2
+      )}\n`
+    );
+    fs.writeFileSync(
+      path.join(runtime, "pnpm-lock.yaml"),
+      "lockfileVersion: '9.0'\n\npatchedDependencies:\n  wouter@3.7.1:\n    hash: 4e16e6ff3fde7d6c1024d3e0c8605dc9eb6afb690d0d49958c2f449091813072\n    path: patches/wouter@3.7.1.patch\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "patches/wouter@3.7.1.patch"),
+      "diff --git a/index.js b/index.js\n"
+    );
+    refreshRuntimeArtifactMetadata(runtime);
+
+    const archive = path.join(directory, "aurion-traefik-runtime-release.tgz");
+    execFileSync("tar", ["-C", runtime, "-czf", archive, "."]);
+    fs.writeFileSync(
+      `${archive}.sha256`,
+      `${digest(archive)}  aurion-traefik-runtime-release.tgz\n`
+    );
+  } finally {
+    fs.rmSync(runtime, { recursive: true, force: true });
+  }
+}
+
 function makeArtifact() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-reconcile-artifact-"));
   const tags = [
@@ -130,6 +217,12 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     const sourceArtifact = makeArtifact();
     try {
       fs.cpSync(sourceArtifact, path.join(sourceRoot, "dist-production-reconcile"), { recursive: true });
+      makeRuntimeReleaseArtifact(sourceRoot);
+      const canonicalArchive = path.join(
+        sourceRoot,
+        "aurion-traefik-runtime-release.tgz"
+      );
+      const canonicalArchiveHash = digest(canonicalArchive);
       execFileSync(process.execPath, [bootstrapBuilder, sourceRoot, outputRoot], {
         env: { ...process.env, AURION_RELEASE_SHA: testRevision },
         stdio: "pipe",
@@ -145,6 +238,59 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
       ));
       expect(canonical.imageDigest).toBe("sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
       expect(bootstrap.imageDigest).toBe("sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f");
+      expect(digest(canonicalArchive)).toBe(canonicalArchiveHash);
+      const bootstrapArchive = path.join(
+        outputRoot,
+        "aurion-traefik-runtime-release.tgz"
+      );
+      expect(digest(bootstrapArchive)).not.toBe(canonicalArchiveHash);
+      expect(
+        fs.readFileSync(
+          path.join(
+            outputRoot,
+            "aurion-traefik-runtime-release.tgz.sha256"
+          ),
+          "utf8"
+        )
+      ).toBe(
+        `${digest(bootstrapArchive)}  aurion-traefik-runtime-release.tgz\n`
+      );
+      const bootstrapRuntime = fs.mkdtempSync(
+        path.join(os.tmpdir(), "aurion-bootstrap-runtime-extract-")
+      );
+      try {
+        execFileSync("tar", [
+          "-xzf",
+          bootstrapArchive,
+          "-C",
+          bootstrapRuntime,
+        ]);
+        expect(
+          fs.existsSync(
+            path.join(bootstrapRuntime, "patches/wouter-3.7.1.patch")
+          )
+        ).toBe(true);
+        expect(
+          fs.existsSync(
+            path.join(bootstrapRuntime, "patches/wouter@3.7.1.patch")
+          )
+        ).toBe(false);
+        expect(
+          JSON.parse(
+            fs.readFileSync(path.join(bootstrapRuntime, "package.json"), "utf8")
+          ).pnpm.patchedDependencies["wouter@3.7.1"]
+        ).toBe("patches/wouter-3.7.1.patch");
+        expect(
+          fs.readFileSync(path.join(bootstrapRuntime, "pnpm-lock.yaml"), "utf8")
+        ).toContain("path: patches/wouter-3.7.1.patch");
+        expect(
+          execFileSync("tar", ["-tzf", bootstrapArchive], {
+            encoding: "utf8",
+          })
+        ).not.toContain("@");
+      } finally {
+        fs.rmSync(bootstrapRuntime, { recursive: true, force: true });
+      }
       verifyArtifact(path.join(outputRoot, "dist-production-reconcile"));
     } finally {
       fs.rmSync(sourceArtifact, { recursive: true, force: true });
