@@ -9,7 +9,7 @@ services:
       STRICT_PORT: "true"
       TRUST_PROXY_HOPS: "1"
     env_file:
-      - .env.production
+      - ${AURION_ENV_FILE:?AURION_ENV_FILE must point to the root-managed production environment}
     expose:
       - "3000"
     labels:
@@ -22,6 +22,7 @@ services:
       - traefik.http.services.aurion.loadbalancer.server.port=3000
       - traefik.http.services.aurion.loadbalancer.healthcheck.path=/healthz
       - traefik.http.services.aurion.loadbalancer.healthcheck.interval=10s
+      - org.opencontainers.image.revision=${AURION_RELEASE_SHA:?AURION_RELEASE_SHA must match the verified image revision}
     networks:
       - traefik-proxy
 

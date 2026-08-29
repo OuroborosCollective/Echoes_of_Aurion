@@ -1,0 +1,7 @@
+# This file is installed root-owned at /etc/aurion-traefik-runtime.env.
+# It contains only deployment routing metadata; application secrets remain in
+# the existing root-managed production environment file.
+AURION_ENV_FILE=/opt/echoes-of-aurion/.env.production
+AURION_DOMAIN=arelogic.space
+TRAEFIK_NETWORK=areloria_arelorian-network
+TRAEFIK_CERTRESOLVER=letsencrypt

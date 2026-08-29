@@ -5,13 +5,16 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
 
-describe("Aurion zone promotion schema-runner bootstrap", () => {
+describe("Aurion Traefik promotion schema-runner bootstrap", () => {
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
   const promoter = read("deploy/promote-aurion-zone-runtime.sh");
 
   it("builds and publishes the read-only reconciler with the exact zone revision", () => {
     expect(workflow).toContain("AURION_RELEASE_SHA: ${{ github.sha }}");
     expect(workflow).toContain("node scripts/build-aurion-production-reconcile-artifact.mjs");
+    expect(workflow).toContain("pnpm build:runtime-artifact");
+    expect(workflow).toContain("node scripts/build-aurion-traefik-runtime-artifact.mjs");
+    expect(workflow).toContain("aurion-traefik-runtime-release.tgz");
     expect(workflow).toContain("dist-production-reconcile");
     expect(workflow).toContain('manifest.mode!=="read_only"');
     expect(workflow).toContain('manifest.revision!==process.env.GITHUB_SHA');
@@ -44,7 +47,7 @@ describe("Aurion zone promotion schema-runner bootstrap", () => {
     expect(promoter).toContain('docker pull "$pinned_image"');
     expect(promoter).toContain('grep -Fq "@${image_digest}"');
     expect(promoter.indexOf('docker pull "$pinned_image"')).toBeLessThan(
-      promoter.indexOf('ln -sTfn "$release" "${base}/current.next"'),
+      promoter.indexOf('ln -sTfn "$release" "${runtime_base}/current.next"'),
     );
   });
 

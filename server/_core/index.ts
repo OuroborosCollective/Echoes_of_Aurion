@@ -33,6 +33,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  const releaseRevision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase();
+  if (releaseRevision && !/^[a-f0-9]{40}$/.test(releaseRevision)) {
+    throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");
+  }
+
   const app = express();
   // The production container is reachable only through Traefik. Trust precisely
   // one proxy hop so HTTPS and host information survive TLS termination.
@@ -43,7 +48,11 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok", service: "echoes-of-aurion" }));
+  app.get("/healthz", (_req, res) => res.status(200).json({
+    status: "ok",
+    service: "echoes-of-aurion",
+    ...(releaseRevision ? { revision: releaseRevision } : {}),
+  }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);

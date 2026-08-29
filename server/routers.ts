@@ -44,11 +44,17 @@ export const appRouter = router({
     loginLocal: publicProcedure.input(z.object({ handle: z.string().trim().min(3).max(32), password: z.string().min(1).max(128) })).mutation(async ({ ctx, input }) => {
       const handle = normalizeLocalHandle(input.handle);
       const record = await db.getLocalCredential(handle);
+      if (!record) {
+        // Do not dereference an absent credential record. Apart from preventing
+        // a 500 response for an unknown handle, this keeps the authentication
+        // failure on tRPC's JSON error path instead of exposing a runtime error.
+        throw new Error("Rufname oder Passwort stimmen nicht.");
+      }
       if (record.credential.lockedUntil && record.credential.lockedUntil.getTime() > Date.now()) {
         throw new Error("Zu viele Fehlversuche. Versuche es in einigen Minuten erneut.");
       }
-      if (!record || !(await verifyLocalPassword(input.password, record.credential.passwordHash))) {
-        if (record) await db.recordLocalAuthFailure(handle, record.credential.failedAttempts);
+      if (!(await verifyLocalPassword(input.password, record.credential.passwordHash))) {
+        await db.recordLocalAuthFailure(handle, record.credential.failedAttempts);
         throw new Error("Rufname oder Passwort stimmen nicht.");
       }
       await db.clearLocalAuthFailures(handle);

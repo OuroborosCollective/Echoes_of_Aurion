@@ -4,6 +4,7 @@
 
 # Build outputs
 dist/
+dist-traefik-runtime/
 build/
 *.dist
 
@@ -109,6 +110,7 @@ temp/
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
 .manus-logs/
+.aurion-evidence/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
