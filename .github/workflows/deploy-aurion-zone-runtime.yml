@@ -17,8 +17,6 @@ on:
       - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
       - "deploy/aurion-zone-runtime.service"
       - "deploy/aurion-zone-runtime.environment.template"
-      - "deploy/arelogic-zone-runtime.nginx.conf"
-      - "deploy/arelogic-zone-runtime-rate-limit.nginx.conf"
       - "server/zoneService.ts"
       - "server/zoneServiceRuntime.ts"
       - "package.json"
@@ -39,10 +37,22 @@ on:
       - "drizzle/0025_aurion_loot_mastery_ethos.sql"
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
+      - "Dockerfile"
+      - "docker-compose.traefik.yml"
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "game-data/**"
+      - "public/**"
+      - "deploy/**"
+      - "scripts/**"
+      - "patches/**"
+      - "vite.config.ts"
+      - "tsconfig.json"
   workflow_dispatch:
 
 concurrency:
-  group: deploy-aurion-zone-runtime
+  group: deploy-aurion-runtime
   cancel-in-progress: false
 
 permissions:
@@ -51,8 +61,9 @@ permissions:
 
 jobs:
   verify-and-build:
-    name: Verify and build immutable Aurion zone runtime
+    name: Verify and build immutable Aurion runtimes
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Guard repository scope
@@ -60,6 +71,7 @@ jobs:
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
           test "${GITHUB_REF}" = "refs/heads/main"
+          [[ "${GITHUB_SHA}" =~ ^[a-f0-9]{40}$ ]]
 
       - name: Check out exact revision
         uses: actions/checkout@v4
@@ -85,31 +97,35 @@ jobs:
           pnpm check
           pnpm test
           bash -n deploy/promote-aurion-zone-runtime.sh
+          bash -n deploy/promote-aurion-container-runtime.sh
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
 
-      - name: Build zone runtime and bounded schema runner
+      - name: Build full runtime, zone fallback and bounded schema runner
         env:
           AURION_RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          pnpm build:runtime-artifact
           pnpm build:zone-runtime
           node scripts/build-aurion-production-reconcile-artifact.mjs
           node --input-type=module <<'NODE'
           import fs from "node:fs";
-          const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
-          if(manifest.schemaVersion!==1) throw new Error("unexpected schema artifact version");
-          if(manifest.recordType!=="aurion_production_schema_reconcile_artifact") throw new Error("unexpected schema artifact type");
-          if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("schema artifact revision mismatch");
-          if(manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("schema artifact boundary mismatch");
+          const runtime=JSON.parse(fs.readFileSync("dist/.aurion-runtime-build.json","utf8"));
+          if(runtime.revision!==process.env.GITHUB_SHA) throw new Error("full runtime revision mismatch");
+          const schema=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
+          if(schema.schemaVersion!==1) throw new Error("unexpected schema artifact version");
+          if(schema.recordType!=="aurion_production_schema_reconcile_artifact") throw new Error("unexpected schema artifact type");
+          if(schema.revision!==process.env.GITHUB_SHA) throw new Error("schema artifact revision mismatch");
+          if(schema.mode!=="read_only"||schema.moduleFormat!=="commonjs") throw new Error("schema artifact boundary mismatch");
           for(const file of [
             "deploy/aurion-production-schema-reconcile",
             "deploy/aurion-reconcile-runtime-image.conf",
             "deploy/aurion-reconcile-runtime-network.conf",
             "deploy/verify-aurion-production-schema-reconcile-artifact.mjs",
-          ]) if(!manifest.files?.[file]) throw new Error(`schema artifact is missing ${file}`);
+          ]) if(!schema.files?.[file]) throw new Error(`schema artifact is missing ${file}`);
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
@@ -118,6 +134,36 @@ jobs:
           tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
           sha256sum aurion-zone-runtime-release.tgz > aurion-zone-runtime-release.tgz.sha256
 
+      - name: Build revision-labelled full container image
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="echoes-of-aurion:sha-${GITHUB_SHA}"
+          docker build \
+            --platform linux/amd64 \
+            --pull \
+            --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$image" \
+            .
+          image_id="$(docker image inspect --format='{{.Id}}' "$image")"
+          revision="$(docker image inspect --format='{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")"
+          [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
+          test "$revision" = "$GITHUB_SHA"
+          IMAGE_ID="$image_id" IMAGE_REF="$image" node -e '
+            const fs=require("node:fs");
+            fs.writeFileSync("aurion-full-runtime-image.json",JSON.stringify({
+              schemaVersion:1,
+              recordType:"aurion_full_runtime_image",
+              revision:process.env.GITHUB_SHA,
+              imageReference:process.env.IMAGE_REF,
+              imageId:process.env.IMAGE_ID,
+            },null,2)+"\n");
+          '
+          docker save "$image" | gzip -1 > aurion-full-runtime-image.tar.gz
+          sha256sum aurion-full-runtime-image.tar.gz > aurion-full-runtime-image.tar.gz.sha256
+
       - name: Publish immutable runtime artifact
         uses: actions/upload-artifact@v4
         with:
@@ -125,11 +171,14 @@ jobs:
           path: |
             aurion-zone-runtime-release.tgz
             aurion-zone-runtime-release.tgz.sha256
+            aurion-full-runtime-image.tar.gz
+            aurion-full-runtime-image.tar.gz.sha256
+            aurion-full-runtime-image.json
+            docker-compose.traefik.yml
             deploy/aurion-zone-runtime.service
             deploy/aurion-zone-runtime.environment.template
-            deploy/arelogic-zone-runtime.nginx.conf
-            deploy/arelogic-zone-runtime-rate-limit.nginx.conf
             deploy/promote-aurion-zone-runtime.sh
+            deploy/promote-aurion-container-runtime.sh
             dist-production-reconcile
           if-no-files-found: error
           retention-days: 30
@@ -142,10 +191,11 @@ jobs:
       use_uploaded_artifact: true
 
   promote-zone-runtime:
-    name: Promote verified Aurion zone runtime
+    name: Promote verified full Aurion runtime
     needs: [verify-and-build, root-reconciliation-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
+    timeout-minutes: 20
     env:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
       EXPECTED_SHA: ${{ github.sha }}
@@ -169,7 +219,7 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
-      - name: Promote node runtime and bounded schema runner
+      - name: Promote full container, fallback zone and bounded schema runner
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact"
@@ -177,12 +227,21 @@ jobs:
           # The first invocation may replace an older promoter with this revision.
           # Re-run the exact, idempotent promotion so its newly installed identity
           # checks execute before the workflow accepts the release.
+          set +e
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+          bootstrap_status=$?
+          set -e
+          cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+          if [[ "$bootstrap_status" -ne 0 ]]; then
+            printf 'LEGACY_PROMOTER_REPLACED status=%s\n' "$bootstrap_status"
+          fi
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
           test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
           grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          test -f "/opt/echoes-of-aurion/releases/${RELEASE_ID}/deployment-receipt.json"
+          grep -Fq "${EXPECTED_SHA}" "/opt/echoes-of-aurion/releases/${RELEASE_ID}/deployment-receipt.json"
 
       - name: Read back installed release identities
         run: |
@@ -192,6 +251,7 @@ jobs:
           runner=/usr/local/sbin/aurion-production-schema-reconcile
           verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
           cat /opt/aurion-zone-runtime/current/.aurion-zone-runtime-release.json
+          cat "/opt/echoes-of-aurion/releases/${RELEASE_ID}/deployment-receipt.json"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
@@ -213,19 +273,22 @@ jobs:
             console.log(JSON.stringify({revision:manifest.revision,mode:manifest.mode,recordType:manifest.recordType}));
           '
 
-      - name: Verify public runtime health
+      - name: Verify public full-runtime health
         run: |
           set -euo pipefail
           public_ready=0
           for _attempt in $(seq 1 20); do
-            if health_json="$(curl --fail --silent --show-error https://arelogic.space/_runtime/healthz 2>/dev/null)"; then
-              if grep -Fq "${EXPECTED_SHA}" <<<"$health_json"; then
+            if health_json="$(curl --fail --silent --show-error --max-time 10 https://arelogic.space/healthz 2>/dev/null)"; then
+              if EXPECTED_SHA="$EXPECTED_SHA" HEALTH_JSON="$health_json" node -e '
+                const body=JSON.parse(process.env.HEALTH_JSON);
+                if(body.ok!==true||body.status!=="ok"||body.service!=="echoes-of-aurion"||body.revision!==process.env.EXPECTED_SHA) process.exit(1);
+              '; then
                 printf '%s\n' "$health_json"
                 public_ready=1
                 break
               fi
             fi
-            sleep 1
+            sleep 2
           done
           [[ "$public_ready" -eq 1 ]]
 
