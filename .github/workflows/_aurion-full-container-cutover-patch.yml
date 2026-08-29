@@ -61,6 +61,14 @@ jobs:
           rm scripts/_patch_aurion_full_container_workflow.py
           rm .github/workflows/_aurion-full-container-cutover-patch.yml
 
+      - name: Export verified workflow bytes
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-full-container-workflow-${{ github.sha }}
+          path: .github/workflows/deploy-aurion-zone-runtime.yml
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Commit verified target change
         run: |
           set -euo pipefail
