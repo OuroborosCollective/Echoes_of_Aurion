@@ -1,15 +1,8 @@
 name: Aurion WASD migration ledger
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/aurion-wasd-migration-ledger.yml"
-      - "scripts/build-aurion-wasd-migration-ledger.mjs"
-      - "scripts/build-aurion-wasd-migration-ledger.test.mjs"
-      - "drizzle/002[1-7]_*.sql"
-      - "drizzle/meta/_journal.json"
-      - "docs/migrations/wasd-aurion-ledger-runner.md"
+  # Direct production changes enter through deploy-aurion-zone-runtime.yml, which
+  # calls this workflow before its test and runtime-promotion gates.
   schedule:
     - cron: "29 */6 * * *"
   workflow_dispatch:
@@ -19,12 +12,34 @@ on:
         required: false
         default: main
         type: string
+  workflow_call:
+    inputs:
+      source_ref:
+        description: WASD ref to inventory; its resolved immutable SHA is recorded in the ledger.
+        required: false
+        default: main
+        type: string
+      target_ref:
+        description: Exact immutable Aurion revision bound into the ledger.
+        required: false
+        default: ""
+        type: string
+    outputs:
+      plan_sha256:
+        description: Fail-closed cross-repository migration-plan hash.
+        value: ${{ jobs.aurion-migration-ledger.outputs.plan_sha256 }}
+      source_sha:
+        description: Resolved immutable WASD source revision.
+        value: ${{ jobs.aurion-migration-ledger.outputs.source_sha }}
+      target_sha:
+        description: Resolved immutable Aurion target revision.
+        value: ${{ jobs.aurion-migration-ledger.outputs.target_sha }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: aurion-wasd-migration-ledger-${{ github.ref }}-${{ inputs.source_ref || 'main' }}
+  group: aurion-wasd-migration-ledger-${{ inputs.target_ref || github.sha }}-${{ inputs.source_ref || 'main' }}
   cancel-in-progress: false
 
 jobs:
@@ -37,12 +52,17 @@ jobs:
   aurion-migration-ledger:
     name: Build read-only cross-repository migration plan
     needs: wasd-source-evidence
+    outputs:
+      plan_sha256: ${{ steps.ledger.outputs.plan_sha256 }}
+      source_sha: ${{ needs.wasd-source-evidence.outputs.source_sha }}
+      target_sha: ${{ steps.ledger.outputs.target_sha }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout the exact Aurion revision
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.target_ref || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -73,10 +93,12 @@ jobs:
       - name: Build and verify a revision-bound migration ledger
         id: ledger
         env:
+          AURION_TARGET_SHA: ${{ inputs.target_ref || github.sha }}
           WASD_SOURCE_SHA: ${{ needs.wasd-source-evidence.outputs.source_sha }}
           EXPECTED_WASD_MANIFEST_SHA256: ${{ needs.wasd-source-evidence.outputs.source_manifest_sha256 }}
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_TARGET_SHA"
           test "$(git -C .wasd-source rev-parse HEAD)" = "$WASD_SOURCE_SHA"
           test "$(git -C .wasd-ledger-toolchain rev-parse HEAD)" = "e39ee9b6c085a1a02e5feb898532ad0e3085c30a"
           # The toolchain tests intentionally inventory their own pinned checkout;
@@ -103,10 +125,11 @@ jobs:
           import fs from "node:fs";
           const ledger = JSON.parse(fs.readFileSync(".aurion-evidence/wasd-migration-ledger/migration-ledger.json", "utf8"));
           if (ledger.schemaVersion !== "aurion.wasd-migration-ledger.v1" || ledger.recordType !== "aurion_wasd_migration_ledger") throw new Error("unexpected migration ledger schema");
-          if (ledger.source?.revision !== process.env.WASD_SOURCE_SHA || !/^[a-f0-9]{40}$/.test(ledger.target?.revision ?? "")) throw new Error("migration ledger revision mismatch");
+          if (ledger.source?.revision !== process.env.WASD_SOURCE_SHA || ledger.target?.revision !== process.env.AURION_TARGET_SHA) throw new Error("migration ledger revision mismatch");
           if (!/^[a-f0-9]{64}$/.test(ledger.planSha256 ?? "") || ledger.plan?.productionWritesScheduled !== false) throw new Error("migration ledger apply gate missing");
           if (!Array.isArray(ledger.plan?.prohibitedActions) || !ledger.plan.prohibitedActions.includes("schema_apply") || !ledger.plan.prohibitedActions.includes("data_backfill")) throw new Error("migration ledger is not fail-closed");
           console.log(`plan_sha256=${ledger.planSha256}`);
+          console.log(`target_sha=${ledger.target.revision}`);
           console.log(`repository_state=${ledger.repositoryState}`);
           NODE
 
