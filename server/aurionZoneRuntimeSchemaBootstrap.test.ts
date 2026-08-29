@@ -62,14 +62,15 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(promoter).not.toContain("0021_aurion_global_world_state.sql");
   });
 
-  it("fails promotion unless the installed reconciliation tree is byte-identical to the artifact", () => {
+  it("fails promotion unless the installed read-only runner is byte-identical to the artifact", () => {
     for (const token of [
       'cmp -s "${schema_artifact}/manifest.json" "${schema_current}/manifest.json"',
       'cmp -s "${schema_artifact}/checksums.sha256" "${schema_current}/checksums.sha256"',
       'cmp -s "${schema_artifact}/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile',
       'cmp -s "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs',
     ]) expect(promoter).toContain(token);
-    expect(workflow).toContain('cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"');
-    expect(workflow).toContain('cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"');
+    expect(workflow).toContain('node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"');
+    expect(workflow).toContain('cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
+    expect(workflow).toContain('cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
   });
 });
