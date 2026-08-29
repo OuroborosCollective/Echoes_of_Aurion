@@ -169,26 +169,6 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
-      - name: Provision digest-pinned reconciliation Docker image
-        run: |
-          set -euo pipefail
-          artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-reconcile"
-          image_contract="${artifact}/deploy/aurion-reconcile-runtime-image.conf"
-          test -f "$image_contract"
-          (cd "$artifact" && sha256sum --strict -c checksums.sha256)
-          node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
-          pinned_image="$(node --input-type=module -e '
-            import fs from "node:fs";
-            const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-            if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22) process.exit(2);
-            if(typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)) process.exit(2);
-            if(typeof c.imageDigest!=="string"||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)) process.exit(2);
-            process.stdout.write(`${c.imageTag}@${c.imageDigest}`);
-          ' "$image_contract")"
-          image_digest="${pinned_image##*@}"
-          sudo docker pull "$pinned_image"
-          sudo docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" | grep -Fq "@${image_digest}"
-
       - name: Promote node runtime and bounded schema runner
         run: |
           set -euo pipefail

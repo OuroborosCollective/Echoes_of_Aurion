@@ -43,6 +43,18 @@ sha256sum -c "$checksum"
   sha256sum --strict -c checksums.sha256 >/dev/null
 )
 
+# The self-hosted deploy runner may invoke this root-owned promoter, but it must
+# never receive general Docker-root authority. Provision the immutable
+# reconciliation image only after the artifact and its image contract have been
+# verified, and before either runtime pointer can change.
+image_contract="${schema_artifact}/deploy/aurion-reconcile-runtime-image.conf"
+[[ -f "$image_contract" ]]
+image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22||typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)){process.exit(2)}; process.stdout.write(c.imageTag)' "$image_contract")"
+image_digest="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!c.imageDigest||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageDigest)' "$image_contract")"
+pinned_image="${image_tag}@${image_digest}"
+docker pull "$pinned_image"
+docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" | grep -Fq "@${image_digest}"
+
 install -d -o aurion-deploy -g aurion-deploy -m 0755 "${base}/releases"
 release="${base}/releases/${release_id}"
 if [[ -e "$release" ]]; then
