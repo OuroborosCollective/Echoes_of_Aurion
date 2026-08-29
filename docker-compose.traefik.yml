@@ -2,21 +2,31 @@ services:
   aurion:
     image: echoes-of-aurion:${AURION_IMAGE_TAG:?AURION_IMAGE_TAG must identify a verified runtime image}
     restart: unless-stopped
+    init: true
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "3000"
       STRICT_PORT: "true"
       TRUST_PROXY_HOPS: "1"
+      AURION_RUNTIME_REVISION: ${AURION_RUNTIME_REVISION:?AURION_RUNTIME_REVISION must match the verified image revision}
+      COMPANION_MEMORY_DIR: /app/data/companion-memory
     env_file:
-      - .env.production
+      - ${AURION_ENV_FILE:-/opt/echoes-of-aurion/.env.production}
     expose:
       - "3000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ${AURION_COMPANION_MEMORY_DIR:-/var/lib/echoes-of-aurion/companion-memory}:/app/data/companion-memory
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}
       - traefik.http.routers.aurion.rule=Host(`${AURION_DOMAIN:-arelogic.space}`)
       - traefik.http.routers.aurion.entrypoints=websecure
+      - traefik.http.routers.aurion.priority=100
       - traefik.http.routers.aurion.tls=true
       - traefik.http.routers.aurion.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
       - traefik.http.services.aurion.loadbalancer.server.port=3000
@@ -24,8 +34,12 @@ services:
       - traefik.http.services.aurion.loadbalancer.healthcheck.interval=10s
     networks:
       - traefik-proxy
+      - aurion-private
 
 networks:
   traefik-proxy:
     external: true
     name: ${TRAEFIK_NETWORK:-areloria_arelorian-network}
+  aurion-private:
+    external: true
+    name: ${AURION_PRIVATE_NETWORK:-echoes-of-aurion-internal}
