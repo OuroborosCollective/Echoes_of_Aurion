@@ -13,8 +13,8 @@ describe("Aurion zone promotion schema-runner bootstrap", () => {
     expect(workflow).toContain("AURION_RELEASE_SHA: ${{ github.sha }}");
     expect(workflow).toContain("node scripts/build-aurion-production-reconcile-artifact.mjs");
     expect(workflow).toContain("dist-production-reconcile");
-    expect(workflow).toContain('manifest.mode!=="read_only"');
-    expect(workflow).toContain('manifest.revision!==process.env.GITHUB_SHA');
+    expect(workflow).toContain('schema.mode!=="read_only"');
+    expect(workflow).toContain('schema.revision!==process.env.GITHUB_SHA');
     expect(workflow).toContain('node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"');
   });
 
