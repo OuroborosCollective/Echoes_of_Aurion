@@ -1,0 +1,117 @@
+name: Aurion WASD migration ledger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/aurion-wasd-migration-ledger.yml"
+      - "scripts/build-aurion-wasd-migration-ledger.mjs"
+      - "scripts/build-aurion-wasd-migration-ledger.test.mjs"
+      - "drizzle/002[1-7]_*.sql"
+      - "drizzle/meta/_journal.json"
+      - "docs/migrations/wasd-aurion-ledger-runner.md"
+  schedule:
+    - cron: "29 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: WASD ref to inventory; its resolved immutable SHA is recorded in the ledger.
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-wasd-migration-ledger-${{ github.ref }}-${{ inputs.source_ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  wasd-source-evidence:
+    name: Resolve WASD source evidence
+    uses: OuroborosCollective/Wasd/.github/workflows/wasd-aurion-source-ledger.yml@e39ee9b6c085a1a02e5feb898532ad0e3085c30a
+    with:
+      source_ref: ${{ inputs.source_ref || 'main' }}
+
+  aurion-migration-ledger:
+    name: Build read-only cross-repository migration plan
+    needs: wasd-source-evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the exact Aurion revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout the resolved WASD source revision
+        uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/Wasd
+          ref: ${{ needs.wasd-source-evidence.outputs.source_sha }}
+          path: .wasd-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Do not execute a ledger builder supplied by the source revision being
+      # inventoried. The toolchain is independently pinned to the reviewed
+      # source-ledger revision, while the actual source tree remains data-only.
+      - name: Checkout the pinned WASD ledger toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/Wasd
+          ref: e39ee9b6c085a1a02e5feb898532ad0e3085c30a
+          path: .wasd-ledger-toolchain
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify the Aurion ledger builder
+        run: node --test scripts/build-aurion-wasd-migration-ledger.test.mjs
+
+      - name: Build and verify a revision-bound migration ledger
+        id: ledger
+        env:
+          WASD_SOURCE_SHA: ${{ needs.wasd-source-evidence.outputs.source_sha }}
+          EXPECTED_WASD_MANIFEST_SHA256: ${{ needs.wasd-source-evidence.outputs.source_manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$(git -C .wasd-source rev-parse HEAD)" = "$WASD_SOURCE_SHA"
+          test "$(git -C .wasd-ledger-toolchain rev-parse HEAD)" = "e39ee9b6c085a1a02e5feb898532ad0e3085c30a"
+          node --test .wasd-ledger-toolchain/scripts/__tests__/build-wasd-aurion-source-ledger.test.mjs
+          (
+            cd .wasd-source
+            WASD_SOURCE_SHA="$WASD_SOURCE_SHA" node ../.wasd-ledger-toolchain/scripts/build-wasd-aurion-source-ledger.mjs --out .aurion-consumer-source-ledger
+          )
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const source = JSON.parse(fs.readFileSync(".wasd-source/.aurion-consumer-source-ledger/source-ledger.json", "utf8"));
+          if (source.manifestSha256 !== process.env.EXPECTED_WASD_MANIFEST_SHA256) throw new Error("reusable workflow and controller source ledgers differ");
+          NODE
+          node scripts/build-aurion-wasd-migration-ledger.mjs \
+            --wasd-root .wasd-source \
+            --source-ledger .wasd-source/.aurion-consumer-source-ledger/source-ledger.json \
+            --out .aurion-evidence/wasd-migration-ledger
+          (
+            cd .aurion-evidence/wasd-migration-ledger
+            sha256sum --strict -c checksums.sha256
+          )
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import fs from "node:fs";
+          const ledger = JSON.parse(fs.readFileSync(".aurion-evidence/wasd-migration-ledger/migration-ledger.json", "utf8"));
+          if (ledger.schemaVersion !== "aurion.wasd-migration-ledger.v1" || ledger.recordType !== "aurion_wasd_migration_ledger") throw new Error("unexpected migration ledger schema");
+          if (ledger.source?.revision !== process.env.WASD_SOURCE_SHA || !/^[a-f0-9]{40}$/.test(ledger.target?.revision ?? "")) throw new Error("migration ledger revision mismatch");
+          if (!/^[a-f0-9]{64}$/.test(ledger.planSha256 ?? "") || ledger.plan?.productionWritesScheduled !== false) throw new Error("migration ledger apply gate missing");
+          if (!Array.isArray(ledger.plan?.prohibitedActions) || !ledger.plan.prohibitedActions.includes("schema_apply") || !ledger.plan.prohibitedActions.includes("data_backfill")) throw new Error("migration ledger is not fail-closed");
+          console.log(`plan_sha256=${ledger.planSha256}`);
+          console.log(`repository_state=${ledger.repositoryState}`);
+          NODE
+
+      - name: Upload migration-plan evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-wasd-migration-ledger-${{ steps.ledger.outputs.plan_sha256 }}
+          path: .aurion-evidence/wasd-migration-ledger
+          if-no-files-found: error
+          retention-days: 30

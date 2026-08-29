@@ -1,4 +1,4 @@
-name: Deploy Aurion zone runtime
+name: Deploy Aurion Traefik runtime
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
       - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
       - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
+      - "deploy/aurion-traefik-runtime.environment.template"
       - "deploy/aurion-production-schema-reconcile"
       - "deploy/aurion-production-schema-reconcile.sudoers"
       - "deploy/install-aurion-production-schema-reconcile"
@@ -21,16 +22,22 @@ on:
       - "deploy/arelogic-zone-runtime-rate-limit.nginx.conf"
       - "server/zoneService.ts"
       - "server/zoneServiceRuntime.ts"
+      - "server/_core/index.ts"
+      - "Dockerfile"
+      - "docker-compose.traefik.yml"
       - "package.json"
       - "pnpm-lock.yaml"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "scripts/build-aurion-traefik-runtime-artifact.mjs"
       - "scripts/aurionProductionSchemaReconciliation.ts"
       - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
       - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
       - "server/aurionProductionReadbackChain.test.ts"
+      - "server/aurionTraefikRuntimeDeployment.test.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
+      - "server/auth.local.test.ts"
       - "drizzle/meta/_journal.json"
       - "drizzle/0021_aurion_global_world_state.sql"
       - "drizzle/0022_aurion_world_chunk_deltas.sql"
@@ -51,7 +58,7 @@ permissions:
 
 jobs:
   verify-and-build:
-    name: Verify and build immutable Aurion zone runtime
+    name: Verify and build immutable Aurion Traefik runtime
     runs-on: ubuntu-24.04
 
     steps:
@@ -85,16 +92,34 @@ jobs:
           pnpm check
           pnpm test
           bash -n deploy/promote-aurion-zone-runtime.sh
+          node --check scripts/build-aurion-traefik-runtime-artifact.mjs
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
 
-      - name: Build zone runtime and bounded schema runner
+      - name: Build revision-bound Traefik runtime and compatibility bootstrap
         env:
           AURION_RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          pnpm build:runtime-artifact
+          node scripts/build-aurion-traefik-runtime-artifact.mjs
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
+          if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
+          if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","dist/.aurion-runtime-build.json"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          NODE
+          (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
+          tar -C dist-traefik-runtime -czf aurion-traefik-runtime-release.tgz .
+          sha256sum aurion-traefik-runtime-release.tgz > aurion-traefik-runtime-release.tgz.sha256
+
+          # Keep this one compatibility payload for the first invocation on the
+          # existing root entrypoint. That invocation installs the Traefik
+          # promoter; the second, byte-checked invocation below performs the
+          # actual container promotion.
           pnpm build:zone-runtime
           node scripts/build-aurion-production-reconcile-artifact.mjs
           node --input-type=module <<'NODE'
@@ -125,10 +150,13 @@ jobs:
           path: |
             aurion-zone-runtime-release.tgz
             aurion-zone-runtime-release.tgz.sha256
+            aurion-traefik-runtime-release.tgz
+            aurion-traefik-runtime-release.tgz.sha256
             deploy/aurion-zone-runtime.service
             deploy/aurion-zone-runtime.environment.template
             deploy/arelogic-zone-runtime.nginx.conf
             deploy/arelogic-zone-runtime-rate-limit.nginx.conf
+            deploy/aurion-traefik-runtime.environment.template
             deploy/promote-aurion-zone-runtime.sh
             dist-production-reconcile
           if-no-files-found: error
@@ -142,7 +170,7 @@ jobs:
       use_uploaded_artifact: true
 
   promote-zone-runtime:
-    name: Promote verified Aurion zone runtime
+    name: Promote verified Aurion Traefik runtime
     needs: [verify-and-build, root-reconciliation-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
@@ -169,29 +197,46 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
-      - name: Promote node runtime and bounded schema runner
+      - name: Bootstrap and promote labelled Traefik container
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact"
 
-          # The first invocation may replace an older promoter with this revision.
-          # Re-run the exact, idempotent promotion so its newly installed identity
-          # checks execute before the workflow accepts the release.
+          # The host currently permits only this fixed root entrypoint. An older
+          # implementation may finish its legacy local setup and fail before it
+          # can expose a route. Continue only when it has atomically installed
+          # this artifact's byte-identical Traefik implementation.
+          set +e
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+          first_status=$?
+          set -e
+          if [[ "$first_status" -ne 0 ]]; then
+            test -x /usr/local/sbin/promote-aurion-zone-runtime
+            cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+          fi
+
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
           test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
           grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
 
-      - name: Read back installed release identities
+      - name: Read back installed container and schema identities
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-reconcile"
           installed_root=/opt/echoes-of-aurion-schema-reconcile/current
           runner=/usr/local/sbin/aurion-production-schema-reconcile
           verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
-          cat /opt/aurion-zone-runtime/current/.aurion-zone-runtime-release.json
+          test -L /opt/aurion-traefik-runtime/current
+          test "$(readlink -f /opt/aurion-traefik-runtime/current)" = "/opt/aurion-traefik-runtime/releases/${RELEASE_ID}"
+          test -f /var/lib/aurion-traefik-runtime/receipts/current.json
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const receipt=JSON.parse(fs.readFileSync("/var/lib/aurion-traefik-runtime/receipts/current.json","utf8"));
+            if(receipt.recordType!=="aurion_traefik_runtime_receipt"||receipt.revision!==process.env.EXPECTED_SHA||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)) throw new Error("Traefik runtime receipt mismatch");
+            console.log(JSON.stringify({revision:receipt.revision,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain}));
+          '
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
@@ -213,13 +258,18 @@ jobs:
             console.log(JSON.stringify({revision:manifest.revision,mode:manifest.mode,recordType:manifest.recordType}));
           '
 
-      - name: Verify public runtime health
+      - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail
           public_ready=0
           for _attempt in $(seq 1 20); do
-            if health_json="$(curl --fail --silent --show-error https://arelogic.space/_runtime/healthz 2>/dev/null)"; then
-              if grep -Fq "${EXPECTED_SHA}" <<<"$health_json"; then
+            if health_json="$(curl --fail --silent --show-error https://arelogic.space/healthz 2>/dev/null)"; then
+              if printf '%s' "$health_json" | node --input-type=module -e '
+                let raw="";
+                for await (const chunk of process.stdin) raw+=chunk;
+                const health=JSON.parse(raw);
+                if(health.status!=="ok"||health.service!=="echoes-of-aurion"||health.revision!==process.argv[1]) process.exit(1);
+              ' "${EXPECTED_SHA}"; then
                 printf '%s\n' "$health_json"
                 public_ready=1
                 break

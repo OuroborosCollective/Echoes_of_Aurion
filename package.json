@@ -9,6 +9,7 @@
     "build:sandbox": "NODE_OPTIONS=--max-old-space-size=${AURION_BUILD_HEAP_MB:-1536} pnpm build",
     "build:runtime-artifact": "pnpm build && node scripts/write-runtime-build-manifest.mjs",
     "build:zone-runtime": "esbuild server/zoneService.ts --platform=node --bundle --format=cjs --outfile=dist-zone/zoneService.cjs",
+    "migration:wasd:ledger": "node scripts/build-aurion-wasd-migration-ledger.mjs",
     "verify:release-assets": "tsx scripts/validate-release-assets.ts",
     "verify:migrations": "tsx scripts/verify-drizzle-migration-chain.ts",
     "build:itch": "pnpm verify:release-assets && vite build --config vite.itch.config.ts && node scripts/package-itch-assets.mjs",
