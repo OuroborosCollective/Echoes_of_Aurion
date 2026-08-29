@@ -79,7 +79,9 @@ jobs:
           set -euo pipefail
           test "$(git -C .wasd-source rev-parse HEAD)" = "$WASD_SOURCE_SHA"
           test "$(git -C .wasd-ledger-toolchain rev-parse HEAD)" = "e39ee9b6c085a1a02e5feb898532ad0e3085c30a"
-          node --test .wasd-ledger-toolchain/scripts/__tests__/build-wasd-aurion-source-ledger.test.mjs
+          # The toolchain tests intentionally inventory their own pinned checkout;
+          # do not leak the *source* revision expectation into that test process.
+          env -u WASD_SOURCE_SHA node --test .wasd-ledger-toolchain/scripts/__tests__/build-wasd-aurion-source-ledger.test.mjs
           (
             cd .wasd-source
             WASD_SOURCE_SHA="$WASD_SOURCE_SHA" node ../.wasd-ledger-toolchain/scripts/build-wasd-aurion-source-ledger.mjs --out .aurion-consumer-source-ledger
