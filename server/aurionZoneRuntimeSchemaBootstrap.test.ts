@@ -37,14 +37,15 @@ describe("Aurion zone promotion schema-runner bootstrap", () => {
     expect(workflow).not.toContain("drizzle-kit migrate");
   });
 
-  it("provisions and verifies the artifact-pinned reconciliation image before promotion", () => {
-    const preflight = workflow.indexOf("Provision digest-pinned reconciliation Docker image");
-    const promote = workflow.indexOf("Promote node runtime and bounded schema runner");
-    expect(preflight).toBeGreaterThan(-1);
-    expect(preflight).toBeLessThan(promote);
-    expect(workflow).toContain('(cd "$artifact" && sha256sum --strict -c checksums.sha256)');
-    expect(workflow).toContain('sudo docker pull "$pinned_image"');
-    expect(workflow).toContain('grep -Fq "@${image_digest}"');
+  it("provisions and verifies the artifact-pinned reconciliation image inside the root promoter", () => {
+    expect(workflow).not.toContain("sudo docker");
+    expect(promoter).toContain('image_contract="${schema_artifact}/deploy/aurion-reconcile-runtime-image.conf"');
+    expect(promoter).toContain('pinned_image="${image_tag}@${image_digest}"');
+    expect(promoter).toContain('docker pull "$pinned_image"');
+    expect(promoter).toContain('grep -Fq "@${image_digest}"');
+    expect(promoter.indexOf('docker pull "$pinned_image"')).toBeLessThan(
+      promoter.indexOf('ln -sTfn "$release" "${base}/current.next"'),
+    );
   });
 
   it("installs only the fixed read-only runner and never applies SQL", () => {
