@@ -32,7 +32,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   });
 
   it("allows the existing fixed root entrypoint to bootstrap only a byte-identical Traefik promoter", () => {
-    expect(workflow).toContain('cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime');
+    expect(workflow).toContain('cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"');
     expect(workflow).toContain("Bootstrap and promote labelled Traefik container");
     expect(workflow).not.toContain("sudo docker");
     expect(promoter).toContain("docker compose --project-name echoes-of-aurion");
@@ -48,6 +48,16 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("runtime-bootstrap-artifact");
     expect(workflow).toContain('bootstrap_release_id="${bootstrap_expected_sha}-0"');
     expect(workflow).toContain("bootstrap-identity.json.sha256");
+    expect(workflow).toContain("bootstrap runtime archive contains a legacy-incompatible path");
+    expect(workflow).toContain("./patches/wouter-3.7.1.patch");
+    expect(workflow).toContain("legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad");
+    expect(workflow).toContain("refusing to invoke an unrecognized promoter");
+    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 2");
+    expect(promoter).toContain("public_readback_dir=/var/lib/aurion-traefik-runtime-readback");
+    expect(promoter).toContain('"recordType":"aurion_traefik_runtime_readback"');
+    expect(promoter).toContain('chmod 0644 "$public_readback_tmp"');
+    expect(workflow).toContain("/var/lib/aurion-traefik-runtime-readback/current.json");
+    expect(workflow).not.toContain("test -L /opt/aurion-traefik-runtime/current");
     expect(promoter).not.toContain("systemctl reload nginx");
     expect(promoter).not.toContain("nginx -t");
   });

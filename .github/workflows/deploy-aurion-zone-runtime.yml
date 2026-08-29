@@ -301,17 +301,26 @@ jobs:
           # Its distinct identity and legacy-safe path permit only the old
           # promoter's self-install; the canonical artifact is then promoted
           # with its own immutable source revision and release directory.
-          if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime; then
-            bootstrap_release_id="${bootstrap_expected_sha}-0"
-            set +e
-            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
-            bootstrap_status=$?
-            set -e
-            printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
-            test -x /usr/local/sbin/promote-aurion-zone-runtime
-            cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+          installed=/usr/local/sbin/promote-aurion-zone-runtime
+          legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad
+          if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
+            installed_promoter_sha256="$(sha256sum "$installed" | awk '{print $1}')"
+            if [[ "$installed_promoter_sha256" == "$legacy_promoter_sha256" ]]; then
+              bootstrap_release_id="${bootstrap_expected_sha}-0"
+              set +e
+              sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
+              bootstrap_status=$?
+              set -e
+              printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
+              test -x "$installed"
+              cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
+            elif grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && grep -Fq 'image_id="$(docker image inspect' "$installed"; }; then
+              printf 'compatible promoter %s will receive the canonical artifact directly\n' "$installed_promoter_sha256"
+            else
+              printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
+              exit 70
+            fi
           fi
-
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
@@ -322,24 +331,22 @@ jobs:
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-reconcile"
-          installed_root=/opt/echoes-of-aurion-schema-reconcile/current
+          runtime_archive="${GITHUB_WORKSPACE}/runtime-artifact/aurion-traefik-runtime-release.tgz"
+          readback=/var/lib/aurion-traefik-runtime-readback/current.json
           runner=/usr/local/sbin/aurion-production-schema-reconcile
           verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
-          test -L /opt/aurion-traefik-runtime/current
-          test "$(readlink -f /opt/aurion-traefik-runtime/current)" = "/opt/aurion-traefik-runtime/releases/${RELEASE_ID}"
-          test -f /var/lib/aurion-traefik-runtime/receipts/current.json
+          test -f "$readback"
+          runtime_manifest_sha256="$(tar -xOzf "$runtime_archive" ./manifest.json | sha256sum | awk '{print $1}')"
+          schema_manifest_sha256="$(sha256sum "$artifact/manifest.json" | awk '{print $1}')"
           node --input-type=module -e '
             import fs from "node:fs";
-            const receipt=JSON.parse(fs.readFileSync("/var/lib/aurion-traefik-runtime/receipts/current.json","utf8"));
-            if(receipt.recordType!=="aurion_traefik_runtime_receipt"||receipt.revision!==process.env.EXPECTED_SHA||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)) throw new Error("Traefik runtime receipt mismatch");
-            console.log(JSON.stringify({revision:receipt.revision,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain}));
-          '
+            const [file, expected, releaseId, runtimeManifest, schemaManifest]=process.argv.slice(1);
+            const receipt=JSON.parse(fs.readFileSync(file,"utf8"));
+            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)||receipt.domain!=="arelogic.space"||receipt.runtimeManifestSha256!==runtimeManifest||receipt.schemaManifestSha256!==schemaManifest||receipt.schemaMode!=="read_only") throw new Error("Traefik runtime readback mismatch");
+            console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain}));
+          ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
-          (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
-          node "$verifier" "$installed_root" "$EXPECTED_SHA"
-          cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
-          cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
           test -f "$runner"
           test ! -L "$runner"
           test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
@@ -348,13 +355,6 @@ jobs:
           test ! -L "$verifier"
           test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
           cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
-          node --input-type=module -e '
-            import fs from "node:fs";
-            const manifest=JSON.parse(fs.readFileSync("/opt/echoes-of-aurion-schema-reconcile/current/manifest.json","utf8"));
-            if(manifest.revision!==process.env.EXPECTED_SHA||manifest.mode!=="read_only") throw new Error("installed schema runner identity mismatch");
-            console.log(JSON.stringify({revision:manifest.revision,mode:manifest.mode,recordType:manifest.recordType}));
-          '
-
       - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail

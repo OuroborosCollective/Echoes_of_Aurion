@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# aurion-traefik-promoter-protocol: 2
 set -euo pipefail
 unset NODE_OPTIONS
 
@@ -16,6 +17,7 @@ runtime_checksum="${artifact_dir}/aurion-traefik-runtime-release.tgz.sha256"
 runtime_base=/opt/aurion-traefik-runtime
 runtime_env=/etc/aurion-traefik-runtime.env
 receipt_dir=/var/lib/aurion-traefik-runtime/receipts
+public_readback_dir=/var/lib/aurion-traefik-runtime-readback
 schema_artifact="${artifact_dir}/dist-production-reconcile"
 schema_installer="${schema_artifact}/deploy/install-aurion-production-schema-reconcile"
 schema_current=/opt/echoes-of-aurion-schema-reconcile/current
@@ -237,14 +239,33 @@ install -d -o root -g root -m 0750 "$receipt_dir"
 phase=promotion-receipt
 receipt="${receipt_dir}/${release_id}.json"
 receipt_tmp="${receipt}.tmp"
+runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
 umask 077
 printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s"}\n' \
   "$expected_sha" "$release_id" \
-  "$(docker image inspect --format '{{.Id}}' "$runtime_image")" \
+  "$runtime_image_id" \
   "$container_id" "$aurion_domain" > "$receipt_tmp"
 mv -Tf "$receipt_tmp" "$receipt"
 ln -sTfn "$receipt" "${receipt_dir}/current.next"
 mv -Tf "${receipt_dir}/current.next" "${receipt_dir}/current.json"
+
+# The runner must not receive root or Docker access merely to attest a completed
+# promotion. Publish only non-secret immutable identities in a root-authored,
+# world-readable receipt; all configuration and database credentials remain
+# inside the root-only release directories.
+runtime_manifest_sha256="$(sha256sum "${release}/manifest.json" | awk '{print $1}')"
+schema_manifest_sha256="$(sha256sum "${schema_current}/manifest.json" | awk '{print $1}')"
+[[ "$runtime_manifest_sha256" =~ ^[a-f0-9]{64}$ ]]
+[[ "$schema_manifest_sha256" =~ ^[a-f0-9]{64}$ ]]
+install -d -o root -g root -m 0755 "$public_readback_dir"
+public_readback_tmp="${public_readback_dir}/.${release_id}.json.tmp"
+public_readback="${public_readback_dir}/current.json"
+printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only"}\n' \
+  "$expected_sha" "$release_id" "$runtime_image_id" "$container_id" "$aurion_domain" \
+  "$runtime_manifest_sha256" "$schema_manifest_sha256" > "$public_readback_tmp"
+chown root:root "$public_readback_tmp"
+chmod 0644 "$public_readback_tmp"
+mv -Tf "$public_readback_tmp" "$public_readback"
 
 # The legacy loopback runtime is not part of the Traefik deployment. It is
 # stopped only after the labelled container and public TLS route prove the same
