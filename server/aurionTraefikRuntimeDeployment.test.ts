@@ -21,7 +21,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(dockerfile).not.toContain("pnpm install");
     expect(dockerfile).toContain("ADD runtime-node_modules.tgz ./");
     expect(dockerfile).toContain('CMD ["node", "dist/index.js"]');
-    expect(runtimeBuilder).toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
+    expect(runtimeBuilder).toContain('tar", ["-czf", path.join(output, "runtime-node_modules.tgz"), "node_modules"]');
+    expect(runtimeBuilder).toContain('cwd: root');
+    expect(runtimeBuilder).not.toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
+    expect(runtimeBuilder).toContain('dependencyClosure: "hosted-lockfile-install"');
     expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain('"runtime-node_modules.tgz"');
