@@ -156,7 +156,76 @@ jobs:
           for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
-          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "echoes-of-aurion:verify-${GITHUB_SHA}" dist-traefik-runtime
+          runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
+          runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"
+          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "${runtime_verify_image}" dist-traefik-runtime
+          docker run --detach --name "${runtime_verify_container}" "${runtime_verify_image}" >/dev/null
+          runtime_verify_cleanup() {
+            docker rm --force "${runtime_verify_container}" >/dev/null 2>&1 || true
+          }
+          trap runtime_verify_cleanup EXIT
+          runtime_verify_ready=0
+          runtime_verify_probe_status=0
+          for _attempt in $(seq 1 60); do
+            if [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "${runtime_verify_container}")" == "healthy" ]]; then
+              if docker exec -e "EXPECTED_SHA=${GITHUB_SHA}" "${runtime_verify_container}" node --input-type=module -e '
+                const healthResponse = await fetch("http://127.0.0.1:3000/healthz");
+                let health;
+                try {
+                  health = await healthResponse.json();
+                } catch {
+                  process.exit(10);
+                }
+                if (!healthResponse.ok || health.status !== "ok" || health.service !== "echoes-of-aurion" || health.revision !== process.env.EXPECTED_SHA) process.exit(10);
+                const pageResponse = await fetch("http://127.0.0.1:3000/");
+                const page = await pageResponse.text();
+                if (!pageResponse.ok || !pageResponse.headers.get("content-type")?.includes("text/html")) process.exit(11);
+                const assetPath = page.match(/(?:src|href)="(\/assets\/[A-Za-z0-9._/-]+)"/)?.[1];
+                if (!assetPath) process.exit(11);
+                const assetResponse = await fetch(new URL(assetPath, "http://127.0.0.1:3000"));
+                if (!assetResponse.ok || (await assetResponse.arrayBuffer()).byteLength < 1) process.exit(12);
+              '; then
+                runtime_verify_ready=1
+                break
+              else
+                runtime_verify_probe_status=$?
+                break
+              fi
+            fi
+            if [[ "$(docker inspect --format '{{.State.Status}}' "${runtime_verify_container}")" != "running" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${runtime_verify_ready}" -ne 1 ]]; then
+            runtime_state="$(docker inspect --format '{{.State.Status}}' "${runtime_verify_container}")"
+            runtime_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "${runtime_verify_container}")"
+            case "${runtime_verify_probe_status}" in
+              10) runtime_category="health_body_invalid" ;;
+              11) runtime_category="static_index_invalid" ;;
+              12) runtime_category="static_asset_invalid" ;;
+              *) runtime_category="$(docker logs --tail 200 "${runtime_verify_container}" 2>&1 | node --input-type=module -e '
+                let raw = "";
+                for await (const chunk of process.stdin) raw += chunk;
+                let category = "unclassified";
+                const quote = String.fromCharCode(39);
+                const missing = raw.match(new RegExp("Cannot find (?:package|module) " + quote + "([^" + quote + "]+)" + quote));
+                const packageName = missing?.[1] ?? "";
+                const safePackageName = new RegExp("^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+$").test(packageName) ? packageName : "unknown";
+                if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = `module_not_found:${safePackageName}`;
+                else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
+                else if (/EACCES/.test(raw)) category = "permission_denied";
+                else if (/Could not find the build directory/.test(raw)) category = "static_build_missing";
+                else if (/AURION_RELEASE_SHA must be/.test(raw)) category = "release_revision_invalid";
+                else if (/Server running on http/.test(raw)) category = "server_started_but_health_unhealthy";
+                process.stdout.write(category);
+              ')" ;;
+            esac
+            printf 'aurion-runtime-container-verify failed state=%s health=%s category=%s\n' "${runtime_state}" "${runtime_health}" "${runtime_category}" >&2
+            exit 1
+          fi
+          trap - EXIT
+          runtime_verify_cleanup
           tar -C dist-traefik-runtime -czf aurion-traefik-runtime-release.tgz .
           sha256sum aurion-traefik-runtime-release.tgz > aurion-traefik-runtime-release.tgz.sha256
 

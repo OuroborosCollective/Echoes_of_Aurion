@@ -31,25 +31,17 @@ for (const relative of directoriesToCopy) {
   await cp(path.join(root, relative), path.join(output, relative), { recursive: true, force: true });
 }
 
-// Create the production dependency closure on the hosted runner where memory is
-// available. The VPS receives only this verified archive and never resolves a
+// Archive the exact dependency graph installed from the pinned lockfile on the
+// hosted runner. pnpm's virtual-store symlinks are preserved as-is: copying to a
+// staging directory and pruning there can drop a valid transitive runtime edge.
+// The VPS receives only this immutable archive and never resolves or installs a
 // package graph during promotion.
-const dependencyStage = path.join(output, ".runtime-dependencies");
-await mkdir(dependencyStage, { recursive: true });
-for (const relative of ["package.json", "pnpm-lock.yaml", "patches", "node_modules"]) {
-  await cp(path.join(root, relative), path.join(dependencyStage, relative), { recursive: relative !== "package.json" && relative !== "pnpm-lock.yaml", force: true });
-}
-execFileSync("pnpm", ["prune", "--prod", "--ignore-scripts"], {
-  cwd: dependencyStage,
-  stdio: "inherit",
-});
 execFileSync("tar", ["-czf", path.join(output, "runtime-node_modules.tgz"), "node_modules"], {
-  cwd: dependencyStage,
+  cwd: root,
   stdio: "inherit",
 });
-await rm(dependencyStage, { recursive: true, force: true });
 if ((await stat(path.join(output, "runtime-node_modules.tgz"))).size < 1) {
-  throw new Error("runtime production dependency archive is empty");
+  throw new Error("runtime lockfile dependency archive is empty");
 }
 
 async function sha256(filePath) {
@@ -81,6 +73,7 @@ for (const relative of (await listFiles(output)).sort()) {
 const manifest = {
   schemaVersion: 1,
   recordType: "aurion_traefik_runtime_artifact",
+  dependencyClosure: "hosted-lockfile-install",
   revision,
   files,
 };

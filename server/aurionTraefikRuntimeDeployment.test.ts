@@ -21,7 +21,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(dockerfile).not.toContain("pnpm install");
     expect(dockerfile).toContain("ADD runtime-node_modules.tgz ./");
     expect(dockerfile).toContain('CMD ["node", "dist/index.js"]');
-    expect(runtimeBuilder).toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
+    expect(runtimeBuilder).toContain('tar", ["-czf", path.join(output, "runtime-node_modules.tgz"), "node_modules"]');
+    expect(runtimeBuilder).toContain('cwd: root');
+    expect(runtimeBuilder).not.toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
+    expect(runtimeBuilder).toContain('dependencyClosure: "hosted-lockfile-install"');
     expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain('"runtime-node_modules.tgz"');
@@ -30,7 +33,24 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
     expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}");
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+    expect(workflow).toContain('runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"');
+    expect(workflow).toContain("aurion-runtime-container-verify failed state=%s health=%s category=%s");
+    expect(promoter).toContain("aurion-container-health-diagnostic state=%s health=%s category=%s");
+    expect(promoter).toContain('docker logs --tail 200 "$container_id"');
+    expect(workflow).toContain('module_not_found:${safePackageName}');
+    expect(promoter).toContain('module_not_found:${safePackageName}');
+    expect(workflow).toContain('health_body_invalid');
+    expect(promoter).toContain('health_body_invalid');
+    expect(workflow).toContain('static_asset_invalid');
+    expect(promoter).toContain('static_asset_invalid');
+    expect(workflow).toContain('const assetPath = page.match');
+    expect(promoter).toContain('const assetPath = page.match');
+    expect(viteRuntime).toContain('throw new Error(');
+    expect(viteRuntime).toContain('Could not find the build directory');
     expect(viteRuntime).toContain('import("vite")');
+    expect(viteRuntime).toContain('new URL("../../vite.config.ts", import.meta.url).href');
+    expect(viteRuntime).toContain('import(/* @vite-ignore */ viteConfigUrl)');
+    expect(viteRuntime).not.toContain('import("../../vite.config")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
     expect(artifactBuilder).toContain('const directoriesToCopy = ["dist", "patches"]');
@@ -88,7 +108,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       '"https://${aurion_domain}/healthz?revision=${expected_sha}"'
     );
     expect(promoter).toContain('body.revision !== process.argv[1]');
-    expect(promoter).toContain('body.revision !== process.env.EXPECTED_SHA');
+    expect(promoter).toContain('health.revision !== process.env.EXPECTED_SHA');
     expect(promoter).toContain('"mode":"traefik-labelled"');
     expect(promoter).toContain('systemctl disable --now "$legacy_service"');
   });

@@ -7,9 +7,13 @@ import path from "path";
 export async function setupVite(app: Express, server: Server) {
   // Development tooling is deliberately loaded only in the development branch.
   // The production runtime ships static assets and therefore needs only production dependencies.
+  // Keep the development-only config outside the production module graph.
+  // A computed file URL prevents the runtime artifact builder from pulling
+  // Vite plugins into the production container merely by compiling this file.
+  const viteConfigUrl = new URL("../../vite.config.ts", import.meta.url).href;
   const [{ createServer: createViteServer }, { default: viteConfig }] = await Promise.all([
     import("vite"),
-    import("../../vite.config"),
+    import(/* @vite-ignore */ viteConfigUrl),
   ]);
 
   // `vite.config.ts` exports a factory. Spreading it directly silently loses its
@@ -64,7 +68,7 @@ export function serveStatic(app: Express) {
       ? path.resolve(import.meta.dirname, "../..", "dist", "public")
       : path.resolve(import.meta.dirname, "public");
   if (!fs.existsSync(distPath)) {
-    console.error(
+    throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
   }
