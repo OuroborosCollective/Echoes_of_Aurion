@@ -37,6 +37,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain('module_not_found:${safePackageName}');
     expect(promoter).toContain('module_not_found:${safePackageName}');
     expect(viteRuntime).toContain('import("vite")');
+    expect(viteRuntime).toContain('new URL("../../vite.config.ts", import.meta.url).href');
+    expect(viteRuntime).toContain('import(/* @vite-ignore */ viteConfigUrl)');
+    expect(viteRuntime).not.toContain('import("../../vite.config")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
     expect(artifactBuilder).toContain('const directoriesToCopy = ["dist", "patches"]');
