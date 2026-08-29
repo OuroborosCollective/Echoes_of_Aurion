@@ -23,6 +23,11 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(dockerfile).toContain('CMD ["node", "dist/index.js"]');
     expect(runtimeBuilder).toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
     expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain('"runtime-node_modules.tgz"');
+    expect(workflow).toContain("docker build --pull=false");
+    expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
+    expect(workflow).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
