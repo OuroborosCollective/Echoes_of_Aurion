@@ -39,6 +39,14 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('docker logs --tail 200 "$container_id"');
     expect(workflow).toContain('module_not_found:${safePackageName}');
     expect(promoter).toContain('module_not_found:${safePackageName}');
+    expect(workflow).toContain('health_body_invalid');
+    expect(promoter).toContain('health_body_invalid');
+    expect(workflow).toContain('static_asset_invalid');
+    expect(promoter).toContain('static_asset_invalid');
+    expect(workflow).toContain('const assetPath = page.match');
+    expect(promoter).toContain('const assetPath = page.match');
+    expect(viteRuntime).toContain('throw new Error(');
+    expect(viteRuntime).toContain('Could not find the build directory');
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).toContain('new URL("../../vite.config.ts", import.meta.url).href');
     expect(viteRuntime).toContain('import(/* @vite-ignore */ viteConfigUrl)');
