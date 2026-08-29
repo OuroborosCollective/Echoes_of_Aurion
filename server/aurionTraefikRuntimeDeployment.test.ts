@@ -108,7 +108,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       '"https://${aurion_domain}/healthz?revision=${expected_sha}"'
     );
     expect(promoter).toContain('body.revision !== process.argv[1]');
-    expect(promoter).toContain('body.revision !== process.env.EXPECTED_SHA');
+    expect(promoter).toContain('health.revision !== process.env.EXPECTED_SHA');
     expect(promoter).toContain('"mode":"traefik-labelled"');
     expect(promoter).toContain('systemctl disable --now "$legacy_service"');
   });
