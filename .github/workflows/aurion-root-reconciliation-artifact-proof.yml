@@ -94,7 +94,7 @@ jobs:
             mariadb:11.4
           ready=0
           for _attempt in $(seq 1 30); do
-            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb-admin --protocol=socket -uroot ping --silent >/dev/null 2>&1; then
+            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
               ready=1
               break
             fi

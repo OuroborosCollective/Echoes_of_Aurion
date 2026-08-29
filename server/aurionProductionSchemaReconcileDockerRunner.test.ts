@@ -82,6 +82,7 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
   const runner = read("deploy/aurion-production-schema-reconcile");
   const imageContract = JSON.parse(read("deploy/aurion-reconcile-runtime-image.conf"));
   const networkContract = JSON.parse(read("deploy/aurion-reconcile-runtime-network.conf"));
+  const rootProof = read(".github/workflows/aurion-root-reconciliation-artifact-proof.yml");
 
   it("uses the revision-bound private MariaDB network instead of the public Traefik network", () => {
     expect(networkContract).toEqual({
@@ -119,6 +120,11 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(runner).toContain('grep -Fq "@${image_digest}"');
     expect(runner).toContain("--pull=never");
     expect(runner).not.toMatch(/docker run[\s\S]*?\bnode:22\b(?![.@])/);
+  });
+
+  it("waits for an authenticated MariaDB query rather than a liveness-only ping", () => {
+    expect(rootProof).toContain("mariadb --protocol=socket -uroot -e 'SELECT 1'");
+    expect(rootProof).not.toContain("mariadb-admin --protocol=socket -uroot ping");
   });
 
   it("uses an ephemeral hardened Docker boundary with no Docker socket or public port", () => {
