@@ -256,7 +256,10 @@ if [[ "$container_ready" -ne 1 ]]; then
     let raw = "";
     for await (const chunk of process.stdin) raw += chunk;
     let category = "unclassified";
-    if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = "module_not_found";
+    const missing = raw.match(/Cannot find (?:package|module) '([^']+)'/);
+    const packageName = missing?.[1] ?? "";
+    const safePackageName = /^(?:@[A-Za-z0-9._-]+\\/)?[A-Za-z0-9._-]+$/.test(packageName) ? packageName : "unknown";
+    if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = `module_not_found:${safePackageName}`;
     else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
     else if (/EACCES/.test(raw)) category = "permission_denied";
     else if (/Could not find the build directory/.test(raw)) category = "static_build_missing";
