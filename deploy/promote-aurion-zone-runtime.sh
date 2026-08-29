@@ -247,7 +247,26 @@ for _attempt in $(seq 1 30); do
   fi
   sleep 1
 done
-[[ "$container_ready" -eq 1 ]]
+if [[ "$container_ready" -ne 1 ]]; then
+  runtime_state="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+  runtime_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")"
+  # Keep process output inside the root boundary. Only a fixed, non-secret
+  # failure category reaches Actions logs for a safe next repair decision.
+  runtime_category="$(docker logs --tail 200 "$container_id" 2>&1 | node --input-type=module -e '
+    let raw = "";
+    for await (const chunk of process.stdin) raw += chunk;
+    let category = "unclassified";
+    if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = "module_not_found";
+    else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
+    else if (/EACCES/.test(raw)) category = "permission_denied";
+    else if (/Could not find the build directory/.test(raw)) category = "static_build_missing";
+    else if (/AURION_RELEASE_SHA must be/.test(raw)) category = "release_revision_invalid";
+    else if (/Server running on http/.test(raw)) category = "server_started_but_health_unhealthy";
+    process.stdout.write(category);
+  ')"
+  printf 'aurion-container-health-diagnostic state=%s health=%s category=%s\\n' "$runtime_state" "$runtime_health" "$runtime_category" >&2
+  exit 1
+fi
 
 public_ready=0
 phase=public-health
