@@ -6,6 +6,7 @@ on:
       - fix/aurion-traefik-full-container-cutover-20260829
     paths:
       - ".github/workflows/_aurion-full-container-cutover-patch.yml"
+      - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
 
 permissions:
   contents: write
