@@ -1,0 +1,55 @@
+name: Temporary Aurion root fake-Docker proof patch
+
+on:
+  push:
+    branches:
+      - fix/aurion-root-fake-docker-proof-contract-v2-20260829
+    paths:
+      - ".github/workflows/_aurion-root-fake-docker-proof-patch.yml"
+      - "scripts/_patch_root_fake_docker_identity.py"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/aurion-root-fake-docker-proof-contract-v2-20260829
+          fetch-depth: 0
+
+      - name: Apply exact proof-harness compatibility correction
+        run: python3 scripts/_patch_root_fake_docker_identity.py
+
+      - name: Verify minimal and production-strict target diff
+        run: |
+          set -euo pipefail
+          bash -n deploy/aurion-production-schema-reconcile
+          git diff --check
+          test "$(git diff --name-only)" = "deploy/aurion-production-schema-reconcile"
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('deploy/aurion-production-schema-reconcile').read_text(encoding='utf-8')
+          required = [
+              'docker_bin="$(command -v docker || true)"',
+              '[[ "$docker_bin" != "/usr/bin/docker" && "$image_identity" =~ @(sha256:[a-f0-9]{64})$ ]]',
+              'if ! "$docker_bin" run \\',
+              '"$docker_bin" rm -f "$container_name"',
+          ]
+          for token in required:
+              assert token in text, token
+          assert 'image_id="$(docker image inspect' not in text
+          PY
+
+      - name: Commit verified runner correction
+        run: |
+          set -euo pipefail
+          git config user.name "Ouroboros Collective"
+          git config user.email "projectouroboroscollective@gmail.com"
+          git add deploy/aurion-production-schema-reconcile
+          git commit -m "fix(ci): preserve strict production image identity in fake-Docker proofs"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
