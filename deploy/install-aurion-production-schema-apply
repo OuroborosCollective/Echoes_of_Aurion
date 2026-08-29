@@ -11,7 +11,8 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 77
 fi
 
-artifact_dir="$1"
+[[ ! -L "$1" ]] || { echo "artifact directory must not be a symlink" >&2; exit 66; }
+artifact_dir="$(readlink -f -- "$1")"
 expected_sha="$2"
 enable_runner="${3:-}"
 case "$enable_runner" in
@@ -40,10 +41,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-validate_release() {
+validate_artifact() {
   local candidate="$1"
   [[ -d "$candidate" && ! -L "$candidate" ]] || return 70
-  if find "$candidate" -xdev \( -type l -o ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+  if find "$candidate" -xdev -type l -print -quit | grep -q .; then
     return 70
   fi
   [[ -f "${candidate}/manifest.json" && -f "${candidate}/checksums.sha256" ]] || return 70
@@ -54,10 +55,22 @@ validate_release() {
   node "${candidate}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$candidate" "$expected_sha" || return 70
 }
 
-validate_release "$artifact_dir" || { echo "schema apply artifact verification failed" >&2; exit 70; }
+validate_release() {
+  local candidate="$1"
+  validate_artifact "$candidate" || return 70
+  if find "$candidate" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+    return 70
+  fi
+}
+
+validate_artifact "$artifact_dir" || { echo "schema apply artifact verification failed" >&2; exit 70; }
 
 install -d -o root -g root -m 0755 "${base}/releases"
-if [[ ! -e "$release" ]]; then
+if [[ -e "$release" || -L "$release" ]]; then
+  validate_release "$release" || { echo "installed schema apply release verification failed" >&2; exit 70; }
+  cmp -s "${artifact_dir}/manifest.json" "${release}/manifest.json" || { echo "installed schema apply manifest differs from artifact" >&2; exit 70; }
+  cmp -s "${artifact_dir}/checksums.sha256" "${release}/checksums.sha256" || { echo "installed schema apply checksum contract differs from artifact" >&2; exit 70; }
+else
   stage="$(mktemp -d "${base}/releases/.${expected_sha}.staging.XXXXXX")"
   cp -a "${artifact_dir}/." "$stage/"
   chown -R root:root "$stage"

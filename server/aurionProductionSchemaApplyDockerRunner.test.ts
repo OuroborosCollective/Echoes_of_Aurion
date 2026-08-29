@@ -71,6 +71,7 @@ describe("Aurion production schema apply boundary", () => {
     expect(verifier).toContain("aurion_production_schema_apply_artifact");
     expect(verifier).toContain("backup_recovery_apply");
     expect(verifier).toContain("actualFiles");
+    expect(installer).toContain("validate_artifact");
     expect(installer).toContain("validate_release");
     expect(installer).toContain("visudo -cf");
     expect(installer).toContain("root:root:600");
