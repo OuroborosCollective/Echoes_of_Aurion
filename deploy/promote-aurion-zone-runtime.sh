@@ -256,9 +256,10 @@ if [[ "$container_ready" -ne 1 ]]; then
     let raw = "";
     for await (const chunk of process.stdin) raw += chunk;
     let category = "unclassified";
-    const missing = raw.match(/Cannot find (?:package|module) \\x27([^\\x27]+)\\x27/);
+    const quote = String.fromCharCode(39);
+    const missing = raw.match(new RegExp("Cannot find (?:package|module) " + quote + "([^" + quote + "]+)" + quote));
     const packageName = missing?.[1] ?? "";
-    const safePackageName = /^(?:@[A-Za-z0-9._-]+\\/)?[A-Za-z0-9._-]+$/.test(packageName) ? packageName : "unknown";
+    const safePackageName = new RegExp("^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+$").test(packageName) ? packageName : "unknown";
     if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = `module_not_found:${safePackageName}`;
     else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
     else if (/EACCES/.test(raw)) category = "permission_denied";
