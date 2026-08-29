@@ -3,12 +3,17 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(import.meta.dirname, "..");
-const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
+const read = (relative: string) =>
+  fs.readFileSync(path.join(root, relative), "utf8");
 
 describe("Aurion post-deploy production schema readback", () => {
-  const readback = read(".github/workflows/aurion-production-schema-readback.yml");
+  const readback = read(
+    ".github/workflows/aurion-production-schema-readback.yml"
+  );
   const runner = read("deploy/aurion-production-schema-reconcile");
-  const networkContract = JSON.parse(read("deploy/aurion-reconcile-runtime-network.conf"));
+  const networkContract = JSON.parse(
+    read("deploy/aurion-reconcile-runtime-network.conf")
+  );
 
   it("accepts only a main deploy caller with an explicit immutable artifact identity", () => {
     expect(readback).toContain("workflow_call:");
@@ -16,18 +21,18 @@ describe("Aurion post-deploy production schema readback", () => {
     expect(readback).toContain("upstream_run_id:");
     expect(readback).toContain('test "${GITHUB_REF}" = "refs/heads/main"');
     expect(readback).toContain('test "${GITHUB_SHA}" = "${EXPECTED_SHA}"');
-    expect(readback).toContain('test "${GITHUB_RUN_ID}" = "${UPSTREAM_RUN_ID}"');
+    expect(readback).toContain(
+      'test "${GITHUB_RUN_ID}" = "${UPSTREAM_RUN_ID}"'
+    );
     expect(readback).not.toContain("workflow_run:");
     expect(readback).not.toContain("pull_request:");
     expect(readback).not.toContain("workflow_dispatch:");
   });
 
   it("binds the job environment directly to the upstream deployment identity", () => {
+    expect(readback).toContain("EXPECTED_SHA: ${{ inputs.expected_sha }}");
     expect(readback).toContain(
-      "EXPECTED_SHA: ${{ inputs.expected_sha }}",
-    );
-    expect(readback).toContain(
-      "UPSTREAM_RUN_ID: ${{ inputs.upstream_run_id }}",
+      "UPSTREAM_RUN_ID: ${{ inputs.upstream_run_id }}"
     );
     expect(readback).not.toContain("EXPECTED_SHA: ${{ env.TARGET_SHA }}");
     expect(readback).not.toContain("TARGET_SHA:");
@@ -36,36 +41,49 @@ describe("Aurion post-deploy production schema readback", () => {
   it("downloads and verifies the exact immutable artifact from the successful upstream run", () => {
     expect(readback).toContain("actions: read");
     expect(readback).toContain(
-      "name: aurion-zone-runtime-${{ inputs.expected_sha }}",
+      "name: aurion-zone-runtime-${{ inputs.expected_sha }}"
     );
-    expect(readback).toContain(
-      "run-id: ${{ inputs.upstream_run_id }}",
-    );
+    expect(readback).toContain("run-id: ${{ inputs.upstream_run_id }}");
     expect(readback).toContain("github-token: ${{ github.token }}");
     expect(readback).toContain(
-      'artifact="${GITHUB_WORKSPACE}/deployment-artifact/dist-production-reconcile"',
+      'artifact="${GITHUB_WORKSPACE}/deployment-artifact/dist-production-reconcile"'
     );
     expect(readback).toContain('test -f "$artifact/checksums.sha256"');
     expect(readback).toContain(
-      '(cd "$artifact" && sha256sum --strict -c checksums.sha256)',
+      '(cd "$artifact" && sha256sum --strict -c checksums.sha256)'
     );
   });
 
   it("requires artifact, installed runner and receipt to share one revision without apply", () => {
     expect(readback).toContain(
-      'installed_root="/opt/echoes-of-aurion-schema-reconcile/current"',
+      'installed_current="/opt/echoes-of-aurion-schema-reconcile/current"'
+    );
+    expect(readback).toContain('test -L "$installed_current"');
+    expect(readback).toContain(
+      'installed_root="$(readlink -f -- "$installed_current")"'
+    );
+    expect(readback).toContain(
+      'test "$installed_root" = "/opt/echoes-of-aurion-schema-reconcile/releases/${EXPECTED_SHA}"'
     );
     expect(readback).toContain('installed="${installed_root}/manifest.json"');
     expect(readback).toContain(
-      "/usr/local/sbin/aurion-production-schema-reconcile",
+      "/usr/local/sbin/aurion-production-schema-reconcile"
     );
-    expect(readback).toContain('cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"');
-    expect(readback).toContain('cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"');
-    expect(readback).toContain('cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
-    expect(readback).toContain('cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
+    expect(readback).toContain(
+      'cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"'
+    );
+    expect(readback).toContain(
+      'cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"'
+    );
+    expect(readback).toContain(
+      'cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"'
+    );
+    expect(readback).toContain(
+      'cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"'
+    );
     expect(readback).toContain('sudo -n "$runner" "$EXPECTED_SHA"');
     expect(readback).toContain(
-      "aurion-production-schema-readback-${{ inputs.expected_sha }}",
+      "aurion-production-schema-readback-${{ inputs.expected_sha }}"
     );
     expect(readback).not.toContain("actions/checkout");
     expect(readback).not.toContain("pnpm install");
@@ -111,7 +129,9 @@ describe("Aurion post-deploy production schema readback", () => {
 
   it("validates the runtime image identity before container execution", () => {
     expect(runner).toContain("docker image inspect");
-    expect(runner).toContain("pinned runtime image has an invalid local image identity");
+    expect(runner).toContain(
+      "pinned runtime image has an invalid local image identity"
+    );
     expect(runner).not.toContain("RepoDigests");
   });
 
