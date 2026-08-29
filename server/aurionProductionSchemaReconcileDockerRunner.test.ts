@@ -139,7 +139,7 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
       "--cap-drop ALL",
       "--security-opt no-new-privileges",
       "source=${release},destination=/reconcile,readonly",
-      "source=${env_file},destination=/reconcile/.env.production,readonly",
+      "source=${env_file},destination=/etc/aurion-production.env,readonly",
     ]) {
       expect(runner).toContain(token);
     }

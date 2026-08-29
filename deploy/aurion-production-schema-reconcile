@@ -88,6 +88,9 @@ tmp="$(mktemp "${state_dir}/.receipt.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 chmod 0600 "$tmp"
 
+# The credential mount deliberately stays outside the read-only artifact tree:
+# Docker creates a file-mount target before container start, which fails below
+# an already read-only artifact bind mount.
 set +e
 docker run \
   --rm \
@@ -96,11 +99,11 @@ docker run \
   --user 0:0 \
   --network "$docker_network" \
   --mount "type=bind,source=${release},destination=/reconcile,readonly" \
-  --mount "type=bind,source=${env_file},destination=/reconcile/.env.production,readonly" \
+  --mount "type=bind,source=${env_file},destination=/etc/aurion-production.env,readonly" \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
-  --env AURION_RECONCILIATION_ENV_FILE=/reconcile/.env.production \
+  --env AURION_RECONCILIATION_ENV_FILE=/etc/aurion-production.env \
   --env AURION_RECONCILIATION_ROOT=/reconcile \
   --env AURION_RECONCILIATION_SOURCE_SHA="$expected_sha" \
   "$pinned_image" \
