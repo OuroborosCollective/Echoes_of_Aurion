@@ -1,0 +1,82 @@
+name: Temporary restore exact Wayfinder asset from Git history
+
+on:
+  push:
+    branches:
+      - fix/aurion-wayfinder-historical-provenance-20260829
+    paths:
+      - ".github/workflows/_restore-wayfinder-from-git-history.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out complete repository history
+        uses: actions/checkout@v4
+        with:
+          ref: fix/aurion-wayfinder-historical-provenance-20260829
+          fetch-depth: 0
+
+      - name: Locate the exact immutable asset in Git history
+        id: locate
+        run: |
+          set -euo pipefail
+          expected_bytes=1992236
+          expected_sha=11910aadcf94c21bf9eb7d68242fa19de89b9211eed7716facfa0d0574142dd8
+          target=client/public/aurion-assets/aurion-wayfinder-animated_6bf370ef.glb
+          candidate="$(mktemp)"
+          found_commit=''
+          found_path=''
+          trap 'rm -f "$candidate"' EXIT
+
+          mapfile -t paths < <(git log --all --name-only --format= | grep -Ei 'wayfinder.*\.glb$' | sort -u)
+          for path in "${paths[@]}"; do
+            while read -r commit; do
+              [[ -n "$commit" ]] || continue
+              if git show "$commit:$path" > "$candidate" 2>/dev/null; then
+                bytes="$(wc -c < "$candidate" | tr -d ' ')"
+                sha="$(sha256sum "$candidate" | awk '{print $1}')"
+                if [[ "$bytes" == "$expected_bytes" && "$sha" == "$expected_sha" ]]; then
+                  found_commit="$commit"
+                  found_path="$path"
+                  mkdir -p "$(dirname "$target")"
+                  install -m 0644 "$candidate" "$target"
+                  break 2
+                fi
+              fi
+            done < <(git rev-list --all -- "$path")
+          done
+
+          [[ -n "$found_commit" && -n "$found_path" ]] || {
+            echo 'Exact Wayfinder asset not present in repository history' >&2
+            exit 1
+          }
+          test "$(wc -c < "$target" | tr -d ' ')" = "$expected_bytes"
+          test "$(sha256sum "$target" | awk '{print $1}')" = "$expected_sha"
+          test "$(head -c 4 "$target")" = 'glTF'
+          printf 'commit=%s\npath=%s\n' "$found_commit" "$found_path" >> "$GITHUB_OUTPUT"
+
+      - name: Remove temporary workflow and commit only provenance-restored asset
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/_restore-wayfinder-from-git-history.yml
+          git diff --check
+          git config user.name "Ouroboros Collective"
+          git config user.email "projectouroboroscollective@gmail.com"
+          git add client/public/aurion-assets/aurion-wayfinder-animated_6bf370ef.glb .github/workflows/_restore-wayfinder-from-git-history.yml
+          git commit -m "fix(android): restore immutable Wayfinder asset from repository history"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Emit secret-free provenance receipt
+        run: |
+          printf '%s\n' \
+            'recordType=aurion_release_asset_provenance' \
+            'asset=aurion-wayfinder-animated_6bf370ef.glb' \
+            'bytes=1992236' \
+            'sha256=11910aadcf94c21bf9eb7d68242fa19de89b9211eed7716facfa0d0574142dd8' \
+            "sourceCommit=${{ steps.locate.outputs.commit }}" \
+            "sourcePath=${{ steps.locate.outputs.path }}"
