@@ -250,6 +250,17 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
+      - name: Record legacy promoter compatibility (read-only)
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/runtime-artifact"
+          installed=/usr/local/sbin/promote-aurion-zone-runtime
+          if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
+            printf 'legacy promoter sha256: '
+            sha256sum "$installed"
+            grep -nE 'pinned_image|image_digest|RepoDigests|docker image inspect|A-Za-z0-9|exit [0-9]+' "$installed" || true
+          fi
+
       - name: Bootstrap and promote labelled Traefik container
         run: |
           set -euo pipefail
