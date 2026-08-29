@@ -156,7 +156,50 @@ jobs:
           for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
-          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "echoes-of-aurion:verify-${GITHUB_SHA}" dist-traefik-runtime
+          runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
+          runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"
+          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "${runtime_verify_image}" dist-traefik-runtime
+          docker run --detach --name "${runtime_verify_container}" "${runtime_verify_image}" >/dev/null
+          runtime_verify_cleanup() {
+            docker rm --force "${runtime_verify_container}" >/dev/null 2>&1 || true
+          }
+          trap runtime_verify_cleanup EXIT
+          runtime_verify_ready=0
+          for _attempt in $(seq 1 60); do
+            if [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "${runtime_verify_container}")" == "healthy" ]]; then
+              docker exec -e "EXPECTED_SHA=${GITHUB_SHA}" "${runtime_verify_container}" node --input-type=module -e '
+                const response = await fetch("http://127.0.0.1:3000/healthz");
+                const body = await response.json();
+                if (!response.ok || body.status !== "ok" || body.service !== "echoes-of-aurion" || body.revision !== process.env.EXPECTED_SHA) process.exit(1);
+              '
+              runtime_verify_ready=1
+              break
+            fi
+            if [[ "$(docker inspect --format '{{.State.Status}}' "${runtime_verify_container}")" != "running" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${runtime_verify_ready}" -ne 1 ]]; then
+            runtime_state="$(docker inspect --format '{{.State.Status}}' "${runtime_verify_container}")"
+            runtime_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "${runtime_verify_container}")"
+            runtime_category="$(docker logs --tail 200 "${runtime_verify_container}" 2>&1 | node --input-type=module -e '
+              let raw = "";
+              for await (const chunk of process.stdin) raw += chunk;
+              let category = "unclassified";
+              if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = "module_not_found";
+              else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
+              else if (/EACCES/.test(raw)) category = "permission_denied";
+              else if (/Could not find the build directory/.test(raw)) category = "static_build_missing";
+              else if (/AURION_RELEASE_SHA must be/.test(raw)) category = "release_revision_invalid";
+              else if (/Server running on http/.test(raw)) category = "server_started_but_health_unhealthy";
+              process.stdout.write(category);
+            ')"
+            printf 'aurion-runtime-container-verify failed state=%s health=%s category=%s\\n' "${runtime_state}" "${runtime_health}" "${runtime_category}" >&2
+            exit 1
+          fi
+          trap - EXIT
+          runtime_verify_cleanup
           tar -C dist-traefik-runtime -czf aurion-traefik-runtime-release.tgz .
           sha256sum aurion-traefik-runtime-release.tgz > aurion-traefik-runtime-release.tgz.sha256
 
