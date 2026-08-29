@@ -12,12 +12,17 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const promoter = read("deploy/promote-aurion-zone-runtime.sh");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
+  const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
 
   it("binds the public health response and image metadata to one source revision", () => {
     expect(dockerfile).toContain("node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
     expect(dockerfile).toContain("AURION_RELEASE_SHA=${AURION_RELEASE_SHA}");
     expect(dockerfile).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA}");
-    expect(dockerfile).toContain("pnpm install --prod --frozen-lockfile");
+    expect(dockerfile).not.toContain("pnpm install");
+    expect(dockerfile).toContain("ADD runtime-node_modules.tgz ./");
+    expect(dockerfile).toContain('CMD ["node", "dist/index.js"]');
+    expect(runtimeBuilder).toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
+    expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');

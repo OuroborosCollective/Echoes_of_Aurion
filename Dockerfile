@@ -17,12 +17,10 @@ ENV NODE_ENV=production \
 
 LABEL org.opencontainers.image.revision=${AURION_RELEASE_SHA}
 
-RUN npm install --global pnpm@10.4.1
-COPY package.json pnpm-lock.yaml ./
-COPY patches ./patches
-# Der Produktionsserver importiert den Vite-Adapter zur statischen Auslieferung.
-# Deshalb müssen die vollständigen, gesperrten Runtime-Abhängigkeiten im Image vorliegen.
-RUN pnpm install --prod --frozen-lockfile --network-concurrency=1 --child-concurrency=1 && pnpm store prune
+# The hosted artifact contains a pruned, lockfile-derived production dependency archive.
+# The VPS Docker build must not resolve or install packages.
+COPY package.json ./
+ADD runtime-node_modules.tgz ./
 
 COPY dist ./dist
 RUN test -n "$AURION_RELEASE_SHA" \
@@ -35,4 +33,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-CMD ["pnpm", "start"]
+CMD ["node", "dist/index.js"]

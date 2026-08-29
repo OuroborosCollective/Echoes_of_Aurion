@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -28,6 +29,27 @@ for (const relative of filesToCopy) {
 }
 for (const relative of directoriesToCopy) {
   await cp(path.join(root, relative), path.join(output, relative), { recursive: true, force: true });
+}
+
+// Create the production dependency closure on the hosted runner where memory is
+// available. The VPS receives only this verified archive and never resolves a
+// package graph during promotion.
+const dependencyStage = path.join(output, ".runtime-dependencies");
+await mkdir(dependencyStage, { recursive: true });
+for (const relative of ["package.json", "pnpm-lock.yaml", "patches", "node_modules"]) {
+  await cp(path.join(root, relative), path.join(dependencyStage, relative), { recursive: relative !== "package.json" && relative !== "pnpm-lock.yaml", force: true });
+}
+execFileSync("pnpm", ["prune", "--prod", "--ignore-scripts"], {
+  cwd: dependencyStage,
+  stdio: "inherit",
+});
+execFileSync("tar", ["-czf", path.join(output, "runtime-node_modules.tgz"), "node_modules"], {
+  cwd: dependencyStage,
+  stdio: "inherit",
+});
+await rm(dependencyStage, { recursive: true, force: true });
+if ((await stat(path.join(output, "runtime-node_modules.tgz"))).size < 1) {
+  throw new Error("runtime production dependency archive is empty");
 }
 
 async function sha256(filePath) {
