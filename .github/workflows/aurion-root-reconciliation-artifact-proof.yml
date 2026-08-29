@@ -323,7 +323,13 @@ jobs:
           fs.writeFileSync("fake-docker-bin/docker", `#!/usr/bin/env bash
           set -euo pipefail
           case "\${1:-}" in
-            image) printf '%s\\n' 'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff' ;;
+            image)
+              if [[ "\${2:-}" == "inspect" ]]; then
+                printf '%s\\n' 'sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f'
+              else
+                printf '%s\\n' 'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff'
+              fi
+              ;;
             network) exit 0 ;;
             run)
               printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion'
