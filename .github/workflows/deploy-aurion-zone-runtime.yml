@@ -73,8 +73,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-aurion-zone-runtime
-  cancel-in-progress: false
+  # PR validation must never occupy the production promotion queue.
+  group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
