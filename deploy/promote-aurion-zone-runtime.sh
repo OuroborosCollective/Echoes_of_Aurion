@@ -234,16 +234,33 @@ docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{pr
 [[ "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" == "$expected_sha" ]]
 
 container_ready=0
+container_probe_status=0
 phase=container-health
 for _attempt in $(seq 1 30); do
   if [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")" == "healthy" ]]; then
-    docker exec -e "EXPECTED_SHA=${expected_sha}" "$container_id" node --input-type=module -e '
-      const response = await fetch("http://127.0.0.1:3000/healthz");
-      const body = await response.json();
-      if (!response.ok || body.status !== "ok" || body.service !== "echoes-of-aurion" || body.revision !== process.env.EXPECTED_SHA) process.exit(1);
-    '
-    container_ready=1
-    break
+    if docker exec -e "EXPECTED_SHA=$expected_sha" "$container_id" node --input-type=module -e '
+      const healthResponse = await fetch("http://127.0.0.1:3000/healthz");
+      let health;
+      try {
+        health = await healthResponse.json();
+      } catch {
+        process.exit(10);
+      }
+      if (!healthResponse.ok || health.status !== "ok" || health.service !== "echoes-of-aurion" || health.revision !== process.env.EXPECTED_SHA) process.exit(10);
+      const pageResponse = await fetch("http://127.0.0.1:3000/");
+      const page = await pageResponse.text();
+      if (!pageResponse.ok || !pageResponse.headers.get("content-type")?.includes("text/html")) process.exit(11);
+      const assetPath = page.match(/(?:src|href)="(\/assets\/[A-Za-z0-9._/-]+)"/)?.[1];
+      if (!assetPath) process.exit(11);
+      const assetResponse = await fetch(new URL(assetPath, "http://127.0.0.1:3000"));
+      if (!assetResponse.ok || (await assetResponse.arrayBuffer()).byteLength < 1) process.exit(12);
+    '; then
+      container_ready=1
+      break
+    else
+      container_probe_status=$?
+      break
+    fi
   fi
   sleep 1
 done
@@ -252,23 +269,28 @@ if [[ "$container_ready" -ne 1 ]]; then
   runtime_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")"
   # Keep process output inside the root boundary. Only a fixed, non-secret
   # failure category reaches Actions logs for a safe next repair decision.
-  runtime_category="$(docker logs --tail 200 "$container_id" 2>&1 | node --input-type=module -e '
-    let raw = "";
-    for await (const chunk of process.stdin) raw += chunk;
-    let category = "unclassified";
-    const quote = String.fromCharCode(39);
-    const missing = raw.match(new RegExp("Cannot find (?:package|module) " + quote + "([^" + quote + "]+)" + quote));
-    const packageName = missing?.[1] ?? "";
-    const safePackageName = new RegExp("^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+$").test(packageName) ? packageName : "unknown";
-    if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = `module_not_found:${safePackageName}`;
-    else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
-    else if (/EACCES/.test(raw)) category = "permission_denied";
-    else if (/Could not find the build directory/.test(raw)) category = "static_build_missing";
-    else if (/AURION_RELEASE_SHA must be/.test(raw)) category = "release_revision_invalid";
-    else if (/Server running on http/.test(raw)) category = "server_started_but_health_unhealthy";
-    process.stdout.write(category);
-  ')"
-  printf 'aurion-container-health-diagnostic state=%s health=%s category=%s\\n' "$runtime_state" "$runtime_health" "$runtime_category" >&2
+  case "$container_probe_status" in
+    10) runtime_category="health_body_invalid" ;;
+    11) runtime_category="static_index_invalid" ;;
+    12) runtime_category="static_asset_invalid" ;;
+    *) runtime_category="$(docker logs --tail 200 "$container_id" 2>&1 | node --input-type=module -e '
+      let raw = "";
+      for await (const chunk of process.stdin) raw += chunk;
+      let category = "unclassified";
+      const quote = String.fromCharCode(39);
+      const missing = raw.match(new RegExp("Cannot find (?:package|module) " + quote + "([^" + quote + "]+)" + quote));
+      const packageName = missing?.[1] ?? "";
+      const safePackageName = new RegExp("^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+$").test(packageName) ? packageName : "unknown";
+      if (/ERR_MODULE_NOT_FOUND|Cannot find (package|module)/.test(raw)) category = `module_not_found:${safePackageName}`;
+      else if (/ERR_DLOPEN_FAILED/.test(raw)) category = "native_module_load_failed";
+      else if (/EACCES/.test(raw)) category = "permission_denied";
+      else if (/Could not find the build directory/.test(raw)) category = "static_build_missing";
+      else if (/AURION_RELEASE_SHA must be/.test(raw)) category = "release_revision_invalid";
+      else if (/Server running on http/.test(raw)) category = "server_started_but_health_unhealthy";
+      process.stdout.write(category);
+    ')" ;;
+  esac
+  printf 'aurion-container-health-diagnostic state=%s health=%s category=%s\n' "$runtime_state" "$runtime_health" "$runtime_category" >&2
   exit 1
 fi
 
