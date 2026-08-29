@@ -15,19 +15,22 @@ done
 [[ "$oidc_count" -eq 0 || "$oidc_count" -eq 4 ]]
 '''
 required_new = '''env_key_has_value() {
-  ENV_FILE="$env_file" ENV_KEY="$1" node -e '
-    const fs=require("node:fs");
-    const key=process.env.ENV_KEY;
-    const source=fs.readFileSync(process.env.ENV_FILE,"utf8");
-    for(const line of source.split(/\\r?\\n/)) {
-      const match=line.match(/^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=([\\s\\S]*)$/);
-      if(!match||match[1]!==key) continue;
-      let value=match[2].trim();
-      if((value.startsWith("\\\"")&&value.endsWith("\\\""))||(value.startsWith("\\'")&&value.endsWith("\\'"))) value=value.slice(1,-1).trim();
-      process.exit(value.length>0?0:1);
-    }
-    process.exit(1);
-  '
+  node --input-type=module - "$env_file" "$1" <<'NODE'
+import fs from "node:fs";
+const [envFile, key] = process.argv.slice(2);
+const source = fs.readFileSync(envFile, "utf8");
+for (const line of source.split(/\\r?\\n/)) {
+  const match = line.match(/^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*=([\\s\\S]*)$/);
+  if (!match || match[1] !== key) continue;
+  let value = match[2].trim();
+  const quoted =
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"));
+  if (quoted && value.length >= 2) value = value.slice(1, -1).trim();
+  process.exit(value.length > 0 ? 0 : 1);
+}
+process.exit(1);
+NODE
 }
 
 for required_name in DATABASE_URL JWT_SECRET VITE_APP_ID; do
