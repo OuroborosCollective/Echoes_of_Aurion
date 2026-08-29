@@ -205,7 +205,11 @@ jobs:
           ' "$image_contract")"
           image_digest="${pinned_image##*@}"
           docker pull "$pinned_image"
-          docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" | grep -Fq "@${image_digest}"
+          # Pull validates the requested manifest digest. Docker may expose the
+          # platform manifest rather than that multi-platform index in
+          # RepoDigests, so validate the exact reference resolves to an image.
+          image_id="$(docker image inspect --format '{{.Id}}' "$pinned_image")"
+          [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
 
       - name: Create root-protected test production environment
         run: |

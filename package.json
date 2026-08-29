@@ -8,6 +8,7 @@
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:sandbox": "NODE_OPTIONS=--max-old-space-size=${AURION_BUILD_HEAP_MB:-1536} pnpm build",
     "build:runtime-artifact": "pnpm build && node scripts/write-runtime-build-manifest.mjs",
+    "build:promoter-bootstrap-artifact": "node scripts/build-aurion-promoter-bootstrap-artifact.mjs",
     "build:zone-runtime": "esbuild server/zoneService.ts --platform=node --bundle --format=cjs --outfile=dist-zone/zoneService.cjs",
     "migration:wasd:ledger": "node scripts/build-aurion-wasd-migration-ledger.mjs",
     "verify:release-assets": "tsx scripts/validate-release-assets.ts",

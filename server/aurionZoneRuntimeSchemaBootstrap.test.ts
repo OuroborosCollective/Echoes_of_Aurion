@@ -45,7 +45,8 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(promoter).toContain('image_contract="${schema_artifact}/deploy/aurion-reconcile-runtime-image.conf"');
     expect(promoter).toContain('pinned_image="${image_tag}@${image_digest}"');
     expect(promoter).toContain('docker pull "$pinned_image"');
-    expect(promoter).toContain('grep -Fq "@${image_digest}"');
+    expect(promoter).toContain('image_id="$(docker image inspect --format \'{{.Id}}\' "$pinned_image")"');
+    expect(promoter).not.toContain("{{range .RepoDigests}}");
     expect(promoter.indexOf('docker pull "$pinned_image"')).toBeLessThan(
       promoter.indexOf('ln -sTfn "$release" "${runtime_base}/current.next"'),
     );

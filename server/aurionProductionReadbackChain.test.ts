@@ -107,7 +107,8 @@ describe("Aurion post-deploy production schema readback", () => {
 
   it("validates the runtime image identity before container execution", () => {
     expect(runner).toContain("docker image inspect");
-    expect(runner).toContain("runtime image digest mismatch");
+    expect(runner).toContain("pinned runtime image has an invalid local image identity");
+    expect(runner).not.toContain("RepoDigests");
   });
 
   it("binds the persisted receipt to the actual Docker execution contract", () => {

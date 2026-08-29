@@ -21,7 +21,7 @@ schema_installer="${schema_artifact}/deploy/install-aurion-production-schema-rec
 schema_current=/opt/echoes-of-aurion-schema-reconcile/current
 legacy_service=aurion-zone-runtime.service
 phase=preflight
-trap 'status=$?; printf "aurion-traefik-promoter failed phase=%s status=%s\\n" "$phase" "$status" >&2' ERR
+trap 'status=$?; if [[ "$status" -ne 0 ]]; then printf "aurion-traefik-promoter failed phase=%s status=%s\\n" "$phase" "$status" >&2; fi' EXIT
 
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]]
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+$ ]]
@@ -51,7 +51,11 @@ image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON
 image_digest="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!c.imageDigest||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageDigest)' "$image_contract")"
 pinned_image="${image_tag}@${image_digest}"
 docker pull "$pinned_image"
-docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" | grep -Fq "@${image_digest}"
+# Docker validates the requested content digest while pulling. RepoDigests may
+# instead report the selected platform manifest for a multi-platform index, so
+# only require that the exact digest-qualified reference now resolves locally.
+image_id="$(docker image inspect --format '{{.Id}}' "$pinned_image")"
+[[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
 
 # The release archive is generated on the hosted verifier and contains only a
 # Docker build context. Reject paths that could escape the root-owned release
