@@ -31,6 +31,11 @@ backup_created=false
 backup_basename=""
 backup_sha256=""
 backup_bytes=0
+recovery_executed=false
+recovery_restore_status=0
+recovery_error_class=""
+recovery_stderr_sha256=""
+recovery_stderr_bytes=0
 
 cleanup_recovery() {
   if [[ -n "$recovery_container" ]]; then
@@ -67,6 +72,11 @@ emit_failure() {
   APPLY_BACKUP_BASENAME="$backup_basename" \
   APPLY_BACKUP_SHA256="$backup_sha256" \
   APPLY_BACKUP_BYTES="$backup_bytes" \
+  APPLY_RECOVERY_EXECUTED="$recovery_executed" \
+  APPLY_RECOVERY_RESTORE_STATUS="$recovery_restore_status" \
+  APPLY_RECOVERY_ERROR_CLASS="$recovery_error_class" \
+  APPLY_RECOVERY_STDERR_SHA256="$recovery_stderr_sha256" \
+  APPLY_RECOVERY_STDERR_BYTES="$recovery_stderr_bytes" \
   node --input-type=module -e '
     import fs from "node:fs";
     const backupCreated=process.env.APPLY_BACKUP_CREATED==="true";
@@ -76,6 +86,14 @@ emit_failure() {
       sha256:process.env.APPLY_BACKUP_SHA256,
       bytes:Number(process.env.APPLY_BACKUP_BYTES),
     } : {created:false};
+    const recoveryExecuted=process.env.APPLY_RECOVERY_EXECUTED==="true";
+    const recovery=recoveryExecuted ? {
+      executed:true,
+      restoreStatus:Number(process.env.APPLY_RECOVERY_RESTORE_STATUS),
+      errorClass:process.env.APPLY_RECOVERY_ERROR_CLASS,
+      stderrSha256:process.env.APPLY_RECOVERY_STDERR_SHA256,
+      stderrBytes:Number(process.env.APPLY_RECOVERY_STDERR_BYTES),
+    } : null;
     fs.writeFileSync(process.argv[1], `${JSON.stringify({
       recordType:"aurion_production_schema_apply",
       schemaVersion:1,
@@ -87,6 +105,7 @@ emit_failure() {
       failureStage:process.env.APPLY_FAILURE_STAGE,
       runnerStatus:Number(process.env.APPLY_FAILURE_STATUS),
       backup,
+      recovery,
     },null,2)}\n`, {mode:0o600});
   ' "$tmp" >/dev/null 2>&1
   persist_receipt "$tmp" || true
@@ -314,10 +333,26 @@ for _attempt in $(seq 1 60); do
   sleep 1
 done
 [[ "$recovery_ready" -eq 1 ]] || { phase=RECOVERY_DATABASE_NOT_READY; exit 69; }
+recovery_executed=true
+recovery_stderr="$(mktemp "${state_dir}/.recovery-restore.XXXXXX")" || { phase=RECOVERY_DIAGNOSTIC_FILE_CREATE_FAILED; exit 69; }
 set +e
-gzip -cd "$backup_file" | docker exec -i "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; exec "$client" --protocol=socket -uroot' >/dev/null 2>&1
+gzip -cd "$backup_file" 2>"$recovery_stderr" | docker exec -i "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; exec "$client" --protocol=socket -uroot' >/dev/null 2>>"$recovery_stderr"
 recovery_restore_status=$?
 set -e
+recovery_stderr_bytes="$(stat -c '%s' "$recovery_stderr")" || { phase=RECOVERY_DIAGNOSTIC_READ_FAILED; rm -f "$recovery_stderr"; exit 69; }
+recovery_stderr_sha256="$(sha256sum "$recovery_stderr" | awk '{print $1}')" || { phase=RECOVERY_DIAGNOSTIC_READ_FAILED; rm -f "$recovery_stderr"; exit 69; }
+[[ "$recovery_stderr_bytes" =~ ^[0-9]+$ && "$recovery_stderr_sha256" =~ ^[a-f0-9]{64}$ ]] || { phase=RECOVERY_DIAGNOSTIC_INVALID; rm -f "$recovery_stderr"; exit 70; }
+recovery_error_class="$(node --input-type=module -e '
+  import fs from "node:fs";
+  const stderr=fs.readFileSync(process.argv[1],"utf8");
+  const maria=stderr.match(/\bERROR\s+([0-9]{4})\b/i);
+  if(maria) process.stdout.write("MARIADB_ERROR_"+maria[1]);
+  else if(/Error response from daemon/i.test(stderr)) process.stdout.write("DOCKER_EXEC_ERROR");
+  else if(/gzip:/i.test(stderr)) process.stdout.write("GZIP_ERROR");
+  else if(stderr.length===0) process.stdout.write("NO_STDERR");
+  else process.stdout.write("UNCLASSIFIED_RESTORE_ERROR");
+' "$recovery_stderr")" || { phase=RECOVERY_DIAGNOSTIC_CLASSIFY_FAILED; rm -f "$recovery_stderr"; exit 69; }
+rm -f "$recovery_stderr"
 [[ "$recovery_restore_status" -eq 0 ]] || { phase=RECOVERY_RESTORE_FAILED; exit "$recovery_restore_status"; }
 recovery_table_count="$(recovery_client query --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database_name}' AND table_type='BASE TABLE'")" || { phase=RECOVERY_TABLE_COUNT_READ_FAILED; exit 69; }
 recovery_schema_sha256="$(recovery_client dump --no-data --skip-comments --skip-dump-date --routines --events --triggers --databases "$database_name" | sha256sum | awk '{print $1}')" || { phase=RECOVERY_SCHEMA_FINGERPRINT_FAILED; exit 69; }
