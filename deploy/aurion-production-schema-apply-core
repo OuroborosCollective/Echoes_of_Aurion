@@ -323,7 +323,11 @@ source_schema_sha256="$(production_client dump --no-data --skip-comments --skip-
 [[ "$source_schema_sha256" =~ ^[a-f0-9]{64}$ ]] || { phase=SOURCE_SCHEMA_FINGERPRINT_INVALID; exit 70; }
 recovery_container="aurion-schema-recovery-${expected_sha:0:12}-${stamp}"
 [[ "$recovery_container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$ ]]
-docker run --detach --rm --name "$recovery_container" --network none -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 "$database_image_id" >/dev/null
+docker run --detach --rm --name "$recovery_container" \
+  --network none \
+  --mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly" \
+  -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 \
+  "$database_image_id" >/dev/null
 recovery_ready=0
 for _attempt in $(seq 1 60); do
   if docker exec "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; "$client" --protocol=socket -uroot -e "SELECT 1" >/dev/null' >/dev/null 2>&1; then
@@ -333,10 +337,17 @@ for _attempt in $(seq 1 60); do
   sleep 1
 done
 [[ "$recovery_ready" -eq 1 ]] || { phase=RECOVERY_DATABASE_NOT_READY; exit 69; }
+docker exec "$recovery_container" /bin/sh -ceu 'test -r /recovery-input/production.sql.gz; command -v gzip >/dev/null' >/dev/null 2>&1 || { phase=RECOVERY_TOOLING_UNAVAILABLE; exit 69; }
 recovery_executed=true
 recovery_stderr="$(mktemp "${state_dir}/.recovery-restore.XXXXXX")" || { phase=RECOVERY_DIAGNOSTIC_FILE_CREATE_FAILED; exit 69; }
 set +e
-gzip -cd "$backup_file" 2>"$recovery_stderr" | docker exec -i "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; exec "$client" --protocol=socket -uroot' >/dev/null 2>>"$recovery_stderr"
+docker exec "$recovery_container" /bin/sh -ceu '
+  client="$(command -v mariadb || command -v mysql || true)"
+  test -n "$client"
+  test -r /recovery-input/production.sql.gz
+  gzip -t /recovery-input/production.sql.gz
+  gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot
+' >/dev/null 2>"$recovery_stderr"
 recovery_restore_status=$?
 set -e
 recovery_stderr_bytes="$(stat -c '%s' "$recovery_stderr")" || { phase=RECOVERY_DIAGNOSTIC_READ_FAILED; rm -f "$recovery_stderr"; exit 69; }
