@@ -22,8 +22,17 @@ jobs:
           ref: fix/aurion-traefik-full-container-cutover-20260829
           fetch-depth: 0
 
-      - name: Apply exact workflow patch
-        run: python3 scripts/_patch_aurion_full_container_workflow.py
+      - name: Validate and apply exact patches
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/_patch_aurion_full_container_workflow.py \
+            scripts/_finalize_aurion_full_container_workflow.py \
+            scripts/_patch_aurion_container_runtime_boundaries.py
+          python3 scripts/_patch_aurion_full_container_workflow.py
+          python3 scripts/_finalize_aurion_full_container_workflow.py
+          python3 scripts/_patch_aurion_container_runtime_boundaries.py
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-aurion-zone-runtime.yml")'
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -47,21 +56,18 @@ jobs:
             server/aurionProductionReadbackChain.test.ts
           bash -n deploy/promote-aurion-zone-runtime.sh
           bash -n deploy/promote-aurion-container-runtime.sh
-          printf 'DATABASE_URL=mysql://user:pass@mariadb:3306/aurion\nJWT_SECRET=test-only\n' > /tmp/aurion.env
+          printf 'DATABASE_URL=mysql://user:pass@mariadb:3306/aurion\nJWT_SECRET=test-only\nVITE_APP_ID=test-app\nOAUTH_SERVER_URL=https://oauth.example.test\n' > /tmp/aurion.env
           AURION_IMAGE_TAG=sha-test \
           AURION_RUNTIME_REVISION=0000000000000000000000000000000000000000 \
           AURION_ENV_FILE=/tmp/aurion.env \
           TRAEFIK_NETWORK=areloria_arelorian-network \
           AURION_PRIVATE_NETWORK=echoes-of-aurion-internal \
           docker compose -f docker-compose.traefik.yml config --quiet
+          ! grep -Fq 'systemctl reload nginx' deploy/promote-aurion-zone-runtime.sh
+          ! grep -Fq 'arelogic-zone-runtime.nginx.conf' .github/workflows/deploy-aurion-zone-runtime.yml
           git diff --check
 
-      - name: Remove temporary patch surfaces
-        run: |
-          rm scripts/_patch_aurion_full_container_workflow.py
-          rm .github/workflows/_aurion-full-container-cutover-patch.yml
-
-      - name: Export verified workflow bytes
+      - name: Export verified production workflow bytes
         uses: actions/upload-artifact@v4
         with:
           name: aurion-full-container-workflow-${{ github.sha }}
@@ -69,11 +75,27 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Commit verified target change
+      - name: Commit only non-workflow target changes
         run: |
           set -euo pipefail
           git config user.name "Ouroboros Collective"
           git config user.email "projectouroboroscollective@gmail.com"
-          git add -A
-          git commit -m "fix(runtime): make Traefik full container the only public Aurion runtime"
+          git add \
+            deploy/promote-aurion-container-runtime.sh \
+            server/_core/sdk.ts \
+            server/aurionFullContainerCutover.test.ts
+          git rm \
+            scripts/_patch_aurion_full_container_workflow.py \
+            scripts/_finalize_aurion_full_container_workflow.py \
+            scripts/_patch_aurion_container_runtime_boundaries.py
+          actual="$(git diff --cached --name-only | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            deploy/promote-aurion-container-runtime.sh \
+            scripts/_finalize_aurion_full_container_workflow.py \
+            scripts/_patch_aurion_container_runtime_boundaries.py \
+            scripts/_patch_aurion_full_container_workflow.py \
+            server/_core/sdk.ts \
+            server/aurionFullContainerCutover.test.ts | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          git commit -m "fix(runtime): harden Aurion auth and release cutover boundaries"
           git push origin "HEAD:${GITHUB_REF_NAME}"
