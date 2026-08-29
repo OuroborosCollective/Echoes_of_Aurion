@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+unset NODE_OPTIONS
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "usage: install-aurion-production-schema-apply <artifact-dir> <expected-sha40> [--enable-runner]" >&2
+  exit 64
+fi
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "install-aurion-production-schema-apply must run as root" >&2
+  exit 77
+fi
+
+[[ ! -L "$1" ]] || { echo "artifact directory must not be a symlink" >&2; exit 66; }
+artifact_dir="$(readlink -f -- "$1")"
+expected_sha="$2"
+enable_runner="${3:-}"
+case "$enable_runner" in
+  ""|--enable-runner) ;;
+  *) echo "invalid installer option" >&2; exit 64 ;;
+esac
+[[ "$artifact_dir" == /* && -d "$artifact_dir" ]] || { echo "artifact directory must be an absolute directory" >&2; exit 64; }
+[[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
+
+base=/opt/echoes-of-aurion-schema-apply
+release="${base}/releases/${expected_sha}"
+verifier_dir=/usr/local/lib/echoes-of-aurion
+verifier="${verifier_dir}/verify-aurion-production-schema-apply-artifact.mjs"
+runner=/usr/local/sbin/aurion-production-schema-apply
+host_config=/etc/aurion-production-schema-apply.env
+stage=""
+verifier_next=""
+runner_next=""
+sudoers_next=""
+
+cleanup() {
+  [[ -z "$stage" ]] || rm -rf "$stage"
+  [[ -z "$verifier_next" ]] || rm -f "$verifier_next"
+  [[ -z "$runner_next" ]] || rm -f "$runner_next"
+  [[ -z "$sudoers_next" ]] || rm -f "$sudoers_next"
+}
+trap cleanup EXIT
+
+validate_artifact() {
+  local candidate="$1"
+  [[ -d "$candidate" && ! -L "$candidate" ]] || return 70
+  if find "$candidate" -xdev -type l -print -quit | grep -q .; then
+    return 70
+  fi
+  [[ -f "${candidate}/manifest.json" && -f "${candidate}/checksums.sha256" ]] || return 70
+  (
+    cd "$candidate"
+    sha256sum --strict -c checksums.sha256 >/dev/null
+  ) || return 70
+  node "${candidate}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$candidate" "$expected_sha" || return 70
+}
+
+validate_release() {
+  local candidate="$1"
+  validate_artifact "$candidate" || return 70
+  if find "$candidate" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+    return 70
+  fi
+}
+
+validate_artifact "$artifact_dir" || { echo "schema apply artifact verification failed" >&2; exit 70; }
+
+install -d -o root -g root -m 0755 "${base}/releases"
+if [[ -e "$release" || -L "$release" ]]; then
+  validate_release "$release" || { echo "installed schema apply release verification failed" >&2; exit 70; }
+  cmp -s "${artifact_dir}/manifest.json" "${release}/manifest.json" || { echo "installed schema apply manifest differs from artifact" >&2; exit 70; }
+  cmp -s "${artifact_dir}/checksums.sha256" "${release}/checksums.sha256" || { echo "installed schema apply checksum contract differs from artifact" >&2; exit 70; }
+else
+  stage="$(mktemp -d "${base}/releases/.${expected_sha}.staging.XXXXXX")"
+  cp -a "${artifact_dir}/." "$stage/"
+  chown -R root:root "$stage"
+  find "$stage" -type d -exec chmod 0755 {} +
+  find "$stage" -type f -exec chmod 0644 {} +
+  chmod 0755 \
+    "${stage}/deploy/aurion-production-schema-apply" \
+    "${stage}/deploy/aurion-production-schema-apply-core" \
+    "${stage}/deploy/install-aurion-production-schema-apply" \
+    "${stage}/deploy/verify-aurion-production-schema-apply-artifact.mjs"
+  validate_release "$stage" || { echo "staged schema apply release verification failed" >&2; exit 70; }
+  cmp -s "${artifact_dir}/manifest.json" "${stage}/manifest.json" || { echo "staged release manifest differs from artifact" >&2; exit 70; }
+  cmp -s "${artifact_dir}/checksums.sha256" "${stage}/checksums.sha256" || { echo "staged release checksum contract differs from artifact" >&2; exit 70; }
+  mv -T "$stage" "$release"
+  stage=""
+fi
+validate_release "$release" || { echo "installed schema apply release verification failed" >&2; exit 70; }
+
+install -d -o root -g root -m 0755 "$verifier_dir"
+verifier_next="$(mktemp "${verifier_dir}/.verify-aurion-production-schema-apply-artifact.XXXXXX")"
+install -o root -g root -m 0755 "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier_next"
+[[ -f "$verifier_next" && ! -L "$verifier_next" && "$(stat -c '%U:%G:%a' "$verifier_next")" == "root:root:755" ]] || { echo "staged artifact verifier ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier_next" || { echo "staged artifact verifier differs from release" >&2; exit 70; }
+mv -f "$verifier_next" "$verifier"
+verifier_next=""
+[[ -f "$verifier" && ! -L "$verifier" && "$(stat -c '%U:%G:%a' "$verifier")" == "root:root:755" ]] || { echo "installed artifact verifier ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier" || { echo "installed artifact verifier differs from release" >&2; exit 70; }
+
+runner_next="$(mktemp /usr/local/sbin/.aurion-production-schema-apply.XXXXXX)"
+install -o root -g root -m 0755 "${release}/deploy/aurion-production-schema-apply" "$runner_next"
+[[ -f "$runner_next" && ! -L "$runner_next" && "$(stat -c '%U:%G:%a' "$runner_next")" == "root:root:755" ]] || { echo "staged root runner ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-apply" "$runner_next" || { echo "staged root runner differs from release" >&2; exit 70; }
+mv -f "$runner_next" "$runner"
+runner_next=""
+[[ -f "$runner" && ! -L "$runner" && "$(stat -c '%U:%G:%a' "$runner")" == "root:root:755" ]] || { echo "installed root runner ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-apply" "$runner" || { echo "installed root runner differs from release" >&2; exit 70; }
+
+if [[ ! -f "$host_config" ]]; then
+  install -o root -g root -m 0600 "${release}/deploy/aurion-production-schema-apply.environment.template" "$host_config"
+fi
+[[ -f "$host_config" && ! -L "$host_config" && "$(stat -c '%U:%G:%a' "$host_config")" == "root:root:600" ]] || { echo "schema apply host config ownership or mode mismatch" >&2; exit 77; }
+
+if [[ "$enable_runner" == "--enable-runner" ]]; then
+  sudoers_next="$(mktemp /etc/sudoers.d/.aurion-production-schema-apply.XXXXXX)"
+  install -o root -g root -m 0440 "${release}/deploy/aurion-production-schema-apply.sudoers" "$sudoers_next"
+  visudo -cf "$sudoers_next" >/dev/null
+  mv -f "$sudoers_next" /etc/sudoers.d/aurion-production-schema-apply
+  sudoers_next=""
+  visudo -cf /etc/sudoers.d/aurion-production-schema-apply >/dev/null
+fi
+
+ln -sTfn "$release" "${base}/current.next"
+mv -Tf "${base}/current.next" "${base}/current"
+[[ "$(readlink -f "${base}/current")" == "$release" ]]
+
+printf '{"installed":true,"revision":"%s","runnerEnabled":%s}\n' "$expected_sha" "$([[ "$enable_runner" == "--enable-runner" ]] && echo true || echo false)"

@@ -21,6 +21,9 @@ public_readback_dir=/var/lib/aurion-traefik-runtime-readback
 schema_artifact="${artifact_dir}/dist-production-reconcile"
 schema_installer="${schema_artifact}/deploy/install-aurion-production-schema-reconcile"
 schema_current=/opt/echoes-of-aurion-schema-reconcile/current
+schema_apply_artifact="${artifact_dir}/dist-production-apply"
+schema_apply_installer="${schema_apply_artifact}/deploy/install-aurion-production-schema-apply"
+schema_apply_current=/opt/echoes-of-aurion-schema-apply/current
 legacy_service=aurion-zone-runtime.service
 phase=preflight
 trap 'status=$?; if [[ "$status" -ne 0 ]]; then printf "aurion-traefik-promoter failed phase=%s status=%s\\n" "$phase" "$status" >&2; fi' EXIT
@@ -34,12 +37,21 @@ trap 'status=$?; if [[ "$status" -ne 0 ]]; then printf "aurion-traefik-promoter 
 [[ -f "${schema_artifact}/manifest.json" && -f "${schema_artifact}/checksums.sha256" ]]
 [[ -f "$schema_installer" ]]
 [[ -f "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" ]]
+[[ -d "$schema_apply_artifact" ]]
+[[ -f "${schema_apply_artifact}/manifest.json" && -f "${schema_apply_artifact}/checksums.sha256" ]]
+[[ -f "$schema_apply_installer" ]]
+[[ -f "${schema_apply_artifact}/deploy/aurion-production-schema-apply-core" ]]
+[[ -f "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-artifact.mjs" ]]
 
 cd "$artifact_dir"
 phase=runtime-archive-integrity
 sha256sum -c "$runtime_checksum"
 (
   cd "$schema_artifact"
+  sha256sum --strict -c checksums.sha256 >/dev/null
+)
+(
+  cd "$schema_apply_artifact"
   sha256sum --strict -c checksums.sha256 >/dev/null
 )
 
@@ -130,6 +142,31 @@ test -f /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcil
 test ! -L /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
 test "$(stat -c '%U:%G:%a' /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs)" = "root:root:755"
 cmp -s "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+
+# The write-capable path is a distinct, separately verified artifact. Installing
+# it never executes a migration; the only root entrypoint accepts a revision and
+# plan hash and performs its own fresh readback, backup and recovery proof.
+phase=schema-apply-runner-install
+bash "$schema_apply_installer" "$schema_apply_artifact" "$expected_sha" --enable-runner
+[[ -x /usr/local/sbin/aurion-production-schema-apply ]]
+[[ -L "$schema_apply_current" ]]
+[[ "$(readlink -f "$schema_apply_current")" == "/opt/echoes-of-aurion-schema-apply/releases/${expected_sha}" ]]
+grep -Fq "$expected_sha" "${schema_apply_current}/manifest.json"
+visudo -cf /etc/sudoers.d/aurion-production-schema-apply >/dev/null
+(
+  cd "$schema_apply_current"
+  sha256sum --strict -c checksums.sha256 >/dev/null
+)
+cmp -s "${schema_apply_artifact}/manifest.json" "${schema_apply_current}/manifest.json"
+cmp -s "${schema_apply_artifact}/checksums.sha256" "${schema_apply_current}/checksums.sha256"
+test -f /usr/local/sbin/aurion-production-schema-apply
+test ! -L /usr/local/sbin/aurion-production-schema-apply
+test "$(stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-apply)" = "root:root:755"
+cmp -s "${schema_apply_artifact}/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
+test -f /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+test ! -L /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+test "$(stat -c '%U:%G:%a' /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs)" = "root:root:755"
+cmp -s "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
 
 # Preserve the existing narrow sudo entrypoint while replacing its implementation
 # with this verified Traefik promoter for future releases.

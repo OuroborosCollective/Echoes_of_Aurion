@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+unset NODE_OPTIONS
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: aurion-production-schema-apply <expected-sha40> <plan-sha256>" >&2
+  exit 64
+fi
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "aurion-production-schema-apply must run as root" >&2
+  exit 77
+fi
+
+expected_sha="$1"
+plan_sha256="$2"
+[[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
+[[ "$plan_sha256" =~ ^[a-f0-9]{64}$ ]] || { echo "invalid plan hash" >&2; exit 64; }
+
+base=/opt/echoes-of-aurion-schema-apply
+current="${base}/current"
+state_dir=/var/lib/echoes-of-aurion/schema-apply
+
+emit_authorization_failure() {
+  install -d -o root -g root -m 0700 "$state_dir"
+  local tmp receipt stamp
+  tmp="$(mktemp "${state_dir}/.authorization-failure.XXXXXX")"
+  APPLY_SOURCE_REVISION="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
+    import fs from "node:fs";
+    fs.writeFileSync(process.argv[1], `${JSON.stringify({
+      recordType:"aurion_production_schema_apply",
+      schemaVersion:1,
+      sourceRevision:process.env.APPLY_SOURCE_REVISION,
+      planSha256:process.env.APPLY_PLAN_SHA256,
+      mode:"backup_recovery_apply",
+      databaseCredentialReturned:false,
+      overallState:"APPLY_FAILED",
+      failureStage:"VERIFY_GITHUB_ACTIONS_OIDC",
+      errorClass:"GITHUB_ACTIONS_OIDC_INVALID",
+      backup:{created:false},
+    },null,2)}\n`, {mode:0o600});
+  ' "$tmp" >/dev/null 2>&1
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  receipt="$(mktemp "${state_dir}/${expected_sha}-${stamp}.json.XXXXXX")"
+  install -o root -g root -m 0600 "$tmp" "$receipt"
+  ln -sTfn "$receipt" "${state_dir}/latest.next"
+  mv -Tf "${state_dir}/latest.next" "${state_dir}/latest.json"
+  rm -f "$tmp"
+  cat "$receipt"
+}
+
+[[ -L "$current" ]] || { echo "schema apply release is not installed" >&2; exit 69; }
+release="$(readlink -f "$current")"
+[[ "$release" == "${base}/releases/${expected_sha}" ]] || { echo "installed schema apply release does not match expected revision" >&2; exit 70; }
+[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -x "${release}/deploy/aurion-production-schema-apply-core" && -f "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" ]] || { echo "schema apply release is incomplete" >&2; exit 70; }
+[[ "$(stat -c '%U:%G' "$release")" == "root:root" ]] || { echo "schema apply release must be root-owned" >&2; exit 70; }
+if find "$release" -xdev \( -type l -o ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+  echo "schema apply release contains unsafe ownership, symlink or writable content" >&2
+  exit 70
+fi
+installed_runner=/usr/local/sbin/aurion-production-schema-apply
+installed_verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+[[ -f "$installed_runner" && ! -L "$installed_runner" && "$(stat -c '%U:%G:%a' "$installed_runner")" == "root:root:755" ]] || { echo "installed root runner ownership or mode mismatch" >&2; exit 70; }
+[[ -f "$installed_verifier" && ! -L "$installed_verifier" && "$(stat -c '%U:%G:%a' "$installed_verifier")" == "root:root:755" ]] || { echo "installed artifact verifier ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-apply" "$installed_runner" || { echo "installed root runner does not match schema apply release" >&2; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$installed_verifier" || { echo "installed artifact verifier does not match schema apply release" >&2; exit 70; }
+node "$installed_verifier" "$release" "$expected_sha"
+(
+  cd "$release"
+  sha256sum --strict -c checksums.sha256 >/dev/null
+)
+
+# The only sudo-exposed entrypoint consumes a short-lived GitHub Actions OIDC
+# JWT from stdin. The token binds the exact revision and ledger plan hash via
+# its audience and is independently verified against GitHub's issuer JWKS.
+if ! node --input-type=module -e '
+  import { createPublicKey, verify } from "node:crypto";
+  const fail=()=>process.exit(2);
+  const read=async()=>{let value="";for await(const chunk of process.stdin){value+=chunk;if(value.length>16384) fail();}return value.trim();};
+  const parse=part=>JSON.parse(Buffer.from(part,"base64url").toString("utf8"));
+  const expectedSha=process.argv[1];
+  const planSha256=process.argv[2];
+  const audience=`aurion-production-schema-apply-v1:${expectedSha}:${planSha256}`;
+  const main=async()=>{
+    const raw=await read();
+    if(!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(raw)) fail();
+    const [headerPart,payloadPart,signaturePart]=raw.split(".");
+    const header=parse(headerPart);
+    const payload=parse(payloadPart);
+    if(header?.alg!=="RS256"||typeof header.kid!=="string"||!header.kid) fail();
+    const now=Math.floor(Date.now()/1000);
+    if(!Number.isSafeInteger(payload?.iat)||!Number.isSafeInteger(payload?.exp)||payload.iat>now+120||payload.iat<now-900||payload.exp<now-60||payload.exp>now+900) fail();
+    if(payload.iss!=="https://token.actions.githubusercontent.com"||payload.aud!==audience||payload.sub!=="repo:OuroborosCollective/Echoes_of_Aurion:environment:production") fail();
+    if(payload.repository!=="OuroborosCollective/Echoes_of_Aurion"||payload.repository_owner!=="OuroborosCollective"||payload.ref!=="refs/heads/main"||payload.sha!==expectedSha||payload.event_name!=="workflow_dispatch"||payload.environment!=="production"||payload.runner_environment!=="self-hosted") fail();
+    if(payload.workflow_ref!=="OuroborosCollective/Echoes_of_Aurion/.github/workflows/aurion-production-schema-apply.yml@refs/heads/main"||payload.workflow_sha!==expectedSha) fail();
+    const response=await fetch("https://token.actions.githubusercontent.com/.well-known/jwks",{redirect:"error",headers:{accept:"application/json"},signal:AbortSignal.timeout(10000)});
+    if(!response.ok) fail();
+    const jwks=await response.json();
+    const key=Array.isArray(jwks?.keys)?jwks.keys.find(candidate=>candidate?.kid===header.kid&&candidate.kty==="RSA"&&candidate.use==="sig"&&(candidate.alg===undefined||candidate.alg==="RS256")):null;
+    if(!key) fail();
+    const publicKey=createPublicKey({key,format:"jwk"});
+    if(!verify("RSA-SHA256",Buffer.from(`${headerPart}.${payloadPart}`),publicKey,Buffer.from(signaturePart,"base64url"))) fail();
+  };
+  main().catch(fail);
+' "$expected_sha" "$plan_sha256"; then
+  emit_authorization_failure
+  exit 77
+fi
+
+exec "${release}/deploy/aurion-production-schema-apply-core" "$expected_sha" "$plan_sha256"

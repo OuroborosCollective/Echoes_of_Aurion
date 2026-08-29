@@ -7,12 +7,19 @@ on:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
       - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
+      - ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
       - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
       - "deploy/aurion-traefik-runtime.environment.template"
       - "deploy/aurion-production-schema-reconcile"
       - "deploy/aurion-production-schema-reconcile.sudoers"
       - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-apply"
+      - "deploy/aurion-production-schema-apply-core"
+      - "deploy/aurion-production-schema-apply.environment.template"
+      - "deploy/aurion-production-schema-apply.sudoers"
+      - "deploy/install-aurion-production-schema-apply"
+      - "deploy/verify-aurion-production-schema-apply-artifact.mjs"
       - "deploy/aurion-reconcile-runtime-image.conf"
       - "deploy/aurion-reconcile-runtime-network.conf"
       - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
@@ -28,13 +35,17 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "scripts/build-aurion-production-apply-artifact.mjs"
       - "scripts/build-aurion-traefik-runtime-artifact.mjs"
       - "scripts/build-aurion-promoter-bootstrap-artifact.mjs"
       - "scripts/aurionProductionSchemaReconciliation.ts"
       - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/apply-aurion-production-schema.ts"
+      - "scripts/aurionProductionDatabaseClientConfig.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
       - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
+      - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
       - "server/aurionProductionReadbackChain.test.ts"
       - "server/aurionTraefikRuntimeDeployment.test.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
@@ -97,7 +108,11 @@ jobs:
           node --check scripts/build-aurion-promoter-bootstrap-artifact.mjs
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
+          bash -n deploy/aurion-production-schema-apply
+          bash -n deploy/aurion-production-schema-apply-core
+          bash -n deploy/install-aurion-production-schema-apply
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
+          sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
           git diff --check
 
       - name: Build revision-bound Traefik runtime and compatibility bootstrap
@@ -124,6 +139,7 @@ jobs:
           # actual container promotion.
           pnpm build:zone-runtime
           node scripts/build-aurion-production-reconcile-artifact.mjs
+          node scripts/build-aurion-production-apply-artifact.mjs
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
@@ -140,6 +156,18 @@ jobs:
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-production-apply/manifest.json","utf8"));
+          if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_production_schema_apply_artifact") throw new Error("unexpected schema apply artifact type");
+          if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="backup_recovery_apply"||manifest.moduleFormat!=="commonjs") throw new Error("schema apply artifact boundary mismatch");
+          for(const file of [
+            "bin/apply.cjs","bin/mysql-client-config.cjs","bin/reconcile.cjs","drizzle/meta/_journal.json",
+            "deploy/aurion-production-schema-apply","deploy/aurion-production-schema-apply-core","deploy/install-aurion-production-schema-apply","deploy/verify-aurion-production-schema-apply-artifact.mjs",
+          ]) if(!manifest.files?.[file]) throw new Error(`schema apply artifact is missing ${file}`);
+          NODE
+          (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
+          node dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs dist-production-apply "$GITHUB_SHA"
           printf '{"revision":"%s","runId":"%s","artifact":"aurion-zone-runtime"}\n' \
             "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > dist-zone/.aurion-zone-runtime-release.json
           tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
@@ -165,6 +193,7 @@ jobs:
             deploy/promote-aurion-zone-runtime.sh \
             runtime-artifact/deploy/
           cp -a dist-production-reconcile runtime-artifact/
+          cp -a dist-production-apply runtime-artifact/
           node scripts/build-aurion-promoter-bootstrap-artifact.mjs runtime-artifact runtime-bootstrap-artifact
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -212,6 +241,7 @@ jobs:
             deploy/aurion-traefik-runtime.environment.template
             deploy/promote-aurion-zone-runtime.sh
             dist-production-reconcile
+            dist-production-apply
           if-no-files-found: error
           retention-days: 30
 
@@ -230,9 +260,16 @@ jobs:
     with:
       use_uploaded_artifact: true
 
+  root-schema-apply-proof:
+    name: Prove backup, recovery and bounded schema apply
+    needs: verify-and-build
+    uses: ./.github/workflows/aurion-root-schema-apply-artifact-proof.yml
+    with:
+      use_uploaded_artifact: true
+
   promote-zone-runtime:
     name: Promote verified Aurion Traefik runtime
-    needs: [verify-and-build, root-reconciliation-proof]
+    needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
     env:
@@ -335,15 +372,21 @@ jobs:
           test -x /usr/local/sbin/aurion-production-schema-reconcile
           test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
           grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          test -x /usr/local/sbin/aurion-production-schema-apply
+          test -f /opt/echoes-of-aurion-schema-apply/current/manifest.json
+          grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-apply/current/manifest.json
 
       - name: Read back installed container and schema identities
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-reconcile"
+          apply_artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-apply"
           runtime_archive="${GITHUB_WORKSPACE}/runtime-artifact/aurion-traefik-runtime-release.tgz"
           readback=/var/lib/aurion-traefik-runtime-readback/current.json
           runner=/usr/local/sbin/aurion-production-schema-reconcile
           verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+          apply_runner=/usr/local/sbin/aurion-production-schema-apply
+          apply_verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
           test -f "$readback"
           runtime_manifest_sha256="$(tar -xOzf "$runtime_archive" ./manifest.json | sha256sum | awk '{print $1}')"
           schema_manifest_sha256="$(sha256sum "$artifact/manifest.json" | awk '{print $1}')"
@@ -356,6 +399,8 @@ jobs:
           ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
+          (cd "$apply_artifact" && sha256sum --strict -c checksums.sha256)
+          node "${apply_artifact}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_artifact" "$EXPECTED_SHA"
           test -f "$runner"
           test ! -L "$runner"
           test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
@@ -364,6 +409,14 @@ jobs:
           test ! -L "$verifier"
           test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
           cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          test -f "$apply_runner"
+          test ! -L "$apply_runner"
+          test "$(stat -c '%U:%G:%a' "$apply_runner")" = "root:root:755"
+          cmp -s "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
+          test -f "$apply_verifier"
+          test ! -L "$apply_verifier"
+          test "$(stat -c '%U:%G:%a' "$apply_verifier")" = "root:root:755"
+          cmp -s "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
       - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail

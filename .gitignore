@@ -5,6 +5,8 @@
 # Build outputs
 dist/
 dist-traefik-runtime/
+dist-production-reconcile/
+dist-production-apply/
 runtime-artifact/
 runtime-bootstrap-artifact/
 build/

@@ -1,0 +1,4 @@
+# The deployment account may invoke only the fixed, root-owned schema apply
+# entrypoint. It cannot choose arbitrary code, Docker arguments, backups, or
+# environment files.
+aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-production-schema-apply *

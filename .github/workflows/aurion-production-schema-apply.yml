@@ -1,0 +1,295 @@
+name: Apply approved Aurion production schema plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      ledger_run_id:
+        description: Run ID of the immutable Aurion WASD migration-ledger artifact.
+        required: true
+        type: string
+      plan_sha256:
+        description: Exact planSha256 from that ledger artifact.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: aurion-production-schema-apply
+  cancel-in-progress: false
+
+jobs:
+  verify-ledger-and-apply-artifact:
+    name: Verify exact ledger and bounded apply artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.identity.outputs.artifact_name }}
+    steps:
+      - name: Guard exact main workflow revision and inputs
+        env:
+          LEDGER_RUN_ID: ${{ inputs.ledger_run_id }}
+          PLAN_SHA256: ${{ inputs.plan_sha256 }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF}" = "refs/heads/main"
+          [[ "$LEDGER_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
+
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checked-out main revision
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download immutable cross-repository ledger receipt
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-wasd-migration-ledger-${{ inputs.plan_sha256 }}
+          path: migration-ledger
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.ledger_run_id }}
+
+      - name: Verify plan, source evidence and target migration hashes
+        env:
+          PLAN_SHA256: ${{ inputs.plan_sha256 }}
+        run: |
+          set -euo pipefail
+          test -f migration-ledger/migration-ledger.json
+          test -f migration-ledger/checksums.sha256
+          (cd migration-ledger && sha256sum --strict -c checksums.sha256)
+          PLAN_SHA256="$PLAN_SHA256" node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const tags=[
+            "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs",
+            "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards",
+          ];
+          const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==="object"?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+          const ledger=JSON.parse(fs.readFileSync("migration-ledger/migration-ledger.json","utf8"));
+          const unsigned={...ledger}; delete unsigned.planSha256;
+          const actualPlan=createHash("sha256").update(JSON.stringify(canonical(unsigned)),"utf8").digest("hex");
+          if(ledger.schemaVersion!=="aurion.wasd-migration-ledger.v1"||ledger.recordType!=="aurion_wasd_migration_ledger"||ledger.planSha256!==process.env.PLAN_SHA256||actualPlan!==ledger.planSha256) throw new Error("ledger plan identity mismatch");
+          if(ledger.source?.repository!=="OuroborosCollective/Wasd"||!/^[a-f0-9]{40}$/.test(ledger.source?.revision??"")||!/^[a-f0-9]{64}$/.test(ledger.source?.manifestSha256??"")) throw new Error("ledger source identity invalid");
+          if(ledger.target?.repository!=="OuroborosCollective/Echoes_of_Aurion"||ledger.target?.revision!==process.env.GITHUB_SHA||ledger.repositoryState!=="PENDING_PRODUCTION_READBACK") throw new Error("ledger target is not this immutable main revision");
+          if(ledger.plan?.productionWritesScheduled!==false||!Array.isArray(ledger.plan?.requiredProductionReadback)||ledger.plan.requiredProductionReadback.join(",")!==tags.join(",")) throw new Error("ledger pre-apply contract invalid");
+          if(!Array.isArray(ledger.plan?.prohibitedActions)||!ledger.plan.prohibitedActions.includes("schema_apply")) throw new Error("ledger is not a bounded read-only source receipt");
+          const migrations=ledger.target?.migrationJournal?.migrations;
+          if(!Array.isArray(migrations)||migrations.length!==tags.length) throw new Error("ledger migration inventory invalid");
+          for(const [index,tag] of tags.entries()) {
+            const migration=migrations[index];
+            const source=fs.readFileSync(`drizzle/${tag}.sql`);
+            const hash=createHash("sha256").update(source).digest("hex");
+            if(migration?.tag!==tag||migration?.path!==`drizzle/${tag}.sql`||migration?.sha256!==hash||migration?.journalPresent!==true) throw new Error(`ledger migration mismatch: ${tag}`);
+          }
+          NODE
+
+      - name: Build and verify the exact bounded apply artifact
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+          bash -n deploy/aurion-production-schema-apply
+          bash -n deploy/aurion-production-schema-apply-core
+          bash -n deploy/install-aurion-production-schema-apply
+          sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
+          node scripts/build-aurion-production-apply-artifact.mjs
+          (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
+          node dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs dist-production-apply "$GITHUB_SHA"
+          PLAN_SHA256="${{ inputs.plan_sha256 }}" node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const ledger=JSON.parse(fs.readFileSync("migration-ledger/migration-ledger.json","utf8"));
+          const artifact=JSON.parse(fs.readFileSync("dist-production-apply/manifest.json","utf8"));
+          if(artifact.recordType!=="aurion_production_schema_apply_artifact"||artifact.revision!==process.env.GITHUB_SHA||artifact.mode!=="backup_recovery_apply") throw new Error("apply artifact identity mismatch");
+          for(const migration of ledger.target.migrationJournal.migrations) {
+            const file=artifact.files?.[migration.path];
+            if(!file||file.sha256!==migration.sha256) throw new Error(`apply artifact migration mismatch: ${migration.tag}`);
+          }
+          NODE
+
+      - name: Publish exact apply artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-production-schema-apply-artifact-${{ github.sha }}-${{ inputs.plan_sha256 }}
+          path: dist-production-apply
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record immutable artifact identity
+        id: identity
+        env:
+          PLAN_SHA256: ${{ inputs.plan_sha256 }}
+        run: |
+          set -euo pipefail
+          printf 'artifact_name=aurion-production-schema-apply-artifact-%s-%s\n' "$GITHUB_SHA" "$PLAN_SHA256" >> "$GITHUB_OUTPUT"
+
+  apply-on-production:
+    name: Apply through backup and recovery boundary
+    needs: verify-ledger-and-apply-artifact
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 45
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+      PLAN_SHA256: ${{ inputs.plan_sha256 }}
+    steps:
+      - name: Guard repository scope
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF}" = "refs/heads/main"
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
+
+      - name: Reset workflow-owned apply evidence
+        run: rm -rf schema-apply-artifact production-schema-apply.raw.json production-schema-apply.json production-schema-apply.stderr production-schema-apply.oidc
+
+      - name: Download verified bounded apply artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.verify-ledger-and-apply-artifact.outputs.artifact_name }}
+          path: schema-apply-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Request revision- and plan-bound GitHub Actions authorization
+        run: |
+          set -euo pipefail
+          authorization_file="${GITHUB_WORKSPACE}/production-schema-apply.oidc"
+          umask 077
+          EXPECTED_SHA="$EXPECTED_SHA" PLAN_SHA256="$PLAN_SHA256" node --input-type=module <<'NODE' > "$authorization_file"
+          const expectedSha=process.env.EXPECTED_SHA;
+          const planSha256=process.env.PLAN_SHA256;
+          if(!/^[a-f0-9]{40}$/.test(expectedSha??"")||!/^[a-f0-9]{64}$/.test(planSha256??"")) process.exit(2);
+          const requestUrl=process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken=process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if(!requestUrl||!requestToken) process.exit(2);
+          const url=new URL(requestUrl);
+          url.searchParams.set("audience",`aurion-production-schema-apply-v1:${expectedSha}:${planSha256}`);
+          const response=await fetch(url,{headers:{authorization:`Bearer ${requestToken}`},redirect:"error",signal:AbortSignal.timeout(10000)});
+          if(!response.ok) process.exit(2);
+          const payload=await response.json();
+          if(typeof payload?.value!=="string"||!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(payload.value)) process.exit(2);
+          process.stdout.write(payload.value);
+          NODE
+          test -s "$authorization_file"
+          test "$(stat -c '%a' "$authorization_file")" = "600"
+
+      - name: Verify installed root runner identity and execute approved plan
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/schema-apply-artifact"
+          installed_current=/opt/echoes-of-aurion-schema-apply/current
+          runner=/usr/local/sbin/aurion-production-schema-apply
+          verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+          raw="${GITHUB_WORKSPACE}/production-schema-apply.raw.json"
+          result="${GITHUB_WORKSPACE}/production-schema-apply.json"
+          stderr_file="${GITHUB_WORKSPACE}/production-schema-apply.stderr"
+          authorization_file="${GITHUB_WORKSPACE}/production-schema-apply.oidc"
+          trap 'rm -f "$authorization_file"' EXIT
+          test -d "$artifact"
+          test -L "$installed_current"
+          installed_root="$(readlink -f -- "$installed_current")"
+          test "$installed_root" = "/opt/echoes-of-aurion-schema-apply/releases/${EXPECTED_SHA}"
+          (cd "$artifact" && sha256sum --strict -c checksums.sha256)
+          node "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$artifact" "$EXPECTED_SHA"
+          test -f "$runner"
+          test ! -L "$runner"
+          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
+          test -f "$verifier"
+          test ! -L "$verifier"
+          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
+          cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
+          cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
+          cmp -s "$artifact/deploy/aurion-production-schema-apply" "$runner"
+          cmp -s "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier"
+          test -s "$authorization_file"
+          test "$(stat -c '%a' "$authorization_file")" = "600"
+          umask 077
+          set +e
+          sudo -n "$runner" "$EXPECTED_SHA" "$PLAN_SHA256" <"$authorization_file" >"$raw" 2>"$stderr_file"
+          runner_status=$?
+          set -e
+          APPLY_RAW="$raw" APPLY_RESULT="$result" APPLY_STATUS="$runner_status" APPLY_EXPECTED_SHA="$EXPECTED_SHA" APPLY_PLAN_SHA256="$PLAN_SHA256" node --input-type=module -e '
+            import fs from "node:fs";
+            const raw=process.env.APPLY_RAW;
+            const output={
+              schemaVersion:1,
+              recordType:"aurion_production_schema_apply_ci",
+              sourceRevision:process.env.APPLY_EXPECTED_SHA,
+              planSha256:process.env.APPLY_PLAN_SHA256,
+              runnerStatus:Number(process.env.APPLY_STATUS),
+              databaseCredentialReturned:false,
+            };
+            if(fs.existsSync(raw)&&fs.statSync(raw).size>0){
+              const receipt=JSON.parse(fs.readFileSync(raw,"utf8"));
+              if(receipt.recordType!=="aurion_production_schema_apply"||receipt.schemaVersion!==1||receipt.sourceRevision!==output.sourceRevision||receipt.planSha256!==output.planSha256||receipt.mode!=="backup_recovery_apply"||receipt.databaseCredentialReturned!==false) throw new Error("unexpected root apply receipt");
+              if(!["APPLY_SUCCEEDED","ALREADY_APPLIED","APPLY_FAILED"].includes(receipt.overallState)) throw new Error("unexpected root apply state");
+              output.state=receipt.overallState;
+              output.failureStage=receipt.failureStage??null;
+              output.backup=receipt.backup??null;
+              output.recovery=receipt.recovery??null;
+              output.apply=receipt.apply??null;
+              output.preflight=receipt.preflight??null;
+              output.postflight=receipt.postflight??null;
+            } else {
+              output.state="ROOT_APPLY_FAILED";
+              output.failureStage=null;
+              output.backup=null;
+              output.recovery=null;
+              output.apply=null;
+              output.preflight=null;
+              output.postflight=null;
+            }
+            fs.writeFileSync(process.env.APPLY_RESULT,`${JSON.stringify(output,null,2)}\n`,{mode:0o600});
+          '
+          rm -f "$raw" "$stderr_file"
+          cat "$result"
+          state="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).state)' "$result")"
+          printf 'state=%s\n' "$state" >> "$GITHUB_OUTPUT"
+
+      - name: Upload sanitized production apply receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-production-schema-apply-receipt-${{ github.sha }}-${{ inputs.plan_sha256 }}
+          path: production-schema-apply.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce complete production apply receipt
+        run: |
+          set -euo pipefail
+          result=production-schema-apply.json
+          test -f "$result"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(r.databaseCredentialReturned!==false||!["APPLY_SUCCEEDED","ALREADY_APPLIED"].includes(r.state)||r.runnerStatus!==0) process.exit(2);
+            if(r.state==="APPLY_SUCCEEDED"){
+              if(r.backup?.created!==true||r.recovery?.executed!==true||r.recovery?.matched!==true||r.apply?.state!=="APPLY_SUCCEEDED"||r.postflight?.state!=="PRESENT_SCHEMA_MATCH") process.exit(3);
+            }
+          ' "$result"
