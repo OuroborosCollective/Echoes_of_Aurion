@@ -1,0 +1,42 @@
+name: Temporary Aurion root sanitization mock patch
+
+on:
+  push:
+    branches:
+      - fix/aurion-root-sanitize-mock-contract-20260829
+    paths:
+      - ".github/workflows/_aurion-root-sanitize-mock-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/aurion-root-sanitize-mock-contract-20260829
+          fetch-depth: 0
+
+      - name: Apply exact mock-contract correction
+        run: python3 scripts/_patch_root_sanitize_mock_contract.py
+
+      - name: Verify minimal target diff
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git diff --name-only)" = ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
+          grep -Fq "image) printf '%s\\n' 'sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff' ;;" .github/workflows/aurion-root-reconciliation-artifact-proof.yml
+          ! grep -Fq "image) printf '%s\\n' 'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff' ;;" .github/workflows/aurion-root-reconciliation-artifact-proof.yml
+
+      - name: Commit verified correction
+        run: |
+          set -euo pipefail
+          git config user.name "Ouroboros Collective"
+          git config user.email "projectouroboroscollective@gmail.com"
+          git add .github/workflows/aurion-root-reconciliation-artifact-proof.yml
+          git commit -m "fix(ci): align fake Docker image identity with root runner"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
