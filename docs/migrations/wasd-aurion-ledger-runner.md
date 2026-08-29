@@ -4,6 +4,10 @@
 
 `.github/workflows/aurion-wasd-migration-ledger.yml` verbindet beide Repositories über einen revisionsgepinnten, wiederverwendbaren GitHub-Workflow. WASD erstellt einen Hash-only Quellen-Ledger; Aurion verifiziert ihn an derselben aufgelösten Commit-Revision und erzeugt daraus einen eigenen Plan-/Receipt-Hash.
 
+Das vollständige Betriebs- und Wiederanlauf-Runbook einschließlich
+Traefik-Promotion, Readback-Zuständen und der manuellen Apply-Grenze steht in
+[`aurion-wasd-automation-runbook.md`](./aurion-wasd-automation-runbook.md).
+
 ## Automatische Phasen
 
 | Phase | Ergebnis | Schreibrecht |
