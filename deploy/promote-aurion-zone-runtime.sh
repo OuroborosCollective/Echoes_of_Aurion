@@ -83,7 +83,7 @@ node --input-type=module -e '
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
   for (const [relative, expectedHash] of Object.entries(manifest.files ?? {})) {
-    if (!/^[A-Za-z0-9._/:-]+$/.test(relative) || relative.split("/").includes("..")) process.exit(4);
+    if (!/^[A-Za-z0-9@._/:-]+$/.test(relative) || relative.split("/").includes("..")) process.exit(4);
     const absolute = path.resolve(release, relative);
     if (!absolute.startsWith(`${path.resolve(release)}${path.sep}`)) process.exit(5);
     const actualHash = createHash("sha256").update(await readFile(absolute)).digest("hex");
