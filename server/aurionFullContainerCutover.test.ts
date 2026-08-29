@@ -12,6 +12,7 @@ describe("Aurion full container cutover", () => {
   const compose = read("docker-compose.traefik.yml");
   const dockerfile = read("Dockerfile");
   const server = read("server/_core/index.ts");
+  const sdk = read("server/_core/sdk.ts");
 
   it("builds one revision-labelled full runtime image from the prebuilt artifact", () => {
     expect(workflow).toContain("pnpm build:runtime-artifact");
@@ -61,10 +62,27 @@ describe("Aurion full container cutover", () => {
     expect(containerPromoter).not.toMatch(/mysql\s+-|mariadb\s+-|psql\s+-/);
   });
 
-  it("requires protected environment permissions and complete-or-absent OIDC consent", () => {
+  it("requires protected environment permissions and exactly one complete authentication mode", () => {
     expect(containerPromoter).toContain("root:root:600");
+    expect(containerPromoter).toContain("DATABASE_URL JWT_SECRET VITE_APP_ID");
     expect(containerPromoter).toContain("OIDC_ISSUER_URL OIDC_CLIENT_ID OIDC_CLIENT_SECRET OIDC_REDIRECT_URI");
-    expect(containerPromoter).toContain('[[ "$oidc_count" -eq 0 || "$oidc_count" -eq 4 ]]');
+    expect(containerPromoter).toContain("OAUTH_SERVER_URL");
+    expect(containerPromoter).toContain("auth_mode=oidc");
+    expect(containerPromoter).toContain("auth_mode=legacy_oauth");
     expect(containerPromoter).not.toContain('cat "$env_file"');
+    expect(sdk).toContain("OIDC provider configured");
+  });
+
+  it("publishes the release pointer only after public revision readback", () => {
+    expect(containerPromoter.indexOf('body.revision!==process.env.EXPECTED_SHA')).toBeLessThan(
+      containerPromoter.indexOf('ln -sTfn "$release" "${base}/current.next"'),
+    );
+    expect(containerPromoter).toContain("authMode:process.env.AUTH_MODE");
+  });
+
+  it("bootstraps the exact new root promoter without accepting an arbitrary failed predecessor", () => {
+    expect(workflow).toContain("LEGACY_PROMOTER_REPLACED");
+    expect(workflow).toContain('cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime');
+    expect(workflow).toContain('},null,2)+"\\n");');
   });
 });

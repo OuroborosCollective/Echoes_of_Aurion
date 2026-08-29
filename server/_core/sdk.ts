@@ -30,11 +30,18 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
+    const oidcConfigured = [
+      "OIDC_ISSUER_URL",
+      "OIDC_CLIENT_ID",
+      "OIDC_CLIENT_SECRET",
+      "OIDC_REDIRECT_URI",
+    ].every(key => typeof process.env[key] === "string" && process.env[key]!.trim().length > 0);
+    if (ENV.oAuthServerUrl) {
+      console.log("[OAuth] Legacy OAuth provider configured");
+    } else if (oidcConfigured) {
+      console.log("[OAuth] OIDC provider configured");
+    } else {
+      console.error("[OAuth] ERROR: neither OIDC nor legacy OAuth is configured");
     }
   }
 

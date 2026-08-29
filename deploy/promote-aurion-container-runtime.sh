@@ -61,16 +61,46 @@ chown root:root "$env_file"
 chmod 0600 "$env_file"
 test "$(stat -c '%U:%G:%a' "$env_file")" = "root:root:600"
 
-for required_name in DATABASE_URL JWT_SECRET; do
-  grep -Eq "^[[:space:]]*(export[[:space:]]+)?${required_name}=" "$env_file"
+env_key_has_value() {
+  node --input-type=module - "$env_file" "$1" <<'NODE'
+import fs from "node:fs";
+const [envFile, key] = process.argv.slice(2);
+const source = fs.readFileSync(envFile, "utf8");
+for (const line of source.split(/\r?\n/)) {
+  const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=([\s\S]*)$/);
+  if (!match || match[1] !== key) continue;
+  let value = match[2].trim();
+  const quoted =
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"));
+  if (quoted && value.length >= 2) value = value.slice(1, -1).trim();
+  process.exit(value.length > 0 ? 0 : 1);
+}
+process.exit(1);
+NODE
+}
+
+for required_name in DATABASE_URL JWT_SECRET VITE_APP_ID; do
+  env_key_has_value "$required_name"
 done
 oidc_count=0
 for oidc_name in OIDC_ISSUER_URL OIDC_CLIENT_ID OIDC_CLIENT_SECRET OIDC_REDIRECT_URI; do
-  if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${oidc_name}=" "$env_file"; then
+  if env_key_has_value "$oidc_name"; then
     oidc_count=$((oidc_count + 1))
   fi
 done
-[[ "$oidc_count" -eq 0 || "$oidc_count" -eq 4 ]]
+legacy_oauth=0
+if env_key_has_value OAUTH_SERVER_URL; then
+  legacy_oauth=1
+fi
+if [[ "$oidc_count" -eq 4 ]]; then
+  auth_mode=oidc
+elif [[ "$oidc_count" -eq 0 && "$legacy_oauth" -eq 1 ]]; then
+  auth_mode=legacy_oauth
+else
+  echo "Aurion authentication configuration is incomplete" >&2
+  exit 65
+fi
 
 docker network inspect "$public_network" >/dev/null
 docker network inspect "$private_network" >/dev/null
@@ -79,10 +109,6 @@ install -d -o 1000 -g 1000 -m 0750 "$companion_memory_dir"
 install -d -o root -g root -m 0755 "$release"
 install -o root -g root -m 0644 "$compose_source" "${release}/docker-compose.traefik.yml"
 install -o root -g root -m 0644 "$image_manifest" "${release}/aurion-full-runtime-image.json"
-
-ln -sTfn "$release" "${base}/current.next"
-mv -Tf "${base}/current.next" "$current"
-test "$(readlink -f "$current")" = "$release"
 
 # Load only the exact, checksum-bound image produced on the trusted hosted runner.
 gzip -dc "$image_archive" | docker load >/dev/null
@@ -101,7 +127,7 @@ run_compose() {
   AURION_COMPANION_MEMORY_DIR="$companion_memory_dir" \
   TRAEFIK_NETWORK="$public_network" \
   AURION_PRIVATE_NETWORK="$private_network" \
-  docker compose --project-name "$project" --env-file "$env_file" -f "${current}/docker-compose.traefik.yml" "$@"
+  docker compose --project-name "$project" --env-file "$env_file" -f "${release}/docker-compose.traefik.yml" "$@"
 }
 
 image_tag="sha-${expected_sha}"
@@ -216,10 +242,15 @@ if [[ "$public_ready" -ne 1 ]]; then
   exit 72
 fi
 
+# Publish the release pointer only after the exact public SHA is visible.
+ln -sTfn "$release" "${base}/current.next"
+mv -Tf "${base}/current.next" "$current"
+test "$(readlink -f "$current")" = "$release"
+
 # The mutable convenience tag is updated only after exact container and public readback succeed.
 docker image tag "$image_ref" echoes-of-aurion:production
 receipt="${release}/deployment-receipt.json"
-EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$previous_image_id" PREVIOUS_IMAGE_REF="$previous_image_ref" PREVIOUS_REVISION="$previous_revision" PUBLIC_NETWORK="$public_network" PRIVATE_NETWORK="$private_network" RECEIPT="$receipt" node -e '
+EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$previous_image_id" PREVIOUS_IMAGE_REF="$previous_image_ref" PREVIOUS_REVISION="$previous_revision" PUBLIC_NETWORK="$public_network" PRIVATE_NETWORK="$private_network" AUTH_MODE="$auth_mode" RECEIPT="$receipt" node -e '
   const fs=require("node:fs");
   const receipt={
     schemaVersion:1,
@@ -230,6 +261,7 @@ EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$p
     previousImageReference:process.env.PREVIOUS_IMAGE_REF||null,
     previousRevision:process.env.PREVIOUS_REVISION||null,
     networks:[process.env.PUBLIC_NETWORK,process.env.PRIVATE_NETWORK],
+    authMode:process.env.AUTH_MODE,
     publicHealth:true,
     databaseMutationPerformed:false,
     secretValuesReturned:false,
