@@ -26,6 +26,10 @@ describe("Aurion production schema apply boundary", () => {
     expect(runner).toContain("token.actions.githubusercontent.com/.well-known/jwks");
     expect(runner).toContain("aurion-production-schema-apply-v1:${expectedSha}:${planSha256}");
     expect(runner).toContain("workflow_ref");
+    expect(runner).toContain("repo:OuroborosCollective@266194342/Echoes_of_Aurion@1313103794:environment:production");
+    expect(runner).toContain("repository_id");
+    expect(runner).toContain("repository_owner_id");
+    expect(runner).not.toContain('payload.sub!=="repo:OuroborosCollective/Echoes_of_Aurion:environment:production"');
     expect(core).toContain("phase=CREATE_LOGICAL_BACKUP");
   });
 
