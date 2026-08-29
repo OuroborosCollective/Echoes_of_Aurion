@@ -7,6 +7,7 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 
 describe("Aurion labelled Traefik runtime deployment", () => {
   const dockerfile = read("Dockerfile");
+  const viteRuntime = read("server/_core/vite.ts");
   const compose = read("docker-compose.traefik.yml");
   const promoter = read("deploy/promote-aurion-zone-runtime.sh");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
@@ -16,6 +17,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(dockerfile).toContain("node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
     expect(dockerfile).toContain("AURION_RELEASE_SHA=${AURION_RELEASE_SHA}");
     expect(dockerfile).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA}");
+    expect(dockerfile).toContain("pnpm install --prod --frozen-lockfile");
+    expect(viteRuntime).toContain('import("vite")');
+    expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
     expect(artifactBuilder).toContain('const directoriesToCopy = ["dist", "patches"]');
     expect(workflow).toContain(

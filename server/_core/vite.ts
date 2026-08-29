@@ -3,10 +3,15 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
+  // Development tooling is deliberately loaded only in the development branch.
+  // The production runtime ships static assets and therefore needs only production dependencies.
+  const [{ createServer: createViteServer }, { default: viteConfig }] = await Promise.all([
+    import("vite"),
+    import("../../vite.config"),
+  ]);
+
   // `vite.config.ts` exports a factory. Spreading it directly silently loses its
   // `client` root, aliases and proxy; then unknown modules fall through to this
   // file's HTML handler. Resolve it exactly as a development server would.
