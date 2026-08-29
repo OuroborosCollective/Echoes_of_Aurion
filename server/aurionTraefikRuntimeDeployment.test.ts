@@ -41,6 +41,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain("traefik.docker.network");
     expect(promoter).toContain("traefik.http.services.aurion.loadbalancer.server.port");
     expect(promoter).toContain("^[A-Za-z0-9@._/:-]+$");
+    expect(promoter).toContain("aurion-traefik-promoter failed phase=");
     expect(promoter).not.toContain("systemctl reload nginx");
     expect(promoter).not.toContain("nginx -t");
   });

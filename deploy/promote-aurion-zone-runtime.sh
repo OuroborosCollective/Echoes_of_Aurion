@@ -20,6 +20,8 @@ schema_artifact="${artifact_dir}/dist-production-reconcile"
 schema_installer="${schema_artifact}/deploy/install-aurion-production-schema-reconcile"
 schema_current=/opt/echoes-of-aurion-schema-reconcile/current
 legacy_service=aurion-zone-runtime.service
+phase=preflight
+trap 'status=$?; printf "aurion-traefik-promoter failed phase=%s status=%s\\n" "$phase" "$status" >&2' ERR
 
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]]
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+$ ]]
@@ -32,6 +34,7 @@ legacy_service=aurion-zone-runtime.service
 [[ -f "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" ]]
 
 cd "$artifact_dir"
+phase=runtime-archive-integrity
 sha256sum -c "$runtime_checksum"
 (
   cd "$schema_artifact"
@@ -42,6 +45,7 @@ sha256sum -c "$runtime_checksum"
 # image on the private database network. Provision it inside the root boundary;
 # the self-hosted runner never receives general Docker authority.
 image_contract="${schema_artifact}/deploy/aurion-reconcile-runtime-image.conf"
+phase=schema-image-integrity
 [[ -f "$image_contract" ]]
 image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22||typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)){process.exit(2)}; process.stdout.write(c.imageTag)' "$image_contract")"
 image_digest="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!c.imageDigest||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageDigest)' "$image_contract")"
@@ -52,12 +56,14 @@ docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pin
 # The release archive is generated on the hosted verifier and contains only a
 # Docker build context. Reject paths that could escape the root-owned release
 # directory before extracting it.
+phase=runtime-archive-paths
 tar -tzf "$runtime_archive" | while IFS= read -r entry; do
   [[ "$entry" == ./* ]]
   [[ "$entry" != *"../"* ]]
 done
 
 install -d -o root -g root -m 0750 "${runtime_base}/releases"
+phase=runtime-release-extraction
 release="${runtime_base}/releases/${release_id}"
 if [[ ! -e "$release" ]]; then
   install -d -o root -g root -m 0750 "$release"
@@ -67,6 +73,7 @@ if [[ ! -e "$release" ]]; then
 fi
 
 [[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" ]]
+phase=runtime-release-integrity
 (
   cd "$release"
   sha256sum --strict -c checksums.sha256 >/dev/null
@@ -96,6 +103,7 @@ node --input-type=module -e '
 # Keep the bounded, read-only schema runner revision-identical to the promoted
 # container. The installer only installs its fixed verifier/runner and never
 # applies a migration or data backfill.
+phase=schema-runner-install
 bash "$schema_installer" "$schema_artifact" "$expected_sha" --enable-runner
 [[ -x /usr/local/sbin/aurion-production-schema-reconcile ]]
 [[ -L "$schema_current" ]]
@@ -119,6 +127,7 @@ cmp -s "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-arti
 
 # Preserve the existing narrow sudo entrypoint while replacing its implementation
 # with this verified Traefik promoter for future releases.
+phase=promoter-self-install
 install -D -o root -g root -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
 cmp -s "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
 
@@ -142,6 +151,7 @@ read_runtime_env() {
 }
 
 aurion_env_file="$(read_runtime_env AURION_ENV_FILE)"
+phase=runtime-environment
 aurion_domain="$(read_runtime_env AURION_DOMAIN)"
 traefik_network="$(read_runtime_env TRAEFIK_NETWORK)"
 traefik_certresolver="$(read_runtime_env TRAEFIK_CERTRESOLVER)"
@@ -156,6 +166,7 @@ base_image="$pinned_image"
 [[ "$base_image" == "node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff" ]]
 
 runtime_image="echoes-of-aurion:${expected_sha}"
+phase=runtime-image-build
 docker build --pull=false --build-arg "AURION_RELEASE_SHA=${expected_sha}" --tag "$runtime_image" "$release"
 [[ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$runtime_image")" == "$expected_sha" ]]
 
@@ -166,6 +177,7 @@ export TRAEFIK_CERTRESOLVER="$traefik_certresolver"
 export AURION_IMAGE_TAG="$expected_sha"
 export AURION_RELEASE_SHA="$expected_sha"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
+phase=compose-promotion
 "${compose[@]}" config --quiet
 "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion
 
@@ -179,6 +191,7 @@ docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{pr
 [[ "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" == "$expected_sha" ]]
 
 container_ready=0
+phase=container-health
 for _attempt in $(seq 1 30); do
   if [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")" == "healthy" ]]; then
     docker exec -e "EXPECTED_SHA=${expected_sha}" "$container_id" node --input-type=module -e '
@@ -194,6 +207,7 @@ done
 [[ "$container_ready" -eq 1 ]]
 
 public_ready=0
+phase=public-health
 for _attempt in $(seq 1 30); do
   if health_json="$(curl --fail --silent --show-error "https://${aurion_domain}/healthz" 2>/dev/null)"; then
     if printf '%s' "$health_json" | node --input-type=module -e '
@@ -216,6 +230,7 @@ mv -Tf "${runtime_base}/current.next" "${runtime_base}/current"
 test "$(readlink -f "${runtime_base}/current")" = "$release"
 
 install -d -o root -g root -m 0750 "$receipt_dir"
+phase=promotion-receipt
 receipt="${receipt_dir}/${release_id}.json"
 receipt_tmp="${receipt}.tmp"
 umask 077
