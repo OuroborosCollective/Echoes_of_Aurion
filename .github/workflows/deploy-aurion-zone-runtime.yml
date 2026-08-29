@@ -303,6 +303,7 @@ jobs:
           # with its own immutable source revision and release directory.
           installed=/usr/local/sbin/promote-aurion-zone-runtime
           legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad
+          promoter_needs_readback_replay=0
           if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
             installed_promoter_sha256="$(sha256sum "$installed" | awk '{print $1}')"
             if [[ "$installed_promoter_sha256" == "$legacy_promoter_sha256" ]]; then
@@ -316,12 +317,20 @@ jobs:
               cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
             elif grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && grep -Fq 'image_id="$(docker image inspect' "$installed"; }; then
               printf 'compatible promoter %s will receive the canonical artifact directly\n' "$installed_promoter_sha256"
+              promoter_needs_readback_replay=1
             else
               printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
               exit 70
             fi
           fi
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+          if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then
+            # The compatible entrypoint installed this artifact during its first
+            # invocation. Re-run only this exact release so the newly installed
+            # promoter can publish its root-authored readback receipt.
+            cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
+            sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+          fi
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
           test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
