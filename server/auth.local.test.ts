@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
+import express from "express";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { COOKIE_NAME } from "../shared/const";
-import type { TrpcContext } from "./_core/context";
+import { createContext, type TrpcContext } from "./_core/context";
 import { hashLocalPassword } from "./localAuth";
 
 const database = vi.hoisted(() => ({
@@ -11,7 +15,7 @@ const database = vi.hoisted(() => ({
   upsertUser: vi.fn(),
 }));
 
-const session = vi.hoisted(() => ({ createSessionToken: vi.fn() }));
+const session = vi.hoisted(() => ({ authenticateRequest: vi.fn(), createSessionToken: vi.fn() }));
 
 vi.mock("./db", async importOriginal => ({
   ...(await importOriginal<typeof import("./db")>()),
@@ -50,6 +54,7 @@ function contextForLocalAuth() {
 describe("Aurion local account router", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    session.authenticateRequest.mockResolvedValue(null);
     session.createSessionToken.mockResolvedValue("signed-session-token");
   });
 
@@ -76,6 +81,32 @@ describe("Aurion local account router", () => {
 
     await expect(caller.auth.loginLocal({ handle: "missing", password: "irrelevant" })).rejects.toThrow("Rufname oder Passwort stimmen nicht.");
     expect(database.recordLocalAuthFailure).not.toHaveBeenCalled();
+  });
+
+  it("serializes an unknown local handle as tRPC JSON instead of an HTML fallback", async () => {
+    database.getLocalCredential.mockResolvedValue(undefined);
+    const app = express();
+    app.use(express.json());
+    app.use("/api/trpc", createExpressMiddleware({ router: appRouter, createContext }));
+
+    const server = app.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    try {
+      const address = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/trpc/auth.loginLocal`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: { handle: "missing", password: "irrelevant" } }),
+      });
+      const body = await response.json();
+
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.headers.get("content-type")).toMatch(/^application\/json/u);
+      expect(body.error.json.message).toBe("Rufname oder Passwort stimmen nicht.");
+      expect(database.recordLocalAuthFailure).not.toHaveBeenCalled();
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
   });
 
   it("logs a known account in and clears prior failures", async () => {
