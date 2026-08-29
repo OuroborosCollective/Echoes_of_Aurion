@@ -32,8 +32,21 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+function runtimeRevision(): string | null {
+  const revision = process.env.AURION_RUNTIME_REVISION?.trim() ?? "";
+  if (!revision) return null;
+  if (!/^[a-f0-9]{40}$/.test(revision)) {
+    throw new Error("AURION_RUNTIME_REVISION must be a 40-character lowercase Git SHA");
+  }
+  return revision;
+}
+
 async function startServer() {
   const app = express();
+  const revision = runtimeRevision();
+  if (process.env.NODE_ENV === "production" && !revision) {
+    throw new Error("AURION_RUNTIME_REVISION is required in production");
+  }
   // The production container is reachable only through Traefik. Trust precisely
   // one proxy hop so HTTPS and host information survive TLS termination.
   if (process.env.NODE_ENV === "production") {
@@ -43,7 +56,12 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok", service: "echoes-of-aurion" }));
+  app.get("/healthz", (_req, res) => res.status(200).json({
+    ok: true,
+    status: "ok",
+    service: "echoes-of-aurion",
+    revision,
+  }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);
