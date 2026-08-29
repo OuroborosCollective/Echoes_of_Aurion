@@ -49,6 +49,11 @@ describe("Aurion production schema apply boundary", () => {
     expect(core).toContain("--network none");
     expect(core).toContain("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1");
     expect(core).toContain("RECOVERY_PROOF_MISMATCH");
+    expect(core).toContain("APPLY_RECOVERY_ERROR_CLASS");
+    expect(core).toContain("MARIADB_ERROR_");
+    expect(core).toContain("recovery_stderr_sha256");
+    expect(core).toContain('rm -f "$recovery_stderr"');
+    expect(core).not.toContain('cat "$recovery_stderr"');
     expect(core).toContain("schemaSha256");
     expect(core).not.toContain("--privileged");
     expect(core).not.toContain("--network host");
