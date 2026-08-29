@@ -13,24 +13,25 @@ release_id="$3"
 deploy_dir="${artifact_dir}/deploy"
 base=/opt/aurion-zone-runtime
 service=aurion-zone-runtime.service
-site=/etc/nginx/sites-enabled/arelogic.space
-snippet=/etc/nginx/snippets/arelogic-zone-runtime.conf
-rate_limit=/etc/nginx/conf.d/zz-aurion-zone-runtime-rate-limit.conf
 env_file=/etc/aurion-zone-runtime.env
 archive="${artifact_dir}/aurion-zone-runtime-release.tgz"
 checksum="${artifact_dir}/aurion-zone-runtime-release.tgz.sha256"
 schema_artifact="${artifact_dir}/dist-production-reconcile"
 schema_installer="${schema_artifact}/deploy/install-aurion-production-schema-reconcile"
 schema_current=/opt/echoes-of-aurion-schema-reconcile/current
+container_promoter="${deploy_dir}/promote-aurion-container-runtime.sh"
 
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]]
 [[ "$release_id" =~ ^[a-f0-9]{40}-[0-9]+$ ]]
 [[ -d "$artifact_dir" && -f "$archive" && -f "$checksum" ]]
 [[ -f "${deploy_dir}/aurion-zone-runtime.service" ]]
 [[ -f "${deploy_dir}/aurion-zone-runtime.environment.template" ]]
-[[ -f "${deploy_dir}/arelogic-zone-runtime.nginx.conf" ]]
-[[ -f "${deploy_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" ]]
 [[ -f "${deploy_dir}/promote-aurion-zone-runtime.sh" ]]
+[[ -f "$container_promoter" ]]
+[[ -f "${artifact_dir}/docker-compose.traefik.yml" ]]
+[[ -f "${artifact_dir}/aurion-full-runtime-image.tar.gz" ]]
+[[ -f "${artifact_dir}/aurion-full-runtime-image.tar.gz.sha256" ]]
+[[ -f "${artifact_dir}/aurion-full-runtime-image.json" ]]
 [[ -d "$schema_artifact" ]]
 [[ -f "${schema_artifact}/manifest.json" && -f "${schema_artifact}/checksums.sha256" ]]
 [[ -f "$schema_installer" ]]
@@ -72,9 +73,8 @@ mv -Tf "${base}/current.next" "${base}/current"
 test "$(readlink -f "${base}/current")" = "$release"
 
 install -D -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+install -D -m 0755 "$container_promoter" /usr/local/sbin/promote-aurion-container-runtime
 install -D -m 0644 "${deploy_dir}/aurion-zone-runtime.service" "/etc/systemd/system/${service}"
-install -D -m 0644 "${deploy_dir}/arelogic-zone-runtime-rate-limit.nginx.conf" "$rate_limit"
-install -D -m 0644 "${deploy_dir}/arelogic-zone-runtime.nginx.conf" "$snippet"
 
 # Keep the bounded read-only schema runner revision-identical to the promoted runtime.
 # The installer verifies its own immutable manifest/checksums and only installs the
@@ -102,11 +102,8 @@ if [[ ! -f "$env_file" ]]; then
 fi
 sed -i "s|^AURION_RUNTIME_REVISION=.*|AURION_RUNTIME_REVISION=${expected_sha}|" "$env_file"
 
-include='    include /etc/nginx/snippets/arelogic-zone-runtime.conf;'
-if ! grep -Fq "/etc/nginx/snippets/arelogic-zone-runtime.conf" "$site"; then
-  sed -i "s|^    root /var/www/echoes-of-aurion/current;|${include}\n    root /var/www/echoes-of-aurion/current;|" "$site"
-fi
-
+# Keep the zone process as a loopback-only rollback surface. Traefik and the
+# public origin are owned exclusively by the full container deployment below.
 systemctl daemon-reload
 systemctl enable "$service"
 systemctl restart "$service"
@@ -123,5 +120,5 @@ for _attempt in $(seq 1 20); do
   sleep 1
 done
 [[ "$runtime_ready" -eq 1 ]]
-nginx -t
-systemctl reload nginx
+
+bash /usr/local/sbin/promote-aurion-container-runtime "$artifact_dir" "$expected_sha" "$release_id"
