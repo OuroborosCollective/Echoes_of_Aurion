@@ -40,6 +40,7 @@ trap 'status=$?; if [[ "$status" -ne 0 ]]; then printf "aurion-traefik-promoter 
 [[ -d "$schema_apply_artifact" ]]
 [[ -f "${schema_apply_artifact}/manifest.json" && -f "${schema_apply_artifact}/checksums.sha256" ]]
 [[ -f "$schema_apply_installer" ]]
+[[ -f "${schema_apply_artifact}/deploy/aurion-production-schema-apply-core" ]]
 [[ -f "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-artifact.mjs" ]]
 
 cd "$artifact_dir"

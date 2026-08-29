@@ -20,8 +20,9 @@ aus.
   `areloria_arelorian-network` betrieben. Dieser Ablauf verwendet kein Nginx.
 - Alle Schreiboperationen an Produktionsdatenbanken laufen nur über den
   separaten Root-Runner, eine konkrete Zielrevision und einen benannten
-  `planSha256`. Vor dem Schreiben erzwingt er Backup und isolierten
-  Recovery-Nachweis.
+  `planSha256`. Ein kurzlebiger GitHub-Actions-OIDC-Token bindet beide Werte
+  zusätzlich an den manuellen Produktionsworkflow; vor dem Schreiben erzwingt
+  der Runner Backup und isolierten Recovery-Nachweis.
 
 ## 1. Gesamtbild
 
@@ -173,12 +174,19 @@ Der Hosted-Teil lädt ausschließlich dieses Artefakt, prüft dessen Prüfsumme,
 WASD-Quellenrevision, WASD-Manifest-Hash, Aurion-Zielrevision sowie die
 Hashes der Migrationen `0021`–`0027`. Die Zielrevision muss exakt dem
 aktuellen `main`-Commit entsprechen. Anschließend baut er ein separates,
-geschlossenes Apply-Artefakt.
+geschlossenes Apply-Artefakt und fordert für den Self-hosted Job einen
+kurzlebigen OIDC-Token an. Dessen Audience enthält genau Zielrevision und
+`planSha256`.
 
 Auf dem Self-hosted Runner akzeptiert der sudo-fähige Account nur den festen
 Root-Einstiegspunkt `aurion-production-schema-apply <SHA> <planSha256>`.
 Der Runner akzeptiert weder Dateipfade, SQL-Text, Docker-Argumente noch eine
-andere Datenbank. Er führt in dieser Reihenfolge aus:
+andere Datenbank. Bevor er den Backup-/Apply-Kern erreicht, verifiziert er
+die Signatur des OIDC-Tokens gegen den GitHub-Issuer und verlangt Repository,
+`main`, `workflow_dispatch`, Produktions-Environment, exakte Workflow-Revision
+und die plan-gebundene Audience. Eine direkte sudo-Ausführung ohne gültigen
+Token endet geschlossen ohne DB-Zugriff oder Backup. Danach führt er in dieser
+Reihenfolge aus:
 
 1. frischen lesenden Schema-Readback;
 2. Prüfung, dass die sieben Migrationen entweder alle fehlen oder ein
@@ -197,8 +205,9 @@ Restore beendet den Lauf vorher geschlossen.
 
 Die Integration wird auf einer temporären MariaDB vor jedem Deployment
 geprüft. Dort wird ein Stand bis Migration `0020` aufgebaut, der Root-Runner
-führt Backup, Restore und Apply aus, und ein zweiter Lauf muss als
-`ALREADY_APPLIED` ohne neues Backup enden.
+weist zunächst die direkte, nicht autorisierte Invocation zurück; der danach
+getestete Backup-/Recovery-Kern führt Backup, Restore und Apply aus, und ein
+zweiter Lauf muss als `ALREADY_APPLIED` ohne neues Backup enden.
 
 ### Recovery und Wiederanlauf
 

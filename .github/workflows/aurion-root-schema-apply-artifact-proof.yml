@@ -18,6 +18,7 @@ on:
       - "scripts/reconcile-aurion-production-schema.ts"
       - "scripts/aurionProductionSchemaReconciliation.ts"
       - "deploy/aurion-production-schema-apply"
+      - "deploy/aurion-production-schema-apply-core"
       - "deploy/aurion-production-schema-apply.environment.template"
       - "deploy/aurion-production-schema-apply.sudoers"
       - "deploy/install-aurion-production-schema-apply"
@@ -69,6 +70,7 @@ jobs:
           pnpm check
           pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
           bash -n deploy/aurion-production-schema-apply
+          bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
           sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
           node --check scripts/build-aurion-production-apply-artifact.mjs
@@ -169,14 +171,29 @@ jobs:
           sudo bash deploy/install-aurion-production-schema-apply "$GITHUB_WORKSPACE/dist-production-apply" "$GITHUB_SHA" --enable-runner
           test "$(sudo readlink -f /opt/echoes-of-aurion-schema-apply/current)" = "/opt/echoes-of-aurion-schema-apply/releases/$GITHUB_SHA"
           test "$(sudo stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-apply)" = "root:root:755"
+          test "$(sudo stat -c '%U:%G:%a' /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core)" = "root:root:755"
           test "$(sudo stat -c '%U:%G:%a' /etc/aurion-production-schema-apply.env)" = "root:root:600"
           sudo cmp -s dist-production-apply/deploy/aurion-production-schema-apply /usr/local/sbin/aurion-production-schema-apply
+
+      - name: Prove the sudo-exposed runner rejects an unbound direct invocation
+        run: |
+          set -euo pipefail
+          set +e
+          printf 'not-a-github-actions-oidc-token' | sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > oidc-rejection-receipt.json
+          status=$?
+          set -e
+          test "$status" -eq 77
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const r=JSON.parse(fs.readFileSync("oidc-rejection-receipt.json","utf8"));
+          if(r.recordType!=="aurion_production_schema_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_FAILED"||r.failureStage!=="VERIFY_GITHUB_ACTIONS_OIDC"||r.errorClass!=="GITHUB_ACTIONS_OIDC_INVALID"||r.backup?.created!==false) process.exit(2);
+          NODE
 
       - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0027
         run: |
           set -euo pipefail
           set +e
-          sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > apply-receipt.json
+          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > apply-receipt.json
           apply_status=$?
           set -e
           if [[ "$apply_status" -ne 0 ]]; then
@@ -215,7 +232,7 @@ jobs:
       - name: Prove exact retry is a non-mutating no-op
         run: |
           set -euo pipefail
-          sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > retry-receipt.json
+          sudo /opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply-core "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > retry-receipt.json
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("retry-receipt.json","utf8"));

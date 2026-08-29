@@ -24,6 +24,7 @@ const tags = [
 ];
 const deployFiles = [
   "aurion-production-schema-apply",
+  "aurion-production-schema-apply-core",
   "aurion-production-schema-apply.environment.template",
   "aurion-production-schema-apply.sudoers",
   "aurion-reconcile-runtime-image.conf",

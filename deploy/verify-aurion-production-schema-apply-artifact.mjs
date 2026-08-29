@@ -20,6 +20,7 @@ const requiredFiles = [
   "drizzle/meta/_journal.json",
   ...tags.map(tag => `drizzle/${tag}.sql`),
   "deploy/aurion-production-schema-apply",
+  "deploy/aurion-production-schema-apply-core",
   "deploy/aurion-production-schema-apply.environment.template",
   "deploy/aurion-production-schema-apply.sudoers",
   "deploy/aurion-reconcile-runtime-image.conf",

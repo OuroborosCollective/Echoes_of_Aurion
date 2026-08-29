@@ -15,6 +15,7 @@ on:
 permissions:
   contents: read
   actions: read
+  id-token: write
 
 concurrency:
   group: aurion-production-schema-apply
@@ -112,6 +113,7 @@ jobs:
           pnpm check
           pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
           bash -n deploy/aurion-production-schema-apply
+          bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
           sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
           node scripts/build-aurion-production-apply-artifact.mjs
@@ -163,7 +165,7 @@ jobs:
           [[ "$PLAN_SHA256" =~ ^[a-f0-9]{64}$ ]]
 
       - name: Reset workflow-owned apply evidence
-        run: rm -rf schema-apply-artifact production-schema-apply.raw.json production-schema-apply.json production-schema-apply.stderr
+        run: rm -rf schema-apply-artifact production-schema-apply.raw.json production-schema-apply.json production-schema-apply.stderr production-schema-apply.oidc
 
       - name: Download verified bounded apply artifact
         uses: actions/download-artifact@v4
@@ -172,6 +174,29 @@ jobs:
           path: schema-apply-artifact
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
+
+      - name: Request revision- and plan-bound GitHub Actions authorization
+        run: |
+          set -euo pipefail
+          authorization_file="${GITHUB_WORKSPACE}/production-schema-apply.oidc"
+          umask 077
+          EXPECTED_SHA="$EXPECTED_SHA" PLAN_SHA256="$PLAN_SHA256" node --input-type=module <<'NODE' > "$authorization_file"
+          const expectedSha=process.env.EXPECTED_SHA;
+          const planSha256=process.env.PLAN_SHA256;
+          if(!/^[a-f0-9]{40}$/.test(expectedSha??"")||!/^[a-f0-9]{64}$/.test(planSha256??"")) process.exit(2);
+          const requestUrl=process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+          const requestToken=process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+          if(!requestUrl||!requestToken) process.exit(2);
+          const url=new URL(requestUrl);
+          url.searchParams.set("audience",`aurion-production-schema-apply-v1:${expectedSha}:${planSha256}`);
+          const response=await fetch(url,{headers:{authorization:`Bearer ${requestToken}`},redirect:"error",signal:AbortSignal.timeout(10000)});
+          if(!response.ok) process.exit(2);
+          const payload=await response.json();
+          if(typeof payload?.value!=="string"||!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(payload.value)) process.exit(2);
+          process.stdout.write(payload.value);
+          NODE
+          test -s "$authorization_file"
+          test "$(stat -c '%a' "$authorization_file")" = "600"
 
       - name: Verify installed root runner identity and execute approved plan
         run: |
@@ -183,6 +208,8 @@ jobs:
           raw="${GITHUB_WORKSPACE}/production-schema-apply.raw.json"
           result="${GITHUB_WORKSPACE}/production-schema-apply.json"
           stderr_file="${GITHUB_WORKSPACE}/production-schema-apply.stderr"
+          authorization_file="${GITHUB_WORKSPACE}/production-schema-apply.oidc"
+          trap 'rm -f "$authorization_file"' EXIT
           test -d "$artifact"
           test -L "$installed_current"
           installed_root="$(readlink -f -- "$installed_current")"
@@ -199,9 +226,11 @@ jobs:
           cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
           cmp -s "$artifact/deploy/aurion-production-schema-apply" "$runner"
           cmp -s "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier"
+          test -s "$authorization_file"
+          test "$(stat -c '%a' "$authorization_file")" = "600"
           umask 077
           set +e
-          sudo -n "$runner" "$EXPECTED_SHA" "$PLAN_SHA256" >"$raw" 2>"$stderr_file"
+          sudo -n "$runner" "$EXPECTED_SHA" "$PLAN_SHA256" <"$authorization_file" >"$raw" 2>"$stderr_file"
           runner_status=$?
           set -e
           APPLY_RAW="$raw" APPLY_RESULT="$result" APPLY_STATUS="$runner_status" APPLY_EXPECTED_SHA="$EXPECTED_SHA" APPLY_PLAN_SHA256="$PLAN_SHA256" node --input-type=module -e '

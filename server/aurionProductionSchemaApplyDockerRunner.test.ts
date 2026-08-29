@@ -7,6 +7,7 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 
 describe("Aurion production schema apply boundary", () => {
   const runner = read("deploy/aurion-production-schema-apply");
+  const core = read("deploy/aurion-production-schema-apply-core");
   const installer = read("deploy/install-aurion-production-schema-apply");
   const verifier = read("deploy/verify-aurion-production-schema-apply-artifact.mjs");
   const builder = read("scripts/build-aurion-production-apply-artifact.mjs");
@@ -21,35 +22,40 @@ describe("Aurion production schema apply boundary", () => {
       "aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-production-schema-apply *",
     );
     expect(read("deploy/aurion-production-schema-apply.sudoers")).not.toContain("ALL=(ALL)");
+    expect(runner).toContain("VERIFY_GITHUB_ACTIONS_OIDC");
+    expect(runner).toContain("token.actions.githubusercontent.com/.well-known/jwks");
+    expect(runner).toContain("aurion-production-schema-apply-v1:${expectedSha}:${planSha256}");
+    expect(runner).toContain("workflow_ref");
+    expect(core).toContain("phase=CREATE_LOGICAL_BACKUP");
   });
 
   it("requires a fresh read-only preflight before a write-capable Docker boundary", () => {
-    expect(runner).toContain("phase=FRESH_READ_ONLY_PREFLIGHT");
-    expect(runner).toContain("node /apply/bin/reconcile.cjs");
-    expect(runner).toContain("phase=APPLY_SCHEMA");
-    expect(runner).toContain("node /apply/bin/apply.cjs");
-    expect(runner.indexOf("phase=FRESH_READ_ONLY_PREFLIGHT")).toBeLessThan(runner.indexOf("phase=CREATE_LOGICAL_BACKUP"));
-    expect(runner.indexOf("phase=CREATE_LOGICAL_BACKUP")).toBeLessThan(runner.indexOf("phase=APPLY_SCHEMA"));
-    expect(runner).toContain("phase=POST_APPLY_READBACK");
+    expect(core).toContain("phase=FRESH_READ_ONLY_PREFLIGHT");
+    expect(core).toContain("node /apply/bin/reconcile.cjs");
+    expect(core).toContain("phase=APPLY_SCHEMA");
+    expect(core).toContain("node /apply/bin/apply.cjs");
+    expect(core.indexOf("phase=FRESH_READ_ONLY_PREFLIGHT")).toBeLessThan(core.indexOf("phase=CREATE_LOGICAL_BACKUP"));
+    expect(core.indexOf("phase=CREATE_LOGICAL_BACKUP")).toBeLessThan(core.indexOf("phase=APPLY_SCHEMA"));
+    expect(core).toContain("phase=POST_APPLY_READBACK");
   });
 
   it("backs up and restores in a network-isolated disposable database before apply", () => {
-    expect(runner).toContain("--single-transaction --quick --skip-lock-tables --routines --events --triggers --add-drop-database --databases");
-    expect(runner).toContain("gzip -t");
-    expect(runner).toContain("--network none");
-    expect(runner).toContain("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1");
-    expect(runner).toContain("RECOVERY_PROOF_MISMATCH");
-    expect(runner).toContain("schemaSha256");
-    expect(runner).not.toContain("--privileged");
-    expect(runner).not.toContain("--network host");
-    expect(runner).not.toContain("/var/run/docker.sock");
+    expect(core).toContain("--single-transaction --quick --skip-lock-tables --routines --events --triggers --add-drop-database --databases");
+    expect(core).toContain("gzip -t");
+    expect(core).toContain("--network none");
+    expect(core).toContain("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1");
+    expect(core).toContain("RECOVERY_PROOF_MISMATCH");
+    expect(core).toContain("schemaSha256");
+    expect(core).not.toContain("--privileged");
+    expect(core).not.toContain("--network host");
+    expect(core).not.toContain("/var/run/docker.sock");
   });
 
   it("keeps credentials in root-only files and never returns them in receipts", () => {
-    expect(runner).toContain("env_file=/opt/echoes-of-aurion/.env.production");
-    expect(runner).toContain('"$(stat -c \'%U:%G:%a\' "$env_file")" == "root:root:600"');
-    expect(runner).toContain("databaseCredentialReturned:false");
-    expect(runner).toContain("mysql-client-config.cjs");
+    expect(core).toContain("env_file=/opt/echoes-of-aurion/.env.production");
+    expect(core).toContain('"$(stat -c \'%U:%G:%a\' "$env_file")" == "root:root:600"');
+    expect(core).toContain("databaseCredentialReturned:false");
+    expect(core).toContain("mysql-client-config.cjs");
     expect(databaseClientConfig).toContain("--my-cnf");
     expect(databaseClientConfig).toContain("--database-name");
     expect(databaseClientConfig).not.toContain("console.log");

@@ -15,6 +15,7 @@ on:
       - "deploy/aurion-production-schema-reconcile.sudoers"
       - "deploy/install-aurion-production-schema-reconcile"
       - "deploy/aurion-production-schema-apply"
+      - "deploy/aurion-production-schema-apply-core"
       - "deploy/aurion-production-schema-apply.environment.template"
       - "deploy/aurion-production-schema-apply.sudoers"
       - "deploy/install-aurion-production-schema-apply"
@@ -108,6 +109,7 @@ jobs:
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           bash -n deploy/aurion-production-schema-apply
+          bash -n deploy/aurion-production-schema-apply-core
           bash -n deploy/install-aurion-production-schema-apply
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
@@ -161,7 +163,7 @@ jobs:
           if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="backup_recovery_apply"||manifest.moduleFormat!=="commonjs") throw new Error("schema apply artifact boundary mismatch");
           for(const file of [
             "bin/apply.cjs","bin/mysql-client-config.cjs","bin/reconcile.cjs","drizzle/meta/_journal.json",
-            "deploy/aurion-production-schema-apply","deploy/install-aurion-production-schema-apply","deploy/verify-aurion-production-schema-apply-artifact.mjs",
+            "deploy/aurion-production-schema-apply","deploy/aurion-production-schema-apply-core","deploy/install-aurion-production-schema-apply","deploy/verify-aurion-production-schema-apply-artifact.mjs",
           ]) if(!manifest.files?.[file]) throw new Error(`schema apply artifact is missing ${file}`);
           NODE
           (cd dist-production-apply && sha256sum --strict -c checksums.sha256)

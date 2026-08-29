@@ -78,6 +78,7 @@ else
   find "$stage" -type f -exec chmod 0644 {} +
   chmod 0755 \
     "${stage}/deploy/aurion-production-schema-apply" \
+    "${stage}/deploy/aurion-production-schema-apply-core" \
     "${stage}/deploy/install-aurion-production-schema-apply" \
     "${stage}/deploy/verify-aurion-production-schema-apply-artifact.mjs"
   validate_release "$stage" || { echo "staged schema apply release verification failed" >&2; exit 70; }
