@@ -6,6 +6,7 @@ on:
       - fix/aurion-root-sanitize-mock-contract-20260829
     paths:
       - ".github/workflows/_aurion-root-sanitize-mock-patch.yml"
+      - "scripts/_patch_root_sanitize_mock_contract.py"
 
 permissions:
   contents: write
@@ -29,8 +30,12 @@ jobs:
           set -euo pipefail
           git diff --check
           test "$(git diff --name-only)" = ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
-          grep -Fq "image) printf '%s\\n' 'sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff' ;;" .github/workflows/aurion-root-reconciliation-artifact-proof.yml
-          ! grep -Fq "image) printf '%s\\n' 'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff' ;;" .github/workflows/aurion-root-reconciliation-artifact-proof.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/aurion-root-reconciliation-artifact-proof.yml').read_text(encoding='utf-8')
+          assert "'sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff'" in text
+          assert "'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff'" not in text
+          PY
 
       - name: Commit verified correction
         run: |
