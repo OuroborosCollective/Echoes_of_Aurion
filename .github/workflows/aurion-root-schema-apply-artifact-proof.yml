@@ -175,7 +175,21 @@ jobs:
       - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0027
         run: |
           set -euo pipefail
+          set +e
           sudo /usr/local/sbin/aurion-production-schema-apply "$GITHUB_SHA" "$AURION_APPLY_TEST_PLAN" > apply-receipt.json
+          apply_status=$?
+          set -e
+          if [[ "$apply_status" -ne 0 ]]; then
+            APPLY_RECEIPT=apply-receipt.json node --input-type=module -e '
+              import fs from "node:fs";
+              const file=process.env.APPLY_RECEIPT;
+              if(!file||!fs.existsSync(file)||fs.statSync(file).size===0) process.exit(2);
+              const r=JSON.parse(fs.readFileSync(file,"utf8"));
+              if(r.recordType!=="aurion_production_schema_apply"||r.schemaVersion!==1||r.databaseCredentialReturned!==false) process.exit(3);
+              console.log(JSON.stringify({overallState:r.overallState,failureStage:r.failureStage??null,backup:r.backup??null},null,2));
+            '
+            exit "$apply_status"
+          fi
           test ! -s /tmp/aurion-schema-apply-untrusted
           AURION_APPLY_TEST_PLAN="$AURION_APPLY_TEST_PLAN" node --input-type=module <<'NODE'
           import fs from "node:fs";
