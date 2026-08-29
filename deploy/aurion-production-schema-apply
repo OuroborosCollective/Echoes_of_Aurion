@@ -89,7 +89,7 @@ if ! node --input-type=module -e '
     if(header?.alg!=="RS256"||typeof header.kid!=="string"||!header.kid) fail();
     const now=Math.floor(Date.now()/1000);
     if(!Number.isSafeInteger(payload?.iat)||!Number.isSafeInteger(payload?.exp)||payload.iat>now+120||payload.iat<now-900||payload.exp<now-60||payload.exp>now+900) fail();
-    // Echoes_of_Aurion was created after GitHub's immutable-subject rollout.
+    // Echoes_of_Aurion was created after the GitHub immutable-subject rollout.
     // Bind its names *and* immutable IDs exactly; do not fall back to the legacy
     // owner/repository-only subject because that would weaken replay resistance.
     const expectedSubject="repo:OuroborosCollective@266194342/Echoes_of_Aurion@1313103794:environment:production";
