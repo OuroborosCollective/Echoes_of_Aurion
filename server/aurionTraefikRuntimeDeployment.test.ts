@@ -28,6 +28,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("docker build --pull=false");
     expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
     expect(workflow).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}");
+    expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
