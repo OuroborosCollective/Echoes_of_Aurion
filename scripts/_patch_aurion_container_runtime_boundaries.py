@@ -64,11 +64,12 @@ test "$(readlink -f "$current")" = "$release"
 if promoter.count(early_pointer) != 1:
     raise SystemExit(f"early pointer boundary count={promoter.count(early_pointer)}")
 promoter = promoter.replace(early_pointer, "", 1)
-promoter = promoter.replace(
-    '  docker compose --project-name "$project" --env-file "$env_file" -f "${current}/docker-compose.traefik.yml" "$@"\n',
-    '  docker compose --project-name "$project" --env-file "$env_file" -f "${release}/docker-compose.traefik.yml" "$@"\n',
-    1,
-)
+
+compose_old = '  docker compose --project-name "$project" --env-file "$env_file" -f "${current}/docker-compose.traefik.yml" "$@"\n'
+compose_new = '  docker compose --project-name "$project" --env-file "$env_file" -f "${release}/docker-compose.traefik.yml" "$@"\n'
+if promoter.count(compose_old) != 1:
+    raise SystemExit("compose release-path boundary missing")
+promoter = promoter.replace(compose_old, compose_new, 1)
 
 public_success = '''if [[ "$public_ready" -ne 1 ]]; then
   rollback_public_service
@@ -93,7 +94,11 @@ if promoter.count(public_success) != 1:
     raise SystemExit(f"public success boundary count={promoter.count(public_success)}")
 promoter = promoter.replace(public_success, public_replacement, 1)
 
-receipt_env_old = 'EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$previous_image_id" PREVIOUS_IMAGE_REF="$previous_image_ref" PREVIOUS_REVISION="$previous_revision" PUBLIC_NETWORK="$public_network" PRIVATE_NETWORK="$private_network" RECEIPT="$receipt" node -e '\nreceipt_env_new = 'EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$previous_image_id" PREVIOUS_IMAGE_REF="$previous_image_ref" PREVIOUS_REVISION="$previous_revision" PUBLIC_NETWORK="$public_network" PRIVATE_NETWORK="$private_network" AUTH_MODE="$auth_mode" RECEIPT="$receipt" node -e '\nif promoter.count(receipt_env_old) != 1:
+receipt_env_old = '''EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$previous_image_id" PREVIOUS_IMAGE_REF="$previous_image_ref" PREVIOUS_REVISION="$previous_revision" PUBLIC_NETWORK="$public_network" PRIVATE_NETWORK="$private_network" RECEIPT="$receipt" node -e '
+'''
+receipt_env_new = '''EXPECTED_SHA="$expected_sha" IMAGE_ID="$expected_image_id" PREVIOUS_IMAGE_ID="$previous_image_id" PREVIOUS_IMAGE_REF="$previous_image_ref" PREVIOUS_REVISION="$previous_revision" PUBLIC_NETWORK="$public_network" PRIVATE_NETWORK="$private_network" AUTH_MODE="$auth_mode" RECEIPT="$receipt" node -e '
+'''
+if promoter.count(receipt_env_old) != 1:
     raise SystemExit("receipt environment boundary missing")
 promoter = promoter.replace(receipt_env_old, receipt_env_new, 1)
 promoter = promoter.replace(
@@ -142,7 +147,8 @@ if sdk.count(sdk_old) != 1:
 sdk_path.write_text(sdk.replace(sdk_old, sdk_new, 1), encoding="utf-8")
 
 test_path = Path("server/aurionFullContainerCutover.test.ts")
-test = test_path.read_text(encoding="utf-8")ntest_old = '''  it("requires protected environment permissions and complete-or-absent OIDC consent", () => {
+test = test_path.read_text(encoding="utf-8")
+test_old = '''  it("requires protected environment permissions and complete-or-absent OIDC consent", () => {
     expect(containerPromoter).toContain("root:root:600");
     expect(containerPromoter).toContain("OIDC_ISSUER_URL OIDC_CLIENT_ID OIDC_CLIENT_SECRET OIDC_REDIRECT_URI");
     expect(containerPromoter).toContain('[[ "$oidc_count" -eq 0 || "$oidc_count" -eq 4 ]]');
@@ -157,6 +163,7 @@ test_new = '''  it("requires protected environment permissions and exactly one c
     expect(containerPromoter).toContain("auth_mode=oidc");
     expect(containerPromoter).toContain("auth_mode=legacy_oauth");
     expect(containerPromoter).not.toContain('cat "$env_file"');
+    expect(sdk).toContain("OIDC provider configured");
   });
 
   it("publishes the release pointer only after public revision readback", () => {
@@ -175,14 +182,8 @@ test_new = '''  it("requires protected environment permissions and exactly one c
 if test.count(test_old) != 1:
     raise SystemExit(f"cutover test replacement count={test.count(test_old)}")
 test = test.replace(test_old, test_new, 1)
-test = test.replace(
-    '  const server = read("server/_core/index.ts");\n',
-    '  const server = read("server/_core/index.ts");\n  const sdk = read("server/_core/sdk.ts");\n',
-    1,
-)
-test = test.replace(
-    '    expect(containerPromoter).not.toContain(\'cat "$env_file"\');\n',
-    '    expect(containerPromoter).not.toContain(\'cat "$env_file"\');\n    expect(sdk).toContain("OIDC provider configured");\n',
-    1,
-)
+server_binding = '  const server = read("server/_core/index.ts");\n'
+if test.count(server_binding) != 1:
+    raise SystemExit("server test binding missing")
+test = test.replace(server_binding, server_binding + '  const sdk = read("server/_core/sdk.ts");\n', 1)
 test_path.write_text(test, encoding="utf-8")
