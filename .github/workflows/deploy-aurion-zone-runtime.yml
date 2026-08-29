@@ -93,11 +93,17 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            test "${GITHUB_REF}" = "refs/heads/main"
-          else
-            test "${GITHUB_EVENT_NAME}" = "pull_request"
-          fi
+          case "${GITHUB_EVENT_NAME}" in
+            push|workflow_dispatch)
+              test "${GITHUB_REF}" = "refs/heads/main"
+              ;;
+            pull_request)
+              ;;
+            *)
+              echo "unsupported event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Check out exact revision
         uses: actions/checkout@v4
