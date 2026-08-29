@@ -7,6 +7,9 @@ on:
     paths:
       - ".github/workflows/_aurion-full-container-cutover-patch.yml"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
+      - "scripts/_patch_aurion_full_container_workflow.py"
+      - "scripts/_finalize_aurion_full_container_workflow.py"
+      - "scripts/_patch_aurion_container_runtime_boundaries.py"
 
 permissions:
   contents: write
