@@ -1,0 +1,24 @@
+name: Temporary Aurion reconcile image presence probe
+
+on:
+  push:
+    branches:
+      - fix/aim-219-root-provision-reconcile-image-20260829
+    paths:
+      - ".github/workflows/_aurion-reconcile-image-presence-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-only:
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect exact pinned image without mutation
+        run: |
+          set -euo pipefail
+          image='node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff'
+          digest='sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff'
+          docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$image" | grep -Fq "@${digest}"
+          printf 'PINNED_IMAGE_PRESENT\n'
