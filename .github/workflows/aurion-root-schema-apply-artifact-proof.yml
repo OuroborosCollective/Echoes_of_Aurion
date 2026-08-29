@@ -166,7 +166,7 @@ jobs:
           sudo install -d -o root -g root -m 0755 /opt/echoes-of-aurion
           sudo install -o root -g root -m 0600 test-production.env /opt/echoes-of-aurion/.env.production
           rm -f test-production.env
-          sudo bash deploy/install-aurion-production-schema-apply dist-production-apply "$GITHUB_SHA" --enable-runner
+          sudo bash deploy/install-aurion-production-schema-apply "$GITHUB_WORKSPACE/dist-production-apply" "$GITHUB_SHA" --enable-runner
           test "$(sudo readlink -f /opt/echoes-of-aurion-schema-apply/current)" = "/opt/echoes-of-aurion-schema-apply/releases/$GITHUB_SHA"
           test "$(sudo stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-apply)" = "root:root:755"
           test "$(sudo stat -c '%U:%G:%a' /etc/aurion-production-schema-apply.env)" = "root:root:600"
