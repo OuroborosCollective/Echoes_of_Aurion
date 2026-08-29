@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset NODE_OPTIONS
 
 if [[ $# -ne 1 ]]; then
   echo "usage: aurion-production-schema-reconcile <expected-sha40>" >&2
@@ -17,21 +18,22 @@ base=/opt/echoes-of-aurion-schema-reconcile
 current="${base}/current"
 env_file=/opt/echoes-of-aurion/.env.production
 state_dir=/var/lib/echoes-of-aurion/schema-reconciliation
-docker_network=areloria_arelorian-network
 
 [[ -L "$current" ]] || { echo "reconciliation release is not installed" >&2; exit 69; }
 release="$(readlink -f "$current")"
 [[ "$release" == "${base}/releases/${expected_sha}" ]] || { echo "installed reconciliation release does not match expected revision" >&2; exit 70; }
-[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -f "${release}/bin/reconcile.cjs" ]] || { echo "reconciliation release is incomplete" >&2; exit 70; }
+[[ -f "${release}/manifest.json" && -f "${release}/checksums.sha256" && -f "${release}/bin/reconcile.cjs" && -f "${release}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" ]] || { echo "reconciliation release is incomplete" >&2; exit 70; }
+installed_runner=/usr/local/sbin/aurion-production-schema-reconcile
+installed_verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
 
 owner="$(stat -c '%U:%G' "$release")"
 [[ "$owner" == "root:root" ]] || { echo "reconciliation release must be root-owned" >&2; exit 70; }
-if find "$release" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
-  echo "reconciliation release contains unsafe ownership or writable content" >&2
+if find "$release" -xdev \( -type l -o ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+  echo "reconciliation release contains unsafe ownership, symlink or writable content" >&2
   exit 70
 fi
 
-manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${release}/manifest.json")"
+manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.nodeTarget!=="node22"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${release}/manifest.json")"
 [[ "$manifest_revision" == "$expected_sha" ]] || { echo "reconciliation manifest revision mismatch" >&2; exit 70; }
 
 (
@@ -39,23 +41,47 @@ manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; cons
   sha256sum --strict -c checksums.sha256 >/dev/null
 )
 
+[[ -f "$installed_runner" && ! -L "$installed_runner" && "$(stat -c '%U:%G:%a' "$installed_runner")" == "root:root:755" ]] || { echo "installed root runner ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-reconcile" "$installed_runner" || {
+  echo "installed root runner does not match reconciliation release" >&2
+  exit 70
+}
+[[ -f "$installed_verifier" && ! -L "$installed_verifier" && "$(stat -c '%U:%G:%a' "$installed_verifier")" == "root:root:755" ]] || { echo "installed artifact verifier ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$installed_verifier" || {
+  echo "installed artifact verifier does not match reconciliation release" >&2
+  exit 70
+}
+node "$installed_verifier" "$release" "$expected_sha"
+
 [[ -f "$env_file" ]] || { echo "production environment file is absent" >&2; exit 69; }
 [[ "$(stat -c '%U:%G:%a' "$env_file")" == "root:root:600" ]] || { echo "production environment file ownership/mode is not root:root:600" >&2; exit 77; }
 
 image_contract="${release}/deploy/aurion-reconcile-runtime-image.conf"
 [[ -f "$image_contract" ]] || { echo "runtime image contract is absent" >&2; exit 69; }
 
-image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22){process.exit(2)}; process.stdout.write(c.imageTag)' "$image_contract")"
+network_contract="${release}/deploy/aurion-reconcile-runtime-network.conf"
+[[ -f "$network_contract" ]] || { echo "runtime network contract is absent" >&2; exit 69; }
+
+image_tag="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22||typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)){process.exit(2)}; process.stdout.write(c.imageTag)' "$image_contract")"
 image_digest="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!c.imageDigest||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)){process.exit(2)}; process.stdout.write(c.imageDigest)' "$image_contract")"
+docker_network="$(node --input-type=module -e 'import fs from "node:fs"; const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_network_contract"||typeof c.network!=="string"||!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(c.network)){process.exit(2)}; process.stdout.write(c.network)' "$network_contract")"
 pinned_image="${image_tag}@${image_digest}"
+[[ "$docker_network" == "echoes-of-aurion-internal" ]] || {
+  echo "runtime database network contract is not allowlisted" >&2
+  exit 70
+}
 
 if ! docker image inspect --format='{{index .RepoDigests 0}}' "$pinned_image" >/dev/null 2>&1; then
   echo "pinned runtime image is not available locally" >&2
   exit 69
 fi
 
-actual_digest="$(docker image inspect --format='{{index .RepoDigests 0}}' "$pinned_image" 2>/dev/null | head -1)"
-[[ "$actual_digest" == *"${image_digest}" ]] || { echo "runtime image digest mismatch" >&2; exit 70; }
+if ! docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" 2>/dev/null | grep -Fq "@${image_digest}"; then
+  echo "runtime image digest mismatch" >&2
+  exit 70
+fi
+
+docker network inspect "$docker_network" >/dev/null 2>&1 || { echo "runtime database network is unavailable" >&2; exit 69; }
 
 install -d -o root -g root -m 0700 "$state_dir"
 tmp="$(mktemp "${state_dir}/.receipt.XXXXXX")"
@@ -65,7 +91,9 @@ chmod 0600 "$tmp"
 set +e
 docker run \
   --rm \
+  --pull=never \
   --read-only \
+  --user 0:0 \
   --network "$docker_network" \
   --mount "type=bind,source=${release},destination=/reconcile,readonly" \
   --mount "type=bind,source=${env_file},destination=/reconcile/.env.production,readonly" \
@@ -77,8 +105,63 @@ docker run \
   --env AURION_RECONCILIATION_SOURCE_SHA="$expected_sha" \
   "$pinned_image" \
   node /reconcile/bin/reconcile.cjs >"$tmp" 2>/dev/null
-status=$?
+docker_status=$?
 set -e
+
+if ! node --input-type=module -e '
+  import fs from "node:fs";
+  const [receiptPath,expected,network,digest,status]=process.argv.slice(1);
+  const receipt=JSON.parse(fs.readFileSync(receiptPath,"utf8"));
+  if(receipt.recordType!=="aurion_production_schema_reconciliation") process.exit(2);
+  if(receipt.schemaVersion!==1||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) process.exit(3);
+  if(receipt.sourceRevision!==expected) process.exit(4);
+  receipt.execution={
+    mode:"docker",
+    network,
+    imageDigest:digest,
+    rootFilesystemReadOnly:true,
+    releaseMountedReadOnly:true,
+    environmentMountedReadOnly:true,
+    containerExitStatus:Number(status),
+  };
+  fs.writeFileSync(receiptPath,`${JSON.stringify(receipt,null,2)}\n`,{mode:0o600});
+' "$tmp" "$expected_sha" "$docker_network" "$image_digest" "$docker_status" 2>/dev/null; then
+  failure_class=DOCKER_RECEIPT_INVALID
+  status=70
+  if [[ "$docker_status" -ne 0 ]]; then
+    failure_class=DOCKER_EXECUTION_FAILED
+    status="$docker_status"
+  fi
+  node --input-type=module -e '
+    import fs from "node:fs";
+    const [receiptPath,expected,network,digest,failureClass,status]=process.argv.slice(1);
+    const receipt={
+      recordType:"aurion_production_schema_reconciliation",
+      schemaVersion:1,
+      sourceRevision:expected,
+      readOnly:true,
+      requireMatch:false,
+      databaseCredentialReturned:false,
+      overallState:"UNREADABLE_FAIL_CLOSED",
+      failureStage:"EXECUTE_DOCKER",
+      errorClass:failureClass,
+      retryable:failureClass==="DOCKER_EXECUTION_FAILED",
+      migrations:[],
+      execution:{
+        mode:"docker",
+        network,
+        imageDigest:digest,
+        rootFilesystemReadOnly:true,
+        releaseMountedReadOnly:true,
+        environmentMountedReadOnly:true,
+        containerExitStatus:Number(status),
+      },
+    };
+    fs.writeFileSync(receiptPath,`${JSON.stringify(receipt,null,2)}\n`,{mode:0o600});
+  ' "$tmp" "$expected_sha" "$docker_network" "$image_digest" "$failure_class" "$docker_status"
+else
+  status="$docker_status"
+fi
 
 node --input-type=module -e '
   import fs from "node:fs";
@@ -87,6 +170,8 @@ node --input-type=module -e '
   if(receipt.recordType!=="aurion_production_schema_reconciliation") process.exit(2);
   if(receipt.schemaVersion!==1||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) process.exit(3);
   if(receipt.sourceRevision!==expected) process.exit(4);
+  const execution=receipt.execution;
+  if(execution?.mode!=="docker"||execution.rootFilesystemReadOnly!==true||execution.releaseMountedReadOnly!==true||execution.environmentMountedReadOnly!==true) process.exit(5);
 ' "$tmp" "$expected_sha"
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset NODE_OPTIONS
 
 if [[ $# -lt 2 || $# -gt 3 ]]; then
   echo "usage: install-aurion-production-schema-reconcile <artifact-dir> <expected-sha40> [--enable-runner]" >&2
@@ -10,52 +11,122 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 77
 fi
 
-artifact_dir="$(readlink -f "$1")"
+[[ ! -L "$1" ]] || { echo "artifact directory must not be a symlink" >&2; exit 66; }
+artifact_dir="$(readlink -f -- "$1")"
 expected_sha="$2"
 enable_runner="${3:-}"
+case "$enable_runner" in
+  ""|--enable-runner) ;;
+  *) echo "unknown installer option" >&2; exit 64 ;;
+esac
+
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected revision" >&2; exit 64; }
 [[ -d "$artifact_dir" ]] || { echo "artifact directory missing" >&2; exit 66; }
 [[ -f "${artifact_dir}/manifest.json" && -f "${artifact_dir}/checksums.sha256" ]] || { echo "artifact metadata missing" >&2; exit 66; }
-[[ -f "${artifact_dir}/deploy/aurion-production-schema-reconcile" && -f "${artifact_dir}/bin/reconcile.cjs" && -f "${artifact_dir}/deploy/aurion-reconcile-runtime-image.conf" ]] || { echo "root runner, bundled reconciler or runtime image contract missing from artifact" >&2; exit 66; }
+[[ -f "${artifact_dir}/deploy/aurion-production-schema-reconcile" && -f "${artifact_dir}/bin/reconcile.cjs" && -f "${artifact_dir}/deploy/aurion-reconcile-runtime-image.conf" && -f "${artifact_dir}/deploy/aurion-reconcile-runtime-network.conf" && -f "${artifact_dir}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" ]] || { echo "root runner, bundled reconciler, runtime image, network contract or artifact verifier missing from artifact" >&2; exit 66; }
+if find "$artifact_dir" -xdev -type l -print -quit | grep -q .; then
+  echo "artifact must not contain symlinks" >&2
+  exit 70
+fi
 
-manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${artifact_dir}/manifest.json")"
+if [[ "$enable_runner" == "--enable-runner" ]]; then
+  sudoers_source="${artifact_dir}/deploy/aurion-production-schema-reconcile.sudoers"
+  [[ -f "$sudoers_source" ]] || { echo "sudoers policy missing from artifact" >&2; exit 66; }
+  visudo -cf "$sudoers_source" >/dev/null
+fi
+
+manifest_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.nodeTarget!=="node22"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${artifact_dir}/manifest.json")"
 [[ "$manifest_revision" == "$expected_sha" ]] || { echo "artifact revision mismatch" >&2; exit 70; }
 (
   cd "$artifact_dir"
   sha256sum --strict -c checksums.sha256 >/dev/null
 )
 
-base=/opt/echoes-of-aurion-schema-reconcile
-release="${base}/releases/${expected_sha}"
-install -d -o root -g root -m 0755 "${base}/releases"
-if [[ -e "$release" ]]; then
-  [[ -d "$release" && -f "${release}/manifest.json" && -f "${release}/checksums.sha256" ]] || { echo "existing release is incomplete" >&2; exit 73; }
+validate_release() {
+  local candidate="$1"
+  [[ -d "$candidate" && ! -L "$candidate" ]] || { echo "candidate release is invalid" >&2; return 70; }
+  [[ -f "${candidate}/manifest.json" && -f "${candidate}/checksums.sha256" && -f "${candidate}/bin/reconcile.cjs" && -f "${candidate}/deploy/aurion-production-schema-reconcile" && -f "${candidate}/deploy/aurion-reconcile-runtime-image.conf" && -f "${candidate}/deploy/aurion-reconcile-runtime-network.conf" && -f "${candidate}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" ]] || { echo "candidate release is incomplete" >&2; return 70; }
+  [[ "$(stat -c '%U:%G' "$candidate")" == "root:root" ]] || { echo "candidate release must be root-owned" >&2; return 70; }
+  if find "$candidate" -xdev \( -type l -o ! -user root -o ! -group root -o -perm /022 \) -print -quit | grep -q .; then
+    echo "candidate release contains unsafe ownership, symlink or writable content" >&2
+    return 70
+  fi
+  local candidate_revision
+  candidate_revision="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.schemaVersion!==1||m.recordType!=="aurion_production_schema_reconcile_artifact"||m.nodeTarget!=="node22"||m.mode!=="read_only"||m.moduleFormat!=="commonjs"||!/^([a-f0-9]{40})$/.test(m.revision)){process.exit(2)}; process.stdout.write(m.revision)' "${candidate}/manifest.json")"
+  [[ "$candidate_revision" == "$expected_sha" ]] || { echo "candidate release revision mismatch" >&2; return 70; }
   (
-    cd "$release"
+    cd "$candidate"
     sha256sum --strict -c checksums.sha256 >/dev/null
   )
+}
+
+base=/opt/echoes-of-aurion-schema-reconcile
+release="${base}/releases/${expected_sha}"
+runner=/usr/local/sbin/aurion-production-schema-reconcile
+verifier_dir=/usr/local/lib/echoes-of-aurion
+verifier="${verifier_dir}/verify-aurion-production-schema-reconcile-artifact.mjs"
+stage=""
+runner_next=""
+verifier_next=""
+sudoers_next=""
+cleanup() {
+  [[ -z "$stage" || ! -d "$stage" ]] || rm -rf -- "$stage"
+  [[ -z "$runner_next" || ! -e "$runner_next" ]] || rm -f -- "$runner_next"
+  [[ -z "$verifier_next" || ! -e "$verifier_next" ]] || rm -f -- "$verifier_next"
+  [[ -z "$sudoers_next" || ! -e "$sudoers_next" ]] || rm -f -- "$sudoers_next"
+}
+trap cleanup EXIT
+
+install -d -o root -g root -m 0755 "${base}/releases"
+if [[ -e "$release" ]]; then
+  validate_release "$release"
+  cmp -s "${artifact_dir}/manifest.json" "${release}/manifest.json" || { echo "existing release manifest differs from artifact" >&2; exit 70; }
+  cmp -s "${artifact_dir}/checksums.sha256" "${release}/checksums.sha256" || { echo "existing release checksum contract differs from artifact" >&2; exit 70; }
 else
-  install -d -o root -g root -m 0755 "$release"
-  cp -a "${artifact_dir}/." "$release/"
-  chown -R root:root "$release"
-  find "$release" -type d -exec chmod 0755 {} +
-  find "$release" -type f -exec chmod 0644 {} +
-  chmod 0755 "${release}/bin/reconcile.cjs" "${release}/deploy/aurion-production-schema-reconcile"
+  stage="$(mktemp -d "${base}/releases/.${expected_sha}.staging.XXXXXX")"
+  cp -a "${artifact_dir}/." "$stage/"
+  chown -R root:root "$stage"
+  find "$stage" -type d -exec chmod 0755 {} +
+  find "$stage" -type f -exec chmod 0644 {} +
+  chmod 0755 "${stage}/bin/reconcile.cjs" "${stage}/deploy/aurion-production-schema-reconcile"
+  validate_release "$stage"
+  cmp -s "${artifact_dir}/manifest.json" "${stage}/manifest.json" || { echo "staged release manifest differs from artifact" >&2; exit 70; }
+  cmp -s "${artifact_dir}/checksums.sha256" "${stage}/checksums.sha256" || { echo "staged release checksum contract differs from artifact" >&2; exit 70; }
+  mv -T "$stage" "$release"
+  stage=""
+  validate_release "$release"
+fi
+
+install -d -o root -g root -m 0755 "$verifier_dir"
+verifier_next="$(mktemp "${verifier_dir}/.verify-aurion-production-schema-reconcile-artifact.XXXXXX")"
+install -o root -g root -m 0755 "${release}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier_next"
+[[ -f "$verifier_next" && ! -L "$verifier_next" && "$(stat -c '%U:%G:%a' "$verifier_next")" == "root:root:755" ]] || { echo "staged artifact verifier ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier_next" || { echo "staged artifact verifier differs from release" >&2; exit 70; }
+mv -f "$verifier_next" "$verifier"
+verifier_next=""
+[[ -f "$verifier" && ! -L "$verifier" && "$(stat -c '%U:%G:%a' "$verifier")" == "root:root:755" ]] || { echo "installed artifact verifier ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier" || { echo "installed artifact verifier differs from release" >&2; exit 70; }
+
+runner_next="$(mktemp /usr/local/sbin/.aurion-production-schema-reconcile.XXXXXX)"
+install -o root -g root -m 0755 "${release}/deploy/aurion-production-schema-reconcile" "$runner_next"
+[[ -f "$runner_next" && ! -L "$runner_next" && "$(stat -c '%U:%G:%a' "$runner_next")" == "root:root:755" ]] || { echo "staged root runner ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-reconcile" "$runner_next" || { echo "staged root runner differs from release" >&2; exit 70; }
+mv -f "$runner_next" "$runner"
+runner_next=""
+[[ -f "$runner" && ! -L "$runner" && "$(stat -c '%U:%G:%a' "$runner")" == "root:root:755" ]] || { echo "installed root runner ownership or mode mismatch" >&2; exit 70; }
+cmp -s "${release}/deploy/aurion-production-schema-reconcile" "$runner" || { echo "installed root runner differs from release" >&2; exit 70; }
+
+if [[ "$enable_runner" == "--enable-runner" ]]; then
+  sudoers_next="$(mktemp /etc/sudoers.d/.aurion-production-schema-reconcile.XXXXXX)"
+  install -o root -g root -m 0440 "${release}/deploy/aurion-production-schema-reconcile.sudoers" "$sudoers_next"
+  visudo -cf "$sudoers_next" >/dev/null
+  mv -f "$sudoers_next" /etc/sudoers.d/aurion-production-schema-reconcile
+  sudoers_next=""
+  visudo -cf /etc/sudoers.d/aurion-production-schema-reconcile >/dev/null
 fi
 
 ln -sTfn "$release" "${base}/current.next"
 mv -Tf "${base}/current.next" "${base}/current"
 [[ "$(readlink -f "${base}/current")" == "$release" ]]
-
-install -o root -g root -m 0755 "${release}/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
-
-if [[ "$enable_runner" == "--enable-runner" ]]; then
-  [[ -f "${release}/deploy/aurion-production-schema-reconcile.sudoers" ]] || { echo "sudoers policy missing from artifact" >&2; exit 66; }
-  install -o root -g root -m 0440 "${release}/deploy/aurion-production-schema-reconcile.sudoers" /etc/sudoers.d/aurion-production-schema-reconcile
-  visudo -cf /etc/sudoers.d/aurion-production-schema-reconcile >/dev/null
-elif [[ -n "$enable_runner" ]]; then
-  echo "unknown installer option" >&2
-  exit 64
-fi
 
 printf '{"installed":true,"revision":"%s","runnerEnabled":%s}\n' "$expected_sha" "$([[ "$enable_runner" == "--enable-runner" ]] && echo true || echo false)"
