@@ -30,6 +30,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
     expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}");
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+    expect(workflow).toContain('runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"');
+    expect(workflow).toContain("aurion-runtime-container-verify failed state=%s health=%s category=%s");
+    expect(promoter).toContain("aurion-container-health-diagnostic state=%s health=%s category=%s");
+    expect(promoter).toContain('docker logs --tail 200 "$container_id"');
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
