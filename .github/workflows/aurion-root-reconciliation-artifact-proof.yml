@@ -1,48 +1,55 @@
 name: Aurion root reconciliation artifact proof
 
 on:
+  workflow_call:
+    inputs:
+      use_uploaded_artifact:
+        description: Reuse the caller's verified immutable release artifact.
+        required: false
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "scripts/reconcile-aurion-production-schema.ts"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/aurion-production-schema-readback.yml"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "deploy/aurion-production-schema-reconcile"
       - "deploy/aurion-production-schema-reconcile.sudoers"
       - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-reconcile-runtime-image.conf"
+      - "deploy/aurion-reconcile-runtime-network.conf"
+      - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
+      - "scripts/aurionProductionReadbackErrors.ts"
+      - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
+      - "server/aurionProductionReadbackChain.test.ts"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
       - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
       - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
-  push:
-    branches: [main]
-    paths:
-      - "scripts/reconcile-aurion-production-schema.ts"
-      - "scripts/build-aurion-production-reconcile-artifact.mjs"
-      - "deploy/aurion-production-schema-reconcile"
-      - "deploy/aurion-production-schema-reconcile.sudoers"
-      - "deploy/install-aurion-production-schema-reconcile"
-      - "drizzle/meta/_journal.json"
-      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
-
 permissions:
   contents: read
+  actions: read
 
 jobs:
   immutable-root-readback:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    services:
-      mariadb:
-        image: mariadb:11.4
-        env:
-          MARIADB_ROOT_PASSWORD: auriontest
-          MARIADB_DATABASE: aurion_root_reconcile_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
-          --health-interval=5s
-          --health-timeout=3s
-          --health-retries=20
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_root_reconcile_test
+      AURION_RECONCILE_TEST_NETWORK: echoes-of-aurion-internal
+      AURION_RECONCILE_TEST_DATABASE: aurion_root_reconcile_test
+      AURION_RECONCILE_TEST_DB: aurion-root-reconcile-mariadb
+      AURION_RECONCILE_TEST_ROOT_PASSWORD: auriontest
+      AURION_RECONCILE_TEST_READ_USER: aurion_readback
+      AURION_RECONCILE_TEST_READ_PASSWORD: aurionreadbacktest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,11 +69,45 @@ jobs:
         run: |
           set -euo pipefail
           pnpm check
-          pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
+          pnpm vitest run \
+            server/aurionProductionSchemaReconciliation.test.ts \
+            server/aurionProductionSchemaReconcileDockerRunner.test.ts \
+            server/aurionProductionReadbackChain.test.ts
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
+
+      - name: Start isolated private Docker proof database
+        run: |
+          set -euo pipefail
+          docker network create --internal "$AURION_RECONCILE_TEST_NETWORK"
+          docker run -d \
+            --name "$AURION_RECONCILE_TEST_DB" \
+            --network "$AURION_RECONCILE_TEST_NETWORK" \
+            --network-alias mariadb \
+            -e MARIADB_ROOT_PASSWORD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" \
+            -e MARIADB_ROOT_HOST=% \
+            -e MARIADB_DATABASE="$AURION_RECONCILE_TEST_DATABASE" \
+            mariadb:11.4
+          ready=0
+          for _attempt in $(seq 1 30); do
+            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+
+      - name: Establish read-only reconciliation database identity
+        run: |
+          set -euo pipefail
+          docker exec -i -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot <<SQL
+          CREATE USER IF NOT EXISTS '${AURION_RECONCILE_TEST_READ_USER}'@'%' IDENTIFIED BY '${AURION_RECONCILE_TEST_READ_PASSWORD}';
+          GRANT SELECT, SHOW VIEW ON \`${AURION_RECONCILE_TEST_DATABASE}\`.* TO '${AURION_RECONCILE_TEST_READ_USER}'@'%';
+          FLUSH PRIVILEGES;
+          SQL
 
       - name: Establish canonical database through journaled 0020 only
         run: |
@@ -87,12 +128,29 @@ jobs:
           journal.entries=cutoff;
           fs.writeFileSync(path, `${JSON.stringify(journal,null,2)}\n`);
           NODE
-          pnpm exec drizzle-kit migrate
+          root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
+          docker run --rm \
+            --network "$AURION_RECONCILE_TEST_NETWORK" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace \
+            --env DATABASE_URL="$root_database_url" \
+            node:22.13.0-bookworm-slim \
+            ./node_modules/.bin/drizzle-kit migrate
           restore_journal
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
 
+      - name: Download caller-verified reconciliation artifact
+        if: ${{ inputs.use_uploaded_artifact }}
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
       - name: Build standalone revision-bound reconciliation artifact
+        if: ${{ !inputs.use_uploaded_artifact }}
         env:
           AURION_RELEASE_SHA: ${{ github.sha }}
         run: |
@@ -103,15 +161,63 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
           if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("artifact revision/mode mismatch");
           if(!manifest.files?.["bin/reconcile.cjs"]) throw new Error("bundled reconciler is not manifest-bound");
+          for(const file of [
+            "deploy/aurion-production-schema-reconcile",
+            "deploy/aurion-reconcile-runtime-image.conf",
+            "deploy/aurion-reconcile-runtime-network.conf",
+            "deploy/verify-aurion-production-schema-reconcile-artifact.mjs",
+          ]) if(!manifest.files?.[file]) throw new Error(`missing artifact contract: ${file}`);
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
+
+      - name: Verify exact revision-bound reconciliation artifact
+        run: |
+          set -euo pipefail
+          test -f dist-production-reconcile/manifest.json
+          test -f dist-production-reconcile/checksums.sha256
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
+          if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("artifact revision/mode mismatch");
+          for(const file of [
+            "bin/reconcile.cjs",
+            "deploy/aurion-production-schema-reconcile",
+            "deploy/aurion-reconcile-runtime-image.conf",
+            "deploy/aurion-reconcile-runtime-network.conf",
+            "deploy/verify-aurion-production-schema-reconcile-artifact.mjs",
+          ]) if(!manifest.files?.[file]) throw new Error(`missing artifact contract: ${file}`);
+          NODE
+          (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
+
+      - name: Pull and verify exact Docker reconciliation image
+        run: |
+          set -euo pipefail
+          image_contract=dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf
+          pinned_image="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22) process.exit(2);
+            if(typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)) process.exit(2);
+            if(typeof c.imageDigest!=="string"||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)) process.exit(2);
+            process.stdout.write(`${c.imageTag}@${c.imageDigest}`);
+          ' "$image_contract")"
+          image_digest="${pinned_image##*@}"
+          docker pull "$pinned_image"
+          docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" | grep -Fq "@${image_digest}"
 
       - name: Create root-protected test production environment
         run: |
           set -euo pipefail
-          printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > test-production.env
+          umask 077
+          printf 'DATABASE_URL=mysql://%s:%s@mariadb:3306/%s\n' \
+            "$AURION_RECONCILE_TEST_READ_USER" \
+            "$AURION_RECONCILE_TEST_READ_PASSWORD" \
+            "$AURION_RECONCILE_TEST_DATABASE" > test-production.env
           sudo install -d -o root -g root -m 0755 /opt/echoes-of-aurion
           sudo install -o root -g root -m 0600 test-production.env /opt/echoes-of-aurion/.env.production
+          rm -f test-production.env
           test "$(sudo stat -c '%U:%G:%a' /opt/echoes-of-aurion/.env.production)" = "root:root:600"
 
       - name: Install immutable reconciliation release as root
@@ -120,6 +226,19 @@ jobs:
           sudo bash deploy/install-aurion-production-schema-reconcile dist-production-reconcile "$GITHUB_SHA"
           test "$(sudo readlink -f /opt/echoes-of-aurion-schema-reconcile/current)" = "/opt/echoes-of-aurion-schema-reconcile/releases/$GITHUB_SHA"
           sudo test -f /opt/echoes-of-aurion-schema-reconcile/current/bin/reconcile.cjs
+          test "$(sudo stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-reconcile)" = "root:root:755"
+          sudo cmp -s dist-production-reconcile/deploy/aurion-production-schema-reconcile /usr/local/sbin/aurion-production-schema-reconcile
+          test "$(sudo stat -c '%U:%G:%a' /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs)" = "root:root:755"
+          sudo cmp -s dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+
+      - name: Prove MariaDB DNS is reachable only through the private Docker network
+        run: |
+          set -euo pipefail
+          set +e
+          getent ahostsv4 mariadb >/dev/null 2>&1
+          host_resolution_status=$?
+          set -e
+          test "$host_resolution_status" -ne 0
 
       - name: Prove fixed root runner sees all seven migrations absent
         run: |
@@ -129,6 +248,8 @@ jobs:
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("root-absent.json","utf8"));
           if(r.sourceRevision!==process.env.GITHUB_SHA||r.readOnly!==true||r.databaseCredentialReturned!==false) throw new Error("root receipt boundary mismatch");
+          if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.rootFilesystemReadOnly!==true||r.execution.releaseMountedReadOnly!==true||r.execution.environmentMountedReadOnly!==true) throw new Error("root receipt Docker execution mismatch");
+          if(r.overallState==="UNREADABLE_FAIL_CLOSED"||r.errorClass==="DATABASE_HOST_UNRESOLVABLE") throw new Error("root runner did not reach the private MariaDB network");
           if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==7) throw new Error("expected seven absent late migrations");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
@@ -136,7 +257,14 @@ jobs:
       - name: Apply 0021 through 0027 only inside ephemeral proof database
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
+          root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
+          docker run --rm -i \
+            --network "$AURION_RECONCILE_TEST_NETWORK" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace \
+            --env DATABASE_URL="$root_database_url" \
+            node:22.13.0-bookworm-slim \
+            node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const tags=[
@@ -165,6 +293,7 @@ jobs:
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("root-match.json","utf8"));
           if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==7) throw new Error("root match proof failed");
+          if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.containerExitStatus!==0) throw new Error("root match did not use the expected Docker executor");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary,drizzleJournal:r.drizzleJournal}));
           NODE
 
@@ -180,6 +309,45 @@ jobs:
           latest="$(sudo readlink -f "$state_dir/latest.json")"
           sudo test -f "$latest"
           printf '%s\n' "${receipts[@]}" | grep -Fx "$latest" >/dev/null
+
+      - name: Prove Docker start failures are sanitized and do not persist credentials
+        run: |
+          set -euo pipefail
+          mkdir -p fake-docker-bin
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          fs.writeFileSync("fake-docker-bin/docker", `#!/usr/bin/env bash
+          set -euo pipefail
+          case "\${1:-}" in
+            image) printf '%s\\n' 'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff' ;;
+            network) exit 0 ;;
+            run)
+              printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion'
+              printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion' >&2
+              exit 42
+              ;;
+            *) exit 64 ;;
+          esac
+          `, { mode: 0o755 });
+          NODE
+          set +e
+          sudo env PATH="$PWD/fake-docker-bin:$PATH" /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" > root-docker-failure.json
+          status=$?
+          set -e
+          test "$status" -eq 42
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const raw=fs.readFileSync("root-docker-failure.json","utf8");
+          if(raw.includes("must-not-leak")||raw.includes("mysql://")) throw new Error("Docker failure receipt leaked a credential");
+          const r=JSON.parse(raw);
+          if(r.overallState!=="UNREADABLE_FAIL_CLOSED"||r.failureStage!=="EXECUTE_DOCKER"||r.errorClass!=="DOCKER_EXECUTION_FAILED"||r.retryable!==true) throw new Error("Docker failure was not fail-closed");
+          if(r.execution?.mode!=="docker"||r.execution.containerExitStatus!==42||r.databaseCredentialReturned!==false) throw new Error("Docker failure receipt boundary mismatch");
+          NODE
+          set +e
+          sudo grep -R --fixed-strings 'must-not-leak' /var/lib/echoes-of-aurion/schema-reconciliation >/dev/null 2>&1
+          persisted_secret=$?
+          set -e
+          test "$persisted_secret" -ne 0
 
       - name: Prove runner cannot execute caller-supplied code path
         run: |
@@ -215,3 +383,10 @@ jobs:
             aurion-production-reconcile-${{ github.sha }}.tgz.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Remove isolated Docker proof database
+        if: always()
+        run: |
+          set -euo pipefail
+          docker rm -f "$AURION_RECONCILE_TEST_DB" >/dev/null 2>&1 || true
+          docker network rm "$AURION_RECONCILE_TEST_NETWORK" >/dev/null 2>&1 || true

@@ -163,6 +163,7 @@ async function main() {
   try {
     failureStage = "CONNECT_DATABASE";
     connection = await mysql.createConnection(databaseUrl);
+    await connection.query("SET SESSION TRANSACTION READ ONLY");
 
     failureStage = "READ_SCHEMA_COLUMNS";
     const [columnRows] = await connection.query<ColumnRow[]>(

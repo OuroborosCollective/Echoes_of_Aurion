@@ -31,6 +31,17 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
 }
 
 describe("Aurion production schema reconciliation", () => {
+  it("sets every reconciler database session read-only before querying metadata", async () => {
+    const source = await readFile(
+      path.resolve(process.cwd(), "scripts/reconcile-aurion-production-schema.ts"),
+      "utf8",
+    );
+    const transactionIndex = source.indexOf("SET SESSION TRANSACTION READ ONLY");
+    const metadataIndex = source.indexOf("READ_SCHEMA_COLUMNS");
+    expect(transactionIndex).toBeGreaterThan(-1);
+    expect(transactionIndex).toBeLessThan(metadataIndex);
+  });
+
   it("parses all seven unjournaled SQL migrations from their real repository contracts", async () => {
     const migrations = await Promise.all(lateAurionMigrationTags.map(parse));
     expect(migrations).toHaveLength(7);

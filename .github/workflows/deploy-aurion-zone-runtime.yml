@@ -6,16 +6,39 @@ on:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
+      - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-reconcile-runtime-image.conf"
+      - "deploy/aurion-reconcile-runtime-network.conf"
+      - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
       - "deploy/aurion-zone-runtime.service"
       - "deploy/aurion-zone-runtime.environment.template"
       - "deploy/arelogic-zone-runtime.nginx.conf"
       - "deploy/arelogic-zone-runtime-rate-limit.nginx.conf"
       - "server/zoneService.ts"
       - "server/zoneServiceRuntime.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/reconcile-aurion-production-schema.ts"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
+      - "server/aurionProductionReadbackChain.test.ts"
+      - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
       - "drizzle/meta/_journal.json"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
   workflow_dispatch:
 
 concurrency:
@@ -24,6 +47,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   verify-and-build:
@@ -32,7 +56,10 @@ jobs:
 
     steps:
       - name: Guard repository scope
-        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF}" = "refs/heads/main"
 
       - name: Check out exact revision
         uses: actions/checkout@v4
@@ -54,6 +81,7 @@ jobs:
       - name: Verify exact source revision
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           pnpm check
           pnpm test
           bash -n deploy/promote-aurion-zone-runtime.sh
@@ -76,8 +104,15 @@ jobs:
           if(manifest.recordType!=="aurion_production_schema_reconcile_artifact") throw new Error("unexpected schema artifact type");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("schema artifact revision mismatch");
           if(manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("schema artifact boundary mismatch");
+          for(const file of [
+            "deploy/aurion-production-schema-reconcile",
+            "deploy/aurion-reconcile-runtime-image.conf",
+            "deploy/aurion-reconcile-runtime-network.conf",
+            "deploy/verify-aurion-production-schema-reconcile-artifact.mjs",
+          ]) if(!manifest.files?.[file]) throw new Error(`schema artifact is missing ${file}`);
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
           printf '{"revision":"%s","runId":"%s","artifact":"aurion-zone-runtime"}\n' \
             "${GITHUB_SHA}" "${GITHUB_RUN_ID}" > dist-zone/.aurion-zone-runtime-release.json
           tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
@@ -99,9 +134,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  root-reconciliation-proof:
+    name: Prove private Docker schema readback
+    needs: verify-and-build
+    uses: ./.github/workflows/aurion-root-reconciliation-artifact-proof.yml
+    with:
+      use_uploaded_artifact: true
+
   promote-zone-runtime:
     name: Promote verified Aurion zone runtime
-    needs: verify-and-build
+    needs: [verify-and-build, root-reconciliation-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
     env:
@@ -110,7 +152,11 @@ jobs:
 
     steps:
       - name: Guard repository scope
-        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
 
       - name: Reset workflow-owned artifact directory
         run: rm -rf runtime-artifact
@@ -120,22 +166,39 @@ jobs:
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: runtime-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Provision digest-pinned reconciliation Docker image
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-reconcile"
+          image_contract="${artifact}/deploy/aurion-reconcile-runtime-image.conf"
+          test -f "$image_contract"
+          (cd "$artifact" && sha256sum --strict -c checksums.sha256)
+          node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
+          pinned_image="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(c.schemaVersion!==1||c.recordType!=="aurion_reconcile_runtime_image_contract"||c.nodeMajorVersion!==22) process.exit(2);
+            if(typeof c.imageTag!=="string"||!/^node:22[A-Za-z0-9._:-]*$/.test(c.imageTag)) process.exit(2);
+            if(typeof c.imageDigest!=="string"||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)) process.exit(2);
+            process.stdout.write(`${c.imageTag}@${c.imageDigest}`);
+          ' "$image_contract")"
+          image_digest="${pinned_image##*@}"
+          sudo docker pull "$pinned_image"
+          sudo docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" | grep -Fq "@${image_digest}"
 
       - name: Promote node runtime and bounded schema runner
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact"
 
-          # On the first rollout the already-installed promoter updates itself.
-          # A second invocation is needed only when that old promoter did not yet
-          # install the newly bundled schema runner. Both invocations are exact,
-          # revision-bound and idempotent.
+          # The first invocation may replace an older promoter with this revision.
+          # Re-run the exact, idempotent promotion so its newly installed identity
+          # checks execute before the workflow accepts the release.
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
-          if [[ ! -x /usr/local/sbin/aurion-production-schema-reconcile ]] \
-            || [[ ! -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json ]] \
-            || ! grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json; then
-            sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
-          fi
+          sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
           test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
@@ -144,7 +207,25 @@ jobs:
       - name: Read back installed release identities
         run: |
           set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/runtime-artifact/dist-production-reconcile"
+          installed_root=/opt/echoes-of-aurion-schema-reconcile/current
+          runner=/usr/local/sbin/aurion-production-schema-reconcile
+          verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
           cat /opt/aurion-zone-runtime/current/.aurion-zone-runtime-release.json
+          (cd "$artifact" && sha256sum --strict -c checksums.sha256)
+          (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
+          node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
+          node "$verifier" "$installed_root" "$EXPECTED_SHA"
+          cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
+          cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
+          test -f "$runner"
+          test ! -L "$runner"
+          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
+          cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
+          test -f "$verifier"
+          test ! -L "$verifier"
+          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
+          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
           node --input-type=module -e '
             import fs from "node:fs";
             const manifest=JSON.parse(fs.readFileSync("/opt/echoes-of-aurion-schema-reconcile/current/manifest.json","utf8"));
@@ -167,3 +248,11 @@ jobs:
             sleep 1
           done
           [[ "$public_ready" -eq 1 ]]
+
+  production-schema-readback:
+    name: Require production schema readback receipt
+    needs: promote-zone-runtime
+    uses: ./.github/workflows/aurion-production-schema-readback.yml
+    with:
+      expected_sha: ${{ github.sha }}
+      upstream_run_id: ${{ github.run_id }}

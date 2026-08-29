@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset NODE_OPTIONS
 
 if [[ $# -ne 3 ]]; then
   echo "usage: promote-aurion-zone-runtime <artifact-dir> <expected-sha40> <release-id>" >&2
@@ -33,6 +34,7 @@ schema_current=/opt/echoes-of-aurion-schema-reconcile/current
 [[ -d "$schema_artifact" ]]
 [[ -f "${schema_artifact}/manifest.json" && -f "${schema_artifact}/checksums.sha256" ]]
 [[ -f "$schema_installer" ]]
+[[ -f "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" ]]
 
 cd "$artifact_dir"
 sha256sum -c "$checksum"
@@ -71,6 +73,17 @@ bash "$schema_installer" "$schema_artifact" "$expected_sha" --enable-runner
 [[ "$(readlink -f "$schema_current")" == "/opt/echoes-of-aurion-schema-reconcile/releases/${expected_sha}" ]]
 grep -Fq "${expected_sha}" "${schema_current}/manifest.json"
 visudo -cf /etc/sudoers.d/aurion-production-schema-reconcile >/dev/null
+( cd "$schema_current" && sha256sum --strict -c checksums.sha256 >/dev/null )
+cmp -s "${schema_artifact}/manifest.json" "${schema_current}/manifest.json"
+cmp -s "${schema_artifact}/checksums.sha256" "${schema_current}/checksums.sha256"
+test -f /usr/local/sbin/aurion-production-schema-reconcile
+test ! -L /usr/local/sbin/aurion-production-schema-reconcile
+test "$(stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-reconcile)" = "root:root:755"
+cmp -s "${schema_artifact}/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
+test -f /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+test ! -L /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+test "$(stat -c '%U:%G:%a' /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs)" = "root:root:755"
+cmp -s "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
 
 if [[ ! -f "$env_file" ]]; then
   install -D -m 0600 "${deploy_dir}/aurion-zone-runtime.environment.template" "$env_file"

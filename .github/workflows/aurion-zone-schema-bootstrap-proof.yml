@@ -5,18 +5,24 @@ on:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
       - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
       - "deploy/aurion-production-schema-reconcile"
       - "deploy/install-aurion-production-schema-reconcile"
       - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "deploy/aurion-reconcile-runtime-image.conf"
+      - "deploy/aurion-reconcile-runtime-network.conf"
+      - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
       - "scripts/aurionProductionReadbackErrors.ts"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
       - "server/aurionProductionReadbackChain.test.ts"
       - "server/aurionProductionReadbackErrors.test.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
       - "drizzle/meta/_journal.json"
       - "drizzle/0021_aurion_global_world_state.sql"
       - "drizzle/0022_aurion_world_chunk_deltas.sql"
@@ -30,13 +36,31 @@ on:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
       - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
+      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
       - ".github/workflows/aurion-production-schema-readback.yml"
       - "deploy/promote-aurion-zone-runtime.sh"
       - "scripts/aurionProductionReadbackErrors.ts"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
+      - "deploy/aurion-production-schema-reconcile"
+      - "deploy/aurion-production-schema-reconcile.sudoers"
+      - "deploy/install-aurion-production-schema-reconcile"
+      - "deploy/aurion-reconcile-runtime-image.conf"
+      - "deploy/aurion-reconcile-runtime-network.conf"
+      - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
       - "server/aurionProductionReadbackChain.test.ts"
       - "server/aurionProductionReadbackErrors.test.ts"
+      - "server/aurionProductionSchemaReconciliation.test.ts"
+      - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
+      - "drizzle/0021_aurion_global_world_state.sql"
+      - "drizzle/0022_aurion_world_chunk_deltas.sql"
+      - "drizzle/0023_aurion_world_presence_epochs.sql"
+      - "drizzle/0024_aurion_world_epoch_reactions.sql"
+      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
+      - "drizzle/0026_aurion_faction_questline_state.sql"
+      - "drizzle/0027_aurion_faction_questline_rewards.sql"
 
 permissions:
   contents: read
@@ -72,7 +96,8 @@ jobs:
             server/aurionZoneRuntimeSchemaBootstrap.test.ts \
             server/aurionProductionReadbackChain.test.ts \
             server/aurionProductionReadbackErrors.test.ts \
-            server/aurionProductionSchemaReconciliation.test.ts
+            server/aurionProductionSchemaReconciliation.test.ts \
+            server/aurionProductionSchemaReconcileDockerRunner.test.ts
           bash -n deploy/promote-aurion-zone-runtime.sh
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
@@ -135,6 +160,7 @@ jobs:
           pnpm build:zone-runtime
           node scripts/build-aurion-production-reconcile-artifact.mjs
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
