@@ -73,10 +73,14 @@ describe("Aurion post-deploy production schema readback", () => {
     expect(readback).not.toContain("postgres_migration_apply");
   });
 
-  it("persists and uploads only the sanitized root-owned receipt", () => {
-    expect(readback).toContain('latest="$(sudo readlink -f "$state_dir/latest.json")"');
-    expect(readback).toContain('test "$(sudo stat -c \'%U:%G:%a\' "$latest")" = "root:root:600"');
-    expect(readback).toContain('sudo cmp -s "$raw" "$latest"');
+  it("uses the sanitized fixed-runner receipt without broadening sudo", () => {
+    expect(readback).toContain(
+      "The fixed root runner persists a private root-owned receipt"
+    );
+    expect(readback).toContain('sudo -n "$runner" "$EXPECTED_SHA"');
+    expect(readback).not.toContain("sudo stat");
+    expect(readback).not.toContain("sudo cmp");
+    expect(readback).not.toContain("sudo readlink");
     expect(readback).toContain("cleanup_transient_readback()");
     expect(readback).toContain("production-schema-readback.json");
     expect(readback).not.toContain("production-schema-readback.raw.json\n");

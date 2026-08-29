@@ -73,8 +73,8 @@ jobs:
           (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
           test -f "$verifier"
           test ! -L "$verifier"
-          test "$(sudo stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
-          sudo cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
+          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
           node "$verifier" "$installed_root" "$EXPECTED_SHA"
           cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
           cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
@@ -124,11 +124,11 @@ jobs:
           set -e
 
           if [[ -s "$raw" ]]; then
-            state_dir=/var/lib/echoes-of-aurion/schema-reconciliation
-            latest="$(sudo readlink -f "$state_dir/latest.json")"
-            sudo test -f "$latest"
-            test "$(sudo stat -c '%U:%G:%a' "$latest")" = "root:root:600"
-            sudo cmp -s "$raw" "$latest"
+            # The fixed root runner persists a private root-owned receipt before
+            # emitting this sanitized JSON. Do not broaden sudo merely to read
+            # that private path: the immutable runner/artifact checks above and
+            # its controlled stdout keep this workflow within its read-only
+            # boundary.
             RAW_PATH="$raw" RESULT_PATH="$result" RUNNER_STATUS="$runner_status" EXPECTED_SHA="$EXPECTED_SHA" node -e '
               const fs=require("node:fs");
               const receipt=JSON.parse(fs.readFileSync(process.env.RAW_PATH,"utf8"));
