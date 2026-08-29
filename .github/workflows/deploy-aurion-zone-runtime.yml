@@ -58,11 +58,24 @@ on:
       - "drizzle/0025_aurion_loot_mastery_ethos.sql"
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
+  pull_request:
+    paths:
+      - ".github/workflows/deploy-aurion-zone-runtime.yml"
+      - "Dockerfile"
+      - "docker-compose.traefik.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "patches/**"
+      - "deploy/promote-aurion-zone-runtime.sh"
+      - "scripts/build-aurion-traefik-runtime-artifact.mjs"
+      - "server/_core/vite.ts"
+      - "server/aurionTraefikRuntimeDeployment.test.ts"
   workflow_dispatch:
 
 concurrency:
-  group: deploy-aurion-zone-runtime
-  cancel-in-progress: false
+  # PR validation must never occupy the production promotion queue.
+  group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -71,6 +84,9 @@ permissions:
 jobs:
   verify-and-build:
     name: Verify and build immutable Aurion Traefik runtime
+    # Pull-request verification runs only for branches in this repository.
+    # Root proofs and promotion remain limited to trusted pushes on main.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
 
     steps:
@@ -78,7 +94,17 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
-          test "${GITHUB_REF}" = "refs/heads/main"
+          case "${GITHUB_EVENT_NAME}" in
+            push|workflow_dispatch)
+              test "${GITHUB_REF}" = "refs/heads/main"
+              ;;
+            pull_request)
+              ;;
+            *)
+              echo "unsupported event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Check out exact revision
         uses: actions/checkout@v4
@@ -127,9 +153,10 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
           if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
-          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","dist/.aurion-runtime-build.json"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
+          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "echoes-of-aurion:verify-${GITHUB_SHA}" dist-traefik-runtime
           tar -C dist-traefik-runtime -czf aurion-traefik-runtime-release.tgz .
           sha256sum aurion-traefik-runtime-release.tgz > aurion-traefik-runtime-release.tgz.sha256
 
@@ -255,6 +282,7 @@ jobs:
 
   root-reconciliation-proof:
     name: Prove private Docker schema readback
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify-and-build
     uses: ./.github/workflows/aurion-root-reconciliation-artifact-proof.yml
     with:
@@ -262,6 +290,7 @@ jobs:
 
   root-schema-apply-proof:
     name: Prove backup, recovery and bounded schema apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify-and-build
     uses: ./.github/workflows/aurion-root-schema-apply-artifact-proof.yml
     with:
@@ -269,6 +298,7 @@ jobs:
 
   promote-zone-runtime:
     name: Promote verified Aurion Traefik runtime
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production

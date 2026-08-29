@@ -12,12 +12,24 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const promoter = read("deploy/promote-aurion-zone-runtime.sh");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
+  const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
 
   it("binds the public health response and image metadata to one source revision", () => {
     expect(dockerfile).toContain("node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
     expect(dockerfile).toContain("AURION_RELEASE_SHA=${AURION_RELEASE_SHA}");
     expect(dockerfile).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA}");
-    expect(dockerfile).toContain("pnpm install --prod --frozen-lockfile");
+    expect(dockerfile).not.toContain("pnpm install");
+    expect(dockerfile).toContain("ADD runtime-node_modules.tgz ./");
+    expect(dockerfile).toContain('CMD ["node", "dist/index.js"]');
+    expect(runtimeBuilder).toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
+    expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain('"runtime-node_modules.tgz"');
+    expect(workflow).toContain("docker build --pull=false");
+    expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
+    expect(workflow).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}");
+    expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
     expect(viteRuntime).toContain('import("vite")');
     expect(viteRuntime).not.toContain('from "vite"');
     expect(artifactBuilder).toContain('recordType: "aurion_traefik_runtime_artifact"');
