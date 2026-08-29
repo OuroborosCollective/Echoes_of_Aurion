@@ -53,7 +53,14 @@ describe("Aurion post-deploy production schema readback", () => {
 
   it("requires artifact, installed runner and receipt to share one revision without apply", () => {
     expect(readback).toContain(
-      'installed_root="/opt/echoes-of-aurion-schema-reconcile/current"',
+      'installed_current="/opt/echoes-of-aurion-schema-reconcile/current"',
+    );
+    expect(readback).toContain('test -L "$installed_current"');
+    expect(readback).toContain(
+      'installed_root="$(readlink -f -- "$installed_current")"',
+    );
+    expect(readback).toContain(
+      'test "$installed_root" = "/opt/echoes-of-aurion-schema-reconcile/releases/${EXPECTED_SHA}"',
     );
     expect(readback).toContain('installed="${installed_root}/manifest.json"');
     expect(readback).toContain(

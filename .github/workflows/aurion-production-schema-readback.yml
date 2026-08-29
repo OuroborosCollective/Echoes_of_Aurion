@@ -59,7 +59,10 @@ jobs:
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/deployment-artifact/dist-production-reconcile"
-          installed_root="/opt/echoes-of-aurion-schema-reconcile/current"
+          installed_current="/opt/echoes-of-aurion-schema-reconcile/current"
+          test -L "$installed_current"
+          installed_root="$(readlink -f -- "$installed_current")"
+          test "$installed_root" = "/opt/echoes-of-aurion-schema-reconcile/releases/${EXPECTED_SHA}"
           installed="${installed_root}/manifest.json"
           runner="/usr/local/sbin/aurion-production-schema-reconcile"
           verifier="/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs"
