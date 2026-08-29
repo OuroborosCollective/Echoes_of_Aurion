@@ -11,6 +11,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const compose = read("docker-compose.traefik.yml");
   const promoter = read("deploy/promote-aurion-zone-runtime.sh");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
+  const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
 
@@ -27,6 +28,14 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(runtimeBuilder).toContain('dependencyClosure: "hosted-lockfile-install"');
     expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
     expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("needs: migration-ledger");
+    expect(workflow).toContain("Bind WASD source and Aurion migration ledger");
+    expect(workflow).toContain('target_ref: ${{ github.sha }}');
+    expect(workflow).toContain('needs.migration-ledger.outputs.plan_sha256');
+    expect(migrationLedger).toContain("workflow_call:");
+    expect(migrationLedger).toContain("target_ref:");
+    expect(migrationLedger).toContain("target_sha:");
+    expect(migrationLedger).toContain("productionWritesScheduled !== false");
     expect(workflow).toContain('"runtime-node_modules.tgz"');
     expect(workflow).toContain("docker build --pull=false");
     expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
