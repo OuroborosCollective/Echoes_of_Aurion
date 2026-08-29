@@ -17,7 +17,7 @@ ENV NODE_ENV=production \
 
 LABEL org.opencontainers.image.revision=${AURION_RELEASE_SHA}
 
-# The hosted artifact contains a pruned, lockfile-derived production dependency archive.
+# The hosted artifact contains the exact dependency graph installed from the pinned lockfile.
 # The VPS Docker build must not resolve or install packages.
 COPY package.json ./
 ADD runtime-node_modules.tgz ./
