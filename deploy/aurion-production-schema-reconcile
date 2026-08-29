@@ -71,13 +71,13 @@ pinned_image="${image_tag}@${image_digest}"
   exit 70
 }
 
-if ! docker image inspect --format='{{index .RepoDigests 0}}' "$pinned_image" >/dev/null 2>&1; then
+if ! image_id="$(docker image inspect --format '{{.Id}}' "$pinned_image" 2>/dev/null)"; then
   echo "pinned runtime image is not available locally" >&2
   exit 69
 fi
 
-if ! docker image inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$pinned_image" 2>/dev/null | grep -Fq "@${image_digest}"; then
-  echo "runtime image digest mismatch" >&2
+if ! [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+  echo "pinned runtime image has an invalid local image identity" >&2
   exit 70
 fi
 

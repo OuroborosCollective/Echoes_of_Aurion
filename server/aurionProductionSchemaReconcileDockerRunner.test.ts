@@ -83,6 +83,7 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
   const imageContract = JSON.parse(read("deploy/aurion-reconcile-runtime-image.conf"));
   const networkContract = JSON.parse(read("deploy/aurion-reconcile-runtime-network.conf"));
   const rootProof = read(".github/workflows/aurion-root-reconciliation-artifact-proof.yml");
+  const bootstrapBuilder = path.join(root, "scripts/build-aurion-promoter-bootstrap-artifact.mjs");
 
   it("uses the revision-bound private MariaDB network instead of the public Traefik network", () => {
     expect(networkContract).toEqual({
@@ -116,10 +117,40 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(imageContract.imageTag).toContain("node:22");
     expect(imageContract.imageDigest).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(runner).toContain('pinned_image="${image_tag}@${image_digest}"');
-    expect(runner).toContain("docker image inspect");
-    expect(runner).toContain('grep -Fq "@${image_digest}"');
+    expect(runner).toContain('image_id="$(docker image inspect --format \'{{.Id}}\' "$pinned_image" 2>/dev/null)"');
+    expect(runner).not.toContain("RepoDigests");
     expect(runner).toContain("--pull=never");
     expect(runner).not.toMatch(/docker run[\s\S]*?\bnode:22\b(?![.@])/);
+  });
+
+
+  it("derives a closed, one-time amd64 bootstrap artifact without mutating the canonical contract", () => {
+    const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-promoter-bootstrap-source-"));
+    const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-promoter-bootstrap-output-"));
+    const sourceArtifact = makeArtifact();
+    try {
+      fs.cpSync(sourceArtifact, path.join(sourceRoot, "dist-production-reconcile"), { recursive: true });
+      execFileSync(process.execPath, [bootstrapBuilder, sourceRoot, outputRoot], {
+        env: { ...process.env, AURION_RELEASE_SHA: testRevision },
+        stdio: "pipe",
+      });
+
+      const canonical = JSON.parse(fs.readFileSync(
+        path.join(sourceRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"),
+        "utf8",
+      ));
+      const bootstrap = JSON.parse(fs.readFileSync(
+        path.join(outputRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"),
+        "utf8",
+      ));
+      expect(canonical.imageDigest).toBe("sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
+      expect(bootstrap.imageDigest).toBe("sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f");
+      verifyArtifact(path.join(outputRoot, "dist-production-reconcile"));
+    } finally {
+      fs.rmSync(sourceArtifact, { recursive: true, force: true });
+      fs.rmSync(sourceRoot, { recursive: true, force: true });
+      fs.rmSync(outputRoot, { recursive: true, force: true });
+    }
   });
 
   it("waits for an authenticated MariaDB query rather than a liveness-only ping", () => {

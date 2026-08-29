@@ -42,6 +42,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain("traefik.http.services.aurion.loadbalancer.server.port");
     expect(promoter).toContain("^[A-Za-z0-9@._/:-]+$");
     expect(promoter).toContain("aurion-traefik-promoter failed phase=");
+    expect(promoter).toContain('image_id="$(docker image inspect --format \'{{.Id}}\' "$pinned_image")"');
+    expect(promoter).not.toContain("{{range .RepoDigests}}");
+    expect(workflow).toContain("one-time promoter bootstrap artifact");
+    expect(workflow).toContain("runtime-bootstrap-artifact");
     expect(promoter).not.toContain("systemctl reload nginx");
     expect(promoter).not.toContain("nginx -t");
   });

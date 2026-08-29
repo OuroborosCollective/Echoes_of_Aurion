@@ -29,6 +29,7 @@ on:
       - "pnpm-lock.yaml"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/build-aurion-traefik-runtime-artifact.mjs"
+      - "scripts/build-aurion-promoter-bootstrap-artifact.mjs"
       - "scripts/aurionProductionSchemaReconciliation.ts"
       - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/reconcile-aurion-production-schema.ts"
@@ -93,6 +94,7 @@ jobs:
           pnpm test
           bash -n deploy/promote-aurion-zone-runtime.sh
           node --check scripts/build-aurion-traefik-runtime-artifact.mjs
+          node --check scripts/build-aurion-promoter-bootstrap-artifact.mjs
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
@@ -143,6 +145,41 @@ jobs:
           tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
           sha256sum aurion-zone-runtime-release.tgz > aurion-zone-runtime-release.tgz.sha256
 
+          # Assemble the same closed file set that the self-hosted job receives,
+          # then derive a one-time amd64 image-contract variant. That variant is
+          # used only when the host still has the pre-Traefik promoter and lets
+          # it install the canonical promoter before the real promotion begins.
+          mkdir -p runtime-artifact/deploy
+          cp -a \
+            aurion-zone-runtime-release.tgz \
+            aurion-zone-runtime-release.tgz.sha256 \
+            aurion-traefik-runtime-release.tgz \
+            aurion-traefik-runtime-release.tgz.sha256 \
+            runtime-artifact/
+          cp -a \
+            deploy/aurion-zone-runtime.service \
+            deploy/aurion-zone-runtime.environment.template \
+            deploy/arelogic-zone-runtime.nginx.conf \
+            deploy/arelogic-zone-runtime-rate-limit.nginx.conf \
+            deploy/aurion-traefik-runtime.environment.template \
+            deploy/promote-aurion-zone-runtime.sh \
+            runtime-artifact/deploy/
+          cp -a dist-production-reconcile runtime-artifact/
+          node scripts/build-aurion-promoter-bootstrap-artifact.mjs runtime-artifact runtime-bootstrap-artifact
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const canonical=JSON.parse(fs.readFileSync("runtime-artifact/dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf","utf8"));
+          const bootstrap=JSON.parse(fs.readFileSync("runtime-bootstrap-artifact/dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf","utf8"));
+          if(canonical.imageDigest!=="sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff") throw new Error("unexpected canonical bootstrap input");
+          if(bootstrap.imageDigest!=="sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f") throw new Error("unexpected amd64 bootstrap image");
+          NODE
+          (cd runtime-bootstrap-artifact/dist-production-reconcile && sha256sum --strict -c checksums.sha256)
+          node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$GITHUB_SHA"
+          bootstrap_image="node:22.13.0-bookworm-slim@sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f"
+          docker pull "$bootstrap_image"
+          bootstrap_image_id="$(docker image inspect --format '{{.Id}}' "$bootstrap_image")"
+          [[ "$bootstrap_image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
+
       - name: Publish immutable runtime artifact
         uses: actions/upload-artifact@v4
         with:
@@ -159,6 +196,14 @@ jobs:
             deploy/aurion-traefik-runtime.environment.template
             deploy/promote-aurion-zone-runtime.sh
             dist-production-reconcile
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish one-time promoter bootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-zone-runtime-bootstrap-${{ github.sha }}
+          path: runtime-bootstrap-artifact
           if-no-files-found: error
           retention-days: 30
 
@@ -186,8 +231,8 @@ jobs:
           test "${GITHUB_REF}" = "refs/heads/main"
           test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
 
-      - name: Reset workflow-owned artifact directory
-        run: rm -rf runtime-artifact
+      - name: Reset workflow-owned artifact directories
+        run: rm -rf runtime-artifact runtime-bootstrap-artifact
 
       - name: Download verified runtime artifact
         uses: actions/download-artifact@v4
@@ -197,20 +242,33 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
+      - name: Download one-time promoter bootstrap artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-zone-runtime-bootstrap-${{ github.sha }}
+          path: runtime-bootstrap-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
       - name: Bootstrap and promote labelled Traefik container
         run: |
           set -euo pipefail
           artifact="${GITHUB_WORKSPACE}/runtime-artifact"
+          bootstrap_artifact="${GITHUB_WORKSPACE}/runtime-bootstrap-artifact"
+          test -f "${bootstrap_artifact}/aurion-traefik-runtime-release.tgz"
+          test -f "${bootstrap_artifact}/dist-production-reconcile/manifest.json"
 
-          # The host currently permits only this fixed root entrypoint. An older
-          # implementation may finish its legacy local setup and fail before it
-          # can expose a route. Continue only when it has atomically installed
-          # this artifact's byte-identical Traefik implementation.
-          set +e
-          sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
-          first_status=$?
-          set -e
-          if [[ "$first_status" -ne 0 ]]; then
+          # A legacy fixed entrypoint cannot safely replace itself before it
+          # validates a Docker image. Use the separately verified, one-time
+          # amd64 bootstrap artifact only while that byte comparison differs;
+          # its runtime payload is identical and it installs the canonical
+          # promoter before the canonical artifact is ever promoted.
+          if ! cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime; then
+            set +e
+            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+            bootstrap_status=$?
+            set -e
+            printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
             test -x /usr/local/sbin/promote-aurion-zone-runtime
             cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
           fi
