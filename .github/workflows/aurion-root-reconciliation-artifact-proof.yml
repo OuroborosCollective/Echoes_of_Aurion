@@ -44,7 +44,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_root_reconcile_test
       AURION_RECONCILE_TEST_NETWORK: echoes-of-aurion-internal
       AURION_RECONCILE_TEST_DATABASE: aurion_root_reconcile_test
       AURION_RECONCILE_TEST_DB: aurion-root-reconcile-mariadb
@@ -87,7 +86,6 @@ jobs:
             --name "$AURION_RECONCILE_TEST_DB" \
             --network "$AURION_RECONCILE_TEST_NETWORK" \
             --network-alias mariadb \
-            -p 127.0.0.1:3306:3306 \
             -e MARIADB_ROOT_PASSWORD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" \
             -e MARIADB_ROOT_HOST=% \
             -e MARIADB_DATABASE="$AURION_RECONCILE_TEST_DATABASE" \
@@ -130,7 +128,14 @@ jobs:
           journal.entries=cutoff;
           fs.writeFileSync(path, `${JSON.stringify(journal,null,2)}\n`);
           NODE
-          pnpm exec drizzle-kit migrate
+          root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
+          docker run --rm \
+            --network "$AURION_RECONCILE_TEST_NETWORK" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace \
+            --env DATABASE_URL="$root_database_url" \
+            node:22.13.0-bookworm-slim \
+            ./node_modules/.bin/drizzle-kit migrate
           restore_journal
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
@@ -252,7 +257,14 @@ jobs:
       - name: Apply 0021 through 0027 only inside ephemeral proof database
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
+          root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
+          docker run --rm -i \
+            --network "$AURION_RECONCILE_TEST_NETWORK" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace \
+            --env DATABASE_URL="$root_database_url" \
+            node:22.13.0-bookworm-slim \
+            node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const tags=[
