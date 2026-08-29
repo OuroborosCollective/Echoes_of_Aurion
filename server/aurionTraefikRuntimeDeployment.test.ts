@@ -29,6 +29,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(compose).toContain("traefik.enable=true");
     expect(compose).toContain("traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}");
     expect(compose).toContain("traefik.http.routers.aurion.rule=Host(`${AURION_DOMAIN:-arelogic.space}`)");
+    expect(compose).toContain("traefik.http.routers.aurion.priority=1000");
     expect(compose).toContain("traefik.http.services.aurion.loadbalancer.server.port=3000");
     expect(compose).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA:?AURION_RELEASE_SHA must match the verified image revision}");
   });
