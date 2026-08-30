@@ -14,7 +14,9 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "patches/**"
+      - "deploy/aurion-traefik-runtime.environment.template"
       - "deploy/promote-aurion-zone-runtime.sh"
+      - "deploy/verify-aurion-runtime-database.mjs"
       - "scripts/build-aurion-traefik-runtime-artifact.mjs"
       - "server/_core/vite.ts"
       - "server/aurionTraefikRuntimeDeployment.test.ts"
@@ -91,6 +93,7 @@ jobs:
           pnpm check
           pnpm test
           bash -n deploy/promote-aurion-zone-runtime.sh
+          node --check deploy/verify-aurion-runtime-database.mjs
           node --check scripts/build-aurion-traefik-runtime-artifact.mjs
           node --check scripts/build-aurion-promoter-bootstrap-artifact.mjs
           bash -n deploy/aurion-production-schema-reconcile
@@ -114,17 +117,55 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
           if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
-          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
           runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
           runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"
-          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "${runtime_verify_image}" dist-traefik-runtime
-          docker run --detach --name "${runtime_verify_container}" "${runtime_verify_image}" >/dev/null
+          runtime_verify_db_container="aurion-runtime-db-verify-${GITHUB_RUN_ID}"
+          runtime_verify_public_network="aurion-runtime-public-verify-${GITHUB_RUN_ID}"
+          runtime_verify_database_network="aurion-runtime-database-verify-${GITHUB_RUN_ID}"
+          runtime_verify_db_password="$(openssl rand -hex 24)"
           runtime_verify_cleanup() {
             docker rm --force "${runtime_verify_container}" >/dev/null 2>&1 || true
+            docker rm --force "${runtime_verify_db_container}" >/dev/null 2>&1 || true
+            docker network rm "${runtime_verify_public_network}" >/dev/null 2>&1 || true
+            docker network rm "${runtime_verify_database_network}" >/dev/null 2>&1 || true
           }
           trap runtime_verify_cleanup EXIT
+          docker network create "${runtime_verify_public_network}" >/dev/null
+          docker network create "${runtime_verify_database_network}" >/dev/null
+          docker run --detach \
+            --name "${runtime_verify_db_container}" \
+            --network "${runtime_verify_database_network}" \
+            --network-alias mariadb \
+            -e MARIADB_ROOT_PASSWORD="${runtime_verify_db_password}" \
+            -e MARIADB_DATABASE=aurion_runtime \
+            -e MARIADB_USER=aurion_runtime \
+            -e MARIADB_PASSWORD="${runtime_verify_db_password}" \
+            mariadb:11.4 >/dev/null
+          runtime_verify_db_ready=0
+          for _attempt in $(seq 1 60); do
+            if docker exec -e MYSQL_PWD="${runtime_verify_db_password}" "${runtime_verify_db_container}" \
+              mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+              runtime_verify_db_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "${runtime_verify_db_ready}" -ne 1 ]]; then
+            echo "aurion-runtime-database-verify failed category=database_not_ready" >&2
+            exit 1
+          fi
+          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "${runtime_verify_image}" dist-traefik-runtime
+          docker run --detach \
+            --name "${runtime_verify_container}" \
+            --network "${runtime_verify_database_network}" \
+            -e "DATABASE_URL=mysql://aurion_runtime:${runtime_verify_db_password}@mariadb:3306/aurion_runtime" \
+            "${runtime_verify_image}" >/dev/null
+          docker network connect "${runtime_verify_public_network}" "${runtime_verify_container}"
+          docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "${runtime_verify_container}" | grep -Fxq "${runtime_verify_public_network}"
+          docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "${runtime_verify_container}" | grep -Fxq "${runtime_verify_database_network}"
           runtime_verify_ready=0
           runtime_verify_probe_status=0
           for _attempt in $(seq 1 60); do
@@ -183,6 +224,10 @@ jobs:
               ')" ;;
             esac
             printf 'aurion-runtime-container-verify failed state=%s health=%s category=%s\n' "${runtime_state}" "${runtime_health}" "${runtime_category}" >&2
+            exit 1
+          fi
+          if ! docker exec "${runtime_verify_container}" node /app/deploy/verify-aurion-runtime-database.mjs >/dev/null 2>&1; then
+            echo "aurion-runtime-database-verify failed category=authenticated_select_failed" >&2
             exit 1
           fi
           trap - EXIT
@@ -454,8 +499,8 @@ jobs:
             import fs from "node:fs";
             const [file, expected, releaseId, runtimeManifest, schemaManifest]=process.argv.slice(1);
             const receipt=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)||receipt.domain!=="arelogic.space"||receipt.runtimeManifestSha256!==runtimeManifest||receipt.schemaManifestSha256!==schemaManifest||receipt.schemaMode!=="read_only") throw new Error("Traefik runtime readback mismatch");
-            console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain}));
+            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)||receipt.domain!=="arelogic.space"||receipt.traefikNetwork!=="areloria_arelorian-network"||receipt.databaseNetwork!=="echoes-of-aurion-internal"||receipt.databaseConnectivity!=="authenticated_select_1"||receipt.runtimeManifestSha256!==runtimeManifest||receipt.schemaManifestSha256!==schemaManifest||receipt.schemaMode!=="read_only") throw new Error("Traefik runtime readback mismatch");
+            console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain,traefikNetwork:receipt.traefikNetwork,databaseNetwork:receipt.databaseNetwork,databaseConnectivity:receipt.databaseConnectivity}));
           ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"

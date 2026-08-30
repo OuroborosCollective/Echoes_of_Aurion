@@ -103,7 +103,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "dist/.aurion-runtime-build.json"];
+  const required = ["Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -197,13 +197,16 @@ aurion_env_file="$(read_runtime_env AURION_ENV_FILE)"
 phase=runtime-environment
 aurion_domain="$(read_runtime_env AURION_DOMAIN)"
 traefik_network="$(read_runtime_env TRAEFIK_NETWORK)"
+database_network="$(read_runtime_env AURION_DATABASE_NETWORK 2>/dev/null || printf '%s\n' echoes-of-aurion-internal)"
 traefik_certresolver="$(read_runtime_env TRAEFIK_CERTRESOLVER)"
 [[ "$aurion_env_file" == "/opt/echoes-of-aurion/.env.production" ]]
 [[ -f "$aurion_env_file" ]]
 [[ "$aurion_domain" == "arelogic.space" ]]
 [[ "$traefik_network" == "areloria_arelorian-network" ]]
+[[ "$database_network" == "echoes-of-aurion-internal" ]]
 [[ "$traefik_certresolver" =~ ^[A-Za-z0-9_-]+$ ]]
 docker network inspect "$traefik_network" >/dev/null
+docker network inspect "$database_network" >/dev/null
 
 base_image="$pinned_image"
 [[ "$base_image" == "node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff" ]]
@@ -216,6 +219,7 @@ docker build --pull=false --build-arg "AURION_RELEASE_SHA=${expected_sha}" --tag
 export AURION_ENV_FILE="$aurion_env_file"
 export AURION_DOMAIN="$aurion_domain"
 export TRAEFIK_NETWORK="$traefik_network"
+export AURION_DATABASE_NETWORK="$database_network"
 export TRAEFIK_CERTRESOLVER="$traefik_certresolver"
 export AURION_IMAGE_TAG="$expected_sha"
 export AURION_RELEASE_SHA="$expected_sha"
@@ -231,6 +235,7 @@ container_id="$("${compose[@]}" ps -q aurion)"
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.http.services.aurion.loadbalancer.server.port" }}' "$container_id")" == "3000" ]]
 docker inspect --format '{{ index .Config.Labels "traefik.http.routers.aurion.rule" }}' "$container_id" | grep -Fq "$aurion_domain"
 docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$container_id" | grep -Fxq "$traefik_network"
+docker inspect --format '{{range $network, $_ := .NetworkSettings.Networks}}{{println $network}}{{end}}' "$container_id" | grep -Fxq "$database_network"
 [[ "$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$container_id")" == "$expected_sha" ]]
 
 container_ready=0
@@ -294,6 +299,37 @@ if [[ "$container_ready" -ne 1 ]]; then
   exit 1
 fi
 
+# HTTP health cannot prove the login path can resolve or authenticate to the
+# private database. Execute one credential-silent SELECT from inside the exact
+# promoted container and fail closed before publishing the release receipt.
+database_ready=0
+database_probe_status=0
+phase=database-connectivity
+for _attempt in $(seq 1 30); do
+  if docker exec "$container_id" node /app/deploy/verify-aurion-runtime-database.mjs >/dev/null 2>&1; then
+    database_ready=1
+    break
+  else
+    database_probe_status=$?
+    case "$database_probe_status" in
+      20|21|24) break ;;
+    esac
+  fi
+  sleep 1
+done
+if [[ "$database_ready" -ne 1 ]]; then
+  case "$database_probe_status" in
+    20) database_category="database_url_missing" ;;
+    21) database_category="database_target_invalid" ;;
+    22) database_category="database_connection_unavailable" ;;
+    23) database_category="database_select_failed" ;;
+    24) database_category="database_driver_missing" ;;
+    *) database_category="database_readback_unclassified" ;;
+  esac
+  printf 'aurion-database-readback network=%s category=%s\n' "$database_network" "$database_category" >&2
+  exit 1
+fi
+
 public_ready=0
 phase=public-health
 for _attempt in $(seq 1 30); do
@@ -323,10 +359,10 @@ receipt="${receipt_dir}/${release_id}.json"
 receipt_tmp="${receipt}.tmp"
 runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
 umask 077
-printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s"}\n' \
+printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1"}\n' \
   "$expected_sha" "$release_id" \
   "$runtime_image_id" \
-  "$container_id" "$aurion_domain" > "$receipt_tmp"
+  "$container_id" "$aurion_domain" "$traefik_network" "$database_network" > "$receipt_tmp"
 mv -Tf "$receipt_tmp" "$receipt"
 ln -sTfn "$receipt" "${receipt_dir}/current.next"
 mv -Tf "${receipt_dir}/current.next" "${receipt_dir}/current.json"
@@ -342,9 +378,9 @@ schema_manifest_sha256="$(sha256sum "${schema_current}/manifest.json" | awk '{pr
 install -d -o root -g root -m 0755 "$public_readback_dir"
 public_readback_tmp="${public_readback_dir}/.${release_id}.json.tmp"
 public_readback="${public_readback_dir}/current.json"
-printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only"}\n' \
+printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only"}\n' \
   "$expected_sha" "$release_id" "$runtime_image_id" "$container_id" "$aurion_domain" \
-  "$runtime_manifest_sha256" "$schema_manifest_sha256" > "$public_readback_tmp"
+  "$traefik_network" "$database_network" "$runtime_manifest_sha256" "$schema_manifest_sha256" > "$public_readback_tmp"
 chown root:root "$public_readback_tmp"
 chmod 0644 "$public_readback_tmp"
 mv -Tf "$public_readback_tmp" "$public_readback"

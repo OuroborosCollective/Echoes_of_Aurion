@@ -26,8 +26,12 @@ services:
       - org.opencontainers.image.revision=${AURION_RELEASE_SHA:?AURION_RELEASE_SHA must match the verified image revision}
     networks:
       - traefik-proxy
+      - database-private
 
 networks:
   traefik-proxy:
     external: true
     name: ${TRAEFIK_NETWORK:-areloria_arelorian-network}
+  database-private:
+    external: true
+    name: ${AURION_DATABASE_NETWORK:-echoes-of-aurion-internal}
