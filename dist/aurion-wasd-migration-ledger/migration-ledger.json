@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "aurion.wasd-migration-ledger.v1",
+  "recordType": "aurion_wasd_migration_ledger",
+  "source": {
+    "manifestSha256": "09acd4c3b5509695d7844ed1da45d25b9e50a781271e6bf0be57f328a9ab29a6",
+    "repository": "OuroborosCollective/Wasd",
+    "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+    "sourceFileCount": 1142,
+    "domainCounts": {
+      "economy": 80,
+      "identity": 26,
+      "inventory": 87,
+      "persistence": 37,
+      "quest": 65,
+      "unclassified": 569,
+      "world": 278
+    }
+  },
+  "target": {
+    "repository": "OuroborosCollective/Echoes_of_Aurion",
+    "revision": "7cdf3f91e9c3036957d7c73befebf6dbd568b2a5",
+    "migrationJournal": {
+      "dialect": "mysql",
+      "journalSha256": "408be414ef1947c6238b3659046b622b4f1128d5b7550d9fd5a47ebd13ffa172",
+      "journalEntryCount": 28,
+      "migrations": [
+        {
+          "tag": "0021_aurion_global_world_state",
+          "path": "drizzle/0021_aurion_global_world_state.sql",
+          "sha256": "58474698da45d822c9f2cb9cc23d53d3d10923b33f936f1b13165c79c9ad825c",
+          "journalPresent": true
+        },
+        {
+          "tag": "0022_aurion_world_chunk_deltas",
+          "path": "drizzle/0022_aurion_world_chunk_deltas.sql",
+          "sha256": "3892c2a896fd2e89426d9c77bbe78be1966cae9822e5b448062d6f830bba4c80",
+          "journalPresent": true
+        },
+        {
+          "tag": "0023_aurion_world_presence_epochs",
+          "path": "drizzle/0023_aurion_world_presence_epochs.sql",
+          "sha256": "2f5fde2ef0e7bbd10421d000d1abfcc421e0a93854226442346e776294b4dd6f",
+          "journalPresent": true
+        },
+        {
+          "tag": "0024_aurion_world_epoch_reactions",
+          "path": "drizzle/0024_aurion_world_epoch_reactions.sql",
+          "sha256": "921e8bb9b6057c95153385e270923694a0b16b3e873fad08146847b474254f31",
+          "journalPresent": true
+        },
+        {
+          "tag": "0025_aurion_loot_mastery_ethos",
+          "path": "drizzle/0025_aurion_loot_mastery_ethos.sql",
+          "sha256": "142cca943123a361c389467df93679664e72b27263bf5758d847f63cd4b6471f",
+          "journalPresent": true
+        },
+        {
+          "tag": "0026_aurion_faction_questline_state",
+          "path": "drizzle/0026_aurion_faction_questline_state.sql",
+          "sha256": "b4059c7aef8daeb1de45077948f34a678b9e43b4d9a6a718c4d75fbe6c4f2a51",
+          "journalPresent": true
+        },
+        {
+          "tag": "0027_aurion_faction_questline_rewards",
+          "path": "drizzle/0027_aurion_faction_questline_rewards.sql",
+          "sha256": "41138c1d64f96452f77b389ca0cbcc5d624138692f8a44a68b03f1e55c2d9f93",
+          "journalPresent": true
+        }
+      ]
+    }
+  },
+  "repositoryState": "PENDING_PRODUCTION_READBACK",
+  "plan": {
+    "automaticPhases": [
+      "verify_source",
+      "inventory_target",
+      "emit_plan",
+      "emit_receipt"
+    ],
+    "requiredProductionReadback": [
+      "0021_aurion_global_world_state",
+      "0022_aurion_world_chunk_deltas",
+      "0023_aurion_world_presence_epochs",
+      "0024_aurion_world_epoch_reactions",
+      "0025_aurion_loot_mastery_ethos",
+      "0026_aurion_faction_questline_state",
+      "0027_aurion_faction_questline_rewards"
+    ],
+    "ownerApprovalRequiredFor": [
+      "schema_apply",
+      "data_backfill",
+      "journal_repair",
+      "production_deploy"
+    ],
+    "prohibitedActions": [
+      "database_write",
+      "schema_apply",
+      "data_backfill",
+      "journal_repair",
+      "production_deploy"
+    ],
+    "productionWritesScheduled": false,
+    "sourceCodeCopiedIntoAurion": false,
+    "acceptanceRule": "A production change requires a fresh root-authorized readback, backup/recovery evidence, and an owner-approved plan hash."
+  },
+  "planSha256": "1c5f44690d06b94bb753a90c7067884731908923bf78c64ba1967c844bed96d6"
+}
