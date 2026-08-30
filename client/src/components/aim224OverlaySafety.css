@@ -1,4 +1,12 @@
 @media (max-width: 720px) {
+  .community-overlay {
+    z-index: 40;
+  }
+
+  .trailer-modal {
+    z-index: 50;
+  }
+
   .trailer-modal-card header > button {
     width: 44px;
     height: 44px;
