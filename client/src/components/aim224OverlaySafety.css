@@ -1,3 +1,27 @@
+.mission-ui.is-open-world > .mission-objective,
+.mission-ui.is-open-world > .boss-readout,
+.mission-ui.is-open-world > .party-strip,
+.mission-ui.is-open-world > .combat-timer,
+.mission-ui.is-open-world > .player-control-bridge,
+.mission-ui.is-open-world > .ability-rail,
+.mission-ui.is-open-world > .arena-track,
+.mission-ui.is-open-world > .ledger-reset,
+.mission-ui.is-open-world > .mission-victory,
+.mission-ui.is-open-world > .mission-quest-ready,
+.mission-ui.is-open-world > .mission-dungeon-ready {
+  display: none;
+}
+
+.mission-ui.is-open-world .open-world-card {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(760px, calc(100vw - 48px));
+  max-height: 54dvh;
+  margin: 14px auto 180px;
+  overflow: auto;
+}
+
 @media (max-width: 900px) {
   .community-overlay {
     z-index: 40;
@@ -37,5 +61,11 @@
   .community-dock {
     right: auto;
     left: 0;
+  }
+
+  .mission-ui.is-open-world .open-world-card {
+    width: calc(100vw - 24px);
+    max-height: 58dvh;
+    margin-bottom: 140px;
   }
 }
