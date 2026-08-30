@@ -3,15 +3,25 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("Aurion home/open-world state separation", () => {
-  it("uses a dedicated open_world screen after the confirmed server transition", async () => {
+  it("keeps Open World structurally separate from legacy mission chrome", async () => {
     const source = await readFile(path.resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
     expect(source).toContain('type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";');
     expect(source).toContain('onEnterExpanse={() => enterAurionExpanse(() => setScreen("open_world"))}');
     expect(source).toContain('screen === "open_world" && <OpenWorldHud');
-    expect(source).toContain('(screen === "mission" || screen === "open_world") && (');
-    expect(source).toContain('screen === "open_world" ? "mission-ui is-open-world" : "mission-ui"');
-    expect(source).toContain('setWorldStreamAnchor(null);');
-    expect(source).toContain('setScreen("mission");');
+    expect(source).toContain('screen === "open_world" && worldDetailsOpen');
+    expect(source).toContain('open-world-card open-world-card--drawer');
+    expect(source).toContain('{screen === "mission" && (');
+    expect(source).not.toContain('(screen === "mission" || screen === "open_world") && (');
+    expect(source).not.toContain('mission-ui is-open-world');
+  });
+
+  it("never starts a legacy arena from loadout", async () => {
+    const source = await readFile(path.resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
+    expect(source).toContain('onClick={() => enterAurionExpanse(() => setScreen("open_world"))}');
+    expect(source).toContain('IN DIE OPEN WORLD');
+    expect(source).not.toContain('onClick={beginMission}');
+    expect(source).not.toContain('const beginMission');
+    expect(source).not.toContain('aurion:begin-expedition');
   });
 
   it("keeps the tower scene free of the legacy arena and sentinel", async () => {
@@ -22,9 +32,10 @@ describe("Aurion home/open-world state separation", () => {
     expect(source).toContain("showTowerHome();");
   });
 
-  it("keeps legacy arena activation behind an explicit encounter event", async () => {
+  it("allows Arena activation only through a confirmed encounter event", async () => {
     const source = await readFile(path.resolve(process.cwd(), "client/src/game/scene.ts"), "utf8");
     expect(source).toContain('window.addEventListener("aurion:load-encounter", onLoadEncounter)');
     expect(source).toContain("sentinel.root.setEnabled(true); applyArena(detail.arenaIndex);");
+    expect(source).not.toContain('aurion:begin-expedition');
   });
 });

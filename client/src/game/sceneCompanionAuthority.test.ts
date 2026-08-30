@@ -14,7 +14,7 @@ function section(source: string, start: string, end: string): string {
 
 describe("companion gameplay authority boundary", () => {
   it("does not mutate movement, health, shield, mark or combat cadence before a receipt", () => {
-    const commandHandler = section(sceneSource, "  const onCommand = ", "  const onStart = ");
+    const commandHandler = section(sceneSource, "  const onCommand = ", "  const onEnterDungeon = ");
     expect(commandHandler).toContain("requestAction(");
     expect(commandHandler).not.toMatch(/shieldTime|markTime|explorerHp|echoHp|nextEnemyStrike|echoTarget\./);
   });

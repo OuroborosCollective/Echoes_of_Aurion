@@ -96,10 +96,13 @@ export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const apiAvailable = hasAurionApi();
   const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: apiAvailable });
-  const previewHome = import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("aurion_preview") === "tower-home";
-  const [screen, setScreen] = useState<Screen>(previewHome ? "home" : "gate");
+  const previewMode = import.meta.env.DEV && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("aurion_preview") : null;
+  const previewHome = previewMode === "tower-home";
+  const previewLoadout = previewMode === "loadout";
+  const previewOpenWorld = previewMode === "open-world";
+  const [screen, setScreen] = useState<Screen>(previewHome ? "home" : previewLoadout ? "loadout" : previewOpenWorld ? "open_world" : "gate");
   const [provider, setProvider] = useState(providers[0]);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(previewLoadout || previewOpenWorld);
   const [companionSession, setCompanionSession] = useState<CompanionSession | null>(() => loadCompanionSession());
   const [companionRows, setCompanionRows] = useState(() => companionDatasetCount());
   const [isPairing, setIsPairing] = useState(false);
@@ -116,13 +119,14 @@ export default function Home() {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [humanTeamPartner, setHumanTeamPartner] = useState<string | null>(null);
-  const [soloMode, setSoloMode] = useState(false);
+  const [soloMode, setSoloMode] = useState(previewLoadout || previewOpenWorld);
   const [activeWorldNpc, setActiveWorldNpc] = useState<"lyra" | "orun" | null>(null);
   const [npcDialogueText, setNpcDialogueText] = useState("");
   const [dialogueQuestPrompt, setDialogueQuestPrompt] = useState<DialogueQuestPrompt | null>(null);
   const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
+  const [worldDetailsOpen, setWorldDetailsOpen] = useState(false);
   const [worldStreamAnchor, setWorldStreamAnchor] = useState<WorldStreamAnchor | null>(null);
   const [bossMusicScope, setBossMusicScope] = useState<"dungeon" | "world" | null>(null);
   const [worldStreamTier, setWorldStreamTier] = useState<WorldChunkStreamingTier>(() => streamTierForViewport());
@@ -566,6 +570,7 @@ export default function Home() {
     startGameplayEncounter.mutate({ encounterKey }, {
       onSuccess: ({ session }) => {
         gameplaySession.current = { id: session.id, nextSequence: session.nextSequence };
+        setWorldDetailsOpen(false);
         zoneClient.current?.close();
         setWorldStreamAnchor(null);
         setWorldStreamCursors({});
@@ -582,6 +587,7 @@ export default function Home() {
     if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
     enterOpenWorld.mutate(undefined, {
       onSuccess: (snapshot) => {
+        setWorldDetailsOpen(false);
         setWorldStreamAnchor(snapshot.globalWorld);
         setWorldStreamCenter({ x: 0, z: 0 });
         setWorldStreamCursors({});
@@ -597,6 +603,7 @@ export default function Home() {
   const returnToTowerHome = (): void => {
     if (gameplaySession.current) { setLastSignal("Eine aktive serverbestätigte Begegnung muss vor der Rückkehr gesichert werden."); return; }
     zoneClient.current?.close();
+    setWorldDetailsOpen(false);
     setWorldStreamAnchor(null);
     setWorldStreamCursors({});
     window.dispatchEvent(new Event("aurion:return-to-tower"));
@@ -629,19 +636,6 @@ export default function Home() {
       },
       onError: () => setLastSignal("Das Zonenticket konnte nicht bestätigt werden."),
     });
-  };
-  const beginMission = (): void => {
-    setScreen("mission"); setMissionElapsed(0); setMission(initialMission); setConfirmedDrop(null);
-    void toggleImmersiveMode();
-    soundscape.current?.unlock();
-    if (audioEnabled) void expeditionAudio.current?.play().catch(() => setLastSignal("Die Expeditionmusik ist bereit; aktiviere sie über das Klangsymbol."));
-    window.setTimeout(() => {
-      const activeQuest = gameplayProgress.data?.activeQuest;
-      if (isAuthenticated && activeQuest) startServerEncounter(activeQuest === "astral_call" ? "asterion" : activeQuest === "archive_of_echoes" ? "archive" : "solarium");
-      else window.dispatchEvent(new CustomEvent("aurion:begin-expedition"));
-    }, 120);
-    appendLedger({ kind: "system", title: "Expedition eröffnet", detail: soloMode ? `${operatorName || "Unbenannter Explorer"} betritt die Sternwarte allein und führt die Echo-Slots direkt.` : `${operatorName || "Unbenannter Explorer"} und ${humanTeamPartner ? `Team-Partner ${humanTeamPartner}` : provider} betreten die Sternwarte Aurion.` });
-    setLastSignal("Die Sternwarte öffnet ihre Resonanzschleuse.");
   };
   const toggleAudio = (): void => {
     const audio = expeditionAudio.current;
@@ -761,40 +755,12 @@ export default function Home() {
         onConnectZone={connectAuthoritativeZone}
         onMove={sendHumanCommand}
         onInteract={() => sendHumanAction("E")}
+        onOpenDetails={() => setWorldDetailsOpen(true)}
       />}
-      {trailerOpen && <section className="trailer-modal" role="dialog" aria-modal="true" aria-labelledby="trailer-title"><div className="trailer-modal-backdrop" onClick={() => setTrailerOpen(false)} /><div className="trailer-modal-card"><header><div><p className="eyebrow">AURION // HERO TRAILER</p><h2 id="trailer-title">One Signal.<br /><em>Two Wills.</em></h2></div><button type="button" onClick={() => setTrailerOpen(false)} aria-label="Hero-Trailer schließen"><X size={20} /></button></header><video className="hero-trailer-video" src={heroTrailerUrl} poster={heroTrailerPoster} controls autoPlay playsInline preload="metadata">Dein Browser unterstützt die Hero-Trailer-Wiedergabe nicht.</video><footer><span>ENGLISH VOICE-OVER</span><b>DEUTSCHE UNTERTITEL</b><small>Autorisierte MCP-Koop · keine private Chat-Automatisierung</small></footer></div></section>}
-      {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>{soloMode ? "Rüste drei sichtbare Protokolle aus. Du steuerst alle Echo-Slots direkt." : "Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed."}</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>{soloMode ? "Lokale Solo-Steuerung · WASD + Slots" : "Autorisierter MCP-Vertrag · WASD + Slots"}</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>{soloMode ? "SOLO-DECK" : "PARTNER-DECK"} <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer></section>}
-      {(screen === "mission" || screen === "open_world") && (
-        <section className={screen === "open_world" ? "mission-ui is-open-world" : "mission-ui"} aria-label={screen === "open_world" ? "Open-World-Details" : "Expeditionsoberfläche"}>
-          <div className="mission-objective">
-            <span>ARENA {mission.arena + 1}/4 // {mission.arenaName}</span>
-            <b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b>
-            <div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div>
-          </div>
-
-          <section className="companion-control-card" aria-label="LLM-Companion-Steuerung">
-            <div><span>LLM COMPANION // {companionSession?.llmLabel ?? "NICHT VERBUNDEN"}</span><b>{companionSession?.mode ?? "disconnected"}</b><small>{companionRows} lokale Beobachtungszeilen · {companionSession?.notes ?? 0} Notizen · der Begleiter ist nur während Play/Go gespawnt</small></div>
-            <div className="companion-control-card__actions">
-              <button type="button" onClick={beginCompanionLearn} disabled={!companionSession}>{companionSession?.mode === "learning" ? "LEARN STOP / BEREIT" : "LEARN / RECORD"}</button>
-              <button type="button" onClick={toggleCompanionPlay} disabled={!companionSession || !["ready", "playing"].includes(companionSession.mode)}>{companionSession?.mode === "playing" ? "STOP / DESPAWN" : "GO / PLAY"}</button>
-              <button type="button" onClick={downloadCompanionDataset} disabled={companionRows === 0}><Download size={14} /> DATASET EXPORT</button>
-            </div>
-          </section>
-
-          <div className="progression-readout" aria-label="Bestätigte Charakterentwicklung">
-            <span>LEVEL <b>{visibleProfile?.level ?? 1}</b></span>
-            <span>XP <b>{visibleProfile?.totalXp ?? 0}</b></span>
-            <span>KLASSE <b>{visibleProfile?.selectedClass ?? "unbound"}</b></span>
-            <span>WAFFE <b>{activeWeaponTrack}</b></span>
-          </div>
-
-          <section className="character-doctrine" aria-label="Klassen- und Waffenklasse">
-            <div><span>CHARAKTERDOKTRIN // SERVERBESTÄTIGT</span><b>{visibleProfile?.selectedClass ? `${visibleProfile.selectedClass} · ${activeWeaponTrack}` : visibleProfile && visibleProfile.level >= 36 ? "Wähle deine Klassenresonanz" : `Klassenresonanz ab Level 36 · ${activeWeaponTrack}`}</b></div>
-            {visibleProfile && visibleProfile.level >= 36 && !visibleProfile.selectedClass && <div className="character-doctrine__choices">{(["vanguard", "seer", "warden"] as const).map(playerClass => <button type="button" key={playerClass} disabled={choosePlayerClass.isPending} onClick={() => choosePlayerClass.mutate({ playerClass }, { onSuccess: () => { void gameplayProgress.refetch(); void playerSnapshot.refetch(); setLastSignal(`${playerClass} wurde serverseitig als Klassenresonanz bestätigt.`); }, onError: () => setLastSignal("Die Klassenwahl wurde nicht bestätigt.") })}>{playerClass}</button>)}</div>}
-            <div className="character-doctrine__weapons">{(["blade", "staff", "spear", "focus"] as const).map(weaponTrack => <button type="button" key={weaponTrack} data-active={weaponTrack === activeWeaponTrack} disabled={setWeaponLoadout.isPending} onClick={() => setWeaponLoadout.mutate({ weaponTrack }, { onSuccess: () => { void playerSnapshot.refetch(); setLastSignal(`${weaponTrack} ist als Waffenpfad bestätigt.`); }, onError: () => setLastSignal("Der Waffenpfad wurde nicht bestätigt.") })}>{weaponTrack}</button>)}</div>
-          </section>
-
-          <section className="open-world-card" aria-label="Bestätigte Aurion-Expanse" style={{ "--expanse-reference": `url("${expanseReference}")` } as CSSProperties}>
+      {screen === "open_world" && worldDetailsOpen && (
+        <div className="open-world-details-layer" role="dialog" aria-modal="true" aria-label="Welt-, Quest- und Begegnungsdetails">
+          <button type="button" className="open-world-details-layer__close" onClick={() => setWorldDetailsOpen(false)}>WELTDETAILS SCHLIESSEN</button>
+          <section className="open-world-card open-world-card--drawer" aria-label="Bestätigte Aurion-Expanse" style={{ "--expanse-reference": `url("${expanseReference}")` } as CSSProperties}>
             <div className="open-world-card__veil" />
             <div className="open-world-card__head"><div><span>OPEN WORLD // SERVER SNAPSHOT</span><b>{openWorld.data?.displayName ?? "Weltkarte wird gelesen"}</b></div><em>REV {openWorld.data?.revision ?? "—"}</em></div>
             <p>{openWorld.data?.entryNarrative ?? "Der Sternwartenturm hält die äußeren Pfade stabil, bis dein bestätigter Weltstatus geladen ist."}</p>
@@ -843,6 +809,41 @@ export default function Home() {
             <button type="button" disabled={Boolean(gameplaySession.current)} onClick={returnToTowerHome}><ChevronRight size={16} /> ZUR STERNWARTE ZURÜCK</button>
             <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>
           </section>
+        </div>
+      )}
+      {trailerOpen && <section className="trailer-modal" role="dialog" aria-modal="true" aria-labelledby="trailer-title"><div className="trailer-modal-backdrop" onClick={() => setTrailerOpen(false)} /><div className="trailer-modal-card"><header><div><p className="eyebrow">AURION // HERO TRAILER</p><h2 id="trailer-title">One Signal.<br /><em>Two Wills.</em></h2></div><button type="button" onClick={() => setTrailerOpen(false)} aria-label="Hero-Trailer schließen"><X size={20} /></button></header><video className="hero-trailer-video" src={heroTrailerUrl} poster={heroTrailerPoster} controls autoPlay playsInline preload="metadata">Dein Browser unterstützt die Hero-Trailer-Wiedergabe nicht.</video><footer><span>ENGLISH VOICE-OVER</span><b>DEUTSCHE UNTERTITEL</b><small>Autorisierte MCP-Koop · keine private Chat-Automatisierung</small></footer></div></section>}
+      {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>{soloMode ? "Rüste drei sichtbare Protokolle aus. Du steuerst alle Echo-Slots direkt." : "Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed."}</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>{soloMode ? "Lokale Solo-Steuerung · WASD + Slots" : "Autorisierter MCP-Vertrag · WASD + Slots"}</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>{soloMode ? "SOLO-DECK" : "PARTNER-DECK"} <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" disabled={enterOpenWorld.isPending} onClick={() => enterAurionExpanse(() => setScreen("open_world"))}><Compass size={18} /> {enterOpenWorld.isPending ? "WELT WIRD BESTÄTIGT" : "IN DIE OPEN WORLD"}</button></footer></section>}
+      {screen === "mission" && (
+        <section className="mission-ui" aria-label="Expeditionsoberfläche">
+          <div className="mission-objective">
+            <span>ARENA {mission.arena + 1}/4 // {mission.arenaName}</span>
+            <b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b>
+            <div className="objective-meter"><i style={{ width: `${bossPercent}%` }} /></div>
+          </div>
+
+          <section className="companion-control-card" aria-label="LLM-Companion-Steuerung">
+            <div><span>LLM COMPANION // {companionSession?.llmLabel ?? "NICHT VERBUNDEN"}</span><b>{companionSession?.mode ?? "disconnected"}</b><small>{companionRows} lokale Beobachtungszeilen · {companionSession?.notes ?? 0} Notizen · der Begleiter ist nur während Play/Go gespawnt</small></div>
+            <div className="companion-control-card__actions">
+              <button type="button" onClick={beginCompanionLearn} disabled={!companionSession}>{companionSession?.mode === "learning" ? "LEARN STOP / BEREIT" : "LEARN / RECORD"}</button>
+              <button type="button" onClick={toggleCompanionPlay} disabled={!companionSession || !["ready", "playing"].includes(companionSession.mode)}>{companionSession?.mode === "playing" ? "STOP / DESPAWN" : "GO / PLAY"}</button>
+              <button type="button" onClick={downloadCompanionDataset} disabled={companionRows === 0}><Download size={14} /> DATASET EXPORT</button>
+            </div>
+          </section>
+
+          <div className="progression-readout" aria-label="Bestätigte Charakterentwicklung">
+            <span>LEVEL <b>{visibleProfile?.level ?? 1}</b></span>
+            <span>XP <b>{visibleProfile?.totalXp ?? 0}</b></span>
+            <span>KLASSE <b>{visibleProfile?.selectedClass ?? "unbound"}</b></span>
+            <span>WAFFE <b>{activeWeaponTrack}</b></span>
+          </div>
+
+          <section className="character-doctrine" aria-label="Klassen- und Waffenklasse">
+            <div><span>CHARAKTERDOKTRIN // SERVERBESTÄTIGT</span><b>{visibleProfile?.selectedClass ? `${visibleProfile.selectedClass} · ${activeWeaponTrack}` : visibleProfile && visibleProfile.level >= 36 ? "Wähle deine Klassenresonanz" : `Klassenresonanz ab Level 36 · ${activeWeaponTrack}`}</b></div>
+            {visibleProfile && visibleProfile.level >= 36 && !visibleProfile.selectedClass && <div className="character-doctrine__choices">{(["vanguard", "seer", "warden"] as const).map(playerClass => <button type="button" key={playerClass} disabled={choosePlayerClass.isPending} onClick={() => choosePlayerClass.mutate({ playerClass }, { onSuccess: () => { void gameplayProgress.refetch(); void playerSnapshot.refetch(); setLastSignal(`${playerClass} wurde serverseitig als Klassenresonanz bestätigt.`); }, onError: () => setLastSignal("Die Klassenwahl wurde nicht bestätigt.") })}>{playerClass}</button>)}</div>}
+            <div className="character-doctrine__weapons">{(["blade", "staff", "spear", "focus"] as const).map(weaponTrack => <button type="button" key={weaponTrack} data-active={weaponTrack === activeWeaponTrack} disabled={setWeaponLoadout.isPending} onClick={() => setWeaponLoadout.mutate({ weaponTrack }, { onSuccess: () => { void playerSnapshot.refetch(); setLastSignal(`${weaponTrack} ist als Waffenpfad bestätigt.`); }, onError: () => setLastSignal("Der Waffenpfad wurde nicht bestätigt.") })}>{weaponTrack}</button>)}</div>
+          </section>
+
+
 
           {mission.phase === "transition" && <p className="mission-transition" role="status">Bossabschluss wird serverseitig bestätigt…</p>}
           {mission.phase === "quest_ready" && (
