@@ -18,6 +18,7 @@ type OpenWorldHudProps = {
   onConnectZone: () => void;
   onMove: (command: "W" | "A" | "S" | "D") => void;
   onInteract: () => void;
+  onOpenDetails: () => void;
 };
 
 export default function OpenWorldHud({
@@ -37,6 +38,7 @@ export default function OpenWorldHud({
   onConnectZone,
   onMove,
   onInteract,
+  onOpenDetails,
 }: OpenWorldHudProps) {
   return (
     <section className="open-world-hud" aria-label="Aurion Open World">
@@ -46,9 +48,14 @@ export default function OpenWorldHud({
           <h2>{displayName}</h2>
           <p>{narrative}</p>
         </div>
-        <button type="button" className="open-world-hud__return" onClick={onReturn}>
-          ZUR STERNWARTE <ChevronRight size={16} />
-        </button>
+        <div className="open-world-hud__header-actions">
+          <button type="button" className="open-world-hud__return" onClick={onOpenDetails}>
+            WELT / QUESTS
+          </button>
+          <button type="button" className="open-world-hud__return" onClick={onReturn}>
+            ZUR STERNWARTE <ChevronRight size={16} />
+          </button>
+        </div>
       </header>
 
       <div className="open-world-hud__metrics" aria-label="Bestätigte Weltdaten">
