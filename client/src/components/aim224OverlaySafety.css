@@ -193,17 +193,22 @@
     left: 0;
   }
 
+  /* Keep the 3D playfield clean and reserve three non-overlapping control zones:
+     community/account at the top, world navigation bottom-left, movement bottom-right. */
   .open-world-hud__header {
-    top: max(58px, calc(env(safe-area-inset-top) + 50px));
+    top: max(118px, calc(env(safe-area-inset-top) + 104px));
     left: max(8px, env(safe-area-inset-left));
     right: max(8px, env(safe-area-inset-right));
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: block;
+    max-width: none;
+    pointer-events: none;
   }
 
   .open-world-hud__identity {
+    width: min(62vw, 260px);
     max-width: none;
     padding: 7px 9px;
+    pointer-events: none;
   }
 
   .open-world-hud__identity p {
@@ -215,14 +220,19 @@
   }
 
   .open-world-hud__header-actions {
+    position: fixed;
+    left: max(8px, env(safe-area-inset-left));
+    bottom: max(8px, env(safe-area-inset-bottom));
     display: grid;
     width: 132px;
+    max-width: 132px;
+    pointer-events: auto;
   }
 
   .open-world-hud__movement {
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));
-    max-width: calc(100vw - 16px);
+    max-width: calc(100vw - 158px);
   }
 
   .open-world-details-layer {
