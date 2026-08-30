@@ -11,10 +11,7 @@ export type ReleaseAssetMetric = {
   animations: number;
 };
 
-export const baselineReleaseAssets: readonly ReleaseAssetMetric[] = [
-  { id: "aurion-wayfinder", assetPath: "/manus-storage/aurion-wayfinder-animated_6bf370ef.glb", bytes: 1_992_236, triangles: 4_987, materials: 1, textures: 0, skins: 1, animations: 3 },
-  { id: "aurion-veilguard", assetPath: "/manus-storage/aurion-veilguard-animated_d6b28a5b.glb", bytes: 2_237_768, triangles: 4_955, materials: 1, textures: 0, skins: 1, animations: 3 },
-] as const;
+export const baselineReleaseAssets: readonly ReleaseAssetMetric[] = [];
 
 export function assertReleaseAssetBudget(asset: ReleaseAssetMetric): ReleaseAssetMetric {
   if (!asset.assetPath.startsWith("/manus-storage/") || !asset.assetPath.endsWith(".glb")) throw new Error(`${asset.id}: freigegebener S3-GLB-Pfad erforderlich.`);

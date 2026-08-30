@@ -2,34 +2,6 @@
   "schemaVersion": 1,
   "assets": [
     {
-      "source": "aurion-wayfinder-animated_6bf370ef.glb",
-      "target": "aurion-wayfinder-animated_6bf370ef.glb",
-      "cacheSource": "aurion-wayfinder-animated_6bf370ef.glb",
-      "bytes": 1992236,
-      "sha256": "db9e3455125c65dac798dad48e532e516ea62063eec71f2f9e000985443e5cae"
-    },
-    {
-      "source": "aurion-veilguard-animated_d6b28a5b.glb",
-      "target": "aurion-veilguard-animated_d6b28a5b.glb",
-      "cacheSource": "aurion-veilguard-animated_d6b28a5b.glb",
-      "bytes": 2237768,
-      "sha256": "8490c30e2772702794c1d0136a6e49dc16f843ec95332d79570bf3b663601013"
-    },
-    {
-      "source": "env_asterion_floor_kit_a01_ec94e853.glb",
-      "target": "env_asterion_floor_kit_a01.glb",
-      "cacheSource": "env_asterion_floor_kit_a01.glb",
-      "bytes": 1044392,
-      "sha256": "3ee76a1db70487ba2288d9703e29b536551bc89776241a44b7611e0ccc9115ce"
-    },
-    {
-      "source": "env_asterion_archway_a01_fe233f19.glb",
-      "target": "env_asterion_archway_a01.glb",
-      "cacheSource": "env_asterion_archway_a01.glb",
-      "bytes": 806812,
-      "sha256": "b920e443b4c12ea28adfaa73ddedaaf44da064d4accead84976bf368bb1328d9"
-    },
-    {
       "source": "aurion-expedition-theme_a8401a12.mp3",
       "target": "aurion-expedition-theme_a8401a12.mp3",
       "bytes": 4039365,

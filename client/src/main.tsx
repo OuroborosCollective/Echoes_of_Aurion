@@ -5,6 +5,7 @@ import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { aurionApiUrl } from "@/lib/runtimeConfig";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -12,7 +13,7 @@ const queryClient = new QueryClient();
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: aurionApiUrl("/api/trpc"),
       transformer: superjson,
       headers() {
         // Preview auto-login fallback: when the browser blocks iframe cookies

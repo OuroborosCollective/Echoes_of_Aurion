@@ -32,6 +32,22 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+function allowedCorsOrigin(origin: string | undefined): string | null {
+  if (!origin) return null;
+  const configured = (process.env.AURION_ALLOWED_ORIGINS ?? "https://arelogic.space")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean);
+  if (configured.includes(origin)) return origin;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol === "https:" && (parsed.hostname.endsWith(".itch.io") || parsed.hostname.endsWith(".itch.zone"))) return origin;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 async function startServer() {
   const releaseRevision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase();
   if (releaseRevision && !/^[a-f0-9]{40}$/.test(releaseRevision)) {
@@ -45,6 +61,21 @@ async function startServer() {
     app.set("trust proxy", parseInt(process.env.TRUST_PROXY_HOPS || "1", 10));
   }
   const server = createServer(app);
+  app.use((req, res, next) => {
+    const origin = allowedCorsOrigin(req.headers.origin);
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Vary", "Origin");
+    }
+    if (req.method === "OPTIONS") {
+      if (!origin) return res.status(403).end();
+      return res.status(204).end();
+    }
+    next();
+  });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

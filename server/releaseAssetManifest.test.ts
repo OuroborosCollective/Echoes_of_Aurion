@@ -7,6 +7,7 @@ describe("release asset manifest", () => {
   });
 
   it("rejects character geometry beyond the mobile budget", () => {
-    expect(() => assertReleaseAssetBudget({ ...baselineReleaseAssets[0], triangles: 15_001 })).toThrow("Dreiecksbudget");
+    const fixture = { id: "test-character", assetPath: "/manus-storage/test-character.glb", bytes: 1_000_000, triangles: 15_001, materials: 1, textures: 0, skins: 1, animations: 3 };
+    expect(() => assertReleaseAssetBudget(fixture)).toThrow("Dreiecksbudget");
   });
 });
