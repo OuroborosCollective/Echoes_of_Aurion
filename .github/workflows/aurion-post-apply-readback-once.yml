@@ -38,6 +38,9 @@ jobs:
           apply_json="$(mktemp)"
           cleanup() { rm -f "$main_json" "$deploy_json" "$apply_json"; }
           trap cleanup EXIT
+          json_get() {
+            node -e 'const fs=require("node:fs"); const value=process.argv[2].split(".").filter(Boolean).reduce((v,k)=>v?.[k],JSON.parse(fs.readFileSync(process.argv[1],"utf8"))); if(value===undefined||value===null) process.exit(2); process.stdout.write(String(value));' "$1" "$2"
+          }
 
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${GH_TOKEN}" \
@@ -45,7 +48,7 @@ jobs:
             --header "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main" \
             --output "$main_json"
-          test "$(jq -r '.commit.sha' "$main_json")" = "$EXPECTED_SHA"
+          test "$(json_get "$main_json" commit.sha)" = "$EXPECTED_SHA"
 
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${GH_TOKEN}" \
@@ -53,11 +56,11 @@ jobs:
             --header "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}" \
             --output "$deploy_json"
-          test "$(jq -r '.head_sha' "$deploy_json")" = "$EXPECTED_SHA"
-          test "$(jq -r '.head_branch' "$deploy_json")" = "main"
-          test "$(jq -r '.path' "$deploy_json")" = ".github/workflows/deploy-aurion-zone-runtime.yml"
-          test "$(jq -r '.status' "$deploy_json")" = "completed"
-          test "$(jq -r '.conclusion' "$deploy_json")" = "success"
+          test "$(json_get "$deploy_json" head_sha)" = "$EXPECTED_SHA"
+          test "$(json_get "$deploy_json" head_branch)" = "main"
+          test "$(json_get "$deploy_json" path)" = ".github/workflows/deploy-aurion-zone-runtime.yml"
+          test "$(json_get "$deploy_json" status)" = "completed"
+          test "$(json_get "$deploy_json" conclusion)" = "success"
 
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${GH_TOKEN}" \
@@ -65,11 +68,11 @@ jobs:
             --header "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${APPLY_RUN_ID}" \
             --output "$apply_json"
-          test "$(jq -r '.head_sha' "$apply_json")" = "$EXPECTED_SHA"
-          test "$(jq -r '.head_branch' "$apply_json")" = "main"
-          test "$(jq -r '.path' "$apply_json")" = ".github/workflows/aurion-production-schema-apply.yml"
-          test "$(jq -r '.status' "$apply_json")" = "completed"
-          test "$(jq -r '.conclusion' "$apply_json")" = "success"
+          test "$(json_get "$apply_json" head_sha)" = "$EXPECTED_SHA"
+          test "$(json_get "$apply_json" head_branch)" = "main"
+          test "$(json_get "$apply_json" path)" = ".github/workflows/aurion-production-schema-apply.yml"
+          test "$(json_get "$apply_json" status)" = "completed"
+          test "$(json_get "$apply_json" conclusion)" = "success"
 
       - name: Reset workflow-owned readback files
         run: |
