@@ -33,7 +33,7 @@ jobs:
       TEST_DB_NAME: aurion_journal_watermark
       TEST_DB_PASSWORD: aurion-watermark-proof
       TEST_DB_PORT: "33306"
-      TEST_PLAN_SHA256: 0000000000000000000000000000000000000000000000000000000000000027
+      TEST_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000027"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,7 +144,7 @@ jobs:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
           AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
           AURION_SCHEMA_APPLY_SOURCE_SHA: ${{ github.sha }}
-          AURION_SCHEMA_APPLY_PLAN_SHA256: 0000000000000000000000000000000000000000000000000000000000000027
+          AURION_SCHEMA_APPLY_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000027"
         run: |
           set -euo pipefail
           node dist-production-apply/bin/apply.cjs > watermark-apply-receipt.json
@@ -191,7 +191,7 @@ jobs:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
           AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
           AURION_SCHEMA_APPLY_SOURCE_SHA: ${{ github.sha }}
-          AURION_SCHEMA_APPLY_PLAN_SHA256: 0000000000000000000000000000000000000000000000000000000000000027
+          AURION_SCHEMA_APPLY_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000027"
         run: |
           set -euo pipefail
           node dist-production-apply/bin/apply.cjs > watermark-retry-receipt.json
