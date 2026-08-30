@@ -1,0 +1,217 @@
+name: One-shot Aurion post-apply production readback
+
+on:
+  push:
+    branches:
+      - sovereign/aurion-schema-apply-dispatch-e2faafcc-final
+    paths:
+      - .github/workflows/aurion-post-apply-readback-once.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: one-shot-aurion-post-apply-readback-e2faafcc
+  cancel-in-progress: false
+
+jobs:
+  readback:
+    name: Prove final production schema and runtime
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 15
+    env:
+      EXPECTED_SHA: e2faafccaac6e7bd20c139d676bc737d335927ad
+      DEPLOY_RUN_ID: "33326153148"
+      APPLY_RUN_ID: "33326881542"
+    steps:
+      - name: Verify immutable main, deploy and apply identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "OuroborosCollective/Echoes_of_Aurion"
+          test "$GITHUB_REF" = "refs/heads/sovereign/aurion-schema-apply-dispatch-e2faafcc-final"
+          main_json="$(mktemp)"
+          deploy_json="$(mktemp)"
+          apply_json="$(mktemp)"
+          cleanup() { rm -f "$main_json" "$deploy_json" "$apply_json"; }
+          trap cleanup EXIT
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main" \
+            --output "$main_json"
+          test "$(jq -r '.commit.sha' "$main_json")" = "$EXPECTED_SHA"
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}" \
+            --output "$deploy_json"
+          test "$(jq -r '.head_sha' "$deploy_json")" = "$EXPECTED_SHA"
+          test "$(jq -r '.head_branch' "$deploy_json")" = "main"
+          test "$(jq -r '.path' "$deploy_json")" = ".github/workflows/deploy-aurion-zone-runtime.yml"
+          test "$(jq -r '.status' "$deploy_json")" = "completed"
+          test "$(jq -r '.conclusion' "$deploy_json")" = "success"
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${APPLY_RUN_ID}" \
+            --output "$apply_json"
+          test "$(jq -r '.head_sha' "$apply_json")" = "$EXPECTED_SHA"
+          test "$(jq -r '.head_branch' "$apply_json")" = "main"
+          test "$(jq -r '.path' "$apply_json")" = ".github/workflows/aurion-production-schema-apply.yml"
+          test "$(jq -r '.status' "$apply_json")" = "completed"
+          test "$(jq -r '.conclusion' "$apply_json")" = "success"
+
+      - name: Reset workflow-owned readback files
+        run: |
+          set -euo pipefail
+          rm -rf deployment-artifact
+          rm -f post-apply-production-readback.raw.json post-apply-production-readback.json post-apply-production-readback.stderr
+
+      - name: Download exact successful deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-zone-runtime-${{ env.EXPECTED_SHA }}
+          path: deployment-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ env.DEPLOY_RUN_ID }}
+
+      - name: Verify installed read-only reconciliation identity
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/deployment-artifact/dist-production-reconcile"
+          installed_current=/opt/echoes-of-aurion-schema-reconcile/current
+          runner=/usr/local/sbin/aurion-production-schema-reconcile
+          verifier=/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+
+          test -d "$artifact"
+          test -L "$installed_current"
+          installed_root="$(readlink -f -- "$installed_current")"
+          test "$installed_root" = "/opt/echoes-of-aurion-schema-reconcile/releases/${EXPECTED_SHA}"
+          (cd "$artifact" && sha256sum --strict -c checksums.sha256)
+          node "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
+          (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
+          cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
+          cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
+          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
+          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
+          test ! -L "$runner"
+          test ! -L "$verifier"
+          cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
+          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          node "$verifier" "$installed_root" "$EXPECTED_SHA"
+
+          ARTIFACT_ROOT="$artifact" node --input-type=module -e '
+            import fs from "node:fs";
+            const root=process.env.ARTIFACT_ROOT;
+            const image=JSON.parse(fs.readFileSync(`${root}/deploy/aurion-reconcile-runtime-image.conf`,"utf8"));
+            const network=JSON.parse(fs.readFileSync(`${root}/deploy/aurion-reconcile-runtime-network.conf`,"utf8"));
+            if(image.schemaVersion!==1||image.recordType!=="aurion_reconcile_runtime_image_contract"||!/^sha256:[a-f0-9]{64}$/.test(image.imageDigest)) process.exit(2);
+            if(network.schemaVersion!==1||network.recordType!=="aurion_reconcile_runtime_network_contract"||network.network!=="echoes-of-aurion-internal") process.exit(3);
+            process.stdout.write(`EXPECTED_DOCKER_NETWORK=${network.network}\nEXPECTED_IMAGE_DIGEST=${image.imageDigest}\n`);
+          ' >> "$GITHUB_ENV"
+
+      - name: Execute independent bounded read-only production classification
+        run: |
+          set -euo pipefail
+          runner=/usr/local/sbin/aurion-production-schema-reconcile
+          raw="${GITHUB_WORKSPACE}/post-apply-production-readback.raw.json"
+          result="${GITHUB_WORKSPACE}/post-apply-production-readback.json"
+          stderr_file="${GITHUB_WORKSPACE}/post-apply-production-readback.stderr"
+          umask 077
+          rm -f "$raw" "$result" "$stderr_file"
+          cleanup() { rm -f "$raw" "$stderr_file"; }
+          trap cleanup EXIT
+
+          set +e
+          sudo -n "$runner" "$EXPECTED_SHA" >"$raw" 2>"$stderr_file"
+          runner_status=$?
+          set -e
+          test "$runner_status" -eq 0
+          test -s "$raw"
+
+          RAW_PATH="$raw" RESULT_PATH="$result" RUNNER_STATUS="$runner_status" EXPECTED_SHA="$EXPECTED_SHA" node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt=JSON.parse(fs.readFileSync(process.env.RAW_PATH,"utf8"));
+          const expectedTags=[
+            "0021_aurion_global_world_state",
+            "0022_aurion_world_chunk_deltas",
+            "0023_aurion_world_presence_epochs",
+            "0024_aurion_world_epoch_reactions",
+            "0025_aurion_loot_mastery_ethos",
+            "0026_aurion_faction_questline_state",
+            "0027_aurion_faction_questline_rewards",
+          ];
+          if(receipt.schemaVersion!==1||receipt.recordType!=="aurion_production_schema_reconciliation") throw new Error("unexpected receipt contract");
+          if(receipt.sourceRevision!==process.env.EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) throw new Error("read-only boundary mismatch");
+          if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`final schema state is ${receipt.overallState}`);
+          if(receipt.summary?.migrationCount!==7||receipt.summary?.matchCount!==7||receipt.summary?.absentCount!==0||receipt.summary?.driftCount!==0) throw new Error("final schema summary mismatch");
+          if(!Array.isArray(receipt.migrations)||receipt.migrations.length!==7) throw new Error("final migration inventory incomplete");
+          if(receipt.migrations.map(m=>m.tag).join(",")!==expectedTags.join(",")||receipt.migrations.some(m=>m.state!=="PRESENT_SCHEMA_MATCH")) throw new Error("final migration states mismatch");
+          const execution=receipt.execution;
+          if(execution?.mode!=="docker"||execution.network!==process.env.EXPECTED_DOCKER_NETWORK||execution.imageDigest!==process.env.EXPECTED_IMAGE_DIGEST||execution.rootFilesystemReadOnly!==true||execution.releaseMountedReadOnly!==true||execution.environmentMountedReadOnly!==true||execution.containerExitStatus!==0) throw new Error("final Docker readback boundary mismatch");
+          if(!Array.isArray(receipt.drizzleJournal)||receipt.drizzleJournal.length!==1) throw new Error("unexpected drizzle journal inventory");
+          const journal=receipt.drizzleJournal[0];
+          if(journal.tableName!=="__drizzle_migrations"||journal.rowCount!==28||!Array.isArray(journal.rows)||journal.rows.length!==28) throw new Error("final journal row count mismatch");
+          const output={
+            schemaVersion:1,
+            recordType:"aurion_post_apply_production_readback_ci",
+            sourceRevision:receipt.sourceRevision,
+            readOnly:true,
+            databaseCredentialReturned:false,
+            state:receipt.overallState,
+            runnerStatus:Number(process.env.RUNNER_STATUS),
+            summary:receipt.summary,
+            migrations:receipt.migrations.map(({tag,state})=>({tag,state})),
+            journal:{tableName:journal.tableName,rowCount:journal.rowCount},
+            execution:{
+              mode:execution.mode,
+              network:execution.network,
+              imageDigest:execution.imageDigest,
+              rootFilesystemReadOnly:execution.rootFilesystemReadOnly,
+              releaseMountedReadOnly:execution.releaseMountedReadOnly,
+              environmentMountedReadOnly:execution.environmentMountedReadOnly,
+              containerExitStatus:execution.containerExitStatus,
+            },
+          };
+          fs.writeFileSync(process.env.RESULT_PATH,`${JSON.stringify(output,null,2)}\n`,{mode:0o600});
+          NODE
+          cat "$result"
+
+      - name: Independently verify public Traefik runtime health
+        run: |
+          set -euo pipefail
+          public_ready=0
+          for _attempt in $(seq 1 20); do
+            if health_json="$(curl --fail --silent --show-error "https://arelogic.space/healthz?revision=${EXPECTED_SHA}" 2>/dev/null)"; then
+              if printf '%s' "$health_json" | node --input-type=module -e '
+                let raw="";
+                for await (const chunk of process.stdin) raw+=chunk;
+                const health=JSON.parse(raw);
+                if(health.status!=="ok"||health.service!=="echoes-of-aurion"||health.revision!==process.argv[1]) process.exit(1);
+              ' "$EXPECTED_SHA"; then
+                printf '%s\n' "$health_json"
+                public_ready=1
+                break
+              fi
+            fi
+            sleep 1
+          done
+          test "$public_ready" -eq 1
+
+      - name: Upload final independent production receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-post-apply-production-readback-${{ env.EXPECTED_SHA }}
+          path: post-apply-production-readback.json
+          if-no-files-found: error
+          retention-days: 30
