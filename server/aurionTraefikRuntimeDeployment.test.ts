@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -10,6 +11,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const viteRuntime = read("server/_core/vite.ts");
   const compose = read("docker-compose.traefik.yml");
   const promoter = read("deploy/promote-aurion-zone-runtime.sh");
+  const runtimeEnvironment = read("deploy/aurion-traefik-runtime.environment.template");
+  const databaseVerifier = read("deploy/verify-aurion-runtime-database.mjs");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
   const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
@@ -22,11 +25,13 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(dockerfile).not.toContain("pnpm install");
     expect(dockerfile).toContain("ADD runtime-node_modules.tgz ./");
     expect(dockerfile).toContain('CMD ["node", "dist/index.js"]');
+    expect(dockerfile).toContain("COPY deploy/verify-aurion-runtime-database.mjs");
     expect(runtimeBuilder).toContain('tar", ["-czf", path.join(output, "runtime-node_modules.tgz"), "node_modules"]');
     expect(runtimeBuilder).toContain('cwd: root');
     expect(runtimeBuilder).not.toContain('pnpm", ["prune", "--prod", "--ignore-scripts"]');
     expect(runtimeBuilder).toContain('dependencyClosure: "hosted-lockfile-install"');
     expect(runtimeBuilder).toContain('runtime-node_modules.tgz');
+    expect(runtimeBuilder).toContain('"deploy/verify-aurion-runtime-database.mjs"');
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("needs: migration-ledger");
     expect(workflow).toContain("Bind WASD source and Aurion migration ledger");
@@ -65,6 +70,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
     expect(workflow).toContain('health.revision!==process.argv[1]');
+    expect(workflow).toContain("node --check deploy/verify-aurion-runtime-database.mjs");
   });
 
   it("keeps every main revision in one serialized proof and promotion chain", () => {
@@ -94,6 +100,53 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(compose).toContain("traefik.http.routers.aurion.priority=1000");
     expect(compose).toContain("traefik.http.services.aurion.loadbalancer.server.port=3000");
     expect(compose).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA:?AURION_RELEASE_SHA must match the verified image revision}");
+    expect(compose).toContain("- database-private");
+    expect(compose).toContain("name: ${AURION_DATABASE_NETWORK:-echoes-of-aurion-internal}");
+    expect(runtimeEnvironment).toContain("AURION_DATABASE_NETWORK=echoes-of-aurion-internal");
+  });
+
+  it("proves the promoted login runtime can authenticate to private MariaDB", () => {
+    expect(promoter).toContain("database_network=\"$(read_runtime_env AURION_DATABASE_NETWORK");
+    expect(promoter).toContain('[[ "$database_network" == "echoes-of-aurion-internal" ]]');
+    expect(promoter).toContain('docker network inspect "$database_network"');
+    expect(promoter).toContain('grep -Fxq "$database_network"');
+    expect(promoter).toContain("node /app/deploy/verify-aurion-runtime-database.mjs");
+    expect(promoter).toContain('databaseConnectivity":"authenticated_select_1"');
+    expect(workflow).toContain("runtime_verify_database_network");
+    expect(workflow).toContain("--network-alias mariadb");
+    expect(workflow).toContain("authenticated_select_failed");
+    expect(workflow).toContain('receipt.databaseNetwork!=="echoes-of-aurion-internal"');
+    expect(workflow).toContain('receipt.databaseConnectivity!=="authenticated_select_1"');
+    expect(databaseVerifier).toContain('target.hostname !== "mariadb"');
+    expect(databaseVerifier).toContain('target.protocol !== "mysql:"');
+    expect(databaseVerifier).toContain('await import("mysql2/promise")');
+    expect(databaseVerifier).toContain("SELECT 1 AS aurion_runtime_database_readback");
+    expect(databaseVerifier).not.toMatch(/console\.|DATABASE_URL.*(?:stdout|stderr)/);
+  });
+
+  it("fails database readback silently before any unapproved target access", () => {
+    const verifierPath = path.join(
+      root,
+      "deploy/verify-aurion-runtime-database.mjs"
+    );
+    const missing = spawnSync(process.execPath, [verifierPath], {
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: "" },
+    });
+    const wrongTarget = spawnSync(process.execPath, [verifierPath], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL: "mysql://user:test-value@not-mariadb:3306/aurion",
+      },
+    });
+
+    expect(missing.status).toBe(20);
+    expect(wrongTarget.status).toBe(21);
+    expect(missing.stdout).toBe("");
+    expect(missing.stderr).toBe("");
+    expect(wrongTarget.stdout).toBe("");
+    expect(wrongTarget.stderr).toBe("");
   });
 
   it("allows the existing fixed root entrypoint to bootstrap only a byte-identical Traefik promoter", () => {

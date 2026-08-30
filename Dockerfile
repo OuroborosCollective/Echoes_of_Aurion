@@ -23,8 +23,10 @@ COPY package.json ./
 ADD runtime-node_modules.tgz ./
 
 COPY dist ./dist
+COPY deploy/verify-aurion-runtime-database.mjs ./deploy/verify-aurion-runtime-database.mjs
 RUN test -n "$AURION_RELEASE_SHA" \
  && test -f /app/dist/.aurion-runtime-build.json \
+ && test -f /app/deploy/verify-aurion-runtime-database.mjs \
  && node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('/app/dist/.aurion-runtime-build.json','utf8')); if (manifest.revision !== process.argv[1]) { process.exit(1); }" "$AURION_RELEASE_SHA"
 
 USER node

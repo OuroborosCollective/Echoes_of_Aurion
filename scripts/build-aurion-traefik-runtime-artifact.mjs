@@ -17,6 +17,7 @@ const filesToCopy = [
   "pnpm-lock.yaml",
   "deploy/promote-aurion-zone-runtime.sh",
   "deploy/aurion-traefik-runtime.environment.template",
+  "deploy/verify-aurion-runtime-database.mjs",
 ];
 const directoriesToCopy = ["dist", "patches"];
 
