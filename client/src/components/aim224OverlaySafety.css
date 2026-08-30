@@ -5,6 +5,13 @@
   pointer-events: none;
 }
 
+/* Open World is an authenticated state. The account CTA is therefore redundant here
+   and must never steal touch events from the 3D game HUD if authentication expires or
+   a development preview is used. Fullscreen remains available independently. */
+.aurion-app:has(.open-world-hud) .account-game-tools__account {
+  display: none;
+}
+
 .open-world-hud__header {
   position: absolute;
   top: max(72px, calc(env(safe-area-inset-top) + 56px));
