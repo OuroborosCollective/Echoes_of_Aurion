@@ -1,0 +1,1260 @@
+name: 🧠 Aurion OpenHands Autonomous PR Forge
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Optional: specific issue or draft PR number to process"
+        required: false
+        type: string
+      issue_type:
+        description: "issue or pr (actual GitHub type is verified before use)"
+        required: false
+        default: "issue"
+        type: choice
+        options:
+          - issue
+          - pr
+      max_issues:
+        description: "Max scheduled issues to process"
+        required: false
+        default: "2"
+        type: string
+
+# Default authority is read-only. Only the deterministic reservation/publisher
+# jobs below receive narrowly scoped writes. The OpenHands/LLM job never gets a
+# write-capable repository token.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: aurion-openhands-forge-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number || (github.event_name == 'schedule' && 'schedule') || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  AURION_REPOSITORY: "OuroborosCollective/Echoes_of_Aurion"
+  TARGET_BRANCH: "main"
+  OPENHANDS_VERSION: "1.11.0"
+  DEFAULT_OPENHANDS_MACRO: "@openhands-agent"
+  DEFAULT_MAX_ITERATIONS: "80"
+  DEFAULT_LLM_MODEL: "anthropic/claude-sonnet-4-20250514"
+  MAX_PATCH_BYTES: "5242880"
+
+jobs:
+  collect-targets:
+    name: 🎯 Reserve trusted Aurion targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: read
+
+    outputs:
+      count: ${{ steps.collect.outputs.count }}
+      matrix: ${{ steps.collect.outputs.matrix }}
+
+    steps:
+      - name: 🎯 Collect, verify and reserve targets
+        id: collect
+        uses: actions/github-script@v7
+        env:
+          OPENHANDS_MACRO: ${{ vars.OPENHANDS_MACRO || '@openhands-agent' }}
+          MAX_ISSUES: ${{ inputs.max_issues || '2' }}
+          DISPATCH_ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
+          DISPATCH_ISSUE_TYPE: ${{ inputs.issue_type || 'issue' }}
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+          AURION_REPOSITORY: ${{ env.AURION_REPOSITORY }}
+        with:
+          script: |
+            if (`${context.repo.owner}/${context.repo.repo}` !== process.env.AURION_REPOSITORY) {
+              core.setFailed(`Refusing unexpected repository: ${context.repo.owner}/${context.repo.repo}`);
+              return;
+            }
+
+            const allowedTriggerLabels = [
+              "autonomous-task",
+              "release-task",
+              "fix-me",
+              "openhands",
+              "openhands-safe",
+              "openhands-protected"
+            ];
+
+            // "processed" prevents scheduled replay, but an explicit trusted macro,
+            // label re-trigger or manual dispatch may intentionally run again.
+            const hardStopLabels = [
+              "openhands-in-progress",
+              "openhands-blocked",
+              "openhands-needs-human",
+              "wontfix",
+              "duplicate"
+            ];
+
+            const scheduledStopLabels = [
+              ...hardStopLabels,
+              "processed"
+            ];
+
+            const trustedAssociations = new Set([
+              "OWNER",
+              "MEMBER",
+              "COLLABORATOR"
+            ]);
+
+            const resultLabels = [
+              {
+                name: "openhands-in-progress",
+                color: "1D76DB",
+                description: "Reserved by the Aurion OpenHands forge."
+              },
+              {
+                name: "openhands-attempted",
+                color: "5319E7",
+                description: "OpenHands attempted this task."
+              },
+              {
+                name: "openhands-pr-created",
+                color: "0E8A16",
+                description: "OpenHands produced a verified draft PR."
+              },
+              {
+                name: "openhands-pr-updated",
+                color: "0E8A16",
+                description: "OpenHands updated an existing verified draft PR."
+              },
+              {
+                name: "openhands-protected-review",
+                color: "FBCA04",
+                description: "Draft touches an Aurion protected architecture/release boundary."
+              },
+              {
+                name: "openhands-needs-human",
+                color: "D93F0B",
+                description: "OpenHands requires human review or repair."
+              },
+              {
+                name: "openhands-blocked",
+                color: "B60205",
+                description: "Aurion forge blocked automatic publication."
+              },
+              {
+                name: "processed",
+                color: "C5DEF5",
+                description: "Automation processed this issue or PR revision."
+              }
+            ];
+
+            for (const label of resultLabels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+              }
+            }
+
+            const macro = process.env.OPENHANDS_MACRO || "@openhands-agent";
+            const targetBranch = process.env.TARGET_BRANCH || "main";
+            const maxIssues = Math.max(1, Math.min(Number(process.env.MAX_ISSUES || "2") || 2, 5));
+            const candidates = [];
+            const candidateKeys = new Set();
+            const targets = [];
+
+            function labelsOf(item) {
+              return (item?.labels || [])
+                .map((label) => typeof label === "string" ? label : label.name)
+                .filter(Boolean);
+            }
+
+            function hasAnyLabel(item, labels) {
+              const names = labelsOf(item);
+              return labels.some((label) => names.includes(label));
+            }
+
+            function hardStopped(item) {
+              return hasAnyLabel(item, hardStopLabels);
+            }
+
+            function scheduledStopped(item) {
+              return hasAnyLabel(item, scheduledStopLabels);
+            }
+
+            function addCandidate({ issueNumber, requestedType = "issue", commentId = "None", reason = "selected" }) {
+              const number = Number(issueNumber);
+              if (!Number.isInteger(number) || number < 1) return;
+              const key = `${number}:${commentId}`;
+              if (candidateKeys.has(key)) return;
+              candidateKeys.add(key);
+              candidates.push({
+                issue_number: String(number),
+                requested_type: requestedType,
+                comment_id: String(commentId || "None"),
+                reason
+              });
+            }
+
+            async function addScheduledIssues() {
+              for (const label of allowedTriggerLabels) {
+                if (candidates.length >= maxIssues) break;
+
+                const res = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: "open",
+                  labels: label,
+                  per_page: 50,
+                  sort: "updated",
+                  direction: "asc"
+                });
+
+                for (const item of res.data) {
+                  if (candidates.length >= maxIssues) break;
+                  if (item.pull_request) continue;
+                  if (scheduledStopped(item)) continue;
+                  if (!hasAnyLabel(item, allowedTriggerLabels)) continue;
+                  addCandidate({
+                    issueNumber: item.number,
+                    requestedType: "issue",
+                    commentId: "None",
+                    reason: `scheduled:${label}`
+                  });
+                }
+              }
+            }
+
+            const eventName = context.eventName;
+            const payload = context.payload;
+
+            if (eventName === "workflow_dispatch") {
+              const issueNumber = process.env.DISPATCH_ISSUE_NUMBER;
+              const requestedType = process.env.DISPATCH_ISSUE_TYPE || "issue";
+              if (issueNumber) {
+                addCandidate({
+                  issueNumber,
+                  requestedType,
+                  commentId: "None",
+                  reason: "manual-dispatch"
+                });
+              } else {
+                await addScheduledIssues();
+              }
+            }
+
+            if (eventName === "schedule") {
+              await addScheduledIssues();
+            }
+
+            if (eventName === "issues") {
+              const issue = payload.issue;
+              const labelName = payload.label?.name;
+              if (
+                issue &&
+                !issue.pull_request &&
+                !hardStopped(issue) &&
+                payload.action === "labeled" &&
+                allowedTriggerLabels.includes(labelName)
+              ) {
+                addCandidate({
+                  issueNumber: issue.number,
+                  requestedType: "issue",
+                  commentId: "None",
+                  reason: `issue-labeled:${labelName}`
+                });
+              }
+            }
+
+            if (eventName === "issue_comment") {
+              const comment = payload.comment;
+              const issue = payload.issue;
+              if (
+                comment &&
+                issue &&
+                !hardStopped(issue) &&
+                typeof comment.body === "string" &&
+                comment.body.includes(macro) &&
+                trustedAssociations.has(comment.author_association)
+              ) {
+                addCandidate({
+                  issueNumber: issue.number,
+                  requestedType: issue.pull_request ? "pr" : "issue",
+                  commentId: comment.id,
+                  reason: "trusted-macro-comment"
+                });
+              }
+            }
+
+            if (eventName === "pull_request_review_comment") {
+              const comment = payload.comment;
+              const pr = payload.pull_request;
+              if (
+                comment &&
+                pr &&
+                !hardStopped(pr) &&
+                typeof comment.body === "string" &&
+                comment.body.includes(macro) &&
+                trustedAssociations.has(comment.author_association)
+              ) {
+                addCandidate({
+                  issueNumber: pr.number,
+                  requestedType: "pr",
+                  commentId: comment.id,
+                  reason: "trusted-pr-review-comment"
+                });
+              }
+            }
+
+            if (eventName === "pull_request_review") {
+              const review = payload.review;
+              const pr = payload.pull_request;
+              if (
+                review &&
+                pr &&
+                !hardStopped(pr) &&
+                typeof review.body === "string" &&
+                review.body.includes(macro) &&
+                trustedAssociations.has(review.author_association)
+              ) {
+                addCandidate({
+                  issueNumber: pr.number,
+                  requestedType: "pr",
+                  commentId: review.id,
+                  reason: "trusted-pr-review"
+                });
+              }
+            }
+
+            for (const candidate of candidates) {
+              if (targets.length >= maxIssues) break;
+
+              const issueNumber = Number(candidate.issue_number);
+              const issueRes = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              const item = issueRes.data;
+
+              // Explicit manual/macro/label re-triggers may override "processed",
+              // but never an active or hard-blocked target.
+              if (hardStopped(item)) {
+                core.warning(`Skipping #${issueNumber}: hard-stop label present.`);
+                continue;
+              }
+
+              let issueType = item.pull_request ? "pr" : "issue";
+              let baseSha;
+              let baseRef;
+              let publishBranch = "";
+
+              if (issueType === "pr") {
+                const prRes = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: issueNumber
+                });
+                const pr = prRes.data;
+
+                if (pr.state !== "open") {
+                  core.warning(`Skipping PR #${issueNumber}: not open.`);
+                  continue;
+                }
+                if (!pr.draft) {
+                  core.warning(`Skipping PR #${issueNumber}: only draft PRs may be autonomously updated.`);
+                  continue;
+                }
+                if (pr.auto_merge) {
+                  core.warning(`Skipping PR #${issueNumber}: auto-merge is enabled.`);
+                  continue;
+                }
+                if (pr.base.ref !== targetBranch) {
+                  core.warning(`Skipping PR #${issueNumber}: base is ${pr.base.ref}, expected ${targetBranch}.`);
+                  continue;
+                }
+                if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+                  core.warning(`Skipping PR #${issueNumber}: fork PR heads are read-only for this forge.`);
+                  continue;
+                }
+                if (pr.head.ref === targetBranch) {
+                  core.warning(`Skipping PR #${issueNumber}: head branch equals protected target branch.`);
+                  continue;
+                }
+
+                baseSha = pr.head.sha;
+                baseRef = pr.head.ref;
+                publishBranch = pr.head.ref;
+              } else {
+                const branchRes = await github.rest.repos.getBranch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  branch: targetBranch
+                });
+                baseSha = branchRes.data.commit.sha;
+                baseRef = targetBranch;
+              }
+
+              if (!/^[a-f0-9]{40}$/.test(baseSha || "")) {
+                core.warning(`Skipping #${issueNumber}: invalid base SHA.`);
+                continue;
+              }
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ["openhands-in-progress"]
+              });
+
+              targets.push({
+                issue_number: String(issueNumber),
+                issue_type: issueType,
+                comment_id: candidate.comment_id,
+                reason: candidate.reason,
+                base_sha: baseSha,
+                base_ref: baseRef,
+                publish_branch: publishBranch
+              });
+            }
+
+            const matrix = { include: targets };
+            core.setOutput("count", String(targets.length));
+            core.setOutput("matrix", JSON.stringify(matrix));
+            core.info(`Reserved ${targets.length} Aurion OpenHands target(s).`);
+            core.info(JSON.stringify(matrix, null, 2));
+
+  openhands-forge:
+    name: 🛠️ Forge #${{ matrix.issue_number }} read-only
+    needs: collect-targets
+    if: needs.collect-targets.outputs.count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      actions: read
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.collect-targets.outputs.matrix) }}
+
+    concurrency:
+      group: aurion-openhands-target-${{ github.repository }}-${{ matrix.issue_type }}-${{ matrix.issue_number }}
+      cancel-in-progress: false
+
+    env:
+      ISSUE_NUMBER: ${{ matrix.issue_number }}
+      ISSUE_TYPE: ${{ matrix.issue_type }}
+      COMMENT_ID: ${{ matrix.comment_id }}
+      BASE_SHA: ${{ matrix.base_sha }}
+      BASE_REF: ${{ matrix.base_ref }}
+      PUBLISH_BRANCH: ${{ matrix.publish_branch }}
+      OPENHANDS_MAX_ITER: ${{ vars.OPENHANDS_MAX_ITER || '80' }}
+      LLM_MODEL: ${{ vars.LLM_MODEL || 'anthropic/claude-sonnet-4-20250514' }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: 🧬 Checkout admitted base revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.base_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: 🔒 Admission preflight
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "${AURION_REPOSITORY}"
+          [[ "${BASE_SHA}" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "${BASE_SHA}"
+          test "${ISSUE_TYPE}" = "issue" -o "${ISSUE_TYPE}" = "pr"
+          git check-ref-format "refs/heads/${BASE_REF}"
+
+          remote_sha="$(git ls-remote origin "refs/heads/${BASE_REF}" | awk 'NR==1 {print $1}')"
+          test "${remote_sha}" = "${BASE_SHA}"
+
+          if [ "${ISSUE_TYPE}" = "pr" ]; then
+            test -n "${PUBLISH_BRANCH}"
+            test "${PUBLISH_BRANCH}" != "${TARGET_BRANCH}"
+            test "${PUBLISH_BRANCH}" = "${BASE_REF}"
+          fi
+
+      - name: 🐍 Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 🟢 Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 📦 Install pinned OpenHands
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install "openhands-ai==${OPENHANDS_VERSION}"
+          python - <<'PY'
+          import importlib.metadata
+          import os
+          actual = importlib.metadata.version("openhands-ai")
+          expected = os.environ["OPENHANDS_VERSION"]
+          if actual != expected:
+              raise SystemExit(f"OpenHands version mismatch: {actual} != {expected}")
+          print("openhands-ai version:", actual)
+          PY
+
+      - name: 🔑 LLM secret preflight
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LLM_API_KEY}" ]; then
+            echo "::error::Missing required repository secret LLM_API_KEY."
+            exit 1
+          fi
+
+      - name: 🧠 Resolve with OpenHands using read-only GitHub authority
+        id: resolve
+        env:
+          # This token inherits THIS JOB's read-only permissions. The model never
+          # receives PAT_TOKEN or any write-capable publisher credential.
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_USERNAME: ${{ github.actor }}
+          SANDBOX_ENV_GITHUB_TOKEN: ${{ github.token }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_API_VERSION: ${{ vars.LLM_API_VERSION || '' }}
+          SANDBOX_BASE_CONTAINER_IMAGE: ${{ vars.OPENHANDS_BASE_CONTAINER_IMAGE || '' }}
+        run: |
+          set -uo pipefail
+          rm -rf /tmp/output /tmp/openhands-resolve.log
+          mkdir -p /tmp/output
+          cd /tmp
+
+          set +e
+          python -m openhands.resolver.resolve_issue \
+            --selected-repo "${GITHUB_REPOSITORY}" \
+            --issue-number "${ISSUE_NUMBER}" \
+            --issue-type "${ISSUE_TYPE}" \
+            --max-iterations "${OPENHANDS_MAX_ITER}" \
+            --comment-id "${COMMENT_ID}" \
+            2>&1 | tee /tmp/openhands-resolve.log
+          resolver_status=${PIPESTATUS[0]}
+          set -e
+
+          echo "resolver_status=${resolver_status}" >> "${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: 🧾 Build immutable forge candidate
+        id: analyze
+        if: always()
+        run: |
+          set -euo pipefail
+
+          forge="${GITHUB_WORKSPACE}/forge"
+          repo="/tmp/output/repo"
+          mkdir -p "${forge}"
+          : > "${forge}/forge.patch"
+          : > "${forge}/changed-paths.txt"
+
+          echo "resolver_success=false" >> "${GITHUB_OUTPUT}"
+          echo "base_match=false" >> "${GITHUB_OUTPUT}"
+          echo "patch_nonempty=false" >> "${GITHUB_OUTPUT}"
+          echo "patch_within_limit=false" >> "${GITHUB_OUTPUT}"
+          echo "secret_risk=false" >> "${GITHUB_OUTPUT}"
+          echo "human_only=false" >> "${GITHUB_OUTPUT}"
+          echo "candidate=false" >> "${GITHUB_OUTPUT}"
+          echo "classification=NO_CANDIDATE" >> "${GITHUB_OUTPUT}"
+
+          result_file="/tmp/output/output.jsonl"
+          resolver_success=false
+          if [ -f "${result_file}" ] && grep -q '"success"[[:space:]]*:[[:space:]]*true' "${result_file}"; then
+            resolver_success=true
+          fi
+
+          if [ ! -d "${repo}/.git" ]; then
+            echo "OpenHands repository workspace was not produced."
+            exit 0
+          fi
+
+          origin_url="$(git -C "${repo}" remote get-url origin)"
+          case "${origin_url}" in
+            *"github.com/${GITHUB_REPOSITORY}"|*"github.com/${GITHUB_REPOSITORY}.git") ;;
+            *)
+              echo "Unexpected resolver origin: ${origin_url}" >&2
+              exit 0
+              ;;
+          esac
+
+          git -C "${repo}" fetch --quiet --no-tags origin "refs/heads/${BASE_REF}"
+          remote_base="$(git -C "${repo}" rev-parse FETCH_HEAD)"
+          base_match=false
+          if [ "${remote_base}" = "${BASE_SHA}" ]; then
+            base_match=true
+          fi
+
+          if ! git -C "${repo}" cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "Admitted base SHA is absent from resolver clone." >&2
+            exit 0
+          fi
+
+          # Intent-to-add makes new untracked files visible to git diff without
+          # committing anything or sending anything to GitHub.
+          git -C "${repo}" add -N -A
+          git -C "${repo}" diff --binary --full-index "${BASE_SHA}" -- . > "${forge}/forge.patch"
+          git -C "${repo}" diff --name-only "${BASE_SHA}" -- . > "${forge}/changed-paths.txt"
+
+          patch_nonempty=false
+          if [ -s "${forge}/forge.patch" ] && [ -s "${forge}/changed-paths.txt" ]; then
+            patch_nonempty=true
+          fi
+
+          patch_bytes="$(wc -c < "${forge}/forge.patch" | tr -d ' ')"
+          patch_within_limit=false
+          if [ "${patch_bytes}" -le "${MAX_PATCH_BYTES}" ]; then
+            patch_within_limit=true
+          fi
+
+          # Fail closed on newly ADDED secret-shaped material. Fixtures should
+          # use explicit placeholders rather than realistic credential strings.
+          secret_risk=false
+          if grep -aE '^\+[^+]' "${forge}/forge.patch" | grep -Eq \
+            '(-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{32,})'; then
+            secret_risk=true
+          fi
+
+          # Changes to workflow/supply-chain execution metadata are never
+          # automatically published. The patch remains available as evidence
+          # for a human-controlled follow-up.
+          human_only=false
+          if grep -Eq '^(\.github/|\.gitattributes$|\.gitmodules$|\.npmrc$)' "${forge}/changed-paths.txt"; then
+            human_only=true
+          fi
+
+          protected=false
+          if grep -Eq '^(deploy/|drizzle/|Dockerfile$|docker-compose[^/]*\.ya?ml$|security/|android/|server/(_core/|db\.ts$|admin|wasdAurionRuntime|zoneService)|shared/(runtimeContracts|world)|scripts/(build-aurion|verify-aurion|security/)|package\.json$|pnpm-lock\.yaml$)' "${forge}/changed-paths.txt"; then
+            protected=true
+          fi
+
+          classification="STANDARD_DRAFT"
+          if [ "${protected}" = "true" ]; then
+            classification="PROTECTED_DRAFT"
+          fi
+          if [ "${human_only}" = "true" ]; then
+            classification="HUMAN_ONLY"
+          fi
+
+          candidate=false
+          if \
+            [ "${resolver_success}" = "true" ] && \
+            [ "${base_match}" = "true" ] && \
+            [ "${patch_nonempty}" = "true" ] && \
+            [ "${patch_within_limit}" = "true" ] && \
+            [ "${secret_risk}" = "false" ] && \
+            [ "${human_only}" = "false" ]; then
+            candidate=true
+          fi
+
+          {
+            echo "resolver_success=${resolver_success}"
+            echo "base_match=${base_match}"
+            echo "patch_nonempty=${patch_nonempty}"
+            echo "patch_within_limit=${patch_within_limit}"
+            echo "secret_risk=${secret_risk}"
+            echo "human_only=${human_only}"
+            echo "candidate=${candidate}"
+            echo "classification=${classification}"
+          } >> "${GITHUB_OUTPUT}"
+
+          printf 'classification=%s resolver_success=%s base_match=%s patch_nonempty=%s patch_bytes=%s secret_risk=%s\n' \
+            "${classification}" "${resolver_success}" "${base_match}" "${patch_nonempty}" "${patch_bytes}" "${secret_risk}"
+
+      - name: ✅ Aurion regression gate
+        id: validation
+        if: steps.analyze.outputs.candidate == 'true'
+        working-directory: /tmp/output/repo
+        run: |
+          set -euo pipefail
+          corepack enable
+
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm test
+          pnpm build
+          pnpm verify:migrations
+          git diff --check "${BASE_SHA}"
+
+          changed="${GITHUB_WORKSPACE}/forge/changed-paths.txt"
+
+          if grep -Eq '^client/' "${changed}"; then
+            pnpm exec playwright install --with-deps chromium
+            pnpm test:e2e
+          fi
+
+          if grep -Eq '^android/' "${changed}"; then
+            pnpm android:apk:debug
+          fi
+
+          if grep -Eq '^(drizzle/|deploy/aurion-production-schema|scripts/build-aurion-production|server/aurionProductionSchema)' "${changed}"; then
+            if [ -f server/aurionProductionSchemaApplyDockerRunner.test.ts ]; then
+              pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+            fi
+          fi
+
+          if grep -Eq '^(Dockerfile$|docker-compose|deploy/promote-aurion-zone-runtime\.sh$|deploy/verify-aurion-runtime-database\.mjs$|server/aurionTraefikRuntimeDeployment\.test\.ts$)' "${changed}"; then
+            if [ -f server/aurionTraefikRuntimeDeployment.test.ts ]; then
+              pnpm vitest run server/aurionTraefikRuntimeDeployment.test.ts
+            fi
+          fi
+
+      - name: 🧾 Finalize ARE evidence receipt
+        if: always()
+        env:
+          RESOLVER_STATUS: ${{ steps.resolve.outputs.resolver_status || 'not-run' }}
+          RESOLVER_SUCCESS: ${{ steps.analyze.outputs.resolver_success || 'false' }}
+          BASE_MATCH: ${{ steps.analyze.outputs.base_match || 'false' }}
+          PATCH_NONEMPTY: ${{ steps.analyze.outputs.patch_nonempty || 'false' }}
+          PATCH_WITHIN_LIMIT: ${{ steps.analyze.outputs.patch_within_limit || 'false' }}
+          SECRET_RISK: ${{ steps.analyze.outputs.secret_risk || 'false' }}
+          HUMAN_ONLY: ${{ steps.analyze.outputs.human_only || 'false' }}
+          CANDIDATE: ${{ steps.analyze.outputs.candidate || 'false' }}
+          CLASSIFICATION: ${{ steps.analyze.outputs.classification || 'NO_CANDIDATE' }}
+          VALIDATION_OUTCOME: ${{ steps.validation.outcome || 'skipped' }}
+        run: |
+          set -euo pipefail
+          forge="${GITHUB_WORKSPACE}/forge"
+          mkdir -p "${forge}"
+          touch "${forge}/forge.patch" "${forge}/changed-paths.txt"
+
+          if [ -f /tmp/output/output.jsonl ]; then
+            cp /tmp/output/output.jsonl "${forge}/openhands-output.jsonl"
+          else
+            : > "${forge}/openhands-output.jsonl"
+          fi
+
+          if [ -f /tmp/openhands-resolve.log ]; then
+            cp /tmp/openhands-resolve.log "${forge}/openhands-resolve.log"
+          else
+            : > "${forge}/openhands-resolve.log"
+          fi
+
+          patch_sha256="$(sha256sum "${forge}/forge.patch" | awk '{print $1}')"
+          changed_paths_sha256="$(sha256sum "${forge}/changed-paths.txt" | awk '{print $1}')"
+
+          PATCH_SHA256="${patch_sha256}" \
+          CHANGED_PATHS_SHA256="${changed_paths_sha256}" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const forge = `${process.env.GITHUB_WORKSPACE}/forge`;
+          const changedPaths = fs.readFileSync(`${forge}/changed-paths.txt`, "utf8")
+            .split(/\r?\n/)
+            .filter(Boolean);
+
+          const isTrue = (value) => value === "true";
+          const validationPassed = process.env.VALIDATION_OUTCOME === "success";
+          const candidate = isTrue(process.env.CANDIDATE);
+          const publishable = candidate && validationPassed;
+
+          const reasons = [];
+          if (!isTrue(process.env.RESOLVER_SUCCESS)) reasons.push("RESOLVER_NOT_SUCCESSFUL");
+          if (!isTrue(process.env.BASE_MATCH)) reasons.push("STALE_OR_MISMATCHED_BASE");
+          if (!isTrue(process.env.PATCH_NONEMPTY)) reasons.push("EMPTY_PATCH");
+          if (!isTrue(process.env.PATCH_WITHIN_LIMIT)) reasons.push("PATCH_TOO_LARGE");
+          if (isTrue(process.env.SECRET_RISK)) reasons.push("SECRET_SHAPED_ADDITION");
+          if (isTrue(process.env.HUMAN_ONLY)) reasons.push("HUMAN_ONLY_PATH");
+          if (candidate && !validationPassed) reasons.push("REGRESSION_GATE_NOT_GREEN");
+
+          const receipt = {
+            schemaVersion: "aurion.openhands-forge-receipt.v1",
+            recordType: "aurion_openhands_forge_receipt",
+            repository: process.env.GITHUB_REPOSITORY,
+            issueNumber: Number(process.env.ISSUE_NUMBER),
+            issueType: process.env.ISSUE_TYPE,
+            commentId: process.env.COMMENT_ID,
+            reason: "${{ matrix.reason }}",
+            baseRevision: process.env.BASE_SHA,
+            baseRef: process.env.BASE_REF,
+            targetBranch: process.env.TARGET_BRANCH,
+            classification: process.env.CLASSIFICATION,
+            openhandsVersion: process.env.OPENHANDS_VERSION,
+            llmModel: process.env.LLM_MODEL,
+            maxIterations: Number(process.env.OPENHANDS_MAX_ITER),
+            resolverStatus: process.env.RESOLVER_STATUS,
+            resolverSuccess: isTrue(process.env.RESOLVER_SUCCESS),
+            baseMatch: isTrue(process.env.BASE_MATCH),
+            patchSha256: process.env.PATCH_SHA256,
+            changedPathsSha256: process.env.CHANGED_PATHS_SHA256,
+            changedPaths,
+            validationOutcome: process.env.VALIDATION_OUTCOME,
+            publishable,
+            reasons,
+            authority: {
+              agentRepositoryWrite: false,
+              agentMerge: false,
+              agentDeploy: false,
+              agentSchemaApply: false,
+              publisherBranchWriteOnly: true
+            },
+            secretsReturned: false,
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT
+          };
+
+          fs.writeFileSync(`${forge}/receipt.json`, `${JSON.stringify(receipt, null, 2)}\n`);
+          NODE
+
+          cat "${forge}/receipt.json"
+
+      - name: 📤 Upload immutable forge bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-openhands-forge-${{ matrix.issue_type }}-${{ matrix.issue_number }}
+          path: forge/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-draft:
+    name: 🌿 Publish verified draft #${{ matrix.issue_number }}
+    needs: [collect-targets, openhands-forge]
+    if: always() && needs.collect-targets.outputs.count != '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.collect-targets.outputs.matrix) }}
+
+    concurrency:
+      group: aurion-openhands-publisher-${{ github.repository }}-${{ matrix.issue_type }}-${{ matrix.issue_number }}
+      cancel-in-progress: false
+
+    env:
+      ISSUE_NUMBER: ${{ matrix.issue_number }}
+      ISSUE_TYPE: ${{ matrix.issue_type }}
+      BASE_SHA: ${{ matrix.base_sha }}
+      BASE_REF: ${{ matrix.base_ref }}
+      EXISTING_PR_BRANCH: ${{ matrix.publish_branch }}
+      FORGE_DIR: ${{ runner.temp }}/aurion-openhands-forge
+
+    steps:
+      - name: 📥 Download forge bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: aurion-openhands-forge-${{ matrix.issue_type }}-${{ matrix.issue_number }}
+          path: ${{ env.FORGE_DIR }}
+
+      - name: 🔬 Verify publisher admission
+        id: decision
+        run: |
+          set -euo pipefail
+          test -f "${FORGE_DIR}/receipt.json"
+          test -f "${FORGE_DIR}/forge.patch"
+          test -f "${FORGE_DIR}/changed-paths.txt"
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { createHash } from "node:crypto";
+
+          const receipt = JSON.parse(fs.readFileSync(`${process.env.FORGE_DIR}/receipt.json`, "utf8"));
+          const patch = fs.readFileSync(`${process.env.FORGE_DIR}/forge.patch`);
+          const paths = fs.readFileSync(`${process.env.FORGE_DIR}/changed-paths.txt`);
+          const sha = (buf) => createHash("sha256").update(buf).digest("hex");
+
+          if (receipt.schemaVersion !== "aurion.openhands-forge-receipt.v1") throw new Error("receipt schema mismatch");
+          if (receipt.repository !== process.env.GITHUB_REPOSITORY) throw new Error("repository mismatch");
+          if (receipt.issueNumber !== Number(process.env.ISSUE_NUMBER)) throw new Error("issue mismatch");
+          if (receipt.issueType !== process.env.ISSUE_TYPE) throw new Error("issue type mismatch");
+          if (receipt.baseRevision !== process.env.BASE_SHA) throw new Error("base revision mismatch");
+          if (receipt.baseRef !== process.env.BASE_REF) throw new Error("base ref mismatch");
+          if (receipt.targetBranch !== process.env.TARGET_BRANCH) throw new Error("target branch mismatch");
+          if (receipt.patchSha256 !== sha(patch)) throw new Error("patch hash mismatch");
+          if (receipt.changedPathsSha256 !== sha(paths)) throw new Error("changed path hash mismatch");
+          if (receipt.authority?.agentRepositoryWrite !== false ||
+              receipt.authority?.agentMerge !== false ||
+              receipt.authority?.agentDeploy !== false ||
+              receipt.authority?.agentSchemaApply !== false) {
+            throw new Error("authority receipt mismatch");
+          }
+          NODE
+
+          publish="$(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.env.FORGE_DIR + "/receipt.json","utf8")).publishable === true))')"
+          classification="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.env.FORGE_DIR + "/receipt.json","utf8")).classification)')"
+          patch_sha="$(sha256sum "${FORGE_DIR}/forge.patch" | awk '{print $1}')"
+
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+          echo "classification=${classification}" >> "${GITHUB_OUTPUT}"
+          echo "patch_sha=${patch_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: ⛔ Record blocked / human-only result
+        id: blocked_result
+        if: steps.decision.outputs.publish != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const receipt = JSON.parse(fs.readFileSync(`${process.env.FORGE_DIR}/receipt.json`, "utf8"));
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ["openhands-attempted", "openhands-needs-human", "openhands-blocked"]
+            });
+
+            for (const label of [
+              "openhands-in-progress",
+              "fix-me",
+              "autonomous-task",
+              "release-task",
+              "openhands",
+              "openhands-safe",
+              "openhands-protected"
+            ]) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label
+                });
+              } catch (error) {
+                if (error.status !== 404) core.warning(`Could not remove ${label}: ${error.message}`);
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                "⚠️ **Aurion OpenHands Forge: nicht automatisch veröffentlicht.**",
+                "",
+                `Klassifikation: \`${receipt.classification}\``,
+                `Base: \`${receipt.baseRevision}\``,
+                `Patch SHA-256: \`${receipt.patchSha256}\``,
+                `Regression Gate: \`${receipt.validationOutcome}\``,
+                `Gründe: ${receipt.reasons.length ? receipt.reasons.map((x) => `\`${x}\``).join(", ") : "`UNCLASSIFIED`"}`,
+                `Run: ${runUrl}`,
+                "",
+                "Kein Branch, kein PR, kein Merge, kein Deploy und kein Schema-Apply wurden durch den Agenten ausgeführt. Das Forge-Artefakt enthält Patch + Evidence für die menschliche Prüfung."
+              ].join("\n")
+            });
+
+      - name: 🔑 Publisher credential preflight
+        if: steps.decision.outputs.publish == 'true'
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PUBLISH_TOKEN}" ]; then
+            echo "::error::Missing PAT_TOKEN. Use a fine-grained token limited to this repository with Contents, Issues and Pull Requests write; do NOT grant Workflows permission."
+            exit 1
+          fi
+
+      - name: 🧬 Checkout exact admitted revision for publisher
+        if: steps.decision.outputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.base_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: 🔒 Re-check target identity immediately before write
+        id: publish_identity
+        if: steps.decision.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "${AURION_REPOSITORY}"
+          test "$(git rev-parse HEAD)" = "${BASE_SHA}"
+          git check-ref-format "refs/heads/${BASE_REF}"
+
+          remote_sha="$(git ls-remote origin "refs/heads/${BASE_REF}" | awk 'NR==1 {print $1}')"
+          test "${remote_sha}" = "${BASE_SHA}"
+
+          if [ "${ISSUE_TYPE}" = "pr" ]; then
+            branch="${EXISTING_PR_BRANCH}"
+            test -n "${branch}"
+            test "${branch}" = "${BASE_REF}"
+          else
+            branch="openhands/aurion-${ISSUE_NUMBER}-${BASE_SHA:0:8}-${GITHUB_RUN_ID}"
+          fi
+
+          git check-ref-format "refs/heads/${branch}"
+          test "${branch}" != "${TARGET_BRANCH}"
+          test "${branch}" != "main"
+
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+
+      - name: 🌿 Apply exact patch and push branch only
+        id: push
+        if: steps.decision.outputs.publish == 'true'
+        env:
+          PUBLISH_BRANCH: ${{ steps.publish_identity.outputs.branch }}
+        run: |
+          set -euo pipefail
+          test -n "${PUBLISH_BRANCH}"
+          test "${PUBLISH_BRANCH}" != "${TARGET_BRANCH}"
+          test "${PUBLISH_BRANCH}" != "main"
+
+          # Defense in depth: human-only control files must never reach this step.
+          if grep -Eq '^(\.github/|\.gitattributes$|\.gitmodules$|\.npmrc$)' "${FORGE_DIR}/changed-paths.txt"; then
+            echo "::error::Human-only path reached publisher unexpectedly."
+            exit 1
+          fi
+
+          git apply --index --binary --whitespace=error-all "${FORGE_DIR}/forge.patch"
+          git diff --cached --check
+
+          git diff --cached --name-only | LC_ALL=C sort > /tmp/publisher-paths.txt
+          LC_ALL=C sort "${FORGE_DIR}/changed-paths.txt" > /tmp/receipt-paths.txt
+          diff -u /tmp/receipt-paths.txt /tmp/publisher-paths.txt
+
+          git config user.name "Aurion OpenHands Forge"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -c core.hooksPath=/dev/null commit --no-verify -m "fix: OpenHands Aurion #${ISSUE_NUMBER}"
+
+          head_sha="$(git rev-parse HEAD)"
+          [[ "${head_sha}" =~ ^[a-f0-9]{40}$ ]]
+          test "${head_sha}" != "${BASE_SHA}"
+
+          # No force push. If another actor changed the branch after admission,
+          # Git rejects the write instead of overwriting newer work.
+          git push origin "HEAD:refs/heads/${PUBLISH_BRANCH}"
+
+          echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: 🚀 Create/read back Draft PR or verify Draft PR update
+        id: pr_readback
+        if: steps.decision.outputs.publish == 'true'
+        env:
+          PUBLISH_BRANCH: ${{ steps.publish_identity.outputs.branch }}
+          PUBLISH_HEAD_SHA: ${{ steps.push.outputs.head_sha }}
+          CLASSIFICATION: ${{ steps.decision.outputs.classification }}
+          PATCH_SHA: ${{ steps.decision.outputs.patch_sha }}
+        uses: actions/github-script@v7
+        with:
+          # PAT exists only in the deterministic publisher job. It is never
+          # exposed to OpenHands or to repository-controlled validation code.
+          github-token: ${{ secrets.PAT_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const receipt = JSON.parse(fs.readFileSync(`${process.env.FORGE_DIR}/receipt.json`, "utf8"));
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let prNumber = issueNumber;
+            let prUrl = "";
+
+            if (process.env.ISSUE_TYPE === "issue") {
+              const issue = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+
+              if (issue.data.state !== "open") throw new Error("Issue stopped being open during publication");
+
+              const created = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[OpenHands] ${issue.data.title}`,
+                head: process.env.PUBLISH_BRANCH,
+                base: process.env.TARGET_BRANCH,
+                draft: true,
+                body: [
+                  `Refs #${issueNumber}`,
+                  "",
+                  "## Aurion OpenHands Forge",
+                  "",
+                  `- Base revision: \`${receipt.baseRevision}\``,
+                  `- Candidate revision: \`${process.env.PUBLISH_HEAD_SHA}\``,
+                  `- Classification: \`${receipt.classification}\``,
+                  `- Patch SHA-256: \`${receipt.patchSha256}\``,
+                  `- Changed-paths SHA-256: \`${receipt.changedPathsSha256}\``,
+                  `- Regression gate: \`${receipt.validationOutcome}\``,
+                  `- OpenHands: \`${receipt.openhandsVersion}\``,
+                  `- Production authority: \`false\``,
+                  "",
+                  "No auto-merge, deploy or schema apply is authorized by this PR.",
+                  "",
+                  `Evidence run: ${runUrl}`
+                ].join("\n")
+              });
+
+              prNumber = created.data.number;
+              prUrl = created.data.html_url;
+            }
+
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            if (pr.data.state !== "open") throw new Error("PR readback is not open");
+            if (pr.data.base.ref !== process.env.TARGET_BRANCH) throw new Error("PR base readback mismatch");
+            if (pr.data.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) throw new Error("PR head repository mismatch");
+            if (pr.data.head.ref !== process.env.PUBLISH_BRANCH) throw new Error("PR branch readback mismatch");
+            if (pr.data.head.sha !== process.env.PUBLISH_HEAD_SHA) throw new Error("PR head SHA readback mismatch");
+            if (pr.data.auto_merge) throw new Error("Auto-merge unexpectedly enabled");
+
+            if (process.env.ISSUE_TYPE === "issue" && !pr.data.draft) {
+              throw new Error("New OpenHands PR is not draft");
+            }
+            if (process.env.ISSUE_TYPE === "pr" && !pr.data.draft) {
+              throw new Error("Existing PR stopped being draft during publication");
+            }
+
+            const resultLabel = process.env.ISSUE_TYPE === "issue"
+              ? "openhands-pr-created"
+              : "openhands-pr-updated";
+
+            const labels = ["openhands-attempted", resultLabel, "processed"];
+            if (receipt.classification === "PROTECTED_DRAFT") {
+              labels.push("openhands-protected-review");
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels
+            });
+
+            if (process.env.ISSUE_TYPE === "issue" && receipt.classification === "PROTECTED_DRAFT") {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: ["openhands-protected-review"]
+              });
+            }
+
+            for (const label of [
+              "openhands-in-progress",
+              "fix-me",
+              "autonomous-task",
+              "release-task",
+              "openhands",
+              "openhands-safe",
+              "openhands-protected"
+            ]) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label
+                });
+              } catch (error) {
+                if (error.status !== 404) core.warning(`Could not remove ${label}: ${error.message}`);
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                process.env.ISSUE_TYPE === "issue"
+                  ? "✅ **Aurion OpenHands Forge hat einen revisionsgebundenen Draft-PR veröffentlicht.**"
+                  : "✅ **Aurion OpenHands Forge hat diesen Draft-PR revisionsgebunden aktualisiert.**",
+                "",
+                process.env.ISSUE_TYPE === "issue" ? `Draft PR: ${prUrl}` : `Draft PR: ${pr.data.html_url}`,
+                `Base: \`${receipt.baseRevision}\``,
+                `Head: \`${process.env.PUBLISH_HEAD_SHA}\``,
+                `Klassifikation: \`${receipt.classification}\``,
+                `Patch SHA-256: \`${receipt.patchSha256}\``,
+                `Regression Gate: \`${receipt.validationOutcome}\``,
+                `Run: ${runUrl}`,
+                "",
+                "Kein Auto-Merge, kein Deploy und kein Produktions-Schema-Apply wurde autorisiert oder ausgeführt."
+              ].join("\n")
+            });
+
+
+      - name: 🧹 Release reservation after abnormal publisher failure
+        if: always() && steps.blocked_result.outcome != 'success' && steps.pr_readback.outcome != 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ["openhands-attempted", "openhands-needs-human", "openhands-blocked"]
+            });
+
+            for (const label of [
+              "openhands-in-progress",
+              "fix-me",
+              "autonomous-task",
+              "release-task",
+              "openhands",
+              "openhands-safe",
+              "openhands-protected"
+            ]) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label
+                });
+              } catch (error) {
+                if (error.status !== 404) core.warning(`Could not remove ${label}: ${error.message}`);
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                "⚠️ **Aurion OpenHands Publisher ist fail-closed abgebrochen.**",
+                "",
+                `Run: ${runUrl}`,
+                "",
+                "Die Reservation wurde freigegeben und der Target ist als `openhands-blocked` / `openhands-needs-human` markiert. Ein eventuell bereits erzeugter Branch bleibt als überprüfbare Evidence erhalten; es wurde kein Merge, Deploy oder Schema-Apply durchgeführt."
+              ].join("\n")
+            });
