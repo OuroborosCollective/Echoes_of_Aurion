@@ -24,6 +24,15 @@ describe("Aurion home/open-world state separation", () => {
     expect(source).not.toContain('aurion:begin-expedition');
   });
 
+  it("binds the confirmed server snapshot to the real Babylon 3D Open World", async () => {
+    const homeSource = await readFile(path.resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
+    const sceneSource = await readFile(path.resolve(process.cwd(), "client/src/game/scene.ts"), "utf8");
+    expect(homeSource).toContain('window.dispatchEvent(new CustomEvent("aurion:load-open-world", { detail: snapshot }))');
+    expect(sceneSource).toContain('window.addEventListener("aurion:load-open-world", onLoadOpenWorld)');
+    expect(sceneSource).toContain('createOpenWorldVisuals(detail); emitState(true);');
+    expect(sceneSource).toContain('sentinel.root.setEnabled(false); arenaSets.forEach(set => set.setEnabled(false));');
+  });
+
   it("keeps the tower scene free of the legacy arena and sentinel", async () => {
     const source = await readFile(path.resolve(process.cwd(), "client/src/game/scene.ts"), "utf8");
     expect(source).toContain("const showTowerHome = (): void => {");
