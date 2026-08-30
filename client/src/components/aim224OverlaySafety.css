@@ -1,4 +1,4 @@
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .community-overlay {
     z-index: 40;
   }
@@ -7,6 +7,7 @@
     z-index: 50;
   }
 
+  .community-panel-header > button,
   .trailer-modal-card header > button {
     width: 44px;
     height: 44px;
