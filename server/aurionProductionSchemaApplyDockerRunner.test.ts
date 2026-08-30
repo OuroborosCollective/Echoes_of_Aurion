@@ -91,11 +91,17 @@ describe("Aurion production schema apply boundary", () => {
     expect(databaseClientConfig).not.toContain("console.log");
   });
 
-  it("locks and validates the expected journal prefix before Drizzle migration", () => {
+  it("uses bounded late-migration hashes instead of Drizzle's global created_at watermark", () => {
     expect(apply).toContain("GET_LOCK(?, 30)");
     expect(apply).toContain("validateJournalProgress");
-    expect(apply).toContain("JOURNAL_CONFLICT");
-    expect(apply).toContain("migrationsFolder: path.join(projectRoot, \"drizzle\")");
+    expect(apply).toContain("journalIndexByHash");
+    expect(apply).toContain("journalPrefix > matchedPrefix");
+    expect(apply).toContain("migrationSeparator");
+    expect(apply).toContain("INSERT INTO `__drizzle_migrations` (`hash`,`created_at`) VALUES (?,?)");
+    expect(apply).toContain("repairJournalPrefix");
+    expect(apply).toContain("applyBoundedMigrations");
+    expect(apply).not.toContain("drizzle-orm/mysql2/migrator");
+    expect(apply).not.toContain("migrate(drizzle");
     expect(apply).toContain("APPLY_SUCCEEDED");
     expect(apply).toContain("ALREADY_APPLIED");
   });

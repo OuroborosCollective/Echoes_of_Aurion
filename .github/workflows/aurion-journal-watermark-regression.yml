@@ -1,0 +1,218 @@
+name: Aurion journal watermark regression
+
+on:
+  pull_request:
+    paths:
+      - "scripts/apply-aurion-production-schema.ts"
+      - "scripts/build-aurion-production-apply-artifact.mjs"
+      - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
+      - "drizzle/**"
+      - ".github/workflows/aurion-journal-watermark-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/apply-aurion-production-schema.ts"
+      - "scripts/build-aurion-production-apply-artifact.mjs"
+      - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
+      - "drizzle/**"
+      - ".github/workflows/aurion-journal-watermark-regression.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-journal-watermark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  historical-watermark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TEST_DB_CONTAINER: aurion-journal-watermark-db
+      TEST_DB_NAME: aurion_journal_watermark
+      TEST_DB_PASSWORD: aurion-watermark-proof
+      TEST_DB_PORT: "33306"
+      TEST_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000027"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify source contract
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+
+      - name: Start isolated MariaDB
+        run: |
+          set -euo pipefail
+          docker run -d \
+            --name "$TEST_DB_CONTAINER" \
+            -p "127.0.0.1:${TEST_DB_PORT}:3306" \
+            -e MARIADB_ROOT_PASSWORD="$TEST_DB_PASSWORD" \
+            -e MARIADB_DATABASE="$TEST_DB_NAME" \
+            mariadb:11.4
+          ready=0
+          for _attempt in $(seq 1 60); do
+            if docker exec -e MYSQL_PWD="$TEST_DB_PASSWORD" "$TEST_DB_CONTAINER" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+
+      - name: Establish canonical schema through 0020
+        env:
+          DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
+        run: |
+          set -euo pipefail
+          backup="$(mktemp)"
+          cp drizzle/meta/_journal.json "$backup"
+          restore_journal() {
+            cp "$backup" drizzle/meta/_journal.json
+            rm -f "$backup"
+          }
+          trap restore_journal EXIT
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const journalPath = "drizzle/meta/_journal.json";
+          const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+          journal.entries = journal.entries.filter(entry => Number(entry.idx) <= 20);
+          if (journal.entries.length !== 21 || journal.entries.at(-1)?.tag !== "0020_wasd_aurion_dialogue_quest_intents") {
+            throw new Error("unable to create exact 0020 cutoff");
+          }
+          fs.writeFileSync(journalPath, `${JSON.stringify(journal, null, 2)}\n`);
+          NODE
+          ./node_modules/.bin/drizzle-kit migrate
+          restore_journal
+          trap - EXIT
+          git diff --exit-code -- drizzle/meta/_journal.json
+
+      - name: Inject historical created_at watermark without changing hashes
+        env:
+          DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
+          const lastLate = journal.entries.find(entry => entry.tag === "0027_aurion_faction_questline_rewards");
+          if (!lastLate || !Number.isSafeInteger(Number(lastLate.when))) throw new Error("late journal timestamp missing");
+          const legacyWatermark = Number(lastLate.when) + 10_000_000;
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [before] = await connection.query("SELECT COUNT(*) AS rowCount FROM `__drizzle_migrations`");
+            if (Number(before[0]?.rowCount) !== 21) throw new Error("expected 21 historical journal rows");
+            const [result] = await connection.query(
+              "UPDATE `__drizzle_migrations` SET `created_at`=? ORDER BY `id` DESC LIMIT 1",
+              [legacyWatermark],
+            );
+            if (Number(result.affectedRows) !== 1) throw new Error("failed to inject historical watermark");
+            const [after] = await connection.query("SELECT MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
+            if (Number(after[0]?.maxCreatedAt) !== legacyWatermark) throw new Error("historical watermark not installed");
+            fs.writeFileSync("legacy-watermark.txt", `${legacyWatermark}\n`);
+          } finally {
+            await connection.end();
+          }
+          NODE
+
+      - name: Build exact bounded apply artifact
+        env:
+          AURION_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/build-aurion-production-apply-artifact.mjs
+          (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
+          node dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs dist-production-apply "$GITHUB_SHA"
+
+      - name: Apply 0021 through 0027 despite the legacy watermark
+        env:
+          DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
+          AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
+          AURION_SCHEMA_APPLY_SOURCE_SHA: ${{ github.sha }}
+          AURION_SCHEMA_APPLY_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000027"
+        run: |
+          set -euo pipefail
+          node dist-production-apply/bin/apply.cjs > watermark-apply-receipt.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt = JSON.parse(fs.readFileSync("watermark-apply-receipt.json", "utf8"));
+          const tags = [
+            "0021_aurion_global_world_state",
+            "0022_aurion_world_chunk_deltas",
+            "0023_aurion_world_presence_epochs",
+            "0024_aurion_world_epoch_reactions",
+            "0025_aurion_loot_mastery_ethos",
+            "0026_aurion_faction_questline_state",
+            "0027_aurion_faction_questline_rewards",
+          ];
+          if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
+          if (receipt.preflight?.absentCount !== 7 || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
+          if (receipt.postflight?.matchCount !== 7 || receipt.postflight?.absentCount !== 0 || receipt.postflight?.driftCount !== 0) throw new Error("postflight schema mismatch");
+          if (receipt.appliedMigrationTags?.join(",") !== tags.join(",")) throw new Error("bounded migration set mismatch");
+          if (receipt.repairedJournalTags?.length !== 0) throw new Error("unexpected journal repair on clean 0020 prefix");
+          NODE
+
+      - name: Prove all 28 journal rows exist while the historical watermark is untouched
+        env:
+          DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const expectedWatermark = Number(fs.readFileSync("legacy-watermark.txt", "utf8").trim());
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
+            if (Number(rows[0]?.rowCount) !== 28) throw new Error("expected 28 journal rows after bounded apply");
+            if (Number(rows[0]?.maxCreatedAt) !== expectedWatermark) throw new Error("legacy historical watermark was rewritten");
+          } finally {
+            await connection.end();
+          }
+          NODE
+
+      - name: Prove exact retry is a non-mutating no-op even with the legacy max watermark
+        env:
+          DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
+          AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
+          AURION_SCHEMA_APPLY_SOURCE_SHA: ${{ github.sha }}
+          AURION_SCHEMA_APPLY_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000027"
+        run: |
+          set -euo pipefail
+          node dist-production-apply/bin/apply.cjs > watermark-retry-receipt.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const receipt = JSON.parse(fs.readFileSync("watermark-retry-receipt.json", "utf8"));
+          if (receipt.state !== "ALREADY_APPLIED") throw new Error(`retry was not a no-op: ${receipt.state}`);
+          if (receipt.appliedMigrationTags?.length !== 0 || receipt.repairedJournalTags?.length !== 0) throw new Error("retry mutated migration state");
+          const expectedWatermark = Number(fs.readFileSync("legacy-watermark.txt", "utf8").trim());
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
+            if (Number(rows[0]?.rowCount) !== 28 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
+              throw new Error("retry changed historical journal state");
+            }
+          } finally {
+            await connection.end();
+          }
+          NODE
+
+      - name: Remove isolated MariaDB
+        if: always()
+        run: docker rm -f "$TEST_DB_CONTAINER" >/dev/null 2>&1 || true
