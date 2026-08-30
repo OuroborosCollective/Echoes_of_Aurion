@@ -24,5 +24,17 @@ for (const viewport of [
     expect(panelBox!.x).toBeGreaterThanOrEqual(0);
     expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(viewport.width);
     await page.screenshot({ path: `test-results/tower-home-${viewport.width}x${viewport.height}.png`, fullPage: true });
+
+    const communityToggle = page.getByRole("button", { name: /GEMEINSCHAFT|MENÜ SCHLIESSEN/i });
+    await communityToggle.click();
+    await page.getByRole("button", { name: "Forum öffnen" }).click();
+    const closeCommunity = page.getByRole("button", { name: "Community-Konsole schließen" });
+    await expect(closeCommunity).toBeVisible();
+    const closeBox = await closeCommunity.boundingBox();
+    expect(closeBox).not.toBeNull();
+    expect(closeBox!.width).toBeGreaterThanOrEqual(44);
+    expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+    await closeCommunity.click();
+    await expect(page.locator(".community-panel")).toHaveCount(0);
   });
 }

@@ -433,6 +433,16 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     camera.lowerRadiusLimit = 14; camera.upperRadiusLimit = 23; camera.radius = 20.5;
     emitWorldChunkMetrics("cleared");
   };
+  const showTowerHome = (): void => {
+    clearOpenWorld();
+    started = false; transitioning = false; victory = false; awaitingQuest = false; dungeonUnlocked = false; dungeonActive = false;
+    arenaIndex = 0; sentinelHp = arenas[0].health; explorerHp = 100; echoHp = 100;
+    arenaSets.forEach(set => set.setEnabled(false));
+    sentinel.root.setEnabled(false);
+    groundMat.diffuseColor = Color3.FromHexString("#17363B"); ringMat.emissiveColor = aurion.scale(0.18); beaconMat.emissiveColor = aurion; beaconLight.diffuse = aurion; sun.diffuse = Color3.FromHexString("#FFD890");
+    explorer.position = new Vector3(-3.2, 0.2, 1.6); echo.position = new Vector3(-0.7, 0.2, 0.4); echoTarget = echo.position.clone();
+    window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: false } }));
+  };
   const trimStreamedChunkCache = (): void => {
     const plan = planWorldChunkCache({ center: activeStreamingCenter, tier: activeStreamingTier, cached: Array.from(streamedChunkRoots.values()).map(entry => ({ coordinate: entry.coordinate, lastAccess: entry.lastAccess })) });
     plan.evict.forEach(coordinate => {
@@ -720,13 +730,8 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   };
   const onReturnToTower = (): void => {
     if (!openWorldActive) return;
-    clearOpenWorld();
-    started = false; transitioning = false; awaitingQuest = false; dungeonActive = false;
-    arenaIndex = 0;
-    arenaSets.forEach((set, index) => set.setEnabled(index === 0));
-    groundMat.diffuseColor = arenas[0].floor; ringMat.emissiveColor = arenas[0].glow.scale(0.23); beaconMat.emissiveColor = arenas[0].glow; beaconLight.diffuse = arenas[0].glow; sun.diffuse = arenas[0].sun;
-    explorer.position = new Vector3(-3.2, 0.2, 1.6); echo.position = new Vector3(-0.7, 0.2, 0.4); echoTarget = echo.position.clone(); sentinel.root.setEnabled(false);
-    window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: false } })); emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
+    showTowerHome();
+    emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
   };
   const onWorldChunkStream = (event: Event): void => {
     const detail = (event as CustomEvent<WorldChunkStreamState>).detail;
@@ -757,6 +762,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
     echo.setEnabled(companionSpawned);
     if (!companionSpawned) echoTarget = explorer.position.clone();
   };
+  showTowerHome();
   window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("aurion:human-command", onHumanCommand); window.addEventListener("aurion:human-action", onHumanAction); window.addEventListener("aurion:command", onCommand); window.addEventListener("aurion:begin-expedition", onStart); window.addEventListener("aurion:enter-dungeon", onEnterDungeon); window.addEventListener("aurion:authoritative-action", onAuthoritativeAction); window.addEventListener("aurion:load-encounter", onLoadEncounter); window.addEventListener("aurion:load-open-world", onLoadOpenWorld); window.addEventListener("aurion:return-to-tower", onReturnToTower); window.addEventListener("aurion:stream-world-chunk", onWorldChunkStream); window.addEventListener("aurion:zone-connected", onZoneConnected); window.addEventListener("aurion:zone-disconnected", onZoneDisconnected); window.addEventListener("aurion:zone-snapshot", onZoneSnapshot); window.addEventListener("aurion:companion-state", onCompanionState);
   const observer = scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05); elapsed += dt; const arena = arenas[arenaIndex];
