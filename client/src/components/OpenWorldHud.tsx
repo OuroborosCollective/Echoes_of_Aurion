@@ -38,25 +38,24 @@ export default function OpenWorldHud({
 }: OpenWorldHudProps) {
   return (
     <section className="open-world-hud" aria-label="Aurion Open World">
-      <header className="open-world-hud__header">
-        <div className="open-world-hud__identity">
-          <span><Compass size={14} /> AURION // FREIE WELT</span>
-          <h2>{displayName}</h2>
-          <p>{narrative}</p>
-          <div className="open-world-hud__play-status" aria-label="Spielstatus">
-            <span>ZONE <b>TIER {zoneTier}</b></span>
-            <span>BEGEGNUNGEN <b>{activeEncounters}/{maximumVisible}</b></span>
-          </div>
+      <div className="open-world-hud__identity" aria-label="Aktueller Weltstatus">
+        <span><Compass size={14} /> AURION // FREIE WELT</span>
+        <h2>{displayName}</h2>
+        <p>{narrative}</p>
+        <div className="open-world-hud__play-status" aria-label="Spielstatus">
+          <span>ZONE <b>TIER {zoneTier}</b></span>
+          <span>BEGEGNUNGEN <b>{activeEncounters}/{maximumVisible}</b></span>
         </div>
-        <div className="open-world-hud__header-actions">
-          <button type="button" className="open-world-hud__return" onClick={onOpenDetails}>
-            WELT / QUESTS
-          </button>
-          <button type="button" className="open-world-hud__return" onClick={onReturn}>
-            ZUR STERNWARTE <ChevronRight size={16} />
-          </button>
-        </div>
-      </header>
+      </div>
+
+      <nav className="open-world-hud__nav" aria-label="Open-World-Navigation">
+        <button type="button" className="open-world-hud__return" onClick={onOpenDetails}>
+          WELT / QUESTS
+        </button>
+        <button type="button" className="open-world-hud__return" onClick={onReturn}>
+          ZUR STERNWARTE <ChevronRight size={16} />
+        </button>
+      </nav>
 
       <div className="open-world-hud__movement">
         <div>
