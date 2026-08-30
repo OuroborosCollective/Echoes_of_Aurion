@@ -1,0 +1,88 @@
+name: One-shot Aurion production schema dispatch bridge
+
+on:
+  push:
+    branches:
+      - sovereign/aurion-schema-apply-dispatch-7cdf3f91-r2
+    paths:
+      - .github/workflows/aurion-production-schema-dispatch-bridge.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: one-shot-aurion-schema-apply-dispatch-7cdf3f91-r2
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Dispatch exact approved production schema apply
+    if: >-
+      github.repository == 'OuroborosCollective/Echoes_of_Aurion' &&
+      github.ref == 'refs/heads/sovereign/aurion-schema-apply-dispatch-7cdf3f91-r2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact bridge parent and unchanged main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_REVISION: 7cdf3f91e9c3036957d7c73befebf6dbd568b2a5
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "OuroborosCollective/Echoes_of_Aurion"
+          test "$GITHUB_REF" = "refs/heads/sovereign/aurion-schema-apply-dispatch-7cdf3f91-r2"
+
+          commit_json="$(mktemp)"
+          main_json="$(mktemp)"
+          cleanup() {
+            rm -f "$commit_json" "$main_json"
+          }
+          trap cleanup EXIT
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+            --output "$commit_json"
+          test "$(jq '.parents | length' "$commit_json")" = "1"
+          test "$(jq -r '.parents[0].sha' "$commit_json")" = "$EXPECTED_REVISION"
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main" \
+            --output "$main_json"
+          test "$(jq -r '.commit.sha' "$main_json")" = "$EXPECTED_REVISION"
+
+      - name: Dispatch exact ledger and plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEDGER_RUN_ID: "33310496052"
+          PLAN_SHA256: 1c5f44690d06b94bb753a90c7067884731908923bf78c64ba1967c844bed96d6
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          cleanup() {
+            rm -f "$response_file"
+          }
+          trap cleanup EXIT
+
+          request_body="$(jq -cn \
+            --arg ledger_run_id "$LEDGER_RUN_ID" \
+            --arg plan_sha256 "$PLAN_SHA256" \
+            '{ref:"main",inputs:{ledger_run_id:$ledger_run_id,plan_sha256:$plan_sha256}}')"
+          status="$(curl --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --header "Content-Type: application/json" \
+            --data "$request_body" \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/aurion-production-schema-apply.yml/dispatches")"
+          test "$status" = "204"
+          test ! -s "$response_file"
