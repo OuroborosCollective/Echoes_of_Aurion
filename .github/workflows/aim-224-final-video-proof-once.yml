@@ -6,30 +6,26 @@ on:
       - fix/aim-224-video-state-machine
     paths:
       - .github/workflows/aim-224-final-video-proof-once.yml
-      - client/src/components/OpenWorldHud.tsx
-      - client/src/components/aim224OverlaySafety.css
-      - client/src/pages/Home.tsx
-      - client/src/pages/Home.openWorldState.test.ts
-      - client/src/game/scene.ts
-      - client/src/game/sceneCompanionAuthority.test.ts
-      - e2e/aim224.videoFlow.spec.ts
-      - e2e/towerHome.mobile.spec.ts
+      - scripts/aim224_hide_account_in_world.py
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prove:
+  prove-and-commit:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/aim-224-video-state-machine
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+      - name: Apply exact authenticated-world UI guard
+        run: python scripts/aim224_hide_account_in_world.py
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
       - name: Verify product source
@@ -64,3 +60,12 @@ jobs:
           done
           cat /tmp/aurion-vite.log
           exit 1
+      - name: Commit proven React state guard
+        run: |
+          git config user.name "Ouroboros Collective"
+          git config user.email "projectouroboroscollective@gmail.com"
+          git add client/src/pages/Home.tsx
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          git commit -m "fix(open-world): hide account CTA during authenticated world play"
+          git push origin HEAD:fix/aim-224-video-state-machine
