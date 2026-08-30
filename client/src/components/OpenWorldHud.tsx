@@ -27,10 +27,6 @@ export default function OpenWorldHud({
   zoneTier,
   activeEncounters,
   maximumVisible,
-  worldEpoch,
-  unlockedSectors,
-  streamCenter,
-  streamTier,
   zoneStatus,
   connecting,
   authenticated,
@@ -43,10 +39,14 @@ export default function OpenWorldHud({
   return (
     <section className="open-world-hud" aria-label="Aurion Open World">
       <header className="open-world-hud__header">
-        <div>
-          <span><Compass size={14} /> OPEN WORLD // SERVERBESTÄTIGT</span>
+        <div className="open-world-hud__identity">
+          <span><Compass size={14} /> AURION // FREIE WELT</span>
           <h2>{displayName}</h2>
           <p>{narrative}</p>
+          <div className="open-world-hud__play-status" aria-label="Spielstatus">
+            <span>ZONE <b>TIER {zoneTier}</b></span>
+            <span>BEGEGNUNGEN <b>{activeEncounters}/{maximumVisible}</b></span>
+          </div>
         </div>
         <div className="open-world-hud__header-actions">
           <button type="button" className="open-world-hud__return" onClick={onOpenDetails}>
@@ -58,18 +58,9 @@ export default function OpenWorldHud({
         </div>
       </header>
 
-      <div className="open-world-hud__metrics" aria-label="Bestätigte Weltdaten">
-        <span>ZONE <b>TIER {zoneTier}</b></span>
-        <span>BEGEGNUNGEN <b>{activeEncounters}/{maximumVisible}</b></span>
-        <span>WELTEPOCHE <b>{worldEpoch ?? "—"}</b></span>
-        <span>SEKTOREN <b>{unlockedSectors ?? "—"}</b></span>
-        <span>STREAM <b>{streamCenter}</b></span>
-        <span>GERÄTETIER <b>{streamTier.toUpperCase()}</b></span>
-      </div>
-
       <div className="open-world-hud__movement">
         <div>
-          <span>EXPLORER // FREIE BEWEGUNG</span>
+          <span>EXPLORER</span>
           <div className="open-world-dpad" aria-label="Open-World-Touchsteuerung">
             <button type="button" onClick={() => onMove("W")} aria-label="Open World vorwärts"><ArrowUp size={21} /></button>
             <button type="button" onClick={() => onMove("A")} aria-label="Open World links"><ArrowLeft size={21} /></button>
@@ -85,7 +76,7 @@ export default function OpenWorldHud({
             onClick={onConnectZone}
           >
             <Radio size={15} />
-            {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}
+            {zoneStatus === "connected" ? "POSITION LIVE" : zoneStatus === "connecting" ? "VERBINDET" : "WELTBEWEGUNG AKTIVIEREN"}
           </button>
         </div>
       </div>
