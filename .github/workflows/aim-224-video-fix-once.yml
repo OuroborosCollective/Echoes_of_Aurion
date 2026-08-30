@@ -24,18 +24,23 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: Apply deterministic video-state fix
-        run: python scripts/aim224_video_state_fix.py
+        run: |
+          python scripts/aim224_video_state_fix.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("client/src/pages/Home.tsx")
+          text = p.read_text()
+          old = '\n      )}}\n      {trailerOpen'
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one drawer boundary, found {text.count(old)}")
+          p.write_text(text.replace(old, '\n      )}\n      {trailerOpen', 1))
+          PY
       - name: Verify patch integrity
         run: git diff --check
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
       - name: Typecheck
-        run: |
-          if ! pnpm check; then
-            echo "--- transformed Home.tsx around parser failure ---"
-            nl -ba client/src/pages/Home.tsx | sed -n '720,840p'
-            exit 1
-          fi
+        run: pnpm check
       - name: Focused state contracts
         run: pnpm exec vitest run client/src/pages/Home.openWorldState.test.ts client/src/game/sceneCompanionAuthority.test.ts
       - name: Install Chromium proof browser
