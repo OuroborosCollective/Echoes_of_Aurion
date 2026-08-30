@@ -16,3 +16,15 @@
     flex: 0 0 44px;
   }
 }
+
+@media (max-width: 720px) {
+  .community-overlay {
+    right: auto;
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  .community-dock {
+    right: auto;
+    left: 0;
+  }
+}
