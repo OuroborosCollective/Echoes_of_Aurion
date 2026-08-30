@@ -868,7 +868,7 @@ jobs:
       BASE_SHA: ${{ matrix.base_sha }}
       BASE_REF: ${{ matrix.base_ref }}
       EXISTING_PR_BRANCH: ${{ matrix.publish_branch }}
-      FORGE_DIR: ${{ runner.temp }}/aurion-openhands-forge
+      FORGE_DIR: ${{ github.workspace }}/.aurion-openhands-forge
 
     steps:
       - name: 📥 Download forge bundle
