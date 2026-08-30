@@ -30,10 +30,16 @@ jobs:
           from pathlib import Path
           p = Path("client/src/pages/Home.tsx")
           text = p.read_text()
-          old = '\n      )}}\n      {trailerOpen'
-          if text.count(old) != 1:
-              raise SystemExit(f"expected one drawer boundary, found {text.count(old)}")
-          p.write_text(text.replace(old, '\n      )}\n      {trailerOpen', 1))
+          hud_old = '        onOpenDetails={() => setWorldDetailsOpen(true)}\n      />\n      {screen === "open_world" && worldDetailsOpen && ('
+          hud_new = '        onOpenDetails={() => setWorldDetailsOpen(true)}\n      />}\n      {screen === "open_world" && worldDetailsOpen && ('
+          if text.count(hud_old) != 1:
+              raise SystemExit(f"expected one OpenWorldHud boundary, found {text.count(hud_old)}")
+          text = text.replace(hud_old, hud_new, 1)
+          drawer_old = '\n      )}}\n      {trailerOpen'
+          if text.count(drawer_old) != 1:
+              raise SystemExit(f"expected one drawer boundary, found {text.count(drawer_old)}")
+          text = text.replace(drawer_old, '\n      )}\n      {trailerOpen', 1)
+          p.write_text(text)
           PY
       - name: Verify patch integrity
         run: git diff --check
