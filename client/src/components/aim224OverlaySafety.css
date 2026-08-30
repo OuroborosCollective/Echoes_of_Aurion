@@ -20,6 +20,12 @@
   .community-overlay:has(.community-dock-button.active) ~ .tower-home-panel {
     pointer-events: none;
   }
+
+  .aurion-app:has(.trailer-modal) .account-game-tools,
+  .aurion-app:has(.trailer-modal) .community-overlay,
+  .aurion-app:has(.trailer-modal) .tower-home-panel {
+    pointer-events: none;
+  }
 }
 
 @media (max-width: 720px) {
