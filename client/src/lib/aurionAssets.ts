@@ -1,16 +1,21 @@
 import { wasdGlbCatalog, wasdGlbCatalogSummary, wasdGlbSourceRevision } from "./wasdGlbCatalog";
+import { aurionApiOrigin } from "./runtimeConfig";
 
 const staticDistribution = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION === "true";
 
 export function hasAurionApi(): boolean {
-  if (!staticDistribution) return true;
-  return typeof window !== "undefined" && window.location.hostname === "arelogic.space";
+  return !staticDistribution || Boolean(aurionApiOrigin());
 }
 
 function resolveAurionAsset(filename: string, manuscriptPath: string): string {
   if (!staticDistribution) return manuscriptPath;
   if (typeof window !== "undefined" && window.location.hostname === "arelogic.space") return `/aurion-assets/${filename}`;
   return `${import.meta.env.BASE_URL}aurion-assets/${filename}`;
+}
+
+function resolveOnlineAsset(path: string): string {
+  if (!staticDistribution || !aurionApiOrigin()) return path;
+  return `${aurionApiOrigin()}${path}`;
 }
 
 export const aurionAssets = {
@@ -53,23 +58,23 @@ export const aurionAssets = {
   },
   trailer: resolveAurionAsset("aurion-hero-trailer-en-de_c44ee2e1.mp4", "/manus-storage/aurion-hero-trailer-en-de_c44ee2e1.mp4"),
   trailerPoster: resolveAurionAsset("aurion-social-keyframe_5edc4882.png", "/manus-storage/aurion-social-keyframe_5edc4882.png"),
-  expanseReference: "/manus-storage/aurion-expanse-windhollow-reference_fed3662e.jpg",
+  expanseReference: resolveOnlineAsset("/manus-storage/aurion-expanse-windhollow-reference_fed3662e.jpg"),
   terrain: {
-    grass: "/manus-storage/aurion-terrain-grass_811245e1.png",
-    flowerMeadow: "/manus-storage/aurion-terrain-flower-meadow_c5078eb0.png",
-    earth: "/manus-storage/aurion-terrain-earth_f53862cb.png",
-    farmland: "/manus-storage/aurion-terrain-farmland_2c4edf2e.png",
-    gardenParcels: "/manus-storage/aurion-terrain-garden-parcels_8810616b.png",
-    starpath: "/manus-storage/aurion-terrain-starpath_37c69d4b.png",
-    starpathCrossing: "/manus-storage/aurion-terrain-starpath-crossing_ead3a305.png",
+    grass: resolveOnlineAsset("/manus-storage/aurion-terrain-grass_811245e1.png"),
+    flowerMeadow: resolveOnlineAsset("/manus-storage/aurion-terrain-flower-meadow_c5078eb0.png"),
+    earth: resolveOnlineAsset("/manus-storage/aurion-terrain-earth_f53862cb.png"),
+    farmland: resolveOnlineAsset("/manus-storage/aurion-terrain-farmland_2c4edf2e.png"),
+    gardenParcels: resolveOnlineAsset("/manus-storage/aurion-terrain-garden-parcels_8810616b.png"),
+    starpath: resolveOnlineAsset("/manus-storage/aurion-terrain-starpath_37c69d4b.png"),
+    starpathCrossing: resolveOnlineAsset("/manus-storage/aurion-terrain-starpath-crossing_ead3a305.png"),
   },
   glbCandidates: {
-    astralwisp: "/manus-storage/aurion-astralwisp-mobile_8898dcae.glb",
-    returnStone: "/manus-storage/aurion-return-stone-mobile_7d892a40.glb",
-    starpathArchway: "/manus-storage/aurion-starpath-archway-mobile_bb96597a.glb",
-    tripoFlowerShrub: "/manus-storage/aurion-tripo-flower-shrub_e4191cad.glb",
-    tripoStarpathMarker: "/manus-storage/aurion-tripo-starpath-marker_da5fe3a7.glb",
-    tripoGardenBorder: "/manus-storage/aurion-tripo-garden-border_8032d87a.glb",
+    astralwisp: resolveOnlineAsset("/manus-storage/aurion-astralwisp-mobile_8898dcae.glb"),
+    returnStone: resolveOnlineAsset("/manus-storage/aurion-return-stone-mobile_7d892a40.glb"),
+    starpathArchway: resolveOnlineAsset("/manus-storage/aurion-starpath-archway-mobile_bb96597a.glb"),
+    tripoFlowerShrub: resolveOnlineAsset("/manus-storage/aurion-tripo-flower-shrub_e4191cad.glb"),
+    tripoStarpathMarker: resolveOnlineAsset("/manus-storage/aurion-tripo-starpath-marker_da5fe3a7.glb"),
+    tripoGardenBorder: resolveOnlineAsset("/manus-storage/aurion-tripo-garden-border_8032d87a.glb"),
   },
   wasdGlb: {
     sourceRevision: wasdGlbSourceRevision,

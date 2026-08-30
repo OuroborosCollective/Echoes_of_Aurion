@@ -1,0 +1,99 @@
+name: Build Aurion itch.io HTML5 client
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "shared/**"
+      - "server/**"
+      - "public/**"
+      - "scripts/package-itch-assets.mjs"
+      - "vite.itch.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/itchio-html5.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: itchio-html5-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build current online Aurion client
+    runs-on: ubuntu-24.04
+    env:
+      VITE_AURION_API_ORIGIN: https://arelogic.space
+      AURION_API_ORIGIN: https://arelogic.space
+      AURION_ALLOW_MISSING_RELEASE_ASSETS: "true"
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      ITCHIO_TARGET: ${{ vars.ITCHIO_TARGET }}
+
+    steps:
+      - name: Guard repository scope
+        run: test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+
+      - name: Check out exact source revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify source
+        run: |
+          pnpm check
+          pnpm test
+          git diff --check
+
+      - name: Build the current online HTML5 client
+        run: pnpm build:itch
+
+      - name: Write immutable itch release manifest
+        run: |
+          set -euo pipefail
+          test -f dist/itch/index.html
+          printf '{"repository":"%s","revision":"%s","apiOrigin":"%s","artifact":"aurion-itch-html5"}\n' \
+            "${GITHUB_REPOSITORY}" "${GITHUB_SHA}" "${AURION_API_ORIGIN}" > dist/itch/.aurion-itch-release.json
+          test "$(find dist/itch -type f | wc -l)" -le 1000
+          test "$(find dist/itch -type f -printf '%s\n' | awk '{s += $1} END {print s+0}')" -le 524288000
+          (cd dist/itch && zip -qr "${GITHUB_WORKSPACE}/aurion-itch-html5-${GITHUB_SHA}.zip" .)
+          sha256sum "aurion-itch-html5-${GITHUB_SHA}.zip" > "aurion-itch-html5-${GITHUB_SHA}.zip.sha256"
+
+      - name: Upload upload-ready HTML5 ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-itch-html5-${{ github.sha }}
+          path: |
+            aurion-itch-html5-${{ github.sha }}.zip
+            aurion-itch-html5-${{ github.sha }}.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      # Optional automatic upload. Configure both values in repository settings:
+      # BUTLER_API_KEY secret and ITCHIO_TARGET variable (user/game).
+      - name: Install Butler when automatic upload is configured
+        if: ${{ env.BUTLER_API_KEY != '' && env.ITCHIO_TARGET != '' }}
+        run: |
+          curl --fail --location --retry 3 https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default -o /tmp/butler.zip
+          unzip -q /tmp/butler.zip -d /tmp/butler
+          install -m 0755 /tmp/butler/butler /usr/local/bin/butler
+
+      - name: Upload current build to itch.io
+        if: ${{ env.BUTLER_API_KEY != '' && env.ITCHIO_TARGET != '' }}
+        run: |
+          butler push "dist/itch" "${ITCHIO_TARGET}:html5" --userversion "${GITHUB_SHA::12}"

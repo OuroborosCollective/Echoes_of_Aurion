@@ -23,6 +23,7 @@ export default defineConfig({
   base: "./",
   define: {
     "import.meta.env.VITE_AURION_STATIC_DISTRIBUTION": JSON.stringify("true"),
+    "import.meta.env.VITE_AURION_API_ORIGIN": JSON.stringify(process.env.VITE_AURION_API_ORIGIN ?? "https://arelogic.space"),
   },
   plugins: [react(), tailwindcss(), itchDocumentPlugin],
   resolve: {

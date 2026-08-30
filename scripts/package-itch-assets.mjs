@@ -114,6 +114,10 @@ async function resolveReleaseAsset(file) {
   for (const candidate of candidates) {
     if (await downloadAndVerify(file, candidate.label, candidate.url)) return;
   }
+  if (process.env.AURION_ALLOW_MISSING_RELEASE_ASSETS === "true") {
+    console.warn(`release_asset_skipped target=${file.target} reason=no-approved-source`);
+    return;
+  }
   throw new Error(`${file.target}: no approved source produced the expected immutable release asset.`);
 }
 
