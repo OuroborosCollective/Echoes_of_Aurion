@@ -17,10 +17,11 @@ jobs:
     steps:
       - name: Mark exact PR ready
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           EXPECTED_HEAD: ${{ github.sha }}
         run: |
           set -euo pipefail
+          test -n "$GH_TOKEN"
           pr_json="$(gh api repos/OuroborosCollective/Echoes_of_Aurion/pulls/157)"
           test "$(jq -r '.draft' <<<"$pr_json")" = "true"
           test "$(jq -r '.head.sha' <<<"$pr_json")" = "$EXPECTED_HEAD"
