@@ -55,6 +55,11 @@ describe("Aurion production schema apply boundary", () => {
     expect(core).toContain('rm -f "$recovery_stderr"');
     expect(core).toContain('type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly');
     expect(core).toContain("RECOVERY_TOOLING_UNAVAILABLE");
+    expect(core).toContain('case "$(cat /proc/1/comm)" in');
+    expect(core).toContain("mariadbd|mysqld");
+    expect(core.indexOf('case "$(cat /proc/1/comm)" in')).toBeLessThan(
+      core.indexOf("gzip -t /recovery-input/production.sql.gz"),
+    );
     expect(core).toContain("gzip -t /recovery-input/production.sql.gz");
     expect(core).toContain('gzip -cd /recovery-input/production.sql.gz | "$client" --protocol=socket -uroot');
     expect(core).not.toContain('gzip -cd "$backup_file" 2>"$recovery_stderr" | docker exec -i');
