@@ -3,64 +3,6 @@ name: Deploy Aurion Traefik runtime
 on:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/deploy-aurion-zone-runtime.yml"
-      - ".github/workflows/aurion-wasd-migration-ledger.yml"
-      - "scripts/build-aurion-wasd-migration-ledger.mjs"
-      - "scripts/build-aurion-wasd-migration-ledger.test.mjs"
-      - ".github/workflows/aurion-zone-schema-bootstrap-proof.yml"
-      - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
-      - ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
-      - ".github/workflows/aurion-production-schema-readback.yml"
-      - "deploy/promote-aurion-zone-runtime.sh"
-      - "deploy/aurion-traefik-runtime.environment.template"
-      - "deploy/aurion-production-schema-reconcile"
-      - "deploy/aurion-production-schema-reconcile.sudoers"
-      - "deploy/install-aurion-production-schema-reconcile"
-      - "deploy/aurion-production-schema-apply"
-      - "deploy/aurion-production-schema-apply-core"
-      - "deploy/aurion-production-schema-apply.environment.template"
-      - "deploy/aurion-production-schema-apply.sudoers"
-      - "deploy/install-aurion-production-schema-apply"
-      - "deploy/verify-aurion-production-schema-apply-artifact.mjs"
-      - "deploy/aurion-reconcile-runtime-image.conf"
-      - "deploy/aurion-reconcile-runtime-network.conf"
-      - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
-      - "deploy/aurion-zone-runtime.service"
-      - "deploy/aurion-zone-runtime.environment.template"
-      - "deploy/arelogic-zone-runtime.nginx.conf"
-      - "deploy/arelogic-zone-runtime-rate-limit.nginx.conf"
-      - "server/zoneService.ts"
-      - "server/zoneServiceRuntime.ts"
-      - "server/_core/index.ts"
-      - "Dockerfile"
-      - "docker-compose.traefik.yml"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "scripts/build-aurion-production-reconcile-artifact.mjs"
-      - "scripts/build-aurion-production-apply-artifact.mjs"
-      - "scripts/build-aurion-traefik-runtime-artifact.mjs"
-      - "scripts/build-aurion-promoter-bootstrap-artifact.mjs"
-      - "scripts/aurionProductionSchemaReconciliation.ts"
-      - "scripts/aurionProductionReadbackErrors.ts"
-      - "scripts/reconcile-aurion-production-schema.ts"
-      - "scripts/apply-aurion-production-schema.ts"
-      - "scripts/aurionProductionDatabaseClientConfig.ts"
-      - "server/aurionProductionSchemaReconciliation.test.ts"
-      - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
-      - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
-      - "server/aurionProductionReadbackChain.test.ts"
-      - "server/aurionTraefikRuntimeDeployment.test.ts"
-      - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
-      - "server/auth.local.test.ts"
-      - "drizzle/meta/_journal.json"
-      - "drizzle/0021_aurion_global_world_state.sql"
-      - "drizzle/0022_aurion_world_chunk_deltas.sql"
-      - "drizzle/0023_aurion_world_presence_epochs.sql"
-      - "drizzle/0024_aurion_world_epoch_reactions.sql"
-      - "drizzle/0025_aurion_loot_mastery_ethos.sql"
-      - "drizzle/0026_aurion_faction_questline_state.sql"
-      - "drizzle/0027_aurion_faction_questline_rewards.sql"
   pull_request:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
@@ -79,8 +21,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # PR validation must never occupy the production promotion queue.
-  group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}
+  # A push and a trusted manual dispatch for main must never promote in
+  # parallel. Pull-request refs remain isolated from the production queue.
+  group: deploy-aurion-zone-runtime-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -369,7 +312,7 @@ jobs:
 
   root-reconciliation-proof:
     name: Prove private Docker schema readback
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: verify-and-build
     uses: ./.github/workflows/aurion-root-reconciliation-artifact-proof.yml
     with:
@@ -377,7 +320,7 @@ jobs:
 
   root-schema-apply-proof:
     name: Prove backup, recovery and bounded schema apply
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: verify-and-build
     uses: ./.github/workflows/aurion-root-schema-apply-artifact-proof.yml
     with:
@@ -385,7 +328,7 @@ jobs:
 
   promote-zone-runtime:
     name: Promote verified Aurion Traefik runtime
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
