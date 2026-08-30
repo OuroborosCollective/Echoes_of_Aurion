@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import CommunityOverlay from "@/components/CommunityOverlay";
 import TowerHomePanel from "@/components/TowerHomePanel";
+import OpenWorldHud from "@/components/OpenWorldHud";
 import { starterCharacters } from "@/game/starterCharacters";
 import { appendLedger, exportLedger, readLedger, resetLedger, type LedgerEntry } from "@/lib/ledger";
 import { AurionSoundscape } from "@/lib/soundscape";
@@ -26,7 +27,7 @@ import { isFreshCompanionFrame, requestCompanionFrame } from "@/lib/companionFra
 import { COMPANION_FRAME_MAX_AGE_MS, type CompanionCommandOrigin, type CompanionSession } from "@shared/companionLearningProtocol";
 import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
-type Screen = "gate" | "home" | "loadout" | "mission";
+type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";
 type Command = "W" | "A" | "S" | "D" | "E" | "F" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type MissionState = { arena: number; arenaName: string; objective: string; sentinelHp: number; sentinelMaxHp: number; explorerHp: number; echoHp: number; shield: boolean; marked: boolean; phase: "active" | "transition" | "quest_ready" | "dungeon_ready" | "victory" };
 
@@ -134,23 +135,23 @@ export default function Home() {
   const persistCompanionObservation = trpc.companion.persistObservation.useMutation();
   const revokeGatewaySession = trpc.gateway.revokeSession.useMutation();
   const gatewayCommandInput = useMemo(() => ({ sessionId: gatewayPairing?.sessionId ?? "unpaired_session", afterSequence: gatewaySequence }), [gatewayPairing?.sessionId, gatewaySequence]);
-  const shouldPollGateway = Boolean(gatewayPairing) && screen === "mission";
+  const shouldPollGateway = Boolean(gatewayPairing) && (screen === "mission" || screen === "open_world");
   const gatewayCommands = trpc.gateway.pullCommands.useQuery(
     gatewayCommandInput,
     { enabled: shouldPollGateway, refetchInterval: shouldPollGateway ? 900 : false }
   );
   const teamSignals = trpc.community.team.signals.useQuery(undefined, {
-    enabled: Boolean(humanTeamPartner) && screen === "mission",
-    refetchInterval: humanTeamPartner && screen === "mission" ? 900 : false,
+    enabled: Boolean(humanTeamPartner) && (screen === "mission" || screen === "open_world"),
+    refetchInterval: humanTeamPartner && (screen === "mission" || screen === "open_world") ? 900 : false,
   });
   const sendTeamSignal = trpc.community.team.sendSignal.useMutation();
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: apiAvailable && isAuthenticated });
   const gameplayProgress = trpc.gameplay.progress.useQuery(undefined, { enabled: isAuthenticated });
-  const factionQuestline = trpc.factionQuestline.read.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
+  const factionQuestline = trpc.factionQuestline.read.useQuery(undefined, { enabled: isAuthenticated && (screen === "mission" || screen === "open_world") });
   const pledgeFactionQuestline = trpc.factionQuestline.pledge.useMutation();
   const decideFactionQuestline = trpc.factionQuestline.decide.useMutation();
-  const wasdCoverage = trpc.gameplay.wasdCoverage.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
-  const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });
+  const wasdCoverage = trpc.gameplay.wasdCoverage.useQuery(undefined, { enabled: isAuthenticated && (screen === "mission" || screen === "open_world") });
+  const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && (screen === "mission" || screen === "open_world") });
   const enterOpenWorld = trpc.gameplay.enterOpenWorld.useMutation();
   const currentStreamCoordinates = useMemo(() => orderedWorldChunkWindow(worldStreamCenter, worldChunkStreamingBudget(worldStreamTier).visibleRadius), [worldStreamCenter, worldStreamTier]);
   const worldChunkWindowInput = useMemo(() => ({
@@ -565,6 +566,10 @@ export default function Home() {
     startGameplayEncounter.mutate({ encounterKey }, {
       onSuccess: ({ session }) => {
         gameplaySession.current = { id: session.id, nextSequence: session.nextSequence };
+        zoneClient.current?.close();
+        setWorldStreamAnchor(null);
+        setWorldStreamCursors({});
+        setScreen("mission");
         const arenaIndex = encounterKey === "asterion" ? 0 : encounterKey === "archive" ? 1 : encounterKey === "solarium" ? 2 : 3;
         window.dispatchEvent(new CustomEvent("aurion:load-encounter", { detail: { arenaIndex, dungeon: encounterKey === "cinder_vault" } }));
         setLastSignal(`${session.encounterKey} ist als serverseitige Begegnung bestätigt.`);
@@ -736,13 +741,31 @@ export default function Home() {
       {screen === "home" && <TowerHomePanel
         playerName={operatorName}
         onPrepare={unlockLoadout}
-        onEnterExpanse={() => enterAurionExpanse(() => setScreen("mission"))}
+        onEnterExpanse={() => enterAurionExpanse(() => setScreen("open_world"))}
         onSignal={(message) => { appendLedger({ kind: "system", title: "Sternwarten-Handlung", detail: message }); setLastSignal(message); }}
+      />}
+      {screen === "open_world" && <OpenWorldHud
+        displayName={openWorld.data?.displayName ?? "Aurion-Expanse"}
+        narrative={openWorld.data?.entryNarrative ?? "Der bestätigte Weltstatus wird gelesen."}
+        zoneTier={openWorld.data?.zoneTier ?? 0}
+        activeEncounters={openWorld.data?.encounter.activeCount ?? 0}
+        maximumVisible={openWorld.data?.encounter.maximumVisible ?? 0}
+        worldEpoch={openWorld.data?.globalWorld.epoch ?? worldStreamAnchor?.epoch ?? null}
+        unlockedSectors={openWorld.data?.globalWorld.unlockedSectorCount ?? worldStreamAnchor?.unlockedSectorCount ?? null}
+        streamCenter={`${worldStreamCenter.x}:${worldStreamCenter.z}`}
+        streamTier={worldStreamTier}
+        zoneStatus={zoneStatus}
+        connecting={issueZoneTicket.isPending}
+        authenticated={isAuthenticated}
+        onReturn={returnToTowerHome}
+        onConnectZone={connectAuthoritativeZone}
+        onMove={sendHumanCommand}
+        onInteract={() => sendHumanAction("E")}
       />}
       {trailerOpen && <section className="trailer-modal" role="dialog" aria-modal="true" aria-labelledby="trailer-title"><div className="trailer-modal-backdrop" onClick={() => setTrailerOpen(false)} /><div className="trailer-modal-card"><header><div><p className="eyebrow">AURION // HERO TRAILER</p><h2 id="trailer-title">One Signal.<br /><em>Two Wills.</em></h2></div><button type="button" onClick={() => setTrailerOpen(false)} aria-label="Hero-Trailer schließen"><X size={20} /></button></header><video className="hero-trailer-video" src={heroTrailerUrl} poster={heroTrailerPoster} controls autoPlay playsInline preload="metadata">Dein Browser unterstützt die Hero-Trailer-Wiedergabe nicht.</video><footer><span>ENGLISH VOICE-OVER</span><b>DEUTSCHE UNTERTITEL</b><small>Autorisierte MCP-Koop · keine private Chat-Automatisierung</small></footer></div></section>}
       {screen === "loadout" && <section className="loadout-deck" aria-labelledby="loadout-title"><div className="loadout-heading"><p className="eyebrow"><Compass size={14} /> TEAMKONFIGURATION</p><h2 id="loadout-title">Setze den <em>Resonanzkurs.</em></h2><p>{soloMode ? "Rüste drei sichtbare Protokolle aus. Du steuerst alle Echo-Slots direkt." : "Rüste drei sichtbare Protokolle aus. Dein Partner erhält nur diese Slots im Expeditionsfeed."}</p></div><div className="loadout-grid"><label className="operator-field"><span>EXPLORER-KENNUNG</span><input value={operatorName} maxLength={20} onChange={(event) => setOperatorName(event.target.value)} /><small>WASD oder Touch-Brücke steuern diese Figur.</small></label><div className="partner-card"><Bot size={22} /><div><span>AKTIVER ECHO SCOUT</span><strong>{provider}</strong><small>{soloMode ? "Lokale Solo-Steuerung · WASD + Slots" : "Autorisierter MCP-Vertrag · WASD + Slots"}</small></div><span className="signal-dot active" /></div></div><div className="skill-shelf">{abilityDeck.map((ability) => { const equipped = selectedSkills.includes(ability.code); return <button type="button" key={ability.code} onClick={() => toggleSkill(ability.code)} className={equipped ? "skill-card equipped" : "skill-card"}><kbd>{ability.code}</kbd><span><strong>{ability.name}</strong><small>{ability.detail}</small></span>{equipped && <ShieldCheck size={17} />}</button>; })}</div><footer className="loadout-footer"><div><p>{soloMode ? "SOLO-DECK" : "PARTNER-DECK"} <b>{selectedSkills.length}/3</b></p><span>{skillNames.map((skill) => skill.name).join(" · ")}</span></div><button type="button" className="seal-button embark" onClick={beginMission}><Swords size={18} /> STERNWARTE BETRETEN</button></footer></section>}
-      {screen === "mission" && (
-        <section className="mission-ui" aria-label="Expeditionsoberfläche">
+      {(screen === "mission" || screen === "open_world") && (
+        <section className={screen === "open_world" ? "mission-ui is-open-world" : "mission-ui"} aria-label={screen === "open_world" ? "Open-World-Details" : "Expeditionsoberfläche"}>
           <div className="mission-objective">
             <span>ARENA {mission.arena + 1}/4 // {mission.arenaName}</span>
             <b>{mission.phase === "victory" ? "Aurion ist stabilisiert" : mission.objective}</b>

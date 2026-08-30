@@ -24,5 +24,30 @@ for (const viewport of [
     expect(panelBox!.x).toBeGreaterThanOrEqual(0);
     expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(viewport.width);
     await page.screenshot({ path: `test-results/tower-home-${viewport.width}x${viewport.height}.png`, fullPage: true });
+
+    if (viewport.width <= 720) {
+      const communityToggle = page.getByRole("button", { name: /GEMEINSCHAFT|MENÜ SCHLIESSEN/i });
+      await communityToggle.click();
+    }
+    await page.getByRole("button", { name: "Forum öffnen" }).click();
+    const closeCommunity = page.getByRole("button", { name: "Community-Konsole schließen" });
+    await expect(closeCommunity).toBeVisible();
+    const closeBox = await closeCommunity.boundingBox();
+    expect(closeBox).not.toBeNull();
+    expect(closeBox!.width).toBeGreaterThanOrEqual(44);
+    expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+    await closeCommunity.click();
+    await expect(page.locator(".community-panel")).toHaveCount(0);
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /HERO TRAILER ANSEHEN/i }).click();
+    const closeTrailer = page.getByRole("button", { name: "Hero-Trailer schließen" });
+    await expect(closeTrailer).toBeVisible();
+    const trailerCloseBox = await closeTrailer.boundingBox();
+    expect(trailerCloseBox).not.toBeNull();
+    expect(trailerCloseBox!.width).toBeGreaterThanOrEqual(44);
+    expect(trailerCloseBox!.height).toBeGreaterThanOrEqual(44);
+    await closeTrailer.click();
+    await expect(page.locator(".trailer-modal")).toHaveCount(0);
   });
 }
