@@ -1,0 +1,58 @@
+name: AIM224 Final Video Proof
+
+on:
+  push:
+    branches:
+      - fix/aim-224-video-state-machine
+    paths:
+      - .github/workflows/aim-224-final-video-proof-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/aim-224-video-state-machine
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify product source
+        run: |
+          git diff --check
+          pnpm check
+          pnpm exec vitest run client/src/pages/Home.openWorldState.test.ts client/src/game/sceneCompanionAuthority.test.ts
+      - name: Install Chromium proof browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Configure Playwright-managed Chromium
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("playwright.config.ts")
+          text = p.read_text()
+          start = text.index("    launchOptions: {")
+          end = text.index("    headless: true,", start)
+          p.write_text(text[:start] + '    launchOptions: { args: ["--use-angle=swiftshader", "--disable-dev-shm-usage"] },\n' + text[end:])
+          PY
+      - name: Prove the user video flow on phone and tablet
+        run: |
+          set -euo pipefail
+          pnpm exec vite --host 127.0.0.1 --port 3000 >/tmp/aurion-vite.log 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              pnpm exec playwright test e2e/aim224.videoFlow.spec.ts e2e/towerHome.mobile.spec.ts --workers=1 --timeout=60000
+              exit $?
+            fi
+            sleep 1
+          done
+          cat /tmp/aurion-vite.log
+          exit 1
