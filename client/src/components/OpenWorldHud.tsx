@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, Compass, Radio } from "lucide-react";
+import "./aim224OverlaySafety.css";
 
 type OpenWorldHudProps = {
   displayName: string;
