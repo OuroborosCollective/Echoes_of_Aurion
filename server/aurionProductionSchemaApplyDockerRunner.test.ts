@@ -43,6 +43,17 @@ describe("Aurion production schema apply boundary", () => {
     expect(core).toContain("phase=POST_APPLY_READBACK");
   });
 
+  it("preserves only a validated, sanitized inner apply failure receipt", () => {
+    expect(core).toContain('apply_failure_receipt=""');
+    expect(core).toContain('APPLY_FAILURE_RECEIPT="$apply_failure_receipt"');
+    expect(core).toContain("aurion_production_schema_apply_execution");
+    expect(core).toContain("phase=APPLY_EXECUTION_FAILED");
+    expect(core).toContain("errorClass:execution.errorClass");
+    expect(core).toContain("preflight:summary??null");
+    expect(core).toContain('rm -f -- "$apply_raw"');
+    expect(core).not.toContain('[[ "$apply_status" -eq 0 && -s "$apply_raw" ]] || { phase=APPLY_CONTAINER_FAILED; exit "$apply_status"; }');
+  });
+
   it("backs up and restores in a network-isolated disposable database before apply", () => {
     expect(core).toContain("--single-transaction --quick --skip-lock-tables --routines --events --triggers --add-drop-database --databases");
     expect(core).toContain("gzip -t");
