@@ -30,7 +30,12 @@ jobs:
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
       - name: Typecheck
-        run: pnpm check
+        run: |
+          if ! pnpm check; then
+            echo "--- transformed Home.tsx around parser failure ---"
+            nl -ba client/src/pages/Home.tsx | sed -n '720,840p'
+            exit 1
+          fi
       - name: Focused state contracts
         run: pnpm exec vitest run client/src/pages/Home.openWorldState.test.ts client/src/game/sceneCompanionAuthority.test.ts
       - name: Install Chromium proof browser
