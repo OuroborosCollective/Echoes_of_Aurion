@@ -36,6 +36,8 @@ recovery_restore_status=0
 recovery_error_class=""
 recovery_stderr_sha256=""
 recovery_stderr_bytes=0
+apply_raw=""
+apply_failure_receipt=""
 
 cleanup_recovery() {
   if [[ -n "$recovery_container" ]]; then
@@ -77,6 +79,7 @@ emit_failure() {
   APPLY_RECOVERY_ERROR_CLASS="$recovery_error_class" \
   APPLY_RECOVERY_STDERR_SHA256="$recovery_stderr_sha256" \
   APPLY_RECOVERY_STDERR_BYTES="$recovery_stderr_bytes" \
+  APPLY_FAILURE_RECEIPT="$apply_failure_receipt" \
   node --input-type=module -e '
     import fs from "node:fs";
     const backupCreated=process.env.APPLY_BACKUP_CREATED==="true";
@@ -94,6 +97,20 @@ emit_failure() {
       stderrSha256:process.env.APPLY_RECOVERY_STDERR_SHA256,
       stderrBytes:Number(process.env.APPLY_RECOVERY_STDERR_BYTES),
     } : null;
+    let apply=null;
+    const applyReceiptPath=process.env.APPLY_FAILURE_RECEIPT;
+    if(applyReceiptPath) {
+      try {
+        const execution=JSON.parse(fs.readFileSync(applyReceiptPath,"utf8"));
+        const stages=new Set(["INITIALIZE","READ_ENVIRONMENT","READ_EXPECTED_MIGRATIONS","CONNECT_DATABASE","ACQUIRE_LOCK","PREFLIGHT_SCHEMA","PREFLIGHT_JOURNAL","MIGRATE","POSTFLIGHT_SCHEMA","POSTFLIGHT_JOURNAL","CLOSE_DATABASE"]);
+        const classes=new Set(["SOURCE_REVISION_INVALID","PLAN_HASH_INVALID","DATABASE_URL_MISSING","DATABASE_URL_INVALID","ENVIRONMENT_FILE_NOT_FOUND","SCHEMA_NOT_APPLYABLE","JOURNAL_CONFLICT","DATABASE_LOCK_UNAVAILABLE","APPLY_EXECUTION_FAILED"]);
+        const summary=execution.preflight;
+        const summaryValid=summary===null||(summary&&["migrationCount","matchCount","absentCount","driftCount"].every(key=>Number.isInteger(summary[key])&&summary[key]>=0)&&summary.migrationCount===summary.matchCount+summary.absentCount+summary.driftCount);
+        if(execution.recordType==="aurion_production_schema_apply_execution"&&execution.schemaVersion===1&&execution.sourceRevision===process.env.APPLY_SOURCE_REVISION&&execution.planSha256===process.env.APPLY_PLAN_SHA256&&execution.mode==="apply"&&execution.databaseCredentialReturned===false&&execution.state==="APPLY_FAILED"&&stages.has(execution.failureStage)&&classes.has(execution.errorClass)&&typeof execution.retryable==="boolean"&&summaryValid) {
+          apply={state:execution.state,failureStage:execution.failureStage,errorClass:execution.errorClass,retryable:execution.retryable,preflight:summary??null};
+        }
+      } catch {}
+    }
     fs.writeFileSync(process.argv[1], `${JSON.stringify({
       recordType:"aurion_production_schema_apply",
       schemaVersion:1,
@@ -106,6 +123,7 @@ emit_failure() {
       runnerStatus:Number(process.env.APPLY_FAILURE_STATUS),
       backup,
       recovery,
+      apply,
     },null,2)}\n`, {mode:0o600});
   ' "$tmp" >/dev/null 2>&1
   persist_receipt "$tmp" || true
@@ -118,6 +136,9 @@ on_exit() {
   cleanup_recovery
   if [[ "$status" -ne 0 && "$receipt_emitted" -ne 1 ]]; then
     emit_failure "$status"
+  fi
+  if [[ -n "$apply_raw" ]]; then
+    rm -f -- "$apply_raw"
   fi
   exit "$status"
 }
@@ -402,7 +423,24 @@ docker run \
   node /apply/bin/apply.cjs >"$apply_raw" 2>/dev/null
 apply_status=$?
 set -e
-[[ "$apply_status" -eq 0 && -s "$apply_raw" ]] || { phase=APPLY_CONTAINER_FAILED; exit "$apply_status"; }
+if [[ "$apply_status" -ne 0 ]]; then
+  if [[ -s "$apply_raw" ]] && APPLY_EXPECTED_SHA="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
+    import fs from "node:fs";
+    const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const stages=new Set(["INITIALIZE","READ_ENVIRONMENT","READ_EXPECTED_MIGRATIONS","CONNECT_DATABASE","ACQUIRE_LOCK","PREFLIGHT_SCHEMA","PREFLIGHT_JOURNAL","MIGRATE","POSTFLIGHT_SCHEMA","POSTFLIGHT_JOURNAL","CLOSE_DATABASE"]);
+    const classes=new Set(["SOURCE_REVISION_INVALID","PLAN_HASH_INVALID","DATABASE_URL_MISSING","DATABASE_URL_INVALID","ENVIRONMENT_FILE_NOT_FOUND","SCHEMA_NOT_APPLYABLE","JOURNAL_CONFLICT","DATABASE_LOCK_UNAVAILABLE","APPLY_EXECUTION_FAILED"]);
+    const summary=r.preflight;
+    const summaryValid=summary===null||(summary&&["migrationCount","matchCount","absentCount","driftCount"].every(key=>Number.isInteger(summary[key])&&summary[key]>=0)&&summary.migrationCount===summary.matchCount+summary.absentCount+summary.driftCount);
+    if(r.recordType!=="aurion_production_schema_apply_execution"||r.schemaVersion!==1||r.sourceRevision!==process.env.APPLY_EXPECTED_SHA||r.planSha256!==process.env.APPLY_PLAN_SHA256||r.mode!=="apply"||r.databaseCredentialReturned!==false||r.state!=="APPLY_FAILED"||!stages.has(r.failureStage)||!classes.has(r.errorClass)||typeof r.retryable!=="boolean"||!summaryValid) process.exit(2);
+  ' "$apply_raw"; then
+    apply_failure_receipt="$apply_raw"
+    phase=APPLY_EXECUTION_FAILED
+  else
+    phase=APPLY_CONTAINER_FAILED
+  fi
+  exit "$apply_status"
+fi
+[[ -s "$apply_raw" ]] || { phase=APPLY_CONTAINER_OUTPUT_MISSING; exit 70; }
 APPLY_EXPECTED_SHA="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
   import fs from "node:fs";
   const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
