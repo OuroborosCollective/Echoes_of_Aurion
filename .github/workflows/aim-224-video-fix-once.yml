@@ -69,7 +69,7 @@ jobs:
           trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
-              pnpm exec playwright test e2e/aim224.videoFlow.spec.ts e2e/towerHome.mobile.spec.ts
+              pnpm exec playwright test e2e/aim224.videoFlow.spec.ts e2e/towerHome.mobile.spec.ts --workers=1 --timeout=60000
               exit $?
             fi
             sleep 1
