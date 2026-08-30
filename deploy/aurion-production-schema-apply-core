@@ -328,9 +328,19 @@ docker run --detach --rm --name "$recovery_container" \
   --mount "type=bind,src=${backup_file},dst=/recovery-input/production.sql.gz,readonly" \
   -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 \
   "$database_image_id" >/dev/null
+# The official MariaDB entrypoint exposes a socket from its temporary
+# initialization server. Continue only after it has exec'd the final daemon.
 recovery_ready=0
 for _attempt in $(seq 1 60); do
-  if docker exec "$recovery_container" /bin/sh -ceu 'client="$(command -v mariadb || command -v mysql || true)"; test -n "$client"; "$client" --protocol=socket -uroot -e "SELECT 1" >/dev/null' >/dev/null 2>&1; then
+  if docker exec "$recovery_container" /bin/sh -ceu '
+    case "$(cat /proc/1/comm)" in
+      mariadbd|mysqld) ;;
+      *) exit 1 ;;
+    esac
+    client="$(command -v mariadb || command -v mysql || true)"
+    test -n "$client"
+    "$client" --protocol=socket -uroot -e "SELECT 1" >/dev/null
+  ' >/dev/null 2>&1; then
     recovery_ready=1
     break
   fi
