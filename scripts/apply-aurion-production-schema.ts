@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { drizzle } from "drizzle-orm/mysql2";
-import { migrate } from "drizzle-orm/mysql2/migrator";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import {
   classifyMigrationContract,
@@ -16,6 +14,7 @@ import {
 
 const projectRoot = path.resolve(process.env.AURION_SCHEMA_APPLY_ROOT?.trim() || process.cwd());
 const lockName = "aurion_production_schema_apply_0021_0027";
+const migrationSeparator = "--> statement-breakpoint";
 
 type ApplyFailureStage =
   | "INITIALIZE"
@@ -71,11 +70,12 @@ type MigrationJournalEntry = Readonly<{
   tag: string;
   when: number;
   hash: string;
+  statements: readonly string[];
 }>;
 
 type JournalState = Readonly<{
   exists: boolean;
-  rowsAtOrAfterFirstLateMigration: readonly { hash: string; when: number }[];
+  rows: readonly { hash: string; when: number | null }[];
 }>;
 
 let failureStage: ApplyFailureStage = "INITIALIZE";
@@ -226,20 +226,25 @@ async function migrationJournal(): Promise<MigrationJournalEntry[]> {
     const entry = byTag.get(tag);
     const when = Number(entry?.when);
     if (!Number.isSafeInteger(when) || when <= 0) throw new SchemaApplyError("JOURNAL_CONFLICT");
-    const source = await readFile(path.join(projectRoot, "drizzle", `${tag}.sql`));
-    journal.push({ tag, when, hash: createHash("sha256").update(source).digest("hex") });
+    const source = await readFile(path.join(projectRoot, "drizzle", `${tag}.sql`), "utf8");
+    const statements = source.split(migrationSeparator).map(statement => statement.trim()).filter(Boolean);
+    if (statements.length === 0) throw new SchemaApplyError("JOURNAL_CONFLICT");
+    journal.push({ tag, when, hash: createHash("sha256").update(source, "utf8").digest("hex"), statements });
   }
   if (journal.some((entry, index) => index > 0 && entry.when <= journal[index - 1].when)) {
+    throw new SchemaApplyError("JOURNAL_CONFLICT");
+  }
+  if (new Set(journal.map(entry => entry.hash)).size !== journal.length) {
     throw new SchemaApplyError("JOURNAL_CONFLICT");
   }
   return journal;
 }
 
-async function readJournalState(connection: Connection, firstLateMigrationWhen: number): Promise<JournalState> {
+async function readJournalState(connection: Connection): Promise<JournalState> {
   const [tableRows] = await connection.query<RowDataPacket[]>(
     "SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND LOWER(TABLE_NAME)=LOWER('__drizzle_migrations') ORDER BY TABLE_NAME",
   );
-  if (tableRows.length === 0) return { exists: false, rowsAtOrAfterFirstLateMigration: [] };
+  if (tableRows.length === 0) return { exists: false, rows: [] };
   if (tableRows.length !== 1 || String(tableRows[0].TABLE_NAME) !== "__drizzle_migrations") {
     throw new SchemaApplyError("JOURNAL_CONFLICT");
   }
@@ -249,23 +254,93 @@ async function readJournalState(connection: Connection, firstLateMigrationWhen: 
   const columns = new Set(columnRows.map(row => String(row.COLUMN_NAME).toLowerCase()));
   if (!columns.has("hash") || !columns.has("created_at")) throw new SchemaApplyError("JOURNAL_CONFLICT");
   const [rows] = await connection.query<DrizzleJournalRow[]>(
-    "SELECT hash,created_at FROM `__drizzle_migrations` WHERE created_at >= ? ORDER BY created_at ASC,hash ASC",
-    [firstLateMigrationWhen],
+    "SELECT hash,created_at FROM `__drizzle_migrations` ORDER BY created_at ASC,hash ASC",
   );
-  const normalized = rows.map(row => ({ hash: String(row.hash), when: Number(row.created_at) }));
-  if (normalized.some(row => !/^[a-f0-9]{64}$/.test(row.hash) || !Number.isSafeInteger(row.when))) {
-    throw new SchemaApplyError("JOURNAL_CONFLICT");
-  }
-  return { exists: true, rowsAtOrAfterFirstLateMigration: normalized };
+  return {
+    exists: true,
+    rows: rows.map(row => {
+      const numericWhen = Number(row.created_at);
+      return {
+        hash: String(row.hash),
+        when: Number.isSafeInteger(numericWhen) ? numericWhen : null,
+      };
+    }),
+  };
 }
 
-function validateJournalProgress(state: JournalState, journal: readonly MigrationJournalEntry[], matchedPrefix: number): void {
-  if (!state.exists && matchedPrefix > 0) throw new SchemaApplyError("JOURNAL_CONFLICT");
-  const expected = journal.slice(0, matchedPrefix).map(entry => ({ hash: entry.hash, when: entry.when }));
-  const actual = state.rowsAtOrAfterFirstLateMigration;
-  if (actual.length !== expected.length || actual.some((entry, index) => entry.hash !== expected[index].hash || entry.when !== expected[index].when)) {
-    throw new SchemaApplyError("JOURNAL_CONFLICT");
+function validateJournalProgress(state: JournalState, journal: readonly MigrationJournalEntry[], matchedPrefix: number): number {
+  if (!state.exists) {
+    if (matchedPrefix > 0) throw new SchemaApplyError("JOURNAL_CONFLICT");
+    return 0;
   }
+
+  const journalIndexByHash = new Map(journal.map((entry, index) => [entry.hash, index]));
+  const observedLateIndexes = new Set<number>();
+  for (const row of state.rows) {
+    const index = journalIndexByHash.get(row.hash);
+    if (index === undefined) continue;
+    if (observedLateIndexes.has(index)) throw new SchemaApplyError("JOURNAL_CONFLICT");
+    if (row.when !== journal[index].when) throw new SchemaApplyError("JOURNAL_CONFLICT");
+    observedLateIndexes.add(index);
+  }
+
+  let journalPrefix = 0;
+  while (observedLateIndexes.has(journalPrefix)) journalPrefix += 1;
+  if (observedLateIndexes.size !== journalPrefix) throw new SchemaApplyError("JOURNAL_CONFLICT");
+  if (journalPrefix > matchedPrefix) throw new SchemaApplyError("JOURNAL_CONFLICT");
+  return journalPrefix;
+}
+
+async function ensureJournalTable(connection: Connection): Promise<void> {
+  await connection.query(`CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
+    \`id\` serial primary key,
+    \`hash\` text not null,
+    \`created_at\` bigint
+  )`);
+}
+
+async function insertJournalEntry(connection: Connection, migration: MigrationJournalEntry): Promise<void> {
+  await connection.query(
+    "INSERT INTO `__drizzle_migrations` (`hash`,`created_at`) VALUES (?,?)",
+    [migration.hash, migration.when],
+  );
+}
+
+async function repairJournalPrefix(
+  connection: Connection,
+  journal: readonly MigrationJournalEntry[],
+  journalPrefix: number,
+  matchedPrefix: number,
+): Promise<string[]> {
+  const repaired: string[] = [];
+  for (let index = journalPrefix; index < matchedPrefix; index += 1) {
+    await insertJournalEntry(connection, journal[index]);
+    repaired.push(journal[index].tag);
+  }
+  return repaired;
+}
+
+async function applyBoundedMigrations(
+  connection: Connection,
+  expected: readonly ExpectedMigration[],
+  journal: readonly MigrationJournalEntry[],
+  matchedPrefix: number,
+): Promise<string[]> {
+  const applied: string[] = [];
+  for (let index = matchedPrefix; index < journal.length; index += 1) {
+    const migration = journal[index];
+    for (const statement of migration.statements) {
+      await connection.query(statement);
+    }
+
+    const observed = await observeMigrations(connection, expected);
+    const observedPrefix = matchedPrefixLength(observed);
+    if (observedPrefix !== index + 1) throw new SchemaApplyError("SCHEMA_NOT_APPLYABLE");
+
+    await insertJournalEntry(connection, migration);
+    applied.push(migration.tag);
+  }
+  return applied;
 }
 
 async function acquireLock(connection: Connection): Promise<void> {
@@ -314,10 +389,10 @@ async function main() {
     preflightSummary = summarize(before);
     const matchedPrefix = matchedPrefixLength(before);
     failureStage = "PREFLIGHT_JOURNAL";
-    const journalBefore = await readJournalState(connection, journal[0].when);
-    validateJournalProgress(journalBefore, journal, matchedPrefix);
+    const journalBefore = await readJournalState(connection);
+    const journalPrefix = validateJournalProgress(journalBefore, journal, matchedPrefix);
 
-    if (matchedPrefix === lateAurionMigrationTags.length) {
+    if (matchedPrefix === lateAurionMigrationTags.length && journalPrefix === lateAurionMigrationTags.length) {
       console.log(JSON.stringify({
         recordType: "aurion_production_schema_apply_execution",
         schemaVersion: 1,
@@ -328,12 +403,16 @@ async function main() {
         state: "ALREADY_APPLIED",
         preflight: preflightSummary,
         appliedMigrationTags: [],
+        repairedJournalTags: [],
       }, null, 2));
       return;
     }
 
     failureStage = "MIGRATE";
-    await migrate(drizzle(connection), { migrationsFolder: path.join(projectRoot, "drizzle") });
+    await ensureJournalTable(connection);
+    const repairedJournalTags = await repairJournalPrefix(connection, journal, journalPrefix, matchedPrefix);
+    const appliedMigrationTags = await applyBoundedMigrations(connection, expected, journal, matchedPrefix);
+
     failureStage = "POSTFLIGHT_SCHEMA";
     const after = await observeMigrations(connection, expected);
     const afterSummary = summarize(after);
@@ -341,8 +420,10 @@ async function main() {
       throw new SchemaApplyError("SCHEMA_NOT_APPLYABLE");
     }
     failureStage = "POSTFLIGHT_JOURNAL";
-    const journalAfter = await readJournalState(connection, journal[0].when);
-    validateJournalProgress(journalAfter, journal, lateAurionMigrationTags.length);
+    const journalAfter = await readJournalState(connection);
+    const finalJournalPrefix = validateJournalProgress(journalAfter, journal, lateAurionMigrationTags.length);
+    if (finalJournalPrefix !== lateAurionMigrationTags.length) throw new SchemaApplyError("JOURNAL_CONFLICT");
+
     console.log(JSON.stringify({
       recordType: "aurion_production_schema_apply_execution",
       schemaVersion: 1,
@@ -353,7 +434,8 @@ async function main() {
       state: "APPLY_SUCCEEDED",
       preflight: preflightSummary,
       postflight: afterSummary,
-      appliedMigrationTags: lateAurionMigrationTags.slice(matchedPrefix),
+      appliedMigrationTags,
+      repairedJournalTags,
     }, null, 2));
   } finally {
     if (connection) {
