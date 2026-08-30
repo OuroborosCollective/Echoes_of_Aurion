@@ -1,0 +1,166 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    p = Path(path)
+    text = p.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected one anchor, found {count}: {old[:90]!r}")
+    p.write_text(text.replace(old, new, 1))
+
+
+replace_once(
+    "client/src/pages/Home.tsx",
+    'import TowerHomePanel from "@/components/TowerHomePanel";\n',
+    'import TowerHomePanel from "@/components/TowerHomePanel";\nimport OpenWorldHud from "@/components/OpenWorldHud";\n',
+)
+replace_once(
+    "client/src/pages/Home.tsx",
+    'type Screen = "gate" | "home" | "loadout" | "mission";',
+    'type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";',
+)
+replace_once(
+    "client/src/pages/Home.tsx",
+    'const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && screen === "mission" });',
+    'const openWorld = trpc.gameplay.openWorld.useQuery(undefined, { enabled: isAuthenticated && (screen === "mission" || screen === "open_world") });',
+)
+replace_once(
+    "client/src/pages/Home.tsx",
+    'onEnterExpanse={() => enterAurionExpanse(() => setScreen("mission"))}',
+    'onEnterExpanse={() => enterAurionExpanse(() => setScreen("open_world"))}',
+)
+
+trailer_anchor = '      {trailerOpen && <section className="trailer-modal"'
+home = Path("client/src/pages/Home.tsx")
+text = home.read_text()
+if text.count(trailer_anchor) != 1:
+    raise SystemExit("Home.tsx: trailer render anchor missing or duplicated")
+open_world_render = '''      {screen === "open_world" && <OpenWorldHud
+        displayName={openWorld.data?.displayName ?? "Aurion-Expanse"}
+        narrative={openWorld.data?.entryNarrative ?? "Der bestätigte Weltstatus wird gelesen."}
+        zoneTier={openWorld.data?.zoneTier ?? 0}
+        activeEncounters={openWorld.data?.encounter.activeCount ?? 0}
+        maximumVisible={openWorld.data?.encounter.maximumVisible ?? 0}
+        worldEpoch={openWorld.data?.globalWorld.epoch ?? worldStreamAnchor?.epoch ?? null}
+        unlockedSectors={openWorld.data?.globalWorld.unlockedSectorCount ?? worldStreamAnchor?.unlockedSectorCount ?? null}
+        streamCenter={`${worldStreamCenter.x}:${worldStreamCenter.z}`}
+        streamTier={worldStreamTier}
+        zoneStatus={zoneStatus}
+        connecting={issueZoneTicket.isPending}
+        authenticated={isAuthenticated}
+        onReturn={returnToTowerHome}
+        onConnectZone={connectAuthoritativeZone}
+        onMove={sendHumanCommand}
+        onInteract={() => sendHumanAction("E")}
+      />}
+'''
+home.write_text(text.replace(trailer_anchor, open_world_render + trailer_anchor, 1))
+
+scene = Path("client/src/game/scene.ts")
+text = scene.read_text()
+trim_anchor = '  const trimStreamedChunkCache = (): void => {'
+if text.count(trim_anchor) != 1:
+    raise SystemExit("scene.ts: trim cache anchor missing or duplicated")
+tower_helper = '''  const showTowerHome = (): void => {
+    clearOpenWorld();
+    started = false; transitioning = false; victory = false; awaitingQuest = false; dungeonUnlocked = false; dungeonActive = false;
+    arenaIndex = 0; sentinelHp = arenas[0].health; explorerHp = 100; echoHp = 100;
+    arenaSets.forEach(set => set.setEnabled(false));
+    sentinel.root.setEnabled(false);
+    groundMat.diffuseColor = Color3.FromHexString("#17363B"); ringMat.emissiveColor = aurion.scale(0.18); beaconMat.emissiveColor = aurion; beaconLight.diffuse = aurion; sun.diffuse = Color3.FromHexString("#FFD890");
+    explorer.position = new Vector3(-3.2, 0.2, 1.6); echo.position = new Vector3(-0.7, 0.2, 0.4); echoTarget = echo.position.clone();
+    window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: false } }));
+  };
+'''
+scene.write_text(text.replace(trim_anchor, tower_helper + trim_anchor, 1))
+replace_once(
+    "client/src/game/scene.ts",
+    '''  const onReturnToTower = (): void => {
+    if (!openWorldActive) return;
+    clearOpenWorld();
+    started = false; transitioning = false; awaitingQuest = false; dungeonActive = false;
+    arenaIndex = 0;
+    arenaSets.forEach((set, index) => set.setEnabled(index === 0));
+    groundMat.diffuseColor = arenas[0].floor; ringMat.emissiveColor = arenas[0].glow.scale(0.23); beaconMat.emissiveColor = arenas[0].glow; beaconLight.diffuse = arenas[0].glow; sun.diffuse = arenas[0].sun;
+    explorer.position = new Vector3(-3.2, 0.2, 1.6); echo.position = new Vector3(-0.7, 0.2, 0.4); echoTarget = echo.position.clone(); sentinel.root.setEnabled(false);
+    window.dispatchEvent(new CustomEvent("aurion:boss-encounter", { detail: { active: false } })); emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
+  };''',
+    '''  const onReturnToTower = (): void => {
+    if (!openWorldActive) return;
+    showTowerHome();
+    emitGameEvent("system", "Du kehrst sicher in deine private Sternwarte zurück. Die Expanse bleibt als serverbestätigter Außenraum erreichbar.");
+  };''',
+)
+listener_anchor = '  window.addEventListener("keydown", onKeyDown);'
+text = scene.read_text()
+if text.count(listener_anchor) != 1:
+    raise SystemExit("scene.ts: listener anchor missing or duplicated")
+scene.write_text(text.replace(listener_anchor, '  showTowerHome();\n' + listener_anchor, 1))
+
+css = Path("client/src/index.css")
+styles = r'''
+
+/* AIM-224: explicit open-world product surface and safe mobile close targets. */
+.open-world-hud { position: relative; z-index: 5; width: min(760px, calc(100vw - 48px)); margin: max(108px, 12vh) auto 0; padding: 20px; color: #e9faf4; background: linear-gradient(135deg, rgb(3 28 33 / 88%), rgb(4 17 22 / 74%)); border: 1px solid rgb(45 226 207 / 45%); border-left: 3px solid #2DE2CF; box-shadow: 0 24px 70px rgb(0 0 0 / 36%); backdrop-filter: blur(10px); pointer-events: auto; }
+.open-world-hud__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.open-world-hud__header > div { max-width: 560px; }
+.open-world-hud__header span, .open-world-hud__movement > div > span { display: inline-flex; align-items: center; gap: 6px; color: #76e8db; font-size: 8px; font-weight: 900; letter-spacing: .13em; }
+.open-world-hud__header h2 { margin: 6px 0; color: #f2ddb1; font-family: "Cinzel", Georgia, serif; font-size: clamp(24px, 4vw, 38px); }
+.open-world-hud__header p { margin: 0; color: #a8c9c1; font-size: 11px; line-height: 1.55; }
+.open-world-hud__return { min-height: 44px; padding: 0 13px; display: inline-flex; align-items: center; gap: 7px; color: #f3d8a0; background: rgb(83 55 30 / 45%); border: 1px solid rgb(218 173 99 / 48%); font-size: 8px; font-weight: 900; white-space: nowrap; }
+.open-world-hud__metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 16px; background: rgb(89 153 142 / 19%); border: 1px solid rgb(45 226 207 / 18%); }
+.open-world-hud__metrics span { display: grid; gap: 2px; padding: 9px; color: #789f96; background: rgb(3 21 26 / 83%); font-size: 7px; font-weight: 900; letter-spacing: .08em; }
+.open-world-hud__metrics b { overflow: hidden; color: #e9d7ad; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.open-world-hud__movement { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-top: 18px; }
+.open-world-dpad { width: 132px; height: 132px; margin-top: 7px; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); }
+.open-world-dpad button { min-width: 44px; min-height: 44px; display: grid; place-items: center; color: #dff7f0; background: rgb(4 38 41 / 80%); border: 1px solid rgb(83 230 212 / 28%); }
+.open-world-dpad button:active { color: #04282c; background: #2DE2CF; }
+.open-world-dpad button:nth-child(1) { grid-column: 2; }
+.open-world-dpad button:nth-child(2) { grid-area: 2 / 1; }
+.open-world-dpad button:nth-child(3) { grid-area: 2 / 2; }
+.open-world-dpad button:nth-child(4) { grid-area: 2 / 3; }
+.open-world-hud__actions { display: grid; gap: 7px; min-width: min(290px, 45vw); }
+.open-world-hud__actions button { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; color: #06272a; background: #67e7d8; border: 1px solid #a2fff4; font-size: 8px; font-weight: 900; letter-spacing: .06em; }
+.open-world-hud__actions button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 720px) {
+  .community-panel-header { position: sticky; top: 0; z-index: 4; align-items: center; }
+  .community-panel-header > button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex: 0 0 44px; margin: -4px -2px -4px 0; }
+  .open-world-hud { width: calc(100vw - 24px); max-height: calc(100dvh - 92px); margin-top: max(82px, calc(env(safe-area-inset-top) + 74px)); padding: 14px; overflow: auto; }
+  .open-world-hud__header { display: grid; gap: 11px; }
+  .open-world-hud__return { width: 100%; justify-content: center; }
+  .open-world-hud__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .open-world-hud__movement { align-items: end; }
+  .open-world-hud__actions { min-width: 0; flex: 1; }
+}
+@media (max-width: 390px) {
+  .open-world-hud__movement { align-items: stretch; flex-direction: column; }
+  .open-world-dpad { width: 132px; height: 132px; margin-inline: auto; }
+  .open-world-hud__actions { width: 100%; }
+}
+'''
+current = css.read_text()
+if "/* AIM-224: explicit open-world product surface" in current:
+    raise SystemExit("index.css: AIM-224 styles already present")
+css.write_text(current + styles)
+
+e2e = Path("e2e/towerHome.mobile.spec.ts")
+text = e2e.read_text()
+screenshot = '    await page.screenshot({ path: `test-results/tower-home-${viewport.width}x${viewport.height}.png`, fullPage: true });\n'
+if text.count(screenshot) != 1:
+    raise SystemExit("towerHome.mobile.spec.ts: screenshot anchor missing or duplicated")
+close_proof = '''    await page.screenshot({ path: `test-results/tower-home-${viewport.width}x${viewport.height}.png`, fullPage: true });
+
+    const communityToggle = page.getByRole("button", { name: /GEMEINSCHAFT|MENÜ SCHLIESSEN/i });
+    await communityToggle.click();
+    await page.getByRole("button", { name: "Forum öffnen" }).click();
+    const closeCommunity = page.getByRole("button", { name: "Community-Konsole schließen" });
+    await expect(closeCommunity).toBeVisible();
+    const closeBox = await closeCommunity.boundingBox();
+    expect(closeBox).not.toBeNull();
+    expect(closeBox!.width).toBeGreaterThanOrEqual(44);
+    expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+    await closeCommunity.click();
+    await expect(page.locator(".community-panel")).toHaveCount(0);
+'''
+e2e.write_text(text.replace(screenshot, close_proof, 1))
