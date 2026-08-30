@@ -16,19 +16,13 @@ describe("glbUsagePlan", () => {
     expect(first.deterministicHash).toMatch(/^fnv1a-[0-9a-f]{8}$/);
   });
 
-  it("assigns all essential tower and world GLBs to explicit runtime targets", () => {
-    expect(essentialTowerGlbPlan.map(entry => entry.id)).toEqual([
-      "aurion_astralwisp",
-      "aurion_return_stone",
-      "aurion_starpath_archway",
-    ]);
-    expect(essentialTowerGlbPlan.every(entry => entry.runtimeDisposition === "runtime_load")).toBe(true);
-    expect(essentialTowerGlbPlan.every(entry => entry.target === "tower_observatory" || entry.target === "tower_storage" || entry.target === "open_world")).toBe(true);
+  it("does not schedule removed native Aurion GLBs", () => {
+    expect(essentialTowerGlbPlan).toEqual([]);
   });
 
   it("preserves safety gates for assets requiring LOD or parser review", () => {
     const plan = buildDeterministicGlbUsagePlan();
-    expect(plan.entries.filter(entry => entry.runtimeDisposition === "runtime_load")).toHaveLength(48);
+    expect(plan.entries.filter(entry => entry.runtimeDisposition === "runtime_load")).toHaveLength(38);
     expect(plan.entries.filter(entry => entry.runtimeDisposition === "prepare_lod")).toHaveLength(28);
     expect(plan.entries.filter(entry => entry.runtimeDisposition === "parser_review")).toHaveLength(6);
   });

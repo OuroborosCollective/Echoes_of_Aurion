@@ -19,10 +19,6 @@ function resolveOnlineAsset(path: string): string {
 }
 
 export const aurionAssets = {
-  wayfinder: resolveAurionAsset("aurion-wayfinder-animated_6bf370ef.glb", "/manus-storage/aurion-wayfinder-animated_6bf370ef.glb"),
-  veilguard: resolveAurionAsset("aurion-veilguard-animated_d6b28a5b.glb", "/manus-storage/aurion-veilguard-animated_d6b28a5b.glb"),
-  floorKit: resolveAurionAsset("env_asterion_floor_kit_a01.glb", "/manus-storage/env_asterion_floor_kit_a01_ec94e853.glb"),
-  archway: resolveAurionAsset("env_asterion_archway_a01.glb", "/manus-storage/env_asterion_archway_a01_fe233f19.glb"),
   expeditionTheme: resolveAurionAsset("aurion-expedition-theme_a8401a12.mp3", "/manus-storage/aurion-expedition-theme_a8401a12.mp3"),
   audio: {
     tower: resolveAurionAsset("ambient-tower.wav", "/audio/ambient-tower.wav"),
@@ -67,14 +63,6 @@ export const aurionAssets = {
     gardenParcels: resolveOnlineAsset("/manus-storage/aurion-terrain-garden-parcels_8810616b.png"),
     starpath: resolveOnlineAsset("/manus-storage/aurion-terrain-starpath_37c69d4b.png"),
     starpathCrossing: resolveOnlineAsset("/manus-storage/aurion-terrain-starpath-crossing_ead3a305.png"),
-  },
-  glbCandidates: {
-    astralwisp: resolveOnlineAsset("/manus-storage/aurion-astralwisp-mobile_8898dcae.glb"),
-    returnStone: resolveOnlineAsset("/manus-storage/aurion-return-stone-mobile_7d892a40.glb"),
-    starpathArchway: resolveOnlineAsset("/manus-storage/aurion-starpath-archway-mobile_bb96597a.glb"),
-    tripoFlowerShrub: resolveOnlineAsset("/manus-storage/aurion-tripo-flower-shrub_e4191cad.glb"),
-    tripoStarpathMarker: resolveOnlineAsset("/manus-storage/aurion-tripo-starpath-marker_da5fe3a7.glb"),
-    tripoGardenBorder: resolveOnlineAsset("/manus-storage/aurion-tripo-garden-border_8032d87a.glb"),
   },
   wasdGlb: {
     sourceRevision: wasdGlbSourceRevision,

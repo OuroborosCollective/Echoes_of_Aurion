@@ -93,8 +93,6 @@ const aurion = Color3.FromHexString("#2DE2CF");
 const bronze = Color3.FromHexString("#9A7043");
 const sandstone = Color3.FromHexString("#A88254");
 const ink = Color3.FromHexString("#071B24");
-const asterionFloorKitUrl = aurionAssets.floorKit;
-const asterionArchwayUrl = aurionAssets.archway;
 
 const arenas: ArenaDefinition[] = [
   { name: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", health: 112, floor: Color3.FromHexString("#183B3D"), glow: aurion, sun: Color3.FromHexString("#FFD890"), enemy: Color3.FromHexString("#9A4B35"), reward: "Asterion-Splitter" },
@@ -295,76 +293,6 @@ function makeArenaSet(scene: Scene): TransformNode[] {
   return [astronomic, archive, solarium, dungeon];
 }
 
-function loadAsterionFloorKit(scene: Scene, parent: TransformNode): void {
-  void SceneLoader.ImportMeshAsync("", "", asterionFloorKitUrl, scene).then(result => {
-    const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
-    if (!topLevelMeshes.length) throw new Error("Das Asterion-Bodenkit enthält keine sichtbare Topologie.");
-    const root = new TransformNode("asterion-floor-kit-root", scene);
-    root.parent = parent;
-    topLevelMeshes.forEach(mesh => { mesh.parent = root; });
-    const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
-    let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
-    bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
-    const span = maximum.subtract(minimum);
-    const scale = 2.35 / Math.max(0.1, span.x, span.z);
-    root.scaling.setAll(scale);
-    root.position = new Vector3(-4.0, -minimum.y * scale + 0.012, -3.85);
-    root.rotation.y = Math.PI / 4;
-  }).catch(error => console.warn("[Aurion Scene] Das optionale Asterion-Bodenkit konnte nicht geladen werden", error));
-}
-
-function loadAsterionArchway(scene: Scene, parent: TransformNode): void {
-  void SceneLoader.ImportMeshAsync("", "", asterionArchwayUrl, scene).then(result => {
-    const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
-    if (!topLevelMeshes.length) throw new Error("Der Asterion-Strukturprop enthält keine sichtbare Topologie.");
-    const root = new TransformNode("asterion-archway-root", scene);
-    root.parent = parent;
-    topLevelMeshes.forEach(mesh => { mesh.parent = root; });
-    const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
-    let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
-    bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
-    const span = maximum.subtract(minimum);
-    const scale = 4.35 / Math.max(0.1, span.y);
-    root.scaling.setAll(scale);
-    root.position = new Vector3(4.7, -minimum.y * scale + 0.01, 3.4);
-    root.rotation.y = -0.72;
-  }).catch(error => console.warn("[Aurion Scene] Der optionale Asterion-Strukturprop konnte nicht geladen werden", error));
-}
-
-function loadEssentialTowerGlbs(scene: Scene, parent: TransformNode): void {
-  const placementById: Record<string, { position: Vector3; height: number; rotationY: number }> = {
-    aurion_astralwisp: { position: new Vector3(0, 3.15, 0), height: 1.15, rotationY: 0 },
-    aurion_return_stone: { position: new Vector3(-4.6, 0, 3.65), height: 2.05, rotationY: 0.42 },
-    aurion_starpath_archway: { position: new Vector3(5.15, 0, -2.25), height: 4.1, rotationY: -0.82 },
-  };
-  const orderedPlan = essentialTowerGlbPlan.slice().sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  void (async () => {
-    for (const entry of orderedPlan) {
-      const placement = placementById[entry.id];
-      if (!placement) continue;
-      try {
-        const result = await SceneLoader.ImportMeshAsync("", "", entry.sourceUrl, scene);
-        const topLevelMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
-        if (!topLevelMeshes.length) throw new Error("Das freigegebene GLB enthält keine sichtbare Topologie.");
-        const root = new TransformNode(`aurion-glb-${entry.id}`, scene);
-        root.parent = parent;
-        topLevelMeshes.forEach(mesh => { mesh.parent = root; });
-        const bounds = topLevelMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
-        let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
-        bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
-        const scale = placement.height / Math.max(0.1, maximum.y - minimum.y);
-        root.scaling.setAll(scale);
-        root.position = new Vector3(placement.position.x, placement.position.y - minimum.y * scale, placement.position.z);
-        root.rotation.y = placement.rotationY;
-        emitGameEvent("asset", `${entry.id} ist als ${entry.target} geladen.`);
-      } catch (error) {
-        console.warn(`[Aurion Scene] Der deterministisch geplante GLB-Kandidat ${entry.id} konnte nicht geladen werden`, error);
-        emitGameEvent("asset", `${entry.id} blieb im sicheren Fallbackzustand.`);
-      }
-    }
-  })();
-}
-
 function emitGameEvent(kind: string, detail: string, audio?: AudioEvent): void {
   window.dispatchEvent(new CustomEvent("aurion:game-event", { detail: { kind, detail, ...(audio ? { audio } : {}) } }));
 }
@@ -394,9 +322,6 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const beaconStem = MeshBuilder.CreateCylinder("beacon-stem", { height: 3.5, diameterTop: 0.15, diameterBottom: 0.7, tessellation: 8 }, scene);
   beaconStem.position.y = 1.6; beaconStem.material = material(scene, "beacon-stem-mat", bronze);
   const arenaSets = makeArenaSet(scene);
-  loadAsterionFloorKit(scene, arenaSets[0]);
-  loadAsterionArchway(scene, arenaSets[0]);
-  loadEssentialTowerGlbs(scene, arenaSets[0]);
   for (let index = 0; index < 10; index += 1) {
     const angle = index * 0.63; const radius = 7.8 + (index % 2) * 1.4;
     const shard = MeshBuilder.CreatePolyhedron(`floating-shard-${index}`, { type: 2, size: 0.65 + (index % 3) * 0.18 }, scene);
@@ -473,13 +398,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   let authoritativeZoneUserId: number | null = null;
   let authoritativeExplorerTarget: Vector3 | null = null;
   let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let activeGlobalWorldHash: string | null = null; let activeStreamingTier: WorldChunkStreamingTier = "phone"; let activeStreamingCenter = { x: 0, z: 0 }; let streamedChunkAccess = 0; const streamedChunkRoots = new Map<string, StreamedChunkRoot>(); const streamedChunkDeltaCache = new Map<string, Map<string, WorldChunkDeltaOverlay>>(); let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
-  const tripoPropTemplates = new Map<WorldPropKind, { root: TransformNode; minimumY: number; height: number }>();
-  const tripoPropUrls: Record<WorldPropKind, string> = {
-    flower_shrub: aurionAssets.glbCandidates.tripoFlowerShrub,
-    starpath_marker: aurionAssets.glbCandidates.tripoStarpathMarker,
-    garden_border: aurionAssets.glbCandidates.tripoGardenBorder,
-  };
-  const tripoPropHeights: Record<WorldPropKind, number> = { flower_shrub: 1.5, starpath_marker: 2.35, garden_border: 0.9 };
+  // World props are generated from confirmed server state using procedural meshes.
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
@@ -637,36 +556,17 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
       source.material = terrainMaterial(scene, `expanse-terrain-mat-${detail.zoneId}-${surface}`, surface, terrainTint[surface]);
       tiles.slice(1).forEach(tile => source.thinInstanceAdd(Matrix.Translation((tile.x - first.x) * detail.terrain.tileSizeMeters, 0, (tile.z - first.z) * detail.terrain.tileSizeMeters)));
     });
-    const spawnTripoProp = (prop: OpenWorldSceneState["props"][number], template: { root: TransformNode; minimumY: number; height: number }): void => {
-      const instance = template.root.clone(`expanse-prop-${detail.zoneId}-${prop.kind}-${prop.tileX}-${prop.tileZ}`, root, false);
-      if (!instance) return;
-      const uniformScale = (tripoPropHeights[prop.kind] / Math.max(0.1, template.height)) * prop.scale;
-      instance.setEnabled(true);
-      instance.scaling.setAll(uniformScale);
-      instance.position = new Vector3((prop.tileX - 3.5) * detail.terrain.tileSizeMeters, -template.minimumY * uniformScale + 0.012, (prop.tileZ - 3.5) * detail.terrain.tileSizeMeters);
-      instance.rotation.y = prop.rotationY;
-    };
-    const propsByKind: Record<WorldPropKind, Array<OpenWorldSceneState["props"][number]>> = { flower_shrub: [], starpath_marker: [], garden_border: [] };
-    detail.props.forEach(prop => propsByKind[prop.kind].push(prop));
-    (Object.keys(propsByKind) as WorldPropKind[]).forEach(kind => {
-      const placements = propsByKind[kind];
-      if (!placements.length) return;
-      const cached = tripoPropTemplates.get(kind);
-      if (cached) { placements.forEach(prop => spawnTripoProp(prop, cached)); return; }
-      void SceneLoader.ImportMeshAsync("", "", tripoPropUrls[kind], scene).then(result => {
-        if (!openWorldActive || openWorldRoot !== root) { result.meshes.forEach(mesh => mesh.dispose(false, true)); return; }
-        const visibleMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0 && !mesh.parent);
-        if (!visibleMeshes.length) throw new Error(`Tripo-Prop ${kind} enthält keine sichtbare Topologie.`);
-        const templateRoot = new TransformNode(`tripo-template-${kind}`, scene);
-        visibleMeshes.forEach(mesh => { mesh.parent = templateRoot; });
-        const bounds = visibleMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
-        let minimum = bounds[0]!.minimumWorld.clone(); let maximum = bounds[0]!.maximumWorld.clone();
-        bounds.slice(1).forEach(bound => { minimum = Vector3.Minimize(minimum, bound.minimumWorld); maximum = Vector3.Maximize(maximum, bound.maximumWorld); });
-        const template = { root: templateRoot, minimumY: minimum.y, height: Math.max(0.1, maximum.y - minimum.y) };
-        templateRoot.setEnabled(false);
-        tripoPropTemplates.set(kind, template);
-        placements.forEach(prop => spawnTripoProp(prop, template));
-      }).catch(error => console.warn(`[Aurion Scene] Der optionale Tripo-Prop ${kind} konnte nicht geladen werden`, error));
+    detail.props.forEach((prop, index) => {
+      const position = new Vector3((prop.tileX - 3.5) * detail.terrain.tileSizeMeters, 0.25, (prop.tileZ - 3.5) * detail.terrain.tileSizeMeters);
+      const height = prop.kind === "starpath_marker" ? 2.35 : prop.kind === "garden_border" ? 0.9 : 1.5;
+      const propMesh = prop.kind === "flower_shrub"
+        ? MeshBuilder.CreateSphere(`expanse-prop-${detail.zoneId}-${index}`, { diameter: height, segments: 8 }, scene)
+        : MeshBuilder.CreateCylinder(`expanse-prop-${detail.zoneId}-${index}`, { height, diameterTop: 0.28, diameterBottom: 0.62, tessellation: 6 }, scene);
+      propMesh.parent = root;
+      propMesh.position = position.add(new Vector3(0, height / 2, 0));
+      propMesh.rotation.y = prop.rotationY;
+      propMesh.scaling.setAll(prop.scale);
+      propMesh.material = material(scene, `expanse-prop-mat-${detail.zoneId}-${index}`, prop.kind === "flower_shrub" ? zoneColors.accent.scale(0.55) : zoneColors.stone, zoneColors.accent.scale(0.1));
     });
     const portal = MeshBuilder.CreateTorus(`expanse-return-${detail.zoneId}`, { diameter: 2.65, thickness: 0.11, tessellation: 36 }, scene);
     portal.parent = root; portal.position = new Vector3(-5.25, 1.5, 3.5); portal.rotation.x = Math.PI / 2; portal.material = material(scene, `expanse-return-mat-${detail.zoneId}`, zoneColors.accent.scale(0.25), zoneColors.accent);

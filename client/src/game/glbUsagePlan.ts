@@ -1,4 +1,3 @@
-import { aurionAssets } from "@/lib/aurionAssets";
 import { wasdGlbCatalog, wasdGlbSourceRevision, type WasdGlbAsset } from "@/lib/wasdGlbCatalog";
 
 export const AURION_GLB_USAGE_PLAN_VERSION = "aurion-glb-usage-plan.v1" as const;
@@ -62,18 +61,7 @@ function dispositionForWasdAsset(asset: WasdGlbAsset): GlbRuntimeDisposition {
   return asset.budgetStatus === "streamable" ? "runtime_load" : asset.budgetStatus === "lod_required" ? "prepare_lod" : "parser_review";
 }
 
-const nativeEntries: readonly GlbUsagePlanEntry[] = [
-  nativeEntry("aurion_floor_kit", aurionAssets.floorKit, "tower_observatory"),
-  nativeEntry("aurion_archway", aurionAssets.archway, "tower_observatory"),
-  nativeEntry("aurion_wayfinder", aurionAssets.wayfinder, "character_loadout"),
-  nativeEntry("aurion_veilguard", aurionAssets.veilguard, "tower_guest_space"),
-  nativeEntry("aurion_astralwisp", aurionAssets.glbCandidates.astralwisp, "tower_observatory"),
-  nativeEntry("aurion_return_stone", aurionAssets.glbCandidates.returnStone, "tower_storage"),
-  nativeEntry("aurion_starpath_archway", aurionAssets.glbCandidates.starpathArchway, "open_world"),
-  nativeEntry("aurion_tripo_flower_shrub", aurionAssets.glbCandidates.tripoFlowerShrub, "open_world"),
-  nativeEntry("aurion_tripo_starpath_marker", aurionAssets.glbCandidates.tripoStarpathMarker, "open_world"),
-  nativeEntry("aurion_tripo_garden_border", aurionAssets.glbCandidates.tripoGardenBorder, "open_world"),
-];
+const nativeEntries: readonly GlbUsagePlanEntry[] = [];
 
 export function buildDeterministicGlbUsagePlan(): GlbUsagePlan {
   const entries = [
