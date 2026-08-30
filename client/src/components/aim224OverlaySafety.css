@@ -1,25 +1,56 @@
-.mission-ui.is-open-world > .mission-objective,
-.mission-ui.is-open-world > .boss-readout,
-.mission-ui.is-open-world > .party-strip,
-.mission-ui.is-open-world > .combat-timer,
-.mission-ui.is-open-world > .player-control-bridge,
-.mission-ui.is-open-world > .ability-rail,
-.mission-ui.is-open-world > .arena-track,
-.mission-ui.is-open-world > .ledger-reset,
-.mission-ui.is-open-world > .mission-victory,
-.mission-ui.is-open-world > .mission-quest-ready,
-.mission-ui.is-open-world > .mission-dungeon-ready {
-  display: none;
+.open-world-hud {
+  z-index: 44;
 }
 
-.mission-ui.is-open-world .open-world-card {
+.open-world-hud__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.open-world-details-layer {
+  position: fixed;
+  z-index: 70;
+  inset: max(72px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
+  color: #e8f8f2;
+  background: rgb(1 13 18 / 96%);
+  border: 1px solid rgb(83 231 214 / 48%);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 66%);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+
+.open-world-details-layer__close {
+  justify-self: end;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 9px 12px;
+  color: #06292c;
+  background: #8ef4e3;
+  border: 1px solid #c9fff7;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .07em;
+}
+
+.open-world-details-layer .open-world-card,
+.open-world-details-layer .open-world-card--drawer {
   position: relative;
   top: auto;
   left: auto;
-  width: min(760px, calc(100vw - 48px));
-  max-height: 54dvh;
-  margin: 14px auto 180px;
+  width: min(760px, 100%);
+  max-height: 100%;
+  margin: 0 auto;
   overflow: auto;
+  pointer-events: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 900px) {
@@ -50,6 +81,16 @@
   .aurion-app:has(.trailer-modal) .tower-home-panel {
     pointer-events: none;
   }
+
+  .open-world-hud__header-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .open-world-hud__header-actions > button {
+    flex: 1 1 150px;
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -63,9 +104,13 @@
     left: 0;
   }
 
-  .mission-ui.is-open-world .open-world-card {
-    width: calc(100vw - 24px);
-    max-height: 58dvh;
-    margin-bottom: 140px;
+  .open-world-details-layer {
+    inset: max(62px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding: 7px;
+  }
+
+  .open-world-details-layer .open-world-card,
+  .open-world-details-layer .open-world-card--drawer {
+    width: 100%;
   }
 }
