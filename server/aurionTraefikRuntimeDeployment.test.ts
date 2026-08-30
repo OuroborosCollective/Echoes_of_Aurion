@@ -39,8 +39,6 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain('"runtime-node_modules.tgz"');
     expect(workflow).toContain("docker build --pull=false");
     expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
-    expect(workflow).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
-    expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}");
     expect(workflow).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
     expect(workflow).toContain('runtime_verify_container="aurion-runtime-verify-${GITHUB_RUN_ID}"');
     expect(workflow).toContain("aurion-runtime-container-verify failed state=%s health=%s category=%s");
@@ -67,6 +65,25 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
     expect(workflow).toContain('health.revision!==process.argv[1]');
+  });
+
+  it("keeps every main revision in one serialized proof and promotion chain", () => {
+    const triggerBlock = workflow.slice(0, workflow.indexOf("\nconcurrency:"));
+    const pushBlock = triggerBlock.match(/  push:\n[\s\S]*?(?=\n  pull_request:)/)?.[0];
+    const trustedMainCondition =
+      "if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'";
+
+    expect(pushBlock).toBeDefined();
+    expect(pushBlock).toContain("branches: [main]");
+    expect(pushBlock).not.toContain("paths:");
+    expect(triggerBlock).toContain("workflow_dispatch:");
+    expect(workflow.split(trustedMainCondition)).toHaveLength(4);
+    expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.ref }}");
+    expect(workflow).not.toContain(
+      "group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}"
+    );
+    expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]");
+    expect(workflow).toContain("needs: promote-zone-runtime");
   });
 
   it("uses Traefik labels and a root-managed secret environment file", () => {
