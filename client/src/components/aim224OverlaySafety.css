@@ -1,12 +1,89 @@
 .open-world-hud {
+  position: fixed;
   z-index: 44;
+  inset: 0;
+  pointer-events: none;
+}
+
+.open-world-hud__header {
+  position: absolute;
+  top: max(72px, calc(env(safe-area-inset-top) + 56px));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(680px, calc(100vw - 28px));
+  pointer-events: auto;
+}
+
+.open-world-hud__identity {
+  max-width: 390px;
+  padding: 9px 11px;
+  border: 1px solid rgb(122 237 222 / 36%);
+  border-radius: 10px;
+  background: rgb(2 15 19 / 76%);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(8px);
+}
+
+.open-world-hud__identity > span,
+.open-world-hud__movement > div > span {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .11em;
+}
+
+.open-world-hud__identity h2 {
+  margin: 3px 0 0;
+  font-size: clamp(18px, 3vw, 26px);
+  line-height: 1;
+}
+
+.open-world-hud__identity p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: .78;
+}
+
+.open-world-hud__play-status {
+  display: flex;
+  gap: 10px;
+  margin-top: 7px;
+  font-size: 9px;
+  letter-spacing: .06em;
 }
 
 .open-world-hud__header-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 7px;
+  pointer-events: auto;
+}
+
+.open-world-hud__header-actions > button,
+.open-world-hud__actions > button {
+  min-height: 44px;
+}
+
+.open-world-hud__movement {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 10px));
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid rgb(122 237 222 / 28%);
+  border-radius: 12px;
+  background: rgb(2 15 19 / 70%);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.open-world-hud__actions {
+  display: grid;
+  gap: 7px;
 }
 
 .open-world-details-layer {
@@ -82,14 +159,19 @@
     pointer-events: none;
   }
 
-  .open-world-hud__header-actions {
-    width: 100%;
-    justify-content: stretch;
+  .open-world-hud__header {
+    right: max(10px, env(safe-area-inset-right));
+    max-width: none;
+    justify-content: space-between;
   }
 
-  .open-world-hud__header-actions > button {
-    flex: 1 1 150px;
-    min-height: 44px;
+  .open-world-hud__identity {
+    max-width: min(58vw, 390px);
+  }
+
+  .open-world-hud__header-actions {
+    max-width: 190px;
+    justify-content: flex-end;
   }
 }
 
@@ -102,6 +184,38 @@
   .community-dock {
     right: auto;
     left: 0;
+  }
+
+  .open-world-hud__header {
+    top: max(58px, calc(env(safe-area-inset-top) + 50px));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .open-world-hud__identity {
+    max-width: none;
+    padding: 7px 9px;
+  }
+
+  .open-world-hud__identity p {
+    display: none;
+  }
+
+  .open-world-hud__play-status {
+    gap: 7px;
+  }
+
+  .open-world-hud__header-actions {
+    display: grid;
+    width: 132px;
+  }
+
+  .open-world-hud__movement {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    max-width: calc(100vw - 16px);
   }
 
   .open-world-details-layer {
