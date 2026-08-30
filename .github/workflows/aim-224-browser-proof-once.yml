@@ -1,0 +1,76 @@
+name: AIM-224 browser proof once
+
+on:
+  push:
+    branches:
+      - fix/aim-224-open-world-mobile-close
+    paths:
+      - .github/workflows/aim-224-browser-proof-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-browser-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Use Playwright-managed Chromium for this proof only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('playwright.config.ts')
+          text = p.read_text()
+          old = '''    launchOptions: {
+      executablePath: "/usr/bin/chromium",
+      args: ["--use-angle=swiftshader", "--disable-dev-shm-usage"],
+    },
+'''
+          if text.count(old) != 1:
+              raise SystemExit('playwright launchOptions anchor mismatch')
+          p.write_text(text.replace(old, '    launchOptions: { args: ["--use-angle=swiftshader", "--disable-dev-shm-usage"] },\n', 1))
+          PY
+
+      - name: Start isolated Vite client
+        run: |
+          set -euo pipefail
+          pnpm exec vite --host 127.0.0.1 --port 3000 > /tmp/aurion-vite.log 2>&1 &
+          echo $! > /tmp/aurion-vite.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aurion-vite.log
+          exit 1
+
+      - name: Prove Android phone and tablet close behavior
+        run: pnpm exec playwright test e2e/towerHome.mobile.spec.ts
+
+      - name: Upload screenshots and traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aim-224-browser-proof-failure
+          path: test-results
+          if-no-files-found: ignore
+
+      - name: Stop isolated Vite client
+        if: always()
+        run: kill "$(cat /tmp/aurion-vite.pid 2>/dev/null)" 2>/dev/null || true
