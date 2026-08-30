@@ -398,7 +398,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   let authoritativeZoneUserId: number | null = null;
   let authoritativeExplorerTarget: Vector3 | null = null;
   let openWorldActive = false; let openWorldRoot: TransformNode | null = null; let activeGlobalWorldHash: string | null = null; let activeStreamingTier: WorldChunkStreamingTier = "phone"; let activeStreamingCenter = { x: 0, z: 0 }; let streamedChunkAccess = 0; const streamedChunkRoots = new Map<string, StreamedChunkRoot>(); const streamedChunkDeltaCache = new Map<string, Map<string, WorldChunkDeltaOverlay>>(); let worldNpcTargets: { id: "lyra" | "orun"; displayName: string; position: Vector3; root: TransformNode }[] = [];
-  // World props are generated from confirmed server state using procedural meshes.
+  // Confirmed world props use deterministic procedural geometry; broken GLB candidates are not requested.
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
     const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);

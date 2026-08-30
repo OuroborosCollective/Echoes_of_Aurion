@@ -16,7 +16,7 @@ describe("glbUsagePlan", () => {
     expect(first.deterministicHash).toMatch(/^fnv1a-[0-9a-f]{8}$/);
   });
 
-  it("does not schedule removed native Aurion GLBs", () => {
+  it("does not schedule confirmed-broken native Aurion GLBs", () => {
     expect(essentialTowerGlbPlan).toEqual([]);
   });
 

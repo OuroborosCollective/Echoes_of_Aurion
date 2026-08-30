@@ -1,3 +1,4 @@
+import { aurionAssets } from "@/lib/aurionAssets";
 import { wasdGlbCatalog, wasdGlbSourceRevision, type WasdGlbAsset } from "@/lib/wasdGlbCatalog";
 
 export const AURION_GLB_USAGE_PLAN_VERSION = "aurion-glb-usage-plan.v1" as const;
