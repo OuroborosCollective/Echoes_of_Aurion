@@ -4,7 +4,10 @@ name: AIM224 Mobile Browser Proof
 on:
   push:
     branches: [fix/aim-224-open-world-mobile-close]
-    paths: [.github/workflows/aim-224-browser-proof-once.yml]
+    paths:
+      - .github/workflows/aim-224-browser-proof-once.yml
+      - client/src/components/aim224OverlaySafety.css
+      - e2e/towerHome.mobile.spec.ts
 
 permissions:
   contents: read
