@@ -9,6 +9,15 @@
   display: none;
 }
 
+.aurion-app:has(.open-world-hud) .brand-bar {
+  pointer-events: none;
+}
+
+.aurion-app:has(.open-world-hud) .brand-bar a,
+.aurion-app:has(.open-world-hud) .brand-bar button {
+  pointer-events: auto;
+}
+
 .open-world-hud__identity {
   position: absolute;
   top: max(76px, calc(env(safe-area-inset-top) + 60px));
@@ -180,9 +189,6 @@
     left: 0;
   }
 
-  /* Mobile has four dedicated, non-overlapping zones:
-     global brand/community at the top, passive world identity below it,
-     world navigation bottom-left and movement bottom-right. */
   .open-world-hud__identity {
     top: max(118px, calc(env(safe-area-inset-top) + 104px));
     left: max(8px, env(safe-area-inset-left));
