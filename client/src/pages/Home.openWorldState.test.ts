@@ -8,6 +8,10 @@ describe("Aurion home/open-world state separation", () => {
     expect(source).toContain('type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";');
     expect(source).toContain('onEnterExpanse={() => enterAurionExpanse(() => setScreen("open_world"))}');
     expect(source).toContain('screen === "open_world" && <OpenWorldHud');
+    expect(source).toContain('(screen === "mission" || screen === "open_world") && (');
+    expect(source).toContain('screen === "open_world" ? "mission-ui is-open-world" : "mission-ui"');
+    expect(source).toContain('setWorldStreamAnchor(null);');
+    expect(source).toContain('setScreen("mission");');
   });
 
   it("keeps the tower scene free of the legacy arena and sentinel", async () => {
