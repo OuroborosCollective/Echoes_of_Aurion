@@ -6,6 +6,14 @@ on:
       - fix/aim-224-video-state-machine
     paths:
       - .github/workflows/aim-224-final-video-proof-once.yml
+      - client/src/components/OpenWorldHud.tsx
+      - client/src/components/aim224OverlaySafety.css
+      - client/src/pages/Home.tsx
+      - client/src/pages/Home.openWorldState.test.ts
+      - client/src/game/scene.ts
+      - client/src/game/sceneCompanionAuthority.test.ts
+      - e2e/aim224.videoFlow.spec.ts
+      - e2e/towerHome.mobile.spec.ts
 
 permissions:
   contents: read
