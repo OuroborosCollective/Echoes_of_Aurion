@@ -114,6 +114,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('databaseConnectivity":"authenticated_select_1"');
     expect(workflow).toContain("runtime_verify_database_network");
     expect(workflow).toContain("--network-alias mariadb");
+    expect(workflow).toContain('docker exec -e MYSQL_PWD="${runtime_verify_db_password}"');
+    expect(workflow).not.toContain("MARIADB_PWD");
     expect(workflow).toContain("authenticated_select_failed");
     expect(workflow).toContain('receipt.databaseNetwork!=="echoes-of-aurion-internal"');
     expect(workflow).toContain('receipt.databaseConnectivity!=="authenticated_select_1"');

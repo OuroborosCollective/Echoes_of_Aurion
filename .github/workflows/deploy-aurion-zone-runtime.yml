@@ -146,7 +146,7 @@ jobs:
             mariadb:11.4 >/dev/null
           runtime_verify_db_ready=0
           for _attempt in $(seq 1 60); do
-            if docker exec -e MARIADB_PWD="${runtime_verify_db_password}" "${runtime_verify_db_container}" \
+            if docker exec -e MYSQL_PWD="${runtime_verify_db_password}" "${runtime_verify_db_container}" \
               mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
               runtime_verify_db_ready=1
               break
