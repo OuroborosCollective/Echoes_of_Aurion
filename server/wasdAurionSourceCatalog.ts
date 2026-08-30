@@ -1,5 +1,5 @@
 /* Generated from the revision-locked Wasd migration matrix. Do not edit manually. */
-export const wasdAurionSourceRevision = "a4d99432e47b82ce98105eadb30360cd8040ad13" as const;
+export const wasdAurionSourceRevision = "a80df4d150cfeb12365fc26886420763eeb18313" as const;
 export type WasdAurionDomain = 'combat' | 'economy' | 'language_lore' | 'loot_items' | 'npc' | 'politics_war' | 'progression' | 'quest' | 'world';
 export type WasdAurionSourceModule = { path: string; sha256: string; domains: readonly WasdAurionDomain[]; target: string };
 export const wasdAurionSourceCatalog: readonly WasdAurionSourceModule[] = [

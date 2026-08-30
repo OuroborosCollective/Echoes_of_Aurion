@@ -80,7 +80,7 @@ describe("wasdAurionProtocol", () => {
     const first = readWasdAurionCoverage();
     const second = readWasdAurionCoverage();
     expect(first).toEqual(second);
-    expect(first.sourceRevision).toBe("a4d99432e47b82ce98105eadb30360cd8040ad13");
+    expect(first.sourceRevision).toBe("a80df4d150cfeb12365fc26886420763eeb18313");
     expect(first.adaptedModuleCount).toBe(712);
     expect(first.domainCounts.world).toBeGreaterThan(0);
     expect(first.paths).toHaveLength(712);
