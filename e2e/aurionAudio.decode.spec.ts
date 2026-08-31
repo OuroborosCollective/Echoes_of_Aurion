@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
@@ -24,11 +23,24 @@ for (const viewport of [
     await page.goto("/?aurion_preview=open-world");
 
     for (const asset of manifest.assets) {
-      const response = await page.request.get(`/audio/${asset.source}`);
-      expect(response.ok(), `${asset.source} must be served`).toBe(true);
-      const body = await response.body();
-      expect(body.byteLength, `${asset.source} decoded response bytes`).toBe(asset.bytes);
-      expect(createHash("sha256").update(body).digest("hex"), `${asset.source} response SHA-256`).toBe(asset.sha256);
+      const browserResponse = await page.evaluate(async (url) => {
+        const response = await fetch(url, { cache: "no-store" });
+        const body = await response.arrayBuffer();
+        const digest = await crypto.subtle.digest("SHA-256", body);
+        const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        return {
+          ok: response.ok,
+          status: response.status,
+          bytes: body.byteLength,
+          sha256,
+          contentEncoding: response.headers.get("content-encoding"),
+          contentLength: response.headers.get("content-length"),
+        };
+      }, `/audio/${asset.source}`);
+
+      expect(browserResponse.ok, `${asset.source} browser response status ${browserResponse.status}`).toBe(true);
+      expect(browserResponse.bytes, `${asset.source} browser response bytes`).toBe(asset.bytes);
+      expect(browserResponse.sha256, `${asset.source} browser response SHA-256`).toBe(asset.sha256);
 
       const metadata = await page.evaluate(async (url) => {
         return await new Promise<{ duration: number; error?: string }>((resolve) => {
@@ -54,7 +66,7 @@ for (const viewport of [
     }
 
     const decoded = await page.evaluate(async (url) => {
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: "no-store" });
       const context = new AudioContext();
       try {
         const buffer = await context.decodeAudioData(await response.arrayBuffer());
