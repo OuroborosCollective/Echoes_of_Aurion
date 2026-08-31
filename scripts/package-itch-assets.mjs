@@ -10,6 +10,14 @@ const outputDirectory = path.join(projectRoot, "dist", "itch", "aurion-assets");
 const releaseAssetSource = (process.env.AURION_RELEASE_ASSET_SOURCE ?? "https://arelogic.space/aurion-assets").replace(/\/$/, "");
 const legacyStaticSource = (process.env.AURION_STATIC_SOURCE ?? "https://aurion3d-6hpapr2g.manus.space").replace(/\/$/, "");
 const localAssetCache = process.env.AURION_ASSET_CACHE ?? path.join(process.env.HOME ?? "", "webdev-static-assets", "aurion");
+const deferredReleaseAssets = new Set(
+  (process.env.AURION_DEFERRED_RELEASE_ASSETS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+const generatedSocialKeyframe = process.env.AURION_GENERATED_SOCIAL_KEYFRAME?.trim() || null;
+const generatedSocialKeyframeTarget = "aurion-social-keyframe_5edc4882.png";
 const integrityManifestPath = path.join(projectRoot, "shared", "releaseAssetIntegrity.json");
 const integrityManifest = JSON.parse(await readFile(integrityManifestPath, "utf8"));
 if (integrityManifest.schemaVersion !== 1 || !Array.isArray(integrityManifest.assets) || integrityManifest.assets.length === 0) {
@@ -58,12 +66,41 @@ async function verifyPackagedAsset(file, outputPath) {
   return digest;
 }
 
+function readPngDimensions(buffer, target) {
+  const expectedSignature = "89504e470d0a1a0a";
+  if (buffer.length < 24 || buffer.subarray(0, 8).toString("hex") !== expectedSignature || buffer.subarray(12, 16).toString("ascii") !== "IHDR") {
+    throw new Error(`${target}: generated social keyframe is not a valid PNG.`);
+  }
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
 async function removeIfPresent(filePath) {
   try {
     await unlink(filePath);
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+}
+
+async function copyGeneratedSocialKeyframe(file) {
+  if (file.target !== generatedSocialKeyframeTarget || !generatedSocialKeyframe) return false;
+  const sourcePath = path.resolve(projectRoot, generatedSocialKeyframe);
+  const outputPath = path.join(outputDirectory, file.target);
+  await access(sourcePath);
+  await copyFile(sourcePath, outputPath);
+  const bytes = await readFile(outputPath);
+  const { width, height } = readPngDimensions(bytes, file.target);
+  if (width !== 1200 || height !== 630) {
+    await removeIfPresent(outputPath);
+    throw new Error(`${file.target}: generated social keyframe must be 1200x630, observed ${width}x${height}.`);
+  }
+  if (bytes.length < 100_000) {
+    await removeIfPresent(outputPath);
+    throw new Error(`${file.target}: generated social keyframe is unexpectedly small (${bytes.length} bytes).`);
+  }
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  console.log(`release_asset_generated target=${file.target} source=playwright-open-world bytes=${bytes.length} sha256=${digest} dimensions=${width}x${height}`);
+  return true;
 }
 
 async function copyCachedAsset(file) {
@@ -110,6 +147,7 @@ async function downloadAndVerify(file, label, url) {
 
 async function resolveReleaseAsset(file) {
   assertManifestEntry(file);
+  if (await copyGeneratedSocialKeyframe(file)) return;
   if (await copyCachedAsset(file)) return;
 
   const candidates = [
@@ -119,8 +157,12 @@ async function resolveReleaseAsset(file) {
   for (const candidate of candidates) {
     if (await downloadAndVerify(file, candidate.label, candidate.url)) return;
   }
+  if (deferredReleaseAssets.has(file.target)) {
+    console.warn(`release_asset_deferred target=${file.target} reason=explicit-owner-approved-post-migration`);
+    return;
+  }
   if (process.env.AURION_ALLOW_MISSING_RELEASE_ASSETS === "true") {
-    console.warn(`release_asset_skipped target=${file.target} reason=no-approved-source`);
+    console.warn(`release_asset_skipped target=${file.target} reason=legacy-broad-missing-asset-mode`);
     return;
   }
   throw new Error(`${file.target}: no approved source produced the expected immutable release asset.`);

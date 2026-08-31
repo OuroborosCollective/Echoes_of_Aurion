@@ -55,46 +55,114 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium for real Open World keyframe
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Capture real Open World social keyframe
+        run: |
+          set -euo pipefail
+          pnpm exec vite --host 127.0.0.1 --port 3000 >/tmp/aurion-android-keyframe-vite.log 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              node scripts/capture-android-social-keyframe.mjs build/android-release/aurion-social-keyframe_5edc4882.png
+              exit $?
+            fi
+            sleep 1
+          done
+          cat /tmp/aurion-android-keyframe-vite.log
+          exit 1
+
       - name: Build budget-checked HTML5 client
         env:
-          # Owner-approved temporary Android-only deferral. The trailer becomes
-          # mandatory again after the complete migration; every other manifest
-          # asset remains hash-bound by the verification step below.
-          AURION_ALLOW_MISSING_RELEASE_ASSETS: "true"
+          # Owner-approved Android-only deferral until the complete migration.
+          AURION_DEFERRED_RELEASE_ASSETS: "aurion-hero-trailer-en-de_c44ee2e1.mp4"
+          # A current real Open World browser frame replaces the vanished legacy
+          # social-image source and receives a build-bound receipt below.
+          AURION_GENERATED_SOCIAL_KEYFRAME: "build/android-release/aurion-social-keyframe_5edc4882.png"
         run: pnpm build:itch
 
-      - name: Verify non-deferred Android release assets
+      - name: Verify Android release assets and write receipt
         run: |
           node --input-type=module <<'NODE'
           import { createHash } from "node:crypto";
-          import { readFile, stat } from "node:fs/promises";
+          import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
           import path from "node:path";
 
-          const deferredTrailer = "aurion-hero-trailer-en-de_c44ee2e1.mp4";
+          const trailerTarget = "aurion-hero-trailer-en-de_c44ee2e1.mp4";
+          const socialTarget = "aurion-social-keyframe_5edc4882.png";
+          const outputRoot = path.join("dist", "itch", "aurion-assets");
           const manifest = JSON.parse(await readFile("shared/releaseAssetIntegrity.json", "utf8"));
           if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.assets) || manifest.assets.length === 0) {
             throw new Error("Android release asset manifest is invalid or empty.");
           }
-          if (!manifest.assets.some((asset) => asset.target === deferredTrailer)) {
-            throw new Error(`Deferred Android trailer is not present in the immutable manifest: ${deferredTrailer}`);
+          for (const target of [trailerTarget, socialTarget]) {
+            if (!manifest.assets.some((asset) => asset.target === target)) {
+              throw new Error(`Required Android release asset contract is absent from the manifest: ${target}`);
+            }
           }
 
+          const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+          const verifyManifestAsset = async (asset) => {
+            const outputPath = path.join(outputRoot, asset.target);
+            const fileStat = await stat(outputPath);
+            const bytes = await readFile(outputPath);
+            const digest = sha256(bytes);
+            if (fileStat.size !== asset.bytes || digest !== asset.sha256) {
+              throw new Error(`${asset.target}: Android immutable asset mismatch.`);
+            }
+            return { target: asset.target, source: "immutable-manifest", bytes: fileStat.size, sha256: digest };
+          };
+
+          const packaged = [];
+          const deferred = [];
           for (const asset of manifest.assets) {
-            if (asset.target === deferredTrailer) {
-              console.log(`android_release_asset_deferred target=${asset.target} reason=owner-approved-until-post-migration`);
+            if (asset.target === socialTarget) continue;
+            if (asset.target === trailerTarget) {
+              try {
+                await access(path.join(outputRoot, asset.target));
+                packaged.push(await verifyManifestAsset(asset));
+              } catch (error) {
+                if (error?.code !== "ENOENT") throw error;
+                deferred.push({ target: asset.target, reason: "owner-approved-until-complete-migration" });
+                console.log(`android_release_asset_deferred target=${asset.target} reason=owner-approved-until-complete-migration`);
+              }
               continue;
             }
-            const outputPath = path.join("dist", "itch", "aurion-assets", asset.target);
-            const fileStat = await stat(outputPath);
-            if (fileStat.size !== asset.bytes) {
-              throw new Error(`${asset.target}: Android package byte mismatch; expected ${asset.bytes}, observed ${fileStat.size}.`);
-            }
-            const digest = createHash("sha256").update(await readFile(outputPath)).digest("hex");
-            if (digest !== asset.sha256) {
-              throw new Error(`${asset.target}: Android package SHA-256 mismatch; expected ${asset.sha256}, observed ${digest}.`);
-            }
-            console.log(`android_release_asset_verified target=${asset.target} bytes=${asset.bytes} sha256=${asset.sha256}`);
+            packaged.push(await verifyManifestAsset(asset));
           }
+
+          const socialPath = path.join(outputRoot, socialTarget);
+          const socialBytes = await readFile(socialPath);
+          if (socialBytes.length < 24 || socialBytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a" || socialBytes.subarray(12, 16).toString("ascii") !== "IHDR") {
+            throw new Error(`${socialTarget}: packaged browser keyframe is not a valid PNG.`);
+          }
+          const width = socialBytes.readUInt32BE(16);
+          const height = socialBytes.readUInt32BE(20);
+          if (width !== 1200 || height !== 630 || socialBytes.length < 100_000) {
+            throw new Error(`${socialTarget}: invalid generated keyframe dimensions or byte count.`);
+          }
+          const socialReceipt = {
+            target: socialTarget,
+            source: "playwright-open-world",
+            bytes: socialBytes.length,
+            sha256: sha256(socialBytes),
+            width,
+            height,
+          };
+          packaged.push(socialReceipt);
+          console.log(`android_release_asset_verified target=${socialTarget} source=${socialReceipt.source} bytes=${socialReceipt.bytes} sha256=${socialReceipt.sha256} dimensions=${width}x${height}`);
+
+          const receipt = {
+            schemaVersion: 1,
+            revision: process.env.GITHUB_SHA ?? null,
+            generatedAt: new Date().toISOString(),
+            packaged,
+            deferred,
+          };
+          await mkdir(outputRoot, { recursive: true });
+          await writeFile(path.join(outputRoot, "android-release-asset-receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
           NODE
 
       - name: Create and synchronize Android shell
