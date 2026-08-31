@@ -42,6 +42,7 @@ jobs:
 
       - name: Verify exact source revision
         run: |
+          node scripts/verify-audio-assets.mjs
           pnpm check
           pnpm test
           git diff --check
@@ -49,12 +50,11 @@ jobs:
       - name: Build static Aurion release
         run: pnpm build:itch
 
-      - name: Mirror only Aurion media into the static release
+      - name: Mirror only optional historical Aurion media into the static release
         run: |
           set -euo pipefail
           mkdir -p dist/itch/manus-storage
           for asset in \
-            aurion-expedition-theme_a8401a12.mp3 \
             aurion-social-keyframe_5edc4882.png \
             aurion-sigil_e1fd1a34.png \
             aurion-hero-trailer-en-de_c44ee2e1.mp4

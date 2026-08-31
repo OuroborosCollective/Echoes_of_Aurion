@@ -2,12 +2,6 @@
   "schemaVersion": 1,
   "assets": [
     {
-      "source": "aurion-expedition-theme_a8401a12.mp3",
-      "target": "aurion-expedition-theme_a8401a12.mp3",
-      "bytes": 4039365,
-      "sha256": "5e0fea741913dbefb50c9f4a7af1f50c1834aaa8ea554eba7c33c8a0e6b6377e"
-    },
-    {
       "source": "aurion-hero-trailer-en-de_c44ee2e1.mp4",
       "target": "aurion-hero-trailer-en-de_c44ee2e1.mp4",
       "bytes": 25137988,

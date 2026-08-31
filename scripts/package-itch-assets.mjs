@@ -10,13 +10,26 @@ const outputDirectory = path.join(projectRoot, "dist", "itch", "aurion-assets");
 const releaseAssetSource = (process.env.AURION_RELEASE_ASSET_SOURCE ?? "https://arelogic.space/aurion-assets").replace(/\/$/, "");
 const legacyStaticSource = (process.env.AURION_STATIC_SOURCE ?? "https://aurion3d-6hpapr2g.manus.space").replace(/\/$/, "");
 const localAssetCache = process.env.AURION_ASSET_CACHE ?? path.join(process.env.HOME ?? "", "webdev-static-assets", "aurion");
+const deferredReleaseAssets = new Set(
+  (process.env.AURION_DEFERRED_RELEASE_ASSETS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+const generatedSocialKeyframe = process.env.AURION_GENERATED_SOCIAL_KEYFRAME?.trim() || null;
+const generatedSocialKeyframeTarget = "aurion-social-keyframe_5edc4882.png";
 const integrityManifestPath = path.join(projectRoot, "shared", "releaseAssetIntegrity.json");
 const integrityManifest = JSON.parse(await readFile(integrityManifestPath, "utf8"));
 if (integrityManifest.schemaVersion !== 1 || !Array.isArray(integrityManifest.assets) || integrityManifest.assets.length === 0) {
   throw new Error("Aurion release asset integrity manifest is invalid or empty.");
 }
 const files = integrityManifest.assets;
-const ambientWorldFiles = ["ambient-forest-world.wav", "ambient-cave-world.wav", "ambient-city-world.wav", "ambient-boss-dungeon-world.wav"];
+const audioIntegrityManifestPath = path.join(projectRoot, "shared", "audioAssetIntegrity.json");
+const audioIntegrityManifest = JSON.parse(await readFile(audioIntegrityManifestPath, "utf8"));
+if (audioIntegrityManifest.schemaVersion !== 1 || !Array.isArray(audioIntegrityManifest.assets) || audioIntegrityManifest.assets.length !== 8) {
+  throw new Error("Aurion audio integrity manifest must bind exactly eight local soundtrack masters.");
+}
+const localAudioFiles = audioIntegrityManifest.assets;
 const sfxFiles = [
   "combat-attack-sharp.wav", "combat-attack-pointed.wav", "combat-attack-blunt.wav", "combat-spell-heal.wav", "combat-spell-buff.wav",
   "combat-creature-wolf-attack.wav", "combat-creature-human-attack.wav", "combat-creature-monster-attack.wav",
@@ -53,12 +66,41 @@ async function verifyPackagedAsset(file, outputPath) {
   return digest;
 }
 
+function readPngDimensions(buffer, target) {
+  const expectedSignature = "89504e470d0a1a0a";
+  if (buffer.length < 24 || buffer.subarray(0, 8).toString("hex") !== expectedSignature || buffer.subarray(12, 16).toString("ascii") !== "IHDR") {
+    throw new Error(`${target}: generated social keyframe is not a valid PNG.`);
+  }
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
 async function removeIfPresent(filePath) {
   try {
     await unlink(filePath);
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+}
+
+async function copyGeneratedSocialKeyframe(file) {
+  if (file.target !== generatedSocialKeyframeTarget || !generatedSocialKeyframe) return false;
+  const sourcePath = path.resolve(projectRoot, generatedSocialKeyframe);
+  const outputPath = path.join(outputDirectory, file.target);
+  await access(sourcePath);
+  await copyFile(sourcePath, outputPath);
+  const bytes = await readFile(outputPath);
+  const { width, height } = readPngDimensions(bytes, file.target);
+  if (width !== 1200 || height !== 630) {
+    await removeIfPresent(outputPath);
+    throw new Error(`${file.target}: generated social keyframe must be 1200x630, observed ${width}x${height}.`);
+  }
+  if (bytes.length < 100_000) {
+    await removeIfPresent(outputPath);
+    throw new Error(`${file.target}: generated social keyframe is unexpectedly small (${bytes.length} bytes).`);
+  }
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  console.log(`release_asset_generated target=${file.target} source=playwright-open-world bytes=${bytes.length} sha256=${digest} dimensions=${width}x${height}`);
+  return true;
 }
 
 async function copyCachedAsset(file) {
@@ -105,6 +147,7 @@ async function downloadAndVerify(file, label, url) {
 
 async function resolveReleaseAsset(file) {
   assertManifestEntry(file);
+  if (await copyGeneratedSocialKeyframe(file)) return;
   if (await copyCachedAsset(file)) return;
 
   const candidates = [
@@ -114,19 +157,30 @@ async function resolveReleaseAsset(file) {
   for (const candidate of candidates) {
     if (await downloadAndVerify(file, candidate.label, candidate.url)) return;
   }
+  if (deferredReleaseAssets.has(file.target)) {
+    console.warn(`release_asset_deferred target=${file.target} reason=explicit-owner-approved-post-migration`);
+    return;
+  }
   if (process.env.AURION_ALLOW_MISSING_RELEASE_ASSETS === "true") {
-    console.warn(`release_asset_skipped target=${file.target} reason=no-approved-source`);
+    console.warn(`release_asset_skipped target=${file.target} reason=legacy-broad-missing-asset-mode`);
     return;
   }
   throw new Error(`${file.target}: no approved source produced the expected immutable release asset.`);
 }
 
+async function copyBoundLocalAudio(file) {
+  assertManifestEntry(file);
+  const sourcePath = path.join(projectRoot, "public", "audio", file.source);
+  const outputPath = path.join(outputDirectory, file.target);
+  await copyFile(sourcePath, outputPath);
+  await verifyPackagedAsset(file, outputPath);
+  console.log(`audio_asset_verified target=${file.target} source=repository bytes=${file.bytes} sha256=${file.sha256}`);
+}
+
 await mkdir(outputDirectory, { recursive: true });
 for (const file of files) await resolveReleaseAsset(file);
-for (const filename of ambientWorldFiles) {
-  await copyFile(path.join(projectRoot, "public", "audio", filename), path.join(outputDirectory, filename));
-}
+for (const file of localAudioFiles) await copyBoundLocalAudio(file);
 for (const filename of sfxFiles) {
   await copyFile(path.join(projectRoot, "public", "audio", "sfx", filename), path.join(outputDirectory, filename));
 }
-console.log(`Aurion itch assets packaged with immutable integrity verification: ${files.length} bound release files, ${ambientWorldFiles.length} local ambient files and ${sfxFiles.length} local SFX files.`);
+console.log(`Aurion itch assets packaged with immutable integrity verification: ${files.length} bound release files, ${localAudioFiles.length} local soundtrack masters and ${sfxFiles.length} local SFX files.`);

@@ -19,7 +19,7 @@ function resolveOnlineAsset(path: string): string {
 }
 
 export const aurionAssets = {
-  expeditionTheme: resolveAurionAsset("aurion-expedition-theme_a8401a12.mp3", "/manus-storage/aurion-expedition-theme_a8401a12.mp3"),
+  expeditionTheme: resolveAurionAsset("ambient-forest.wav", "/audio/ambient-forest.wav"),
   audio: {
     tower: resolveAurionAsset("ambient-tower.wav", "/audio/ambient-tower.wav"),
     plains: resolveAurionAsset("ambient-plains.wav", "/audio/ambient-plains.wav"),
