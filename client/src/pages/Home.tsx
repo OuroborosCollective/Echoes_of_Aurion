@@ -716,7 +716,7 @@ export default function Home() {
         onStarterCharacterSelected={setStarterCharacter}
       />
       <div className="account-game-tools" aria-label="Konto- und Spielmodus">
-        {!isAuthenticated && <button type="button" className="account-game-tools__account" onClick={openAccountAccess}><UserRound size={15} /> KONTO ANLEGEN / ANMELDEN</button>}
+        {!isAuthenticated && screen !== "open_world" && <button type="button" className="account-game-tools__account" onClick={openAccountAccess}><UserRound size={15} /> KONTO ANLEGEN / ANMELDEN</button>}
         <button type="button" className="account-game-tools__fullscreen" onClick={() => void toggleImmersiveMode()} aria-label={immersiveMode ? "Vollbildmodus beenden" : "Vollbildmodus aktivieren"}>{immersiveMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}<span>{immersiveMode ? "VOLLBILD ENDE" : "VOLLBILD"}</span></button>
       </div>
       {screen === "gate" && (
