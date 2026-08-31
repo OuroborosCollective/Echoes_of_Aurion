@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(projectRoot, "shared", "audioAssetIntegrity.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+const canonicalAudioRoot = path.join(projectRoot, "public", "audio");
+const browserAudioRoot = path.join(projectRoot, "client", "public", "audio");
 
 function fail(message) {
   throw new Error(`Aurion audio integrity: ${message}`);
@@ -55,9 +57,9 @@ async function readWavHeader(filePath) {
   }
 }
 
-function assertPcmWav(asset, buffer) {
+function assertPcmWav(asset, buffer, surface) {
   if (buffer.length < 44 || buffer.toString("ascii", 0, 4) !== "RIFF" || buffer.toString("ascii", 8, 12) !== "WAVE") {
-    fail(`${asset.target}: not a RIFF/WAVE file.`);
+    fail(`${asset.target}: ${surface} is not a RIFF/WAVE file.`);
   }
   let offset = 12;
   let formatFound = false;
@@ -71,27 +73,34 @@ function assertPcmWav(asset, buffer) {
       const sampleRate = buffer.readUInt32LE(body + 4);
       const bitsPerSample = buffer.readUInt16LE(body + 14);
       if (audioFormat !== 1 || channels !== manifest.format.channels || sampleRate !== manifest.format.sampleRateHz || bitsPerSample !== manifest.format.bitsPerSample) {
-        fail(`${asset.target}: expected PCM S16LE ${manifest.format.sampleRateHz} Hz stereo.`);
+        fail(`${asset.target}: ${surface} expected PCM S16LE ${manifest.format.sampleRateHz} Hz stereo.`);
       }
       formatFound = true;
       break;
     }
     offset = body + size + (size % 2);
   }
-  if (!formatFound) fail(`${asset.target}: fmt chunk was not found in the bounded header read.`);
+  if (!formatFound) fail(`${asset.target}: ${surface} fmt chunk was not found in the bounded header read.`);
+}
+
+async function verifySurface(asset, root, surface) {
+  const filePath = path.join(root, asset.source);
+  const fileStat = await stat(filePath);
+  if (fileStat.size !== asset.bytes) fail(`${asset.target}: ${surface} expected ${asset.bytes} bytes, observed ${fileStat.size}.`);
+  const digest = await sha256(filePath);
+  if (digest !== asset.sha256) fail(`${asset.target}: ${surface} expected SHA-256 ${asset.sha256}, observed ${digest}.`);
+  assertPcmWav(asset, await readWavHeader(filePath), surface);
+  return fileStat.size;
 }
 
 assertManifest();
-let verifiedBytes = 0;
+let canonicalBytes = 0;
+let browserBytes = 0;
 for (const asset of manifest.assets) {
-  const filePath = path.join(projectRoot, "public", "audio", asset.source);
-  const fileStat = await stat(filePath);
-  if (fileStat.size !== asset.bytes) fail(`${asset.target}: expected ${asset.bytes} bytes, observed ${fileStat.size}.`);
-  const digest = await sha256(filePath);
-  if (digest !== asset.sha256) fail(`${asset.target}: expected SHA-256 ${asset.sha256}, observed ${digest}.`);
-  assertPcmWav(asset, await readWavHeader(filePath));
-  verifiedBytes += fileStat.size;
-  console.log(`audio_asset_verified role=${asset.role} target=${asset.target} bytes=${asset.bytes} sha256=${asset.sha256}`);
+  canonicalBytes += await verifySurface(asset, canonicalAudioRoot, "canonical-master");
+  browserBytes += await verifySurface(asset, browserAudioRoot, "browser-projection");
+  console.log(`audio_asset_verified role=${asset.role} target=${asset.target} bytes=${asset.bytes} sha256=${asset.sha256} surfaces=canonical-master,browser-projection`);
 }
-if (verifiedBytes !== manifest.totalBytes) fail(`verified byte total mismatch: ${verifiedBytes}.`);
-console.log(`Aurion soundtrack integrity verified: ${manifest.assets.length} local PCM masters, ${verifiedBytes} bytes, no external music source.`);
+if (canonicalBytes !== manifest.totalBytes) fail(`canonical verified byte total mismatch: ${canonicalBytes}.`);
+if (browserBytes !== manifest.totalBytes) fail(`browser projection byte total mismatch: ${browserBytes}.`);
+console.log(`Aurion soundtrack integrity verified: ${manifest.assets.length} PCM masters projected byte-identically into the browser runtime, ${canonicalBytes} bytes per surface, no external music source.`);

@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/aim-224-final-video-proof-once.yml
       - .github/workflows/android-apk.yml
+      - client/public/audio/**
       - client/src/components/aim224OverlaySafety.css
       - client/src/lib/aurionAssets.ts
       - client/src/pages/Home.tsx
