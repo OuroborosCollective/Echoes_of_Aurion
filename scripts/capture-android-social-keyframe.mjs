@@ -12,9 +12,13 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
-  await page.goto(`${baseUrl}/?aurion_preview=open-world`, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: /Aurion-Expanse/i }).waitFor({ state: "visible" });
-  await page.locator("canvas.game-canvas").waitFor({ state: "visible" });
+  await page.goto(`${baseUrl}/?aurion_preview=open-world`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
+  await page.getByRole("heading", { name: /Aurion-Expanse/i }).waitFor({ state: "visible", timeout: 60_000 });
+  await page.locator("canvas.game-canvas").waitFor({ state: "visible", timeout: 60_000 });
+  await page.getByRole("button", { name: "WELT / QUESTS" }).waitFor({ state: "visible", timeout: 60_000 });
   if (await page.locator(".mission-ui").count()) throw new Error("Legacy mission UI is visible in the Open World keyframe.");
   if (await page.getByText(/ARENA 1\/4/i).count()) throw new Error("Legacy arena is visible in the Open World keyframe.");
   await page.addStyleTag({
