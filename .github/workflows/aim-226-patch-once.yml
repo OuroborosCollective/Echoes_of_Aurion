@@ -1,0 +1,513 @@
+name: AIM226 Exact Patch and Evidence Lane
+
+on:
+  push:
+    branches:
+      - feature/aim-226-aurion-migration-round-1-einmalige-persistente
+
+permissions:
+  contents: write
+
+env:
+  DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim226_test
+  JWT_SECRET: aim226-ci-cookie-secret-at-least-thirty-two-characters
+  PORT: "3000"
+
+jobs:
+  patch-and-prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_aim226_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Verify exact AIM-226 ancestry and one-shot state
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=02c79dd12767db2f4dd87b6b72894cf1c236c9ab
+          test "$(git merge-base HEAD "$base")" = "$base"
+          if grep -q 'AIM-226: userId primary key is the atomic first-write-wins authority' server/db.ts; then
+            echo "already_patched=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          unexpected="$(git diff --name-only "$base"..HEAD | grep -v '^.github/workflows/aim-226-patch-once.yml$' || true)"
+          test -z "$unexpected" || { echo "Unexpected pre-patch drift:"; echo "$unexpected"; exit 1; }
+          echo "already_patched=false" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.already_patched != 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.already_patched != 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        if: steps.gate.outputs.already_patched != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply exact AIM-226 source patch
+        if: steps.gate.outputs.already_patched != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, got {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          db_path = "server/db.ts"
+          old_equip = '''export async function equipPlayerCharacterAppearance(values: { userId: number; assetId: string }) {
+            const db = await getDb();
+            if (!db) throw new Error("Game database is not available");
+            const asset = (await db.select({ id: glbAssets.id, assetType: glbAssets.assetType, status: glbAssets.status, visibility: glbAssetSubmissions.visibility, submittedByUserId: glbAssetSubmissions.submittedByUserId }).from(glbAssets).leftJoin(glbAssetSubmissions, eq(glbAssetSubmissions.approvedAssetId, glbAssets.id)).where(eq(glbAssets.id, values.assetId)).limit(1))[0];
+            if (!asset || asset.assetType !== "character" || asset.status !== "approved") throw new Error("Dieses Charaktermodell ist nicht freigegeben.");
+            if (asset.visibility === "private" && asset.submittedByUserId !== values.userId) throw new Error("Private Charaktermodelle dürfen nur vom einreichenden Explorer verwendet werden.");
+            await db.insert(playerCharacterAppearances).values({ userId: values.userId, assetId: asset.id, visibility: asset.visibility ?? "public" }).onDuplicateKeyUpdate({ set: { assetId: asset.id, visibility: asset.visibility ?? "public" } });
+            const appearance = await getPlayerCharacterAppearance(values.userId);
+            if (!appearance || appearance.assetId !== asset.id) throw new Error("Charakterauswahl konnte nicht bestätigt werden.");
+            return appearance;
+          }'''.replace("          ", "")
+          new_equip = '''export async function equipPlayerCharacterAppearance(values: { userId: number; assetId: string }) {
+            const db = await getDb();
+            if (!db) throw new Error("Game database is not available");
+            const asset = (await db.select({ id: glbAssets.id, assetType: glbAssets.assetType, status: glbAssets.status, visibility: glbAssetSubmissions.visibility, submittedByUserId: glbAssetSubmissions.submittedByUserId }).from(glbAssets).leftJoin(glbAssetSubmissions, eq(glbAssetSubmissions.approvedAssetId, glbAssets.id)).where(eq(glbAssets.id, values.assetId)).limit(1))[0];
+            if (!asset || asset.assetType !== "character" || asset.status !== "approved") throw new Error("Dieses Charaktermodell ist nicht freigegeben.");
+            if (asset.visibility === "private" && asset.submittedByUserId !== values.userId) throw new Error("Private Charaktermodelle dürfen nur vom einreichenden Explorer verwendet werden.");
+
+            const existing = await getPlayerCharacterAppearance(values.userId);
+            if (existing) {
+              if (existing.assetId !== asset.id) throw new Error("Dein Aurion-Charakter ist bereits dauerhaft gebunden.");
+              return existing;
+            }
+
+            // AIM-226: userId primary key is the atomic first-write-wins authority.
+            // Concurrent first binds may both observe absence, but only one INSERT can win.
+            // The loser reads the committed winner and is idempotent only for the same asset.
+            try {
+              await db.insert(playerCharacterAppearances).values({ userId: values.userId, assetId: asset.id, visibility: asset.visibility ?? "public" });
+            } catch (error) {
+              if (!isDuplicateKeyError(error)) throw error;
+            }
+
+            const appearance = await getPlayerCharacterAppearance(values.userId);
+            if (!appearance) throw new Error("Charakterbindung konnte nicht bestätigt werden.");
+            if (appearance.assetId !== asset.id) throw new Error("Dein Aurion-Charakter ist bereits dauerhaft gebunden.");
+            return appearance;
+          }'''.replace("          ", "")
+          replace_once(db_path, old_equip, new_equip)
+          replace_once(
+              db_path,
+              '    if (submission.assetType === "character") await tx.insert(playerCharacterAppearances).values({ userId: submission.submittedByUserId, assetId, visibility: submission.visibility }).onDuplicateKeyUpdate({ set: { assetId, visibility: submission.visibility } });\n',
+              '',
+          )
+
+          home = Path("client/src/pages/Home.tsx")
+          text = home.read_text()
+          for old in [
+              'import { starterCharacters } from "@/game/starterCharacters";\n',
+              '  const [starterCharacter, setStarterCharacter] = useState<(typeof starterCharacters)[number]>(starterCharacters[0]);\n',
+              '        starterCharacterId={starterCharacter.id}\n        onStarterCharacterSelected={setStarterCharacter}\n',
+              '          {!characterAppearance.data && <div className="starter-character-select" aria-label="Standard-Charaktermodell wählen"><p>EXPLORER-MODELL // RIGGT + ANIMIERT</p><div>{starterCharacters.map(character => <button type="button" key={character.id} onClick={() => setStarterCharacter(character)} className={starterCharacter.id === character.id ? "active" : ""}><b>{character.name}</b><span>{character.role}</span><small>{character.detail}</small></button>)}</div></div>}\n',
+          ]:
+              if text.count(old) != 1:
+                  raise SystemExit(f"Home.tsx expected exactly one match for {old[:60]!r}, got {text.count(old)}")
+              text = text.replace(old, '', 1)
+          old = '  const activeCharacterUrl = characterAppearance.data?.storageUrl ?? starterCharacter.assetPath;'
+          new = '  const activeCharacterUrl = characterAppearance.data?.storageUrl;'
+          if text.count(old) != 1:
+              raise SystemExit("Home.tsx activeCharacterUrl contract drift")
+          home.write_text(text.replace(old, new, 1))
+
+          overlay = Path("client/src/components/CommunityOverlay.tsx")
+          text = overlay.read_text()
+          text = text.replace('import { starterCharacters, type StarterCharacter } from "@/game/starterCharacters";\n', '', 1)
+          old_sig = '''export default function CommunityOverlay({
+            isAuthenticated,
+            currentUserId,
+            onTeamReady,
+            onTeamCleared,
+            starterCharacterId,
+            onStarterCharacterSelected,
+          }: {
+            isAuthenticated: boolean;
+            currentUserId?: number;
+            onTeamReady: (partnerName: string) => void;
+            onTeamCleared: () => void;
+            starterCharacterId: StarterCharacter["id"];
+            onStarterCharacterSelected: (character: StarterCharacter) => void;
+          }) {'''.replace("          ", "")
+          new_sig = '''export default function CommunityOverlay({
+            isAuthenticated,
+            currentUserId,
+            onTeamReady,
+            onTeamCleared,
+          }: {
+            isAuthenticated: boolean;
+            currentUserId?: number;
+            onTeamReady: (partnerName: string) => void;
+            onTeamCleared: () => void;
+          }) {'''.replace("          ", "")
+          if text.count(old_sig) != 1:
+              raise SystemExit("CommunityOverlay signature drift")
+          text = text.replace(old_sig, new_sig, 1)
+          old_mutation = '  const equipCharacter = trpc.assetSubmissions.equipCharacter.useMutation({ onSuccess: async appearance => { setMessage(`${appearance.displayName} ist nun dein aktives Charaktermodell.`); await utils.assetSubmissions.characterAppearance.invalidate(); }, onError: error => reportRuntimeFailure("Das Ausrüsten des Charaktermodells", error) });'
+          new_mutation = '  const equipCharacter = trpc.assetSubmissions.equipCharacter.useMutation({ onSuccess: async appearance => { setMessage(`${appearance.displayName} ist dauerhaft an dein Aurion-Konto gebunden.`); await utils.assetSubmissions.characterAppearance.invalidate(); }, onError: error => reportRuntimeFailure("Die dauerhafte Charakterbindung", error) });'
+          if text.count(old_mutation) != 1:
+              raise SystemExit("CommunityOverlay mutation drift")
+          text = text.replace(old_mutation, new_mutation, 1)
+          starter_pattern = re.compile(r'\n        <div className="asset-catalog starter-asset-catalog">\{starterCharacters\.map\(character => <article.*?</div>\n        \{characterAppearance\.data && <p className="active-character-asset">Aktives Charaktermodell: <b>\{characterAppearance\.data\.displayName\}</b></p>\}', re.S)
+          match = starter_pattern.search(text)
+          if not match:
+              raise SystemExit("CommunityOverlay starter catalog block drift")
+          replacement = '\n        {characterAppearance.data && <p className="active-character-asset" data-testid="active-character-binding" data-character-asset-id={characterAppearance.data.assetId}>Dauerhaft gebundener Charakter: <b>{characterAppearance.data.displayName}</b></p>}'
+          text = text[:match.start()] + replacement + text[match.end():]
+          old_button = '{isAuthenticated && asset.assetType === "character" && <button type="button" disabled={equipCharacter.isPending || characterAppearance.data?.assetId === asset.id} onClick={() => equipCharacter.mutate({ assetId: asset.id })}>{characterAppearance.data?.assetId === asset.id ? "Aktiv" : "Als Charakter wählen"}</button>}'
+          new_button = '{isAuthenticated && asset.assetType === "character" && <button type="button" disabled={equipCharacter.isPending || characterAppearance.data === undefined || characterAppearance.data !== null} onClick={() => equipCharacter.mutate({ assetId: asset.id })}>{characterAppearance.data === undefined ? "Bindung wird geprüft" : characterAppearance.data?.assetId === asset.id ? "Dauerhaft gebunden" : characterAppearance.data ? "Charakter bereits gebunden" : "Charakter dauerhaft binden"}</button>}'
+          if text.count(old_button) != 1:
+              raise SystemExit(f"CommunityOverlay catalog button drift: {text.count(old_button)}")
+          overlay.write_text(text.replace(old_button, new_button, 1))
+
+          overlay_test = Path("client/src/components/CommunityOverlay.test.tsx")
+          text = overlay_test.read_text()
+          old_props = ' starterCharacterId="wayfinder" onStarterCharacterSelected={() => undefined}'
+          if text.count(old_props) != 3:
+              raise SystemExit(f"CommunityOverlay.test expected 3 legacy prop sites, got {text.count(old_props)}")
+          overlay_test.write_text(text.replace(old_props, ''))
+
+          canvas = Path("client/src/components/GameCanvas.tsx")
+          text = canvas.read_text()
+          old_canvas = '<canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} />'
+          new_canvas = '<canvas ref={canvasRef} className="game-canvas" style={{ touchAction: "none" }} aria-hidden={webglUnavailable} data-character-model-url={characterModelUrl ?? ""} />'
+          if text.count(old_canvas) != 1:
+              raise SystemExit("GameCanvas canvas contract drift")
+          canvas.write_text(text.replace(old_canvas, new_canvas, 1))
+
+          guest = Path("e2e/guest-smoke.spec.ts")
+          text = guest.read_text()
+          pattern = re.compile(r'test\("guest selects both starter characters and sees a read-only asset catalog".*?\n\}\);\n\n', re.S)
+          match = pattern.search(text)
+          if not match:
+              raise SystemExit("guest starter-switch test contract drift")
+          replacement = '''test("guest has no character-selection authority and sees a read-only asset catalog", async ({ page }) => {
+            test.slow();
+            const errors = recordUnexpectedConsoleErrors(page);
+            await page.goto("/");
+
+            await expect(page.getByLabel("Standard-Charaktermodell wählen")).toHaveCount(0);
+            await page.getByRole("button", { name: "GLB-Einreichung öffnen" }).click();
+            const community = page.getByLabel("Aurion Gemeinschaft");
+            await expect(community.getByText("Öffentlicher Aurion-Katalog")).toBeVisible();
+            await expect(community.locator('input[type="file"]')).toHaveCount(0);
+            await expect(community.getByRole("button", { name: /Charakter (?:dauerhaft binden|bereits gebunden)|Als Charakter wählen/ })).toHaveCount(0);
+            expect(errors).toEqual([]);
+          });
+
+          '''.replace("          ", "")
+          guest.write_text(text[:match.start()] + replacement + text[match.end():])
+          PY
+
+          cat > server/playerCharacterBinding.e2e.test.ts <<'EOF'
+          import mysql, { type Connection } from "mysql2/promise";
+          import { afterAll, beforeAll, describe, expect, it } from "vitest";
+          import { equipPlayerCharacterAppearance, getPlayerCharacterAppearance, reviewPlayerGlbSubmission } from "./db";
+
+          const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
+          const USER_MIN = 2_146_200_000;
+          const USER_MAX = 2_146_200_999;
+          const ASSET_A = "aim226-character-a";
+          const ASSET_B = "aim226-character-b";
+
+          describeWithDatabase("AIM-226 persistent character binding", () => {
+            let connection: Connection;
+
+            async function seedPublicCharacter(id: string, ownerUserId: number) {
+              await connection.execute(
+                "INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId) VALUES (?, ?, 'character', ?, ?, ?, ?, 'approved', ?)",
+                [id, `AIM226 ${id}`, `aim226/${id}.glb`, `/manus-storage/${id}.glb`, id === ASSET_A ? "a".repeat(64) : "b".repeat(64), 4096, ownerUserId],
+              );
+            }
+
+            async function resetFixture() {
+              await connection.execute("DELETE FROM playerCharacterAppearances WHERE userId BETWEEN ? AND ?", [USER_MIN, USER_MAX]);
+              await connection.execute("DELETE FROM glbAssetSubmissions WHERE id LIKE 'aim226-%'");
+              await connection.execute("DELETE FROM glbAssets WHERE storageKey LIKE 'aim226/%'");
+            }
+
+            beforeAll(async () => {
+              connection = await mysql.createConnection(process.env.DATABASE_URL!);
+              await resetFixture();
+              await seedPublicCharacter(ASSET_A, USER_MIN);
+              await seedPublicCharacter(ASSET_B, USER_MIN);
+            });
+
+            afterAll(async () => {
+              await resetFixture();
+              await connection.end();
+            });
+
+            it("allows the first binding, treats the same asset idempotently, and refuses replacement", async () => {
+              const userId = USER_MIN + 1;
+              const first = await equipPlayerCharacterAppearance({ userId, assetId: ASSET_A });
+              const repeated = await equipPlayerCharacterAppearance({ userId, assetId: ASSET_A });
+              expect(first.assetId).toBe(ASSET_A);
+              expect(repeated.assetId).toBe(ASSET_A);
+              expect(repeated.equippedAt.getTime()).toBe(first.equippedAt.getTime());
+              await expect(equipPlayerCharacterAppearance({ userId, assetId: ASSET_B })).rejects.toThrow("bereits dauerhaft gebunden");
+              expect((await getPlayerCharacterAppearance(userId))?.assetId).toBe(ASSET_A);
+            });
+
+            it("keeps private character ownership server-authoritative", async () => {
+              const ownerUserId = USER_MIN + 2;
+              const outsiderUserId = USER_MIN + 3;
+              const privateAssetId = "aim226-private-character";
+              await connection.execute(
+                "INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId) VALUES (?, 'AIM226 Private', 'character', ?, ?, ?, 4096, 'approved', ?)",
+                [privateAssetId, "aim226/private.glb", "/manus-storage/aim226-private.glb", "c".repeat(64), ownerUserId],
+              );
+              await connection.execute(
+                "INSERT INTO glbAssetSubmissions (id, submittedByUserId, assetType, subcategory, displayName, description, visibility, storageKey, storageUrl, sha256, bytes, status, approvedAssetId) VALUES ('aim226-private-submission', ?, 'character', 'e2e', 'AIM226 Private', 'Private ownership regression fixture', 'private', 'aim226/private-submission.glb', '/manus-storage/aim226-private.glb', ?, 4096, 'approved', ?)",
+                [ownerUserId, "d".repeat(64), privateAssetId],
+              );
+              await expect(equipPlayerCharacterAppearance({ userId: outsiderUserId, assetId: privateAssetId })).rejects.toThrow("nur vom einreichenden Explorer");
+              expect(await getPlayerCharacterAppearance(outsiderUserId)).toBeUndefined();
+            });
+
+            it("does not let a later admin approval rebind an existing character", async () => {
+              const userId = USER_MIN + 4;
+              await equipPlayerCharacterAppearance({ userId, assetId: ASSET_A });
+              await connection.execute(
+                "INSERT INTO glbAssetSubmissions (id, submittedByUserId, assetType, subcategory, displayName, description, visibility, storageKey, storageUrl, sha256, bytes, status) VALUES ('aim226-review-submission', ?, 'character', 'e2e', 'AIM226 Approved Later', 'Approval must not mutate identity binding', 'public', 'aim226/review-later.glb', '/manus-storage/aim226-review-later.glb', ?, 4096, 'pending')",
+                [userId, "e".repeat(64)],
+              );
+              const review = await reviewPlayerGlbSubmission({ submissionId: "aim226-review-submission", reviewedByUserId: USER_MIN + 5, decision: "approved" });
+              expect(review.approved).toBe(true);
+              expect(review.assetId).not.toBe(ASSET_A);
+              expect((await getPlayerCharacterAppearance(userId))?.assetId).toBe(ASSET_A);
+            });
+
+            it("uses the userId primary key as the atomic winner for concurrent first binds", async () => {
+              const userId = USER_MIN + 6;
+              const outcomes = await Promise.allSettled([
+                equipPlayerCharacterAppearance({ userId, assetId: ASSET_A }),
+                equipPlayerCharacterAppearance({ userId, assetId: ASSET_B }),
+              ]);
+              expect(outcomes.filter(result => result.status === "fulfilled")).toHaveLength(1);
+              expect(outcomes.filter(result => result.status === "rejected")).toHaveLength(1);
+              const finalAppearance = await getPlayerCharacterAppearance(userId);
+              expect([ASSET_A, ASSET_B]).toContain(finalAppearance?.assetId);
+              const [rows] = await connection.execute("SELECT assetId FROM playerCharacterAppearances WHERE userId = ?", [userId]);
+              expect(rows).toHaveLength(1);
+            });
+          });
+          EOF
+
+          cat > e2e/aim226.characterBinding.mobile.spec.ts <<'EOF'
+          import { expect, test, type Page } from "@playwright/test";
+          import mysql from "mysql2/promise";
+          import { randomUUID } from "node:crypto";
+
+          const ASSET_A = "aim226-character-a";
+          const ASSET_B = "aim226-character-b";
+          const ASSET_A_URL = "/manus-storage/aim226-character-a.glb";
+
+          async function openAssets(page: Page) {
+            const mobileToggle = page.getByRole("button", { name: /GEMEINSCHAFT|MENÜ SCHLIESSEN/i });
+            if (await mobileToggle.isVisible()) await mobileToggle.click();
+            await page.getByRole("button", { name: "GLB-Einreichung öffnen" }).click();
+            await expect(page.getByRole("heading", { name: "Asset-Einreichung" })).toBeVisible();
+          }
+
+          async function registerAccount(page: Page, handle: string) {
+            await page.goto("/?aurion_runtime=no-webgl");
+            await page.getByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/ }).click();
+            await page.getByRole("tab", { name: "Konto anlegen" }).click();
+            await page.getByLabel("Rufname").fill(handle);
+            await page.getByLabel("Passwort").fill("AIM226-mobile-proof-password");
+            await page.getByRole("button", { name: "Aurion-Konto erstellen" }).click();
+            await expect(page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ })).toBeVisible({ timeout: 20_000 });
+          }
+
+          async function prepareEncounter(handle: string) {
+            const connection = await mysql.createConnection(process.env.DATABASE_URL!);
+            try {
+              const [rows] = await connection.execute<any[]>("SELECT userId FROM localCredentials WHERE handle = ? LIMIT 1", [handle]);
+              expect(rows).toHaveLength(1);
+              const userId = Number(rows[0].userId);
+              await connection.execute(
+                "INSERT INTO gameplayQuestProgress (id, userId, questKey, state) VALUES (?, ?, 'astral_call', 'active')",
+                [`aim226-quest-${randomUUID()}`, userId],
+              );
+              return userId;
+            } finally {
+              await connection.end();
+            }
+          }
+
+          async function readBinding(userId: number) {
+            const connection = await mysql.createConnection(process.env.DATABASE_URL!);
+            try {
+              const [rows] = await connection.execute<any[]>("SELECT assetId FROM playerCharacterAppearances WHERE userId = ?", [userId]);
+              return rows.map(row => String(row.assetId));
+            } finally {
+              await connection.end();
+            }
+          }
+
+          for (const viewport of [
+            { name: "Android phone", width: 412, height: 915 },
+            { name: "Android tablet", width: 800, height: 1280 },
+          ]) {
+            test(`keeps one server-bound character across reload, observatory, open world and encounter on ${viewport.name}`, async ({ page }) => {
+              test.slow();
+              await page.setViewportSize({ width: viewport.width, height: viewport.height });
+              const handle = `aim226${viewport.width}${Date.now().toString(36)}`.slice(0, 30);
+              await registerAccount(page, handle);
+              const userId = await prepareEncounter(handle);
+
+              await openAssets(page);
+              const assetA = page.locator("article").filter({ hasText: "AIM226 Character A" });
+              const assetB = page.locator("article").filter({ hasText: "AIM226 Character B" });
+              await assetA.getByRole("button", { name: "Charakter dauerhaft binden" }).click();
+              const binding = page.getByTestId("active-character-binding");
+              await expect(binding).toHaveAttribute("data-character-asset-id", ASSET_A);
+              await expect(assetA.getByRole("button", { name: "Dauerhaft gebunden" })).toBeDisabled();
+              await expect(assetB.getByRole("button", { name: "Charakter bereits gebunden" })).toBeDisabled();
+              expect(await readBinding(userId)).toEqual([ASSET_A]);
+
+              await page.reload();
+              await openAssets(page);
+              await expect(page.getByTestId("active-character-binding")).toHaveAttribute("data-character-asset-id", ASSET_A);
+              expect(await readBinding(userId)).toEqual([ASSET_A]);
+              await page.getByRole("button", { name: "Community-Konsole schließen" }).click();
+              await expect(page.locator("canvas.game-canvas")).toHaveAttribute("data-character-model-url", ASSET_A_URL);
+
+              await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
+              await expect(page.getByRole("heading", { name: /Willkommen zurück/i })).toBeVisible();
+              await expect(page.locator("canvas.game-canvas")).toHaveAttribute("data-character-model-url", ASSET_A_URL);
+
+              await page.getByRole("button", { name: "IN DIE OPEN WORLD" }).click();
+              await expect(page.getByLabel("Aurion Open World")).toBeVisible({ timeout: 20_000 });
+              await expect(page.locator("canvas.game-canvas")).toHaveAttribute("data-character-model-url", ASSET_A_URL);
+
+              await page.getByRole("button", { name: "WELT / QUESTS" }).click();
+              const details = page.getByRole("dialog", { name: "Welt-, Quest- und Begegnungsdetails" });
+              await expect(details).toBeVisible();
+              await details.getByRole("button", { name: "Begegnung beginnen" }).click();
+              await expect(page.getByText("LIVE COMMAND BRIDGE", { exact: true })).toBeVisible({ timeout: 20_000 });
+              await expect(page.locator("canvas.game-canvas")).toHaveAttribute("data-character-model-url", ASSET_A_URL);
+              expect(await readBinding(userId)).toEqual([ASSET_A]);
+            });
+          }
+          EOF
+
+      - name: Establish exact isolated MariaDB schema
+        if: steps.gate.outputs.already_patched != 'true'
+        run: |
+          set -euo pipefail
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+
+      - name: Prove server identity binding and TypeScript contracts
+        if: steps.gate.outputs.already_patched != 'true'
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm exec vitest run server/playerCharacterBinding.e2e.test.ts client/src/components/CommunityOverlay.test.tsx client/src/pages/Home.openWorldState.test.ts server/gameplayProtocol.test.ts
+          git diff --check
+          test -z "$(git diff --name-only 02c79dd12767db2f4dd87b6b72894cf1c236c9ab -- drizzle/)"
+          if grep -R "force\.click" e2e/aim226.characterBinding.mobile.spec.ts; then exit 1; fi
+
+      - name: Install Chromium proof browser
+        if: steps.gate.outputs.already_patched != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Configure Playwright-managed Chromium for CI only
+        if: steps.gate.outputs.already_patched != 'true'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("playwright.config.ts")
+          text = p.read_text()
+          start = text.index("    launchOptions: {")
+          end = text.index("    headless: true,", start)
+          p.write_text(text[:start] + '    launchOptions: { args: ["--use-angle=swiftshader", "--disable-dev-shm-usage"] },\n' + text[end:])
+          PY
+
+      - name: Seed approved character catalog for isolated browser proof
+        if: steps.gate.outputs.already_patched != 'true'
+        run: |
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            for (const asset of [
+              ["aim226-character-a", "AIM226 Character A", "aim226/e2e-a.glb", "/manus-storage/aim226-character-a.glb", "a".repeat(64)],
+              ["aim226-character-b", "AIM226 Character B", "aim226/e2e-b.glb", "/manus-storage/aim226-character-b.glb", "b".repeat(64)],
+            ]) {
+              await connection.execute("INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId) VALUES (?, ?, 'character', ?, ?, ?, 4096, 'approved', 2146100000)", asset);
+            }
+          } finally { await connection.end(); }
+          NODE
+
+      - name: Prove Android phone and tablet character projection in real browser
+        if: steps.gate.outputs.already_patched != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm dev >/tmp/aurion-aim226.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            git checkout -- playwright.config.ts
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              pnpm exec playwright test e2e/aim226.characterBinding.mobile.spec.ts e2e/guest-smoke.spec.ts --workers=1 --timeout=120000
+              exit $?
+            fi
+            sleep 1
+          done
+          cat /tmp/aurion-aim226.log
+          exit 1
+
+      - name: Commit only proven AIM-226 product and regression changes
+        if: steps.gate.outputs.already_patched != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- playwright.config.ts
+          git diff --check
+          test -z "$(git diff --name-only 02c79dd12767db2f4dd87b6b72894cf1c236c9ab -- drizzle/)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/db.ts server/playerCharacterBinding.e2e.test.ts client/src/pages/Home.tsx client/src/components/CommunityOverlay.tsx client/src/components/CommunityOverlay.test.tsx client/src/components/GameCanvas.tsx e2e/guest-smoke.spec.ts e2e/aim226.characterBinding.mobile.spec.ts
+          git commit -m "fix(aim-226): make character binding permanent"
+          git push origin HEAD:feature/aim-226-aurion-migration-round-1-einmalige-persistente
