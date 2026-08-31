@@ -56,7 +56,46 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build budget-checked HTML5 client
+        env:
+          # Owner-approved temporary Android-only deferral. The trailer becomes
+          # mandatory again after the complete migration; every other manifest
+          # asset remains hash-bound by the verification step below.
+          AURION_ALLOW_MISSING_RELEASE_ASSETS: "true"
         run: pnpm build:itch
+
+      - name: Verify non-deferred Android release assets
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFile, stat } from "node:fs/promises";
+          import path from "node:path";
+
+          const deferredTrailer = "aurion-hero-trailer-en-de_c44ee2e1.mp4";
+          const manifest = JSON.parse(await readFile("shared/releaseAssetIntegrity.json", "utf8"));
+          if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.assets) || manifest.assets.length === 0) {
+            throw new Error("Android release asset manifest is invalid or empty.");
+          }
+          if (!manifest.assets.some((asset) => asset.target === deferredTrailer)) {
+            throw new Error(`Deferred Android trailer is not present in the immutable manifest: ${deferredTrailer}`);
+          }
+
+          for (const asset of manifest.assets) {
+            if (asset.target === deferredTrailer) {
+              console.log(`android_release_asset_deferred target=${asset.target} reason=owner-approved-until-post-migration`);
+              continue;
+            }
+            const outputPath = path.join("dist", "itch", "aurion-assets", asset.target);
+            const fileStat = await stat(outputPath);
+            if (fileStat.size !== asset.bytes) {
+              throw new Error(`${asset.target}: Android package byte mismatch; expected ${asset.bytes}, observed ${fileStat.size}.`);
+            }
+            const digest = createHash("sha256").update(await readFile(outputPath)).digest("hex");
+            if (digest !== asset.sha256) {
+              throw new Error(`${asset.target}: Android package SHA-256 mismatch; expected ${asset.sha256}, observed ${digest}.`);
+            }
+            console.log(`android_release_asset_verified target=${asset.target} bytes=${asset.bytes} sha256=${asset.sha256}`);
+          }
+          NODE
 
       - name: Create and synchronize Android shell
         run: |
