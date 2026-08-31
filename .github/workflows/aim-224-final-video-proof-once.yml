@@ -6,6 +6,7 @@ on:
       - fix/aim-224-video-state-machine
     paths:
       - .github/workflows/aim-224-final-video-proof-once.yml
+      - .github/workflows/android-apk.yml
       - client/src/components/aim224OverlaySafety.css
       - client/src/lib/aurionAssets.ts
       - client/src/pages/Home.tsx
@@ -14,6 +15,7 @@ on:
       - e2e/aurionAudio.decode.spec.ts
       - e2e/towerHome.mobile.spec.ts
       - public/audio/**
+      - scripts/capture-android-social-keyframe.mjs
       - scripts/package-itch-assets.mjs
       - scripts/verify-audio-assets.mjs
       - shared/audioAssetIntegrity.json
