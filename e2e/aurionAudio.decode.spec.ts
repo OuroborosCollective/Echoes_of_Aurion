@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
@@ -5,6 +6,7 @@ type AudioAsset = {
   role: string;
   source: string;
   bytes: number;
+  sha256: string;
   durationSeconds: number;
 };
 
@@ -24,7 +26,9 @@ for (const viewport of [
     for (const asset of manifest.assets) {
       const response = await page.request.get(`/audio/${asset.source}`);
       expect(response.ok(), `${asset.source} must be served`).toBe(true);
-      expect(Number(response.headers()["content-length"] ?? asset.bytes)).toBe(asset.bytes);
+      const body = await response.body();
+      expect(body.byteLength, `${asset.source} decoded response bytes`).toBe(asset.bytes);
+      expect(createHash("sha256").update(body).digest("hex"), `${asset.source} response SHA-256`).toBe(asset.sha256);
 
       const metadata = await page.evaluate(async (url) => {
         return await new Promise<{ duration: number; error?: string }>((resolve) => {
