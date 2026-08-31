@@ -9,13 +9,9 @@
   display: none;
 }
 
-.aurion-app:has(.open-world-hud) .brand-bar {
+.aurion-app:has(.open-world-hud) .brand-bar,
+.aurion-app:has(.open-world-hud) .brand-bar * {
   pointer-events: none;
-}
-
-.aurion-app:has(.open-world-hud) .brand-bar a,
-.aurion-app:has(.open-world-hud) .brand-bar button {
-  pointer-events: auto;
 }
 
 .open-world-hud__identity {
