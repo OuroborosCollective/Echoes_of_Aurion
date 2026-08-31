@@ -1,7 +1,17 @@
-.open-world-hud {
+.aurion-app .open-world-hud {
   position: fixed;
   z-index: 44;
   inset: 0;
+  width: auto;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
   pointer-events: none;
 }
 
@@ -58,6 +68,7 @@
 
 .open-world-hud__nav {
   position: absolute;
+  z-index: 46;
   top: max(76px, calc(env(safe-area-inset-top) + 60px));
   right: max(14px, env(safe-area-inset-right));
   display: flex;
@@ -72,6 +83,7 @@
 
 .open-world-hud__movement {
   position: absolute;
+  z-index: 45;
   right: max(14px, env(safe-area-inset-right));
   bottom: max(18px, calc(env(safe-area-inset-bottom) + 10px));
   display: flex;
@@ -209,14 +221,12 @@
     display: grid;
     width: 132px;
     max-width: 132px;
-    z-index: 46;
   }
 
   .open-world-hud__movement {
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));
     max-width: calc(100vw - 158px);
-    z-index: 45;
   }
 
   .open-world-details-layer {
