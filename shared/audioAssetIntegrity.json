@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "provenance": {
+    "kind": "project-owner-confirmed-soundtrack",
+    "confirmedAt": "2026-08-31",
+    "canonicalSource": "repository-pcm-master"
+  },
+  "format": {
+    "container": "wav",
+    "codec": "pcm_s16le",
+    "sampleRateHz": 44100,
+    "channels": 2,
+    "bitsPerSample": 16
+  },
+  "totalBytes": 180592752,
+  "assets": [
+    {
+      "role": "expedition",
+      "source": "ambient-forest.wav",
+      "target": "ambient-forest.wav",
+      "bytes": 20883534,
+      "sha256": "946dd349748cea7b8a789ba7e4c8dc75b3cb0ce6cef11ee7e335e8117cf784e8",
+      "durationSeconds": 118.386939
+    },
+    {
+      "role": "tower",
+      "source": "ambient-tower.wav",
+      "target": "ambient-tower.wav",
+      "bytes": 20736078,
+      "sha256": "82d7262d1f6231fc6bf79e0552aea4aca9c67a28cc1d57f2724649723b6460dc",
+      "durationSeconds": 117.55102
+    },
+    {
+      "role": "plains",
+      "source": "ambient-plains.wav",
+      "target": "ambient-plains.wav",
+      "bytes": 20196942,
+      "sha256": "b8ca19ebcaf62b5e12484d0a0a0980cb8566b7f8256889e901d52228bd76318e",
+      "durationSeconds": 114.494694
+    },
+    {
+      "role": "forest_world",
+      "source": "ambient-forest-world.wav",
+      "target": "ambient-forest-world.wav",
+      "bytes": 20570190,
+      "sha256": "ebcfa648ff20d33f326eef4107a648dd7a61eb191a8b4586b22e67740c76e7a2",
+      "durationSeconds": 116.611
+    },
+    {
+      "role": "cave_world",
+      "source": "ambient-cave-world.wav",
+      "target": "ambient-cave-world.wav",
+      "bytes": 20828238,
+      "sha256": "13aa4c6f734d6b6692f69bda64a58cd073d1aa7b6d6f3c13fad4d726473fc0b1",
+      "durationSeconds": 118.073
+    },
+    {
+      "role": "city_world",
+      "source": "ambient-city-world.wav",
+      "target": "ambient-city-world.wav",
+      "bytes": 31191630,
+      "sha256": "e31e43a40909f127001f1621e73cd61b8558c01b85abc3f299fabb65a530df1d",
+      "durationSeconds": 176.823
+    },
+    {
+      "role": "boss_dungeon_world",
+      "source": "ambient-boss-dungeon-world.wav",
+      "target": "ambient-boss-dungeon-world.wav",
+      "bytes": 25952334,
+      "sha256": "e7713ea4aabc3f6f0bb54fe478cc2c8e8c509877281854bf76b1c8363d350daa",
+      "durationSeconds": 147.122
+    },
+    {
+      "role": "cinder_vault",
+      "source": "ambient-cinder-vault.wav",
+      "target": "ambient-cinder-vault.wav",
+      "bytes": 20233806,
+      "sha256": "3d05daeb328140bce232d2e2035eb3f62cf8b1d98e3c9e2628ef148b69ba062e",
+      "durationSeconds": 114.703673
+    }
+  ]
+}

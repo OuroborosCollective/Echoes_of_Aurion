@@ -1,4 +1,4 @@
-name: AIM224 Final Video Proof
+name: AIM224 Final Video and Audio Proof
 
 on:
   push:
@@ -6,32 +6,41 @@ on:
       - fix/aim-224-video-state-machine
     paths:
       - .github/workflows/aim-224-final-video-proof-once.yml
-      - scripts/aim224_hide_account_in_world.py
       - client/src/components/aim224OverlaySafety.css
+      - client/src/lib/aurionAssets.ts
+      - client/src/pages/Home.tsx
+      - client/src/pages/Home.openWorldState.test.ts
+      - e2e/aim224.videoFlow.spec.ts
+      - e2e/aurionAudio.decode.spec.ts
+      - e2e/towerHome.mobile.spec.ts
+      - public/audio/**
+      - scripts/package-itch-assets.mjs
+      - scripts/verify-audio-assets.mjs
+      - shared/audioAssetIntegrity.json
+      - shared/releaseAssetIntegrity.json
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  prove-and-commit:
+  prove:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/aim-224-video-state-machine
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - name: Apply exact authenticated-world UI guard
-        run: python scripts/aim224_hide_account_in_world.py
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify product source
+      - name: Verify source, soundtrack and state contracts
         run: |
           git diff --check
+          node scripts/verify-audio-assets.mjs
           pnpm check
           pnpm exec vitest run client/src/pages/Home.openWorldState.test.ts client/src/game/sceneCompanionAuthority.test.ts
       - name: Install Chromium proof browser
@@ -46,7 +55,7 @@ jobs:
           end = text.index("    headless: true,", start)
           p.write_text(text[:start] + '    launchOptions: { args: ["--use-angle=swiftshader", "--disable-dev-shm-usage"] },\n' + text[end:])
           PY
-      - name: Prove the user video flow on phone and tablet
+      - name: Prove phone/tablet video flow and browser audio decode
         run: |
           set -euo pipefail
           pnpm exec vite --host 127.0.0.1 --port 3000 >/tmp/aurion-vite.log 2>&1 &
@@ -54,19 +63,10 @@ jobs:
           trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
-              pnpm exec playwright test e2e/aim224.videoFlow.spec.ts e2e/towerHome.mobile.spec.ts --workers=1 --timeout=60000
+              pnpm exec playwright test e2e/aim224.videoFlow.spec.ts e2e/towerHome.mobile.spec.ts e2e/aurionAudio.decode.spec.ts --workers=1 --timeout=120000
               exit $?
             fi
             sleep 1
           done
           cat /tmp/aurion-vite.log
           exit 1
-      - name: Commit proven React state guard
-        run: |
-          git config user.name "Ouroboros Collective"
-          git config user.email "projectouroboroscollective@gmail.com"
-          git add client/src/pages/Home.tsx
-          git diff --cached --check
-          test -n "$(git diff --cached --name-only)"
-          git commit -m "fix(open-world): hide account CTA during authenticated world play"
-          git push origin HEAD:fix/aim-224-video-state-machine

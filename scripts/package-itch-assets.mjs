@@ -16,7 +16,12 @@ if (integrityManifest.schemaVersion !== 1 || !Array.isArray(integrityManifest.as
   throw new Error("Aurion release asset integrity manifest is invalid or empty.");
 }
 const files = integrityManifest.assets;
-const ambientWorldFiles = ["ambient-forest-world.wav", "ambient-cave-world.wav", "ambient-city-world.wav", "ambient-boss-dungeon-world.wav"];
+const audioIntegrityManifestPath = path.join(projectRoot, "shared", "audioAssetIntegrity.json");
+const audioIntegrityManifest = JSON.parse(await readFile(audioIntegrityManifestPath, "utf8"));
+if (audioIntegrityManifest.schemaVersion !== 1 || !Array.isArray(audioIntegrityManifest.assets) || audioIntegrityManifest.assets.length !== 8) {
+  throw new Error("Aurion audio integrity manifest must bind exactly eight local soundtrack masters.");
+}
+const localAudioFiles = audioIntegrityManifest.assets;
 const sfxFiles = [
   "combat-attack-sharp.wav", "combat-attack-pointed.wav", "combat-attack-blunt.wav", "combat-spell-heal.wav", "combat-spell-buff.wav",
   "combat-creature-wolf-attack.wav", "combat-creature-human-attack.wav", "combat-creature-monster-attack.wav",
@@ -121,12 +126,19 @@ async function resolveReleaseAsset(file) {
   throw new Error(`${file.target}: no approved source produced the expected immutable release asset.`);
 }
 
+async function copyBoundLocalAudio(file) {
+  assertManifestEntry(file);
+  const sourcePath = path.join(projectRoot, "public", "audio", file.source);
+  const outputPath = path.join(outputDirectory, file.target);
+  await copyFile(sourcePath, outputPath);
+  await verifyPackagedAsset(file, outputPath);
+  console.log(`audio_asset_verified target=${file.target} source=repository bytes=${file.bytes} sha256=${file.sha256}`);
+}
+
 await mkdir(outputDirectory, { recursive: true });
 for (const file of files) await resolveReleaseAsset(file);
-for (const filename of ambientWorldFiles) {
-  await copyFile(path.join(projectRoot, "public", "audio", filename), path.join(outputDirectory, filename));
-}
+for (const file of localAudioFiles) await copyBoundLocalAudio(file);
 for (const filename of sfxFiles) {
   await copyFile(path.join(projectRoot, "public", "audio", "sfx", filename), path.join(outputDirectory, filename));
 }
-console.log(`Aurion itch assets packaged with immutable integrity verification: ${files.length} bound release files, ${ambientWorldFiles.length} local ambient files and ${sfxFiles.length} local SFX files.`);
+console.log(`Aurion itch assets packaged with immutable integrity verification: ${files.length} bound release files, ${localAudioFiles.length} local soundtrack masters and ${sfxFiles.length} local SFX files.`);
