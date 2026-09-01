@@ -737,7 +737,10 @@ export async function recordValidatedSkillProgressionEvent(values: {
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
     const prior = (await tx.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
-    if (prior) return { applied: false as const, event: prior };
+    if (prior) {
+      if (prior.userId !== values.userId || prior.skillId !== values.skillId || prior.resultReceiptId !== values.resultReceiptId) throw new Error("SKILL_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, event: prior };
+    }
 
     const result = (await tx.select().from(expeditionResultReceipts).where(and(
       eq(expeditionResultReceipts.id, values.resultReceiptId),
@@ -826,7 +829,10 @@ export async function recordValidatedAurionMasteryEvent(values: {
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
     const prior = (await tx.select().from(aurionMasteryEvents).where(eq(aurionMasteryEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
-    if (prior) return { applied: false as const, event: prior };
+    if (prior) {
+      if (prior.userId !== values.userId || prior.disciplineId !== values.disciplineId || prior.sourceReceiptId !== values.sourceReceiptId) throw new Error("MASTERY_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, event: prior };
+    }
     const receipt = (await tx.select().from(expeditionResultReceipts).where(and(
       eq(expeditionResultReceipts.id, values.sourceReceiptId),
       eq(expeditionResultReceipts.userId, values.userId),
@@ -876,7 +882,10 @@ export async function recordValidatedAurionEthosEvent(values: {
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
     const prior = (await tx.select().from(aurionEthosEvents).where(eq(aurionEthosEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
-    if (prior) return { applied: false as const, event: prior };
+    if (prior) {
+      if (prior.userId !== values.userId || prior.sourceReceiptId !== values.sourceReceiptId) throw new Error("ETHOS_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, event: prior };
+    }
     const receipt = (await tx.select().from(expeditionResultReceipts).where(and(
       eq(expeditionResultReceipts.id, values.sourceReceiptId),
       eq(expeditionResultReceipts.userId, values.userId),
@@ -1682,8 +1691,13 @@ export async function grantProgress(values: { userId: number; kind: "xp" | "poin
   if (!Number.isInteger(values.delta) || values.delta <= 0) throw new Error("Progression delta must be a positive integer");
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
+  const weaponTrack = values.kind === "weapon_xp" ? values.weaponTrack : undefined;
+  if (values.kind === "weapon_xp" && !weaponTrack) throw new Error("Weapon track is required for weapon XP");
   const previous = await db.select().from(progressionLedger).where(eq(progressionLedger.idempotencyKey, values.idempotencyKey)).limit(1);
-  if (previous[0]) return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+  if (previous[0]) {
+    if (previous[0].userId !== values.userId || previous[0].kind !== values.kind || previous[0].delta !== values.delta || previous[0].source !== values.source) throw new Error("PROGRESSION_IDEMPOTENCY_CONFLICT");
+    return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+  }
   const profile = await getOrCreatePlayerProfile(values.userId);
   await db.insert(progressionLedger).values({ id: newEndgameId("prog"), userId: values.userId, kind: values.kind, delta: values.delta, source: values.source, reason: values.reason, idempotencyKey: values.idempotencyKey });
   if (values.kind === "xp") {
@@ -1697,12 +1711,11 @@ export async function grantProgress(values: { userId: number; kind: "xp" | "poin
     await db.update(playerProfiles).set({ victories: profile.victories + values.delta }).where(eq(playerProfiles.userId, values.userId));
   }
   if (values.kind === "weapon_xp") {
-    if (!values.weaponTrack) throw new Error("Weapon track is required for weapon XP");
-    const prior = await db.select().from(weaponMasteries).where(and(eq(weaponMasteries.userId, values.userId), eq(weaponMasteries.weaponTrack, values.weaponTrack))).limit(1);
+    const prior = await db.select().from(weaponMasteries).where(and(eq(weaponMasteries.userId, values.userId), eq(weaponMasteries.weaponTrack, weaponTrack!))).limit(1);
     const xp = (prior[0]?.xp ?? 0) + values.delta;
     const level = levelFromTotalXp(xp);
     if (prior[0]) await db.update(weaponMasteries).set({ xp, level }).where(eq(weaponMasteries.id, prior[0].id));
-    else await db.insert(weaponMasteries).values({ id: newEndgameId("wm"), userId: values.userId, weaponTrack: values.weaponTrack, xp, level });
+    else await db.insert(weaponMasteries).values({ id: newEndgameId("wm"), userId: values.userId, weaponTrack: weaponTrack!, xp, level });
   }
   return { applied: true as const, profile: await getOrCreatePlayerProfile(values.userId) };
 }
@@ -2019,7 +2032,10 @@ export async function recordValidatedWeaponEvent(values: { userId: number; exped
   if (!isWeaponActionAllowed(values.weaponTrack, values.actionKey)) throw new Error("Weapon action is not allowed for the equipped track");
   return db.transaction(async tx => {
     const previous = await tx.select().from(weaponMasteryReceipts).where(eq(weaponMasteryReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
-    if (previous[0]) return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+    if (previous[0]) {
+      if (previous[0].userId !== values.userId || previous[0].expeditionKey !== values.expeditionKey || previous[0].weaponTrack !== values.weaponTrack || previous[0].actionKey !== values.actionKey) throw new Error("WEAPON_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+    }
     const rewardKey = `weapon:${values.idempotencyKey}`;
     const priorReward = await tx.select().from(progressionLedger).where(eq(progressionLedger.idempotencyKey, rewardKey)).limit(1);
     if (priorReward[0]) throw new Error("Weapon reward receipt already exists without its matching weapon receipt");
