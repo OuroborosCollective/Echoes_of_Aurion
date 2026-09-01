@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionFactionQuestlineDecisionReceipts, aurionFactionQuestlineOathReceipts, aurionFactionQuestlineRewardReceipts, aurionFactionQuestlineStates, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
-import { canChooseClass, canUseWeaponWithClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
+import { canChooseClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
 import { craftingReceiptDigest, resolveAurionCraftingPlan, resolveCraftingResolutionIndex, type CraftingAffix, type CraftingItemQuality } from "./craftingProtocol";
 import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
@@ -1698,7 +1698,6 @@ export async function grantProgress(values: { userId: number; kind: "xp" | "poin
   }
   if (values.kind === "weapon_xp") {
     if (!values.weaponTrack) throw new Error("Weapon track is required for weapon XP");
-    if (!canUseWeaponWithClass(profile.selectedClass, values.weaponTrack)) throw new Error("Weapon track is not available for the selected class");
     const prior = await db.select().from(weaponMasteries).where(and(eq(weaponMasteries.userId, values.userId), eq(weaponMasteries.weaponTrack, values.weaponTrack))).limit(1);
     const xp = (prior[0]?.xp ?? 0) + values.delta;
     const level = levelFromTotalXp(xp);
@@ -1717,8 +1716,6 @@ export async function listWeaponMasteries(userId: number) {
 export async function setWeaponLoadout(values: { userId: number; weaponTrack: WeaponTrack }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  const profile = await getOrCreatePlayerProfile(values.userId);
-  if (!canUseWeaponWithClass(profile.selectedClass, values.weaponTrack)) throw new Error("Weapon track is not available for the selected class");
   await db.insert(weaponLoadouts).values(values).onDuplicateKeyUpdate({ set: { weaponTrack: values.weaponTrack, configuredAt: new Date() } });
   const readback = await db.select().from(weaponLoadouts).where(eq(weaponLoadouts.userId, values.userId)).limit(1);
   if (!readback[0] || readback[0].weaponTrack !== values.weaponTrack) throw new Error("Weapon loadout readback failed");
@@ -2017,8 +2014,6 @@ export async function recordValidatedWeaponEvent(values: { userId: number; exped
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   await getAcceptedExpeditionResult(values);
-  const profile = await getOrCreatePlayerProfile(values.userId);
-  if (!canUseWeaponWithClass(profile.selectedClass, values.weaponTrack)) throw new Error("Weapon track is not available for the selected class");
   const loadout = await getWeaponLoadout(values.userId);
   if (!loadout || loadout.weaponTrack !== values.weaponTrack) throw new Error("Weapon track is not equipped in the server loadout");
   if (!isWeaponActionAllowed(values.weaponTrack, values.actionKey)) throw new Error("Weapon action is not allowed for the equipped track");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canChooseClass, canUseWeaponWithClass, CLASS_UNLOCK_LEVEL, isServerEvidenceDigest, isWeaponActionAllowed, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
+import { canChooseClass, CLASS_UNLOCK_LEVEL, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
 
 describe("endgame protocol", () => {
   it("keeps the XP requirement monotone through the class unlock", () => {
@@ -43,10 +43,8 @@ describe("endgame protocol", () => {
     expect(setBonusForOwnedPieces("archive_vigil", ["archive_staff", "warden_focus", "ember_focus"])).toMatchObject({ resonance: 12, guard: 8, echoPower: 6 });
   });
 
-  it("enforces class weapon boundaries after specialization", () => {
-    expect(canUseWeaponWithClass("vanguard", "spear")).toBe(true);
-    expect(canUseWeaponWithClass("vanguard", "staff")).toBe(false);
-    expect(canUseWeaponWithClass("unbound", "staff")).toBe(true);
+  it("accepts all four weapon tracks independently of class", () => {
+    expect(["blade", "staff", "spear", "focus"].every(isWeaponTrack)).toBe(true);
   });
 
   it("accepts only digest-shaped server evidence for expedition reward authority", () => {
