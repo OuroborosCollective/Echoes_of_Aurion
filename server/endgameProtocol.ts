@@ -141,13 +141,3 @@ export function setBonusForOwnedPieces(setKey: string, ownedPieces: readonly str
   if (owned === 2) return { resonance: 6, guard: 4 };
   return { resonance: 12, guard: 8, echoPower: 6 };
 }
-
-export function canUseWeaponWithClass(selectedClass: "unbound" | PlayerClass, track: WeaponTrack): boolean {
-  if (selectedClass === "unbound") return true;
-  const allowed: Record<PlayerClass, readonly WeaponTrack[]> = {
-    vanguard: ["blade", "spear"],
-    seer: ["staff", "focus"],
-    warden: ["spear", "focus"],
-  };
-  return allowed[selectedClass].includes(track);
-}
