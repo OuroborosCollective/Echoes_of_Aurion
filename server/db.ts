@@ -2159,6 +2159,12 @@ export async function listPublicGlbCatalog() {
     .where(and(eq(glbAssets.status, "approved"), eq(glbAssetSubmissions.visibility, "public"))).orderBy(desc(glbAssets.createdAt)).limit(100);
 }
 
+export function resolveCharacterBinding(existingAssetId: string | null | undefined, requestedAssetId: string): "bind" | "idempotent" {
+  if (!existingAssetId) return "bind";
+  if (existingAssetId === requestedAssetId) return "idempotent";
+  throw new Error("CHARACTER_BINDING_IMMUTABLE");
+}
+
 export async function getPlayerCharacterAppearance(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
@@ -2171,7 +2177,9 @@ export async function equipPlayerCharacterAppearance(values: { userId: number; a
   const asset = (await db.select({ id: glbAssets.id, assetType: glbAssets.assetType, status: glbAssets.status, visibility: glbAssetSubmissions.visibility, submittedByUserId: glbAssetSubmissions.submittedByUserId }).from(glbAssets).leftJoin(glbAssetSubmissions, eq(glbAssetSubmissions.approvedAssetId, glbAssets.id)).where(eq(glbAssets.id, values.assetId)).limit(1))[0];
   if (!asset || asset.assetType !== "character" || asset.status !== "approved") throw new Error("Dieses Charaktermodell ist nicht freigegeben.");
   if (asset.visibility === "private" && asset.submittedByUserId !== values.userId) throw new Error("Private Charaktermodelle dürfen nur vom einreichenden Explorer verwendet werden.");
-  await db.insert(playerCharacterAppearances).values({ userId: values.userId, assetId: asset.id, visibility: asset.visibility ?? "public" }).onDuplicateKeyUpdate({ set: { assetId: asset.id, visibility: asset.visibility ?? "public" } });
+  const existingAppearance = await getPlayerCharacterAppearance(values.userId);
+  if (existingAppearance && resolveCharacterBinding(existingAppearance.assetId, asset.id) === "idempotent") return existingAppearance;
+  await db.insert(playerCharacterAppearances).values({ userId: values.userId, assetId: asset.id, visibility: asset.visibility ?? "public" });
   const appearance = await getPlayerCharacterAppearance(values.userId);
   if (!appearance || appearance.assetId !== asset.id) throw new Error("Charakterauswahl konnte nicht bestätigt werden.");
   return appearance;
@@ -2196,7 +2204,10 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
     }
     const assetId = newEndgameId("glb");
     await tx.insert(glbAssets).values({ id: assetId, displayName: submission.displayName, assetType: submission.assetType, storageKey: submission.storageKey, storageUrl: submission.storageUrl, sha256: submission.sha256, bytes: submission.bytes, status: "approved", createdByUserId: submission.submittedByUserId, reviewedByUserId: values.reviewedByUserId, reviewedAt });
-    if (submission.assetType === "character") await tx.insert(playerCharacterAppearances).values({ userId: submission.submittedByUserId, assetId, visibility: submission.visibility }).onDuplicateKeyUpdate({ set: { assetId, visibility: submission.visibility } });
+    if (submission.assetType === "character") {
+      const existingAppearance = (await tx.select({ userId: playerCharacterAppearances.userId }).from(playerCharacterAppearances).where(eq(playerCharacterAppearances.userId, submission.submittedByUserId)).limit(1))[0];
+      if (!existingAppearance) await tx.insert(playerCharacterAppearances).values({ userId: submission.submittedByUserId, assetId, visibility: submission.visibility });
+    }
     await tx.update(glbAssetSubmissions).set({ status: "approved", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt, approvedAssetId: assetId }).where(eq(glbAssetSubmissions.id, submission.id));
     return { approved: true as const, assetId };
   });
