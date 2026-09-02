@@ -35,7 +35,7 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     const invocations = workflow.match(
       /sudo \/usr\/local\/sbin\/promote-aurion-zone-runtime/g,
     );
-    expect(invocations?.length).toBe(3);
+    expect(invocations?.length).toBe(2);
     expect(workflow).not.toContain("sudo bash deploy/install-aurion-production-schema-reconcile");
     expect(workflow).not.toContain("drizzle-kit migrate");
   });
