@@ -173,6 +173,18 @@ cmp -s "${schema_apply_artifact}/deploy/verify-aurion-production-schema-apply-ar
 phase=promoter-self-install
 install -D -o root -g root -m 0755 "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
 cmp -s "${deploy_dir}/promote-aurion-zone-runtime.sh" /usr/local/sbin/promote-aurion-zone-runtime
+# The self-hosted deploy user may read only this fixed root-owned promoter
+# through narrowly scoped, passwordless readback commands. No arbitrary root
+# command or caller-controlled path is granted.
+cat > /etc/sudoers.d/aurion-zone-runtime-readback <<'SUDOERS'
+Defaults:aurion-deploy !requiretty
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/sha256sum /usr/local/sbin/promote-aurion-zone-runtime
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/grep * /usr/local/sbin/promote-aurion-zone-runtime
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/cmp * /usr/local/sbin/promote-aurion-zone-runtime
+SUDOERS
+chown root:root /etc/sudoers.d/aurion-zone-runtime-readback
+chmod 0440 /etc/sudoers.d/aurion-zone-runtime-readback
+visudo -cf /etc/sudoers.d/aurion-zone-runtime-readback >/dev/null
 
 if [[ ! -f "$runtime_env" ]]; then
   install -D -o root -g root -m 0600 "${deploy_dir}/aurion-traefik-runtime.environment.template" "$runtime_env"
