@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
@@ -17,6 +18,30 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
+
+  it("keeps embedded Node verifier sources complete and syntactically valid", () => {
+    expect(workflow).not.toContain("[...]");
+
+    const embeddedNodeScripts = [
+      ...workflow.matchAll(/node --input-type=module <<'NODE'\n([\s\S]*?)\n\s*NODE/g),
+      ...workflow.matchAll(/node --input-type=module -e '\n([\s\S]*?)\n\s*'/g),
+    ].map(match => match[1]);
+
+    expect(embeddedNodeScripts.length).toBeGreaterThanOrEqual(8);
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-workflow-node-"));
+    try {
+      embeddedNodeScripts.forEach((script, index) => {
+        const verifierPath = path.join(tempDir, `verifier-${index}.mjs`);
+        fs.writeFileSync(verifierPath, script, "utf8");
+        const syntax = spawnSync(process.execPath, ["--check", verifierPath], {
+          encoding: "utf8",
+        });
+        expect(syntax.status, `${verifierPath}\n${syntax.stderr}`).toBe(0);
+      });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 
   it("binds the public health response and image metadata to one source revision", () => {
     expect(dockerfile).toContain("node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
@@ -111,14 +136,15 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('docker network inspect "$database_network"');
     expect(promoter).toContain('grep -Fxq "$database_network"');
     expect(promoter).toContain("node /app/deploy/verify-aurion-runtime-database.mjs");
-    expect(promoter).toContain('databaseConnectivity":"authenticated_select_1"');
+    expect(promoter).toContain('databaseConnectivity\":\"authenticated_select_1\"');
+    expect(promoter).toContain('databaseNetwork\":\"%s\"');
+    expect(workflow).toContain('receipt.databaseNetwork!=="echoes-of-aurion-internal"');
+    expect(workflow).toContain('receipt.databaseConnectivity!=="authenticated_select_1"');
     expect(workflow).toContain("runtime_verify_database_network");
     expect(workflow).toContain("--network-alias mariadb");
     expect(workflow).toContain('docker exec -e MYSQL_PWD="${runtime_verify_db_password}"');
     expect(workflow).not.toContain("MARIADB_PWD");
     expect(workflow).toContain("authenticated_select_failed");
-    expect(workflow).toContain('receipt.databaseNetwork!=="echoes-of-aurion-internal"');
-    expect(workflow).toContain('receipt.databaseConnectivity!=="authenticated_select_1"');
     expect(databaseVerifier).toContain('target.hostname !== "mariadb"');
     expect(databaseVerifier).toContain('target.protocol !== "mysql:"');
     expect(databaseVerifier).toContain('await import("mysql2/promise")');

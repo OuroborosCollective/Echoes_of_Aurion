@@ -184,6 +184,7 @@ jobs:
                   "0025_aurion_loot_mastery_ethos",
                   "0026_aurion_faction_questline_state",
                   "0027_aurion_faction_questline_rewards",
+                  "0028_aurion_world_checkpoint",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
@@ -194,8 +195,8 @@ jobs:
                   driftCount:migrations.filter(m=>m.state==="PRESENT_SCHEMA_DRIFT").length,
                 };
                 const summary=receipt.summary;
-                if(!summary||summary.migrationCount!==7||summary.matchCount!==counts.matchCount||summary.absentCount!==counts.absentCount||summary.driftCount!==counts.driftCount) throw new Error("production receipt summary mismatch");
-                if(receipt.overallState==="PRESENT_SCHEMA_MATCH"&&(counts.matchCount!==7||counts.absentCount!==0||counts.driftCount!==0)) throw new Error("production match receipt is inconsistent");
+                if(!summary||summary.migrationCount!==8||summary.matchCount!==counts.matchCount||summary.absentCount!==counts.absentCount||summary.driftCount!==counts.driftCount) throw new Error("production receipt summary mismatch");
+                if(receipt.overallState==="PRESENT_SCHEMA_MATCH"&&(counts.matchCount!==8||counts.absentCount!==0||counts.driftCount!==0)) throw new Error("production match receipt is inconsistent");
                 if(receipt.overallState==="RECONCILIATION_REQUIRED"&&(counts.absentCount<1||counts.driftCount!==0)) throw new Error("production reconciliation receipt is inconsistent");
                 if(receipt.overallState==="PRESENT_SCHEMA_DRIFT"&&counts.driftCount<1) throw new Error("production drift receipt is inconsistent");
                 if(["PRESENT_SCHEMA_MATCH","RECONCILIATION_REQUIRED"].includes(receipt.overallState)&&(Number(process.env.RUNNER_STATUS)!==0||execution.containerExitStatus!==0)) throw new Error("readable production receipt has non-zero execution status");

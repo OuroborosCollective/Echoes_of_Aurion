@@ -14,6 +14,7 @@ on:
       - "drizzle/0025_aurion_loot_mastery_ethos.sql"
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
+      - "drizzle/0028_aurion_world_checkpoint.sql"
       - ".github/workflows/aurion-schema-reconciliation-proof.yml"
   push:
     branches: [main]
@@ -29,6 +30,7 @@ on:
       - "drizzle/0025_aurion_loot_mastery_ethos.sql"
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
+      - "drizzle/0028_aurion_world_checkpoint.sql"
       - ".github/workflows/aurion-schema-reconciliation-proof.yml"
 
 permissions:
@@ -101,7 +103,7 @@ jobs:
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
 
-      - name: Prove all seven late migrations classify absent on a 0020-only database
+      - name: Prove all eight late migrations classify absent on a 0020-only database
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts > absent.json
@@ -109,12 +111,12 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("absent.json","utf8"));
           if(receipt.overallState!=="RECONCILIATION_REQUIRED") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.absentCount!==7 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
+          if(receipt.summary.absentCount!==8 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
 
-      - name: Apply 0021 through 0027 only inside this isolated proof database
+      - name: Apply 0021 through 0028 only inside this isolated proof database
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -128,6 +130,7 @@ jobs:
             "0025_aurion_loot_mastery_ethos",
             "0026_aurion_faction_questline_state",
             "0027_aurion_faction_questline_rewards",
+            "0028_aurion_world_checkpoint",
           ];
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try {
@@ -140,7 +143,7 @@ jobs:
           console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
           NODE
 
-      - name: Prove all seven late migrations match after isolated apply
+      - name: Prove all eight late migrations match after isolated apply
         run: |
           set -euo pipefail
           set +e
@@ -153,7 +156,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
           if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.matchCount!==7 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
+          if(receipt.summary.matchCount!==8 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
           console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
 

@@ -150,6 +150,7 @@ function makeArtifact() {
     "0025_aurion_loot_mastery_ethos",
     "0026_aurion_faction_questline_state",
     "0027_aurion_faction_questline_rewards",
+    "0028_aurion_world_checkpoint",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });

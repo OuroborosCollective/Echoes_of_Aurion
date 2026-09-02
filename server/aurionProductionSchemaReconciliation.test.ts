@@ -42,9 +42,9 @@ describe("Aurion production schema reconciliation", () => {
     expect(transactionIndex).toBeLessThan(metadataIndex);
   });
 
-  it("parses all seven unjournaled SQL migrations from their real repository contracts", async () => {
+  it("parses all eight late SQL migrations from their real repository contracts", async () => {
     const migrations = await Promise.all(lateAurionMigrationTags.map(parse));
-    expect(migrations).toHaveLength(7);
+    expect(migrations).toHaveLength(8);
     expect(migrations.every(migration => migration.tables.length > 0)).toBe(true);
     const tableNames = migrations.flatMap(migration => migration.tables.map(table => table.name));
     expect(tableNames).toContain("aurionGlobalWorldStates");
@@ -54,6 +54,7 @@ describe("Aurion production schema reconciliation", () => {
     expect(tableNames).toContain("aurionLootDropReceiptsV2");
     expect(tableNames).toContain("aurionFactionQuestlineStates");
     expect(tableNames).toContain("aurionFactionQuestlineRewardReceipts");
+    expect(tableNames).toContain("aurionWorldCheckpoints");
   });
 
   it("does not mistake enum string literals such as 'unique' for UNIQUE constraints", async () => {
@@ -67,10 +68,10 @@ describe("Aurion production schema reconciliation", () => {
   });
 
   it("classifies a migration with no target tables as ABSENT_APPLY_REQUIRED", async () => {
-    const migration = await parse("0027_aurion_faction_questline_rewards");
+    const migration = await parse("0028_aurion_world_checkpoint");
     const result = classifyMigrationContract(migration, new Map());
     expect(result.state).toBe("ABSENT_APPLY_REQUIRED");
-    expect(result.missingTables).toEqual(["aurionFactionQuestlineRewardReceipts"]);
+    expect(result.missingTables).toEqual(["aurionWorldCheckpoints"]);
     expect(result.drift).toEqual([]);
   });
 
