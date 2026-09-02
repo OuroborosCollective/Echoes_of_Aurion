@@ -481,11 +481,11 @@ jobs:
           fi
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
-          test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
-          grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          sudo test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          sudo grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
           test -x /usr/local/sbin/aurion-production-schema-apply
-          test -f /opt/echoes-of-aurion-schema-apply/current/manifest.json
-          grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-apply/current/manifest.json
+          sudo test -f /opt/echoes-of-aurion-schema-apply/current/manifest.json
+          sudo grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-apply/current/manifest.json
 
       - name: Read back installed container and schema identities
         run: |
