@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "..");
 const controllerPath = path.join(root, "deploy/aurion-revision-alignment-controller.py");
 const controller = fs.readFileSync(controllerPath, "utf8");
+const environment = fs.readFileSync(
+  path.join(root, "deploy/aurion-revision-alignment-controller.env.template"),
+  "utf8"
+);
 
 describe("Aurion revision alignment controller", () => {
   it("keeps the reconciler fail-closed but able to self-heal missing and failed releases", () => {
@@ -19,6 +23,14 @@ describe("Aurion revision alignment controller", () => {
     expect(controller).toContain('raise ControllerError("stale_main", "main revision changed before workflow dispatch")');
     expect(controller).toContain('raise ControllerError("stale_main", "main revision changed during workflow dispatch")');
     expect(controller).not.toContain("no successful exact release run available");
+  });
+
+  it("keeps the installed environment aligned with the bounded retry contract", () => {
+    expect(environment).toContain("AURION_RECONCILER_MAX_RETRY_ATTEMPTS=3");
+    expect(environment).toContain("AURION_RECONCILER_RETRY_BACKOFF_SECONDS=300");
+    expect(environment).toContain("AURION_RECONCILER_DISPATCH=1");
+    expect(environment).not.toContain("AURION_RECONCILER_POLL_SECONDS");
+    expect(environment).not.toContain("AURION_RECONCILER_POLL_ATTEMPTS");
   });
 
   it("compiles and proves dispatch, duplicate suppression, retry bounds, stale-main rejection and aligned no-op", () => {
