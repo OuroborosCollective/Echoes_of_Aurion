@@ -345,7 +345,7 @@ jobs:
             aurion-zone-runtime-release.tgz.sha256
             aurion-traefik-runtime-release.tgz
             aurion-traefik-runtime-release.tgz.sha256
-            runtime-node_modules.tgz
+            "runtime-node_modules.tgz"
             deploy/aurion-zone-runtime.service
             deploy/aurion-zone-runtime.environment.template
             deploy/arelogic-zone-runtime.nginx.conf
@@ -505,7 +505,7 @@ jobs:
             import fs from "node:fs";
             const [file, expected, releaseId, runtimeManifest, schemaManifest]=process.argv.slice(1);
             const receipt=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$[...] ||receipt.databaseNetwork!=="echoes-of-aurion-internal"||receipt.databaseConnectivity!=="authenticated_select_1"||receipt.runtimeManifestSha256!==runtimeManifest||receipt.schemaMani[...]
+            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$[...]
             console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain,traefikNetwork:receipt.[...]
           ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
