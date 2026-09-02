@@ -126,7 +126,7 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
           if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
-          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-d[...]
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
           runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
@@ -274,7 +274,7 @@ jobs:
           if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="backup_recovery_apply"||manifest.moduleFormat!=="commonjs") throw new Error("schema apply artifact boundary mismatch");
           for(const file of [
             "bin/apply.cjs","bin/mysql-client-config.cjs","bin/reconcile.cjs","drizzle/meta/_journal.json",
-            "deploy/aurion-production-schema-apply","deploy/aurion-production-schema-apply-core","deploy/install-aurion-production-schema-apply","deploy/verify-aurion-production-schema-apply-artifact.mjs",
+            "deploy/aurion-production-schema-apply","deploy/aurion-production-schema-apply-core","deploy/install-aurion-production-schema-apply","deploy/verify-aurion-production-schema-apply-arti[...]
           ]) if(!manifest.files?.[file]) throw new Error(`schema apply artifact is missing ${file}`);
           NODE
           (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
@@ -313,7 +313,7 @@ jobs:
           const identity=JSON.parse(fs.readFileSync("runtime-bootstrap-artifact/bootstrap-identity.json","utf8"));
           if(canonical.imageDigest!=="sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff") throw new Error("unexpected canonical bootstrap input");
           if(bootstrap.imageDigest!=="sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f") throw new Error("unexpected amd64 bootstrap image");
-          if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==process.env.GITHUB_SHA||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===process.env.GITHUB_SHA||identity.mode!=="bootstrap_only") throw new Error("unexpected bootstrap identity");
+          if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==process.env.GITHUB_SHA||!/^([a-f0-9]{40})$/.test(identity.boo[...]
           NODE
           bootstrap_runtime_entries="$(tar -tzf runtime-bootstrap-artifact/aurion-traefik-runtime-release.tgz)"
           if grep -Fq '@' <<<"$bootstrap_runtime_entries"; then
@@ -326,11 +326,11 @@ jobs:
             import fs from "node:fs";
             const [file, expected]=process.argv.slice(1);
             const identity=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===expected||identity.mode!=="bootstrap_only") process.exit(2);
+            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevisi[...]
             process.stdout.write(identity.bootstrapRevision);
           ' runtime-bootstrap-artifact/bootstrap-identity.json "$GITHUB_SHA")"
           (cd runtime-bootstrap-artifact/dist-production-reconcile && sha256sum --strict -c checksums.sha256)
-          node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$bootstrap_revision"
+          node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$bootstrap_[...]
           bootstrap_image="node:22.13.0-bookworm-slim@sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f"
           docker pull "$bootstrap_image"
           bootstrap_image_id="$(docker image inspect --format '{{.Id}}' "$bootstrap_image")"
@@ -442,7 +442,7 @@ jobs:
             import fs from "node:fs";
             const [file, expected]=process.argv.slice(1);
             const identity=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===expected||identity.mode!=="bootstrap_only") process.exit(2);
+            if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==expected||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevisi[...]
             process.stdout.write(identity.bootstrapRevision);
           ' "${bootstrap_artifact}/bootstrap-identity.json" "${EXPECTED_SHA}")"
 
@@ -454,6 +454,7 @@ jobs:
           # with its own immutable source revision and release directory.
           installed=/usr/local/sbin/promote-aurion-zone-runtime
           legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad
+          promoter_needs_readback_replay=0
           if ! sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
             installed_promoter_sha256="$(sudo sha256sum "$installed" | awk '{print $1}')"
             if [[ "$installed_promoter_sha256" == "$legacy_promoter_sha256" ]]; then
@@ -465,7 +466,7 @@ jobs:
               printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
               sudo test -x "$installed"
               sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
-            elif sudo grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { sudo grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && sudo grep -Fq 'image_id="$(docker image inspect' "$installed"; }; then
+            elif sudo grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { sudo grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && sudo grep -Fq 'image_id="$(docke[...]
               printf 'compatible promoter %s will receive the canonical artifact directly\n' "$installed_promoter_sha256"
             else
               printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
@@ -473,6 +474,10 @@ jobs:
             fi
           fi
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
+
+          if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then
+            printf 'promoter readback replay required for revision=%s\n' "${EXPECTED_SHA}"
+          fi
 
           test -x /usr/local/sbin/aurion-production-schema-reconcile
           test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
@@ -499,8 +504,8 @@ jobs:
             import fs from "node:fs";
             const [file, expected, releaseId, runtimeManifest, schemaManifest]=process.argv.slice(1);
             const receipt=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)||receipt.domain!=="arelogic.space"||receipt.traefikNetwork!=="areloria_arelorian-network"||receipt.databaseNetwork!=="echoes-of-aurion-internal"||receipt.databaseConnectivity!=="authenticated_select_1"||receipt.runtimeManifestSha256!==runtimeManifest||receipt.schemaManifestSha256!==schemaManifest||receipt.schemaMode!=="read_only") throw new Error("Traefik runtime readback mismatch");
-            console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain,traefikNetwork:receipt.traefikNetwork,databaseNetwork:receipt.databaseNetwork,databaseConnectivity:receipt.databaseConnectivity}));
+            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$[...]
+            console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain,traefikNetwork:receipt.[...]
           ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
