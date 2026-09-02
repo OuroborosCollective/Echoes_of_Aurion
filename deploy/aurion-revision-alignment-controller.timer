@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodically reconcile Aurion production with verified main
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20s
+AccuracySec=15s
+Persistent=true
+Unit=aurion-revision-alignment-controller.service
+
+[Install]
+WantedBy=timers.target

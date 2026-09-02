@@ -1,0 +1,26 @@
+[Unit]
+Description=Aurion revision alignment controller
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=-/etc/aurion-revision-alignment/controller.env
+ExecStart=/usr/local/sbin/aurion-revision-alignment-controller
+StateDirectory=aurion-revision-alignment
+StateDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/aurion-revision-alignment
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TimeoutStartSec=35min
+
+[Install]
+WantedBy=multi-user.target
