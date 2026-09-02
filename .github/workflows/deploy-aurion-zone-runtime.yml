@@ -20,6 +20,10 @@ on:
       - "scripts/build-aurion-traefik-runtime-artifact.mjs"
       - "server/_core/vite.ts"
       - "server/aurionTraefikRuntimeDeployment.test.ts"
+      - "deploy/aurion-revision-alignment-controller.py"
+      - "deploy/aurion-revision-alignment-controller.service"
+      - "deploy/aurion-revision-alignment-controller.timer"
+      - "deploy/aurion-revision-alignment-controller.env.template"
   workflow_dispatch:
 
 concurrency:
@@ -96,6 +100,11 @@ jobs:
           node --check deploy/verify-aurion-runtime-database.mjs
           node --check scripts/build-aurion-traefik-runtime-artifact.mjs
           node --check scripts/build-aurion-promoter-bootstrap-artifact.mjs
+          python3 -m py_compile deploy/aurion-revision-alignment-controller.py
+          test -f deploy/aurion-revision-alignment-controller.service
+          test -f deploy/aurion-revision-alignment-controller.timer
+          grep -Fq 'OnUnitActiveSec=2min' deploy/aurion-revision-alignment-controller.timer
+          grep -Fq 'NoNewPrivileges=true' deploy/aurion-revision-alignment-controller.service
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           bash -n deploy/aurion-production-schema-apply
@@ -542,7 +551,33 @@ jobs:
             sleep 1
           done
           [[ "$public_ready" -eq 1 ]]
-
+      - name: Install revision alignment controller after verified promotion
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          path: controller-source
+      - name: Enable revision alignment timer
+        run: |
+          set -Eeuo pipefail
+          source_dir="${GITHUB_WORKSPACE}/controller-source/deploy"
+          test -f "${source_dir}/aurion-revision-alignment-controller.py"
+          test -f "${source_dir}/aurion-revision-alignment-controller.service"
+          test -f "${source_dir}/aurion-revision-alignment-controller.timer"
+          test -f "${source_dir}/aurion-revision-alignment-controller.env.template"
+          install -d -o root -g root -m 0750 /etc/aurion-revision-alignment
+          install -d -o root -g root -m 0750 /var/lib/aurion-revision-alignment
+          install -o root -g root -m 0755 "${source_dir}/aurion-revision-alignment-controller.py" /usr/local/sbin/aurion-revision-alignment-controller
+          install -o root -g root -m 0644 "${source_dir}/aurion-revision-alignment-controller.service" /etc/systemd/system/aurion-revision-alignment-controller.service
+          install -o root -g root -m 0644 "${source_dir}/aurion-revision-alignment-controller.timer" /etc/systemd/system/aurion-revision-alignment-controller.timer
+          if [[ ! -f /etc/aurion-revision-alignment/controller.env ]]; then
+            install -o root -g root -m 0640 "${source_dir}/aurion-revision-alignment-controller.env.template" /etc/aurion-revision-alignment/controller.env
+          fi
+          test "$(stat -c '%U:%G:%a' /usr/local/sbin/aurion-revision-alignment-controller)" = "root:root:755"
+          systemd-analyze verify /etc/systemd/system/aurion-revision-alignment-controller.service /etc/systemd/system/aurion-revision-alignment-controller.timer
+          systemctl daemon-reload
+          systemctl enable --now aurion-revision-alignment-controller.timer
+          systemctl is-active --quiet aurion-revision-alignment-controller.timer
   production-schema-readback:
     name: Require production schema readback receipt
     needs: promote-zone-runtime
