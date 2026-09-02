@@ -21,6 +21,7 @@ const tags = [
   "0025_aurion_loot_mastery_ethos",
   "0026_aurion_faction_questline_state",
   "0027_aurion_faction_questline_rewards",
+  "0028_aurion_world_checkpoint",
 ];
 const deployFiles = [
   "aurion-production-schema-apply",
