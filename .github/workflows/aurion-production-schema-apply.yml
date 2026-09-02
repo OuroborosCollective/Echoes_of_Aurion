@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ledger_run_id:
-        description: Run ID of the immutable Aurion WASD migration-ledger artifact.
+        description: Run ID of the immutable Aurion WASD migration-ledger workflow in this repository.
         required: true
         type: string
       plan_sha256:
@@ -63,14 +63,12 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      # The ledger is produced in OuroborosCollective/Wasd; run-id is cross-repository only when repository is explicit.
       - name: Download immutable cross-repository ledger receipt
         uses: actions/download-artifact@v4
         with:
           name: aurion-wasd-migration-ledger-${{ inputs.plan_sha256 }}
           path: migration-ledger
           github-token: ${{ github.token }}
-          repository: OuroborosCollective/Wasd
           run-id: ${{ inputs.ledger_run_id }}
 
       - name: Verify plan, source evidence and target migration hashes
