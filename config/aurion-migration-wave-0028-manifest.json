@@ -2,14 +2,14 @@
   "schemaVersion": "aurion.migration-wave-manifest.v3",
   "recordType": "aurion_migration_wave_manifest",
   "waveId": "aurion-next-0028",
-  "status": "planned",
+  "status": "implemented",
   "source": {
     "repository": "OuroborosCollective/Wasd",
     "revision": "e298fc085ded475dcc92e498f29a39e47370d142"
   },
   "target": {
     "repository": "OuroborosCollective/Echoes_of_Aurion",
-    "revision": "21b4c910349a1a8475015d649c5912e77efd08b7"
+    "revision": "872d786d506eb4792898a81dbd234e16c681039d"
   },
   "migrations": [
     {
@@ -17,8 +17,8 @@
       "tag": "0028_aurion_world_checkpoint",
       "path": "drizzle/0028_aurion_world_checkpoint.sql",
       "source": "aurion",
-      "status": "planned",
-      "fileSha256": null
+      "status": "implemented",
+      "fileSha256": "a52b2efdbd972c96f7ba4918a48cca1c7c37ded4cc63d6bc1859cf26f3fd9da4"
     }
   ],
   "policy": {
@@ -27,5 +27,5 @@
     "requiresFreshPlanHashBeforeApply": true,
     "futureTagsRequireNewManifest": true
   },
-  "manifestSha256": "42ac9ab8ed372d91ef5a8c16866f9a60f03a3000d2a6963991ba0aa486180514"
+  "manifestSha256": "687ac526cee74fe5f600017a845a114aea61952c309418b993f099d0244867bc"
 }

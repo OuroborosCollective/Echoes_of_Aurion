@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
 export const MANIFEST_SCHEMA = "aurion.migration-wave-manifest.v3";
@@ -23,15 +22,6 @@ export const canonicalSha256 = value =>
     .update(JSON.stringify(canonicalValue(value)), "utf8")
     .digest("hex");
 
-const revisionAt = root =>
-  execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  })
-    .trim()
-    .toLowerCase();
-
 export function verifyManifest(
   manifest,
   { expectedSourceRevision, expectedTargetRevision } = {}
@@ -42,7 +32,7 @@ export function verifyManifest(
   ) {
     throw new Error("WAVE_MANIFEST_SCHEMA_INVALID");
   }
-  if (manifest.status !== "planned")
+  if (!["planned", "implemented"].includes(manifest.status))
     throw new Error("WAVE_MANIFEST_STATUS_INVALID");
   if (
     manifest.source?.repository !== "OuroborosCollective/Wasd" ||
@@ -87,8 +77,15 @@ export function verifyManifest(
       throw new Error("WAVE_MANIFEST_DUPLICATE_MIGRATION");
     tags.add(migration.tag);
     paths.add(migration.path);
-    if (migration.status !== "planned" || migration.fileSha256 !== null)
-      throw new Error("WAVE_MANIFEST_PLANNED_ENTRY_INVALID");
+    if (manifest.status === "planned") {
+      if (migration.status !== "planned" || migration.fileSha256 !== null)
+        throw new Error("WAVE_MANIFEST_PLANNED_ENTRY_INVALID");
+    } else if (
+      migration.status !== "implemented" ||
+      !SHA64.test(migration.fileSha256 ?? "")
+    ) {
+      throw new Error("WAVE_MANIFEST_IMPLEMENTED_ENTRY_INVALID");
+    }
   }
   if (
     manifest.policy?.productionWritesScheduled !== false ||
@@ -106,6 +103,7 @@ export function verifyManifest(
     throw new Error("WAVE_MANIFEST_HASH_INVALID");
   return {
     waveId: manifest.waveId,
+    status: manifest.status,
     migrationCount: manifest.migrations.length,
     firstSequence: sequences[0],
     lastSequence: sequences.at(-1),
@@ -115,7 +113,17 @@ export function verifyManifest(
 
 export async function verifyManifestFile(path, options = {}) {
   const manifest = JSON.parse(await readFile(resolve(path), "utf8"));
-  return verifyManifest(manifest, options);
+  const result = verifyManifest(manifest, options);
+  if (manifest.status === "implemented") {
+    const repositoryRoot = resolve(options.repositoryRoot ?? process.cwd());
+    for (const migration of manifest.migrations) {
+      const bytes = await readFile(resolve(repositoryRoot, migration.path));
+      const actual = createHash("sha256").update(bytes).digest("hex");
+      if (actual !== migration.fileSha256)
+        throw new Error(`WAVE_MANIFEST_FILE_HASH_MISMATCH:${migration.tag}`);
+    }
+  }
+  return result;
 }
 
 if (

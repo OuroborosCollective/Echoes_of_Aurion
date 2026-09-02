@@ -1,30 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { verifyManifest } from "./verify-aurion-migration-wave-manifest.mjs";
+import {
+  verifyManifest,
+  verifyManifestFile,
+} from "./verify-aurion-migration-wave-manifest.mjs";
 
-const manifest = JSON.parse(
-  await readFile(
-    new URL(
-      "../config/aurion-migration-wave-0028-manifest.json",
-      import.meta.url
-    ),
-    "utf8"
-  )
+const manifestUrl = new URL(
+  "../config/aurion-migration-wave-0028-manifest.json",
+  import.meta.url
 );
+const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
 
-test("AIM-229 manifest is a valid planned 0028 wave", () => {
-  const result = verifyManifest(manifest, {
+test("AIM-230 manifest binds implemented 0028 to its exact SQL bytes", async () => {
+  const result = await verifyManifestFile(manifestUrl.pathname, {
     expectedSourceRevision: "e298fc085ded475dcc92e498f29a39e47370d142",
-    expectedTargetRevision: "21b4c910349a1a8475015d649c5912e77efd08b7",
+    expectedTargetRevision: "872d786d506eb4792898a81dbd234e16c681039d",
   });
   assert.deepEqual(result, {
     waveId: "aurion-next-0028",
+    status: "implemented",
     migrationCount: 1,
     firstSequence: 28,
     lastSequence: 28,
     manifestSha256: manifest.manifestSha256,
   });
+  assert.equal(
+    manifest.migrations[0].fileSha256,
+    "a52b2efdbd972c96f7ba4918a48cca1c7c37ded4cc63d6bc1859cf26f3fd9da4"
+  );
 });
 
 test("rejects a mismatched target revision", () => {
@@ -44,12 +48,21 @@ test("rejects a sequence gap", () => {
     tag: "0030_invalid_gap",
     path: "drizzle/0030_invalid_gap.sql",
     source: "aurion",
-    status: "planned",
-    fileSha256: null,
+    status: "implemented",
+    fileSha256: "0".repeat(64),
   });
   assert.throws(
     () => verifyManifest(invalid),
     /WAVE_MANIFEST_SEQUENCE_INVALID/
+  );
+});
+
+test("rejects an implemented migration without a real file hash", () => {
+  const invalid = structuredClone(manifest);
+  invalid.migrations[0].fileSha256 = null;
+  assert.throws(
+    () => verifyManifest(invalid),
+    /WAVE_MANIFEST_IMPLEMENTED_ENTRY_INVALID/
   );
 });
 
