@@ -28,6 +28,16 @@ export type AurionWorldCheckpointReadModel = Readonly<
   Omit<AurionWorldCheckpoint, "snapshotJson" | "idempotencyKey">
 >;
 
+type PersistedAurionWorldCheckpointIdentity = Readonly<{
+  worldId: string;
+  worldSeed: string;
+  epoch: number;
+  worldRevision: string;
+  chunkRevision: string;
+  snapshotHash: string;
+  idempotencyKey: string;
+}>;
+
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
     const encoded = JSON.stringify(value);
@@ -86,10 +96,12 @@ export function buildAurionWorldCheckpoint(input: AurionWorldCheckpointInput): A
 }
 
 export function sameAurionWorldCheckpoint(
-  left: Pick<AurionWorldCheckpoint, "worldId" | "worldSeed" | "epoch" | "worldRevision" | "chunkRevision" | "snapshotHash" | "idempotencyKey">,
-  right: Pick<AurionWorldCheckpoint, "worldId" | "worldSeed" | "epoch" | "worldRevision" | "chunkRevision" | "snapshotHash" | "idempotencyKey">,
+  left: PersistedAurionWorldCheckpointIdentity,
+  right: PersistedAurionWorldCheckpointIdentity,
 ): boolean {
   return (
+    left.worldId === AURION_WORLD_CHECKPOINT_WORLD_ID &&
+    right.worldId === AURION_WORLD_CHECKPOINT_WORLD_ID &&
     left.worldId === right.worldId &&
     left.worldSeed === right.worldSeed &&
     left.epoch === right.epoch &&
