@@ -1,0 +1,65 @@
+name: AIM-240 Starter GLB Runtime
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim-240-starter-glb-runtime.yml"
+      - "client/src/components/GameCanvas.tsx"
+      - "client/src/game/sceneWithStarterCharacters.ts"
+      - "client/src/game/starterCharacterAssets.ts"
+      - "client/src/game/starterCharacterAssets.test.ts"
+      - "client/src/game/starterCreatureVisuals.ts"
+      - "server/_core/index.ts"
+      - "server/starterGlbRuntimeAssets.ts"
+      - "server/starterGlbRuntimeAssets.test.ts"
+      - "server/starterGlbRuntimeWiring.test.ts"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-240-starter-glb-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  starter-glb-runtime:
+    name: Starter GLB runtime, typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Run starter GLB runtime regression tests
+        run: >-
+          pnpm exec vitest run
+          client/src/game/starterCharacterAssets.test.ts
+          server/starterGlbRuntimeAssets.test.ts
+          server/starterGlbRuntimeWiring.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build web and server runtime
+        run: pnpm build

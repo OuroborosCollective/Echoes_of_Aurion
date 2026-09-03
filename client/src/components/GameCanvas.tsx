@@ -8,8 +8,19 @@ import { useEffect, useRef, useState } from "react";
 import type { Engine } from "@babylonjs/core/Engines/engine";
 import { CreateScreenshotUsingRenderTargetAsync } from "@babylonjs/core/Misc/screenshotTools";
 import type { GameHandle } from "@/game/scene";
+import { normalizeStarterRuntimeAssetSources } from "@/game/starterCharacterAssets";
 import { COMPANION_FRAME_REQUEST_EVENT, COMPANION_FRAME_RESPONSE_EVENT, type CompanionFrameRequestDetail, type CompanionFrameResponseDetail } from "@/lib/companionFrameCapture";
 import { validateRuntimeModelSource } from "@shared/runtimeContracts";
+
+async function fetchStarterRuntimeAssetSources() {
+  try {
+    const response = await fetch("/api/game/starter-glb-assets", { credentials: "same-origin" });
+    if (!response.ok) return normalizeStarterRuntimeAssetSources(null);
+    return normalizeStarterRuntimeAssetSources(await response.json());
+  } catch {
+    return normalizeStarterRuntimeAssetSources(null);
+  }
+}
 
 export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { characterModelUrl?: string; arenaModelUrl?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,10 +76,14 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     };
     window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, onCompanionFrameRequest);
 
-    void Promise.all([import("@babylonjs/core/Engines/engine"), import("@/game/scene")]).then(async ([{ Engine }, { createGameScene }]) => {
+    void Promise.all([
+      import("@babylonjs/core/Engines/engine"),
+      import("@/game/sceneWithStarterCharacters"),
+      fetchStarterRuntimeAssetSources(),
+    ]).then(async ([{ Engine }, { createGameScene }, starterSources]) => {
       if (disposed) return;
       engine = new Engine(canvas, true, { stencil: true, adaptToDeviceRatio: true });
-      const sceneHandle = await createGameScene(engine, canvas);
+      const sceneHandle = await createGameScene(engine, canvas, characterModelUrlRef.current, starterSources);
       if (disposed) {
         sceneHandle.dispose();
         return;
