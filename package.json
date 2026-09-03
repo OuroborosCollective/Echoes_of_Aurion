@@ -4,7 +4,10 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "starter-glb:materialize": "tsx scripts/materialize-starter-glb-assets.ts",
+    "predev": "pnpm starter-glb:materialize",
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
+    "prebuild": "pnpm starter-glb:materialize",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:sandbox": "NODE_OPTIONS=--max-old-space-size=${AURION_BUILD_HEAP_MB:-1536} pnpm build",
     "build:runtime-artifact": "pnpm build && node scripts/write-runtime-build-manifest.mjs",
@@ -13,6 +16,7 @@
     "migration:wasd:ledger": "node scripts/build-aurion-wasd-migration-ledger.mjs",
     "verify:release-assets": "tsx scripts/validate-release-assets.ts",
     "verify:migrations": "tsx scripts/verify-drizzle-migration-chain.ts",
+    "prebuild:itch": "pnpm starter-glb:materialize",
     "build:itch": "pnpm verify:release-assets && vite build --config vite.itch.config.ts && node scripts/package-itch-assets.mjs",
     "package:itch": "pnpm build:itch && cd dist/itch && zip -r ../echoes-of-aurion-itch.zip .",
     "android:sync": "pnpm build:itch && node scripts/prepare-android.mjs",
