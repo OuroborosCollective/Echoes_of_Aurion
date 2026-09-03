@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(path, "utf8");
+const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
 describe("AIM-239 xaurion integration boundary", () => {
   it("keeps xaurion rendering mounted behind the confirmed Aurion world transition", () => {
@@ -46,5 +48,14 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(home).toContain("TowerHomePanel");
     expect(soundscape).toContain("AurionSoundscape");
     expect(db).toContain("DATABASE_URL");
+  });
+
+  it("pins the hash-materialized owner ZIP player and equipment wave", () => {
+    expect(sha256("client/src/xaurion/entities/OpenWorldPlayer.ts")).toBe("678c6c0c8720e8577fa34cb872c467e22dbc343f3072c10a981ea4dbb502220a");
+    expect(sha256("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toBe("1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7");
+    expect(sha256("client/src/xaurion/core/ItemGlbRegistry.ts")).toBe("825702516ae6d2eeff827150899c6317d6716ec8a6b1a16287531dbb414184c2");
+    expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("ProceduralEquipmentVisuals");
+    expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("equipGlbAsEquipment");
+    expect(read("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toContain("resolveItemGlbMapping");
   });
 });
