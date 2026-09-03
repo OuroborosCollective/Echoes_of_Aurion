@@ -6,7 +6,7 @@ on:
       - feature/aim-239-xaurion-open-world-integration
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -23,6 +23,16 @@ jobs:
           cache: pnpm
       - name: Resolve exact dependency closure
         run: pnpm install --no-frozen-lockfile
+      - name: Persist resolved lock on branch
+        shell: bash
+        run: |
+          if ! git diff --quiet -- pnpm-lock.yaml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pnpm-lock.yaml
+            git commit -m "build(open-world): lock Three.js dependency closure"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - name: Upload resolved lock
         uses: actions/upload-artifact@v4
         with:

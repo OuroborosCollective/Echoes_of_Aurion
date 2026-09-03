@@ -47,13 +47,13 @@ type AurionPlayerProjection = Readonly<{
   weaponLoadout?: { weaponTrack?: "blade" | "staff" | "spear" | "focus" } | null;
 }>;
 
-const classForAurion = (value: AurionPlayerProjection["profile"] extends infer P ? P extends { selectedClass?: infer C } ? C : never : never): CharacterClassId => {
+const classForAurion = (value: "unbound" | "vanguard" | "seer" | "warden" | undefined): CharacterClassId => {
   if (value === "seer") return "mage";
   if (value === "warden") return "ranger";
   return "knight";
 };
 
-const weaponForAurion = (value: AurionPlayerProjection["weaponLoadout"] extends infer P ? P extends { weaponTrack?: infer W } ? W : never : never) => {
+const weaponForAurion = (value: "blade" | "staff" | "spear" | "focus" | undefined) => {
   if (value === "staff" || value === "focus") return "arcane" as const;
   if (value === "spear") return "blade" as const;
   return "blade" as const;
