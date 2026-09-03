@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
 import { registerAdminMcp } from "../adminMcp";
+import { registerGlbSmartUpload } from "../glbSmartUpload";
 import { registerZoneGateway } from "../zoneGateway";
 import { consumeZoneConnectionTicket, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 
@@ -84,6 +85,7 @@ async function startServer() {
     service: "echoes-of-aurion",
     ...(releaseRevision ? { revision: releaseRevision } : {}),
   }));
+  registerGlbSmartUpload(app);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);
