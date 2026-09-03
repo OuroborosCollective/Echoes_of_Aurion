@@ -1,0 +1,50 @@
+name: AIM-239 owner ZIP source materializer
+
+on:
+  push:
+    branches:
+      - feature/aim-239-xaurion-open-world-integration
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: ${{ hashFiles('.aim239-source/READY') != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Materialize hash-bound owner ZIP sources
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const manifest = JSON.parse(fs.readFileSync('.aim239-source/manifest.json', 'utf8'));
+          for (const file of manifest.files) {
+            const body = Buffer.concat(file.parts.map((part) => fs.readFileSync(part)));
+            const sha256 = crypto.createHash('sha256').update(body).digest('hex');
+            if (sha256 !== file.sha256) {
+              throw new Error(`SHA mismatch for ${file.target}: ${sha256} != ${file.sha256}`);
+            }
+            fs.mkdirSync(path.dirname(file.target), { recursive: true });
+            fs.writeFileSync(file.target, body);
+            console.log(`${file.target} ${body.length} ${sha256}`);
+          }
+          NODE
+      - name: Commit only verified source materialization
+        shell: bash
+        run: |
+          rm -rf .aim239-source
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/xaurion .aim239-source || true
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(open-world): materialize hash-bound owner ZIP source"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
