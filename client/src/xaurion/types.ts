@@ -1,5 +1,3 @@
-// @ts-nocheck
-// Vendored from owner-provided xaurion ZIP (SHA-256 739650d16dee85bb073e2c5af3c737f32573f328673c56edfe91d250719a030f).
 /**
  * Core Types for Aurion - 3D Open World Steampunk Fantasy MMORPG
  */
@@ -27,10 +25,10 @@ export type ItemSlot =
   | 'consumable';
 
 export interface CharacterAttributes {
-  strength: number;     // Physical damage & heavy crit bonus
-  agility: number;      // Attack speed, cooldown reduction & dodge chance
-  intelligence: number; // Max mana, mana regen & magic spell power
-  defense: number;      // Armor rating & max HP
+  strength: number;
+  agility: number;
+  intelligence: number;
+  defense: number;
 }
 
 export interface MilestoneWeaponSkill extends ClassSkill {
@@ -80,8 +78,8 @@ export interface RPGItem {
     armor?: number;
     maxHp?: number;
     maxResource?: number;
-    critChance?: number; // %
-    moveSpeed?: number;  // %
+    critChance?: number;
+    moveSpeed?: number;
   };
   valueGold: number;
   effectDescription?: string;
@@ -96,7 +94,7 @@ export interface ClassSkill {
   icon: string;
   description: string;
   keybind: string;
-  cooldown: number; // in seconds
+  cooldown: number;
   currentCooldown: number;
   resourceCost: number;
   resourceType: 'steam' | 'mana' | 'energy' | 'heat';
@@ -191,7 +189,11 @@ export interface WorldMobEntity {
 export interface SimulatedPlayer { id: string; name: string; className: string; classId: CharacterClassId; level: number; x: number; y: number; z: number; targetMobId?: string; action: 'patrolling' | 'fighting' | 'resting' | 'riding'; guildTag: string; }
 export interface PartyMember { id: string; name: string; classId: CharacterClassId; className: string; level: number; hp: number; maxHp: number; resource: number; maxResource: number; resourceName: string; resourceColor: string; isLeader: boolean; avatarIcon: string; zone: string; isOnline: boolean; dps: number; }
 export interface DayNightInfo { timeOfDay: number; formattedTime: string; phase: 'dawn' | 'day' | 'dusk' | 'night'; phaseName: string; icon: string; sunIntensity: number; skyColorHex: string; }
-export interface Quest { id: string; title: string; giverName: string; giverZone: string; lore: string; description?: string; objective: string; targetCount: number; currentCount: number; rewardXp: number; rewardGold: number; rewardItem?: RPGItem; completed: boolean; type: 'kill_mobs' | 'kill_boss' | 'collect_loot' | 'explore_zone' | 'level_up' | 'tame_pet' | 'build_house'; targetMobType?: string; }
+
+export interface Quest {
+  id: string; title: string; giverName: string; giverZone: string; lore: string; description?: string; objective: string; targetCount: number; currentCount: number; rewardXp: number; rewardGold: number; rewardItem?: RPGItem; completed: boolean; type: 'kill_mobs' | 'kill_boss' | 'collect_loot' | 'explore_zone' | 'level_up' | 'tame_pet' | 'build_house'; targetMobType?: string;
+}
+
 export type NPCRole = 'grand_artificer' | 'archmage' | 'guard_captain' | 'wandering_trader' | 'beast_tamer' | 'homestead_architect' | 'outlaw_informant' | 'tavern_keeper' | 'Territory Envoy' | 'Guard';
 export interface NPCRelationshipMemory { reputation: number; timesInteracted: number; tradesCompleted: number; crimesWitnessed: number; lastConversationTimestamp?: string; personalNotes?: string; }
 export interface NPCCharacter { id: string; name: string; title: string; zone: string; role?: NPCRole; x: number; y: number; z: number; dialogue: string[]; quests: Quest[]; shopItems?: RPGItem[]; color: string; faction?: 'Kingdom of Aethelgard' | 'Clockwork Artisans' | 'Aether Circle' | 'Outlaw Syndicate'; familyMembers?: string[]; mood?: 'ecstatic' | 'friendly' | 'neutral' | 'suspicious' | 'hostile'; memory?: NPCRelationshipMemory; sellPets?: CompanionPet[]; houseBlueprints?: HomesteadBlueprint[]; }
