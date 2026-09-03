@@ -34,11 +34,12 @@ jobs:
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.4.1
           run_install: false
 
       - name: Set up Node
@@ -49,6 +50,9 @@ jobs:
 
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: Run GLB regression and runtime tests
         run: >-
