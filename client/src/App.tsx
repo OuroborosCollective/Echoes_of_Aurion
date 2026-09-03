@@ -11,12 +11,22 @@ import LocalAuthPanel from "./components/LocalAuthPanel";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Operations from "./pages/Operations";
+import AurionOpenWorldRuntime from "./xaurion/integration/AurionOpenWorldRuntime";
 
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <TooltipProvider><Toaster /><LocalAuthPanel /><Switch><Route path="/" component={Home} /><Route path="/ops" component={Operations} /><Route component={Home} /></Switch></TooltipProvider>
+        <TooltipProvider>
+          <Toaster />
+          <LocalAuthPanel />
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/ops" component={Operations} />
+            <Route component={Home} />
+          </Switch>
+          <AurionOpenWorldRuntime />
+        </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
