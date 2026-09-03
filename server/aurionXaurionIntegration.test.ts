@@ -51,11 +51,12 @@ describe("AIM-239 xaurion integration boundary", () => {
   });
 
   it("pins the hash-materialized owner ZIP player and equipment wave", () => {
-    expect(sha256("client/src/xaurion/entities/OpenWorldPlayer.ts")).toBe("678c6c0c8720e8577fa34cb872c467e22dbc343f3072c10a981ea4dbb502220a");
+    expect(sha256("client/src/xaurion/entities/OpenWorldPlayer.ts")).toBe("6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e");
     expect(sha256("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toBe("1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7");
     expect(sha256("client/src/xaurion/core/ItemGlbRegistry.ts")).toBe("825702516ae6d2eeff827150899c6317d6716ec8a6b1a16287531dbb414184c2");
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("ProceduralEquipmentVisuals");
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("equipGlbAsEquipment");
+    expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("return previousEquipped ?? null;");
     expect(read("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toContain("resolveItemGlbMapping");
   });
 });
