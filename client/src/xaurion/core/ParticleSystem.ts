@@ -1,1 +1,97 @@
-import * as THREE from'three';type Particle={points:THREE.Points;life:number;max:number;vel:THREE.Vector3[]};export class ParticleSystem{private particles:Particle[]=[];constructor(private readonly scene:THREE.Scene){}public emit(kind:string,position:{x:number;y:number;z:number},color:string|number='#22d3ee',scale=1){const count=kind==='explosion'||kind==='level_up'?40:22,geo=new THREE.BufferGeometry(),arr=new Float32Array(count*3),vel:THREE.Vector3[]=[];for(let i=0;i<count;i++){arr[i*3]=position.x;arr[i*3+1]=position.y;arr[i*3+2]=position.z;const a=Math.random()*Math.PI*2,s=(.6+Math.random()*2.6)*scale;vel.push(new THREE.Vector3(Math.cos(a)*s,(.8+Math.random()*2.5)*scale,Math.sin(a)*s))}geo.setAttribute('position',new THREE.BufferAttribute(arr,3));const points=new THREE.Points(geo,new THREE.PointsMaterial({color:new THREE.Color(color),size:.12*scale,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));this.scene.add(points);this.particles.push({points,life:0,max:1.2,vel})}public update(delta:number){this.particles.forEach(p=>{p.life+=delta;const pos=p.points.geometry.getAttribute('position')as THREE.BufferAttribute;for(let i=0;i<p.vel.length;i++){p.vel[i].y-=delta*2.2;pos.setXYZ(i,pos.getX(i)+p.vel[i].x*delta,pos.getY(i)+p.vel[i].y*delta,pos.getZ(i)+p.vel[i].z*delta)}pos.needsUpdate=true;(p.points.material as THREE.PointsMaterial).opacity=Math.max(0,1-p.life/p.max)});const dead=this.particles.filter(p=>p.life>=p.max);dead.forEach(p=>{this.scene.remove(p.points);p.points.geometry.dispose();(p.points.material as THREE.Material).dispose()});this.particles=this.particles.filter(p=>p.life<p.max)}public dispose(){this.particles.forEach(p=>this.scene.remove(p.points));this.particles=[]}}
+import * as THREE from 'three';
+
+type Particle = { points: THREE.Points; life: number; max: number; vel: THREE.Vector3[] };
+type AmbientEmitter = { position: THREE.Vector3; kind: 'steam' | 'beacon'; color: string; timer: number };
+
+export class ParticleSystem {
+  private particles: Particle[] = [];
+  private emitters: AmbientEmitter[] = [];
+
+  constructor(private readonly scene: THREE.Scene) {}
+
+  public registerSteamVent(x: number, y: number, z: number): void {
+    this.emitters.push({ position: new THREE.Vector3(x, y, z), kind: 'steam', color: '#94a3b8', timer: Math.random() * 1.5 });
+  }
+
+  public registerBeacon(x: number, y: number, z: number, color = '#22d3ee'): void {
+    this.emitters.push({ position: new THREE.Vector3(x, y, z), kind: 'beacon', color, timer: Math.random() });
+  }
+
+  public emit(kind: string, position: { x: number; y: number; z: number }, color: string | number = '#22d3ee', scale = 1): void {
+    const count = kind === 'explosion' || kind === 'level_up' ? 40 : kind === 'steam_vent' ? 12 : 22;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const velocities: THREE.Vector3[] = [];
+    for (let index = 0; index < count; index++) {
+      positions[index * 3] = position.x;
+      positions[index * 3 + 1] = position.y;
+      positions[index * 3 + 2] = position.z;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (0.6 + Math.random() * 2.6) * scale;
+      velocities.push(new THREE.Vector3(
+        Math.cos(angle) * speed * (kind === 'steam_vent' ? 0.25 : 1),
+        (0.8 + Math.random() * 2.5) * scale,
+        Math.sin(angle) * speed * (kind === 'steam_vent' ? 0.25 : 1),
+      ));
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const points = new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({
+        color: new THREE.Color(color),
+        size: (kind === 'beacon_activate' ? 0.18 : 0.12) * scale,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.scene.add(points);
+    this.particles.push({ points, life: 0, max: kind === 'steam_vent' ? 1.8 : 1.2, vel: velocities });
+  }
+
+  public update(delta: number): void {
+    for (const emitter of this.emitters) {
+      emitter.timer -= delta;
+      if (emitter.timer <= 0) {
+        if (emitter.kind === 'steam') {
+          this.emit('steam_vent', emitter.position, emitter.color, 0.55);
+          emitter.timer = 1.1 + Math.random() * 1.6;
+        } else {
+          this.emit('beacon_activate', emitter.position, emitter.color, 0.35);
+          emitter.timer = 2.2 + Math.random() * 2.5;
+        }
+      }
+    }
+
+    for (const particle of this.particles) {
+      particle.life += delta;
+      const position = particle.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+      for (let index = 0; index < particle.vel.length; index++) {
+        particle.vel[index].y -= delta * 1.4;
+        position.setXYZ(
+          index,
+          position.getX(index) + particle.vel[index].x * delta,
+          position.getY(index) + particle.vel[index].y * delta,
+          position.getZ(index) + particle.vel[index].z * delta,
+        );
+      }
+      position.needsUpdate = true;
+      (particle.points.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - particle.life / particle.max);
+    }
+
+    const dead = this.particles.filter(particle => particle.life >= particle.max);
+    for (const particle of dead) {
+      this.scene.remove(particle.points);
+      particle.points.geometry.dispose();
+      (particle.points.material as THREE.Material).dispose();
+    }
+    this.particles = this.particles.filter(particle => particle.life < particle.max);
+  }
+
+  public dispose(): void {
+    this.particles.forEach(particle => this.scene.remove(particle.points));
+    this.particles = [];
+    this.emitters = [];
+  }
+}
