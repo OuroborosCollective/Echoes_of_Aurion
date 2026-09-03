@@ -1,0 +1,38 @@
+name: AIM-239 xaurion validation
+
+on:
+  push:
+    branches:
+      - feature/aim-239-xaurion-open-world-integration
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Resolve exact dependency closure
+        run: pnpm install --no-frozen-lockfile
+      - name: Upload resolved lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: aim239-pnpm-lock-${{ github.sha }}
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+      - name: TypeScript
+        run: pnpm check
+      - name: AIM-239 regression
+        run: pnpm vitest run server/aurionXaurionIntegration.test.ts
+      - name: Production build
+        run: pnpm build
