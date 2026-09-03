@@ -33,16 +33,40 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
           const crypto = require('node:crypto');
+          const hash = (body) => crypto.createHash('sha256').update(body).digest('hex');
           const manifest = JSON.parse(fs.readFileSync('.aim239-source/manifest.json', 'utf8'));
           for (const file of manifest.files) {
-            const body = Buffer.concat(file.parts.map((part) => fs.readFileSync(part)));
-            const sha256 = crypto.createHash('sha256').update(body).digest('hex');
-            if (sha256 !== file.sha256) {
-              throw new Error(`SHA mismatch for ${file.target}: ${sha256} != ${file.sha256}`);
+            let body;
+            if (Array.isArray(file.parts)) {
+              body = Buffer.concat(file.parts.map((part) => fs.readFileSync(part)));
+              const sha256 = hash(body);
+              if (sha256 !== file.sha256) {
+                throw new Error(`SHA mismatch for ${file.target}: ${sha256} != ${file.sha256}`);
+              }
+            } else if (file.patch) {
+              const before = fs.readFileSync(file.target);
+              const beforeSha256 = hash(before);
+              if (beforeSha256 !== file.patch.beforeSha256) {
+                throw new Error(`Before-SHA mismatch for ${file.target}: ${beforeSha256} != ${file.patch.beforeSha256}`);
+              }
+              const source = before.toString('utf8');
+              const matches = source.split(file.patch.search).length - 1;
+              const expectedOccurrences = file.patch.occurrences ?? 1;
+              if (matches !== expectedOccurrences) {
+                throw new Error(`Patch occurrence mismatch for ${file.target}: ${matches} != ${expectedOccurrences}`);
+              }
+              body = Buffer.from(source.split(file.patch.search).join(file.patch.replacement), 'utf8');
+              const afterSha256 = hash(body);
+              if (file.patch.afterSha256 && afterSha256 !== file.patch.afterSha256) {
+                throw new Error(`After-SHA mismatch for ${file.target}: ${afterSha256} != ${file.patch.afterSha256}`);
+              }
+              console.log(`patched ${file.target} ${beforeSha256} -> ${afterSha256}`);
+            } else {
+              throw new Error(`Unsupported materializer entry for ${file.target}`);
             }
             fs.mkdirSync(path.dirname(file.target), { recursive: true });
             fs.writeFileSync(file.target, body);
-            console.log(`${file.target} ${body.length} ${sha256}`);
+            console.log(`${file.target} ${body.length} ${hash(body)}`);
           }
           NODE
       - name: Commit only verified source materialization
