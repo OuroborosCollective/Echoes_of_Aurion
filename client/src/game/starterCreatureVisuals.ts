@@ -5,13 +5,12 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import type { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
 
-import { materializeChunkedGlb } from "./chunkedGlb";
 import {
-  STARTER_CHARACTER_ASSETS,
   selectStarterMonsterLod,
   starterCreatureKindForArena,
-  type ChunkedGlbAsset,
   type StarterCreatureKind,
+  type StarterRuntimeAssetSource,
+  type StarterRuntimeAssetSources,
 } from "./starterCharacterAssets";
 
 type CreatureClip = "Idle" | "Walk" | "Attack" | "Death";
@@ -52,43 +51,38 @@ function playAnimation(asset: LoadedCreature, clip: CreatureClip): void {
 
 async function loadCreature(
   scene: Scene,
-  asset: ChunkedGlbAsset,
+  source: StarterRuntimeAssetSource,
   rootName: string,
   parent: TransformNode,
   targetHeight: number,
 ): Promise<LoadedCreature> {
-  const materialized = await materializeChunkedGlb(asset);
-  try {
-    const result = await SceneLoader.ImportMeshAsync("", "", materialized.url, scene);
-    const visibleMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0);
-    if (!visibleMeshes.length) {
-      result.animationGroups.forEach(group => group.dispose());
-      result.meshes.forEach(mesh => mesh.dispose(false, true));
-      throw new Error(`${rootName} contains no visible mesh topology`);
-    }
-
-    const root = new TransformNode(rootName, scene);
-    const topLevelMeshes = result.meshes.filter(mesh => !mesh.parent);
-    topLevelMeshes.forEach(mesh => { mesh.parent = root; });
-
-    const bounds = visibleMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
-    let minimum = bounds[0]!.minimumWorld.clone();
-    let maximum = bounds[0]!.maximumWorld.clone();
-    bounds.slice(1).forEach(bound => {
-      minimum = Vector3.Minimize(minimum, bound.minimumWorld);
-      maximum = Vector3.Maximize(maximum, bound.maximumWorld);
-    });
-    const height = Math.max(0.1, maximum.y - minimum.y);
-    const scale = targetHeight / height;
-    root.scaling.setAll(scale);
-    root.position.y = -minimum.y * scale;
-    root.parent = parent;
-    root.setEnabled(false);
-
-    return { root, animations: result.animationGroups, activeClip: null };
-  } finally {
-    materialized.revoke();
+  const result = await SceneLoader.ImportMeshAsync("", "", source.storageUrl, scene);
+  const visibleMeshes = result.meshes.filter(mesh => mesh.getTotalVertices() > 0);
+  if (!visibleMeshes.length) {
+    result.animationGroups.forEach(group => group.dispose());
+    result.meshes.forEach(mesh => mesh.dispose(false, true));
+    throw new Error(`${rootName} contains no visible mesh topology`);
   }
+
+  const root = new TransformNode(rootName, scene);
+  const topLevelMeshes = result.meshes.filter(mesh => !mesh.parent);
+  topLevelMeshes.forEach(mesh => { mesh.parent = root; });
+
+  const bounds = visibleMeshes.map(mesh => mesh.getBoundingInfo().boundingBox);
+  let minimum = bounds[0]!.minimumWorld.clone();
+  let maximum = bounds[0]!.maximumWorld.clone();
+  bounds.slice(1).forEach(bound => {
+    minimum = Vector3.Minimize(minimum, bound.minimumWorld);
+    maximum = Vector3.Maximize(maximum, bound.maximumWorld);
+  });
+  const height = Math.max(0.1, maximum.y - minimum.y);
+  const scale = targetHeight / height;
+  root.scaling.setAll(scale);
+  root.position.y = -minimum.y * scale;
+  root.parent = parent;
+  root.setEnabled(false);
+
+  return { root, animations: result.animationGroups, activeClip: null };
 }
 
 export class StarterCreatureVisuals {
@@ -101,30 +95,28 @@ export class StarterCreatureVisuals {
   constructor(
     private readonly scene: Scene,
     private readonly parent: TransformNode,
+    private readonly sources: StarterRuntimeAssetSources,
   ) {}
 
   async load(): Promise<void> {
     if (this.loaded) return;
     try {
-      const spider = await loadCreature(
-        this.scene,
-        STARTER_CHARACTER_ASSETS.spider,
-        "starter-spider-visual",
-        this.parent,
-        1.55,
-      );
-      const beastLods: LoadedCreature[] = [];
-      for (let index = 0; index < STARTER_CHARACTER_ASSETS.beast.lods.length; index += 1) {
-        beastLods.push(await loadCreature(
-          this.scene,
-          STARTER_CHARACTER_ASSETS.beast.lods[index]!,
-          `starter-beast-lod${index}-visual`,
-          this.parent,
-          2.15,
-        ));
+      if (this.sources.spider) {
+        this.spider = await loadCreature(this.scene, this.sources.spider, "starter-spider-visual", this.parent, 1.55);
       }
-      this.spider = spider;
-      this.beastLods = beastLods;
+      if (this.sources.beastLods.every((source): source is StarterRuntimeAssetSource => Boolean(source))) {
+        const beastLods: LoadedCreature[] = [];
+        for (let index = 0; index < this.sources.beastLods.length; index += 1) {
+          beastLods.push(await loadCreature(
+            this.scene,
+            this.sources.beastLods[index]!,
+            `starter-beast-lod${index}-visual`,
+            this.parent,
+            2.15,
+          ));
+        }
+        this.beastLods = beastLods;
+      }
       this.loaded = true;
     } catch (error) {
       this.dispose();

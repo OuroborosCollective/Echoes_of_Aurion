@@ -1,23 +1,23 @@
-import { STARTER_GLB_BUILD_ASSETS, type StarterGlbBuildAsset } from "@shared/starterGlbAssetManifest";
+import { validateRuntimeModelSource } from "@shared/runtimeContracts";
 
-export type ChunkedGlbAsset = Pick<StarterGlbBuildAsset,
-  "id" | "compressedBytes" | "glbBytes" | "compressedSha256" | "glbSha256"
-> & Readonly<{ parts: readonly string[] }>;
+export type StarterRuntimeAssetSource = Readonly<{
+  assetId: string;
+  storageUrl: string;
+}>;
 
-function runtimeAsset(asset: StarterGlbBuildAsset): ChunkedGlbAsset {
-  return Object.freeze({
-    id: asset.id,
-    parts: Object.freeze([asset.publicUrl]),
-    compressedBytes: asset.compressedBytes,
-    glbBytes: asset.glbBytes,
-    compressedSha256: asset.compressedSha256,
-    glbSha256: asset.glbSha256,
-  });
-}
+export type StarterRuntimeAssetSources = Readonly<{
+  player: StarterRuntimeAssetSource | null;
+  spider: StarterRuntimeAssetSource | null;
+  beastLods: readonly [
+    StarterRuntimeAssetSource | null,
+    StarterRuntimeAssetSource | null,
+    StarterRuntimeAssetSource | null,
+    StarterRuntimeAssetSource | null,
+  ];
+}>;
 
 export const STARTER_CHARACTER_ASSETS = Object.freeze({
   player: Object.freeze({
-    ...runtimeAsset(STARTER_GLB_BUILD_ASSETS.player),
     animations: Object.freeze(["AttackCombo", "Death", "Fight", "Idle", "Jump", "Run", "Walk"] as const),
     equipmentSockets: Object.freeze([
       "Socket_Head",
@@ -37,16 +37,14 @@ export const STARTER_CHARACTER_ASSETS = Object.freeze({
     ] as const),
   }),
   spider: Object.freeze({
-    ...runtimeAsset(STARTER_GLB_BUILD_ASSETS.spider),
     animations: Object.freeze(["Idle", "Walk", "Attack", "Death"] as const),
   }),
   beast: Object.freeze({
-    id: "starter_beast",
     lods: Object.freeze([
-      Object.freeze({ ...runtimeAsset(STARTER_GLB_BUILD_ASSETS.beastLod0), triangleCount: 1149 }),
-      Object.freeze({ ...runtimeAsset(STARTER_GLB_BUILD_ASSETS.beastLod1), triangleCount: 694 }),
-      Object.freeze({ ...runtimeAsset(STARTER_GLB_BUILD_ASSETS.beastLod2), triangleCount: 345 }),
-      Object.freeze({ ...runtimeAsset(STARTER_GLB_BUILD_ASSETS.beastLod3), triangleCount: 145 }),
+      Object.freeze({ triangleCount: 1149 }),
+      Object.freeze({ triangleCount: 694 }),
+      Object.freeze({ triangleCount: 345 }),
+      Object.freeze({ triangleCount: 145 }),
     ] as const),
     animations: Object.freeze(["Idle", "Walk", "Attack", "Death"] as const),
   }),
@@ -80,4 +78,27 @@ export function selectStarterMonsterLod(distanceMeters: number, currentLod = 0):
     lod = (lod - 1) as 0 | 1 | 2 | 3;
   }
   return lod;
+}
+
+function normalizeSource(value: unknown): StarterRuntimeAssetSource | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as { assetId?: unknown; storageUrl?: unknown };
+  if (typeof candidate.assetId !== "string" || candidate.assetId.length < 8) return null;
+  if (typeof candidate.storageUrl !== "string" || !validateRuntimeModelSource(candidate.storageUrl).valid) return null;
+  return Object.freeze({ assetId: candidate.assetId, storageUrl: candidate.storageUrl });
+}
+
+export function normalizeStarterRuntimeAssetSources(value: unknown): StarterRuntimeAssetSources {
+  const candidate = value && typeof value === "object" ? value as { player?: unknown; spider?: unknown; beastLods?: unknown } : {};
+  const rawLods = Array.isArray(candidate.beastLods) ? candidate.beastLods : [];
+  return Object.freeze({
+    player: normalizeSource(candidate.player),
+    spider: normalizeSource(candidate.spider),
+    beastLods: Object.freeze([
+      normalizeSource(rawLods[0]),
+      normalizeSource(rawLods[1]),
+      normalizeSource(rawLods[2]),
+      normalizeSource(rawLods[3]),
+    ]) as StarterRuntimeAssetSources["beastLods"],
+  });
 }

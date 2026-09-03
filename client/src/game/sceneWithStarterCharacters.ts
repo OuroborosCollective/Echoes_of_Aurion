@@ -3,13 +3,16 @@ import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 
-import { materializeChunkedGlb } from "./chunkedGlb";
 import { createGameScene as createBaseGameScene, type GameHandle } from "./scene";
-import { STARTER_CHARACTER_ASSETS } from "./starterCharacterAssets";
+import { STARTER_CHARACTER_ASSETS, type StarterRuntimeAssetSources } from "./starterCharacterAssets";
 import { StarterCreatureVisuals } from "./starterCreatureVisuals";
 
 const PLAYER_ANIMATION_NAMES = new Set<string>(STARTER_CHARACTER_ASSETS.player.animations);
-const DEFAULT_PLAYER_SOURCE = `starter:${STARTER_CHARACTER_ASSETS.player.glbSha256}`;
+const EMPTY_STARTER_SOURCES: StarterRuntimeAssetSources = Object.freeze({
+  player: null,
+  spider: null,
+  beastLods: Object.freeze([null, null, null, null]),
+});
 
 type MissionStateDetail = {
   arena?: number;
@@ -39,6 +42,7 @@ export async function createGameScene(
   engine: Engine,
   canvas: HTMLCanvasElement,
   requestedCharacterModelUrl?: string,
+  starterSources: StarterRuntimeAssetSources = EMPTY_STARTER_SOURCES,
 ): Promise<GameHandle> {
   const base = await createBaseGameScene(engine, canvas);
   const { scene } = base;
@@ -47,7 +51,7 @@ export async function createGameScene(
 
   let playerAnimations: AnimationGroup[] = [];
   let activePlayerAnimation: AnimationGroup | null = null;
-  let currentPlayerSource: string | null = null;
+  let currentPlayerSource: string | null | undefined = undefined;
   let explorerHp = 100;
   let sentinelHp = 1;
   let arenaIndex = 0;
@@ -57,21 +61,21 @@ export async function createGameScene(
 
   const setCharacterModel = async (sourceUrl?: string): Promise<void> => {
     const customSource = sourceUrl?.trim();
-    const sourceIdentity = customSource || DEFAULT_PLAYER_SOURCE;
-    if (currentPlayerSource === sourceIdentity && playerAnimations.length) return;
+    const defaultSource = starterSources.player?.storageUrl;
+    const sourceIdentity = customSource || defaultSource || null;
+    if (currentPlayerSource === sourceIdentity && currentPlayerSource !== undefined) return;
 
     const previousGroups = new Set(scene.animationGroups);
-    if (customSource) {
-      await base.setCharacterModel(customSource);
-    } else {
-      const materialized = await materializeChunkedGlb(STARTER_CHARACTER_ASSETS.player);
-      try {
-        await base.setCharacterModel(materialized.url);
-      } finally {
-        materialized.revoke();
-      }
+    if (!sourceIdentity) {
+      await base.setCharacterModel(undefined);
+      currentPlayerSource = null;
+      playerAnimations = [];
+      activePlayerAnimation = null;
+      window.dispatchEvent(new CustomEvent("aurion:starter-character-status", { detail: { active: false, source: "procedural", defaultAsset: true } }));
+      return;
     }
 
+    await base.setCharacterModel(sourceIdentity);
     playerAnimations = scene.animationGroups.filter(group => !previousGroups.has(group) && PLAYER_ANIMATION_NAMES.has(group.name));
     currentPlayerSource = sourceIdentity;
     activePlayerAnimation = null;
@@ -85,6 +89,7 @@ export async function createGameScene(
       active: true,
       source: sourceIdentity,
       defaultAsset: !customSource,
+      assetId: !customSource ? starterSources.player?.assetId ?? null : null,
       animations: playerAnimations.map(group => group.name),
     } }));
   };
@@ -96,10 +101,10 @@ export async function createGameScene(
     currentPlayerSource = null;
     playerAnimations = [];
     console.warn("[Aurion starter characters] Standard-/Auswahlcharakter konnte nicht geladen werden; prozeduraler Explorer bleibt aktiv.", error);
-    window.dispatchEvent(new CustomEvent("aurion:starter-character-status", { detail: { active: false, source: requestedCharacterModelUrl?.trim() || DEFAULT_PLAYER_SOURCE } }));
+    window.dispatchEvent(new CustomEvent("aurion:starter-character-status", { detail: { active: false, source: requestedCharacterModelUrl?.trim() || starterSources.player?.storageUrl || "procedural" } }));
   }
 
-  const creatureVisuals = sentinel ? new StarterCreatureVisuals(scene, sentinel) : null;
+  const creatureVisuals = sentinel ? new StarterCreatureVisuals(scene, sentinel, starterSources) : null;
   const proceduralSentinelNodes = [
     "sentinel-torso",
     "sentinel-shoulder-0",
@@ -119,7 +124,7 @@ export async function createGameScene(
     void creatureVisuals.load().then(() => {
       if (!disposed) syncCreatureArena();
     }).catch(error => {
-      console.warn("[Aurion starter characters] Starter-Monster-GLBs konnten nicht vollständig geladen werden; Sentinel-Fallback bleibt aktiv.", error);
+      console.warn("[Aurion starter characters] Starter-Monster-GLBs konnten nicht geladen werden; Sentinel-Fallback bleibt aktiv.", error);
       proceduralSentinelNodes.forEach(node => node.setEnabled(true));
       window.dispatchEvent(new CustomEvent("aurion:starter-creature-status", { detail: { active: false, arenaIndex, error: "load_failed" } }));
     });
