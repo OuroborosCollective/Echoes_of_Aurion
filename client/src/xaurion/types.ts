@@ -167,15 +167,12 @@ export interface PlayerStats {
 export interface EquipmentState {
   weapon: RPGItem | null;
   shield: RPGItem | null;
-  offhand?: RPGItem | null;
   helmet: RPGItem | null;
-  head?: RPGItem | null;
   shoulders: RPGItem | null;
   chest: RPGItem | null;
   arms: RPGItem | null;
   legs: RPGItem | null;
   boots: RPGItem | null;
-  shoes?: RPGItem | null;
   relic: RPGItem | null;
   mount: RPGItem | null;
 }
