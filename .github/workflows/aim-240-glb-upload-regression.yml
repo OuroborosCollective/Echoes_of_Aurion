@@ -1,0 +1,65 @@
+name: AIM-240 GLB Upload Regression
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim-240-glb-upload-regression.yml"
+      - "client/src/App.tsx"
+      - "client/src/components/DashboardLayout.tsx"
+      - "client/src/pages/GlbUpload.tsx"
+      - "server/_core/index.ts"
+      - "server/adminProtocol.ts"
+      - "server/glbAssetClassifier.ts"
+      - "server/glbAssetClassifier.test.ts"
+      - "server/glbSmartUpload.ts"
+      - "server/glbSmartUpload.test.ts"
+      - "server/glbSmartUploadIntegrationContract.test.ts"
+      - "server/db.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-240-glb-upload-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  glb-upload-regression:
+    name: GLB classifier, runtime, typecheck and web build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run GLB regression and runtime tests
+        run: >-
+          pnpm exec vitest run
+          server/adminProtocol.test.ts
+          server/glbAssetClassifier.test.ts
+          server/glbSmartUpload.test.ts
+          server/glbSmartUploadIntegrationContract.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build web and server runtime
+        run: pnpm build
