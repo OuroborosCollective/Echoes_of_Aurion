@@ -957,7 +957,7 @@ export class OpenWorldPlayer {
 
     // Dynamic Visual Update for every equipped piece!
     this.observeEquipmentState();
-    return previousEquipped;
+    return previousEquipped ?? null;
   }
 
   public unequipItem(slotName: string): RPGItem | null {
