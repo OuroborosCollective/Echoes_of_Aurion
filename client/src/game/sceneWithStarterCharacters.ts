@@ -11,7 +11,7 @@ const PLAYER_ANIMATION_NAMES = new Set<string>(STARTER_CHARACTER_ASSETS.player.a
 const EMPTY_STARTER_SOURCES: StarterRuntimeAssetSources = Object.freeze({
   player: null,
   spider: null,
-  beastLods: Object.freeze([null, null, null, null]),
+  beastLods: Object.freeze([null, null, null, null] as const),
 });
 
 type MissionStateDetail = {
