@@ -1,0 +1,120 @@
+import * as THREE from 'three';
+import { RPGItem, ItemSlot, WeaponType, ItemRarity } from '../types';
+
+export interface GLBSocketTransform {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number] | number;
+  mirrorRight?: boolean;
+}
+
+export interface ItemGlbMapping {
+  itemId: string;
+  slot: ItemSlot;
+  glbPath: string;
+  fallbackGlbPath?: string;
+  name: string;
+  triangleBudget: number;
+  rarity: ItemRarity;
+  weaponType?: WeaponType;
+  primaryColor?: number;
+  glowColor?: number;
+  glowIntensity?: number;
+  socketTransform: GLBSocketTransform;
+  leftSocketTransform?: GLBSocketTransform;
+  rightSocketTransform?: GLBSocketTransform;
+  specialEffect?: 'none' | 'pulsing_rune' | 'steam_vent' | 'orbit_ring' | 'aether_flame' | 'clockwork_spin';
+}
+
+/**
+ * Deterministic mapping of individual Item IDs to GLB Asset Paths and Rig Sockets
+ */
+export const ITEM_TO_GLB_MAPPINGS: Record<string, ItemGlbMapping> = {
+  // ==========================================
+  // 1. HEAD / HELMET (Kopf)
+  // ==========================================
+  item_helm_starter: {
+    itemId: 'item_helm_starter',
+    slot: 'helmet',
+    glbPath: '/glb-assets/helmets/recruit-iron-sallet.glb',
+    fallbackGlbPath: '/models/glb/recruit-iron-sallet.glb',
+    name: 'Recruit Iron Sallet',
+    triangleBudget: 420,
+    rarity: 'common',
+    primaryColor: 0x94a3b8,
+    glowColor: 0x00f0ff,
+    socketTransform: {
+      position: [0, 0.08, 0],
+      rotation: [0, 0, 0],
+      scale: 1.05,
+    },
+    specialEffect: 'none',
+  },
+  item_helm_rare: {
+    itemId: 'item_helm_rare',
+    slot: 'helmet',
+    glbPath: '/glb-assets/helmets/aviator-recon-goggles.glb',
+    fallbackGlbPath: '/models/glb/aviator-recon-goggles.glb',
+    name: 'Aviator Tactical Brass Goggles',
+    triangleBudget: 680,
+    rarity: 'rare',
+    primaryColor: 0xd97706,
+    glowColor: 0x00f0ff,
+    glowIntensity: 1.8,
+    socketTransform: {
+      position: [0, 0.06, 0.04],
+      rotation: [0, 0, 0],
+      scale: 1.0,
+    },
+    specialEffect: 'pulsing_rune',
+  },
+  item_helm_epic: {
+    itemId: 'item_helm_epic',
+    slot: 'helmet',
+    glbPath: '/glb-assets/helmets/sentinel-visored-greathelm.glb',
+    fallbackGlbPath: '/models/glb/sol-corona-greathelm.glb',
+    name: 'Sentinel Visored Greathelm',
+    triangleBudget: 940,
+    rarity: 'epic',
+    primaryColor: 0x475569,
+    glowColor: 0x00f0ff,
+    glowIntensity: 2.0,
+    socketTransform: {
+      position: [0, 0.08, 0],
+      rotation: [0, 0, 0],
+      scale: 1.08,
+    },
+    specialEffect: 'steam_vent',
+  },
+  item_helm_chrono: {
+    itemId: 'item_helm_chrono',
+    slot: 'helmet',
+    glbPath: '/glb-assets/helmets/chrono-aether-cowl.glb',
+    fallbackGlbPath: '/models/glb/chrono-aether-cowl.glb',
+    name: 'Chronomancer Aether Cowl',
+    triangleBudget: 850,
+    rarity: 'epic',
+    primaryColor: 0x0a192f,
+    glowColor: 0x38bdf8,
+    glowIntensity: 2.2,
+    socketTransform: {
+      position: [0, 0.12, -0.02],
+      rotation: [0, 0, 0],
+      scale: 1.1,
+    },
+    specialEffect: 'orbit_ring',
+  },
+  item_helm_legendary: {
+    itemId: 'item_helm_legendary',
+    slot: 'helmet',
+    glbPath: '/glb-assets/helmets/sol-corona-greathelm.glb',
+    fallbackGlbPath: '/models/glb/sol-corona-greathelm.glb',
+    name: 'Sol Corona Crown Greathelm',
+    triangleBudget: 1050,
+    rarity: 'legendary',
+    primaryColor: 0xf59e0b,
+    glowColor: 0xfcd34d,
+    glowIntensity: 2.5,
+    socketTransform: {
+      position: [0, 0.14, 0],
+   

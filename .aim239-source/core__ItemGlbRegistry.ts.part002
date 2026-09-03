@@ -1,0 +1,46 @@
+LB_MAPPINGS[cleanId];
+  }
+
+  // 4. Fallback for custom or procedurally generated items based on Slot & Rarity
+  const normalizedSlot = (item.slot || slot) as ItemSlot;
+  const glbUrl = item.glbModelUrl || (item.glbModelId ? `/glb-assets/${item.glbModelId}.glb` : undefined);
+
+  return {
+    itemId: item.id,
+    slot: normalizedSlot,
+    glbPath: glbUrl || `/glb-assets/${normalizedSlot}/${item.id}.glb`,
+    fallbackGlbPath: `/models/glb/${cleanId}.glb`,
+    name: item.name,
+    triangleBudget: 1100,
+    rarity: item.rarity || 'epic',
+    weaponType: item.weaponType,
+    socketTransform: getDefaultSocketTransform(normalizedSlot),
+    specialEffect: item.rarity === 'mystic' || item.rarity === 'legendary' ? 'pulsing_rune' : 'none',
+  };
+}
+
+export function getDefaultSocketTransform(slot: ItemSlot | string): GLBSocketTransform {
+  switch (slot) {
+    case 'helmet':
+    case 'head':
+      return { position: [0, 0.08, 0], rotation: [0, 0, 0], scale: 1.05 };
+    case 'chest':
+      return { position: [0, 0.35, 0], rotation: [0, 0, 0], scale: 1.1 };
+    case 'shoulders':
+      return { position: [0, 0.06, 0], rotation: [0, 0, 0], scale: 1.05, mirrorRight: true };
+    case 'arms':
+      return { position: [0, -0.2, 0], rotation: [0, 0, 0], scale: 1.05, mirrorRight: true };
+    case 'legs':
+      return { position: [0, -0.22, 0], rotation: [0, 0, 0], scale: 1.05, mirrorRight: true };
+    case 'boots':
+    case 'shoes':
+      return { position: [0, -0.42, 0.08], rotation: [0, 0, 0], scale: 1.05, mirrorRight: true };
+    case 'weapon':
+      return { position: [0, 0.3, 0], rotation: [0, 0, 0], scale: 1.15 };
+    case 'shield':
+    case 'offhand':
+      return { position: [0, -0.15, 0.12], rotation: [0, Math.PI / 2, 0], scale: 1.0 };
+    default:
+      return { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1.0 };
+  }
+}

@@ -1,0 +1,120 @@
+l({
+        color: theme.secondaryColor,
+        roughness: 0.8,
+      });
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: theme.goldColor,
+        metalness: 0.95,
+        roughness: 0.2,
+      });
+      const glowMat = new THREE.MeshStandardMaterial({
+        color: theme.glowColor,
+        emissive: theme.glowColor,
+        emissiveIntensity: theme.emissiveIntensity,
+      });
+
+      // Upper Arms
+      const upperArmGeo = new THREE.BoxGeometry(0.24, 0.4, 0.24);
+      const leftUpperArm = new THREE.Mesh(upperArmGeo, secondaryMat);
+      leftUpperArm.position.set(0, -0.19, 0);
+      leftArmPivot.add(leftUpperArm);
+
+      const rightUpperArm = new THREE.Mesh(upperArmGeo, secondaryMat);
+      rightUpperArm.position.set(0, -0.19, 0);
+      rightArmPivot.add(rightUpperArm);
+
+      // Forearms / Gauntlets
+      const forearmGeo = new THREE.BoxGeometry(0.24, 0.36, 0.24);
+      const leftForearm = new THREE.Mesh(forearmGeo, arms ? metalMat : secondaryMat);
+      leftForearm.position.set(0, -0.18, 0);
+      leftFallback.add(leftForearm);
+
+      const rightForearm = new THREE.Mesh(forearmGeo, arms ? metalMat : secondaryMat);
+      rightForearm.position.set(0, -0.18, 0);
+      rightFallback.add(rightForearm);
+
+      // Hands
+      const handMat = arms ? metalMat : skinMat;
+      const handGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+      const leftHand = new THREE.Mesh(handGeo, handMat);
+      leftHand.position.set(0, -0.38, 0);
+      leftFallback.add(leftHand);
+
+      const rightHand = new THREE.Mesh(handGeo, handMat);
+      rightHand.position.set(0, -0.38, 0);
+      rightFallback.add(rightHand);
+
+      if (arms && (theme.isMystic || theme.isLegendary)) {
+        const runeRingGeo = new THREE.TorusGeometry(0.16, 0.02, 6, 16);
+        const leftRing = new THREE.Mesh(runeRingGeo, glowMat);
+        leftRing.position.set(0, -0.24, 0);
+        leftRing.rotation.x = Math.PI / 2;
+        leftFallback.add(leftRing);
+
+        const rightRing = new THREE.Mesh(runeRingGeo, glowMat);
+        rightRing.position.set(0, -0.24, 0);
+        rightRing.rotation.x = Math.PI / 2;
+        rightFallback.add(rightRing);
+
+        this.animatedNodes.push({
+          object: leftRing,
+          type: 'spin_y',
+          speed: 2.5,
+        });
+        this.animatedNodes.push({
+          object: rightRing,
+          type: 'spin_y',
+          speed: -2.5,
+        });
+      }
+    });
+  }
+
+  /**
+   * 5. Builds dynamic LEGS & GREAVES
+   */
+  public buildLegs(
+    leftHipPivot: THREE.Group,
+    rightHipPivot: THREE.Group,
+    leftKneePivot: THREE.Group,
+    rightKneePivot: THREE.Group,
+    legs: RPGItem | null
+  ) {
+    this.attachGlbOrProceduralPaired('legs', leftKneePivot, rightKneePivot, legs, (leftFallback, rightFallback) => {
+      const theme = deriveProceduralTheme(legs, 'legs');
+      const tex = createNoiseTexture(theme.textureType);
+
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: theme.primaryColor,
+        metalness: theme.metalness,
+        roughness: theme.roughness,
+        map: tex,
+      });
+      const secondaryMat = new THREE.MeshStandardMaterial({
+        color: theme.secondaryColor,
+        roughness: 0.8,
+      });
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: theme.goldColor,
+        metalness: 0.95,
+        roughness: 0.2,
+      });
+      const glowMat = new THREE.MeshStandardMaterial({
+        color: theme.glowColor,
+        emissive: theme.glowColor,
+        emissiveIntensity: theme.emissiveIntensity,
+      });
+
+      // Thighs
+      const thighGeo = new THREE.BoxGeometry(0.26, 0.48, 0.28);
+      const leftThigh = new THREE.Mesh(thighGeo, secondaryMat);
+      leftThigh.position.set(0, -0.24, 0);
+      leftHipPivot.add(leftThigh);
+
+      const rightThigh = new THREE.Mesh(thighGeo, secondaryMat);
+      rightThigh.position.set(0, -0.24, 0);
+      rightHipPivot.add(rightThigh);
+
+      // Shins / Greaves
+      const shinGeo = new THREE.BoxGeometry(0.25, 0.45, 0.27);
+      co

@@ -1,0 +1,55 @@
+ },
+    specialEffect: 'steam_vent',
+  },
+
+  // ==========================================
+  // 5. LEGS & GREAVES (Beine)
+  // ==========================================
+  item_legs_starter: {
+    itemId: 'item_legs_starter',
+    slot: 'legs',
+    glbPath: '/glb-assets/legs/recruit-iron-greaves.glb',
+    fallbackGlbPath: '/models/glb/recruit-iron-greaves.glb',
+    name: 'Recruit Iron Greaves',
+    triangleBudget: 410,
+    rarity: 'common',
+    primaryColor: 0x475569,
+    socketTransform: {
+      position: [0, -0.22, 0],
+      rotation: [0, 0, 0],
+      scale: 1.0,
+      mirrorRight: true,
+    },
+  },
+  item_legs_rare: {
+    itemId: 'item_legs_rare',
+    slot: 'legs',
+    glbPath: '/glb-assets/legs/armored-steel-greaves.glb',
+    fallbackGlbPath: '/models/glb/armored-steel-greaves.glb',
+    name: 'Armored Steel Greaves',
+    triangleBudget: 760,
+    rarity: 'rare',
+    primaryColor: 0x0284c7,
+    glowColor: 0x00f0ff,
+    socketTransform: {
+      position: [0, -0.22, 0],
+      rotation: [0, 0, 0],
+      scale: 1.06,
+      mirrorRight: true,
+    },
+  },
+  item_legs_mage: {
+    itemId: 'item_legs_mage',
+    slot: 'legs',
+    glbPath: '/glb-assets/legs/silk-chrono-robe-skirt.glb',
+    fallbackGlbPath: '/models/glb/silk-chrono-robe-skirt.glb',
+    name: 'Silk Chrono Robe Skirt',
+    triangleBudget: 830,
+    rarity: 'epic',
+    primaryColor: 0x0f172a,
+    glowColor: 0x00f0ff,
+    socketTransform: {
+      position: [0, -0.2, 0],
+      rotation: [0, 0, 0],
+      scale: 1.08,
+      mir

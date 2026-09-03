@@ -1,0 +1,225 @@
+8);
+          const guard = new THREE.Mesh(guardGeo, goldMat);
+          guard.position.set(0, 0, 0);
+          fallbackGroup.add(guard);
+
+          const bladeGeo = new THREE.BoxGeometry(0.08, 1.85, 0.03);
+          const blade = new THREE.Mesh(bladeGeo, metalMat);
+          blade.position.set(0, 0.95, 0);
+          fallbackGroup.add(blade);
+        } else if (isHammer) {
+          const shaftGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.6, 6);
+          const shaft = new THREE.Mesh(shaftGeo, metalMat);
+          shaft.position.set(0, 0.4, 0);
+          fallbackGroup.add(shaft);
+
+          const headGeo = new THREE.BoxGeometry(0.48, 0.4, 0.55);
+          const hammerHead = new THREE.Mesh(headGeo, goldMat);
+          hammerHead.position.set(0, 1.15, 0);
+          fallbackGroup.add(hammerHead);
+        } else {
+          // Broadsword / Sunblade
+          const hiltGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.45, 6);
+          const hilt = new THREE.Mesh(hiltGeo, darkLeatherMat);
+          hilt.position.set(0, -0.2, 0);
+          fallbackGroup.add(hilt);
+
+          const crossguardGeo = new THREE.BoxGeometry(0.48, 0.08, 0.12);
+          const crossguard = new THREE.Mesh(crossguardGeo, goldMat);
+          crossguard.position.set(0, 0.05, 0);
+          fallbackGroup.add(crossguard);
+
+          const bladeGeo = new THREE.BoxGeometry(0.16, 1.65, 0.04);
+          const blade = new THREE.Mesh(bladeGeo, metalMat);
+          blade.position.set(0, 0.88, 0);
+          fallbackGroup.add(blade);
+
+          const fullerGeo = new THREE.BoxGeometry(0.04, 1.45, 0.045);
+          const fuller = new THREE.Mesh(fullerGeo, glowMat);
+          fuller.position.set(0, 0.88, 0);
+          fallbackGroup.add(fuller);
+        }
+      } else if (type === 'arcane') {
+        const staffGeo = new THREE.CylinderGeometry(0.045, 0.035, 2.1, 8);
+        const staff = new THREE.Mesh(staffGeo, goldMat);
+        staff.position.set(0, 0.6, 0);
+        fallbackGroup.add(staff);
+
+        const orbGeo = new THREE.OctahedronGeometry(0.24, 0);
+        const orb = new THREE.Mesh(orbGeo, glowMat);
+        orb.position.set(0, 1.75, 0);
+        fallbackGroup.add(orb);
+
+        const ringGeo = new THREE.TorusGeometry(0.38, 0.02, 6, 16);
+        const ring = new THREE.Mesh(ringGeo, goldMat);
+        ring.position.set(0, 1.75, 0);
+        ring.rotation.x = Math.PI / 4;
+        fallbackGroup.add(ring);
+
+        this.animatedNodes.push({
+          object: orb,
+          type: 'spin_y',
+          speed: 3.0,
+        });
+        this.animatedNodes.push({
+          object: ring,
+          type: 'orbit',
+          speed: 1.8,
+        });
+      } else if (type === 'marksmanship') {
+        const isBow = !weaponItem?.id.includes('repeater') && !weaponItem?.id.includes('gun');
+        if (isBow) {
+          const gripGeo = new THREE.BoxGeometry(0.08, 0.25, 0.08);
+          const grip = new THREE.Mesh(gripGeo, darkLeatherMat);
+          fallbackGroup.add(grip);
+
+          const upperLimbGeo = new THREE.CylinderGeometry(0.03, 0.04, 1.1, 6);
+          upperLimbGeo.rotateZ(Math.PI / 8);
+          const upperLimb = new THREE.Mesh(upperLimbGeo, goldMat);
+          upperLimb.position.set(-0.25, 0.55, 0);
+          fallbackGroup.add(upperLimb);
+
+          const lowerLimbGeo = new THREE.CylinderGeometry(0.04, 0.03, 1.1, 6);
+          lowerLimbGeo.rotateZ(-Math.PI / 8);
+          const lowerLimb = new THREE.Mesh(lowerLimbGeo, goldMat);
+          lowerLimb.position.set(-0.25, -0.55, 0);
+          fallbackGroup.add(lowerLimb);
+        } else {
+          // Arbalest / Crossbow
+          const stockGeo = new THREE.BoxGeometry(0.12, 0.12, 1.1);
+          const stock = new THREE.Mesh(stockGeo, darkLeatherMat);
+          stock.position.set(0, 0, 0.2);
+          fallbackGroup.add(stock);
+
+          const prodGeo = new THREE.BoxGeometry(0.95, 0.08, 0.08);
+          const prod = new THREE.Mesh(prodGeo, metalMat);
+          prod.position.set(0, 0, 0.65);
+          fallbackGroup.add(prod);
+        }
+      } else {
+        // Heavy Tech / Cannon
+        const barrelGeo = new THREE.CylinderGeometry(0.18, 0.14, 1.5, 8);
+        barrelGeo.rotateX(Math.PI / 2);
+        const barrel = new THREE.Mesh(barrelGeo, metalMat);
+        barrel.position.set(0, 0, 0.45);
+        fallbackGroup.add(barrel);
+
+        const boilerCoreGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.45, 8);
+        const boilerCore = new THREE.Mesh(boilerCoreGeo, goldMat);
+        boilerCore.position.set(0, 0, -0.15);
+        fallbackGroup.add(boilerCore);
+      }
+    });
+  }
+
+  /**
+   * 8. Builds dynamic OFFHAND & SHIELDS (Tomes, Orbs, Bucklers, Stilettos)
+   */
+  public buildOffhand(
+    offhandGroup: THREE.Group,
+    shieldItem: RPGItem | null,
+    activeWeaponType: WeaponType
+  ) {
+    if (!shieldItem && activeWeaponType !== 'arcane') {
+      return;
+    }
+
+    this.attachGlbOrProcedural('shield', offhandGroup, shieldItem, (fallbackGroup) => {
+      const theme = deriveProceduralTheme(shieldItem, 'shield');
+      const tex = createNoiseTexture(theme.textureType);
+
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: theme.primaryColor,
+        metalness: theme.metalness,
+        roughness: theme.roughness,
+        map: tex,
+      });
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: theme.goldColor,
+        metalness: 0.95,
+        roughness: 0.2,
+      });
+      const glowMat = new THREE.MeshStandardMaterial({
+        color: theme.glowColor,
+        emissive: theme.glowColor,
+        emissiveIntensity: theme.emissiveIntensity,
+      });
+
+      if (!shieldItem) {
+        // Ambient focus orb for arcane class
+        const orbGeo = new THREE.SphereGeometry(0.12, 8, 8);
+        const orb = new THREE.Mesh(orbGeo, glowMat);
+        orb.position.set(0, 0, 0.25);
+        fallbackGroup.add(orb);
+        return;
+      }
+
+      const seed = hashString(shieldItem.id + shieldItem.name);
+      const isTome = shieldItem.id.includes('tome') || shieldItem.id.includes('grimoire') || (seed % 4 === 1);
+      const isOrb = shieldItem.id.includes('orb') || shieldItem.id.includes('catalyst') || (seed % 4 === 2);
+      const isStiletto = shieldItem.id.includes('dagger') || shieldItem.id.includes('stiletto');
+
+      if (isTome) {
+        // Levitating Grimoire
+        const bookGeo = new THREE.BoxGeometry(0.45, 0.55, 0.12);
+        const book = new THREE.Mesh(bookGeo, new THREE.MeshStandardMaterial({ color: 0x4c1d95, roughness: 0.7 }));
+        book.position.set(0, 0, 0.2);
+        fallbackGroup.add(book);
+
+        const glyphGeo = new THREE.RingGeometry(0.12, 0.18, 6);
+        const glyph = new THREE.Mesh(glyphGeo, glowMat);
+        glyph.position.set(0, 0, 0.27);
+        fallbackGroup.add(glyph);
+
+        this.animatedNodes.push({
+          object: fallbackGroup,
+          type: 'bob_float',
+          speed: 2.0,
+          initialY: 0,
+        });
+      } else if (isOrb) {
+        // Floating Aether Catalyst Orb
+        const orbGeo = new THREE.SphereGeometry(0.18, 10, 10);
+        const orb = new THREE.Mesh(orbGeo, glowMat);
+        orb.position.set(0, 0, 0.25);
+        fallbackGroup.add(orb);
+
+        const orbitRingGeo = new THREE.TorusGeometry(0.28, 0.02, 6, 16);
+        const ring = new THREE.Mesh(orbitRingGeo, goldMat);
+        ring.position.set(0, 0, 0.25);
+        ring.rotation.x = Math.PI / 3;
+        fallbackGroup.add(ring);
+
+        this.animatedNodes.push({
+          object: ring,
+          type: 'orbit',
+          speed: 2.0,
+        });
+        this.animatedNodes.push({
+          object: orb,
+          type: 'pulse_glow',
+          speed: 3.5,
+          maxIntensity: 2.5,
+        });
+      } else if (isStiletto) {
+        // Parrying Stiletto
+        const stilettoGeo = new THREE.BoxGeometry(0.06, 0.75, 0.03);
+        const stiletto = new THREE.Mesh(stilettoGeo, metalMat);
+        stiletto.position.set(0, 0.25, 0.1);
+        stiletto.rotation.x = Math.PI;
+        fallbackGroup.add(stiletto);
+      } else {
+        // Aegis / Tower Shield / Royal Buckler
+        const shieldGeo = new THREE.BoxGeometry(0.68, 0.98, 0.12);
+        const shield = new THREE.Mesh(shieldGeo, theme.isLegendary ? goldMat : metalMat);
+        shield.position.set(0, 0, 0.15);
+        fallbackGroup.add(shield);
+
+        const shieldCoreGeo = new THREE.OctahedronGeometry(0.15, 0);
+        const shieldCore = new THREE.Mesh(shieldCoreGeo, glowMat);
+        shieldCore.position.set(0, 0, 0.22);
+        fallbackGroup.add(shieldCore);
+      }
+    });
+  }
+}

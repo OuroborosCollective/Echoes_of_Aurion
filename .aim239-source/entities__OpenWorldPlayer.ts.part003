@@ -1,0 +1,288 @@
+ipItem(slotName: string): RPGItem | null {
+    const slot = OpenWorldPlayer.normalizeSlot(slotName);
+    const item = this.equipment[slot] || (slotName === 'head' ? (this.equipment as any).head : null) || (slotName === 'shoes' ? (this.equipment as any).shoes : null) || (slotName === 'offhand' ? (this.equipment as any).offhand : null);
+    if (item) {
+      this.equipment[slot] = null;
+      if (slot === 'helmet') (this.equipment as any).head = null;
+      if (slot === 'boots') (this.equipment as any).shoes = null;
+      if (slot === 'shield') (this.equipment as any).offhand = null;
+      this.inventory.push(item);
+      this.observeEquipmentState();
+      return item;
+    }
+    return null;
+  }
+
+  public unequipSlot(slotName: string): RPGItem | null {
+    return this.unequipItem(slotName);
+  }
+
+  public useConsumable(item: RPGItem) {
+    if (item.id === 'item_potion_hp') {
+      this.heal(250);
+    } else if (item.id === 'item_potion_elixir') {
+      this.buffAttackMultiplier = 1.35;
+      this.buffTimer = 30.0;
+      this.recalculateStats();
+    }
+    this.inventory = this.inventory.filter((i) => i.id !== item.id);
+  }
+
+  public takeDamage(amount: number): { damageTaken: number; isDead: boolean; dodged: boolean } {
+    // Check Agility-based Dodge
+    const roll = Math.random() * 100;
+    if (roll < this.stats.dodgeChance) {
+      this.triggerDodge();
+      return { damageTaken: 0, isDead: false, dodged: true };
+    }
+
+    let effectiveDmg = amount * (100 / (100 + this.stats.armor * 0.6));
+    if (this.isShieldActive) {
+      effectiveDmg *= 0.25;
+    }
+
+    effectiveDmg = Math.max(1, Math.round(effectiveDmg));
+    this.stats.hp = Math.max(0, this.stats.hp - effectiveDmg);
+
+    return {
+      damageTaken: effectiveDmg,
+      isDead: this.stats.hp <= 0,
+      dodged: false,
+    };
+  }
+
+  public triggerDodge() {
+    this.isDodging = true;
+    this.dodgeTimer = 0.35;
+  }
+
+  public heal(amount: number) {
+    this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + amount);
+  }
+
+  public restoreResource(amount: number) {
+    this.stats.resource = Math.min(this.stats.maxResource, this.stats.resource + amount);
+  }
+
+  public consumeResource(amount: number): boolean {
+    if (this.stats.resource >= amount) {
+      this.stats.resource -= amount;
+      return true;
+    }
+    return false;
+  }
+
+  public gainXp(amount: number): boolean {
+    this.stats.xp += amount;
+    let leveledUp = false;
+
+    while (this.stats.xp >= this.stats.xpToNextLevel) {
+      this.stats.xp -= this.stats.xpToNextLevel;
+      this.stats.level += 1;
+      this.stats.xpToNextLevel = Math.round(this.stats.xpToNextLevel * 1.4);
+      this.stats.score += 250;
+      this.stats.statPoints += 2; // +2 Stat points on player level up!
+      this.stats.hp = this.stats.maxHp;
+      this.stats.resource = this.stats.maxResource;
+      leveledUp = true;
+    }
+
+    this.recalculateStats();
+    return leveledUp;
+  }
+
+  public triggerShield(duration: number = 5.0) {
+    this.isShieldActive = true;
+    this.shieldTimer = duration;
+    (this.shieldBubble.material as THREE.MeshStandardMaterial).opacity = 0.75;
+  }
+
+  // --- Real Combat Weapon Swing & Spell Trigger ---
+  public triggerAttackAnimation(
+    type: 'melee' | 'projectile' | 'aoe' | 'buff' | 'utility' | 'turret' = 'melee',
+    duration?: number
+  ) {
+    this.isAttacking = true;
+    this.activeAttackType = type;
+    const dur = duration || this.attackAnimDuration;
+    this.attackAnimTimer = dur;
+
+    if (type === 'aoe' || type === 'projectile') {
+      (this.spellGlyphRing.material as THREE.MeshBasicMaterial).opacity = 0.85;
+    } else if (type === 'buff') {
+      (this.buffShockwaveRing.material as THREE.MeshBasicMaterial).opacity = 0.9;
+    }
+  }
+
+  // --- Kinematics & Animation Update Loop ---
+  public update(delta: number, moveInput: { x: number; z: number }) {
+    this.idleTime += delta;
+
+    if (this.glbMixer) {
+      this.glbMixer.update(delta);
+    }
+
+    // 1. Buffs Countdown
+    if (this.buffTimer > 0) {
+      this.buffTimer -= delta;
+      if (this.buffTimer <= 0) {
+        this.buffAttackMultiplier = 1.0;
+        this.buffSpeedMultiplier = 1.0;
+        this.recalculateStats();
+      }
+    }
+
+    // 2. Shield Countdown
+    if (this.isShieldActive) {
+      this.shieldTimer -= delta;
+      this.shieldBubble.rotation.y += delta * 2.0;
+      if (this.shieldTimer <= 0) {
+        this.isShieldActive = false;
+        (this.shieldBubble.material as THREE.MeshStandardMaterial).opacity = 0.0;
+      }
+    }
+
+    // 3. Spell / Buff Visual FX Fading & Rotation
+    if ((this.spellGlyphRing.material as THREE.MeshBasicMaterial).opacity > 0) {
+      const mat = this.spellGlyphRing.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.max(0, mat.opacity - delta * 2.0);
+      this.spellGlyphRing.rotation.y += delta * 3.0;
+    }
+
+    if ((this.buffShockwaveRing.material as THREE.MeshBasicMaterial).opacity > 0) {
+      const mat = this.buffShockwaveRing.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.max(0, mat.opacity - delta * 2.2);
+      this.buffShockwaveRing.scale.addScalar(delta * 2.5);
+      if (mat.opacity <= 0) {
+        this.buffShockwaveRing.scale.set(1, 1, 1);
+      }
+    }
+
+    // 4. Dodge Timer
+    if (this.isDodging) {
+      this.dodgeTimer -= delta;
+      this.pelvisGroup.rotation.y += delta * 18.0;
+      if (this.dodgeTimer <= 0) {
+        this.isDodging = false;
+        this.pelvisGroup.rotation.y = 0;
+      }
+    }
+
+    // 5. Passive Resource Regeneration (Scaled by Intelligence)
+    const intRegen = 10 + (this.stats.attributes.intelligence - 10) * 1.2;
+    this.restoreResource(delta * intRegen);
+
+    // 6. Real-time Equipment Observer Check (Guarantees immediate 3D re-render on equipment mutation)
+    this.observeEquipmentState();
+    this.proceduralVisuals.updateAnimations(delta, this.idleTime);
+
+    // 7. Movement Physics & Articulated Kinematics
+    const inputLen = Math.hypot(moveInput.x, moveInput.z);
+    this.isMoving = inputLen > 0.05;
+    const speed = this.baseMoveSpeed * this.stats.moveSpeedMultiplier;
+
+    if (this.isMoving) {
+      const normX = moveInput.x / inputLen;
+      const normZ = moveInput.z / inputLen;
+
+      this.velocity.x = normX * speed;
+      this.velocity.z = normZ * speed;
+
+      // Rotate character towards movement
+      this.targetAngle = Math.atan2(normX, normZ);
+      let angleDiff = this.targetAngle - this.facingAngle;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      this.facingAngle += angleDiff * Math.min(1.0, delta * 14.0);
+
+      // --- Feet & Leg Walking / Running Gait Kinematics ---
+      if (!this.stats.isMounted) {
+        const gaitSpeed = 10.5 * (speed / this.baseMoveSpeed);
+        this.walkCyclePhase += delta * gaitSpeed;
+
+        const strideExtent = 0.65;
+        const leftLegCycle = Math.sin(this.walkCyclePhase);
+        const rightLegCycle = -leftLegCycle;
+
+        // Hip swing forward & backward
+        this.leftHipPivot.rotation.x = leftLegCycle * strideExtent;
+        this.rightHipPivot.rotation.x = rightLegCycle * strideExtent;
+
+        // Natural knee bend on backstroke, straightens when planting foot forward
+        this.leftKneePivot.rotation.x = Math.max(0, -leftLegCycle) * 1.15;
+        this.rightKneePivot.rotation.x = Math.max(0, -rightLegCycle) * 1.15;
+
+        // Torso & Pelvic Vertical Bounce and subtle sway
+        const bounce = Math.abs(Math.sin(this.walkCyclePhase * 2)) * 0.07;
+        this.pelvisGroup.position.y = 0.95 - bounce;
+        this.torsoGroup.rotation.z = Math.sin(this.walkCyclePhase) * 0.04;
+        this.torsoGroup.rotation.x = 0.08; // Forward sprint lean
+
+        // Counter-arm swing when moving (keeping weapon held firmly in hand)
+        if (!this.isAttacking) {
+          this.leftArmPivot.rotation.x = -leftLegCycle * 0.55;
+          this.rightArmPivot.rotation.x = -rightLegCycle * 0.55;
+          this.leftForearmPivot.rotation.x = -0.3;
+          this.rightForearmPivot.rotation.x = -0.3;
+          this.weaponPivot.rotation.x = THREE.MathUtils.lerp(this.weaponPivot.rotation.x, 0.2, delta * 8);
+        }
+      } else {
+        // Mount Gallop animation
+        this.gallopPhase += delta * 15.0;
+        this.mountLegs.forEach((leg, index) => {
+          leg.rotation.x = Math.sin(this.gallopPhase + (index % 2) * Math.PI) * 0.5;
+        });
+      }
+    } else {
+      // Decelerate
+      this.velocity.x *= 0.65;
+      this.velocity.z *= 0.65;
+
+      // --- Articulated Combat Idle & Weapon-Holding Kinematics ---
+      if (!this.stats.isMounted) {
+        this.walkCyclePhase = 0;
+        const breathCycle = Math.sin(this.idleTime * 2.4);
+        const breathSlow = Math.sin(this.idleTime * 1.2);
+
+        // Pelvis breathing lift & fall
+        this.pelvisGroup.position.y = 0.95 + breathCycle * 0.02;
+
+        // Torso martial lean, expansion, and breathing sway
+        this.torsoGroup.rotation.x = THREE.MathUtils.lerp(this.torsoGroup.rotation.x, 0.04 + breathCycle * 0.015, delta * 8);
+        this.torsoGroup.rotation.y = THREE.MathUtils.lerp(this.torsoGroup.rotation.y, breathSlow * 0.025, delta * 8);
+        this.torsoGroup.rotation.z = THREE.MathUtils.lerp(this.torsoGroup.rotation.z, breathCycle * 0.01, delta * 8);
+
+        // Head attentive level scan keeping eye contact forward
+        this.headGroup.rotation.x = THREE.MathUtils.lerp(this.headGroup.rotation.x, -0.04 - breathCycle * 0.015, delta * 8);
+        this.headGroup.rotation.y = THREE.MathUtils.lerp(this.headGroup.rotation.y, Math.sin(this.idleTime * 0.6) * 0.05, delta * 6);
+
+        // Grounded martial ready footing (left foot slightly forward, right foot braced back)
+        this.leftHipPivot.rotation.x = THREE.MathUtils.lerp(this.leftHipPivot.rotation.x, 0.08, delta * 8);
+        this.rightHipPivot.rotation.x = THREE.MathUtils.lerp(this.rightHipPivot.rotation.x, -0.08, delta * 8);
+        this.leftKneePivot.rotation.x = THREE.MathUtils.lerp(this.leftKneePivot.rotation.x, 0.12, delta * 8);
+        this.rightKneePivot.rotation.x = THREE.MathUtils.lerp(this.rightKneePivot.rotation.x, 0.14, delta * 8);
+
+        // Weapon-Holding Combat Idle Stances (when not actively executing an attack swing)
+        if (!this.isAttacking) {
+          const activeWep = this.getActiveWeaponType();
+
+          if (activeWep === 'blade') {
+            // Blade Stance: Weapon held poised diagonally in high ready guard, blade tilted forward
+            this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(this.rightArmPivot.rotation.x, -0.45 + breathCycle * 0.03, delta * 8);
+            this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(this.rightArmPivot.rotation.y, -0.15, delta * 8);
+            this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(this.rightArmPivot.rotation.z, 0.2, delta * 8);
+
+            this.rightForearmPivot.rotation.x = THREE.MathUtils.lerp(this.rightForearmPivot.rotation.x, -0.7 + breathCycle * 0.02, delta * 8);
+            this.rightForearmPivot.rotation.y = THREE.MathUtils.lerp(this.rightForearmPivot.rotation.y, 0.12, delta * 8);
+
+            this.weaponPivot.rotation.x = THREE.MathUtils.lerp(this.weaponPivot.rotation.x, 0.35 + breathCycle * 0.04, delta * 8);
+            this.weaponPivot.rotation.y = THREE.MathUtils.lerp(this.weaponPivot.rotation.y, 0.1, delta * 8);
+            this.weaponPivot.rotation.z = THREE.MathUtils.lerp(this.weaponPivot.rotation.z, -0.12, delta * 8);
+
+            // Left Arm / Shield
+            if (this.equipment.shield || (this.equipment as any).offhand) {
+              this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, -0.38 + breathCycle * 0.03, delta * 8);
+              this.leftArmPivot.rotation.y = THREE.MathUtils.lerp(this.leftArmPivot.rotation.y, 0.18, delta * 8);
+              this.leftArmPivot.rotation.z = THREE.MathUtils.lerp(this.leftArmPivot.rotation.z, -0.28, delta * 8);
+
+              this.leftForearmPivot.rotation.x = THREE.MathUtils.lerp(this.le

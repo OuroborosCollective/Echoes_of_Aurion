@@ -1,0 +1,240 @@
+ftForearmPivot.rotation.x, -0.85 + breathCycle * 0.02, delta * 8);
+              this.leftForearmPivot.rotation.y = THREE.MathUtils.lerp(this.leftForearmPivot.rotation.y, -0.2, delta * 8);
+            } else {
+              this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, -0.28 + breathCycle * 0.02, delta * 8);
+              this.leftArmPivot.rotation.y = THREE.MathUtils.lerp(this.leftArmPivot.rotation.y, 0.08, delta * 8);
+              this.leftArmPivot.rotation.z = THREE.MathUtils.lerp(this.leftArmPivot.rotation.z, -0.18, delta * 8);
+
+              this.leftForearmPivot.rotation.x = THREE.MathUtils.lerp(this.leftForearmPivot.rotation.x, -0.5, delta * 8);
+              this.leftForearmPivot.rotation.y = THREE.MathUtils.lerp(this.leftForearmPivot.rotation.y, 0, delta * 8);
+            }
+          } else if (activeWep === 'arcane') {
+            // Arcane Stance: Staff held tall, left hand channeling mystic energy
+            this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(this.rightArmPivot.rotation.x, -0.32 + breathCycle * 0.03, delta * 8);
+            this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(this.rightArmPivot.rotation.y, -0.05, delta * 8);
+            this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(this.rightArmPivot.rotation.z, 0.14, delta * 8);
+
+            this.rightForearmPivot.rotation.x = THREE.MathUtils.lerp(this.rightForearmPivot.rotation.x, -0.48 + breathCycle * 0.02, delta * 8);
+            this.rightForearmPivot.rotation.y = 0;
+
+            this.weaponPivot.rotation.x = THREE.MathUtils.lerp(this.weaponPivot.rotation.x, 0.12 + breathCycle * 0.02, delta * 8);
+            this.weaponPivot.rotation.y = 0;
+            this.weaponPivot.rotation.z = 0;
+
+            this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, -0.45 + breathCycle * 0.04, delta * 8);
+            this.leftArmPivot.rotation.y = THREE.MathUtils.lerp(this.leftArmPivot.rotation.y, 0.22, delta * 8);
+            this.leftArmPivot.rotation.z = THREE.MathUtils.lerp(this.leftArmPivot.rotation.z, -0.3, delta * 8);
+
+            this.leftForearmPivot.rotation.x = THREE.MathUtils.lerp(this.leftForearmPivot.rotation.x, -0.72 + breathCycle * 0.03, delta * 8);
+            this.leftForearmPivot.rotation.y = -0.1;
+
+            if (this.offhandMesh) {
+              this.offhandMesh.rotation.y += delta * 1.5;
+            }
+          } else if (activeWep === 'marksmanship') {
+            // Marksmanship Stance: Crossbow held raised in two-handed tactical ready stance
+            this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(this.rightArmPivot.rotation.x, -0.8 + breathCycle * 0.02, delta * 8);
+            this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(this.rightArmPivot.rotation.y, -0.12, delta * 8);
+            this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(this.rightArmPivot.rotation.z, 0.22, delta * 8);
+
+            this.rightForearmPivot.rotation.x = THREE.MathUtils.lerp(this.rightForearmPivot.rotation.x, -0.55, delta * 8);
+            this.weaponPivot.rotation.x = THREE.MathUtils.lerp(this.weaponPivot.rotation.x, 0.1, delta * 8);
+
+            this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, -0.75 + breathCycle * 0.02, delta * 8);
+            this.leftArmPivot.rotation.y = THREE.MathUtils.lerp(this.leftArmPivot.rotation.y, 0.32, delta * 8);
+            this.leftArmPivot.rotation.z = THREE.MathUtils.lerp(this.leftArmPivot.rotation.z, -0.15, delta * 8);
+
+            this.leftForearmPivot.rotation.x = THREE.MathUtils.lerp(this.leftForearmPivot.rotation.x, -0.68, delta * 8);
+          } else {
+            // Heavy Tech Stance: Underslung Gatling / Cannon braced ready stance
+            this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(this.rightArmPivot.rotation.x, -0.62 + breathCycle * 0.03, delta * 8);
+            this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(this.rightArmPivot.rotation.y, -0.1, delta * 8);
+            this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(this.rightArmPivot.rotation.z, 0.28, delta * 8);
+
+            this.rightForearmPivot.rotation.x = THREE.MathUtils.lerp(this.rightForearmPivot.rotation.x, -0.48, delta * 8);
+            this.weaponPivot.rotation.x = THREE.MathUtils.lerp(this.weaponPivot.rotation.x, 0.18 + breathCycle * 0.03, delta * 8);
+
+            this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, -0.58 + breathCycle * 0.03, delta * 8);
+            this.leftArmPivot.rotation.y = THREE.MathUtils.lerp(this.leftArmPivot.rotation.y, 0.28, delta * 8);
+            this.leftArmPivot.rotation.z = THREE.MathUtils.lerp(this.leftArmPivot.rotation.z, -0.22, delta * 8);
+
+            this.leftForearmPivot.rotation.x = THREE.MathUtils.lerp(this.leftForearmPivot.rotation.x, -0.62, delta * 8);
+          }
+        }
+      }
+    }
+
+    // --- Dynamic Weapon Swing & Spell Casting Animations ---
+    if (this.isAttacking && this.attackAnimTimer > 0) {
+      this.attackAnimTimer -= delta;
+      const progress = 1.0 - this.attackAnimTimer / this.attackAnimDuration; // 0.0 to 1.0
+
+      if (this.activeAttackType === 'melee') {
+        // Multi-stage realistic slashing arc: Windup -> Explosive Slash -> Follow-through
+        if (progress < 0.28) {
+          // Windup phase
+          const p = progress / 0.28;
+          this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(-0.2, -1.3, p);
+          this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(0, -0.6, p);
+          this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(0.1, 0.5, p);
+          this.rightForearmPivot.rotation.x = THREE.MathUtils.lerp(-0.4, -1.2, p);
+          this.weaponPivot.rotation.x = THREE.MathUtils.lerp(0, -0.8, p);
+          this.torsoGroup.rotation.y = THREE.MathUtils.lerp(0, -0.35, p);
+        } else if (progress < 0.68) {
+          // Explosive Slash phase
+          const p = (progress - 0.28) / 0.4;
+          const easeSlash = Math.sin(p * Math.PI * 0.5);
+          this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(-1.3, 1.45, easeSlash);
+          this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(-0.6, 0.7, easeSlash);
+          this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(0.5, -0.4, easeSlash);
+          this.rightForearmPivot.rotation.x = THREE.MathUtils.lerp(-1.2, -0.2, easeSlash);
+          this.weaponPivot.rotation.x = THREE.MathUtils.lerp(-0.8, 1.2, easeSlash);
+          this.torsoGroup.rotation.y = THREE.MathUtils.lerp(-0.35, 0.45, easeSlash);
+        } else {
+          // Recovery phase
+          const p = (progress - 0.68) / 0.32;
+          this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(1.45, -0.2, p);
+          this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(0.7, 0, p);
+          this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(-0.4, 0.1, p);
+          this.torsoGroup.rotation.y = THREE.MathUtils.lerp(0.45, 0, p);
+        }
+      } else if (this.activeAttackType === 'projectile' || this.activeAttackType === 'turret') {
+        // Aim raise & sharp recoil kickback
+        if (progress < 0.3) {
+          this.rightArmPivot.rotation.x = -1.4;
+          this.rightForearmPivot.rotation.x = -0.1;
+          this.weaponPivot.rotation.x = 0.5;
+        } else {
+          const p = (progress - 0.3) / 0.7;
+          this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(-1.4, -0.2, p);
+          this.weaponPivot.rotation.x = THREE.MathUtils.lerp(0.5, 0, p);
+        }
+      } else if (this.activeAttackType === 'buff') {
+        // Active Buff / Warcry: Stomp ground and raise arms outward
+        const p = Math.sin(progress * Math.PI);
+        this.leftArmPivot.rotation.z = -p * 1.2;
+        this.rightArmPivot.rotation.z = p * 1.2;
+        this.leftArmPivot.rotation.x = -p * 0.8;
+        this.rightArmPivot.rotation.x = -p * 0.8;
+      } else {
+        // Spellcast (AoE / Chrono Magic): Raise staff overhead with dual channeling pose
+        const arc = Math.sin(progress * Math.PI);
+        this.rightArmPivot.rotation.x = -0.2 - arc * 1.5;
+        this.leftArmPivot.rotation.x = -0.2 - arc * 1.5;
+        this.weaponPivot.rotation.z = arc * 0.8;
+        this.pelvisGroup.position.y += arc * 0.15; // Floating sensation while channeling!
+      }
+
+      if (this.attackAnimTimer <= 0) {
+        this.isAttacking = false;
+      }
+    }
+
+    // Update Position in World with Physical Solid Obstacle Collision & Wall-Sliding
+    const displacement = {
+      x: this.velocity.x * delta,
+      z: this.velocity.z * delta,
+    };
+
+    if (Math.abs(displacement.x) > 0.0001 || Math.abs(displacement.z) > 0.0001) {
+      const resolved = collisionSystem.resolveMovement(
+        { x: this.position.x, z: this.position.z },
+        displacement,
+        0.65 // Player physical body collision radius
+      );
+      this.position.x = resolved.newPos.x;
+      this.position.z = resolved.newPos.z;
+    }
+
+    this.group.position.copy(this.position);
+    this.group.rotation.y = this.facingAngle;
+
+    // Aura floating
+    this.classAura.rotation.y += delta * 0.5;
+  }
+
+  // --- External GLB Model Equipping ---
+  public async equipGlbModel(modelId: string | null): Promise<boolean> {
+    // Clear existing GLB avatar
+    while (this.glbAvatarGroup.children.length > 0) {
+      const child = this.glbAvatarGroup.children[0];
+      this.glbAvatarGroup.remove(child);
+    }
+    if (this.glbMixer) {
+      this.glbMixer.stopAllAction();
+      this.glbMixer = null;
+      this.activeGlbAction = null;
+    }
+
+    if (!modelId) {
+      this.activeGlbModelId = null;
+      this.rootGroup.visible = true;
+      return true;
+    }
+
+    try {
+      const { scene, animations } = await glbManager.loadModel(modelId);
+      this.activeGlbModelId = modelId;
+      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active
+
+      scene.position.set(0, 0, 0);
+      scene.scale.set(1.0, 1.0, 1.0);
+      this.glbAvatarGroup.add(scene);
+
+      if (animations && animations.length > 0) {
+        this.glbMixer = new THREE.AnimationMixer(scene);
+        const clip = animations.find((a) => a.name.toLowerCase().includes('idle')) || animations[0];
+        if (clip) {
+          this.activeGlbAction = this.glbMixer.clipAction(clip);
+          this.activeGlbAction.play();
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error(`Could not equip GLB model ${modelId}:`, err);
+      this.rootGroup.visible = true;
+      this.activeGlbModelId = null;
+      return false;
+    }
+  }
+
+  // Equips a registered GLB model directly to its corresponding equipment slot (Weapon, Shield, Helmet, Chest, Avatar)
+  public async equipGlbAsEquipment(modelId: string, targetSlot?: any): Promise<boolean> {
+    const catalog = glbManager.getCachedCatalog();
+    let model = catalog.find((m) => m.id === modelId);
+    if (!model) {
+      const fresh = await glbManager.fetchCatalog();
+      model = fresh.find((m) => m.id === modelId);
+    }
+
+    if (!model) {
+      console.warn(`[OpenWorldPlayer] Model ${modelId} not found in catalog.`);
+      return false;
+    }
+
+    if (model.category === 'character_avatar') {
+      return this.equipGlbModel(modelId);
+    }
+
+    // Convert to RPGItem and dynamically equip
+    const item = glbManager.convertToRpgItem(model);
+    if (targetSlot) {
+      item.slot = targetSlot;
+    }
+    this.equipItem(item);
+    return true;
+  }
+
+  // Registers a newly scanned GLB model into the player's active MMORPG inventory
+  public registerGlbItemToInventory(model: GLBModelEntry): RPGItem {
+    const item = glbManager.convertToRpgItem(model);
+    const existingIndex = this.inventory.findIndex((i) => i.id === item.id);
+    if (existingIndex >= 0) {
+      this.inventory[existingIndex] = item;
+    } else {
+      this.inventory.push(item);
+    }
+    this.observeEquipmentState();
+    return item;
+  }
+}
