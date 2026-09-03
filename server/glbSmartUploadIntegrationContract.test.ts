@@ -21,8 +21,8 @@ describe("smart GLB upload integration contract", () => {
     expect(runtime).toContain("classification = classifyGlbBase64(contentBase64)");
     expect(runtime).toContain("assetType: classification.assetType");
     expect(page).toContain('fetch("/api/admin/glb-smart-upload"');
-    expect(page).toContain("contentBase64: await readFileAsBase64(file)");
-    expect(page).not.toContain("assetType:");
+    expect(page).toContain("body: JSON.stringify({\n          displayName: chosenName,\n          fileName: file.name,\n          contentBase64: await readFileAsBase64(file),\n        })");
+    expect(page).not.toContain("glbAssetType");
   });
 
   it("exposes the uploader only through the admin navigation surface", () => {
