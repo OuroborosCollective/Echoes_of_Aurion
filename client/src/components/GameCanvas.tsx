@@ -65,10 +65,10 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     };
     window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, onCompanionFrameRequest);
 
-    void Promise.all([import("@babylonjs/core/Engines/engine"), import("@/game/scene")]).then(async ([{ Engine }, { createGameScene }]) => {
+    void Promise.all([import("@babylonjs/core/Engines/engine"), import("@/game/sceneWithStarterCharacters")]).then(async ([{ Engine }, { createGameScene }]) => {
       if (disposed) return;
       engine = new Engine(canvas, true, { stencil: true, adaptToDeviceRatio: true });
-      const sceneHandle = await createGameScene(engine, canvas);
+      const sceneHandle = await createGameScene(engine, canvas, characterModelUrlRef.current);
       if (disposed) {
         sceneHandle.dispose();
         return;
