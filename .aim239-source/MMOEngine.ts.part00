@@ -1,0 +1,505 @@
+import * as THREE from 'three';
+import confetti from 'canvas-confetti';
+import {
+  CharacterAppearance,
+  CharacterClassId,
+  ChatMessage,
+  ClassSkill,
+  CompanionPet,
+  DayNightInfo,
+  EquipmentState,
+  FloatingCombatText,
+  GMWorldConfig,
+  HomesteadBlueprint,
+  LootDropEntity,
+  NPCCharacter,
+  PartyMember,
+  PlayerStats,
+  Quest,
+  RPGItem,
+  SimulatedPlayer,
+  WorldMobEntity,
+} from '../types';
+import { INITIAL_NPCS, MMORPG_CLASSES, COMPANION_PETS_DATABASE, HOMESTEAD_BLUEPRINTS } from '../data/mmorpgData';
+import { OpenWorldLandscape } from '../world/OpenWorldLandscape';
+import { OpenWorldPlayer } from '../entities/OpenWorldPlayer';
+import { collisionSystem } from '../world/WorldCollisionSystem';
+import { MobManager } from '../entities/MobManager';
+import { LootDropManager } from '../entities/LootDropManager';
+import { SimulatedRealmPlayers } from '../entities/SimulatedRealmPlayers';
+import { soundSynth } from '../audio/SoundSynthesizer';
+import { GenkitAdapter } from '../adapters/GenkitAdapter';
+import { ParticleSystem } from './ParticleSystem';
+import { syncManager } from './SyncManager';
+import { PartyManager } from './PartyManager';
+
+
+interface ActiveProjectile {
+  mesh: THREE.Mesh;
+  startPos: THREE.Vector3;
+  targetPos: THREE.Vector3;
+  progress: number;
+  speed: number;
+  damage: number;
+  isCrit: boolean;
+  targetMobId: string;
+  color: string;
+}
+
+interface ActiveAoEEffect {
+  mesh: THREE.Mesh;
+  timer: number;
+  maxTimer: number;
+}
+
+export class MMOEngine {
+  public container: HTMLElement;
+  public scene: THREE.Scene;
+  public camera: THREE.PerspectiveCamera;
+  public renderer: THREE.WebGLRenderer;
+
+  // Game Subsystems
+  public landscape: OpenWorldLandscape;
+  public player: OpenWorldPlayer;
+  public mobManager: MobManager;
+  public lootManager: LootDropManager;
+  public simPlayers: SimulatedRealmPlayers;
+  public genkitAdapter: GenkitAdapter;
+  public particleSystem: ParticleSystem;
+
+  // Companion Pet & Homestead Subsystems
+  public activePet: CompanionPet | null = null;
+  private petMeshGroup: THREE.Group | null = null;
+  private petPosition: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
+  public unlockedHouses: HomesteadBlueprint[] = [];
+  private houseMeshes: THREE.Group[] = [];
+
+  // Party Subsystem
+  public partyManager: PartyManager;
+
+  // Day-Night Cycle Subsystem & Atmospheric Lighting
+  public timeOfDay: number = 14.0; // 0.0 to 24.0
+  public dayNightSpeed: number = 0.045; // ~8-9 minutes per full 24hr cycle
+  public isDayNightActive: boolean = true;
+  private currentSkyColor: THREE.Color = new THREE.Color(0x1e293b);
+
+  // Lighting & GM Controls
+  private hemiLight: THREE.HemisphereLight;
+  private sunLight: THREE.DirectionalLight;
+  private fillLight: THREE.DirectionalLight;
+  public gmConfig: GMWorldConfig = {
+    godMode: false,
+    infiniteResources: false,
+    spawnMobType: 'clockwork_stalker',
+    weatherState: 'clear_sun',
+    timeOfDay: 14,
+    mobSpawnMultiplier: 1.0,
+    ambientParticles: true,
+  };
+
+  // Active Projectiles & AoE VFX
+  private projectiles: ActiveProjectile[] = [];
+  private aoeEffects: ActiveAoEEffect[] = [];
+
+  // 3rd-Person Orbit & Follow Camera
+  public cameraDistance: number = 10.5;
+  public cameraHeight: number = 4.2;
+  public cameraYaw: number = 0;
+  public cameraPitch: number = 0.28;
+  private isOrbitingCamera: boolean = false;
+  private lastMouseX: number = 0;
+  private lastMouseY: number = 0;
+
+  // Controls Input State
+  private keysPressed: Record<string, boolean> = {};
+  public targetMob: WorldMobEntity | null = null;
+  public nearbyNPC: NPCCharacter | null = null;
+  public nearbyLoot: LootDropEntity | null = null;
+
+  // Quests & Chat State
+  public quests: Quest[] = [];
+  public npcs: NPCCharacter[] = INITIAL_NPCS;
+  public chatMessages: ChatMessage[] = [];
+
+  // Floating Combat Texts
+  public floatingTexts: FloatingCombatText[] = [];
+  private textIdCounter: number = 0;
+  private resizeObserver?: ResizeObserver;
+
+  // Virtual on-screen movement input
+  public virtualForward: number = 0;
+  public virtualRight: number = 0;
+
+  // Touch gesture states
+  private lastPinchDistance: number = 0;
+
+  // Callback to React
+  public onStateUpdate?: (data: {
+    stats: PlayerStats;
+    equipment: EquipmentState;
+    inventory: RPGItem[];
+    targetMob: WorldMobEntity | null;
+    nearbyNPC: NPCCharacter | null;
+    nearbyLoot: LootDropEntity | null;
+    quests: Quest[];
+    chatMessages: ChatMessage[];
+    floatingTexts: FloatingCombatText[];
+    simPlayers: SimulatedPlayer[];
+    partyMembers: PartyMember[];
+    dayNightInfo: DayNightInfo;
+  }) => void;
+
+  private isRunning: boolean = false;
+  private lastTime: number = 0;
+  private animationFrameId: number = 0;
+  private stateUpdateTimer: number = 0;
+
+  public collisionDebugGroup: THREE.Group | null = null;
+  private _enableCollisionVisualizer: boolean = false;
+
+  public get enableCollisionVisualizer(): boolean { return this._enableCollisionVisualizer; }
+  public set enableCollisionVisualizer(val: boolean) {
+    this._enableCollisionVisualizer = val;
+    this.updateCollisionVisualizer();
+  }
+
+  public updateCollisionVisualizer(): void {
+    if (!this.collisionDebugGroup) {
+      this.collisionDebugGroup = new THREE.Group();
+      this.scene.add(this.collisionDebugGroup);
+    }
+    
+    // Clear existing
+    while (this.collisionDebugGroup.children.length > 0) {
+      this.collisionDebugGroup.remove(this.collisionDebugGroup.children[0]);
+    }
+
+    this.collisionDebugGroup.visible = this._enableCollisionVisualizer;
+
+    if (this._enableCollisionVisualizer) {
+       // Render all static obstacles
+       const obs = collisionSystem.getAllObstacles();
+       const geo = new THREE.CylinderGeometry(1, 1, 10, 16);
+       const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.8 });
+       
+       obs.forEach(o => {
+         const mesh = new THREE.Mesh(geo, mat);
+         mesh.scale.set(o.radius, 1, o.radius);
+         const y = this.landscape.chunkManager.getElevationAt(o.x, o.z);
+         mesh.position.set(o.x, y + 5, o.z);
+         this.collisionDebugGroup!.add(mesh);
+       });
+       
+       // Render player hitbox
+       const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.8 });
+       const pMesh = new THREE.Mesh(geo, playerMat);
+       pMesh.scale.set(0.65, 0.4, 0.65); // 0.65 player collision radius
+       pMesh.name = 'playerHitbox';
+       
+       // Add dynamic player hitbox
+       this.collisionDebugGroup.add(pMesh);
+    }
+  }
+
+  public static checkWebGLSupport(): { supported: boolean; version?: string; error?: string } {
+    try {
+      if (typeof window === 'undefined') {
+        return { supported: false, error: 'Window environment not available.' };
+      }
+      const canvas = document.createElement('canvas');
+      const gl2 = canvas.getContext('webgl2');
+      if (gl2) {
+        return { supported: true, version: 'WebGL 2.0' };
+      }
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (gl) {
+        return { supported: true, version: 'WebGL 1.0' };
+      }
+      return {
+        supported: false,
+        error: 'WebGL context initialization failed. Please ensure WebGL and Hardware Acceleration are enabled in your browser.',
+      };
+    } catch (e: any) {
+      return {
+        supported: false,
+        error: e?.message || 'WebGL check threw an unexpected exception.',
+      };
+    }
+  }
+
+  public static isWebGLAvailable(): boolean {
+    return MMOEngine.checkWebGLSupport().supported;
+  }
+
+  constructor(container: HTMLElement, startingClass: CharacterClassId = 'knight') {
+    this.container = container;
+
+    // Clear any previous stale canvas or child elements from container
+    while (this.container.firstChild) {
+      this.container.removeChild(this.container.firstChild);
+    }
+
+    // 1. Scene, Camera, Renderer
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x1e293b);
+
+    const width = container.clientWidth > 0 ? container.clientWidth : (window.innerWidth || 1280);
+    const height = container.clientHeight > 0 ? container.clientHeight : (window.innerHeight || 720);
+    const aspect = height > 0 ? width / height : 16 / 9;
+
+    this.camera = new THREE.PerspectiveCamera(55, isFinite(aspect) && aspect > 0 ? aspect : 16 / 9, 0.1, 800);
+
+    try {
+      this.renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance',
+        alpha: false,
+        failIfMajorPerformanceCaveat: false,
+      });
+    } catch (err: any) {
+      console.error('MMOEngine: Failed to create WebGLRenderer', err);
+      throw new Error(`WebGLRenderer initialization failed: ${err?.message || 'WebGL not supported'}`);
+    }
+
+    this.renderer.setSize(width, height);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setClearColor(0x1e293b, 1.0);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.35;
+    this.renderer.shadowMap.enabled = false;
+
+    // Explicit CSS to eliminate layout glitches, margins, or scrollbars
+    const canvas = this.renderer.domElement;
+    canvas.id = 'threejs-canvas';
+    canvas.style.display = 'block';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.outline = 'none';
+    canvas.style.touchAction = 'none';
+
+    container.appendChild(canvas);
+
+    console.info(
+      `[MMOEngine] Initialization: Container=${width}x${height}, RendererAttached=${container.contains(
+        canvas
+      )}, PixelRatio=${window.devicePixelRatio}`
+    );
+
+    // 2. Sophisticated Atmospheric Lighting & Fog
+    this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x475569, 1.6);
+    this.scene.add(this.hemiLight);
+
+    this.sunLight = new THREE.DirectionalLight(0xfffbeb, 2.5); // Warm Sun
+    this.sunLight.position.set(60, 95, 60);
+    this.scene.add(this.sunLight);
+
+    this.fillLight = new THREE.DirectionalLight(0x38bdf8, 1.0); // Luminous Aether Fill
+    this.fillLight.position.set(-60, 40, -40);
+    this.scene.add(this.fillLight);
+
+    this.scene.fog = new THREE.FogExp2(0x1e293b, 0.005);
+
+    // 3. Initialize Subsystems
+    this.landscape = new OpenWorldLandscape(this.scene);
+    this.lootManager = new LootDropManager(this.scene);
+    this.player = new OpenWorldPlayer(this.scene, startingClass);
+    this.mobManager = new MobManager(this.scene, this.lootManager);
+    this.simPlayers = new SimulatedRealmPlayers(this.scene);
+    this.partyManager = new PartyManager('Hero', startingClass, 1);
+    this.partyManager.onPartyMessage = (sender, text) => {
+      this.addChatMessage('party', sender, text);
+    };
+    this.genkitAdapter = new GenkitAdapter();
+    this.particleSystem = new ParticleSystem(this.scene);
+
+
+    // Register landscape steam vents and beacon points into ParticleSystem
+    this.landscape.steamVents.forEach((v) => {
+      this.particleSystem.registerSteamVent(v.x, v.y, v.z);
+    });
+    this.particleSystem.registerBeacon(0, 4.2, 0, '#00f2ff'); // Central Aetherium Fountain
+    this.particleSystem.registerBeacon(0, 8.0, 65, '#a855f7'); // Void Spire Apex
+    this.particleSystem.registerBeacon(55, 3.5, -35, '#10b981'); // Whispering Woods Runestone
+
+    // Dynamic Persistent World Events (Self-expanding world chunks & kingdom borders)
+    this.landscape.chunkManager.onChunkLoaded = (chunk) => {
+      // Spawn Politics Envoy for ALL chunks (loaded or newly generated)
+      this.spawnPoliticsEnvoyForChunk(chunk);
+    };
+
+    this.landscape.chunkManager.onNewChunkCreated = (chunk) => {
+      this.addFloatingText(
+        `🗺️ Territorium erbaut: ${chunk.landmarkName}`,
+        this.player.position.x,
+        this.player.position.y + 2.4,
+        '#00f0ff',
+        'xl'
+      );
+      this.addChatMessage(
+        'system',
+        'Weltchronik',
+        `🗺️ Neues dauerhaftes Territorium [${chunk.kingdom} • ${chunk.landmarkName}] generiert und in der persistenten Weltlogik gespeichert!`
+      );
+      if (this._enableCollisionVisualizer) {
+        this.updateCollisionVisualizer();
+      }
+
+      // Spawn Politics Envoy
+      this.spawnPoliticsEnvoyForChunk(chunk);
+    };
+
+    this.landscape.chunkManager.onKingdomBorderCrossed = (fromK, toK) => {
+      this.addFloatingText(
+        `⚔️ Grenze: ${toK}`,
+        this.player.position.x,
+        this.player.position.y + 2.8,
+        '#eab308',
+        'xl'
+      );
+      this.addChatMessage(
+        'system',
+        'Landesgrenze',
+        `Du überschreitest die Grenze von [${fromK}] und betrittst nun [${toK}].`
+      );
+    };
+
+    // Position camera immediately
+    const horizDist = this.cameraDistance * Math.cos(this.cameraPitch);
+    const vertDist = this.cameraHeight + this.cameraDistance * Math.sin(this.cameraPitch);
+    const targetCamX = this.player.position.x + Math.sin(this.cameraYaw) * horizDist;
+    const targetCamY = this.player.position.y + vertDist;
+    const targetCamZ = this.player.position.z + Math.cos(this.cameraYaw) * horizDist;
+    this.camera.position.set(targetCamX, targetCamY, targetCamZ);
+    this.camera.lookAt(this.player.position.x, this.player.position.y + 1.6, this.player.position.z);
+
+    // Spawn 3D NPC visuals
+    this.spawnNPCVisuals();
+
+    // 4. Initial Quests from NPCs
+    this.quests = INITIAL_NPCS.flatMap((n) => n.quests);
+
+    // 5. Initial Chat Announcements
+    this.addChatMessage('system', 'System', 'Welcome to the Realm of Aethelgard! Use [W,A,S,D] to move, [1-5] for skills, [Z] for Mount.');
+    this.addChatMessage('guild', 'Sir_Galahad_99', 'Heading to the Scorched Quarry to hunt Golems if anyone wants to group up!');
+    this.addChatMessage('all', 'ArcaneLilly', 'Has anyone spotted the World Boss Titan Ignis in the South Arena today?');
+
+    // 6. Bind User Controls & Resize Observer
+    this.bindEvents();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.handleResize();
+      });
+      this.resizeObserver.observe(this.container);
+    }
+  }
+
+  private spawnNPCVisuals() {
+    this.npcs.forEach((npc) => {
+      this.addNPCMesh(npc);
+    });
+  }
+
+  private addNPCMesh(npc: NPCCharacter) {
+    const group = new THREE.Group();
+    // Use elevation for spawn
+    const elev = this.landscape.chunkManager.getElevationAt(npc.x, npc.z);
+    group.position.set(npc.x, elev, npc.z);
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(npc.color),
+      metalness: 0.8,
+      roughness: 0.2,
+    });
+
+    // Body & Robe
+    const bodyGeo = new THREE.CylinderGeometry(0.5, 0.7, 1.8, 8);
+    const body = new THREE.Mesh(bodyGeo, mat);
+    body.position.y = 0.9;
+    group.add(body);
+
+    // Head with glowing crest
+    const headGeo = new THREE.SphereGeometry(0.35, 8, 8);
+    const head = new THREE.Mesh(headGeo, mat);
+    head.position.y = 2.0;
+    group.add(head);
+
+    // Quest Exclamation Icon (Floating Golden Marker)
+    const markGeo = new THREE.OctahedronGeometry(0.35, 0);
+    const markMat = new THREE.MeshStandardMaterial({
+      color: 0xfbbf24,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 1.8,
+    });
+    const marker = new THREE.Mesh(markGeo, markMat);
+    marker.position.y = 3.2;
+    // Animate marker in update loop? It currently doesn't animate, let's keep it static for now
+    group.add(marker);
+
+    this.scene.add(group);
+  }
+
+  public spawnPoliticsEnvoyForChunk(chunk: any) {
+    // Only one per chunk
+    const npcId = `politics_envoy_${chunk.chunkKey}`;
+    if (this.npcs.find(n => n.id === npcId)) return;
+
+    const envoyNPC: NPCCharacter = {
+      id: npcId,
+      name: `Verwaltungssitz: ${chunk.landmarkName}`,
+      title: 'Gebietsvorsitzender & Politik',
+      role: 'Territory Envoy',
+      zone: chunk.landmarkName,
+      x: chunk.centerX,
+      y: this.landscape.chunkManager.getElevationAt(chunk.centerX, chunk.centerZ),
+      z: chunk.centerZ,
+      color: '#00f0ff', // Aurion-Türkis
+      dialogue: ['Willkommen, Reisender. Die politische Stabilität dieser Region hängt von tapferen Helden ab.'],
+      quests: [
+        {
+          id: `politics_stabilize_${chunk.chunkKey}`,
+          title: 'Politik: Gebiet Stabilisieren',
+          description: `Erledige Verwaltungsaufgaben in ${chunk.landmarkName}, um Einfluss zu gewinnen. (+15 XP, +5 Gebietsverwaltungspunkte)`,
+          completed: false,
+          type: 'explore_zone', // Using an existing type for compatibility
+          giverName: 'Territory Envoy',
+          giverZone: chunk.landmarkName,
+          lore: 'Stabilität sichert das Überleben der Zivilisation.',
+          objective: 'Führe Verwaltungsaufgaben aus.',
+          targetCount: 1,
+          currentCount: 0,
+          rewardGold: 0,
+          rewardXp: 15
+        },
+        {
+          id: `politics_destabilize_${chunk.chunkKey}`,
+          title: 'Politik: Chaos stiften (Destabilisierung)',
+          description: `Säe Chaos in ${chunk.landmarkName}, um die Kontrolle des aktuellen Verwalters zu schwächen. (+20 XP, senkt Stabilität)`,
+          completed: false,
+          type: 'explore_zone',
+          giverName: 'Territory Envoy',
+          giverZone: chunk.landmarkName,
+          lore: 'Chaos ist eine Leiter.',
+          objective: 'Störe den Frieden.',
+          targetCount: 1,
+          currentCount: 0,
+          rewardGold: 0,
+          rewardXp: 20
+        }
+      ]
+    };
+    
+    this.npcs.push(envoyNPC);
+    this.quests.push(...envoyNPC.quests);
+    this.addNPCMesh(envoyNPC);
+
+    // Aurion owns persistent territory state; request a projection without writing from the renderer.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('aurion:xaurion-politics-read-request', { detail: { chunkKey: chunk.chunkKey } }));
+    }
+  }
+
+  public spawnTerritoryGuards(chunkKey: string, count: n

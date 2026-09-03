@@ -1,0 +1,14 @@
+{
+  "files": [
+    {
+      "target": "client/src/xaurion/core/MMOEngine.ts",
+      "sha256": "5118772883005ba048286e2f2da3bf53ac4e2cb206824d5ba1a6070cc84ab778",
+      "parts": [
+        ".aim239-source/MMOEngine.ts.part00",
+        ".aim239-source/MMOEngine.ts.part01",
+        ".aim239-source/MMOEngine.ts.part02",
+        ".aim239-source/MMOEngine.ts.part03"
+      ]
+    }
+  ]
+}

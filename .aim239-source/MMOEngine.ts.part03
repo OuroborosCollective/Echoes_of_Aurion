@@ -1,0 +1,317 @@
+0xea580c).lerp(new THREE.Color(0xa855f7), progress);
+      targetHemiSky.setHex(0x7e22ce).lerp(new THREE.Color(0x1e1b4b), progress);
+      targetHemiGround.setHex(0x7c2d12).lerp(new THREE.Color(0x0f172a), progress);
+      targetFillColor.setHex(0xf59e0b).lerp(new THREE.Color(0x06b6d4), progress);
+      targetSkyColor.setHex(0x27173a).lerp(new THREE.Color(0x0a0f1d), progress);
+
+      targetSunIntensity = 2.2 - progress * 1.4;
+      targetHemiIntensity = 1.5 - progress * 0.6;
+      targetFillIntensity = 1.0 - progress * 0.2;
+      targetExposure = 1.3 - progress * 0.3;
+    } else {
+      // NIGHT / MIDNIGHT (21:00 - 05:00)
+      phase = 'night';
+      phaseName = 'Starlit Aether Night';
+      icon = '🌙';
+
+      targetSunColor.setHex(0x7dd3fc); // Silvery moonlight
+      targetHemiSky.setHex(0x1e1b4b); // Deep celestial indigo
+      targetHemiGround.setHex(0x0f172a);
+      targetFillColor.setHex(0x06b6d4); // Neon cyan aether glow
+      targetSkyColor.setHex(0x080c18); // Midnight abyss
+
+      targetSunIntensity = 0.95; // Moon radiance
+      targetHemiIntensity = 0.95;
+      targetFillIntensity = 0.85;
+      targetExposure = 1.05;
+    }
+
+    // Smoothly blend light values
+    const lerpRate = Math.min(1.0, delta * 4.0);
+    this.sunLight.color.lerp(targetSunColor, lerpRate);
+    this.sunLight.intensity = THREE.MathUtils.lerp(this.sunLight.intensity, targetSunIntensity, lerpRate);
+
+    this.hemiLight.color.lerp(targetHemiSky, lerpRate);
+    this.hemiLight.groundColor.lerp(targetHemiGround, lerpRate);
+    this.hemiLight.intensity = THREE.MathUtils.lerp(this.hemiLight.intensity, targetHemiIntensity, lerpRate);
+
+    this.fillLight.color.lerp(targetFillColor, lerpRate);
+    this.fillLight.intensity = THREE.MathUtils.lerp(this.fillLight.intensity, targetFillIntensity, lerpRate);
+
+    this.renderer.toneMappingExposure = THREE.MathUtils.lerp(this.renderer.toneMappingExposure, targetExposure, lerpRate);
+
+    this.currentSkyColor.lerp(targetSkyColor, lerpRate);
+    this.renderer.setClearColor(this.currentSkyColor, 1.0);
+    if (this.scene.fog) {
+      this.scene.fog.color.copy(this.currentSkyColor);
+    }
+
+    return {
+      timeOfDay: t,
+      formattedTime,
+      phase,
+      phaseName,
+      icon,
+      sunIntensity: this.sunLight.intensity,
+      skyColorHex: '#' + this.currentSkyColor.getHexString(),
+    };
+  }
+
+  // --- Inventory Auto-Sorting Subsystem ---
+  public sortInventory(mode: 'rarity' | 'name' | 'type') {
+    const rarityWeight: Record<string, number> = {
+      legendary: 5,
+      epic: 4,
+      rare: 3,
+      uncommon: 2,
+      common: 1,
+    };
+    const slotWeight: Record<string, number> = {
+      weapon: 1,
+      shield: 2,
+      helmet: 3,
+      chest: 4,
+      boots: 5,
+      relic: 6,
+      mount: 7,
+      consumable: 8,
+    };
+
+    if (mode === 'rarity') {
+      this.player.inventory.sort((a, b) => (rarityWeight[b.rarity] || 0) - (rarityWeight[a.rarity] || 0));
+    } else if (mode === 'name') {
+      this.player.inventory.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (mode === 'type') {
+      this.player.inventory.sort((a, b) => (slotWeight[a.slot] || 99) - (slotWeight[b.slot] || 99));
+    }
+
+    soundSynth.playItemEquip();
+  }
+
+
+  // --- Companion Pet Subsystem ---
+  public tamePet(pet: CompanionPet) {
+    this.activePet = pet;
+
+    // Apply pet stat buffs
+    this.player.stats.attackPower += pet.bonusAttack;
+    this.player.stats.moveSpeedMultiplier += pet.bonusSpeed / 100;
+    this.player.recalculateStats();
+
+    // Spawn 3D Mesh
+    this.spawnPetMesh(pet);
+
+    // Particles and sounds
+    this.particleSystem.emit('beacon_activate', this.player.position, pet.color, 1.4);
+    soundSynth.playQuestComplete();
+    this.addFloatingText(`★ Pet Companion [${pet.name}] Bound! ★`, this.player.position.x, this.player.position.y + 2.8, pet.color, 'xl');
+    this.addChatMessage('system', 'Beast Tamer', `Successfully bonded with companion pet [${pet.name}]! (+${pet.bonusAttack} Atk, +${pet.bonusSpeed}% Spd).`);
+
+    this.progressQuests('tame_pet');
+  }
+
+  private spawnPetMesh(pet: CompanionPet) {
+    if (this.petMeshGroup) {
+      this.scene.remove(this.petMeshGroup);
+      this.petMeshGroup = null;
+    }
+
+    const group = new THREE.Group();
+    this.petPosition.set(this.player.position.x + 2, 0.3, this.player.position.z + 2);
+    group.position.copy(this.petPosition);
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(pet.color),
+      metalness: pet.species === 'clockwork_hound' ? 0.9 : 0.4,
+      roughness: 0.3,
+    });
+
+    if (pet.species === 'aether_wisp') {
+      const coreGeo = new THREE.SphereGeometry(0.4, 16, 16);
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        emissive: 0x0284c7,
+        emissiveIntensity: 2.0,
+      });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      group.add(core);
+
+      const ringGeo = new THREE.TorusGeometry(0.7, 0.08, 8, 24);
+      const ring = new THREE.Mesh(ringGeo, coreMat);
+      ring.rotation.x = Math.PI / 3;
+      group.add(ring);
+    } else if (pet.species === 'clockwork_hound') {
+      const bodyGeo = new THREE.BoxGeometry(0.8, 0.6, 1.2);
+      const body = new THREE.Mesh(bodyGeo, mat);
+      body.position.y = 0.5;
+      group.add(body);
+
+      const headGeo = new THREE.BoxGeometry(0.5, 0.45, 0.6);
+      const head = new THREE.Mesh(headGeo, mat);
+      head.position.set(0, 0.8, 0.6);
+      group.add(head);
+
+      const earL = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), mat);
+      earL.position.set(-0.2, 1.1, 0.6);
+      const earR = earL.clone();
+      earR.position.x = 0.2;
+      group.add(earL);
+      group.add(earR);
+    } else {
+      // Drake / Gryphon miniature
+      const bodyGeo = new THREE.ConeGeometry(0.5, 1.2, 6);
+      bodyGeo.rotateX(Math.PI / 2);
+      const body = new THREE.Mesh(bodyGeo, mat);
+      body.position.y = 0.6;
+      group.add(body);
+
+      const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.4), mat);
+      wingL.position.set(-0.6, 0.8, 0);
+      wingL.rotation.z = Math.PI / 6;
+      const wingR = wingL.clone();
+      wingR.position.x = 0.6;
+      wingR.rotation.z = -Math.PI / 6;
+      group.add(wingL);
+      group.add(wingR);
+    }
+
+    this.petMeshGroup = group;
+    this.scene.add(group);
+  }
+
+  // --- Homestead House Subsystem ---
+  public buildHomestead(blueprint: HomesteadBlueprint) {
+    if (this.unlockedHouses.some((h) => h.id === blueprint.id)) return;
+    this.unlockedHouses.push(blueprint);
+
+    // Apply House Perks
+    this.player.stats.maxHp += blueprint.tier === 1 ? 50 : blueprint.tier === 2 ? 150 : 300;
+    this.player.stats.hp = this.player.stats.maxHp;
+    this.player.recalculateStats();
+
+    // Spawn 3D Architecture in the West Homestead district
+    const houseGroup = new THREE.Group();
+    const houseX = -26 - (this.unlockedHouses.length - 1) * 8;
+    const houseZ = 16 + (this.unlockedHouses.length - 1) * 6;
+    houseGroup.position.set(houseX, 0, houseZ);
+
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: blueprint.tier === 3 ? 0x1e3a8a : 0x991b1b, roughness: 0.6 });
+
+    // Foundation & Walls
+    const wallGeo = new THREE.BoxGeometry(6, 4 + blueprint.tier * 1.5, 6);
+    const walls = new THREE.Mesh(wallGeo, woodMat);
+    walls.position.y = (4 + blueprint.tier * 1.5) / 2;
+    houseGroup.add(walls);
+
+    // Stone Base Trim
+    const baseGeo = new THREE.BoxGeometry(6.4, 1.2, 6.4);
+    const base = new THREE.Mesh(baseGeo, stoneMat);
+    base.position.y = 0.6;
+    houseGroup.add(base);
+
+    // Roof
+    const roofGeo = new THREE.ConeGeometry(5.2, 3.5, 4);
+    roofGeo.rotateY(Math.PI / 4);
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.y = 4 + blueprint.tier * 1.5 + 1.75;
+    houseGroup.add(roof);
+
+    // Chimney with steam smoke
+    const chimneyGeo = new THREE.BoxGeometry(0.8, 4.0, 0.8);
+    const chimney = new THREE.Mesh(chimneyGeo, stoneMat);
+    chimney.position.set(2.0, 4 + blueprint.tier * 1.5, -1.5);
+    houseGroup.add(chimney);
+
+    this.particleSystem.registerSteamVent(houseX + 2.0, 4 + blueprint.tier * 1.5 + 2.0, houseZ - 1.5);
+
+    this.houseMeshes.push(houseGroup);
+    this.scene.add(houseGroup);
+
+    // Particles and announcements
+    this.particleSystem.emit('beacon_activate', houseGroup.position, '#eab308', 2.0);
+    soundSynth.playQuestComplete();
+    this.addFloatingText(`★ HOMESTEAD CONSTRUCTED: ${blueprint.name}! ★`, this.player.position.x, this.player.position.y + 3.2, '#eab308', 'xl');
+    this.addChatMessage('system', 'Architect Silas', `Congratulations on building your [${blueprint.name}] in the West District! Perks unlocked.`);
+
+    this.progressQuests('build_house');
+  }
+
+  // --- Admin / GM World Edit Tools ---
+  public applyGMConfig(config: Partial<GMWorldConfig>) {
+    this.gmConfig = { ...this.gmConfig, ...config };
+
+    if (config.timeOfDay !== undefined) {
+      const angle = ((this.gmConfig.timeOfDay - 6) / 24) * Math.PI * 2;
+      this.sunLight.position.set(Math.cos(angle) * 90, Math.sin(angle) * 90, 60);
+      const isNight = this.gmConfig.timeOfDay < 6 || this.gmConfig.timeOfDay > 19;
+      this.sunLight.intensity = isNight ? 0.3 : 2.5;
+      this.hemiLight.intensity = isNight ? 0.6 : 1.6;
+    }
+
+    if (config.weatherState) {
+      if (config.weatherState === 'blood_moon') {
+        this.scene.background = new THREE.Color(0x2a0808);
+        this.sunLight.color = new THREE.Color(0xef4444);
+      } else if (config.weatherState === 'aether_aurora') {
+        this.scene.background = new THREE.Color(0x042f2e);
+        this.sunLight.color = new THREE.Color(0x2dd4bf);
+      } else if (config.weatherState === 'void_storm') {
+        this.scene.background = new THREE.Color(0x1e1035);
+        this.sunLight.color = new THREE.Color(0xa855f7);
+      } else {
+        this.scene.background = new THREE.Color(0x1e293b);
+        this.sunLight.color = new THREE.Color(0xfffbeb);
+      }
+    }
+
+    if (this.gmConfig.godMode) {
+      this.player.stats.hp = this.player.stats.maxHp;
+      this.player.stats.resource = this.player.stats.maxResource;
+    }
+
+    if (this.gmConfig.infiniteResources) {
+      this.player.stats.gold = Math.max(this.player.stats.gold, 999999);
+    }
+
+    this.addFloatingText('GM World Configuration Updated', this.player.position.x, this.player.position.y + 2.0, '#38bdf8', 'md');
+  }
+
+  public spawnCustomMob(type: WorldMobEntity['type'], x?: number, z?: number) {
+    const spawnX = x !== undefined ? x : this.player.position.x + (Math.random() - 0.5) * 10;
+    const spawnZ = z !== undefined ? z : this.player.position.z + (Math.random() - 0.5) * 10;
+
+    this.mobManager.spawnCustomMob(type, spawnX, spawnZ);
+    this.particleSystem.emit('teleport_warp', { x: spawnX, y: 1.0, z: spawnZ }, '#a855f7', 1.5);
+    this.addFloatingText(`GM Spawned [${type.toUpperCase()}]`, spawnX, 2.5, '#a855f7', 'lg');
+  }
+
+  public equipItem(item: RPGItem): RPGItem | null {
+    const prev = this.player.equipItem(item);
+    this.player.observeEquipmentState();
+    return prev;
+  }
+
+  public unequipItem(slotName: string): RPGItem | null {
+    const unequipped = this.player.unequipSlot(slotName as any);
+    this.player.observeEquipmentState();
+    return unequipped;
+  }
+
+  public observePlayerEquipment(callback: (equipment: EquipmentState) => void): () => void {
+    return this.player.addEquipmentListener(callback);
+  }
+
+  private handleResize = () => {
+    if (!this.container || !this.renderer || !this.camera) return;
+    const width = this.container.clientWidth || window.innerWidth || 1280;
+    const height = this.container.clientHeight || window.innerHeight || 720;
+    if (height <= 0 || width <= 0) return;
+    const aspect = width / height;
+    if (!isFinite(aspect) || isNaN(aspect) || aspect <= 0) return;
+    this.camera.aspect = aspect;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(width, height);
+  };
+}

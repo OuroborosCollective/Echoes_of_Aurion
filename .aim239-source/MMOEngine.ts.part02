@@ -1,0 +1,504 @@
+er.getActiveWeaponType();
+    const masteryHitXp = Math.max(5, Math.round(damage * 0.35));
+    const hitMastery = this.player.gainWeaponMasteryXp(activeWep, masteryHitXp);
+    if (hitMastery.leveledUp) {
+      soundSynth.playLevelUp();
+      this.particleSystem.emit('beacon_activate', this.player.position, hitMastery.mastery.color, 1.6);
+      confetti({ particleCount: 60, spread: 70 });
+      this.addFloatingText(
+        `★ ${hitMastery.mastery.name.toUpperCase()} RANK ${hitMastery.newLevel}! ★`,
+        this.player.position.x,
+        this.player.position.y + 2.8,
+        hitMastery.mastery.color,
+        'xl'
+      );
+      this.addChatMessage(
+        'system',
+        'Mastery',
+        `⚔️ Your ${hitMastery.mastery.name} advanced to Rank ${hitMastery.newLevel}! (${hitMastery.mastery.scalingAttr})`
+      );
+    }
+
+    if (result.isKilled) {
+      soundSynth.playMobDeath();
+      this.player.stats.kills += 1;
+
+      // Award bonus kill weapon mastery XP
+      const killMastery = this.player.gainWeaponMasteryXp(activeWep, result.mob.expReward);
+      if (killMastery.leveledUp && !hitMastery.leveledUp) {
+        soundSynth.playLevelUp();
+        this.particleSystem.emit('beacon_activate', this.player.position, killMastery.mastery.color, 1.6);
+        confetti({ particleCount: 70, spread: 70 });
+        this.addFloatingText(
+          `★ ${killMastery.mastery.name.toUpperCase()} RANK ${killMastery.newLevel}! ★`,
+          this.player.position.x,
+          this.player.position.y + 2.8,
+          killMastery.mastery.color,
+          'xl'
+        );
+      }
+
+      if (result.mob.isBoss) {
+        this.player.stats.bossKills += 1;
+        this.particleSystem.emit('explosion', { x: result.mob.x, y: result.mob.y + 1.8, z: result.mob.z }, '#f97316', 2.2);
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        this.addChatMessage(
+          'system',
+          'World Boss',
+          `⚔️ HERO SLAYER ALERT: World Boss [${result.mob.name}] has been defeated by ${this.player.currentClassId.toUpperCase()}!`
+        );
+      } else {
+        this.particleSystem.emit('blood_oil', { x: result.mob.x, y: result.mob.y + 0.6, z: result.mob.z }, '#991b1b', 1.2);
+      }
+
+      // Award XP & Gold
+      this.player.stats.gold += result.mob.goldReward;
+      const leveledUp = this.player.gainXp(result.mob.expReward);
+
+      this.addFloatingText(
+        `+${result.mob.expReward} EXP | +${result.mob.goldReward} Gold`,
+        this.player.position.x,
+        this.player.position.y + 2.0,
+        '#10b981',
+        'md'
+      );
+
+      if (leveledUp) {
+        soundSynth.playLevelUp();
+        this.particleSystem.emit('level_up', this.player.position, '#fbbf24', 1.5);
+        confetti({ particleCount: 80, spread: 60 });
+        this.addFloatingText(
+          `★ LEVEL UP! (Lv.${this.player.stats.level}) ★`,
+          this.player.position.x,
+          this.player.position.y + 3.2,
+          '#f59e0b',
+          'xl'
+        );
+        this.addChatMessage(
+          'guild',
+          'System',
+          `Congratulate player on reaching Level ${this.player.stats.level}!`
+        );
+      }
+
+      // Progress Quests & Genkit Adapter Bounties
+      this.genkitAdapter.onMobKilled(result.mob);
+      this.progressQuests('kill_mobs', result.mob.type);
+      if (result.mob.isBoss) {
+        this.progressQuests('kill_boss', 'titan_boss');
+      }
+
+      // Party Shared Quest Progression
+      const partyAssist = this.partyManager.handleSharedKill(result.mob.name, this.quests);
+      if (partyAssist.sharedCount > 0) {
+        this.addFloatingText(
+          `★ Party Quest Shared (${partyAssist.sharedCount}) ★`,
+          this.player.position.x,
+          this.player.position.y + 3.4,
+          '#38bdf8',
+          'md'
+        );
+      }
+
+
+      if (this.targetMob?.id === mobId) {
+        this.targetMob = null;
+      }
+    }
+  }
+
+  public progressQuests(type: Quest['type'], mobType?: string) {
+    this.quests.forEach((q) => {
+      if (!q.completed && q.type === type) {
+        if (mobType && q.targetMobType && q.targetMobType !== mobType) return;
+
+        q.currentCount = Math.min(q.targetCount, q.currentCount + 1);
+        if (q.currentCount >= q.targetCount) {
+          q.completed = true;
+          this.player.gainXp(q.rewardXp);
+          this.player.stats.gold += q.rewardGold;
+          if (q.rewardItem) {
+            this.player.inventory.push(q.rewardItem);
+          }
+          soundSynth.playQuestComplete();
+          this.addFloatingText(
+            `QUEST COMPLETE: ${q.title}!`,
+            this.player.position.x,
+            this.player.position.y + 3.0,
+            '#fbbf24',
+            'xl'
+          );
+          this.addChatMessage('system', 'Quest Master', `Completed Quest: [${q.title}]! Received ${q.rewardGold} Gold.`);
+        }
+      }
+    });
+  }
+
+  public addChatMessage(
+    channel: ChatMessage['channel'],
+    sender: string,
+    text: string,
+    isPlayer: boolean = false
+  ) {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    this.chatMessages.push({
+      id: `chat_${Date.now()}_${Math.random()}`,
+      channel,
+      sender,
+      text,
+      timestamp: timeStr,
+      isPlayer,
+    });
+    if (this.chatMessages.length > 50) {
+      this.chatMessages.shift();
+    }
+  }
+
+  public addFloatingText(
+    text: string,
+    x: number,
+    y: number,
+    color: string,
+    size: FloatingCombatText['size'] = 'md',
+    isCrit: boolean = false
+  ) {
+    this.floatingTexts.push({
+      id: `ftext_${++this.textIdCounter}`,
+      text,
+      x,
+      y,
+      color,
+      size,
+      opacity: 1.0,
+      lifespan: 1.4,
+      vy: 1.2,
+      isCrit,
+    });
+  }
+
+  public setVirtualMovement(forward: number, right: number) {
+    this.virtualForward = forward;
+    this.virtualRight = right;
+  }
+
+  public start() {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    this.lastTime = performance.now();
+    this.handleResize();
+
+    // Verify non-zero viewport dimensions on next animation frame
+    requestAnimationFrame(() => {
+      this.handleResize();
+      if (this.renderer) {
+        const size = this.renderer.getSize(new THREE.Vector2());
+        console.info(`[MMOEngine] Runtime Viewport Validated: [${size.x}w x ${size.y}h]`);
+      }
+    });
+
+    this.loop(this.lastTime);
+  }
+
+  public stop() {
+    this.isRunning = false;
+    cancelAnimationFrame(this.animationFrameId);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+    }
+    this.unbindEvents();
+
+    try {
+      if (this.renderer) {
+        if (this.renderer.domElement && this.renderer.domElement.parentElement === this.container) {
+          this.container.removeChild(this.renderer.domElement);
+        }
+        this.renderer.dispose();
+      }
+    } catch (e) {
+      console.warn('MMOEngine: Error during renderer disposal', e);
+    }
+  }
+
+  private loop = (time: number) => {
+    if (!this.isRunning) return;
+    const delta = Math.min((time - this.lastTime) / 1000, 0.1);
+    this.lastTime = time;
+
+    this.update(delta);
+    this.renderer.render(this.scene, this.camera);
+
+    this.animationFrameId = requestAnimationFrame(this.loop);
+  };
+
+  private update(delta: number) {
+    // 1. Calculate Movement Vector from WASD / Arrow Keys / Virtual On-Screen Joystick
+    let inputForward = this.virtualForward;
+    let inputRight = this.virtualRight;
+
+    if (this.keysPressed['w'] || this.keysPressed['arrowup']) inputForward += 1;
+    if (this.keysPressed['s'] || this.keysPressed['arrowdown']) inputForward -= 1;
+    if (this.keysPressed['d'] || this.keysPressed['arrowright']) inputRight += 1;
+    if (this.keysPressed['a'] || this.keysPressed['arrowleft']) inputRight -= 1;
+
+    // Rotate movement vector by Camera Yaw (Forward: camera facing direction, Right: camera strafe right)
+    const forwardX = -Math.sin(this.cameraYaw);
+    const forwardZ = -Math.cos(this.cameraYaw);
+    const rightX = Math.cos(this.cameraYaw);
+    const rightZ = -Math.sin(this.cameraYaw);
+
+    const moveX = inputForward * forwardX + inputRight * rightX;
+    const moveZ = inputForward * forwardZ + inputRight * rightZ;
+
+    // 2. Update Player
+    this.player.update(delta, { x: moveX, z: moveZ });
+
+    // Terrain solid mass height enforcement - player cannot fall through the ground
+    const elev = this.landscape.chunkManager.getElevationAt(this.player.position.x, this.player.position.z);
+    this.player.position.y = elev;
+    this.player.group.position.y = elev;
+
+    // Update collision visualizer player hitbox
+    if (this._enableCollisionVisualizer && this.collisionDebugGroup) {
+      const pMesh = this.collisionDebugGroup.children.find(c => c.name === 'playerHitbox');
+      if (pMesh) {
+        pMesh.position.set(this.player.position.x, elev + 2, this.player.position.z);
+      }
+    }
+
+    // Dynamic Procedural World Expansion (builds map forward as player approaches edges)
+    this.landscape.chunkManager.checkPlayerProximity(this.player.position.x, this.player.position.z);
+
+    // Update Landscape Animations (floating crystal, monoliths, etc.)
+    this.landscape.update(delta);
+
+    // 3. Update Skill Cooldowns
+    const classDef = MMORPG_CLASSES[this.player.currentClassId];
+    classDef.skills.forEach((s) => {
+      if (s.currentCooldown > 0) {
+        s.currentCooldown = Math.max(0, s.currentCooldown - delta);
+      }
+    });
+
+    // 4. Update 3rd Person Orbit / Follow Camera
+    const horizDist = this.cameraDistance * Math.cos(this.cameraPitch);
+    const vertDist = this.cameraHeight + this.cameraDistance * Math.sin(this.cameraPitch);
+    const targetCamX = this.player.position.x + Math.sin(this.cameraYaw) * horizDist;
+    const targetCamY = this.player.position.y + vertDist;
+    const targetCamZ = this.player.position.z + Math.cos(this.cameraYaw) * horizDist;
+
+    this.camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), delta * 8.0);
+    this.camera.lookAt(this.player.position.x, this.player.position.y + 1.6, this.player.position.z);
+
+    // 5. Update Mobs AI
+    this.mobManager.update(delta, this.player.position.x, this.player.position.z, (mob, dmg) => {
+      // Mob attacks player
+      const res = this.player.takeDamage(dmg);
+      soundSynth.playHitSound();
+      this.addFloatingText(`-${res.damageTaken}`, this.player.position.x, this.player.position.y + 1.8, '#ef4444', 'lg');
+
+      if (res.isDead) {
+        this.addFloatingText('DEFEATED - Respawning at Sanctum...', this.player.position.x, this.player.position.y + 2.5, '#ef4444', 'xl');
+        this.player.position.set(0, 0, 8.0); // respawn at open city hub plaza
+        this.player.stats.hp = this.player.stats.maxHp;
+      }
+    });
+
+    // 6. Update Loot Drops & Check nearby interaction prompts
+    this.lootManager.update(delta);
+    this.nearbyLoot = this.lootManager.getNearbyLoot(this.player.position.x, this.player.position.z, 3.5);
+
+    // Check nearby NPC
+    this.nearbyNPC = null;
+    for (const npc of this.npcs) {
+      if (Math.hypot(npc.x - this.player.position.x, npc.z - this.player.position.z) <= 5.5) {
+        this.nearbyNPC = npc;
+        break;
+      }
+    }
+
+    // 7. Update Active Projectiles
+    const remainingProjs: ActiveProjectile[] = [];
+    this.projectiles.forEach((proj) => {
+      proj.progress += (proj.speed * delta) / proj.startPos.distanceTo(proj.targetPos);
+      proj.mesh.position.lerpVectors(proj.startPos, proj.targetPos, Math.min(1.0, proj.progress));
+
+      if (proj.progress >= 1.0) {
+        this.scene.remove(proj.mesh);
+        this.applyDamageToMob(proj.targetMobId, proj.damage, proj.isCrit);
+      } else {
+        remainingProjs.push(proj);
+      }
+    });
+    this.projectiles = remainingProjs;
+
+    // 8. Update AoE Effects
+    const remainingAoE: ActiveAoEEffect[] = [];
+    this.aoeEffects.forEach((aoe) => {
+      aoe.timer -= delta;
+      aoe.mesh.scale.multiplyScalar(1.0 + delta * 0.4);
+      if (aoe.timer <= 0) {
+        this.scene.remove(aoe.mesh);
+      } else {
+        remainingAoE.push(aoe);
+      }
+    });
+    this.aoeEffects = remainingAoE;
+
+    // 9. Update Simulated Players
+    this.simPlayers.update(delta);
+
+    // 10. Update Floating Combat Texts
+    this.floatingTexts.forEach((t) => {
+      t.y += t.vy * delta;
+      t.lifespan -= delta;
+      t.opacity = Math.max(0, t.lifespan / 1.4);
+    });
+    this.floatingTexts = this.floatingTexts.filter((t) => t.lifespan > 0);
+
+    // 11. Update Particle System
+    if (this.particleSystem && this.gmConfig.ambientParticles) {
+      this.particleSystem.update(delta);
+    }
+
+    // 12. Dynamic Atmospheric Day-Night Cycle
+    const dayNightInfo = this.updateDayNightCycle(delta);
+
+    // 13. Update Party Manager & Synchronize Member Vitals
+    this.partyManager.updatePlayerStats(
+      this.player.stats.hp,
+      this.player.stats.maxHp,
+      this.player.stats.resource,
+      this.player.stats.maxResource,
+      this.player.stats.level,
+      this.player.stats.currentZone
+    );
+    this.partyManager.update(delta, !!this.targetMob, this.targetMob);
+
+    // 14. Update Companion Pet following Player
+    if (this.petMeshGroup && this.activePet) {
+      const offsetDist = 2.2;
+      const angle = this.player.facingAngle + Math.PI * 0.75;
+      const targetPetX = this.player.position.x + Math.sin(angle) * offsetDist;
+      const targetPetZ = this.player.position.z + Math.cos(angle) * offsetDist;
+      const targetPetY = this.player.position.y + (this.activePet.species === 'aether_wisp' ? 1.5 + Math.sin(performance.now() * 0.004) * 0.3 : 0.3);
+
+      this.petPosition.lerp(new THREE.Vector3(targetPetX, targetPetY, targetPetZ), delta * 5.0);
+      this.petMeshGroup.position.copy(this.petPosition);
+      this.petMeshGroup.rotation.y = this.player.facingAngle;
+
+      if (this.activePet.species === 'aether_wisp') {
+        this.petMeshGroup.rotation.y += delta * 3.0;
+      }
+    }
+
+    // Update Zone Name
+    this.player.stats.currentZone = this.landscape.getZoneName(this.player.position.x, this.player.position.z);
+
+    // 15. Dispatch State to React HUD & Synchronize Backend State
+    this.stateUpdateTimer += delta;
+    if (this.stateUpdateTimer >= 0.045) {
+      this.stateUpdateTimer = 0;
+
+      // Sync state with SyncManager
+      syncManager.updateLocalState({
+        stats: { ...this.player.stats },
+        inventory: [...this.player.inventory],
+        quests: [...this.quests],
+        activePetId: this.activePet?.id,
+        unlockedHouses: this.unlockedHouses.map((h) => h.id),
+      });
+
+      this.onStateUpdate?.({
+        stats: { ...this.player.stats },
+        equipment: { ...this.player.equipment },
+        inventory: [...this.player.inventory],
+        targetMob: this.targetMob,
+        nearbyNPC: this.nearbyNPC,
+        nearbyLoot: this.nearbyLoot,
+        quests: [...this.quests],
+        chatMessages: [...this.chatMessages],
+        floatingTexts: [...this.floatingTexts],
+        simPlayers: this.simPlayers.getPlayers(),
+        partyMembers: this.partyManager.getMembers(),
+        dayNightInfo,
+      });
+    }
+  }
+
+  // --- Dynamic Day-Night Atmospheric Cycle Subsystem ---
+  public updateDayNightCycle(delta: number): DayNightInfo {
+    if (this.isDayNightActive) {
+      this.timeOfDay = (this.timeOfDay + delta * this.dayNightSpeed) % 24.0;
+    }
+
+    const t = this.timeOfDay;
+    const hours = Math.floor(t);
+    const minutes = Math.floor((t - hours) * 60);
+    const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+
+    let phase: 'dawn' | 'day' | 'dusk' | 'night' = 'day';
+    let phaseName = 'Golden Midday';
+    let icon = '☀️';
+
+    const targetSunColor = new THREE.Color();
+    const targetHemiSky = new THREE.Color();
+    const targetHemiGround = new THREE.Color();
+    const targetFillColor = new THREE.Color();
+    const targetSkyColor = new THREE.Color();
+
+    let targetSunIntensity = 2.5;
+    let targetHemiIntensity = 1.6;
+    let targetFillIntensity = 1.0;
+    let targetExposure = 1.35;
+
+    // Solar angle: 0 at 6am, PI/2 at 12pm, PI at 6pm, 3PI/2 at 12am
+    const solarAngle = ((t - 6.0) / 24.0) * Math.PI * 2;
+    const sunDist = 120;
+    const sunX = Math.cos(solarAngle) * sunDist;
+    const sunY = Math.max(12, Math.sin(solarAngle) * sunDist);
+    const sunZ = 50 + Math.cos(solarAngle * 0.5) * 30;
+
+    this.sunLight.position.set(sunX, sunY, sunZ);
+    this.fillLight.position.set(-sunX * 0.7, Math.max(15, -sunY * 0.4 + 45), -sunZ * 0.7);
+
+    if (t >= 5.0 && t < 8.5) {
+      // DAWN / SUNRISE (05:00 - 08:30)
+      phase = 'dawn';
+      phaseName = 'Amber Steam Dawn';
+      icon = '🌅';
+      const progress = (t - 5.0) / 3.5;
+
+      targetSunColor.setHex(0xf59e0b).lerp(new THREE.Color(0xfffbeb), progress);
+      targetHemiSky.setHex(0xf97316).lerp(new THREE.Color(0x93c5fd), progress);
+      targetHemiGround.setHex(0x451a03).lerp(new THREE.Color(0x475569), progress);
+      targetFillColor.setHex(0xc084fc).lerp(new THREE.Color(0x38bdf8), progress);
+      targetSkyColor.setHex(0x2a1b2d).lerp(new THREE.Color(0x1e293b), progress);
+
+      targetSunIntensity = 0.8 + progress * 1.7;
+      targetHemiIntensity = 1.0 + progress * 0.6;
+      targetFillIntensity = 0.6 + progress * 0.4;
+      targetExposure = 1.1 + progress * 0.25;
+    } else if (t >= 8.5 && t < 17.5) {
+      // MIDDAY / DAY (08:30 - 17:30)
+      phase = 'day';
+      phaseName = 'Golden Sun Midday';
+      icon = '☀️';
+
+      targetSunColor.setHex(0xfffbeb);
+      targetHemiSky.setHex(0x93c5fd);
+      targetHemiGround.setHex(0x475569);
+      targetFillColor.setHex(0x38bdf8);
+      targetSkyColor.setHex(0x1e293b);
+
+      targetSunIntensity = 2.6;
+      targetHemiIntensity = 1.7;
+      targetFillIntensity = 1.1;
+      targetExposure = 1.35;
+    } else if (t >= 17.5 && t < 21.0) {
+      // DUSK / TWILIGHT (17:30 - 21:00)
+      phase = 'dusk';
+      phaseName = 'Crimson Aether Twilight';
+      icon = '🌇';
+      const progress = (t - 17.5) / 3.5;
+
+      targetSunColor.setHex(
