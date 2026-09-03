@@ -35,6 +35,6 @@ test.describe("AIM-239 xaurion open-world bridge", () => {
 
     await page.evaluate(() => window.dispatchEvent(new Event("aurion:return-to-tower")));
     await expect(runtime).toHaveCount(0);
-    await expect(page.getByText("Echoes", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ })).toBeVisible();
   });
 });
