@@ -29,7 +29,7 @@ const serverReadback = {
 };
 
 function mockSuccessfulFetch() {
-  const fetchMock = vi.fn(async () => ({
+  const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
     ok: true,
     status: 201,
     json: async () => serverReadback,
@@ -60,11 +60,14 @@ describe("GLB upload website runtime", () => {
     fireEvent.change(input!, { target: { files: [file] } });
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0]!;
+    const call = fetchMock.mock.calls[0];
+    expect(call).toBeTruthy();
+    const url = call![0];
+    const init = call![1];
     expect(url).toBe("/api/admin/glb-smart-upload");
     expect(init).toMatchObject({ method: "POST", credentials: "include" });
 
-    const requestBody = JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>;
+    const requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(requestBody).toMatchObject({
       displayName: "starter spider",
       fileName: "starter-spider.glb",
