@@ -7,14 +7,28 @@ import {
 
 describe("starter character asset contract", () => {
   it("binds the supplied humanoid and verified animation/socket contract", () => {
-    expect(STARTER_CHARACTER_ASSETS.player.url).toBe("/game-assets/characters/aurion_humanoid_v1.glb");
+    expect(STARTER_CHARACTER_ASSETS.player.parts).toHaveLength(2);
+    expect(STARTER_CHARACTER_ASSETS.player.glbSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(STARTER_CHARACTER_ASSETS.player.animations).toEqual(["AttackCombo", "Death", "Fight", "Idle", "Jump", "Run", "Walk"]);
     expect(STARTER_CHARACTER_ASSETS.player.equipmentSockets).toHaveLength(14);
   });
 
   it("does not claim the unexported spider Aggro clip", () => {
+    expect(STARTER_CHARACTER_ASSETS.spider.parts).toHaveLength(13);
     expect(STARTER_CHARACTER_ASSETS.spider.animations).toEqual(["Idle", "Walk", "Attack", "Death"]);
     expect(STARTER_CHARACTER_ASSETS.spider.animations).not.toContain("Aggro");
+  });
+
+  it("binds all four supplied monster LODs to unique verified payloads", () => {
+    expect(STARTER_CHARACTER_ASSETS.beast.lods.map(lod => lod.triangleCount)).toEqual([1149, 694, 345, 145]);
+    expect(new Set(STARTER_CHARACTER_ASSETS.beast.lods.map(lod => lod.glbSha256)).size).toBe(4);
+    expect(STARTER_CHARACTER_ASSETS.beast.lods.flatMap(lod => lod.parts)).toHaveLength(7);
+    for (const lod of STARTER_CHARACTER_ASSETS.beast.lods) {
+      expect(lod.compressedSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(lod.glbSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(lod.compressedBytes).toBeGreaterThan(0);
+      expect(lod.glbBytes).toBeGreaterThan(lod.compressedBytes);
+    }
   });
 
   it("maps the first two encounter arenas to the supplied starter creatures", () => {
