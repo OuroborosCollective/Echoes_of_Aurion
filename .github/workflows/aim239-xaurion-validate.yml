@@ -1,0 +1,74 @@
+name: AIM-239 xaurion validation
+
+on:
+  push:
+    branches:
+      - feature/aim-239-xaurion-open-world-integration
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install exact dependency closure
+        run: pnpm install --frozen-lockfile
+      - name: TypeScript
+        run: pnpm check
+      - name: AIM-239 authority and source-rebind regressions
+        run: pnpm vitest run server/aurionXaurionIntegration.test.ts server/aim239SourceRebind.test.ts
+      - name: Production build
+        run: pnpm build
+      - name: Install Chromium for xaurion smoke
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start built Aurion server
+        shell: bash
+        run: |
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production pnpm start > /tmp/aim239-aurion.log 2>&1 &
+          echo $! > /tmp/aim239-aurion.pid
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/aim239-aurion.log
+          exit 1
+      - name: Browser smoke the source-bound open world
+        shell: bash
+        run: |
+          cat > playwright.aim239.config.ts <<'EOF'
+          import { defineConfig } from "@playwright/test";
+          export default defineConfig({
+            testDir: "./e2e",
+            timeout: 30_000,
+            fullyParallel: false,
+            reporter: "list",
+            use: {
+              baseURL: "http://127.0.0.1:3000",
+              browserName: "chromium",
+              launchOptions: { args: ["--use-angle=swiftshader", "--disable-dev-shm-usage"] },
+              headless: true,
+              screenshot: "only-on-failure",
+              trace: "retain-on-failure",
+            },
+          });
+          EOF
+          pnpm exec playwright test e2e/aim239.xaurionOpenWorld.spec.ts --config=playwright.aim239.config.ts --workers=1
+      - name: Stop built Aurion server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/aim239-aurion.pid ]]; then
+            kill "$(cat /tmp/aim239-aurion.pid)" 2>/dev/null || true
+          fi

@@ -1,0 +1,84 @@
+name: AIM-239 owner ZIP source materializer
+
+on:
+  push:
+    branches:
+      - feature/aim-239-xaurion-open-world-integration
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Detect ready source manifest
+        id: source
+        shell: bash
+        run: |
+          if [[ -f .aim239-source/READY && -f .aim239-source/manifest.json ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Materialize hash-bound owner ZIP sources
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const hash = (body) => crypto.createHash('sha256').update(body).digest('hex');
+          const manifest = JSON.parse(fs.readFileSync('.aim239-source/manifest.json', 'utf8'));
+          for (const file of manifest.files) {
+            let body;
+            if (Array.isArray(file.parts)) {
+              body = Buffer.concat(file.parts.map((part) => fs.readFileSync(part)));
+              const sha256 = hash(body);
+              if (sha256 !== file.sha256) {
+                throw new Error(`SHA mismatch for ${file.target}: ${sha256} != ${file.sha256}`);
+              }
+            } else if (file.patch) {
+              const before = fs.readFileSync(file.target);
+              const beforeSha256 = hash(before);
+              if (beforeSha256 !== file.patch.beforeSha256) {
+                throw new Error(`Before-SHA mismatch for ${file.target}: ${beforeSha256} != ${file.patch.beforeSha256}`);
+              }
+              const source = before.toString('utf8');
+              const matches = source.split(file.patch.search).length - 1;
+              const expectedOccurrences = file.patch.occurrences ?? 1;
+              if (matches !== expectedOccurrences) {
+                throw new Error(`Patch occurrence mismatch for ${file.target}: ${matches} != ${expectedOccurrences}`);
+              }
+              body = Buffer.from(source.split(file.patch.search).join(file.patch.replacement), 'utf8');
+              const afterSha256 = hash(body);
+              if (file.patch.afterSha256 && afterSha256 !== file.patch.afterSha256) {
+                throw new Error(`After-SHA mismatch for ${file.target}: ${afterSha256} != ${file.patch.afterSha256}`);
+              }
+              console.log(`patched ${file.target} ${beforeSha256} -> ${afterSha256}`);
+            } else {
+              throw new Error(`Unsupported materializer entry for ${file.target}`);
+            }
+            fs.mkdirSync(path.dirname(file.target), { recursive: true });
+            fs.writeFileSync(file.target, body);
+            console.log(`${file.target} ${body.length} ${hash(body)}`);
+          }
+          NODE
+      - name: Commit only verified source materialization
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        run: |
+          rm -rf .aim239-source
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A client/src/xaurion .aim239-source
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(open-world): materialize hash-bound owner ZIP source"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
