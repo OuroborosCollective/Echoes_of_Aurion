@@ -81,6 +81,7 @@ export type ProfessionOperationInput = Readonly<{
 
 export type ProfessionEconomicControls = Readonly<{
   inputConsumption: "consume_once_atomically";
+  sourceMutation: "consume_or_deplete_once_atomically";
   replayPolicy: "return_existing_receipt";
   bonusOutputsGrantMasteryXp: false;
   bonusOutputsCarrySourceOperation: true;
@@ -99,6 +100,7 @@ export type ProfessionOperationEnvelope = Readonly<{
   resolutionIndex: number;
   sourceReceiptId: string;
   sourceEvidenceDigest: string;
+  serverSeedDigest: string;
   resourceInputs: readonly ProfessionResourceInput[];
   resourceDigest: string;
   masteryKeys: readonly ScopedMasteryKey[];
@@ -213,7 +215,7 @@ export function deterministicProfessionRollBps(serverSeed: string, operationId: 
 }
 
 function canonicalResourceInputs(resources: readonly ProfessionResourceInput[], activityKind: ProfessionActivityKind): readonly ProfessionResourceInput[] {
-  if (activityKind === "craft" && resources.length === 0) throw new Error("crafting requires consumed resource origins");
+  if (resources.length === 0) throw new Error(activityKind === "craft" ? "crafting requires consumed resource origins" : "gathering requires a depleted world-source origin");
   const seenOrigins = new Set<string>();
   const canonical = resources.map(resource => {
     if (!safeToken.test(resource.originId) || !safeId.test(resource.itemId)) throw new Error("invalid profession resource identity");
@@ -246,6 +248,7 @@ export function professionMasteryKeys(input: Readonly<{
 
 const economicControls: ProfessionEconomicControls = Object.freeze({
   inputConsumption: "consume_once_atomically",
+  sourceMutation: "consume_or_deplete_once_atomically",
   replayPolicy: "return_existing_receipt",
   bonusOutputsGrantMasteryXp: false,
   bonusOutputsCarrySourceOperation: true,
@@ -266,10 +269,12 @@ export function buildProfessionOperationEnvelope(input: ProfessionOperationInput
 
   const resourceInputs = canonicalResourceInputs(input.resources, input.activityKind);
   const resourceDigest = hash(resourceInputs.flatMap(resource => [resource.originId, resource.itemId, resource.quantityExact]));
+  const serverSeedDigest = hash([AURION_PROFESSION_MASTERY_RULESET_VERSION, input.serverSeed]);
   const keys = professionMasteryKeys(input);
+  const carry = resolveBonusYieldCarry(input.masteryLevelExact);
+  const modifiers = resolveProfessionMasteryModifiers({ masteryLevelExact: carry.masteryLevelExact, qualityScoreExact: input.qualityScoreExact });
   const rollBps = deterministicProfessionRollBps(input.serverSeed, input.operationId, "yield");
-  const yieldOutcome = resolveProfessionYield({ masteryLevelExact: input.masteryLevelExact, baseQuantityExact: input.baseOutputQuantityExact, rollBps });
-  const modifiers = resolveProfessionMasteryModifiers({ masteryLevelExact: input.masteryLevelExact, qualityScoreExact: input.qualityScoreExact });
+  const yieldOutcome = resolveProfessionYield({ masteryLevelExact: carry.masteryLevelExact, baseQuantityExact: input.baseOutputQuantityExact, rollBps });
   const operationDigest = hash([
     AURION_PROFESSION_MASTERY_RULESET_VERSION,
     AURION_PROFESSION_MASTERY_CONTENT_VERSION,
@@ -281,10 +286,11 @@ export function buildProfessionOperationEnvelope(input: ProfessionOperationInput
     input.outputItemId,
     input.sourceReceiptId,
     input.sourceEvidenceDigest,
+    serverSeedDigest,
     String(input.resolutionIndex),
     resourceDigest,
-    input.masteryLevelExact,
-    input.qualityScoreExact,
+    carry.masteryLevelExact,
+    modifiers.qualityScoreExact,
     yieldOutcome.baseQuantityExact,
     yieldOutcome.totalQuantityExact,
     yieldOutcome.bonusBatchesExact,
@@ -298,6 +304,7 @@ export function buildProfessionOperationEnvelope(input: ProfessionOperationInput
     receiptId,
     outputOriginNamespace,
     economicControls.inputConsumption,
+    economicControls.sourceMutation,
     economicControls.replayPolicy,
     economicControls.outputRepresentation,
   ]);
@@ -313,6 +320,7 @@ export function buildProfessionOperationEnvelope(input: ProfessionOperationInput
     resolutionIndex: input.resolutionIndex,
     sourceReceiptId: input.sourceReceiptId,
     sourceEvidenceDigest: input.sourceEvidenceDigest,
+    serverSeedDigest,
     resourceInputs,
     resourceDigest,
     masteryKeys: keys,
@@ -323,6 +331,31 @@ export function buildProfessionOperationEnvelope(input: ProfessionOperationInput
     receiptId,
     commitHash,
   });
+}
+
+export type ProfessionOperationReplay = Readonly<{
+  replay: true;
+  envelope: ProfessionOperationEnvelope;
+}>;
+
+/**
+ * A committed operation may be read again, but the same operation ID may never
+ * be rebound to another seed, source, resource set, yield or mastery outcome.
+ */
+export function reconcileProfessionOperationReplay(
+  existing: ProfessionOperationEnvelope,
+  candidate: ProfessionOperationEnvelope,
+): ProfessionOperationReplay {
+  if (existing.operationId !== candidate.operationId) throw new Error("profession replay operation mismatch");
+  if (existing.commitHash !== candidate.commitHash
+    || existing.receiptId !== candidate.receiptId
+    || existing.sourceReceiptId !== candidate.sourceReceiptId
+    || existing.sourceEvidenceDigest !== candidate.sourceEvidenceDigest
+    || existing.serverSeedDigest !== candidate.serverSeedDigest
+    || existing.resourceDigest !== candidate.resourceDigest) {
+    throw new Error("PROFESSION_OPERATION_CONFLICT");
+  }
+  return Object.freeze({ replay: true, envelope: existing });
 }
 
 /** Lazily derives unique output origins without allocating an unbounded array. */
