@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 type SourceBaseline = {
   authorityHierarchy: string[];
   sources: {
-    normativeRules: { repository: string; revision: string; role: string };
-    gameplayEngine: { repository: string; revision: string; role: string };
-    aurionBaseline: { repository: string; revision: string; role: string };
+    normativeRules: { repository: string; ref: string; revision: string; role: string };
+    gameplayEngine: { repository: string; ref: string; revision: string; role: string };
+    aurionBaseline: { repository: string; ref: string; revision: string; role: string };
     historicalOwnerZip: { sha256: string; role: string };
   };
   bannedStandaloneAuthority: string[];
@@ -20,11 +20,13 @@ describe("AIM-241 source and main reconciliation", () => {
   it("pins Arelorian/WASD as normative rules and -ax1 as the canonical gameplay-engine source", () => {
     expect(baseline.sources.normativeRules).toEqual({
       repository: "OuroborosCollective/Wasd",
+      ref: "main",
       revision: "7bd039bb79681d2df342abe160579f89ca3ff8ed",
       role: "normative_rules",
     });
     expect(baseline.sources.gameplayEngine).toEqual({
       repository: "OuroborosCollective/-ax1",
+      ref: "main",
       revision: "b9a0c19cb3d2d34212075983e64891274489e32a",
       role: "canonical_gameplay_engine_source",
     });
@@ -33,6 +35,7 @@ describe("AIM-241 source and main reconciliation", () => {
   it("binds the reconcile to the exact Aurion main authority baseline and preserves old ZIP provenance only as history", () => {
     expect(baseline.sources.aurionBaseline).toEqual({
       repository: "OuroborosCollective/Echoes_of_Aurion",
+      ref: "main",
       revision: "8115ac594f2f3df91d04499fc4f4515b00427d2e",
       role: "production_authority_host",
     });
