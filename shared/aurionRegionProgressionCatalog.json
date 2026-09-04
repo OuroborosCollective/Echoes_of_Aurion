@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "rulesetVersion": "aurion-region-progression.v1",
+  "dungeonRulesetVersion": "aurion-dungeon-progression.v1",
+  "authority": "server-derived-from-global-world-plan-and-receipts",
+  "persistence": "store-deltas-and-receipts-not-full-derived-regions",
+  "regionArchetypes": [
+    "observatory_threshold",
+    "windhollow",
+    "emberfall",
+    "cinder_vault",
+    "clockwork_woods",
+    "frostcrown_march",
+    "sunwatch_bastion",
+    "whispering_frontier",
+    "tidescar_coast",
+    "starfall_ruins"
+  ],
+  "regionEvents": [
+    "caravan_fair",
+    "leyline_tempest",
+    "succession_crisis",
+    "ancestral_migration",
+    "masterwork_demand",
+    "dungeon_breach",
+    "harvest_tide",
+    "border_congress"
+  ],
+  "dungeonVariants": ["normal", "elite", "endless", "challenge"],
+  "dungeonAffixes": [
+    "volatile_leylines",
+    "ironbound_host",
+    "ancestral_echoes",
+    "famine_pressure",
+    "caravan_siege",
+    "political_unrest",
+    "masterwork_cache",
+    "shifting_paths",
+    "resonant_guardians",
+    "scarcity_bloom"
+  ],
+  "safety": {
+    "playerLevelMirroring": false,
+    "oldRegionRewardFloorBps": 7500,
+    "regionRewardCeilingBps": 25000,
+    "dungeonRewardCeilingBps": 50000,
+    "dungeonCombatBudgetCeilingBps": 60000,
+    "maxPartySize": 8,
+    "maxDungeonAffixes": 6,
+    "receiptDigestRequired": true,
+    "wallClockAuthority": false,
+    "browserRandomAuthority": false
+  },
+  "chunkPerformance": {
+    "phone": {"activeMobs": 12, "activeNpcs": 14, "activeProps": 700, "particles": 96, "remotePlayers": 12, "aoiRadiusMeters": 90, "serverTickDivisor": 4},
+    "tablet": {"activeMobs": 18, "activeNpcs": 22, "activeProps": 1200, "particles": 180, "remotePlayers": 24, "aoiRadiusMeters": 120, "serverTickDivisor": 2},
+    "desktop": {"activeMobs": 28, "activeNpcs": 36, "activeProps": 2000, "particles": 320, "remotePlayers": 48, "aoiRadiusMeters": 160, "serverTickDivisor": 1}
+  }
+}
