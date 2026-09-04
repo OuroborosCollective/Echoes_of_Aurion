@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "aim": "AIM-239",
-  "reconcileTask": "AIM-241",
-  "capturedAt": "2026-09-04",
+  "reconcileTask": "AIM-266",
+  "capturedAt": "2026-09-05",
   "authorityHierarchy": [
     "OuroborosCollective/Wasd defines normative deterministic gameplay rules",
-    "OuroborosCollective/Echoes_of_Aurion owns production auth, session, server authority, persistence, zone movement and audio",
-    "OuroborosCollective/-ax1 is the canonical gameplay and 3D engine source to be adapted behind Aurion authority"
+    "OuroborosCollective/Echoes_of_Aurion owns production auth, session, server authority, persistence, zone movement, inventory, guild custody and audio",
+    "OuroborosCollective/-ax1 is the canonical gameplay, content and 3D engine source to be adapted behind Aurion authority"
   ],
   "sources": {
     "normativeRules": {
@@ -18,13 +18,14 @@
     "gameplayEngine": {
       "repository": "OuroborosCollective/-ax1",
       "ref": "main",
-      "revision": "b9a0c19cb3d2d34212075983e64891274489e32a",
-      "role": "canonical_gameplay_engine_source"
+      "revision": "d356881538dae23c3aa97364a5596d48b6ac3079",
+      "previousRevision": "b9a0c19cb3d2d34212075983e64891274489e32a",
+      "role": "canonical_gameplay_content_engine_source"
     },
     "aurionBaseline": {
       "repository": "OuroborosCollective/Echoes_of_Aurion",
       "ref": "main",
-      "revision": "8115ac594f2f3df91d04499fc4f4515b00427d2e",
+      "revision": "d6549a2319ffc5de0e364bd54eeca8a1e4a3ed4a",
       "role": "production_authority_host"
     },
     "historicalOwnerZip": {
@@ -32,12 +33,26 @@
       "role": "superseded_historical_provenance"
     }
   },
+  "finalDelta": {
+    "manifestPath": "docs/migrations/aim239-ax1-final-delta.json",
+    "manifestSha256": "723c02d743e784067bd31e94311774da808bb5c7673100afe206f0832b123c13",
+    "commitCount": 1,
+    "changedFiles": 38,
+    "addedFiles": 10,
+    "modifiedFiles": 28,
+    "sourceCommitVerified": false,
+    "sourceCheckRuns": 0
+  },
   "bannedStandaloneAuthority": [
     "/api/player/save",
     "/api/database/configure",
     "/api/world/chunks",
     "raw DATABASE_URL in xaurion client",
     "production localStorage world state",
-    "new AudioContext in xaurion"
+    "new AudioContext in xaurion",
+    "client-selected guild owner, ruler, territory or capital",
+    "client-provided guild bank item object or balance",
+    "synthetic server hash presented as production evidence",
+    "in-memory fallback presented as persisted success"
   ]
 }
