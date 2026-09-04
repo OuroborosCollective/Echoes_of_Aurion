@@ -1,0 +1,160 @@
+    const arenaGroup = new THREE.Group();
+
+    const spireMat = new THREE.MeshStandardMaterial({
+      color: 0x581c87,
+      emissive: 0x7e22ce,
+      emissiveIntensity: 0.9,
+      roughness: 0.2,
+      metalness: 0.8,
+    });
+
+    const riftMat = new THREE.MeshStandardMaterial({
+      color: 0xa855f7,
+      emissive: 0xc084fc,
+      emissiveIntensity: 1.8,
+      wireframe: true,
+    });
+
+    // Central Boss Arena Portal (Z = 65, X = 0)
+    const bossArenaCenter = new THREE.Vector3(0, 0, 65);
+
+    // Floating Rune Monoliths around the arena perimeter
+    const numMonoliths = 8;
+    const arenaRadius = 24;
+    for (let i = 0; i < numMonoliths; i++) {
+      const angle = (i / numMonoliths) * Math.PI * 2;
+      const mx = bossArenaCenter.x + Math.cos(angle) * arenaRadius;
+      const mz = bossArenaCenter.z + Math.sin(angle) * arenaRadius;
+
+      const monoGeo = new THREE.OctahedronGeometry(1.8, 0);
+      monoGeo.scale(0.8, 3.2, 0.8);
+      const monolith = new THREE.Mesh(monoGeo, spireMat);
+      monolith.position.set(mx, 4.5, mz);
+      arenaGroup.add(monolith);
+
+      this.animatedProps.push({ mesh: monolith, rotSpeed: 0.4 + (i * 0.05) });
+
+      collisionSystem.registerObstacle({
+        id: `void_monolith_${i}`,
+        type: 'monolith',
+        x: mx,
+        z: mz,
+        radius: 1.6,
+        name: 'Leeren-Monolith',
+      });
+    }
+
+    // Central Void Rift Core Sphere
+    const riftGeo = new THREE.IcosahedronGeometry(3.5, 2);
+    const riftCore = new THREE.Mesh(riftGeo, riftMat);
+    riftCore.position.set(bossArenaCenter.x, 8, bossArenaCenter.z);
+    arenaGroup.add(riftCore);
+    this.animatedProps.push({ mesh: riftCore, rotSpeed: 1.2 });
+
+    collisionSystem.registerObstacle({
+      id: 'void_rift_pedestal',
+      type: 'monolith',
+      x: bossArenaCenter.x,
+      z: bossArenaCenter.z,
+      radius: 3.5,
+      name: 'Leerenriss-Sphäre',
+    });
+
+    // Boss Summoning Rune Ring on ground
+    const ringGeo = new THREE.RingGeometry(18, 20, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x9333ea,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.7,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.set(bossArenaCenter.x, 0.05, bossArenaCenter.z);
+    arenaGroup.add(ring);
+    this.animatedProps.push({ mesh: ring, rotSpeed: 0.2 });
+
+    this.group.add(arenaGroup);
+  }
+
+  private buildEnvironmentProps() {
+    // 1. Celestial Atmospheric Sky Dome (Fantasy Cyan/Blue Twilight Horizon)
+    const skyGeo = new THREE.SphereGeometry(300, 32, 20);
+    const skyMat = new THREE.MeshBasicMaterial({
+      color: 0x1e293b,
+      side: THREE.BackSide,
+      fog: false,
+    });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    this.group.add(sky);
+
+    // 2. Radiant Sun / Celestial Star
+    const sunGeo = new THREE.SphereGeometry(22, 16, 16);
+    const sunMat = new THREE.MeshBasicMaterial({
+      color: 0xfffbeb,
+      fog: false,
+    });
+    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+    sunMesh.position.set(90, 130, 90);
+    this.group.add(sunMesh);
+
+    // Sun Corona Halo
+    const coronaGeo = new THREE.RingGeometry(24, 38, 32);
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.55,
+      fog: false,
+    });
+    const corona = new THREE.Mesh(coronaGeo, coronaMat);
+    corona.position.set(90, 130, 90);
+    corona.lookAt(0, 0, 0);
+    this.group.add(corona);
+
+    // 3. Floating Dust & Aether Spores
+    const sporeCount = 280;
+    const sporeGeo = new THREE.BufferGeometry();
+    const sporePos = new Float32Array(sporeCount * 3);
+
+    for (let i = 0; i < sporeCount * 3; i += 3) {
+      sporePos[i] = (Math.random() - 0.5) * 240;
+      sporePos[i + 1] = Math.random() * 25 + 0.5;
+      sporePos[i + 2] = (Math.random() - 0.5) * 240;
+    }
+
+    sporeGeo.setAttribute('position', new THREE.BufferAttribute(sporePos, 3));
+    const sporeMat = new THREE.PointsMaterial({
+      color: 0x38bdf8,
+      size: 0.55,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+    });
+
+    const spores = new THREE.Points(sporeGeo, sporeMat);
+    this.group.add(spores);
+  }
+
+  public update(delta: number) {
+    this.animatedProps.forEach((prop) => {
+      prop.mesh.rotation.y += prop.rotSpeed * delta;
+    });
+  }
+
+  public getZoneName(x: number, z: number): string {
+    const distCenter = Math.hypot(x, z);
+    if (distCenter < 35) return 'Aethelgard Sanctum (Hauptstadt)';
+    if (x > 15 && z < 15 && distCenter < 95) return 'Whispering Clockwork Woods';
+    if (x < -15 && z < 35 && distCenter < 95) return 'Scorched Iron Quarry';
+    if (z > 35 && distCenter < 95) return 'Crystalline Void Spire (World Boss)';
+
+    const cx = Math.round(x / this.chunkManager.chunkSize);
+    const cz = Math.round(z / this.chunkManager.chunkSize);
+    const chunk = this.chunkManager.chunks.get(`${cx},${cz}`);
+    if (chunk) {
+      return `${chunk.kingdom} • ${chunk.landmarkName}`;
+    }
+    return 'Unkartierte Aurion-Grenzmark';
+  }
+}
