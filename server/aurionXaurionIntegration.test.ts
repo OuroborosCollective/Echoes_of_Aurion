@@ -59,4 +59,15 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("return previousEquipped ?? null;");
     expect(read("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toContain("resolveItemGlbMapping");
   });
+
+  it("pins the hash-materialized owner ZIP landscape wave and its visible world structure", () => {
+    const landscape = read("client/src/xaurion/world/OpenWorldLandscape.ts");
+    expect(sha256("client/src/xaurion/world/OpenWorldLandscape.ts")).toBe("836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207");
+    expect(landscape).toContain("buildSanctumHub");
+    expect(landscape).toContain("buildClockworkWoods");
+    expect(landscape).toContain("buildScorchedQuarry");
+    expect(landscape).toContain("buildVoidSpireArena");
+    expect(landscape).toContain("Aethelgard Aetherium-Brunnen");
+    expect(landscape).toContain("sporeCount = 280");
+  });
 });
