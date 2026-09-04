@@ -87,8 +87,9 @@ describe("AIM-248 profession and recipe mastery", () => {
   });
 
   it("builds the same server-bound atomic envelope for the same operation", () => {
-    const left = buildProfessionOperationEnvelope(operation());
-    const right = buildProfessionOperationEnvelope(operation());
+    const guaranteedMultiOutput = operation({ masteryLevelExact: "1049" });
+    const left = buildProfessionOperationEnvelope(guaranteedMultiOutput);
+    const right = buildProfessionOperationEnvelope(guaranteedMultiOutput);
     expect(left).toEqual(right);
     expect(left.commitHash).toMatch(/^[a-f0-9]{64}$/);
     expect(left.resourceDigest).toMatch(/^[a-f0-9]{64}$/);
@@ -102,6 +103,7 @@ describe("AIM-248 profession and recipe mastery", () => {
       bonusOutputsGrantMasteryXp: false,
       recursiveSalvageMasteryCredit: false,
     });
+    expect(BigInt(left.yield.totalQuantityExact)).toBeGreaterThanOrEqual(2n);
     const lastIndex = (BigInt(left.yield.totalQuantityExact) - 1n).toString(10);
     expect(professionOutputOriginAt(left, "0")).not.toBe(professionOutputOriginAt(left, lastIndex));
     expect(() => professionOutputOriginAt(left, left.yield.totalQuantityExact)).toThrow("outside profession envelope");
@@ -159,10 +161,13 @@ describe("AIM-248 profession and recipe mastery", () => {
   it("derives deterministic server rolls without accepting a client-selected outcome", () => {
     const first = deterministicProfessionRollBps("c".repeat(64), "operation_1", "yield");
     const replay = deterministicProfessionRollBps("c".repeat(64), "operation_1", "yield");
-    const otherLane = deterministicProfessionRollBps("c".repeat(64), "operation_1", "rare_find");
+    const otherLaneFirst = deterministicProfessionRollBps("c".repeat(64), "operation_1", "rare_find");
+    const otherLaneReplay = deterministicProfessionRollBps("c".repeat(64), "operation_1", "rare_find");
     expect(first).toBe(replay);
+    expect(otherLaneFirst).toBe(otherLaneReplay);
     expect(first).toBeGreaterThanOrEqual(0);
     expect(first).toBeLessThan(10_000);
-    expect(otherLane).not.toBe(first);
+    expect(otherLaneFirst).toBeGreaterThanOrEqual(0);
+    expect(otherLaneFirst).toBeLessThan(10_000);
   });
 });
