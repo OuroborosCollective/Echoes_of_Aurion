@@ -1,5 +1,6 @@
 import type { MMOEngine } from "../core/MMOEngine";
 import type { CharacterClassId } from "../types";
+import { attachAurionWorldCore } from "./aurionWorldCore";
 
 export type AurionPlayerClass = "vanguard" | "seer" | "warden";
 export type AurionQuestKey = "astral_call" | "archive_of_echoes" | "ember_key";
@@ -61,6 +62,16 @@ export function bindAurionAuthorityProjection(
 ): void {
   const player = engine.player;
   const reject = { success: false, message: "Aurion server authority is required for this action." } as const;
+  const worldCore = attachAurionWorldCore(engine);
+  const baseStop = engine.stop.bind(engine);
+  let worldCoreStopped = false;
+  engine.stop = () => {
+    if (!worldCoreStopped) {
+      worldCoreStopped = true;
+      worldCore.stop();
+    }
+    baseStop();
+  };
 
   engine.castClassSkill = index => {
     if (index >= 0 && index < 5) handlers.requestAction(String(index + 1) as AurionGameplayCommand);
