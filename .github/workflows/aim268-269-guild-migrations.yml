@@ -1,0 +1,81 @@
+name: AIM 268-269 guild migration regression
+
+on:
+  pull_request:
+    paths:
+      - "shared/guildGovernanceContract.ts"
+      - "server/guildGovernance*.ts"
+      - "server/aim268GuildGovernance*.test.ts"
+      - "server/guildBank*.ts"
+      - "server/aim269GuildBank*.test.ts"
+      - "server/_core/index.ts"
+      - "drizzle/guildGovernanceSchema.ts"
+      - "drizzle/guildBankSchema.ts"
+      - "drizzle/0029_aurion_guild_kingdom_authority.sql"
+      - "drizzle/0030_aurion_guild_bank_economy.sql"
+      - "drizzle/meta/_journal.json"
+      - "drizzle.config.ts"
+      - ".github/workflows/aim268-269-guild-migrations.yml"
+  push:
+    branches: [main]
+    paths:
+      - "shared/guildGovernanceContract.ts"
+      - "server/guildGovernance*.ts"
+      - "server/aim268GuildGovernance*.test.ts"
+      - "server/guildBank*.ts"
+      - "server/aim269GuildBank*.test.ts"
+      - "server/_core/index.ts"
+      - "drizzle/guildGovernanceSchema.ts"
+      - "drizzle/guildBankSchema.ts"
+      - "drizzle/0029_aurion_guild_kingdom_authority.sql"
+      - "drizzle/0030_aurion_guild_bank_economy.sql"
+      - "drizzle/meta/_journal.json"
+      - "drizzle.config.ts"
+      - ".github/workflows/aim268-269-guild-migrations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  guild-migration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_guild_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_guild_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify chain, types and deterministic governance contracts
+        run: |
+          set -euo pipefail
+          pnpm verify:migrations
+          pnpm check
+          pnpm vitest run server/aim268GuildGovernance.test.ts
+          if test -f server/aim269GuildBank.test.ts; then pnpm vitest run server/aim269GuildBank.test.ts; fi
+          git diff --check
+      - name: Apply the complete journal into isolated MariaDB
+        run: pnpm exec drizzle-kit migrate
+      - name: Prove transactional guild governance in MariaDB
+        run: |
+          set -euo pipefail
+          pnpm vitest run server/aim268GuildGovernanceMariaDb.test.ts
+          if test -f server/aim269GuildBankMariaDb.test.ts; then pnpm vitest run server/aim269GuildBankMariaDb.test.ts; fi
