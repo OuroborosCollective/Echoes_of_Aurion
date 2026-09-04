@@ -1,0 +1,181 @@
+ = '';
+    let materialTheme: WorldChunkData['materialTheme'] = 'grass';
+
+    const distFromOrigin = Math.hypot(cx, cz);
+
+    if (cz < -1 && cx >= 0) {
+      // North-East: Whispering Forest
+      kingdom = this.KINGDOMS[1].name;
+      biome = 'whispering_forest';
+      materialTheme = 'flower_meadow';
+      if (Math.abs(cx) + Math.abs(cz) % 3 === 0) {
+        landmarkType = 'dungeon';
+        landmarkName = `Aschengewölbe-Krypta (${cx},${cz})`;
+      } else {
+        landmarkType = 'forest';
+        landmarkName = `Flüsterwald-Dickicht (${cx},${cz})`;
+      }
+    } else if (cx < -1) {
+      // West: Emberfall March & Volcano
+      kingdom = this.KINGDOMS[2].name;
+      biome = 'emberfall_march';
+      materialTheme = 'earth';
+      if ((Math.abs(cx) + Math.abs(cz)) % 4 === 0) {
+        landmarkType = 'dungeon';
+        landmarkName = `Schmelzkern-Verlies (${cx},${cz})`;
+      } else if (Math.abs(cz) % 2 === 0) {
+        landmarkType = 'city';
+        landmarkName = `Emberfall-Außenposten (${cx},${cz})`;
+      } else {
+        landmarkType = 'quarry';
+        landmarkName = `Scorched Crag Quarry (${cx},${cz})`;
+      }
+    } else if (cz > 1 && cx <= 0) {
+      // South: Sunwatch Barony & Borderlands
+      kingdom = this.KINGDOMS[3].name;
+      biome = 'sunwatch_bastion';
+      materialTheme = 'farmland';
+      if (Math.abs(cz) >= 3 && Math.abs(cx) <= 1) {
+        landmarkType = 'border';
+        landmarkName = `Landesgrenze Aurion / Sonnenwacht (${cx},${cz})`;
+      } else {
+        landmarkType = 'city';
+        landmarkName = `Bastion der Sonnenwacht (${cx},${cz})`;
+      }
+    } else {
+      // General expansions: Distribute between Forests, Cities, Dungeons, and Borders
+      const mod = Math.abs(cx * 3 + cz * 7) % 5;
+      if (mod === 0) {
+        landmarkType = 'city';
+        landmarkName = `Aethelgard Freistadt (${cx},${cz})`;
+        kingdom = this.KINGDOMS[0].name;
+        materialTheme = 'starpath';
+      } else if (mod === 1) {
+        landmarkType = 'dungeon';
+        landmarkName = `Vergessenes Runen-Dungeon (${cx},${cz})`;
+        kingdom = this.KINGDOMS[1].name;
+        materialTheme = 'earth';
+      } else if (mod === 2) {
+        landmarkType = 'forest';
+        landmarkName = `Uralter Eichenhain (${cx},${cz})`;
+        kingdom = this.KINGDOMS[1].name;
+        materialTheme = 'flower_meadow';
+      } else if (mod === 3) {
+        landmarkType = 'border';
+        landmarkName = `Reichsgrenzturm & Grenzwall (${cx},${cz})`;
+        kingdom = this.KINGDOMS[4].name;
+        materialTheme = 'starpath_crossing';
+      } else {
+        landmarkType = 'forest';
+        landmarkName = `Mondlicht-Waldung (${cx},${cz})`;
+        kingdom = this.KINGDOMS[0].name;
+        materialTheme = 'grass';
+      }
+    }
+
+    const obstacles: SolidObstacle[] = [];
+    const elevationBase = (rng() - 0.5) * 4.0;
+
+    // Generate Solid Obstacles based on landmark type
+    if (landmarkType === 'forest') {
+      // 14 to 20 solid trees, boulders, and ancient fallen trunks
+      const treeCount = 12 + Math.floor(rng() * 8);
+      for (let i = 0; i < treeCount; i++) {
+        const ox = centerX + (rng() - 0.5) * (this.chunkSize - 12);
+        const oz = centerZ + (rng() - 0.5) * (this.chunkSize - 12);
+        const radius = 0.9 + rng() * 0.5; // Solid tree trunk radius
+        obstacles.push({
+          id: `tree_${chunkKey}_${i}`,
+          type: 'tree',
+          x: ox,
+          z: oz,
+          radius,
+          height: 7.0 + rng() * 4.0,
+          name: 'Flüsterwald-Baum',
+          chunkKey,
+        });
+      }
+      // 4 to 6 solid mossy rock boulders
+      const rockCount = 3 + Math.floor(rng() * 4);
+      for (let i = 0; i < rockCount; i++) {
+        const ox = centerX + (rng() - 0.5) * (this.chunkSize - 16);
+        const oz = centerZ + (rng() - 0.5) * (this.chunkSize - 16);
+        const radius = 2.0 + rng() * 1.5;
+        obstacles.push({
+          id: `rock_${chunkKey}_${i}`,
+          type: 'rock',
+          x: ox,
+          z: oz,
+          radius,
+          height: 3.5,
+          name: 'Moosiger Granitfelsen',
+          chunkKey,
+        });
+      }
+    } else if (landmarkType === 'city') {
+      // 3 to 5 stone buildings, 2 guard towers, and stone walls
+      const buildingCount = 3 + Math.floor(rng() * 3);
+      for (let i = 0; i < buildingCount; i++) {
+        const angle = (i / buildingCount) * Math.PI * 2;
+        const dist = 18 + rng() * 12;
+        const ox = centerX + Math.cos(angle) * dist;
+        const oz = centerZ + Math.sin(angle) * dist;
+        obstacles.push({
+          id: `bldg_${chunkKey}_${i}`,
+          type: 'building',
+          x: ox,
+          z: oz,
+          radius: 5.5, // 11m building bounding box
+          height: 7.0,
+          name: 'Stadtgebäude / Zunfthaus',
+          chunkKey,
+        });
+      }
+      // 2 Guard Watchtowers
+      for (let i = 0; i < 2; i++) {
+        const ox = centerX + (i === 0 ? -24 : 24);
+        const oz = centerZ + (i === 0 ? -24 : 24);
+        obstacles.push({
+          id: `tower_${chunkKey}_${i}`,
+          type: 'tower',
+          x: ox,
+          z: oz,
+          radius: 3.2,
+          height: 12.0,
+          name: 'Königlicher Wachturm',
+          chunkKey,
+        });
+      }
+    } else if (landmarkType === 'dungeon') {
+      // Dungeon Gateway Arch & 4 Sentinel Pillars
+      obstacles.push({
+        id: `dungeon_gate_${chunkKey}`,
+        type: 'dungeon_gate',
+        x: centerX,
+        z: centerZ,
+        radius: 4.8, // Solid gateway arch structure
+        height: 9.0,
+        name: 'Aschengewölbe-Dungeontor',
+        chunkKey,
+      });
+      // 4 Surrounding Rune Obelisks / Pillars
+      const pillarOffsets = [
+        { dx: -12, dz: -12 },
+        { dx: 12, dz: -12 },
+        { dx: -12, dz: 12 },
+        { dx: 12, dz: 12 },
+      ];
+      pillarOffsets.forEach((po, idx) => {
+        obstacles.push({
+          id: `pillar_${chunkKey}_${idx}`,
+          type: 'ruin_pillar',
+          x: centerX + po.dx,
+          z: centerZ + po.dz,
+          radius: 1.6,
+          height: 5.5,
+          name: 'Wächter-Monolith',
+          chunkKey,
+        });
+      });
+    } else if (landmarkType === 'border') {
+      
