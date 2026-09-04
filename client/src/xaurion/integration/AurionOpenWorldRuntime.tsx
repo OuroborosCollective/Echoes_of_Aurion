@@ -12,6 +12,13 @@ import { NPCDialogueModal } from "../components/NPCDialogueModal";
 import { QuestLogModal } from "../components/QuestLogModal";
 import { WorldMapModal } from "../components/WorldMapModal";
 import { PartyModal } from "../components/PartyModal";
+import {
+  ax1MovementToAurionIntent,
+  aurionClassForAx1,
+  aurionQuestKey,
+  bindAurionAuthorityProjection,
+  type AurionGameplayCommand,
+} from "./aurionAuthorityAdapter";
 import type {
   CharacterClassId,
   ChatMessage,
@@ -76,6 +83,7 @@ export default function AurionOpenWorldRuntime() {
   const engineRef = useRef<MMOEngine | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
   const keysRef = useRef(new Set<string>());
+  const virtualInputRef = useRef({ forward: 0, right: 0 });
   const connectedOnceRef = useRef(false);
 
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
@@ -108,6 +116,21 @@ export default function AurionOpenWorldRuntime() {
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
+  const choosePlayerClass = trpc.player.chooseClass.useMutation();
+  const acceptGameplayQuest = trpc.gameplay.acceptQuest.useMutation();
+
+  const requestAuthoritativeAction = useCallback((command: AurionGameplayCommand) => {
+    window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source: "human" as const } }));
+  }, []);
+
+  const requestAuthoritativeMount = useCallback(() => {
+    engineRef.current?.addChatMessage("system", "Aurion", "Mount bleibt auf dem -ax1-Keybind Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.");
+    window.dispatchEvent(new CustomEvent("aurion:xaurion-mount-intent", { detail: { source: "human" as const } }));
+  }, []);
+
+  const rejectLocalGameplayWrite = useCallback((label: string) => {
+    engineRef.current?.addChatMessage("system", "Aurion", `${label} wartet auf den serverautoritativen Migrationspfad; der Client schreibt keinen Ersatzstatus.`);
+  }, []);
 
   useEffect(() => {
     const onLoad = (event: Event) => {
@@ -139,6 +162,10 @@ export default function AurionOpenWorldRuntime() {
     try {
       const engine = new MMOEngine(containerRef.current, currentClassId);
       engineRef.current = engine;
+      bindAurionAuthorityProjection(engine, {
+        requestAction: requestAuthoritativeAction,
+        requestMount: requestAuthoritativeMount,
+      });
       setEquipment({ ...engine.player.equipment });
       setInventory([...engine.player.inventory]);
       setStats({ ...engine.player.stats, currentZone: activation.displayName ?? engine.player.stats.currentZone });
@@ -171,8 +198,9 @@ export default function AurionOpenWorldRuntime() {
       engineRef.current?.stop();
       engineRef.current = null;
       keysRef.current.clear();
+      virtualInputRef.current = { forward: 0, right: 0 };
     };
-  }, [activation]);
+  }, [activation, requestAuthoritativeAction, requestAuthoritativeMount]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -237,47 +265,52 @@ export default function AurionOpenWorldRuntime() {
     zoneClientRef.current?.sendMovement(input);
   }, []);
 
+  const publishAx1MovementIntent = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const keys = keysRef.current;
+    const virtual = virtualInputRef.current;
+    const forward = virtual.forward + (keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0);
+    const right = virtual.right + (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+    sendAuthoritativeMovement(ax1MovementToAurionIntent(engine.cameraYaw, forward, right));
+  }, [sendAuthoritativeMovement]);
+
   useEffect(() => {
     if (!activation) return;
-    const publish = () => {
-      const keys = keysRef.current;
-      const input: ZoneMovementInput = {
-        x: ((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0)) as -1 | 0 | 1,
-        z: ((keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0)) as -1 | 0 | 1,
-      };
-      sendAuthoritativeMovement(input);
-    };
     const down = (event: KeyboardEvent) => {
       if (event.repeat || ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase())) return;
       const key = event.key.toLowerCase();
       if (!/[wasd]/.test(key) || key.length !== 1) return;
       keysRef.current.add(key);
-      publish();
+      publishAx1MovementIntent();
     };
     const up = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       if (!/[wasd]/.test(key) || key.length !== 1) return;
       keysRef.current.delete(key);
-      publish();
+      publishAx1MovementIntent();
     };
+    const cameraFollowTimer = window.setInterval(() => {
+      const virtual = virtualInputRef.current;
+      if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) publishAx1MovementIntent();
+    }, 100);
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     return () => {
+      window.clearInterval(cameraFollowTimer);
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       sendAuthoritativeMovement({ x: 0, z: 0 });
       keysRef.current.clear();
+      virtualInputRef.current = { forward: 0, right: 0 };
     };
-  }, [activation, sendAuthoritativeMovement]);
+  }, [activation, publishAx1MovementIntent, sendAuthoritativeMovement]);
 
   const handleVirtualMove = useCallback((forward: number, right: number) => {
+    virtualInputRef.current = { forward, right };
     engineRef.current?.setVirtualMovement(forward, right);
-    const input: ZoneMovementInput = {
-      x: right > 0.15 ? 1 : right < -0.15 ? -1 : 0,
-      z: forward > 0.15 ? -1 : forward < -0.15 ? 1 : 0,
-    };
-    sendAuthoritativeMovement(input);
-  }, [sendAuthoritativeMovement]);
+    publishAx1MovementIntent();
+  }, [publishAx1MovementIntent]);
 
   const handleInteract = useCallback(() => {
     const result = engineRef.current?.interactNearby();
@@ -288,48 +321,47 @@ export default function AurionOpenWorldRuntime() {
   }, []);
 
   const handleSelectClass = useCallback((classId: CharacterClassId) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.player.setClass(classId);
-    setCurrentClassId(classId);
-    setStats({ ...engine.player.stats });
-  }, []);
+    const playerClass = aurionClassForAx1(classId);
+    if (!playerClass) {
+      rejectLocalGameplayWrite("Diese -ax1-Klasse");
+      return;
+    }
+    choosePlayerClass.mutate({ playerClass }, {
+      onSuccess: () => {
+        void playerSnapshot.refetch();
+        setClassOpen(false);
+      },
+      onError: () => rejectLocalGameplayWrite("Klassenwahl"),
+    });
+  }, [choosePlayerClass, playerSnapshot, rejectLocalGameplayWrite]);
 
-  const handleEquip = useCallback((item: RPGItem) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.equipItem(item);
-    setEquipment({ ...engine.player.equipment });
-    setInventory([...engine.player.inventory]);
-    setStats({ ...engine.player.stats });
-  }, []);
+  const handleEquip = useCallback((_item: RPGItem) => {
+    rejectLocalGameplayWrite("Ausrüstungswechsel");
+  }, [rejectLocalGameplayWrite]);
 
-  const handleUnequip = useCallback((slot: keyof EquipmentState) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.unequipItem(String(slot));
-    setEquipment({ ...engine.player.equipment });
-    setInventory([...engine.player.inventory]);
-    setStats({ ...engine.player.stats });
-  }, []);
+  const handleUnequip = useCallback((_slot: keyof EquipmentState) => {
+    rejectLocalGameplayWrite("Ausrüstungswechsel");
+  }, [rejectLocalGameplayWrite]);
 
   const handleSendMessage = useCallback((text: string, channel: ChatMessage["channel"]) => {
     engineRef.current?.addChatMessage(channel, user?.name || "Explorer", text);
   }, [user?.name]);
 
   const handleAcceptQuest = useCallback((quest: Quest) => {
-    const engine = engineRef.current;
-    if (!engine || engine.quests.some(candidate => candidate.id === quest.id)) return;
-    engine.quests.push({ ...quest });
-    engine.addChatMessage("system", "Quest", `Accepted: ${quest.title}`);
-  }, []);
+    const questKey = aurionQuestKey(quest.id);
+    if (!questKey) {
+      rejectLocalGameplayWrite("Diese -ax1-Quest");
+      return;
+    }
+    acceptGameplayQuest.mutate({ questKey }, {
+      onSuccess: () => engineRef.current?.addChatMessage("system", "Aurion", `Server bestätigt Quest: ${quest.title}`),
+      onError: () => rejectLocalGameplayWrite("Questannahme"),
+    });
+  }, [acceptGameplayQuest, rejectLocalGameplayWrite]);
 
-  const handleBuyItem = useCallback((item: RPGItem) => {
-    const engine = engineRef.current;
-    if (!engine || engine.player.stats.gold < item.valueGold) return;
-    engine.player.stats.gold -= item.valueGold;
-    engine.player.inventory.push(item);
-  }, []);
+  const handleBuyItem = useCallback((_item: RPGItem) => {
+    rejectLocalGameplayWrite("Händlerkauf");
+  }, [rejectLocalGameplayWrite]);
 
   const worldLabel = useMemo(() => activation?.displayName ?? "Aurion Open World", [activation?.displayName]);
   if (!activation) return null;
@@ -360,10 +392,10 @@ export default function AurionOpenWorldRuntime() {
           floatingTexts={floatingTexts}
           partyMembers={partyMembers}
           dayNightInfo={dayNightInfo}
-          onCastSkill={index => engineRef.current?.castClassSkill(index)}
+          onCastSkill={index => index >= 0 && index < 5 && requestAuthoritativeAction(String(index + 1) as AurionGameplayCommand)}
           onCycleTarget={() => engineRef.current?.cycleTarget()}
           onVirtualMove={handleVirtualMove}
-          onToggleMount={() => engineRef.current?.toggleMount()}
+          onToggleMount={requestAuthoritativeMount}
           onInteract={handleInteract}
           onOpenInventory={() => setInventoryOpen(true)}
           onOpenCharacter={() => setCharacterOpen(true)}
@@ -375,13 +407,13 @@ export default function AurionOpenWorldRuntime() {
         />
       )}
 
-      {stats && equipment && <InventoryModal isOpen={inventoryOpen} onClose={() => setInventoryOpen(false)} equipment={equipment} inventory={inventory} gold={stats.gold} onEquip={handleEquip} onUnequip={handleUnequip} onUseConsumable={item => { engineRef.current?.player.useConsumable(item); if (engineRef.current) { setInventory([...engineRef.current.player.inventory]); setStats({ ...engineRef.current.player.stats }); } }} onDiscard={itemId => { const engine = engineRef.current; if (!engine) return; engine.player.inventory = engine.player.inventory.filter(item => item.id !== itemId); setInventory([...engine.player.inventory]); }} onSortInventory={mode => engineRef.current?.sortInventory(mode)} />}
-      {stats && <CharacterModal isOpen={characterOpen} onClose={() => setCharacterOpen(false)} stats={stats} currentClassId={currentClassId} onAllocateStatPoint={attribute => { const result = engineRef.current?.player.allocateStatPoint(attribute) ?? { success: false, message: "Engine unavailable" }; if (engineRef.current) setStats({ ...engineRef.current.player.stats }); return result; }} onUnlockMilestoneSkill={skillId => { const result = engineRef.current?.player.unlockMilestoneSkill(skillId) ?? { success: false, message: "Engine unavailable" }; if (engineRef.current) setStats({ ...engineRef.current.player.stats }); return result; }} onEquipSkill={(slot, skill) => { engineRef.current?.player.equipSkillToHotbar(slot, skill); if (engineRef.current) setStats({ ...engineRef.current.player.stats }); }} />}
+      {stats && equipment && <InventoryModal isOpen={inventoryOpen} onClose={() => setInventoryOpen(false)} equipment={equipment} inventory={inventory} gold={stats.gold} onEquip={handleEquip} onUnequip={handleUnequip} onUseConsumable={() => rejectLocalGameplayWrite("Verbrauchsgegenstand")} onDiscard={() => rejectLocalGameplayWrite("Gegenstand verwerfen")} onSortInventory={mode => engineRef.current?.sortInventory(mode)} />}
+      {stats && <CharacterModal isOpen={characterOpen} onClose={() => setCharacterOpen(false)} stats={stats} currentClassId={currentClassId} onAllocateStatPoint={() => ({ success: false, message: "Aurion server authority is required for stat allocation." })} onUnlockMilestoneSkill={() => ({ success: false, message: "Aurion server authority is required for skill unlocks." })} onEquipSkill={() => rejectLocalGameplayWrite("Skill-Loadout")} />}
       <ClassSelectModal isOpen={classOpen} onClose={() => setClassOpen(false)} currentClassId={currentClassId} onSelectClass={handleSelectClass} />
       {stats && <NPCDialogueModal isOpen={dialogueOpen} onClose={() => setDialogueOpen(false)} npc={activeNPC} activeQuests={quests} playerGold={stats.gold} playerLevel={stats.level} genkitAdapter={engineRef.current?.genkitAdapter} onAcceptQuest={handleAcceptQuest} onBuyItem={handleBuyItem} />}
       <QuestLogModal isOpen={questsOpen} onClose={() => setQuestsOpen(false)} quests={quests} />
       {stats && <WorldMapModal isOpen={mapOpen} onClose={() => setMapOpen(false)} playerStats={stats} npcs={engineRef.current?.npcs ?? []} chunkManager={engineRef.current?.landscape.chunkManager ?? null} />}
-      <PartyModal isOpen={partyOpen} onClose={() => setPartyOpen(false)} partyMembers={partyMembers} availablePlayers={simPlayers} onInvitePlayer={player => engineRef.current?.partyManager.inviteMember(player)} onRemoveMember={memberId => engineRef.current?.partyManager.removeMember(memberId)} onLeaveParty={() => engineRef.current?.partyManager.leaveParty()} onPromoteLeader={memberId => engineRef.current?.partyManager.promoteToLeader(memberId)} />
+      <PartyModal isOpen={partyOpen} onClose={() => setPartyOpen(false)} partyMembers={partyMembers} availablePlayers={simPlayers} onInvitePlayer={() => rejectLocalGameplayWrite("Party-Einladung")} onRemoveMember={() => rejectLocalGameplayWrite("Party-Änderung")} onLeaveParty={() => rejectLocalGameplayWrite("Party verlassen")} onPromoteLeader={() => rejectLocalGameplayWrite("Party-Leitung")} />
     </section>
   );
 }
