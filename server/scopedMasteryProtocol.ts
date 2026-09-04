@@ -69,7 +69,6 @@ const safeToken = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const digestPattern = /^[a-f0-9]{64}$/;
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 const hash = (parts: readonly string[]): string => createHash("sha256").update(parts.join("\u001f"), "utf8").digest("hex");
-const masteryEventKey = (receiptId: string, idempotencyKey: string): string => `${receiptId}\u001e${idempotencyKey}`;
 
 export function scopedMasteryKey(scopeType: MasteryScopeType, scopeId: string): ScopedMasteryKey {
   if (!(masteryScopeTypes as readonly string[]).includes(scopeType) || !safeId.test(scopeId)) throw new Error("invalid mastery scope");
@@ -77,6 +76,7 @@ export function scopedMasteryKey(scopeType: MasteryScopeType, scopeId: string): 
 }
 
 export function canonicalScopedMasteryKey(key: ScopedMasteryKey): string {
+  if (key.version !== 1) throw new Error("unsupported mastery key version");
   const canonical = scopedMasteryKey(key.scopeType, key.scopeId);
   return `v${canonical.version}:${canonical.scopeType}:${canonical.scopeId}`;
 }
@@ -147,17 +147,27 @@ function assertEventIdentity(event: ScopedMasteryEvent): void {
   if (!Number.isSafeInteger(event.resolutionIndex) || event.resolutionIndex < 0) throw new Error("invalid mastery resolutionIndex");
 }
 
+function sameAppliedEvent(left: AppliedMasteryEvent, right: AppliedMasteryEvent): boolean {
+  return left.eventDigest === right.eventDigest
+    && left.receiptId === right.receiptId
+    && left.idempotencyKey === right.idempotencyKey
+    && left.resolutionIndex === right.resolutionIndex;
+}
+
 function canonicalAppliedEvents(events: readonly AppliedMasteryEvent[] | undefined): readonly AppliedMasteryEvent[] {
-  const byKey = new Map<string, AppliedMasteryEvent>();
-  for (const event of events ?? []) {
-    if (!safeToken.test(event.receiptId) || !safeToken.test(event.idempotencyKey) || !digestPattern.test(event.eventDigest) || !Number.isSafeInteger(event.resolutionIndex) || event.resolutionIndex < 0) throw new Error("invalid applied mastery event");
-    const expectedKey = masteryEventKey(event.receiptId, event.idempotencyKey);
-    if (event.eventKey !== expectedKey) throw new Error("invalid applied mastery event key");
-    const prior = byKey.get(event.eventKey);
-    if (prior && prior.eventDigest !== event.eventDigest) throw new Error("MASTERY_IDEMPOTENCY_CONFLICT");
-    byKey.set(event.eventKey, Object.freeze({ ...event }));
+  const byIdempotency = new Map<string, AppliedMasteryEvent>();
+  const byReceipt = new Map<string, AppliedMasteryEvent>();
+  for (const raw of events ?? []) {
+    if (!safeToken.test(raw.receiptId) || !safeToken.test(raw.idempotencyKey) || !digestPattern.test(raw.eventDigest) || !Number.isSafeInteger(raw.resolutionIndex) || raw.resolutionIndex < 0) throw new Error("invalid applied mastery event");
+    if (raw.eventKey !== raw.idempotencyKey) throw new Error("invalid applied mastery event key");
+    const event = Object.freeze({ ...raw });
+    const priorByIdempotency = byIdempotency.get(event.idempotencyKey);
+    const priorByReceipt = byReceipt.get(event.receiptId);
+    if ((priorByIdempotency && !sameAppliedEvent(priorByIdempotency, event)) || (priorByReceipt && !sameAppliedEvent(priorByReceipt, event))) throw new Error("MASTERY_IDEMPOTENCY_CONFLICT");
+    byIdempotency.set(event.idempotencyKey, event);
+    byReceipt.set(event.receiptId, event);
   }
-  return Object.freeze(Array.from(byKey.values()).sort((left, right) => compareText(left.eventKey, right.eventKey)));
+  return Object.freeze(Array.from(byIdempotency.values()).sort((left, right) => compareText(left.eventKey, right.eventKey)));
 }
 
 function masteryEventDigest(event: ScopedMasteryEvent, eligibility: MasteryEligibility): string {
@@ -196,7 +206,9 @@ export function resolveScopedMastery(input: Readonly<{
   let lifetimeUses = exact(input.current?.lifetimeUsesExact ?? "0", "lifetimeUsesExact");
   let qualityScore = exact(input.current?.qualityScoreExact ?? "0", "qualityScoreExact");
   let contextMetrics = canonicalMetrics(input.current?.contextMetricsExact);
-  const appliedByKey = new Map(canonicalAppliedEvents(input.current?.appliedEvents).map(event => [event.eventKey, event] as const));
+  const currentEvents = canonicalAppliedEvents(input.current?.appliedEvents);
+  const appliedByIdempotency = new Map(currentEvents.map(event => [event.idempotencyKey, event] as const));
+  const appliedByReceipt = new Map(currentEvents.map(event => [event.receiptId, event] as const));
 
   const ordered = input.events.slice().sort((left, right) => left.resolutionIndex - right.resolutionIndex || compareText(left.receiptId, right.receiptId) || compareText(left.idempotencyKey, right.idempotencyKey));
   for (const event of ordered) {
@@ -204,11 +216,19 @@ export function resolveScopedMastery(input: Readonly<{
     assertEventIdentity(event);
     const eligibility = evaluateMasteryEligibility(event);
     if (!eligibility.eligible) continue;
-    const identity = masteryEventKey(event.receiptId, event.idempotencyKey);
     const eventDigest = masteryEventDigest(event, eligibility);
-    const prior = appliedByKey.get(identity);
-    if (prior) {
-      if (prior.eventDigest !== eventDigest) throw new Error("MASTERY_IDEMPOTENCY_CONFLICT");
+    const appliedEvent: AppliedMasteryEvent = Object.freeze({
+      eventKey: event.idempotencyKey,
+      eventDigest,
+      receiptId: event.receiptId,
+      idempotencyKey: event.idempotencyKey,
+      resolutionIndex: event.resolutionIndex,
+    });
+    const priorByIdempotency = appliedByIdempotency.get(event.idempotencyKey);
+    const priorByReceipt = appliedByReceipt.get(event.receiptId);
+    if (priorByIdempotency || priorByReceipt) {
+      const prior = priorByIdempotency ?? priorByReceipt!;
+      if (!sameAppliedEvent(prior, appliedEvent)) throw new Error("MASTERY_IDEMPOTENCY_CONFLICT");
       continue;
     }
 
@@ -216,11 +236,12 @@ export function resolveScopedMastery(input: Readonly<{
     lifetimeUses += exact(event.useCountExact ?? "1", "useCountExact");
     qualityScore += exact(event.qualityDeltaExact ?? "0", "qualityDeltaExact");
     contextMetrics = mergeMetrics(contextMetrics, event.contextMetricsExact);
-    appliedByKey.set(identity, Object.freeze({ eventKey: identity, eventDigest, receiptId: event.receiptId, idempotencyKey: event.idempotencyKey, resolutionIndex: event.resolutionIndex }));
+    appliedByIdempotency.set(event.idempotencyKey, appliedEvent);
+    appliedByReceipt.set(event.receiptId, appliedEvent);
   }
 
-  const appliedEvents = Object.freeze(Array.from(appliedByKey.values()).sort((left, right) => compareText(left.eventKey, right.eventKey)));
-  const appliedReceiptIds = Object.freeze(Array.from(new Set(appliedEvents.map(event => event.receiptId))).sort(compareText));
+  const appliedEvents = Object.freeze(Array.from(appliedByIdempotency.values()).sort((left, right) => compareText(left.eventKey, right.eventKey)));
+  const appliedReceiptIds = Object.freeze(appliedEvents.map(event => event.receiptId).sort(compareText));
   const stateHash = hash([
     SCOPED_MASTERY_RULESET_VERSION,
     input.actorId,
@@ -231,7 +252,7 @@ export function resolveScopedMastery(input: Readonly<{
     lifetimeUses.toString(10),
     qualityScore.toString(10),
     ...Object.entries(contextMetrics).map(([key, value]) => `${key}:${value}`),
-    ...appliedEvents.map(event => `${event.eventKey}:${event.eventDigest}:${event.resolutionIndex}`),
+    ...appliedEvents.map(event => `${event.eventKey}:${event.eventDigest}:${event.receiptId}:${event.resolutionIndex}`),
   ]);
 
   return Object.freeze({
