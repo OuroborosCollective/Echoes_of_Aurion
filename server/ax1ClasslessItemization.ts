@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { advanceExactSkillProgression, type ExactProgression } from "./wasdAurionSkillProgressionProtocol";
-import { resolveLoot, setBonusForOwnedPieces, type LootResolution } from "./endgameProtocol";
+import { resolveLoot, setBonusForOwnedPieces, type LootAffix, type LootResolution } from "./endgameProtocol";
 
 export const AX1_CLASSLESS_ITEMIZATION_RULESET = "aurion-ax1-classless-itemization.v1" as const;
 export const classlessWeaponTracks = ["blade", "arcane", "marksmanship", "heavy_tech"] as const;
@@ -35,12 +35,13 @@ export function itemQualityScoreExact(input: Readonly<{ itemLevelExact: string; 
   return (item * 10_000n + craft * 125n + ascension * 25n).toString(10);
 }
 
+export type ClasslessLootResolution = Readonly<Omit<LootResolution, "affixes"> & { affixes: readonly Readonly<LootAffix>[] }>;
 export type ClasslessLoot = Readonly<{
   source: LootSource;
   regionKey: string;
   itemLevelExact: string;
   powerBudgetBps: number;
-  resolution: LootResolution;
+  resolution: ClasslessLootResolution;
   deterministicHash: string;
 }>;
 
@@ -72,7 +73,11 @@ export function resolveClasslessLoot(input: Readonly<{ serverSeed: string; sourc
     String(qualityRoll), String(affixRoll), itemLevelExact, resolution.baseItemKey, resolution.quality,
     resolution.setKey ?? "none", ...resolution.affixes.map(affix => `${affix.slot}:${affix.key}`),
   ].join("\u001f"), "utf8").digest("hex");
-  return Object.freeze({ source: input.source, regionKey: input.regionKey, itemLevelExact, powerBudgetBps: powerBudget[input.source], resolution: Object.freeze({ ...resolution, affixes: Object.freeze(resolution.affixes.map(affix => Object.freeze({ ...affix, stats: Object.freeze({ ...affix.stats }) }))) }), deterministicHash });
+  const frozenResolution: ClasslessLootResolution = Object.freeze({
+    ...resolution,
+    affixes: Object.freeze(resolution.affixes.map(affix => Object.freeze({ ...affix, stats: Object.freeze({ ...affix.stats }) }))),
+  });
+  return Object.freeze({ source: input.source, regionKey: input.regionKey, itemLevelExact, powerBudgetBps: powerBudget[input.source], resolution: frozenResolution, deterministicHash });
 }
 
 /** Weapon use is track-scoped, never class-gated. Starter class is presentation/archetype only. */
