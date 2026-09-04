@@ -63,6 +63,7 @@ suite("AIM-268 MariaDB guild governance transaction", () => {
   });
 
   it("does not let a normal member plan a territory mutation", async () => {
-    await expect(store.plan(otherUserId, { operation: "claim_territory", expectedRevisionExact: "7", idempotencyKey: "aim268-member-claim", payload: { worldId: "aim268-world", chunkX: 3, chunkZ: 1 } })).rejects.toThrow("GUILD_CAPABILITY_REQUIRED");
+    const current = await store.read(otherUserId, guildId);
+    await expect(store.plan(otherUserId, { operation: "claim_territory", expectedRevisionExact: current.revisionExact, idempotencyKey: "aim268-member-claim", payload: { worldId: "aim268-world", chunkX: 3, chunkZ: 1 } })).rejects.toThrow("GUILD_CAPABILITY_REQUIRED");
   });
 });
