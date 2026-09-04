@@ -118,9 +118,10 @@ export function normalizeGuildGovernancePayload(operation: GuildGovernanceOperat
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("governance payload must be an object");
   const payload = raw as Record<string, unknown>;
   if (operation === "claim_territory") {
-    rejectUnknownKeys(payload, ["worldId", "chunkX", "chunkZ"]);
+    rejectUnknownKeys(payload, ["worldId", "chunkX", "chunkZ", "territoryId"]);
     assertId(payload.worldId, "worldId"); assertWhole(payload.chunkX, "chunkX"); assertWhole(payload.chunkZ, "chunkZ");
     const territoryId = guildTerritoryId(payload.worldId, payload.chunkX, payload.chunkZ);
+    if (payload.territoryId !== undefined && payload.territoryId !== territoryId) throw new Error("derived territoryId does not match canonical coordinates");
     return freezeRecord({ territoryId, worldId: payload.worldId, chunkX: payload.chunkX, chunkZ: payload.chunkZ });
   }
   if (operation === "release_territory") {
