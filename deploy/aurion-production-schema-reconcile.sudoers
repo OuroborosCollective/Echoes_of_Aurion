@@ -1,2 +1,8 @@
 # Install only after the root-owned reconciliation release and runner have been verified.
 aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-production-schema-reconcile *
+
+# The post-promotion workflow may attest only one canonical 40-hex revision
+# against this fixed root-owned manifest. Character classes exclude whitespace,
+# so the argument pattern cannot absorb a second option, argument, or path.
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/grep -Fq [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f] /opt/echoes-of-aurion-schema-reconcile/current/manifest.json

@@ -21,6 +21,7 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:aurion-post-promote-readback": "vitest run server/aurionPostPromoteReadbackSudo.test.ts",
     "test:e2e": "playwright test",
     "db:push": "pnpm verify:migrations && drizzle-kit generate && drizzle-kit migrate"
   },
