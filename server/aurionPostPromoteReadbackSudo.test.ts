@@ -8,10 +8,10 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
 const reconcileSudoers = read("deploy/aurion-production-schema-reconcile.sudoers");
 const applySudoers = read("deploy/aurion-production-schema-apply.sudoers");
-const sha40Pattern = "?".repeat(40);
+const sha40Pattern = "[0-9a-f]".repeat(40);
 
 describe("Aurion post-promotion manifest readback authority", () => {
-  it("authorizes only the fixed root-owned manifest checks used by the workflow", () => {
+  it("authorizes only fixed root-owned manifest checks for a canonical SHA", () => {
     const reconcileManifest = "/opt/echoes-of-aurion-schema-reconcile/current/manifest.json";
     const applyManifest = "/opt/echoes-of-aurion-schema-apply/current/manifest.json";
 
@@ -34,12 +34,13 @@ describe("Aurion post-promotion manifest readback authority", () => {
     );
   });
 
-  it("does not grant generic root shell, Docker, test, grep, or extra-path access", () => {
+  it("rejects wildcard authority that could cross argument boundaries", () => {
     for (const policy of [reconcileSudoers, applySudoers]) {
       expect(policy).not.toContain("/bin/bash");
       expect(policy).not.toContain("/usr/bin/docker");
       expect(policy).not.toContain("/usr/bin/test *");
       expect(policy).not.toContain("/usr/bin/grep -Fq *");
+      expect(policy).not.toContain("/usr/bin/grep -Fq ?");
       expect(policy).not.toMatch(/\/usr\/bin\/grep\s+[^\n]*\s+\/[^\n]*\s+\/[^\n]*$/m);
     }
   });
