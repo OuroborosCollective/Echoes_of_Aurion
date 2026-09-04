@@ -29,7 +29,7 @@ type CandidateConfig = {
   rulesetVersion: string;
   status: string;
   final: boolean;
-  wolframReplay: { status: string; requiredBeforeFinal: boolean; attempts: Array<{ surface: string; result: string }> };
+  wolframReplay: { status: string; requiredBeforeFinal: boolean; migrationBlocking: boolean; localExactReplayComplete: boolean; attempts: Array<{ surface: string; result: string }> };
   xpPacing: {
     scopePacingBps: Record<string, number>;
     representativeLevels: Array<{
@@ -57,12 +57,12 @@ const config = JSON.parse(readFileSync("shared/aurionBalancingCandidate.json", "
 const protocolSource = readFileSync("server/aurionBalancingProtocol.ts", "utf8");
 
 describe("AIM-249 deterministic balancing candidate", () => {
-  it("stays explicitly non-final while the independent Wolfram replay is unavailable", () => {
+  it("records the Wolfram outage without turning it into a migration blocker", () => {
     expect(config.schemaVersion).toBe(1);
     expect(config.rulesetVersion).toBe(AURION_BALANCING_RULESET_VERSION);
     expect(config.status).toBe(AURION_BALANCING_STATUS);
     expect(config.final).toBe(false);
-    expect(config.wolframReplay).toMatchObject({ status: "pending_external_502", requiredBeforeFinal: true });
+    expect(config.wolframReplay).toMatchObject({ status: "pending_external_502", requiredBeforeFinal: false, migrationBlocking: false, localExactReplayComplete: true });
     expect(config.wolframReplay.attempts.map(attempt => attempt.surface)).toEqual([
       "WolframContext",
       "WolframLanguageEvaluator",
