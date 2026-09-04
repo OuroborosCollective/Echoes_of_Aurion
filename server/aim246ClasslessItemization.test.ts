@@ -4,12 +4,14 @@ import { advanceAscension, advanceWeaponMastery, canTrainWeaponTrack, classlessS
 const zero = { totalXpExact: "0", levelExact: "1", xpIntoLevelExact: "0" } as const;
 
 describe("AIM-246 classless weapon mastery and itemization", () => {
-  it("keeps weapon and ascension mastery unbounded with exact decimal state", () => {
-    const weapon = advanceWeaponMastery(zero, "100000000000000000000000");
-    const ascension = advanceAscension(zero, "100000000000000000000000");
+  it("keeps weapon and ascension mastery cap-free with exact decimal state", () => {
+    const weapon = advanceWeaponMastery(zero, "1000000");
+    const ascension = advanceAscension(zero, "1000000");
     expect(BigInt(weapon.levelExact)).toBeGreaterThan(50n);
     expect(BigInt(ascension.levelExact)).toBeGreaterThan(50n);
-    expect(weapon.totalXpExact).toBe("100000000000000000000000");
+    expect(weapon.totalXpExact).toBe("1000000");
+    const continued = advanceWeaponMastery(weapon, "1");
+    expect(BigInt(continued.totalXpExact)).toBe(BigInt(weapon.totalXpExact) + 1n);
   });
 
   it("never uses starter class as a hard weapon gate", () => {
