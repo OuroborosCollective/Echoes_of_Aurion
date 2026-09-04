@@ -4,11 +4,11 @@ import { masteryKeys, scopedMasteryKey, type ScopedMasteryKey } from "./scopedMa
 
 /** Compatibility mapping: old fixed discipline surfaces become scoped keys, not a second progression engine. */
 export function legacyDisciplineMasteryKey(disciplineId: string): ScopedMasteryKey {
+  if (disciplineId.endsWith("_armor_mastery")) return scopedMasteryKey("item", disciplineId);
   if (disciplineId.endsWith("_mastery")) return masteryKeys.weapon(disciplineId.slice(0, -"_mastery".length));
   if (["woodworking", "smithing", "weaving", "alchemy", "rune_crafting", "shaping"].includes(disciplineId)) return masteryKeys.profession(disciplineId);
   if (["council", "administration", "sovereignty", "diplomacy", "stewardship"].includes(disciplineId)) return masteryKeys.politics(disciplineId);
   if (disciplineId.endsWith("_magic")) return scopedMasteryKey("action", disciplineId);
-  if (disciplineId.endsWith("_armor_mastery")) return scopedMasteryKey("item", disciplineId);
   return scopedMasteryKey("action", disciplineId);
 }
 
