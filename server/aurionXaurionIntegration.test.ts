@@ -24,6 +24,8 @@ describe("AIM-239 xaurion integration boundary", () => {
       expect(source).not.toContain("/api/world/chunks");
       expect(source).not.toContain("DATABASE_URL");
     }
+    expect(chunks).not.toContain("localStorage");
+    expect(chunks).not.toContain("fetch(");
     expect(sync).toContain("Aurion");
   });
 
@@ -69,5 +71,20 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(landscape).toContain("buildVoidSpireArena");
     expect(landscape).toContain("Aethelgard Aetherium-Brunnen");
     expect(landscape).toContain("sporeCount = 280");
+  });
+
+  it("pins the owner ZIP chunk and collision wave while keeping Aurion persistence authoritative", () => {
+    const chunks = read("client/src/xaurion/world/WorldChunkManager.ts");
+    const collision = read("client/src/xaurion/world/WorldCollisionSystem.ts");
+    expect(sha256("client/src/xaurion/world/WorldChunkManager.ts")).toBe("e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1");
+    expect(sha256("client/src/xaurion/world/WorldCollisionSystem.ts")).toBe("edbef31c708319d91ac66d98400a84c3009adda4b2e578e50bf5b3fbd4e63883");
+    expect(chunks).toContain("Grenzmark Frostkrone");
+    expect(chunks).toContain("Schmelzkern-Verlies");
+    expect(chunks).toContain("dungeon_gate");
+    expect(chunks).toContain("border_stone");
+    expect(chunks).toContain("registerObstacles");
+    expect(chunks).toContain("new Date(0).toISOString()");
+    expect(collision).toContain("High-performance spatial-partitioned obstacle collision");
+    expect(collision).toContain("Up to 3 relaxation passes");
   });
 });
