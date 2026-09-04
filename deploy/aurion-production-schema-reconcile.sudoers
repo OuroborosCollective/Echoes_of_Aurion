@@ -1,2 +1,7 @@
 # Install only after the root-owned reconciliation release and runner have been verified.
 aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-production-schema-reconcile *
+
+# The post-promotion workflow may attest the fixed, root-owned manifest only.
+# It receives no general shell, Docker, or caller-controlled filesystem access.
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/grep -Fq * /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
