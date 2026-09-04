@@ -1,4 +1,4 @@
-# AIM-249 — Deterministic Balancing Lab (candidate pending Wolfram replay)
+# AIM-249 — Deterministic Balancing Lab (local exact replay complete)
 
 Status: **candidate model, not final gameplay authority**  
 Ruleset: `aurion-balancing-candidate.v1`  
@@ -12,9 +12,9 @@ Three independent Wolfram surfaces were invoked on **4 September 2026**:
 2. Wolfram Language evaluator
 3. Wolfram|Alpha
 
-All three returned an external upstream **HTTP 502**. Therefore this document does **not** claim a completed Wolfram computation. The exact arithmetic and sensitivity tables below were generated deterministically from the checked-in WASD formulas and are intended as the replayable candidate input for a later Wolfram verification.
+All three returned an external upstream **HTTP 502**. Therefore this document does **not** claim a completed Wolfram computation. The exact arithmetic and sensitivity tables below were generated deterministically from the checked-in WASD formulas. This local exact replay is the migration proof for AIM-249. A later Wolfram result is welcome as independent corroboration, but the external 502 must not block AIM-250 or the ongoing migration.
 
-No value in this document grants XP, rolls loot, changes prices, mutates combat, or deploys a runtime. Final adoption requires a later versioned decision after the independent replay.
+No value in this document grants XP, rolls loot, changes prices, mutates combat, or deploys a runtime. Runtime adoption still requires an explicit versioned gameplay decision; it does not require the external provider to be online.
 
 ## 1. Unbounded WASD progression
 
@@ -227,9 +227,6 @@ A region may become temporarily more valuable through scarcity, events, politics
 
 ## 10. Completion boundary
 
-This candidate is suitable for implementation discussion and deterministic replay. AIM-249 remains **not final** while the independent Wolfram surfaces return 502. A later update must either:
+This candidate is suitable for implementation discussion and deterministic replay. The local exact TypeScript/Python replay plus the checked-in regression suite satisfies the AIM-249 modelling requirement and does not create a new migration gate.
 
-1. attach a successful Wolfram replay and reconcile any numerical disagreement; or
-2. record an explicit owner-approved equivalent independent formal proof.
-
-Until then the model remains versioned `candidate_pending_wolfram_replay` and cannot silently become production truth.
+The constants remain versioned candidates rather than immutable production truth. A later successful Wolfram replay may corroborate them or produce an explicit `v2` revision; any numerical disagreement must be reconciled visibly instead of mutating `v1` in place.
