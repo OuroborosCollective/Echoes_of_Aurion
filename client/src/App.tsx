@@ -9,6 +9,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LocalAuthPanel from "./components/LocalAuthPanel";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import GlbUpload from "./pages/GlbUpload";
 import Home from "./pages/Home";
 import Operations from "./pages/Operations";
 import AurionOpenWorldRuntime from "./xaurion/integration/AurionOpenWorldRuntime";
@@ -23,6 +24,7 @@ function App() {
           <Switch>
             <Route path="/" component={Home} />
             <Route path="/ops" component={Operations} />
+            <Route path="/ops/glb-upload" component={GlbUpload} />
             <Route component={Home} />
           </Switch>
           <AurionOpenWorldRuntime />

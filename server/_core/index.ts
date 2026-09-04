@@ -10,6 +10,8 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
 import { registerAdminMcp } from "../adminMcp";
+import { registerGlbSmartUpload } from "../glbSmartUpload";
+import { registerStarterGlbRuntimeAssets } from "../starterGlbRuntimeAssets";
 import { registerZoneGateway } from "../zoneGateway";
 import { consumeZoneConnectionTicket, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 
@@ -55,8 +57,6 @@ async function startServer() {
   }
 
   const app = express();
-  // The production container is reachable only through Traefik. Trust precisely
-  // one proxy hop so HTTPS and host information survive TLS termination.
   if (process.env.NODE_ENV === "production") {
     app.set("trust proxy", parseInt(process.env.TRUST_PROXY_HOPS || "1", 10));
   }
@@ -76,7 +76,6 @@ async function startServer() {
     }
     next();
   });
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.get("/healthz", (_req, res) => res.status(200).json({
@@ -84,6 +83,8 @@ async function startServer() {
     service: "echoes-of-aurion",
     ...(releaseRevision ? { revision: releaseRevision } : {}),
   }));
+  registerGlbSmartUpload(app);
+  registerStarterGlbRuntimeAssets(app);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerMcpGateway(app);
@@ -92,7 +93,6 @@ async function startServer() {
     upsert: recordWorldPresenceLease,
     release: releaseWorldPresenceLease,
   });
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -100,7 +100,6 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {

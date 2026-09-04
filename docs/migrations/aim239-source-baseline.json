@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "aim": "AIM-239",
+  "reconcileTask": "AIM-241",
+  "capturedAt": "2026-09-04",
+  "authorityHierarchy": [
+    "OuroborosCollective/Wasd defines normative deterministic gameplay rules",
+    "OuroborosCollective/Echoes_of_Aurion owns production auth, session, server authority, persistence, zone movement and audio",
+    "OuroborosCollective/-ax1 is the canonical gameplay and 3D engine source to be adapted behind Aurion authority"
+  ],
+  "sources": {
+    "normativeRules": {
+      "repository": "OuroborosCollective/Wasd",
+      "ref": "main",
+      "revision": "7bd039bb79681d2df342abe160579f89ca3ff8ed",
+      "role": "normative_rules"
+    },
+    "gameplayEngine": {
+      "repository": "OuroborosCollective/-ax1",
+      "ref": "main",
+      "revision": "b9a0c19cb3d2d34212075983e64891274489e32a",
+      "role": "canonical_gameplay_engine_source"
+    },
+    "aurionBaseline": {
+      "repository": "OuroborosCollective/Echoes_of_Aurion",
+      "ref": "main",
+      "revision": "8115ac594f2f3df91d04499fc4f4515b00427d2e",
+      "role": "production_authority_host"
+    },
+    "historicalOwnerZip": {
+      "sha256": "739650d16dee85bb073e2c5af3c737f32573f328673c56edfe91d250719a030f",
+      "role": "superseded_historical_provenance"
+    }
+  },
+  "bannedStandaloneAuthority": [
+    "/api/player/save",
+    "/api/database/configure",
+    "/api/world/chunks",
+    "raw DATABASE_URL in xaurion client",
+    "production localStorage world state",
+    "new AudioContext in xaurion"
+  ]
+}

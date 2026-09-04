@@ -6,7 +6,7 @@ on:
       - feature/aim-239-xaurion-open-world-integration
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -21,28 +21,12 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - name: Resolve exact dependency closure
-        run: pnpm install --no-frozen-lockfile
-      - name: Persist resolved lock on branch
-        shell: bash
-        run: |
-          if ! git diff --quiet -- pnpm-lock.yaml; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add pnpm-lock.yaml
-            git commit -m "build(open-world): lock Three.js dependency closure"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
-      - name: Upload resolved lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: aim239-pnpm-lock-${{ github.sha }}
-          path: pnpm-lock.yaml
-          if-no-files-found: error
+      - name: Install exact dependency closure
+        run: pnpm install --frozen-lockfile
       - name: TypeScript
         run: pnpm check
-      - name: AIM-239 regression
-        run: pnpm vitest run server/aurionXaurionIntegration.test.ts
+      - name: AIM-239 authority and source-rebind regressions
+        run: pnpm vitest run server/aurionXaurionIntegration.test.ts server/aim239SourceRebind.test.ts
       - name: Production build
         run: pnpm build
       - name: Install Chromium for xaurion smoke
@@ -60,7 +44,7 @@ jobs:
           done
           cat /tmp/aim239-aurion.log
           exit 1
-      - name: Browser smoke the ZIP-reference world
+      - name: Browser smoke the source-bound open world
         shell: bash
         run: |
           cat > playwright.aim239.config.ts <<'EOF'
