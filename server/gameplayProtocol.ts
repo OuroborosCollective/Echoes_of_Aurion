@@ -1,3 +1,5 @@
+import { ax1DamageForAction } from "./ax1CombatAuthority";
+
 export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key";
 export type QuestState = "locked" | "available" | "active" | "completed";
 export type McpAction = "run" | "attack" | "interact" | "skill_1" | "skill_2" | "skill_3" | "skill_4" | "skill_5" | "skill_6" | "skill_7" | "skill_8" | "skill_9";
@@ -72,21 +74,6 @@ export const aurionEncounters: readonly {
   { key: "cinder_vault", name: "Aschengewölbe", enemyName: "Glutwächter", maxBossHp: 258, questKey: null, requiresDungeonKey: "ember_key" },
 ] as const;
 
-const actionDamage: Record<McpAction, number> = {
-  run: 0,
-  interact: 0,
-  attack: 17,
-  skill_1: 15,
-  skill_2: 0,
-  skill_3: 0,
-  skill_4: 0,
-  skill_5: 22,
-  skill_6: 0,
-  skill_7: 10,
-  skill_8: 29,
-  skill_9: 43,
-};
-
 export function getQuest(key: QuestKey): QuestDefinition {
   const quest = aurionQuestline.find(candidate => candidate.key === key);
   if (!quest) throw new Error("Unknown Aurion quest");
@@ -99,8 +86,9 @@ export function getEncounter(key: EncounterKey) {
   return encounter;
 }
 
+/** Damage budgets are now owned by the server-side -ax1 combat authority adapter. */
 export function damageForMcpAction(action: McpAction): number {
-  return actionDamage[action];
+  return ax1DamageForAction(action);
 }
 
 export function resolveQuestState(input: { key: QuestKey; level: number; completed: readonly QuestKey[]; active: QuestKey | null }): QuestState {
