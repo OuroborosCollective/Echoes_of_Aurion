@@ -265,52 +265,96 @@ export default function AurionOpenWorldRuntime() {
     zoneClientRef.current?.sendMovement(input);
   }, []);
 
-  const publishAx1MovementIntent = useCallback(() => {
+  const syncAx1HumanMovement = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
     const keys = keysRef.current;
     const virtual = virtualInputRef.current;
     const forward = virtual.forward + (keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0);
     const right = virtual.right + (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+    engine.setVirtualMovement(forward, right);
     sendAuthoritativeMovement(ax1MovementToAurionIntent(engine.cameraYaw, forward, right));
   }, [sendAuthoritativeMovement]);
 
   useEffect(() => {
     if (!activation) return;
+    const typing = () => ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase());
     const down = (event: KeyboardEvent) => {
-      if (event.repeat || ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase())) return;
+      if (event.repeat || typing()) return;
       const key = event.key.toLowerCase();
-      if (!/[wasd]/.test(key) || key.length !== 1) return;
-      keysRef.current.add(key);
-      publishAx1MovementIntent();
+      const engine = engineRef.current;
+      if (!engine) return;
+
+      if (["w", "a", "s", "d"].includes(key)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        keysRef.current.add(key);
+        syncAx1HumanMovement();
+        return;
+      }
+      if (key === "1" || key === "2" || key === "3" || key === "4" || key === "5") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        engine.castClassSkill(Number(key) - 1);
+        return;
+      }
+      if (event.code === "Space") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        engine.castClassSkill(2);
+        return;
+      }
+      if (key === "z") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        engine.toggleMount();
+        return;
+      }
+      if (key === "f") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const result = engine.interactNearby();
+        if (result.npcOpened) {
+          setActiveNPC(result.npcOpened);
+          setDialogueOpen(true);
+        }
+        return;
+      }
+      if (key === "tab") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        engine.cycleTarget();
+      }
     };
     const up = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (!/[wasd]/.test(key) || key.length !== 1) return;
+      if (!["w", "a", "s", "d"].includes(key)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       keysRef.current.delete(key);
-      publishAx1MovementIntent();
+      syncAx1HumanMovement();
     };
     const cameraFollowTimer = window.setInterval(() => {
       const virtual = virtualInputRef.current;
-      if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) publishAx1MovementIntent();
+      if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) syncAx1HumanMovement();
     }, 100);
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
+    window.addEventListener("keydown", down, true);
+    window.addEventListener("keyup", up, true);
     return () => {
       window.clearInterval(cameraFollowTimer);
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
+      window.removeEventListener("keydown", down, true);
+      window.removeEventListener("keyup", up, true);
+      engineRef.current?.setVirtualMovement(0, 0);
       sendAuthoritativeMovement({ x: 0, z: 0 });
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
     };
-  }, [activation, publishAx1MovementIntent, sendAuthoritativeMovement]);
+  }, [activation, sendAuthoritativeMovement, syncAx1HumanMovement]);
 
   const handleVirtualMove = useCallback((forward: number, right: number) => {
     virtualInputRef.current = { forward, right };
-    engineRef.current?.setVirtualMovement(forward, right);
-    publishAx1MovementIntent();
-  }, [publishAx1MovementIntent]);
+    syncAx1HumanMovement();
+  }, [syncAx1HumanMovement]);
 
   const handleInteract = useCallback(() => {
     const result = engineRef.current?.interactNearby();
