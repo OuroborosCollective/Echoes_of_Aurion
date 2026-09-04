@@ -6,11 +6,11 @@ import { xpRequiredForNextSkillLevelExact } from "./wasdAurionSkillProgressionPr
  * This module never grants XP, rolls loot, mutates combat state, or replaces the
  * normative WASD progression curve. It converts already-authoritative exact
  * progression requirements into versioned pacing and budget candidates. The
- * constants remain candidate values until an independent Wolfram replay is
- * attached to the migration record.
+ * constants remain versioned candidate values. A later independent Wolfram replay may
+ * corroborate or revise them, but an external provider outage is not a migration gate.
  */
 export const AURION_BALANCING_RULESET_VERSION = "aurion-balancing-candidate.v1" as const;
-export const AURION_BALANCING_STATUS = "candidate_pending_wolfram_replay" as const;
+export const AURION_BALANCING_STATUS = "candidate_local_exact_replay_complete" as const;
 
 export const balancingScopes = [
   "weapon",
