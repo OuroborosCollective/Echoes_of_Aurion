@@ -27,15 +27,15 @@ export function AurionEncounterPanel({ userId, connected, onAttack }: { userId: 
   }, [query.refetch]);
   return <section className="aurion-encounter" aria-label="Begegnung" data-state={current.state}>
     <small>{readbackLabels[current.state]}</small>
-    {active && enemy ? <><b>{enemy.enemyName}</b><progress aria-label="Bestätigte Gegnergesundheit" value={active.bossHp} max={active.maxBossHp} /><span>{active.bossHp} / {active.maxBossHp} LP</span><button disabled={!fresh || open} onClick={onAttack}>Angreifen</button></> : <span>{current.state === "live" ? "Keine aktive Begegnung" : "Begegnung wird geprüft"}</span>}
-    <button onClick={() => setOpen(true)}>Begegnungen</button>
+    {active && enemy ? <><b>{enemy.enemyName}</b><progress aria-label="Bestätigte Gegnergesundheit" value={active.bossHp} max={active.maxBossHp} /><span>{active.bossHp} / {active.maxBossHp} LP</span><button type="button" disabled={!fresh || open} onClick={onAttack}>Angreifen</button></> : <span>{current.state === "live" ? "Keine aktive Begegnung" : "Begegnung wird geprüft"}</span>}
+    <button type="button" onClick={() => setOpen(true)}>Begegnungen</button>
     {message && <span role="status">{message}</span>}
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop">
         <DialogTitle>Begegnungen</DialogTitle>
         <DialogDescription>Nimm den zugehörigen Auftrag an. Eine laufende Begegnung bleibt bei der Rückkehr zur Sternwarte gespeichert.</DialogDescription>
         {current.data?.encounters.map(encounter => <article className="aurion-authority-hud__card" key={encounter.key}><b>{encounter.name}</b><p>{encounter.enemyName}</p>
-          <button disabled={!fresh || (!encounter.available && active?.encounterKey !== encounter.key) || Boolean(active && active.encounterKey !== encounter.key)} onClick={async () => {
+          <button type="button" disabled={!fresh || (!encounter.available && active?.encounterKey !== encounter.key) || Boolean(active && active.encounterKey !== encounter.key)} onClick={async () => {
             if (!fresh) return;
             setMessage("");
             try { await start.mutateAsync({ encounterKey: encounter.key }); await query.refetch(); setOpen(false); }
