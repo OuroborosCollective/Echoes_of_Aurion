@@ -1,8 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
-import { worldNatureCollision } from "../server/worldNatureCollision";
-import manifest from "../shared/worldCollisionManifest.json";
+import { readFileSync } from "node:fs";
+const manifest = JSON.parse(
+  readFileSync("shared/worldCollisionManifest.json", "utf8")
+);
 
 test.skip(
   process.env.AURION_COLLISION_E2E !== "1",
@@ -126,13 +128,57 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
     } finally {
       await mover.keyboard.up("w");
     }
-    await expect.poll(() => current?.lastAcceptedClientSeq).toBe(stopSeq);
+    await expect
+      .poll(() => stopSeq > 0 && current?.lastAcceptedClientSeq === stopSeq)
+      .toBe(true);
     const crossed = { ...current!.position };
     expect(crossed.x).toBe(0);
     expect(crossed.z).toBeGreaterThan(-41000);
     await expect
       .poll(async () => (await evidence(mover)).center?.z, { timeout: 15000 })
       .toBe(-1);
+    const response = await mover.request.get(
+      "/api/trpc/worldAssets.region?input=" +
+        encodeURIComponent(JSON.stringify({ json: { x: 0, z: -1 } }))
+    );
+    expect(response.ok()).toBe(true);
+    const region = (await response.json()).result.data.json;
+    expect(region.collisionHash).toBe(manifest.manifestSha256);
+    const obstacle = region.placements.find(
+      (p: { assetId: string; xMm: number; zMm: number }) =>
+        p.assetId === "nature-stump-3" && p.xMm === 8000 && p.zMm === -40000
+    );
+    expect(obstacle).toBeDefined();
+    const source = manifest.colliders.find(
+      (c: { assetId: string }) => c.assetId === obstacle.assetId
+    );
+    const hull = source.hullMm.map(([x, z]: [number, number]) =>
+      obstacle.rotation === 0
+        ? [x, z]
+        : obstacle.rotation === 1
+          ? [z, -x]
+          : obstacle.rotation === 2
+            ? [-x, -z]
+            : [-z, x]
+    );
+    // Independent geometric measurement of the actual stopped snapshot. The test
+    // does not call the production collision resolver to decide its expectations.
+    const distanceToHull = (position: { x: number; z: number }) => {
+      const px = position.x - obstacle.xMm,
+        pz = position.z - obstacle.zMm;
+      return Math.min(
+        ...hull.map(([ax, az]: [number, number], i: number) => {
+          const [bx, bz] = hull[(i + 1) % hull.length],
+            dx = bx - ax,
+            dz = bz - az;
+          const t = Math.max(
+            0,
+            Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz))
+          );
+          return Math.hypot(px - ax - t * dx, pz - az - t * dz);
+        })
+      );
+    };
     await mover.keyboard.down("d");
     try {
       await expect
@@ -142,10 +188,11 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
         .poll(
           () =>
             !!current &&
-            !!worldNatureCollision.blockingObstacle(current.position, {
+            distanceToHull({
               x: current.position.x + 340,
               z: current.position.z,
-            }),
+            }) <
+              manifest.playerRadiusMm + manifest.quantizationMarginMm,
           { timeout: 8000 }
         )
         .toBe(true);
@@ -155,13 +202,16 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
     } finally {
       await mover.keyboard.up("d");
     }
-    await expect.poll(() => current?.lastAcceptedClientSeq).toBe(stopSeq);
+    await expect
+      .poll(() => stopSeq > 0 && current?.lastAcceptedClientSeq === stopSeq)
+      .toBe(true);
     const stopped = structuredClone(current!);
-    const obstacle = worldNatureCollision.blockingObstacle(stopped.position, {
-      x: stopped.position.x + 340,
-      z: stopped.position.z,
-    });
-    expect(obstacle?.assetId).toBe("nature-stump-3");
+    expect(distanceToHull(stopped.position)).toBeGreaterThanOrEqual(
+      manifest.playerRadiusMm
+    );
+    expect(distanceToHull(stopped.position)).toBeLessThan(
+      manifest.playerRadiusMm + 341
+    );
     await expect.poll(() => remote).toEqual(stopped);
     await expect
       .poll(
