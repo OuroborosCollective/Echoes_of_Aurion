@@ -56,7 +56,24 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     const open = () => { setQuestTab("contacts"); setPanel("quests"); };
     window.addEventListener("aurion:authoritative-action", refresh);
     window.addEventListener("aurion:open-world-contacts", open);
-    return () => { window.removeEventListener("aurion:authoritative-action", refresh); window.removeEventListener("aurion:open-world-contacts", open); };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName ?? "").toUpperCase();
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(activeTag)) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "i" || key === "b") { e.preventDefault(); setPanel(p => p === "inventory" ? null : "inventory"); }
+      else if (key === "c") { e.preventDefault(); setPanel(p => p === "character" ? null : "character"); }
+      else if (key === "m") { e.preventDefault(); setPanel(p => p === "map" ? null : "map"); }
+      else if (key === "j" || key === "q") { e.preventDefault(); setPanel(p => p === "quests" ? null : "quests"); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("aurion:authoritative-action", refresh);
+      window.removeEventListener("aurion:open-world-contacts", open);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [playerQuery.refetch, questQuery.refetch]);
   const profile = player.data?.profile;
   const inventory = player.data?.inventory;
@@ -74,7 +91,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       </div>
     </section>
     <nav className="aurion-authority-hud__menu" aria-label="Weltmenü" data-expanded={expandedMenu}>
-      {(Object.keys(titles) as Exclude<Panel, null>[]).map(key => { const Icon = panelIcons[key]; return <button key={key} title={titles[key]} aria-label={titles[key]} onClick={() => { setPanel(key); setExpandedMenu(false); }}><Icon size={19} /></button>; })}
+      {(Object.keys(titles) as Exclude<Panel, null>[]).map(key => {
+        const Icon = panelIcons[key];
+        const shortcut = key === "inventory" ? "I" : key === "character" ? "C" : key === "map" ? "M" : key === "quests" ? "J" : undefined;
+        const titleWithShortcut = shortcut ? `${titles[key]} [${shortcut}]` : titles[key];
+        return <button key={key} title={titleWithShortcut} aria-label={titles[key]} aria-keyshortcuts={shortcut} onClick={() => { setPanel(key); setExpandedMenu(false); }}><Icon size={19} /></button>;
+      })}
       <button className="ax1-menu-more" title="Weitere Menüs" aria-label="Weitere Menüs" aria-expanded={expandedMenu} onClick={() => setExpandedMenu(value => !value)}><Menu size={19} /></button>
       <div className="ax1-secondary-menu">
         <button title="Companion" aria-label="Companion" onClick={() => { setExpandedMenu(false); window.dispatchEvent(new Event("aurion:open-companion")); }}><Sparkles size={19} /></button>
