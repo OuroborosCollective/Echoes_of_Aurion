@@ -1,49 +1,50 @@
+---
+description: >-
+  Serverautoritäres 3D-Open-World-MMORPG mit persistenter Welt, Quests und
+  Gilden.
+---
+
 # Echoes of Aurion
 
-**Echoes of Aurion** ist ein mobiloptimiertes, isometrisches 3D-Action-Abenteuer für den Browser. Ein menschlicher Explorer und ein sichtbarer Echo Scout bilden ein Team: Der Mensch bewegt sich über WASD oder die Touch-Brücke, während der Scout über einen streng begrenzten Befehlsadapter mit `W`, `A`, `S`, `D` und ausgerüsteten Slots `1`–`9` gesteuert wird.
+**Echoes of Aurion** ist ein 3D-Open-World-MMORPG für Browser und Mobilgeräte. Du erkundest eine persistente Welt, entwickelst deinen Charakter und beeinflusst Regionen durch Quests, Kämpfe, Wirtschaft und Gilden.
 
-> Die aktuelle Veröffentlichung verwendet bewusst eine lokale, nachvollziehbare Testkopplung. Sie liest keine privaten Chat-Apps aus und führt keine verdeckten Aktionen bei LLM-Anbietern aus.
+Die Welt entsteht deterministisch aus einem versionierten Seed. Der Server autorisiert Bewegung, Kampf, Loot, Quests, Präsenz, Epochen und Weltveränderungen. Clients zeigen ausschließlich bestätigte Zustände an.
 
-## Spielinhalt
+## Die Welt von Aurion
 
-Der erste Run führt durch drei Ruinenarenen: die **Sternwarte Asterion**, die **Versunkene Archivhalle** und das **Solarium der letzten Flamme**. Jede Arena verändert Umgebung, Questziel, Sentinel-Integrität und den taktischen Druck. Schutz-, Aufklärungs- und Angriffsprotokolle erzeugen echte, sichtbare Spielwirkungen.
+Aurion besteht aus verbundenen Sektoren mit eigener Politik, Wirtschaft, Ressourcen und Dungeons. Welt-Events verändern Gefahr, Belohnungen, Knappheit und Beziehungen der Fraktionen.
 
-| Steuerung | Wirkung |
-| --- | --- |
-| `W`, `A`, `S`, `D` | Explorer bewegen; im Partner-Feed bewegt dies den Echo Scout. |
-| `F` oder Speer-Button | Explorer-Speersignal gegen den Sentinel. |
-| `1`–`9` | Ausgerüstete Partnerfähigkeiten; der Standard-Loadout nutzt `1`, `2` und `9`. |
+Die ersten Regionen sind:
 
-## Lokale Entwicklung
+1. **Schwelle der Sternwarte**
+2. **Windhollow**
+3. **Emberfall-Marsch**
+4. **Aschengewölbe**
 
-Die Anwendung basiert auf **React**, **TypeScript**, **Vite** und **Babylon.js**.
+Regionen bleiben langfristig relevant. Ressourcen, Handelsrollen, Fraktionen, Dungeons und Welt-Events bieten eigene Ziele. Mastery verbessert Zugang und Fortschritt. Sie skaliert Gegner nicht automatisch auf dein Level.
 
-```bash
-pnpm install
-pnpm dev
-```
+## Fortschritt und Aktivitäten
 
-Für die statische Produktionsfassung:
+Du baust Fortschritt über serverbestätigte Ergebnisse auf:
 
-```bash
-pnpm check
-pnpm build
-```
+* **Quests und Entscheidungen:** Fraktionsgeschichten führen über nachvollziehbare Entscheidungs- und Belohnungsbelege.
+* **Kampf und Loot:** Begegnungen erzeugen bestätigte Siege, Gegenstände, Erfahrung und Mastery-Fortschritt.
+* **Dungeons:** Normal, Elite, Herausforderung und Endlosmodus nutzen regionale Varianten und Affixe.
 
-## Architektur
+Endlosdungeons haben kein Level-Cap. Ihre sichtbaren Kampf- und Belohnungswerte bleiben begrenzt. So bleiben Wirtschaft und Lesbarkeit stabil.
 
-| Bereich | Zuständigkeit |
-| --- | --- |
-| `client/src/game/scene.ts` | Babylon-Szene, Teamakteure, Sentinel, Schadensregeln und Arenawechsel. |
-| `client/src/pages/Home.tsx` | Zugangsgate, Loadout, mobile HUD- und Befehlskonsole. |
-| `client/src/lib/ledger.ts` | Exportierbares, lokales JSON-Memory-Ledger im Browser. |
-| `MCP_GATEWAY_CONTRACT.md` | Vertrag für eine spätere, autorisierte Server-/MCP-Anbindung. |
-| `VPS_DEPLOYMENT.md` | Reversible Bereitstellungsstrategie für die statische Domainfassung. |
+## Gemeinschaft und Weltordnung
 
-## Produktionsstatus
+Gilden koordinieren Territorien, Ressourcen und Diplomatie. Ein Königreich entsteht aus mindestens sechs verbundenen Territorien derselben Gilde. Der Server prüft Mitgliedschaft, Berechtigungen, Ressourcen und Revisionen bei jeder wirksamen Aktion.
 
-Die aktuelle statische Fassung wird über [arelogic.space](https://arelogic.space) ausgeliefert. Details zu Spiel- und Arena-Entscheidungen liegen in `ARENA_DESIGN.md`, `ASSETS.md`, `STRUCTURE.md` und `PLAN.md`.
+Ein persönlicher Turm dient als geschützter Rückkehrpunkt, Lager und später gestaltbarer Raum. Er ist keine Kampfarena.
 
-## Nächste Erweiterungsstufen
+## Technik
 
-Eine reale LLM-Anbindung benötigt einen separaten, nutzerautorisierten Server-Gateway-Flow mit kurzlebigen Tokens, pro Provider geprüfter Anmeldung, strikt erlaubten Befehlen und einer klaren Einwilligungs-/Löschstrecke. Mehrspielerbetrieb und Werbeformate gehören ebenfalls in separierte, serverseitig abgesicherte Ausbauschritte.
+Die Anwendung nutzt **React**, **TypeScript**, **Vite** und **Babylon.js**. Sie streamt Welt-Chunks und passt Detailstufen an Phone, Tablet und Desktop an. Diese Budgets reduzieren Renderlast, niemals den kanonischen Weltzustand.
+
+## Aktueller Veröffentlichungsstand
+
+Die MMORPG-Systeme sind im aktuellen Aurion-Quellstand implementiert und durch Verträge sowie Tests abgesichert. Die öffentliche Auslieferung wird noch schrittweise auf die vollständige Aurion-Laufzeit umgestellt.
+
+Die derzeitige öffentliche Website enthält eine ältere statische Oberfläche. Produktionsmigrationen, die vollständige API und der End-to-End-Nachweis des MMORPG-Flows werden vor ihrer Freigabe separat verifiziert. Dadurch bleiben Konten, Fortschritt und Wirtschaft geschützt.
