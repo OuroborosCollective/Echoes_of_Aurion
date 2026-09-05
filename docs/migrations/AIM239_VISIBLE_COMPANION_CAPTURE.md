@@ -1,0 +1,12 @@
+# Companion demonstrations from the visible world
+
+The old recorder listened to the Babylon canvas even while AX1 covered it. The world now owns one renderer, so its optional learning recorder must follow that renderer's lifecycle.
+
+- The world menu opens an explicit companion recording dialog. An authenticated player first creates the existing MCP control contract, then starts recording. Issuing a contract is not proof that an external model has connected.
+- `VisibleCanvasCapture` accepts one bounded request per scheduled frame and captures the actual AX1 canvas at 256×144 with aspect-preserving letterboxing. It performs rendering only; it cannot advance the simulation, move actors, or mint gameplay receipts. Recording requires the same user's learning session and a connected zone.
+- The capture timestamp is supplied explicitly by the recorder's request boundary. It records capture-start time, a conservative lower bound for freshness: render latency cannot make an old action look fresh. No wall clock or randomness is read in the capture/identity modules. Authentication and observation-age checks still use the external operational clock.
+- The shared decode boundary accepts only bounded PNG/WebP envelopes and bounded decoded dimensions. SVG, oversized data, stale generations and mismatched timestamps are rejected. Returning, renderer failure or stopping learning suppresses pending captures.
+- Human movement changes and action intents become the existing normalized demonstration labels. Repeated movement refreshes do not continually replace an in-flight label. Unknown health, shield, companion state and phases have mask=0; only a fresh, owned native encounter can label the enemy health component.
+- The existing authenticated CompanionMemoryStore persists feature/action/state evidence under the user's identity. Images remain in the existing local demonstration dataset. This increment does not claim MariaDB migration of the file/Redis memory store, an external LLM connection, a world companion actor or complete MCP playback.
+
+Validation includes capture ownership, stop/retirement, allocation bounds, explicit timestamps, input validation and unknown-state masks. The isolated browser test creates a real account and control contract through the UI, enables learning, moves in the rendered world, verifies sixteen nonconstant image features and checks the returned memory hash against the actual persisted record. No existing user session or credential is used by the test.

@@ -1,3 +1,6 @@
+import { WORLD_DEMONSTRATION_EVENT } from "@/lib/companionWorldInputs";
+import { VisibleCanvasCapture } from "@/lib/visibleCanvasCapture";
+import { loadCompanionSession } from "@/lib/companionLearning";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Database, Radio } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -60,8 +63,10 @@ export default function AurionOpenWorldRuntime() {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
+  const zoneConnectedRef = useRef(false);
   const remotePresenceRef = useRef<RemotePresenceProjection | null>(null);
   const keysRef = useRef(new Set<string>());
+  const demonstratedMovementRef = useRef("0:0");
   const virtualInputRef = useRef({ forward: 0, right: 0 });
 
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
@@ -78,6 +83,7 @@ export default function AurionOpenWorldRuntime() {
 
   const requestAuthoritativeAction = useCallback((command: AurionGameplayCommand) => {
     if (document.querySelector('[role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]')) return;
+    window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
     window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source: "human" as const } }));
   }, []);
 
@@ -116,6 +122,7 @@ export default function AurionOpenWorldRuntime() {
     let disposed = false;
     let engine: MMOEngine | undefined;
     let remotePresence: RemotePresenceProjection | undefined;
+    let capture: VisibleCanvasCapture | undefined;
     const confirmedVisuals = new ConfirmedVisualEffects();
     const onConfirmedAction = (event: Event) => {
       if (disposed || !engine || engineRef.current !== engine) return;
@@ -126,6 +133,7 @@ export default function AurionOpenWorldRuntime() {
     };
     const fail = (error: unknown) => {
       if (disposed) return;
+      capture?.dispose();
       remotePresence?.dispose();
       remotePresenceRef.current = null;
       setRemotePlayers([]);
@@ -135,6 +143,7 @@ export default function AurionOpenWorldRuntime() {
       engineRef.current = null;
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
+      zoneConnectedRef.current = false;
       setZoneStatus("closed");
       setWebglError(runtimeIssueCode(error));
     };
@@ -151,6 +160,11 @@ export default function AurionOpenWorldRuntime() {
       remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       remotePresenceRef.current = remotePresence;
       engine.start();
+      capture = new VisibleCanvasCapture(() => {
+        if (!engine || disposed || engineRef.current !== engine) throw new Error("RETIRED_RENDERER");
+        engine.renderer.render(engine.scene, engine.camera);
+        return engine.renderer.domElement;
+      }, () => { const session = loadCompanionSession(); return !disposed && zoneConnectedRef.current && session?.userId === user?.id && session?.online === true && session?.mode === "learning"; });
       window.addEventListener("aurion:authoritative-action", onConfirmedAction);
     } catch (error) {
       fail(error);
@@ -158,6 +172,7 @@ export default function AurionOpenWorldRuntime() {
     return () => {
       disposed = true;
       window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
+      capture?.dispose();
       remotePresence?.dispose();
       if (remotePresenceRef.current === remotePresence) remotePresenceRef.current = null;
       engine?.stop();
@@ -200,6 +215,7 @@ export default function AurionOpenWorldRuntime() {
         client = new ZoneMovementClient({
           onStatus: status => {
             if (disposed) return;
+            zoneConnectedRef.current = status === "connected";
             setZoneStatus(status);
             if (status !== "connected") { remotePresenceRef.current?.clear(); setRemotePlayers([]); }
           },
@@ -232,6 +248,7 @@ export default function AurionOpenWorldRuntime() {
     });
     return () => {
       disposed = true;
+      zoneConnectedRef.current = false;
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
@@ -239,6 +256,11 @@ export default function AurionOpenWorldRuntime() {
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
+    const key = `${input.x}:${input.z}`;
+    if (key !== demonstratedMovementRef.current) {
+      demonstratedMovementRef.current = key;
+      window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "move", x: input.x, z: input.z } }));
+    }
   }, []);
 
   const syncAx1HumanMovement = useCallback(() => {

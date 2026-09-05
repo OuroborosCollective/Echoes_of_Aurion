@@ -53,10 +53,10 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
     let handle: GameHandle | null = null;
     let disposed = false;
     let captureInFlight = false;
-    const dispatchFrameResponse = (detail: CompanionFrameResponseDetail) => window.dispatchEvent(new CustomEvent(COMPANION_FRAME_RESPONSE_EVENT, { detail }));
+    const dispatchFrameResponse = (detail: CompanionFrameResponseDetail) => !disposed && window.dispatchEvent(new CustomEvent(COMPANION_FRAME_RESPONSE_EVENT, { detail }));
     const onCompanionFrameRequest = (event: Event) => {
       const detail = (event as CustomEvent<CompanionFrameRequestDetail>).detail;
-      if (!detail?.requestId) return;
+      if (!detail?.requestId || !Number.isSafeInteger(detail.captureStartedAt) || detail.captureStartedAt < 1) return;
       const activeEngine = engine;
       const camera = handle?.scene.activeCamera;
       if (!activeEngine || !camera || disposed) {
@@ -68,7 +68,7 @@ export default function GameCanvas({ characterModelUrl, arenaModelUrl }: { chara
         return;
       }
       captureInFlight = true;
-      const capturedAt = Date.now();
+      const capturedAt = detail.captureStartedAt;
       void CreateScreenshotUsingRenderTargetAsync(activeEngine, camera, { width: 256, height: 144 }, "image/webp")
         .then(frameDataUrl => dispatchFrameResponse({ requestId: detail.requestId, frameDataUrl, capturedAt }))
         .catch(() => dispatchFrameResponse({ requestId: detail.requestId, error: "capture_failed" }))

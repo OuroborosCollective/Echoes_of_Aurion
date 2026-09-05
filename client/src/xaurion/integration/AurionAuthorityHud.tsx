@@ -59,6 +59,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     </section>
     <nav className="aurion-authority-hud__menu" aria-label="Weltmenü">
       {(Object.keys(titles) as Exclude<Panel, null>[]).map(key => <button key={key} onClick={() => setPanel(key)}>{titles[key]}</button>)}
+      <button onClick={() => window.dispatchEvent(new Event("aurion:open-companion"))}>Companion</button>
       <button onClick={() => community("partners")}>Gruppe</button><button onClick={() => community("chat")}>Chat</button>
       <button onClick={() => community("market")}>Handel</button><button onClick={() => community("crafting")}>Handwerk</button>
     </nav>

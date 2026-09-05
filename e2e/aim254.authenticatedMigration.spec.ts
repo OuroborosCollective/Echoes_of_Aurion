@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
 // This test creates disposable accounts through the public registration UI.
 // It is forbidden against a production endpoint or non-isolated database.
@@ -246,5 +248,61 @@ test("native encounter survives a world return and commits the quest reward once
     expect(reward[0]).toMatchObject({ totalXp: 122, aurionPoints: 20, state: "completed" });
     expect(errors).toEqual([]);
     await testInfo.attach("encounter-readback", { body: JSON.stringify({ sessionId: before[0].id, userId: before[0].userId, resumedWithoutReset: true, questCompleted: true, reward: reward[0] }), contentType: "application/json" });
+  } finally { await page.close(); await pool.end(); }
+});
+
+test("explicit companion learning captures the visible world and stores a bounded human demonstration", async ({ page, baseURL }, testInfo) => {
+  test.setTimeout(180_000);
+  expect(baseURL).toBe("http://127.0.0.1:3000");
+  const target = new URL(process.env.DATABASE_URL ?? "");
+  expect(target.hostname).toBe("127.0.0.1"); expect(target.pathname).toBe("/aurion_browser_test");
+  const pool = createPool(process.env.DATABASE_URL!);
+  const [database] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name"); expect(database[0].name).toBe("aurion_browser_test");
+  try {
+    await page.setViewportSize({ width: 800, height: 1280 }); await page.goto("/");
+    await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("tab", { name: "Konto anlegen", exact: true }).click();
+    await dialog.getByLabel("Rufname", { exact: true }).fill("aim239_companion");
+    await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-companion-regression!");
+    await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+    await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
+    await page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true }).click();
+    const runtime = page.getByTestId("xaurion-open-world-runtime");
+    await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator("canvas")).toHaveCount(1);
+    await runtime.getByRole("button", { name: "Companion", exact: true }).click();
+    const pairingResponse = page.waitForResponse(response => response.url().includes("gateway.createSession") && response.status() === 200);
+    await dialog.getByRole("button", { name: "Companion verbinden", exact: true }).click();
+    const pairBody = await (await pairingResponse).json();
+    const pair = (Array.isArray(pairBody) ? pairBody[0] : pairBody).result.data.json;
+    expect(pair.sessionId).toMatch(/^[A-Za-z0-9_-]+$/);
+    const [gateway] = await pool.query<RowDataPacket[]>("SELECT userId FROM gatewaySessions WHERE id=?", [pair.sessionId]);
+    expect(gateway).toHaveLength(1); const userId = Number(gateway[0].userId);
+    await expect(dialog.getByText("0 lokale Beobachtungszeilen", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Aufzeichnung starten", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    const persisted = page.waitForResponse(response => response.url().includes("companion.persistObservation") && response.status() === 200, { timeout: 30_000 });
+    await page.keyboard.down("w");
+    let receipt: { memoryHash: string };
+    try { const body = await (await persisted).json(); receipt = (Array.isArray(body) ? body[0] : body).result.data.json; }
+    finally { await page.keyboard.up("w"); }
+    expect(receipt!.memoryHash).toMatch(/^[0-9a-f]{64}$/);
+    const sessionId = `cmp_${pair.sessionId}`;
+    const lines = (await readFile(`data/companion-memory/user-${userId}/${sessionId}.jsonl`, "utf8")).trim().split("\n");
+    const line = lines.find(value => createHash("sha256").update(`${value}\n`).digest("hex") === receipt!.memoryHash)!;
+    expect(line).toBeTruthy(); const observation = JSON.parse(line);
+    expect(observation.userId).toBe(userId); expect(observation.sessionId).toBe(sessionId);
+    expect(observation.featureVector).toHaveLength(16);
+    expect(observation.featureVector.every((value: number) => Number.isFinite(value) && value >= 0 && value <= 1)).toBe(true);
+    expect(new Set(observation.featureVector).size).toBeGreaterThan(1);
+    expect(observation.stateMask).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(observation.stateVector).toEqual([0, 0, 0, 0, 0, 0]);
+    await runtime.getByRole("button", { name: "Companion", exact: true }).click();
+    await expect(dialog.getByText(/^[1-9][0-9]* lokale Beobachtungszeilen$/)).toBeVisible();
+    await dialog.getByRole("button", { name: "Aufzeichnung beenden", exact: true }).click();
+    await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await expect(runtime).toHaveCount(0);
+    await testInfo.attach("visible-companion-readback", { body: JSON.stringify({ userId, sessionId, memoryHash: receipt!.memoryHash, featureCount: 16, unknownStateMasked: true, rendererCount: 1 }), contentType: "application/json" });
   } finally { await page.close(); await pool.end(); }
 });

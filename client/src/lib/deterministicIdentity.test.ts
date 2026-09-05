@@ -28,7 +28,7 @@ describe("explicit identity and observation inputs", () => {
     const ids: string[] = [];
     const listener = (event: Event) => { const { requestId } = (event as CustomEvent).detail; ids.push(requestId); window.dispatchEvent(new CustomEvent(COMPANION_FRAME_RESPONSE_EVENT, { detail: { requestId, error: "unavailable" } })); };
     window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, listener);
-    try { expect(await Promise.all([requestCompanionFrame(), requestCompanionFrame()])).toEqual([null, null]); expect(ids[0]).not.toBe(ids[1]); expect(Number(ids[1].split("-").at(-1))).toBe(Number(ids[0].split("-").at(-1)) + 1); }
+    try { expect(await Promise.all([requestCompanionFrame(1000), requestCompanionFrame(1000)])).toEqual([null, null]); expect(ids[0]).not.toBe(ids[1]); expect(Number(ids[1].split("-").at(-1))).toBe(Number(ids[0].split("-").at(-1)) + 1); }
     finally { window.removeEventListener(COMPANION_FRAME_REQUEST_EVENT, listener); }
   });
 });
