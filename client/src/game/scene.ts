@@ -391,6 +391,7 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   const tether = MeshBuilder.CreateLines("team-tether", { points: [explorer.position.add(new Vector3(0, 1.1, 0)), echo.position.add(new Vector3(0, 1.2, 0))], updatable: true }, scene);
   tether.color = aurion;
   const keys = new Set<string>(); const pulses: Pulse[] = [];
+  let commandPulseSequence = 0;
   let companionSpawned = false;
   let started = false; let elapsed = 0; let arenaIndex = 0; let sentinelHp = arenas[0].health; let explorerHp = 100; let echoHp = 100;
   let echoTarget = echo.position.clone(); let shieldTime = 0; let markTime = 0; let actionHeat = 0; let nextEnemyStrike = 4.2; let transitioning = false; let victory = false; let awaitingQuest = false; let dungeonUnlocked = false; let dungeonActive = false; let lastStateEmit = -1;
@@ -401,8 +402,8 @@ export async function createGameScene(engine: Engine, canvas: HTMLCanvasElement)
   // Confirmed world props use deterministic procedural geometry; broken GLB candidates are not requested.
 
   const createPulse = (at: Vector3, color: Color3, size = 0.54): void => {
-    const ring = MeshBuilder.CreateTorus(`command-pulse-${Date.now()}-${pulses.length}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
-    ring.position = at.clone(); ring.rotation.x = Math.PI / 2; ring.material = material(scene, `command-pulse-mat-${Date.now()}-${pulses.length}`, color.scale(0.2), color); pulses.push({ mesh: ring, age: 0 });
+    const ring = MeshBuilder.CreateTorus(`command-pulse-${++commandPulseSequence}`, { diameter: size, thickness: 0.055, tessellation: 24 }, scene);
+    ring.position = at.clone(); ring.rotation.x = Math.PI / 2; ring.material = material(scene, `command-pulse-mat-${commandPulseSequence}`, color.scale(0.2), color); pulses.push({ mesh: ring, age: 0 });
   };
   const emitState = (force = false): void => {
     if (!force && elapsed - lastStateEmit < 0.16) return;

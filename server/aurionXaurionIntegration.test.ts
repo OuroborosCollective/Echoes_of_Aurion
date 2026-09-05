@@ -4,6 +4,24 @@ import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptations.json")) as {
+  files: Array<{ path: string; sourceSha256: string; targetSha256: string; adaptations: Array<{ before: string; after: string; occurrences: number }> }>;
+};
+
+/** Preserve the original source pin while permitting only the reviewed deterministic deltas. */
+function sourceHashBeforeDeterminism(path: string): string {
+  const entry = adaptations.files.find(file => file.path === path);
+  if (!entry) throw new Error(`Missing deterministic adaptation evidence: ${path}`);
+  expect(sha256(path)).toBe(entry.targetSha256);
+  let source = read(path);
+  for (const change of [...entry.adaptations].reverse()) {
+    expect(source.split(change.after).length - 1).toBe(change.occurrences);
+    source = source.replaceAll(change.after, change.before);
+  }
+  const restored = createHash("sha256").update(source).digest("hex");
+  expect(restored).toBe(entry.sourceSha256);
+  return restored;
+}
 
 describe("AIM-239 xaurion integration boundary", () => {
   it("keeps xaurion rendering mounted behind the confirmed Aurion world transition", () => {
@@ -53,8 +71,8 @@ describe("AIM-239 xaurion integration boundary", () => {
   });
 
   it("pins the hash-materialized owner ZIP player and equipment wave", () => {
-    expect(sha256("client/src/xaurion/entities/OpenWorldPlayer.ts")).toBe("6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e");
-    expect(sha256("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toBe("1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7");
+    expect(sourceHashBeforeDeterminism("client/src/xaurion/entities/OpenWorldPlayer.ts")).toBe("6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e");
+    expect(sourceHashBeforeDeterminism("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toBe("1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7");
     expect(sha256("client/src/xaurion/core/ItemGlbRegistry.ts")).toBe("825702516ae6d2eeff827150899c6317d6716ec8a6b1a16287531dbb414184c2");
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("ProceduralEquipmentVisuals");
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("equipGlbAsEquipment");
@@ -64,7 +82,7 @@ describe("AIM-239 xaurion integration boundary", () => {
 
   it("pins the hash-materialized owner ZIP landscape wave and its visible world structure", () => {
     const landscape = read("client/src/xaurion/world/OpenWorldLandscape.ts");
-    expect(sha256("client/src/xaurion/world/OpenWorldLandscape.ts")).toBe("836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207");
+    expect(sourceHashBeforeDeterminism("client/src/xaurion/world/OpenWorldLandscape.ts")).toBe("836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207");
     expect(landscape).toContain("buildSanctumHub");
     expect(landscape).toContain("buildClockworkWoods");
     expect(landscape).toContain("buildScorchedQuarry");

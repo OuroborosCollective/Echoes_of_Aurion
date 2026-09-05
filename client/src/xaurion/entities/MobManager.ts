@@ -1,3 +1,4 @@
+import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import type { RPGItem, WorldMobEntity } from '../types';
 import { RPG_ITEMS_DATABASE } from '../data/mmorpgData';
@@ -11,7 +12,7 @@ export class MobManager {
   private counter = 0;
   private lootManager?: LootDropManager;
 
-  constructor(scene: THREE.Scene, lootManager?: LootDropManager) {
+  constructor(scene: THREE.Scene, lootManager: LootDropManager, private readonly simulation: DeterministicSimulation) {
     this.scene = scene;
     this.lootManager = lootManager;
     this.spawnInitial();
@@ -43,7 +44,7 @@ export class MobManager {
       isAggroed: false,
       isBoss: boss,
       isElite: elite,
-      patrolAngle: Math.random() * Math.PI * 2,
+      patrolAngle: this.simulation.random("mob:patrol") * Math.PI * 2,
       attackCooldown: 0,
       maxAttackCooldown: boss ? 2.8 : 1.8,
       dropTable: this.dropTable(level),
@@ -146,7 +147,7 @@ export class MobManager {
     const isKilled = visual.data.hp <= 0;
     if (isKilled) {
       visual.group.visible = false;
-      const drop = visual.data.dropTable[Math.floor(Math.random() * Math.max(1, visual.data.dropTable.length))];
+      const drop = visual.data.dropTable[Math.floor(this.simulation.random("mob:loot") * Math.max(1, visual.data.dropTable.length))];
       if (drop && this.lootManager) this.lootManager.spawnLoot({ ...drop, stats: { ...drop.stats } }, visual.data.x, visual.data.z, visual.data.goldReward);
     }
     return { mob: visual.data, isKilled };

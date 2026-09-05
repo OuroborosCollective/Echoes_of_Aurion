@@ -49,7 +49,7 @@ export class SyncManager {
   public updateLocalState(payload: Partial<SyncPayload>): void {
     this.currentPayload = {
       playerId: payload.playerId ?? this.currentPayload?.playerId ?? 'aurion-session-player',
-      timestamp: Date.now(),
+      timestamp: payload.timestamp ?? this.currentPayload?.timestamp ?? 0,
       stats: payload.stats ?? this.currentPayload?.stats!,
       inventory: payload.inventory ?? this.currentPayload?.inventory ?? [],
       quests: payload.quests ?? this.currentPayload?.quests ?? [],

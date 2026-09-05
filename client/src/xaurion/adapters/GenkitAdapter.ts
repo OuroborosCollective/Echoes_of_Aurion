@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { DeterministicSimulation } from "@shared/deterministicSimulation";
 // Vendored from owner-provided xaurion ZIP (SHA-256 739650d16dee85bb073e2c5af3c737f32573f328673c56edfe91d250719a030f).
 import { GameAdapter } from './GameAdapter';
 import { PlayerStats, Quest, RPGItem, WorldMobEntity } from '../types';
@@ -15,7 +15,7 @@ export class GenkitAdapter extends GameAdapter {
   public onQuestPoolUpdated?: (bounties: Quest[]) => void;
   public onLoreGenerated?: (lore: string) => void;
 
-  constructor() {
+  constructor(private readonly simulation: DeterministicSimulation) {
     super('GenkitAIAdapter');
     this.generateTaskPool('Aethelgard Sanctum', 1, 4);
   }
@@ -34,8 +34,8 @@ export class GenkitAdapter extends GameAdapter {
       { title:'Apex Directive: Slay Titan Ignis', objective:'Vanquish World Boss Titan Ignis the Overclocked in the South Arena', lore:'The ultimate super-heavy steam war machine has awakened in the southern crater. Assemble your weapons and strike down the Colossus of Aethelgard!', type:'kill_boss', targetMobType:'titan_boss', targetCount:1, baseGold:1200, baseXp:2000, rewardItemId:'item_legendary_blade' },
       { title:'Skies of Aethelgard: Drake Cull', objective:'Bring down 3 Aether Steam Drakes near the Void Spire', lore:'Bio-mechanical steam drakes have nested atop the southern spires, diving upon ground patrols. Secure the airspace with precision ranged fire.', type:'kill_mobs', targetMobType:'steam_drake', targetCount:3, baseGold:260, baseXp:400, rewardItemId:'item_bow_epic' },
     ] as const;
-    const selected=[...templates].sort(()=>Math.random()-0.5).slice(0,Math.min(count,templates.length));
-    const newBounties: Quest[]=selected.map((tpl:any,idx)=>({ id:`genkit_bounty_${Date.now()}_${idx}`, title:tpl.title, lore:tpl.lore, description:tpl.lore, objective:tpl.objective, type:tpl.type, targetMobType:tpl.targetMobType, targetCount:tpl.targetCount, currentCount:0, rewardGold:tpl.baseGold+level*35, rewardXp:tpl.baseXp+level*50, rewardItem:tpl.rewardItemId?RPG_ITEMS_DATABASE.find(i=>i.id===tpl.rewardItemId):undefined, completed:false, giverName:'Genkit AI Bounty Matrix', giverZone:zone }));
+    const selected=this.simulation.shuffled("bounty:templates", templates).slice(0,Math.min(count,templates.length));
+    const newBounties: Quest[]=selected.map(tpl=>({ id:this.simulation.nextId("genkit_bounty"), title:tpl.title, lore:tpl.lore, description:tpl.lore, objective:tpl.objective, type:tpl.type, targetMobType:tpl.targetMobType, targetCount:tpl.targetCount, currentCount:0, rewardGold:tpl.baseGold+level*35, rewardXp:tpl.baseXp+level*50, rewardItem:tpl.rewardItemId?RPG_ITEMS_DATABASE.find(i=>i.id===tpl.rewardItemId):undefined, completed:false, giverName:'Genkit AI Bounty Matrix', giverZone:zone }));
     this.availableBounties=newBounties;
     this.onQuestPoolUpdated?.(newBounties);
     return newBounties;
@@ -60,7 +60,7 @@ export class GenkitAdapter extends GameAdapter {
 
   public generateEmergentLore(npcName:string,zone:string):string {
     const lines=[`"The clockwork resonance in ${zone} is pulsating with unprecedented energy today," murmurs ${npcName}. "Take caution as you venture beyond the perimeter."`,`"Our artificers detected harmonic anomalies across ${zone}. Whatever power sleeps in the ancient core, it is stirring," whispers ${npcName}.`,`"Every defeated construct yields precious aetherium crystal conduits. The realm salutes your steadfast courage," remarks ${npcName}.`];
-    const lore=lines[Math.floor(Math.random()*lines.length)];
+    const lore=lines[Math.floor(this.simulation.random("lore")*lines.length)];
     this.onLoreGenerated?.(lore);
     return lore;
   }

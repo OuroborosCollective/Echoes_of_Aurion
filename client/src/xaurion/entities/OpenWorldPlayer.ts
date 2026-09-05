@@ -1,3 +1,4 @@
+import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import { collisionSystem } from '../world/WorldCollisionSystem';
 import {
@@ -97,7 +98,7 @@ export class OpenWorldPlayer {
   private glbMixer: THREE.AnimationMixer | null = null;
   private activeGlbAction: THREE.AnimationAction | null = null;
 
-  constructor(scene: THREE.Scene, startingClass: CharacterClassId = 'knight') {
+  constructor(scene: THREE.Scene, startingClass: CharacterClassId, private readonly simulation: DeterministicSimulation) {
     this.scene = scene;
     this.group = new THREE.Group();
     this.currentClassId = startingClass;
@@ -276,9 +277,9 @@ export class OpenWorldPlayer {
     const auraCount = 24;
     const auraPositions = new Float32Array(auraCount * 3);
     for (let i = 0; i < auraCount * 3; i += 3) {
-      auraPositions[i] = (Math.random() - 0.5) * 1.6;
-      auraPositions[i + 1] = Math.random() * 2.3;
-      auraPositions[i + 2] = (Math.random() - 0.5) * 1.6;
+      auraPositions[i] = (this.simulation.random("player:aura") - 0.5) * 1.6;
+      auraPositions[i + 1] = this.simulation.random("player:aura") * 2.3;
+      auraPositions[i + 2] = (this.simulation.random("player:aura") - 0.5) * 1.6;
     }
     auraGeo.setAttribute('position', new THREE.BufferAttribute(auraPositions, 3));
     const auraMat = new THREE.PointsMaterial({
@@ -992,7 +993,7 @@ export class OpenWorldPlayer {
 
   public takeDamage(amount: number): { damageTaken: number; isDead: boolean; dodged: boolean } {
     // Check Agility-based Dodge
-    const roll = Math.random() * 100;
+    const roll = this.simulation.random("player:dodge") * 100;
     if (roll < this.stats.dodgeChance) {
       this.triggerDodge();
       return { damageTaken: 0, isDead: false, dodged: true };

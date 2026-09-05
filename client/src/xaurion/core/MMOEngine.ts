@@ -31,6 +31,7 @@ import { soundSynth } from '../audio/SoundSynthesizer';
 import { GenkitAdapter } from '../adapters/GenkitAdapter';
 import { ParticleSystem } from './ParticleSystem';
 import { RuntimeFrameLoop } from './RuntimeFrameLoop';
+import { DeterministicSimulation } from '@shared/deterministicSimulation';
 import { syncManager } from './SyncManager';
 import { PartyManager } from './PartyManager';
 
@@ -153,7 +154,7 @@ export class MMOEngine {
   public onRuntimeError?: (error: unknown) => void;
   private disposed = false;
   private readonly frameLoop = new RuntimeFrameLoop(delta => {
-    this.update(delta);
+    this.simulation.advanceProjection(delta, step => this.update(step));
     this.renderer.render(this.scene, this.camera);
   }, error => this.failRuntime(error));
   private stateUpdateTimer: number = 0;
@@ -235,7 +236,7 @@ export class MMOEngine {
     return MMOEngine.checkWebGLSupport().supported;
   }
 
-  constructor(container: HTMLElement, startingClass: CharacterClassId = 'knight') {
+  constructor(container: HTMLElement, startingClass: CharacterClassId, public readonly simulation: DeterministicSimulation) {
     this.container = container;
 
     // Clear any previous stale canvas or child elements from container
@@ -307,17 +308,17 @@ export class MMOEngine {
     this.scene.fog = new THREE.FogExp2(0x1e293b, 0.005);
 
     // 3. Initialize Subsystems
-    this.landscape = new OpenWorldLandscape(this.scene);
-    this.lootManager = new LootDropManager(this.scene);
-    this.player = new OpenWorldPlayer(this.scene, startingClass);
-    this.mobManager = new MobManager(this.scene, this.lootManager);
-    this.simPlayers = new SimulatedRealmPlayers(this.scene);
+    this.landscape = new OpenWorldLandscape(this.scene, simulation);
+    this.lootManager = new LootDropManager(this.scene, simulation);
+    this.player = new OpenWorldPlayer(this.scene, startingClass, simulation);
+    this.mobManager = new MobManager(this.scene, this.lootManager, simulation);
+    this.simPlayers = new SimulatedRealmPlayers(this.scene, simulation);
     this.partyManager = new PartyManager('Hero', startingClass, 1);
     this.partyManager.onPartyMessage = (sender, text) => {
       this.addChatMessage('party', sender, text);
     };
-    this.genkitAdapter = new GenkitAdapter();
-    this.particleSystem = new ParticleSystem(this.scene);
+    this.genkitAdapter = new GenkitAdapter(simulation);
+    this.particleSystem = new ParticleSystem(this.scene, simulation);
 
 
     // Register landscape steam vents and beacon points into ParticleSystem
@@ -864,7 +865,7 @@ export class MMOEngine {
     // Damage all mobs in cleave radius
     const nearby = this.mobManager.getNearbyMobs(hitCenter.x, hitCenter.z, skill.aoeRadius || 4.0);
     nearby.forEach((mob) => {
-      const isCrit = Math.random() * 100 < this.player.stats.critChance;
+      const isCrit = this.simulation.random("combat:critical") * 100 < this.player.stats.critChance;
       const baseDmg = (skill.damage + this.player.stats.attackPower * 0.8);
       const totalDmg = Math.round(isCrit ? baseDmg * 1.85 : baseDmg);
 
@@ -891,7 +892,7 @@ export class MMOEngine {
     projMesh.position.copy(startPos);
     this.scene.add(projMesh);
 
-    const isCrit = Math.random() * 100 < this.player.stats.critChance;
+    const isCrit = this.simulation.random("combat:critical") * 100 < this.player.stats.critChance;
     const baseDmg = skill.damage + (this.player.stats.spellPower || this.player.stats.attackPower) * 0.9;
     const totalDmg = Math.round(isCrit ? baseDmg * 1.9 : baseDmg);
 
@@ -934,7 +935,7 @@ export class MMOEngine {
     // Damage all mobs in area
     const nearby = this.mobManager.getNearbyMobs(targetX, targetZ, aoeRadius);
     nearby.forEach((mob) => {
-      const isCrit = Math.random() * 100 < this.player.stats.critChance;
+      const isCrit = this.simulation.random("combat:critical") * 100 < this.player.stats.critChance;
       const baseDmg = skill.damage + (this.player.stats.spellPower + this.player.stats.attackPower) * 0.7;
       const totalDmg = Math.round(isCrit ? baseDmg * 1.8 : baseDmg);
 
@@ -1002,7 +1003,7 @@ export class MMOEngine {
     // Floating damage text
     this.addFloatingText(
       isCrit ? `CRIT! ${damage}` : `${damage}`,
-      result.mob.x + (Math.random() - 0.5) * 1.2,
+      result.mob.x + (this.simulation.random("loot:position") - 0.5) * 1.2,
       result.mob.y + 2.2,
       isCrit ? '#fbbf24' : '#ffffff',
       isCrit ? 'xl' : 'lg',
@@ -1152,9 +1153,10 @@ export class MMOEngine {
     text: string,
     isPlayer: boolean = false
   ) {
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const seconds = Math.floor(this.simulation.elapsedMilliseconds / 1000);
+    const timeStr = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
     this.chatMessages.push({
-      id: `chat_${Date.now()}_${Math.random()}`,
+      id: this.simulation.nextId('chat'),
       channel,
       sender,
       text,
@@ -1380,7 +1382,7 @@ export class MMOEngine {
       const angle = this.player.facingAngle + Math.PI * 0.75;
       const targetPetX = this.player.position.x + Math.sin(angle) * offsetDist;
       const targetPetZ = this.player.position.z + Math.cos(angle) * offsetDist;
-      const targetPetY = this.player.position.y + (this.activePet.species === 'aether_wisp' ? 1.5 + Math.sin(performance.now() * 0.004) * 0.3 : 0.3);
+      const targetPetY = this.player.position.y + (this.activePet.species === 'aether_wisp' ? 1.5 + Math.sin(this.simulation.elapsedMilliseconds * 0.004) * 0.3 : 0.3);
 
       this.petPosition.lerp(new THREE.Vector3(targetPetX, targetPetY, targetPetZ), delta * 5.0);
       this.petMeshGroup.position.copy(this.petPosition);
@@ -1401,6 +1403,7 @@ export class MMOEngine {
 
       // Sync state with SyncManager
       syncManager.updateLocalState({
+        timestamp: this.simulation.elapsedMilliseconds,
         stats: { ...this.player.stats },
         inventory: [...this.player.inventory],
         quests: [...this.quests],
@@ -1782,8 +1785,8 @@ export class MMOEngine {
   }
 
   public spawnCustomMob(type: WorldMobEntity['type'], x?: number, z?: number) {
-    const spawnX = x !== undefined ? x : this.player.position.x + (Math.random() - 0.5) * 10;
-    const spawnZ = z !== undefined ? z : this.player.position.z + (Math.random() - 0.5) * 10;
+    const spawnX = x !== undefined ? x : this.player.position.x + (this.simulation.random("mob:spawn") - 0.5) * 10;
+    const spawnZ = z !== undefined ? z : this.player.position.z + (this.simulation.random("mob:spawn") - 0.5) * 10;
 
     this.mobManager.spawnCustomMob(type, spawnX, spawnZ);
     this.particleSystem.emit('teleport_warp', { x: spawnX, y: 1.0, z: spawnZ }, '#a855f7', 1.5);
