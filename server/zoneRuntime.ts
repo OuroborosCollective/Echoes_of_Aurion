@@ -1,4 +1,5 @@
 import type WebSocket from "ws";
+import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT } from "@shared/zonePresenceContract";
 import {
   makeZoneConnectionId,
   ZONE_FIXED_POINT_SCALE,
@@ -10,7 +11,7 @@ import {
   type ZoneWelcome,
 } from "./zoneProtocol";
 
-const ZONE_BOUNDARY_FIXED = 14_500;
+const ZONE_BOUNDARY_FIXED = ZONE_POSITION_LIMIT;
 const CARDINAL_STEP_FIXED = 340;
 const DIAGONAL_STEP_FIXED = 240;
 
@@ -54,6 +55,13 @@ export class AuthoritativeMovementZone {
   constructor(readonly zoneId: ZoneId) {}
 
   join(values: { userId: number; socket: WebSocket }): ZoneWelcome {
+    if (!Number.isSafeInteger(values.userId) || values.userId < 1) throw new Error("ZONE_USER_INVALID");
+    const previous = [...this.peers.values()].find(peer => peer.userId === values.userId);
+    if (!previous && this.peers.size >= ZONE_MAX_PRESENCES) throw new Error("ZONE_CAPACITY_REACHED");
+    if (previous) {
+      this.peers.delete(previous.connectionId);
+      previous.socket.close(1000, "superseded by authenticated reconnect");
+    }
     const connectionId = makeZoneConnectionId();
     this.peers.set(connectionId, {
       connectionId,

@@ -31,6 +31,7 @@ vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn(() => {
   const client = { connect: vi.fn(), close: vi.fn(), sendMovement: vi.fn() }; fixture.connections.push(client); return client;
 }) }));
 vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn() }));
+vi.mock("./RemotePresenceProjection", () => ({ RemotePresenceProjection: vi.fn(() => ({ dispose: vi.fn(), clear: vi.fn() })) }));
 vi.mock("../components/GameHUD", () => ({ GameHUD: () => <p>World controls</p> }));
 vi.mock("./AurionAuthorityHud", () => ({ AurionAuthorityHud: () => <p>World controls</p> }));
 vi.mock("../components/InventoryModal", () => ({ InventoryModal: () => null }));

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
 
@@ -122,3 +122,67 @@ for (const viewport of [
     } finally { await page.close(); await pool.end(); }
   });
 }
+
+test("two authenticated accounts see the same confirmed movement and departure", async ({ browser, baseURL }, testInfo) => {
+  test.setTimeout(180_000);
+  expect(baseURL).toBe("http://127.0.0.1:3000");
+  const target = new URL(process.env.DATABASE_URL ?? "");
+  expect(target.hostname).toBe("127.0.0.1"); expect(target.pathname).toBe("/aurion_browser_test");
+  const pool = createPool(process.env.DATABASE_URL!);
+  const [database] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name"); expect(database[0].name).toBe("aurion_browser_test");
+  const leftContext = await browser.newContext({ baseURL, viewport: { width: 800, height: 1280 } });
+  const rightContext = await browser.newContext({ baseURL, viewport: { width: 412, height: 915 } });
+  const left = await leftContext.newPage(), right = await rightContext.newPage();
+  type Presence = { userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
+  let leftView: Presence[] = [], rightView: Presence[] = [];
+  const errors: string[] = [];
+  const observe = (page: Page, update: (presences: Presence[]) => void) => {
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("websocket", socket => { if (socket.url().endsWith("/v1/ws")) socket.on("framereceived", frame => {
+      try { const value = JSON.parse(String(frame.payload)); if (["welcome", "snapshot"].includes(value.type) && Array.isArray(value.presences)) update(value.presences); } catch { /* Invalid frames cannot satisfy assertions. */ }
+    }); });
+  };
+  observe(left, value => { leftView = value; }); observe(right, value => { rightView = value; });
+  const enter = async (page: Page, handle: string) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("tab", { name: "Konto anlegen", exact: true }).click();
+    await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
+    await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-regression-254!");
+    await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+    await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
+    await page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true }).click();
+    await expect(page.getByTestId("xaurion-open-world-runtime").getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+  };
+  try {
+    await enter(left, "aim254_coop_left");
+    await expect.poll(() => leftView.length).toBe(1);
+    const leftUserId = leftView[0].userId;
+    await enter(right, "aim254_coop_right");
+    await expect.poll(() => leftView.length).toBe(2);
+    await expect.poll(() => rightView.length).toBe(2);
+    const rightUserId = rightView.find(p => p.userId !== leftUserId)!.userId;
+    expect(rightUserId).not.toBe(leftUserId);
+    await expect(left.getByTestId("confirmed-remote-player-count")).toHaveText("1 andere Explorer verbunden");
+    await expect(right.getByTestId("confirmed-remote-player-count")).toHaveText("1 andere Explorer verbunden");
+    const initial = { ...rightView.find(p => p.userId === leftUserId)!.position };
+    await left.keyboard.down("w");
+    try { await expect.poll(() => rightView.find(p => p.userId === leftUserId)?.position.z !== initial.z, { timeout: 15_000 }).toBe(true); }
+    finally { await left.keyboard.up("w"); }
+    await expect.poll(() => JSON.stringify(rightView.find(p => p.userId === leftUserId)?.position) === JSON.stringify(leftView.find(p => p.userId === leftUserId)?.position)).toBe(true);
+    await expect.poll(async () => {
+      const [rows] = await pool.query<RowDataPacket[]>("SELECT positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL", [leftUserId]);
+      return rows.some(row => row.positionZ !== initial.z);
+    }, { timeout: WORLD_PRESENCE_REFRESH_MS + 10_000 }).toBe(true);
+    await right.getByRole("button", { name: "Weltatlas", exact: true }).click();
+    await expect(right.getByRole("dialog").getByText(new RegExp(`^Explorer ${leftUserId}:`))).toBeVisible();
+    await right.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+    await right.locator("#three-viewport canvas").screenshot({ path: testInfo.outputPath("confirmed-other-player.png") });
+    await left.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await expect(right.getByTestId("confirmed-remote-player-count")).toHaveText("0 andere Explorer verbunden");
+    await expect.poll(() => rightView.map(p => p.userId)).toEqual([rightUserId]);
+    expect(errors).toEqual([]);
+    await testInfo.attach("two-account-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, leftUserId, rightUserId, replicatedMovement: true, databasePresenceVerified: true, departedActorRemoved: true }), contentType: "application/json" });
+  } finally { await leftContext.close(); await rightContext.close(); await pool.end(); }
+});

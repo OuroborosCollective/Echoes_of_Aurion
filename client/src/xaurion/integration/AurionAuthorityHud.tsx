@@ -4,14 +4,16 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { VirtualJoystick } from "../components/VirtualJoystick";
 import { projectPlayerReadback, projectReadback, questReadbackSchema, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
+import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 
 type Panel = "inventory" | "character" | "quests" | "map" | null;
 const classes = { unbound: "Noch keine Klasse", vanguard: "Vorhut", seer: "Seher", warden: "Hüter" } as const;
 const titles = { inventory: "Inventar", character: "Charakter", quests: "Aufträge & Kontakte", map: "Weltatlas" } as const;
 const community = (panel: "chat" | "partners" | "market" | "crafting") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
 
-export function AurionAuthorityHud({ userId, connected, position, onMove, onAction }: {
+export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction }: {
   userId: number; connected: boolean; position?: { x: number; z: number };
+  remotePlayers?: readonly ConfirmedZonePresence[];
   onMove: (forward: number, right: number) => void; onAction: (command: AurionGameplayCommand) => void;
 }) {
   const [panel, setPanel] = useState<Panel>(null);
@@ -52,6 +54,7 @@ export function AurionAuthorityHud({ userId, connected, position, onMove, onActi
     <section className="aurion-authority-hud__profile" aria-label="Serverbestätigter Charakter" data-state={player.state}>
       <small role="status">{readbackLabels[player.state]}</small>
       {profile ? <><b>{classes[profile.selectedClass]} · Stufe {profile.level}</b><span>{profile.totalXp} EP · {profile.aurionPoints} AURION</span><span>{profile.victories} Siege</span></> : <b>Charakterdaten ausstehend</b>}
+      <span data-testid="confirmed-remote-player-count">{connected ? `${remotePlayers.length} andere Explorer verbunden` : "Mitspieler werden verbunden"}</span>
     </section>
     <nav className="aurion-authority-hud__menu" aria-label="Weltmenü">
       {(Object.keys(titles) as Exclude<Panel, null>[]).map(key => <button key={key} onClick={() => setPanel(key)}>{titles[key]}</button>)}
@@ -94,6 +97,7 @@ export function AurionAuthorityHud({ userId, connected, position, onMove, onActi
           <p role="status">{readbackLabels[world.state]}</p>
           {world.data && <><p>Weltepoche {world.data.globalWorld.epoch}</p><p className="aurion-authority-hud__hash">Welt-Hash: {world.data.globalWorld.deterministicHash}</p></>}
           {position && connected ? <p>Bestätigte Position: {(position.x / 1000).toFixed(2)} / {(position.z / 1000).toFixed(2)}</p> : <p>Position wartet auf die Zonenverbindung.</p>}
+          {connected && remotePlayers.map(player => <p key={player.userId}>Explorer {player.userId}: {(player.position.x / 1000).toFixed(2)} / {(player.position.z / 1000).toFixed(2)}</p>)}
         </div>}
       </DialogContent>
     </Dialog>

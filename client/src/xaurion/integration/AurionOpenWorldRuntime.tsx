@@ -7,6 +7,8 @@ import { runtimeIssueCode } from "@shared/runtimeContracts";
 import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import { MMOEngine } from "../core/MMOEngine";
 import { ConfirmedVisualEffects } from "./confirmedVisualEffects";
+import { RemotePresenceProjection } from "./RemotePresenceProjection";
+import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import { AurionAuthorityHud } from "./AurionAuthorityHud";
 import { ax1MovementToAurionIntent, bindAurionAuthorityProjection, type AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import type { CharacterClassId } from "../types";
@@ -58,6 +60,7 @@ export default function AurionOpenWorldRuntime() {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
+  const remotePresenceRef = useRef<RemotePresenceProjection | null>(null);
   const keysRef = useRef(new Set<string>());
   const virtualInputRef = useRef({ forward: 0, right: 0 });
 
@@ -66,6 +69,7 @@ export default function AurionOpenWorldRuntime() {
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [currentClassId, setCurrentClassId] = useState<CharacterClassId>("knight");
   const [confirmedPosition, setConfirmedPosition] = useState<{ x: number; z: number }>();
+  const [remotePlayers, setRemotePlayers] = useState<readonly ConfirmedZonePresence[]>([]);
   const [celebration, setCelebration] = useState(0);
 
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
@@ -86,6 +90,7 @@ export default function AurionOpenWorldRuntime() {
     const onLoad = (event: Event) => {
       setWebglError(null);
       setConfirmedPosition(undefined);
+      setRemotePlayers([]);
       setActivation(validActivation((event as CustomEvent<unknown>).detail));
     };
     const onReturn = () => setActivation(null);
@@ -110,6 +115,7 @@ export default function AurionOpenWorldRuntime() {
 
     let disposed = false;
     let engine: MMOEngine | undefined;
+    let remotePresence: RemotePresenceProjection | undefined;
     const confirmedVisuals = new ConfirmedVisualEffects();
     const onConfirmedAction = (event: Event) => {
       if (disposed || !engine || engineRef.current !== engine) return;
@@ -120,6 +126,9 @@ export default function AurionOpenWorldRuntime() {
     };
     const fail = (error: unknown) => {
       if (disposed) return;
+      remotePresence?.dispose();
+      remotePresenceRef.current = null;
+      setRemotePlayers([]);
       engine?.stop();
       zoneClientRef.current?.close();
       zoneClientRef.current = null;
@@ -139,6 +148,8 @@ export default function AurionOpenWorldRuntime() {
         requestAction: requestAuthoritativeAction,
         requestMount: requestAuthoritativeMount,
       });
+      remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
+      remotePresenceRef.current = remotePresence;
       engine.start();
       window.addEventListener("aurion:authoritative-action", onConfirmedAction);
     } catch (error) {
@@ -147,6 +158,8 @@ export default function AurionOpenWorldRuntime() {
     return () => {
       disposed = true;
       window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
+      remotePresence?.dispose();
+      if (remotePresenceRef.current === remotePresence) remotePresenceRef.current = null;
       engine?.stop();
       if (engineRef.current === engine) engineRef.current = null;
       keysRef.current.clear();
@@ -185,13 +198,21 @@ export default function AurionOpenWorldRuntime() {
       onSuccess: ({ ticket }) => {
         if (disposed || !engineRef.current) return;
         client = new ZoneMovementClient({
-          onStatus: status => { if (!disposed) setZoneStatus(status); },
+          onStatus: status => {
+            if (disposed) return;
+            setZoneStatus(status);
+            if (status !== "connected") { remotePresenceRef.current?.clear(); setRemotePlayers([]); }
+          },
           onReject: () => { if (!disposed) setZoneStatus("rejected"); },
           onSnapshot: snapshot => {
             if (disposed) return;
             const self = snapshot.presences.find(presence => presence.userId === user.id);
             const engine = engineRef.current;
             if (!self || !engine) return;
+            try {
+              remotePresenceRef.current?.apply(snapshot.presences);
+              setRemotePlayers(remotePresenceRef.current?.presences ?? []);
+            } catch (error) { engine.onRuntimeError?.(error); return; }
             setConfirmedPosition({ ...self.position });
             const x = self.position.x / 1000;
             const z = self.position.z / 1000;
@@ -321,7 +342,7 @@ export default function AurionOpenWorldRuntime() {
   if (!activation) return null;
 
   return (
-    <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Open World powered by owner ZIP reference">
+    <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Open World">
       <div ref={containerRef} className="xaurion-runtime__viewport" id="three-viewport" />
       <div className="xaurion-runtime__bridge-status" aria-live="polite">
         <span><Database size={13} /> AURION DB</span>
@@ -334,7 +355,7 @@ export default function AurionOpenWorldRuntime() {
       {celebration > 0 && <div className="xaurion-runtime__celebration" key={celebration} aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <span key={index} style={{ "--i": index } as React.CSSProperties}>✦</span>)}</div>}
       {webglError && <div className="xaurion-runtime__error" role="alert"><b>OPEN WORLD ANGEHALTEN</b><span>Bitte kehre zur Sternwarte zurück und öffne die Welt erneut. Vorgang {webglError}</span></div>}
 
-      {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} />}
+      {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} />}
     </section>
   );
 }

@@ -1,3 +1,5 @@
+import { validConfirmedPresences, ZONE_SNAPSHOT_MAX_CHARACTERS } from "@shared/zonePresenceContract";
+
 export type ZoneMovementInput = { x: -1 | 0 | 1; z: -1 | 0 | 1 };
 export type ZonePresenceSnapshot = {
   type: "snapshot";
@@ -16,6 +18,7 @@ export function zoneWebSocketUrl(origin: string): string {
 }
 
 function parseZoneMessage(raw: string): ZoneMessage | null {
+  if (raw.length > ZONE_SNAPSHOT_MAX_CHARACTERS) return null;
   try {
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== "object") return null;
@@ -24,12 +27,8 @@ function parseZoneMessage(raw: string): ZoneMessage | null {
     if (message.type !== "welcome" && message.type !== "snapshot") return null;
     const integer = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n);
     if (message.zoneId !== "observatory_threshold" || !integer(message.snapshotSeq) || (message.snapshotSeq as number) < 0 || !integer(message.tick) || (message.tick as number) < 0) return null;
-    if (message.type === "welcome" && typeof message.connectionId !== "string") return null;
-    if (!Array.isArray(message.presences) || !message.presences.every(p =>
-      p && typeof p === "object" && typeof p.entityId === "string" && integer(p.userId) && p.userId > 0 &&
-      integer(p.lastAcceptedClientSeq) && p.lastAcceptedClientSeq >= 0 && p.position &&
-      integer(p.position.x) && integer(p.position.z)
-    )) return null;
+    if (message.type === "welcome" && (typeof message.connectionId !== "string" || !/^[A-Za-z0-9_-]{12,96}$/.test(message.connectionId))) return null;
+    if (!validConfirmedPresences(message.presences)) return null;
     return message as ZoneMessage;
   } catch {
     return null;
@@ -52,6 +51,9 @@ export class ZoneMovementClient {
     this.nextClientSeq = 1;
     this.options.onStatus("connecting");
     const socket = new WebSocket(zoneWebSocketUrl(window.location.origin));
+    let welcomed = false;
+    let lastSnapshot = -1;
+    let lastTick = -1;
     this.socket = socket;
     socket.addEventListener("open", () => {
       if (this.socket !== socket) { socket.close(1000, "retired zone client"); return; }
@@ -62,9 +64,16 @@ export class ZoneMovementClient {
       const message = parseZoneMessage(String(event.data));
       if (!message) return;
       if (message.type === "welcome") {
+        if (welcomed) return;
+        welcomed = true;
+        lastSnapshot = message.snapshotSeq;
+        lastTick = message.tick;
         this.options.onStatus("connected");
         this.options.onSnapshot({ type: "snapshot", zoneId: message.zoneId, snapshotSeq: message.snapshotSeq, tick: message.tick, presences: message.presences });
       } else if (message.type === "snapshot") {
+        if (!welcomed || message.snapshotSeq <= lastSnapshot || message.tick < lastTick) return;
+        lastSnapshot = message.snapshotSeq;
+        lastTick = message.tick;
         this.options.onSnapshot(message);
       } else if (message.type === "reject") {
         this.options.onReject(message.code);
