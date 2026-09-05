@@ -84,6 +84,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await pages[1]!.getByRole("button", { name: `${tankName} heilen`, exact: true }).click();
       await expect.poll(async () => (await read(pages[0]!)).party!.health.find(h => h.userId === tankId)!.hp).toBeGreaterThan(damaged.party!.health.find(h => h.userId === tankId)!.hp);
       await pages[1]!.getByRole("button", { name: "Instanz verlassen, Platz behalten", exact: true }).click();
+      await expect(pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true })).toBeVisible();
+      expect((await read(pages[1]!)).player.status).toBe("formed");
       await pages[1]!.reload();
       await pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }).click();
       await expect(pages[1]!.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id);

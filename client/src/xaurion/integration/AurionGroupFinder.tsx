@@ -39,6 +39,7 @@ export function AurionGroupFinder({ open, onClose }: { open: boolean; onClose?: 
   const [dungeonId, setDungeonId] = useState<GroupReadmodel["catalog"][number]["id"]>("dungeon_aschengewoelbe");
   const [variant, setVariant] = useState<typeof groupVariants[number]>("normal");
   const [message, setMessage] = useState("");
+  const [pendingCommand, setPendingCommand] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const busy = useRef(false);
   const parsed = groupReadmodelSchema.safeParse(query.data);
@@ -49,10 +50,14 @@ export function AurionGroupFinder({ open, onClose }: { open: boolean; onClose?: 
     const value = current.current;
     if (!value || busy.current) return;
     busy.current = true;
+    setPendingCommand(true);
     setMessage("");
     try { await mutation.mutateAsync({ expectedRevision: value.player.revision, action }); }
     catch { setMessage("Die Aktion ist nicht bestätigt. Der aktuelle Gruppenstand wird neu gelesen; prüfe Rolle, Ausrüstung und Bereitschaft."); }
-    finally { await query.refetch(); busy.current = false; }
+    finally {
+      try { await query.refetch(); }
+      finally { busy.current = false; setPendingCommand(false); }
+    }
   }, [mutation.mutateAsync, query.refetch]);
   useEffect(() => {
     if (!open) return;
@@ -60,7 +65,7 @@ export function AurionGroupFinder({ open, onClose }: { open: boolean; onClose?: 
     return () => clearInterval(timer);
   }, [open, act]);
   const player = data?.player, party = data?.party, ticket = data?.ticket;
-  const fresh = Boolean(data) && !mutation.isPending;
+  const fresh = Boolean(data) && !mutation.isPending && !pendingCommand;
   const compatible = !party || party.sourceRevision === data?.sourceRevision;
   const canActInInstance = fresh && compatible;
   const content = <div className="aurion-group-finder" data-testid="aurion-group-finder">

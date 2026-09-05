@@ -55,4 +55,17 @@ describe("AIM-259 confirmed group UI", () => {
     fixture.query.data = idleFixture(); fixture.query.isError = true; rerender(<AurionGroupFinder open />);
     expect(screen.queryByRole("button", { name: "Gruppe suchen" })).toBeNull();
   });
+  it("keeps controls disabled until the post-command readback finishes", async () => {
+    let finishRead!: () => void;
+    fixture.query.refetch.mockImplementation(() => new Promise<void>(resolve => { finishRead = resolve; }));
+    render(<AurionGroupFinder open />);
+    const button = screen.getByRole("button", { name: "Gruppe suchen" }) as HTMLButtonElement;
+    fireEvent.click(button);
+    await waitFor(() => expect(fixture.query.refetch).toHaveBeenCalledTimes(1));
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(fixture.mutation.mutateAsync).toHaveBeenCalledTimes(1);
+    finishRead();
+    await waitFor(() => expect(button.disabled).toBe(false));
+  });
 });
