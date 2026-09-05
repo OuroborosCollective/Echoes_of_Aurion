@@ -263,7 +263,7 @@ validate_preflight() {
     import fs from "node:fs";
     const tags=[
       "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs",
-      "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint",
+      "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
     ];
     const receipt=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
     if(receipt.recordType!=="aurion_production_schema_reconciliation"||receipt.schemaVersion!==1||receipt.sourceRevision!==process.env.APPLY_EXPECTED_SHA||receipt.readOnly!==true||receipt.databaseCredentialReturned!==false) process.exit(2);
@@ -444,7 +444,7 @@ fi
 APPLY_EXPECTED_SHA="$expected_sha" APPLY_PLAN_SHA256="$plan_sha256" node --input-type=module -e '
   import fs from "node:fs";
   const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-  const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint"];
+  const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint","0029_aurion_guild_kingdom_authority","0030_aurion_guild_bank_economy","0031_aurion_profession_crafting_persistence"];
   if(r.recordType!=="aurion_production_schema_apply_execution"||r.schemaVersion!==1||r.sourceRevision!==process.env.APPLY_EXPECTED_SHA||r.planSha256!==process.env.APPLY_PLAN_SHA256||r.mode!=="apply"||r.databaseCredentialReturned!==false||r.state!=="APPLY_SUCCEEDED") process.exit(2);
   if(!Array.isArray(r.appliedMigrationTags)||r.appliedMigrationTags.length<1||r.appliedMigrationTags.some(tag=>!tags.includes(tag))) process.exit(3);
   if(r.postflight?.migrationCount!==tags.length||r.postflight?.matchCount!==tags.length||r.postflight?.absentCount!==0||r.postflight?.driftCount!==0) process.exit(4);

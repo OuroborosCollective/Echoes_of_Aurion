@@ -1,11 +1,11 @@
+import { readProductionSchemaContracts } from "./aurionProductionSchemaContracts";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import {
-  classifyMigrationContract,
+  classifyMigrationContracts,
   lateAurionMigrationTags,
-  parseLateMigrationSql,
   type ExpectedMigration,
   type MigrationClassification,
   type ObservedIndex,
@@ -142,10 +142,7 @@ function placeholders(count: number): string {
 }
 
 async function expectedMigrations(): Promise<ExpectedMigration[]> {
-  return Promise.all(lateAurionMigrationTags.map(async tag => {
-    const sql = await readFile(path.join(projectRoot, "drizzle", `${tag}.sql`), "utf8");
-    return parseLateMigrationSql(tag, sql);
-  }));
+  return readProductionSchemaContracts(projectRoot);
 }
 
 async function observeMigrations(connection: Connection, expected: readonly ExpectedMigration[]): Promise<MigrationClassification[]> {
@@ -159,7 +156,11 @@ async function observeMigrations(connection: Connection, expected: readonly Expe
     expectedTableNames,
   );
 
-  const tableNamesPresent = new Set(columnRows.map(row => row.TABLE_NAME));
+  const [checkRows] = await connection.query<(RowDataPacket & { TABLE_NAME: string; CONSTRAINT_NAME: string; CHECK_CLAUSE: string })[]>(
+      `SELECT TABLE_NAME,CONSTRAINT_NAME,CHECK_CLAUSE FROM information_schema.check_constraints WHERE constraint_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,CONSTRAINT_NAME`,
+      expectedTableNames,
+    );
+    const tableNamesPresent = new Set(columnRows.map(row => row.TABLE_NAME));
   const observedTables = new Map<string, ObservedTable>();
   for (const tableName of tableNamesPresent) {
     const columns = columnRows
@@ -176,9 +177,9 @@ async function observeMigrations(connection: Connection, expected: readonly Expe
       unique: index.unique,
       columns: index.columns.sort((left, right) => left.sequence - right.sequence).map(column => column.name),
     }));
-    observedTables.set(tableName, { name: tableName, columns, indexes });
+    observedTables.set(tableName, { name: tableName, columns, indexes, checks: checkRows.filter(row => row.TABLE_NAME === tableName).map(row => ({ name: row.CONSTRAINT_NAME, expression: row.CHECK_CLAUSE })) });
   }
-  return expected.map(migration => classifyMigrationContract(migration, observedTables));
+  return classifyMigrationContracts(expected, observedTables);
 }
 
 function summarize(migrations: readonly MigrationClassification[]): Record<string, number> {

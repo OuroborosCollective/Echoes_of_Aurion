@@ -103,7 +103,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -360,6 +360,26 @@ for _attempt in $(seq 1 30); do
   sleep 1
 done
 [[ "$public_ready" -eq 1 ]]
+
+# Install the existing alignment controller inside the same verified root
+# boundary as promotion. The deployment user never receives general install or
+# systemctl authority, and controller bytes come from the hashed release archive.
+phase=revision-alignment-install
+controller_source="${release}/deploy"
+install -d -o root -g root -m 0750 /etc/aurion-revision-alignment
+install -d -o root -g root -m 0750 /var/lib/aurion-revision-alignment
+install -o root -g root -m 0755 "${controller_source}/aurion-revision-alignment-controller.py" /usr/local/sbin/aurion-revision-alignment-controller
+install -o root -g root -m 0644 "${controller_source}/aurion-revision-alignment-controller.service" /etc/systemd/system/aurion-revision-alignment-controller.service
+install -o root -g root -m 0644 "${controller_source}/aurion-revision-alignment-controller.timer" /etc/systemd/system/aurion-revision-alignment-controller.timer
+if [[ ! -f /etc/aurion-revision-alignment/controller.env ]]; then
+  install -o root -g root -m 0640 "${controller_source}/aurion-revision-alignment-controller.env.template" /etc/aurion-revision-alignment/controller.env
+fi
+[[ "$(stat -c '%U:%G:%a' /usr/local/sbin/aurion-revision-alignment-controller)" == "root:root:755" ]]
+cmp -s "${controller_source}/aurion-revision-alignment-controller.py" /usr/local/sbin/aurion-revision-alignment-controller
+systemd-analyze verify /etc/systemd/system/aurion-revision-alignment-controller.service /etc/systemd/system/aurion-revision-alignment-controller.timer
+systemctl daemon-reload
+systemctl enable --now aurion-revision-alignment-controller.timer
+systemctl is-active --quiet aurion-revision-alignment-controller.timer
 
 ln -sTfn "$release" "${runtime_base}/current.next"
 mv -Tf "${runtime_base}/current.next" "${runtime_base}/current"

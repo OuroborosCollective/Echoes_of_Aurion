@@ -96,6 +96,7 @@ jobs:
           [[ "${{ needs.migration-ledger.outputs.plan_sha256 }}" =~ ^[a-f0-9]{64}$ ]]
           pnpm check
           pnpm test
+          node --test scripts/dispatch-aurion-schema-plan.test.mjs
           bash -n deploy/promote-aurion-zone-runtime.sh
           node --check deploy/verify-aurion-runtime-database.mjs
           node --check scripts/build-aurion-traefik-runtime-artifact.mjs
@@ -480,10 +481,10 @@ jobs:
             printf 'promoter readback replay required for revision=%s\n' "${EXPECTED_SHA}"
           fi
 
-          test -x /usr/local/sbin/aurion-production-schema-reconcile
+          bash "$artifact/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$artifact/dist-production-reconcile/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
           sudo -n test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
           sudo -n grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
-          test -x /usr/local/sbin/aurion-production-schema-apply
+          bash "$artifact/dist-production-apply/deploy/verify-aurion-installed-schema-tool" "$artifact/dist-production-apply/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
           sudo -n test -f /opt/echoes-of-aurion-schema-apply/current/manifest.json
           sudo -n grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-apply/current/manifest.json
 
@@ -512,22 +513,10 @@ jobs:
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
           (cd "$apply_artifact" && sha256sum --strict -c checksums.sha256)
           node "${apply_artifact}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_artifact" "$EXPECTED_SHA"
-          test -f "$runner"
-          test ! -L "$runner"
-          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
-          cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
-          test -f "$verifier"
-          test ! -L "$verifier"
-          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
-          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
-          test -f "$apply_runner"
-          test ! -L "$apply_runner"
-          test "$(stat -c '%U:%G:%a' "$apply_runner")" = "root:root:755"
-          cmp -s "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
-          test -f "$apply_verifier"
-          test ! -L "$apply_verifier"
-          test "$(stat -c '%U:%G:%a' "$apply_verifier")" = "root:root:755"
-          cmp -s "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
       - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail
@@ -548,36 +537,34 @@ jobs:
             sleep 1
           done
           [[ "$public_ready" -eq 1 ]]
-      - name: Install revision alignment controller after verified promotion
-        uses: actions/checkout@v4
+  apply-reviewed-schema-plan:
+    name: Apply reviewed 0021–0031 plan through the existing OIDC workflow
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [migration-ledger, promote-zone-runtime]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 1
-          path: controller-source
-      - name: Enable revision alignment timer
-        run: |
-          set -Eeuo pipefail
-          source_dir="${GITHUB_WORKSPACE}/controller-source/deploy"
-          test -f "${source_dir}/aurion-revision-alignment-controller.py"
-          test -f "${source_dir}/aurion-revision-alignment-controller.service"
-          test -f "${source_dir}/aurion-revision-alignment-controller.timer"
-          test -f "${source_dir}/aurion-revision-alignment-controller.env.template"
-          install -d -o root -g root -m 0750 /etc/aurion-revision-alignment
-          install -d -o root -g root -m 0750 /var/lib/aurion-revision-alignment
-          install -o root -g root -m 0755 "${source_dir}/aurion-revision-alignment-controller.py" /usr/local/sbin/aurion-revision-alignment-controller
-          install -o root -g root -m 0644 "${source_dir}/aurion-revision-alignment-controller.service" /etc/systemd/system/aurion-revision-alignment-controller.service
-          install -o root -g root -m 0644 "${source_dir}/aurion-revision-alignment-controller.timer" /etc/systemd/system/aurion-revision-alignment-controller.timer
-          if [[ ! -f /etc/aurion-revision-alignment/controller.env ]]; then
-            install -o root -g root -m 0640 "${source_dir}/aurion-revision-alignment-controller.env.template" /etc/aurion-revision-alignment/controller.env
-          fi
-          test "$(stat -c '%U:%G:%a' /usr/local/sbin/aurion-revision-alignment-controller)" = "root:root:755"
-          systemd-analyze verify /etc/systemd/system/aurion-revision-alignment-controller.service /etc/systemd/system/aurion-revision-alignment-controller.timer
-          systemctl daemon-reload
-          systemctl enable --now aurion-revision-alignment-controller.timer
-          systemctl is-active --quiet aurion-revision-alignment-controller.timer
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dispatch and wait for the exact reviewed schema plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AURION_EXPECTED_SHA: ${{ github.sha }}
+          AURION_PLAN_SHA256: ${{ needs.migration-ledger.outputs.plan_sha256 }}
+          AURION_LEDGER_RUN_ID: ${{ github.run_id }}
+        run: node scripts/dispatch-aurion-schema-plan.mjs
+
   production-schema-readback:
     name: Require production schema readback receipt
-    needs: promote-zone-runtime
+    needs: [promote-zone-runtime, apply-reviewed-schema-plan]
     uses: ./.github/workflows/aurion-production-schema-readback.yml
     with:
       expected_sha: ${{ github.sha }}

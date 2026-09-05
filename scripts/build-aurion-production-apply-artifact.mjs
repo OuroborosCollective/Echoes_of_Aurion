@@ -21,9 +21,11 @@ const tags = [
   "0025_aurion_loot_mastery_ethos",
   "0026_aurion_faction_questline_state",
   "0027_aurion_faction_questline_rewards",
-  "0028_aurion_world_checkpoint",
+  "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
 ];
+const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [
+  "verify-aurion-installed-schema-tool",
   "aurion-production-schema-apply",
   "aurion-production-schema-apply-core",
   "aurion-production-schema-apply.environment.template",
@@ -70,7 +72,7 @@ if (entries.length !== tags.length || entries.some((entry, index) => entry.tag !
 }
 await writeFile(path.join(meta, "_journal.json"), `${JSON.stringify({ version: "7", dialect: "mysql", entries }, null, 2)}\n`, { mode: 0o644 });
 
-for (const tag of tags) {
+for (const tag of contractTags) {
   await copyFile(path.join(root, "drizzle", `${tag}.sql`), path.join(drizzle, `${tag}.sql`));
 }
 for (const filename of deployFiles) {
@@ -82,7 +84,7 @@ const relativeFiles = [
   "bin/mysql-client-config.cjs",
   "bin/reconcile.cjs",
   "drizzle/meta/_journal.json",
-  ...tags.map(tag => `drizzle/${tag}.sql`),
+  ...contractTags.map(tag => `drizzle/${tag}.sql`),
   ...deployFiles.map(filename => `deploy/${filename}`),
 ].sort();
 const files = {};

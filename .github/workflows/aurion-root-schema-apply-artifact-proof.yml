@@ -17,6 +17,7 @@ on:
       - "scripts/build-aurion-production-apply-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/aurionProductionSchemaContracts.ts"
       - "deploy/aurion-production-schema-apply"
       - "deploy/aurion-production-schema-apply-core"
       - "deploy/aurion-production-schema-apply.environment.template"
@@ -35,6 +36,12 @@ on:
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
       - "drizzle/0028_aurion_world_checkpoint.sql"
+      - "drizzle/0029_aurion_guild_kingdom_authority.sql"
+      - "drizzle/0030_aurion_guild_bank_economy.sql"
+      - "drizzle/0031_aurion_profession_crafting_persistence.sql"
+      - "drizzle/0001_shocking_doctor_octopus.sql"
+      - "drizzle/0009_rainy_multiple_man.sql"
+      - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
 
 permissions:
   contents: read
@@ -176,6 +183,22 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' /etc/aurion-production-schema-apply.env)" = "root:root:600"
           sudo cmp -s dist-production-apply/deploy/aurion-production-schema-apply /usr/local/sbin/aurion-production-schema-apply
 
+      - name: Verify installed tools from a deployment user with restricted sbin traversal
+        run: |
+          set -euo pipefail
+          sudo useradd --system --no-create-home aurion-deploy
+          original_mode="$(stat -c '%a' /usr/local/sbin)"
+          trap 'sudo chmod "$original_mode" /usr/local/sbin' EXIT
+          sudo chmod 0700 /usr/local/sbin
+          if sudo -u aurion-deploy test -x /usr/local/sbin/aurion-production-schema-apply; then
+            echo 'restricted traversal fixture did not apply' >&2
+            exit 1
+          fi
+          sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-apply/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
+          sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-apply/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-apply/current/deploy/verify-aurion-production-schema-apply-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+          sudo chmod "$original_mode" /usr/local/sbin
+          trap - EXIT
+
       - name: Prove the sudo-exposed runner rejects an unbound direct invocation
         run: |
           set -euo pipefail
@@ -190,7 +213,7 @@ jobs:
           if(r.recordType!=="aurion_production_schema_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_FAILED"||r.failureStage!=="VERIFY_GITHUB_ACTIONS_OIDC"||r.errorClass!=="GITHUB_ACTIONS_OIDC_INVALID"||r.backup?.created!==false) process.exit(2);
           NODE
 
-      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0028
+      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0031
         run: |
           set -euo pipefail
           set +e
@@ -214,7 +237,7 @@ jobs:
           const raw=fs.readFileSync("apply-receipt.json","utf8");
           if(raw.includes("aurionapplyroot")||raw.includes("mysql://")) throw new Error("apply receipt leaked a credential");
           const r=JSON.parse(raw);
-          const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint"];
+          const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint","0029_aurion_guild_kingdom_authority","0030_aurion_guild_bank_economy","0031_aurion_profession_crafting_persistence"];
           if(r.recordType!=="aurion_production_schema_apply"||r.schemaVersion!==1||r.sourceRevision!==process.env.GITHUB_SHA||r.planSha256!==process.env.AURION_APPLY_TEST_PLAN||r.mode!=="backup_recovery_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_SUCCEEDED") throw new Error("apply receipt identity mismatch");
           if(r.preflight?.state!=="RECONCILIATION_REQUIRED"||r.preflight?.summary?.absentCount!==tags.length) throw new Error("apply did not require an absent preflight");
           if(r.backup?.created!==true||!/^[a-f0-9]{64}$/.test(r.backup?.sha256??"")||!Number.isSafeInteger(r.backup?.bytes)||r.backup.bytes<1) throw new Error("backup receipt invalid");
@@ -228,7 +251,7 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' "$backup_file")" = "root:root:600"
           sudo gzip -t "$backup_file"
           rows="$(docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM __drizzle_migrations" "$AURION_APPLY_TEST_DATABASE")"
-          test "$rows" -eq 29
+          test "$rows" -eq 32
 
       - name: Prove exact retry is a non-mutating no-op
         run: |
