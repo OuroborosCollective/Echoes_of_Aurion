@@ -10,7 +10,7 @@ test.skip(
   process.env.AURION_COLLISION_E2E !== "1",
   "Isolated collision runtime required"
 );
-test("real desktop movement crosses a chunk, collides with the supplied stump, and agrees with a phone observer and MariaDB", async ({
+test("real desktop movement crosses a chunk, passes small decoration and collides with a tree, and agrees with a phone observer and MariaDB", async ({
   browser,
   baseURL,
 }, info) => {
@@ -137,6 +137,29 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
     await expect
       .poll(async () => (await evidence(mover)).center?.z, { timeout: 15000 })
       .toBe(-1);
+    const driveUntil = async (
+      key: string,
+      reached: () => boolean,
+      timeout = 15000
+    ) => {
+      const previousStop = stopSeq;
+      await mover.keyboard.down(key);
+      try {
+        await expect.poll(reached, { intervals: [25], timeout }).toBe(true);
+      } finally {
+        await mover.keyboard.up(key);
+      }
+      await expect.poll(() => stopSeq).toBeGreaterThan(previousStop);
+      await expect
+        .poll(() => current?.lastAcceptedClientSeq === stopSeq)
+        .toBe(true);
+    };
+    // The supplied Stump_3 sits at (8,-40)m. Small decoration must be passable.
+    await driveUntil("d", () => !!current && current.position.x >= 10200);
+    const passedDecoration = structuredClone(current!);
+    expect(passedDecoration.position.x).toBeGreaterThan(9000);
+    await driveUntil("a", () => !!current && current.position.x <= 0);
+    await driveUntil("w", () => !!current && current.position.z <= -55760);
     const response = await mover.request.get(
       "/api/trpc/worldAssets.region?input=" +
         encodeURIComponent(JSON.stringify({ json: { x: 0, z: -1 } }))
@@ -146,12 +169,20 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
     expect(region.collisionHash).toBe(manifest.manifestSha256);
     const obstacle = region.placements.find(
       (p: { assetId: string; xMm: number; zMm: number }) =>
-        p.assetId === "nature-stump-3" && p.xMm === 8000 && p.zMm === -40000
+        p.assetId === "nature-tree-oak-6" &&
+        p.xMm === -24000 &&
+        p.zMm === -56000
     );
     expect(obstacle).toBeDefined();
     const source = manifest.colliders.find(
       (c: { assetId: string }) => c.assetId === obstacle.assetId
     );
+    expect(source.blocksMovement).toBe(true);
+    expect(
+      manifest.colliders.find(
+        (c: { assetId: string }) => c.assetId === "nature-stump-3"
+      ).blocksMovement
+    ).toBe(false);
     const hull = source.hullMm.map(([x, z]: [number, number]) =>
       obstacle.rotation === 0
         ? [x, z]
@@ -179,17 +210,17 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
         })
       );
     };
-    await mover.keyboard.down("d");
+    await mover.keyboard.down("a");
     try {
       await expect
         .poll(() => current?.position.x, { timeout: 8000 })
-        .toBeGreaterThan(5000);
+        .toBeLessThan(-18000);
       await expect
         .poll(
           () =>
             !!current &&
             distanceToHull({
-              x: current.position.x + 340,
+              x: current.position.x - 340,
               z: current.position.z,
             }) <
               manifest.playerRadiusMm + manifest.quantizationMarginMm,
@@ -200,7 +231,7 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
       await mover.waitForTimeout(1200);
       expect(current!.position).toEqual(blocked);
     } finally {
-      await mover.keyboard.up("d");
+      await mover.keyboard.up("a");
     }
     await expect
       .poll(() => stopSeq > 0 && current?.lastAcceptedClientSeq === stopSeq)
@@ -239,7 +270,7 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
     expect(visual.collisionHash).toBe(manifest.manifestSha256);
     expect(visual.origin).toEqual({ x: 0, z: -64 });
     expect(visual.selected).toContainEqual(
-      expect.objectContaining({ id: "nature-stump-3" })
+      expect.objectContaining({ id: "nature-tree-oak-6" })
     );
     await mover.screenshot({
       path: info.outputPath("desktop-nature-collision.png"),
@@ -248,13 +279,13 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
       path: info.outputPath("phone-shared-world.png"),
     });
     // Backing away must work immediately after contact.
-    await mover.keyboard.down("a");
+    await mover.keyboard.down("d");
     try {
       await expect
         .poll(() => current?.position.x)
-        .toBeLessThan(stopped.position.x);
+        .toBeGreaterThan(stopped.position.x);
     } finally {
-      await mover.keyboard.up("a");
+      await mover.keyboard.up("d");
     }
     expect(errors).toEqual([]);
     await info.attach("world-collision-readback", {
@@ -262,6 +293,7 @@ test("real desktop movement crosses a chunk, collides with the supplied stump, a
         revision: process.env.AURION_RELEASE_SHA,
         auth: "public_registration",
         crossed,
+        passedDecoration,
         stopped,
         remote,
         obstacle,

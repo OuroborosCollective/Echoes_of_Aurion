@@ -40,11 +40,11 @@ describe("authoritative zone movement", () => {
     const zone = new AuthoritativeMovementZone("observatory_threshold");
     const { connectionId } = zone.join({ userId: 2, socket: socket as unknown as WebSocket });
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
-    for (let tick = 0; tick < 118; tick += 1) expect(zone.tick()).toBe(true);
-    zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: 1, z: 0 } });
-    for (let tick = 0; tick < 19; tick += 1) expect(zone.tick()).toBe(true);
+    for (let tick = 0; tick < 165; tick += 1) expect(zone.tick()).toBe(true);
+    zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: -1, z: 0 } });
+    for (let tick = 0; tick < 64; tick += 1) expect(zone.tick()).toBe(true);
     const boundary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
-    expect(boundary.presences[0].position).toEqual({x:6_460,z:-40_120});
+    expect(boundary.presences[0].position).toEqual({x:-21_760,z:-56_100});
     expect(zone.tick()).toBe(false);
     const stationary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
     expect(stationary.tick).toBe(boundary.tick + 1);

@@ -71,12 +71,17 @@ const colliders = catalog.assets
       throw Error("COLLIDER_STREAMING_EXTENT_EXCEEDED");
     const hullMm = convexHull(points);
     if (hullMm.length < 3) throw Error("COLLIDER_FOOTPRINT_DEGENERATE");
-    return { assetId: asset.id, sourceSha256: asset.collider.sha256, hullMm };
+    return {
+      assetId: asset.id,
+      sourceSha256: asset.collider.sha256,
+      blocksMovement: /^(Tree_|Rock_|Mountain_)/.test(asset.name),
+      hullMm,
+    };
   });
 if (colliders.length !== 112) throw Error("COLLIDER_COUNT_MISMATCH");
 const payload = {
-  version: "aurion-nature-collision.v1",
-  policy: "convex-xz-swept-circle",
+  version: "aurion-nature-collision.v2",
+  policy: "trees-and-rocks-convex-xz-swept-circle",
   playerRadiusMm: 350,
   quantizationMarginMm: 1,
   bundleSha256: catalog.bundleSha256,

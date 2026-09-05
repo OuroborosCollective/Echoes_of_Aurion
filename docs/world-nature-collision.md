@@ -21,9 +21,13 @@ zuerst eine Bewegung entlang X und dann entlang Z versucht. Clients senden
 ausschließlich geordnete Richtungsabsichten. LOD, Kamera und Ladegeschwindigkeit
 können das Ergebnis nicht verändern.
 
-Diese erste Regel verwendet den vollständigen Grundriss jedes gelieferten
-Natur-Colliders. Sie enthält keine Höhenfreigabe für Übersteigen, Springen oder
-Unterlaufen von Baumkronen. Stadtmodelle ohne gelieferten Collider erhalten dadurch
+Kollision ist ausschließlich für die 42 Baum- und Felsmodelle (`Tree_*`,
+`Rock_*`, `Mountain_*`) aktiv. Die 70 übrigen Naturmodelle bleiben durchgehbar:
+Blumen, Gras, Büsche, Pilze, Äste, Baumstümpfe, Holzstücke, flache Trittsteine
+und kleine Dekoration. Alle 112 gelieferten Collider-Dateien bleiben erhalten;
+`blocksMovement` im geprüften Manifest bestimmt ihre Verwendung.
+Die aktive Regel verwendet den vollständigen Grundriss. Sie enthält keine
+Höhenfreigabe für Springen oder Unterlaufen von Baumkronen. Stadtmodelle ohne gelieferten Collider erhalten dadurch
 keine zusätzliche Körperphysik. Vorhandene Landschafts- und Kollisionsquellen
 bleiben erhalten; die neue Regel gehört zur Aurion-Serverbewegung.
 
@@ -51,13 +55,14 @@ damit kleine Positionsunterschiede auch bei großen Weltkoordinaten erhalten ble
 
 Der Produktionsbuild berechnet die Collider-Datei erneut und verweigert jede
 Abweichung. `server/worldNatureCollision.test.ts` prüft Quellen, Kantenfälle,
-alle 112 Kollisionsflächen, Weltgrenzen, Chunk-Reichweite und reproduzierbare
+alle 112 Quelldateien, die 42 aktiven Kollisionsflächen, 70 durchgehbare
+Dekorationsmodelle, Weltgrenzen, Chunk-Reichweite und reproduzierbare
 Bewegung. `server/worldNatureCollisionMariaDb.test.ts` prüft die echte INT-Speicherung
 an beiden Weltenden sowie eine serverbestätigte Aktion im entfernten Chunk.
 
 `e2e/world.nature-collision.spec.ts` legt zwei isolierte Konten über die öffentliche
 Registrierung an. Ein Spieler läuft mit Tastatureingaben über die Chunk-Grenze
-und gegen `Stump_3`; ein zweiter Browser empfängt denselben Serverstand. Der Test
+durch einen Baumstumpf und gegen `Tree_Oak_6`; ein zweiter Browser empfängt denselben Serverstand. Der Test
 gleicht WebSocket-Snapshots, sichtbare GLB-Projektion und MariaDB ab und speichert
 Screenshots samt revisionsgebundenen Nachweisen. Die Tests laufen ausschließlich
 gegen die ausdrücklich geprüfte lokale Testdatenbank.

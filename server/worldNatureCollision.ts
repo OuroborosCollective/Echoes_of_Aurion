@@ -138,7 +138,7 @@ export class WorldNatureCollision {
     const obstacles = worldAssetsForChunk(this.worldSeed, coordinate).flatMap(
       p => {
         const source = footprints.get(p.assetId);
-        if (!source) return [];
+        if (!source?.blocksMovement) return [];
         const hull = Object.freeze(
           source.hullMm.map(([x, z]) =>
             Object.freeze(rotate({ x: x!, z: z! }, p.rotation))

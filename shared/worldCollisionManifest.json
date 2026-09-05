@@ -1,6 +1,6 @@
 {
-  "version": "aurion-nature-collision.v1",
-  "policy": "convex-xz-swept-circle",
+  "version": "aurion-nature-collision.v2",
+  "policy": "trees-and-rocks-convex-xz-swept-circle",
   "playerRadiusMm": 350,
   "quantizationMarginMm": 1,
   "bundleSha256": "94de6cf4ff05f0ccc93c9471f077972b09def8e21c42e3720215017ab7939c4f",
@@ -9,6 +9,7 @@
     {
       "assetId": "nature-branch-1",
       "sourceSha256": "fd893bea2409a7a6b7ca50e7865ebbd3b01215982faf09bcee8913d361092318",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -55,6 +56,7 @@
     {
       "assetId": "nature-branch-2",
       "sourceSha256": "d9cfcd36c6647a033f149f1a9a3c98de6c890c018700ab4d34dd870d330b0638",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -121,6 +123,7 @@
     {
       "assetId": "nature-branch-3",
       "sourceSha256": "eb0374d2829198a031885dc138b589a4dd326824461235b1b4f93c57e105f982",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -187,6 +190,7 @@
     {
       "assetId": "nature-bush-1",
       "sourceSha256": "1c5ca15fd889d35c837c2aa6adff15923a91f9ad96bec8e9091e7cac6d7fb2b1",
+      "blocksMovement": false,
       "hullMm": [
         [
           -425,
@@ -229,6 +233,7 @@
     {
       "assetId": "nature-bush-2",
       "sourceSha256": "2f74a8db4e4e12b8bfbbc75463cd345c3fe1edc37bf48f22cb021d358121a638",
+      "blocksMovement": false,
       "hullMm": [
         [
           -496,
@@ -279,6 +284,7 @@
     {
       "assetId": "nature-bush-3",
       "sourceSha256": "cdccd9f587a2f197fca19a014942f4fb00e5c6f5b5845fe9d2e2bfbbd59dab0d",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -337,6 +343,7 @@
     {
       "assetId": "nature-bush-4",
       "sourceSha256": "119cf880d916d905f7b814ff00910d6ee75f0e66822b3523eb0e76d18f62c6d5",
+      "blocksMovement": false,
       "hullMm": [
         [
           -439,
@@ -383,6 +390,7 @@
     {
       "assetId": "nature-bush-5",
       "sourceSha256": "f7bf554a40f550390e15699e8ff9b64fb24e211fafca8496aa27c98cbea771cc",
+      "blocksMovement": false,
       "hullMm": [
         [
           -470,
@@ -429,6 +437,7 @@
     {
       "assetId": "nature-campfire-star",
       "sourceSha256": "c81b4b65e0c8ddbf512bef241b6e70528ad2ccb64d8238c407999ecbb0037d32",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -515,6 +524,7 @@
     {
       "assetId": "nature-campfire-teepee",
       "sourceSha256": "b785364e7694edac4a2f032a9c093597fd957e21a605911fe24341b012fceccc",
+      "blocksMovement": false,
       "hullMm": [
         [
           -472,
@@ -561,6 +571,7 @@
     {
       "assetId": "nature-cattail-1",
       "sourceSha256": "148ac076ce38c642ef410dfb8e91ae0f7b26b56b2df076711e3dc62f30035fcd",
+      "blocksMovement": false,
       "hullMm": [
         [
           -44,
@@ -607,6 +618,7 @@
     {
       "assetId": "nature-cattail-2",
       "sourceSha256": "030265bb37bd8ff277f4736975623a486d251e17b063eb7363b6c553b0108cf8",
+      "blocksMovement": false,
       "hullMm": [
         [
           -35,
@@ -649,6 +661,7 @@
     {
       "assetId": "nature-cattail-3",
       "sourceSha256": "1dde892065ac890864db4187f5c984e9df185c48cc941d812f81b6abf11b9b1f",
+      "blocksMovement": false,
       "hullMm": [
         [
           -32,
@@ -699,6 +712,7 @@
     {
       "assetId": "nature-cattail-4",
       "sourceSha256": "92df2478a7c2667bb8b3a73a30f4373da775f233aa3a3a2ff8224e96985306fe",
+      "blocksMovement": false,
       "hullMm": [
         [
           -73,
@@ -749,6 +763,7 @@
     {
       "assetId": "nature-cattail-5",
       "sourceSha256": "e520066cb9d6db10d03e1742dcb6f54284e4fa916bc843b2a4cd095513094e21",
+      "blocksMovement": false,
       "hullMm": [
         [
           -38,
@@ -803,6 +818,7 @@
     {
       "assetId": "nature-coconut",
       "sourceSha256": "7b2c52a0d660d9725331a21d72644c951fac700a8e6a45048a01f8da607f38d8",
+      "blocksMovement": false,
       "hullMm": [
         [
           -476,
@@ -849,6 +865,7 @@
     {
       "assetId": "nature-flower-balloon-1",
       "sourceSha256": "07aa331b4f772792ec39eb7e7dd15d319d54abba93bdbe541133b79169a3e0aa",
+      "blocksMovement": false,
       "hullMm": [
         [
           -368,
@@ -875,6 +892,7 @@
     {
       "assetId": "nature-flower-balloon-2",
       "sourceSha256": "d3154b28cc57ab974176d463ef1a05104797f016b2533fd7b6e6055083bf2d4f",
+      "blocksMovement": false,
       "hullMm": [
         [
           -349,
@@ -909,6 +927,7 @@
     {
       "assetId": "nature-flower-balloon-3",
       "sourceSha256": "e22298621fcc629b0654fcbb2c2231b04bde24d37ed02f017dcbeb7e59a93482",
+      "blocksMovement": false,
       "hullMm": [
         [
           -317,
@@ -951,6 +970,7 @@
     {
       "assetId": "nature-flower-bellflower-1",
       "sourceSha256": "26bc50c9977a2b2f49138ed691fd018c8e1de5677b815dbff607f0c50298b8ac",
+      "blocksMovement": false,
       "hullMm": [
         [
           -238,
@@ -1001,6 +1021,7 @@
     {
       "assetId": "nature-flower-bellflower-2",
       "sourceSha256": "3c834ac51fee6751da017f280607c6b86a3d81a5b7da13dc409fdab89be2fd32",
+      "blocksMovement": false,
       "hullMm": [
         [
           -246,
@@ -1047,6 +1068,7 @@
     {
       "assetId": "nature-flower-bellflower-3",
       "sourceSha256": "244cced4678f42756408ab5315ab628d9fc46dd0884af29f5746fddb457da540",
+      "blocksMovement": false,
       "hullMm": [
         [
           -309,
@@ -1093,6 +1115,7 @@
     {
       "assetId": "nature-flower-daisy-1",
       "sourceSha256": "f839a37064e8c982e73810ae6ffda963c82f73d102609b35b74173ab50983ee5",
+      "blocksMovement": false,
       "hullMm": [
         [
           -399,
@@ -1131,6 +1154,7 @@
     {
       "assetId": "nature-flower-daisy-2",
       "sourceSha256": "4fc3b4ca6694ce831c9ff4e168ab42ec05823f5de3ac56a3d89ffbc39b002c12",
+      "blocksMovement": false,
       "hullMm": [
         [
           -215,
@@ -1177,6 +1201,7 @@
     {
       "assetId": "nature-flower-daisy-3",
       "sourceSha256": "34068ff9f847900b725dfd5d82ca8a5936285517e363d8592d10cdbecb4710da",
+      "blocksMovement": false,
       "hullMm": [
         [
           -378,
@@ -1219,6 +1244,7 @@
     {
       "assetId": "nature-flower-sunflower-1",
       "sourceSha256": "36d6ba2713f31e80c54082f08a962762c522dcd31916704e0180730ed6e8fddc",
+      "blocksMovement": false,
       "hullMm": [
         [
           -369,
@@ -1257,6 +1283,7 @@
     {
       "assetId": "nature-flower-sunflower-2",
       "sourceSha256": "6f9972992839f17abda4fad9036097340588d13eae2f79e0a8188c573fa8b4b5",
+      "blocksMovement": false,
       "hullMm": [
         [
           -316,
@@ -1303,6 +1330,7 @@
     {
       "assetId": "nature-flower-sunflower-3",
       "sourceSha256": "6631ce0f80a53186b7e65211930b76cf3b4af97903f4695e8716ceb5e259eb7c",
+      "blocksMovement": false,
       "hullMm": [
         [
           -310,
@@ -1357,6 +1385,7 @@
     {
       "assetId": "nature-flower-violet-1",
       "sourceSha256": "4b4cdd073a1bdff20e7893269c51955de3cadacfc05fe1994d9fff062c971970",
+      "blocksMovement": false,
       "hullMm": [
         [
           -380,
@@ -1395,6 +1424,7 @@
     {
       "assetId": "nature-flower-violet-2",
       "sourceSha256": "03e437eacc7a0b37fe2d2386700f958dc81aa920d0ef4bd723966d7d0d74361b",
+      "blocksMovement": false,
       "hullMm": [
         [
           -356,
@@ -1433,6 +1463,7 @@
     {
       "assetId": "nature-flower-violet-3",
       "sourceSha256": "0cda9d26df00c88c76588116e5c90ac3768a2af1a945d58088afb3a4f5b7f3ee",
+      "blocksMovement": false,
       "hullMm": [
         [
           -314,
@@ -1475,6 +1506,7 @@
     {
       "assetId": "nature-grass-clump-1",
       "sourceSha256": "4da908cfce8f1ffb77c2f5cae08e55c32af2f8629f1cd014f0947f9b551edf6d",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -1505,6 +1537,7 @@
     {
       "assetId": "nature-grass-clump-2",
       "sourceSha256": "918d0d188f9332f08f2ca87b090924fe29fe2ef4a356afe9906dd4fbcf09568e",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -1523,6 +1556,7 @@
     {
       "assetId": "nature-grass-clump-3",
       "sourceSha256": "6cd073a72a0cb256c25a378c11952257b9eae9550411917e17c2697469de3fa4",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -1545,6 +1579,7 @@
     {
       "assetId": "nature-grass-clump-4",
       "sourceSha256": "1d169ea1f4f2cc81e13adb48bd1b7656d054b8744eb3c768743d4f9005859460",
+      "blocksMovement": false,
       "hullMm": [
         [
           -301,
@@ -1571,6 +1606,7 @@
     {
       "assetId": "nature-grass-clump-5",
       "sourceSha256": "f6945c51a014a1cb459c40a0c113cc57c74e31fd0398e6f6d13cf662bbd5b158",
+      "blocksMovement": false,
       "hullMm": [
         [
           -383,
@@ -1597,6 +1633,7 @@
     {
       "assetId": "nature-lamp-post",
       "sourceSha256": "d62a0314242d8849c159fccce24c4ae1496973092d91667d61378f22b547a0c6",
+      "blocksMovement": false,
       "hullMm": [
         [
           -200,
@@ -1651,6 +1688,7 @@
     {
       "assetId": "nature-log-1",
       "sourceSha256": "9947cf8da66efa58747cea3017f7abd99407a9007397e10ae424ca4465d2dd74",
+      "blocksMovement": false,
       "hullMm": [
         [
           -997,
@@ -1701,6 +1739,7 @@
     {
       "assetId": "nature-log-2",
       "sourceSha256": "83c5c7200b76e84578fe6a51941c88a25b2e2ea966d998015c44b616a6f488b0",
+      "blocksMovement": false,
       "hullMm": [
         [
           -996,
@@ -1747,6 +1786,7 @@
     {
       "assetId": "nature-log-3",
       "sourceSha256": "3b1ea70da0f69ba25fa7512c600a9bdd00f2d931aa13cae313bc643865c63c3e",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -1793,6 +1833,7 @@
     {
       "assetId": "nature-log-4",
       "sourceSha256": "675d716fe490d465c76f7e635d74ae425b858d4dd88d23b15783923edadee15d",
+      "blocksMovement": false,
       "hullMm": [
         [
           -997,
@@ -1843,6 +1884,7 @@
     {
       "assetId": "nature-log-5",
       "sourceSha256": "b8ee60134e805e81703b504d7565f18b7bdc7651570c72461b3b8ac9bc215671",
+      "blocksMovement": false,
       "hullMm": [
         [
           -999,
@@ -1889,6 +1931,7 @@
     {
       "assetId": "nature-mountain-1",
       "sourceSha256": "3c54c6bf466ea3840e17cf36d0c8772eebcf1b45e1b9ab255c89cfde05546e61",
+      "blocksMovement": true,
       "hullMm": [
         [
           -9000,
@@ -1935,6 +1978,7 @@
     {
       "assetId": "nature-mountain-2",
       "sourceSha256": "3f1b830315bebe436e3313fa72f2269413bd427acda460263f33a99522261915",
+      "blocksMovement": true,
       "hullMm": [
         [
           -8956,
@@ -1985,6 +2029,7 @@
     {
       "assetId": "nature-mountain-3",
       "sourceSha256": "ae6ddb458c4c283ffce7422aaae041348824bcdc32d8e24c7dfc2522281f6e3a",
+      "blocksMovement": true,
       "hullMm": [
         [
           -9000,
@@ -2031,6 +2076,7 @@
     {
       "assetId": "nature-mountain-4",
       "sourceSha256": "18f8f083fa9e89ba7663ac4b267b4dec82d50367bf994b5b8d902491c087261c",
+      "blocksMovement": true,
       "hullMm": [
         [
           -7602,
@@ -2093,6 +2139,7 @@
     {
       "assetId": "nature-mushroom-brown",
       "sourceSha256": "746540f84a1191b4b340a32a62168a194516eb7b3c86d18e7a0c7ccc4056b654",
+      "blocksMovement": false,
       "hullMm": [
         [
           -498,
@@ -2147,6 +2194,7 @@
     {
       "assetId": "nature-mushroom-dark-red",
       "sourceSha256": "f1cb470d66d361128e7ed265814aa4daaea92d667ebbbabf6584f3bb40a018f8",
+      "blocksMovement": false,
       "hullMm": [
         [
           -505,
@@ -2201,6 +2249,7 @@
     {
       "assetId": "nature-mushroom-grey",
       "sourceSha256": "3424993f2914dcb061c80c5c8812a1b4126502b7ac4523beff4e9fc06fb2f97a",
+      "blocksMovement": false,
       "hullMm": [
         [
           -463,
@@ -2255,6 +2304,7 @@
     {
       "assetId": "nature-mushroom-red-spotted",
       "sourceSha256": "bc8cea1a665fc6bac67a760e4cd44fd5c6648f1cc46ba3ad1cd5bcd9a8e55dd0",
+      "blocksMovement": false,
       "hullMm": [
         [
           -512,
@@ -2309,6 +2359,7 @@
     {
       "assetId": "nature-rock-1",
       "sourceSha256": "0adbf5dc98eb0683e7d8d50aa406cdf19930d6e6d7808d8090271f56dff32bc0",
+      "blocksMovement": true,
       "hullMm": [
         [
           -946,
@@ -2359,6 +2410,7 @@
     {
       "assetId": "nature-rock-2",
       "sourceSha256": "0e2885d8906032a692a70e48435b5bb377bb27739b88b9be938c5d1e584bf845",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1000,
@@ -2425,6 +2477,7 @@
     {
       "assetId": "nature-rock-3",
       "sourceSha256": "6fe2b688cf4ca9162a35e0783d33da89a09121d1e2978de3eb17cd0036d4445d",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1001,
@@ -2479,6 +2532,7 @@
     {
       "assetId": "nature-rock-4",
       "sourceSha256": "6983ba5ce703c02fc8cd904e0c04cf3084413e6fd68104b31355ee4210781f8f",
+      "blocksMovement": true,
       "hullMm": [
         [
           -877,
@@ -2537,6 +2591,7 @@
     {
       "assetId": "nature-rock-5",
       "sourceSha256": "55c1832090588a84c6ac5da94ed43ce5410b8de66186eed051cd61527c76797d",
+      "blocksMovement": true,
       "hullMm": [
         [
           -639,
@@ -2595,6 +2650,7 @@
     {
       "assetId": "nature-rock-6",
       "sourceSha256": "983484f7ca7bdf87042944bd8cdd1d6833daf3e4c0d2365c380e1232464fc535",
+      "blocksMovement": true,
       "hullMm": [
         [
           -831,
@@ -2653,6 +2709,7 @@
     {
       "assetId": "nature-rock-7",
       "sourceSha256": "a10231c44673e4f09c9b0c7061c9afb239deeaf47eebdf555ff3553a61957c3c",
+      "blocksMovement": true,
       "hullMm": [
         [
           -977,
@@ -2707,6 +2764,7 @@
     {
       "assetId": "nature-rock-8",
       "sourceSha256": "062651d8dee461a5b2537cb876b1cea0751778a8364317e2b2031d1871e5fa43",
+      "blocksMovement": true,
       "hullMm": [
         [
           -905,
@@ -2753,6 +2811,7 @@
     {
       "assetId": "nature-rock-9",
       "sourceSha256": "5503ab3cb0640cd47287f5849843987957bb9c97854a45cf480a5bbfb9d13726",
+      "blocksMovement": true,
       "hullMm": [
         [
           -977,
@@ -2811,6 +2870,7 @@
     {
       "assetId": "nature-root-1",
       "sourceSha256": "5cde7b6345bd6a3d75f7d864e47d21782dce22663e2c5c1b1e027448946f5289",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -2853,6 +2913,7 @@
     {
       "assetId": "nature-root-2",
       "sourceSha256": "7487e1ea327b13a19913eb5d5cf574ce4758e5445a315f3d3ae1ca60011fa8dd",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -2895,6 +2956,7 @@
     {
       "assetId": "nature-root-3",
       "sourceSha256": "fff9a98cb3ea4f44da5d8a6ed06f16a346e17c700b59f4eea4c44665ec716c48",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -2945,6 +3007,7 @@
     {
       "assetId": "nature-root-4",
       "sourceSha256": "3d7d137b148b9190f6e7217ae1f08bb546363b219ee1bedcad430b7c4a8fd429",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -2999,6 +3062,7 @@
     {
       "assetId": "nature-root-5",
       "sourceSha256": "c1de984977249089ce14e0c6c1d8db1d552865d4aa8a43e246bb95d18162e5a5",
+      "blocksMovement": false,
       "hullMm": [
         [
           -409,
@@ -3045,6 +3109,7 @@
     {
       "assetId": "nature-root-6",
       "sourceSha256": "5e90feebf4275252ef69e79d5d23d2cd64444e7b131768cd5d53adde913d786e",
+      "blocksMovement": false,
       "hullMm": [
         [
           -206,
@@ -3103,6 +3168,7 @@
     {
       "assetId": "nature-shell-layered",
       "sourceSha256": "031393ff71367fa9bdf9d226c99e1b5aa2c0cf1e7de8e133752999e63ce72fbb",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -3157,6 +3223,7 @@
     {
       "assetId": "nature-shell-salmon",
       "sourceSha256": "26ebaa2cdf2668df240780d691ddce4b51e5bc3121a168c72bba45cf375324b7",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -3211,6 +3278,7 @@
     {
       "assetId": "nature-shell-slate",
       "sourceSha256": "19cd84fc3dc372c452809aac29b83d7b1a2d901ab43eabc52752e30003c6f3fe",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -3265,6 +3333,7 @@
     {
       "assetId": "nature-starfish-bleached",
       "sourceSha256": "768b387287c9cd1236d517c71f612acbc563fd44a8aafeedf1c854280033fe3a",
+      "blocksMovement": false,
       "hullMm": [
         [
           -492,
@@ -3291,6 +3360,7 @@
     {
       "assetId": "nature-starfish-salmon",
       "sourceSha256": "24e4f545d67b8f16d0d34bc038cf97ba05731e30db492c2ed1c8efc91be47644",
+      "blocksMovement": false,
       "hullMm": [
         [
           -477,
@@ -3317,6 +3387,7 @@
     {
       "assetId": "nature-stepping-stone-1",
       "sourceSha256": "f67d9f2ad625f36197e7d26977d526f97a712332f339c969ad3593cd64021087",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -3367,6 +3438,7 @@
     {
       "assetId": "nature-stepping-stone-2",
       "sourceSha256": "9b0eff4d206be758e7137c9f77dad0396af4e2beea5679281ecb09e628b51f57",
+      "blocksMovement": false,
       "hullMm": [
         [
           -467,
@@ -3417,6 +3489,7 @@
     {
       "assetId": "nature-stepping-stone-3",
       "sourceSha256": "592f8256134c634b494659c628b2e3e7a7ce6015e9379a8296013e6b1b006130",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -3471,6 +3544,7 @@
     {
       "assetId": "nature-stepping-stone-4",
       "sourceSha256": "8e770f47e4eb23a0e7ad844b412c923173b4d7f50125e0abb83f124673dfde1a",
+      "blocksMovement": false,
       "hullMm": [
         [
           -500,
@@ -3513,6 +3587,7 @@
     {
       "assetId": "nature-stump-1",
       "sourceSha256": "b95867d0a0e2a1286d0022f38b8a2c649a6a70305caa019c70fd0f134063f02f",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -3567,6 +3642,7 @@
     {
       "assetId": "nature-stump-2",
       "sourceSha256": "431a9533b755ac6eed79c7e8535c35217f830b691c9bf47185e7b1e024e50de7",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -3621,6 +3697,7 @@
     {
       "assetId": "nature-stump-3",
       "sourceSha256": "a288d391726fc42ff92d2ad066ecf230f0ba1012e44e46123cd071cc668c4610",
+      "blocksMovement": false,
       "hullMm": [
         [
           -942,
@@ -3651,6 +3728,7 @@
     {
       "assetId": "nature-timber-cut-2",
       "sourceSha256": "3b6fccac26a6ed80dbc2e16ff895eb624d952c9708739e4ee2e56ecb7c3fc47c",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -3689,6 +3767,7 @@
     {
       "assetId": "nature-timber-cut-3",
       "sourceSha256": "54966de9ff0cf8cb379bd4dfb67f415450d63c7eadae2cb57a93df93673b6343",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -3727,6 +3806,7 @@
     {
       "assetId": "nature-timber-cut-4",
       "sourceSha256": "916cc757873bb3cd28d60f76eedfdc64d56ba1ad59d817ac77baed193e5d4835",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -3769,6 +3849,7 @@
     {
       "assetId": "nature-timber-stack-1",
       "sourceSha256": "4b1146fa6c5a746932ad1bbf1e95ce850f4b680e358f8e312cfc60e42e0a7c27",
+      "blocksMovement": false,
       "hullMm": [
         [
           -998,
@@ -3827,6 +3908,7 @@
     {
       "assetId": "nature-timber-stack-2",
       "sourceSha256": "f584a6489b3d549f8e84b095d7195c364f490f238889bfcc2f6dd75a87b19686",
+      "blocksMovement": false,
       "hullMm": [
         [
           -990,
@@ -3873,6 +3955,7 @@
     {
       "assetId": "nature-timber-whole-1",
       "sourceSha256": "89d473f1b59add524d19c2b40c0bc93091ec085468f5f2cb268b0e1db9ca131a",
+      "blocksMovement": false,
       "hullMm": [
         [
           -1000,
@@ -3903,6 +3986,7 @@
     {
       "assetId": "nature-tree-bare-1",
       "sourceSha256": "574d49355b8de73edacf9d3bd8f7b0d326a8f167a66e9d6a7318a03c1d2f4597",
+      "blocksMovement": true,
       "hullMm": [
         [
           -684,
@@ -3941,6 +4025,7 @@
     {
       "assetId": "nature-tree-bare-2",
       "sourceSha256": "a6a51f3a899a5e1b3b7aa05bbbaec240073291fb18b6d3174846761401723f17",
+      "blocksMovement": true,
       "hullMm": [
         [
           -738,
@@ -3975,6 +4060,7 @@
     {
       "assetId": "nature-tree-bare-3",
       "sourceSha256": "55b4452209bec8eaeeeb0881ed67447003bfae840dc61f34cde24fe341fe3750",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1058,
@@ -4017,6 +4103,7 @@
     {
       "assetId": "nature-tree-bare-4",
       "sourceSha256": "348b896bf79e111b461262fbfbc2592b157ef3d89752782a765aa66e97f0cabb",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1187,
@@ -4059,6 +4146,7 @@
     {
       "assetId": "nature-tree-bare-5",
       "sourceSha256": "d286babf5dc08a033c3faecd4a9c719e8299cf21c2aaefcac3b6e235593ef8a3",
+      "blocksMovement": true,
       "hullMm": [
         [
           -929,
@@ -4121,6 +4209,7 @@
     {
       "assetId": "nature-tree-bare-6",
       "sourceSha256": "759e94395083897d10bd4907ee6e8b3ea19d2cadccae6825b113d61cc06808b4",
+      "blocksMovement": true,
       "hullMm": [
         [
           -954,
@@ -4163,6 +4252,7 @@
     {
       "assetId": "nature-tree-cedar-1",
       "sourceSha256": "4419f03d0d11c53b725664bfc1af99972312d0a2aa8fed0001d09e875140ebed",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1494,
@@ -4217,6 +4307,7 @@
     {
       "assetId": "nature-tree-cedar-2",
       "sourceSha256": "b5c37acaeb449e5d36e0942783348bdb08a4b1847f5b9d1e790abd8d9d61d85d",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1478,
@@ -4263,6 +4354,7 @@
     {
       "assetId": "nature-tree-cedar-3",
       "sourceSha256": "2063f6a5af4884dac6efa5211e89cddb4e8bd756e88d79ef41b8461a670e8fd9",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1414,
@@ -4321,6 +4413,7 @@
     {
       "assetId": "nature-tree-oak-1",
       "sourceSha256": "43a6eee01c9a76a978152472289f213973cc3f8147d41cfdff98b283bc50e918",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2546,
@@ -4367,6 +4460,7 @@
     {
       "assetId": "nature-tree-oak-2",
       "sourceSha256": "21e309861713b52b009d222d9940ef6e26cbc457ea7001c6845ff4c33e958db1",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1655,
@@ -4413,6 +4507,7 @@
     {
       "assetId": "nature-tree-oak-3",
       "sourceSha256": "fa5f5d8d48886dbe16370fb56442b6fc41fb8dba8a031662ad96e4ec9d1018a3",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1551,
@@ -4459,6 +4554,7 @@
     {
       "assetId": "nature-tree-oak-4",
       "sourceSha256": "ae415c94fa8104cc0ce90efef7fa84b1e2a48f3ac0e63db74b024f62187af67d",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1100,
@@ -4513,6 +4609,7 @@
     {
       "assetId": "nature-tree-oak-5",
       "sourceSha256": "b584abb2f5dcf44cc7c49975ee3802a8b7e572a8f8f1f1521241de67e9aecd51",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1673,
@@ -4567,6 +4664,7 @@
     {
       "assetId": "nature-tree-oak-6",
       "sourceSha256": "1e9ae75b0790fee3d030e794860726a4b4aa1fba6e3591e33e3c16cc8e50e3bd",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1837,
@@ -4629,6 +4727,7 @@
     {
       "assetId": "nature-tree-oak-7",
       "sourceSha256": "c980c6187833908fa391a66d249a5ecac872635e8a6f1f8391b8c286ddc09044",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1355,
@@ -4691,6 +4790,7 @@
     {
       "assetId": "nature-tree-oak-8",
       "sourceSha256": "3a94c64c998a8ff8a16c07e946c1eed79d764d420d1d437205c07884a47feddc",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1457,
@@ -4749,6 +4849,7 @@
     {
       "assetId": "nature-tree-palm-1",
       "sourceSha256": "c1999747cb673bba3ac91649bb1ef240470bddf12e0f35d1010bfc38716deb31",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2738,
@@ -4791,6 +4892,7 @@
     {
       "assetId": "nature-tree-palm-2",
       "sourceSha256": "ef500c1a239f4409ee44402247b38db8af886aff341c2ce9fcce60820afb00a2",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2987,
@@ -4841,6 +4943,7 @@
     {
       "assetId": "nature-tree-palm-3",
       "sourceSha256": "4a438d301d289c675366bd3ba6bd3b6986ed2645552663c9267a4aa6f43c2cfc",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2631,
@@ -4887,6 +4990,7 @@
     {
       "assetId": "nature-tree-palm-4",
       "sourceSha256": "34964616c8966a040604cc1385adb90fbb41248410f5eab29cfe6a158bac70ab",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2565,
@@ -4933,6 +5037,7 @@
     {
       "assetId": "nature-tree-palm-5",
       "sourceSha256": "762853e434e399407a383597e2c6079238babd142b7c2fe9fc2f9304e1630e04",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2295,
@@ -4979,6 +5084,7 @@
     {
       "assetId": "nature-tree-palm-6",
       "sourceSha256": "8aee8618efa1ff4580a6174c9dc3136ef90baec656d83ef3adc09008afd2fe58",
+      "blocksMovement": true,
       "hullMm": [
         [
           -2284,
@@ -5025,6 +5131,7 @@
     {
       "assetId": "nature-tree-pine-1",
       "sourceSha256": "83d7e859942c1cc6f81c3034d0c873466340cfe2dcfaa2098b25c391b4be8e19",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1386,
@@ -5055,6 +5162,7 @@
     {
       "assetId": "nature-tree-pine-2",
       "sourceSha256": "ff864b3f2369b9ad640365b6c7bc6b40d995a1881cac0ad7151b11ca215b0100",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1147,
@@ -5085,6 +5193,7 @@
     {
       "assetId": "nature-tree-pine-3",
       "sourceSha256": "de2196ffd630096678e18e2889a5fded766176539109e41dfc16ee57e468344d",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1297,
@@ -5115,6 +5224,7 @@
     {
       "assetId": "nature-tree-pine-4",
       "sourceSha256": "f6a582ee281058fbc7005ea7c9c49daa3be2b61744ee9211325f6470ef5f6f4e",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1074,
@@ -5145,6 +5255,7 @@
     {
       "assetId": "nature-tree-pine-5",
       "sourceSha256": "aa8065fb22896005aee4725bbb3e3f7b3f2c28c9d58e187898a9875cf6265304",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1168,
@@ -5175,6 +5286,7 @@
     {
       "assetId": "nature-tree-pine-6",
       "sourceSha256": "78ea8037c9d9099b2fdeb2c28ff3cc44ece54dc4c90b4cff8bf67210af409fa2",
+      "blocksMovement": true,
       "hullMm": [
         [
           -1140,
@@ -5203,5 +5315,5 @@
       ]
     }
   ],
-  "manifestSha256": "c0d33cb450c9987de7fdaae3bcef08ea39cd4a083997766665e9c6b1cb273f75"
+  "manifestSha256": "ba350a340de4cac8a1326af7c9d02c8704bf4fff01b0d600347cf9b4c8bb2580"
 }

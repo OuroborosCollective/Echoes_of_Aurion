@@ -10,6 +10,7 @@ import {
   worldAssetCatalog,
   worldAssetRegion,
   worldAssetRegionSchema,
+  worldAssetsForChunk,
 } from "../shared/worldAssetProtocol";
 import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import {
@@ -95,7 +96,7 @@ describe("source-bound nature collision and global movement", () => {
       )
     ).toBe(true);
   });
-  it("selects every collider with exact quarter turns, independently of user/cache order", () => {
+  it("selects only tree and rock colliders with exact quarter turns, independently of user/cache order", () => {
     const world = new WorldNatureCollision(),
       other = new WorldNatureCollision();
     const covered = new Set();
@@ -119,7 +120,15 @@ describe("source-bound nature collision and global movement", () => {
           expect(world.blockingObstacle(actual, actual)?.id).toBe(obstacle.id);
         }
       }
-    expect(covered.size).toBe(112);
+    expect(covered.size).toBe(42);
+    expect([...covered].sort()).toEqual(
+      worldAssetCatalog.assets
+        .filter(
+          a => a.family === "nature" && /^(Tree_|Rock_|Mountain_)/.test(a.name)
+        )
+        .map(a => a.id)
+        .sort()
+    );
     expect(world.obstaclesForChunk({ x: 0, z: -1 })).toEqual(
       other.obstaclesForChunk({ x: 0, z: -1 })
     );
@@ -127,30 +136,54 @@ describe("source-bound nature collision and global movement", () => {
       world.blockingObstacle({ x: 0, z: 0 }, { x: 0, z: 64_000 })
     ).toThrow("STEP_EXCEEDED");
   });
-  it("replays travel beyond the old boundary and stops against the real Stump_3 collider", () => {
+  it("replays travel beyond the old boundary and stops against the real Tree_Oak_6 collider", () => {
     const trace = () => {
       let p = { x: 0, z: 0 };
       const positions = [];
-      for (let i = 0; i < 118; i++) {
+      for (let i = 0; i < 165; i++) {
         p = integrateZoneMovement(p, { x: 0, z: -1 });
         positions.push(p);
       }
-      for (let i = 0; i < 40; i++) {
-        p = integrateZoneMovement(p, { x: 1, z: 0 });
+      for (let i = 0; i < 100; i++) {
+        p = integrateZoneMovement(p, { x: -1, z: 0 });
         positions.push(p);
       }
       return positions;
     };
     expect(trace()).toEqual(trace());
-    expect(trace().at(-1)).toEqual({ x: 6460, z: -40120 });
+    expect(trace().at(-1)).toEqual({ x: -21760, z: -56100 });
     expect(splitWorldChunkPositionMm(trace().at(-1)!).coordinate).toEqual({
       x: 0,
       z: -1,
     });
-    expect(integrateZoneMovement(trace().at(-1)!, { x: -1, z: 0 })).toEqual({
-      x: 6120,
-      z: -40120,
+    expect(integrateZoneMovement(trace().at(-1)!, { x: 1, z: 0 })).toEqual({
+      x: -21420,
+      z: -56100,
     });
+  });
+  it("lets players cross flowers, grass, stumps and every other small decoration", () => {
+    const world = new WorldNatureCollision(),
+      checked = new Set<string>();
+    const passive = new Set(
+      manifest.colliders.filter(c => !c.blocksMovement).map(c => c.assetId)
+    );
+    for (let x = -12; x <= 12; x++)
+      for (let z = -12; z <= 12; z++)
+        for (const placement of worldAssetsForChunk(GLOBAL_WORLD_SEED, {
+          x,
+          z,
+        })) {
+          if (!passive.has(placement.assetId) || checked.has(placement.assetId))
+            continue;
+          const from = { x: placement.xMm - 170, z: placement.zMm },
+            to = { x: placement.xMm + 170, z: placement.zMm };
+          expect(world.blockingObstacle(from, to)).toBeUndefined();
+          expect(integrateZoneMovement(from, { x: 1, z: 0 })).toEqual(to);
+          checked.add(placement.assetId);
+        }
+    expect(checked.size).toBe(70);
+    expect([...checked].some(id => id.startsWith("nature-flower-"))).toBe(true);
+    expect(checked.has("nature-stump-3")).toBe(true);
   });
   it("round-trips the full world through centered INT storage, preserving old chunk-zero rows", () => {
     for (const x of [
