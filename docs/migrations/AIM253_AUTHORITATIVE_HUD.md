@@ -36,6 +36,10 @@ replacement flow; committing the file alone does not publish it to the catalog.
 animated foot contact to the terrain. The imported skeleton is preserved; server
 movement selects Idle/Walk/Run and confirmed actions trigger attacks. The actor's
 clock and skeleton pose are measured directly for browser verification.
+The zone publishes the first stationary tick after movement, including at its
+boundary, and acknowledges accepted intents even when coordinates do not change.
+This supplies confirmed zero velocity for Idle without broadcasting continuously
+while the zone is idle. Stale intents cannot restart motion.
 
 The supplied blacksmith GLB (`38fe974913fef9e86b27fa93f2b30b75f069c27afbc05c3ec69736d946920137`)
 is recognized from its internal rig/clip names as `npc_blacksmith`, independently
