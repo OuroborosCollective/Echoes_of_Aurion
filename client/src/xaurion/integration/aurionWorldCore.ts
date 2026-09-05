@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { MMOEngine } from "../core/MMOEngine";
+import { RuntimeFrameLoop } from "../core/RuntimeFrameLoop";
 
 export type AurionWorldContext = Readonly<{ epoch: number; worldSeed: string }>;
 
@@ -253,8 +254,14 @@ export class AurionWorldCore {
   private readonly occlusion = new OcclusionCullingSystem();
   private readonly ambient = new THREE.AmbientLight(0xfff7ed, 0.3);
   private readonly vegetation: InstancedVegetationSystem;
-  private animationFrame = 0;
-  private lastFrame = 0;
+  private disposed = false;
+  private readonly frameLoop = new RuntimeFrameLoop(delta => {
+    this.loop.advance(delta);
+    this.lod.update(this.engine.camera);
+  }, error => {
+    this.engine.stop();
+    this.engine.onRuntimeError?.(error);
+  }, 0.25);
   private weatherPhase: WeatherType = "clear_radiance";
 
   constructor(private readonly engine: MMOEngine, private readonly context: AurionWorldContext) {
@@ -267,16 +274,7 @@ export class AurionWorldCore {
   }
 
   start(): void {
-    if (this.animationFrame) return;
-    this.lastFrame = performance.now();
-    const frame = (now: number) => {
-      const delta = Math.max(0, (now - this.lastFrame) / 1000);
-      this.lastFrame = now;
-      this.loop.advance(delta);
-      this.lod.update(this.engine.camera);
-      this.animationFrame = requestAnimationFrame(frame);
-    };
-    this.animationFrame = requestAnimationFrame(frame);
+    if (!this.disposed) this.frameLoop.start();
   }
 
   private fixedTick(tick: number): void {
@@ -301,8 +299,9 @@ export class AurionWorldCore {
   }
 
   stop(): void {
-    if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
-    this.animationFrame = 0;
+    if (this.disposed) return;
+    this.disposed = true;
+    this.frameLoop.stop();
     this.lod.clear();
     this.vegetation.dispose(this.engine.scene);
     this.engine.scene.remove(this.ambient);

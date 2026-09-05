@@ -30,6 +30,7 @@ import { SimulatedRealmPlayers } from '../entities/SimulatedRealmPlayers';
 import { soundSynth } from '../audio/SoundSynthesizer';
 import { GenkitAdapter } from '../adapters/GenkitAdapter';
 import { ParticleSystem } from './ParticleSystem';
+import { RuntimeFrameLoop } from './RuntimeFrameLoop';
 import { syncManager } from './SyncManager';
 import { PartyManager } from './PartyManager';
 
@@ -149,9 +150,12 @@ export class MMOEngine {
     dayNightInfo: DayNightInfo;
   }) => void;
 
-  private isRunning: boolean = false;
-  private lastTime: number = 0;
-  private animationFrameId: number = 0;
+  public onRuntimeError?: (error: unknown) => void;
+  private disposed = false;
+  private readonly frameLoop = new RuntimeFrameLoop(delta => {
+    this.update(delta);
+    this.renderer.render(this.scene, this.camera);
+  }, error => this.failRuntime(error));
   private stateUpdateTimer: number = 0;
 
   public collisionDebugGroup: THREE.Group | null = null;
@@ -391,7 +395,12 @@ export class MMOEngine {
 
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => {
-        this.handleResize();
+        if (this.disposed) return;
+        try {
+          this.handleResize();
+        } catch (error) {
+          this.failRuntime(error);
+        }
       });
       this.resizeObserver.observe(this.container);
     }
@@ -583,13 +592,11 @@ export class MMOEngine {
 
   private handleContextLost = (event: Event) => {
     event.preventDefault();
-    console.warn('MMOEngine: WebGL Context Lost.');
-    this.stop();
+    this.failRuntime(new Error('WEBGL_CONTEXT_LOST'));
   };
 
   private handleContextRestored = () => {
-    console.info('MMOEngine: WebGL Context Restored. Resuming render loop.');
-    this.start();
+    // Context loss disposes this engine; recovery must create a fresh instance.
   };
 
   private handleKeyDown = (e: KeyboardEvent) => {
@@ -1187,26 +1194,25 @@ export class MMOEngine {
   }
 
   public start() {
-    if (this.isRunning) return;
-    this.isRunning = true;
-    this.lastTime = performance.now();
-    this.handleResize();
-
-    // Verify non-zero viewport dimensions on next animation frame
-    requestAnimationFrame(() => {
+    if (this.disposed) return;
+    try {
       this.handleResize();
-      if (this.renderer) {
-        const size = this.renderer.getSize(new THREE.Vector2());
-        console.info(`[MMOEngine] Runtime Viewport Validated: [${size.x}w x ${size.y}h]`);
-      }
-    });
+      this.frameLoop.start();
+    } catch (error) {
+      this.failRuntime(error);
+    }
+  }
 
-    this.loop(this.lastTime);
+  private failRuntime(error: unknown) {
+    if (this.disposed) return;
+    this.stop();
+    this.onRuntimeError?.(error);
   }
 
   public stop() {
-    this.isRunning = false;
-    cancelAnimationFrame(this.animationFrameId);
+    if (this.disposed) return;
+    this.disposed = true;
+    this.frameLoop.stop();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
@@ -1223,17 +1229,6 @@ export class MMOEngine {
       console.warn('MMOEngine: Error during renderer disposal', e);
     }
   }
-
-  private loop = (time: number) => {
-    if (!this.isRunning) return;
-    const delta = Math.min((time - this.lastTime) / 1000, 0.1);
-    this.lastTime = time;
-
-    this.update(delta);
-    this.renderer.render(this.scene, this.camera);
-
-    this.animationFrameId = requestAnimationFrame(this.loop);
-  };
 
   private update(delta: number) {
     // 1. Calculate Movement Vector from WASD / Arrow Keys / Virtual On-Screen Joystick

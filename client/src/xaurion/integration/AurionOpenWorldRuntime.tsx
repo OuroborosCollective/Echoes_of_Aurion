@@ -3,6 +3,7 @@ import { ArrowLeft, Database, Radio } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
+import { runtimeIssueCode } from "@shared/runtimeContracts";
 import { MMOEngine } from "../core/MMOEngine";
 import { GameHUD } from "../components/GameHUD";
 import { InventoryModal } from "../components/InventoryModal";
@@ -84,7 +85,6 @@ export default function AurionOpenWorldRuntime() {
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
   const keysRef = useRef(new Set<string>());
   const virtualInputRef = useRef({ forward: 0, right: 0 });
-  const connectedOnceRef = useRef(false);
 
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -134,7 +134,7 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     const onLoad = (event: Event) => {
-      connectedOnceRef.current = false;
+      setWebglError(null);
       setActivation(validActivation((event as CustomEvent<unknown>).detail));
     };
     const onReturn = () => setActivation(null);
@@ -158,10 +158,23 @@ export default function AurionOpenWorldRuntime() {
     }
 
     let disposed = false;
+    let engine: MMOEngine | undefined;
     let unsubscribeEquipment: (() => void) | undefined;
+    const fail = (error: unknown) => {
+      if (disposed) return;
+      engine?.stop();
+      zoneClientRef.current?.close();
+      zoneClientRef.current = null;
+      engineRef.current = null;
+      keysRef.current.clear();
+      virtualInputRef.current = { forward: 0, right: 0 };
+      setZoneStatus("closed");
+      setWebglError(runtimeIssueCode(error));
+    };
     try {
-      const engine = new MMOEngine(containerRef.current, currentClassId);
+      engine = new MMOEngine(containerRef.current, currentClassId);
       engineRef.current = engine;
+      engine.onRuntimeError = fail;
       bindAurionAuthorityProjection(engine, {
         requestAction: requestAuthoritativeAction,
         requestMount: requestAuthoritativeMount,
@@ -188,15 +201,14 @@ export default function AurionOpenWorldRuntime() {
         setSimPlayers([...state.simPlayers]);
       };
       engine.start();
-      setWebglError(null);
     } catch (error) {
-      setWebglError(error instanceof Error ? error.message : "xaurion konnte nicht initialisiert werden.");
+      fail(error);
     }
     return () => {
       disposed = true;
       unsubscribeEquipment?.();
-      engineRef.current?.stop();
-      engineRef.current = null;
+      engine?.stop();
+      if (engineRef.current === engine) engineRef.current = null;
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
     };
@@ -226,15 +238,18 @@ export default function AurionOpenWorldRuntime() {
   }, [characterAppearance.data?.storageUrl, activation]);
 
   useEffect(() => {
-    if (!activation || !isAuthenticated || !user?.id || connectedOnceRef.current) return;
-    connectedOnceRef.current = true;
+    if (!activation || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
+    let disposed = false;
+    let client: ZoneMovementClient | undefined;
     setZoneStatus("connecting");
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "xaurion-open-world-v1" }, {
       onSuccess: ({ ticket }) => {
-        const client = new ZoneMovementClient({
-          onStatus: setZoneStatus,
-          onReject: () => setZoneStatus("rejected"),
+        if (disposed || !engineRef.current) return;
+        client = new ZoneMovementClient({
+          onStatus: status => { if (!disposed) setZoneStatus(status); },
+          onReject: () => { if (!disposed) setZoneStatus("rejected"); },
           onSnapshot: snapshot => {
+            if (disposed) return;
             const self = snapshot.presences.find(presence => presence.userId === user.id);
             const engine = engineRef.current;
             if (!self || !engine) return;
@@ -252,14 +267,14 @@ export default function AurionOpenWorldRuntime() {
         zoneClientRef.current = client;
         client.connect(ticket);
       },
-      onError: () => setZoneStatus("rejected"),
+      onError: () => { if (!disposed) setZoneStatus("rejected"); },
     });
     return () => {
-      zoneClientRef.current?.close();
-      zoneClientRef.current = null;
-      setZoneStatus("idle");
+      disposed = true;
+      client?.close();
+      if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
-  }, [activation, isAuthenticated, user?.id]);
+  }, [activation, webglError, isAuthenticated, user?.id]);
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
@@ -415,16 +430,16 @@ export default function AurionOpenWorldRuntime() {
       <div ref={containerRef} className="xaurion-runtime__viewport" id="three-viewport" />
       <div className="xaurion-runtime__bridge-status" aria-live="polite">
         <span><Database size={13} /> AURION DB</span>
-        <b>{zoneStatus === "connected" ? "SERVER-AUTORITÄT LIVE" : zoneStatus === "connecting" ? "VERBINDET" : "READBACK"}</b>
+        <b>{webglError ? "ANGEHALTEN" : zoneStatus === "connected" ? "BEWEGUNG VERBUNDEN" : zoneStatus === "connecting" ? "VERBINDET" : zoneStatus === "rejected" ? "VERBINDUNG ABGELEHNT" : "NICHT VERBUNDEN"}</b>
         <i><Radio size={12} /> {worldLabel}</i>
       </div>
       <button className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>
         <ArrowLeft size={16} /> ZUR STERNWARTE
       </button>
       {celebration > 0 && <div className="xaurion-runtime__celebration" key={celebration} aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <span key={index} style={{ "--i": index } as React.CSSProperties}>✦</span>)}</div>}
-      {webglError && <div className="xaurion-runtime__error" role="alert"><b>OPEN-WORLD-RENDERER NICHT VERFÜGBAR</b><span>{webglError}</span></div>}
+      {webglError && <div className="xaurion-runtime__error" role="alert"><b>OPEN WORLD ANGEHALTEN</b><span>Bitte kehre zur Sternwarte zurück und öffne die Welt erneut. Vorgang {webglError}</span></div>}
 
-      {stats && (
+      {!webglError && stats && (
         <GameHUD
           playerStats={stats}
           currentClassId={currentClassId}
