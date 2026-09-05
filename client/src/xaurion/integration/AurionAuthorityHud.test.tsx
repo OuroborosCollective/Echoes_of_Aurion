@@ -6,7 +6,7 @@ const fixtures = vi.hoisted(() => ({ player: { data: undefined as unknown, isErr
 vi.mock("@/lib/trpc", () => ({ trpc: {
   useUtils: () => ({ gameplay: { relationshipStanding: { invalidate: fixtures.standing.refetch } } }),
   player: { me: { useQuery: () => fixtures.player }, chooseClass: { useMutation: () => ({ mutateAsync: fixtures.mutate }) }, setWeaponLoadout: { useMutation: () => ({ mutateAsync: fixtures.mutate }) } },
-  gameplay: { relationshipStanding: { useQuery: () => fixtures.standing }, currentEncounter: { useQuery: () => fixtures.other }, startEncounter: { useMutation: () => ({}) }, progress: { useQuery: () => fixtures.other }, openWorld: { useQuery: () => fixtures.other }, acceptQuest: { useMutation: () => ({}) }, completeQuest: { useMutation: () => ({}) } },
+  gameplay: { npcSnapshots: { useQuery: () => ({}) }, relationshipStanding: { useQuery: () => fixtures.standing }, currentEncounter: { useQuery: () => fixtures.other }, startEncounter: { useMutation: () => ({}) }, progress: { useQuery: () => fixtures.other }, openWorld: { useQuery: () => fixtures.other }, acceptQuest: { useMutation: () => ({}) }, completeQuest: { useMutation: () => ({}) } },
 } }));
 vi.mock("../components/VirtualJoystick", () => ({ VirtualJoystick: () => null }));
 const confirmed = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "warden" }, capabilities: { canChooseClass: false, classUnlockLevel: 36 }, weaponMasteries: [], inventory: [] };

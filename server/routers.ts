@@ -15,7 +15,7 @@ import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
-import { interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
+import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
 
@@ -127,6 +127,7 @@ export const appRouter = router({
   }),
   gameplay: router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
+    npcSnapshots: protectedProcedure.query(({ ctx }) => readConfirmedNpcPacket(ctx.user.id)),
     relationshipStanding: protectedProcedure.query(({ ctx }) => db.getRelationshipStanding(ctx.user.id)),
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
