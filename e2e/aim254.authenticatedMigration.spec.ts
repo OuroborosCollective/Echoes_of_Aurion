@@ -336,6 +336,7 @@ test("explicit companion learning captures the visible world and stores a bounde
     const runtime = page.getByTestId("xaurion-open-world-runtime");
     await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
     await expect(page.locator("canvas")).toHaveCount(1);
+    await runtime.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
     const pairingResponse = page.waitForResponse(response => response.url().includes("gateway.createSession") && response.status() === 200);
     await dialog.getByRole("button", { name: "Companion verbinden", exact: true }).click();
@@ -380,6 +381,7 @@ test("explicit companion learning captures the visible world and stores a bounde
     expect(new Set(observation.featureVector).size).toBeGreaterThan(1);
     expect(observation.stateMask).toEqual([0, 0, 0, 0, 0, 0]);
     expect(observation.stateVector).toEqual([0, 0, 0, 0, 0, 0]);
+    await runtime.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
     await expect(dialog.getByText(/^[1-9][0-9]* lokale Beobachtungszeilen$/)).toBeVisible();
     await dialog.getByRole("button", { name: "Aufzeichnung beenden", exact: true }).click();

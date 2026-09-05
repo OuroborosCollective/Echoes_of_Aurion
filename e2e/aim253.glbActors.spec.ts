@@ -142,12 +142,12 @@ for (const viewport of [
       const origin = { ...presence!.position };
       await page.keyboard.down("d");
       try {
-        await expect.poll(async () => (await pose(player))?.clip, { timeout: 15_000 }).toMatch(/^(Walk|Run)$/);
         await expect.poll(() => presence!.position.x, { timeout: 15_000 }).toBeGreaterThan(origin.x);
-        await expect.poll(() => presence!.position.x, { timeout: 15_000 }).toBeGreaterThanOrEqual(5500);
+        await expect.poll(() => presence!.position.x, { intervals: [50], timeout: 15_000 }).toBeGreaterThanOrEqual(5500);
       } finally { await page.keyboard.up("d"); }
       await page.keyboard.down("w");
       try {
+        await expect.poll(async () => (await pose(player))?.clip, { timeout: 15_000 }).toMatch(/^(Walk|Run)$/);
         await expect(page.getByRole("button", { name: "Schmied ansprechen", exact: true })).toBeVisible({ timeout: 15_000 });
       } finally { await page.keyboard.up("w"); }
       await expect.poll(async () => (await pose(player))?.clip).toBe("Idle");
