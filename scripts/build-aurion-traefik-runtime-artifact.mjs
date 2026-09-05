@@ -11,6 +11,10 @@ if (!/^[a-f0-9]{40}$/.test(revision)) {
 const root = process.cwd();
 const output = path.join(root, "dist-traefik-runtime");
 const filesToCopy = [
+  "deploy/aurion-revision-alignment-controller.py",
+  "deploy/aurion-revision-alignment-controller.service",
+  "deploy/aurion-revision-alignment-controller.timer",
+  "deploy/aurion-revision-alignment-controller.env.template",
   "Dockerfile",
   "docker-compose.traefik.yml",
   "package.json",

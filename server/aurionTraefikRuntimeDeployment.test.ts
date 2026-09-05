@@ -108,13 +108,18 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(pushBlock).toContain("branches: [main]");
     expect(pushBlock).not.toContain("paths:");
     expect(triggerBlock).toContain("workflow_dispatch:");
-    expect(workflow.split(trustedMainCondition)).toHaveLength(4);
+    expect(workflow.split(trustedMainCondition)).toHaveLength(5);
+    const dispatchJob = workflow.split("\n  apply-reviewed-schema-plan:")[1]?.split("\n  production-schema-readback:")[0];
+    expect(dispatchJob).toContain(trustedMainCondition);
+    expect(dispatchJob).toContain("needs: [migration-ledger, promote-zone-runtime]");
+    expect(dispatchJob).toContain("actions: write");
+    expect(dispatchJob).toContain("node scripts/dispatch-aurion-schema-plan.mjs");
     expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.ref }}");
     expect(workflow).not.toContain(
       "group: deploy-aurion-zone-runtime-${{ github.event_name }}-${{ github.ref }}"
     );
     expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]");
-    expect(workflow).toContain("needs: promote-zone-runtime");
+    expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
   });
 
   it("uses Traefik labels and a root-managed secret environment file", () => {

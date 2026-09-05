@@ -84,7 +84,7 @@ jobs:
           import fs from "node:fs";
           const tags=[
             "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs",
-            "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint",
+            "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
           ];
           const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==="object"?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
           const ledger=JSON.parse(fs.readFileSync("migration-ledger/migration-ledger.json","utf8"));
@@ -216,16 +216,10 @@ jobs:
           test "$installed_root" = "/opt/echoes-of-aurion-schema-apply/releases/${EXPECTED_SHA}"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           node "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$artifact" "$EXPECTED_SHA"
-          test -f "$runner"
-          test ! -L "$runner"
-          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
-          test -f "$verifier"
-          test ! -L "$verifier"
-          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
           cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
           cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
-          cmp -s "$artifact/deploy/aurion-production-schema-apply" "$runner"
-          cmp -s "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-apply" "$runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier"
           test -s "$authorization_file"
           test "$(stat -c '%a' "$authorization_file")" = "600"
           umask 077

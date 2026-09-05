@@ -7,6 +7,9 @@ export const lateAurionMigrationTags = [
   "0026_aurion_faction_questline_state",
   "0027_aurion_faction_questline_rewards",
   "0028_aurion_world_checkpoint",
+  "0029_aurion_guild_kingdom_authority",
+  "0030_aurion_guild_bank_economy",
+  "0031_aurion_profession_crafting_persistence",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
@@ -32,11 +35,15 @@ export type ExpectedTable = Readonly<{
   name: string;
   columns: readonly ExpectedColumn[];
   indexes: readonly ExpectedIndex[];
+  checks?: readonly { name: string; expression: string }[];
 }>;
 
 export type ExpectedMigration = Readonly<{
   tag: LateAurionMigrationTag;
   tables: readonly ExpectedTable[];
+  /** Exact contracts before ALTER; missing legacy prerequisites are never applyable. */
+  priorTables?: readonly ExpectedTable[];
+  createdTableNames?: readonly string[];
 }>;
 
 export type ObservedColumn = Readonly<{
@@ -55,6 +62,7 @@ export type ObservedTable = Readonly<{
   name: string;
   columns: readonly ObservedColumn[];
   indexes: readonly ObservedIndex[];
+  checks?: readonly { name: string; expression: string }[];
 }>;
 
 export type MigrationClassification = Readonly<{
@@ -231,6 +239,7 @@ function parseIndexClause(clause: string): ExpectedIndex | null {
 function parseCreateTable(name: string, body: string): ExpectedTable {
   const columns: ExpectedColumn[] = [];
   const indexes: ExpectedIndex[] = [];
+  const checks: { name: string; expression: string }[] = [];
   for (const clause of splitTopLevelComma(body)) {
     const columnMatch = clause.match(/^`([^`]+)`\s+([\s\S]+)$/);
     if (columnMatch) {
@@ -247,12 +256,14 @@ function parseCreateTable(name: string, body: string): ExpectedTable {
     }
     const parsedIndex = parseIndexClause(clause);
     if (parsedIndex) indexes.push(parsedIndex);
+    const check = clause.match(/^CONSTRAINT\s+`([^`]+)`\s+CHECK\s*\(([\s\S]+)\)$/i);
+    if (check) checks.push({ name: check[1], expression: check[2] });
   }
   if (columns.length === 0) throw new Error(`${name}: CREATE TABLE contains no parsed columns`);
-  return { name, columns, indexes };
+  return { name, columns, indexes, checks };
 }
 
-export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: string): ExpectedMigration {
+export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: string, existing: ReadonlyMap<string, ExpectedTable> = new Map()): ExpectedMigration {
   const sql = removeSqlComments(sourceSql);
   const tables: ExpectedTable[] = [];
   const createPattern = /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`([^`]+)`\s*\(/gi;
@@ -263,16 +274,97 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
     tables.push(parseCreateTable(match[1], body));
     createPattern.lastIndex = end;
   }
-  if (tables.length === 0) throw new Error(`${tag}: no CREATE TABLE statements found`);
-
-  const tableMap = new Map(tables.map(table => [table.name, { ...table, indexes: [...table.indexes] }]));
+  const tableMap = new Map(tables.map(table => [table.name, { ...table, columns: [...table.columns], indexes: [...table.indexes], checks: [...(table.checks ?? [])] }]));
+  const priorTables = new Map<string, ExpectedTable>();
+  const alterPattern = /ALTER\s+TABLE\s+`([^`]+)`\s+([^;]+);/gi;
+  while ((match = alterPattern.exec(sql))) {
+    const name = match[1];
+    if (!tableMap.has(name)) {
+      const before = existing.get(name);
+      if (!before) throw new Error(`${tag}: ALTER references unknown table ${name}`);
+      priorTables.set(name, before);
+      tableMap.set(name, { ...before, columns: [...before.columns], indexes: [...before.indexes], checks: [...(before.checks ?? [])] });
+    }
+    const table = tableMap.get(name)!;
+    const clause = match[2].trim();
+    const column = clause.match(/^(ADD|MODIFY)(?:\s+COLUMN)?\s+`([^`]+)`\s+([\s\S]+)$/i);
+    if (column) {
+      const parsed = parseCreateTable(name, `\`${column[2]}\` ${column[3]}`).columns[0];
+      const index = table.columns.findIndex(entry => entry.name === parsed.name);
+      if (column[1].toUpperCase() === "ADD") {
+        if (index !== -1) throw new Error(`${tag}: duplicate ADD column ${name}.${parsed.name}`);
+        table.columns.push(parsed);
+      } else {
+        if (index === -1) throw new Error(`${tag}: missing MODIFY column ${name}.${parsed.name}`);
+        table.columns[index] = parsed;
+      }
+      continue;
+    }
+    const index = clause.startsWith("ADD ") ? parseIndexClause(clause.slice(4)) : null;
+    if (index) {
+      if (table.indexes.some(entry => entry.name === index.name)) throw new Error(`${tag}: duplicate index ${index.name}`);
+      table.indexes.push(index);
+      continue;
+    }
+    const drop = clause.match(/^DROP\s+INDEX\s+`([^`]+)`$/i);
+    if (drop) {
+      if (!table.indexes.some(entry => entry.name === drop[1])) throw new Error(`${tag}: missing DROP index ${drop[1]}`);
+      table.indexes = table.indexes.filter(entry => entry.name !== drop[1]);
+      continue;
+    }
+    const check = clause.match(/^ADD\s+CONSTRAINT\s+`([^`]+)`\s+CHECK\s*\(([\s\S]+)\)$/i);
+    if (check) {
+      table.checks.push({ name: check[1], expression: check[2] });
+      continue;
+    }
+    throw new Error(`${tag}: unsupported ALTER ${name}`);
+  }
+  if (tableMap.size === 0) throw new Error(`${tag}: no table contracts found`);
   const externalIndexPattern = /CREATE\s+(UNIQUE\s+)?INDEX\s+`([^`]+)`\s+ON\s+`([^`]+)`\s*\(([^;]+)\)\s*;/gi;
   while ((match = externalIndexPattern.exec(sql))) {
     const table = tableMap.get(match[3]);
     if (!table) throw new Error(`${tag}: index ${match[2]} references unknown table ${match[3]}`);
     table.indexes.push({ name: match[2], unique: Boolean(match[1]), columns: indexColumns(match[4]) });
   }
-  return { tag, tables: Array.from(tableMap.values()) };
+  const dropIndexPattern = /DROP\s+INDEX\s+`([^`]+)`\s+ON\s+`([^`]+)`\s*;/gi;
+  while ((match = dropIndexPattern.exec(sql))) {
+    const table = tableMap.get(match[2]);
+    if (!table || !table.indexes.some(index => index.name === match![1])) throw new Error(`${tag}: missing standalone DROP index ${match[1]}`);
+    table.indexes = table.indexes.filter(index => index.name !== match![1]);
+  }
+  return { tag, tables: Array.from(tableMap.values()), priorTables: [...priorTables.values()], createdTableNames: tables.map(table => table.name) };
+}
+
+/** Prefix comparison accounts for later migrations evolving an earlier table. */
+export function classifyMigrationContracts(expected: readonly ExpectedMigration[], observed: ReadonlyMap<string, ObservedTable>): MigrationClassification[] {
+  const created = new Set(expected.flatMap(migration => migration.createdTableNames ?? migration.tables.map(table => table.name)));
+  const baseline = new Map<string, ExpectedTable>();
+  for (const migration of expected) for (const table of migration.priorTables ?? []) {
+    if (!created.has(table.name) && !baseline.has(table.name)) baseline.set(table.name, table);
+  }
+  const allNames = new Set(expected.flatMap(migration => migration.tables.map(table => table.name)));
+  const snapshots = [new Map(baseline)];
+  for (const migration of expected) {
+    const next = new Map(snapshots.at(-1)!);
+    for (const table of migration.tables) next.set(table.name, table);
+    snapshots.push(next);
+  }
+  const candidates = snapshots.map((snapshot, prefix) => ({ prefix, drift: [...allNames].flatMap(name => {
+    const table = snapshot.get(name);
+    const actual = observed.get(name);
+    if (!table) return actual ? [`${name}:unexpected_table_before_migration`] : [];
+    return actual ? compareTableContract(table, actual) : [`${name}:missing_table`];
+  }).sort() }));
+  const closest = candidates.reduce((left, right) => right.drift.length < left.drift.length ? right : left);
+  return expected.map((migration, index) => {
+    const names = migration.tables.map(table => table.name).sort();
+    const drift = closest.drift.filter(message => names.some(name => message.startsWith(`${name}:`)));
+    return {
+      tag: migration.tag,
+      state: drift.length ? "PRESENT_SCHEMA_DRIFT" : index < closest.prefix ? "PRESENT_SCHEMA_MATCH" : "ABSENT_APPLY_REQUIRED",
+      expectedTables: names, presentTables: names.filter(name => observed.has(name)), missingTables: names.filter(name => !observed.has(name)), drift,
+    };
+  });
 }
 
 function normalizeType(value: string): string {
@@ -281,6 +373,42 @@ function normalizeType(value: string): string {
 
 function expectedIndexName(index: ExpectedIndex): string {
   return index.name.startsWith("inline_unique:") ? index.name.slice("inline_unique:".length) : index.name;
+}
+
+/** Normalize MariaDB's parentheses/identifier formatting without losing AND/OR precedence. */
+export function canonicalCheckExpression(expression: string, table: string): string {
+  const matches = [...expression.matchAll(/'(?:''|\\.|[^'\\])*'|`[^`]+`|[a-z_][a-z_0-9]*|[0-9]+|<>|!=|<=|>=|[().=<>+*/%-]/gi)];
+  let end = 0;
+  for (const match of matches) {
+    if (expression.slice(end, match.index).trim()) throw new Error("Unsupported CHECK expression token");
+    end = match.index! + match[0].length;
+  }
+  if (expression.slice(end).trim()) throw new Error("Unsupported CHECK expression token");
+  const tokens = matches.map(match => match[0]);
+  const values = tokens.map(token => token.startsWith("'") ? token : token.replace(/`/g, "").toLowerCase()).filter((token, index, all) => {
+    if (token === table.toLowerCase() && all[index + 1] === ".") return false;
+    if (token === "." && all[index - 1] === table.toLowerCase()) return false;
+    if (/^_(?:utf8mb4|utf8mb3|utf8|latin1)$/.test(token) && all[index + 1]?.startsWith("'")) return false;
+    return true;
+  });
+  function normalize(input: string[]): unknown {
+    while (input[0] === "(" && input.at(-1) === ")") {
+      let depth = 0;
+      if (input.slice(0, -1).some(token => { depth += token === "(" ? 1 : token === ")" ? -1 : 0; return depth === 0; })) break;
+      input = input.slice(1, -1);
+    }
+    for (const operator of ["or", "and"]) {
+      let depth = 0, start = 0;
+      const parts: string[][] = [];
+      input.forEach((token, index) => {
+        depth += token === "(" ? 1 : token === ")" ? -1 : 0;
+        if (depth === 0 && token === operator) { parts.push(input.slice(start, index)); start = index + 1; }
+      });
+      if (parts.length) return [operator, ...[...parts, input.slice(start)].map(normalize)];
+    }
+    return input;
+  }
+  return JSON.stringify(normalize(values));
 }
 
 export function compareTableContract(expected: ExpectedTable, observed: ObservedTable): string[] {
@@ -316,6 +444,13 @@ export function compareTableContract(expected: ExpectedTable, observed: Observed
   for (const name of observedIndexes.keys()) {
     if (!expectedIndexes.has(name)) drift.push(`${expected.name}:unexpected_index:${name}`);
   }
+  const actualChecks = new Map((observed.checks ?? []).map(check => [check.name, check.expression]));
+  for (const check of expected.checks ?? []) {
+    const actual = actualChecks.get(check.name);
+    if (!actual) drift.push(`${expected.name}:missing_check:${check.name}`);
+    else if (canonicalCheckExpression(check.expression, expected.name) !== canonicalCheckExpression(actual, expected.name)) drift.push(`${expected.name}:check_expression:${check.name}`);
+  }
+  for (const name of actualChecks.keys()) if (!(expected.checks ?? []).some(check => check.name === name)) drift.push(`${expected.name}:unexpected_check:${name}`);
   return drift.sort();
 }
 

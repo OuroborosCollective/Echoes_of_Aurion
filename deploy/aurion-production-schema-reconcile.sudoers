@@ -6,3 +6,9 @@ aurion-deploy ALL=(root) NOPASSWD: /usr/local/sbin/aurion-production-schema-reco
 # so the argument pattern cannot absorb a second option, argument, or path.
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
 aurion-deploy ALL=(root) NOPASSWD: /usr/bin/grep -Fq [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f] /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+
+# Metadata and content digests of these two fixed installed executables only.
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/stat -c %u_%g_%f /usr/local/sbin/aurion-production-schema-reconcile
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/sha256sum /usr/local/sbin/aurion-production-schema-reconcile
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/stat -c %u_%g_%f /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+aurion-deploy ALL=(root) NOPASSWD: /usr/bin/sha256sum /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs

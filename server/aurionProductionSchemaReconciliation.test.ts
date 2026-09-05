@@ -1,8 +1,11 @@
+import { readProductionSchemaContracts } from "../scripts/aurionProductionSchemaContracts";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   classifyMigrationContract,
+  classifyMigrationContracts,
+  canonicalCheckExpression,
   compareTableContract,
   lateAurionMigrationTags,
   parseLateMigrationSql,
@@ -17,6 +20,7 @@ async function parse(tag: (typeof lateAurionMigrationTags)[number]) {
 function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"][number]): ObservedTable {
   return {
     name: table.name,
+    checks: table.checks,
     columns: table.columns.map(column => ({
       name: column.name,
       columnType: column.sqlType === "int" ? "int(11)" : column.sqlType,
@@ -31,6 +35,52 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
 }
 
 describe("Aurion production schema reconciliation", () => {
+  it("compares CHECK boolean structure without discarding grouping or string literals", () => {
+    const normalize = (value: string) => canonicalCheckExpression(value, "items");
+    expect(normalize("((`items`.`kind` = 'craft' AND `a` IS NULL) OR (`kind` = 'loot' AND `b` IS NOT NULL))")).toBe(normalize("`kind` = 'craft' and `a` is null or `kind` = 'loot' and `b` is not null"));
+    expect(normalize("(a = 1 OR b = 2) AND c = 3")).not.toBe(normalize("a = 1 OR b = 2 AND c = 3"));
+    expect(normalize("quantity REGEXP '^[1-9][0-9]*$'")).not.toBe(normalize("quantity REGEXP '^[0-9]*$'"));
+    expect(() => normalize("a = 1 || b = 2")).toThrow("Unsupported CHECK");
+  });
+
+  it("accepts every exact late prefix including both guild enum and crafting index evolution", async () => {
+    const contracts = await readProductionSchemaContracts(process.cwd());
+    const created = new Set(contracts.flatMap(migration => migration.createdTableNames ?? []));
+    const observed = new Map<string, ObservedTable>();
+    for (const migration of contracts) for (const table of migration.priorTables ?? []) {
+      if (!created.has(table.name) && !observed.has(table.name)) observed.set(table.name, observedFromExpected(table));
+    }
+    for (let prefix = 0; prefix <= contracts.length; prefix++) {
+      const result = classifyMigrationContracts(contracts, observed);
+      expect(result.map(migration => migration.state), `prefix ${prefix}`).toEqual(contracts.map((_, index) => index < prefix ? "PRESENT_SCHEMA_MATCH" : "ABSENT_APPLY_REQUIRED"));
+      if (prefix < contracts.length) for (const table of contracts[prefix].tables) observed.set(table.name, observedFromExpected(table));
+    }
+    expect(observed.get("aurionItemInstancesV2")?.columns.find(column => column.name === "status")?.columnType).toContain("guild_custody");
+    const indexes = observed.get("itemInstances")!.indexes;
+    expect(indexes.find(index => index.name === "itemInstances_crafting_output_uq")).toMatchObject({ unique: true, columns: ["craftingReceiptId", "craftingOutputKey"] });
+    expect(indexes.some(index => index.name === "itemInstances_craftingReceiptId_unique")).toBe(false);
+    // 0009 removes the 0001 index before adding owner/status/created ordering.
+    expect(indexes.some(index => index.name === "itemInstances_owner_created_idx")).toBe(false);
+    expect(indexes.some(index => index.name === "itemInstances_owner_status_created_idx")).toBe(true);
+  });
+
+  it("fails closed for absent legacy prerequisites and incomplete ALTER application", async () => {
+    const contracts = await readProductionSchemaContracts(process.cwd());
+    expect(classifyMigrationContracts(contracts, new Map()).some(result => result.state === "PRESENT_SCHEMA_DRIFT")).toBe(true);
+    const observed = new Map<string, ObservedTable>();
+    for (const migration of contracts) for (const table of migration.tables) observed.set(table.name, observedFromExpected(table));
+    const items = observed.get("itemInstances")!;
+    observed.set(items.name, { ...items, indexes: items.indexes.filter(index => index.name !== "itemInstances_crafting_output_uq") });
+    const result = classifyMigrationContracts(contracts, observed);
+    expect(result.some(migration => migration.drift.some(reason => reason.includes("missing_index:itemInstances_crafting_output_uq")))).toBe(true);
+    expect(result.at(-1)?.state).toBe("PRESENT_SCHEMA_DRIFT");
+  });
+
+  it("rejects unsupported ALTER instead of certifying only newly created tables", () => {
+    const sql = "CREATE TABLE `example` (`id` int NOT NULL); ALTER TABLE `example` DROP COLUMN `id`;";
+    expect(() => parseLateMigrationSql("0031_aurion_profession_crafting_persistence", sql)).toThrow("unsupported ALTER");
+  });
+
   it("sets every reconciler database session read-only before querying metadata", async () => {
     const source = await readFile(
       path.resolve(process.cwd(), "scripts/reconcile-aurion-production-schema.ts"),
@@ -42,9 +92,9 @@ describe("Aurion production schema reconciliation", () => {
     expect(transactionIndex).toBeLessThan(metadataIndex);
   });
 
-  it("parses all eight late SQL migrations from their real repository contracts", async () => {
-    const migrations = await Promise.all(lateAurionMigrationTags.map(parse));
-    expect(migrations).toHaveLength(8);
+  it("parses all eleven late SQL migrations from their real repository contracts", async () => {
+    const migrations = await readProductionSchemaContracts(process.cwd());
+    expect(migrations).toHaveLength(11);
     expect(migrations.every(migration => migration.tables.length > 0)).toBe(true);
     const tableNames = migrations.flatMap(migration => migration.tables.map(table => table.name));
     expect(tableNames).toContain("aurionGlobalWorldStates");

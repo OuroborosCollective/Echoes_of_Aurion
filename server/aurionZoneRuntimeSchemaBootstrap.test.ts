@@ -26,7 +26,7 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(workflow).toContain("uses: ./.github/workflows/aurion-root-reconciliation-artifact-proof.yml");
     expect(workflow).toContain("production-schema-readback:");
     expect(workflow).toContain("uses: ./.github/workflows/aurion-production-schema-readback.yml");
-    expect(workflow).toContain("needs: promote-zone-runtime");
+    expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
     expect(workflow).toContain("expected_sha: ${{ github.sha }}");
     expect(workflow).toContain("upstream_run_id: ${{ github.run_id }}");
   });
@@ -70,7 +70,7 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
       'cmp -s "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs',
     ]) expect(promoter).toContain(token);
     expect(workflow).toContain('node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"');
-    expect(workflow).toContain('cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
-    expect(workflow).toContain('cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
+    expect(workflow).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
+    expect(workflow).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
   });
 });

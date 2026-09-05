@@ -74,17 +74,11 @@ jobs:
           test -f "$installed"
           test -f "$installed_root/checksums.sha256"
           (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
-          test -f "$verifier"
-          test ! -L "$verifier"
-          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
-          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
-          node "$verifier" "$installed_root" "$EXPECTED_SHA"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          node "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$installed_root" "$EXPECTED_SHA"
           cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
           cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
-          test -f "$runner"
-          test ! -L "$runner"
-          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
-          cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
           ARTIFACT_MANIFEST="$artifact/manifest.json" INSTALLED_MANIFEST="$installed" EXPECTED_SHA="$EXPECTED_SHA" node -e '
             const fs=require("node:fs");
             const artifact=JSON.parse(fs.readFileSync(process.env.ARTIFACT_MANIFEST,"utf8"));
@@ -152,7 +146,7 @@ jobs:
 
               const allowedStages=new Set([
                 "INITIALIZE","READ_ENVIRONMENT","READ_EXPECTED_MIGRATIONS","CONNECT_DATABASE",
-                "READ_SCHEMA_COLUMNS","READ_SCHEMA_INDEXES","READ_DRIZZLE_JOURNAL","CLOSE_DATABASE","EXECUTE_DOCKER",
+                "READ_SCHEMA_COLUMNS","READ_SCHEMA_INDEXES","READ_SCHEMA_CHECKS","READ_DRIZZLE_JOURNAL","CLOSE_DATABASE","EXECUTE_DOCKER",
               ]);
               const allowedClasses=new Set([
                 "DATABASE_URL_MISSING","DATABASE_URL_INVALID","ENVIRONMENT_FILE_NOT_FOUND",
@@ -184,7 +178,7 @@ jobs:
                   "0025_aurion_loot_mastery_ethos",
                   "0026_aurion_faction_questline_state",
                   "0027_aurion_faction_questline_rewards",
-                  "0028_aurion_world_checkpoint",
+                  "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
@@ -195,8 +189,8 @@ jobs:
                   driftCount:migrations.filter(m=>m.state==="PRESENT_SCHEMA_DRIFT").length,
                 };
                 const summary=receipt.summary;
-                if(!summary||summary.migrationCount!==8||summary.matchCount!==counts.matchCount||summary.absentCount!==counts.absentCount||summary.driftCount!==counts.driftCount) throw new Error("production receipt summary mismatch");
-                if(receipt.overallState==="PRESENT_SCHEMA_MATCH"&&(counts.matchCount!==8||counts.absentCount!==0||counts.driftCount!==0)) throw new Error("production match receipt is inconsistent");
+                if(!summary||summary.migrationCount!==11||summary.matchCount!==counts.matchCount||summary.absentCount!==counts.absentCount||summary.driftCount!==counts.driftCount) throw new Error("production receipt summary mismatch");
+                if(receipt.overallState==="PRESENT_SCHEMA_MATCH"&&(counts.matchCount!==11||counts.absentCount!==0||counts.driftCount!==0)) throw new Error("production match receipt is inconsistent");
                 if(receipt.overallState==="RECONCILIATION_REQUIRED"&&(counts.absentCount<1||counts.driftCount!==0)) throw new Error("production reconciliation receipt is inconsistent");
                 if(receipt.overallState==="PRESENT_SCHEMA_DRIFT"&&counts.driftCount<1) throw new Error("production drift receipt is inconsistent");
                 if(["PRESENT_SCHEMA_MATCH","RECONCILIATION_REQUIRED"].includes(receipt.overallState)&&(Number(process.env.RUNNER_STATUS)!==0||execution.containerExitStatus!==0)) throw new Error("readable production receipt has non-zero execution status");

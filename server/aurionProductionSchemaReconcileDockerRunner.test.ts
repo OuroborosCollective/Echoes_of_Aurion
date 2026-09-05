@@ -150,7 +150,8 @@ function makeArtifact() {
     "0025_aurion_loot_mastery_ethos",
     "0026_aurion_faction_questline_state",
     "0027_aurion_faction_questline_rewards",
-    "0028_aurion_world_checkpoint",
+    "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory",
+    "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
@@ -158,6 +159,7 @@ function makeArtifact() {
   fs.writeFileSync(path.join(directory, "bin/reconcile.cjs"), "module.exports = {};\n");
   for (const tag of tags) fs.writeFileSync(path.join(directory, "drizzle", `${tag}.sql`), `-- ${tag}\n`);
   for (const name of [
+    "verify-aurion-installed-schema-tool",
     "aurion-production-schema-reconcile",
     "aurion-production-schema-reconcile.sudoers",
     "install-aurion-production-schema-reconcile",
