@@ -194,8 +194,8 @@ jobs:
             echo 'restricted traversal fixture did not apply' >&2
             exit 1
           fi
-          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-apply/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-apply/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
-          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-apply/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+          sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-apply/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-apply/current/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
+          sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-apply/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-apply/current/deploy/verify-aurion-production-schema-apply-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
           sudo chmod "$original_mode" /usr/local/sbin
           trap - EXIT
 

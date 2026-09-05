@@ -254,8 +254,8 @@ jobs:
             echo 'restricted traversal fixture did not apply' >&2
             exit 1
           fi
-          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
-          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+          sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-reconcile/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-reconcile/current/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
+          sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-reconcile/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-reconcile/current/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
           sudo chmod "$original_mode" /usr/local/sbin
           trap - EXIT
 

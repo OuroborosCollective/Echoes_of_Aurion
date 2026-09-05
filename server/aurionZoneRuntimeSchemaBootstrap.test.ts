@@ -70,7 +70,7 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
       'cmp -s "${schema_artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs',
     ]) expect(promoter).toContain(token);
     expect(workflow).toContain('node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"');
-    expect(workflow).toContain('cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
-    expect(workflow).toContain('cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
+    expect(workflow).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
+    expect(workflow).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
   });
 });
