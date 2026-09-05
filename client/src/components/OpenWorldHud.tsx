@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, Compass, Radio } from "lucide-react";
 import "./aim224OverlaySafety.css";
 
@@ -37,11 +36,7 @@ export default function OpenWorldHud({
   onInteract,
   onOpenDetails,
 }: OpenWorldHudProps) {
-  useEffect(() => {
-    const returnFromXaurion = () => onReturn();
-    window.addEventListener("aurion:xaurion-return-request", returnFromXaurion);
-    return () => window.removeEventListener("aurion:xaurion-return-request", returnFromXaurion);
-  }, [onReturn]);
+
 
   return (
     <section className="open-world-hud" aria-label="Aurion Open World">

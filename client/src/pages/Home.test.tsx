@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it } from "vitest";
@@ -32,4 +32,17 @@ describe("Home", () => {
       window.removeEventListener("aurion:open-local-auth", onOpen);
     }
   });
+  it("owns the return bridge even when the old world HUD is not mounted", () => {
+    window.history.replaceState({}, "", "/?aurion_runtime=no-webgl");
+    render(<RealClientHarness><Home /></RealClientHarness>);
+    let returns = 0;
+    const returned = () => { returns += 1; };
+    window.addEventListener("aurion:return-to-tower", returned);
+    try {
+      fireEvent(window, new Event("aurion:xaurion-return-request"));
+      expect(returns).toBe(1);
+      expect(screen.getByRole("heading", { name: /Willkommen zurück/ })).toBeTruthy();
+    } finally { window.removeEventListener("aurion:return-to-tower", returned); }
+  });
+
 });

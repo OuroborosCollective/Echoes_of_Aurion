@@ -363,7 +363,7 @@ export default function Home() {
       }
       companionCaptureInFlight.current = true;
       void requestCompanionFrame().then(sample => {
-        if (!sample || !isFreshCompanionFrame(sample) || lastCompanionAction.current?.id !== pending.id) return;
+        if (!sample || !isFreshCompanionFrame(sample, Date.now()) || lastCompanionAction.current?.id !== pending.id) return;
         const stateVector: CompanionStateVector = [
           mission.explorerHp / 100,
           mission.echoHp / 100,
@@ -536,7 +536,7 @@ export default function Home() {
       onSuccess: (pairing) => {
         processedGatewaySequence.current = 0; setGatewayPairing(pairing); setGatewaySequence(0); setConnected(true); setIsPairing(false);
         if (user?.id) {
-          startCompanionSession(user.id, provider);
+          startCompanionSession(user.id, provider, pairing.sessionId);
           transitionCompanionSession("connect");
         }
         appendLedger({ kind: "connection", title: "LLM-Verbindung bestätigt", detail: `${provider} ist verbunden. Der Companion wird erst nach Learn und anschließendem Play gespawnt.` });
@@ -608,7 +608,7 @@ export default function Home() {
       onError: () => setLastSignal("Der Weltübergang wurde nicht bestätigt. Die Szene bleibt im sicheren Turmzustand."),
     });
   };
-  const returnToTowerHome = (): void => {
+  const returnToTowerHome = useCallback((): void => {
     if (gameplaySession.current) { setLastSignal("Eine aktive serverbestätigte Begegnung muss vor der Rückkehr gesichert werden."); return; }
     zoneClient.current?.close();
     setWorldDetailsOpen(false);
@@ -618,7 +618,11 @@ export default function Home() {
     setScreen("home");
     appendLedger({ kind: "system", title: "Sichere Rückkehr zur Sternwarte", detail: "Der lokale Expanse-Stream wurde beendet; dein privates Hauptquartier bleibt der sichere Ausgangspunkt." });
     setLastSignal("Du bist sicher in deine private Sternwarte zurückgekehrt.");
-  };
+  }, []);
+  useEffect(() => {
+    window.addEventListener("aurion:xaurion-return-request", returnToTowerHome);
+    return () => window.removeEventListener("aurion:xaurion-return-request", returnToTowerHome);
+  }, [returnToTowerHome]);
   const connectAuthoritativeZone = (): void => {
     if (!isAuthenticated || !user?.id) { openAccountAccess(); return; }
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "aurion-browser-movement-v1" }, {
