@@ -129,7 +129,7 @@ export function resolveSetKey(quality: LootQuality, baseItemKey: string): string
 
 export function resolveLoot(classKey: string, qualityRoll: number, affixRoll: number, magicFind = 0): LootResolution {
   const quality = rollLootQuality(qualityRoll, magicFind);
-  const baseItemKey = resolveTreasureClass(classKey, qualityRoll + affixRoll);
+  const baseItemKey = resolveTreasureClass(classKey, affixRoll);
   return { baseItemKey, quality, affixes: resolveAffixes(quality, affixRoll), setKey: resolveSetKey(quality, baseItemKey) };
 }
 
