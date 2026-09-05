@@ -253,6 +253,44 @@ test("native encounter survives a world return and commits the quest reward once
     for (const row of relationships) expect(createHash("sha256").update(row.eventJson).digest("hex")).toBe(row.eventHash);
     expect(relationships.map(row => row.scopeKey).sort()).toEqual(["v1:npc_relation:lyra", "v1:social:friendship"]);
     expect(errors).toEqual([]);
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await hud.getByRole("button", { name: "Charakter", exact: true }).click();
+    await dialog.getByRole("button", { name: "Gilde öffnen", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Gildenverwaltung", exact: true })).toBeVisible();
+    await page.getByLabel("Gildenname", { exact: true }).fill("Sternwacht Regression");
+    await page.getByLabel("Gildenkürzel", { exact: true }).fill("A269B");
+    await page.getByRole("button", { name: "Gilde gründen", exact: true }).click();
+    const bank = page.getByTestId("guild-bank-panel");
+    await expect(bank.getByText("20 AURION", { exact: true })).toBeVisible();
+    const [guildRows] = await pool.query<RowDataPacket[]>("SELECT guildId FROM guildMemberships WHERE userId=? AND status='active'", [before[0].userId]);
+    expect(guildRows).toHaveLength(1); const guildId = guildRows[0].guildId;
+    const balances = async () => {
+      const [rows] = await pool.query<RowDataPacket[]>("SELECT p.aurionPoints, COALESCE(a.balance,0) AS treasury FROM playerProfiles p LEFT JOIN aurionGuildTreasuryAccounts a ON a.guildId=? WHERE p.userId=?", [guildId,before[0].userId]);
+      return { wallet: Number(rows[0].aurionPoints), treasury: Number(rows[0].treasury) };
+    };
+    const apply = async () => {
+      const receipt = page.waitForResponse(response => response.url().endsWith("/api/guild/bank/apply") && response.status() === 200);
+      await bank.getByRole("button", { name: "Verbindlich bestätigen", exact: true }).click(); await receipt;
+      await expect(bank.getByText("Die Bankänderung ist bestätigt.", { exact: true })).toBeVisible();
+    };
+    await bank.getByLabel("Betrag in AURION", { exact: true }).fill("5");
+    await bank.getByRole("button", { name: "AURION einzahlen prüfen", exact: true }).click();
+    await expect(bank.getByText("Betrag: 5 AURION", { exact: true })).toBeVisible();
+    expect(await balances()).toEqual({ wallet: 20, treasury: 0 });
+    await apply(); expect(await balances()).toEqual({ wallet: 15, treasury: 5 });
+    await bank.getByLabel("Betrag in AURION", { exact: true }).fill("2");
+    await bank.getByRole("button", { name: "AURION entnehmen prüfen", exact: true }).click(); await apply();
+    expect(await balances()).toEqual({ wallet: 17, treasury: 3 });
+    await bank.getByRole("button", { name: "Einlagern prüfen", exact: true }).first().click(); await apply();
+    const [custody] = await pool.query<RowDataPacket[]>("SELECT itemId,itemRecordVersion,status FROM aurionGuildItemCustody WHERE guildId=?", [guildId]);
+    expect(custody).toHaveLength(1); expect(custody[0].status).toBe("held");
+    await bank.getByRole("button", { name: "Entnehmen prüfen", exact: true }).click(); await apply();
+    const [released] = await pool.query<RowDataPacket[]>("SELECT status FROM aurionGuildItemCustody WHERE guildId=?", [guildId]);
+    expect(released[0].status).toBe("withdrawn");
+    const [bankReceipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGuildBankReceipts WHERE guildId=?", [guildId]); expect(Number(bankReceipts[0].count)).toBe(4);
+    await page.getByRole("button", { name: "Community-Konsole schließen", exact: true }).click();
+    await expect(page.locator("canvas")).toHaveCount(1); expect(errors).toEqual([]);
+    await testInfo.attach("guild-bank-readback", { body: JSON.stringify({guildId, balances:await balances(), receipts:4, custody:released[0].status}), contentType:"application/json" });
     await testInfo.attach("encounter-readback", { body: JSON.stringify({ sessionId: before[0].id, userId: before[0].userId, resumedWithoutReset: true, questCompleted: true, reward: reward[0] }), contentType: "application/json" });
   } finally { await page.close(); await pool.end(); }
 });
