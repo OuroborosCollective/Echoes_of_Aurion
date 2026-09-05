@@ -49,6 +49,13 @@ describe("AIM-268 guild and kingdom authority", () => {
     expect(() => reconcileGuildGovernanceReplay(receipt, { ...receipt, resultHash: "0".repeat(64) })).toThrow("GUILD_GOVERNANCE_IDEMPOTENCY_CONFLICT");
   });
 
+  it.each([
+    [{ kingdomName: "Aurion" }, "capitalTerritoryId must be a canonical token"],
+    [{ kingdomName: "Aurion", capitalTerritoryId: "aurion:0:0" }, "territoryIds must be an array"],
+  ])("rejects incomplete consolidation proposals before generating a confirmation", (payload, message) => {
+    expect(() => buildGuildMutationPlan({ actorUserId: 42, guildId: "guild_a", role: "founder", operation: "consolidate_kingdom", expectedRevisionExact: "6", idempotencyKey: "kingdom-incomplete", payload })).toThrow(message);
+  });
+
   it("rejects client-selected ownership and malformed high-impact inputs", () => {
     expect(() => buildGuildMutationPlan({ actorUserId: 42, guildId: "guild_a", role: "founder", operation: "claim_territory", expectedRevisionExact: "0", idempotencyKey: "claim-002", payload: { worldId: "aurion", chunkX: 0, chunkZ: 0, guildId: "guild_evil" } })).toThrow("client authority field rejected: guildId");
     expect(() => buildGuildMutationPlan({ actorUserId: 42, guildId: "guild_a", role: "founder", operation: "consolidate_kingdom", expectedRevisionExact: "0", idempotencyKey: "kingdom-002", payload: { kingdomName: "Aurion", capitalTerritoryId: "aurion:0:0", territoryIds: ["aurion:0:0", "aurion:0:0", "aurion:1:0", "aurion:2:0", "aurion:0:1", "aurion:1:1"] } })).toThrow("duplicate territories");

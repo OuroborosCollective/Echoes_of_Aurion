@@ -1,4 +1,4 @@
-import { createPool } from "mysql2/promise";
+import { createPool, type Pool } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GuildGovernanceStore } from "./guildGovernanceStore";
 
@@ -9,8 +9,8 @@ suite("AIM-268 MariaDB guild governance transaction", () => {
   const guildId = "guild_aim268_integration";
   const founderUserId = 9268001;
   const otherUserId = 9268002;
-  let pool: any;
-  let store: any;
+  let pool: Pool;
+  let store: GuildGovernanceStore;
 
   beforeAll(async () => {
     if (!databaseUrl) return;
@@ -55,7 +55,10 @@ suite("AIM-268 MariaDB guild governance transaction", () => {
       territoryIds.push(String(applied.receipt.result.territoryId));
     }
 
-    const kingdomPlan = await store.plan(founderUserId, { operation: "consolidate_kingdom", expectedRevisionExact: expected.toString(), idempotencyKey: "aim268-kingdom", payload: { kingdomName: "AIM 268 Testreich" } });
+    expect(territoryIds).toHaveLength(6);
+    const owned = await store.read(founderUserId, guildId);
+    expect(owned.territories.map(territory => territory.territoryId).sort()).toEqual([...territoryIds].sort());
+    const kingdomPlan = await store.plan(founderUserId, { operation: "consolidate_kingdom", expectedRevisionExact: expected.toString(), idempotencyKey: "aim268-kingdom", payload: { kingdomName: "AIM 268 Testreich", capitalTerritoryId: territoryIds[0], territoryIds } });
     const first = await store.apply(founderUserId, kingdomPlan.plan.confirmationHash);
     expect(first.replay).toBe(false);
     expect(first.readback.kingdom).toMatchObject({ name: "AIM 268 Testreich", capitalTerritoryId: territoryIds[0] });
@@ -68,6 +71,6 @@ suite("AIM-268 MariaDB guild governance transaction", () => {
 
   it("does not let a normal member plan a territory mutation", async () => {
     const current = await store.read(otherUserId, guildId);
-    await expect(store.plan(otherUserId, { operation: "claim_territory", expectedRevisionExact: current.revisionExact, idempotencyKey: "aim268-member-claim", payload: { worldId: "aim268-world", chunkX: 10, chunkZ: 10 } })).rejects.toThrow();
+    await expect(store.plan(otherUserId, { operation: "claim_territory", expectedRevisionExact: current.revisionExact, idempotencyKey: "aim268-member-claim", payload: { worldId: "aim268-world", chunkX: 10, chunkZ: 10 } })).rejects.toThrow("GUILD_CAPABILITY_REQUIRED");
   });
 });
