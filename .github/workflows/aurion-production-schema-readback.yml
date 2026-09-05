@@ -74,17 +74,11 @@ jobs:
           test -f "$installed"
           test -f "$installed_root/checksums.sha256"
           (cd "$installed_root" && sha256sum --strict -c checksums.sha256)
-          test -f "$verifier"
-          test ! -L "$verifier"
-          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
-          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
-          node "$verifier" "$installed_root" "$EXPECTED_SHA"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          node "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$installed_root" "$EXPECTED_SHA"
           cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
           cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
-          test -f "$runner"
-          test ! -L "$runner"
-          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
-          cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
           ARTIFACT_MANIFEST="$artifact/manifest.json" INSTALLED_MANIFEST="$installed" EXPECTED_SHA="$EXPECTED_SHA" node -e '
             const fs=require("node:fs");
             const artifact=JSON.parse(fs.readFileSync(process.env.ARTIFACT_MANIFEST,"utf8"));

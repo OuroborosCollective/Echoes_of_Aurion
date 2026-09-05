@@ -16,6 +16,7 @@ const tags = [
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 
 const requiredFiles = [
+  "deploy/verify-aurion-installed-schema-tool",
   "bin/apply.cjs",
   "bin/mysql-client-config.cjs",
   "bin/reconcile.cjs",

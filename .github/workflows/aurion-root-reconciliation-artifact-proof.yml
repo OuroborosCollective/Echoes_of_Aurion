@@ -235,13 +235,29 @@ jobs:
       - name: Install immutable reconciliation release as root
         run: |
           set -euo pipefail
-          sudo bash deploy/install-aurion-production-schema-reconcile dist-production-reconcile "$GITHUB_SHA"
+          sudo bash deploy/install-aurion-production-schema-reconcile dist-production-reconcile "$GITHUB_SHA" --enable-runner
           test "$(sudo readlink -f /opt/echoes-of-aurion-schema-reconcile/current)" = "/opt/echoes-of-aurion-schema-reconcile/releases/$GITHUB_SHA"
           sudo test -f /opt/echoes-of-aurion-schema-reconcile/current/bin/reconcile.cjs
           test "$(sudo stat -c '%U:%G:%a' /usr/local/sbin/aurion-production-schema-reconcile)" = "root:root:755"
           sudo cmp -s dist-production-reconcile/deploy/aurion-production-schema-reconcile /usr/local/sbin/aurion-production-schema-reconcile
           test "$(sudo stat -c '%U:%G:%a' /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs)" = "root:root:755"
           sudo cmp -s dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+
+      - name: Verify installed tools from a deployment user with restricted sbin traversal
+        run: |
+          set -euo pipefail
+          sudo useradd --system --no-create-home aurion-deploy
+          original_mode="$(stat -c '%a' /usr/local/sbin)"
+          trap 'sudo chmod "$original_mode" /usr/local/sbin' EXIT
+          sudo chmod 0700 /usr/local/sbin
+          if sudo -u aurion-deploy test -x /usr/local/sbin/aurion-production-schema-reconcile; then
+            echo 'restricted traversal fixture did not apply' >&2
+            exit 1
+          fi
+          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
+          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
+          sudo chmod "$original_mode" /usr/local/sbin
+          trap - EXIT
 
       - name: Prove MariaDB DNS is reachable only through the private Docker network
         run: |

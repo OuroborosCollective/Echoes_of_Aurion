@@ -14,7 +14,7 @@ export async function readProductionSchemaContracts(root: string): Promise<Expec
   // their real CREATE, ALTER and index statements are retained in source order.
   const legacySql = sources.flatMap(sql => sql.split("--> statement-breakpoint")).filter(statement =>
     /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts)`/i.test(statement)
-      || /CREATE\s+(?:UNIQUE\s+)?INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts)`/i.test(statement),
+      || /(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts)`/i.test(statement),
   ).join("\n");
   const baseline = parseLateMigrationSql(lateAurionMigrationTags[0], legacySql);
   const state = new Map<string, ExpectedTable>(baseline.tables.map(table => [table.name, table]));

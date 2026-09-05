@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# -eq 2 ]] || exit 64
+expected="$1"
+installed="$2"
+case "$installed" in
+  /usr/local/sbin/aurion-production-schema-reconcile|/usr/local/sbin/aurion-production-schema-apply|/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs|/usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs) ;;
+  *) echo 'installed schema tool path is not allowlisted' >&2; exit 64 ;;
+esac
+[[ -f "$expected" && ! -L "$expected" ]] || exit 66
+# Numeric ownership plus complete inode mode: regular file, root:root, 0755.
+# Reading this metadata through sudo does not require traversing root-only sbin
+# as the deployment user. Symlinks and any writable ownership drift fail closed.
+[[ "$(sudo -n stat -c %u_%g_%f "$installed")" == "0_0_81ed" ]] || {
+  echo 'installed schema tool ownership, type or mode mismatch' >&2; exit 70;
+}
+expected_digest="$(sha256sum "$expected" | cut -d ' ' -f1)"
+installed_digest="$(sudo -n sha256sum "$installed" | cut -d ' ' -f1)"
+[[ "$expected_digest" =~ ^[a-f0-9]{64}$ && "$installed_digest" == "$expected_digest" ]] || {
+  echo 'installed schema tool digest mismatch' >&2; exit 70;
+}
+printf 'verified installed schema tool %s sha256=%s\n' "$installed" "$installed_digest"

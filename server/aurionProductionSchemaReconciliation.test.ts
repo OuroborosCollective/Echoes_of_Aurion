@@ -59,6 +59,9 @@ describe("Aurion production schema reconciliation", () => {
     const indexes = observed.get("itemInstances")!.indexes;
     expect(indexes.find(index => index.name === "itemInstances_crafting_output_uq")).toMatchObject({ unique: true, columns: ["craftingReceiptId", "craftingOutputKey"] });
     expect(indexes.some(index => index.name === "itemInstances_craftingReceiptId_unique")).toBe(false);
+    // 0009 removes the 0001 index before adding owner/status/created ordering.
+    expect(indexes.some(index => index.name === "itemInstances_owner_created_idx")).toBe(false);
+    expect(indexes.some(index => index.name === "itemInstances_owner_status_created_idx")).toBe(true);
   });
 
   it("fails closed for absent legacy prerequisites and incomplete ALTER application", async () => {

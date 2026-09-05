@@ -68,8 +68,8 @@ describe("Aurion post-deploy production schema readback", () => {
     );
     expect(readback).toContain('cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"');
     expect(readback).toContain('cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"');
-    expect(readback).toContain('cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
-    expect(readback).toContain('cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
+    expect(readback).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"');
+    expect(readback).toContain('bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"');
     expect(readback).toContain('sudo -n "$runner" "$EXPECTED_SHA"');
     expect(readback).toContain(
       "aurion-production-schema-readback-${{ inputs.expected_sha }}",

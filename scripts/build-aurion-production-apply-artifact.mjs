@@ -25,6 +25,7 @@ const tags = [
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [
+  "verify-aurion-installed-schema-tool",
   "aurion-production-schema-apply",
   "aurion-production-schema-apply-core",
   "aurion-production-schema-apply.environment.template",

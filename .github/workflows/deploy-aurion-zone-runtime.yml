@@ -480,10 +480,10 @@ jobs:
             printf 'promoter readback replay required for revision=%s\n' "${EXPECTED_SHA}"
           fi
 
-          test -x /usr/local/sbin/aurion-production-schema-reconcile
+          bash "$artifact/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$artifact/dist-production-reconcile/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
           sudo -n test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
           sudo -n grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
-          test -x /usr/local/sbin/aurion-production-schema-apply
+          bash "$artifact/dist-production-apply/deploy/verify-aurion-installed-schema-tool" "$artifact/dist-production-apply/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
           sudo -n test -f /opt/echoes-of-aurion-schema-apply/current/manifest.json
           sudo -n grep -Fq "${EXPECTED_SHA}" /opt/echoes-of-aurion-schema-apply/current/manifest.json
 
@@ -512,22 +512,10 @@ jobs:
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
           (cd "$apply_artifact" && sha256sum --strict -c checksums.sha256)
           node "${apply_artifact}/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_artifact" "$EXPECTED_SHA"
-          test -f "$runner"
-          test ! -L "$runner"
-          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
-          cmp -s "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
-          test -f "$verifier"
-          test ! -L "$verifier"
-          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
-          cmp -s "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
-          test -f "$apply_runner"
-          test ! -L "$apply_runner"
-          test "$(stat -c '%U:%G:%a' "$apply_runner")" = "root:root:755"
-          cmp -s "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
-          test -f "$apply_verifier"
-          test ! -L "$apply_verifier"
-          test "$(stat -c '%U:%G:%a' "$apply_verifier")" = "root:root:755"
-          cmp -s "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-reconcile" "$runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
       - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail

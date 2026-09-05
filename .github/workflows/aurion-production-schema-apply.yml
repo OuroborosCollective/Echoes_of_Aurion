@@ -216,16 +216,10 @@ jobs:
           test "$installed_root" = "/opt/echoes-of-aurion-schema-apply/releases/${EXPECTED_SHA}"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           node "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$artifact" "$EXPECTED_SHA"
-          test -f "$runner"
-          test ! -L "$runner"
-          test "$(stat -c '%U:%G:%a' "$runner")" = "root:root:755"
-          test -f "$verifier"
-          test ! -L "$verifier"
-          test "$(stat -c '%U:%G:%a' "$verifier")" = "root:root:755"
           cmp -s "$artifact/manifest.json" "$installed_root/manifest.json"
           cmp -s "$artifact/checksums.sha256" "$installed_root/checksums.sha256"
-          cmp -s "$artifact/deploy/aurion-production-schema-apply" "$runner"
-          cmp -s "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/aurion-production-schema-apply" "$runner"
+          bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$verifier"
           test -s "$authorization_file"
           test "$(stat -c '%a' "$authorization_file")" = "600"
           umask 077

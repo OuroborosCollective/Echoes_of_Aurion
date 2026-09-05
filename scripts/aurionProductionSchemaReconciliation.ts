@@ -326,6 +326,12 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
     if (!table) throw new Error(`${tag}: index ${match[2]} references unknown table ${match[3]}`);
     table.indexes.push({ name: match[2], unique: Boolean(match[1]), columns: indexColumns(match[4]) });
   }
+  const dropIndexPattern = /DROP\s+INDEX\s+`([^`]+)`\s+ON\s+`([^`]+)`\s*;/gi;
+  while ((match = dropIndexPattern.exec(sql))) {
+    const table = tableMap.get(match[2]);
+    if (!table || !table.indexes.some(index => index.name === match![1])) throw new Error(`${tag}: missing standalone DROP index ${match[1]}`);
+    table.indexes = table.indexes.filter(index => index.name !== match![1]);
+  }
   return { tag, tables: Array.from(tableMap.values()), priorTables: [...priorTables.values()], createdTableNames: tables.map(table => table.name) };
 }
 

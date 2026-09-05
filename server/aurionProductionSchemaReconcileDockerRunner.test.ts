@@ -159,6 +159,7 @@ function makeArtifact() {
   fs.writeFileSync(path.join(directory, "bin/reconcile.cjs"), "module.exports = {};\n");
   for (const tag of tags) fs.writeFileSync(path.join(directory, "drizzle", `${tag}.sql`), `-- ${tag}\n`);
   for (const name of [
+    "verify-aurion-installed-schema-tool",
     "aurion-production-schema-reconcile",
     "aurion-production-schema-reconcile.sudoers",
     "install-aurion-production-schema-reconcile",

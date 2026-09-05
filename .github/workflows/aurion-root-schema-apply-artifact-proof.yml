@@ -183,6 +183,22 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' /etc/aurion-production-schema-apply.env)" = "root:root:600"
           sudo cmp -s dist-production-apply/deploy/aurion-production-schema-apply /usr/local/sbin/aurion-production-schema-apply
 
+      - name: Verify installed tools from a deployment user with restricted sbin traversal
+        run: |
+          set -euo pipefail
+          sudo useradd --system --no-create-home aurion-deploy
+          original_mode="$(stat -c '%a' /usr/local/sbin)"
+          trap 'sudo chmod "$original_mode" /usr/local/sbin' EXIT
+          sudo chmod 0700 /usr/local/sbin
+          if sudo -u aurion-deploy test -x /usr/local/sbin/aurion-production-schema-apply; then
+            echo 'restricted traversal fixture did not apply' >&2
+            exit 1
+          fi
+          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-apply/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-apply/deploy/aurion-production-schema-apply" /usr/local/sbin/aurion-production-schema-apply
+          sudo -u aurion-deploy bash "$GITHUB_WORKSPACE/dist-production-apply/deploy/verify-aurion-installed-schema-tool" "$GITHUB_WORKSPACE/dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-apply-artifact.mjs
+          sudo chmod "$original_mode" /usr/local/sbin
+          trap - EXIT
+
       - name: Prove the sudo-exposed runner rejects an unbound direct invocation
         run: |
           set -euo pipefail
