@@ -1850,9 +1850,11 @@ export async function createLootDrop(values: { userId: number; expeditionKey: st
 }
 
 async function createLootDropInTransaction(tx: DatabaseTransaction, values: Parameters<typeof createLootDrop>[0]) {
-  await getAcceptedExpeditionResult(values, tx);
   const owner = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
   if (!owner) throw new Error("LOOT_PROFILE_REQUIRED");
+  // Take the account lock before the first consistent read. Under REPEATABLE READ, a
+  // snapshot opened before waiting for this lock can miss a concurrent committed drop.
+  await getAcceptedExpeditionResult(values, tx);
   const [previous] = await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
   if (previous) {
     if (previous.userId !== values.userId || previous.expeditionKey !== values.expeditionKey || previous.seedDigest !== values.seedDigest) throw new Error("LOOT_IDEMPOTENCY_CONFLICT");
