@@ -48,7 +48,7 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     await pool.query("INSERT INTO playerProfiles (userId, aurionPoints) VALUES (?, 50000), (?, 50000)", [founderUserId, memberUserId]);
     await pool.query("INSERT INTO guilds (id, name, tag, founderUserId) VALUES (?, 'AIM 269 Integration', 'A269', ?)", [guildId, founderUserId]);
     await pool.query("INSERT INTO guildMemberships (id, guildId, userId, role, status) VALUES ('gm_aim269_founder', ?, ?, 'founder', 'active'), ('gm_aim269_member', ?, ?, 'member', 'active')", [guildId, founderUserId, guildId, memberUserId]);
-    await pool.query("INSERT INTO itemInstances (id, ownerUserId, sourceKind, baseItemKey, quality, itemLevel, affixesJson, status) VALUES (?, ?, 'loot', 'asterion_blade', 'rare', 10, '[]', 'owned')", [legacyItemId, memberUserId]);
+    await pool.query("INSERT INTO itemInstances (id, ownerUserId, sourceKind, lootReceiptId, craftingReceiptId, baseItemKey, quality, itemLevel, affixesJson, status) VALUES (?, ?, 'loot', 'aim269_loot_receipt_legacy', NULL, 'asterion_blade', 'rare', 10, '[]', 'owned')", [legacyItemId, memberUserId]);
     await pool.query("INSERT INTO aurionItemInstancesV2 (id, ownerUserId, lootReceiptId, baseItemDefinitionId, category, equipmentSlot, quality, itemLevelExact, affixesJson, setId, itemPower, deterministicHash, status) VALUES (?, ?, 'aim269_loot_receipt_v2', 'mat_wood_oak', 'crafting_component', NULL, 'normal', '1', '[]', NULL, 1, ?, 'owned')", [v2ResourceItemId, memberUserId, "a".repeat(64)]);
   });
 
@@ -64,7 +64,7 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
       store.apply(memberUserId, planned.plan.confirmationHash),
       store.apply(memberUserId, planned.plan.confirmationHash),
     ]);
-    expect([left.replay, right.replay].sort()).toEqual([false, true]);
+    expect([left.replay, right.replay].filter(Boolean)).toHaveLength(1);
     expect(left.receipt.receiptId).toBe(right.receipt.receiptId);
     const readback = await store.read(memberUserId, guildId);
     expect(readback.playerPointsExact).toBe("49000");
