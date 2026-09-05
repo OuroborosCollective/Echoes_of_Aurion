@@ -42,10 +42,16 @@ export type FactionQuestlineDecisionReceipt = Readonly<QuestDecision & {
   deterministicHash: string;
 }>;
 
+export type FactionQuestlineCompletionReceipt = Readonly<{
+  id: string; playerId: string; faction: AurionFaction; questId: string;
+  sourceDecisionReceiptId: string; resolutionIndex: number; rewardDigest: string;
+}>;
+
 export type FactionQuestlineStateInput = Readonly<{
   playerId: string;
   pledgedFaction: AurionFaction;
   oathReceipt: FactionQuestlineOathReceipt | null;
+  completions?: readonly FactionQuestlineCompletionReceipt[];
   decisions: readonly FactionQuestlineDecisionReceipt[];
   lastResolutionIndex: number;
 }>;
@@ -208,6 +214,20 @@ export function resolveFactionQuestline(input: FactionQuestlineStateInput): Fact
   const oath = assertOathReceipt(input);
   const ordered = sortedDecisionReceipts(input.decisions);
   const seenReceiptIds = new Set<string>();
+  const completions = [...(input.completions ?? [])].sort((a,b) => a.resolutionIndex - b.resolutionIndex || compare(a.id,b.id));
+  if (completions.length > 512) throw new Error("Faction completion checkpoint required");
+  const indices = new Set(ordered.map(d => d.resolutionIndex));
+  const identities = new Set(ordered.map(d => d.receiptId));
+  if (oath) { indices.add(oath.resolutionIndex); identities.add(oath.id); }
+  const completedRewards = new Set<string>();
+  let newestCompletionIndex = 0;
+  for (const receipt of completions) {
+    const source = ordered.find(d => d.receiptId === receipt.sourceDecisionReceiptId);
+    const activeFaction = oath && receipt.resolutionIndex > oath.resolutionIndex ? oath.toFaction : "free_haven";
+    if (receipt.playerId !== input.playerId || !source || source.questId !== receipt.questId || source.faction !== receipt.faction || receipt.faction !== activeFaction || !receipt.id || identities.has(receipt.id) || !/^[a-f0-9]{64}$/.test(receipt.rewardDigest) || !isResolutionIndex(receipt.resolutionIndex) || receipt.resolutionIndex <= source.resolutionIndex || indices.has(receipt.resolutionIndex) || completedRewards.has(receipt.questId) || getQuestlineNode(receipt.questId).kind === "oath") throw new Error("Faction completion receipt is not owned, ordered or unique");
+    identities.add(receipt.id); indices.add(receipt.resolutionIndex); completedRewards.add(receipt.questId);
+    newestCompletionIndex = receipt.resolutionIndex;
+  }
 
   const beforeOath = oath ? ordered.filter(decision => decision.resolutionIndex < oath.resolutionIndex) : ordered;
   const afterOath = oath ? ordered.filter(decision => decision.resolutionIndex > oath.resolutionIndex) : [];
@@ -226,7 +246,7 @@ export function resolveFactionQuestline(input: FactionQuestlineStateInput): Fact
   });
 
   if (!oath) {
-    if (neutral.lastDecisionResolutionIndex !== input.lastResolutionIndex) throw new Error("Faction questline state must end at its newest receipt index");
+    if (Math.max(neutral.lastDecisionResolutionIndex, newestCompletionIndex) !== input.lastResolutionIndex) throw new Error("Faction questline state must end at its newest receipt index");
     return renderFactionQuestline({
       playerId: input.playerId,
       faction: "free_haven",
@@ -234,6 +254,7 @@ export function resolveFactionQuestline(input: FactionQuestlineStateInput): Fact
       completed: neutral.completed,
       approachScores: neutral.approachScores,
       decisions: ordered,
+      completions,
       oath: null,
       lastResolutionIndex: input.lastResolutionIndex,
     });
@@ -252,7 +273,7 @@ export function resolveFactionQuestline(input: FactionQuestlineStateInput): Fact
     afterResolutionIndex: oath.resolutionIndex,
     seenReceiptIds,
   });
-  if (pledged.lastDecisionResolutionIndex !== input.lastResolutionIndex) throw new Error("Faction questline state must end at its newest receipt index");
+  if (Math.max(pledged.lastDecisionResolutionIndex, newestCompletionIndex) !== input.lastResolutionIndex) throw new Error("Faction questline state must end at its newest receipt index");
   return renderFactionQuestline({
     playerId: input.playerId,
     faction: oath.toFaction,
@@ -260,6 +281,7 @@ export function resolveFactionQuestline(input: FactionQuestlineStateInput): Fact
     completed: new Set([...Array.from(neutral.completed), ...Array.from(pledged.completed)]),
     approachScores: pledged.approachScores,
     decisions: ordered,
+    completions,
     oath,
     lastResolutionIndex: input.lastResolutionIndex,
   });
@@ -272,6 +294,7 @@ function renderFactionQuestline(input: Readonly<{
   completed: ReadonlySet<string>;
   approachScores: Readonly<Partial<Record<QuestApproach, number>>>;
   decisions: readonly FactionQuestlineDecisionReceipt[];
+  completions: readonly FactionQuestlineCompletionReceipt[];
   oath: FactionQuestlineOathReceipt | null;
   lastResolutionIndex: number;
 }>): FactionQuestlineReadmodel {
@@ -318,6 +341,7 @@ function renderFactionQuestline(input: Readonly<{
       input.oath ? factionQuestlineOathHash(input.oath) : "no-permanent-oath",
       ...completedQuestIds,
       ...input.decisions.map(canonicalDecisionEvidence),
+      ...input.completions.map(c => ["completion.v1",c.id,c.playerId,c.faction,c.questId,c.sourceDecisionReceiptId,String(c.resolutionIndex),c.rewardDigest].join(":")),
       ...availableQuestIds,
       base.preferredApproach,
       warfront?.questId ?? "no-warfront",
@@ -339,7 +363,7 @@ export function isFactionQuestDecisionAvailable(input: FactionQuestlineStateInpu
 }
 
 export function factionQuestlineNextResolutionIndex(input: FactionQuestlineStateInput): number {
-  if (!isResolutionIndex(input.lastResolutionIndex) || input.lastResolutionIndex >= Number.MAX_SAFE_INTEGER) throw new Error("Faction questline resolution index is exhausted");
+  if (!isResolutionIndex(input.lastResolutionIndex) || input.lastResolutionIndex >= 2147483647) throw new Error("Faction questline resolution index is exhausted");
   return input.lastResolutionIndex + 1;
 }
 

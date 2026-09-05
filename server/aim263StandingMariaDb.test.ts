@@ -1,6 +1,6 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { acceptGameplayQuest, applyGameplayAction, completeGameplayQuest, getRelationshipStanding, startGameplayEncounter, getOrCreatePlayerProfile, resolveFactionQuestDecisionForUser, completeFactionQuestlineQuestForUser } from "./db";
+import { acceptGameplayQuest, applyGameplayAction, completeGameplayQuest, getRelationshipStanding, getFactionQuestlineReadmodel, startGameplayEncounter, getOrCreatePlayerProfile, resolveFactionQuestDecisionForUser, completeFactionQuestlineQuestForUser } from "./db";
 
 const suite = process.env.AURION_NPC_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const userId = 9263001;
@@ -46,9 +46,17 @@ suite("AIM-263 native relationship transactions in isolated MariaDB", () => {
     await resolveFactionQuestDecisionForUser({userId,questId:"free_haven.oath",decisionKey:"pledge",approach:"trade",idempotencyKey:"aim263:standing:oath"});
     await resolveFactionQuestDecisionForUser({userId,questId:"free_haven.mainline",decisionKey:"mediate",approach:"trade",idempotencyKey:"aim263:standing:main"});
     const request={userId,questId:"free_haven.mainline",idempotencyKey:"aim263:standing:reward"};
-    await completeFactionQuestlineQuestForUser(request);const first=await getRelationshipStanding(userId);
+    const grants = await Promise.all([completeFactionQuestlineQuestForUser(request),completeFactionQuestlineQuestForUser(request)]);
+    expect(grants.filter(r=>r.applied)).toHaveLength(1);expect(grants[0].receipt.id).toBe(grants[1].receipt.id);
+    const first=await getRelationshipStanding(userId);
+    expect((await getFactionQuestlineReadmodel(userId)).lastResolutionIndex).toBe(3);
     expect(first.entries.find(e=>e.id==="free_haven")).toMatchObject({score:4,sourceCount:1,xpExact:"5"});
     await completeFactionQuestlineQuestForUser(request);expect(await getRelationshipStanding(userId)).toEqual(first);
+    await resolveFactionQuestDecisionForUser({userId,questId:"free_haven.water-list",decisionKey:"publish",approach:"trade",idempotencyKey:"aim263:standing:next"});
+    expect((await getFactionQuestlineReadmodel(userId)).lastResolutionIndex).toBe(4);
+    await pool.query("UPDATE aurionFactionQuestlineRewardReceipts SET xp=xp+1 WHERE userId=?",[userId]);
+    await expect(getFactionQuestlineReadmodel(userId)).rejects.toThrow("EVIDENCE_INVALID");
+    await pool.query("UPDATE aurionFactionQuestlineRewardReceipts SET xp=xp-1 WHERE userId=?",[userId]);
     await pool.query("UPDATE aurionScopedMasteryEvents SET eventJson='{}' WHERE userId=?",[userId]);
     await expect(getRelationshipStanding(userId)).rejects.toThrow("CORRUPT");
   });

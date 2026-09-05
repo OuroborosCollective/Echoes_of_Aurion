@@ -20,7 +20,7 @@ import { storagePut } from "./storage";
 import { aurionEncounters, aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { AURION_FACTION_QUESTLINE_CONTENT_VERSION, AURION_FACTION_QUESTLINE_RULESET_VERSION, factionQuestlineDecisionHash, factionQuestlineNextResolutionIndex, factionQuestlineOathHash, isFactionQuestDecisionAvailable, mayPledgeFaction, permanentFactionChoices, resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineOathReceipt, type FactionQuestlineStateInput, type PermanentAurionFaction } from "./aurionFactionQuestlineProtocol";
 import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
-import { AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION, AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION, resolveFactionQuestlineCompletion, getFactionQuestlineRewardDefinition, type FactionQuestlineReward } from "./aurionFactionQuestlineRewardProtocol";
+import { AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION, AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION, resolveFactionQuestlineCompletion, getFactionQuestlineRewardDefinition, verifiedFactionCompletion, type FactionQuestlineReward } from "./aurionFactionQuestlineRewardProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
 import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
 import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
@@ -479,6 +479,7 @@ function toFactionQuestlineStateInput(values: {
   state: FactionQuestlineStateRow | undefined;
   oath: FactionQuestlineOathRow | undefined;
   decisions: readonly FactionQuestlineDecisionRow[];
+  completions: readonly (typeof aurionFactionQuestlineRewardReceipts.$inferSelect)[];
 }): FactionQuestlineStateInput {
   const pledgedFaction = values.state?.pledgedFaction ?? "free_haven";
   if (!isFactionQuestlineFaction(pledgedFaction)) throw new Error("Persistierte Fraktionszugehörigkeit ist nicht zulässig.");
@@ -514,6 +515,7 @@ function toFactionQuestlineStateInput(values: {
     pledgedFaction,
     oathReceipt,
     decisions,
+    completions: values.completions.map(row => verifiedFactionCompletion(row,String(values.userId),decisions)),
     lastResolutionIndex: values.state?.lastResolutionIndex ?? 0,
   };
 }
@@ -537,11 +539,13 @@ async function loadFactionQuestlineState(values: {
   const state = lock
     ? (await tx.select().from(aurionFactionQuestlineStates).where(eq(aurionFactionQuestlineStates.userId, userId)).for("update").limit(1))[0]
     : (await tx.select().from(aurionFactionQuestlineStates).where(eq(aurionFactionQuestlineStates.userId, userId)).limit(1))[0];
-  const [oath, decisions] = await Promise.all([
+  const [oath, decisions, completions] = await Promise.all([
     tx.select().from(aurionFactionQuestlineOathReceipts).where(eq(aurionFactionQuestlineOathReceipts.userId, userId)).limit(1),
-    tx.select().from(aurionFactionQuestlineDecisionReceipts).where(eq(aurionFactionQuestlineDecisionReceipts.userId, userId)).orderBy(asc(aurionFactionQuestlineDecisionReceipts.resolutionIndex), asc(aurionFactionQuestlineDecisionReceipts.id)),
+    tx.select().from(aurionFactionQuestlineDecisionReceipts).where(eq(aurionFactionQuestlineDecisionReceipts.userId, userId)).orderBy(asc(aurionFactionQuestlineDecisionReceipts.resolutionIndex), asc(aurionFactionQuestlineDecisionReceipts.id)).limit(513),
+    tx.select().from(aurionFactionQuestlineRewardReceipts).where(eq(aurionFactionQuestlineRewardReceipts.userId,userId)).orderBy(asc(aurionFactionQuestlineRewardReceipts.completionResolutionIndex)).limit(513),
   ]);
-  return toFactionQuestlineStateInput({ userId, state, oath: oath[0], decisions });
+  if (decisions.length > 512 || completions.length > 512) throw new Error("FACTION_CHECKPOINT_REQUIRED");
+  return toFactionQuestlineStateInput({ userId, state, oath: oath[0], decisions, completions });
 }
 
 /** Readmodel-only query. A missing row represents the deterministic neutral starting state and is never created by reading. */
@@ -647,13 +651,13 @@ export async function completeFactionQuestlineQuestForUser(values: { userId: num
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   await getOrCreatePlayerProfile(values.userId);
   return db.transaction(async tx => {
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
     const replay = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(eq(aurionFactionQuestlineRewardReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
     if (replay) {
       if (replay.userId !== values.userId || replay.questId !== values.questId) throw new Error("Idempotenzschlüssel ist bereits an eine andere Questbelohnung gebunden.");
       const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: false, ensureState: false });
       return { applied: false as const, receipt: replay, reward: replay, readmodel: resolveFactionQuestline(state) };
     }
-    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
     const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: true, ensureState: true });
     const previous = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(and(eq(aurionFactionQuestlineRewardReceipts.userId, values.userId), eq(aurionFactionQuestlineRewardReceipts.questId, values.questId))).limit(1))[0];
     if (previous) throw new Error("Diese Fraktionsquest wurde bereits belohnt.");
@@ -695,7 +699,7 @@ export async function completeFactionQuestlineQuestForUser(values: { userId: num
     const receipt = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(and(eq(aurionFactionQuestlineRewardReceipts.id, completionReceiptId), eq(aurionFactionQuestlineRewardReceipts.userId, values.userId))).limit(1))[0];
     if (!receipt || receipt.rewardDigest !== resolution.rewardDigest || receipt.xp !== reward.xp || receipt.points !== reward.points) throw new Error("Fraktionsquestline-Reward-Readback fehlgeschlagen.");
     await commitFactionQuestRelationship(tx, { userId: values.userId, receiptId: completionReceiptId, resolutionIndex: completionResolutionIndex, faction: reward.faction });
-    const nextState: FactionQuestlineStateInput = { ...state, lastResolutionIndex: completionResolutionIndex };
+    const nextState = await loadFactionQuestlineState({ tx, userId: values.userId, lock: false, ensureState: false });
     return { applied: true as const, receipt, reward, readmodel: resolveFactionQuestline(nextState) };
   });
 }

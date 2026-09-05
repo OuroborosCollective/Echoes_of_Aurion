@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { getFactionStory, getQuestlineNode, questApproaches, type AurionFaction, type QuestApproach } from "./aurionQuestlineProtocol";
-import { resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineStateInput } from "./aurionFactionQuestlineProtocol";
+import { resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineStateInput, type FactionQuestlineCompletionReceipt } from "./aurionFactionQuestlineProtocol";
 
 export const AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION = "aurion-faction-questline-rewards.v1" as const;
 export const AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION = "aurion-faction-questline-rewards.v1" as const;
@@ -96,4 +96,14 @@ export function resolveFactionQuestlineCompletion(input: Readonly<{
 
 export function factionQuestlineRewardApproaches(): readonly QuestApproach[] {
   return questApproaches.slice();
+}
+
+/** Rebuilds immutable completion evidence from the actual owned authored reward and decision. */
+export function verifiedFactionCompletion(row: { id: string; userId: number; faction: string; questId: string; approach: string; sourceDecisionReceiptId: string; completionResolutionIndex: number; rewardKey: string; xp: number; points: number; victory: number; rewardDigest: string; contentVersion: string; ruleSetVersion: string }, playerId: string, decisions: readonly FactionQuestlineDecisionReceipt[]): FactionQuestlineCompletionReceipt {
+  const source = decisions.find(d => d.receiptId === row.sourceDecisionReceiptId);
+  if (String(row.userId) !== playerId || !source || source.playerId !== playerId || source.faction !== row.faction || source.questId !== row.questId || source.approach !== row.approach || row.ruleSetVersion !== AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION || row.contentVersion !== AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION) throw new Error("FACTION_COMPLETION_EVIDENCE_INVALID");
+  const reward = getFactionQuestlineRewardDefinition({ faction: source.faction, questId: source.questId, approach: source.approach });
+  const expected = digest([row.ruleSetVersion,row.contentVersion,playerId,row.id,String(row.completionResolutionIndex),reward.rewardKey,String(reward.xp),String(reward.points),String(reward.victory),source.receiptId,String(source.resolutionIndex)]);
+  if (row.rewardKey !== reward.rewardKey || row.xp !== reward.xp || row.points !== reward.points || row.victory !== reward.victory || row.rewardDigest !== expected) throw new Error("FACTION_COMPLETION_EVIDENCE_INVALID");
+  return Object.freeze({ id: row.id, playerId, faction: source.faction, questId: source.questId, sourceDecisionReceiptId: source.receiptId, resolutionIndex: row.completionResolutionIndex, rewardDigest: row.rewardDigest });
 }

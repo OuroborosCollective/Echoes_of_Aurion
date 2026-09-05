@@ -287,7 +287,8 @@ test("explicit companion learning captures the visible world and stores a bounde
     await expect(dialog.getByText("0 lokale Beobachtungszeilen", { exact: true })).toBeVisible();
     // Persist only bounded event metadata in CI diagnostics, never screenshots or pairing credentials.
     await page.evaluate(() => {
-      const events: Record<string, unknown>[] = [];
+      const canvas = document.querySelector("#threejs-canvas") as HTMLCanvasElement;
+      const events: Record<string, unknown>[] = [{ framebufferWidth: canvas.width, framebufferHeight: canvas.height }];
       (window as unknown as { captureDiagnostics: unknown }).captureDiagnostics = events;
       for (const name of ["aurion:world-demonstration", "aurion:companion-frame-request", "aurion:companion-frame-response", "aurion:companion-dataset-updated"]) {
         window.addEventListener(name, event => {

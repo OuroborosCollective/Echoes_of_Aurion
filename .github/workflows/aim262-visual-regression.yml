@@ -4,6 +4,9 @@ on:
     paths:
       - 'client/src/xaurion/**'
       - 'client/src/pages/Home.tsx'
+      - 'client/src/lib/companion*'
+      - 'client/src/lib/visibleCanvasCapture*'
+      - 'client/src/hooks/useCompanionCaptureLoop*'
       - 'shared/deterministicSimulation.ts'
       - 'server/aim262VisualEffects.test.ts'
       - 'e2e/aim254.authenticatedMigration.spec.ts'
@@ -15,6 +18,9 @@ on:
     paths:
       - 'client/src/xaurion/**'
       - 'client/src/pages/Home.tsx'
+      - 'client/src/lib/companion*'
+      - 'client/src/lib/visibleCanvasCapture*'
+      - 'client/src/hooks/useCompanionCaptureLoop*'
       - 'shared/deterministicSimulation.ts'
       - 'server/aim262VisualEffects.test.ts'
       - 'e2e/aim254.authenticatedMigration.spec.ts'
@@ -41,6 +47,11 @@ jobs:
       - run: pnpm test
 
   authenticated-browser-and-database:
+    name: authenticated-browser-and-database (${{ matrix.scenario }})
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [world, companion]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
@@ -84,11 +95,18 @@ jobs:
           done
           exit 1
       - name: Prove actual registration, world entry, movement, persistence and recovery
-        run: pnpm exec playwright test --config=playwright.aurion-migration.config.ts
+        env:
+          BROWSER_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          case "$BROWSER_SCENARIO" in
+            world) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep-invert "explicit companion learning" ;;
+            companion) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep "explicit companion learning" ;;
+            *) exit 1 ;;
+          esac
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: aurion-authenticated-browser-${{ github.sha }}
+          name: aurion-authenticated-browser-${{ matrix.scenario }}-${{ github.sha }}
           path: |
             test-results/
             playwright-migration-report/
