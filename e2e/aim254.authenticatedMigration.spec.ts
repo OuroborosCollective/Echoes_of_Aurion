@@ -187,3 +187,64 @@ test("two authenticated accounts see the same confirmed movement and departure",
     await testInfo.attach("two-account-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, leftUserId, rightUserId, replicatedMovement: true, databasePresenceVerified: true, departedActorRemoved: true }), contentType: "application/json" });
   } finally { await leftContext.close(); await rightContext.close(); await pool.end(); }
 });
+
+test("native encounter survives a world return and commits the quest reward once", async ({ page, baseURL }, testInfo) => {
+  test.setTimeout(240_000);
+  expect(baseURL).toBe("http://127.0.0.1:3000");
+  const target = new URL(process.env.DATABASE_URL ?? "");
+  expect(target.hostname).toBe("127.0.0.1"); expect(target.pathname).toBe("/aurion_browser_test");
+  const pool = createPool(process.env.DATABASE_URL!);
+  const [database] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name"); expect(database[0].name).toBe("aurion_browser_test");
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.setViewportSize({ width: 412, height: 915 }); await page.goto("/");
+    await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("tab", { name: "Konto anlegen", exact: true }).click();
+    await dialog.getByLabel("Rufname", { exact: true }).fill("aim253_encounter");
+    await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-regression-253!");
+    await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+    await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
+    const enter = async () => {
+      await page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true }).click();
+      await expect(page.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+      await expect(page.locator("canvas")).toHaveCount(1);
+    };
+    await enter();
+    const hud = page.getByTestId("authoritative-world-hud");
+    await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
+    await dialog.getByRole("button", { name: "Bei Lyra annehmen", exact: true }).click();
+    await expect(dialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await hud.getByRole("button", { name: "Begegnungen", exact: true }).click();
+    await dialog.getByRole("button", { name: "Sternwarte Asterion beginnen", exact: true }).click();
+    const attack = hud.getByRole("button", { name: "Angreifen", exact: true });
+    await expect(attack).toBeEnabled();
+    const firstAction = page.waitForResponse(response => response.url().includes("gameplay.act") && response.status() === 200);
+    await attack.click(); await firstAction;
+    const [before] = await pool.query<RowDataPacket[]>("SELECT s.* FROM gameplaySessions s JOIN users u ON u.id=s.userId WHERE u.name='aim253_encounter' AND s.status='active'");
+    expect(before).toHaveLength(1); expect(before[0].bossHp).toBeLessThan(before[0].maxBossHp); expect(before[0].nextSequence).toBe(2);
+    await page.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await expect(page.getByTestId("xaurion-open-world-runtime")).toHaveCount(0);
+    await enter();
+    await expect(hud.getByText(`${before[0].bossHp} / ${before[0].maxBossHp} LP`, { exact: true })).toBeVisible();
+    for (let step = 0; step < 20; step++) {
+      const [state] = await pool.query<RowDataPacket[]>("SELECT status FROM gameplaySessions WHERE id=?", [before[0].id]);
+      if (state[0].status === "completed") break;
+      await expect(attack).toBeEnabled();
+      const response = page.waitForResponse(response => response.url().includes("gameplay.act") && response.status() === 200);
+      await attack.click(); await response;
+    }
+    await expect(hud.getByText("Keine aktive Begegnung", { exact: true })).toBeVisible();
+    const [completed] = await pool.query<RowDataPacket[]>("SELECT s.status, s.bossHp, q.state FROM gameplaySessions s JOIN gameplayQuestProgress q ON q.completionSessionId=s.id WHERE s.id=?", [before[0].id]);
+    expect(completed[0]).toMatchObject({ status: "completed", bossHp: 0, state: "ready_to_turn_in" });
+    await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
+    await dialog.getByRole("button", { name: "Bei Lyra abgeben", exact: true }).click();
+    await expect(dialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Bei Lyra abgeben", exact: true })).toHaveCount(0);
+    const [reward] = await pool.query<RowDataPacket[]>("SELECT p.totalXp, p.aurionPoints, q.state FROM playerProfiles p JOIN gameplayQuestProgress q ON q.userId=p.userId WHERE p.userId=? AND q.questKey='astral_call'", [before[0].userId]);
+    expect(reward[0]).toMatchObject({ totalXp: 122, aurionPoints: 20, state: "completed" });
+    expect(errors).toEqual([]);
+    await testInfo.attach("encounter-readback", { body: JSON.stringify({ sessionId: before[0].id, userId: before[0].userId, resumedWithoutReset: true, questCompleted: true, reward: reward[0] }), contentType: "application/json" });
+  } finally { await page.close(); await pool.end(); }
+});

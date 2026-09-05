@@ -1,3 +1,5 @@
+import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
+import { parseOwnedEncounterReadback } from "../shared/encounterReadback";
 import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -14,7 +16,7 @@ import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB
 import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
 import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQuality } from "./marketProtocol";
 import { storagePut } from "./storage";
-import { aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
+import { aurionEncounters, aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { AURION_FACTION_QUESTLINE_CONTENT_VERSION, AURION_FACTION_QUESTLINE_RULESET_VERSION, factionQuestlineDecisionHash, factionQuestlineNextResolutionIndex, factionQuestlineOathHash, isFactionQuestDecisionAvailable, mayPledgeFaction, permanentFactionChoices, resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineOathReceipt, type FactionQuestlineStateInput, type PermanentAurionFaction } from "./aurionFactionQuestlineProtocol";
 import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
 import { AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION, AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION, resolveFactionQuestlineCompletion, getFactionQuestlineRewardDefinition, type FactionQuestlineReward } from "./aurionFactionQuestlineRewardProtocol";
@@ -1474,15 +1476,16 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
   if (quest.giver !== values.giver) throw new Error("Dieser Questgeber kann den Auftrag nicht abschließen.");
   let completionSessionId: string | null = null;
   await db.transaction(async tx => {
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1).for("update"))[0];
+    if (!profile) throw new Error("Spielerprofil fehlt beim Questabschluss.");
     const row = (await tx.select().from(gameplayQuestProgress).where(and(
       eq(gameplayQuestProgress.userId, values.userId),
       eq(gameplayQuestProgress.questKey, values.questKey),
-      eq(gameplayQuestProgress.state, "ready_to_turn_in"),
-    )).limit(1))[0];
-    if (!row?.completionSessionId) throw new Error("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
+    )).limit(1).for("update"))[0];
+    if (!row?.completionSessionId || !["ready_to_turn_in", "completed"].includes(row.state)) throw new Error("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
     completionSessionId = row.completionSessionId;
-    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
-    if (!profile) throw new Error("Spielerprofil fehlt beim Questabschluss.");
+    // Recovery may continue idempotent loot/mastery finalization, but never grant the base reward twice.
+    if (row.state === "completed") return;
     const now = new Date();
     const totalXp = profile.totalXp + quest.reward.xp;
     await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now }).where(eq(gameplayQuestProgress.id, row.id));
@@ -1550,25 +1553,51 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
   return { ...(await getGameplayProgress(values.userId)), questDrop: item ? { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality, itemLevel: item.itemLevel, setKey: item.setKey } : null };
 }
 
+/** Owned, bounded readback is also the recovery path after a lost action response. */
+export async function getCurrentGameplayEncounter(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  const sessions = await db.select().from(gameplaySessions).where(and(eq(gameplaySessions.userId, userId), eq(gameplaySessions.status, "active"))).limit(2);
+  if (sessions.length > 1) throw new Error("MULTIPLE_ACTIVE_ENCOUNTERS");
+  const progress = await getGameplayProgress(userId);
+  return parseOwnedEncounterReadback({ active: sessions[0] ?? null, encounters: aurionEncounters.map(encounter => ({
+    key: encounter.key, name: encounter.name, enemyName: encounter.enemyName,
+    available: encounter.questKey ? progress.quests.some(quest => quest.key === encounter.questKey && quest.state === "active" && !quest.readyToTurnIn) : progress.canEnterDungeon,
+  })) }, userId);
+}
+
 export async function startGameplayEncounter(values: { userId: number; encounterKey: EncounterKey }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   const encounter = getEncounter(values.encounterKey);
-  const progress = await getGameplayProgress(values.userId);
-  if (encounter.questKey && progress.quests.find(quest => quest.key === encounter.questKey)?.state !== "active") {
-    throw new Error("Die zugehörige Quest muss vor dieser Begegnung aktiv sein.");
-  }
-  if (encounter.requiresDungeonKey && !progress.canEnterDungeon) {
-    throw new Error("Der Glutschlüssel und der abgeschlossene Questpfad sind für das Aschengewölbe erforderlich.");
-  }
-  const sessionId = newEndgameId("game");
-  await db.transaction(async tx => {
-    await tx.update(gameplaySessions).set({ status: "abandoned" }).where(and(eq(gameplaySessions.userId, values.userId), eq(gameplaySessions.status, "active")));
+  // One account lock serializes starts with actions; retries resume instead of resetting HP.
+  await getOrCreatePlayerProfile(values.userId);
+  const session = await db.transaction(async tx => {
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
+    if (!profile) throw new Error("Spielerprofil fehlt.");
+    const active = await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.userId, values.userId), eq(gameplaySessions.status, "active"))).limit(2).for("update");
+    if (active.length > 1) throw new Error("MULTIPLE_ACTIVE_ENCOUNTERS");
+    if (active[0]) {
+      if (active[0].encounterKey !== values.encounterKey) throw new Error("ACTIVE_ENCOUNTER_MUST_BE_COMPLETED");
+      return active[0];
+    }
+    const quests = await tx.select().from(gameplayQuestProgress).where(eq(gameplayQuestProgress.userId, values.userId)).for("update");
+    if (encounter.questKey && !quests.some(quest => quest.questKey === encounter.questKey && quest.state === "active")) {
+      throw new Error("Die zugehörige Quest muss vor dieser Begegnung aktiv sein.");
+    }
+    if (encounter.requiresDungeonKey) {
+      const keys = await tx.select().from(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, values.userId));
+      if (!mayEnterDungeon({ level: profile.level, completed: quests.filter(quest => quest.state === "completed").map(quest => quest.questKey as QuestKey), keys: keys.map(key => key.keyName) })) {
+        throw new Error("Der Glutschlüssel und der abgeschlossene Questpfad sind für das Aschengewölbe erforderlich.");
+      }
+    }
+    const [history] = await tx.select({ count: sql<number>`count(*)` }).from(gameplaySessions).where(eq(gameplaySessions.userId, values.userId));
+    const sessionId = encounterSessionIdentity(values.userId, Number(history.count) + 1, values.encounterKey);
     await tx.insert(gameplaySessions).values({ id: sessionId, userId: values.userId, encounterKey: values.encounterKey, bossHp: encounter.maxBossHp, maxBossHp: encounter.maxBossHp });
+    return (await tx.select().from(gameplaySessions).where(eq(gameplaySessions.id, sessionId)).limit(1))[0];
   });
-  const session = await db.select().from(gameplaySessions).where(eq(gameplaySessions.id, sessionId)).limit(1);
-  if (!session[0]) throw new Error("Die Spielsitzung konnte nicht bestätigt werden.");
-  return { session: session[0], progress };
+  if (!session) throw new Error("Die Spielsitzung konnte nicht bestätigt werden.");
+  return { session, progress: await getGameplayProgress(values.userId) };
 }
 
 export async function applyGameplayAction(values: { userId: number; sessionId: string; sequence: number; command: string; source: "human" | "gateway" }) {
@@ -1578,14 +1607,16 @@ export async function applyGameplayAction(values: { userId: number; sessionId: s
   const action = mcpActionFromCommand(normalized);
   if (!action) throw new Error("Der Spielbefehl ist nicht zulässig.");
   const resolution = await db.transaction(async tx => {
-    const session = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id, values.sessionId), eq(gameplaySessions.userId, values.userId))).limit(1))[0];
+    const owner = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
+    if (!owner) throw new Error("Spielerprofil fehlt.");
+    const session = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id, values.sessionId), eq(gameplaySessions.userId, values.userId))).limit(1).for("update"))[0];
     if (!session || session.status !== "active") throw new Error("Die Spielsitzung ist nicht aktiv.");
-    if (!Number.isSafeInteger(values.sequence) || values.sequence !== session.nextSequence) throw new Error("Die Aktionssequenz ist nicht gültig.");
+    if (!Number.isSafeInteger(values.sequence) || values.sequence >= 2_147_483_647 || values.sequence !== session.nextSequence) throw new Error("Die Aktionssequenz ist nicht gültig.");
     const encounterKey = session.encounterKey as EncounterKey;
     const encounter = getEncounter(encounterKey);
     const damage = damageForMcpAction(action);
     const bossHp = Math.max(0, session.bossHp - damage);
-    await tx.insert(gameplayActionReceipts).values({ id: newEndgameId("gact"), sessionId: session.id, userId: values.userId, sequence: values.sequence, command: normalized, action, source: values.source, damage });
+    await tx.insert(gameplayActionReceipts).values({ id: encounterActionIdentity(session.id, values.sequence), sessionId: session.id, userId: values.userId, sequence: values.sequence, command: normalized, action, source: values.source, damage });
     await tx.update(gameplaySessions).set({ bossHp, nextSequence: session.nextSequence + 1 }).where(eq(gameplaySessions.id, session.id));
     let completedQuest: QuestKey | null = null;
     let dungeonKeyGranted: string | null = null;

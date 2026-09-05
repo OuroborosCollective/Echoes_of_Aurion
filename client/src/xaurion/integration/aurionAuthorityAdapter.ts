@@ -4,7 +4,7 @@ import { attachAurionWorldCore } from "./aurionWorldCore";
 
 export type AurionPlayerClass = "vanguard" | "seer" | "warden";
 export type AurionQuestKey = "astral_call" | "archive_of_echoes" | "ember_key";
-export type AurionGameplayCommand = "1" | "2" | "3" | "4" | "5" | "E";
+export type AurionGameplayCommand = "1" | "2" | "3" | "4" | "5" | "E" | "F";
 export type AurionZoneMovementInput = { x: -1 | 0 | 1; z: -1 | 0 | 1 };
 
 const quantizeAxis = (value: number): -1 | 0 | 1 => value > 0.15 ? 1 : value < -0.15 ? -1 : 0;

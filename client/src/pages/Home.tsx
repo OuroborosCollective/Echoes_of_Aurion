@@ -1,3 +1,4 @@
+import { parseOwnedEncounterReadback } from "@shared/encounterReadback";
 /**
  * Echoes of Aurion — Expedition console
  * Design philosophy: A vertical bronze-and-glass field device frames rather than
@@ -103,6 +104,8 @@ export default function Home() {
     return () => { window.removeEventListener("aurion:load-open-world", enter); window.removeEventListener("aurion:return-to-tower", leave); };
   }, []);
   const apiAvailable = hasAurionApi();
+  const apiUtils = trpc.useUtils();
+  const actionInFlight = useRef(false);
   const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: apiAvailable });
   const previewMode = import.meta.env.DEV && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("aurion_preview") : null;
   const previewHome = previewMode === "tower-home";
@@ -457,29 +460,33 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const onRequestedAction = (event: Event) => {
+    const onRequestedAction = async (event: Event) => {
       const detail = (event as CustomEvent<{ command: Command; source: "human" | "gateway"; origin?: CompanionCommandOrigin }>).detail;
-      const session = gameplaySession.current;
-      if (!detail || !session) {
-        setLastSignal("Die Aktion wartet auf eine bestätigte Quest- und Begegnungssitzung.");
-        return;
+      if (!user?.id || actionInFlight.current || !detail || !/^[WASDEF1-9]$/.test(detail.command) || !["human", "gateway"].includes(detail.source)) return;
+      actionInFlight.current = true;
+      const status = (busy: boolean, message: string) => window.dispatchEvent(new CustomEvent("aurion:encounter-status", { detail: { busy, message } }));
+      status(true, "Aktion wird geprüft.");
+      try {
+        // Fetch the owned server state before choosing a sequence. No clock or browser counter mints an action.
+        const session = parseOwnedEncounterReadback(await apiUtils.gameplay.currentEncounter.fetch(), user.id).active;
+        if (!session) { status(true, "Nimm einen Auftrag an und beginne die zugehörige Begegnung."); return; }
+        const result = await applyGameplayAction.mutateAsync({ sessionId: session.id, sequence: session.nextSequence, command: detail.command, source: detail.source });
+        gameplaySession.current = result.completed ? null : { id: result.sessionId, nextSequence: result.nextSequence };
+        window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sessionId: result.sessionId, sequence: result.nextSequence - 1, command: detail.command, source: detail.source, origin: detail.origin, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
+        const message = result.completed ? "Begegnung abgeschlossen. Prüfe deinen Auftrag beim Questgeber." : `${result.damage} Schaden bestätigt.`;
+        setLastSignal(message); status(true, message);
+        if (result.completed) { void gameplayProgress.refetch(); if (result.drop) setConfirmedDrop(result.drop); }
+      } catch {
+        const message = "Aktion nicht bestätigt. Der gespeicherte Begegnungsstand wird neu geladen.";
+        setLastSignal(message); status(true, message);
+      } finally {
+        // A lost response must never auto-repeat an attack; a fresh readback recovers its committed sequence.
+        try { await apiUtils.gameplay.currentEncounter.invalidate(); } catch { status(true, "Begegnungsdaten sind derzeit nicht erreichbar."); } finally { actionInFlight.current = false; window.dispatchEvent(new CustomEvent("aurion:encounter-status", { detail: { busy: false } })); }
       }
-      applyGameplayAction.mutate({ sessionId: session.id, sequence: session.nextSequence, command: detail.command, source: detail.source }, {
-        onSuccess: (result) => {
-          gameplaySession.current = result.completed ? null : { id: result.sessionId, nextSequence: result.nextSequence };
-          window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sessionId: result.sessionId, sequence: result.nextSequence - 1, command: detail.command, source: detail.source, origin: detail.origin, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
-          if (result.completed) {
-            void gameplayProgress.refetch();
-            if (result.drop) setConfirmedDrop(result.drop);
-            setLastSignal(result.completedQuest ? `Der Auftrag ist bereit. Kehre für die Belohnung zu ${gameplayProgress.data?.quests.find(quest => quest.key === result.completedQuest)?.giver ?? "deinem Questgeber"} zurück.` : result.drop ? `Dungeonfund bestätigt: ${result.drop.baseItemKey}.` : "Der Glutwächter ist bestätigt gefallen.");
-          }
-        },
-        onError: () => setLastSignal("Die Aktion wurde nicht bestätigt. Die lokale Szene übernimmt keinen unbestätigten Schaden."),
-      });
     };
     window.addEventListener("aurion:request-action", onRequestedAction);
     return () => window.removeEventListener("aurion:request-action", onRequestedAction);
-  }, [applyGameplayAction, gameplayProgress]);
+  }, [applyGameplayAction, gameplayProgress, apiUtils, user?.id]);
 
   const openAccountAccess = useCallback(() => {
     window.dispatchEvent(new Event("aurion:open-local-auth"));
@@ -592,7 +599,6 @@ export default function Home() {
   };
   const enterAurionExpanse = (onConfirmed?: () => void): void => {
     if (!isAuthenticated) { setLastSignal("Melde dich an, um die serverbestätigte Aurion-Expanse zu betreten."); openAccountAccess(); return; }
-    if (gameplaySession.current) { setLastSignal("Beende oder sichere zuerst die aktive serverseitige Begegnung."); return; }
     enterOpenWorld.mutate(undefined, {
       onSuccess: (snapshot) => {
         setWorldDetailsOpen(false);
@@ -609,7 +615,6 @@ export default function Home() {
     });
   };
   const returnToTowerHome = (): void => {
-    if (gameplaySession.current) { setLastSignal("Eine aktive serverbestätigte Begegnung muss vor der Rückkehr gesichert werden."); return; }
     zoneClient.current?.close();
     setWorldDetailsOpen(false);
     setWorldStreamAnchor(null);

@@ -18,3 +18,6 @@
 .xaurion-game-hud>.top-4.right-4{top:64px}
 .xaurion-game-hud>.top-4.left-4{top:110px}
 @media(max-width:900px){.xaurion-game-hud>.top-4.left-1\/2{top:192px}}
+
+.aurion-encounter{position:absolute;left:16px;top:240px;display:grid;gap:5px;max-width:220px;pointer-events:auto;padding:10px;background:#081714ed;border:1px solid #bca77570;border-radius:12px;font-size:12px}.aurion-encounter progress{width:100%;accent-color:#cf785f}.aurion-encounter small{color:#87ccba}.aurion-encounter [role=status]{font-size:11px;overflow-wrap:anywhere}
+@media(max-width:720px){.aurion-encounter{left:10px;top:236px;max-width:44vw;font-size:11px}.aurion-encounter button{font-size:11px;padding:6px}}

@@ -1,3 +1,4 @@
+import { AurionEncounterPanel } from "./AurionEncounterPanel";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -61,6 +62,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       <button onClick={() => community("partners")}>Gruppe</button><button onClick={() => community("chat")}>Chat</button>
       <button onClick={() => community("market")}>Handel</button><button onClick={() => community("crafting")}>Handwerk</button>
     </nav>
+    <AurionEncounterPanel userId={userId} connected={connected} onAttack={() => onAction("F")} />
     <div className="aurion-authority-hud__move"><VirtualJoystick onMove={onMove} /></div>
     <div className="aurion-authority-hud__actions" aria-label="Aktionen">
       {[1, 2, 3, 4, 5].map(slot => <button key={slot} disabled={!connected || panel !== null} onClick={() => onAction(String(slot) as AurionGameplayCommand)} aria-label={`Aktion ${slot}`}>{slot}</button>)}
