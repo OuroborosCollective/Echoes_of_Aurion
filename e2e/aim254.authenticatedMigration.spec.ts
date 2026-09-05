@@ -287,7 +287,7 @@ test("explicit companion learning captures the visible world and stores a bounde
       for (const name of ["aurion:world-demonstration", "aurion:companion-frame-request", "aurion:companion-frame-response", "aurion:companion-dataset-updated"]) {
         window.addEventListener(name, event => {
           const d = (event as CustomEvent).detail ?? {};
-          events.push({ event: name, requestId: d.requestId, kind: d.kind, error: d.error, count: d.count, frameLength: typeof d.frameDataUrl === "string" ? d.frameDataUrl.length : undefined });
+          events.push({ event: name, requestId: d.requestId, kind: d.kind, error: d.error, count: d.count, captureAgeMs: typeof d.capturedAt === "number" ? Date.now() - d.capturedAt : undefined, featureCount: d.featureVector?.length, frameLength: typeof d.frameDataUrl === "string" ? d.frameDataUrl.length : undefined });
           if (events.length > 100) events.shift();
         });
       }

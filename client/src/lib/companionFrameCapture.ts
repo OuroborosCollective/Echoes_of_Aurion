@@ -11,6 +11,7 @@ export type CompanionFrameResponseDetail = Readonly<{
   requestId: string;
   frameDataUrl?: string;
   capturedAt?: number;
+  featureVector?: readonly number[];
   error?: "busy" | "unavailable" | "capture_failed";
 }>;
 
@@ -117,7 +118,14 @@ export async function requestCompanionFrame(captureStartedAt: number, timeoutMs 
         finish(null);
         return;
       }
-      void createCompanionFrameSample(detail.frameDataUrl, detail.capturedAt).then(finish).catch(() => finish(null));
+      if (detail.featureVector !== undefined) {
+        if (!Array.isArray(detail.featureVector)) { finish(null); return; }
+        const sample = { frameDataUrl: detail.frameDataUrl, capturedAt: detail.capturedAt, featureVector: [...detail.featureVector] };
+        if (!/^data:image\/(png|webp);base64,/.test(sample.frameDataUrl) || sample.frameDataUrl.length > 262_144 || !isFreshCompanionFrame(sample, captureStartedAt)) { finish(null); return; }
+        finish(sample);
+      } else {
+        void createCompanionFrameSample(detail.frameDataUrl, detail.capturedAt).then(finish).catch(() => finish(null));
+      }
     };
     const timer = window.setTimeout(() => finish(null), timeoutMs);
     window.addEventListener(COMPANION_FRAME_RESPONSE_EVENT, onResponse);
