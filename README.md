@@ -28,10 +28,12 @@ Regionen bleiben langfristig relevant. Ressourcen, Handelsrollen, Fraktionen, Du
 Du baust Fortschritt über serverbestätigte Ergebnisse auf:
 
 * **Quests und Entscheidungen:** Fraktionsgeschichten führen über nachvollziehbare Entscheidungs- und Belohnungsbelege.
-* **Kampf und Loot:** Begegnungen erzeugen bestätigte Siege, Gegenstände, Erfahrung und Mastery-Fortschritt.
+* **Kampf und Loot:** Begegnungen erzeugen bestätigte Siege, Gegenstände und Skill-XP.
 * **Dungeons:** Normal, Elite, Herausforderung und Endlosmodus nutzen regionale Varianten und Affixe.
 
 Endlosdungeons haben kein Level-Cap. Ihre sichtbaren Kampf- und Belohnungswerte bleiben begrenzt. So bleiben Wirtschaft und Lesbarkeit stabil.
+
+Aurion verwendet keine Klassen und keine globale Charakterstufe. Jede Fähigkeit besitzt eigene XP und eine eigene, cap-freie Stufenlogik. Dein Build entsteht aus trainierten Skills, Ausrüstung und Spielentscheidungen.
 
 ## Gemeinschaft und Weltordnung
 

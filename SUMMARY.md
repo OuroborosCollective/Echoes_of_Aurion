@@ -1,7 +1,7 @@
 # Table of contents
 
 * [Echoes of Aurion](README.md)
-* [Echoes of Aurion — Administration, Progression und Asset-Governance](ADMIN_PROGRESSION_ARCHITECTURE.md)
+* [Echoes of Aurion — Administration, Skills und Asset-Governance](ADMIN_PROGRESSION_ARCHITECTURE.md)
 * [Android-APK-Build](ANDROID_BUILD.md)
 * [Echoes of Aurion — Arena Progression](ARENA_DESIGN.md)
 * [Echoes of Aurion — Asset Manifest](ASSETS.md)
