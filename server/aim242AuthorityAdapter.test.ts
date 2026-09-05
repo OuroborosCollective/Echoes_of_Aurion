@@ -36,8 +36,10 @@ describe("AIM-242 -ax1 controls behind Aurion authority", () => {
     expect(runtime).toContain("ax1MovementToAurionIntent(engine.cameraYaw, forward, right)");
     expect(runtime).toContain("bindAurionAuthorityProjection");
     expect(runtime).toContain('new CustomEvent("aurion:request-action"');
-    expect(runtime).toContain("trpc.player.chooseClass.useMutation()");
-    expect(runtime).toContain("trpc.gameplay.acceptQuest.useMutation()");
+    const hud = readFileSync("client/src/xaurion/integration/AurionAuthorityHud.tsx", "utf8");
+    expect(runtime).toContain("<AurionAuthorityHud");
+    expect(hud).toContain("trpc.player.chooseClass.useMutation()");
+    expect(hud).toContain("trpc.gameplay.acceptQuest.useMutation()");
     expect(runtime).not.toContain('x: ((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0))');
     expect(runtime).not.toContain("engine.player.stats.gold -= item.valueGold");
     expect(runtime).not.toContain("engine.quests.push({ ...quest })");

@@ -318,7 +318,8 @@ export class MMOEngine {
       this.addChatMessage('party', sender, text);
     };
     this.genkitAdapter = new GenkitAdapter(simulation);
-    this.particleSystem = new ParticleSystem(this.scene, simulation);
+    const particleTier = this.container.clientWidth < 768 ? 'phone' : this.container.clientWidth < 1200 ? 'tablet' : 'desktop';
+    this.particleSystem = new ParticleSystem(this.scene, simulation, particleTier);
 
 
     // Register landscape steam vents and beacon points into ParticleSystem
@@ -1219,6 +1220,7 @@ export class MMOEngine {
       this.resizeObserver.disconnect();
     }
     this.unbindEvents();
+    this.particleSystem?.dispose();
 
     try {
       if (this.renderer) {
@@ -1358,8 +1360,8 @@ export class MMOEngine {
     this.floatingTexts = this.floatingTexts.filter((t) => t.lifespan > 0);
 
     // 11. Update Particle System
-    if (this.particleSystem && this.gmConfig.ambientParticles) {
-      this.particleSystem.update(delta);
+    if (this.particleSystem) {
+      this.particleSystem.update(delta, this.gmConfig.ambientParticles);
     }
 
     // 12. Dynamic Atmospheric Day-Night Cycle

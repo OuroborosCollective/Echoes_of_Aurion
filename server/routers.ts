@@ -7,7 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
-import { isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
+import { canChooseClass, CLASS_UNLOCK_LEVEL, isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
@@ -108,14 +108,17 @@ export const appRouter = router({
     }),
   }),
   player: router({
-    me: protectedProcedure.query(async ({ ctx }) => ({
-      profile: await db.getOrCreatePlayerProfile(ctx.user.id),
+    me: protectedProcedure.query(async ({ ctx }) => {
+      const profile = await db.getOrCreatePlayerProfile(ctx.user.id);
+      return {
+      profile,
+      capabilities: { canChooseClass: canChooseClass(profile.level, profile.selectedClass), classUnlockLevel: CLASS_UNLOCK_LEVEL },
       weaponMasteries: await db.listWeaponMasteries(ctx.user.id),
       weaponLoadout: await db.getWeaponLoadout(ctx.user.id),
       guild: await db.getActiveGuildForUser(ctx.user.id),
       inventory: await db.listInventoryForUser(ctx.user.id),
       setBonuses: await db.listSetBonusesForUser(ctx.user.id),
-    })),
+    }; }),
     chooseClass: protectedProcedure.input(z.object({ playerClass: z.enum(["vanguard", "seer", "warden"]) })).mutation(async ({ ctx, input }) => {
       if (!isPlayerClass(input.playerClass)) throw new Error("Unsupported class");
       return db.choosePlayerClass(ctx.user.id, input.playerClass);
