@@ -57,7 +57,10 @@ describe("AIM-239 xaurion integration boundary", () => {
     const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
     const hud = read("client/src/components/OpenWorldHud.tsx");
     expect(runtime).toContain("aurion:xaurion-return-request");
-    expect(hud).toContain("aurion:xaurion-return-request");
+    const home = read("client/src/pages/Home.tsx");
+    expect(home).toContain('window.addEventListener("aurion:xaurion-return-request", returnToTowerHome)');
+    expect(home).toContain('window.removeEventListener("aurion:xaurion-return-request", returnToTowerHome)');
+    expect(hud).not.toContain("aurion:xaurion-return-request");
     expect(hud).toContain("onReturn");
   });
 
