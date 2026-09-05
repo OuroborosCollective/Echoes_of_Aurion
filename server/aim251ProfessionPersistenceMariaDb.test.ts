@@ -95,4 +95,26 @@ suite("AIM-251 production crafting transaction in isolated MariaDB", () => {
     const recovered = await craftItemForUser({ userId, recipeKey: "temper_aurion_spear", inputItemId: inputId });
     expect(recovered).toMatchObject({ applied: true, receipt: { resolutionIndex: 1 } });
   }, 30_000);
+
+  it("rejects modified receipt bytes and output templates before replay or materialization", async () => {
+    const request = { userId, recipeKey: "temper_aurion_spear", inputItemId: inputId };
+    const craft = await craftItemForUser(request);
+    const db = (await getDb())!;
+    const id = craft.profession!.envelope.receiptId;
+    const [receipt] = await db.select().from(aurionProfessionReceipts).where(eq(aurionProfessionReceipts.id, id));
+    const [batch] = await db.select().from(aurionProfessionOutputBatches).where(eq(aurionProfessionOutputBatches.professionReceiptId, id));
+    const envelope = JSON.parse(receipt.envelopeJson);
+    envelope.modifiers.qualityPowerBps += 1;
+    await db.update(aurionProfessionReceipts).set({ envelopeJson: stableCatalogStringify(envelope) }).where(eq(aurionProfessionReceipts.id, id));
+    await expect(craftItemForUser(request)).rejects.toThrow("PROFESSION_STORED_CONTENT_CORRUPT");
+    await db.update(aurionProfessionReceipts).set({ envelopeJson: receipt.envelopeJson }).where(eq(aurionProfessionReceipts.id, id));
+    const template = JSON.parse(batch.templateJson);
+    template.affixes[0].stats.power += 999;
+    await db.update(aurionProfessionOutputBatches).set({ templateJson: stableCatalogStringify(template) }).where(eq(aurionProfessionOutputBatches.professionReceiptId, id));
+    await expect(materializeCraftingBonusForUser({ userId, receiptId: craft.receipt.id, expectedOutputIndexExact: "1", count: 1 })).rejects.toThrow("PROFESSION_STORED_CONTENT_CORRUPT");
+    expect(await db.select().from(itemInstances).where(eq(itemInstances.craftingReceiptId, craft.receipt.id))).toHaveLength(1);
+    expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.userId, userId))).toHaveLength(3);
+    await db.update(aurionProfessionOutputBatches).set({ templateJson: batch.templateJson }).where(eq(aurionProfessionOutputBatches.professionReceiptId, id));
+    expect((await craftItemForUser(request)).applied).toBe(false);
+  }, 30_000);
 });

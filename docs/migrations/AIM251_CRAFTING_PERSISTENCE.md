@@ -19,48 +19,39 @@ identity comes from the authenticated session, never a supplied player ID.
 
 ## Migration and deployment gate
 
+Foundation PR #203 prepares SQL 0031 before this application starts reading its
+columns. It preserves the old compatible application, verifies root tool bytes,
+checks all 0021–0031 schema contracts and applies through the existing OIDC,
+backup/recovery and postflight boundary. This profession release must follow a
+successful physical production readback from that foundation.
+
 0031 creates three tables, adds an optional profession link to crafting receipts,
 and extends item provenance with `craftingOutputKey` (historical default `base`).
-The composite unique index is installed **before** the old receipt-only unique
-index is removed. The existing exactly-one-provenance CHECK remains in force.
-The change does not delete inventories, receipts or mastery history.
+The composite unique index is installed before the old receipt-only unique index
+is removed. The existing exactly-one-provenance CHECK remains in force.
 
-Before production application: take and verify a restorable database backup,
-verify the exact source/journal hashes, apply the complete chain in isolated
-MariaDB, and verify physical columns, index uniqueness and CHECK constraints.
-The previously deployed reconciliation stopped at 0028 and did not inspect
-ALTER TABLE. This increment extends both artifacts through 0031 and binds the
-0001/0009/0019 source contracts needed for legacy inventory/crafting comparison.
-It compares complete prefixes, evolved enums, columns, index changes (including
-0009's removed owner index), and CHECK expressions with boolean grouping intact.
-Do not apply 0031 with an older production runner or mark AIM-251 complete.
+The persisted profession `commitHash` binds the entire stored envelope and
+output template, including affixes. The protocol's original operation hash
+remains inside the envelope. Every receipt replay and bonus materialization
+verifies that storage digest before using the data. Pending output readback
+uses the same verifier; completed batches cannot crowd unclaimed outputs out
+of its bounded page. Historical crafts without a profession receipt are not
+retroactively credited.
 
-Production runs 33940846162 and 33941519563 promoted healthy containers but then
-failed on unprivileged executable checks below `/usr/local/sbin`. Read-only
-diagnosis 33942145907 proved all four manifest/revision checks passed and both
-executable checks failed with permission denied. A bounded helper now verifies
-numeric ownership, regular-file mode 0755 and exact SHA-256 through sudo rules
-for four fixed executable paths only. It neither changes sbin permissions nor
-adds general file/shell access. Both isolated root proofs reproduce the blocked
-directory traversal using a deployment user before exercising this helper.
-
-Rollback after bonus items exist requires preserving the new composite index and
-disabling writes until the matching application is restored. Reinstating the old
-receipt-only unique index would reject legitimate multiple outputs. A full DB
-restore must use the verified pre-migration backup during a write pause, with a
-separate data-loss assessment for any subsequent writes.
+Preserve the new schema on application rollback. Reinstating the old receipt-only
+unique index would reject legitimate multiple outputs. A full database restore
+requires the verified backup and a write pause, with assessment of subsequent
+writes.
 
 ## Verification
 
-Local TypeScript and the contiguous 0000–0031 journal verifier pass. The complete
-local suite passes 473 tests; 35 environment-bound tests are skipped. The new
-MariaDB workflow runs the complete Drizzle chain and existing crafting tests,
-then proves concurrent retries, exact bonus origins, ownership rejection, and
-full rollback after an injected late SQL failure. Those database checks must
-pass in Actions; local skips do not constitute database evidence. Initial
-profession-only MariaDB run 33942109429 passed. The first expanded schema run
-correctly stopped at an incorrectly retained historical index contract; the
-0009 DROP INDEX is now included and awaits repeated database verification.
+Typecheck and the targeted local crafting/UI suite pass (16 tests). Four
+MariaDB cases require the explicit isolated test database and run in Actions:
+concurrent retries, exact bonus origins without extra XP, full rollback after an
+injected late insert failure, and corrupted envelope/template rejection before
+replay or item emission. Local skips are not database evidence. The earlier
+three-case database suite passed on PR #202 head 2593045; the new fourth case
+requires a fresh run on this release.
 
 Still pending for the complete Linear scope: all catalog recipes and gathering
 activities, region/faction constraints, gameplay input receipts, restart replay,

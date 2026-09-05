@@ -6,7 +6,7 @@ import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
 import { craftingReceiptDigest, resolveAurionCraftingPlan, resolveCraftingResolutionIndex, type CraftingAffix, type CraftingItemQuality } from "./craftingProtocol";
-import { prepareCraftingProfession, commitCraftingProfession, readCraftingProfession, readCraftingMastery, type CraftingOutputTemplate } from "./craftingProfessionPersistence";
+import { prepareCraftingProfession, commitCraftingProfession, readCraftingProfession, readCraftingMastery, readPendingCraftingOutputs, type CraftingOutputTemplate } from "./craftingProfessionPersistence";
 import { aurionProfessionOutputBatches } from "../drizzle/professionPersistenceSchema";
 import { professionOutputOriginAt } from "./professionMasteryProtocol";
 import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
@@ -1850,14 +1850,14 @@ export async function getCraftingReadmodel(userId: number) {
     db.select().from(itemInstances).where(and(eq(itemInstances.ownerUserId, userId), eq(itemInstances.status, "owned"), eq(itemInstances.sourceKind, "crafting"), isNotNull(itemInstances.craftingReceiptId))).orderBy(desc(itemInstances.createdAt)).limit(100),
     getExactSkillProgressionReadmodel(userId, "crafting"),
     readCraftingMastery(db, userId),
-    db.select().from(aurionProfessionOutputBatches).where(eq(aurionProfessionOutputBatches.ownerUserId, userId)).limit(100),
+    readPendingCraftingOutputs(db, userId),
   ]);
   return {
     receipts: receipts.map(receipt => ({ id: receipt.id, recipeKey: receipt.recipeKey, receiptDigest: receipt.receiptDigest, resolutionIndex: receipt.resolutionIndex, createdAt: receipt.createdAt })),
     outputs: outputs.map(craftingItemView),
     progression,
     scopedMastery,
-    bonusOutputs: batches.map(batch => ({ receiptId: batch.sourceCraftingReceiptId, professionReceiptId: batch.professionReceiptId, nextOutputIndexExact: batch.nextOutputIndexExact, remainingQuantityExact: (BigInt(batch.totalQuantityExact) - BigInt(batch.nextOutputIndexExact)).toString() })).filter(batch => batch.remainingQuantityExact !== "0"),
+    bonusOutputs: batches,
   };
 }
 

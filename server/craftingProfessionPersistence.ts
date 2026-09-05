@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { aurionProfessionOutputBatches, aurionProfessionReceipts, aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import type { getDb } from "./db";
 import type { CraftingAffix, CraftingPlan } from "./craftingProtocol";
@@ -60,7 +60,9 @@ export async function prepareCraftingProfession(tx: Reader, input: {
 /** No transaction or alternative crafting service is opened by this persistence helper. */
 export async function commitCraftingProfession(tx: Writer, userId: number, prepared: Awaited<ReturnType<typeof prepareCraftingProfession>>) {
   const { envelope, masteryEvents, template } = prepared;
-  await tx.insert(aurionProfessionReceipts).values({ id: envelope.receiptId, userId, sourceCraftingReceiptId: envelope.sourceReceiptId, operationId: envelope.operationId, commitHash: envelope.commitHash, envelopeJson: stableCatalogStringify(envelope) });
+  // The persisted digest binds every envelope field and the exact output
+  // template. The protocol's operation hash alone does not cover stored bytes.
+  await tx.insert(aurionProfessionReceipts).values({ id: envelope.receiptId, userId, sourceCraftingReceiptId: envelope.sourceReceiptId, operationId: envelope.operationId, commitHash: digest({ envelope, template }), envelopeJson: stableCatalogStringify(envelope) });
   await tx.insert(aurionScopedMasteryEvents).values(masteryEvents.map(event => ({ id: event.idempotencyKey, userId, scopeKey: canonicalScopedMasteryKey(event.key), professionReceiptId: envelope.receiptId, eventHash: digest(event), eventJson: stableCatalogStringify(event) })));
   await tx.insert(aurionProfessionOutputBatches).values({ professionReceiptId: envelope.receiptId, sourceCraftingReceiptId: envelope.sourceReceiptId, ownerUserId: userId, totalQuantityExact: envelope.yield.totalQuantityExact, nextOutputIndexExact: "1", templateJson: stableCatalogStringify(template) });
   const readback = await readCraftingProfession(tx, userId, envelope.sourceReceiptId, envelope.receiptId);
@@ -72,14 +74,36 @@ export async function readCraftingProfession(reader: Reader, userId: number, sou
   if (!expectedReceiptId) return null; // Historical crafts are never retroactively credited.
   const row = (await reader.select().from(aurionProfessionReceipts).where(and(eq(aurionProfessionReceipts.id, expectedReceiptId), eq(aurionProfessionReceipts.userId, userId), eq(aurionProfessionReceipts.sourceCraftingReceiptId, sourceCraftingReceiptId))).limit(1))[0];
   if (!row) throw new Error("PROFESSION_RECEIPT_MISSING");
-  const envelope = JSON.parse(row.envelopeJson) as ProfessionOperationEnvelope;
-  if (envelope.receiptId !== row.id || envelope.actorId !== actor(userId) || envelope.commitHash !== row.commitHash || envelope.sourceReceiptId !== sourceCraftingReceiptId) throw new Error("PROFESSION_RECEIPT_CORRUPT");
+  const batch = (await reader.select().from(aurionProfessionOutputBatches).where(and(eq(aurionProfessionOutputBatches.professionReceiptId, row.id), eq(aurionProfessionOutputBatches.ownerUserId, userId))).limit(1))[0];
+  const stored = verifyStoredCraftingOutput(row, batch, userId);
+  const { envelope } = stored;
   const events = await reader.select().from(aurionScopedMasteryEvents).where(and(eq(aurionScopedMasteryEvents.userId, userId), eq(aurionScopedMasteryEvents.professionReceiptId, row.id)));
   const expectedKeys = envelope.masteryKeys.map(canonicalScopedMasteryKey).sort();
   if (JSON.stringify(events.map(event => canonicalScopedMasteryKey(eventFromRow(event).key)).sort()) !== JSON.stringify(expectedKeys)) throw new Error("PROFESSION_EVENTS_INCOMPLETE");
-  const batch = (await reader.select().from(aurionProfessionOutputBatches).where(and(eq(aurionProfessionOutputBatches.professionReceiptId, row.id), eq(aurionProfessionOutputBatches.ownerUserId, userId))).limit(1))[0];
-  if (!batch || batch.sourceCraftingReceiptId !== sourceCraftingReceiptId || batch.totalQuantityExact !== envelope.yield.totalQuantityExact || !/^[1-9][0-9]*$/.test(batch.nextOutputIndexExact) || BigInt(batch.nextOutputIndexExact) > BigInt(batch.totalQuantityExact)) throw new Error("PROFESSION_OUTPUT_BATCH_CORRUPT");
-  return { envelope, remainingQuantityExact: (BigInt(batch.totalQuantityExact) - BigInt(batch.nextOutputIndexExact)).toString(), nextOutputIndexExact: batch.nextOutputIndexExact, masteryStates: await masteryReadback(reader, userId, envelope.masteryKeys) };
+  return { ...stored, masteryStates: await masteryReadback(reader, userId, envelope.masteryKeys) };
+}
+
+function verifyStoredCraftingOutput(row: typeof aurionProfessionReceipts.$inferSelect | null, batch: typeof aurionProfessionOutputBatches.$inferSelect | undefined, userId: number) {
+  if (!row) throw new Error("PROFESSION_RECEIPT_MISSING");
+  const envelope = JSON.parse(row.envelopeJson) as ProfessionOperationEnvelope;
+  if (row.userId !== userId || envelope.receiptId !== row.id || envelope.actorId !== actor(userId) || envelope.operationId !== row.operationId || envelope.sourceReceiptId !== row.sourceCraftingReceiptId) throw new Error("PROFESSION_RECEIPT_CORRUPT");
+  if (!batch || batch.ownerUserId !== userId || batch.professionReceiptId !== row.id || batch.sourceCraftingReceiptId !== row.sourceCraftingReceiptId || batch.totalQuantityExact !== envelope.yield.totalQuantityExact || !/^[1-9][0-9]*$/.test(batch.totalQuantityExact) || !/^[1-9][0-9]*$/.test(batch.nextOutputIndexExact) || BigInt(batch.nextOutputIndexExact) > BigInt(batch.totalQuantityExact)) throw new Error("PROFESSION_OUTPUT_BATCH_CORRUPT");
+  const template = JSON.parse(batch.templateJson) as CraftingOutputTemplate;
+  if (digest({ envelope, template }) !== row.commitHash) throw new Error("PROFESSION_STORED_CONTENT_CORRUPT");
+  return { envelope, remainingQuantityExact: (BigInt(batch.totalQuantityExact) - BigInt(batch.nextOutputIndexExact)).toString(), nextOutputIndexExact: batch.nextOutputIndexExact };
+}
+
+export async function readPendingCraftingOutputs(reader: Reader, userId: number) {
+  // Completed batches cannot crowd unclaimed outputs out of the bounded page.
+  const rows = await reader.select({ batch: aurionProfessionOutputBatches, receipt: aurionProfessionReceipts })
+    .from(aurionProfessionOutputBatches)
+    .leftJoin(aurionProfessionReceipts, eq(aurionProfessionReceipts.id, aurionProfessionOutputBatches.professionReceiptId))
+    .where(and(eq(aurionProfessionOutputBatches.ownerUserId, userId), ne(aurionProfessionOutputBatches.totalQuantityExact, aurionProfessionOutputBatches.nextOutputIndexExact)))
+    .orderBy(asc(aurionProfessionOutputBatches.professionReceiptId)).limit(100);
+  return rows.map(({ batch, receipt }) => {
+    const stored = verifyStoredCraftingOutput(receipt, batch, userId);
+    return { receiptId: batch.sourceCraftingReceiptId, professionReceiptId: batch.professionReceiptId, nextOutputIndexExact: stored.nextOutputIndexExact, remainingQuantityExact: stored.remainingQuantityExact };
+  });
 }
 
 export async function readCraftingMastery(reader: Reader, userId: number) {

@@ -1,16 +1,52 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0028",
+  "waveId": "aurion-production-0021-0031",
   "migrations": [
-    { "tag": "0021_aurion_global_world_state", "source": "aurion" },
-    { "tag": "0022_aurion_world_chunk_deltas", "source": "aurion" },
-    { "tag": "0023_aurion_world_presence_epochs", "source": "aurion" },
-    { "tag": "0024_aurion_world_epoch_reactions", "source": "aurion" },
-    { "tag": "0025_aurion_loot_mastery_ethos", "source": "aurion" },
-    { "tag": "0026_aurion_faction_questline_state", "source": "aurion" },
-    { "tag": "0027_aurion_faction_questline_rewards", "source": "aurion" },
-    { "tag": "0028_aurion_world_checkpoint", "source": "aurion" }
+    {
+      "tag": "0021_aurion_global_world_state",
+      "source": "aurion"
+    },
+    {
+      "tag": "0022_aurion_world_chunk_deltas",
+      "source": "aurion"
+    },
+    {
+      "tag": "0023_aurion_world_presence_epochs",
+      "source": "aurion"
+    },
+    {
+      "tag": "0024_aurion_world_epoch_reactions",
+      "source": "aurion"
+    },
+    {
+      "tag": "0025_aurion_loot_mastery_ethos",
+      "source": "aurion"
+    },
+    {
+      "tag": "0026_aurion_faction_questline_state",
+      "source": "aurion"
+    },
+    {
+      "tag": "0027_aurion_faction_questline_rewards",
+      "source": "aurion"
+    },
+    {
+      "tag": "0028_aurion_world_checkpoint",
+      "source": "aurion"
+    },
+    {
+      "tag": "0029_aurion_guild_kingdom_authority",
+      "source": "aurion"
+    },
+    {
+      "tag": "0030_aurion_guild_bank_economy",
+      "source": "aurion"
+    },
+    {
+      "tag": "0031_aurion_profession_crafting_persistence",
+      "source": "aurion"
+    }
   ],
   "policy": {
     "productionWritesScheduled": false,

@@ -26,7 +26,7 @@ describe("Aurion Traefik promotion schema-runner bootstrap", () => {
     expect(workflow).toContain("uses: ./.github/workflows/aurion-root-reconciliation-artifact-proof.yml");
     expect(workflow).toContain("production-schema-readback:");
     expect(workflow).toContain("uses: ./.github/workflows/aurion-production-schema-readback.yml");
-    expect(workflow).toContain("needs: promote-zone-runtime");
+    expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
     expect(workflow).toContain("expected_sha: ${{ github.sha }}");
     expect(workflow).toContain("upstream_run_id: ${{ github.run_id }}");
   });

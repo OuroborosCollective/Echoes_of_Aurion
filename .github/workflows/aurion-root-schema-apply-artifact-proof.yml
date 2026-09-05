@@ -251,7 +251,7 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' "$backup_file")" = "root:root:600"
           sudo gzip -t "$backup_file"
           rows="$(docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM __drizzle_migrations" "$AURION_APPLY_TEST_DATABASE")"
-          test "$rows" -eq 29
+          test "$rows" -eq 32
 
       - name: Prove exact retry is a non-mutating no-op
         run: |
