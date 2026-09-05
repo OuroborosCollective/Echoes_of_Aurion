@@ -6,6 +6,9 @@ import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
 import { craftingReceiptDigest, resolveAurionCraftingPlan, resolveCraftingResolutionIndex, type CraftingAffix, type CraftingItemQuality } from "./craftingProtocol";
+import { prepareCraftingProfession, commitCraftingProfession, readCraftingProfession, readCraftingMastery, type CraftingOutputTemplate } from "./craftingProfessionPersistence";
+import { aurionProfessionOutputBatches } from "../drizzle/professionPersistenceSchema";
+import { professionOutputOriginAt } from "./professionMasteryProtocol";
 import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayProtocol";
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
 import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
@@ -1842,15 +1845,19 @@ function craftingItemView(item: { id: string; baseItemKey: string; quality: stri
 export async function getCraftingReadmodel(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  const [receipts, outputs, progression] = await Promise.all([
+  const [receipts, outputs, progression, scopedMastery, batches] = await Promise.all([
     db.select().from(craftingReceipts).where(eq(craftingReceipts.userId, userId)).orderBy(desc(craftingReceipts.createdAt)).limit(30),
     db.select().from(itemInstances).where(and(eq(itemInstances.ownerUserId, userId), eq(itemInstances.status, "owned"), eq(itemInstances.sourceKind, "crafting"), isNotNull(itemInstances.craftingReceiptId))).orderBy(desc(itemInstances.createdAt)).limit(100),
     getExactSkillProgressionReadmodel(userId, "crafting"),
+    readCraftingMastery(db, userId),
+    db.select().from(aurionProfessionOutputBatches).where(eq(aurionProfessionOutputBatches.ownerUserId, userId)).limit(100),
   ]);
   return {
     receipts: receipts.map(receipt => ({ id: receipt.id, recipeKey: receipt.recipeKey, receiptDigest: receipt.receiptDigest, resolutionIndex: receipt.resolutionIndex, createdAt: receipt.createdAt })),
     outputs: outputs.map(craftingItemView),
     progression,
+    scopedMastery,
+    bonusOutputs: batches.map(batch => ({ receiptId: batch.sourceCraftingReceiptId, professionReceiptId: batch.professionReceiptId, nextOutputIndexExact: batch.nextOutputIndexExact, remainingQuantityExact: (BigInt(batch.totalQuantityExact) - BigInt(batch.nextOutputIndexExact)).toString() })).filter(batch => batch.remainingQuantityExact !== "0"),
   };
 }
 
@@ -1876,10 +1883,10 @@ export async function craftItemForUser(values: { userId: number; recipeKey: stri
 
     const replay = (await tx.select().from(craftingReceipts).where(eq(craftingReceipts.idempotencyKey, idempotencyKey)).limit(1))[0];
     if (replay) {
-      const output = (await tx.select().from(itemInstances).where(and(eq(itemInstances.craftingReceiptId, replay.id), eq(itemInstances.sourceKind, "crafting"))).limit(1))[0];
+      const output = (await tx.select().from(itemInstances).where(and(eq(itemInstances.craftingReceiptId, replay.id), eq(itemInstances.sourceKind, "crafting"), eq(itemInstances.craftingOutputKey, "base"))).limit(1))[0];
       const event = (await tx.select().from(skillProgressionEvents).where(and(eq(skillProgressionEvents.userId, values.userId), eq(skillProgressionEvents.resultReceiptId, replay.id), eq(skillProgressionEvents.receiptKind, "crafting"), eq(skillProgressionEvents.skillId, "crafting"))).limit(1))[0];
       if (!output || !event) throw new Error("Crafting-Receipt besitzt keine vollständige bestätigte Wirkung.");
-      return { applied: false as const, receipt: replay, output: craftingItemView(output), skillEvent: event };
+      return { applied: false as const, receipt: replay, output: craftingItemView(output), skillEvent: event, profession: await readCraftingProfession(tx, values.userId, replay.id, replay.professionReceiptId) };
     }
 
     const inputItem = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.inputItemId), eq(itemInstances.ownerUserId, values.userId), eq(itemInstances.status, "owned"))).for("update").limit(1))[0];
@@ -1889,10 +1896,11 @@ export async function craftItemForUser(values: { userId: number; recipeKey: stri
 
     const receiptRows = await tx.select({ count: sql<number>`count(*)` }).from(craftingReceipts).where(eq(craftingReceipts.userId, values.userId));
     const resolutionIndex = resolveCraftingResolutionIndex(Number(receiptRows[0]?.count ?? 0));
-    const receiptId = newEndgameId("craft");
     const receiptDigest = craftingReceiptDigest({ userId: values.userId, idempotencyKey, plan: planResolution.plan, resolutionIndex });
-    const outputId = newEndgameId("crafted");
-    const skillEventId = newEndgameId("skillev");
+    const receiptId = `craft_${receiptDigest.slice(0, 48)}`;
+    const prepared = await prepareCraftingProfession(tx, { userId: values.userId, plan: planResolution.plan, receiptId, receiptDigest, resolutionIndex, inputItem, serverSeed: GLOBAL_WORLD_SEED });
+    const outputId = prepared.outputId;
+    const skillEventId = `skillev_${receiptDigest.slice(0, 48)}`;
     const consumed = await tx.update(itemInstances).set({ status: "consumed" }).where(and(eq(itemInstances.id, inputItem.id), eq(itemInstances.ownerUserId, values.userId), eq(itemInstances.status, "owned")));
     if (affectedRowCount(consumed) !== 1) throw new Error("Der Crafting-Gegenstand wurde parallel verändert.");
 
@@ -1904,6 +1912,7 @@ export async function craftItemForUser(values: { userId: number; recipeKey: stri
       ruleSetVersion: planResolution.plan.recipe.ruleSetVersion,
       contentVersion: planResolution.plan.recipe.contentVersion,
       inputItemId: inputItem.id,
+      professionReceiptId: prepared.envelope.receiptId,
       receiptDigest,
       resolutionIndex,
       idempotencyKey,
@@ -1916,7 +1925,7 @@ export async function craftItemForUser(values: { userId: number; recipeKey: stri
       baseItemKey: planResolution.plan.output.baseItemKey,
       quality: planResolution.plan.output.quality,
       itemLevel: inputItem.itemLevel,
-      affixesJson: JSON.stringify(planResolution.plan.output.affixes),
+      affixesJson: JSON.stringify(prepared.template.affixes),
     });
     // `recordValidatedSkillProgressionEvent` remains deliberately expedition-only. This sibling
     // path writes only after its same-player Crafting receipt exists in this transaction and labels
@@ -1932,11 +1941,47 @@ export async function craftItemForUser(values: { userId: number; recipeKey: stri
       resolutionIndex,
       idempotencyKey: `skill:${idempotencyKey}`,
     });
+    const profession = await commitCraftingProfession(tx, values.userId, prepared);
     const receipt = (await tx.select().from(craftingReceipts).where(eq(craftingReceipts.id, receiptId)).limit(1))[0];
     const output = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, outputId), eq(itemInstances.craftingReceiptId, receiptId), eq(itemInstances.sourceKind, "crafting"))).limit(1))[0];
     const skillEvent = (await tx.select().from(skillProgressionEvents).where(and(eq(skillProgressionEvents.id, skillEventId), eq(skillProgressionEvents.receiptKind, "crafting"))).limit(1))[0];
     if (!receipt || !output || !skillEvent) throw new Error("Crafting-Readback nach Transaktion fehlgeschlagen.");
-    return { applied: true as const, receipt, output: craftingItemView(output), skillEvent };
+    return { applied: true as const, receipt, output: craftingItemView(output), skillEvent, profession };
+  });
+}
+
+/** Materializes a bounded, expected origin range from an existing craft; never grants XP. */
+export async function materializeCraftingBonusForUser(values: { userId: number; receiptId: string; expectedOutputIndexExact: string; count: number }) {
+  if (!Number.isSafeInteger(values.userId) || values.userId < 1 || !Number.isInteger(values.count) || values.count < 1 || values.count > 50 || !/^[1-9][0-9]*$/.test(values.expectedOutputIndexExact)) throw new Error("CRAFT_OUTPUT_REQUEST_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update").limit(1))[0];
+    if (!profile) throw new Error("CRAFT_PROFILE_REQUIRED");
+    const receipt = (await tx.select().from(craftingReceipts).where(and(eq(craftingReceipts.id, values.receiptId), eq(craftingReceipts.userId, values.userId))).limit(1))[0];
+    if (!receipt?.professionReceiptId) throw new Error("CRAFT_PROFESSION_RECEIPT_REQUIRED");
+    const batch = (await tx.select().from(aurionProfessionOutputBatches).where(and(eq(aurionProfessionOutputBatches.sourceCraftingReceiptId, receipt.id), eq(aurionProfessionOutputBatches.ownerUserId, values.userId))).for("update").limit(1))[0];
+    const profession = await readCraftingProfession(tx, values.userId, receipt.id, receipt.professionReceiptId);
+    if (!batch || !profession) throw new Error("CRAFT_OUTPUT_BATCH_REQUIRED");
+    const start = BigInt(values.expectedOutputIndexExact);
+    const end = start + BigInt(values.count);
+    const next = BigInt(batch.nextOutputIndexExact);
+    if (start > next || end > BigInt(batch.totalQuantityExact) || (start < next && end > next)) throw new Error("CRAFT_OUTPUT_RANGE_CONFLICT");
+    const template = JSON.parse(batch.templateJson) as CraftingOutputTemplate;
+    if (template.baseItemKey !== profession.envelope.outputItemId || !Number.isSafeInteger(template.itemLevel) || template.itemLevel < 1 || !Array.isArray(template.affixes)) throw new Error("CRAFT_OUTPUT_TEMPLATE_CORRUPT");
+    const outputs: CraftingItemView[] = [];
+    for (let index = start; index < end; index++) {
+      const id = professionOutputOriginAt(profession.envelope, index.toString());
+      if (start === next) {
+        await tx.insert(itemInstances).values({ id, ownerUserId: values.userId, sourceKind: "crafting", craftingReceiptId: receipt.id, craftingOutputKey: id, baseItemKey: template.baseItemKey, quality: template.quality, itemLevel: template.itemLevel, affixesJson: JSON.stringify(template.affixes) });
+      }
+      const output = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, id), eq(itemInstances.craftingReceiptId, receipt.id), eq(itemInstances.craftingOutputKey, id))).limit(1))[0];
+      if (!output) throw new Error("CRAFT_OUTPUT_READBACK_FAILED");
+      outputs.push(craftingItemView(output));
+    }
+    if (start === next) await tx.update(aurionProfessionOutputBatches).set({ nextOutputIndexExact: end.toString() }).where(eq(aurionProfessionOutputBatches.professionReceiptId, receipt.professionReceiptId));
+    const readback = await readCraftingProfession(tx, values.userId, receipt.id, receipt.professionReceiptId);
+    return { applied: start === next, outputs, profession: readback };
   });
 }
 

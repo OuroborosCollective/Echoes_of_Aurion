@@ -42,16 +42,17 @@ const operation = (overrides: Partial<ProfessionOperationInput> = {}): Professio
 
 describe("AIM-248 profession and recipe mastery", () => {
   it("defines the six owner-requested starting professions", () => {
-    expect(aurionProfessionIds).toEqual([
+    expect(aurionProfessionIds).toEqual(expect.arrayContaining([
       "fishing",
       "mining",
       "herbalism",
       "alchemy",
       "enchanting",
       "carpentry",
-    ]);
+    ]));
+    expect(new Set(aurionProfessionIds).size).toBe(14);
     expect(AURION_PROFESSION_MASTERY_RULESET_VERSION).toBe("aurion-profession-mastery.v1");
-    expect(AURION_PROFESSION_MASTERY_CONTENT_VERSION).toBe("aurion-profession-mastery-content.v1");
+    expect(AURION_PROFESSION_MASTERY_CONTENT_VERSION).toBe("aurion-profession-mastery-content.d356.v2");
   });
 
   it("implements the exact unbounded wooden-chest carry formula", () => {
