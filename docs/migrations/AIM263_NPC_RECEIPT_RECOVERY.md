@@ -1,0 +1,15 @@
+# AIM-263: exact NPC receipt recovery
+
+Source contract: WASD `7bd039bb79681d2df342abe160579f89ca3ff8ed`; AX1 `d356881538dae23c3aa97364a5596d48b6ac3079`, NPCLongTermMemory logical pruning and immutable projections. This change hardens Aurion's existing admin.world.resolveNpc and ax1LivingWorldRuntime persistence caller. It does not claim the standing, mob AOI or binary snapshot integrations are complete.
+
+Previously, concurrent calls read before taking any NPC lock. Historical replay combined an old decision hash with the latest needs/memory, stale resolutions could overwrite newer state, and malformed JSON silently became default NPC state.
+
+The NPC primary-key insert/update now serializes creation and changes in one transaction. Exact indexed receipt queries are bounded to one row. Repeating a canonical request returns its complete immutable snapshot; different input under the same NPC/index is rejected. An unseen older index is rejected. Need-event indices must equal the selected resolution. IDs derive from version/NPC/index using SHA-256. No wall clock or random generator supplies gameplay identity or memory age.
+
+`observationIdsJson` holds a tagged `aurion-npc-decision.v2` envelope for new receipts: canonical request hash, full snapshot and snapshot hash. It includes the decision, needs and versioned memory entries. Latest state is checked against the latest receipt before advancing; stored JSON, bounds, goal and decision hash are validated. The existing TEXT column remains compatible at the database level; no historical row is rewritten by deployment.
+
+`memoryJson` acquires `aurion-npc-memory.v2`. Aurion's existing 24-entry capacity is preserved. Entries expire at exactly 3500 logical resolutions; replacement sorts last-observed index then SHA-256 identity, independently of input order. Read projections and nested entries are frozen. Valid legacy memory arrays acquire their last confirmed resolution on a subsequent successful write. Legacy decision arrays cannot reproduce historical memory/input evidence and explicitly raise NPC_LEGACY_RECEIPT_REQUIRES_RECONCILIATION on replay; they are never silently repaired or deleted. A legacy latest state can advance only when its need/observation decision hash still matches.
+
+Validation: 520 local tests passed, 43 database-gated tests skipped locally; TypeScript passes. Four additional isolated MariaDB tests cover concurrent initial calls, stable historical replay after a later decision, changed-input/out-of-order rejection, rollback on a failed receipt insert, and valid-JSON tampering. CI runs these serially with the other shared-fixture test files while preserving concurrent business calls inside tests. CI result and production promotion must be recorded separately.
+
+Remaining AIM-263 work: persisted player/NPC/faction standing events; authoritative mob threat/AOI resolution; complete bounded binary snapshot transport and caller; actual autonomous NPC economy rehydration and scheduling. No default faction reputation or invented online actors is introduced.

@@ -7,6 +7,9 @@ on:
       - "server/professionMasteryProtocol.ts"
       - "server/aim251Profession*.test.ts"
       - "server/aim253Encounter*.test.ts"
+      - "server/aim263Npc*.test.ts"
+      - "server/npcPersistenceProtocol.ts"
+      - "server/wasdAurionRuntime.ts"
       - "shared/encounterReadback*"
       - "server/encounterIdentity.ts"
       - "server/db.ts"
@@ -21,6 +24,9 @@ on:
       - "server/professionMasteryProtocol.ts"
       - "server/aim251Profession*.test.ts"
       - "server/aim253Encounter*.test.ts"
+      - "server/aim263Npc*.test.ts"
+      - "server/npcPersistenceProtocol.ts"
+      - "server/wasdAurionRuntime.ts"
       - "shared/encounterReadback*"
       - "server/encounterIdentity.ts"
       - "server/db.ts"
@@ -54,6 +60,7 @@ jobs:
       AURION_CRAFTING_E2E: "1"
       AURION_PROFESSION_E2E: "1"
       AURION_ENCOUNTER_E2E: "1"
+      AURION_NPC_E2E: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -66,13 +73,13 @@ jobs:
         run: |
           pnpm verify:migrations
           pnpm check
-          pnpm vitest run server/aim248ProfessionMastery.test.ts server/aim248ProfessionReplay.test.ts server/aim253EncounterReadback.test.ts
+          pnpm vitest run server/aim248ProfessionMastery.test.ts server/aim248ProfessionReplay.test.ts server/aim253EncounterReadback.test.ts server/aim263NpcPersistence.test.ts
       - name: Apply complete migration chain to isolated MariaDB
         run: pnpm exec drizzle-kit migrate
       - name: Verify existing crafting, mastery, concurrency, output origins and rollback
         # Test files share cleanup tables and rollback triggers. Keep fixture lifecycles
         # serial; Promise.all business-operation concurrency inside each test remains active.
-        run: pnpm vitest run --no-file-parallelism server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts server/aim253EncounterMariaDb.test.ts
+        run: pnpm vitest run --no-file-parallelism server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts server/aim253EncounterMariaDb.test.ts server/aim263NpcMariaDb.test.ts
 
       - name: Verify all physical late schema contracts after the complete chain
         env:
