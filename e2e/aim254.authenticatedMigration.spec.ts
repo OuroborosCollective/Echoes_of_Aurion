@@ -38,7 +38,7 @@ for (const viewport of [
       await page.goto("/");
       const health = await page.request.get("/healthz");
       expect(await health.json()).toMatchObject({ status: "ok", revision: process.env.AURION_RELEASE_SHA });
-      await page.getByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/ }).click();
+      await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("tab", { name: "Konto anlegen", exact: true }).click();
       const handle = `aim254_${viewport.name}`;

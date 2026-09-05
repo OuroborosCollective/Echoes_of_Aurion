@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AURION_CRAFTING_CONTENT_VERSION, AURION_CRAFTING_RULESET_VERSION } from "./craftingProtocol";
 import { craftItemForUser, createMarketListing, getCraftingReadmodel, getDb, getGameplayProgress, listInventoryForUser } from "./db";
 import { craftingReceipts, itemInstances, marketListings, playerProfiles, skillProgressionEvents } from "../drizzle/schema";
+import { aurionProfessionReceipts, aurionProfessionOutputBatches, aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 
 const describeWithCraftingDatabase = process.env.DATABASE_URL && process.env.AURION_CRAFTING_E2E === "1" ? describe : describe.skip;
 const CRAFT_USER_ID = 2_146_999_990;
@@ -12,6 +13,9 @@ async function cleanupCraftingState() {
   const db = await getDb();
   if (!db) return;
   await db.transaction(async tx => {
+    await tx.delete(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.userId, CRAFT_USER_ID));
+    await tx.delete(aurionProfessionOutputBatches).where(eq(aurionProfessionOutputBatches.ownerUserId, CRAFT_USER_ID));
+    await tx.delete(aurionProfessionReceipts).where(eq(aurionProfessionReceipts.userId, CRAFT_USER_ID));
     await tx.delete(marketListings).where(eq(marketListings.sellerUserId, CRAFT_USER_ID));
     await tx.delete(skillProgressionEvents).where(and(eq(skillProgressionEvents.userId, CRAFT_USER_ID), eq(skillProgressionEvents.skillId, "crafting")));
     await tx.delete(craftingReceipts).where(eq(craftingReceipts.userId, CRAFT_USER_ID));
