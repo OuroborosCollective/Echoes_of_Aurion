@@ -1,0 +1,19 @@
+.aurion-groups-page { max-width: 760px; margin: 3rem auto; padding: 1.5rem; color: #dce9e5; background: #0e1c26; border-radius: 16px; }
+.aurion-groups-page h1 { font-size: 1.6rem; margin: 1rem 0; }
+.aurion-group-finder { display: grid; gap: 1rem; }
+.aurion-group-finder fieldset { display: grid; gap: .6rem; padding: .8rem; border: 1px solid #37535c; border-radius: 8px; }
+.aurion-group-finder label { display: block; }
+.aurion-group-finder input { accent-color: #72c5b3; margin-right: .4rem; }
+.aurion-group-finder select { display: block; width: 100%; padding: .6rem; margin-top: .3rem; background: #132a35; color: #e5eee7; border: 1px solid #45636d; border-radius: 6px; }
+.aurion-group-finder button { min-height: 44px; padding: .55rem .85rem; border: 1px solid #507572; border-radius: 7px; background: #18393d; color: #e4f4ed; }
+.aurion-group-finder button:disabled { opacity: .5; cursor: not-allowed; }
+.aurion-group-finder button:focus-visible, .aurion-group-finder input:focus-visible { outline: 2px solid #e4c383; outline-offset: 3px; }
+.aurion-group-finder li { margin: .5rem 0; list-style: none; }
+.aurion-group-instance { padding: .9rem; border: 1px solid #3e6970; border-radius: 10px; background: #0c202c; }
+.aurion-group-instance h3 { font-size: 1.3rem; margin-bottom: .6rem; }
+.aurion-group-instance svg { width: 100%; max-height: 160px; margin: .5rem 0; }
+.aurion-group-instance progress { display: block; width: 100%; height: 8px; accent-color: #72c5b3; }
+.aurion-group-instance code { display: block; word-break: break-all; font-size: .7rem; margin-top: .4rem; }
+.aurion-group-note { font-size: .8rem; color: #c4b9a2; margin: .8rem 0; }
+.aurion-group-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+@media (max-width: 600px) { .aurion-groups-page { margin: 0; padding: 1rem; border-radius: 0; } }

@@ -73,7 +73,7 @@ describe("Aurion production schema reconciliation", () => {
     observed.set(items.name, { ...items, indexes: items.indexes.filter(index => index.name !== "itemInstances_crafting_output_uq") });
     const result = classifyMigrationContracts(contracts, observed);
     expect(result.some(migration => migration.drift.some(reason => reason.includes("missing_index:itemInstances_crafting_output_uq")))).toBe(true);
-    expect(result.at(-1)?.state).toBe("PRESENT_SCHEMA_DRIFT");
+    expect(result.find(migration => migration.tag === "0031_aurion_profession_crafting_persistence")?.state).toBe("PRESENT_SCHEMA_DRIFT");
   });
 
   it("rejects unsupported ALTER instead of certifying only newly created tables", () => {
@@ -92,9 +92,9 @@ describe("Aurion production schema reconciliation", () => {
     expect(transactionIndex).toBeLessThan(metadataIndex);
   });
 
-  it("parses all eleven late SQL migrations from their real repository contracts", async () => {
+  it("parses all twelve late SQL migrations from their real repository contracts", async () => {
     const migrations = await readProductionSchemaContracts(process.cwd());
-    expect(migrations).toHaveLength(11);
+    expect(migrations).toHaveLength(12);
     expect(migrations.every(migration => migration.tables.length > 0)).toBe(true);
     const tableNames = migrations.flatMap(migration => migration.tables.map(table => table.name));
     expect(tableNames).toContain("aurionGlobalWorldStates");

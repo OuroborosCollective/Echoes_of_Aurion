@@ -7,6 +7,8 @@ import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
+import { groupCommandSchema } from "../shared/groupInstanceProtocol";
+import { commandGroupForUser, readGroupForUser } from "./groupInstancePersistence";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, CLASS_UNLOCK_LEVEL, isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
@@ -32,6 +34,10 @@ const companionMemory = new CompanionMemoryStore();
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  groups: router({
+    read: protectedProcedure.query(({ ctx }) => readGroupForUser(ctx.user.id)),
+    command: protectedProcedure.input(groupCommandSchema).mutation(({ ctx, input }) => commandGroupForUser(ctx.user.id, input)),
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     registerLocal: publicProcedure.input(z.object({ handle: z.string().trim().min(3).max(32), password: z.string().min(12).max(128) })).mutation(async ({ ctx, input }) => {

@@ -12,6 +12,7 @@ export default defineConfig({
     "./drizzle/guildGovernanceSchema.ts",
     "./drizzle/guildBankSchema.ts",
     "./drizzle/professionPersistenceSchema.ts",
+    "./drizzle/groupInstanceSchema.ts",
   ],
   out: "./drizzle",
   dialect: "mysql",
