@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
+import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
 
 // This test creates disposable accounts through the public registration UI.
 // It is forbidden against a production endpoint or non-isolated database.
@@ -73,7 +74,7 @@ for (const viewport of [
       await expect.poll(async () => {
         const [rows] = await pool.query<RowDataPacket[]>("SELECT positionX, positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL", [latestPresence!.userId]);
         return rows.some(row => row.positionX !== initial.x || row.positionZ !== initial.z);
-      }).toBe(true);
+      }, { timeout: WORLD_PRESENCE_REFRESH_MS + 10_000 }).toBe(true);
       const [account] = await pool.query<RowDataPacket[]>("SELECT u.role, p.level FROM users u JOIN playerProfiles p ON p.userId=u.id WHERE u.id=?", [latestPresence!.userId]);
       expect(account).toEqual([expect.objectContaining({ role: "user", level: 1 })]);
       const [world] = await pool.query<RowDataPacket[]>("SELECT epoch, snapshotHash FROM aurionGlobalWorldStates WHERE worldId='echoes-of-aurion-global'");
