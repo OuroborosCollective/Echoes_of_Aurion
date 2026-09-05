@@ -5,6 +5,7 @@ on:
     paths:
       - "shared/guildGovernanceContract.ts"
       - "shared/guildBank*.ts"
+      - "shared/operationalClock.ts"
       - "client/src/lib/guildBankClient.ts"
       - "client/src/components/GuildBankPanel*"
       - "server/db.ts"
@@ -26,6 +27,7 @@ on:
     paths:
       - "shared/guildGovernanceContract.ts"
       - "shared/guildBank*.ts"
+      - "shared/operationalClock.ts"
       - "client/src/lib/guildBankClient.ts"
       - "client/src/components/GuildBankPanel*"
       - "server/db.ts"

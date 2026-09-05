@@ -1,3 +1,4 @@
+import { operationalNow } from "../../../shared/operationalClock";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState, queueHumanDemonstration, type PendingHumanDemonstration } from "@/lib/companionWorldInputs";
 import { parseOwnedEncounterReadback } from "@shared/encounterReadback";
@@ -361,7 +362,7 @@ export default function Home() {
     enabled: companionSession?.mode === "learning",
     scope: `${user?.id ?? 0}:${companionSession?.sessionId ?? "none"}:${openWorldRendererActive ? "world" : screen}`,
     pending: lastCompanionAction,
-    now: Date.now,
+    now: operationalNow,
     capture: requestCompanionFrame,
     accept: (sample, pending) => {
         const observed = observedWorldState(observedEncounter.data, user?.id ?? 0, !observedEncounter.isStale && !observedEncounter.isError);
@@ -670,7 +671,7 @@ export default function Home() {
   };
   const queueCompanionAction = (action: CompanionAction, source: PendingHumanDemonstration["source"] = "action"): void => {
     if (loadCompanionSession()?.mode !== "learning") return;
-    const next = queueHumanDemonstration(lastCompanionAction.current, action, Date.now(), companionActionSequence.current + 1, source);
+    const next = queueHumanDemonstration(lastCompanionAction.current, action, operationalNow(), companionActionSequence.current + 1, source);
     companionActionSequence.current = Math.max(companionActionSequence.current, next.id);
     lastCompanionAction.current = next;
   };

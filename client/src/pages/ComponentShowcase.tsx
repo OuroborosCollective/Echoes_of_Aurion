@@ -1,3 +1,4 @@
+import { operationalDate } from "../../../shared/operationalClock";
 import {
   Accordion,
   AccordionContent,
@@ -175,7 +176,7 @@ import { AIChatBox, type Message } from "@/components/AIChatBox";
 
 export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [date, setDate] = useState<Date | undefined>(operationalDate());
   const [datePickerDate, setDatePickerDate] = useState<Date>();
   const [selectedFruits, setSelectedFruits] = useState<string[]>([]);
   const [progress, setProgress] = useState(33);
@@ -513,7 +514,7 @@ export default function ComponentsShowcase() {
                                   e.target.value.split(":");
                                 const newDate = datePickerDate
                                   ? new Date(datePickerDate)
-                                  : new Date();
+                                  : operationalDate();
                                 newDate.setHours(parseInt(hours));
                                 newDate.setMinutes(parseInt(minutes));
                                 setDatePickerDate(newDate);
@@ -657,7 +658,7 @@ export default function ComponentsShowcase() {
                         <SelectContent>
                           {Array.from(
                             { length: 10 },
-                            (_, i) => new Date().getFullYear() - 5 + i
+                            (_, i) => operationalDate().getFullYear() - 5 + i
                           ).map(year => (
                             <SelectItem key={year} value={year.toString()}>
                               {year}

@@ -1,3 +1,4 @@
+import { operationalNow, deadlineAfter, hostOperationalClock, type OperationalClock } from "../shared/operationalClock";
 import type { GuildBankView } from "@shared/guildBankView";
 import { createPool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import {
@@ -202,11 +203,11 @@ export type GuildBankReadback = Readonly<Pick<GuildBankView,"allowedOperations"|
 }>;
 
 export class GuildBankStore {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly clock: OperationalClock = hostOperationalClock) {}
 
-  static fromDatabaseUrl(databaseUrl = process.env.DATABASE_URL): GuildBankStore {
+  static fromDatabaseUrl(databaseUrl = process.env.DATABASE_URL, clock: OperationalClock = hostOperationalClock): GuildBankStore {
     if (!databaseUrl) throw new Error("DATABASE_URL is required for guild bank");
-    return new GuildBankStore(createPool(databaseUrl));
+    return new GuildBankStore(createPool(databaseUrl), clock);
   }
 
   async close(): Promise<void> { await this.pool.end(); }
@@ -228,7 +229,7 @@ export class GuildBankStore {
         return Object.freeze({ plan: stored, expiresAt: new Date(existing[0].expiresAt).toISOString(), replay: true });
       }
       await validateOperation(connection, plan, account);
-      const expiresAt = new Date(Date.now() + PLAN_TTL_MS);
+      const expiresAt = new Date(deadlineAfter(operationalNow(this.clock), PLAN_TTL_MS));
       await connection.execute("INSERT INTO aurionGuildBankPlans (confirmationHash, guildId, actorUserId, operation, requiredCapability, expectedRevision, idempotencyKey, payloadHash, payloadJson, resourcesJson, planJson, status, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?)", [plan.confirmationHash, plan.guildId, plan.actorUserId, plan.operation, plan.requiredCapability, plan.expectedRevisionExact, plan.idempotencyKey, plan.payloadHash, JSON.stringify(plan.payload), JSON.stringify(plan.resources), JSON.stringify(plan), expiresAt]);
       await connection.commit();
       return Object.freeze({ plan, expiresAt: expiresAt.toISOString(), replay: false });
@@ -255,7 +256,7 @@ export class GuildBankStore {
         replay = true;
         await connection.commit();
       } else {
-        if (row.status !== "planned" || new Date(row.expiresAt).getTime() <= Date.now()) throw new Error("GUILD_BANK_PLAN_EXPIRED");
+        if (row.status !== "planned" || new Date(row.expiresAt).getTime() <= operationalNow(this.clock)) throw new Error("GUILD_BANK_PLAN_EXPIRED");
         const stored = parseJson<GuildBankPlan>(row.planJson);
         const plan = buildGuildBankPlan({ actorUserId: stored.actorUserId, guildId: stored.guildId, role: stored.role, operation: stored.operation, expectedRevisionExact: stored.expectedRevisionExact, idempotencyKey: stored.idempotencyKey, payload: stored.payload });
         if (plan.confirmationHash !== row.confirmationHash || plan.payloadHash !== row.payloadHash) throw new Error("GUILD_BANK_PLAN_STORAGE_DRIFT");

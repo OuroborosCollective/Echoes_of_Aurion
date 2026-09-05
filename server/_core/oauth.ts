@@ -1,3 +1,4 @@
+import { operationalDate } from "../../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS, OAUTH_STATE_COOKIE, decodeOAuthState } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
 import type { Express, Request, Response } from "express";
@@ -64,7 +65,7 @@ async function handleOidcCallback(req: Request, res: Response): Promise<void> {
       name: identity.name,
       email: identity.email,
       loginMethod: identity.loginMethod,
-      lastSignedIn: new Date(),
+      lastSignedIn: operationalDate(),
     });
     const sessionToken = await sdk.createSessionToken(identity.openId, {
       name: identity.name,
@@ -112,7 +113,7 @@ async function handleLegacyOAuthCallback(req: Request, res: Response): Promise<v
       name: userInfo.name || null,
       email: userInfo.email ?? null,
       loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-      lastSignedIn: new Date(),
+      lastSignedIn: operationalDate(),
     });
 
     const sessionToken = await sdk.createSessionToken(userInfo.openId, {

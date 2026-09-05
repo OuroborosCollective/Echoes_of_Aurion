@@ -19,7 +19,7 @@ function validClaims(overrides: Record<string, unknown> = {}) {
     sub: "fusionauth-user-01",
     aud: "https://arelogic.space/admin-mcp",
     scope: AURION_ADMIN_MCP_READ_SCOPE,
-    exp: Math.floor(Date.now() / 1000) + 600,
+    exp: Math.floor(1_800_000_000_000 / 1000) + 600,
     ...overrides,
   };
 }
@@ -49,14 +49,22 @@ describe("adminMcpProtocol", () => {
 
   it("accepts only a live read-scoped token bound to the exact admin resource", () => {
     const settings = readAurionAdminMcpSettings(environment);
-    expect(parseAurionAdminMcpTokenClaims(validClaims({ scope: `openid profile ${AURION_ADMIN_MCP_READ_SCOPE}` }), settings)).toMatchObject({
+    expect(parseAurionAdminMcpTokenClaims(validClaims({ scope: `openid profile ${AURION_ADMIN_MCP_READ_SCOPE}` }), settings, 1_800_000_000_000)).toMatchObject({
       subject: "fusionauth-user-01",
       audience: [settings.resourceUrl],
       scopes: [AURION_ADMIN_MCP_READ_SCOPE, "openid", "profile"],
     });
-    expect(() => parseAurionAdminMcpTokenClaims(validClaims({ aud: "https://arelogic.space/mcp" }), settings)).toThrow("resource server");
-    expect(() => parseAurionAdminMcpTokenClaims(validClaims({ scope: "openid profile" }), settings)).toThrow("read scope");
-    expect(() => parseAurionAdminMcpTokenClaims(validClaims({ exp: Math.floor(Date.now() / 1000) - 1 }), settings)).toThrow("expired");
+    expect(() => parseAurionAdminMcpTokenClaims(validClaims({ aud: "https://arelogic.space/mcp" }), settings, 1_800_000_000_000)).toThrow("resource server");
+    expect(() => parseAurionAdminMcpTokenClaims(validClaims({ scope: "openid profile" }), settings, 1_800_000_000_000)).toThrow("read scope");
+    expect(() => parseAurionAdminMcpTokenClaims(validClaims({ exp: Math.floor(1_800_000_000_000 / 1000) - 1 }), settings, 1_800_000_000_000)).toThrow("expired");
+  });
+
+  it("expires at the exact recorded second and rejects invalid time evidence", () => {
+    const settings = readAurionAdminMcpSettings(environment);
+    const expiryMs = 1_800_000_600_000, claims = validClaims({ exp: expiryMs / 1000 });
+    expect(parseAurionAdminMcpTokenClaims(claims, settings, expiryMs - 1).expiresAtSeconds).toBe(expiryMs / 1000);
+    expect(() => parseAurionAdminMcpTokenClaims(claims, settings, expiryMs)).toThrow("expired");
+    expect(() => parseAurionAdminMcpTokenClaims(claims, settings, Number.NaN)).toThrow("OPERATIONAL_TIME_INVALID");
   });
 
   it("derives a stable Aurion user key from issuer and subject without trusting display claims", () => {

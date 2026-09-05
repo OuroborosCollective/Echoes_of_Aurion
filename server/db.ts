@@ -1,3 +1,4 @@
+import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
@@ -95,11 +96,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     }
 
     if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
+      values.lastSignedIn = operationalDate();
     }
 
     if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
+      updateSet.lastSignedIn = operationalDate();
     }
 
     await db.insert(users).values(values).onDuplicateKeyUpdate({
@@ -136,7 +137,7 @@ export async function issueZoneConnectionTicket(values: { userId: number; zoneId
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   const ticket = createZoneTicket();
-  const expiresAt = new Date(Date.now() + ZONE_TICKET_TTL_MS);
+  const expiresAt = new Date(operationalNow() + ZONE_TICKET_TTL_MS);
   await db.insert(zoneConnectionTickets).values({
     id: `zone_ticket_${randomBytes(12).toString("base64url")}`,
     userId: values.userId,
@@ -153,7 +154,7 @@ export async function consumeZoneConnectionTicket(values: { ticket: string; zone
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   const ticketDigest = digestZoneTicket(values.ticket);
-  const now = new Date();
+  const now = operationalDate();
   return db.transaction(async tx => {
     const candidate = (await tx.select().from(zoneConnectionTickets).where(and(
       eq(zoneConnectionTickets.ticketDigest, ticketDigest),
@@ -173,7 +174,7 @@ export async function consumeZoneConnectionTicket(values: { ticket: string; zone
 }
 
 export async function recordWorldPresenceLease(values: { userId: number; connectionId: string; zoneId: ZoneId; position: { x: number; z: number }; now?: Date }): Promise<WorldPresenceLease> {
-  const now = values.now ?? new Date();
+  const now = values.now ?? operationalDate();
   const lease = createWorldPresenceLease({ userId: values.userId, connectionId: values.connectionId, zoneId: values.zoneId, position: values.position, now });
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
@@ -197,13 +198,13 @@ export async function recordWorldPresenceLease(values: { userId: number; connect
 export async function releaseWorldPresenceLease(values: { connectionId: string; now?: Date }): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.update(aurionWorldPresenceLeases).set({ disconnectedAt: values.now ?? new Date() }).where(and(
+  await db.update(aurionWorldPresenceLeases).set({ disconnectedAt: values.now ?? operationalDate() }).where(and(
     eq(aurionWorldPresenceLeases.connectionId, values.connectionId),
     isNull(aurionWorldPresenceLeases.disconnectedAt),
   ));
 }
 
-export async function listActiveWorldPresence(now = new Date()): Promise<readonly { userId: number; zoneId: string; chunk: WorldChunkCoordinate; position: { x: number; z: number } }[]> {
+export async function listActiveWorldPresence(now = operationalDate()): Promise<readonly { userId: number; zoneId: string; chunk: WorldChunkCoordinate; position: { x: number; z: number } }[]> {
   const db = await getDb();
   if (!db) return Object.freeze([]);
   const rows = await db.select({
@@ -258,7 +259,7 @@ export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserI
   const prior = (await db.select().from(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.idempotencyKey, idempotencyKey)).limit(1))[0];
   if (prior) return { plan: planFromStoredGlobalSnapshot(prior.snapshotJson, prior.snapshotHash), source: "persisted", activePresenceCount: planFromStoredGlobalSnapshot(prior.snapshotJson, prior.snapshotHash).activePlayerCount };
 
-  const now = input.now ?? new Date();
+  const now = input.now ?? operationalDate();
   const presence = await listActiveWorldPresence(now);
   const activePresenceCount = presence.length;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -312,7 +313,7 @@ export async function createLocalUser(values: { handle: string; passwordHash: st
 
   const openId = `local:${values.handle}`;
   await db.transaction(async tx => {
-    await tx.insert(users).values({ openId, name: values.handle, loginMethod: "aurion-local", role: "user", lastSignedIn: new Date() });
+    await tx.insert(users).values({ openId, name: values.handle, loginMethod: "aurion-local", role: "user", lastSignedIn: operationalDate() });
     const created = await tx.select({ id: users.id }).from(users).where(eq(users.openId, openId)).limit(1);
     if (!created[0]) throw new Error("Das Aurion-Konto konnte nicht angelegt werden.");
     await tx.insert(localCredentials).values({ userId: created[0].id, handle: values.handle, passwordHash: values.passwordHash });
@@ -333,7 +334,7 @@ export async function recordLocalAuthFailure(handle: string, failedAttempts: num
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   const nextAttempts = failedAttempts + 1;
-  const lockedUntil = nextAttempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null;
+  const lockedUntil = nextAttempts >= 5 ? new Date(operationalNow() + 15 * 60 * 1000) : null;
   await db.update(localCredentials).set({ failedAttempts: nextAttempts, lockedUntil }).where(eq(localCredentials.handle, handle));
   return { lockedUntil };
 }
@@ -374,15 +375,15 @@ export async function listGatewaySessionsForUser(userId: number) {
 export async function getActiveGatewaySessionByTokenDigest(tokenDigest: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(gatewaySessions).where(and(eq(gatewaySessions.tokenDigest, tokenDigest), eq(gatewaySessions.status, "active"), gt(gatewaySessions.expiresAt, new Date()))).limit(1);
+  const result = await db.select().from(gatewaySessions).where(and(eq(gatewaySessions.tokenDigest, tokenDigest), eq(gatewaySessions.status, "active"), gt(gatewaySessions.expiresAt, operationalDate()))).limit(1);
   const session = result[0];
-  return session && isGatewayGrantActive(session.status, session.expiresAt) ? session : undefined;
+  return session && isGatewayGrantActive(session.status, session.expiresAt, operationalDate()) ? session : undefined;
 }
 
 export async function revokeGatewaySession(id: string, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Gateway database is not available");
-  await db.update(gatewaySessions).set({ status: "revoked", revokedAt: new Date() }).where(and(eq(gatewaySessions.id, id), eq(gatewaySessions.userId, userId), eq(gatewaySessions.status, "active")));
+  await db.update(gatewaySessions).set({ status: "revoked", revokedAt: operationalDate() }).where(and(eq(gatewaySessions.id, id), eq(gatewaySessions.userId, userId), eq(gatewaySessions.status, "active")));
 }
 
 export async function appendGatewayCommand(values: { gatewaySessionId: string; sequence: number; command: AurionCommand }) {
@@ -1505,7 +1506,7 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
     const completedSession = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id,row.completionSessionId),eq(gameplaySessions.userId,values.userId),eq(gameplaySessions.status,"completed"))).limit(1))[0];
     if (!completedSession || completedSession.bossHp !== 0 || completedSession.nextSequence < 2) throw new Error("QUEST_COMPLETION_EVIDENCE_REQUIRED");
     await commitNativeQuestRelationship(tx, { userId: values.userId, questKey: quest.key, sessionId: completedSession.id, nextSequence: completedSession.nextSequence });
-    const now = new Date();
+    const now = operationalDate();
     const totalXp = profile.totalXp + quest.reward.xp;
     await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now }).where(eq(gameplayQuestProgress.id, row.id));
     await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + quest.reward.points, seasonPoints: profile.seasonPoints + quest.reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
@@ -1642,7 +1643,7 @@ export async function applyGameplayAction(values: { userId: number; sessionId: s
     let reward = { xp: 0, points: 0 };
     let completedDungeon = false;
     if (bossHp === 0) {
-      const now = new Date();
+      const now = operationalDate();
       await tx.update(gameplaySessions).set({ status: "completed", completedAt: now }).where(eq(gameplaySessions.id, session.id));
       if (encounter.questKey) {
         const quest = getQuest(encounter.questKey);
@@ -1716,7 +1717,7 @@ export async function choosePlayerClass(userId: number, playerClass: PlayerClass
   if (!db) throw new Error("Game database is not available");
   const profile = await getOrCreatePlayerProfile(userId);
   if (!canChooseClass(profile.level, profile.selectedClass)) throw new Error("Class choice is not available for this profile");
-  await db.update(playerProfiles).set({ selectedClass: playerClass, classChosenAt: new Date() }).where(eq(playerProfiles.userId, userId));
+  await db.update(playerProfiles).set({ selectedClass: playerClass, classChosenAt: operationalDate() }).where(eq(playerProfiles.userId, userId));
   return getOrCreatePlayerProfile(userId);
 }
 
@@ -1793,7 +1794,7 @@ export async function listWeaponMasteries(userId: number) {
 export async function setWeaponLoadout(values: { userId: number; weaponTrack: WeaponTrack }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  await db.insert(weaponLoadouts).values(values).onDuplicateKeyUpdate({ set: { weaponTrack: values.weaponTrack, configuredAt: new Date() } });
+  await db.insert(weaponLoadouts).values(values).onDuplicateKeyUpdate({ set: { weaponTrack: values.weaponTrack, configuredAt: operationalDate() } });
   const readback = await db.select().from(weaponLoadouts).where(eq(weaponLoadouts.userId, values.userId)).limit(1);
   if (!readback[0] || readback[0].weaponTrack !== values.weaponTrack) throw new Error("Weapon loadout readback failed");
   return readback[0];
@@ -2075,7 +2076,7 @@ export async function sellItemToSystem(values: { itemId: string; sellerUserId: n
     const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).limit(1))[0];
     if (!item) throw new Error("Der Gegenstand ist nicht verfügbar oder gehört dir nicht.");
     const aurionGranted = systemSaleValue(item.itemLevel, item.quality as MarketQuality);
-    const now = new Date();
+    const now = operationalDate();
     await tx.insert(playerProfiles).values({ userId: values.sellerUserId }).onDuplicateKeyUpdate({ set: { userId: values.sellerUserId } });
     await tx.insert(systemSaleReceipts).values({ id: newCommunityId("syssale"), itemId: item.id, sellerUserId: values.sellerUserId, aurionGranted });
     await tx.update(itemInstances).set({ status: "sold", soldAt: now }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
@@ -2104,7 +2105,7 @@ export async function cancelMarketListing(values: { listingId: string; sellerUse
   return db.transaction(async tx => {
     const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.sellerUserId, values.sellerUserId), eq(marketListings.status, "active"))).limit(1))[0];
     if (!listing) throw new Error("Dieses Angebot kann nicht zurückgenommen werden.");
-    await tx.update(marketListings).set({ status: "cancelled", settledAt: new Date() }).where(and(eq(marketListings.id, listing.id), eq(marketListings.status, "active")));
+    await tx.update(marketListings).set({ status: "cancelled", settledAt: operationalDate() }).where(and(eq(marketListings.id, listing.id), eq(marketListings.status, "active")));
     await tx.update(itemInstances).set({ status: "owned" }).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed")));
     return { cancelled: true as const };
   });
@@ -2119,13 +2120,13 @@ export async function buyMarketListing(values: { listingId: string; buyerUserId:
     const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.status, "active"))).limit(1))[0];
     if (!listing) throw new Error("Dieses Angebot ist nicht mehr verfügbar.");
     assertNotOwnListing(listing.sellerUserId, values.buyerUserId);
-    await tx.insert(playerProfiles).values([{ userId: values.buyerUserId }, { userId: listing.sellerUserId }]).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+    await tx.insert(playerProfiles).values([{ userId: values.buyerUserId }, { userId: listing.sellerUserId }]).onDuplicateKeyUpdate({ set: { updatedAt: operationalDate() } });
     const buyer = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.buyerUserId)).limit(1))[0];
     if (!buyer || buyer.aurionPoints < listing.askingPrice) throw new Error("Deine Aurion-Währung reicht für dieses Angebot nicht aus.");
     const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed"), eq(itemInstances.ownerUserId, listing.sellerUserId))).limit(1))[0];
     if (!item) throw new Error("Der angebotene Gegenstand ist nicht mehr verfügbar.");
     const receiptId = newCommunityId("marketrec");
-    const now = new Date();
+    const now = operationalDate();
     await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} - ${listing.askingPrice}` }).where(eq(playerProfiles.userId, values.buyerUserId));
     await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} + ${listing.askingPrice}` }).where(eq(playerProfiles.userId, listing.sellerUserId));
     await tx.update(itemInstances).set({ ownerUserId: values.buyerUserId, status: "owned" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "listed")));
@@ -2325,7 +2326,7 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
   return db.transaction(async tx => {
     const submission = (await tx.select().from(glbAssetSubmissions).where(and(eq(glbAssetSubmissions.id, values.submissionId), eq(glbAssetSubmissions.status, "pending"))).limit(1))[0];
     if (!submission) throw new Error("Diese Einreichung ist nicht mehr offen.");
-    const reviewedAt = new Date();
+    const reviewedAt = operationalDate();
     if (values.decision === "rejected") {
       await tx.update(glbAssetSubmissions).set({ status: "rejected", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt }).where(eq(glbAssetSubmissions.id, submission.id));
       return { approved: false as const, assetId: null };
@@ -2346,7 +2347,7 @@ export async function setGlbAssetReview(values: { assetId: string; status: Asset
   if (!db) throw new Error("Game database is not available");
   const existing = await getGlbAsset(values.assetId);
   if (!existing) throw new Error("GLB asset does not exist");
-  await db.update(glbAssets).set({ status: values.status, reviewedByUserId: values.reviewedByUserId, reviewedAt: new Date() }).where(eq(glbAssets.id, values.assetId));
+  await db.update(glbAssets).set({ status: values.status, reviewedByUserId: values.reviewedByUserId, reviewedAt: operationalDate() }).where(eq(glbAssets.id, values.assetId));
   const asset = await getGlbAsset(values.assetId);
   if (!asset || asset.status !== values.status || asset.reviewedByUserId !== values.reviewedByUserId) throw new Error("GLB review readback failed");
   return asset;
@@ -2504,7 +2505,7 @@ export async function rotateSeason(values: { confirmedSeasonKey: string; nextSea
       await tx.insert(seasonLeaderboardSnapshots).values(profiles.map(profile => ({ id: newEndgameId("seasonsnap"), seasonId: active[0]!.id, ...profile })));
     }
     snapshotsCaptured = profiles.length;
-    await tx.update(seasons).set({ status: "closed", endsAt: new Date(), closedByUserId: values.actorUserId }).where(eq(seasons.id, active[0].id));
+    await tx.update(seasons).set({ status: "closed", endsAt: operationalDate(), closedByUserId: values.actorUserId }).where(eq(seasons.id, active[0].id));
     await tx.insert(seasons).values({ id: nextSeasonId, seasonKey: values.nextSeasonKey, displayName: values.nextDisplayName, createdByUserId: values.actorUserId });
     await tx.update(playerProfiles).set({ seasonPoints: 0 });
     await tx.insert(seasonTransitionReceipts).values({ id: newEndgameId("seasonrec"), action: "rotate", fromSeasonId: active[0].id, toSeasonId: nextSeasonId, actorUserId: values.actorUserId, idempotencyKey: values.idempotencyKey });
@@ -2595,7 +2596,7 @@ export async function acceptPartnerRequest(values: { requestId: string; responde
       .where(and(eq(expeditionTeamMembers.status, "active"), eq(expeditionTeams.status, "active"), or(eq(expeditionTeamMembers.userId, request.requesterUserId), eq(expeditionTeamMembers.userId, values.responderUserId)))).limit(1);
     if (occupied[0]) throw new Error("Mindestens ein Explorer ist bereits in einem aktiven Expeditionsteam.");
     const teamId = newCommunityId("team");
-    const now = new Date();
+    const now = operationalDate();
     await tx.insert(expeditionTeams).values({ id: teamId, createdByUserId: request.requesterUserId });
     await tx.insert(expeditionTeamMembers).values([
       { id: newCommunityId("member"), teamId, userId: request.requesterUserId, role: "leader", activeUserKey: activeTeamMemberKey(request.requesterUserId) },
@@ -2624,7 +2625,7 @@ export async function leaveActiveExpeditionTeam(userId: number) {
   if (!db) throw new Error("Game database is not available");
   const active = await findActiveTeamForUser(userId);
   if (!active) return { disbanded: false as const };
-  const now = new Date();
+  const now = operationalDate();
   await db.transaction(async tx => {
     await tx.update(expeditionTeams).set({ status: "disbanded", disbandedAt: now }).where(and(eq(expeditionTeams.id, active.teamId), eq(expeditionTeams.status, "active")));
     await tx.update(expeditionTeamMembers).set({ status: "left", activeUserKey: null, leftAt: now }).where(and(eq(expeditionTeamMembers.teamId, active.teamId), eq(expeditionTeamMembers.status, "active")));

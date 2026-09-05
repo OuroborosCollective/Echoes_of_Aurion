@@ -1,3 +1,4 @@
+import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
 import { COMPANION_FEATURE_VECTOR_LENGTH, COMPANION_STATE_VECTOR_LENGTH } from "@shared/companionLearningProtocol";
@@ -50,7 +51,7 @@ export const appRouter = router({
         // failure on tRPC's JSON error path instead of exposing a runtime error.
         throw new Error("Rufname oder Passwort stimmen nicht.");
       }
-      if (record.credential.lockedUntil && record.credential.lockedUntil.getTime() > Date.now()) {
+      if (record.credential.lockedUntil && record.credential.lockedUntil.getTime() > operationalNow()) {
         throw new Error("Zu viele Fehlversuche. Versuche es in einigen Minuten erneut.");
       }
       if (!(await verifyLocalPassword(input.password, record.credential.passwordHash))) {
@@ -58,7 +59,7 @@ export const appRouter = router({
         throw new Error("Rufname oder Passwort stimmen nicht.");
       }
       await db.clearLocalAuthFailures(handle);
-      await db.upsertUser({ openId: record.user.openId, lastSignedIn: new Date() });
+      await db.upsertUser({ openId: record.user.openId, lastSignedIn: operationalDate() });
       const token = await sdk.createSessionToken(record.user.openId, { name: record.user.name ?? handle, expiresInMs: ONE_YEAR_MS });
       ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: ONE_YEAR_MS });
       return record.user;
@@ -90,7 +91,7 @@ export const appRouter = router({
       if (allowed.length === 0) throw new Error("No valid gateway commands selected");
       const pairingToken = createPairingToken();
       const sessionId = createGatewaySessionId();
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 8);
+      const expiresAt = new Date(operationalNow() + 1000 * 60 * 60 * 8);
       await db.createGatewaySession({ id: sessionId, userId: ctx.user.id, providerLabel: input.providerLabel, tokenDigest: digestPairingToken(pairingToken), allowedCommands: JSON.stringify(allowed), expiresAt });
       return { sessionId, pairingToken, expiresAt, mcpUrl: gatewayUrl(), allowedCommands: allowed };
     }),
@@ -103,7 +104,7 @@ export const appRouter = router({
     }),
     pullCommands: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), afterSequence: z.number().int().min(0) })).query(async ({ ctx, input }) => {
       const session = await db.getGatewaySessionForUser(input.sessionId, ctx.user.id);
-      if (!session || session.status !== "active" || session.expiresAt <= new Date()) throw new Error("Gateway session unavailable");
+      if (!session || session.status !== "active" || session.expiresAt <= operationalDate()) throw new Error("Gateway session unavailable");
       return db.listGatewayCommandsAfter(input.sessionId, input.afterSequence);
     }),
   }),

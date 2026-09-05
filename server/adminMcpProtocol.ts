@@ -1,3 +1,4 @@
+import { validEpochMilliseconds } from "../shared/operationalClock";
 import { createHash } from "node:crypto";
 
 /**
@@ -75,7 +76,7 @@ export function openIdForOidcSubject(issuer: string, subject: string): string {
 }
 
 /** Validates untrusted verified-JWT payload fields before role resolution in Aurion's database. */
-export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionAdminMcpSettings): AurionAdminMcpTokenClaims {
+export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionAdminMcpSettings, observedAtMs: number): AurionAdminMcpTokenClaims {
   if (!value || typeof value !== "object") throw new Error("Admin MCP token claims must be an object");
   const payload = value as Record<string, unknown>;
   const issuer = normalizeHttpsUrl(payload.iss, "Admin MCP token issuer");
@@ -87,7 +88,7 @@ export function parseAurionAdminMcpTokenClaims(value: unknown, settings: AurionA
   const scopes = parseScopeClaim(payload.scope);
   if (!hasAurionAdminMcpReadScope(scopes)) throw new Error("Admin MCP token lacks the required read scope");
   const expiresAtSeconds = typeof payload.exp === "number" && Number.isSafeInteger(payload.exp) ? payload.exp : 0;
-  if (expiresAtSeconds <= Math.floor(Date.now() / 1000)) throw new Error("Admin MCP token is expired");
+  if (expiresAtSeconds <= Math.floor(validEpochMilliseconds(observedAtMs) / 1000)) throw new Error("Admin MCP token is expired");
   return Object.freeze({ issuer, subject, audience, scopes, expiresAtSeconds });
 }
 

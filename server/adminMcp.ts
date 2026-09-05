@@ -1,3 +1,4 @@
+import { operationalNow } from "../shared/operationalClock";
 import type { Express, Request, Response } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
@@ -58,7 +59,7 @@ function sameOriginHttps(value: unknown, issuer: string): string {
 
 async function discoverIssuer(issuer: string): Promise<OidcDiscovery> {
   const cached = discoveryCache.get(issuer);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached && cached.expiresAt > operationalNow()) return cached.value;
   const response = await fetch(`${issuer}/.well-known/openid-configuration`, {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
@@ -67,7 +68,7 @@ async function discoverIssuer(issuer: string): Promise<OidcDiscovery> {
   const body = await response.json() as Record<string, unknown>;
   if (body.issuer !== issuer) throw new Error("OIDC discovery issuer does not match the configured authorization server");
   const value = Object.freeze({ issuer, jwksUri: sameOriginHttps(body.jwks_uri, issuer) });
-  discoveryCache.set(issuer, { value, expiresAt: Date.now() + DISCOVERY_TTL_MS });
+  discoveryCache.set(issuer, { value, expiresAt: operationalNow() + DISCOVERY_TTL_MS });
   return value;
 }
 
@@ -79,7 +80,7 @@ async function resolveAdminActor(token: string, settings: AurionAdminMcpSettings
     issuer: settings.authorizationServerUrl,
     audience: settings.resourceUrl,
   });
-  const claims = parseAurionAdminMcpTokenClaims(payload, settings);
+  const claims = parseAurionAdminMcpTokenClaims(payload, settings, operationalNow());
   const openId = openIdForOidcSubject(claims.issuer, claims.subject);
   const user = await db.getUserByOpenId(openId);
   if (!user || user.role !== "admin") throw new Error("Aurion admin role is required");

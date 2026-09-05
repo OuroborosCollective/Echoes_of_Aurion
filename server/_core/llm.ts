@@ -1,4 +1,5 @@
-import { computeBackoffDelay } from "./retryPolicy";
+import { operationalNow } from "../../shared/operationalClock";
+import { computeBackoffDelay, parseRetryAfter } from "./retryPolicy";
 import { ENV } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
@@ -276,13 +277,6 @@ type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
 const sleep = (ms: number) =>
   new Promise<void>(resolve => setTimeout(resolve, ms));
 
-const parseRetryAfter = (value: string | null): number | undefined => {
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
-  const at = Date.parse(value);
-  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
-};
 
 // Retries non-2xx responses and network errors with exponential backoff, then
 // returns the final Response so callers keep their existing error handling.
@@ -300,7 +294,7 @@ const fetchWithBackoff = async (
       }
 
       const retryAfterMs = parseRetryAfter(
-        response.headers.get("retry-after")
+        response.headers.get("retry-after"), operationalNow()
       );
       try {
         await response.body?.cancel();
