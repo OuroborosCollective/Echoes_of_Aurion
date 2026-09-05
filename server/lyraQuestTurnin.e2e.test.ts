@@ -1,3 +1,4 @@
+import { cleanupQuestRegressionUser } from "./questRegressionFixture";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -20,23 +21,10 @@ import {
   skillProgressionEvents,
 } from "../drizzle/schema";
 
-const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
+const describeWithDatabase = process.env.AURION_ENCOUNTER_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const LYRA_E2E_USER_ID = 2_146_999_991;
 
-async function cleanupLyraE2eState() {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.transaction(async tx => {
-    await tx.delete(gameplayActionReceipts).where(eq(gameplayActionReceipts.userId, LYRA_E2E_USER_ID));
-    await tx.delete(gameplaySessions).where(eq(gameplaySessions.userId, LYRA_E2E_USER_ID));
-    await tx.delete(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, LYRA_E2E_USER_ID));
-    await tx.delete(skillProgressionEvents).where(eq(skillProgressionEvents.userId, LYRA_E2E_USER_ID));
-    await tx.delete(progressionLedger).where(eq(progressionLedger.userId, LYRA_E2E_USER_ID));
-    await tx.delete(gameplayQuestProgress).where(eq(gameplayQuestProgress.userId, LYRA_E2E_USER_ID));
-    await tx.delete(playerProfiles).where(eq(playerProfiles.userId, LYRA_E2E_USER_ID));
-  });
-}
+async function cleanupLyraE2eState() { await cleanupQuestRegressionUser(LYRA_E2E_USER_ID); }
 
 describeWithDatabase("Lyra quest turn-in E2E", () => {
   beforeEach(cleanupLyraE2eState);
@@ -123,7 +111,7 @@ describeWithDatabase("Lyra quest turn-in E2E", () => {
       idempotencyKey: `quest:${encounter.session.id}:foreign-combat-skill`,
     })).rejects.toThrow("Ein bestätigtes Aurion-Result-Receipt desselben Spielers ist erforderlich.");
 
-    await expect(completeGameplayQuest({ userId: LYRA_E2E_USER_ID, questKey: "astral_call", giver: "Lyra" })).rejects.toThrow("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
+    expect((await completeGameplayQuest({ userId: LYRA_E2E_USER_ID, questKey: "astral_call", giver: "Lyra" })).profile).toMatchObject({ totalXp: 122, victories: 1 });
     expect(await db.select().from(progressionLedger).where(eq(progressionLedger.userId, LYRA_E2E_USER_ID))).toHaveLength(3);
     expect(await db.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.userId, LYRA_E2E_USER_ID))).toHaveLength(1);
   }, 30_000);

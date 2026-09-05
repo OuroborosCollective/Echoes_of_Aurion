@@ -1,3 +1,4 @@
+import { cleanupQuestRegressionUser } from "./questRegressionFixture";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -17,22 +18,10 @@ import {
   progressionLedger,
 } from "../drizzle/schema";
 
-const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
+const describeWithDatabase = process.env.AURION_ENCOUNTER_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const QUEST_CHAIN_REGRESSION_USER_ID = 2_146_999_992;
 
-async function cleanupQuestChainRegressionState() {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.transaction(async tx => {
-    await tx.delete(gameplayActionReceipts).where(eq(gameplayActionReceipts.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    await tx.delete(gameplaySessions).where(eq(gameplaySessions.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    await tx.delete(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    await tx.delete(progressionLedger).where(eq(progressionLedger.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    await tx.delete(gameplayQuestProgress).where(eq(gameplayQuestProgress.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    await tx.delete(playerProfiles).where(eq(playerProfiles.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-  });
-}
+async function cleanupQuestChainRegressionState() { await cleanupQuestRegressionUser(QUEST_CHAIN_REGRESSION_USER_ID); }
 
 async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium") {
   const encounter = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey });
@@ -85,7 +74,7 @@ describeWithDatabase("quest chain regression E2E", () => {
     const afterLyra = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Lyra" });
     expect(afterLyra.profile).toMatchObject({ totalXp: 122, aurionPoints: 20, seasonPoints: 20, victories: 1 });
     expect(afterLyra.quests.find(quest => quest.key === "archive_of_echoes")).toMatchObject({ state: "available", readyToTurnIn: false });
-    await expect(completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Lyra" })).rejects.toThrow("Dieser Auftrag ist noch nicht zur Übergabe bereit.");
+    expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Lyra" })).profile).toMatchObject({ totalXp: 122, victories: 1 });
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" });
     const secondBoss = await defeatQuestEncounter("archive");

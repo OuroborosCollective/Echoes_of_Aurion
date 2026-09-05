@@ -1,7 +1,7 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { acceptGameplayQuest, applyGameplayAction, completeGameplayQuest, getCurrentGameplayEncounter, getDb, startGameplayEncounter } from "./db";
+import { acceptGameplayQuest, applyGameplayAction, completeGameplayQuest, getCurrentGameplayEncounter, getDb, startGameplayEncounter, recordValidatedExpeditionResult, recordValidatedSkillProgressionEvent, setWeaponLoadout } from "./db";
 import { playerProfiles } from "../drizzle/schema";
 
 const suite = process.env.AURION_ENCOUNTER_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
@@ -62,7 +62,8 @@ suite("AIM-253 native encounter transaction in isolated MariaDB", () => {
     const [after] = await pool.query<RowDataPacket[]>("SELECT state, completionSessionId FROM gameplayQuestProgress WHERE userId=? AND questKey='astral_call'", [userId]);
     expect(after[0]).toMatchObject({ state: "ready_to_turn_in", completionSessionId: session.id });
     expect((await (await getDb())!.select().from(playerProfiles).where(eq(playerProfiles.userId, userId)))[0].totalXp).toBe(0);
-    const first = await completeGameplayQuest({ userId, questKey: "astral_call", giver: "Lyra" });
+    const [first, concurrent] = await Promise.all([0,1].map(() => completeGameplayQuest({ userId, questKey: "astral_call", giver: "Lyra" })));
+    expect(concurrent.questDrop?.id).toBe(first.questDrop?.id);
     const recovered = await completeGameplayQuest({ userId, questKey: "astral_call", giver: "Lyra" });
     expect(recovered.questDrop?.id).toBe(first.questDrop?.id);
     const [reward] = await pool.query<RowDataPacket[]>("SELECT totalXp, aurionPoints, victories FROM playerProfiles WHERE userId=?", [userId]);
@@ -70,4 +71,26 @@ suite("AIM-253 native encounter transaction in isolated MariaDB", () => {
     const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM progressionLedger WHERE userId=?", [userId]);
     expect(Number(ledger[0].count)).toBe(3);
   });
+  it("serializes skill/weapon finalization and rejects a foreign or changed result replay", async () => {
+    await setWeaponLoadout({userId,weaponTrack:"spear"});
+    const {session}=await startGameplayEncounter({userId,encounterKey:"asterion"});
+    for(let sequence=1;sequence<=10;sequence++) {
+      if((await applyGameplayAction({userId,sessionId:session.id,sequence,command:"9",source:"human"})).completed) break;
+    }
+    await Promise.all([0,1].map(()=>completeGameplayQuest({userId,questKey:"astral_call",giver:"Lyra"})));
+    const [results]=await pool.query<RowDataPacket[]>("SELECT * FROM expeditionResultReceipts WHERE userId=?",[userId]);
+    expect(results).toHaveLength(1); const row=results[0];
+    const replay={userId,expeditionKey:row.expeditionKey,seedDigest:row.seedDigest,resultDigest:row.resultDigest,confirmedByUserId:userId,idempotencyKey:row.idempotencyKey};
+    await expect(recordValidatedExpeditionResult({...replay,userId:userId+1})).rejects.toThrow("RESULT_IDEMPOTENCY_CONFLICT");
+    await pool.query("DELETE FROM playerProfiles WHERE userId=?",[userId+1]);
+    await expect(recordValidatedExpeditionResult({...replay,resultDigest:"f".repeat(64)})).rejects.toThrow("RESULT_IDEMPOTENCY_CONFLICT");
+    const [events]=await pool.query<RowDataPacket[]>("SELECT * FROM skillProgressionEvents WHERE userId=?",[userId]);
+    expect(events).toHaveLength(1);
+    await expect(recordValidatedSkillProgressionEvent({userId,skillId:"combat",amountExact:"999",source:"quest_reward",resultReceiptId:row.id,resolutionIndex:events[0].resolutionIndex,idempotencyKey:events[0].idempotencyKey})).rejects.toThrow("SKILL_IDEMPOTENCY_CONFLICT");
+    const [mastery]=await pool.query<RowDataPacket[]>("SELECT xp FROM weaponMasteries WHERE userId=? AND weaponTrack='spear'",[userId]);
+    expect(mastery).toEqual([expect.objectContaining({xp:10})]);
+    const [receipts]=await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM weaponMasteryReceipts WHERE userId=?",[userId]); expect(Number(receipts[0].count)).toBe(1);
+    const [items]=await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM itemInstances WHERE ownerUserId=?",[userId]); expect(Number(items[0].count)).toBe(1);
+  });
+
 });
