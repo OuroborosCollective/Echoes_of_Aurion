@@ -1,0 +1,9 @@
+import { BookOpen, Check } from "lucide-react";
+import { aurionControlSkills, type ControlSettings, type SkillCommand } from "@shared/playerUiProtocol";
+
+export function Ax1SkillBook({ settings, pending, onBind }: { settings?: ControlSettings; pending: boolean; onBind: (slot: number, command: SkillCommand) => void }) {
+  return <div className="space-y-4"><h4 className="font-serif text-cyan-300 text-sm flex items-center gap-2"><BookOpen size={18} /> Grimoire · Skills & Belegung</h4>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{aurionControlSkills.map(skill => <article className="p-3 rounded-xl bg-black/60 border border-gray-800 flex items-center gap-3" key={skill.command}><span className="text-2xl" style={{ color: skill.color }}>{skill.icon}</span><div className="flex-1"><h5 className="font-serif text-sm text-white">{skill.name}</h5><span className="text-[10px] text-gray-400">{settings?.hotbar.includes(skill.command) ? <><Check size={12} className="inline" /> In der Aktionsleiste</> : "Im Skillbuch"}</span></div></article>)}</div>
+    <fieldset disabled={pending || !settings} className="bg-black/70 rounded-xl border border-amber-500/30 p-3"><legend className="text-xs text-amber-300 px-2">Aktionsleiste · Tasten 1–5</legend><div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{Array.from({ length: 5 }, (_, i) => <label key={i} className="flex items-center gap-2 text-xs"><kbd className="ax1-badge">{i + 1}</kbd><select className="flex-1 min-w-0" aria-label={`Skillplatz ${i + 1}`} value={settings?.hotbar[i] ?? ""} onChange={e => onBind(i, e.target.value as SkillCommand)}>{!settings && <option value="">Wird geladen</option>}{aurionControlSkills.map(s => <option key={s.command} value={s.command}>{s.name}</option>)}</select></label>)}</div><p className="text-[10px] text-gray-400 mt-3">Bereits belegte Skills tauschen ihre Plätze. Die Leiste wird nach dem Speichern aktualisiert.</p></fieldset>
+  </div>;
+}

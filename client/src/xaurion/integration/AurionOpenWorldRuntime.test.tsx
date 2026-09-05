@@ -5,7 +5,7 @@ import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
 const fixture = vi.hoisted(() => {
   const makeEngine = () => ({
     player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
-    landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(),
+    landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
     start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
     onRuntimeError: undefined as ((error: unknown) => void) | undefined,
   });
@@ -17,7 +17,7 @@ const fixture = vi.hoisted(() => {
 });
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: 1 }, isAuthenticated: true }) }));
 vi.mock("@/lib/trpc", () => ({ trpc: {
-  player: { me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
+  player: { ui: { useQuery: () => ({}) }, me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
   assetSubmissions: { characterAppearance: { useQuery: () => ({}) } },
   gameplay: {
     openWorld: { useQuery: () => ({}) },

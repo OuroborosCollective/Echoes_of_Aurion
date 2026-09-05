@@ -1,3 +1,4 @@
+import type { ActionCompletion, ActionOutcome } from "../xaurion/integration/confirmedActionRequest";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { splitWorldChunkPositionMm } from "@shared/worldChunkProtocol";
 import { operationalNow } from "../../../shared/operationalClock";
@@ -455,19 +456,24 @@ export default function Home() {
 
   useEffect(() => {
     const onRequestedAction = async (event: Event) => {
-      const detail = (event as CustomEvent<{ command: Command; source: "human" | "gateway"; origin?: CompanionCommandOrigin }>).detail;
-      if (!user?.id || actionInFlight.current || !detail || !/^[WASDEF1-9]$/.test(detail.command) || !["human", "gateway"].includes(detail.source)) return;
+      const detail = (event as CustomEvent<{ command: Command; source: "human" | "gateway"; origin?: CompanionCommandOrigin; complete?: ActionCompletion }>).detail;
+      if (!user?.id || actionInFlight.current || !detail || !/^[WASDEF1-9]$/.test(detail.command) || !["human", "gateway"].includes(detail.source)) {
+        detail?.complete?.({ confirmed: false, completed: false, message: "Aktion derzeit nicht verfügbar." });
+        return;
+      }
+      let outcome: ActionOutcome = { confirmed: false, completed: false, message: "Aktion nicht bestätigt." };
       actionInFlight.current = true;
       const status = (busy: boolean, message: string) => window.dispatchEvent(new CustomEvent("aurion:encounter-status", { detail: { busy, message } }));
       status(true, "Aktion wird geprüft.");
       try {
         // Fetch the owned server state before choosing a sequence. No clock or browser counter mints an action.
         const session = parseOwnedEncounterReadback(await apiUtils.gameplay.currentEncounter.fetch(), user.id).active;
-        if (!session) { status(true, "Nimm einen Auftrag an und beginne die zugehörige Begegnung."); return; }
+        if (!session) { outcome.message = "Nimm einen Auftrag an und beginne die zugehörige Begegnung."; status(true, outcome.message); return; }
         const result = await applyGameplayAction.mutateAsync({ sessionId: session.id, sequence: session.nextSequence, command: detail.command, source: detail.source });
         gameplaySession.current = result.completed ? null : { id: result.sessionId, nextSequence: result.nextSequence };
         window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sessionId: result.sessionId, sequence: result.nextSequence - 1, command: detail.command, source: detail.source, origin: detail.origin, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
         const message = result.completed ? "Begegnung abgeschlossen. Prüfe deinen Auftrag beim Questgeber." : `${result.damage} Schaden bestätigt.`;
+        outcome = { confirmed: true, completed: result.completed, message };
         setLastSignal(message); status(true, message);
         if (result.completed) { void gameplayProgress.refetch(); if (result.drop) setConfirmedDrop(result.drop); }
       } catch {
@@ -475,7 +481,16 @@ export default function Home() {
         setLastSignal(message); status(true, message);
       } finally {
         // A lost response must never auto-repeat an attack; a fresh readback recovers its committed sequence.
-        try { await apiUtils.gameplay.currentEncounter.invalidate(); } catch { status(true, "Begegnungsdaten sind derzeit nicht erreichbar."); } finally { actionInFlight.current = false; window.dispatchEvent(new CustomEvent("aurion:encounter-status", { detail: { busy: false } })); }
+        try {
+          await apiUtils.gameplay.currentEncounter.invalidate();
+          // Do not release UI/auto-attack until a fresh owned session can be parsed.
+          parseOwnedEncounterReadback(await apiUtils.gameplay.currentEncounter.fetch(), user.id);
+        } catch { outcome = { confirmed: false, completed: false, message: "Begegnungsdaten sind derzeit nicht erreichbar." }; status(true, outcome.message); }
+        finally {
+          actionInFlight.current = false;
+          window.dispatchEvent(new CustomEvent("aurion:encounter-status", { detail: { busy: false } }));
+          detail.complete?.(outcome);
+        }
       }
     };
     window.addEventListener("aurion:request-action", onRequestedAction);

@@ -414,7 +414,7 @@ export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
   setId: varchar("setId", { length: 96 }),
   itemPower: int("itemPower").notNull(),
   deterministicHash: varchar("deterministicHash", { length: 64 }).notNull(),
-  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed"]).default("owned").notNull(),
+  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed", "guild_custody", "pending_pickup", "equipped"]).default("owned").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionItemInstancesV2_loot_receipt_uq").on(table.lootReceiptId),
@@ -788,7 +788,7 @@ export const itemInstances = mysqlTable("itemInstances", {
   itemLevel: int("itemLevel").notNull(),
   affixesJson: text("affixesJson").notNull(),
   setKey: varchar("setKey", { length: 96 }),
-  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed", "guild_custody"]).default("owned").notNull(),
+  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed", "guild_custody", "pending_pickup", "equipped"]).default("owned").notNull(),
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [

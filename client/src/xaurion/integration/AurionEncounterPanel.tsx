@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { encounterReadbackSchema } from "@shared/encounterReadback";
 import { projectReadback, readbackLabels } from "./authoritativeHudProjection";
@@ -7,6 +7,7 @@ import { Crosshair } from "lucide-react";
 
 export function AurionEncounterPanel({ userId, connected, onAttack }: { userId: number; connected: boolean; onAttack: () => void }) {
   const [open, setOpen] = useState(false);
+  const starting = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const query = trpc.gameplay.currentEncounter.useQuery(undefined, { enabled: userId > 0, staleTime: 10_000, refetchInterval: 5_000 });
@@ -37,10 +38,11 @@ export function AurionEncounterPanel({ userId, connected, onAttack }: { userId: 
         <DialogDescription>Nimm den zugehörigen Auftrag an. Eine laufende Begegnung bleibt bei der Rückkehr zur Sternwarte gespeichert.</DialogDescription>
         {current.data?.encounters.map(encounter => <article className="aurion-authority-hud__card" key={encounter.key}><b>{encounter.name}</b><p>{encounter.enemyName}</p>
           <button disabled={!fresh || (!encounter.available && active?.encounterKey !== encounter.key) || Boolean(active && active.encounterKey !== encounter.key)} onClick={async () => {
-            if (!fresh) return;
-            setMessage("");
-            try { await start.mutateAsync({ encounterKey: encounter.key }); await query.refetch(); setOpen(false); }
+            if (!fresh || starting.current) return;
+            starting.current = true; setBusy(true); setMessage("");
+            try { await start.mutateAsync({ encounterKey: encounter.key }); const readback = await query.refetch({ throwOnError: true }); encounterReadbackSchema.parse(readback.data); setOpen(false); }
             catch { setMessage("Start nicht bestätigt. Prüfe den Auftrag und aktualisiere die Begegnung."); await query.refetch(); }
+            finally { starting.current = false; setBusy(false); }
           }}>{active?.encounterKey === encounter.key ? "Begegnung fortsetzen" : `${encounter.name} beginnen`}</button>
         </article>)}
         {message && <p role="status">{message}</p>}

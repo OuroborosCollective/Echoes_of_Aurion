@@ -1,3 +1,5 @@
+import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
+import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { WORLD_DEMONSTRATION_EVENT } from "@/lib/companionWorldInputs";
 import { VisibleCanvasCapture } from "@/lib/visibleCanvasCapture";
@@ -89,12 +91,21 @@ export default function AurionOpenWorldRuntime() {
   const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
+  const controlsQuery = trpc.player.ui.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated, staleTime: 15_000, refetchInterval: 10_000 });
+  const controlsRef = useRef<ControlSettings | null>(null);
+  const controls = playerUiReadbackSchema.safeParse(controlsQuery.data);
+  controlsRef.current = controls.success && controls.data.userId === user?.id && !controlsQuery.isError && !controlsQuery.isStale ? controls.data.settings : null;
 
-  const requestAuthoritativeAction = useCallback((command: AurionGameplayCommand) => {
-    if (document.querySelector('[role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]')) return;
-    window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
-    window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source: "human" as const } }));
+  const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
+    if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
+    // A delegated auto-attack is not a new human demonstration for the companion.
+    if (!automated) window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
+    return requestConfirmedAction(command);
   }, []);
+  const requestHotbarAction = useCallback((command: AurionGameplayCommand) => {
+    const mapped = /^[1-5]$/.test(command) ? controlsRef.current?.hotbar[Number(command) - 1] : command;
+    if (mapped) void requestAuthoritativeAction(mapped);
+  }, [requestAuthoritativeAction]);
 
   const requestAuthoritativeMount = useCallback(() => {
     engineRef.current?.addChatMessage("system", "Aurion", "Mount bleibt auf dem -ax1-Keybind Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.");
@@ -105,7 +116,7 @@ export default function AurionOpenWorldRuntime() {
     const engine = engineRef.current;
     if (!engine || !zoneConnectedRef.current) return;
     if (serviceNpcRef.current?.interact(engine.player.position)) {
-      window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel: "crafting" } }));
+      window.dispatchEvent(new Event("aurion:open-world-crafting"));
       return;
     }
     const result = engine.interactNearby();
@@ -149,7 +160,9 @@ export default function AurionOpenWorldRuntime() {
       if (disposed || !engine || engineRef.current !== engine) return;
       const effect = confirmedVisuals.accept((event as CustomEvent<unknown>).detail);
       if (!effect) return;
+      engine.player.triggerAttackAnimation();
       engine.player.playConfirmedGlbAttack();
+      if (containerRef.current) containerRef.current.dataset.confirmedAttackReceipt = effect.receiptKey;
       try { engine.particleSystem.emit(effect.kind, engine.player.position, undefined, 1, effect.receiptKey); }
       catch (error) { fail(error); }
     };
@@ -177,7 +190,7 @@ export default function AurionOpenWorldRuntime() {
       engine.onProjectionTick = delta => serviceNpcRef.current?.update(delta);
       engine.onRuntimeError = fail;
       bindAurionAuthorityProjection(engine, {
-        requestAction: requestAuthoritativeAction,
+        requestAction: requestHotbarAction,
         requestMount: requestAuthoritativeMount,
       });
       remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
@@ -320,7 +333,7 @@ export default function AurionOpenWorldRuntime() {
   const syncAx1HumanMovement = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (document.querySelector('[role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]')) {
+    if (document.querySelector(WORLD_PANEL_SELECTOR)) {
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
       engine.setVirtualMovement(0, 0);
@@ -337,7 +350,7 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     if (!activation) return;
-    const typing = () => Boolean(document.querySelector('[role="dialog"][data-state="open"]')) || ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase());
+    const typing = () => Boolean(document.querySelector(WORLD_PANEL_SELECTOR)) || ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase());
     const down = (event: KeyboardEvent) => {
       if (event.repeat || typing()) return;
       const key = event.key.toLowerCase();
@@ -375,6 +388,13 @@ export default function AurionOpenWorldRuntime() {
         requestWorldInteraction();
         return;
       }
+      if (key === "r" || key === "t" || key === "i" || key === "c" || key === "j") {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (key === "r") void requestAuthoritativeAction("F");
+        else if (key === "t") window.dispatchEvent(new Event("aurion:toggle-auto-attack"));
+        else window.dispatchEvent(new CustomEvent("aurion:open-world-panel", { detail: { panel: key === "i" ? "inventory" : key === "c" ? "character" : "quests" } }));
+        return;
+      }
       if (key === "tab") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -398,11 +418,16 @@ export default function AurionOpenWorldRuntime() {
       const virtual = virtualInputRef.current;
       if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) syncAx1HumanMovement();
     }, 100);
+    const panels = new MutationObserver(() => { if (document.querySelector(WORLD_PANEL_SELECTOR)) { releaseMovement(); engineRef.current?.releaseControlInput(); } });
+    panels.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state", "data-aurion-panel", "data-opened-from-world"] });
+    document.addEventListener("visibilitychange", releaseMovement);
     window.addEventListener("keydown", down, true);
     window.addEventListener("keyup", up, true);
     window.addEventListener("blur", releaseMovement);
     return () => {
       window.clearInterval(cameraFollowTimer);
+      panels.disconnect();
+      document.removeEventListener("visibilitychange", releaseMovement);
       window.removeEventListener("keydown", down, true);
       window.removeEventListener("keyup", up, true);
       window.removeEventListener("blur", releaseMovement);
