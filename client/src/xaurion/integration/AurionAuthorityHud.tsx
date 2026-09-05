@@ -1,3 +1,4 @@
+import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionEncounterPanel } from "./AurionEncounterPanel";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -19,6 +20,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [message, setMessage] = useState("");
+  const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
   const playerQuery = trpc.player.me.useQuery(undefined, options);
   const questQuery = trpc.gameplay.progress.useQuery(undefined, options);
@@ -37,7 +39,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     setMessage("");
     try {
       await operation();
-      await Promise.all([playerQuery.refetch(), questQuery.refetch()]);
+      await Promise.all([playerQuery.refetch(), questQuery.refetch(), utils.gameplay.relationshipStanding.invalidate()]);
       setMessage("Änderung vom Server bestätigt.");
     } catch { setMessage("Änderung nicht bestätigt. Bitte aktualisieren und erneut versuchen."); }
   };
@@ -89,6 +91,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
             <h3>Waffenmeisterschaft</h3>{player.data?.weaponMasteries.length === 0 && <p>Noch keine Meisterschaft erworben.</p>}{player.data?.weaponMasteries.map(item => <p key={item.weaponTrack}>{item.weaponTrack} · Stufe {item.level} · {item.xp} EP</p>)}</>}
         </div>}
         {panel === "quests" && <div data-state={quests.state}>
+          <NpcStandingPanel userId={userId} />
           <p role="status">{readbackLabels[quests.state]}</p>
           {quests.data?.quests.map(quest => <article key={quest.key} className="aurion-authority-hud__card"><b>{quest.title}</b><p>{quest.giver} · ab Stufe {quest.requiredLevel}</p><p>{quest.objective}</p><p>{quest.readyToTurnIn ? "Bereit zur Abgabe" : ({ locked: "Gesperrt", available: "Verfügbar", active: "Aktiv", completed: "Abgeschlossen" } as const)[quest.state]}</p>
             {quest.state === "available" && <button disabled={!fresh || quests.state !== "live"} onClick={() => void act(() => accept.mutateAsync({ questKey: quest.key }))}>Bei {quest.giver} annehmen</button>}

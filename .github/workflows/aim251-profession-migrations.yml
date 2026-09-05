@@ -9,6 +9,9 @@ on:
       - "server/aim253Encounter*.test.ts"
       - "server/aim263Npc*.test.ts"
       - "server/npcPersistenceProtocol.ts"
+      - "server/npcStandingPersistence.ts"
+      - "server/aim263Standing*.test.ts"
+      - "shared/npcStanding.ts"
       - "server/wasdAurionRuntime.ts"
       - "shared/encounterReadback*"
       - "server/encounterIdentity.ts"
@@ -26,6 +29,9 @@ on:
       - "server/aim253Encounter*.test.ts"
       - "server/aim263Npc*.test.ts"
       - "server/npcPersistenceProtocol.ts"
+      - "server/npcStandingPersistence.ts"
+      - "server/aim263Standing*.test.ts"
+      - "shared/npcStanding.ts"
       - "server/wasdAurionRuntime.ts"
       - "shared/encounterReadback*"
       - "server/encounterIdentity.ts"
@@ -73,13 +79,13 @@ jobs:
         run: |
           pnpm verify:migrations
           pnpm check
-          pnpm vitest run server/aim248ProfessionMastery.test.ts server/aim248ProfessionReplay.test.ts server/aim253EncounterReadback.test.ts server/aim263NpcPersistence.test.ts
+          pnpm vitest run server/aim248ProfessionMastery.test.ts server/aim248ProfessionReplay.test.ts server/aim253EncounterReadback.test.ts server/aim263NpcPersistence.test.ts server/aim263Standing.test.ts
       - name: Apply complete migration chain to isolated MariaDB
         run: pnpm exec drizzle-kit migrate
       - name: Verify existing crafting, mastery, concurrency, output origins and rollback
         # Test files share cleanup tables and rollback triggers. Keep fixture lifecycles
         # serial; Promise.all business-operation concurrency inside each test remains active.
-        run: pnpm vitest run --no-file-parallelism server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts server/aim253EncounterMariaDb.test.ts server/aim263NpcMariaDb.test.ts
+        run: pnpm vitest run --no-file-parallelism server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts server/aim253EncounterMariaDb.test.ts server/aim263NpcMariaDb.test.ts server/aim263StandingMariaDb.test.ts
 
       - name: Verify all physical late schema contracts after the complete chain
         env:

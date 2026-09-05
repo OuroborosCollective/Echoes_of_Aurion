@@ -1,3 +1,4 @@
+import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
 import { parseOwnedEncounterReadback } from "../shared/encounterReadback";
 import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
@@ -652,6 +653,7 @@ export async function completeFactionQuestlineQuestForUser(values: { userId: num
       const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: false, ensureState: false });
       return { applied: false as const, receipt: replay, reward: replay, readmodel: resolveFactionQuestline(state) };
     }
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
     const state = await loadFactionQuestlineState({ tx, userId: values.userId, lock: true, ensureState: true });
     const previous = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(and(eq(aurionFactionQuestlineRewardReceipts.userId, values.userId), eq(aurionFactionQuestlineRewardReceipts.questId, values.questId))).limit(1))[0];
     if (previous) throw new Error("Diese Fraktionsquest wurde bereits belohnt.");
@@ -692,6 +694,7 @@ export async function completeFactionQuestlineQuestForUser(values: { userId: num
     if (affectedRowCount(updated) !== 1) throw new Error("Fraktionsquestline wurde während der Belohnung parallel verändert.");
     const receipt = (await tx.select().from(aurionFactionQuestlineRewardReceipts).where(and(eq(aurionFactionQuestlineRewardReceipts.id, completionReceiptId), eq(aurionFactionQuestlineRewardReceipts.userId, values.userId))).limit(1))[0];
     if (!receipt || receipt.rewardDigest !== resolution.rewardDigest || receipt.xp !== reward.xp || receipt.points !== reward.points) throw new Error("Fraktionsquestline-Reward-Readback fehlgeschlagen.");
+    await commitFactionQuestRelationship(tx, { userId: values.userId, receiptId: completionReceiptId, resolutionIndex: completionResolutionIndex, faction: reward.faction });
     const nextState: FactionQuestlineStateInput = { ...state, lastResolutionIndex: completionResolutionIndex };
     return { applied: true as const, receipt, reward, readmodel: resolveFactionQuestline(nextState) };
   });
@@ -1486,6 +1489,9 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
     completionSessionId = row.completionSessionId;
     // Recovery may continue idempotent loot/mastery finalization, but never grant the base reward twice.
     if (row.state === "completed") return;
+    const completedSession = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id,row.completionSessionId),eq(gameplaySessions.userId,values.userId),eq(gameplaySessions.status,"completed"))).limit(1))[0];
+    if (!completedSession || completedSession.bossHp !== 0 || completedSession.nextSequence < 2) throw new Error("QUEST_COMPLETION_EVIDENCE_REQUIRED");
+    await commitNativeQuestRelationship(tx, { userId: values.userId, questKey: quest.key, sessionId: completedSession.id, nextSequence: completedSession.nextSequence });
     const now = new Date();
     const totalXp = profile.totalXp + quest.reward.xp;
     await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now }).where(eq(gameplayQuestProgress.id, row.id));
@@ -2693,4 +2699,10 @@ export async function createForumReply(values: { threadId: string; authorUserId:
   const id = newCommunityId("reply");
   await db.insert(forumReplies).values({ id, ...values });
   return { id };
+}
+
+export async function getRelationshipStanding(userId: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Game database is not available");
+  return readRelationshipStanding(database,userId);
 }

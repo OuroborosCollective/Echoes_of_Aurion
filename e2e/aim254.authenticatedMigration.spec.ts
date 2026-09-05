@@ -246,6 +246,11 @@ test("native encounter survives a world return and commits the quest reward once
     await expect(dialog.getByRole("button", { name: "Bei Lyra abgeben", exact: true })).toHaveCount(0);
     const [reward] = await pool.query<RowDataPacket[]>("SELECT p.totalXp, p.aurionPoints, q.state FROM playerProfiles p JOIN gameplayQuestProgress q ON q.userId=p.userId WHERE p.userId=? AND q.questKey='astral_call'", [before[0].userId]);
     expect(reward[0]).toMatchObject({ totalXp: 122, aurionPoints: 20, state: "completed" });
+    await expect(dialog.getByTestId("npc-standing-panel").getByText("Neutral · Ansehen 5", { exact: true })).toBeVisible();
+    const [relationships] = await pool.query<RowDataPacket[]>("SELECT scopeKey,eventJson,eventHash FROM aurionScopedMasteryEvents WHERE userId=?", [before[0].userId]);
+    expect(relationships).toHaveLength(2);
+    for (const row of relationships) expect(createHash("sha256").update(row.eventJson).digest("hex")).toBe(row.eventHash);
+    expect(relationships.map(row => row.scopeKey).sort()).toEqual(["v1:npc_relation:lyra", "v1:social:friendship"]);
     expect(errors).toEqual([]);
     await testInfo.attach("encounter-readback", { body: JSON.stringify({ sessionId: before[0].id, userId: before[0].userId, resumedWithoutReset: true, questCompleted: true, reward: reward[0] }), contentType: "application/json" });
   } finally { await page.close(); await pool.end(); }
