@@ -26,8 +26,9 @@ import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { companionActionAllowed, companionDatasetCount, exportCompanionDataset, loadCompanionSession, recordCompanionObservation, startCompanionSession, transitionCompanionSession, type CompanionAction, type CompanionStateMask, type CompanionStateVector } from "@/lib/companionLearning";
-import { isFreshCompanionFrame, requestCompanionFrame } from "@/lib/companionFrameCapture";
-import { COMPANION_FRAME_MAX_AGE_MS, type CompanionCommandOrigin, type CompanionSession } from "@shared/companionLearningProtocol";
+import { requestCompanionFrame } from "@/lib/companionFrameCapture";
+import { useCompanionCaptureLoop } from "@/hooks/useCompanionCaptureLoop";
+import { type CompanionCommandOrigin, type CompanionSession } from "@shared/companionLearningProtocol";
 import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
 type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";
@@ -209,7 +210,6 @@ export default function Home() {
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
   const lastCompanionAction = useRef<PendingCompanionAction | undefined>(undefined);
   const companionActionSequence = useRef(0);
-  const companionCaptureInFlight = useRef(false);
 
   useEffect(() => () => zoneClient.current?.close(), []);
 
@@ -357,23 +357,13 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    if (companionSession?.mode !== "learning") {
-      lastCompanionAction.current = undefined;
-      return;
-    }
-    let captureGenerationActive = true;
-    const timer = window.setInterval(() => {
-      const pending = lastCompanionAction.current;
-      if (!pending || companionCaptureInFlight.current) return;
-      const now = Date.now();
-      if (now - pending.issuedAt > COMPANION_FRAME_MAX_AGE_MS) {
-        if (lastCompanionAction.current?.id === pending.id) lastCompanionAction.current = undefined;
-        return;
-      }
-      companionCaptureInFlight.current = true;
-      void requestCompanionFrame(now).then(sample => {
-        if (!captureGenerationActive || !sample || !isFreshCompanionFrame(sample, Date.now()) || lastCompanionAction.current?.id !== pending.id) return;
+  useCompanionCaptureLoop({
+    enabled: companionSession?.mode === "learning",
+    scope: `${user?.id ?? 0}:${companionSession?.sessionId ?? "none"}:${openWorldRendererActive ? "world" : screen}`,
+    pending: lastCompanionAction,
+    now: Date.now,
+    capture: requestCompanionFrame,
+    accept: (sample, pending) => {
         const observed = observedWorldState(observedEncounter.data, user?.id ?? 0, !observedEncounter.isStale && !observedEncounter.isError);
         const stateVector = observed.vector;
         const stateMask = observed.mask;
@@ -386,8 +376,7 @@ export default function Home() {
           capturedAt: sample.capturedAt,
           note: openWorldRendererActive ? "Menschliche Eingabe im sichtbaren Aurion-Welt-Canvas" : "Menschliche Eingabe im sichtbaren Aurion-Canvas",
         });
-        if (!row) return;
-        if (lastCompanionAction.current?.id === pending.id) lastCompanionAction.current = undefined;
+        if (!row) return false;
         void persistCompanionObservation.mutateAsync({
           sessionId: row.session_id,
           sequenceIndex: row.sequence_index,
@@ -399,10 +388,10 @@ export default function Home() {
           stateMask: row.state_mask,
           note: row.note,
         }).catch(() => setLastSignal("Die Demonstration ist lokal gesichert; die serverseitige Companion-Memory-Bestätigung steht noch aus."));
-      }).finally(() => { companionCaptureInFlight.current = false; });
-    }, 100);
-    return () => { captureGenerationActive = false; window.clearInterval(timer); };
-  }, [companionSession?.mode, mission, persistCompanionObservation, observedEncounter.data, observedEncounter.isStale, observedEncounter.isError, user?.id, openWorldRendererActive]);
+      return true;
+    },
+    onError: () => setLastSignal("Die Beobachtung konnte nicht gesichert werden. Die Aufzeichnung wartet auf die nächste menschliche Eingabe."),
+  });
 
   useEffect(() => {
     if (screen !== "mission") return;

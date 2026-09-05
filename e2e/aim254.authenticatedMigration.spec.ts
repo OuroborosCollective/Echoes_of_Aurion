@@ -280,13 +280,29 @@ test("explicit companion learning captures the visible world and stores a bounde
     const [gateway] = await pool.query<RowDataPacket[]>("SELECT userId FROM gatewaySessions WHERE id=?", [pair.sessionId]);
     expect(gateway).toHaveLength(1); const userId = Number(gateway[0].userId);
     await expect(dialog.getByText("0 lokale Beobachtungszeilen", { exact: true })).toBeVisible();
+    // Persist only bounded event metadata in CI diagnostics, never screenshots or pairing credentials.
+    await page.evaluate(() => {
+      const events: Record<string, unknown>[] = [];
+      (window as unknown as { captureDiagnostics: unknown }).captureDiagnostics = events;
+      for (const name of ["aurion:world-demonstration", "aurion:companion-frame-request", "aurion:companion-frame-response", "aurion:companion-dataset-updated"]) {
+        window.addEventListener(name, event => {
+          const d = (event as CustomEvent).detail ?? {};
+          events.push({ event: name, requestId: d.requestId, kind: d.kind, error: d.error, count: d.count, frameLength: typeof d.frameDataUrl === "string" ? d.frameDataUrl.length : undefined });
+          if (events.length > 100) events.shift();
+        });
+      }
+    });
     await dialog.getByRole("button", { name: "Aufzeichnung starten", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     const persisted = page.waitForResponse(response => response.url().includes("companion.persistObservation") && response.status() === 200, { timeout: 30_000 });
     await page.keyboard.down("w");
     let receipt: { memoryHash: string };
     try { const body = await (await persisted).json(); receipt = (Array.isArray(body) ? body[0] : body).result.data.json; }
-    finally { await page.keyboard.up("w"); }
+    finally {
+      await page.keyboard.up("w");
+      const diagnostics = await page.evaluate(() => (window as unknown as { captureDiagnostics: unknown }).captureDiagnostics);
+      await testInfo.attach("capture-events", { body: JSON.stringify(diagnostics), contentType: "application/json" });
+    }
     expect(receipt!.memoryHash).toMatch(/^[0-9a-f]{64}$/);
     const sessionId = `cmp_${pair.sessionId}`;
     const lines = (await readFile(`data/companion-memory/user-${userId}/${sessionId}.jsonl`, "utf8")).trim().split("\n");

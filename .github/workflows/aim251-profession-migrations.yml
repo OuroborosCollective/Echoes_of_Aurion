@@ -70,7 +70,9 @@ jobs:
       - name: Apply complete migration chain to isolated MariaDB
         run: pnpm exec drizzle-kit migrate
       - name: Verify existing crafting, mastery, concurrency, output origins and rollback
-        run: pnpm vitest run server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts server/aim253EncounterMariaDb.test.ts
+        # Test files share cleanup tables and rollback triggers. Keep fixture lifecycles
+        # serial; Promise.all business-operation concurrency inside each test remains active.
+        run: pnpm vitest run --no-file-parallelism server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts server/aim253EncounterMariaDb.test.ts
 
       - name: Verify all physical late schema contracts after the complete chain
         env:
