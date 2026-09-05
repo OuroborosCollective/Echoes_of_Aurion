@@ -1,3 +1,5 @@
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState, queueHumanDemonstration, type PendingHumanDemonstration } from "@/lib/companionWorldInputs";
 import { parseOwnedEncounterReadback } from "@shared/encounterReadback";
 /**
  * Echoes of Aurion — Expedition console
@@ -24,8 +26,9 @@ import { wasdAurionSceneAssetAssignments } from "@/lib/wasdAurionSceneAssets";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { companionActionAllowed, companionDatasetCount, exportCompanionDataset, loadCompanionSession, recordCompanionObservation, startCompanionSession, transitionCompanionSession, type CompanionAction, type CompanionStateMask, type CompanionStateVector } from "@/lib/companionLearning";
-import { isFreshCompanionFrame, requestCompanionFrame } from "@/lib/companionFrameCapture";
-import { COMPANION_FRAME_MAX_AGE_MS, type CompanionCommandOrigin, type CompanionSession } from "@shared/companionLearningProtocol";
+import { requestCompanionFrame } from "@/lib/companionFrameCapture";
+import { useCompanionCaptureLoop } from "@/hooks/useCompanionCaptureLoop";
+import { type CompanionCommandOrigin, type CompanionSession } from "@shared/companionLearningProtocol";
 import { matchesWorldChunkStreamSelection, orderedWorldChunkWindow, worldChunkCoordinateKey, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "@shared/worldChunkStreamingProtocol";
 
 type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";
@@ -56,7 +59,7 @@ type WorldStreamAnchor = {
   deterministicHash: string;
 };
 
-type PendingCompanionAction = { id: number; action: CompanionAction; issuedAt: number };
+type PendingCompanionAction = PendingHumanDemonstration;
 const companionMissionPhaseValue: Record<MissionState["phase"], number> = { active: 0, transition: 0.25, quest_ready: 0.5, dungeon_ready: 0.75, victory: 1 };
 
 const initialMission: MissionState = { arena: 0, arenaName: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", sentinelHp: 112, sentinelMaxHp: 112, explorerHp: 100, echoHp: 100, shield: false, marked: false, phase: "active" };
@@ -95,13 +98,16 @@ function codeFromText(value: string): Command | null {
 
 export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const [companionPanelOpen, setCompanionPanelOpen] = useState(false);
   const [openWorldRendererActive, setOpenWorldRendererActive] = useState(false);
   useEffect(() => {
+    const showCompanion = () => setCompanionPanelOpen(true);
+    window.addEventListener("aurion:open-companion", showCompanion);
     const enter = () => setOpenWorldRendererActive(true);
     const leave = () => setOpenWorldRendererActive(false);
     window.addEventListener("aurion:load-open-world", enter);
     window.addEventListener("aurion:return-to-tower", leave);
-    return () => { window.removeEventListener("aurion:load-open-world", enter); window.removeEventListener("aurion:return-to-tower", leave); };
+    return () => { window.removeEventListener("aurion:open-companion", showCompanion); window.removeEventListener("aurion:load-open-world", enter); window.removeEventListener("aurion:return-to-tower", leave); };
   }, []);
   const apiAvailable = hasAurionApi();
   const apiUtils = trpc.useUtils();
@@ -161,6 +167,7 @@ export default function Home() {
   });
   const sendTeamSignal = trpc.community.team.sendSignal.useMutation();
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: apiAvailable && isAuthenticated });
+  const observedEncounter = trpc.gameplay.currentEncounter.useQuery(undefined, { enabled: isAuthenticated && companionSession?.mode === "learning", staleTime: 2000, refetchInterval: companionSession?.mode === "learning" ? 1000 : false });
   const gameplayProgress = trpc.gameplay.progress.useQuery(undefined, { enabled: isAuthenticated });
   const factionQuestline = trpc.factionQuestline.read.useQuery(undefined, { enabled: isAuthenticated && (screen === "mission" || screen === "open_world") });
   const pledgeFactionQuestline = trpc.factionQuestline.pledge.useMutation();
@@ -203,7 +210,6 @@ export default function Home() {
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
   const lastCompanionAction = useRef<PendingCompanionAction | undefined>(undefined);
   const companionActionSequence = useRef(0);
-  const companionCaptureInFlight = useRef(false);
 
   useEffect(() => () => zoneClient.current?.close(), []);
 
@@ -351,31 +357,16 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    if (companionSession?.mode !== "learning") {
-      lastCompanionAction.current = undefined;
-      return;
-    }
-    const timer = window.setInterval(() => {
-      const pending = lastCompanionAction.current;
-      if (!pending || companionCaptureInFlight.current) return;
-      const now = Date.now();
-      if (now - pending.issuedAt > COMPANION_FRAME_MAX_AGE_MS) {
-        if (lastCompanionAction.current?.id === pending.id) lastCompanionAction.current = undefined;
-        return;
-      }
-      companionCaptureInFlight.current = true;
-      void requestCompanionFrame().then(sample => {
-        if (!sample || !isFreshCompanionFrame(sample, Date.now()) || lastCompanionAction.current?.id !== pending.id) return;
-        const stateVector: CompanionStateVector = [
-          mission.explorerHp / 100,
-          mission.echoHp / 100,
-          mission.sentinelHp / Math.max(1, mission.sentinelMaxHp),
-          mission.shield ? 1 : 0,
-          mission.marked ? 1 : 0,
-          companionMissionPhaseValue[mission.phase],
-        ];
-        const stateMask: CompanionStateMask = [1, 1, 1, 1, 1, 1];
+  useCompanionCaptureLoop({
+    enabled: companionSession?.mode === "learning",
+    scope: `${user?.id ?? 0}:${companionSession?.sessionId ?? "none"}:${openWorldRendererActive ? "world" : screen}`,
+    pending: lastCompanionAction,
+    now: Date.now,
+    capture: requestCompanionFrame,
+    accept: (sample, pending) => {
+        const observed = observedWorldState(observedEncounter.data, user?.id ?? 0, !observedEncounter.isStale && !observedEncounter.isError);
+        const stateVector = observed.vector;
+        const stateMask = observed.mask;
         const row = recordCompanionObservation({
           frameDataUrl: sample.frameDataUrl,
           featureVector: [...sample.featureVector],
@@ -383,10 +374,9 @@ export default function Home() {
           stateVector,
           stateMask,
           capturedAt: sample.capturedAt,
-          note: `Beobachtung in ${mission.arenaName}: ${mission.objective}`,
+          note: openWorldRendererActive ? "Menschliche Eingabe im sichtbaren Aurion-Welt-Canvas" : "Menschliche Eingabe im sichtbaren Aurion-Canvas",
         });
-        if (!row) return;
-        if (lastCompanionAction.current?.id === pending.id) lastCompanionAction.current = undefined;
+        if (!row) return false;
         void persistCompanionObservation.mutateAsync({
           sessionId: row.session_id,
           sequenceIndex: row.sequence_index,
@@ -398,10 +388,10 @@ export default function Home() {
           stateMask: row.state_mask,
           note: row.note,
         }).catch(() => setLastSignal("Die Demonstration ist lokal gesichert; die serverseitige Companion-Memory-Bestätigung steht noch aus."));
-      }).finally(() => { companionCaptureInFlight.current = false; });
-    }, 100);
-    return () => window.clearInterval(timer);
-  }, [companionSession?.mode, mission, persistCompanionObservation]);
+      return true;
+    },
+    onError: () => setLastSignal("Die Beobachtung konnte nicht gesichert werden. Die Aufzeichnung wartet auf die nächste menschliche Eingabe."),
+  });
 
   useEffect(() => {
     if (screen !== "mission") return;
@@ -546,7 +536,7 @@ export default function Home() {
           startCompanionSession(user.id, provider, pairing.sessionId);
           transitionCompanionSession("connect");
         }
-        appendLedger({ kind: "connection", title: "LLM-Verbindung bestätigt", detail: `${provider} ist verbunden. Der Companion wird erst nach Learn und anschließendem Play gespawnt.` });
+        appendLedger({ kind: "connection", title: "MCP-Steuervertrag ausgestellt", detail: `Ein Steuervertrag für ${provider} wurde ausgestellt. Der Companion wird erst nach Learn und anschließendem Play gespawnt.` });
         setLastSignal(`${provider} kann jetzt über den autorisierten MCP-Steuervertrag beitreten.`);
       },
       onError: () => { setIsPairing(false); setLastSignal("Partner-Siegel konnte nicht ausgestellt werden. Prüfe die Konto-Verbindung erneut."); },
@@ -562,6 +552,7 @@ export default function Home() {
         }
         if (loadCompanionSession()?.mode === "stopping") { try { transitionCompanionSession("disconnect"); } catch { /* already disconnected */ } }
         appendLedger({ kind: "connection", title: "LLM-Verbindung widerrufen", detail: "Der serverseitige Steuervertrag wurde beendet; der Companion wurde aus der Szene entfernt." });
+        window.dispatchEvent(new Event("aurion:return-to-tower"));
         processedGatewaySequence.current = 0; setGatewayPairing(null); setGatewaySequence(0); setConnected(false); setSoloMode(false); setScreen("gate");
         setLastSignal("Partner-Siegel widerrufen. Eine neue Kopplung kann ausgestellt werden.");
       },
@@ -677,11 +668,25 @@ export default function Home() {
     appendLedger({ kind: /^[1-9]$/.test(code) ? "combat" : "command", title: `Partner-Impuls ${code}`, detail: ability ? `${provider} aktiviert ${ability.name}.` : `${provider} erhält den Bewegungsbefehl ${code}.` });
     setLastSignal(ability ? `${provider}: ${ability.name} ausgelöst.` : `${provider}: Kurs ${code} bestätigt.`); setCommandText("");
   };
-  const queueCompanionAction = (action: CompanionAction): void => {
+  const queueCompanionAction = (action: CompanionAction, source: PendingHumanDemonstration["source"] = "action"): void => {
     if (loadCompanionSession()?.mode !== "learning") return;
-    companionActionSequence.current += 1;
-    lastCompanionAction.current = { id: companionActionSequence.current, action, issuedAt: Date.now() };
+    const next = queueHumanDemonstration(lastCompanionAction.current, action, Date.now(), companionActionSequence.current + 1, source);
+    companionActionSequence.current = Math.max(companionActionSequence.current, next.id);
+    lastCompanionAction.current = next;
   };
+  useEffect(() => {
+    const observe = (event: Event) => {
+      const session = loadCompanionSession();
+      if (session?.mode !== "learning" || session.userId !== user?.id) return;
+      const detail = (event as CustomEvent<unknown>).detail;
+      const action = actionFromWorldIntent(detail);
+      const movement = Boolean(detail && typeof detail === "object" && "kind" in detail && detail.kind === "move");
+      if (action) queueCompanionAction(action, movement ? "movement" : "action");
+      else if (movement && lastCompanionAction.current?.source === "movement") lastCompanionAction.current = undefined;
+    };
+    window.addEventListener(WORLD_DEMONSTRATION_EVENT, observe);
+    return () => window.removeEventListener(WORLD_DEMONSTRATION_EVENT, observe);
+  }, [user?.id]);
   const sendHumanCommand = (code: "W" | "A" | "S" | "D"): void => {
     const coordinates: Record<string, [number, number]> = { W: [0.5, 0.25], A: [0.25, 0.5], S: [0.5, 0.75], D: [0.75, 0.5] };
     const [x, y] = coordinates[code];
@@ -724,6 +729,19 @@ export default function Home() {
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
       <header className="brand-bar"><div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div><div className="brand-status"><a href="/ops" className="mr-4 text-[10px] tracking-[.14em] text-cyan-100/75 hover:text-cyan-200">OPS</a><button type="button" className="audio-toggle header-audio" onClick={toggleAudio} aria-label={audioEnabled ? "Expeditionsmusik pausieren" : "Expeditionsmusik aktivieren"}>{audioEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}</button><span className={connected ? "signal-dot active" : "signal-dot"} /> {soloMode ? "Solo-Siegel aktiv" : connected ? "Partner-Siegel aktiv" : isAuthenticated ? "Konto verbunden" : "Konto erforderlich"}</div></header>
+      <Dialog open={companionPanelOpen} onOpenChange={setCompanionPanelOpen}>
+        <DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop">
+          <DialogTitle>Companion-Aufzeichnung</DialogTitle>
+          <DialogDescription>Nach deiner Aktivierung werden sichtbare Spielbilder und deine Eingaben als Demonstrationen gespeichert. Private Chats werden nicht gelesen.</DialogDescription>
+          {!gatewayPairing ? <><label>MCP-Partner<select aria-label="MCP-Partner" value={provider} onChange={event => setProvider(event.target.value)}>{providers.map(value => <option key={value}>{value}</option>)}</select></label><button disabled={!isAuthenticated || isPairing} onClick={pairPartner}>Companion verbinden</button></> : <>
+            <p>Steuervertrag: {companionSession?.llmLabel}</p><p>{companionRows} lokale Beobachtungszeilen</p>
+            <button onClick={() => { beginCompanionLearn(); setCompanionPanelOpen(false); }} disabled={!companionSession}>{companionSession?.mode === "learning" ? "Aufzeichnung beenden" : "Aufzeichnung starten"}</button>
+            <button onClick={downloadCompanionDataset} disabled={companionRows === 0}>Demonstrationen exportieren</button>
+            <details><summary>MCP-Verbindungsdaten</summary><p>{gatewayPairing.mcpUrl}</p><p>Bearer-Token für deinen eigenen MCP-Client:</p><code className="aurion-authority-hud__hash">{gatewayPairing.pairingToken}</code></details>
+            <button onClick={() => { setCompanionPanelOpen(false); revokePartner(); }} disabled={revokeGatewaySession.isPending}>Verbindung beenden</button>
+          </>}
+        </DialogContent>
+      </Dialog>
       <CommunityOverlay
         isAuthenticated={isAuthenticated}
         currentUserId={user?.id}

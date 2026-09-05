@@ -6,11 +6,12 @@ import {
 export const COMPANION_FRAME_REQUEST_EVENT = "aurion:companion-frame-request" as const;
 export const COMPANION_FRAME_RESPONSE_EVENT = "aurion:companion-frame-response" as const;
 
-export type CompanionFrameRequestDetail = Readonly<{ requestId: string }>;
+export type CompanionFrameRequestDetail = Readonly<{ requestId: string; captureStartedAt: number }>;
 export type CompanionFrameResponseDetail = Readonly<{
   requestId: string;
   frameDataUrl?: string;
   capturedAt?: number;
+  featureVector?: readonly number[];
   error?: "busy" | "unavailable" | "capture_failed";
 }>;
 
@@ -59,7 +60,7 @@ export function extractCompanionFrameFeatures(
 }
 
 export async function createCompanionFrameSample(frameDataUrl: string, capturedAt: number): Promise<CompanionFrameSample> {
-  if (!frameDataUrl.startsWith("data:image/") || !Number.isInteger(capturedAt) || capturedAt <= 0) {
+  if (!/^data:image\/(png|webp);base64,/.test(frameDataUrl) || frameDataUrl.length > 262_144 || !Number.isInteger(capturedAt) || capturedAt <= 0) {
     throw new Error("Companion frame response is invalid");
   }
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -68,6 +69,7 @@ export async function createCompanionFrameSample(frameDataUrl: string, capturedA
     candidate.onerror = () => reject(new Error("Companion frame decode failed"));
     candidate.src = frameDataUrl;
   });
+  if (image.naturalWidth < 4 || image.naturalHeight < 4 || image.naturalWidth > 512 || image.naturalHeight > 512) throw new Error("Companion frame dimensions are invalid");
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(4, image.naturalWidth || image.width);
   canvas.height = Math.max(4, image.naturalHeight || image.height);
@@ -97,8 +99,8 @@ export function isFreshCompanionFrame(
   );
 }
 
-export async function requestCompanionFrame(timeoutMs = 1_000): Promise<CompanionFrameSample | null> {
-  if (typeof window === "undefined" || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 10_000) return null;
+export async function requestCompanionFrame(captureStartedAt: number, timeoutMs = 1_000): Promise<CompanionFrameSample | null> {
+  if (typeof window === "undefined" || !Number.isSafeInteger(captureStartedAt) || captureStartedAt < 1 || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 10_000) return null;
   const requestId = requestIdentity();
   return await new Promise<CompanionFrameSample | null>((resolve) => {
     let settled = false;
@@ -112,14 +114,21 @@ export async function requestCompanionFrame(timeoutMs = 1_000): Promise<Companio
     const onResponse = (event: Event) => {
       const detail = (event as CustomEvent<CompanionFrameResponseDetail>).detail;
       if (!detail || detail.requestId !== requestId) return;
-      if (detail.error || !detail.frameDataUrl || !detail.capturedAt) {
+      if (detail.error || !detail.frameDataUrl || detail.capturedAt !== captureStartedAt) {
         finish(null);
         return;
       }
-      void createCompanionFrameSample(detail.frameDataUrl, detail.capturedAt).then(finish).catch(() => finish(null));
+      if (detail.featureVector !== undefined) {
+        if (!Array.isArray(detail.featureVector)) { finish(null); return; }
+        const sample = { frameDataUrl: detail.frameDataUrl, capturedAt: detail.capturedAt, featureVector: [...detail.featureVector] };
+        if (!/^data:image\/(png|webp);base64,/.test(sample.frameDataUrl) || sample.frameDataUrl.length > 262_144 || !isFreshCompanionFrame(sample, captureStartedAt)) { finish(null); return; }
+        finish(sample);
+      } else {
+        void createCompanionFrameSample(detail.frameDataUrl, detail.capturedAt).then(finish).catch(() => finish(null));
+      }
     };
     const timer = window.setTimeout(() => finish(null), timeoutMs);
     window.addEventListener(COMPANION_FRAME_RESPONSE_EVENT, onResponse);
-    window.dispatchEvent(new CustomEvent<CompanionFrameRequestDetail>(COMPANION_FRAME_REQUEST_EVENT, { detail: { requestId } }));
+    window.dispatchEvent(new CustomEvent<CompanionFrameRequestDetail>(COMPANION_FRAME_REQUEST_EVENT, { detail: { requestId, captureStartedAt } }));
   });
 }

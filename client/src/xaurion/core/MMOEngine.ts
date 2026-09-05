@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { renderBudget } from './renderBudget';
 import confetti from 'canvas-confetti';
 import {
   CharacterAppearance,
@@ -59,6 +60,7 @@ export class MMOEngine {
   public scene: THREE.Scene;
   public camera: THREE.PerspectiveCamera;
   public renderer: THREE.WebGLRenderer;
+  private rendererName = "";
 
   // Game Subsystems
   public landscape: OpenWorldLandscape;
@@ -151,11 +153,13 @@ export class MMOEngine {
     dayNightInfo: DayNightInfo;
   }) => void;
 
+  public onFrameRendered?: () => void;
   public onRuntimeError?: (error: unknown) => void;
   private disposed = false;
   private readonly frameLoop = new RuntimeFrameLoop(delta => {
     this.simulation.advanceProjection(delta, step => this.update(step));
     this.renderer.render(this.scene, this.camera);
+    this.onFrameRendered?.();
   }, error => this.failRuntime(error));
   private stateUpdateTimer: number = 0;
 
@@ -266,8 +270,14 @@ export class MMOEngine {
       throw new Error(`WebGLRenderer initialization failed: ${err?.message || 'WebGL not supported'}`);
     }
 
+    const gl = this.renderer.getContext();
+    const rendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    this.rendererName = rendererInfo ? String(gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
+    const budget = renderBudget(width, height, window.devicePixelRatio || 1, this.rendererName);
+    this.camera.far = budget.far;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(budget.pixelRatio);
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x1e293b, 1.0);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.35;
@@ -1819,7 +1829,10 @@ export class MMOEngine {
     const aspect = width / height;
     if (!isFinite(aspect) || isNaN(aspect) || aspect <= 0) return;
     this.camera.aspect = aspect;
+    const budget = renderBudget(width, height, window.devicePixelRatio || 1, this.rendererName);
+    this.camera.far = budget.far;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(budget.pixelRatio);
     this.renderer.setSize(width, height);
   };
 }
