@@ -1,11 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   extractCompanionFrameFeatures,
+  requestCompanionFrame, COMPANION_FRAME_REQUEST_EVENT, COMPANION_FRAME_RESPONSE_EVENT,
   isFreshCompanionFrame,
   type CompanionFrameSample,
 } from "./companionFrameCapture";
 
 describe("Aurion companion frame capture", () => {
+  it("accepts in-frame features without an asynchronous image decode and rejects malformed vectors", async () => {
+    let features: unknown = Array(16).fill(.25);
+    const respond = (event: Event) => {
+      const request = (event as CustomEvent).detail;
+      window.dispatchEvent(new CustomEvent(COMPANION_FRAME_RESPONSE_EVENT, { detail: { requestId: request.requestId, capturedAt: request.captureStartedAt, frameDataUrl: "data:image/webp;base64,AAAA", featureVector: features } }));
+    };
+    window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, respond);
+    try {
+      expect(await requestCompanionFrame(1000)).toMatchObject({ capturedAt: 1000, featureVector: Array(16).fill(.25) });
+      features = "invalid"; expect(await requestCompanionFrame(1000)).toBeNull();
+      features = Array(16).fill(NaN); expect(await requestCompanionFrame(1000)).toBeNull();
+      features = Array(15).fill(.25); expect(await requestCompanionFrame(1000)).toBeNull();
+    } finally { window.removeEventListener(COMPANION_FRAME_REQUEST_EVENT, respond); }
+  });
   it("derives exactly sixteen bounded luminance features", () => {
     const pixels = new Uint8ClampedArray(8 * 8 * 4);
     for (let index = 0; index < pixels.length; index += 4) {

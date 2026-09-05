@@ -15,7 +15,7 @@ describe("visible canvas capture ownership", () => {
     allowed = true; vi.clearAllMocks();
     vi.stubGlobal("requestAnimationFrame", vi.fn((next: FrameRequestCallback) => { callback = next; return 1; }));
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage, fillRect: vi.fn() } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage, fillRect: vi.fn(), getImageData: () => ({ data: new Uint8ClampedArray(256 * 144 * 4), width: 256, height: 144 }) } as unknown as CanvasRenderingContext2D);
     vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/webp;base64,AAAA");
     window.addEventListener(COMPANION_FRAME_RESPONSE_EVENT, reply);
     bridge = new VisibleCanvasCapture(render, () => allowed);
@@ -26,7 +26,14 @@ describe("visible canvas capture ownership", () => {
     callback(0);
     expect(render).toHaveBeenCalledTimes(1);
     expect(drawImage.mock.calls[0].slice(1)).toEqual([83, 0, 90, 144]);
-    expect(reply.mock.calls[1][0].detail).toEqual({ requestId: "companion-frame-1", capturedAt: 1000, frameDataUrl: "data:image/webp;base64,AAAA" });
+    expect(reply.mock.calls[1][0].detail).toEqual({ requestId: "companion-frame-1", capturedAt: 1000, frameDataUrl: "data:image/webp;base64,AAAA", featureVector: Array(16).fill(0) });
+  });
+  it("reads one completed engine frame without scheduling a second render or an image decode", () => {
+    bridge!.dispose(); bridge = new VisibleCanvasCapture(render, () => allowed, "renderer");
+    request(); expect(requestAnimationFrame).not.toHaveBeenCalled(); expect(render).not.toHaveBeenCalled();
+    bridge.onRenderedFrame(); bridge.onRenderedFrame();
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(reply.mock.calls[0][0].detail.featureVector).toEqual(Array(16).fill(0));
   });
   it("does not capture before learning or after consent/state changes", () => {
     allowed = false; request(); expect(render).not.toHaveBeenCalled(); expect(reply.mock.calls[0][0].detail.error).toBe("unavailable");

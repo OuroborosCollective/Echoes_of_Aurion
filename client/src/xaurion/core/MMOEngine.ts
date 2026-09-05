@@ -151,11 +151,13 @@ export class MMOEngine {
     dayNightInfo: DayNightInfo;
   }) => void;
 
+  public onFrameRendered?: () => void;
   public onRuntimeError?: (error: unknown) => void;
   private disposed = false;
   private readonly frameLoop = new RuntimeFrameLoop(delta => {
     this.simulation.advanceProjection(delta, step => this.update(step));
     this.renderer.render(this.scene, this.camera);
+    this.onFrameRendered?.();
   }, error => this.failRuntime(error));
   private stateUpdateTimer: number = 0;
 

@@ -162,9 +162,9 @@ export default function AurionOpenWorldRuntime() {
       engine.start();
       capture = new VisibleCanvasCapture(() => {
         if (!engine || disposed || engineRef.current !== engine) throw new Error("RETIRED_RENDERER");
-        engine.renderer.render(engine.scene, engine.camera);
         return engine.renderer.domElement;
-      }, () => { const session = loadCompanionSession(); return !disposed && zoneConnectedRef.current && session?.userId === user?.id && session?.online === true && session?.mode === "learning"; });
+      }, () => { const session = loadCompanionSession(); return !disposed && zoneConnectedRef.current && session?.userId === user?.id && session?.online === true && session?.mode === "learning"; }, "renderer");
+      engine.onFrameRendered = capture.onRenderedFrame;
       window.addEventListener("aurion:authoritative-action", onConfirmedAction);
     } catch (error) {
       fail(error);

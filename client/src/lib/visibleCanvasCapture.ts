@@ -1,11 +1,11 @@
-import { COMPANION_FRAME_REQUEST_EVENT, COMPANION_FRAME_RESPONSE_EVENT, type CompanionFrameRequestDetail, type CompanionFrameResponseDetail } from "./companionFrameCapture";
+import { COMPANION_FRAME_REQUEST_EVENT, COMPANION_FRAME_RESPONSE_EVENT, extractCompanionFrameFeatures, type CompanionFrameRequestDetail, type CompanionFrameResponseDetail } from "./companionFrameCapture";
 
 /** Captures only on a learning request; owns and cancels its scheduled frame on retirement. */
 export class VisibleCanvasCapture {
   private disposed = false;
   private pending: CompanionFrameRequestDetail | null = null;
   private frame: number | null = null;
-  constructor(private readonly render: () => HTMLCanvasElement, private readonly canCapture: () => boolean) {
+  constructor(private readonly render: () => HTMLCanvasElement, private readonly canCapture: () => boolean, private readonly frameSource: "scheduled" | "renderer" = "scheduled") {
     window.addEventListener(COMPANION_FRAME_REQUEST_EVENT, this.request);
   }
   private respond(detail: CompanionFrameResponseDetail) {
@@ -18,9 +18,13 @@ export class VisibleCanvasCapture {
     if (!this.canCapture()) { this.respond({ requestId: request.requestId, error: "unavailable" }); return; }
     if (this.pending) { this.respond({ requestId: request.requestId, error: "busy" }); return; }
     this.pending = request;
-    this.frame = requestAnimationFrame(() => {
+    if (this.frameSource === "scheduled") this.frame = requestAnimationFrame(() => this.onRenderedFrame());
+  };
+  /** Called synchronously after the engine's normal render; never advances simulation or draws a second world frame. */
+  onRenderedFrame = () => {
       this.frame = null;
-      if (this.disposed || this.pending !== request) return;
+      const request = this.pending;
+      if (this.disposed || !request) return;
       try {
         if (!this.canCapture()) { this.respond({ requestId: request.requestId, error: "unavailable" }); return; }
         const source = this.render();
@@ -34,10 +38,11 @@ export class VisibleCanvasCapture {
         const frameDataUrl = canvas.toDataURL("image/webp", 0.7);
         if (!/^data:image\/(webp|png);base64,/.test(frameDataUrl) || frameDataUrl.length > 262_144) throw new Error("CAPTURE_SIZE_INVALID");
         // The explicit request-start timestamp is a conservative age bound: render latency cannot make an old observation look fresh.
-        this.respond({ requestId: request.requestId, frameDataUrl, capturedAt: request.captureStartedAt });
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+        const featureVector = extractCompanionFrameFeatures(pixels.data, pixels.width, pixels.height);
+        this.respond({ requestId: request.requestId, frameDataUrl, featureVector, capturedAt: request.captureStartedAt });
       } catch { this.respond({ requestId: request.requestId, error: "capture_failed" }); }
       finally { this.pending = null; }
-    });
   };
   dispose() {
     if (this.disposed) return;
