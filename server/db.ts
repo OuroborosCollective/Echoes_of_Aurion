@@ -4,7 +4,7 @@ import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
 import { parseOwnedEncounterReadback } from "../shared/encounterReadback";
-import { and, asc, desc, eq, gt, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionFactionQuestlineDecisionReceipts, aurionFactionQuestlineOathReceipts, aurionFactionQuestlineRewardReceipts, aurionFactionQuestlineStates, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
@@ -40,6 +40,7 @@ import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aur
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
@@ -426,8 +427,8 @@ function canonicalActionForWeapon(track: WeaponTrack): string {
   return { blade: "melee", staff: "bolt", spear: "thrust", focus: "pulse" }[track];
 }
 
-async function getAcceptedExpeditionResult(values: { resultReceiptId: string; userId: number; expeditionKey: string; seedDigest: string }) {
-  const db = await getDb();
+async function getAcceptedExpeditionResult(values: { resultReceiptId: string; userId: number; expeditionKey: string; seedDigest: string }, reader?: Pick<ReturnType<typeof drizzle>, "select">) {
+  const db = reader ?? await getDb();
   if (!db) throw new Error("Game database is not available");
   const result = await db.select().from(expeditionResultReceipts).where(and(
     eq(expeditionResultReceipts.id, values.resultReceiptId),
@@ -442,23 +443,28 @@ async function getAcceptedExpeditionResult(values: { resultReceiptId: string; us
 
 export async function recordValidatedExpeditionResult(values: { userId: number; expeditionKey: string; seedDigest: string; resultDigest: string; confirmedByUserId: number; idempotencyKey: string }) {
   if (!isServerEvidenceDigest(values.seedDigest) || !isServerEvidenceDigest(values.resultDigest)) throw new Error("Expedition evidence must be a SHA-256 digest");
+  if (!values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("RESULT_IDEMPOTENCY_KEY_INVALID");
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  if (!values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("RESULT_IDEMPOTENCY_KEY_INVALID");
   await getOrCreatePlayerProfile(values.userId);
-  return db.transaction(async tx => {
-    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
-    const prior = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey,values.idempotencyKey)).limit(1))[0];
-    if (prior) {
-      if (prior.userId !== values.userId || prior.expeditionKey !== values.expeditionKey || prior.seedDigest !== values.seedDigest || prior.resultDigest !== values.resultDigest || prior.confirmedByUserId !== values.confirmedByUserId || prior.status !== "accepted") throw new Error("RESULT_IDEMPOTENCY_CONFLICT");
-      return { applied: false as const, receipt: prior };
-    }
-    const receiptId = rewardReceiptIdentity("expres",values.userId,values.idempotencyKey);
-    await tx.insert(expeditionResultReceipts).values({ id: receiptId, ...values });
-    const receipt = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.id,receiptId)).limit(1))[0];
-    if (!receipt || receipt.status !== "accepted") throw new Error("Expedition result receipt readback failed");
-    return { applied: true as const, receipt };
-  });
+  return db.transaction(tx => recordExpeditionResultInTransaction(tx, values));
+}
+
+/** The caller's transaction owns the result and every dependent reward together. */
+async function recordExpeditionResultInTransaction(tx: DatabaseTransaction, values: Parameters<typeof recordValidatedExpeditionResult>[0]) {
+  if (!isServerEvidenceDigest(values.seedDigest) || !isServerEvidenceDigest(values.resultDigest)) throw new Error("Expedition evidence must be a SHA-256 digest");
+  if (!values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("RESULT_IDEMPOTENCY_KEY_INVALID");
+  await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
+  const prior = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey,values.idempotencyKey)).limit(1))[0];
+  if (prior) {
+    if (prior.userId !== values.userId || prior.expeditionKey !== values.expeditionKey || prior.seedDigest !== values.seedDigest || prior.resultDigest !== values.resultDigest || prior.confirmedByUserId !== values.confirmedByUserId || prior.status !== "accepted") throw new Error("RESULT_IDEMPOTENCY_CONFLICT");
+    return { applied: false as const, receipt: prior };
+  }
+  const receiptId = rewardReceiptIdentity("expres",values.userId,values.idempotencyKey);
+  await tx.insert(expeditionResultReceipts).values({ id: receiptId, ...values });
+  const receipt = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.id,receiptId)).limit(1))[0];
+  if (!receipt || receipt.status !== "accepted") throw new Error("Expedition result receipt readback failed");
+  return { applied: true as const, receipt };
 }
 
 export async function getOrCreatePlayerProfile(userId: number) {
@@ -1627,18 +1633,45 @@ export async function startGameplayEncounter(values: { userId: number; encounter
   return { session, progress: await getGameplayProgress(values.userId) };
 }
 
-export async function applyGameplayAction(values: { userId: number; sessionId: string; sequence: number; command: string; source: "human" | "gateway" }) {
+type GameplayActionInput = { userId: number; sessionId: string; sequence: number; command: string; source: "human" | "gateway" };
+
+/** Reconstruct a completed response exclusively from its original durable effects. */
+async function readDungeonCompletion(tx: DatabaseTransaction, values: GameplayActionInput, replayed: boolean) {
+  const session = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id, values.sessionId), eq(gameplaySessions.userId, values.userId))).limit(1))[0];
+  const receipt = (await tx.select().from(gameplayActionReceipts).where(and(eq(gameplayActionReceipts.sessionId, values.sessionId), eq(gameplayActionReceipts.userId, values.userId), eq(gameplayActionReceipts.sequence, values.sequence))).limit(1))[0];
+  const action = mcpActionFromCommand(values.command);
+  if (!session || session.status !== "completed" || session.encounterKey !== "cinder_vault" || session.bossHp !== 0 || values.sequence !== session.nextSequence - 1 || !receipt || receipt.command !== values.command || receipt.source !== values.source || receipt.action !== action || !action) throw new Error("DUNGEON_COMPLETION_REPLAY_CONFLICT");
+
+  const expeditionKey = `dungeon:${session.id}`;
+  const seedDigest = createHash("sha256").update(`aurion:dungeon:${session.id}:seed`, "utf8").digest("hex");
+  const result = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey, `${expeditionKey}:result`)).limit(1))[0];
+  const drop = (await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, `${expeditionKey}:drop`)).limit(1))[0];
+  const ledger = await tx.select().from(progressionLedger).where(and(eq(progressionLedger.userId, values.userId), inArray(progressionLedger.idempotencyKey, [`${expeditionKey}:xp`, `${expeditionKey}:points`, `${expeditionKey}:victory`])));
+  const xp = ledger.find(row => row.idempotencyKey === `${expeditionKey}:xp` && row.kind === "xp");
+  const points = ledger.find(row => row.idempotencyKey === `${expeditionKey}:points` && row.kind === "points");
+  const victory = ledger.find(row => row.idempotencyKey === `${expeditionKey}:victory` && row.kind === "victory");
+  if (!result || result.userId !== values.userId || result.confirmedByUserId !== values.userId || result.expeditionKey !== expeditionKey || result.seedDigest !== seedDigest || result.status !== "accepted" || !isServerEvidenceDigest(result.resultDigest) || !drop || drop.userId !== values.userId || drop.expeditionKey !== expeditionKey || drop.seedDigest !== seedDigest || !xp || xp.delta <= 0 || !points || points.delta < 0 || victory?.delta !== 1 || ledger.length !== 3 || ledger.some(row => row.source !== "dungeon:cinder_vault")) throw new Error("DUNGEON_COMPLETION_EVIDENCE_INCOMPLETE");
+  const item = (await tx.select().from(itemInstances).where(eq(itemInstances.lootReceiptId, drop.id)).limit(1))[0];
+  if (!item || item.sourceKind !== "loot" || item.quality !== drop.quality) throw new Error("DUNGEON_COMPLETION_ITEM_MISMATCH");
+  // Ownership/status may since have changed through trade or crafting. A replay only describes
+  // the original drop; it never restores ownership, consumes a second item or grants a reward.
+  return { sessionId: session.id, encounterKey: "cinder_vault" as const, action, damage: receipt.damage, bossHp: 0, maxBossHp: session.maxBossHp, completed: true, completedQuest: null, dungeonKeyGranted: null, completedDungeon: true, reward: { xp: xp.delta, points: points.delta }, nextSequence: session.nextSequence, replayed, drop: { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality, itemLevel: item.itemLevel } };
+}
+
+export async function applyGameplayAction(values: GameplayActionInput) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   const normalized = values.command.trim().toUpperCase();
   const action = mcpActionFromCommand(normalized);
   if (!action) throw new Error("Der Spielbefehl ist nicht zulässig.");
-  const resolution = await db.transaction(async tx => {
+  if (!Number.isSafeInteger(values.sequence) || values.sequence < 1 || values.sequence >= 2_147_483_647) throw new Error("Die Aktionssequenz ist nicht gültig.");
+  return db.transaction(async tx => {
     const owner = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
     if (!owner) throw new Error("Spielerprofil fehlt.");
     const session = (await tx.select().from(gameplaySessions).where(and(eq(gameplaySessions.id, values.sessionId), eq(gameplaySessions.userId, values.userId))).limit(1).for("update"))[0];
+    if (session?.status === "completed" && session.encounterKey === "cinder_vault") return readDungeonCompletion(tx, { ...values, command: normalized }, true);
     if (!session || session.status !== "active") throw new Error("Die Spielsitzung ist nicht aktiv.");
-    if (!Number.isSafeInteger(values.sequence) || values.sequence >= 2_147_483_647 || values.sequence !== session.nextSequence) throw new Error("Die Aktionssequenz ist nicht gültig.");
+    if (values.sequence !== session.nextSequence) throw new Error("Die Aktionssequenz ist nicht gültig.");
     const encounterKey = session.encounterKey as EncounterKey;
     const encounter = getEncounter(encounterKey);
     const damage = damageForMcpAction(action);
@@ -1666,43 +1699,23 @@ export async function applyGameplayAction(values: { userId: number; sessionId: s
         const totalXp = profile.totalXp + reward.xp;
         await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + reward.points, seasonPoints: profile.seasonPoints + reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
         await tx.insert(progressionLedger).values([
-          { id: newEndgameId("prog"), userId: values.userId, kind: "xp", delta: reward.xp, source: "dungeon:cinder_vault", reason: "Aschengewölbe gesichert", idempotencyKey: `dungeon:${session.id}:xp` },
-          { id: newEndgameId("prog"), userId: values.userId, kind: "points", delta: reward.points, source: "dungeon:cinder_vault", reason: "Aschengewölbe gesichert", idempotencyKey: `dungeon:${session.id}:points` },
-          { id: newEndgameId("prog"), userId: values.userId, kind: "victory", delta: 1, source: "dungeon:cinder_vault", reason: encounter.enemyName, idempotencyKey: `dungeon:${session.id}:victory` },
+          { id: rewardReceiptIdentity("prog", values.userId, `dungeon:${session.id}:xp`), userId: values.userId, kind: "xp", delta: reward.xp, source: "dungeon:cinder_vault", reason: "Aschengewölbe gesichert", idempotencyKey: `dungeon:${session.id}:xp` },
+          { id: rewardReceiptIdentity("prog", values.userId, `dungeon:${session.id}:points`), userId: values.userId, kind: "points", delta: reward.points, source: "dungeon:cinder_vault", reason: "Aschengewölbe gesichert", idempotencyKey: `dungeon:${session.id}:points` },
+          { id: rewardReceiptIdentity("prog", values.userId, `dungeon:${session.id}:victory`), userId: values.userId, kind: "victory", delta: 1, source: "dungeon:cinder_vault", reason: encounter.enemyName, idempotencyKey: `dungeon:${session.id}:victory` },
         ]);
+        const level = levelFromTotalXp(totalXp);
+        const treasureClass = (await tx.select().from(treasureClasses).where(and(eq(treasureClasses.active, 1), lte(treasureClasses.minLevel, level), gte(treasureClasses.maxLevel, level))).orderBy(desc(treasureClasses.minLevel), asc(treasureClasses.classKey)).limit(1))[0];
+        if (!treasureClass) throw new Error("DUNGEON_TREASURE_CLASS_UNAVAILABLE");
+        const expeditionKey = `dungeon:${session.id}`;
+        const seedDigest = createHash("sha256").update(`aurion:dungeon:${session.id}:seed`, "utf8").digest("hex");
+        const resultDigest = createHash("sha256").update(JSON.stringify(["aurion.dungeon-completion.v1", values.userId, session.id, encounterKey, values.sequence, normalized, values.source, reward.xp, reward.points, level, treasureClass.classKey]), "utf8").digest("hex");
+        const result = await recordExpeditionResultInTransaction(tx, { userId: values.userId, expeditionKey, seedDigest, resultDigest, confirmedByUserId: values.userId, idempotencyKey: `${expeditionKey}:result` });
+        await createLootDropInTransaction(tx, { userId: values.userId, expeditionKey, treasureClass: treasureClass.classKey, qualityRoll: (values.sequence * 631) % 10_000, affixRoll: (values.sequence * 929) % 10_000, magicFind: 0, itemLevel: level, seedDigest, resultReceiptId: result.receipt.id, idempotencyKey: `${expeditionKey}:drop` });
+        return readDungeonCompletion(tx, { ...values, command: normalized }, false);
       }
     }
-    return { sessionId: session.id, encounterKey, action, damage, bossHp, maxBossHp: session.maxBossHp, completed: bossHp === 0, completedQuest, dungeonKeyGranted, completedDungeon, reward, nextSequence: session.nextSequence + 1 };
+    return { sessionId: session.id, encounterKey, action, damage, bossHp, maxBossHp: session.maxBossHp, completed: bossHp === 0, completedQuest, dungeonKeyGranted, completedDungeon, reward, nextSequence: session.nextSequence + 1, replayed: false, drop: null };
   });
-  if (!resolution.completedDungeon) return { ...resolution, drop: null };
-  const profile = await getOrCreatePlayerProfile(values.userId);
-  const catalog = await db.select().from(treasureClasses).where(eq(treasureClasses.active, 1));
-  const treasureClass = catalog.find(candidate => profile.level >= candidate.minLevel && profile.level <= candidate.maxLevel);
-  if (!treasureClass) return { ...resolution, drop: null };
-  const seedDigest = createHash("sha256").update(`aurion:dungeon:${resolution.sessionId}:seed`, "utf8").digest("hex");
-  const resultDigest = createHash("sha256").update(`aurion:dungeon:${resolution.sessionId}:result`, "utf8").digest("hex");
-  const resultReceipt = await recordValidatedExpeditionResult({
-    userId: values.userId,
-    expeditionKey: `dungeon:${resolution.sessionId}`,
-    seedDigest,
-    resultDigest,
-    confirmedByUserId: values.userId,
-    idempotencyKey: `dungeon:${resolution.sessionId}:result`,
-  });
-  const dropResult = await createLootDrop({
-    userId: values.userId,
-    expeditionKey: `dungeon:${resolution.sessionId}`,
-    treasureClass: treasureClass.classKey,
-    qualityRoll: (values.sequence * 631) % 10_000,
-    affixRoll: (values.sequence * 929) % 10_000,
-    magicFind: 0,
-    itemLevel: Math.max(treasureClass.minLevel, Math.min(profile.level, treasureClass.maxLevel)),
-    seedDigest,
-    resultReceiptId: resultReceipt.receipt.id,
-    idempotencyKey: `dungeon:${resolution.sessionId}:drop`,
-  });
-  const item = dropResult.itemId ? (await db.select().from(itemInstances).where(eq(itemInstances.id, dropResult.itemId)).limit(1))[0] : undefined;
-  return { ...resolution, drop: item ? { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality, itemLevel: item.itemLevel } : null };
 }
 
 export async function listLeaderboard(limit: number) {
@@ -1833,35 +1846,37 @@ function parseAffix(row: { affixKey: string; slot: "prefix" | "suffix"; modifier
 export async function createLootDrop(values: { userId: number; expeditionKey: string; treasureClass: string; qualityRoll: number; affixRoll: number; magicFind: number; itemLevel: number; seedDigest: string; resultReceiptId: string; idempotencyKey: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  await getAcceptedExpeditionResult(values);
-  return db.transaction(async tx => {
-    const owner = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
-    if (!owner) throw new Error("LOOT_PROFILE_REQUIRED");
-    const [previous] = await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
-    if (previous) {
-      if (previous.userId !== values.userId || previous.expeditionKey !== values.expeditionKey || previous.seedDigest !== values.seedDigest) throw new Error("LOOT_IDEMPOTENCY_CONFLICT");
-      const [item] = await tx.select().from(itemInstances).where(eq(itemInstances.lootReceiptId, previous.id)).limit(1);
-      if (!item || item.sourceKind !== "loot" || item.quality !== previous.quality) throw new Error("LOOT_RECEIPT_ITEM_MISMATCH");
-      return { applied: false as const, receiptId: previous.id, itemId: item.id, quality: item.quality };
-    }
-    const definition = await tx.select().from(treasureClasses).where(and(eq(treasureClasses.classKey, values.treasureClass), eq(treasureClasses.active, 1))).limit(1);
-    if (!definition[0] || values.itemLevel < definition[0].minLevel || values.itemLevel > definition[0].maxLevel) throw new Error("Treasure class is unavailable for the item level");
-    const entries = parseCatalogEntries(definition[0].entriesJson);
-    const quality = rollLootQuality(values.qualityRoll, values.magicFind);
-    const baseItemKey = entries[(values.qualityRoll + values.affixRoll) % entries.length]!;
-    const candidates = await tx.select().from(lootAffixes).where(and(eq(lootAffixes.active, 1), lte(lootAffixes.minItemLevel, values.itemLevel), gte(lootAffixes.maxItemLevel, values.itemLevel))).orderBy(asc(lootAffixes.affixKey));
-    const prefix = candidates.filter(affix => affix.slot === "prefix");
-    const suffix = candidates.filter(affix => affix.slot === "suffix");
-    const affixes: LootAffix[] = quality === "normal" ? [] : [parseAffix(prefix[values.affixRoll % prefix.length] ?? (() => { throw new Error("No prefix affix is available"); })())];
-    if (quality !== "normal" && quality !== "magic") affixes.push(parseAffix(suffix[Math.floor(values.affixRoll / 7) % suffix.length] ?? (() => { throw new Error("No suffix affix is available"); })()));
-    const setDefinition = quality === "set" ? (await tx.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1)).orderBy(asc(lootSetDefinitions.setKey))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
-    const originHash = createHash("sha256").update(JSON.stringify(["aurion-loot-origin.v2", values.userId, values.expeditionKey, values.seedDigest, values.idempotencyKey])).digest("hex").slice(0, 48);
-    const receiptId = `drop_${originHash}`;
-    const itemId = `item_${originHash}`;
-    await tx.insert(lootDropReceipts).values({ id: receiptId, userId: values.userId, expeditionKey: values.expeditionKey, treasureClass: values.treasureClass, quality, seedDigest: values.seedDigest, idempotencyKey: values.idempotencyKey });
-    await tx.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey });
-    return { applied: true as const, receiptId, itemId, quality };
-  });
+  return db.transaction(tx => createLootDropInTransaction(tx, values));
+}
+
+async function createLootDropInTransaction(tx: DatabaseTransaction, values: Parameters<typeof createLootDrop>[0]) {
+  await getAcceptedExpeditionResult(values, tx);
+  const owner = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
+  if (!owner) throw new Error("LOOT_PROFILE_REQUIRED");
+  const [previous] = await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+  if (previous) {
+    if (previous.userId !== values.userId || previous.expeditionKey !== values.expeditionKey || previous.seedDigest !== values.seedDigest) throw new Error("LOOT_IDEMPOTENCY_CONFLICT");
+    const [item] = await tx.select().from(itemInstances).where(eq(itemInstances.lootReceiptId, previous.id)).limit(1);
+    if (!item || item.sourceKind !== "loot" || item.quality !== previous.quality) throw new Error("LOOT_RECEIPT_ITEM_MISMATCH");
+    return { applied: false as const, receiptId: previous.id, itemId: item.id, quality: item.quality };
+  }
+  const definition = await tx.select().from(treasureClasses).where(and(eq(treasureClasses.classKey, values.treasureClass), eq(treasureClasses.active, 1))).limit(1);
+  if (!definition[0] || values.itemLevel < definition[0].minLevel || values.itemLevel > definition[0].maxLevel) throw new Error("Treasure class is unavailable for the item level");
+  const entries = parseCatalogEntries(definition[0].entriesJson);
+  const quality = rollLootQuality(values.qualityRoll, values.magicFind);
+  const baseItemKey = entries[(values.qualityRoll + values.affixRoll) % entries.length]!;
+  const candidates = await tx.select().from(lootAffixes).where(and(eq(lootAffixes.active, 1), lte(lootAffixes.minItemLevel, values.itemLevel), gte(lootAffixes.maxItemLevel, values.itemLevel))).orderBy(asc(lootAffixes.affixKey));
+  const prefix = candidates.filter(affix => affix.slot === "prefix");
+  const suffix = candidates.filter(affix => affix.slot === "suffix");
+  const affixes: LootAffix[] = quality === "normal" ? [] : [parseAffix(prefix[values.affixRoll % prefix.length] ?? (() => { throw new Error("No prefix affix is available"); })())];
+  if (quality !== "normal" && quality !== "magic") affixes.push(parseAffix(suffix[Math.floor(values.affixRoll / 7) % suffix.length] ?? (() => { throw new Error("No suffix affix is available"); })()));
+  const setDefinition = quality === "set" ? (await tx.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1)).orderBy(asc(lootSetDefinitions.setKey))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
+  const originHash = createHash("sha256").update(JSON.stringify(["aurion-loot-origin.v2", values.userId, values.expeditionKey, values.seedDigest, values.idempotencyKey])).digest("hex").slice(0, 48);
+  const receiptId = `drop_${originHash}`;
+  const itemId = `item_${originHash}`;
+  await tx.insert(lootDropReceipts).values({ id: receiptId, userId: values.userId, expeditionKey: values.expeditionKey, treasureClass: values.treasureClass, quality, seedDigest: values.seedDigest, idempotencyKey: values.idempotencyKey });
+  await tx.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey });
+  return { applied: true as const, receiptId, itemId, quality };
 }
 
 export async function listSetBonusesForUser(userId: number) {
