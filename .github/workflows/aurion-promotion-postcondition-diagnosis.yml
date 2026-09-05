@@ -1,0 +1,45 @@
+name: Aurion promotion postcondition diagnosis
+on:
+  push:
+    branches: [diagnostic/aurion-promotion-readback]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: github.repository == 'OuroborosCollective/Echoes_of_Aurion'
+    runs-on: [self-hosted, Linux, X64, aurion-static]
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Read fixed public promotion receipt and check individual postconditions
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt=/var/lib/aurion-traefik-runtime-readback/current.json
+          revision="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if(r.recordType!=="aurion_traefik_runtime_readback"||!/^[a-f0-9]{40}$/.test(r.revision)) throw new Error("invalid public receipt");
+            process.stdout.write(r.revision);
+          ' "$receipt")"
+          printf 'promoted revision=%s\n' "$revision"
+          check() {
+            local label="$1"; shift
+            if "$@"; then printf 'postcondition %s PASS\n' "$label"; else
+              local result=$?
+              printf 'postcondition %s FAIL exit=%s\n' "$label" "$result"
+              failures=$((failures+1))
+            fi
+          }
+          failures=0
+          check reconcile-executable test -x /usr/local/sbin/aurion-production-schema-reconcile
+          check reconcile-manifest sudo -n test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          check reconcile-revision sudo -n grep -Fq "$revision" /opt/echoes-of-aurion-schema-reconcile/current/manifest.json
+          check apply-executable test -x /usr/local/sbin/aurion-production-schema-apply
+          check apply-manifest sudo -n test -f /opt/echoes-of-aurion-schema-apply/current/manifest.json
+          check apply-revision sudo -n grep -Fq "$revision" /opt/echoes-of-aurion-schema-apply/current/manifest.json
+          for entry in /usr/local/sbin/aurion-production-schema-reconcile /usr/local/sbin/aurion-production-schema-apply /opt/echoes-of-aurion-schema-reconcile/current /opt/echoes-of-aurion-schema-apply/current; do
+            check file-metadata stat -c '%n %U:%G:%a' "$entry"
+          done
+          test "$failures" -eq 0
