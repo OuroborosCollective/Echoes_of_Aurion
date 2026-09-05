@@ -1,3 +1,4 @@
+import { ZONE_POSITION_LIMIT } from "@shared/zonePresenceContract";
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { RemotePresenceProjection } from "./RemotePresenceProjection";
@@ -13,11 +14,19 @@ describe("confirmed remote player projection", () => {
     const geometry = vi.spyOn(projection.mesh.geometry, "dispose"); const material = vi.spyOn(projection.mesh.material as THREE.Material, "dispose");
     projection.dispose(); projection.dispose(); expect(scene.children).toHaveLength(0); expect(geometry).toHaveBeenCalledTimes(1); expect(material).toHaveBeenCalledTimes(1);
   });
+  it("keeps millimetre separation visible at the far world edge", () => {
+    const projection = new RemotePresenceProjection(new THREE.Scene(), 1, () => 0);
+    projection.apply([actor(1, 64_000_000_000), actor(2, 64_000_000_340)]);
+    const matrix = new THREE.Matrix4(); projection.mesh.getMatrixAt(0, matrix);
+    expect(projection.mesh.position.x).toBe(64_000_000);
+    expect(matrix.elements[12]).toBeCloseTo(.34, 5);
+    projection.dispose();
+  });
   it("never applies a partial invalid snapshot or a failed terrain projection", () => {
     const scene = new THREE.Scene(); const projection = new RemotePresenceProjection(scene, 1, x => x === 4 ? Number.NaN : 0);
     projection.apply([actor(1), actor(2, 1000)]);
     const previous = projection.presences;
-    for (const invalid of [[actor(2)], [actor(1), actor(2), actor(2)], [actor(1), actor(2, 14501)], [actor(1), actor(2, 4000)]]) expect(() => projection.apply(invalid)).toThrow();
+    for (const invalid of [[actor(2)], [actor(1), actor(2), actor(2)], [actor(1), actor(2, ZONE_POSITION_LIMIT + 1)], [actor(1), actor(2, 4000)]]) expect(() => projection.apply(invalid)).toThrow();
     expect(projection.presences).toBe(previous); expect(projection.mesh.count).toBe(1); projection.dispose();
   });
 });

@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -9,6 +10,30 @@ describe("Aurion post-deploy production schema readback", () => {
   const readback = read(".github/workflows/aurion-production-schema-readback.yml");
   const runner = read("deploy/aurion-production-schema-reconcile");
   const networkContract = JSON.parse(read("deploy/aurion-reconcile-runtime-network.conf"));
+
+  it("executes the production receipt classifier against all journaled migrations", () => {
+    const classifier=readback.match(/RAW_PATH="\$raw"[\s\S]*?node -e '([\s\S]*?)\n            '/)?.[1];
+    expect(classifier).toBeDefined();
+    const tags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21).map((e:{tag:string})=>e.tag);
+    expect(tags).toHaveLength(13);
+    const sourceRevision="a".repeat(40),imageDigest="sha256:"+"b".repeat(64);
+    const fixture={schemaVersion:1,recordType:"aurion_production_schema_reconciliation",sourceRevision,readOnly:true,databaseCredentialReturned:false,overallState:"PRESENT_SCHEMA_MATCH",execution:{mode:"docker",network:"echoes-of-aurion-internal",imageDigest,rootFilesystemReadOnly:true,releaseMountedReadOnly:true,environmentMountedReadOnly:true,containerExitStatus:0},migrations:tags.map((tag:string)=>({tag,state:"PRESENT_SCHEMA_MATCH"})),summary:{migrationCount:13,matchCount:13,absentCount:0,driftCount:0}};
+    const classify=(receipt:unknown)=>{
+      let result="";
+      runInNewContext(classifier!,{require:(name:string)=>{if(name!=="node:fs")throw Error("UNEXPECTED_IMPORT");return {readFileSync:()=>JSON.stringify(receipt),writeFileSync:(_path:string,body:string)=>{result=body;}};},process:{env:{RAW_PATH:"unit-input",RESULT_PATH:"unit-output",RUNNER_STATUS:"0",EXPECTED_SHA:sourceRevision,EXPECTED_DOCKER_NETWORK:fixture.execution.network,EXPECTED_IMAGE_DIGEST:imageDigest}}});
+      return JSON.parse(result);
+    };
+    expect(classify(fixture)).toMatchObject({state:"PRESENT_SCHEMA_MATCH",summary:{migrationCount:13,matchCount:13}});
+    for(const invalid of [
+      {...fixture,summary:{...fixture.summary,migrationCount:11}},
+      {...fixture,migrations:fixture.migrations.slice(0,-1)},
+      {...fixture,migrations:[...fixture.migrations.slice(0,-1),fixture.migrations[0]]},
+      {...fixture,sourceRevision:"c".repeat(40)},
+      {...fixture,readOnly:false},
+      {...fixture,execution:{...fixture.execution,containerExitStatus:1}},
+      {...fixture,migrations:fixture.migrations.map((m:{tag:string;state:string},i:number)=>i===0?{...m,state:"PRESENT_SCHEMA_DRIFT"}:m)},
+    ])expect(()=>classify(invalid)).toThrow();
+  });
 
   it("accepts only a main deploy caller with an explicit immutable artifact identity", () => {
     expect(readback).toContain("workflow_call:");

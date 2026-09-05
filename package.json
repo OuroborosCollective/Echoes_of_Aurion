@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "node scripts/prepare-world-assets.mjs && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/prepare-world-assets.mjs && node scripts/compile-world-colliders.mjs --check && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:sandbox": "NODE_OPTIONS=--max-old-space-size=${AURION_BUILD_HEAP_MB:-1536} pnpm build",
     "build:runtime-artifact": "pnpm build && node scripts/write-runtime-build-manifest.mjs",
     "build:promoter-bootstrap-artifact": "node scripts/build-aurion-promoter-bootstrap-artifact.mjs",

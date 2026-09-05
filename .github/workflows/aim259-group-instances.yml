@@ -8,6 +8,17 @@ on:
       - "server/amplitude*.ts"
       - "server/_core/trpc.ts"
       - "shared/worldAsset*"
+      - "shared/worldCollision*"
+      - "shared/worldIdentity.ts"
+      - "shared/zonePresenceContract.ts"
+      - "server/zone*.ts"
+      - "server/worldNatureCollision*.ts"
+      - "server/worldPresenceProtocol.ts"
+      - "server/worldChunkActionProtocol.ts"
+      - "server/db.ts"
+      - "scripts/*world-colliders*"
+      - "scripts/world-glb-geometry.mjs"
+      - "e2e/world.nature-collision.spec.ts"
       - "assets/world/**"
       - "scripts/*world-assets*"
       - "client/src/xaurion/integration/WorldAssetProjection.ts"
@@ -35,6 +46,17 @@ on:
       - "server/amplitude*.ts"
       - "server/_core/trpc.ts"
       - "shared/worldAsset*"
+      - "shared/worldCollision*"
+      - "shared/worldIdentity.ts"
+      - "shared/zonePresenceContract.ts"
+      - "server/zone*.ts"
+      - "server/worldNatureCollision*.ts"
+      - "server/worldPresenceProtocol.ts"
+      - "server/worldChunkActionProtocol.ts"
+      - "server/db.ts"
+      - "scripts/*world-colliders*"
+      - "scripts/world-glb-geometry.mjs"
+      - "e2e/world.nature-collision.spec.ts"
       - "assets/world/**"
       - "scripts/*world-assets*"
       - "client/src/xaurion/integration/WorldAssetProjection.ts"
@@ -68,6 +90,7 @@ jobs:
       DATABASE_URL: mysql://root:aurion-disposable-group-test@127.0.0.1:3306/aurion_group_test
       AURION_GROUP_E2E: "1"
       AURION_UI_E2E: "1"
+      AURION_COLLISION_E2E: "1"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       JWT_SECRET: aurion-disposable-group-ci-signing-key-never-production
       VITE_APP_ID: aurion-group-isolated-regression
@@ -86,11 +109,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm check
           pnpm verify:migrations
-          pnpm vitest run server/aim259GroupRules.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
+          pnpm vitest run server/aurionProductionReadbackChain.test.ts server/worldNatureCollision.test.ts server/zoneRuntime.test.ts server/worldPresenceProtocol.test.ts server/worldChunkActionProtocol.test.ts client/src/lib/zoneMovement.test.ts server/aim259GroupRules.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
       - name: Apply full schema and test concurrent real database operations
         run: |
           pnpm exec drizzle-kit migrate
-          pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts
+          pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts server/worldNatureCollisionMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
       - name: Build the exact runtime and install browser
         run: |

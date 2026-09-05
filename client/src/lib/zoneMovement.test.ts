@@ -1,3 +1,4 @@
+import { ZONE_POSITION_LIMIT } from "@shared/zonePresenceContract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ZoneMovementClient, zoneWebSocketUrl } from "./zoneMovement";
 
@@ -64,7 +65,7 @@ describe("zone movement browser transport", () => {
     socket.receive(snapshot); expect(options.onSnapshot).not.toHaveBeenCalled();
     socket.receive({ ...snapshot, type: "welcome", connectionId: "zone_peer_fixture" });
     options.onSnapshot.mockClear();
-    for (const invalid of [snapshot, { ...snapshot, snapshotSeq: 9 }, { ...snapshot, snapshotSeq: 11, tick: 9 }, { ...snapshot, snapshotSeq: 11, presences: [...snapshot.presences, ...snapshot.presences] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], entityId: "player:2" }] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], position: { x: 14501, z: 0 } }] }, { ...snapshot, snapshotSeq: 11, presences: new Array(129).fill(snapshot.presences[0]) }, { ...snapshot, snapshotSeq: 11, extra: "x".repeat(65537) }]) socket.receive(invalid);
+    for (const invalid of [snapshot, { ...snapshot, snapshotSeq: 9 }, { ...snapshot, snapshotSeq: 11, tick: 9 }, { ...snapshot, snapshotSeq: 11, presences: [...snapshot.presences, ...snapshot.presences] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], entityId: "player:2" }] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], position: { x: ZONE_POSITION_LIMIT + 1, z: 0 } }] }, { ...snapshot, snapshotSeq: 11, presences: new Array(129).fill(snapshot.presences[0]) }, { ...snapshot, snapshotSeq: 11, extra: "x".repeat(65537) }]) socket.receive(invalid);
     expect(options.onSnapshot).not.toHaveBeenCalled();
     socket.receive({ ...snapshot, snapshotSeq: 11, tick: 11 }); expect(options.onSnapshot).toHaveBeenCalledTimes(1);
     client.close();

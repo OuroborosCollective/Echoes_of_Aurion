@@ -1,3 +1,5 @@
+import { splitWorldChunkPositionMm, WORLD_CHUNK_SIZE_MM, WORLD_CHUNK_COORDINATE_LIMIT } from "../shared/worldChunkProtocol";
+import { validWorldPosition } from "../shared/zonePresenceContract";
 import type { ZoneId, ZonePosition } from "./zoneProtocol";
 import type { WorldChunkCoordinate } from "./worldChunkProtocol";
 
@@ -32,13 +34,14 @@ export function worldChunkForZone(zoneId: ZoneId): WorldChunkCoordinate {
 export function createWorldPresenceLease(input: { userId: number; connectionId: string; zoneId: ZoneId; position: ZonePosition; now: Date }): WorldPresenceLease {
   assertPositiveSafeInteger(input.userId, "userId");
   if (!/^[A-Za-z0-9_-]{12,96}$/.test(input.connectionId)) throw new Error("connectionId is invalid");
-  if (!Number.isSafeInteger(input.position.x) || !Number.isSafeInteger(input.position.z) || Math.abs(input.position.x) > 14_500 || Math.abs(input.position.z) > 14_500) throw new Error("position must be a valid zone fixed-point coordinate");
+  if (!validWorldPosition(input.position)) throw new Error("position must be a valid zone fixed-point coordinate");
   if (!(input.now instanceof Date) || !Number.isFinite(input.now.getTime())) throw new Error("now must be a valid date");
+  worldChunkForZone(input.zoneId);
   return Object.freeze({
     userId: input.userId,
     connectionId: input.connectionId,
     zoneId: input.zoneId,
-    chunk: worldChunkForZone(input.zoneId),
+    chunk: splitWorldChunkPositionMm(input.position).coordinate,
     position: Object.freeze({ ...input.position }),
     expiresAt: new Date(input.now.getTime() + WORLD_PRESENCE_LEASE_MS),
   });
@@ -54,4 +57,15 @@ export function canonicalWorldEpochRequestKey(value: string): string {
   const normalized = value.trim();
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/.test(normalized)) throw new Error("world epoch idempotency key is invalid");
   return normalized;
+}
+
+/** Existing INT columns store centered chunk-local millimetres. Chunk zero is
+ * backward compatible with every lease written by the original bounded zone. */
+export function worldPresenceStoragePosition(position: ZonePosition): ZonePosition {
+  const {localPositionMm}=splitWorldChunkPositionMm(position);
+  return {x:localPositionMm.x-WORLD_CHUNK_SIZE_MM/2,z:localPositionMm.z-WORLD_CHUNK_SIZE_MM/2};
+}
+export function worldPresenceGlobalPosition(chunk: WorldChunkCoordinate, local: ZonePosition): ZonePosition {
+  if (![chunk.x,chunk.z].every(v=>Number.isSafeInteger(v)&&Math.abs(v)<=WORLD_CHUNK_COORDINATE_LIMIT) || ![local.x,local.z].every(v=>Number.isSafeInteger(v)&&v>=-WORLD_CHUNK_SIZE_MM/2&&v<WORLD_CHUNK_SIZE_MM/2)) throw Error("WORLD_PRESENCE_STORAGE_INVALID");
+  return {x:chunk.x*WORLD_CHUNK_SIZE_MM+local.x,z:chunk.z*WORLD_CHUNK_SIZE_MM+local.z};
 }

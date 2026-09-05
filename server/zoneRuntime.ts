@@ -1,5 +1,5 @@
 import type WebSocket from "ws";
-import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT } from "@shared/zonePresenceContract";
+import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT, ZONE_POSITION_MIN, validWorldPosition } from "@shared/zonePresenceContract";
 import {
   makeZoneConnectionId,
   ZONE_FIXED_POINT_SCALE,
@@ -11,7 +11,7 @@ import {
   type ZoneWelcome,
 } from "./zoneProtocol";
 
-const ZONE_BOUNDARY_FIXED = ZONE_POSITION_LIMIT;
+import { worldNatureCollision } from "./worldNatureCollision";
 const CARDINAL_STEP_FIXED = 340;
 const DIAGONAL_STEP_FIXED = 240;
 
@@ -33,17 +33,18 @@ function compareBinary(left: string, right: string): number {
 }
 
 function clampFixed(value: number): number {
-  return Math.max(-ZONE_BOUNDARY_FIXED, Math.min(ZONE_BOUNDARY_FIXED, value));
+  return Math.max(ZONE_POSITION_MIN, Math.min(ZONE_POSITION_LIMIT, value));
 }
 
 /** Pure Level-A movement step: positions are millimetre-like fixed-point integers, never client coordinates. */
 export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["input"]): ZonePosition {
+  if (!validWorldPosition(position) || ![input.x,input.z].every(v=>Number.isInteger(v)&&Math.abs(v)<=1)) throw Error("MOVEMENT_COORDINATE_INVALID");
   const diagonal = input.x !== 0 && input.z !== 0;
   const step = diagonal ? DIAGONAL_STEP_FIXED : CARDINAL_STEP_FIXED;
-  return {
+  return worldNatureCollision.resolve(position, {
     x: clampFixed(position.x + input.x * step),
     z: clampFixed(position.z + input.z * step),
-  };
+  });
 }
 
 /** First writable slice: clients submit only ordered movement intents; this zone owns all resulting positions. */
