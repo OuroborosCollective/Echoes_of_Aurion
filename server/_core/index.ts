@@ -14,6 +14,7 @@ import { registerGlbSmartUpload } from "../glbSmartUpload";
 import { registerStarterGlbRuntimeAssets } from "../starterGlbRuntimeAssets";
 import { registerZoneGateway } from "../zoneGateway";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
+import { registerGuildBankRoutes } from "../guildBankRoutes";
 import { consumeZoneConnectionTicket, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -91,6 +92,7 @@ async function startServer() {
   registerMcpGateway(app);
   registerAdminMcp(app);
   registerGuildGovernanceRoutes(app);
+  registerGuildBankRoutes(app);
   registerZoneGateway(server, undefined, consumeZoneConnectionTicket, {
     upsert: recordWorldPresenceLease,
     release: releaseWorldPresenceLease,

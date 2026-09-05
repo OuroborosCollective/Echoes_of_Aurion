@@ -10,6 +10,7 @@ export default defineConfig({
     "./drizzle/schema.ts",
     "./drizzle/aurionWorldCheckpointSchema.ts",
     "./drizzle/guildGovernanceSchema.ts",
+    "./drizzle/guildBankSchema.ts",
   ],
   out: "./drizzle",
   dialect: "mysql",
