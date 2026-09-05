@@ -1,0 +1,37 @@
+name: AIM 262 deterministic visual regression
+on:
+  pull_request:
+    paths:
+      - 'client/src/xaurion/**'
+      - 'client/src/pages/Home.tsx'
+      - 'shared/deterministicSimulation.ts'
+      - 'server/aim262VisualEffects.test.ts'
+      - 'docs/migrations/aim262-particle-source.json'
+      - '.github/workflows/aim262-visual-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'client/src/xaurion/**'
+      - 'client/src/pages/Home.tsx'
+      - 'shared/deterministicSimulation.ts'
+      - 'server/aim262VisualEffects.test.ts'
+      - 'docs/migrations/aim262-particle-source.json'
+      - '.github/workflows/aim262-visual-regression.yml'
+permissions:
+  contents: read
+jobs:
+  source-replay-and-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test

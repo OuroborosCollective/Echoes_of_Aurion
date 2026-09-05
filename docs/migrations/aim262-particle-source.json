@@ -1,0 +1,32 @@
+{
+  "sourceRepository": "OuroborosCollective/-ax1",
+  "sourceRevision": "d356881538dae23c3aa97364a5596d48b6ac3079",
+  "sourcePath": "src/core/ParticleSystem.ts",
+  "sourceSha256": "ed83e776a077388da2062eb056a212aaaf9335af834f5c683c6cefbd1348409b",
+  "targetPath": "client/src/xaurion/core/ParticleSystem.ts",
+  "targetSha256": "55bb7e1407e2e8eb78efc05261016f90833e38e529c93261b37ca2e2fd521773",
+  "effectGenerators": {
+    "emitCombatHit": "5968ad7439423977c4785a6a9a19db7a0cf323633796a3d64cf004b174cf8538",
+    "emitCombatCrit": "6a2c77040e5e85cf4b03e12e9c90a258ba26da091cff1ef7bc6b4b98e93305b8",
+    "emitSlashArc": "6f4a7728187d63261f87d472033c3de5fb315b54e66a91f420271e79b5b7cf09",
+    "emitMagicImpact": "a1477a99285249ada4a97f77e80673488425fb036afea5d596bfa30b9fc24469",
+    "emitLevelUpFlare": "1b53242e39a1d9dbecf822bc5f34c4cf66367027a5d21ed63f7823e8af756997",
+    "emitBeaconBurst": "73137872e3f0aded41b45a1a1b8517b84f284d29d1ef91829661acd0d19eeb40",
+    "emitSteamPuff": "14372ce2a49ba40930d946fe30c8d43ae1e173b12158407a90ef69fa1de58724",
+    "emitSmokePuff": "874f33aa27552575e28073a67a08c35be84219b0355f93c989978e6c6c615bb4",
+    "emitExplosion": "df90fef440dc9ac292d1b1844146af41026322ac32508d80d51204eb3cfe986b",
+    "emitHealSparkles": "525ad703e4daab28d935faad545570417bb945811f5650a03f6d36533d6d6a38",
+    "emitBloodOilSplash": "5ad0392afe232d6f254be777895abc2cb7534bb8ca5a8e61cf9d33a9237106cc",
+    "emitTeleportWarp": "b800f38f70bc93406ce6113c70daf8342696065267d5132125b29b7f3c49e87e",
+    "emitAurionBlast": "118c96b40507f991ff592f47df2a6ebdbbf8460cfda7be0d1c6308b1b7f04489",
+    "emitHolyNova": "1de3f5c276d0cff66b85f11661e89b805ea2a877db66344178bd997450bd6a43",
+    "emitElectricSparks": "3010dcdc3dd51a45fbfbd618f8ef9605c335146679dd4c07db0e5c4ed9420b48",
+    "emitFrostShatter": "b84d8ffc097489b3f08c2220ae731b8d8b2caef377828e9d5aa1f339112cf56f",
+    "emitFireImpact": "ad0433ac442ecae6adde52a1e068426f54ea27a9399221d4a6c4b7fbd0079ce8",
+    "emitPhysicalHit": "bb0ac58fd6cfda7a6acc06c3f8f185128c41e3ad7cc1a42a8f6296b5d93ca5d0"
+  },
+  "generatorAdaptations": [
+    "Math.random() -> this.random()",
+    "this.particles.push({ -> this.enqueueParticle({"
+  ]
+}
