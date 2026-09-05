@@ -77,7 +77,8 @@ export function AurionAuthorityHud({ userId, connected, position, onMove, onActi
         {panel === "character" && <div data-state={player.state}>
           <p role="status">{readbackLabels[player.state]}</p>
           {profile && <><p>Klasse: {classes[profile.selectedClass]}</p><p>Stufe {profile.level} · Gesamt-EP {profile.totalXp}</p><p>{profile.aurionPoints} AURION · {profile.victories} Siege</p>
-            <fieldset disabled={!fresh}><legend>Klasse wählen</legend>{(["vanguard", "seer", "warden"] as const).map(playerClass => <button key={playerClass} aria-pressed={profile.selectedClass === playerClass} onClick={() => void act(() => chooseClass.mutateAsync({ playerClass }))}>{classes[playerClass]}</button>)}</fieldset>
+            <p>Klassenwahl ab Stufe {player.data!.capabilities.classUnlockLevel}; die Wahl ist dauerhaft.</p>
+            <fieldset disabled={!fresh || !player.data?.capabilities.canChooseClass}><legend>Klasse wählen</legend>{(["vanguard", "seer", "warden"] as const).map(playerClass => <button key={playerClass} aria-pressed={profile.selectedClass === playerClass} onClick={() => { if (player.data?.capabilities.canChooseClass) void act(() => chooseClass.mutateAsync({ playerClass })); }}>{classes[playerClass]}</button>)}</fieldset>
             <fieldset disabled={!fresh}><legend>Waffendisziplin</legend>{(["blade", "staff", "spear", "focus"] as const).map(weaponTrack => <button key={weaponTrack} aria-pressed={player.data?.weaponLoadout?.weaponTrack === weaponTrack} onClick={() => void act(() => setWeapon.mutateAsync({ weaponTrack }))}>{weaponTrack}</button>)}</fieldset>
             <h3>Waffenmeisterschaft</h3>{player.data?.weaponMasteries.length === 0 && <p>Noch keine Meisterschaft erworben.</p>}{player.data?.weaponMasteries.map(item => <p key={item.weaponTrack}>{item.weaponTrack} · Stufe {item.level} · {item.xp} EP</p>)}</>}
         </div>}

@@ -8,7 +8,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   gameplay: { progress: { useQuery: () => fixtures.other }, openWorld: { useQuery: () => fixtures.other }, acceptQuest: { useMutation: () => ({}) }, completeQuest: { useMutation: () => ({}) } },
 } }));
 vi.mock("../components/VirtualJoystick", () => ({ VirtualJoystick: () => null }));
-const confirmed = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "warden" }, weaponMasteries: [], inventory: [] };
+const confirmed = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "warden" }, capabilities: { canChooseClass: false, classUnlockLevel: 36 }, weaponMasteries: [], inventory: [] };
 const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onAction={fixtures.onAction} />);
 describe("server-backed Aurion HUD", () => {
   beforeEach(() => { fixtures.player.data = undefined; fixtures.player.isError = false; fixtures.player.isStale = false; vi.clearAllMocks(); });

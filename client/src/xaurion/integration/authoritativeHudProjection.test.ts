@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { playerReadbackSchema, projectPlayerReadback, projectReadback, worldReadbackSchema } from "./authoritativeHudProjection";
 
-export const confirmedPlayer = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "warden" }, weaponMasteries: [], inventory: [] };
+export const confirmedPlayer = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "warden" }, capabilities: { canChooseClass: false, classUnlockLevel: 36 }, weaponMasteries: [], inventory: [] };
 describe("authoritative HUD readback", () => {
   it("keeps absence, empty inventory, transport failure and stale evidence distinct", () => {
     expect(projectPlayerReadback({}, 7)).toEqual({ state: "waiting" });

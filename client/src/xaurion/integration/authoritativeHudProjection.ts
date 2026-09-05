@@ -3,6 +3,7 @@ import { z } from "zod";
 const natural = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const identity = z.string().min(1).max(128);
 export const playerReadbackSchema = z.object({
+  capabilities: z.object({ canChooseClass: z.boolean(), classUnlockLevel: natural.positive() }),
   profile: z.object({ userId: natural.positive(), level: natural.positive(), totalXp: natural, aurionPoints: natural, victories: natural, selectedClass: z.enum(["unbound", "vanguard", "seer", "warden"]) }),
   weaponLoadout: z.object({ weaponTrack: z.enum(["blade", "staff", "spear", "focus"]) }).nullish(),
   weaponMasteries: z.array(z.object({ weaponTrack: z.string(), xp: natural, level: natural.positive() })),

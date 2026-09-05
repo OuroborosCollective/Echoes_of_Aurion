@@ -84,10 +84,11 @@ for (const viewport of [
       await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
       await hud.getByRole("button", { name: "Charakter", exact: true }).click();
       const characterDialog = page.getByRole("dialog");
-      await characterDialog.getByRole("button", { name: "Hüter", exact: true }).click();
+      await expect(characterDialog.getByRole("button", { name: "Hüter", exact: true })).toBeDisabled();
+      await characterDialog.getByRole("button", { name: "staff", exact: true }).click();
       await expect(characterDialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
-      const [chosen] = await pool.query<RowDataPacket[]>("SELECT selectedClass FROM playerProfiles WHERE userId=?", [latestPresence!.userId]);
-      expect(chosen[0].selectedClass).toBe("warden");
+      const [chosen] = await pool.query<RowDataPacket[]>("SELECT p.selectedClass, w.weaponTrack FROM playerProfiles p JOIN weaponLoadouts w ON w.userId=p.userId WHERE p.userId=?", [latestPresence!.userId]);
+      expect(chosen[0]).toMatchObject({ selectedClass: "unbound", weaponTrack: "staff" });
       await characterDialog.getByRole("button", { name: "Close", exact: true }).click();
       await hud.getByRole("button", { name: "Weltatlas", exact: true }).click();
       await expect(page.getByRole("dialog").getByText(`Welt-Hash: ${confirmedWorld!.deterministicHash}`, { exact: true })).toBeVisible();
