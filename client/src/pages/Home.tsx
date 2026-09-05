@@ -459,7 +459,7 @@ export default function Home() {
       applyGameplayAction.mutate({ sessionId: session.id, sequence: session.nextSequence, command: detail.command, source: detail.source }, {
         onSuccess: (result) => {
           gameplaySession.current = result.completed ? null : { id: result.sessionId, nextSequence: result.nextSequence };
-          window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { command: detail.command, source: detail.source, origin: detail.origin, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
+          window.dispatchEvent(new CustomEvent("aurion:authoritative-action", { detail: { sessionId: result.sessionId, sequence: result.nextSequence - 1, command: detail.command, source: detail.source, origin: detail.origin, damage: result.damage, bossHp: result.bossHp, completed: result.completed } }));
           if (result.completed) {
             void gameplayProgress.refetch();
             if (result.drop) setConfirmedDrop(result.drop);

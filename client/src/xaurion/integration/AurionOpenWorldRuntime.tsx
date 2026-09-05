@@ -6,6 +6,7 @@ import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
 import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import { MMOEngine } from "../core/MMOEngine";
+import { ConfirmedVisualEffects } from "./confirmedVisualEffects";
 import { GameHUD } from "../components/GameHUD";
 import { InventoryModal } from "../components/InventoryModal";
 import { CharacterModal } from "../components/CharacterModal";
@@ -161,6 +162,14 @@ export default function AurionOpenWorldRuntime() {
     let disposed = false;
     let engine: MMOEngine | undefined;
     let unsubscribeEquipment: (() => void) | undefined;
+    const confirmedVisuals = new ConfirmedVisualEffects();
+    const onConfirmedAction = (event: Event) => {
+      if (disposed || !engine || engineRef.current !== engine) return;
+      const effect = confirmedVisuals.accept((event as CustomEvent<unknown>).detail);
+      if (!effect) return;
+      try { engine.particleSystem.emit(effect.kind, engine.player.position, undefined, 1, effect.receiptKey); }
+      catch (error) { fail(error); }
+    };
     const fail = (error: unknown) => {
       if (disposed) return;
       engine?.stop();
@@ -204,11 +213,13 @@ export default function AurionOpenWorldRuntime() {
         setSimPlayers([...state.simPlayers]);
       };
       engine.start();
+      window.addEventListener("aurion:authoritative-action", onConfirmedAction);
     } catch (error) {
       fail(error);
     }
     return () => {
       disposed = true;
+      window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
       unsubscribeEquipment?.();
       engine?.stop();
       if (engineRef.current === engine) engineRef.current = null;

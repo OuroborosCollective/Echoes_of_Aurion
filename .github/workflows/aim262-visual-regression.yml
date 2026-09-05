@@ -1,0 +1,103 @@
+name: AIM 262 deterministic visual regression
+on:
+  pull_request:
+    paths:
+      - 'client/src/xaurion/**'
+      - 'client/src/pages/Home.tsx'
+      - 'shared/deterministicSimulation.ts'
+      - 'server/aim262VisualEffects.test.ts'
+      - 'e2e/aim254.authenticatedMigration.spec.ts'
+      - 'playwright.aurion-migration.config.ts'
+      - 'docs/migrations/aim262-particle-source.json'
+      - '.github/workflows/aim262-visual-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'client/src/xaurion/**'
+      - 'client/src/pages/Home.tsx'
+      - 'shared/deterministicSimulation.ts'
+      - 'server/aim262VisualEffects.test.ts'
+      - 'e2e/aim254.authenticatedMigration.spec.ts'
+      - 'playwright.aurion-migration.config.ts'
+      - 'docs/migrations/aim262-particle-source.json'
+      - '.github/workflows/aim262-visual-regression.yml'
+permissions:
+  contents: read
+jobs:
+  source-replay-and-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+
+  authenticated-browser-and-database:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_browser_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
+      AURION_E2E_ISOLATED: '1'
+      AURION_RELEASE_SHA: ${{ github.sha }}
+      JWT_SECRET: aurion-disposable-ci-browser-signing-key-never-production
+      VITE_APP_ID: aurion-isolated-browser-test
+      AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Start the built application against isolated MariaDB
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-browser-server.log 2>&1 &
+          echo $! >/tmp/aurion-browser-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Prove actual registration, world entry, movement, persistence and recovery
+        run: pnpm exec playwright test --config=playwright.aurion-migration.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aurion-authenticated-browser-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-migration-report/
+            /tmp/aurion-browser-server.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Stop the isolated application
+        if: always()
+        run: |
+          if test -f /tmp/aurion-browser-server.pid; then
+            kill "$(cat /tmp/aurion-browser-server.pid)" 2>/dev/null || true
+          fi

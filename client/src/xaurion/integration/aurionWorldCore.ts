@@ -13,6 +13,7 @@ type WorldCoreMetrics = Readonly<{
   vegetationInstances: number;
   lod: Readonly<{ high: number; medium: number; low: number; culled: number }>;
   occlusion: Readonly<{ tested: number; occluded: number }>;
+  particles: Readonly<{ tier: string; budget: number; active: number; pooled: number; reused: number; droppedBursts: number; tickRate: number }> | null;
 }>;
 
 let latestWorldContext: AurionWorldContext = Object.freeze({ epoch: 0, worldSeed: "echoes-of-aurion-global" });
@@ -293,6 +294,7 @@ export class AurionWorldCore {
         vegetationInstances: this.vegetation.instanceCount,
         lod: Object.freeze({ ...this.lod.stats }),
         occlusion: Object.freeze({ tested: this.occlusion.stats.tested, occluded: this.occlusion.stats.occluded }),
+        particles: this.engine.particleSystem?.metrics ?? null,
       });
       window.dispatchEvent(new CustomEvent("aurion:xaurion-world-core-metrics", { detail: metrics }));
     }
