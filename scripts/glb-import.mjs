@@ -43,7 +43,7 @@ export async function importAsset(filename, token, { dryRun = false, fetcher = f
 
 async function main(args) {
   if (!args.length || args.includes('--help')) {
-    process.stdout.write('Usage: node scripts/glb-import.mjs [--dry-run] [--watch DIRECTORY | FILE.glb ...]\nAuth: AURION_GLB_TOKEN_FILE (0600) or AURION_GLB_BEARER_TOKEN; OAuth admin read + assets.write scopes required.\nWatch scans stable GLBs every 2 seconds; conflicts never replace active models automatically.\n'); return;
+    process.stdout.write('Usage: node scripts/glb-import.mjs [--dry-run] [--watch DIRECTORY | FILE.glb ...]\nAuth: AURION_GLB_TOKEN_FILE (0600) or AURION_GLB_BEARER_TOKEN; Admin GLB session from /ops/glb-upload, or OAuth admin read + assets.write scopes.\nWatch scans stable GLBs every 2 seconds; conflicts never replace active models automatically.\n'); return;
   }
   let token = process.env.AURION_GLB_BEARER_TOKEN;
   if (process.env.AURION_GLB_TOKEN_FILE) {

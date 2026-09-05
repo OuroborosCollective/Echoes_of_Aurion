@@ -1,3 +1,4 @@
+import { issueGlbAgentSession, verifyGlbAgentSession } from "./glbAgentSession";
 import type { Express, Request, Response } from "express";
 import { sdk } from "./_core/sdk";
 import * as db from "./db";
@@ -21,7 +22,18 @@ type GlbSmartUploadDependencies = Readonly<{
 function defaultDependencies(): GlbSmartUploadDependencies {
   return {
     authenticate: async request => {
-      if (request.header("authorization")) return authenticateAdminGlbBearer(request);
+      if (request.header("authorization")) {
+        const token = request.header("authorization")?.match(/^Bearer (\S+)$/)?.[1];
+        if (token) {
+          try {
+            const id = await verifyGlbAgentSession(token, process.env.JWT_SECRET ?? "");
+            const user = await db.getUserById(id);
+            if (user?.role === "admin") return { id: user.id, role: "admin" };
+            throw new Error("GLB_ADMIN_REQUIRED");
+          } catch { /* A distinct OAuth credential must pass its own issuer and scope checks. */ }
+        }
+        return authenticateAdminGlbBearer(request);
+      }
       const user = await sdk.authenticateRequest(request);
       return user ? { id: user.id, role: user.role } : null;
     },
@@ -106,9 +118,15 @@ export function registerGlbSmartUpload(app: Express): void {
     try { user = await defaultDependencies().authenticate(request); }
     catch { response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" }); return; }
     if (!user || user.role !== "admin") { response.status(user ? 403 : 401).json({ error: "GLB_ADMIN_REQUIRED" }); return; }
-    try { response.json(await operation(request, user)); }
+    try { response.setHeader("Cache-Control", "no-store"); response.json(await operation(request, user)); }
     catch (error) { const code = error instanceof Error && /^GLB_[A-Z_]+$/.test(error.message) ? error.message : "GLB_OPERATION_FAILED"; response.status(code.includes("CHANGED") || code.includes("BUSY") ? 409 : 422).json({ error: code }); }
   };
+  app.post("/api/admin/glb-import/agent-session", adminRoute(async (request, user) => {
+    if (request.header("authorization")) throw new Error("GLB_BROWSER_LOGIN_REQUIRED");
+    // A session cannot issue or extend another session; only the normal admin login may mint it.
+    if ((await db.getUserById(user.id))?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
+    return issueGlbAgentSession(user.id, process.env.JWT_SECRET ?? "");
+  }));
   app.get("/api/admin/glb-import/status", adminRoute(async () => ({ ...(await checkGlbStorage()), catalog: await glbImportStore().catalog() })));
   app.post("/api/admin/glb-import/plan", adminRoute(async request => buildGlbImportPlan(z.object({ contentBase64: z.string().max(34 * 1024 * 1024) }).parse(request.body).contentBase64)));
   app.post("/api/admin/glb-import/apply", adminRoute(async (request, user) => glbImportStore().ingest(user.id, z.object({ displayName: z.string().min(3).max(120), contentBase64: z.string().max(34 * 1024 * 1024), expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body))));

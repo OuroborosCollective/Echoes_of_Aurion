@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { testGlb } from "../server/glbImportFixtures";
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable GLB CI database");
-test("admin upload persists bytes and assignment, deduplicates, and renders the published avatar", async ({ page, baseURL }, testInfo) => {
+test("admin upload persists bytes and assignment, deduplicates, and renders the published avatar", async ({ page, baseURL, request }, testInfo) => {
   expect(baseURL).toBe("http://127.0.0.1:3000");
   const target = new URL(process.env.DATABASE_URL!);
   expect(target.hostname).toBe("127.0.0.1"); expect(target.pathname).toBe("/aurion_glb_test");
@@ -44,6 +44,19 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     const stored = await page.request.get(receipt.storageUrl);
     expect(stored.status()).toBe(200); expect(await stored.body()).toEqual(bytes);
     expect((await (await page.request.get('/api/game/starter-glb-assets')).json()).player.assetId).toBe(receipt.assetId);
+    // Use the real short-lived credential without browser cookies or configured OAuth.
+    const sessionReply = page.waitForResponse(r => r.url().endsWith('/api/admin/glb-import/agent-session'));
+    await page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true }).click();
+    const sessionResponse = await sessionReply; expect(sessionResponse.status()).toBe(200);
+    const session = await sessionResponse.json();
+    const bearer = { Authorization: `Bearer ${session.token}` };
+    const planResponse = await request.post('/api/admin/glb-import/plan', { headers: bearer, data: { contentBase64: bytes.toString('base64') } });
+    expect(planResponse.status()).toBe(200);
+    const plan = await planResponse.json();
+    const apply = await request.post('/api/admin/glb-import/apply', { headers: bearer, data: { displayName: 'Agent avatar', contentBase64: bytes.toString('base64'), expectedPlanSha256: plan.planSha256 } });
+    expect(apply.status()).toBe(200); expect(await apply.json()).toMatchObject({ assetId: receipt.assetId, deduplicated: true });
+    expect((await request.post('/api/admin/glb-import/agent-session', { headers: bearer, data: {} })).status()).toBe(422);
+    // Do not attach or log the credential.
     const fetched: string[] = [];
     page.on('response', response => { if (response.url().endsWith(receipt.storageUrl) && response.status() === 200) fetched.push(response.url()); });
     await page.goto('/');

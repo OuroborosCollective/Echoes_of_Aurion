@@ -67,6 +67,8 @@ export default function GlbUpload() {
   const [catalog, setCatalog] = useState<GlbRuntimeCatalog | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const [agentSession, setAgentSession] = useState<{ token: string; expiresAt: string } | null>(null);
+  const [sessionBusy, setSessionBusy] = useState(false);
   const refreshCatalog = async (signal?: AbortSignal) => {
     try {
       const response = await fetch("/api/admin/glb-import/status", { credentials: "include", signal });
@@ -77,11 +79,22 @@ export default function GlbUpload() {
     } catch (error) { if (!signal?.aborted) { setCatalog(null); setStorageError(error instanceof Error ? error.message : "Dateispeicher nicht erreichbar."); } }
   };
   useEffect(() => {
-    setCatalog(null); setStorageError(null);
+    setCatalog(null); setStorageError(null); setAgentSession(null);
     if (user?.role !== "admin") return;
     const controller = new AbortController(); void refreshCatalog(controller.signal);
     return () => controller.abort();
   }, [user?.id, user?.role]);
+
+  const createAgentSession = async () => {
+    setSessionBusy(true); setAgentSession(null);
+    try {
+      const response = await fetch("/api/admin/glb-import/agent-session", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await response.json();
+      if (!response.ok || typeof body.token !== "string" || typeof body.expiresAt !== "string") throw new Error("Import-Zugang konnte nicht erstellt werden.");
+      setAgentSession({ token: body.token, expiresAt: body.expiresAt });
+    } catch (error) { setError(error instanceof Error ? error.message : "Import-Zugang nicht verfügbar."); }
+    finally { setSessionBusy(false); }
+  };
 
   const uploadOne = async (file: File, chosenName: string): Promise<SmartUploadResult> => {
     const response = await fetch("/api/admin/glb-smart-upload", {
@@ -171,6 +184,8 @@ export default function GlbUpload() {
           {error && <p role="alert" className="rounded-lg border border-red-300/20 bg-red-400/[.06] p-3 text-sm text-red-200">{error}</p>}
         </CardContent>
       </Card>
+
+      <Card className="border-cyan-200/15 bg-slate-950/75"><CardHeader><CardTitle>Automatisierter Import</CardTitle><CardDescription>Für den Import-Client und berechtigte Assistenten. Der Zugang gilt eine Stunde, ausschließlich für GLB-Importe, und setzt deine fortbestehende Admin-Rolle voraus.</CardDescription></CardHeader><CardContent className="space-y-3 text-sm"><p>Client: <code>node scripts/glb-import.mjs --watch /pfad/zu/glbs</code>. Den Zugang über <code>AURION_GLB_BEARER_TOKEN</code> oder eine private Datei mit <code>AURION_GLB_TOKEN_FILE</code> bereitstellen. Nicht in Chats oder Tickets teilen.</p><Button disabled={sessionBusy} variant="outline" onClick={() => void createAgentSession()}>Import-Zugang für eine Stunde erstellen</Button>{agentSession && <div className="space-y-2"><Label htmlFor="glbAgentToken">Persönlicher GLB-Zugang · gültig bis {agentSession.expiresAt}</Label><Input id="glbAgentToken" type="password" readOnly value={agentSession.token} autoComplete="off" /><Button variant="outline" onClick={() => { void navigator.clipboard.writeText(agentSession.token).catch(() => setError("Kopieren nicht möglich. Bitte den Zugang im Feld auswählen und kopieren.")); }}>Zugang kopieren</Button><Button variant="ghost" onClick={() => setAgentSession(null)}>Ausblenden</Button></div>}</CardContent></Card>
 
       {outcomes.length > 0 && <Card className="border-emerald-300/20 bg-slate-950/75"><CardHeader><CardTitle className="text-emerald-100">Server-Readback</CardTitle><CardDescription>{outcomes.filter(outcome => outcome.result).length}/{outcomes.length} Dateien wurden angenommen. Jede Datei besitzt einen eigenen serverseitigen Klassifikationsnachweis.</CardDescription></CardHeader><CardContent className="space-y-3 text-sm">{outcomes.map(outcome => outcome.result ? <div key={`${outcome.fileName}-${outcomes.indexOf(outcome)}`} className="rounded-lg border border-emerald-300/15 p-3"><div className="flex flex-wrap items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-300" /><b className="mr-auto text-amber-50">{outcome.fileName}</b><Badge variant="outline" className="border-emerald-300/40 text-emerald-100">{outcome.result.classification.assetType}</Badge><Badge variant="outline" className="border-cyan-300/30 text-cyan-100">{outcome.result.classification.subcategory}</Badge>{outcome.result.classification.lod !== null && <Badge variant="outline">LOD {outcome.result.classification.lod}</Badge>}</div><div className="mt-3 space-y-2"><p className="text-emerald-100">{outcome.result.receipt.status === "assigned" ? "Dem Spielziel zugeordnet" : outcome.result.receipt.status === "conflict" ? "Gespeichert · Ziel bereits belegt" : outcome.result.receipt.status === "archived" ? "Bereits archiviert · keine Veröffentlichung" : "Im Katalog · kein eindeutiges Spielziel"}{outcome.result.receipt.deduplicated ? " · Datei bereits vorhanden" : ""}</p><p className="break-all text-xs text-slate-400">Ziel: {outcome.result.receipt.targetKey ?? "offen"} · SHA-256: {outcome.result.receipt.sha256}</p>{outcome.result.receipt.status === "conflict" && <Button variant="outline" onClick={() => void replaceTarget(outcome.result!)}>Bisheriges Modell durch dieses ersetzen</Button>}</div><p className="mt-2 text-xs text-slate-400">{outcome.result.classification.skinCount} Skin(s) · {outcome.result.classification.socketCount} Socket(s) · Animationen: {outcome.result.classification.animationNames.length ? outcome.result.classification.animationNames.join(", ") : "keine"}</p></div> : <div key={`${outcome.fileName}-${outcomes.indexOf(outcome)}`} className="rounded-lg border border-red-300/15 p-3"><div className="flex items-center gap-2 text-red-200"><XCircle className="h-4 w-4" /><b>{outcome.fileName}</b></div><p className="mt-2 text-xs text-red-200/80">{outcome.error}</p></div>)}</CardContent></Card>}
       {catalog && catalog.entries.length > 0 && <Card className="border-cyan-200/15 bg-slate-950/75"><CardHeader><CardTitle>Veröffentlichte Modelle</CardTitle><CardDescription>Zuordnungen werden beim nächsten Laden oder Aktualisieren der Spielansicht übernommen.</CardDescription></CardHeader><CardContent className="space-y-3">{catalog.entries.map(entry => <div key={`${entry.assetId}:${entry.targetKey}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-200/10 pb-3 text-sm"><div><b>{entry.displayName}</b><p className="text-xs text-slate-400">{entry.assetType} · {entry.targetKey ?? "Nur Katalog"}</p></div><a className="text-cyan-200 underline" href={entry.storageUrl} target="_blank" rel="noreferrer">GLB öffnen</a></div>)}</CardContent></Card>}

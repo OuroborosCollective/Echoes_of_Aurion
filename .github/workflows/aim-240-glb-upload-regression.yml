@@ -91,6 +91,7 @@ jobs:
       - name: Run GLB regression and runtime tests
         run: >-
           pnpm exec vitest run
+          server/glbAgentSession.test.ts
           server/glbImportMariaDb.test.ts
           server/glbImportPlan.test.ts
           server/glbFileStore.test.ts

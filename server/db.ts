@@ -113,6 +113,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 }
 
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("GLB_DATABASE_UNAVAILABLE");
+  return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {
