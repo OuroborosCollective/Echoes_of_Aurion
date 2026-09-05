@@ -32,8 +32,8 @@ describe("CommunityOverlay", () => {
     render(<RealClientHarness><CommunityOverlay isAuthenticated currentUserId={42} onTeamReady={() => undefined} onTeamCleared={() => undefined} starterCharacterId="wayfinder" onStarterCharacterSelected={() => undefined} /></RealClientHarness>);
     await user.click(screen.getByRole("button", { name: "Sternwartenschmiede öffnen" }));
     expect(await screen.findByRole("heading", { name: "Sternwartenschmiede" })).toBeTruthy();
-    expect(screen.getByText(/Craft-Receipt und 6 exakte Crafting-XP entstehen nur nach bestätigter Prüfung/i)).toBeTruthy();
-    expect(screen.getByText("VERFÜGBARE EINGÄNGE")).toBeTruthy();
+    expect(screen.getByText(/Du benötigst einen eigenen Speer und erhältst 6 Handwerks-EP/i)).toBeTruthy();
+    expect(screen.getByText("DEINE MATERIALIEN")).toBeTruthy();
   });
   it("mounts world-opened controls above the world portal and retires that layer on close", async () => {
     const user=userEvent.setup();

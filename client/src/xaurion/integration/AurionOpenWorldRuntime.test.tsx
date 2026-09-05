@@ -20,6 +20,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   player: { me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
   assetSubmissions: { characterAppearance: { useQuery: () => ({}) } },
   gameplay: {
+    openWorld: { useQuery: () => ({}) },
     issueZoneTicket: { useMutation: () => ({ mutate: (_: unknown, reply: typeof fixture.tickets[number]) => fixture.tickets.push(reply) }) },
     acceptQuest: { useMutation: () => ({}) },
   },

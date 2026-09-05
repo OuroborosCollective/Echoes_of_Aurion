@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { DEFAULT_WEAPON_MASTERIES, MMORPG_CLASSES, RPG_ITEMS_DATABASE } from '../data/mmorpgData';
 import { glbManager, GLBModelEntry } from '../core/GLBModelManager';
+import { AnimatedGlbActor } from '../core/AnimatedGlbActor';
 import { ProceduralEquipmentVisuals } from '../core/ProceduralEquipmentVisuals';
 
 export class OpenWorldPlayer {
@@ -95,8 +96,8 @@ export class OpenWorldPlayer {
   // External GLB Avatar Support
   public glbAvatarGroup: THREE.Group = new THREE.Group();
   public activeGlbModelId: string | null = null;
-  private glbMixer: THREE.AnimationMixer | null = null;
-  private activeGlbAction: THREE.AnimationAction | null = null;
+  private glbActor: AnimatedGlbActor | null = null;
+  private confirmedGlbSpeed = 0;
 
   constructor(scene: THREE.Scene, startingClass: CharacterClassId, private readonly simulation: DeterministicSimulation) {
     this.scene = scene;
@@ -1081,9 +1082,8 @@ export class OpenWorldPlayer {
   public update(delta: number, moveInput: { x: number; z: number }) {
     this.idleTime += delta;
 
-    if (this.glbMixer) {
-      this.glbMixer.update(delta);
-    }
+    this.glbActor?.setLocomotion(this.confirmedGlbSpeed);
+    this.glbActor?.update(delta);
 
     // 1. Buffs Countdown
     if (this.buffTimer > 0) {
@@ -1412,11 +1412,8 @@ export class OpenWorldPlayer {
       const child = this.glbAvatarGroup.children[0];
       this.glbAvatarGroup.remove(child);
     }
-    if (this.glbMixer) {
-      this.glbMixer.stopAllAction();
-      this.glbMixer = null;
-      this.activeGlbAction = null;
-    }
+    this.glbActor?.dispose();
+    this.glbActor = null;
 
     if (!modelId) {
       this.activeGlbModelId = null;
@@ -1430,18 +1427,8 @@ export class OpenWorldPlayer {
       this.activeGlbModelId = modelId;
       this.rootGroup.visible = false; // Hide procedural model while GLB skin is active
 
-      scene.position.set(0, 0, 0);
-      scene.scale.set(1.0, 1.0, 1.0);
-      this.glbAvatarGroup.add(scene);
-
-      if (animations && animations.length > 0) {
-        this.glbMixer = new THREE.AnimationMixer(scene);
-        const clip = animations.find((a) => a.name.toLowerCase().includes('idle')) || animations[0];
-        if (clip) {
-          this.activeGlbAction = this.glbMixer.clipAction(clip);
-          this.activeGlbAction.play();
-        }
-      }
+      this.glbActor = new AnimatedGlbActor(scene, animations, 2);
+      this.glbAvatarGroup.add(this.glbActor.group);
       return true;
     } catch (err) {
       if (request !== this.glbAvatarRequest) return false;
@@ -1451,6 +1438,13 @@ export class OpenWorldPlayer {
       return false;
     }
   }
+
+  public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {
+    this.confirmedGlbSpeed = Number.isFinite(speedMetersPerSecond) ? Math.max(0, speedMetersPerSecond) : 0;
+  }
+
+  public playConfirmedGlbAttack(): void { this.glbActor?.playOnce("attack"); }
+  public glbPresentationEvidence() { return this.glbActor?.evidence() ?? null; }
 
   // Equips a registered GLB model directly to its corresponding equipment slot (Weapon, Shield, Helmet, Chest, Avatar)
   public async equipGlbAsEquipment(modelId: string, targetSlot?: any): Promise<boolean> {
