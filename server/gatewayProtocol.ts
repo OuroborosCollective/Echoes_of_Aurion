@@ -22,7 +22,7 @@ export function isStrictlyIncreasingSequence(sequence: number, previousSequence:
 }
 
 /** A bearer grant is usable only while its persisted status is active and its expiry is still in the future. */
-export function isGatewayGrantActive(status: string, expiresAt: Date, now = new Date()): boolean {
+export function isGatewayGrantActive(status: string, expiresAt: Date, now: Date): boolean {
   return status === "active" && expiresAt.getTime() > now.getTime();
 }
 

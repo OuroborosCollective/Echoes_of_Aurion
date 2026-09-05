@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildAuthorizationUrl,
+  discoverOidcMetadata,
   codeChallengeFor,
   createOidcTransaction,
   identityFromVerifiedIdToken,
@@ -75,4 +76,15 @@ describe("oidcProtocol", () => {
     expect(() => readOidcSettings({ ...process.env, OIDC_ISSUER_URL: "http://id.example.test", OIDC_CLIENT_ID: settings.clientId, OIDC_CLIENT_SECRET: settings.clientSecret, OIDC_REDIRECT_URI: settings.redirectUri })).toThrow("HTTPS");
     expect(() => readOidcSettings({ ...process.env, OIDC_ISSUER_URL: settings.issuerUrl, OIDC_CLIENT_ID: settings.clientId, OIDC_CLIENT_SECRET: settings.clientSecret, OIDC_REDIRECT_URI: settings.redirectUri, OIDC_SCOPE: "profile email" })).toThrow("openid");
   });
+});
+
+it("refreshes discovery on the exact injected expiry without real waiting", async () => {
+  let timestamp = 1_800_000_000_000;
+  const clock = { now: () => timestamp };
+  const request = vi.fn(async () => new Response(JSON.stringify({issuer:settings.issuerUrl,authorization_endpoint:metadata.authorizationEndpoint,token_endpoint:metadata.tokenEndpoint,jwks_uri:metadata.jwksUri}),{status:200}));
+  await discoverOidcMetadata(settings, request, clock);
+  timestamp += 10 * 60 * 1000 - 1;
+  await discoverOidcMetadata(settings, request, clock); expect(request).toHaveBeenCalledTimes(1);
+  timestamp += 1;
+  await discoverOidcMetadata(settings, request, clock); expect(request).toHaveBeenCalledTimes(2);
 });

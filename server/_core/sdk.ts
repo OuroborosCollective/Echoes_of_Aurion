@@ -1,3 +1,4 @@
+import { operationalNow, operationalDate, deadlineAfter, hostOperationalClock, type OperationalClock } from "../../shared/operationalClock";
 import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS, decodeOAuthState } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
@@ -81,11 +82,11 @@ const createOAuthHttpClient = (): AxiosInstance =>
     timeout: AXIOS_TIMEOUT_MS,
   });
 
-class SDKServer {
+export class SDKServer {
   private readonly client: AxiosInstance;
   private readonly oauthService: OAuthService;
 
-  constructor(client: AxiosInstance = createOAuthHttpClient()) {
+  constructor(client: AxiosInstance = createOAuthHttpClient(), private readonly clock: OperationalClock = hostOperationalClock) {
     this.client = client;
     this.oauthService = new OAuthService(this.client);
   }
@@ -181,9 +182,9 @@ class SDKServer {
     payload: SessionPayload,
     options: { expiresInMs?: number } = {}
   ): Promise<string> {
-    const issuedAt = Date.now();
+    const issuedAt = operationalNow(this.clock);
     const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
-    const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
+    const expirationSeconds = Math.floor(deadlineAfter(issuedAt, expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 
     return new SignJWT({
@@ -208,6 +209,7 @@ class SDKServer {
       const secretKey = this.getSessionSecret();
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
+        currentDate: operationalDate(this.clock),
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
@@ -286,7 +288,7 @@ class SDKServer {
     }
 
     const sessionUserId = session.openId;
-    const signedInAt = new Date();
+    const signedInAt = operationalDate(this.clock);
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
@@ -331,7 +333,7 @@ export type AuthenticatedUser = User & {
 function buildCronUser(
   userInfo: GetUserInfoWithJwtResponse
 ): AuthenticatedUser {
-  const now = new Date();
+  const now = operationalDate();
   return {
     id: -1,
     openId: userInfo.openId,

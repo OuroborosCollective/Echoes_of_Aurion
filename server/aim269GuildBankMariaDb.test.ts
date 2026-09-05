@@ -144,4 +144,24 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS rowCount FROM aurionGuildResourceLedger WHERE guildId = ? AND direction = 'debit'", [guildId]);
     expect(Number(ledger[0]?.rowCount)).toBe(3);
   });
+  it("enforces the exact injected deadline and still reads consumed receipts after expiry", async () => {
+    let timestamp = 1_800_000_000_000;
+    const timed = GuildBankStore.fromDatabaseUrl(databaseUrl, { now: () => timestamp });
+    try {
+      const initial = await timed.read(founderUserId,guildId);
+      const expired = await timed.plan(founderUserId,{operation:"deposit_points",expectedRevisionExact:initial.revisionExact,idempotencyKey:"aim269-exact-expiry",payload:{amountExact:"1"}});
+      expect(new Date(expired.expiresAt).getTime()).toBe(timestamp + 600_000);
+      timestamp += 600_000;
+      await expect(timed.apply(founderUserId,expired.plan.confirmationHash)).rejects.toThrow("GUILD_BANK_PLAN_EXPIRED");
+      expect((await timed.read(founderUserId,guildId)).revisionExact).toBe(initial.revisionExact);
+      const valid = await timed.plan(founderUserId,{operation:"deposit_points",expectedRevisionExact:initial.revisionExact,idempotencyKey:"aim269-before-expiry",payload:{amountExact:"1"}});
+      timestamp += 599_999;
+      const applied = await timed.apply(founderUserId,valid.plan.confirmationHash);
+      timestamp += 1;
+      const replay = await timed.apply(founderUserId,valid.plan.confirmationHash);
+      expect(replay.replay).toBe(true); expect(replay.receipt).toEqual(applied.receipt);
+      expect(replay.readback.playerPointsExact).toBe(applied.readback.playerPointsExact);
+    } finally { await timed.close(); }
+  });
+
 });

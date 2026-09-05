@@ -1,3 +1,4 @@
+import { operationalNow, deadlineAfter, hostOperationalClock, type OperationalClock } from "../../shared/operationalClock";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 
@@ -154,9 +155,10 @@ function parseMetadata(value: unknown, settings: OidcSettings): OidcMetadata {
   };
 }
 
-export async function discoverOidcMetadata(settings: OidcSettings, request: typeof fetch = fetch): Promise<OidcMetadata> {
+export async function discoverOidcMetadata(settings: OidcSettings, request: typeof fetch = fetch, clock: OperationalClock = hostOperationalClock): Promise<OidcMetadata> {
+  const observedAtMs = operationalNow(clock);
   const cached = discoveryCache.get(settings.issuerUrl);
-  if (cached && cached.expiresAt > Date.now()) return cached.metadata;
+  if (cached && cached.expiresAt > observedAtMs) return cached.metadata;
 
   const discoveryUrl = `${settings.issuerUrl}/.well-known/openid-configuration`;
   const response = await request(discoveryUrl, {
@@ -165,7 +167,7 @@ export async function discoverOidcMetadata(settings: OidcSettings, request: type
   });
   if (!response.ok) throw new Error(`OIDC discovery failed with HTTP ${response.status}`);
   const metadata = parseMetadata(await response.json(), settings);
-  discoveryCache.set(settings.issuerUrl, { metadata, expiresAt: Date.now() + OIDC_DISCOVERY_TTL_MS });
+  discoveryCache.set(settings.issuerUrl, { metadata, expiresAt: deadlineAfter(operationalNow(clock), OIDC_DISCOVERY_TTL_MS) });
   return metadata;
 }
 
