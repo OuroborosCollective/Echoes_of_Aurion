@@ -1,6 +1,18 @@
-# Echoes of Aurion — Structure
+---
+description: Archivierte Architektur eines frühen statischen Browser-Prototyps.
+---
 
-```text
+# Echoes of Aurion — Historischer Prototypaufbau
+
+{% hint style="warning" %}
+Dieser Aufbau beschreibt einen frühen statischen Prototyp. Er ist nicht die aktuelle, vollständige Aurion-Runtime auf `main`.
+{% endhint %}
+
+Der aktuelle Nachweisstand steht im [AURION\_MIGRATION\_TRUTH\_SNAPSHOT\_2026-08-28.md](AURION_MIGRATION_TRUTH_SNAPSHOT_2026-08-28.md "mention").
+
+## Prototypaufbau
+
+```
 React frame (Home.tsx)
 ├── GameCanvas.tsx             Babylon lifecycle and canvas ownership
 ├── Local Ledger               Browser-local, append-only session memory
@@ -14,8 +26,8 @@ React frame (Home.tsx)
     └── Command Adapter        Normalizes W/A/S/D/1–9 custom events
 ```
 
-## Runtime boundaries
+## Historische Grenzen
 
-The React layer owns consent, menu state, touch controls and local persistence. Babylon owns only the scene graph, the world update loop and actor transforms. Communication uses narrowly scoped browser events: `aurion:command`, `aurion:human-command`, `aurion:begin-expedition` and `aurion:game-event`.
+Die React-Schicht verwaltete Einwilligung, Menüzustand, Touch-Steuerung und lokale Speicherung. Babylon verwaltete Szenengraph, Update-Loop und Figuren-Transformationen. Die Kommunikation verwendete begrenzte Browser-Events.
 
-The first release deliberately contains **no private-app access, no hidden transmission and no external credential handling**. It is an auditable, static prototype with a simulated local link. Replacing that link with a genuine provider-specific connector requires a backend gateway, an explicit authorization journey, service-policy review and a user-visible privacy notice.
+Der Prototyp enthielt keinen Zugriff auf private Apps, keine versteckte Übertragung und keine externen Zugangsdaten. Die lokale Verbindung war simuliert. Sie ersetzt keine autorisierte Serveranbindung.

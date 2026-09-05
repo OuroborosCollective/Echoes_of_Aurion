@@ -1,52 +1,45 @@
 ---
-description: >-
-  Serverautoritäres 3D-Open-World-MMORPG mit persistenter Welt, Quests und
-  Gilden.
+description: Technischer Projektüberblick und nachweisgebundener Veröffentlichungsstand.
 ---
 
 # Echoes of Aurion
 
-**Echoes of Aurion** ist ein 3D-Open-World-MMORPG für Browser und Mobilgeräte. Du erkundest eine persistente Welt, entwickelst deinen Charakter und beeinflusst Regionen durch Quests, Kämpfe, Wirtschaft und Gilden.
+**Echoes of Aurion** ist ein serverautoritäres 3D-Open-World-MMORPG für Browser und Mobilgeräte. Die Runtime entwickelt sich auf `main`. Dieser Überblick trennt implementierte Systeme von produktiv nachgewiesenen Funktionen.
 
-Die Welt entsteht deterministisch aus einem versionierten Seed. Der Server autorisiert Bewegung, Kampf, Loot, Quests, Präsenz, Epochen und Weltveränderungen. Clients zeigen ausschließlich bestätigte Zustände an.
+Die Referenzrevision ist `main@c0ad8967046c52141cf1b5f69874a0c53117fbe2`. Der vollständige Evidenzstand steht im [AURION\_MIGRATION\_TRUTH\_SNAPSHOT\_2026-08-28.md](AURION_MIGRATION_TRUTH_SNAPSHOT_2026-08-28.md "mention").
 
-## Die Welt von Aurion
+## Architektur
 
-Aurion besteht aus verbundenen Sektoren mit eigener Politik, Wirtschaft, Ressourcen und Dungeons. Welt-Events verändern Gefahr, Belohnungen, Knappheit und Beziehungen der Fraktionen.
+Die Welt entsteht aus einem versionierten Seed. Der Server autorisiert Bewegung, Kampf, Loot, Quests, Präsenz, Epochen und Weltänderungen. Clients zeigen nur bestätigte Readmodels.
 
-Die ersten Regionen sind:
+Die Anwendung verwendet React, TypeScript, Vite und Babylon.js. Das Streaming passt Detailstufen an Gerätebudgets an. Diese Budgets ändern niemals den kanonischen Weltzustand.
 
-1. **Schwelle der Sternwarte**
-2. **Windhollow**
-3. **Emberfall-Marsch**
-4. **Aschengewölbe**
+## Implementierte Systeme
 
-Regionen bleiben langfristig relevant. Ressourcen, Handelsrollen, Fraktionen, Dungeons und Welt-Events bieten eigene Ziele. Mastery verbessert Zugang und Fortschritt. Sie skaliert Gegner nicht automatisch auf dein Level.
+Der aktuelle Quellstand enthält folgende Systeme:
 
-## Fortschritt und Aktivitäten
+* Deterministische Welt-, Chunk- und Streamingverträge.
+* Serverseitige Quests, Loot, Iteminstanzen, Mastery und Ethos.
+* Präsenz, Welt-Epochen und begrenzte Reaktionsketten.
+* Faction-Questentscheidungen mit idempotenten Belohnungsbelegen.
+* Audio-Cues als reine Präsentation.
 
-Du baust Fortschritt über serverbestätigte Ergebnisse auf:
+Aurion verwendet keine Klassen und keine globale Charakterstufe. Fähigkeiten haben eigene XP und eigene, offene Fortschrittslogik. Builds entstehen aus Fähigkeiten, Ausrüstung und Entscheidungen.
 
-* **Quests und Entscheidungen:** Fraktionsgeschichten führen über nachvollziehbare Entscheidungs- und Belohnungsbelege.
-* **Kampf und Loot:** Begegnungen erzeugen bestätigte Siege, Gegenstände und Skill-XP.
-* **Dungeons:** Normal, Elite, Herausforderung und Endlosmodus nutzen regionale Varianten und Affixe.
+## Nachweisstand
 
-Endlosdungeons haben kein Level-Cap. Ihre sichtbaren Kampf- und Belohnungswerte bleiben begrenzt. So bleiben Wirtschaft und Lesbarkeit stabil.
+Die Systeme sind in `main` vorhanden und überwiegend durch Verträge oder Tests belegt. Das beweist keine vollständige Produktionsfreigabe.
 
-Aurion verwendet keine Klassen und keine globale Charakterstufe. Jede Fähigkeit besitzt eigene XP und eine eigene, cap-freie Stufenlogik. Dein Build entsteht aus trainierten Skills, Ausrüstung und Spielentscheidungen.
+Die öffentliche Root-Website zeigt weiterhin eine ältere statische Oberfläche. Die vollständige API-Laufzeit, Produktionsdatenbank-Migrationen und der durchgängige Browsernachweis bleiben separat zu verifizieren.
 
-## Gemeinschaft und Weltordnung
+Die Hauptschritte vor einer vollständigen Freigabe sind:
 
-Gilden koordinieren Territorien, Ressourcen und Diplomatie. Ein Königreich entsteht aus mindestens sechs verbundenen Territorien derselben Gilde. Der Server prüft Mitgliedschaft, Berechtigungen, Ressourcen und Revisionen bei jeder wirksamen Aktion.
+1. Produktionsschema bis Migration `0027` sicher abgleichen.
+2. Die Migrationskette für neue und bestehende Umgebungen reparieren.
+3. Den vollständigen Golden Slice mit Datenbank- und Browser-Readback prüfen.
 
-Ein persönlicher Turm dient als geschützter Rückkehrpunkt, Lager und später gestaltbarer Raum. Er ist keine Kampfarena.
+Bis dahin gilt eine Funktion nur im höchsten belegten Evidenzstatus. Datei-, Test- oder PR-Existenz allein ist kein Produktionsnachweis.
 
-## Technik
+## Historische Inhalte
 
-Die Anwendung nutzt **React**, **TypeScript**, **Vite** und **Babylon.js**. Sie streamt Welt-Chunks und passt Detailstufen an Phone, Tablet und Desktop an. Diese Budgets reduzieren Renderlast, niemals den kanonischen Weltzustand.
-
-## Aktueller Veröffentlichungsstand
-
-Die MMORPG-Systeme sind im aktuellen Aurion-Quellstand implementiert und durch Verträge sowie Tests abgesichert. Die öffentliche Auslieferung wird noch schrittweise auf die vollständige Aurion-Laufzeit umgestellt.
-
-Die derzeitige öffentliche Website enthält eine ältere statische Oberfläche. Produktionsmigrationen, die vollständige API und der End-to-End-Nachweis des MMORPG-Flows werden vor ihrer Freigabe separat verifiziert. Dadurch bleiben Konten, Fortschritt und Wirtschaft geschützt.
+Frühere Seiten zu einem lokalen Einzelspieler-Prototyp, einer simulierten Partnerkopplung oder einer itch.io-Auslieferung beschreiben historische Kandidaten. Sie sind keine Aussage über die aktuelle Aurion-Runtime oder eine veröffentlichte Produktion.
