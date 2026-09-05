@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DeterministicPRNG, FixedTimestepLoop, GlobalWeatherEngine, TerrainBarycentric } from "../client/src/xaurion/integration/aurionWorldCore";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -29,7 +29,19 @@ describe("AIM-243 deterministic xaurion world core", () => {
     expect(weather.state(0, 0).type).toBe("clear_radiance");
     expect(weather.state(0, 3000).type).toBe("leyline_tempest");
     expect(weather.state(0, 6000).type).toBe("aether_rain");
-    expect(read("client/src/xaurion/integration/aurionWorldCore.ts")).not.toContain("Date.now()");
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => {
+      throw new Error("Weather must not consult the wall clock");
+    });
+    try {
+      for (const epoch of [0, 1, 42]) {
+        for (const tick of [0, 2999, 3000, 6000, 9000, 12000]) {
+          expect(new GlobalWeatherEngine().state(epoch, tick)).toEqual(weather.state(epoch, tick));
+        }
+      }
+      expect(clock).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("grounds TerrainBarycentric on the existing Aurion landscape height function", () => {

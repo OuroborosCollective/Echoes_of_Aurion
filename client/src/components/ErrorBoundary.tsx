@@ -38,7 +38,7 @@ class ErrorBoundary extends Component<Props, State> {
 
             <p className="mb-2 text-[10px] font-bold tracking-[.18em] text-cyan-200">AURION // RUNTIME-SCHUTZ</p>
             <h2 className="mb-3 font-serif text-2xl text-[#f4e4bc]">Die Sternwarte braucht einen neuen Impuls.</h2>
-            <p className="mb-2 max-w-md text-center text-sm leading-6 text-cyan-50/75">Der Spielbereich wurde sicher angehalten. Deine Kontodaten und Community-Aktionen wurden nicht verändert.</p>
+            <p className="mb-2 max-w-md text-center text-sm leading-6 text-cyan-50/75">Die Spieloberfläche wurde angehalten. Öffne die Sternwarte erneut, um den zuletzt gespeicherten Stand vom Server zu laden.</p>
             <code className="mb-6 border border-cyan-200/15 bg-black/20 px-3 py-1 text-[10px] text-cyan-100/70">VORGANG {runtimeIssueCode(this.state.error)}</code>
 
             <button

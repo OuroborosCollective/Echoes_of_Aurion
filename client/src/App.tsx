@@ -13,6 +13,7 @@ import GlbUpload from "./pages/GlbUpload";
 import Home from "./pages/Home";
 import Operations from "./pages/Operations";
 import AurionOpenWorldRuntime from "./xaurion/integration/AurionOpenWorldRuntime";
+import { OpenWorldErrorBoundary } from "./xaurion/integration/OpenWorldErrorBoundary";
 
 function App() {
   return (
@@ -27,7 +28,7 @@ function App() {
             <Route path="/ops/glb-upload" component={GlbUpload} />
             <Route component={Home} />
           </Switch>
-          <AurionOpenWorldRuntime />
+          <OpenWorldErrorBoundary><AurionOpenWorldRuntime /></OpenWorldErrorBoundary>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
