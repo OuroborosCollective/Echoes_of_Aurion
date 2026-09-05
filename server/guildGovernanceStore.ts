@@ -1,4 +1,5 @@
 import { operationalNow, deadlineAfter, hostOperationalClock, type OperationalClock } from "../shared/operationalClock";
+import { ownedGuildGovernance } from "../shared/guildGovernanceView";
 import { createPool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import {
   AURION_GUILD_GOVERNANCE_CONTENT_VERSION,
@@ -266,14 +267,23 @@ export class GuildGovernanceStore {
   async read(actorUserId: number, requestedGuildId?: string): Promise<GuildGovernanceReadback> {
     const connection = await this.pool.getConnection();
     try {
+      await connection.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+      await connection.beginTransaction();
       const active = await membership(connection, actorUserId, requestedGuildId, false);
       const [states] = await connection.query<StateRow[]>("SELECT guildId, revision, kingdomId, capitalTerritoryId FROM aurionGuildGovernanceStates WHERE guildId = ?", [active.guildId]);
       const state = states[0] ?? ({ guildId: active.guildId, revision: "0", kingdomId: null, capitalTerritoryId: null } as StateRow);
-      const [territories] = await connection.query<TerritoryRow[]>("SELECT territoryId, worldId, chunkX, chunkZ, guildId, state FROM aurionGuildTerritories WHERE guildId = ? AND state != 'released' ORDER BY territoryId", [active.guildId]);
+      const [territories] = await connection.query<TerritoryRow[]>("SELECT territoryId, worldId, chunkX, chunkZ, guildId, state FROM aurionGuildTerritories WHERE guildId = ? AND state != 'released' ORDER BY territoryId LIMIT 1001", [active.guildId]);
       const [kingdoms] = await connection.query<KingdomRow[]>("SELECT id, name, rulerUserId, capitalTerritoryId, territoryDigest, revision FROM aurionGuildKingdoms WHERE guildId = ? AND status = 'active'", [active.guildId]);
       const explicit = await grants(connection, active.guildId, actorUserId);
       const kingdom = kingdoms[0] ? Object.freeze({ id: kingdoms[0].id, name: kingdoms[0].name, rulerUserId: kingdoms[0].rulerUserId, capitalTerritoryId: kingdoms[0].capitalTerritoryId, territoryDigest: kingdoms[0].territoryDigest, revisionExact: revisionOf(kingdoms[0].revision) }) : null;
-      return Object.freeze({ guildId: active.guildId, actorUserId, role: active.role, revisionExact: revisionOf(state.revision), kingdom, territories: Object.freeze(territories.map(row => Object.freeze({ territoryId: row.territoryId, worldId: row.worldId, chunkX: row.chunkX, chunkZ: row.chunkZ, guildId: row.guildId, state: row.state }))), grants: Object.freeze(explicit.map(row => Object.freeze({ capability: row.capability, scopeKind: row.scopeKind, scopeId: row.scopeId, status: row.status }))) });
+      if (kingdoms.length > 1 || state.kingdomId !== (kingdom?.id ?? null) || state.capitalTerritoryId !== (kingdom?.capitalTerritoryId ?? null)) throw new Error("GUILD_GOVERNANCE_KINGDOM_READBACK_DRIFT");
+      const readback = Object.freeze({ guildId: active.guildId, actorUserId, role: active.role, revisionExact: revisionOf(state.revision), kingdom, territories: Object.freeze(territories.map(row => Object.freeze({ territoryId: row.territoryId, worldId: row.worldId, chunkX: row.chunkX, chunkZ: row.chunkZ, guildId: row.guildId, state: row.state }))), grants: Object.freeze(explicit.map(row => Object.freeze({ capability: row.capability, scopeKind: row.scopeKind, scopeId: row.scopeId, status: row.status }))) });
+      ownedGuildGovernance(readback, actorUserId, active.guildId);
+      await connection.commit();
+      return readback;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
     } finally { connection.release(); }
   }
 }

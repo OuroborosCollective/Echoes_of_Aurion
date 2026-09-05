@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import GuildGovernancePanel from "./GuildGovernancePanel";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import {
@@ -408,6 +409,10 @@ export default function GuildBankPanel({ userId }: { userId: number }) {
       <button disabled={busy} onClick={() => void query.refetch()}>
         Bank aktualisieren
       </button>
+      <details>
+        <summary>Rolle, Territorien & Königreich</summary>
+        <GuildGovernancePanel key={`${userId}:${guildId}`} userId={userId} guildId={guildId} />
+      </details>
     </section>
   );
 }
