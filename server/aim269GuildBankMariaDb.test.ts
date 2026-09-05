@@ -1,4 +1,4 @@
-import { createPool, type RowDataPacket } from "mysql2/promise";
+import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GuildBankStore } from "./guildBankStore";
 
@@ -11,11 +11,10 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
   const memberUserId = 9269002;
   const legacyItemId = "aim269_legacy_item";
   const v2ResourceItemId = "aim269_v2_wood_item";
-  let pool: any;
-  let store: any;
+  let pool: Pool;
+  let store: GuildBankStore;
 
   async function clean(): Promise<void> {
-    if (!pool) return;
     for (const statement of [
       "DELETE FROM aurionGuildResourceLedger WHERE guildId = ?",
       "DELETE FROM aurionGuildItemCustodyLedger WHERE guildId = ?",
@@ -52,8 +51,8 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     await pool.query("INSERT INTO playerProfiles (userId, aurionPoints) VALUES (?, 50000), (?, 50000)", [founderUserId, memberUserId]);
     await pool.query("INSERT INTO guilds (id, name, tag, founderUserId) VALUES (?, 'AIM 269 Integration', 'A269', ?)", [guildId, founderUserId]);
     await pool.query("INSERT INTO guildMemberships (id, guildId, userId, role, status) VALUES ('gm_aim269_founder', ?, ?, 'founder', 'active'), ('gm_aim269_member', ?, ?, 'member', 'active')", [guildId, founderUserId, guildId, memberUserId]);
-    await pool.query("INSERT INTO itemInstances (id, ownerUserId, sourceKind, lootReceiptId, craftingReceiptId, baseItemKey, quality, itemLevel, affixesJson, status) VALUES (?, ?, 'loot', 'aim269_loot_receipt', NULL, 'aurion_spear', 'rare', 36, '[]', 'owned')", [legacyItemId, memberUserId]);
-    await pool.query("INSERT INTO aurionItemInstancesV2 (id, ownerUserId, lootReceiptId, baseItemDefinitionId, category, equipmentSlot, quality, itemLevelExact, affixesJson, setId, itemPower, deterministicHash) VALUES (?, ?, 'aim269_v2_loot', 'wood_logs', 'material', NULL, 'normal', '10', '[]', NULL, 0, 'aim269_v2_hash')", [v2ResourceItemId, memberUserId]);
+    await pool.query("INSERT INTO itemInstances (id, ownerUserId, sourceKind, lootReceiptId, craftingReceiptId, baseItemKey, quality, itemLevel, affixesJson, status) VALUES (?, ?, 'loot', 'aim269_loot_receipt_legacy', NULL, 'asterion_blade', 'rare', 10, '[]', 'owned')", [legacyItemId, memberUserId]);
+    await pool.query("INSERT INTO aurionItemInstancesV2 (id, ownerUserId, lootReceiptId, baseItemDefinitionId, category, equipmentSlot, quality, itemLevelExact, affixesJson, setId, itemPower, deterministicHash, status) VALUES (?, ?, 'aim269_loot_receipt_v2', 'mat_wood_oak', 'crafting_component', NULL, 'normal', '1', '[]', NULL, 1, ?, 'owned')", [v2ResourceItemId, memberUserId, "a".repeat(64)]);
   });
 
   afterAll(async () => {
@@ -81,7 +80,7 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
   });
 
   it("denies withdrawal to a normal member and permits the founder atomically", async () => {
-    await expect(store.plan(memberUserId, { operation: "withdraw_points", expectedRevisionExact: "1", idempotencyKey: "aim269-member-withdraw", payload: { amountExact: "1" } })).rejects.toThrow();
+    await expect(store.plan(memberUserId, { operation: "withdraw_points", expectedRevisionExact: "1", idempotencyKey: "aim269-member-withdraw", payload: { amountExact: "1" } })).rejects.toThrow("GUILD_CAPABILITY_REQUIRED");
     const planned = await store.plan(founderUserId, { operation: "withdraw_points", expectedRevisionExact: "1", idempotencyKey: "aim269-founder-withdraw", payload: { amountExact: "250" } });
     const applied = await store.apply(founderUserId, planned.plan.confirmationHash);
     expect(applied.readback.treasuryBalanceExact).toBe("750");
@@ -96,7 +95,7 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     const [heldItem] = await pool.query<RowDataPacket[]>("SELECT ownerUserId, status FROM itemInstances WHERE id = ?", [legacyItemId]);
     expect(heldItem[0]).toMatchObject({ ownerUserId: memberUserId, status: "guild_custody" });
 
-    const withdrawal = await store.plan(founderUserId, { operation: "withdraw_item", expectedRevisionExact: "3", idempotencyKey: "aim269-item-withdraw", payload: { itemRecordVersion: "legacy", itemId: legacyItemId, recipientUserId: founderUserId } });
+    const withdrawal = await store.plan(founderUserId, { operation: "withdraw_item", expectedRevisionExact: "3", idempotencyKey: "aim269-item-withdraw", payload: { itemRecordVersion: "legacy", itemId: legacyItemId } });
     const withdrawn = await store.apply(founderUserId, withdrawal.plan.confirmationHash);
     expect(withdrawn.readback.heldItems).toHaveLength(0);
     const [ownedItem] = await pool.query<RowDataPacket[]>("SELECT ownerUserId, status FROM itemInstances WHERE id = ?", [legacyItemId]);
@@ -106,7 +105,7 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
   });
 
   it("consumes a real V2 material instance into one exact guild resource unit", async () => {
-    const planned = await store.plan(memberUserId, { operation: "donate_resource_item", expectedRevisionExact: "4", idempotencyKey: "aim269-resource-donation", payload: { itemRecordVersion: "aurion_v2", itemId: v2ResourceItemId } });
+    const planned = await store.plan(memberUserId, { operation: "donate_resource_item", expectedRevisionExact: "4", idempotencyKey: "aim269-resource-donation", payload: { itemRecordVersion: "aurion_v2", itemId: v2ResourceItemId, expectedResourceKey: "wood" } });
     const applied = await store.apply(memberUserId, planned.plan.confirmationHash);
     expect(applied.readback.resourceBalancesExact.wood).toBe("1");
     const [itemRows] = await pool.query<RowDataPacket[]>("SELECT ownerUserId, status FROM aurionItemInstancesV2 WHERE id = ?", [v2ResourceItemId]);
@@ -120,12 +119,12 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
   it("upgrades one building by atomically consuming points and all exact resource accounts", async () => {
     await pool.query("UPDATE aurionGuildTreasuryAccounts SET balance = 20000 WHERE guildId = ?", [guildId]);
     await pool.query("UPDATE aurionGuildResourceAccounts SET balance = 5000 WHERE guildId = ?", [guildId]);
-    const planned = await store.plan(founderUserId, { operation: "upgrade_building", expectedRevisionExact: "5", idempotencyKey: "aim269-building-upgrade", payload: { buildingId: "bld_sovereign_academy", levelUpgrade: 1 } });
+    const planned = await store.plan(founderUserId, { operation: "upgrade_building", expectedRevisionExact: "5", idempotencyKey: "aim269-building-upgrade", payload: { buildingId: "bld_sovereign_academy", expectedLevelExact: "0" } });
     const applied = await store.apply(founderUserId, planned.plan.confirmationHash);
     expect(applied.readback.revisionExact).toBe("6");
     expect(applied.readback.treasuryBalanceExact).toBe("17800");
     expect(applied.readback.resourceBalancesExact).toEqual({ wood: "4500", stone: "4550", aether: "4650" });
-    expect(applied.readback.buildings).toEqual([expect.objectContaining({ buildingId: "bld_sovereign_academy", levelExact: "1" })]);
+    expect(applied.readback.buildings).toEqual([expect.objectContaining({ buildingId: "bld_sovereign_academy", levelExact: "1", projection: expect.objectContaining({ bonusesBps: expect.objectContaining({ validatedMasteryXpBps: 200 }) }) })]);
     const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS rowCount FROM aurionGuildResourceLedger WHERE guildId = ? AND direction = 'debit'", [guildId]);
     expect(Number(ledger[0]?.rowCount)).toBe(3);
   });
