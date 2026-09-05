@@ -270,6 +270,11 @@ test("native encounter survives a world return and commits the quest reward once
     expect(bankBody).toMatchObject({ success: true, bank: { actorUserId: before[0].userId, playerPointsExact: "20" } });
     const bank = page.getByTestId("guild-bank-panel");
     await expect(bank.getByText("20 AURION", { exact: true })).toBeVisible();
+    await bank.locator("summary").filter({ hasText: "Rolle, Territorien & Königreich" }).click();
+    const politics = bank.getByTestId("guild-governance-panel");
+    await expect(politics.getByText("Gründer", { exact: true })).toBeVisible();
+    await expect(politics.getByText("Keine bestätigten Territorien.", { exact: true })).toBeVisible();
+    await expect(politics.getByText("Kein bestätigtes Königreich.", { exact: true })).toBeVisible();
     const [guildRows] = await pool.query<RowDataPacket[]>("SELECT guildId FROM guildMemberships WHERE userId=? AND status='active'", [before[0].userId]);
     expect(guildRows).toHaveLength(1); const guildId = guildRows[0].guildId;
     const balances = async () => {
