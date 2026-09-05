@@ -355,7 +355,7 @@ export default function Home() {
       }
       companionCaptureInFlight.current = true;
       void requestCompanionFrame().then(sample => {
-        if (!sample || !isFreshCompanionFrame(sample) || lastCompanionAction.current?.id !== pending.id) return;
+        if (!sample || !isFreshCompanionFrame(sample, Date.now()) || lastCompanionAction.current?.id !== pending.id) return;
         const stateVector: CompanionStateVector = [
           mission.explorerHp / 100,
           mission.echoHp / 100,
@@ -528,7 +528,7 @@ export default function Home() {
       onSuccess: (pairing) => {
         processedGatewaySequence.current = 0; setGatewayPairing(pairing); setGatewaySequence(0); setConnected(true); setIsPairing(false);
         if (user?.id) {
-          startCompanionSession(user.id, provider);
+          startCompanionSession(user.id, provider, pairing.sessionId);
           transitionCompanionSession("connect");
         }
         appendLedger({ kind: "connection", title: "LLM-Verbindung bestätigt", detail: `${provider} ist verbunden. Der Companion wird erst nach Learn und anschließendem Play gespawnt.` });

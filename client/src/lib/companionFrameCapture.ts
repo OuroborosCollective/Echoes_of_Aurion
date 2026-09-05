@@ -20,9 +20,10 @@ export type CompanionFrameSample = Readonly<{
   capturedAt: number;
 }>;
 
+let requestSequence = 0;
 function requestIdentity(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `companion-frame-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  if (!Number.isSafeInteger(requestSequence + 1)) throw new Error("COMPANION_REQUEST_SEQUENCE_OVERFLOW");
+  return `companion-frame-${++requestSequence}`;
 }
 
 export function extractCompanionFrameFeatures(
@@ -57,7 +58,7 @@ export function extractCompanionFrameFeatures(
   return features;
 }
 
-export async function createCompanionFrameSample(frameDataUrl: string, capturedAt = Date.now()): Promise<CompanionFrameSample> {
+export async function createCompanionFrameSample(frameDataUrl: string, capturedAt: number): Promise<CompanionFrameSample> {
   if (!frameDataUrl.startsWith("data:image/") || !Number.isInteger(capturedAt) || capturedAt <= 0) {
     throw new Error("Companion frame response is invalid");
   }
@@ -81,20 +82,23 @@ export async function createCompanionFrameSample(frameDataUrl: string, capturedA
 
 export function isFreshCompanionFrame(
   sample: CompanionFrameSample | null,
-  now = Date.now(),
+  now: number,
   maximumAgeMs = COMPANION_FRAME_MAX_AGE_MS,
 ): sample is CompanionFrameSample {
   return Boolean(
     sample
-    && Number.isInteger(sample.capturedAt)
+    && Number.isSafeInteger(now) && now > 0
+    && Number.isSafeInteger(maximumAgeMs) && maximumAgeMs >= 0
+    && Number.isSafeInteger(sample.capturedAt) && sample.capturedAt > 0
     && sample.featureVector.length === COMPANION_FEATURE_VECTOR_LENGTH
+    && sample.featureVector.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
     && now >= sample.capturedAt
     && now - sample.capturedAt <= maximumAgeMs,
   );
 }
 
 export async function requestCompanionFrame(timeoutMs = 1_000): Promise<CompanionFrameSample | null> {
-  if (typeof window === "undefined" || timeoutMs < 1) return null;
+  if (typeof window === "undefined" || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 10_000) return null;
   const requestId = requestIdentity();
   return await new Promise<CompanionFrameSample | null>((resolve) => {
     let settled = false;

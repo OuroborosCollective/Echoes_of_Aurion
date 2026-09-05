@@ -92,8 +92,12 @@ function saveSession(session: CompanionSession): CompanionSession {
   return session;
 }
 
-export function startCompanionSession(userId: number, llmLabel: string): CompanionSession {
-  const session = createCompanionSession({ sessionId: `cmp_${Date.now().toString(36)}`, userId, llmLabel });
+export function startCompanionSession(userId: number, llmLabel: string, gatewaySessionId: string): CompanionSession {
+  if (!/^[A-Za-z0-9._:-]{8,64}$/.test(gatewaySessionId)) throw new Error("CONFIRMED_GATEWAY_SESSION_REQUIRED");
+  const sessionId = `cmp_${gatewaySessionId}`;
+  const existing = loadCompanionSession();
+  if (existing?.sessionId === sessionId && existing.userId === userId && existing.llmLabel === llmLabel) return existing;
+  const session = createCompanionSession({ sessionId, userId, llmLabel });
   return saveSession(session);
 }
 
@@ -125,8 +129,8 @@ export function recordCompanionObservation(input: {
   const stateMask = input.stateMask ?? EMPTY_MASK;
   if (!finiteVector(stateVector, COMPANION_STATE_VECTOR_LENGTH) || !validStateMask(stateMask)) return null;
 
-  const timestampEpoch = input.capturedAt ?? Date.now();
-  if (!Number.isInteger(timestampEpoch) || timestampEpoch <= 0) return null;
+  const timestampEpoch = input.capturedAt;
+  if (timestampEpoch === undefined || !Number.isSafeInteger(timestampEpoch) || timestampEpoch <= 0) return null;
 
   const sequenceIndex = session.datasetRows;
   const rowBase = {
