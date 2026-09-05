@@ -1,0 +1,71 @@
+name: AIM 251 profession crafting migration regression
+
+on:
+  pull_request:
+    paths:
+      - "server/crafting*.ts"
+      - "server/professionMasteryProtocol.ts"
+      - "server/aim251Profession*.test.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
+      - "drizzle/**"
+      - "drizzle.config.ts"
+      - ".github/workflows/aim251-profession-migrations.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/crafting*.ts"
+      - "server/professionMasteryProtocol.ts"
+      - "server/aim251Profession*.test.ts"
+      - "server/db.ts"
+      - "server/routers.ts"
+      - "drizzle/**"
+      - "drizzle.config.ts"
+      - ".github/workflows/aim251-profession-migrations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  profession-migration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_profession_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_profession_test
+      AURION_CRAFTING_E2E: "1"
+      AURION_PROFESSION_E2E: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify journal, types and pure profession contracts
+        run: |
+          pnpm verify:migrations
+          pnpm check
+          pnpm vitest run server/aim248ProfessionMastery.test.ts server/aim248ProfessionReplay.test.ts
+      - name: Apply complete migration chain to isolated MariaDB
+        run: pnpm exec drizzle-kit migrate
+      - name: Verify existing crafting, mastery, concurrency, output origins and rollback
+        run: pnpm vitest run server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts
+
+      - name: Verify all physical late schema contracts after the complete chain
+        env:
+          AURION_RECONCILIATION_SOURCE_SHA: ${{ github.sha }}
+        run: node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match

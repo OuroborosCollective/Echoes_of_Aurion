@@ -194,6 +194,7 @@ export const appRouter = router({
   crafting: router({
     read: protectedProcedure.query(({ ctx }) => db.getCraftingReadmodel(ctx.user.id)),
     craft: protectedProcedure.input(z.object({ recipeKey: z.literal("temper_aurion_spear"), inputItemId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.craftItemForUser({ userId: ctx.user.id, ...input })),
+    materializeBonus: protectedProcedure.input(z.object({ receiptId: z.string().min(8).max(64), expectedOutputIndexExact: z.string().min(1).max(128).regex(/^[1-9][0-9]*$/), count: z.number().int().min(1).max(50) }).strict()).mutation(({ ctx, input }) => db.materializeCraftingBonusForUser({ userId: ctx.user.id, ...input })),
   }),
   market: router({
     inventory: protectedProcedure.query(({ ctx }) => db.listInventoryForUser(ctx.user.id)),

@@ -10,7 +10,7 @@ import {
 } from "./scopedMasteryProtocol";
 
 export const AURION_PROFESSION_MASTERY_RULESET_VERSION = "aurion-profession-mastery.v1" as const;
-export const AURION_PROFESSION_MASTERY_CONTENT_VERSION = "aurion-profession-mastery-content.v1" as const;
+export const AURION_PROFESSION_MASTERY_CONTENT_VERSION = "aurion-profession-mastery-content.d356.v2" as const;
 
 export const aurionProfessionIds = [
   "fishing",
@@ -19,6 +19,7 @@ export const aurionProfessionIds = [
   "alchemy",
   "enchanting",
   "carpentry",
+  "blacksmith", "tailoring", "leatherworking", "woodcutting", "farming", "hunting", "civic_democracy", "stewardship",
 ] as const;
 export type AurionProfessionId = (typeof aurionProfessionIds)[number];
 export type ProfessionActivityKind = "craft" | "gather";
