@@ -35,7 +35,7 @@
   },
   "finalDelta": {
     "manifestPath": "docs/migrations/aim239-ax1-final-delta.json",
-    "manifestSha256": "723c02d743e784067bd31e94311774da808bb5c7673100afe206f0832b123c13",
+    "manifestSha256": "d02175af7fdd25074416745c0b76d3ea65749442aa224160e44f58a204ce5204",
     "commitCount": 1,
     "changedFiles": 38,
     "addedFiles": 10,

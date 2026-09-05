@@ -23,7 +23,7 @@ type DeltaManifest = {
   targetBaseline: { repository: string; revision: string };
   normativeRules: { repository: string; revision: string };
   summary: { changedFiles: number; added: number; modified: number; additions: number; deletions: number };
-  decisions: readonly { path: string; status: string; additions: number; deletions: number; decision: string; surface: string; risk: string; instruction: string }[];
+  decisions: readonly { path: string; status: string; additions: number; deletions: number; decision: string; surface: string; risk: string; instruction: string; sourceBlobSha: string; targetAim: string; integrationStatus: string }[];
   manifestSha256: string;
 };
 
@@ -106,6 +106,19 @@ describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
     expect(byPath.get("server.ts")?.decision).toBe("reject-raw");
     expect(byPath.get("server/mariadb.ts")?.decision).toBe("reject-raw");
     expect(byPath.get("src/entities/SimulatedRealmPlayers.ts")?.decision).toBe("dev-only");
+  });
+
+  it("binds every source decision to exact bytes and an accountable Linear lane without claiming integration", () => {
+    for (const entry of manifest.decisions) {
+      expect(entry.sourceBlobSha, entry.path).toMatch(/^[a-f0-9]{40}$/);
+      expect(entry.targetAim, entry.path).toMatch(/^AIM-(24[3-9]|25[0-9]|26[0-7])$/);
+      expect(entry.integrationStatus, entry.path).toBe("requires_target_evidence");
+    }
+    const byPath = new Map(manifest.decisions.map(entry => [entry.path, entry]));
+    expect(byPath.get("src/components/DungeonFinderModal.tsx")?.targetAim).toBe("AIM-259");
+    expect(byPath.get("src/entities/LootDropManager.ts")?.targetAim).toBe("AIM-260");
+    expect(byPath.get("src/world/WorldChunkManager.ts")?.targetAim).toBe("AIM-261");
+    expect(byPath.get("src/components/GuildManagementModal.tsx")?.targetAim).toBe("AIM-258");
   });
 
   it("records every delta path in the human-readable ownership matrix", () => {
