@@ -20,6 +20,33 @@ describe("server-backed Aurion HUD", () => {
     expect(screen.getByText("Charakterdaten ausstehend")).toBeTruthy();
     expect(screen.queryByText(/LV |🪙|100\/100|Sir_Galahad/)).toBeNull();
   });
+  it("toggles every panel shortcut once and stops movement on opening", () => {
+    mount();
+    for (const [key, name] of [["i", "Inventar & Paperdoll-Rüstkammer"], ["b", "Inventar & Paperdoll-Rüstkammer"], ["c", "Charakter & Skills"], ["m", "Weltatlas"], ["j", "Quest-Buch & Lore-Chroniken"], ["q", "Quest-Buch & Lore-Chroniken"]]) {
+      fireEvent.keyDown(window, { key });
+      expect(screen.getByRole("dialog", { name })).toBeTruthy();
+      expect(fixtures.onMove).toHaveBeenLastCalledWith(0, 0);
+      fireEvent.keyDown(window, { key, repeat: true });
+      expect(screen.getByRole("dialog", { name })).toBeTruthy();
+      fireEvent.keyDown(window, { key });
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+    expect(fixtures.onAction).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Weltatlas" }).getAttribute("aria-keyshortcuts")).toBe("M");
+  });
+  it("leaves typing, browser shortcuts and other dialogs in control of their keys", () => {
+    const { container } = mount();
+    fireEvent.keyDown(window, { key: "i", ctrlKey: true });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const editor = document.createElement("div");
+    editor.contentEditable = "true"; editor.setAttribute("contenteditable", "true"); editor.tabIndex = 0; container.append(editor); editor.focus();
+    fireEvent.keyDown(editor, { key: "i" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    editor.remove();
+    const external = document.createElement("section"); external.dataset.aurionPanel = "open"; container.append(external);
+    fireEvent.keyDown(window, { key: "i" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
   it("projects confirmed currency and treats stale data as read-only", () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; mount();
     expect(screen.getByText("290 EP · 23 AURION")).toBeTruthy();

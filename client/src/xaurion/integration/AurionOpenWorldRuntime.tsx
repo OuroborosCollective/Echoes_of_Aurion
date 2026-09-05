@@ -400,11 +400,10 @@ export default function AurionOpenWorldRuntime() {
         requestWorldInteraction();
         return;
       }
-      if (key === "r" || key === "t" || key === "i" || key === "c" || key === "j") {
+      if (key === "r" || key === "t") {
         event.preventDefault(); event.stopImmediatePropagation();
         if (key === "r") void requestAuthoritativeAction("F");
-        else if (key === "t") window.dispatchEvent(new Event("aurion:toggle-auto-attack"));
-        else window.dispatchEvent(new CustomEvent("aurion:open-world-panel", { detail: { panel: key === "i" ? "inventory" : key === "c" ? "character" : "quests" } }));
+        else window.dispatchEvent(new Event("aurion:toggle-auto-attack"));
         return;
       }
       if (key === "tab") {

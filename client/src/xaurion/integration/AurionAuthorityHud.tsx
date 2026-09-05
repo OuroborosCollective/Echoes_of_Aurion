@@ -22,6 +22,8 @@ import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 type Panel = "inventory" | "character" | "quests" | "map" | "crafting" | "controls" | null;
 const classes = { unbound: "Reisender", vanguard: "Vorhut", seer: "Seher", warden: "Hüter" } as const;
 const menu = [["inventory", "Inventar", Package], ["character", "Charakter", UserRound], ["quests", "Aufträge & Kontakte", ScrollText], ["map", "Weltatlas", Map]] as const;
+const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", m: "map", j: "quests", q: "quests" };
+const panelShortcuts = { inventory: "I", character: "C", quests: "J", map: "M" } as const;
 const community = (panel: "chat" | "market" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
 
 export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction, onInteract }: {
@@ -103,7 +105,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     const contacts = () => { setQuestTab("contacts"); openPanel("quests"); };
     const crafting = () => openPanel("crafting");
     const controls = () => openPanel("controls");
-    const shortcut = (e: Event) => { const next = (e as CustomEvent<{ panel?: Panel }>).detail?.panel; if (next && ["inventory", "character", "quests"].includes(next)) openPanel(next); };
+    const shortcut = (e: Event) => { const next = (e as CustomEvent<{ panel?: Panel }>).detail?.panel; if (next && ["inventory", "character", "quests", "map"].includes(next)) openPanel(next); };
     const toggle = () => { if (autoActive) auto.stop(); else auto.start(); };
     const status = (e: Event) => setCombatBusy(Boolean((e as CustomEvent<{ busy?: boolean }>).detail?.busy));
     const stop = () => auto.stop();
@@ -112,6 +114,21 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     document.addEventListener("visibilitychange", stop);
     return () => { events.forEach(([name, handler]) => window.removeEventListener(name, handler)); document.removeEventListener("visibilitychange", stop); };
   }, [refresh, openPanel, auto, autoActive]);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const active = document.activeElement;
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      if (active instanceof HTMLElement && (active.isContentEditable || active.closest('input, textarea, select, [contenteditable="true"]'))) return;
+      if (groupOpen || (panel === null && document.querySelector(WORLD_PANEL_SELECTOR))) return;
+      const next = panelHotkeys[event.key.toLowerCase()];
+      if (!next) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openPanel(panel === next ? null : next);
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [openPanel, panel, groupOpen]);
   useEffect(() => {
     const observer = new MutationObserver(() => { if (document.querySelector(WORLD_PANEL_SELECTOR)) auto.stop(); });
     observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state", "data-aurion-panel", "data-opened-from-world"] });
@@ -123,15 +140,15 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     <section className="aurion-authority-hud__profile" aria-label="Serverbestätigter Charakter" data-state={player.state}>
       <div className="ax1-unit-portrait" aria-hidden="true"><UserRound size={27} />{profile && <span>{profile.level}</span>}</div><div className="ax1-unit-values">{profile ? <><b>{classes[profile.selectedClass]} · Stufe {profile.level}</b><span>{profile.totalXp} EP · {profile.aurionPoints} AURION</span><span className="ax1-unit-detail">{profile.victories} Siege</span></> : <b>Charakterdaten ausstehend</b>}<small role="status" className={player.state === "live" ? "sr-only" : undefined}>{readbackLabels[player.state]}</small><span data-testid="confirmed-remote-player-count" className="sr-only">{connected ? remotePlayers.length + " andere Explorer verbunden" : "Mitspieler werden verbunden"}</span></div>
     </section>
-    <nav className="aurion-authority-hud__menu" aria-label="Weltmenü" data-expanded={expandedMenu}>{menu.map(([key, label, Icon]) => <button key={key} title={label} aria-label={label} onClick={() => openPanel(key)}><Icon size={19} /></button>)}<button className="ax1-menu-more" title="Weitere Menüs" aria-label="Weitere Menüs" aria-expanded={expandedMenu} onClick={() => { auto.stop(); setExpandedMenu(v => !v); }}><Menu size={19} /></button><div className="ax1-secondary-menu"><button aria-label="Steuerung & Skills" title="Steuerung & Skills" onClick={() => openPanel("controls")}><Gamepad2 size={19} /></button><button title="Companion" aria-label="Companion" onClick={() => { auto.stop(); setExpandedMenu(false); window.dispatchEvent(new Event("aurion:open-companion")); }}><Sparkles size={19} /></button><button title="Gruppe" aria-label="Gruppe" onClick={() => { auto.stop(); onMove(0, 0); setExpandedMenu(false); setGroupOpen(true); }}><Users size={19} /></button><button title="Chat" aria-label="Chat" onClick={() => { auto.stop(); setExpandedMenu(false); community("chat"); }}><MessageSquare size={19} /></button><button title="Gilde" aria-label="Gilde öffnen" onClick={() => { auto.stop(); setExpandedMenu(false); community("guild"); }}><Users size={19} /></button><button title="Handel" aria-label="Handel" onClick={() => { auto.stop(); setExpandedMenu(false); community("market"); }}><Coins size={19} /></button><button title="Handwerk" aria-label="Handwerk" onClick={() => openPanel("crafting")}><Hammer size={19} /></button></div></nav>
+    <nav className="aurion-authority-hud__menu" aria-label="Weltmenü" data-expanded={expandedMenu}>{menu.map(([key, label, Icon]) => <button type="button" key={key} title={`${label} [${panelShortcuts[key]}]`} aria-label={label} aria-keyshortcuts={panelShortcuts[key]} onClick={() => openPanel(key)}><Icon size={19} /></button>)}<button type="button" className="ax1-menu-more" title="Weitere Menüs" aria-label="Weitere Menüs" aria-expanded={expandedMenu} onClick={() => { auto.stop(); setExpandedMenu(v => !v); }}><Menu size={19} /></button><div className="ax1-secondary-menu"><button type="button" aria-label="Steuerung & Skills" title="Steuerung & Skills" onClick={() => openPanel("controls")}><Gamepad2 size={19} /></button><button type="button" title="Companion" aria-label="Companion" onClick={() => { auto.stop(); setExpandedMenu(false); window.dispatchEvent(new Event("aurion:open-companion")); }}><Sparkles size={19} /></button><button type="button" title="Gruppe" aria-label="Gruppe" onClick={() => { auto.stop(); onMove(0, 0); setExpandedMenu(false); setGroupOpen(true); }}><Users size={19} /></button><button type="button" title="Chat" aria-label="Chat" onClick={() => { auto.stop(); setExpandedMenu(false); community("chat"); }}><MessageSquare size={19} /></button><button type="button" title="Gilde" aria-label="Gilde öffnen" onClick={() => { auto.stop(); setExpandedMenu(false); community("guild"); }}><Users size={19} /></button><button type="button" title="Handel" aria-label="Handel" onClick={() => { auto.stop(); setExpandedMenu(false); community("market"); }}><Coins size={19} /></button><button type="button" title="Handwerk" aria-label="Handwerk" onClick={() => openPanel("crafting")}><Hammer size={19} /></button></div></nav>
     <AurionEncounterPanel userId={userId} connected={connected} onAttack={() => { void onAction("F"); }} />
     {groupOpen && <AurionGroupFinder open onClose={() => setGroupOpen(false)} />}
     <div className="aurion-authority-hud__move"><VirtualJoystick onMove={onMove} /></div>
     <div className="aurion-authority-hud__actions" aria-label="Aktionen">
-      <button className="ax1-action-primary" disabled={actionDisabled} onClick={() => { void onAction("F"); }} aria-label="Angriff" title="Angriff [R]"><Swords size={24} /><kbd>R</kbd></button>
-      {(ui.data?.settings.hotbar ?? []).map((command, index) => { const skill = aurionControlSkills.find(s => s.command === command)!; return <button key={index} disabled={actionDisabled || ui.state !== "live"} onClick={() => { void onAction(command); }} aria-label={"Aktion " + (index + 1) + ": " + skill.name} title={skill.name}><span style={{ color: skill.color }}>{skill.icon}</span><kbd>{index + 1}</kbd></button>; })}
-      <button disabled={actionDisabled} onClick={() => onInteract ? onInteract() : void onAction("E")} aria-label="Interaktion" title="Interaktion [F]"><Hand size={22} /><kbd>F</kbd></button>
-      <button disabled={!connected || panel !== null || groupOpen || pending} onClick={() => autoActive ? auto.stop() : auto.start()} aria-label="Auto-Angriff" title="Auto-Angriff [T]" aria-pressed={autoActive}><Repeat size={20} /><kbd>{autoActive ? "AN" : "T"}</kbd></button>
+      <button type="button" className="ax1-action-primary" disabled={actionDisabled} onClick={() => { void onAction("F"); }} aria-label="Angriff" title="Angriff [R]"><Swords size={24} /><kbd>R</kbd></button>
+      {(ui.data?.settings.hotbar ?? []).map((command, index) => { const skill = aurionControlSkills.find(s => s.command === command)!; return <button type="button" key={index} disabled={actionDisabled || ui.state !== "live"} onClick={() => { void onAction(command); }} aria-label={"Aktion " + (index + 1) + ": " + skill.name} title={skill.name}><span style={{ color: skill.color }}>{skill.icon}</span><kbd>{index + 1}</kbd></button>; })}
+      <button type="button" disabled={actionDisabled} onClick={() => onInteract ? onInteract() : void onAction("E")} aria-label="Interaktion" title="Interaktion [F]"><Hand size={22} /><kbd>F</kbd></button>
+      <button type="button" disabled={!connected || panel !== null || groupOpen || pending} onClick={() => autoActive ? auto.stop() : auto.start()} aria-label="Auto-Angriff" title="Auto-Angriff [T]" aria-pressed={autoActive}><Repeat size={20} /><kbd>{autoActive ? "AN" : "T"}</kbd></button>
     </div>
     {panel === null && message && <p className="aurion-ui-feedback" role="status">{message}</p>}
     {ui.state === "error" && <p className="aurion-ui-feedback" role="alert">Inventardaten sind nicht verfügbar.</p>}
