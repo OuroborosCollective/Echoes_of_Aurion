@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { factionQuestlineDecisionHash, type FactionQuestlineDecisionReceipt, type FactionQuestlineStateInput } from "./aurionFactionQuestlineProtocol";
+import { resolveFactionQuestline, factionQuestlineDecisionHash, type FactionQuestlineDecisionReceipt, type FactionQuestlineStateInput } from "./aurionFactionQuestlineProtocol";
 import { getFactionQuestlineRewardDefinition, resolveFactionQuestlineCompletion } from "./aurionFactionQuestlineRewardProtocol";
 
 function decision(input: Readonly<{
@@ -42,6 +42,22 @@ const neutralCompletedState: FactionQuestlineStateInput = {
 };
 
 describe("aurion faction questline reward protocol", () => {
+  it("rehydrates a real reward resolution without relaxing receipt-index validation", () => {
+    const resolved = resolveFactionQuestlineCompletion({ state: neutralCompletedState, questId: "free_haven.mainline", completionReceiptId: "completion-1", completionResolutionIndex: 3 });
+    const completion = { id: resolved.completionReceiptId, playerId: "reward-player", faction: "free_haven" as const, questId: "free_haven.mainline", sourceDecisionReceiptId: "reward-main", resolutionIndex: 3, rewardDigest: resolved.rewardDigest };
+    const state = { ...neutralCompletedState, completions: [completion], lastResolutionIndex: 3 };
+    const readback = resolveFactionQuestline(state);
+    expect(readback.lastResolutionIndex).toBe(3);
+    expect(readback.completedQuestIds).toContain("free_haven.mainline");
+    expect(resolveFactionQuestline(state)).toEqual(readback);
+    expect(() => resolveFactionQuestline({ ...state, completions: [] })).toThrow("newest receipt");
+    expect(() => resolveFactionQuestline({ ...state, completions: [completion, completion] })).toThrow("unique");
+    expect(() => resolveFactionQuestline({ ...state, completions: [{ ...completion, playerId: "foreign" }] })).toThrow("owned");
+    expect(() => resolveFactionQuestline({ ...state, completions: [{ ...completion, resolutionIndex: 2 }] })).toThrow("ordered");
+    const next = decision({ faction: "free_haven", questId: "free_haven.water-list", key: "publish", approach: "trade", receiptId: "after-reward", resolutionIndex: 4 });
+    expect(resolveFactionQuestline({ ...state, decisions: [...state.decisions,next], lastResolutionIndex: 4 }).completedQuestIds).toContain("free_haven.water-list");
+  });
+
   it("resolves a deterministic authored mainline reward from a confirmed decision", () => {
     const first = resolveFactionQuestlineCompletion({ state: neutralCompletedState, questId: "free_haven.mainline", completionReceiptId: "completion-1", completionResolutionIndex: 3 });
     const replay = resolveFactionQuestlineCompletion({ state: neutralCompletedState, questId: "free_haven.mainline", completionReceiptId: "completion-1", completionResolutionIndex: 3 });

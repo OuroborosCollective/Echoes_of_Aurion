@@ -12,7 +12,7 @@ suite("AIM-253 native encounter transaction in isolated MariaDB", () => {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS aim253_abort_completion");
     await pool.query("DELETE FROM itemInstances WHERE ownerUserId=?", [userId]);
-    for (const table of ["skillProgressionEvents", "weaponMasteryReceipts", "lootDropReceipts", "expeditionResultReceipts", "progressionLedger", "gameplayActionReceipts", "gameplaySessions", "gameplayQuestProgress", "gameplayDungeonKeys", "weaponLoadouts", "weaponMasteries", "playerProfiles"]) await pool.query(`DELETE FROM ${table} WHERE userId=?`, [userId]);
+    for (const table of ["aurionScopedMasteryEvents", "skillProgressionEvents", "weaponMasteryReceipts", "lootDropReceipts", "expeditionResultReceipts", "progressionLedger", "gameplayActionReceipts", "gameplaySessions", "gameplayQuestProgress", "gameplayDungeonKeys", "weaponLoadouts", "weaponMasteries", "playerProfiles"]) await pool.query(`DELETE FROM ${table} WHERE userId=?`, [userId]);
   };
   beforeAll(async () => {
     pool = createPool(process.env.DATABASE_URL!);

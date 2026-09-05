@@ -127,6 +127,7 @@ export const appRouter = router({
   }),
   gameplay: router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
+    relationshipStanding: protectedProcedure.query(({ ctx }) => db.getRelationshipStanding(ctx.user.id)),
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
