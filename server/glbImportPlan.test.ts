@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildGlbImportPlan } from "./glbImportPlan";
+import { validateRuntimeModelSource } from "../shared/runtimeContracts";
 import { testGlb } from "./glbImportFixtures";
 
 describe("production GLB import plans", () => {
@@ -9,6 +10,8 @@ describe("production GLB import plans", () => {
     expect(buildGlbImportPlan(bytes.toString("base64"))).toEqual(first);
     expect(first.targetKey).toBe("weapon_spear");
     expect(first.classification.assetType).toBe("weapon");
+    expect(validateRuntimeModelSource(`/api/assets/glb/${first.sha256}.glb`).valid).toBe(true);
+    expect(validateRuntimeModelSource("/api/assets/glb/../../private.glb").valid).toBe(false);
     expect(first.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(first.planSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(buildGlbImportPlan(testGlb("Aurion_Blade_Weapon").toString("base64")).planSha256).not.toBe(first.planSha256);

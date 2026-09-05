@@ -48,6 +48,8 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     page.on('response', response => { if (response.url().endsWith(receipt.storageUrl) && response.status() === 200) fetched.push(response.url()); });
     await page.goto('/');
     const solo = page.getByRole('button', { name: /ALLEIN DIE STERNWARTE BETRETEN/ });
+    const enterWorld = page.getByRole('button', { name: 'IN DIE OPEN WORLD', exact: true });
+    await expect(solo.or(enterWorld).first()).toBeVisible({ timeout: 30_000 });
     if (await solo.isVisible()) await solo.click();
     await page.getByRole('button', { name: 'IN DIE OPEN WORLD', exact: true }).click();
     await expect(page.getByTestId('xaurion-open-world-runtime')).toBeVisible();

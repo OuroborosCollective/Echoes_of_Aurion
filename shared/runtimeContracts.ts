@@ -26,7 +26,7 @@ export function validateRuntimeModelSource(sourceUrl?: string): { valid: boolean
   if (!sourceUrl) return { valid: true };
   try {
     const url = new URL(sourceUrl, "https://aurion.local");
-    const isRelativeStoragePath = sourceUrl.startsWith("/manus-storage/");
+    const isRelativeStoragePath = sourceUrl.startsWith("/manus-storage/") || /^\/api\/assets\/glb\/[a-f0-9]{64}\.glb$/.test(sourceUrl);
     const isBundledStaticAsset = sourceUrl.startsWith("./aurion-assets/") || sourceUrl.startsWith("aurion-assets/");
     const isSecureRemoteUrl = sourceUrl.startsWith("https://") && url.protocol === "https:";
     if (!isRelativeStoragePath && !isBundledStaticAsset && !isSecureRemoteUrl) return { valid: false, reason: "Quelle muss über HTTPS oder den Aurion-Speicher geladen werden." };

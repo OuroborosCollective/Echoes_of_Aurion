@@ -41,13 +41,15 @@ export class GlbImportStore {
       const storageKey = `local-glb/${plan.sha256}.glb`;
       if (existing[0] && existing[0].storageKey !== storageKey) throw new Error("GLB_EXISTING_ASSET_REQUIRES_REVIEW");
       if (existing[0] && (existing[0].assetType !== plan.assetType || existing[0].bytes !== plan.bytes)) throw new Error("GLB_METADATA_DRIFT");
-      const stored = await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
+      const stored = { key: storageKey, url: `/api/assets/glb/${plan.sha256}.glb` };
       const assetId = existing[0]?.id ?? plan.assetId;
       if (!existing.length) {
         const [count] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM glbAssets WHERE storageKey LIKE 'local-glb/%' AND status = 'approved'");
         if (Number(count[0]?.count) >= 500) throw new Error("GLB_CATALOG_LIMIT");
+        await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
         await connection.execute("INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId, reviewedByUserId, reviewedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)", [assetId, input.displayName.trim(), plan.assetType, stored.key, stored.url, plan.sha256, plan.bytes, actorUserId, actorUserId, operationalDate()]);
       }
+      if (existing.length) await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
       const archived = existing[0] && existing[0].status !== "approved";
       let activeAssetId: string | null = null;
       let status: GlbImportReceipt["status"] = archived ? "archived" : "catalog";
@@ -105,7 +107,13 @@ export class GlbImportStore {
     return this.locked(actorUserId, async connection => {
       const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
       if (!assets[0]) throw new Error("GLB_ASSET_MISSING");
-      if (input.status === "approved" && assets[0].storageKey.startsWith("local-glb/")) await readStoredGlb(assets[0].sha256, this.storageRoot);
+      if (input.status === "approved" && assets[0].storageKey.startsWith("local-glb/")) {
+        await readStoredGlb(assets[0].sha256, this.storageRoot);
+        if (assets[0].status !== "approved") {
+          const [count] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM glbAssets WHERE storageKey LIKE 'local-glb/%' AND status = 'approved'");
+          if (Number(count[0]?.count) >= 500) throw new Error("GLB_CATALOG_LIMIT");
+        }
+      }
       await connection.execute("UPDATE glbAssets SET status = ?, reviewedByUserId = ?, reviewedAt = ? WHERE id = ?", [input.status, actorUserId, operationalDate(), input.assetId]);
       if (input.status !== "approved") await connection.execute("UPDATE glbAssignments SET active = 0 WHERE assetId = ?", [input.assetId]);
       const [rows] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ?", [input.assetId]);
