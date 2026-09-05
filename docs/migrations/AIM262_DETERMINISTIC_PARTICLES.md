@@ -25,6 +25,15 @@ rejection and one-time resource disposal. Three.js's opaque allocation UUIDs are
 outside simulation inputs and replay hashes. Metrics expose budget, active/pool
 counts, reuse, dropped bursts and 10 Hz tick rate through the existing inspector.
 
+The dedicated CI browser job uses Chromium/SwiftShader, the production build and
+an isolated `aurion_browser_test` MariaDB. Disposable players register through
+the real account UI. It checks authenticated entry, WebSocket movement, persisted
+positions, tower return and reentry at phone/tablet/desktop sizes, plus forced
+context loss on desktop. The initial epoch remains a read-only canonical view;
+the test must not claim an epoch-write receipt was created by a read. Screenshots
+and a revision-bound readback are retained as Actions artifacts. This gate must
+actually pass before it counts as browser evidence.
+
 This increment covers particle migration. The complete AIM-262 also requires
 the remaining material/GLB/fallback ownership migration, authoritative mob and
 equipment projections and an authenticated browser/device visual playtest.
