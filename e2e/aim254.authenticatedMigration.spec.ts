@@ -180,7 +180,7 @@ test("two authenticated accounts see the same confirmed movement and departure",
     await expect(right.getByRole("dialog").getByText(new RegExp(`^Explorer ${leftUserId}:`))).toBeVisible();
     await right.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
     await right.locator("#three-viewport canvas").screenshot({ path: testInfo.outputPath("confirmed-other-player.png") });
-    await left.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await left.getByTestId("xaurion-open-world-runtime").getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(right.getByTestId("confirmed-remote-player-count")).toHaveText("0 andere Explorer verbunden");
     await expect.poll(() => rightView.map(p => p.userId)).toEqual([rightUserId]);
     expect(errors).toEqual([]);

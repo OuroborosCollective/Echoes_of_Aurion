@@ -7,7 +7,8 @@ describe("Aurion home/open-world state separation", () => {
     const source = await readFile(path.resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
     expect(source).toContain('type Screen = "gate" | "home" | "loadout" | "open_world" | "mission";');
     expect(source).toContain('onEnterExpanse={() => enterAurionExpanse(() => setScreen("open_world"))}');
-    expect(source).toContain('screen === "open_world" && <OpenWorldHud');
+    expect(source).toContain('screen === "open_world" && !openWorldRendererActive && <OpenWorldHud');
+    expect(source).toContain('{!openWorldRendererActive && <Suspense');
     expect(source).toContain('screen === "open_world" && worldDetailsOpen');
     expect(source).toContain('open-world-card open-world-card--drawer');
     expect(source).toContain('{screen === "mission" && (');
