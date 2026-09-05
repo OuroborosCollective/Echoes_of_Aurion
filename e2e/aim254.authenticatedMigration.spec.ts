@@ -56,6 +56,13 @@ for (const viewport of [
         await page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true }).click();
         const body = await (await response).json();
         const results = Array.isArray(body) ? body : [body];
+        const cityLayout = results.map(value => value.result?.data?.json?.worldKernel?.cityLayout).find(Boolean);
+        expect(cityLayout?.receiptHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(cityLayout.entities).toHaveLength(3);
+        const buildings = cityLayout.entities.filter((entity: { type: string }) => entity.type !== "road");
+        expect(buildings).toHaveLength(2);
+        expect(buildings.every((entity: { position: { y: number } }) => entity.position.y === 0)).toBe(true);
+        expect(Math.hypot(buildings[0].position.x - buildings[1].position.x, buildings[0].position.z - buildings[1].position.z)).toBeGreaterThanOrEqual(2);
         confirmedWorld = results.map(value => value.result?.data?.json?.globalWorld).find(Boolean);
         expect(confirmedWorld?.worldSeed).toBe("echoes-of-aurion-v1");
         expect(confirmedWorld?.deterministicHash).toMatch(/^fnv1a-[0-9a-f]{8}$/);

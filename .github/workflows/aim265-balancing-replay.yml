@@ -1,0 +1,74 @@
+name: AIM 265 exact balancing and spatial replay
+on:
+  pull_request:
+    paths:
+      - 'scripts/balancing/**'
+      - 'docs/balancing/**'
+      - 'server/aurion*Protocol.ts'
+      - 'server/aurionRegionCatalog.ts'
+      - 'server/aurionAx1ContentCatalog.ts'
+      - 'server/*MasteryProtocol.ts'
+      - 'server/wasdAurionSkillProgressionProtocol.ts'
+      - 'server/wasdAurionWorldIntegrityProtocol.ts'
+      - 'server/openWorldProtocol.ts'
+      - 'server/globalWorldProtocol.ts'
+      - 'server/guildBankProtocol.ts'
+      - 'server/aim265*'
+      - 'shared/aurion*Catalog.json'
+      - 'shared/worldChunk*Protocol.ts'
+      - '.github/workflows/aim265-balancing-replay.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/balancing/**'
+      - 'docs/balancing/**'
+      - 'server/aurion*Protocol.ts'
+      - 'server/aurionRegionCatalog.ts'
+      - 'server/aurionAx1ContentCatalog.ts'
+      - 'server/*MasteryProtocol.ts'
+      - 'server/wasdAurionSkillProgressionProtocol.ts'
+      - 'server/wasdAurionWorldIntegrityProtocol.ts'
+      - 'server/openWorldProtocol.ts'
+      - 'server/globalWorldProtocol.ts'
+      - 'server/guildBankProtocol.ts'
+      - 'server/aim265*'
+      - 'shared/aurion*Catalog.json'
+      - 'shared/worldChunk*Protocol.ts'
+      - '.github/workflows/aim265-balancing-replay.yml'
+permissions:
+  contents: read
+jobs:
+  independent-exact-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - name: Run real TypeScript calculations and independent integer/rational oracle
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/balancing/replay-aim265.mjs /tmp/aurion-balancing-v2.json
+          python scripts/balancing/verify-aim265.py /tmp/aurion-balancing-v2.json > /tmp/aurion-balancing-oracle.json
+          diff -u docs/balancing/aim265-candidate.json /tmp/aurion-balancing-v2.json
+          python -m unittest discover -s scripts/balancing -p 'test_*.py'
+          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurion-balancing-v2-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/aurion-balancing-v2.json
+            /tmp/aurion-balancing-oracle.json
+          if-no-files-found: error
+          retention-days: 14

@@ -3,7 +3,7 @@ import { activityXpAwardExact, economyBounds, integerSquareRoot, resolveEnemyBud
 import { dungeonAffixDefinitions, dungeonAffixKeys, type DungeonAffix } from "./aurionRegionCatalog";
 import { clampInteger, stableStringify, type RegionProgression } from "./aurionRegionProgressionProtocol";
 
-export const AURION_DUNGEON_RULESET_VERSION = "aurion-dungeon-progression.v1" as const;
+export const AURION_DUNGEON_RULESET_VERSION = "aurion-dungeon-progression.v2" as const;
 export const dungeonVariants = ["normal", "elite", "endless", "challenge"] as const;
 export type DungeonVariant = (typeof dungeonVariants)[number];
 
@@ -18,7 +18,7 @@ const hashHex = (...parts: readonly string[]): string => createHash("sha256").up
 function chooseDistinctAffixes(seed: string, count: number): readonly DungeonAffix[] {
   return Object.freeze(dungeonAffixKeys
     .map(key => ({ key, rank: hashHex(seed, key) }))
-    .sort((left, right) => left.rank.localeCompare(right.rank))
+    .sort((left, right) => left.rank < right.rank ? -1 : left.rank > right.rank ? 1 : left.key < right.key ? -1 : left.key > right.key ? 1 : 0)
     .slice(0, count)
     .map(entry => dungeonAffixDefinitions[entry.key]));
 }
@@ -63,14 +63,17 @@ export function resolveDungeonProgression(input: Readonly<{
   const floorProjection = projectedEndlessFloor(input.floorExact);
   const floorDangerBps = input.variant === "endless" ? floorProjection * 8 : input.variant === "challenge" ? floorProjection * 4 : floorProjection * 2;
   const affixCount = input.variant === "normal" ? 1 : input.variant === "elite" ? 2 : input.variant === "challenge" ? 3 : clampInteger(2 + Math.floor(input.floorExact.length / 2), 2, 6);
-  const seed = hashHex(AURION_DUNGEON_RULESET_VERSION, input.worldSeed, String(input.epoch), input.region.regionId, input.region.archetype.dungeonKey, input.variant, input.floorExact, input.sourceReceiptDigest);
-  const affixes = chooseDistinctAffixes(seed, affixCount);
+  // One immutable run receipt fixes the affix ordering. Higher floors extend
+  // that prefix instead of rerolling danger/rewards downwards at every floor.
+  const runSeed = hashHex(AURION_DUNGEON_RULESET_VERSION, input.worldSeed, String(input.epoch), input.region.regionId, input.region.archetype.dungeonKey, input.variant, input.sourceReceiptDigest);
+  const seed = hashHex(runSeed, input.floorExact);
+  const affixes = chooseDistinctAffixes(runSeed, affixCount);
   const affixDangerBps = affixes.reduce((sum, affix) => sum + affix.dangerDeltaBps, 0);
   const affixRewardBps = affixes.reduce((sum, affix) => sum + affix.rewardDeltaBps, 0);
   const combatBudgetBps = clampInteger(variantBaseBps[input.variant] + floorDangerBps + affixDangerBps + (input.partySize - 1) * 500, 10_000, 60_000);
   const rewardMultiplierBps = clampInteger(input.region.rewardMultiplierBps + Math.floor((combatBudgetBps - 10_000) / 2) + affixRewardBps, economyBounds.oldRegionRewardFloorBps, 50_000);
   const enemyTier: EnemyTier = combatBudgetBps >= 32_000 ? "dungeon_boss" : combatBudgetBps >= 21_000 ? "boss" : combatBudgetBps >= 14_000 ? "elite" : "normal";
-  const challengeScoreExact = (floor * BigInt(variantBaseBps[input.variant] + affixDangerBps) + BigInt(input.epoch + 1) * BigInt(input.partySize)).toString(10);
+  const challengeScoreExact = (floor * BigInt(variantBaseBps[input.variant] + affixDangerBps) + (BigInt(input.epoch) + 1n) * BigInt(input.partySize)).toString(10);
   const completionBase = BigInt(activityXpAwardExact({ levelExact: input.combatMasteryLevelExact, scope: "combat_action", activity: "dungeon_completion", repetitionStreak: 0 }));
   const completionXpExact = ((completionBase * BigInt(rewardMultiplierBps)) / 10_000n).toString(10);
   const snapshot = {
