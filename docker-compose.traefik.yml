@@ -8,10 +8,13 @@ services:
       PORT: "3000"
       STRICT_PORT: "true"
       TRUST_PROXY_HOPS: "1"
+      AURION_GLB_STORAGE_DIR: /var/lib/aurion/glb
     env_file:
       - ${AURION_ENV_FILE:?AURION_ENV_FILE must point to the root-managed production environment}
     expose:
       - "3000"
+    volumes:
+      - aurion-glb-assets:/var/lib/aurion/glb
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}
@@ -27,6 +30,10 @@ services:
     networks:
       - traefik-proxy
       - database-private
+
+volumes:
+  aurion-glb-assets:
+    name: echoes-of-aurion-glb-assets
 
 networks:
   traefik-proxy:

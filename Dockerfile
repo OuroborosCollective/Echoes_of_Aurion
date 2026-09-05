@@ -29,6 +29,7 @@ RUN test -n "$AURION_RELEASE_SHA" \
  && test -f /app/deploy/verify-aurion-runtime-database.mjs \
  && node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('/app/dist/.aurion-runtime-build.json','utf8')); if (manifest.revision !== process.argv[1]) { process.exit(1); }" "$AURION_RELEASE_SHA"
 
+RUN mkdir -p /var/lib/aurion/glb && chown node:node /var/lib/aurion/glb
 USER node
 EXPOSE 3000
 

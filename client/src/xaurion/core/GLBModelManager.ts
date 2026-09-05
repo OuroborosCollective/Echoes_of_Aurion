@@ -1,3 +1,5 @@
+import { glbRuntimeCatalogSchema } from "@shared/glbImportContract";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RPGItem, ItemSlot, WeaponType, ItemRarity } from '../types';
@@ -35,16 +37,16 @@ export interface GLBModelEntry {
     maxHp?: number;
     maxResource?: number;
   };
-  triangleBudget: number;
-  boneCount: number;
-  fileSizeBytes: number;
+  triangleBudget?: number;
+  boneCount?: number;
+  fileSizeBytes?: number;
   status: string;
   animations: string[];
   description: string;
   referenceUrl?: string;
   author?: string;
   sourceDirectory?: string;
-  uploadedAt: string;
+  uploadedAt?: string;
   lastScannedAt?: string;
 }
 
@@ -89,9 +91,14 @@ export class GLBModelManager {
   }
 
   public async fetchCatalog(): Promise<GLBModelEntry[]> {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('aurion:xaurion-glb-catalog-request'));
-    }
+    const response = await fetch('/api/game/glb-catalog', { credentials: 'same-origin' });
+    if (!response.ok) throw new Error('GLB_CATALOG_UNAVAILABLE');
+    const catalog = glbRuntimeCatalogSchema.parse(await response.json());
+    this.setAuthoritativeCatalog(catalog.entries.map(entry => ({
+      id: entry.assetId, name: entry.displayName, fileName: `${entry.sha256}.glb`, url: entry.storageUrl,
+      category: entry.assetType === 'character' ? 'character_avatar' : entry.assetType === 'enemy' ? 'mob' : entry.assetType === 'arena' ? 'architecture' : entry.assetType === 'weapon' ? 'weapon' : 'prop',
+      status: 'approved', animations: [], description: `Aurion catalog: ${entry.targetKey ?? entry.assetType}`,
+    })));
     return this.catalog;
   }
 
@@ -143,6 +150,7 @@ export class GLBModelManager {
   }
 
   public convertToRpgItem(model: GLBModelEntry): RPGItem {
+    if (model.url.startsWith('/api/assets/glb/')) throw new Error('GLB_VISUAL_CATALOG_CANNOT_GRANT_ITEMS');
     let slot: ItemSlot = 'weapon';
     if (model.category === 'shield' || model.equipSlot === 'shield') slot = 'shield';
     else if (model.category === 'offhand' || model.equipSlot === 'offhand') slot = 'shield';
@@ -197,12 +205,12 @@ export class GLBModelManager {
     if (this.cache.has(url)) {
       const cached = this.cache.get(url)!;
       return {
-        scene: cached.scene.clone(true),
+        scene: cloneSkeleton(cached.scene) as THREE.Group,
         animations: cached.animations,
       };
     }
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.loader.load(
         url,
         (gltf) => {
@@ -219,12 +227,13 @@ export class GLBModelManager {
           });
 
           resolve({
-            scene: gltf.scene.clone(true),
+            scene: cloneSkeleton(gltf.scene) as THREE.Group,
             animations: gltf.animations,
           });
         },
         undefined,
         (err) => {
+          if (url.startsWith("/api/assets/glb/")) { reject(err); return; }
           if (!url.includes('/models/glb/')) {
             const fallbackUrl = `/models/glb/${urlOrId.replace(/^.*[\\/]/, '')}`;
             this.loader.load(
@@ -237,7 +246,7 @@ export class GLBModelManager {
                   }
                 });
                 this.cache.set(url, { scene: gltf.scene, animations: gltf.animations });
-                resolve({ scene: gltf.scene.clone(true), animations: gltf.animations });
+                resolve({ scene: cloneSkeleton(gltf.scene) as THREE.Group, animations: gltf.animations });
               },
               undefined,
               (fallbackErr) => {

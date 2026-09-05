@@ -4,7 +4,7 @@ import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
 
 const fixture = vi.hoisted(() => {
   const makeEngine = () => ({
-    player: { equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
+    player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
     landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(),
     start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
     onRuntimeError: undefined as ((error: unknown) => void) | undefined,

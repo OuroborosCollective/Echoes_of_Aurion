@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
  */
 export const AURION_ADMIN_MCP_PATH = "/admin-mcp" as const;
 export const AURION_ADMIN_MCP_READ_SCOPE = "aurion.admin.read" as const;
-export const AURION_ADMIN_MCP_SCOPES = [AURION_ADMIN_MCP_READ_SCOPE] as const;
+export const AURION_ADMIN_GLB_WRITE_SCOPE = "aurion.admin.assets.write" as const;
+export const AURION_ADMIN_MCP_SCOPES = [AURION_ADMIN_MCP_READ_SCOPE, AURION_ADMIN_GLB_WRITE_SCOPE] as const;
 
 export type AurionAdminMcpScope = (typeof AURION_ADMIN_MCP_SCOPES)[number];
 

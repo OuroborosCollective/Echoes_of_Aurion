@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AURION_ADMIN_MCP_READ_SCOPE,
+  AURION_ADMIN_GLB_WRITE_SCOPE,
   bearerChallenge,
   openIdForOidcSubject,
   parseAurionAdminMcpTokenClaims,
@@ -35,7 +36,7 @@ describe("adminMcpProtocol", () => {
     expect(protectedResourceMetadata(settings)).toEqual({
       resource: settings.resourceUrl,
       authorization_servers: [settings.authorizationServerUrl],
-      scopes_supported: [AURION_ADMIN_MCP_READ_SCOPE],
+      scopes_supported: [AURION_ADMIN_MCP_READ_SCOPE, AURION_ADMIN_GLB_WRITE_SCOPE],
       resource_documentation: "https://arelogic.space/docs/aurion-admin-mcp",
     });
     expect(bearerChallenge(settings)).toContain(settings.protectedResourceMetadataUrl);

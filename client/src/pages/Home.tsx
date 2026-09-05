@@ -1,3 +1,4 @@
+import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { operationalNow } from "../../../shared/operationalClock";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState, queueHumanDemonstration, type PendingHumanDemonstration } from "@/lib/companionWorldInputs";
@@ -200,7 +201,8 @@ export default function Home() {
   const requestQuestActionFromDialogue = trpc.gameplay.requestQuestActionFromDialogue.useMutation();
   const gameplaySession = useRef<{ id: string; nextSequence: number } | null>(null);
   const zoneClient = useRef<ZoneMovementClient | null>(null);
-  const activeCharacterUrl = characterAppearance.data?.storageUrl ?? starterCharacter.assetPath;
+  const glbCatalog = useGlbCatalog(apiAvailable);
+  const activeCharacterUrl = characterAppearance.data?.storageUrl ?? glbCatalog?.entries.find(entry => entry.targetKey === "starter_player")?.storageUrl ?? starterCharacter.assetPath;
   const localWasdScenePreview = useMemo(() => {
     if (!import.meta.env.DEV || typeof window === "undefined") return undefined;
     if (new URLSearchParams(window.location.search).get("wasd_scene_preview") !== "emberfall_water_source") return undefined;

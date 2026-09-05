@@ -60,3 +60,25 @@ try {
     process.exitCode ||= 22;
   }
 }
+
+// The GLB volume must be writable by the actual unprivileged runtime identity.
+// Probe bytes are removed; no user asset, approval or assignment is created.
+if (!process.exitCode) {
+  let probe;
+  try {
+    const fs = await import("node:fs/promises");
+    const { randomUUID } = await import("node:crypto");
+    if (process.env.AURION_GLB_STORAGE_DIR !== "/var/lib/aurion/glb") throw new Error("GLB volume configuration missing");
+    probe = `/var/lib/aurion/glb/.deployment-probe-${randomUUID()}`;
+    const handle = await fs.open(probe, "wx", 0o600);
+    try { await handle.writeFile("aurion-glb-volume-readback"); await handle.sync(); }
+    finally { await handle.close(); }
+    if (await fs.readFile(probe, "utf8") !== "aurion-glb-volume-readback") throw new Error("GLB volume readback failed");
+  } catch { process.exitCode = 25; }
+  finally {
+    if (probe) {
+      const fs = await import("node:fs/promises");
+      await fs.unlink(probe).catch(() => { process.exitCode = 25; });
+    }
+  }
+}

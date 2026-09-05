@@ -17,6 +17,7 @@ vi.mock("@/components/DashboardLayout", () => ({
 function serverReadback(fileName: string) {
   const isPlayer = fileName.includes("player");
   return {
+    receipt: { version: "aurion.glb-import.v1", assetId: "glb_test123", sha256: "a".repeat(64), bytes: 100, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, assetType: isPlayer ? "character" : "enemy", targetKey: isPlayer ? "starter_player" : "starter_spider", planSha256: "b".repeat(64), status: "assigned", activeAssetId: "glb_test123", deduplicated: false },
     accepted: true as const,
     fileName,
     classification: {
@@ -33,6 +34,7 @@ function serverReadback(fileName: string) {
 
 function mockSuccessfulFetch() {
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (!init?.body) return { ok: true, json: async () => ({ writable: true, catalog: { version: "aurion.glb-import.v1", revision: "c".repeat(64), entries: [] } }) } as Response;
     const body = JSON.parse(String(init?.body)) as { fileName: string };
     return {
       ok: true,
@@ -67,12 +69,14 @@ describe("GLB upload website runtime", () => {
     expect(input).toBeTruthy();
     expect(input?.multiple).toBe(true);
 
+    await waitFor(() => expect(input?.disabled).toBe(false));
     const player = glbFile("aurion-player-standard.glb");
     const spider = glbFile("starter-spider.glb");
     fireEvent.change(input!, { target: { files: [player, spider] } });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    for (const call of fetchMock.mock.calls) {
+    await waitFor(() => expect(fetchMock.mock.calls.filter(call => call[1]?.body)).toHaveLength(2));
+    const uploads = fetchMock.mock.calls.filter(call => call[1]?.body);
+    for (const call of uploads) {
       expect(call[0]).toBe("/api/admin/glb-smart-upload");
       expect(call[1]).toMatchObject({ method: "POST", credentials: "include" });
       const requestBody = JSON.parse(String(call[1]?.body)) as Record<string, unknown>;
@@ -80,8 +84,8 @@ describe("GLB upload website runtime", () => {
       expect(requestBody).not.toHaveProperty("assetType");
     }
 
-    const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
-    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<string, unknown>;
+    const firstBody = JSON.parse(String(uploads[0]?.[1]?.body)) as Record<string, unknown>;
+    const secondBody = JSON.parse(String(uploads[1]?.[1]?.body)) as Record<string, unknown>;
     expect(firstBody).toMatchObject({ displayName: "aurion player standard", fileName: "aurion-player-standard.glb" });
     expect(secondBody).toMatchObject({ displayName: "starter spider", fileName: "starter-spider.glb" });
 
@@ -96,9 +100,10 @@ describe("GLB upload website runtime", () => {
     const fetchMock = mockSuccessfulFetch();
     render(<GlbUpload />);
     const input = document.querySelector<HTMLInputElement>("#smartGlbFile");
+    await waitFor(() => expect(input?.disabled).toBe(false));
     fireEvent.change(input!, { target: { files: [new File(["bad"], "notes.txt"), glbFile("starter-spider.glb")] } });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(call => call[1]?.body)).toHaveLength(1));
     expect(screen.getByText("notes.txt")).toBeTruthy();
     expect(screen.getByText("Nur binäre GLB-Dateien (.glb) werden akzeptiert.")).toBeTruthy();
     expect(screen.getByText("starter-spider.glb")).toBeTruthy();

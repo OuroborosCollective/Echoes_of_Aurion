@@ -3,6 +3,13 @@ import { adminMcpCapabilities } from "./adminMcp";
 import { getGlobalWorldAdminReadModel } from "./db";
 
 describe("adminMcp", () => {
+  it("exposes asset writes only for the dedicated scope without opening gameplay or shell authority", () => {
+    const writable = adminMcpCapabilities(["aurion.admin.read", "aurion.admin.assets.write"]);
+    expect(writable.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual(["aurion_admin_glb_import", "aurion_admin_glb_assign"]);
+    expect(writable.unavailable).toContain("shell_access");
+    expect(writable.unavailable).toContain("npc_reward_mutation");
+    expect(adminMcpCapabilities(["aurion.admin.read"]).tools.every(tool => tool.mode === "read")).toBe(true);
+  });
   it("exposes only the bounded ChatGPT-Pro read surface", () => {
     const capabilities = adminMcpCapabilities();
     expect(capabilities.chatGptProMode).toBe("read_fetch_only");

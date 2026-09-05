@@ -1404,7 +1404,9 @@ export class OpenWorldPlayer {
   }
 
   // --- External GLB Model Equipping ---
+  private glbAvatarRequest = 0;
   public async equipGlbModel(modelId: string | null): Promise<boolean> {
+    const request = ++this.glbAvatarRequest;
     // Clear existing GLB avatar
     while (this.glbAvatarGroup.children.length > 0) {
       const child = this.glbAvatarGroup.children[0];
@@ -1424,6 +1426,7 @@ export class OpenWorldPlayer {
 
     try {
       const { scene, animations } = await glbManager.loadModel(modelId);
+      if (request !== this.glbAvatarRequest) return false;
       this.activeGlbModelId = modelId;
       this.rootGroup.visible = false; // Hide procedural model while GLB skin is active
 
@@ -1441,6 +1444,7 @@ export class OpenWorldPlayer {
       }
       return true;
     } catch (err) {
+      if (request !== this.glbAvatarRequest) return false;
       console.error(`Could not equip GLB model ${modelId}:`, err);
       this.rootGroup.visible = true;
       this.activeGlbModelId = null;

@@ -7,7 +7,7 @@
     {
       "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
       "sourceSha256": "6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e",
-      "targetSha256": "a7c7c61c8273b187a7f2c90697f1258b47bb2062184f8d3cd0dece0bd43094f4",
+      "targetSha256": "7defc44167260003b198491697aead3fbcc3cd78bed470f32d33987f4009441b",
       "adaptations": [
         {
           "before": "",
@@ -28,6 +28,12 @@
           "before": "Math.random()",
           "after": "this.simulation.random(\"player:aura\")",
           "occurrences": 3
+        },
+        {
+          "before": "  public async equipGlbModel(modelId: string | null): Promise<boolean> {\n    // Clear existing GLB avatar\n    while (this.glbAvatarGroup.children.length > 0) {\n      const child = this.glbAvatarGroup.children[0];\n      this.glbAvatarGroup.remove(child);\n    }\n    if (this.glbMixer) {\n      this.glbMixer.stopAllAction();\n      this.glbMixer = null;\n      this.activeGlbAction = null;\n    }\n\n    if (!modelId) {\n      this.activeGlbModelId = null;\n      this.rootGroup.visible = true;\n      return true;\n    }\n\n    try {\n      const { scene, animations } = await glbManager.loadModel(modelId);\n      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      scene.position.set(0, 0, 0);\n      scene.scale.set(1.0, 1.0, 1.0);\n      this.glbAvatarGroup.add(scene);\n\n      if (animations && animations.length > 0) {\n        this.glbMixer = new THREE.AnimationMixer(scene);\n        const clip = animations.find((a) => a.name.toLowerCase().includes('idle')) || animations[0];\n        if (clip) {\n          this.activeGlbAction = this.glbMixer.clipAction(clip);\n          this.activeGlbAction.play();\n        }\n      }\n      return true;\n    } catch (err) {\n      console.error(`Could not equip GLB model ${modelId}:`, err);\n      this.rootGroup.visible = true;\n      this.activeGlbModelId = null;\n      return false;\n    }\n  }\n\n",
+          "after": "  private glbAvatarRequest = 0;\n  public async equipGlbModel(modelId: string | null): Promise<boolean> {\n    const request = ++this.glbAvatarRequest;\n    // Clear existing GLB avatar\n    while (this.glbAvatarGroup.children.length > 0) {\n      const child = this.glbAvatarGroup.children[0];\n      this.glbAvatarGroup.remove(child);\n    }\n    if (this.glbMixer) {\n      this.glbMixer.stopAllAction();\n      this.glbMixer = null;\n      this.activeGlbAction = null;\n    }\n\n    if (!modelId) {\n      this.activeGlbModelId = null;\n      this.rootGroup.visible = true;\n      return true;\n    }\n\n    try {\n      const { scene, animations } = await glbManager.loadModel(modelId);\n      if (request !== this.glbAvatarRequest) return false;\n      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      scene.position.set(0, 0, 0);\n      scene.scale.set(1.0, 1.0, 1.0);\n      this.glbAvatarGroup.add(scene);\n\n      if (animations && animations.length > 0) {\n        this.glbMixer = new THREE.AnimationMixer(scene);\n        const clip = animations.find((a) => a.name.toLowerCase().includes('idle')) || animations[0];\n        if (clip) {\n          this.activeGlbAction = this.glbMixer.clipAction(clip);\n          this.activeGlbAction.play();\n        }\n      }\n      return true;\n    } catch (err) {\n      if (request !== this.glbAvatarRequest) return false;\n      console.error(`Could not equip GLB model ${modelId}:`, err);\n      this.rootGroup.visible = true;\n      this.activeGlbModelId = null;\n      return false;\n    }\n  }\n\n",
+          "occurrences": 1,
+          "reason": "Owner-approved AIM-112/240 GLB runtime: discard stale asynchronous avatar loads on replacement or exit; no gameplay mutation."
         }
       ]
     },

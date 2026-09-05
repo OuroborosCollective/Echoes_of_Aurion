@@ -135,14 +135,17 @@ jobs:
           runtime_verify_db_container="aurion-runtime-db-verify-${GITHUB_RUN_ID}"
           runtime_verify_public_network="aurion-runtime-public-verify-${GITHUB_RUN_ID}"
           runtime_verify_database_network="aurion-runtime-database-verify-${GITHUB_RUN_ID}"
+          runtime_verify_glb_volume="aurion-glb-verify-${GITHUB_RUN_ID}"
           runtime_verify_db_password="$(openssl rand -hex 24)"
           runtime_verify_cleanup() {
             docker rm --force "${runtime_verify_container}" >/dev/null 2>&1 || true
             docker rm --force "${runtime_verify_db_container}" >/dev/null 2>&1 || true
+            docker volume rm "${runtime_verify_glb_volume}" >/dev/null 2>&1 || true
             docker network rm "${runtime_verify_public_network}" >/dev/null 2>&1 || true
             docker network rm "${runtime_verify_database_network}" >/dev/null 2>&1 || true
           }
           trap runtime_verify_cleanup EXIT
+          docker volume create "${runtime_verify_glb_volume}" >/dev/null
           docker network create "${runtime_verify_public_network}" >/dev/null
           docker network create "${runtime_verify_database_network}" >/dev/null
           docker run --detach \
@@ -170,6 +173,8 @@ jobs:
           docker build --pull=false --build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}" --tag "${runtime_verify_image}" dist-traefik-runtime
           docker run --detach \
             --name "${runtime_verify_container}" \
+            --mount "type=volume,source=${runtime_verify_glb_volume},destination=/var/lib/aurion/glb" \
+            -e AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb \
             --network "${runtime_verify_database_network}" \
             -e "DATABASE_URL=mysql://aurion_runtime:${runtime_verify_db_password}@mariadb:3306/aurion_runtime" \
             "${runtime_verify_image}" >/dev/null
@@ -240,6 +245,12 @@ jobs:
             echo "aurion-runtime-database-verify failed category=authenticated_select_failed" >&2
             exit 1
           fi
+          # Prove that bytes outlive the writer process and are readable by a fresh
+          # unprivileged container using the same named volume.
+          docker exec "${runtime_verify_container}" node -e 'require("node:fs").writeFileSync("/var/lib/aurion/glb/.ci-persistence-proof", process.env.AURION_RELEASE_SHA)'
+          docker run --rm --network none \
+            --mount "type=volume,source=${runtime_verify_glb_volume},destination=/var/lib/aurion/glb" \
+            "${runtime_verify_image}" node -e 'const fs=require("node:fs"); if(fs.readFileSync("/var/lib/aurion/glb/.ci-persistence-proof","utf8")!==process.env.AURION_RELEASE_SHA) process.exit(1); fs.unlinkSync("/var/lib/aurion/glb/.ci-persistence-proof")'
           trap - EXIT
           runtime_verify_cleanup
           tar -C dist-traefik-runtime -czf aurion-traefik-runtime-release.tgz .
