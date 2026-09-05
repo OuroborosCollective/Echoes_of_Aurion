@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /**
  * Image generation helper using internal ImageService
  *
@@ -97,7 +98,7 @@ export async function generateImage(
 
   // Save to S3
   const { url } = await storagePut(
-    `generated/${Date.now()}.png`,
+    `generated/${createHash("sha256").update(buffer).digest("hex")}.png`,
     buffer,
     result.image.mimeType
   );
