@@ -154,6 +154,7 @@ test("two authenticated accounts see the same confirmed movement and departure",
     await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     await page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true }).click();
     await expect(page.getByTestId("xaurion-open-world-runtime").getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator("canvas")).toHaveCount(1);
   };
   try {
     await enter(left, "aim254_coop_left");

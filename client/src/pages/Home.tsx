@@ -94,6 +94,14 @@ function codeFromText(value: string): Command | null {
 
 export default function Home() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const [openWorldRendererActive, setOpenWorldRendererActive] = useState(false);
+  useEffect(() => {
+    const enter = () => setOpenWorldRendererActive(true);
+    const leave = () => setOpenWorldRendererActive(false);
+    window.addEventListener("aurion:load-open-world", enter);
+    window.addEventListener("aurion:return-to-tower", leave);
+    return () => { window.removeEventListener("aurion:load-open-world", enter); window.removeEventListener("aurion:return-to-tower", leave); };
+  }, []);
   const apiAvailable = hasAurionApi();
   const activeArenaAsset = trpc.assetSubmissions.activeArenaAsset.useQuery({ targetKey: "asterion_courtyard" }, { enabled: apiAvailable });
   const previewMode = import.meta.env.DEV && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("aurion_preview") : null;
@@ -701,9 +709,9 @@ export default function Home() {
 
   return (
     <main className={`aurion-app${immersiveMode ? " is-immersive" : ""}`} style={{ "--aurion-hero-poster": `url("${heroTrailerPoster}")` } as CSSProperties}>
-      <Suspense fallback={<div className="aurion-canvas-boot" role="status"><span className="aurion-canvas-boot__sigil">✦</span><span>3D-Szene wird vorbereitet</span></div>}>
+      {!openWorldRendererActive && <Suspense fallback={<div className="aurion-canvas-boot" role="status"><span className="aurion-canvas-boot__sigil">✦</span><span>3D-Szene wird vorbereitet</span></div>}>
         <GameCanvas characterModelUrl={activeCharacterUrl} arenaModelUrl={localWasdScenePreview?.asset.sourceUrl ?? activeArenaAsset.data?.storageUrl} />
-      </Suspense>
+      </Suspense>}
       <div className="atmosphere-vignette" aria-hidden="true" />
       <div className="ruin-constellation" aria-hidden="true"><span className="ruin-arch" /><span className="ruin-temple" /><span className="ruin-temple distant" /><span className="ruin-shard shard-one" /><span className="ruin-shard shard-two" /><span className="ruin-duo explorer" /><span className="ruin-duo scout" /><span className="ruin-thread" /></div>
       <header className="brand-bar"><div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i /><b /><i /></span><div><p className="brand-kicker">COOPERATIVE EXPEDITION // 01</p><h1>Echoes <span>of</span> Aurion</h1></div></div><div className="brand-status"><a href="/ops" className="mr-4 text-[10px] tracking-[.14em] text-cyan-100/75 hover:text-cyan-200">OPS</a><button type="button" className="audio-toggle header-audio" onClick={toggleAudio} aria-label={audioEnabled ? "Expeditionsmusik pausieren" : "Expeditionsmusik aktivieren"}>{audioEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}</button><span className={connected ? "signal-dot active" : "signal-dot"} /> {soloMode ? "Solo-Siegel aktiv" : connected ? "Partner-Siegel aktiv" : isAuthenticated ? "Konto verbunden" : "Konto erforderlich"}</div></header>
