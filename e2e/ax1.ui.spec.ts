@@ -71,9 +71,18 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(dialog).toHaveCount(0);
       const attack = hud.getByRole("button", { name: "Angriff", exact: true });
       const auto = hud.getByRole("button", { name: "Auto-Angriff", exact: true });
+      await page.getByTestId("glb-presentation").evaluate(element => {
+        const samples: unknown[] = []; (window as any).__ax1AttackSamples = samples;
+        new MutationObserver(() => { const sample=JSON.parse(element.getAttribute("data-attack")||"{}"); if(sample.attacking && sample.visible && samples.length<30)samples.push(sample); }).observe(element,{attributes:true,attributeFilter:["data-attack"]});
+      });
       const action = page.waitForResponse(r => r.url().includes("gameplay.act") && r.status() === 200);
       await attack.click(); await action;
-      await expect(runtime).toHaveAttribute("data-confirmed-attack-receipt", /.+/);
+      await expect(page.locator("#three-viewport")).toHaveAttribute("data-confirmed-attack-receipt", /.+/);
+      await expect.poll(()=>page.evaluate(()=>(window as any).__ax1AttackSamples.length),{timeout:10_000}).toBeGreaterThan(1);
+      const animation=await page.evaluate(()=>(window as any).__ax1AttackSamples);
+      expect(new Set(animation.map((sample:any)=>JSON.stringify(sample.arm))).size).toBeGreaterThan(1);
+      const [boss]=await pool.query<RowDataPacket[]>("SELECT bossHp,maxBossHp FROM gameplaySessions WHERE userId=?",[userId]);
+      expect(boss[0].bossHp).toBeLessThan(boss[0].maxBossHp);
       const receipts = async () => { const [rows] = await pool.query<RowDataPacket[]>("SELECT sequence,command,damage FROM gameplayActionReceipts WHERE userId=? ORDER BY sequence", [userId]); return rows; };
       await expect.poll(async () => (await receipts()).length).toBe(1);
       expect((await receipts())[0]).toMatchObject({ command: "F" });
@@ -112,7 +121,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(persisted.settings.hotbar[0]).toBe("9"); expect(persisted.settings.autoLoot).toBe(false);
       expect(persisted.equipment).toEqual([]); expect(persisted.items.find(i => i.id === item.id)?.status).toBe("owned");
       expect(errors).toEqual([]);
-      await info.attach("ax1-real-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, userId, viewport, qualification: group.qualification, actions, inventory: persisted, environment: await assetEvidence(), auth: "public_registration", items: "canonical_encounter_loot" }), contentType: "application/json" });
+      await info.attach("ax1-real-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, userId, viewport, qualification: group.qualification, actions, animation, inventory: persisted, environment: await assetEvidence(), auth: "public_registration", items: "canonical_encounter_loot" }), contentType: "application/json" });
     } finally { await page.close(); await pool.end(); }
   });
 }

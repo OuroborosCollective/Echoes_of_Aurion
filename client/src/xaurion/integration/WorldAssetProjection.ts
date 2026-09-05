@@ -51,8 +51,9 @@ export class WorldAssetProjection {
   }
  }
  private adoptTextures(gltf:GLTF,json:any,hashes:string[]):Set<string>{
-  const used=new Set<string>(),images=new Set<any>();
+  const used=new Set<string>(),images=new Set<any>(),seenMaterials=new Set<THREE.Material>();
   gltf.scene.traverse(node=>{if(!(node as THREE.Mesh).isMesh)return;const mesh=node as THREE.Mesh;for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){
+   if(seenMaterials.has(material))continue;seenMaterials.add(material);
    for(const [property,value] of Object.entries(material)){if(!(value instanceof THREE.Texture))continue;images.add(value.image);const index=gltf.parser.associations.get(value)?.textures;if(index===undefined)throw Error("WORLD_TEXTURE_INDEX_REQUIRED");const source=json.textures[index];const image=source?.extensions?.EXT_texture_webp?.source??source?.source;const hash=hashes[image];if(!hash)throw Error("WORLD_TEXTURE_PROVENANCE_REQUIRED");
     const key=JSON.stringify([hash,value.colorSpace,value.wrapS,value.wrapT,value.magFilter,value.minFilter,value.channel,value.flipY,value.offset.toArray(),value.repeat.toArray(),value.rotation,value.center.toArray()]);let shared=this.sharedTextures.get(key);
     if(!shared){shared={texture:value,refs:0};this.sharedTextures.set(key,shared);}else if(shared.texture!==value){(material as any)[property]=shared.texture;value.dispose();}

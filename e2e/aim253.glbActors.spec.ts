@@ -138,6 +138,18 @@ for (const viewport of [
         await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-${name.split(" ")[0]}.png`), animations: "disabled" });
         await dialog.getByRole("button", { name: name === "Inventar" ? "Inventar schließen" : name === "Charakter" ? "Charakter schließen" : "Quest-Buch schließen", exact: true }).click();
       }
+      await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
+      await dialog.getByRole("button", { name: "Bei Lyra annehmen", exact: true }).click();
+      await expect(dialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
+      await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();
+      await hud.getByRole("button", { name: "Begegnungen", exact: true }).click();
+      await dialog.getByRole("button", { name: "Sternwarte Asterion beginnen", exact: true }).click();
+      const confirmedAttack=page.waitForResponse(r=>r.url().includes("gameplay.act")&&r.status()===200);
+      await hud.getByRole("button", { name: "Angriff", exact: true }).click();await confirmedAttack;
+      await expect.poll(async()=> (await pose(player))?.clip,{intervals:[40,80,100]}).toMatch(/attack|fight/i);
+      const attackPose=(await pose(player))!.bonePose;
+      await expect.poll(async()=> (await pose(player))?.bonePose,{intervals:[40,80,100]}).not.toBe(attackPose);
+      await page.screenshot({path:testInfo.outputPath(`${viewport.name}-confirmed-glb-attack.png`)});
       // Walk around the plaza fountain, then north to the Royal Forge.
       await expect.poll(() => presence?.userId).toBeGreaterThan(0);
       const origin = { ...presence!.position };

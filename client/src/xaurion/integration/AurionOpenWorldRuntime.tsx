@@ -217,6 +217,7 @@ export default function AurionOpenWorldRuntime() {
         const evidence = engine.player.glbPresentationEvidence();
         if (modelEvidenceRef.current) {
           modelEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
+          modelEvidenceRef.current.dataset.attack = JSON.stringify({ attacking: engine.player.isAttacking, remaining: engine.player.attackAnimTimer, visible: engine.player.rootGroup.visible, arm: engine.player.rightArmPivot.rotation.toArray(), weapon: engine.player.weaponPivot.rotation.toArray() });
           modelEvidenceRef.current.dataset.groundY = String(engine.player.group.position.y);
         }
         if (npcEvidenceRef.current) npcEvidenceRef.current.dataset.presentation = JSON.stringify(serviceNpcRef.current?.evidence() ?? null);
