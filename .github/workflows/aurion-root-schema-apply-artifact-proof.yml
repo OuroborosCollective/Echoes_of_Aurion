@@ -39,6 +39,7 @@ on:
       - "drizzle/0029_aurion_guild_kingdom_authority.sql"
       - "drizzle/0030_aurion_guild_bank_economy.sql"
       - "drizzle/0031_aurion_profession_crafting_persistence.sql"
+      - "drizzle/0032_aurion_group_instances.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -237,7 +238,7 @@ jobs:
           const raw=fs.readFileSync("apply-receipt.json","utf8");
           if(raw.includes("aurionapplyroot")||raw.includes("mysql://")) throw new Error("apply receipt leaked a credential");
           const r=JSON.parse(raw);
-          const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint","0029_aurion_guild_kingdom_authority","0030_aurion_guild_bank_economy","0031_aurion_profession_crafting_persistence"];
+          const tags=["0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint","0029_aurion_guild_kingdom_authority","0030_aurion_guild_bank_economy","0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances"];
           if(r.recordType!=="aurion_production_schema_apply"||r.schemaVersion!==1||r.sourceRevision!==process.env.GITHUB_SHA||r.planSha256!==process.env.AURION_APPLY_TEST_PLAN||r.mode!=="backup_recovery_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_SUCCEEDED") throw new Error("apply receipt identity mismatch");
           if(r.preflight?.state!=="RECONCILIATION_REQUIRED"||r.preflight?.summary?.absentCount!==tags.length) throw new Error("apply did not require an absent preflight");
           if(r.backup?.created!==true||!/^[a-f0-9]{64}$/.test(r.backup?.sha256??"")||!Number.isSafeInteger(r.backup?.bytes)||r.backup.bytes<1) throw new Error("backup receipt invalid");

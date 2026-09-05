@@ -1,6 +1,7 @@
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionEncounterPanel } from "./AurionEncounterPanel";
+import { AurionGroupFinder } from "./AurionGroupFinder";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +26,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const [panel, setPanel] = useState<Panel>(null);
   const [message, setMessage] = useState("");
   const [expandedMenu, setExpandedMenu] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
   const [questTab, setQuestTab] = useState<"quests" | "contacts">("quests");
   const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
@@ -76,13 +78,14 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       <button className="ax1-menu-more" title="Weitere Menüs" aria-label="Weitere Menüs" aria-expanded={expandedMenu} onClick={() => setExpandedMenu(value => !value)}><Menu size={19} /></button>
       <div className="ax1-secondary-menu">
         <button title="Companion" aria-label="Companion" onClick={() => { setExpandedMenu(false); window.dispatchEvent(new Event("aurion:open-companion")); }}><Sparkles size={19} /></button>
-        <button title="Gruppe" aria-label="Gruppe" onClick={() => { setExpandedMenu(false); community("partners"); }}><Users size={19} /></button>
+        <button title="Gruppe" aria-label="Gruppe" onClick={() => { setExpandedMenu(false); setGroupOpen(true); }}><Users size={19} /></button>
         <button title="Chat" aria-label="Chat" onClick={() => { setExpandedMenu(false); community("chat"); }}><MessageSquare size={19} /></button>
         <button title="Handel" aria-label="Handel" onClick={() => { setExpandedMenu(false); community("market"); }}><Coins size={19} /></button>
         <button title="Handwerk" aria-label="Handwerk" onClick={() => { setExpandedMenu(false); community("crafting"); }}><Hammer size={19} /></button>
       </div>
     </nav>
     <AurionEncounterPanel userId={userId} connected={connected} onAttack={() => onAction("F")} />
+    {groupOpen && <AurionGroupFinder open onClose={() => setGroupOpen(false)} />}
     <div className="aurion-authority-hud__move"><VirtualJoystick onMove={onMove} /></div>
     <div className="aurion-authority-hud__actions" aria-label="Aktionen">
       {[1, 2, 3, 4, 5].map(slot => { const Icon = actionIcons[slot - 1]!; return <button key={slot} className={slot === 1 ? "ax1-action-primary" : undefined} disabled={!connected || panel !== null} onClick={() => onAction(String(slot) as AurionGameplayCommand)} aria-label={`Aktion ${slot}`}><Icon size={22} /><kbd>{slot}</kbd></button>; })}

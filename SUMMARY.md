@@ -71,6 +71,7 @@
     * [AIM-239 / AIM-266 — Final -ax1 Source Reconciliation Matrix](docs/migrations/AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md)
     * [AIM-250 — Regionen, Chunks und Dungeons ohne obsolete Gebiete](docs/migrations/AIM250_REGION_DUNGEON_PROGRESSION.md)
     * [AIM-252 — Arelorian/WASD Normative Ruleset for Aurion ↔ -ax1 migration](docs/migrations/AIM252_WASD_NORMATIVE_RULESET.md)
+    * [AIM-259 — Rollenwarteschlange und gemeinsame Gruppeninstanzen](docs/migrations/AIM259_ROLE_QUEUE_GROUP_INSTANCES.md)
     * [AIM-267 — Final -ax1 content catalog](docs/migrations/AIM267_AX1_CONTENT_CATALOG.md)
     * [AIM-268 — Guild and kingdom authority](docs/migrations/AIM268_GUILD_KINGDOM_AUTHORITY.md)
     * [AIM-269 — Guild bank and state economy](docs/migrations/AIM269_GUILD_BANK_ECONOMY.md)

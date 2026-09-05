@@ -1,0 +1,98 @@
+name: AIM 259 real group instance regression
+
+on:
+  pull_request:
+    paths:
+      - "server/groupInstance*.ts"
+      - "server/aim259*.ts"
+      - "shared/groupInstanceProtocol.ts"
+      - "server/routers.ts"
+      - "client/src/xaurion/integration/AurionGroupFinder.tsx"
+      - "client/src/xaurion/integration/AurionGroupFinder.test.tsx"
+      - "client/src/xaurion/integration/aurionGroupFinder.css"
+      - "client/src/xaurion/integration/AurionAuthorityHud.tsx"
+      - "client/src/App.tsx"
+      - "drizzle/**"
+      - "e2e/aim259.groups.spec.ts"
+      - "playwright.aurion-groups.config.ts"
+      - "scripts/prepare-aurion-group-runtime-proof.ts"
+      - ".github/workflows/aim259-group-instances.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/groupInstance*.ts"
+      - "shared/groupInstanceProtocol.ts"
+      - "server/routers.ts"
+      - "client/src/xaurion/integration/AurionGroupFinder.tsx"
+      - "drizzle/**"
+      - ".github/workflows/aim259-group-instances.yml"
+permissions:
+  contents: read
+jobs:
+  real-group-instance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-group-test
+          MARIADB_DATABASE: aurion_group_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-group-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-group-test@127.0.0.1:3306/aurion_group_test
+      AURION_GROUP_E2E: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-group-ci-signing-key-never-production
+      VITE_APP_ID: aurion-group-isolated-regression
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify source, types and pure queue rules
+        run: |
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm check
+          pnpm verify:migrations
+          pnpm vitest run server/aim259GroupRules.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
+      - name: Apply full schema and test concurrent real database operations
+        run: |
+          pnpm exec drizzle-kit migrate
+          pnpm vitest run server/aim259GroupMariaDb.test.ts
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+      - name: Build the exact runtime and install browser
+        run: |
+          pnpm build:runtime-artifact
+          pnpm exec playwright install --with-deps chromium
+      - name: Persist the initial world through the canonical resolver
+        run: node --import tsx scripts/prepare-aurion-group-runtime-proof.ts
+      - name: Start the built isolated runtime
+        run: |
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production pnpm start > /tmp/aim259-runtime.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Five authenticated sessions, shared instance, heal and rejoin on phone/tablet/desktop
+        run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
+      - name: Upload revision-bound evidence and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aim259-group-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-groups-report/
+            dist/.aurion-runtime-build.json
+          if-no-files-found: error
+          retention-days: 14
