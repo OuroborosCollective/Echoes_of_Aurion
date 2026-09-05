@@ -127,7 +127,7 @@ describe("AIM-250 deterministic region and dungeon progression", () => {
       expect(BigInt(first.challengeScoreExact)).toBeGreaterThan(0n);
       expect(BigInt(first.completionXpExact)).toBeGreaterThan(0n);
     }
-    expect(AURION_DUNGEON_RULESET_VERSION).toBe("aurion-dungeon-progression.v1");
+    expect(AURION_DUNGEON_RULESET_VERSION).toBe("aurion-dungeon-progression.v2");
     expect(() => resolveDungeonProgression({ worldSeed: "aurion-seed", epoch: 12, region, variant: "normal", floorExact: "1", partySize: 1, combatMasteryLevelExact: "1", sourceReceiptDigest: "client-picked" })).toThrow(/SHA-256/);
   });
 
@@ -139,6 +139,26 @@ describe("AIM-250 deterministic region and dungeon progression", () => {
     expect(budgets[0]!.serverTickDivisor).toBe(4);
     expect(budgets[2]!.serverTickDivisor).toBe(1);
     expect(budgets.every(budget => budget.remotePlayers >= 4 && budget.activeMobs > 0 && budget.aoiRadiusMeters > 0)).toBe(true);
+  });
+
+  it("keeps a run's difficulty and rewards monotone over floor and affix-count boundaries", () => {
+    const region = resolveRegionProgression({ worldSeed: "aurion-seed", epoch: 12, resolutionIndex: 3, sector: sector(3), mastery: mastery(), partySize: 5 });
+    for (const variant of dungeonVariants) {
+      let previous: ReturnType<typeof resolveDungeonProgression> | undefined;
+      for (const floor of [...Array.from({ length: 250 }, (_, index) => String(index + 1)), "999", "1000", "999999", "1000000", "1000000000000000000000000"]) {
+        const next = resolveDungeonProgression({ worldSeed: "aurion-seed", epoch: 12, region, variant, floorExact: floor, partySize: 5, combatMasteryLevelExact: "1000", sourceReceiptDigest: "a".repeat(64) });
+        if (previous) {
+          expect(next.combatBudgetBps, `${variant} floor ${floor}`).toBeGreaterThanOrEqual(previous.combatBudgetBps);
+          expect(next.rewardMultiplierBps, `${variant} floor ${floor}`).toBeGreaterThanOrEqual(previous.rewardMultiplierBps);
+          expect(BigInt(next.completionXpExact)).toBeGreaterThanOrEqual(BigInt(previous.completionXpExact));
+          expect(BigInt(next.enemyBudget.hpExact)).toBeGreaterThanOrEqual(BigInt(previous.enemyBudget.hpExact));
+          expect(BigInt(next.challengeScoreExact)).toBeGreaterThan(BigInt(previous.challengeScoreExact));
+          expect(next.affixes.slice(0, previous.affixes.length)).toEqual(previous.affixes);
+          expect(next.deterministicHash).not.toBe(previous.deterministicHash);
+        }
+        previous = next;
+      }
+    }
   });
 
   it("projects many existing global sectors without duplicating persistent world state", () => {

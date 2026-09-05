@@ -63,6 +63,7 @@
           * [Welt- und Contentregeln](docs/agent-knowledgebase/skill-archive/aurion-runtime-knowledgebase/references/world-and-content.md)
   * [balancing](docs/balancing/README.md)
     * [AIM-249 — Deterministic Balancing Lab (local exact replay complete)](docs/balancing/AIM249_BALANCING_LAB.md)
+    * [AIM-265 — Reproduzierbare Berechnung der Migrationsregeln](docs/balancing/AIM265_BALANCING_V2.md)
   * [external](docs/external/README.md)
     * [Echoes of Aurion — externe Veröffentlichungen](docs/external/aurion-awareness-content.md)
   * [migrations](docs/migrations/README.md)

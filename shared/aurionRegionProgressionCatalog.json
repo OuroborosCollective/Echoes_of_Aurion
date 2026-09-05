@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "rulesetVersion": "aurion-region-progression.v1",
-  "dungeonRulesetVersion": "aurion-dungeon-progression.v1",
+  "dungeonRulesetVersion": "aurion-dungeon-progression.v2",
   "authority": "server-derived-from-global-world-plan-and-receipts",
   "persistence": "store-deltas-and-receipts-not-full-derived-regions",
   "regionArchetypes": [

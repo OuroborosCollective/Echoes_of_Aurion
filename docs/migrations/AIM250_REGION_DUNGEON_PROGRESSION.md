@@ -1,7 +1,13 @@
 # AIM-250 — Regionen, Chunks und Dungeons ohne obsolete Gebiete
 
 Status: **Migrationsvertrag und ausführbarer deterministischer Resolver**  
-Regeln: `aurion-region-progression.v1` / `aurion-dungeon-progression.v1`
+Regeln: `aurion-region-progression.v1` / `aurion-dungeon-progression.v2`
+
+Dungeon v2 bindet die Affix-Reihenfolge an den unveränderlichen Laufbeleg, sodass
+höhere Etagen keine geringere Schwierigkeit oder Belohnung durch Neuverlosung
+erhalten. Details und reproduzierbare Gegenbeispiele stehen in
+[AIM-265](../balancing/AIM265_BALANCING_V2.md). Diese Protokollrechnung ist noch
+kein Nachweis einer aktiven Dungeon-Instanz; dafür bleibt AIM-259 erforderlich.
 
 ## Autoritätskette
 

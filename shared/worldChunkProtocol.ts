@@ -6,6 +6,29 @@ export const WORLD_CHUNK_BASE_REVISION = 1 as const;
 export const WORLD_CHUNK_COORDINATE_LIMIT = 1_000_000 as const;
 
 export type WorldChunkCoordinate = { x: number; z: number };
+
+/** Aurion chunks are centered at coordinate * 64 m; local positions are [0, 64 m).
+ * Use floor division for negative positions, not BigInt's truncation toward zero.
+ */
+export function splitWorldChunkPositionMm(position: { x: number; z: number }): {
+  coordinate: WorldChunkCoordinate;
+  localPositionMm: { x: number; z: number };
+} {
+  const size = BigInt(WORLD_CHUNK_SIZE_MM);
+  const axis = (value: number) => {
+    if (!Number.isSafeInteger(value)) throw new Error("world position must be integer millimeters");
+    const shifted = BigInt(value) + size / 2n;
+    const quotient = shifted / size - (shifted < 0n && shifted % size !== 0n ? 1n : 0n);
+    if (quotient < -BigInt(WORLD_CHUNK_COORDINATE_LIMIT) || quotient > BigInt(WORLD_CHUNK_COORDINATE_LIMIT)) throw new Error("world position exceeds chunk boundary");
+    return { coordinate: Number(quotient), local: Number(shifted - quotient * size) };
+  };
+  const x = axis(position.x), z = axis(position.z);
+  return { coordinate: { x: x.coordinate, z: z.coordinate }, localPositionMm: { x: x.local, z: z.local } };
+}
+
+export function isBaseChunkRoadTile(tile: Pick<BaseChunkTile, "x" | "z">): boolean {
+  return tile.x === WORLD_CHUNK_GRID_SIZE / 2 || tile.z === WORLD_CHUNK_GRID_SIZE / 2;
+}
 export type ChunkBiome = "forest" | "riverland" | "plains" | "highland" | "ashland" | "ruins";
 export type ChunkSurface = "grass" | "forest_floor" | "riverbank" | "stone" | "ash" | "ruin_path";
 export type ChunkResourceKind = "tree" | "herb" | "ore" | "water";
@@ -173,7 +196,7 @@ function buildTiles(worldSeed: string, coordinate: WorldChunkCoordinate, biome: 
     for (let x = 0; x < WORLD_CHUNK_GRID_SIZE; x += 1) {
       const noise = hash32(worldSeed, "height", String(coordinate.x), String(coordinate.z), String(x), String(z)) % 4_001;
       const ridge = (Math.abs(coordinate.x) + Math.abs(coordinate.z)) % 11 * 40;
-      const road = x === WORLD_CHUNK_GRID_SIZE / 2 || z === WORLD_CHUNK_GRID_SIZE / 2;
+      const road = isBaseChunkRoadTile({ x, z });
       tiles.push({ x, z, heightMm: noise - 2_000 + ridge, surface: surfaceFor(biome, x, z, road) });
     }
   }

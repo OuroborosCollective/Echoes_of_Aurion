@@ -1,4 +1,5 @@
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
+import { splitWorldChunkPositionMm } from "@shared/worldChunkProtocol";
 import { operationalNow } from "../../../shared/operationalClock";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState, queueHumanDemonstration, type PendingHumanDemonstration } from "@/lib/companionWorldInputs";
@@ -90,7 +91,7 @@ function streamTierForViewport(): WorldChunkStreamingTier {
 }
 
 function worldChunkCenterForZonePosition(position: { x: number; z: number }): { x: number; z: number } {
-  return { x: Math.floor((position.x + 32_000) / 64_000), z: Math.floor((position.z + 32_000) / 64_000) };
+  return splitWorldChunkPositionMm(position).coordinate;
 }
 
 function codeFromText(value: string): Command | null {
