@@ -98,7 +98,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect.poll(async () => { const before = (await receipts()).length; await page.waitForTimeout(1300); return (await receipts()).length === before; }).toBe(true);
       await dialog.getByRole("button", { name: "Inventar schließen", exact: true }).click();
       await auto.click();
-      await expect.poll(async () => { const [rows] = await pool.query<RowDataPacket[]>("SELECT status FROM gameplaySessions WHERE userId=? ORDER BY createdAt DESC LIMIT 1", [userId]); return rows[0]?.status; }, { timeout: 70_000 }).toBe("completed");
+      await expect.poll(async () => { const [rows] = await pool.query<RowDataPacket[]>("SELECT status FROM gameplaySessions WHERE userId=? ORDER BY startedAt DESC LIMIT 1", [userId]); return rows[0]?.status; }, { timeout: 70_000 }).toBe("completed");
       await expect(auto).toHaveAttribute("aria-pressed", "false");
       const actions = await receipts();
       expect(actions.map(row => row.sequence)).toEqual(actions.map((_, i) => i + 1));

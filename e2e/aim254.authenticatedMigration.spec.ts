@@ -146,10 +146,15 @@ test("two authenticated accounts see the same confirmed movement and departure",
   const left = await leftContext.newPage(), right = await rightContext.newPage();
   type Presence = { userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
   let leftView: Presence[] = [], rightView: Presence[] = [];
+  let leftStopSequence = 0;
   const errors: string[] = [];
   const observe = (page: Page, update: (presences: Presence[]) => void) => {
     page.on("pageerror", error => errors.push(error.message));
-    page.on("websocket", socket => { if (socket.url().endsWith("/v1/ws")) socket.on("framereceived", frame => {
+    page.on("websocket", socket => { if (!socket.url().endsWith("/v1/ws")) return;
+      if (page === left) socket.on("framesent", frame => {
+        try { const value = JSON.parse(String(frame.payload)); if (value.type === "move" && value.input?.x === 0 && value.input?.z === 0) leftStopSequence = value.clientSeq; } catch { /* Only actual stop commands count. */ }
+      });
+      socket.on("framereceived", frame => {
       try { const value = JSON.parse(String(frame.payload)); if (["welcome", "snapshot"].includes(value.type) && Array.isArray(value.presences)) update(value.presences); } catch { /* Invalid frames cannot satisfy assertions. */ }
     }); });
   };
@@ -179,10 +184,21 @@ test("two authenticated accounts see the same confirmed movement and departure",
     await expect(left.getByTestId("confirmed-remote-player-count")).toHaveText("1 andere Explorer verbunden");
     await expect(right.getByTestId("confirmed-remote-player-count")).toHaveText("1 andere Explorer verbunden");
     const initial = { ...rightView.find(p => p.userId === leftUserId)!.position };
+    const stopBeforeMovement = leftStopSequence;
     await left.keyboard.down("w");
-    try { await expect.poll(() => rightView.find(p => p.userId === leftUserId)?.position.z !== initial.z, { timeout: 15_000 }).toBe(true); }
+    try { await expect.poll(() => { const actor = rightView.find(p => p.userId === leftUserId); return Boolean(actor && actor.position.z !== initial.z); }, { timeout: 15_000 }).toBe(true); }
     finally { await left.keyboard.up("w"); }
-    await expect.poll(() => JSON.stringify(rightView.find(p => p.userId === leftUserId)?.position) === JSON.stringify(leftView.find(p => p.userId === leftUserId)?.position)).toBe(true);
+    // A position comparison while frames are still queued does not prove convergence.
+    // Require both sockets to acknowledge the actual stop, then compare fixed-point values.
+    try {
+      await expect.poll(() => leftStopSequence, { timeout: 15_000 }).toBeGreaterThan(stopBeforeMovement);
+      await expect.poll(() => {
+        const a = leftView.find(p => p.userId === leftUserId), b = rightView.find(p => p.userId === leftUserId);
+        return Boolean(a && b && a.lastAcceptedClientSeq >= leftStopSequence && b.lastAcceptedClientSeq >= leftStopSequence && a.position.x === b.position.x && a.position.z === b.position.z);
+      }, { timeout: 15_000 }).toBe(true);
+    } finally {
+      await testInfo.attach("movement-stop-readback", { body: JSON.stringify({ leftStopSequence, leftView, rightView }), contentType: "application/json" });
+    }
     await expect.poll(async () => {
       const [rows] = await pool.query<RowDataPacket[]>("SELECT positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL", [leftUserId]);
       return rows.some(row => row.positionZ !== initial.z);
