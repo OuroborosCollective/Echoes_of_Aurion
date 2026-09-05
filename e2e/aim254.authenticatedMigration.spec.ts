@@ -244,7 +244,7 @@ test("native encounter survives a world return and commits the quest reward once
       const response = page.waitForResponse(response => response.url().includes("gameplay.act") && response.status() === 200);
       await attack.click(); await response;
     }
-    await expect(hud.getByText("Keine aktive Begegnung", { exact: true })).toBeVisible();
+    await expect(hud.getByRole("region", { name: "Begegnung", exact: true })).toHaveAttribute("data-active", "false");
     const [completed] = await pool.query<RowDataPacket[]>("SELECT s.status, s.bossHp, q.state FROM gameplaySessions s JOIN gameplayQuestProgress q ON q.completionSessionId=s.id WHERE s.id=?", [before[0].id]);
     expect(completed[0]).toMatchObject({ status: "completed", bossHp: 0, state: "ready_to_turn_in" });
     await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
@@ -253,6 +253,7 @@ test("native encounter survives a world return and commits the quest reward once
     await expect(dialog.getByRole("button", { name: "Bei Lyra abgeben", exact: true })).toHaveCount(0);
     const [reward] = await pool.query<RowDataPacket[]>("SELECT p.totalXp, p.aurionPoints, q.state FROM playerProfiles p JOIN gameplayQuestProgress q ON q.userId=p.userId WHERE p.userId=? AND q.questKey='astral_call'", [before[0].userId]);
     expect(reward[0]).toMatchObject({ totalXp: 122, aurionPoints: 20, state: "completed" });
+    await dialog.getByRole("tab", { name: "Kontakte", exact: true }).click();
     await expect(dialog.getByTestId("npc-standing-panel").getByText("Neutral · Ansehen 5", { exact: true })).toBeVisible();
     await expect(dialog.getByTestId("npc-decision-panel").getByText("Noch keine bestätigten Verhaltensentscheidungen für Lyra und Orun.", { exact: true })).toBeVisible();
     const [relationships] = await pool.query<RowDataPacket[]>("SELECT scopeKey,eventJson,eventHash FROM aurionScopedMasteryEvents WHERE userId=?", [before[0].userId]);
@@ -335,6 +336,7 @@ test("explicit companion learning captures the visible world and stores a bounde
     const runtime = page.getByTestId("xaurion-open-world-runtime");
     await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
     await expect(page.locator("canvas")).toHaveCount(1);
+    await runtime.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
     const pairingResponse = page.waitForResponse(response => response.url().includes("gateway.createSession") && response.status() === 200);
     await dialog.getByRole("button", { name: "Companion verbinden", exact: true }).click();
@@ -379,6 +381,7 @@ test("explicit companion learning captures the visible world and stores a bounde
     expect(new Set(observation.featureVector).size).toBeGreaterThan(1);
     expect(observation.stateMask).toEqual([0, 0, 0, 0, 0, 0]);
     expect(observation.stateVector).toEqual([0, 0, 0, 0, 0, 0]);
+    await runtime.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
     await expect(dialog.getByText(/^[1-9][0-9]* lokale Beobachtungszeilen$/)).toBeVisible();
     await dialog.getByRole("button", { name: "Aufzeichnung beenden", exact: true }).click();

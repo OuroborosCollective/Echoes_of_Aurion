@@ -51,6 +51,8 @@ export class AuthoritativeMovementZone {
   private readonly peers = new Map<string, PresencePeer>();
   private snapshotSeq = 0;
   private tickNumber = 0;
+  private inputAcknowledgementPending = false;
+  private movedLastTick = false;
 
   constructor(readonly zoneId: ZoneId) {}
 
@@ -92,6 +94,7 @@ export class AuthoritativeMovementZone {
     if (move.clientSeq <= peer.lastAcceptedClientSeq) return "stale";
     peer.lastAcceptedClientSeq = move.clientSeq;
     peer.input = move.input;
+    this.inputAcknowledgementPending = true;
     return "accepted";
   }
 
@@ -105,7 +108,12 @@ export class AuthoritativeMovementZone {
       peer.position = next;
       changed = true;
     });
-    if (changed) this.broadcastSnapshot();
+    // Publish the first stationary tick too: the renderer needs confirmed zero
+    // velocity after stopping or reaching the boundary. New intents also need
+    // acknowledgement even when their resulting position remains unchanged.
+    if (changed || this.movedLastTick || this.inputAcknowledgementPending) this.broadcastSnapshot();
+    this.movedLastTick = changed;
+    this.inputAcknowledgementPending = false;
     return changed;
   }
 

@@ -75,6 +75,10 @@ export function classifyGlbBase64(contentBase64: string): GlbAssetClassification
   const animationSet = new Set(animationNames.map(name => name.toLowerCase()));
   const lod = detectLod(allNames);
 
+  if (skinCount > 0 && hasKeyword(searchable, ["blacksmith", "schmied"]) && animationSet.has("idle") && animationSet.has("shopinteract")) {
+    return Object.freeze({ assetType: "character", subcategory: "blacksmith-npc", confidence: "high", animationNames: Object.freeze(animationNames), nodeNames: Object.freeze(nodeNames), skinCount, socketCount, lod });
+  }
+
   const playerSignals = socketCount >= 4
     || (searchable.includes("aurion_humanoid_rig") && (animationSet.has("attackcombo") || animationSet.has("fight")))
     || hasKeyword(searchable, ["player", "explorer", "character"]);

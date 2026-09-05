@@ -12,6 +12,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import GlbUpload from "./pages/GlbUpload";
 import Home from "./pages/Home";
 import Operations from "./pages/Operations";
+import AurionGroupsPage from "./xaurion/integration/AurionGroupFinder";
 import AurionOpenWorldRuntime from "./xaurion/integration/AurionOpenWorldRuntime";
 import { OpenWorldErrorBoundary } from "./xaurion/integration/OpenWorldErrorBoundary";
 
@@ -26,6 +27,7 @@ function App() {
             <Route path="/" component={Home} />
             <Route path="/ops" component={Operations} />
             <Route path="/ops/glb-upload" component={GlbUpload} />
+            <Route path="/groups" component={AurionGroupsPage} />
             <Route component={Home} />
           </Switch>
           <OpenWorldErrorBoundary><AurionOpenWorldRuntime /></OpenWorldErrorBoundary>

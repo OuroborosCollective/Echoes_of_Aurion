@@ -8,11 +8,34 @@ const suite = process.env.AURION_ENCOUNTER_E2E === "1" && process.env.DATABASE_U
 const userId = 9253001;
 suite("AIM-253 native encounter transaction in isolated MariaDB", () => {
   let pool: Pool; let isolated = false;
+  let changedCatalog: { classKey: string; active: number }[] = [];
+  const restoreCatalog = async () => {
+    for (const row of changedCatalog) await pool.query("UPDATE treasureClasses SET active=? WHERE classKey=?", [row.active, row.classKey]);
+    changedCatalog = [];
+  };
   const cleanup = async () => {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS aim253_abort_completion");
-    await pool.query("DELETE FROM itemInstances WHERE ownerUserId=?", [userId]);
+    await pool.query("DROP TRIGGER IF EXISTS aim259_abort_dungeon_item");
+    await restoreCatalog();
+    await pool.query("DELETE FROM itemInstances WHERE ownerUserId=? OR lootReceiptId IN (SELECT id FROM lootDropReceipts WHERE userId=?)", [userId, userId]);
     for (const table of ["aurionScopedMasteryEvents", "skillProgressionEvents", "weaponMasteryReceipts", "lootDropReceipts", "expeditionResultReceipts", "progressionLedger", "gameplayActionReceipts", "gameplaySessions", "gameplayQuestProgress", "gameplayDungeonKeys", "weaponLoadouts", "weaponMasteries", "playerProfiles"]) await pool.query(`DELETE FROM ${table} WHERE userId=?`, [userId]);
+  };
+  const finalDungeonCommand = async () => {
+    // Reach the dungeon through the real quest/key entry path, not a fabricated completion.
+    for (const [questKey, encounterKey, giver] of [["astral_call", "asterion", "Lyra"], ["archive_of_echoes", "archive", "Orun"], ["ember_key", "solarium", "Lyra"]] as const) {
+      if (questKey !== "astral_call") await acceptGameplayQuest({ userId, questKey });
+      const { session } = await startGameplayEncounter({ userId, encounterKey });
+      for (let sequence = 1; sequence <= 20; sequence++) {
+        if ((await applyGameplayAction({ userId, sessionId: session.id, sequence, command: "9", source: "human" })).completed) break;
+      }
+      await completeGameplayQuest({ userId, questKey, giver });
+    }
+    const { session } = await startGameplayEncounter({ userId, encounterKey: "cinder_vault" });
+    await applyGameplayAction({ userId, sessionId: session.id, sequence: 1, command: "F", source: "human" });
+    // Stop immediately before the final hit so fault injection targets only finalization.
+    await pool.query("UPDATE gameplaySessions SET bossHp=1 WHERE id=?", [session.id]);
+    return { userId, sessionId: session.id, sequence: 2, command: "F", source: "human" as const };
   };
   beforeAll(async () => {
     pool = createPool(process.env.DATABASE_URL!);
@@ -91,6 +114,80 @@ suite("AIM-253 native encounter transaction in isolated MariaDB", () => {
     expect(mastery).toEqual([expect.objectContaining({xp:10})]);
     const [receipts]=await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM weaponMasteryReceipts WHERE userId=?",[userId]); expect(Number(receipts[0].count)).toBe(1);
     const [items]=await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM itemInstances WHERE ownerUserId=?",[userId]); expect(Number(items[0].count)).toBe(1);
+  });
+
+  it("rolls back the dungeon's final hit, reward, result and drop when item creation fails", async () => {
+    const command = await finalDungeonCommand();
+    await pool.query(`CREATE TRIGGER aim259_abort_dungeon_item AFTER INSERT ON itemInstances FOR EACH ROW BEGIN IF NEW.ownerUserId=${userId} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='AIM259_FORCED_ROLLBACK'; END IF; END`);
+    await expect(applyGameplayAction(command)).rejects.toThrow();
+    expect((await getCurrentGameplayEncounter(userId)).active).toMatchObject({ id: command.sessionId, bossHp: 1, nextSequence: 2 });
+    const [actions] = await pool.query<RowDataPacket[]>("SELECT sequence FROM gameplayActionReceipts WHERE sessionId=?", [command.sessionId]);
+    expect(actions.map(row => row.sequence)).toEqual([1]);
+    const [profile] = await pool.query<RowDataPacket[]>("SELECT totalXp, aurionPoints, victories FROM playerProfiles WHERE userId=?", [userId]);
+    expect(profile[0]).toMatchObject({ totalXp: 702, aurionPoints: 115, victories: 3 });
+    for (const table of ["expeditionResultReceipts", "lootDropReceipts"]) {
+      const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS count FROM ${table} WHERE expeditionKey=?`, [`dungeon:${command.sessionId}`]);
+      expect(Number(rows[0].count)).toBe(0);
+    }
+    const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM progressionLedger WHERE userId=? AND source='dungeon:cinder_vault'", [userId]);
+    expect(Number(ledger[0].count)).toBe(0);
+    await pool.query("DROP TRIGGER aim259_abort_dungeon_item");
+    expect(await applyGameplayAction(command)).toMatchObject({ completedDungeon: true, replayed: false, reward: { xp: 480, points: 90 }, drop: { id: expect.any(String) } });
+  });
+
+  it("replays one original dungeon completion despite concurrent calls and later profile, catalog or ownership changes", async () => {
+    const command = await finalDungeonCommand();
+    const results = await Promise.all([applyGameplayAction(command), applyGameplayAction(command)]);
+    expect(results.map(result => result.replayed).sort()).toEqual([false, true]);
+    expect(results[1]).toEqual({ ...results[0], replayed: results[1].replayed });
+    const first = results[0];
+    expect(first.drop?.id).toBeTruthy();
+    const [profile] = await pool.query<RowDataPacket[]>("SELECT totalXp, aurionPoints, victories FROM playerProfiles WHERE userId=?", [userId]);
+    expect(profile[0]).toMatchObject({ totalXp: 1182, aurionPoints: 205, victories: 4 });
+    const [catalog] = await pool.query<RowDataPacket[]>("SELECT classKey, active FROM treasureClasses WHERE classKey=(SELECT treasureClass FROM lootDropReceipts WHERE expeditionKey=?)", [`dungeon:${command.sessionId}`]);
+    changedCatalog = catalog.map(row => ({ classKey: row.classKey, active: row.active }));
+    expect(changedCatalog).toHaveLength(1);
+    await pool.query("UPDATE treasureClasses SET active=0 WHERE classKey=?", [changedCatalog[0].classKey]);
+    await pool.query("UPDATE playerProfiles SET level=50, totalXp=1000000 WHERE userId=?", [userId]);
+    await setWeaponLoadout({ userId, weaponTrack: "focus" });
+    await pool.query("UPDATE itemInstances SET ownerUserId=?, status='sold' WHERE id=?", [userId + 1, first.drop!.id]);
+    expect(await applyGameplayAction({ ...command, command: " f " })).toEqual({ ...first, replayed: true });
+    const [item] = await pool.query<RowDataPacket[]>("SELECT ownerUserId, status FROM itemInstances WHERE id=?", [first.drop!.id]);
+    expect(item[0]).toMatchObject({ ownerUserId: userId + 1, status: "sold" });
+    const [after] = await pool.query<RowDataPacket[]>("SELECT totalXp, aurionPoints, victories FROM playerProfiles WHERE userId=?", [userId]);
+    expect(after[0]).toMatchObject({ totalXp: 1000000, aurionPoints: 205, victories: 4 });
+    const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM progressionLedger WHERE userId=? AND source='dungeon:cinder_vault'", [userId]);
+    expect(Number(ledger[0].count)).toBe(3);
+    const [drops] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM lootDropReceipts WHERE expeditionKey=?", [`dungeon:${command.sessionId}`]);
+    expect(Number(drops[0].count)).toBe(1);
+    for (const override of [{ sequence: 1 }, { sequence: 3 }, { command: "E" }, { source: "gateway" as const }]) {
+      await expect(applyGameplayAction({ ...command, ...override })).rejects.toThrow("DUNGEON_COMPLETION_REPLAY_CONFLICT");
+    }
+    await (await getDb())!.insert(playerProfiles).values({ userId: userId + 1 });
+    try { await expect(applyGameplayAction({ ...command, userId: userId + 1 })).rejects.toThrow("nicht aktiv"); }
+    finally { await pool.query("DELETE FROM playerProfiles WHERE userId=?", [userId + 1]); }
+  });
+
+  it("keeps a dungeon active until an eligible loot catalog exists", async () => {
+    const command = await finalDungeonCommand();
+    const [catalog] = await pool.query<RowDataPacket[]>("SELECT classKey, active FROM treasureClasses WHERE active=1");
+    changedCatalog = catalog.map(row => ({ classKey: row.classKey, active: row.active }));
+    await pool.query("UPDATE treasureClasses SET active=0 WHERE active=1");
+    await expect(applyGameplayAction(command)).rejects.toThrow("DUNGEON_TREASURE_CLASS_UNAVAILABLE");
+    expect((await getCurrentGameplayEncounter(userId)).active).toMatchObject({ bossHp: 1, nextSequence: 2 });
+    await restoreCatalog();
+    expect(await applyGameplayAction(command)).toMatchObject({ completedDungeon: true, replayed: false, drop: { id: expect.any(String) } });
+  });
+
+  it("rejects incomplete historical dungeon evidence without reissuing any rewards", async () => {
+    const command = await finalDungeonCommand();
+    const first = await applyGameplayAction(command);
+    await pool.query("UPDATE expeditionResultReceipts SET status='rejected' WHERE expeditionKey=?", [`dungeon:${command.sessionId}`]);
+    await expect(applyGameplayAction(command)).rejects.toThrow("DUNGEON_COMPLETION_EVIDENCE_INCOMPLETE");
+    const [profile] = await pool.query<RowDataPacket[]>("SELECT totalXp, aurionPoints, victories FROM playerProfiles WHERE userId=?", [userId]);
+    expect(profile[0]).toMatchObject({ totalXp: 1182, aurionPoints: 205, victories: 4 });
+    const [items] = await pool.query<RowDataPacket[]>("SELECT id FROM itemInstances WHERE id=?", [first.drop!.id]);
+    expect(items).toHaveLength(1);
   });
 
 });

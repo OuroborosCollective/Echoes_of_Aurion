@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "aim254.authenticatedMigration.spec.ts",
+  testMatch: ["aim254.authenticatedMigration.spec.ts", "aim253.glbActors.spec.ts"],
   timeout: 120_000,
   workers: 1,
   retries: 0,

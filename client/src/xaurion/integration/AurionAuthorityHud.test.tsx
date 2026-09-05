@@ -30,6 +30,7 @@ describe("server-backed Aurion HUD", () => {
   it("shows confirmed NPC standing and labels stale relationship data", () => {
     fixtures.standing.data = { userId: 7, social: [], entries: [{ kind: "npc_relation", id: "lyra", score: 5, tier: "NEUTRAL", sourceCount: 1, xpExact: "4", levelExact: "1" }] };
     fixtures.standing.isStale = true; mount(); fireEvent.click(screen.getByRole("button", { name: "Aufträge & Kontakte" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Kontakte" }));
     expect(screen.getByTestId("npc-standing-panel").dataset.state).toBe("stale");
     expect(screen.getByText("Neutral · Ansehen 5")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Beziehungen aktualisieren" })); expect(fixtures.standing.refetch).toHaveBeenCalledTimes(1);
@@ -37,6 +38,7 @@ describe("server-backed Aurion HUD", () => {
   it("rejects a relationship response belonging to another player", () => {
     fixtures.standing.data = { userId: 8, social: [], entries: [{ kind: "npc_relation", id: "lyra", score: 80, tier: "EXALTED", sourceCount: 1, xpExact: "4", levelExact: "1" }] };
     mount(); fireEvent.click(screen.getByRole("button", { name: "Aufträge & Kontakte" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Kontakte" }));
     expect(screen.getByTestId("npc-standing-panel").dataset.state).toBe("error");
     expect(screen.queryByText(/Erhaben/)).toBeNull();
   });
