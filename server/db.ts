@@ -1725,7 +1725,7 @@ export async function grantProgress(values: { userId: number; kind: "xp" | "poin
 
 export async function listWeaponMasteries(userId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Game database is not available");
   return db.select().from(weaponMasteries).where(eq(weaponMasteries.userId, userId));
 }
 
@@ -1740,7 +1740,7 @@ export async function setWeaponLoadout(values: { userId: number; weaponTrack: We
 
 export async function getWeaponLoadout(userId: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) throw new Error("Game database is not available");
   const result = await db.select().from(weaponLoadouts).where(eq(weaponLoadouts.userId, userId)).limit(1);
   return result[0];
 }
@@ -1788,7 +1788,7 @@ export async function createLootDrop(values: { userId: number; expeditionKey: st
 
 export async function listSetBonusesForUser(userId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Game database is not available");
   const owned = await db.select().from(itemInstances).where(eq(itemInstances.ownerUserId, userId));
   const definitions = await db.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1));
   return definitions.flatMap(definition => {
@@ -1803,7 +1803,7 @@ export async function listSetBonusesForUser(userId: number) {
 
 export async function listInventoryForUser(userId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Game database is not available");
   const items = await db.select().from(itemInstances).where(and(eq(itemInstances.ownerUserId, userId), eq(itemInstances.status, "owned"))).orderBy(desc(itemInstances.createdAt)).limit(100);
   return items.map(item => {
     let affixes: LootAffix[] = [];
@@ -2448,7 +2448,7 @@ function newCommunityId(prefix: string): string {
 
 export async function listExpeditionChatMessages(limit = 40) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Game database is not available");
   const messages = await db.select({
     id: expeditionChatMessages.id,
     userId: expeditionChatMessages.userId,
@@ -2538,7 +2538,7 @@ export async function acceptPartnerRequest(values: { requestId: string; responde
 
 export async function getActiveExpeditionTeam(userId: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) throw new Error("Game database is not available");
   const membership = await findActiveTeamForUser(userId);
   if (!membership) return undefined;
   const members = await db.select({ userId: expeditionTeamMembers.userId, role: expeditionTeamMembers.role, name: users.name })

@@ -32,6 +32,7 @@ vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn(() => {
 }) }));
 vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn() }));
 vi.mock("../components/GameHUD", () => ({ GameHUD: () => <p>World controls</p> }));
+vi.mock("./AurionAuthorityHud", () => ({ AurionAuthorityHud: () => <p>World controls</p> }));
 vi.mock("../components/InventoryModal", () => ({ InventoryModal: () => null }));
 vi.mock("../components/CharacterModal", () => ({ CharacterModal: () => null }));
 vi.mock("../components/ClassSelectModal", () => ({ ClassSelectModal: () => null }));

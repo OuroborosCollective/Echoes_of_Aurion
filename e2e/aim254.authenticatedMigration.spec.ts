@@ -77,6 +77,22 @@ for (const viewport of [
       }, { timeout: WORLD_PRESENCE_REFRESH_MS + 10_000 }).toBe(true);
       const [account] = await pool.query<RowDataPacket[]>("SELECT u.role, p.level FROM users u JOIN playerProfiles p ON p.userId=u.id WHERE u.id=?", [latestPresence!.userId]);
       expect(account).toEqual([expect.objectContaining({ role: "user", level: 1 })]);
+      const hud = page.getByTestId("authoritative-world-hud");
+      await expect(hud.getByText("0 EP · 0 AURION", { exact: true })).toBeVisible();
+      await hud.getByRole("button", { name: "Inventar", exact: true }).click();
+      await expect(page.getByRole("dialog").getByText("Dein Inventar ist leer.", { exact: true })).toBeVisible();
+      await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+      await hud.getByRole("button", { name: "Charakter", exact: true }).click();
+      const characterDialog = page.getByRole("dialog");
+      await expect(characterDialog.getByRole("button", { name: "Hüter", exact: true })).toBeDisabled();
+      await characterDialog.getByRole("button", { name: "staff", exact: true }).click();
+      await expect(characterDialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
+      const [chosen] = await pool.query<RowDataPacket[]>("SELECT p.selectedClass, w.weaponTrack FROM playerProfiles p JOIN weaponLoadouts w ON w.userId=p.userId WHERE p.userId=?", [latestPresence!.userId]);
+      expect(chosen[0]).toMatchObject({ selectedClass: "unbound", weaponTrack: "staff" });
+      await characterDialog.getByRole("button", { name: "Close", exact: true }).click();
+      await hud.getByRole("button", { name: "Weltatlas", exact: true }).click();
+      await expect(page.getByRole("dialog").getByText(`Welt-Hash: ${confirmedWorld!.deterministicHash}`, { exact: true })).toBeVisible();
+      await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
       const [world] = await pool.query<RowDataPacket[]>("SELECT epoch, snapshotHash FROM aurionGlobalWorldStates WHERE worldId='echoes-of-aurion-global'");
       // Reading a fresh world's canonical epoch must not create a write receipt.
       expect(world).toHaveLength(0);
