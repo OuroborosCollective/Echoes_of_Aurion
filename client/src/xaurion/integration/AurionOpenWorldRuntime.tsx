@@ -1,3 +1,4 @@
+import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { WORLD_DEMONSTRATION_EVENT } from "@/lib/companionWorldInputs";
 import { VisibleCanvasCapture } from "@/lib/visibleCanvasCapture";
 import { loadCompanionSession } from "@/lib/companionLearning";
@@ -70,6 +71,8 @@ export default function AurionOpenWorldRuntime() {
   const virtualInputRef = useRef({ forward: 0, right: 0 });
 
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
+  const catalog = useGlbCatalog(Boolean(activation));
+  const [modelStatus, setModelStatus] = useState("procedural");
   const [webglError, setWebglError] = useState<string | null>(null);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [currentClassId, setCurrentClassId] = useState<CharacterClassId>("knight");
@@ -199,10 +202,15 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     const engine = engineRef.current;
-    const url = characterAppearance.data?.storageUrl;
-    if (!engine || !url) return;
-    void engine.player.equipGlbModel(url);
-  }, [characterAppearance.data?.storageUrl, activation]);
+    const url = characterAppearance.data?.storageUrl ?? catalog?.entries.find(entry => entry.targetKey === "starter_player")?.storageUrl ?? null;
+    if (!engine) return;
+    let disposed = false;
+    setModelStatus(url ? "loading" : "procedural");
+    void engine.player.equipGlbModel(url).then(loaded => {
+      if (!disposed) setModelStatus(url ? loaded ? "active" : "failed" : "procedural");
+    });
+    return () => { disposed = true; void engine.player.equipGlbModel(null); };
+  }, [characterAppearance.data?.storageUrl, catalog?.revision, activation]);
 
   useEffect(() => {
     if (!activation || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
@@ -372,6 +380,7 @@ export default function AurionOpenWorldRuntime() {
 
   return (
     <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Open World">
+      <output data-testid="glb-model-status" aria-label="Charaktermodell" className="sr-only">{modelStatus}</output>
       <div ref={containerRef} className="xaurion-runtime__viewport" id="three-viewport" />
       <div className="xaurion-runtime__bridge-status" aria-live="polite">
         <span><Database size={13} /> AURION DB</span>

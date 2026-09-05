@@ -10,6 +10,17 @@ on:
       - "client/src/pages/GlbUpload.test.tsx"
       - "server/_core/index.ts"
       - "server/adminProtocol.ts"
+      - "server/glb*.ts"
+      - "server/adminMcp*.ts"
+      - "shared/glbImportContract.ts"
+      - "client/src/hooks/useGlbCatalog.ts"
+      - "client/src/xaurion/**"
+      - "client/src/pages/Home.tsx"
+      - "scripts/glb-import.mjs"
+      - "e2e/glbImport.spec.ts"
+      - "playwright.glb.config.ts"
+      - "Dockerfile"
+      - "docker-compose.traefik.yml"
       - "server/glbAssetClassifier.ts"
       - "server/glbAssetClassifier.test.ts"
       - "server/glbSmartUpload.ts"
@@ -31,7 +42,26 @@ jobs:
   glb-upload-regression:
     name: GLB classifier, runtime, typecheck and web build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_glb_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_glb_test
+      AURION_GLB_DB_TEST: '1'
+      AURION_E2E_ISOLATED: '1'
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-glb-browser-assets
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-ci-glb-signing-key-never-production
+      VITE_APP_ID: aurion-isolated-glb-test
+      AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v4
@@ -55,9 +85,19 @@ jobs:
       - name: Prove exact checked-out head
         run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
 
+      - name: Apply the complete migration journal to real MariaDB
+        run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+
       - name: Run GLB regression and runtime tests
         run: >-
           pnpm exec vitest run
+          server/glbImportMariaDb.test.ts
+          server/glbImportPlan.test.ts
+          server/glbFileStore.test.ts
+          server/glbImportCli.test.ts
+          server/adminMcp.test.ts
+          server/adminMcpProtocol.test.ts
+          server/adminMcpRoute.test.ts
           server/adminProtocol.test.ts
           server/glbAssetClassifier.test.ts
           server/glbSmartUpload.test.ts
@@ -69,3 +109,26 @@ jobs:
 
       - name: Build web and server runtime
         run: pnpm build
+
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Run authenticated browser upload and render proof
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-glb-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          pnpm exec playwright test --config=playwright.glb.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: glb-upload-db-render-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-glb-report/
+            /tmp/aurion-glb-server.log
+          if-no-files-found: warn
+          retention-days: 14

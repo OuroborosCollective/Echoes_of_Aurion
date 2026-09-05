@@ -1,3 +1,4 @@
+import { glbImportStore } from "./glbImportStore";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
@@ -2227,28 +2228,10 @@ export async function getGlbAsset(assetId: string) {
 }
 
 export async function uploadGlbAsset(values: { displayName: string; assetType: AssetType; contentBase64: string; createdByUserId: number }) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
-  const payload = decodeValidatedGlbBase64(values.contentBase64);
-  const existing = await db.select().from(glbAssets).where(eq(glbAssets.sha256, payload.sha256)).limit(1);
-  if (existing[0]) return { asset: existing[0], deduplicated: true as const };
-
-  const stored = await storagePut(`aurion/glb/${values.createdByUserId}/${payload.sha256}.glb`, payload.bytes, "model/gltf-binary");
-  const id = newEndgameId("glb");
-  await db.insert(glbAssets).values({
-    id,
-    displayName: values.displayName,
-    assetType: values.assetType,
-    storageKey: stored.key,
-    storageUrl: stored.url,
-    sha256: payload.sha256,
-    bytes: payload.bytes.length,
-    status: "draft",
-    createdByUserId: values.createdByUserId,
-  });
-  const asset = await getGlbAsset(id);
+  const receipt = await glbImportStore().ingest(values.createdByUserId, { displayName: values.displayName, contentBase64: values.contentBase64 });
+  const asset = await getGlbAsset(receipt.assetId);
   if (!asset) throw new Error("GLB metadata readback failed");
-  return { asset, deduplicated: false as const };
+  return { asset, deduplicated: receipt.deduplicated, receipt };
 }
 
 export async function submitPlayerGlbAsset(values: { submittedByUserId: number; assetType: AssetType; subcategory: string; displayName: string; description: string; visibility: "private" | "public"; contentBase64: string }) {
@@ -2344,13 +2327,9 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
 }
 
 export async function setGlbAssetReview(values: { assetId: string; status: AssetReviewStatus; reviewedByUserId: number }) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
-  const existing = await getGlbAsset(values.assetId);
-  if (!existing) throw new Error("GLB asset does not exist");
-  await db.update(glbAssets).set({ status: values.status, reviewedByUserId: values.reviewedByUserId, reviewedAt: operationalDate() }).where(eq(glbAssets.id, values.assetId));
+  await glbImportStore().review(values.reviewedByUserId, values);
   const asset = await getGlbAsset(values.assetId);
-  if (!asset || asset.status !== values.status || asset.reviewedByUserId !== values.reviewedByUserId) throw new Error("GLB review readback failed");
+  if (!asset || asset.status !== values.status) throw new Error("GLB review readback failed");
   return asset;
 }
 
@@ -2377,20 +2356,10 @@ export async function getActiveGlbAssignment(targetType: AssetType, targetKey: s
     .where(and(eq(glbAssignments.targetType, targetType), eq(glbAssignments.targetKey, targetKey), eq(glbAssignments.active, 1), eq(glbAssets.status, "approved"))).limit(1))[0] ?? null;
 }
 
-export async function assignApprovedGlbAsset(values: { assetId: string; targetType: AssetType; targetKey: string; assignedByUserId: number }) {
-  const db = await getDb();
-  if (!db) throw new Error("Game database is not available");
-  const asset = await getGlbAsset(values.assetId);
-  if (!asset || asset.status !== "approved") throw new Error("Only approved GLB assets can be assigned");
-  if (asset.assetType !== values.targetType) throw new Error("GLB asset type does not match assignment target");
-
-  const assignmentId = newEndgameId("assign");
-  await db.transaction(async tx => {
-    await tx.update(glbAssignments).set({ active: 0 }).where(and(eq(glbAssignments.targetType, values.targetType), eq(glbAssignments.targetKey, values.targetKey), eq(glbAssignments.active, 1)));
-    await tx.insert(glbAssignments).values({ id: assignmentId, assetId: values.assetId, targetType: values.targetType, targetKey: values.targetKey, active: 1, assignedByUserId: values.assignedByUserId });
-  });
-  const assignment = (await listGlbAssignments()).find(entry => entry.id === assignmentId);
-  if (!assignment || assignment.active !== 1) throw new Error("GLB assignment readback failed");
+export async function assignApprovedGlbAsset(values: { assetId: string; targetType: AssetType; targetKey: string; assignedByUserId: number; expectedActiveAssetId: string | null }) {
+  await glbImportStore().assign(values.assignedByUserId, values);
+  const assignment = (await listGlbAssignments()).find(entry => entry.assetId === values.assetId && entry.targetType === values.targetType && entry.targetKey === values.targetKey && entry.active === 1);
+  if (!assignment) throw new Error("GLB assignment readback failed");
   return assignment;
 }
 

@@ -2,6 +2,11 @@ import type { Express, Request, Response } from "express";
 import { sdk } from "./_core/sdk";
 import * as db from "./db";
 import { classifyGlbBase64, type GlbAssetClassification, type GlbAssetType } from "./glbAssetClassifier";
+import { authenticateAdminGlbBearer } from "./adminMcp";
+import { glbImportStore } from "./glbImportStore";
+import { buildGlbImportPlan } from "./glbImportPlan";
+import { checkGlbStorage } from "./glbFileStore";
+import { z } from "zod";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
@@ -16,6 +21,7 @@ type GlbSmartUploadDependencies = Readonly<{
 function defaultDependencies(): GlbSmartUploadDependencies {
   return {
     authenticate: async request => {
+      if (request.header("authorization")) return authenticateAdminGlbBearer(request);
       const user = await sdk.authenticateRequest(request);
       return user ? { id: user.id, role: user.role } : null;
     },
@@ -78,6 +84,7 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
         fileName,
         classification,
         asset,
+        ...((asset as { receipt?: unknown })?.receipt ? { receipt: (asset as { receipt: unknown }).receipt } : {}),
       });
     } catch (error) {
       console.error("[GLB Smart Upload] persistence failed:", error);
@@ -87,5 +94,37 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
 }
 
 export function registerGlbSmartUpload(app: Express): void {
+  app.use([GLB_SMART_UPLOAD_PATH, "/api/admin/glb-import"], (request, response, next) => {
+    const origin = request.header("origin");
+    const allowed = (process.env.AURION_ALLOWED_ORIGINS ?? "https://arelogic.space").split(",").map(value => value.trim());
+    if (origin && !allowed.includes(origin)) { response.status(403).json({ error: "GLB_ORIGIN_REJECTED" }); return; }
+    next();
+  });
   app.post(GLB_SMART_UPLOAD_PATH, createGlbSmartUploadHandler());
+  const adminRoute = (operation: (request: Request, user: AuthenticatedUploader) => Promise<unknown>) => async (request: Request, response: Response) => {
+    let user: AuthenticatedUploader | null;
+    try { user = await defaultDependencies().authenticate(request); }
+    catch { response.status(401).json({ error: "GLB_AUTHENTICATION_REQUIRED" }); return; }
+    if (!user || user.role !== "admin") { response.status(user ? 403 : 401).json({ error: "GLB_ADMIN_REQUIRED" }); return; }
+    try { response.json(await operation(request, user)); }
+    catch (error) { const code = error instanceof Error && /^GLB_[A-Z_]+$/.test(error.message) ? error.message : "GLB_OPERATION_FAILED"; response.status(code.includes("CHANGED") || code.includes("BUSY") ? 409 : 422).json({ error: code }); }
+  };
+  app.get("/api/admin/glb-import/status", adminRoute(async () => ({ ...(await checkGlbStorage()), catalog: await glbImportStore().catalog() })));
+  app.post("/api/admin/glb-import/plan", adminRoute(async request => buildGlbImportPlan(z.object({ contentBase64: z.string().max(34 * 1024 * 1024) }).parse(request.body).contentBase64)));
+  app.post("/api/admin/glb-import/apply", adminRoute(async (request, user) => glbImportStore().ingest(user.id, z.object({ displayName: z.string().min(3).max(120), contentBase64: z.string().max(34 * 1024 * 1024), expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body))));
+  app.post("/api/admin/glb-import/assign", adminRoute(async (request, user) => glbImportStore().assign(user.id, z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }).strict().parse(request.body))));
+  app.get("/api/game/glb-catalog", async (_request, response) => {
+    try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }
+    catch { response.status(503).json({ error: "GLB_CATALOG_UNAVAILABLE" }); }
+  });
+  app.get("/api/assets/glb/:file", async (request, response) => {
+    const match = /^([a-f0-9]{64})\.glb$/.exec(String(request.params.file));
+    if (!match) { response.status(404).end(); return; }
+    try {
+      const bytes = await glbImportStore().approvedBytes(match[1]!);
+      if (!bytes) { response.status(404).end(); return; }
+      response.set({ "Content-Type": "model/gltf-binary", "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-cache", ETag: `"${match[1]}"` });
+      response.send(bytes);
+    } catch { response.status(503).json({ error: "GLB_BYTES_UNAVAILABLE" }); }
+  });
 }
