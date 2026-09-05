@@ -1795,22 +1795,30 @@ export async function createLootDrop(values: { userId: number; expeditionKey: st
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   await getAcceptedExpeditionResult(values);
-  const definition = await db.select().from(treasureClasses).where(and(eq(treasureClasses.classKey, values.treasureClass), eq(treasureClasses.active, 1))).limit(1);
-  if (!definition[0] || values.itemLevel < definition[0].minLevel || values.itemLevel > definition[0].maxLevel) throw new Error("Treasure class is unavailable for the item level");
-  const entries = parseCatalogEntries(definition[0].entriesJson);
-  const quality = rollLootQuality(values.qualityRoll, values.magicFind);
-  const baseItemKey = entries[(values.qualityRoll + values.affixRoll) % entries.length]!;
-  const candidates = await db.select().from(lootAffixes).where(and(eq(lootAffixes.active, 1), lte(lootAffixes.minItemLevel, values.itemLevel), gte(lootAffixes.maxItemLevel, values.itemLevel)));
-  const prefix = candidates.filter(affix => affix.slot === "prefix");
-  const suffix = candidates.filter(affix => affix.slot === "suffix");
-  const affixes: LootAffix[] = quality === "normal" ? [] : [parseAffix(prefix[values.affixRoll % prefix.length] ?? (() => { throw new Error("No prefix affix is available"); })())];
-  if (quality !== "normal" && quality !== "magic") affixes.push(parseAffix(suffix[Math.floor(values.affixRoll / 7) % suffix.length] ?? (() => { throw new Error("No suffix affix is available"); })()));
-  const setDefinition = quality === "set" ? (await db.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
   return db.transaction(async tx => {
-    const previous = await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
-    if (previous[0]) return { applied: false as const, receiptId: previous[0].id };
-    const receiptId = newEndgameId("drop");
-    const itemId = newEndgameId("item");
+    const owner = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update"))[0];
+    if (!owner) throw new Error("LOOT_PROFILE_REQUIRED");
+    const [previous] = await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
+    if (previous) {
+      if (previous.userId !== values.userId || previous.expeditionKey !== values.expeditionKey || previous.seedDigest !== values.seedDigest) throw new Error("LOOT_IDEMPOTENCY_CONFLICT");
+      const [item] = await tx.select().from(itemInstances).where(eq(itemInstances.lootReceiptId, previous.id)).limit(1);
+      if (!item || item.sourceKind !== "loot" || item.quality !== previous.quality) throw new Error("LOOT_RECEIPT_ITEM_MISMATCH");
+      return { applied: false as const, receiptId: previous.id, itemId: item.id, quality: item.quality };
+    }
+    const definition = await tx.select().from(treasureClasses).where(and(eq(treasureClasses.classKey, values.treasureClass), eq(treasureClasses.active, 1))).limit(1);
+    if (!definition[0] || values.itemLevel < definition[0].minLevel || values.itemLevel > definition[0].maxLevel) throw new Error("Treasure class is unavailable for the item level");
+    const entries = parseCatalogEntries(definition[0].entriesJson);
+    const quality = rollLootQuality(values.qualityRoll, values.magicFind);
+    const baseItemKey = entries[(values.qualityRoll + values.affixRoll) % entries.length]!;
+    const candidates = await tx.select().from(lootAffixes).where(and(eq(lootAffixes.active, 1), lte(lootAffixes.minItemLevel, values.itemLevel), gte(lootAffixes.maxItemLevel, values.itemLevel)));
+    const prefix = candidates.filter(affix => affix.slot === "prefix");
+    const suffix = candidates.filter(affix => affix.slot === "suffix");
+    const affixes: LootAffix[] = quality === "normal" ? [] : [parseAffix(prefix[values.affixRoll % prefix.length] ?? (() => { throw new Error("No prefix affix is available"); })())];
+    if (quality !== "normal" && quality !== "magic") affixes.push(parseAffix(suffix[Math.floor(values.affixRoll / 7) % suffix.length] ?? (() => { throw new Error("No suffix affix is available"); })()));
+    const setDefinition = quality === "set" ? (await tx.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
+    const originHash = createHash("sha256").update(JSON.stringify(["aurion-loot-origin.v2", values.userId, values.expeditionKey, values.seedDigest, values.idempotencyKey])).digest("hex").slice(0, 48);
+    const receiptId = `drop_${originHash}`;
+    const itemId = `item_${originHash}`;
     await tx.insert(lootDropReceipts).values({ id: receiptId, userId: values.userId, expeditionKey: values.expeditionKey, treasureClass: values.treasureClass, quality, seedDigest: values.seedDigest, idempotencyKey: values.idempotencyKey });
     await tx.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey });
     return { applied: true as const, receiptId, itemId, quality };
