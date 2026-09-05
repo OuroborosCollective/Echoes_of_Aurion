@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { encounterReadbackSchema } from "@shared/encounterReadback";
 import { projectReadback, readbackLabels } from "./authoritativeHudProjection";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Crosshair } from "lucide-react";
 
 export function AurionEncounterPanel({ userId, connected, onAttack }: { userId: number; connected: boolean; onAttack: () => void }) {
   const [open, setOpen] = useState(false);
@@ -25,10 +26,10 @@ export function AurionEncounterPanel({ userId, connected, onAttack }: { userId: 
     window.addEventListener("aurion:encounter-status", status);
     return () => { window.removeEventListener("aurion:authoritative-action", refresh); window.removeEventListener("aurion:encounter-status", status); };
   }, [query.refetch]);
-  return <section className="aurion-encounter" aria-label="Begegnung" data-state={current.state}>
-    <small>{readbackLabels[current.state]}</small>
+  return <section className="aurion-encounter" aria-label="Begegnung" data-state={current.state} data-active={Boolean(active)}>
+    <small className={current.state === "live" ? "sr-only" : undefined}>{readbackLabels[current.state]}</small>
     {active && enemy ? <><b>{enemy.enemyName}</b><progress aria-label="Bestätigte Gegnergesundheit" value={active.bossHp} max={active.maxBossHp} /><span>{active.bossHp} / {active.maxBossHp} LP</span><button disabled={!fresh || open} onClick={onAttack}>Angreifen</button></> : <span>{current.state === "live" ? "Keine aktive Begegnung" : "Begegnung wird geprüft"}</span>}
-    <button onClick={() => setOpen(true)}>Begegnungen</button>
+    <button title="Begegnungen" aria-label="Begegnungen" onClick={() => setOpen(true)}><Crosshair size={18} /><span>Begegnungen</span></button>
     {message && <span role="status">{message}</span>}
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop">

@@ -7,7 +7,7 @@
     {
       "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
       "sourceSha256": "6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e",
-      "targetSha256": "7defc44167260003b198491697aead3fbcc3cd78bed470f32d33987f4009441b",
+      "targetSha256": "9a1541435640b8b837d63512bc84bd9affc44d19028a32b29d3b5d9a65f9ec78",
       "adaptations": [
         {
           "before": "",
@@ -34,6 +34,36 @@
           "after": "  private glbAvatarRequest = 0;\n  public async equipGlbModel(modelId: string | null): Promise<boolean> {\n    const request = ++this.glbAvatarRequest;\n    // Clear existing GLB avatar\n    while (this.glbAvatarGroup.children.length > 0) {\n      const child = this.glbAvatarGroup.children[0];\n      this.glbAvatarGroup.remove(child);\n    }\n    if (this.glbMixer) {\n      this.glbMixer.stopAllAction();\n      this.glbMixer = null;\n      this.activeGlbAction = null;\n    }\n\n    if (!modelId) {\n      this.activeGlbModelId = null;\n      this.rootGroup.visible = true;\n      return true;\n    }\n\n    try {\n      const { scene, animations } = await glbManager.loadModel(modelId);\n      if (request !== this.glbAvatarRequest) return false;\n      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      scene.position.set(0, 0, 0);\n      scene.scale.set(1.0, 1.0, 1.0);\n      this.glbAvatarGroup.add(scene);\n\n      if (animations && animations.length > 0) {\n        this.glbMixer = new THREE.AnimationMixer(scene);\n        const clip = animations.find((a) => a.name.toLowerCase().includes('idle')) || animations[0];\n        if (clip) {\n          this.activeGlbAction = this.glbMixer.clipAction(clip);\n          this.activeGlbAction.play();\n        }\n      }\n      return true;\n    } catch (err) {\n      if (request !== this.glbAvatarRequest) return false;\n      console.error(`Could not equip GLB model ${modelId}:`, err);\n      this.rootGroup.visible = true;\n      this.activeGlbModelId = null;\n      return false;\n    }\n  }\n\n",
           "occurrences": 1,
           "reason": "Owner-approved AIM-112/240 GLB runtime: discard stale asynchronous avatar loads on replacement or exit; no gameplay mutation."
+        },
+        {
+          "before": "} from '../types';\nimport { DEFAULT_WEAPON_MASTERIES, MMORPG_CLASSES, RPG_ITEMS_DATABASE } from '../data/mmorpgData';\nimport { glbManager, GLBModelEntry } from '../core/GLBModelManager';\nimport { ProceduralEquipmentVisuals } from '../core/ProceduralEquipmentVisuals';\n\nexport class OpenWorldPlayer {\n",
+          "after": "} from '../types';\nimport { DEFAULT_WEAPON_MASTERIES, MMORPG_CLASSES, RPG_ITEMS_DATABASE } from '../data/mmorpgData';\nimport { glbManager, GLBModelEntry } from '../core/GLBModelManager';\nimport { AnimatedGlbActor } from '../core/AnimatedGlbActor';\nimport { ProceduralEquipmentVisuals } from '../core/ProceduralEquipmentVisuals';\n\nexport class OpenWorldPlayer {\n",
+          "occurrences": 1
+        },
+        {
+          "before": "  // External GLB Avatar Support\n  public glbAvatarGroup: THREE.Group = new THREE.Group();\n  public activeGlbModelId: string | null = null;\n  private glbMixer: THREE.AnimationMixer | null = null;\n  private activeGlbAction: THREE.AnimationAction | null = null;\n\n  constructor(scene: THREE.Scene, startingClass: CharacterClassId, private readonly simulation: DeterministicSimulation) {\n    this.scene = scene;\n",
+          "after": "  // External GLB Avatar Support\n  public glbAvatarGroup: THREE.Group = new THREE.Group();\n  public activeGlbModelId: string | null = null;\n  private glbActor: AnimatedGlbActor | null = null;\n  private confirmedGlbSpeed = 0;\n\n  constructor(scene: THREE.Scene, startingClass: CharacterClassId, private readonly simulation: DeterministicSimulation) {\n    this.scene = scene;\n",
+          "occurrences": 1
+        },
+        {
+          "before": "  public update(delta: number, moveInput: { x: number; z: number }) {\n    this.idleTime += delta;\n\n    if (this.glbMixer) {\n      this.glbMixer.update(delta);\n    }\n\n    // 1. Buffs Countdown\n    if (this.buffTimer > 0) {\n",
+          "after": "  public update(delta: number, moveInput: { x: number; z: number }) {\n    this.idleTime += delta;\n\n    this.glbActor?.setLocomotion(this.confirmedGlbSpeed);\n    this.glbActor?.update(delta);\n\n    // 1. Buffs Countdown\n    if (this.buffTimer > 0) {\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      const child = this.glbAvatarGroup.children[0];\n      this.glbAvatarGroup.remove(child);\n    }\n    if (this.glbMixer) {\n      this.glbMixer.stopAllAction();\n      this.glbMixer = null;\n      this.activeGlbAction = null;\n    }\n\n    if (!modelId) {\n      this.activeGlbModelId = null;\n",
+          "after": "      const child = this.glbAvatarGroup.children[0];\n      this.glbAvatarGroup.remove(child);\n    }\n    this.glbActor?.dispose();\n    this.glbActor = null;\n\n    if (!modelId) {\n      this.activeGlbModelId = null;\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      scene.position.set(0, 0, 0);\n      scene.scale.set(1.0, 1.0, 1.0);\n      this.glbAvatarGroup.add(scene);\n\n      if (animations && animations.length > 0) {\n        this.glbMixer = new THREE.AnimationMixer(scene);\n        const clip = animations.find((a) => a.name.toLowerCase().includes('idle')) || animations[0];\n        if (clip) {\n          this.activeGlbAction = this.glbMixer.clipAction(clip);\n          this.activeGlbAction.play();\n        }\n      }\n      return true;\n    } catch (err) {\n      if (request !== this.glbAvatarRequest) return false;\n",
+          "after": "      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      this.glbActor = new AnimatedGlbActor(scene, animations, 2);\n      this.glbAvatarGroup.add(this.glbActor.group);\n      return true;\n    } catch (err) {\n      if (request !== this.glbAvatarRequest) return false;\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      return false;\n    }\n  }\n\n  // Equips a registered GLB model directly to its corresponding equipment slot (Weapon, Shield, Helmet, Chest, Avatar)\n  public async equipGlbAsEquipment(modelId: string, targetSlot?: any): Promise<boolean> {\n",
+          "after": "      return false;\n    }\n  }\n\n  public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {\n    this.confirmedGlbSpeed = Number.isFinite(speedMetersPerSecond) ? Math.max(0, speedMetersPerSecond) : 0;\n  }\n\n  public playConfirmedGlbAttack(): void { this.glbActor?.playOnce(\"attack\"); }\n  public glbPresentationEvidence() { return this.glbActor?.evidence() ?? null; }\n\n  // Equips a registered GLB model directly to its corresponding equipment slot (Weapon, Shield, Helmet, Chest, Avatar)\n  public async equipGlbAsEquipment(modelId: string, targetSlot?: any): Promise<boolean> {\n",
+          "occurrences": 1
         }
       ]
     },

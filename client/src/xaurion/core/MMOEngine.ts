@@ -154,6 +154,7 @@ export class MMOEngine {
   }) => void;
 
   public onFrameRendered?: () => void;
+  public onProjectionTick?: (delta: number) => void;
   public onRuntimeError?: (error: unknown) => void;
   private disposed = false;
   private readonly frameLoop = new RuntimeFrameLoop(delta => {
@@ -1265,6 +1266,7 @@ export class MMOEngine {
 
     // 2. Update Player
     this.player.update(delta, { x: moveX, z: moveZ });
+    this.onProjectionTick?.(delta);
 
     // Terrain solid mass height enforcement - player cannot fall through the ground
     const elev = this.landscape.chunkManager.getElevationAt(this.player.position.x, this.player.position.z);

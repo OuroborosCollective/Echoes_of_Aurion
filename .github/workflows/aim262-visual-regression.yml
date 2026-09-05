@@ -16,6 +16,12 @@ on:
       - 'server/_core/retryPolicy*.ts'
       - 'server/aim262VisualEffects.test.ts'
       - 'e2e/aim254.authenticatedMigration.spec.ts'
+      - 'e2e/aim253.glbActors.spec.ts'
+      - 'assets/characters/**'
+      - 'test/fixtures/aurion-glb/**'
+      - 'server/glbAssetClassifier.ts'
+      - 'server/glbImportPlan.ts'
+      - 'shared/worldServiceNpcs.ts'
       - 'playwright.aurion-migration.config.ts'
       - 'docs/migrations/aim262-particle-source.json'
       - '.github/workflows/aim262-visual-regression.yml'
@@ -36,6 +42,12 @@ on:
       - 'server/_core/retryPolicy*.ts'
       - 'server/aim262VisualEffects.test.ts'
       - 'e2e/aim254.authenticatedMigration.spec.ts'
+      - 'e2e/aim253.glbActors.spec.ts'
+      - 'assets/characters/**'
+      - 'test/fixtures/aurion-glb/**'
+      - 'server/glbAssetClassifier.ts'
+      - 'server/glbImportPlan.ts'
+      - 'shared/worldServiceNpcs.ts'
       - 'playwright.aurion-migration.config.ts'
       - 'docs/migrations/aim262-particle-source.json'
       - '.github/workflows/aim262-visual-regression.yml'
@@ -63,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [world, companion]
+        scenario: [world, companion, assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
@@ -83,6 +95,7 @@ jobs:
       JWT_SECRET: aurion-disposable-ci-browser-signing-key-never-production
       VITE_APP_ID: aurion-isolated-browser-test
       AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-visual-browser-assets
     steps:
       - uses: actions/checkout@v4
         with:
@@ -111,8 +124,9 @@ jobs:
           BROWSER_SCENARIO: ${{ matrix.scenario }}
         run: |
           case "$BROWSER_SCENARIO" in
-            world) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep-invert "explicit companion learning" ;;
+            world) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep-invert "explicit companion learning|real GLB actors" ;;
             companion) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep "explicit companion learning" ;;
+            assets) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep "real GLB actors" ;;
             *) exit 1 ;;
           esac
       - uses: actions/upload-artifact@v4

@@ -10,6 +10,7 @@ import { resolveAiProposal } from "./wasdAurionAiProposalProtocol";
 import { resolveSkillProgressionReadmodel, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
 import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
 import type { WorldEpochReaction } from "./worldEpochReactionProtocol";
+import { worldServiceNpcs, type WorldServiceNpc } from "../shared/worldServiceNpcs";
 
 export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
@@ -49,6 +50,7 @@ export type OpenWorldSnapshot = {
   encounter: { activeCount: number; budget: number; maximumVisible: number };
   primaryEncounter: null | { id: string; label: string; encounterKey: EncounterKey; narrative: string };
   pointsOfInterest: readonly { id: string; kind: PointOfInterestKind; state: "locked" | "available" | "completed"; label: string }[];
+  serviceNpcs: readonly WorldServiceNpc[];
   npcs: readonly { id: "lyra" | "orun"; displayName: string; role: string; memory: { local: readonly string[]; social: readonly string[]; quest: readonly string[] }; autonomy: { needs: Readonly<Record<NpcNeedKey, number>>; goal: string; decisionHash: string; dialectId: string; comprehensionThreshold: number } }[];
   terrain: OpenWorldTerrainSnapshot;
   props: readonly { kind: WorldPropKind; tileX: number; tileZ: number; rotationY: number; scale: number }[];
@@ -346,6 +348,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
     encounter: { activeCount: Math.min(maximumVisible, Math.max(2, zone.tier + Math.floor(Math.max(1, input.level) / 12) + 1)), budget: encounterBudget(input.level, zone.tier), maximumVisible },
     primaryEncounter: primaryEncounterFor(input),
     pointsOfInterest: zone.pois,
+    serviceNpcs: worldServiceNpcs,
     npcs: npcReadModels(input, world.reaction),
     terrain: buildOpenWorldTerrain(zoneId),
     props: propsForZone(zoneId),

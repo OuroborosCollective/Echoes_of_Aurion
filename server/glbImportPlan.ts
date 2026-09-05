@@ -114,6 +114,7 @@ export function validateImportGeometry(bytes: Buffer): void {
 }
 
 export function automaticGlbTarget(classification: GlbAssetClassification): string | null {
+  if (classification.assetType === "character" && classification.subcategory === "blacksmith-npc") return "npc_blacksmith";
   if (classification.assetType === "character") return "starter_player";
   if (classification.assetType === "enemy") {
     if (classification.subcategory === "spider") return "starter_spider";
