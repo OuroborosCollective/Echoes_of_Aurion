@@ -1,6 +1,7 @@
 import type { ActionCompletion, ActionOutcome } from "../xaurion/integration/confirmedActionRequest";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { splitWorldChunkPositionMm } from "@shared/worldChunkProtocol";
+import { validWorldPosition } from "@shared/zonePresenceContract";
 import { operationalNow } from "../../../shared/operationalClock";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState, queueHumanDemonstration, type PendingHumanDemonstration } from "@/lib/companionWorldInputs";
@@ -192,6 +193,17 @@ export default function Home() {
     }),
   }), [currentStreamCoordinates, worldStreamCenter.x, worldStreamCenter.z, worldStreamCursors, worldStreamTier]);
   const worldChunkWindow = trpc.gameplay.worldChunkWindow.useQuery(worldChunkWindowInput, { enabled: isAuthenticated && Boolean(worldStreamAnchor), refetchInterval: worldStreamAnchor ? 15_000 : false });
+  useEffect(() => {
+    if (screen !== "open_world" || !isAuthenticated || !user?.id) return;
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.userId !== user.id || !detail.position || !validWorldPosition(detail.position)) return;
+      const next = worldChunkCenterForZonePosition(detail.position);
+      setWorldStreamCenter(previous => previous.x === next.x && previous.z === next.z ? previous : next);
+    };
+    window.addEventListener("aurion:zone-snapshot", receive);
+    return () => window.removeEventListener("aurion:zone-snapshot", receive);
+  }, [screen, isAuthenticated, user?.id]);
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: isAuthenticated });
   const choosePlayerClass = trpc.player.chooseClass.useMutation();
   const setWeaponLoadout = trpc.player.setWeaponLoadout.useMutation();
@@ -639,6 +651,7 @@ export default function Home() {
     return () => window.removeEventListener("aurion:xaurion-return-request", returnToTowerHome);
   }, [returnToTowerHome]);
   const connectAuthoritativeZone = (): void => {
+    if (openWorldRendererActive) return;
     if (!isAuthenticated || !user?.id) { openAccountAccess(); return; }
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "aurion-browser-movement-v1" }, {
       onSuccess: ({ ticket }) => {
@@ -653,7 +666,6 @@ export default function Home() {
             const self = snapshot.presences.find(presence => presence.userId === user.id);
             if (self) {
               window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
-              setWorldStreamCenter(worldChunkCenterForZonePosition(self.position));
             }
           },
           onReject: (code) => setLastSignal(`Zonenbewegung wurde serverseitig verworfen: ${code}.`),
@@ -861,7 +873,7 @@ export default function Home() {
             })()}
             <button type="button" disabled={enterOpenWorld.isPending || Boolean(gameplaySession.current)} onClick={() => enterAurionExpanse()}><Compass size={16} /> {enterOpenWorld.isPending ? "WELTSTATUS WIRD BESTÄTIGT" : "DIE AURION-EXPANSE BETRETEN"}</button>
             <button type="button" disabled={Boolean(gameplaySession.current)} onClick={returnToTowerHome}><ChevronRight size={16} /> ZUR STERNWARTE ZURÜCK</button>
-            <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>
+            {!openWorldRendererActive && <button type="button" disabled={issueZoneTicket.isPending || !isAuthenticated || zoneStatus === "connecting" || zoneStatus === "connected"} onClick={connectAuthoritativeZone}><Radio size={16} /> {zoneStatus === "connected" ? "ZONENPOSITION BESTÄTIGT" : zoneStatus === "connecting" ? "ZONENTICKET WIRD VERBUNDEN" : "ZONENBEWEGUNG VERBINDEN"}</button>}
           </section>
         </div>
       )}

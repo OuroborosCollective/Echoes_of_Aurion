@@ -38,27 +38,42 @@ describe("zoneGateway world presence bridge", () => {
     const server = createServer();
     const upsert = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
-    const gateway = registerZoneGateway(server, new ZoneRegistry(), async () => ({
+    const registry = new ZoneRegistry();
+    const consumeTicket = vi.fn(async () => ({
       userId: 73,
-      zoneId: "observatory_threshold",
+      zoneId: "observatory_threshold" as const,
       clientBuild: "aurion-presence-test-v1",
       expiresAt: new Date(Date.now() + 60_000),
-    }), { upsert, release });
+    }));
+    const gateway = registerZoneGateway(server, registry, consumeTicket, { upsert, release });
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", () => resolve());
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Expected TCP server address");
-    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/v1/ws`, { origin: "http://localhost" });
+    const endpoint = `ws://127.0.0.1:${address.port}/v1/ws`;
+    const legacy = new WebSocket(endpoint, { origin: "http://localhost" });
+    await onceOpen(legacy);
+    const legacyReject = onceMessageOfType(legacy, "reject"), legacyClosed = onceClose(legacy);
+    legacy.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: 1 }));
+    expect(await legacyReject).toMatchObject({code:"PROTOCOL_VERSION_UNSUPPORTED"});
+    await legacyClosed;expect(consumeTicket).not.toHaveBeenCalled();
+    const socket = new WebSocket(endpoint, { origin: "http://localhost" });
     try {
       await onceOpen(socket);
       const welcomePromise = onceMessageOfType(socket, "welcome");
-      socket.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: 1 }));
+      socket.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: 2 }));
       const welcome = await welcomePromise;
       expect(welcome.type).toBe("welcome");
+      expect(welcome.protocolVersion).toBe(2);
       expect(upsert).toHaveBeenCalledTimes(1);
       expect(upsert.mock.calls[0]?.[0]).toMatchObject({ userId: 73, zoneId: "observatory_threshold", position: { x: 0, z: 0 }, connectionId: expect.stringMatching(/^zone_peer_/) });
+      const zone = registry.get("observatory_threshold");
+      zone.submitMovement(String(welcome.connectionId), {type:"move",clientSeq:1,input:{x:0,z:-1}});
+      for(let i=0;i<95;i++) zone.tick();
+      zone.submitMovement(String(welcome.connectionId), {type:"move",clientSeq:2,input:{x:0,z:0}});
+      await vi.waitFor(()=>expect(upsert).toHaveBeenLastCalledWith(expect.objectContaining({position:{x:0,z:-32300}})),{timeout:1000});
       const closePromise = onceClose(socket);
       socket.close();
       await closePromise;

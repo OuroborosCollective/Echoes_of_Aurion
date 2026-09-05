@@ -41,8 +41,10 @@ Millimeterpositionen von −32.000 bis +31.999 in den vorhandenen INT-Spalten.
 Die API rekonstruiert die exakte globale Position. Alte Datensätze in Chunk 0
 bleiben kompatibel. Es entsteht keine zusätzliche Migration.
 
-Die vorhandene Presence-Lease wird alle 30 Sekunden erneuert; ihr Ablauf bleibt
-bei 120 Sekunden. Weltaktionen prüfen den Zielchunk und die Reichweite gegen
+Die Presence-Lease wird beim Chunk-Wechsel und beim ersten Stillstand direkt
+erneuert. Gleichzeitige Schreibaufträge werden geordnet und auf die neueste
+Position zusammengeführt. Zusätzlich bleibt der 30-Sekunden-Heartbeat bestehen;
+der Ablauf liegt bei 120 Sekunden. Weltaktionen prüfen Zielchunk und Reichweite gegen
 diesen servergespeicherten Stand. Ein Reconnect startet weiterhin im bisherigen
 Spawn; die Lease ist kein dauerhafter Spieler-Speicherpunkt.
 
@@ -50,6 +52,19 @@ Der Collider-Cache hält höchstens 256 abgeleitete Chunks. Die GLB-Projektion l
 weiterhin nur nahe Instanzen und hält ihre bisherigen mobilen Budgets ein.
 Instanzmatrizen für Weltmodelle und andere Spieler verwenden einen nahen Ursprung,
 damit kleine Positionsunterschiede auch bei großen Weltkoordinaten erhalten bleiben.
+
+Das aktive Bewegungsprotokoll verwendet Version 2. Veraltete Clients werden schon
+beim Handshake mit `PROTOCOL_VERSION_UNSUPPORTED` zurückgewiesen. Der Browser
+fordert zum Neuladen auf. Der Asset-Endpunkt `worldAssets.region` behält exakt
+das bisherige strikte V1-Format; `worldAssets.regionV2` liefert den Kollisionshash
+im V2-Format. Platzierungs-IDs, Welt-Seed und Originalmodelle bleiben identisch.
+
+Der aktive Runtime-Client gibt bestätigte Positionen an das Chunk-Streaming
+weiter. Die Figur und ihre Laufanimation folgen ausschließlich bestätigten
+Bewegungen; die lokale AX1-Kinematik darf ihre Position zwischen Snapshots nicht
+verschieben. Dadurch bleibt auch die sichtbare Figur bei gehaltenem Eingang
+vor einer blockierenden Fläche stehen. Diese Projektion erfolgt in bestätigten
+100-ms-Schritten, ohne lokale Bewegungsvorhersage.
 
 ## Nachweise
 
@@ -63,6 +78,7 @@ an beiden Weltenden sowie eine serverbestätigte Aktion im entfernten Chunk.
 `e2e/world.nature-collision.spec.ts` legt zwei isolierte Konten über die öffentliche
 Registrierung an. Ein Spieler läuft mit Tastatureingaben über die Chunk-Grenze
 durch einen Baumstumpf und gegen `Tree_Oak_6`; ein zweiter Browser empfängt denselben Serverstand. Der Test
-gleicht WebSocket-Snapshots, sichtbare GLB-Projektion und MariaDB ab und speichert
+gleicht WebSocket-Snapshots, 60 Renderframes am Hindernis, den aktiven Chunk-Stream,
+beide Asset-Protokolle und zeitnah aktualisierte MariaDB-Positionen ab und speichert
 Screenshots samt revisionsgebundenen Nachweisen. Die Tests laufen ausschließlich
 gegen die ausdrücklich geprüfte lokale Testdatenbank.

@@ -1,4 +1,5 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
+import { ConfirmedPlayerMotion } from "./ConfirmedPlayerMotion";
 import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
@@ -70,6 +71,7 @@ export default function AurionOpenWorldRuntime() {
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
+  const motionRef = useRef<ConfirmedPlayerMotion | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
   const zoneConnectedRef = useRef(false);
   const remotePresenceRef = useRef<RemotePresenceProjection | null>(null);
@@ -195,14 +197,19 @@ export default function AurionOpenWorldRuntime() {
       engineRef.current = engine;
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
-        center => rpcUtils.worldAssets.region.fetch(center),
+        center => rpcUtils.worldAssets.regionV2.fetch(center),
         evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); });
-      engine.onProjectionTick = delta => { serviceNpcRef.current?.update(delta); worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth); };
+      engine.onProjectionTick = delta => {
+        serviceNpcRef.current?.update(delta);
+        worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth);
+        if (containerRef.current) containerRef.current.dataset.playerProjection = JSON.stringify({ position: engine!.player.position, rendered: engine!.player.group.position });
+      };
       engine.onRuntimeError = fail;
       bindAurionAuthorityProjection(engine, {
         requestAction: requestHotbarAction,
         requestMount: requestAuthoritativeMount,
       });
+      motionRef.current = new ConfirmedPlayerMotion(engine.player, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       remotePresenceRef.current = remotePresence;
       engine.start();
@@ -283,7 +290,6 @@ export default function AurionOpenWorldRuntime() {
     if (!activation || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
     let disposed = false;
     let client: ZoneMovementClient | undefined;
-    let lastMotion: { x: number; z: number; tick: number } | undefined;
     setZoneStatus("connecting");
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "xaurion-open-world-v1" }, {
       onSuccess: ({ ticket }) => {
@@ -293,7 +299,7 @@ export default function AurionOpenWorldRuntime() {
             if (disposed) return;
             zoneConnectedRef.current = status === "connected";
             setZoneStatus(status);
-            if (status !== "connected") { remotePresenceRef.current?.clear(); setRemotePlayers([]); engineRef.current?.player.setConfirmedGlbSpeed(0); lastMotion = undefined; }
+            if (status !== "connected") { remotePresenceRef.current?.clear(); setRemotePlayers([]); motionRef.current?.stop(); }
           },
           onReject: () => { if (!disposed) setZoneStatus("rejected"); },
           onSnapshot: snapshot => {
@@ -306,17 +312,8 @@ export default function AurionOpenWorldRuntime() {
               setRemotePlayers(remotePresenceRef.current?.presences ?? []);
             } catch (error) { engine.onRuntimeError?.(error); return; }
             setConfirmedPosition({ ...self.position });
-            const x = self.position.x / 1000;
-            const z = self.position.z / 1000;
-            const seconds = lastMotion ? (snapshot.tick - lastMotion.tick) / 10 : 0;
-            engine.player.setConfirmedGlbSpeed(lastMotion && seconds > 0 ? Math.hypot(x - lastMotion.x, z - lastMotion.z) / seconds : 0);
-            lastMotion = { x, z, tick: snapshot.tick };
-            engine.player.position.x = x;
-            engine.player.position.z = z;
-            engine.player.position.y = engine.landscape.chunkManager.getElevationAt(x, z);
-            engine.player.stats.x = x;
-            engine.player.stats.y = engine.player.position.y;
-            engine.player.stats.z = z;
+            motionRef.current?.project(self.position, snapshot.tick);
+            window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
           },
         });
         zoneClientRef.current?.close();
@@ -328,6 +325,7 @@ export default function AurionOpenWorldRuntime() {
     return () => {
       disposed = true;
       zoneConnectedRef.current = false;
+      motionRef.current?.stop();
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
@@ -477,6 +475,7 @@ export default function AurionOpenWorldRuntime() {
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
+      {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
     </section>
   );

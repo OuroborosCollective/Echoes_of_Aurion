@@ -1,5 +1,5 @@
 import type WebSocket from "ws";
-import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT, ZONE_POSITION_MIN, validWorldPosition } from "@shared/zonePresenceContract";
+import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT, ZONE_POSITION_MIN, ZONE_PROTOCOL_VERSION, validWorldPosition } from "@shared/zonePresenceContract";
 import {
   makeZoneConnectionId,
   ZONE_FIXED_POINT_SCALE,
@@ -74,7 +74,7 @@ export class AuthoritativeMovementZone {
       lastAcceptedClientSeq: 0,
       position: { x: 0, z: 0 },
     });
-    const welcome: ZoneWelcome = { type: "welcome", connectionId, zoneId: this.zoneId, snapshotSeq: ++this.snapshotSeq, tick: this.tickNumber, presences: this.presences() };
+    const welcome: ZoneWelcome = { type: "welcome", protocolVersion: ZONE_PROTOCOL_VERSION, connectionId, zoneId: this.zoneId, snapshotSeq: ++this.snapshotSeq, tick: this.tickNumber, presences: this.presences() };
     this.broadcastSnapshot();
     return welcome;
   }

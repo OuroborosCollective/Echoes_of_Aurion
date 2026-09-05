@@ -46,7 +46,7 @@ describe("zone movement browser transport", () => {
     client.connect("fixture-ticket");
     const socket = TestSocket.instances[0];
     const snapshot = { type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 1, tick: 10, presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: -2000 }, lastAcceptedClientSeq: 0 }] };
-    socket.receive({ ...snapshot, type: "welcome", connectionId: "zone_peer_fixture", snapshotSeq: 0 });
+    socket.receive({ ...snapshot, type: "welcome", protocolVersion: 2, connectionId: "zone_peer_fixture", snapshotSeq: 0 });
     options.onSnapshot.mockClear();
     for (const invalid of [null, {}, { ...snapshot, tick: -1 }, { ...snapshot, presences: [{}] }, { ...snapshot, presences: [{ ...snapshot.presences[0], position: { x: 0.5, z: 0 } }] }]) socket.receive(invalid);
     expect(options.onSnapshot).not.toHaveBeenCalled();
@@ -54,6 +54,18 @@ describe("zone movement browser transport", () => {
     expect(options.onSnapshot).toHaveBeenCalledTimes(1);
     expect(options.onSnapshot).toHaveBeenCalledWith(snapshot);
     client.close();
+  });
+  it("negotiates v2 and explicitly rejects a legacy server welcome", () => {
+    vi.stubGlobal("WebSocket", TestSocket);
+    const options={onStatus:vi.fn(),onSnapshot:vi.fn(),onReject:vi.fn()};
+    const client=new ZoneMovementClient(options);client.connect("fixture-ticket");
+    const socket=TestSocket.instances[0];socket.dispatchEvent(new Event("open"));
+    expect(JSON.parse(socket.send.mock.calls[0][0]).protocolVersion).toBe(2);
+    socket.receive({type:"welcome",connectionId:"zone_peer_fixture",zoneId:"observatory_threshold",snapshotSeq:1,tick:0,presences:[]});
+    expect(options.onSnapshot).not.toHaveBeenCalled();
+    expect(options.onReject).toHaveBeenCalledWith("PROTOCOL_VERSION_UNSUPPORTED");
+    socket.dispatchEvent(new CloseEvent("close",{code:1008}));
+    expect(options.onStatus).toHaveBeenLastCalledWith("rejected");
   });
 
   it("rejects out-of-order, duplicate, oversized and identity-inconsistent snapshots", () => {
@@ -63,7 +75,7 @@ describe("zone movement browser transport", () => {
     const socket = TestSocket.instances[0];
     const snapshot = { type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 10, tick: 10, presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: 0 }, lastAcceptedClientSeq: 0 }] };
     socket.receive(snapshot); expect(options.onSnapshot).not.toHaveBeenCalled();
-    socket.receive({ ...snapshot, type: "welcome", connectionId: "zone_peer_fixture" });
+    socket.receive({ ...snapshot, type: "welcome", protocolVersion: 2, connectionId: "zone_peer_fixture" });
     options.onSnapshot.mockClear();
     for (const invalid of [snapshot, { ...snapshot, snapshotSeq: 9 }, { ...snapshot, snapshotSeq: 11, tick: 9 }, { ...snapshot, snapshotSeq: 11, presences: [...snapshot.presences, ...snapshot.presences] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], entityId: "player:2" }] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], position: { x: ZONE_POSITION_LIMIT + 1, z: 0 } }] }, { ...snapshot, snapshotSeq: 11, presences: new Array(129).fill(snapshot.presences[0]) }, { ...snapshot, snapshotSeq: 11, extra: "x".repeat(65537) }]) socket.receive(invalid);
     expect(options.onSnapshot).not.toHaveBeenCalled();

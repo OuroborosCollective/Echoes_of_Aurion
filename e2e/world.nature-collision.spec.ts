@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
-import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
 import { readFileSync } from "node:fs";
 const manifest = JSON.parse(
   readFileSync("shared/worldCollisionManifest.json", "utf8")
@@ -41,6 +40,17 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
     stopSeq = 0;
   const errors: string[] = [],
     frames: unknown[] = [];
+  const streamWindows: Array<{ x: number; z: number }> = [];
+  mover.on("response", async response => {
+    if (!response.url().includes("gameplay.worldChunkWindow")) return;
+    try {
+      const payload = await response.json();
+      for (const item of Array.isArray(payload) ? payload : [payload]) {
+        const data = item.result?.data?.json;
+        if (data?.center && Array.isArray(data.chunks)) streamWindows.push(data.center);
+      }
+    } catch {}
+  });
   const observe = (page: Page, isMover: boolean) => {
     page.on("pageerror", e => errors.push(e.message));
     page.on("websocket", socket => {
@@ -134,6 +144,11 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
     const crossed = { ...current!.position };
     expect(crossed.x).toBe(0);
     expect(crossed.z).toBeGreaterThan(-41000);
+    await expect.poll(() => streamWindows.at(-1), { timeout: 3000 }).toEqual({x:0,z:-1});
+    await expect.poll(async () => {
+      const [rows] = await pool.query<RowDataPacket[]>("SELECT chunkX,chunkZ,positionX,positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL",[moverId]);
+      return rows.map(r=>({x:r.chunkX,z:r.chunkZ,positionX:r.positionX,positionZ:r.positionZ}));
+    }, {timeout:3000}).toContainEqual({x:0,z:-1,positionX:crossed.x,positionZ:crossed.z+64000});
     await expect
       .poll(async () => (await evidence(mover)).center?.z, { timeout: 15000 })
       .toBe(-1);
@@ -161,12 +176,19 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
     await driveUntil("a", () => !!current && current.position.x <= 0);
     await driveUntil("w", () => !!current && current.position.z <= -55760);
     const response = await mover.request.get(
-      "/api/trpc/worldAssets.region?input=" +
+      "/api/trpc/worldAssets.regionV2?input=" +
         encodeURIComponent(JSON.stringify({ json: { x: 0, z: -1 } }))
     );
     expect(response.ok()).toBe(true);
     const region = (await response.json()).result.data.json;
     expect(region.collisionHash).toBe(manifest.manifestSha256);
+    expect(region.version).toBe("aurion-world-assets.v2");
+    const legacyResponse = await mover.request.get("/api/trpc/worldAssets.region?input="+encodeURIComponent(JSON.stringify({json:{x:0,z:-1}})));
+    expect(legacyResponse.ok()).toBe(true);
+    const legacyRegion=(await legacyResponse.json()).result.data.json;
+    expect(Object.keys(legacyRegion).sort()).toEqual(["version","catalogHash","worldId","center","placements"].sort());
+    expect(legacyRegion.version).toBe("aurion-world-assets.v1");
+    expect(legacyRegion.placements).toEqual(region.placements);
     const obstacle = region.placements.find(
       (p: { assetId: string; xMm: number; zMm: number }) =>
         p.assetId === "nature-tree-oak-6" &&
@@ -228,7 +250,18 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
         )
         .toBe(true);
       const blocked = { ...current!.position };
-      await mover.waitForTimeout(1200);
+      const renderedFrames = await mover.evaluate(async () => {
+        const samples: Array<{position:{x:number;z:number};rendered:{x:number;z:number}}> = [];
+        for(let i=0;i<60;i++) {
+          await new Promise(requestAnimationFrame);
+          samples.push(JSON.parse(document.querySelector<HTMLElement>("#three-viewport")!.dataset.playerProjection!));
+        }
+        return samples;
+      });
+      for(const frame of renderedFrames) for(const position of [frame.position,frame.rendered]) {
+        expect(position.x*1000).toBeCloseTo(blocked.x,6);
+        expect(position.z*1000).toBeCloseTo(blocked.z,6);
+      }
       expect(current!.position).toEqual(blocked);
     } finally {
       await mover.keyboard.up("a");
@@ -259,7 +292,7 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
               r.chunkZ * 64000 + r.positionZ === stopped.position.z
           );
         },
-        { timeout: WORLD_PRESENCE_REFRESH_MS + 10000 }
+        { timeout: 3000 }
       )
       .toBe(true);
     await expect
@@ -298,6 +331,7 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
         remote,
         obstacle,
         visual,
+        streamWindows,
         frames,
         storage: "chunk-local INT with exact global reconstruction",
       }),
