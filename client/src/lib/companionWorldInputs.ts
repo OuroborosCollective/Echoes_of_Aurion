@@ -21,3 +21,11 @@ export function observedWorldState(input: unknown, userId: number, fresh: boolea
   }
   return { vector, mask };
 }
+
+export type PendingHumanDemonstration = Readonly<{ id: number; action: CompanionAction; issuedAt: number; source: "movement" | "action" }>;
+/** A held input renews the live label, never the timestamp of an already captured frame. */
+export function queueHumanDemonstration(previous: PendingHumanDemonstration | undefined, action: CompanionAction, issuedAt: number, nextId: number, source: PendingHumanDemonstration["source"]): PendingHumanDemonstration {
+  if (!Number.isSafeInteger(issuedAt) || issuedAt < 1 || !Number.isSafeInteger(nextId) || nextId < 1 || action.length !== 4 || action.some(value => !Number.isFinite(value) || value < 0 || value > 1)) throw new Error("HUMAN_DEMONSTRATION_INVALID");
+  const sameHeldInput = source === "movement" && previous?.source === source && action.every((value, index) => value === previous.action[index]);
+  return Object.freeze({ id: sameHeldInput ? previous.id : nextId, action: [...action] as CompanionAction, issuedAt, source });
+}
