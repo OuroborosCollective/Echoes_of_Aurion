@@ -14,6 +14,7 @@ async function rpc<T>(page: Page, procedure: string): Promise<T> {
 for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tablet", width: 800, height: 1280 }, { name: "desktop", width: 1440, height: 1000 }]) {
   test(`AX1 real controls, unarmed healer, earned inventory and confirmed attacks on ${viewport.name}`, async ({ page, baseURL }, info) => {
     test.setTimeout(240_000);
+    page.setDefaultTimeout(15_000);
     expect(baseURL).toBe("http://127.0.0.1:3000");
     const url = new URL(process.env.DATABASE_URL!);
     expect(url.hostname).toBe("127.0.0.1"); expect(url.pathname).toBe("/aurion_group_test");
