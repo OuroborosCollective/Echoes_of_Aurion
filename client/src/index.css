@@ -325,3 +325,13 @@ kbd { min-width: 27px; height: 27px; display: inline-grid; place-items: center; 
   .open-world-dpad { width: 132px; height: 132px; margin-inline: auto; }
   .open-world-hud__actions { width: 100%; }
 }
+
+.guild-bank-content { display: grid; gap: 12px; padding: 16px; overflow: auto; min-height: 0; color: #d0e5dd; font-size: 13px; overflow-wrap: anywhere; }
+.guild-bank-content form, .guild-bank-content label, .guild-bank-content article, .guild-bank-content [role="group"] { display: grid; gap: 9px; }
+.guild-bank-content input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #477d78; background: #092b30; color: #e2f6ed; font-size: 16px; }
+.guild-bank-content article, .guild-bank-content [role="group"] { padding: 12px; border: 1px solid #375a55; background: #09272b; }
+.guild-bank-content button { min-height: 44px; padding: 9px 12px; border: 1px solid #64c9bb; background: #164c48; color: #e8f7ec; }
+.guild-bank-content button:disabled { opacity: .5; cursor: not-allowed; }
+.guild-bank-content :is(input,button):focus-visible { outline: 2px solid #f0ce80; outline-offset: 2px; }
+.guild-bank-content h3, .guild-bank-content h4 { color: #f0dcae; font-weight: 700; }
+.guild-bank-content [role="alert"] { color: #ffbd9d; }

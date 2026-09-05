@@ -1,5 +1,6 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { guildBankViewSchema } from "../shared/guildBankView";
 import { GuildBankStore } from "./guildBankStore";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -13,8 +14,10 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
   const v2ResourceItemId = "aim269_v2_wood_item";
   let pool: Pool;
   let store: GuildBankStore;
+  let isolated = false;
 
   async function clean(): Promise<void> {
+    if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     for (const statement of [
       "DELETE FROM aurionGuildResourceLedger WHERE guildId = ?",
       "DELETE FROM aurionGuildItemCustodyLedger WHERE guildId = ?",
@@ -45,7 +48,12 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
 
   beforeAll(async () => {
     if (!databaseUrl) return;
+    const target = new URL(databaseUrl);
+    if(target.hostname!=="127.0.0.1"||!target.pathname.endsWith("_test"))throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     pool = createPool(databaseUrl);
+    const [database] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name");
+    if(database[0]?.name!==target.pathname.slice(1))throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    isolated=true;
     store = GuildBankStore.fromDatabaseUrl(databaseUrl);
     await clean();
     await pool.query("INSERT INTO playerProfiles (userId, aurionPoints) VALUES (?, 50000), (?, 50000)", [founderUserId, memberUserId]);
@@ -56,9 +64,9 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
   });
 
   afterAll(async () => {
-    if (!pool || !store) return;
-    await clean();
-    await store.close();
+    if (!pool) return;
+    if(isolated) await clean();
+    if(store) await store.close();
     await pool.end();
   });
 
@@ -71,6 +79,14 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     expect([left.replay, right.replay].filter(Boolean)).toHaveLength(1);
     expect(left.receipt.receiptId).toBe(right.receipt.receiptId);
     const readback = await store.read(memberUserId, guildId);
+    const view=guildBankViewSchema.parse(readback);
+    expect(view.actorUserId).toBe(memberUserId);
+    expect(view.planningRevisionExact).toBe("1");
+    expect(view.allowedOperations).toContain("deposit_points");
+    expect(view.allowedOperations).not.toContain("withdraw_points");
+    expect(view.availableItems.map(item=>item.itemId).sort()).toEqual([legacyItemId,v2ResourceItemId].sort());
+    expect(view.buildingOptions).toHaveLength(6);
+    expect(view.buildingOptions.every(building=>!building.canUpgrade)).toBe(true);
     expect(readback.playerPointsExact).toBe("49000");
     expect(readback.treasuryBalanceExact).toBe("1000");
     expect(readback.revisionExact).toBe("1");

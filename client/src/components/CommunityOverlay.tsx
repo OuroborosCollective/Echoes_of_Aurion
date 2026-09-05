@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import GuildBankPanel from "./GuildBankPanel";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import GlbPreview from "@/components/GlbPreview";
@@ -24,7 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type CommunityPanel = "chat" | "partners" | "market" | "crafting" | "assets" | "forum" | null;
+type CommunityPanel = "chat" | "partners" | "market" | "crafting" | "guild" | "assets" | "forum" | null;
 type ForumCategory = "announcements" | "patch_notes" | "events" | "general";
 
 const forumSections: { id: ForumCategory; label: string; icon: typeof Megaphone }[] = [
@@ -77,7 +79,7 @@ export default function CommunityOverlay({
     const open = (event: Event) => {
       const requested = (event as CustomEvent<unknown>).detail;
       if (!requested || typeof requested !== "object" || !("panel" in requested)) return;
-      if (!["chat", "partners", "market", "crafting"].includes(String(requested.panel))) return;
+      if (!["chat", "partners", "market", "crafting", "guild"].includes(String(requested.panel))) return;
       setPanel(requested.panel as CommunityPanel);
       setOpenedFromWorld(true);
     };
@@ -242,20 +244,21 @@ export default function CommunityOverlay({
     if (next !== "forum") setSelectedThreadId(null);
   };
 
-  return <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
+  const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18} /><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
     <div id="aurion-community-dock" className="community-dock">
       <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("chat")} aria-label="Expeditionschat öffnen"><MessageCircle size={16} /><span>CHAT</span></button>
       <button type="button" className={panel === "partners" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("partners")} aria-label="Partnergesuche öffnen"><UsersRound size={16} /><span>TEAM</span>{pendingRequests.length > 0 && <b className="community-badge">{pendingRequests.length}</b>}</button>
       <button type="button" className={panel === "market" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("market")} aria-label="Auktionshaus öffnen"><Store size={16} /><span>MARKT</span></button>
       <button type="button" className={panel === "crafting" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("crafting")} aria-label="Sternwartenschmiede öffnen"><Hammer size={16} /><span>SCHMIEDE</span></button>
+      <button type="button" className={panel === "guild" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("guild")} aria-label="Gilde öffnen"><UsersRound size={16}/><span>GILDE</span></button>
       <button type="button" className={panel === "assets" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("assets")} aria-label="GLB-Einreichung öffnen"><Box size={16} /><span>ASSET</span></button>
       <button type="button" className={panel === "forum" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("forum")} aria-label="Forum öffnen"><FileText size={16} /><span>FORUM</span></button>
     </div>
 
     {panel && <section className={`community-panel ${panel}-panel`} aria-live="polite">
       <header className="community-panel-header">
-        <div><p>EXPEDITION // GEMEINSCHAFT</p><h2>{panel === "chat" ? "Signalraum" : panel === "partners" ? "Partnergesuche" : panel === "market" ? "Auktionshaus" : panel === "crafting" ? "Sternwartenschmiede" : panel === "assets" ? "Asset-Einreichung" : "Sternwartenforum"}</h2></div>
+        <div><p>EXPEDITION // GEMEINSCHAFT</p><h2>{panel === "chat" ? "Signalraum" : panel === "partners" ? "Partnergesuche" : panel === "market" ? "Auktionshaus" : panel === "crafting" ? "Sternwartenschmiede" : panel === "guild" ? "Gildenverwaltung" : panel === "assets" ? "Asset-Einreichung" : "Sternwartenforum"}</h2></div>
         <button type="button" onClick={() => setPanel(null)} aria-label="Community-Konsole schließen"><X size={18} /></button>
       </header>
       {message && <p className="community-feedback"><BellRing size={13} />{message}</p>}
@@ -295,6 +298,7 @@ export default function CommunityOverlay({
         <div className="market-listings">{marketListings.data?.filter(listing => listing.sellerUserId !== currentUserId).map(listing => <article key={listing.id} className="market-listing"><div><b>{listing.baseItemKey.replaceAll("_", " ")}</b><small>{listing.quality} · Stufe {listing.itemLevel} · {participantName(listing.sellerName, listing.sellerUserId)}</small></div><button type="button" disabled={buyListing.isPending || (player.data?.profile.aurionPoints ?? 0) < listing.askingPrice} onClick={() => buyListing.mutate({ listingId: listing.id, idempotencyKey: `market:${crypto.randomUUID()}` })}><ShoppingBag size={13} />{listing.askingPrice} Aurion</button></article>)}{!marketLoading && !marketError && !marketListings.data?.some(listing => listing.sellerUserId !== currentUserId) && <p className="community-empty">Noch keine Angebote anderer Explorer. Gib deinem Fundstück einen Wert und eröffne den Handel.</p>}</div>
       </div>}
 
+      {panel === "guild" && currentUserId && <GuildBankPanel key={currentUserId} userId={currentUserId}/>}
       {panel === "crafting" && <div className="community-crafting">
         {crafting.isLoading && <p className="community-empty">Crafting-Receipts werden aus der Sternwarte abgerufen…</p>}
         {crafting.error && <p className="community-feedback"><BellRing size={13} />Die Schmiede ist gerade nicht erreichbar. Vorgang {runtimeIssueCode(crafting.error)}.</p>}
@@ -346,4 +350,5 @@ export default function CommunityOverlay({
       </div>}
     </section>}
   </aside>;
+  return openedFromWorld && panel !== null ? createPortal(overlay, document.body) : overlay;
 }

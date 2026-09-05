@@ -194,7 +194,7 @@ export const appRouter = router({
     })).mutation(({ ctx, input }) => db.completeFactionQuestlineQuestForUser({ userId: ctx.user.id, ...input })),
   }),
   guild: router({
-    mine: protectedProcedure.query(({ ctx }) => db.getActiveGuildForUser(ctx.user.id)),
+    mine: protectedProcedure.query(async ({ ctx }) => (await db.getActiveGuildForUser(ctx.user.id)) ?? null),
     create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
   }),
   crafting: router({

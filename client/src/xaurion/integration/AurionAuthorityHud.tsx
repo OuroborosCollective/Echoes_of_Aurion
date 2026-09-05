@@ -12,7 +12,7 @@ import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 type Panel = "inventory" | "character" | "quests" | "map" | null;
 const classes = { unbound: "Noch keine Klasse", vanguard: "Vorhut", seer: "Seher", warden: "Hüter" } as const;
 const titles = { inventory: "Inventar", character: "Charakter", quests: "Aufträge & Kontakte", map: "Weltatlas" } as const;
-const community = (panel: "chat" | "partners" | "market" | "crafting") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
+const community = (panel: "chat" | "partners" | "market" | "crafting" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
 
 export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction }: {
   userId: number; connected: boolean; position?: { x: number; z: number };
@@ -89,7 +89,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
             <p>Klassenwahl ab Stufe {player.data!.capabilities.classUnlockLevel}; die Wahl ist dauerhaft.</p>
             <fieldset disabled={!fresh || !player.data?.capabilities.canChooseClass}><legend>Klasse wählen</legend>{(["vanguard", "seer", "warden"] as const).map(playerClass => <button key={playerClass} aria-pressed={profile.selectedClass === playerClass} onClick={() => { if (player.data?.capabilities.canChooseClass) void act(() => chooseClass.mutateAsync({ playerClass })); }}>{classes[playerClass]}</button>)}</fieldset>
             <fieldset disabled={!fresh}><legend>Waffendisziplin</legend>{(["blade", "staff", "spear", "focus"] as const).map(weaponTrack => <button key={weaponTrack} aria-pressed={player.data?.weaponLoadout?.weaponTrack === weaponTrack} onClick={() => void act(() => setWeapon.mutateAsync({ weaponTrack }))}>{weaponTrack}</button>)}</fieldset>
-            <h3>Waffenmeisterschaft</h3>{player.data?.weaponMasteries.length === 0 && <p>Noch keine Meisterschaft erworben.</p>}{player.data?.weaponMasteries.map(item => <p key={item.weaponTrack}>{item.weaponTrack} · Stufe {item.level} · {item.xp} EP</p>)}</>}
+            <button onClick={()=>{setPanel(null);community("guild");}}>Gilde öffnen</button><h3>Waffenmeisterschaft</h3>{player.data?.weaponMasteries.length === 0 && <p>Noch keine Meisterschaft erworben.</p>}{player.data?.weaponMasteries.map(item => <p key={item.weaponTrack}>{item.weaponTrack} · Stufe {item.level} · {item.xp} EP</p>)}</>}
         </div>}
         {panel === "quests" && <div data-state={quests.state}>
           <NpcStandingPanel userId={userId} />

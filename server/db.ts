@@ -1723,21 +1723,33 @@ export async function choosePlayerClass(userId: number, playerClass: PlayerClass
 export async function createGuildForFounder(values: { userId: number; name: string; tag: string }) {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  const activeMembership = await db.select().from(guildMemberships).where(and(eq(guildMemberships.userId, values.userId), eq(guildMemberships.status, "active"))).limit(1);
-  if (activeMembership[0]) throw new Error("Player already belongs to an active guild");
-  const guildId = newEndgameId("guild");
-  await db.insert(guilds).values({ id: guildId, name: values.name, tag: values.tag, founderUserId: values.userId });
-  await db.insert(guildMemberships).values({ id: newEndgameId("gmem"), guildId, userId: values.userId, role: "founder", status: "active" });
-  return { guildId };
+  await getOrCreatePlayerProfile(values.userId);
+  return db.transaction(async tx=>{
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
+    const active=await tx.select().from(guildMemberships).where(and(eq(guildMemberships.userId,values.userId),eq(guildMemberships.status,"active"))).limit(2);
+    if(active.length>1)throw new Error("MULTIPLE_ACTIVE_GUILDS_NOT_ALLOWED");
+    if(active[0]){
+      const existing=(await tx.select().from(guilds).where(eq(guilds.id,active[0].guildId)).limit(1))[0];
+      if(existing?.founderUserId===values.userId&&existing.name===values.name&&existing.tag===values.tag)return {guildId:existing.id};
+      throw new Error("Player already belongs to an active guild");
+    }
+    const previous=await tx.select({id:guilds.id}).from(guilds).where(eq(guilds.founderUserId,values.userId));
+    const guildId=rewardReceiptIdentity("guild",values.userId,JSON.stringify([previous.length+1,values.name,values.tag]));
+    await tx.insert(guilds).values({id:guildId,name:values.name,tag:values.tag,founderUserId:values.userId});
+    await tx.insert(guildMemberships).values({id:rewardReceiptIdentity("gmem",values.userId,guildId),guildId,userId:values.userId,role:"founder",status:"active"});
+    return {guildId};
+  });
 }
 
 export async function getActiveGuildForUser(userId: number) {
   const db = await getDb();
-  if (!db) return undefined;
-  const memberships = await db.select().from(guildMemberships).where(and(eq(guildMemberships.userId, userId), eq(guildMemberships.status, "active"))).limit(1);
+  if (!db) throw new Error("Game database is not available");
+  const memberships = await db.select().from(guildMemberships).where(and(eq(guildMemberships.userId, userId), eq(guildMemberships.status, "active"))).limit(2);
+  if(memberships.length>1)throw new Error("MULTIPLE_ACTIVE_GUILDS_NOT_ALLOWED");
   if (!memberships[0]) return undefined;
   const guild = await db.select().from(guilds).where(eq(guilds.id, memberships[0].guildId)).limit(1);
-  return guild[0] ? { guild: guild[0], membership: memberships[0] } : undefined;
+  if(!guild[0])throw new Error("GUILD_MEMBERSHIP_READBACK_MISSING");
+  return { guild: guild[0], membership: memberships[0] };
 }
 
 export async function grantProgress(values: { userId: number; kind: "xp" | "points" | "victory" | "weapon_xp"; delta: number; source: string; reason: string; idempotencyKey: string; weaponTrack?: WeaponTrack }) {

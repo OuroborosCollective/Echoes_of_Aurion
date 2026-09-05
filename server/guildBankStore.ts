@@ -1,7 +1,9 @@
+import type { GuildBankView } from "@shared/guildBankView";
 import { createPool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import {
   AURION_GUILD_BANK_CONTENT_VERSION,
   AURION_GUILD_BANK_RULESET_VERSION,
+  guildBankOperations,
   type GuildBankOperation,
   type GuildBankPlan,
   type GuildBankReceipt,
@@ -10,6 +12,8 @@ import {
 } from "@shared/guildBankContract";
 import type { GuildCapability, GuildCapabilityScopeKind, GuildMembershipRole } from "@shared/guildGovernanceContract";
 import {
+  bankOperationCapability,
+  guildBuildingDefinitions,
   buildGuildBankPlan,
   buildGuildBankReceipt,
   deriveGuildBankGoals,
@@ -183,7 +187,7 @@ async function validateOperation(connection: PoolConnection, plan: GuildBankPlan
   for (const key of resourceKeys) if (balances[key] < BigInt(upgrade.costExact[key])) throw new Error(`INSUFFICIENT_GUILD_RESOURCE:${key}`);
 }
 
-export type GuildBankReadback = Readonly<{
+export type GuildBankReadback = Readonly<Pick<GuildBankView,"allowedOperations"|"availableItems"|"buildingOptions"|"planningRevisionExact"> & {
   guildId: string;
   actorUserId: number;
   role: GuildMembershipRole;
@@ -373,17 +377,37 @@ export class GuildBankStore {
   async read(actorUserId: number, requestedGuildId?: string): Promise<GuildBankReadback> {
     const connection = await this.pool.getConnection();
     try {
+      await connection.beginTransaction();
       const member = await activeMembership(connection, actorUserId, requestedGuildId, false);
       const account = await readAccount(connection, member.guildId, false);
       const wallet = await player(connection, actorUserId, false);
-      const [held] = await connection.query<CustodyRow[]>("SELECT custodyId, guildId, itemRecordVersion, itemId, depositorUserId, currentRecipientUserId, status, revision, depositReceiptId, withdrawalReceiptId FROM aurionGuildItemCustody WHERE guildId = ? AND status = 'held' ORDER BY depositedAt, custodyId", [member.guildId]);
+      const [held] = await connection.query<CustodyRow[]>("SELECT custodyId, guildId, itemRecordVersion, itemId, depositorUserId, currentRecipientUserId, status, revision, depositReceiptId, withdrawalReceiptId FROM aurionGuildItemCustody WHERE guildId = ? AND status = 'held' ORDER BY depositedAt, custodyId LIMIT 1001", [member.guildId]);
+      if(held.length>1000) throw new Error("GUILD_BANK_PAGE_REQUIRED");
+      const availableItems: GuildBankView["availableItems"]=[];
+      for(const itemRecordVersion of ["legacy","aurion_v2"] as const){
+        const spec=itemSpec(itemRecordVersion);
+        const [rows]=await connection.query<RowDataPacket[]>(`SELECT id, ${spec.definitionColumn} AS definitionId FROM ${spec.table} WHERE ownerUserId=? AND status='owned' ORDER BY id LIMIT 1001`,[actorUserId]);
+        for(const row of rows)availableItems.push({itemRecordVersion,itemId:row.id,definitionId:row.definitionId,resourceKey:resourceForItemDefinition(row.definitionId)});
+      }
+      if(availableItems.length>1000) throw new Error("GUILD_INVENTORY_PAGE_REQUIRED");
+      const [planningRows]=await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGuildBankPlans WHERE guildId=? AND actorUserId=?",[member.guildId,actorUserId]);
+      const planningRevisionExact=String(planningRows[0].count);
+      const grants=await explicitGrants(connection,member.guildId,actorUserId);
+      const can=(required:GuildCapability,scopeKind:GuildCapabilityScopeKind,scopeId:string)=>hasGuildCapability({role:member.role,required,guildId:member.guildId,scopeKind,scopeId,explicit:grants});
+      const allowedOperations=guildBankOperations.filter(op=>op!=="upgrade_building"&&can(bankOperationCapability[op],"bank",member.guildId));
       const balances = await resources(connection, member.guildId, false);
       const [buildingRows] = await connection.query<BuildingRow[]>("SELECT buildingId, level, revision, projectionJson FROM aurionGuildBuildings WHERE guildId = ? ORDER BY buildingId", [member.guildId]);
       const [alliances] = await connection.query<AllianceRow[]>("SELECT targetGuildId, pactType, status FROM aurionGuildDiplomacyPacts WHERE sourceGuildId = ? AND status = 'active' ORDER BY targetGuildId, pactType", [member.guildId]);
       const [territoryRows] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS rowCount FROM aurionGuildTerritories WHERE guildId = ? AND state = 'active'", [member.guildId]);
       const totalBuildingLevels = buildingRows.reduce((sum, row) => sum + BigInt(row.level), 0n);
       const goals = deriveGuildBankGoals({ treasuryBalanceExact: revisionOf(account.balance), activeTerritoriesExact: String(territoryRows[0]?.rowCount ?? 0), heldItemsExact: String(held.length), totalBuildingLevelsExact: totalBuildingLevels.toString() });
-      return Object.freeze({
+      const buildingOptions=Object.values(guildBuildingDefinitions).map(definition=>{
+        const levelExact=revisionOf(buildingRows.find(row=>row.buildingId===definition.id)?.level??"0");
+        const next=BigInt(levelExact)<BigInt(definition.maximumLevelExact)?resolveGuildBuildingUpgrade(definition.id,levelExact):null;
+        return {buildingId:definition.id,levelExact,maximumLevelExact:definition.maximumLevelExact,canUpgrade:Boolean(next)&&can("building_manage","building",definition.id),nextCost:next?{...next.costExact}:null};
+      });
+      const readback=Object.freeze({
+        allowedOperations,availableItems,buildingOptions,planningRevisionExact,
         guildId: member.guildId,
         actorUserId,
         role: member.role,
@@ -396,6 +420,8 @@ export class GuildBankStore {
         alliances: Object.freeze(alliances.map(row => Object.freeze({ targetGuildId: row.targetGuildId, pactType: row.pactType }))),
         goals,
       });
-    } finally { connection.release(); }
+    await connection.commit();
+    return readback;
+    } catch(error){await connection.rollback();throw error;} finally { connection.release(); }
   }
 }
