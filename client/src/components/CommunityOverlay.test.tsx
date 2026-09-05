@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it } from "vitest";
@@ -35,4 +35,15 @@ describe("CommunityOverlay", () => {
     expect(screen.getByText(/Craft-Receipt und 6 exakte Crafting-XP entstehen nur nach bestätigter Prüfung/i)).toBeTruthy();
     expect(screen.getByText("VERFÜGBARE EINGÄNGE")).toBeTruthy();
   });
+  it("mounts world-opened controls above the world portal and retires that layer on close", async () => {
+    const user=userEvent.setup();
+    render(<RealClientHarness><CommunityOverlay isAuthenticated currentUserId={42} onTeamReady={()=>undefined} onTeamCleared={()=>undefined} starterCharacterId="wayfinder" onStarterCharacterSelected={()=>undefined}/></RealClientHarness>);
+    fireEvent(window,new CustomEvent("aurion:open-community",{detail:{panel:"crafting"}}));
+    await screen.findByRole("heading",{name:"Sternwartenschmiede"});
+    expect(screen.getByRole("complementary",{name:"Aurion Gemeinschaft"}).parentElement).toBe(document.body);
+    await user.click(screen.getByRole("button",{name:"Community-Konsole schließen"}));
+    expect(screen.getByRole("complementary",{name:"Aurion Gemeinschaft"}).parentElement).not.toBe(document.body);
+    expect(screen.queryByRole("heading",{name:"Sternwartenschmiede"})).toBeNull();
+  });
+
 });
