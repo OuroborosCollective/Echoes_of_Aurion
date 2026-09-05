@@ -751,7 +751,7 @@ export default function Home() {
         onEnterExpanse={() => enterAurionExpanse(() => setScreen("open_world"))}
         onSignal={(message) => { appendLedger({ kind: "system", title: "Sternwarten-Handlung", detail: message }); setLastSignal(message); }}
       />}
-      {screen === "open_world" && <OpenWorldHud
+      {screen === "open_world" && !openWorldRendererActive && <OpenWorldHud
         displayName={openWorld.data?.displayName ?? "Aurion-Expanse"}
         narrative={openWorld.data?.entryNarrative ?? "Der bestätigte Weltstatus wird gelesen."}
         zoneTier={openWorld.data?.zoneTier ?? 0}

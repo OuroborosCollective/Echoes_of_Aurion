@@ -180,7 +180,7 @@ test("two authenticated accounts see the same confirmed movement and departure",
     await expect(right.getByRole("dialog").getByText(new RegExp(`^Explorer ${leftUserId}:`))).toBeVisible();
     await right.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
     await right.locator("#three-viewport canvas").screenshot({ path: testInfo.outputPath("confirmed-other-player.png") });
-    await left.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await left.getByTestId("xaurion-open-world-runtime").getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(right.getByTestId("confirmed-remote-player-count")).toHaveText("0 andere Explorer verbunden");
     await expect.poll(() => rightView.map(p => p.userId)).toEqual([rightUserId]);
     expect(errors).toEqual([]);
@@ -224,7 +224,7 @@ test("native encounter survives a world return and commits the quest reward once
     await attack.click(); await firstAction;
     const [before] = await pool.query<RowDataPacket[]>("SELECT s.* FROM gameplaySessions s JOIN users u ON u.id=s.userId WHERE u.name='aim253_encounter' AND s.status='active'");
     expect(before).toHaveLength(1); expect(before[0].bossHp).toBeLessThan(before[0].maxBossHp); expect(before[0].nextSequence).toBe(2);
-    await page.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await page.getByTestId("xaurion-open-world-runtime").getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(page.getByTestId("xaurion-open-world-runtime")).toHaveCount(0);
     await enter();
     await expect(hud.getByText(`${before[0].bossHp} / ${before[0].maxBossHp} LP`, { exact: true })).toBeVisible();
