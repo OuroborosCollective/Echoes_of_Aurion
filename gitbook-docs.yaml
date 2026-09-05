@@ -1,0 +1,12 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+version: 1
+site:
+  title: Echoes of Aurion
+  structure:
+    - type: space
+      key: space-echoes-of-aurion
+      title: Echoes of Aurion
+      path: aurion
+      default: true
+      content:
+        directory: ./
