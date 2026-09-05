@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
+import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import { MMOEngine } from "../core/MMOEngine";
 import { GameHUD } from "../components/GameHUD";
 import { InventoryModal } from "../components/InventoryModal";
@@ -172,7 +173,9 @@ export default function AurionOpenWorldRuntime() {
       setWebglError(runtimeIssueCode(error));
     };
     try {
-      engine = new MMOEngine(containerRef.current, currentClassId);
+      const world = activation.globalWorld;
+      if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
+      engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch));
       engineRef.current = engine;
       engine.onRuntimeError = fail;
       bindAurionAuthorityProjection(engine, {

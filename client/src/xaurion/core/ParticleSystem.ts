@@ -1,3 +1,4 @@
+import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 
 type Particle = { points: THREE.Points; life: number; max: number; vel: THREE.Vector3[] };
@@ -7,14 +8,14 @@ export class ParticleSystem {
   private particles: Particle[] = [];
   private emitters: AmbientEmitter[] = [];
 
-  constructor(private readonly scene: THREE.Scene) {}
+  constructor(private readonly scene: THREE.Scene, private readonly simulation: DeterministicSimulation) {}
 
   public registerSteamVent(x: number, y: number, z: number): void {
-    this.emitters.push({ position: new THREE.Vector3(x, y, z), kind: 'steam', color: '#94a3b8', timer: Math.random() * 1.5 });
+    this.emitters.push({ position: new THREE.Vector3(x, y, z), kind: 'steam', color: '#94a3b8', timer: this.simulation.random("particles") * 1.5 });
   }
 
   public registerBeacon(x: number, y: number, z: number, color = '#22d3ee'): void {
-    this.emitters.push({ position: new THREE.Vector3(x, y, z), kind: 'beacon', color, timer: Math.random() });
+    this.emitters.push({ position: new THREE.Vector3(x, y, z), kind: 'beacon', color, timer: this.simulation.random("particles") });
   }
 
   public emit(kind: string, position: { x: number; y: number; z: number }, color: string | number = '#22d3ee', scale = 1): void {
@@ -26,11 +27,11 @@ export class ParticleSystem {
       positions[index * 3] = position.x;
       positions[index * 3 + 1] = position.y;
       positions[index * 3 + 2] = position.z;
-      const angle = Math.random() * Math.PI * 2;
-      const speed = (0.6 + Math.random() * 2.6) * scale;
+      const angle = this.simulation.random("particles") * Math.PI * 2;
+      const speed = (0.6 + this.simulation.random("particles") * 2.6) * scale;
       velocities.push(new THREE.Vector3(
         Math.cos(angle) * speed * (kind === 'steam_vent' ? 0.25 : 1),
-        (0.8 + Math.random() * 2.5) * scale,
+        (0.8 + this.simulation.random("particles") * 2.5) * scale,
         Math.sin(angle) * speed * (kind === 'steam_vent' ? 0.25 : 1),
       ));
     }
@@ -56,10 +57,10 @@ export class ParticleSystem {
       if (emitter.timer <= 0) {
         if (emitter.kind === 'steam') {
           this.emit('steam_vent', emitter.position, emitter.color, 0.55);
-          emitter.timer = 1.1 + Math.random() * 1.6;
+          emitter.timer = 1.1 + this.simulation.random("particles") * 1.6;
         } else {
           this.emit('beacon_activate', emitter.position, emitter.color, 0.35);
-          emitter.timer = 2.2 + Math.random() * 2.5;
+          emitter.timer = 2.2 + this.simulation.random("particles") * 2.5;
         }
       }
     }

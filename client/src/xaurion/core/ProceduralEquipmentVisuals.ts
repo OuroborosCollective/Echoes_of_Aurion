@@ -1,3 +1,4 @@
+import { seededRandom } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import { ItemRarity, ItemSlot, RPGItem, WeaponType } from '../types';
 import { glbManager } from './GLBModelManager';
@@ -31,6 +32,7 @@ function createNoiseTexture(type: 'damascus' | 'runic' | 'bronze' | 'mystic' | '
     return proceduralTextureCache.get(type)!;
   }
 
+  const random = seededRandom(`equipment-texture-v1:${type}`);
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 128;
@@ -63,8 +65,8 @@ function createNoiseTexture(type: 'damascus' | 'runic' | 'bronze' | 'mystic' | '
     ctx.fillRect(0, 0, 128, 128);
     ctx.fillStyle = '#b45309';
     for (let i = 0; i < 40; i++) {
-      const x = Math.random() * 128;
-      const y = Math.random() * 128;
+      const x = random() * 128;
+      const y = random() * 128;
       ctx.fillRect(x, y, 4, 12);
     }
   } else if (type === 'mystic') {
@@ -77,7 +79,7 @@ function createNoiseTexture(type: 'damascus' | 'runic' | 'bronze' | 'mystic' | '
     ctx.fillStyle = '#ffffff';
     for (let i = 0; i < 25; i++) {
       ctx.beginPath();
-      ctx.arc(Math.random() * 128, Math.random() * 128, 2, 0, Math.PI * 2);
+      ctx.arc(random() * 128, random() * 128, 2, 0, Math.PI * 2);
       ctx.fill();
     }
   } else {
@@ -86,7 +88,7 @@ function createNoiseTexture(type: 'damascus' | 'runic' | 'bronze' | 'mystic' | '
     ctx.fillRect(0, 0, 128, 128);
     ctx.fillStyle = '#44403c';
     for (let i = 0; i < 60; i++) {
-      ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+      ctx.fillRect(random() * 128, random() * 128, 2, 2);
     }
   }
 

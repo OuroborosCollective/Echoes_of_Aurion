@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "task": "AIM-239",
+  "reason": "Owner request: replace implicit randomness and wall time with deterministic streams and ticks",
+  "aurionPreAdaptationRevision": "5d0652f270df16f943b7cf490c06da222a5695dc",
+  "files": [
+    {
+      "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
+      "sourceSha256": "6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e",
+      "targetSha256": "a7c7c61c8273b187a7f2c90697f1258b47bb2062184f8d3cd0dece0bd43094f4",
+      "adaptations": [
+        {
+          "before": "",
+          "after": "import { DeterministicSimulation } from \"@shared/deterministicSimulation\";\n",
+          "occurrences": 1
+        },
+        {
+          "before": "constructor(scene: THREE.Scene, startingClass: CharacterClassId = 'knight')",
+          "after": "constructor(scene: THREE.Scene, startingClass: CharacterClassId, private readonly simulation: DeterministicSimulation)",
+          "occurrences": 1
+        },
+        {
+          "before": "Math.random() * 100",
+          "after": "this.simulation.random(\"player:dodge\") * 100",
+          "occurrences": 1
+        },
+        {
+          "before": "Math.random()",
+          "after": "this.simulation.random(\"player:aura\")",
+          "occurrences": 3
+        }
+      ]
+    },
+    {
+      "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
+      "sourceSha256": "836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207",
+      "targetSha256": "c00e7d2a3b417e250a77b19e961294c3de3c85a26e650bd20361e5e7feeca3b5",
+      "adaptations": [
+        {
+          "before": "",
+          "after": "import { DeterministicSimulation } from \"@shared/deterministicSimulation\";\n",
+          "occurrences": 1
+        },
+        {
+          "before": "constructor(scene: THREE.Scene)",
+          "after": "constructor(scene: THREE.Scene, private readonly simulation: DeterministicSimulation)",
+          "occurrences": 1
+        },
+        {
+          "before": "Math.random()",
+          "after": "this.simulation.random(\"landscape:spores\")",
+          "occurrences": 3
+        }
+      ]
+    },
+    {
+      "path": "client/src/xaurion/core/ProceduralEquipmentVisuals.ts",
+      "sourceSha256": "1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7",
+      "targetSha256": "9fddffcaf31ae701d61ab76eb1a98b27ab1544013d1e580484ad0dcc6973613d",
+      "adaptations": [
+        {
+          "before": "",
+          "after": "import { seededRandom } from \"@shared/deterministicSimulation\";\n",
+          "occurrences": 1
+        },
+        {
+          "before": "  const canvas = document.createElement('canvas');",
+          "after": "  const random = seededRandom(`equipment-texture-v1:${type}`);\n  const canvas = document.createElement('canvas');",
+          "occurrences": 1
+        },
+        {
+          "before": "Math.random()",
+          "after": "random()",
+          "occurrences": 6
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import { collisionSystem } from './WorldCollisionSystem';
 import { WorldChunkManager } from './WorldChunkManager';
@@ -10,7 +11,7 @@ export class OpenWorldLandscape {
   public chunkManager: WorldChunkManager;
   private animatedProps: { mesh: THREE.Object3D; rotSpeed: number }[] = [];
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, private readonly simulation: DeterministicSimulation) {
     this.scene = scene;
     this.group = new THREE.Group();
     this.scene.add(this.group);
@@ -601,9 +602,9 @@ export class OpenWorldLandscape {
     const sporePos = new Float32Array(sporeCount * 3);
 
     for (let i = 0; i < sporeCount * 3; i += 3) {
-      sporePos[i] = (Math.random() - 0.5) * 240;
-      sporePos[i + 1] = Math.random() * 25 + 0.5;
-      sporePos[i + 2] = (Math.random() - 0.5) * 240;
+      sporePos[i] = (this.simulation.random("landscape:spores") - 0.5) * 240;
+      sporePos[i + 1] = this.simulation.random("landscape:spores") * 25 + 0.5;
+      sporePos[i + 2] = (this.simulation.random("landscape:spores") - 0.5) * 240;
     }
 
     sporeGeo.setAttribute('position', new THREE.BufferAttribute(sporePos, 3));
