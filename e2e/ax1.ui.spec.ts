@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
+import { execFileSync } from "node:child_process";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated AX1 runtime required");
@@ -70,7 +71,9 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await dialog.getByRole("button", { name: "Sternwarte Asterion beginnen", exact: true }).click();
       await expect(dialog).toHaveCount(0);
       const attack = hud.getByRole("button", { name: "Angriff", exact: true });
-      const auto = hud.getByRole("button", { name: "Auto-Angriff", exact: true });
+      // Radix correctly hides the background HUD from assistive technology while a
+      // modal is open; inspect its state without requiring it to remain accessible.
+      const auto = hud.getByRole("button", { name: "Auto-Angriff", exact: true, includeHidden: true });
       await page.getByTestId("glb-presentation").evaluate(element => {
         const samples: unknown[] = []; (window as any).__ax1AttackSamples = samples;
         new MutationObserver(() => { const sample=JSON.parse(element.getAttribute("data-attack")||"{}"); if(sample.attacking && sample.visible && samples.length<30)samples.push(sample); }).observe(element,{attributes:true,attributeFilter:["data-attack"]});
@@ -112,16 +115,53 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect((await rpc<PlayerUiReadback>(page, "player.ui")).equipment).toContainEqual({ id: item.id, version: item.version, slot: item.slot });
       await page.screenshot({ path: info.outputPath(`${viewport.name}-paperdoll.png`) });
       await dialog.getByRole("button", { name: "Ablegen", exact: true }).click(); await confirmed();
+      await dialog.getByRole("button", { name: "Auto-Loot AUS", exact: true }).click(); await confirmed();
+      // Explicit isolated fixtures exercise the real loot persistence function with the
+      // accepted encounter receipt. These two drops are not claimed as earned rewards.
+      const [accepted] = await pool.query<RowDataPacket[]>("SELECT id,expeditionKey,seedDigest FROM expeditionResultReceipts WHERE userId=? AND status='accepted' ORDER BY createdAt DESC LIMIT 1", [userId]);
+      expect(accepted).toHaveLength(1);
+      const fixtureInput = { userId, resultReceiptId: accepted[0].id, expeditionKey: accepted[0].expeditionKey, seedDigest: accepted[0].seedDigest };
+      const fixtureOutput = execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
+        const url = new URL(process.env.DATABASE_URL);
+        if (process.env.AURION_UI_E2E !== "1" || url.hostname !== "127.0.0.1" || url.pathname !== "/aurion_group_test") throw Error("ISOLATED_UI_DATABASE_REQUIRED");
+        const { createLootDrop } = await import("./server/db.ts");
+        const input = JSON.parse(process.argv[1]);
+        const drops = [];
+        for (const qualityRoll of [9996, 400]) drops.push(await createLootDrop({ ...input, treasureClass: "asterion_t2_weapons", qualityRoll, affixRoll: 0, magicFind: 0, itemLevel: 1, idempotencyKey: "ax1-ui-fixture:" + input.userId + ":" + qualityRoll }));
+        console.log("AX1_FIXTURE_JSON=" + JSON.stringify(drops)); process.exit(0);
+      `, JSON.stringify(fixtureInput)], { encoding: "utf8", timeout: 30_000 });
+      const fixtureDrops: { itemId: string; receiptId: string; quality: string }[] = JSON.parse(fixtureOutput.split("\n").find(line => line.startsWith("AX1_FIXTURE_JSON="))!.slice("AX1_FIXTURE_JSON=".length));
+      const normal = fixtureDrops.find(drop => drop.quality === "normal")!;
+      const rare = fixtureDrops.find(drop => drop.quality === "rare")!;
+      const autoLootReadback = await rpc<PlayerUiReadback>(page, "player.ui");
+      expect(autoLootReadback.items.find(i => i.id === normal.itemId)).toMatchObject({ status: "owned", definition: "aurion_spear" });
+      expect(autoLootReadback.items.find(i => i.id === rare.itemId)).toMatchObject({ status: "pending_pickup" });
+      await dialog.getByRole("button", { name: "Auto-Loot AN", exact: true }).click(); await confirmed();
+      await dialog.getByTestId(`bag-${rare.itemId}`).click();
+      await dialog.getByRole("button", { name: "Beute einsammeln", exact: true }).click(); await confirmed();
+      expect((await rpc<PlayerUiReadback>(page, "player.ui")).items.find(i => i.id === rare.itemId)?.status).toBe("owned");
       await dialog.getByRole("button", { name: "Handwerk öffnen", exact: true }).click();
       await expect(dialog.getByText("HANDWERK & BERUFE", { exact: true })).toBeVisible();
+      await dialog.getByLabel("Eingesammelten Speer wählen", { exact: true }).selectOption(normal.itemId);
+      await dialog.getByRole("button", { name: "Speer tempern", exact: true }).click(); await confirmed();
+      const crafting = await rpc<any>(page, "crafting.read");
+      expect(crafting.receipts).toHaveLength(1);
+      expect(crafting.outputs).toHaveLength(1);
+      expect(crafting.outputs[0]).toMatchObject({ baseItemKey: "aurion_spear", quality: "magic" });
+      expect(crafting.progression.progression.totalXpExact).toBe("6");
+      const [consumed] = await pool.query<RowDataPacket[]>("SELECT status FROM itemInstances WHERE id=?", [normal.itemId]);
+      expect(consumed[0].status).toBe("consumed");
+      await dialog.getByRole("button", { name: "Berufe & Meisterschaft", exact: true }).click();
+      await expect(dialog.getByText(/6 Handwerks-EP/)).toBeVisible();
       await page.screenshot({ path: info.outputPath(`${viewport.name}-crafting.png`) });
       await dialog.getByRole("button", { name: "Handwerk schließen", exact: true }).click();
+      const environmentReadback = await assetEvidence();
       await page.reload();
       const persisted = await rpc<PlayerUiReadback>(page, "player.ui");
       expect(persisted.settings.hotbar[0]).toBe("9"); expect(persisted.settings.autoLoot).toBe(false);
       expect(persisted.equipment).toEqual([]); expect(persisted.items.find(i => i.id === item.id)?.status).toBe("owned");
       expect(errors).toEqual([]);
-      await info.attach("ax1-real-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, userId, viewport, qualification: group.qualification, actions, animation, inventory: persisted, environment: await assetEvidence(), auth: "public_registration", items: "canonical_encounter_loot" }), contentType: "application/json" });
+      await info.attach("ax1-real-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, userId, viewport, qualification: group.qualification, actions, animation, inventory: persisted, environment: environmentReadback, crafting, auth: "public_registration", earnedItems: loot.items, explicitIsolatedFixtures: { purpose: "normal_auto_loot_rare_pickup_crafting", drops: fixtureDrops } }), contentType: "application/json" });
     } finally { await page.close(); await pool.end(); }
   });
 }
