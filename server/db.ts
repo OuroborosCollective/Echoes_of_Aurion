@@ -1,3 +1,4 @@
+import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
 import { parseOwnedEncounterReadback } from "../shared/encounterReadback";
@@ -435,14 +436,21 @@ export async function recordValidatedExpeditionResult(values: { userId: number; 
   if (!isServerEvidenceDigest(values.seedDigest) || !isServerEvidenceDigest(values.resultDigest)) throw new Error("Expedition evidence must be a SHA-256 digest");
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
-  const previous = await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
-  if (previous[0]) return { applied: false as const, receipt: previous[0] };
+  if (!values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("RESULT_IDEMPOTENCY_KEY_INVALID");
   await getOrCreatePlayerProfile(values.userId);
-  const receiptId = newEndgameId("expres");
-  await db.insert(expeditionResultReceipts).values({ id: receiptId, ...values });
-  const readback = await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.id, receiptId)).limit(1);
-  if (!readback[0] || readback[0].status !== "accepted") throw new Error("Expedition result receipt readback failed");
-  return { applied: true as const, receipt: readback[0] };
+  return db.transaction(async tx => {
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
+    const prior = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey,values.idempotencyKey)).limit(1))[0];
+    if (prior) {
+      if (prior.userId !== values.userId || prior.expeditionKey !== values.expeditionKey || prior.seedDigest !== values.seedDigest || prior.resultDigest !== values.resultDigest || prior.confirmedByUserId !== values.confirmedByUserId || prior.status !== "accepted") throw new Error("RESULT_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, receipt: prior };
+    }
+    const receiptId = rewardReceiptIdentity("expres",values.userId,values.idempotencyKey);
+    await tx.insert(expeditionResultReceipts).values({ id: receiptId, ...values });
+    const receipt = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.id,receiptId)).limit(1))[0];
+    if (!receipt || receipt.status !== "accepted") throw new Error("Expedition result receipt readback failed");
+    return { applied: true as const, receipt };
+  });
 }
 
 export async function getOrCreatePlayerProfile(userId: number) {
@@ -748,9 +756,10 @@ export async function recordValidatedSkillProgressionEvent(values: {
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update");
     const prior = (await tx.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.idempotencyKey, values.idempotencyKey)).limit(1))[0];
     if (prior) {
-      if (prior.userId !== values.userId || prior.skillId !== values.skillId || prior.resultReceiptId !== values.resultReceiptId) throw new Error("SKILL_IDEMPOTENCY_CONFLICT");
+      if (prior.userId !== values.userId || prior.skillId !== values.skillId || prior.resultReceiptId !== values.resultReceiptId || prior.amountExact !== values.amountExact || prior.source !== values.source || prior.resolutionIndex !== values.resolutionIndex) throw new Error("SKILL_IDEMPOTENCY_CONFLICT");
       return { applied: false as const, event: prior };
     }
 
@@ -771,7 +780,7 @@ export async function recordValidatedSkillProgressionEvent(values: {
     )).limit(1))[0];
     if (conflictingEvent) throw new Error("Dieses Result-Receipt besitzt bereits ein Skillereignis.");
 
-    const id = newEndgameId("skillev");
+    const id = rewardReceiptIdentity("skillev",values.userId,values.idempotencyKey);
     await tx.insert(skillProgressionEvents).values({ id, ...values });
     const event = (await tx.select().from(skillProgressionEvents).where(eq(skillProgressionEvents.id, id)).limit(1))[0];
     if (!event) throw new Error("Skillereignis-Readback fehlgeschlagen.");
@@ -1501,11 +1510,11 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
     await tx.update(gameplayQuestProgress).set({ state: "completed", completedAt: now }).where(eq(gameplayQuestProgress.id, row.id));
     await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp), aurionPoints: profile.aurionPoints + quest.reward.points, seasonPoints: profile.seasonPoints + quest.reward.points, victories: profile.victories + 1 }).where(eq(playerProfiles.userId, values.userId));
     await tx.insert(progressionLedger).values([
-      { id: newEndgameId("prog"), userId: values.userId, kind: "xp", delta: quest.reward.xp, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:xp` },
-      { id: newEndgameId("prog"), userId: values.userId, kind: "points", delta: quest.reward.points, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:points` },
-      { id: newEndgameId("prog"), userId: values.userId, kind: "victory", delta: 1, source: `encounter:${row.completionSessionId}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:victory` },
+      { id: rewardReceiptIdentity("prog",values.userId,`quest:${row.completionSessionId}:xp`), userId: values.userId, kind: "xp", delta: quest.reward.xp, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:xp` },
+      { id: rewardReceiptIdentity("prog",values.userId,`quest:${row.completionSessionId}:points`), userId: values.userId, kind: "points", delta: quest.reward.points, source: `quest:${quest.key}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:points` },
+      { id: rewardReceiptIdentity("prog",values.userId,`quest:${row.completionSessionId}:victory`), userId: values.userId, kind: "victory", delta: 1, source: `encounter:${row.completionSessionId}`, reason: quest.title, idempotencyKey: `quest:${row.completionSessionId}:victory` },
     ]);
-    if (quest.reward.dungeonKey) await tx.insert(gameplayDungeonKeys).values({ id: newEndgameId("dkey"), userId: values.userId, keyName: quest.reward.dungeonKey, grantedByQuest: quest.key }).onDuplicateKeyUpdate({ set: { grantedByQuest: quest.key } });
+    if (quest.reward.dungeonKey) await tx.insert(gameplayDungeonKeys).values({ id: rewardReceiptIdentity("dkey",values.userId,quest.reward.dungeonKey), userId: values.userId, keyName: quest.reward.dungeonKey, grantedByQuest: quest.key }).onDuplicateKeyUpdate({ set: { grantedByQuest: quest.key } });
   });
   if (!completionSessionId) throw new Error("Quest completion receipt is missing");
   const profile = await getOrCreatePlayerProfile(values.userId);
@@ -1820,12 +1829,12 @@ export async function createLootDrop(values: { userId: number; expeditionKey: st
     const entries = parseCatalogEntries(definition[0].entriesJson);
     const quality = rollLootQuality(values.qualityRoll, values.magicFind);
     const baseItemKey = entries[(values.qualityRoll + values.affixRoll) % entries.length]!;
-    const candidates = await tx.select().from(lootAffixes).where(and(eq(lootAffixes.active, 1), lte(lootAffixes.minItemLevel, values.itemLevel), gte(lootAffixes.maxItemLevel, values.itemLevel)));
+    const candidates = await tx.select().from(lootAffixes).where(and(eq(lootAffixes.active, 1), lte(lootAffixes.minItemLevel, values.itemLevel), gte(lootAffixes.maxItemLevel, values.itemLevel))).orderBy(asc(lootAffixes.affixKey));
     const prefix = candidates.filter(affix => affix.slot === "prefix");
     const suffix = candidates.filter(affix => affix.slot === "suffix");
     const affixes: LootAffix[] = quality === "normal" ? [] : [parseAffix(prefix[values.affixRoll % prefix.length] ?? (() => { throw new Error("No prefix affix is available"); })())];
     if (quality !== "normal" && quality !== "magic") affixes.push(parseAffix(suffix[Math.floor(values.affixRoll / 7) % suffix.length] ?? (() => { throw new Error("No suffix affix is available"); })()));
-    const setDefinition = quality === "set" ? (await tx.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
+    const setDefinition = quality === "set" ? (await tx.select().from(lootSetDefinitions).where(eq(lootSetDefinitions.active, 1)).orderBy(asc(lootSetDefinitions.setKey))).find(candidate => parseCatalogEntries(candidate.piecesJson).includes(baseItemKey)) : undefined;
     const originHash = createHash("sha256").update(JSON.stringify(["aurion-loot-origin.v2", values.userId, values.expeditionKey, values.seedDigest, values.idempotencyKey])).digest("hex").slice(0, 48);
     const receiptId = `drop_${originHash}`;
     const itemId = `item_${originHash}`;
@@ -2121,26 +2130,29 @@ export async function recordValidatedWeaponEvent(values: { userId: number; exped
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   await getAcceptedExpeditionResult(values);
-  const loadout = await getWeaponLoadout(values.userId);
-  if (!loadout || loadout.weaponTrack !== values.weaponTrack) throw new Error("Weapon track is not equipped in the server loadout");
-  if (!isWeaponActionAllowed(values.weaponTrack, values.actionKey)) throw new Error("Weapon action is not allowed for the equipped track");
+  if (!Number.isSafeInteger(values.xpGranted) || values.xpGranted <= 0 || !values.idempotencyKey || values.idempotencyKey.length > 128) throw new Error("WEAPON_REWARD_INPUT_INVALID");
   return db.transaction(async tx => {
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId,values.userId)).limit(1).for("update"))[0];
+    if (!profile) throw new Error("WEAPON_REWARD_PROFILE_REQUIRED");
     const previous = await tx.select().from(weaponMasteryReceipts).where(eq(weaponMasteryReceipts.idempotencyKey, values.idempotencyKey)).limit(1);
     if (previous[0]) {
-      if (previous[0].userId !== values.userId || previous[0].expeditionKey !== values.expeditionKey || previous[0].weaponTrack !== values.weaponTrack || previous[0].actionKey !== values.actionKey) throw new Error("WEAPON_IDEMPOTENCY_CONFLICT");
-      return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
+      if (previous[0].userId !== values.userId || previous[0].expeditionKey !== values.expeditionKey || previous[0].weaponTrack !== values.weaponTrack || previous[0].actionKey !== values.actionKey || previous[0].xpGranted !== values.xpGranted) throw new Error("WEAPON_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, profile };
     }
+    const loadout = (await tx.select().from(weaponLoadouts).where(eq(weaponLoadouts.userId,values.userId)).limit(1))[0];
+    if (!loadout || loadout.weaponTrack !== values.weaponTrack) throw new Error("Weapon track is not equipped in the server loadout");
+    if (!isWeaponActionAllowed(values.weaponTrack,values.actionKey)) throw new Error("Weapon action is not allowed for the equipped track");
     const rewardKey = `weapon:${values.idempotencyKey}`;
     const priorReward = await tx.select().from(progressionLedger).where(eq(progressionLedger.idempotencyKey, rewardKey)).limit(1);
     if (priorReward[0]) throw new Error("Weapon reward receipt already exists without its matching weapon receipt");
     const priorMastery = await tx.select().from(weaponMasteries).where(and(eq(weaponMasteries.userId, values.userId), eq(weaponMasteries.weaponTrack, values.weaponTrack))).limit(1);
     const xp = (priorMastery[0]?.xp ?? 0) + values.xpGranted;
     const level = levelFromTotalXp(xp);
-    await tx.insert(weaponMasteryReceipts).values({ id: newEndgameId("wrec"), userId: values.userId, expeditionKey: values.expeditionKey, weaponTrack: values.weaponTrack, actionKey: values.actionKey, xpGranted: values.xpGranted, idempotencyKey: values.idempotencyKey });
+    await tx.insert(weaponMasteryReceipts).values({ id: rewardReceiptIdentity("wrec",values.userId,values.idempotencyKey), userId: values.userId, expeditionKey: values.expeditionKey, weaponTrack: values.weaponTrack, actionKey: values.actionKey, xpGranted: values.xpGranted, idempotencyKey: values.idempotencyKey });
     if (priorMastery[0]) await tx.update(weaponMasteries).set({ xp, level }).where(eq(weaponMasteries.id, priorMastery[0].id));
-    else await tx.insert(weaponMasteries).values({ id: newEndgameId("wm"), userId: values.userId, weaponTrack: values.weaponTrack, xp, level });
-    await tx.insert(progressionLedger).values({ id: newEndgameId("prog"), userId: values.userId, kind: "weapon_xp", delta: values.xpGranted, source: "validated-expedition", reason: `${values.expeditionKey}:${values.actionKey}`, idempotencyKey: rewardKey });
-    return { applied: true as const, profile: await getOrCreatePlayerProfile(values.userId) };
+    else await tx.insert(weaponMasteries).values({ id: rewardReceiptIdentity("wm",values.userId,values.weaponTrack), userId: values.userId, weaponTrack: values.weaponTrack, xp, level });
+    await tx.insert(progressionLedger).values({ id: rewardReceiptIdentity("prog",values.userId,rewardKey), userId: values.userId, kind: "weapon_xp", delta: values.xpGranted, source: "validated-expedition", reason: `${values.expeditionKey}:${values.actionKey}`, idempotencyKey: rewardKey });
+    return { applied: true as const, profile };
   });
 }
 
