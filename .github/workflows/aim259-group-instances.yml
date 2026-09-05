@@ -5,6 +5,12 @@ on:
     paths:
       - "server/groupInstance*.ts"
       - "server/playerUi*.ts"
+      - "server/amplitude*.ts"
+      - "server/_core/trpc.ts"
+      - "shared/worldAsset*"
+      - "assets/world/**"
+      - "scripts/*world-assets*"
+      - "client/src/xaurion/integration/WorldAssetProjection.ts"
       - "shared/playerUi*.ts"
       - "client/src/xaurion/components/**"
       - "server/aim259*.ts"
@@ -26,6 +32,12 @@ on:
     paths:
       - "server/groupInstance*.ts"
       - "server/playerUi*.ts"
+      - "server/amplitude*.ts"
+      - "server/_core/trpc.ts"
+      - "shared/worldAsset*"
+      - "assets/world/**"
+      - "scripts/*world-assets*"
+      - "client/src/xaurion/integration/WorldAssetProjection.ts"
       - "shared/playerUi*.ts"
       - "client/src/xaurion/components/**"
       - "shared/groupInstanceProtocol.ts"
@@ -74,7 +86,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm check
           pnpm verify:migrations
-          pnpm vitest run server/aim259GroupRules.test.ts server/playerUiProtocol.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
+          pnpm vitest run server/aim259GroupRules.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
       - name: Apply full schema and test concurrent real database operations
         run: |
           pnpm exec drizzle-kit migrate

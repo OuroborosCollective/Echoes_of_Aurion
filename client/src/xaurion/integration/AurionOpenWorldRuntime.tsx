@@ -1,3 +1,4 @@
+import { WorldAssetProjection } from "./WorldAssetProjection";
 import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
@@ -64,6 +65,9 @@ function validActivation(detail: unknown): ActivationSnapshot {
 
 export default function AurionOpenWorldRuntime() {
   const { user, isAuthenticated } = useAuth();
+  const rpcUtils = trpc.useUtils();
+  const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
+  const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
@@ -155,6 +159,7 @@ export default function AurionOpenWorldRuntime() {
     let engine: MMOEngine | undefined;
     let remotePresence: RemotePresenceProjection | undefined;
     let capture: VisibleCanvasCapture | undefined;
+    let worldAssets: WorldAssetProjection | undefined;
     const confirmedVisuals = new ConfirmedVisualEffects();
     const onConfirmedAction = (event: Event) => {
       if (disposed || !engine || engineRef.current !== engine) return;
@@ -168,6 +173,7 @@ export default function AurionOpenWorldRuntime() {
     };
     const fail = (error: unknown) => {
       if (disposed) return;
+      worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       remotePresenceRef.current = null;
@@ -187,7 +193,11 @@ export default function AurionOpenWorldRuntime() {
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
       engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch));
       engineRef.current = engine;
-      engine.onProjectionTick = delta => serviceNpcRef.current?.update(delta);
+      worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
+        (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
+        center => rpcUtils.worldAssets.region.fetch(center),
+        evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); });
+      engine.onProjectionTick = delta => { serviceNpcRef.current?.update(delta); worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth); };
       engine.onRuntimeError = fail;
       bindAurionAuthorityProjection(engine, {
         requestAction: requestHotbarAction,
@@ -219,6 +229,7 @@ export default function AurionOpenWorldRuntime() {
     return () => {
       disposed = true;
       window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
+      worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       if (remotePresenceRef.current === remotePresence) remotePresenceRef.current = null;
@@ -464,6 +475,8 @@ export default function AurionOpenWorldRuntime() {
       {webglError && <div className="xaurion-runtime__error" role="alert"><b>OPEN WORLD ANGEHALTEN</b><span>Bitte kehre zur Sternwarte zurück und öffne die Welt erneut. Vorgang {webglError}</span></div>}
 
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
+      <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
+      {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
     </section>
   );

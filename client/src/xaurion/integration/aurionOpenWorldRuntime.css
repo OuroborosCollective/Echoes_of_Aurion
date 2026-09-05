@@ -89,7 +89,7 @@
  .aurion-encounter[data-active=false] button>span{display:none}
  .aurion-authority-hud__move{left:12px;bottom:max(18px,env(safe-area-inset-bottom))}
  .aurion-authority-hud__move>div{width:96px;height:96px}
- .aurion-authority-hud__actions{right:12px;display:grid;grid-template-columns:repeat(3,44px);gap:7px;padding:7px}
+ .aurion-authority-hud__actions{right:12px;display:grid;grid-template-columns:repeat(4,44px);gap:7px;padding:7px}
  .aurion-authority-hud__actions button{width:44px;height:44px}
  .aurion-authority-hud__dialog{padding:18px;gap:12px;border-radius:18px}
  .aurion-authority-hud__dialog h2{font-size:21px}

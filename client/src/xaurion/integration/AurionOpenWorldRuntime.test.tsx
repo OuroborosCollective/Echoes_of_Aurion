@@ -17,6 +17,7 @@ const fixture = vi.hoisted(() => {
 });
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: 1 }, isAuthenticated: true }) }));
 vi.mock("@/lib/trpc", () => ({ trpc: {
+  useUtils: () => ({ worldAssets: { region: { fetch: vi.fn() } } }),
   player: { ui: { useQuery: () => ({}) }, me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
   assetSubmissions: { characterAppearance: { useQuery: () => ({}) } },
   gameplay: {
@@ -32,6 +33,7 @@ vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn(() => {
   const client = { connect: vi.fn(), close: vi.fn(), sendMovement: vi.fn() }; fixture.connections.push(client); return client;
 }) }));
 vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn() }));
+vi.mock("./WorldAssetProjection", () => ({ WorldAssetProjection: vi.fn(() => ({ dispose: vi.fn(), update: vi.fn() })) }));
 vi.mock("./RemotePresenceProjection", () => ({ RemotePresenceProjection: vi.fn(() => ({ dispose: vi.fn(), clear: vi.fn() })) }));
 vi.mock("../components/GameHUD", () => ({ GameHUD: () => <p>World controls</p> }));
 vi.mock("./AurionAuthorityHud", () => ({ AurionAuthorityHud: () => <p>World controls</p> }));

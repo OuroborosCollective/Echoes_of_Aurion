@@ -19,8 +19,8 @@ const statsFrom = (json: string, base: Readonly<Record<string, number>> = {}) =>
 
 export async function readControlSettings(tx: Database | UiTransaction, userId: number): Promise<ControlSettings> {
   const row = (await tx.select().from(aurionPlayerUiSettings).where(eq(aurionPlayerUiSettings.userId, userId)))[0];
-  if (row && row.autoLoot !== 0 && row.autoLoot !== 1) throw new Error("UI_SETTINGS_CORRUPT");
-  return row ? controlSettingsSchema.parse({ revision: row.revision, autoLoot: row.autoLoot === 1, hotbar: JSON.parse(row.hotbarJson) }) : { revision: 0, autoLoot: true, hotbar: [...defaultHotbar] };
+  if (row && ((row.autoLoot !== 0 && row.autoLoot !== 1) || (row.analyticsConsent !== 0 && row.analyticsConsent !== 1))) throw new Error("UI_SETTINGS_CORRUPT");
+  return row ? controlSettingsSchema.parse({ revision: row.revision, autoLoot: row.autoLoot === 1, analyticsConsent: row.analyticsConsent === 1, hotbar: JSON.parse(row.hotbarJson) }) : { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: [...defaultHotbar] };
 }
 function legacyView(row: typeof itemInstances.$inferSelect): UiItem {
   return uiItemSchema.parse({ id: row.id, version: "legacy", name: legacyWeapons[row.baseItemKey] ?? row.baseItemKey.replaceAll("_", " "), definition: row.baseItemKey,
@@ -74,7 +74,7 @@ export async function savePlayerControls(userId: number, expected: ControlSettin
     const previous = await readControlSettings(tx, userId);
     if (previous.revision !== input.revision) throw new Error("UI_SETTINGS_STALE");
     if (input.revision >= 2_000_000_000) throw new Error("UI_SETTINGS_REVISION_EXHAUSTED");
-    const row = { userId, revision: input.revision + 1, autoLoot: input.autoLoot ? 1 : 0, hotbarJson: JSON.stringify(input.hotbar) };
+    const row = { userId, revision: input.revision + 1, autoLoot: input.autoLoot ? 1 : 0, analyticsConsent: input.analyticsConsent ? 1 : 0, hotbarJson: JSON.stringify(input.hotbar) };
     await tx.insert(aurionPlayerUiSettings).values(row).onDuplicateKeyUpdate({ set: row });
     return readUi(tx, userId);
   });

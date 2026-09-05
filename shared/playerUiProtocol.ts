@@ -6,7 +6,7 @@ export const skillCommandSchema = z.enum(["1", "2", "3", "4", "5", "6", "7", "8"
 export type SkillCommand = z.infer<typeof skillCommandSchema>;
 export const hotbarSchema = z.array(skillCommandSchema).length(5).refine(v => new Set(v).size === 5, "Doppelte Skillbelegung");
 export const defaultHotbar: SkillCommand[] = ["1", "2", "3", "4", "5"];
-export const controlSettingsSchema = z.object({ revision: z.number().int().nonnegative(), autoLoot: z.boolean(), hotbar: hotbarSchema }).strict();
+export const controlSettingsSchema = z.object({ revision: z.number().int().nonnegative(), autoLoot: z.boolean(), analyticsConsent: z.boolean().default(false), hotbar: hotbarSchema }).strict();
 export type ControlSettings = z.infer<typeof controlSettingsSchema>;
 // Names are the existing Aurion command deck. No AX1-local cooldown, resource or damage
 // preview is allowed to masquerade as a confirmed Aurion combat outcome.

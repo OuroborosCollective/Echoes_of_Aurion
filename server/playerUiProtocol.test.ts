@@ -3,7 +3,7 @@ import { controlSettingsSchema, defaultHotbar, PLAYER_UI_VERSION, playerUiReadba
 
 describe("AX1 controls and confirmed paperdoll contract", () => {
   it("accepts five distinct server commands and rejects invented, repeated or authority-bearing settings", () => {
-    const settings = { revision: 0, autoLoot: true, hotbar: defaultHotbar };
+    const settings = { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: defaultHotbar };
     expect(controlSettingsSchema.parse(settings)).toEqual(settings);
     for (const invalid of [{ ...settings, hotbar: ["1", "1", "2", "3", "4"] }, { ...settings, hotbar: ["F", "2", "3", "4", "5"] }, { ...settings, userId: 8 }, { ...settings, revision: -1 }]) expect(controlSettingsSchema.safeParse(invalid).success).toBe(false);
   });

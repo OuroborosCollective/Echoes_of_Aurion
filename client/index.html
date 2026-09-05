@@ -16,20 +16,7 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      (() => {
-        const endpoint = "%VITE_ANALYTICS_ENDPOINT%";
-        const websiteId = "%VITE_ANALYTICS_WEBSITE_ID%";
-        // Vite preserves unknown HTML placeholders. Never request such a literal
-        // path in local development; production analytics remain opt-in.
-        if (!endpoint || endpoint.startsWith("%") || !websiteId || websiteId.startsWith("%")) return;
-        const analytics = document.createElement("script");
-        analytics.defer = true;
-        analytics.src = `${endpoint.replace(/\/$/, "")}/umami`;
-        analytics.dataset.websiteId = websiteId;
-        document.head.appendChild(analytics);
-      })();
-    </script>
+    <!-- Optional analytics are delivered by the server after player consent. -->
   </body>
 
 </html>

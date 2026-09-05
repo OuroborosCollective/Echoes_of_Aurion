@@ -1030,8 +1030,8 @@ export async function getGameplayProgress(userId: number) {
   };
 }
 
-const GLOBAL_WORLD_ID = "echoes-of-aurion-global";
-const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
+export const GLOBAL_WORLD_ID = "echoes-of-aurion-global";
+export const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
 
 /**
  * Resolves the persistent global world plan. Account count is a durable phase-one

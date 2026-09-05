@@ -136,7 +136,7 @@ for (const viewport of [
         expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
         expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
         await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-${name.split(" ")[0]}.png`), animations: "disabled" });
-        await dialog.getByRole("button", { name: "Close", exact: true }).click();
+        await dialog.getByRole("button", { name: name === "Inventar" ? "Inventar schließen" : name === "Charakter" ? "Charakter schließen" : "Quest-Buch schließen", exact: true }).click();
       }
       // Walk around the plaza fountain, then north to the Royal Forge.
       await expect.poll(() => presence?.userId).toBeGreaterThan(0);
@@ -154,9 +154,9 @@ for (const viewport of [
       await expect.poll(async () => (await pose(player))?.clip).toBe("Idle");
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-near-smith.png`) });
       await page.getByRole("button", { name: "Schmied ansprechen", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Sternwartenschmiede", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "HANDWERK & BERUFE", exact: true })).toBeVisible();
       await expect.poll(async () => (await pose(smith))?.clip, { intervals: [50, 100, 200] }).toBe("ShopInteract");
-      const crafting = page.locator(".community-overlay[data-opened-from-world=true] .community-panel");
+      const crafting = page.getByRole("dialog");
       const craftBox = (await crafting.boundingBox())!;
       expect(craftBox.y).toBeGreaterThanOrEqual(0);
       expect(craftBox.y + craftBox.height).toBeLessThanOrEqual(viewport.height + 1);

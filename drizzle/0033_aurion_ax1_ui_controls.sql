@@ -2,6 +2,7 @@ CREATE TABLE `aurionPlayerUiSettings` (
   `userId` int NOT NULL,
   `revision` int NOT NULL DEFAULT 0,
   `autoLoot` int NOT NULL DEFAULT 1,
+  `analyticsConsent` int NOT NULL DEFAULT 0,
   `hotbarJson` text NOT NULL,
   CONSTRAINT `aurionPlayerUiSettings_userId` PRIMARY KEY (`userId`)
 );

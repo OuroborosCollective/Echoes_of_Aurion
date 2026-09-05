@@ -32,6 +32,13 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       const runtime = page.getByTestId("xaurion-open-world-runtime");
       const hud = page.getByTestId("authoritative-world-hud");
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+      const environment=page.getByTestId("world-assets-evidence");
+      const assetEvidence=async()=>JSON.parse(await environment.getAttribute("data-presentation")||"{}");
+      await expect.poll(async()=>(await assetEvidence()).rendered,{timeout:60_000}).toBeGreaterThan(0);
+      await expect.poll(async()=>(await assetEvidence()).loading,{timeout:60_000}).toBe(0);
+      expect((await assetEvidence()).failed).toBe(0);
+      expect((await assetEvidence()).planned).toBe(108);
+      await page.screenshot({path:info.outputPath(`${viewport.name}-world-assets.png`)});
       const initial = await rpc<PlayerUiReadback>(page, "player.ui");
       expect(initial.items).toEqual([]);
       const userId = initial.userId;
@@ -44,7 +51,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await hud.getByRole("button", { name: "Charakter", exact: true }).click();
       await expect(dialog.getByRole("button", { name: "Hüter", exact: true })).toBeDisabled();
       await dialog.getByRole("button", { name: "Skills & Meisterschaft", exact: true }).click();
-      await dialog.getByLabel("Heilendes Licht", { exact: true }).check(); await confirmed();
+      await dialog.getByLabel("Heilendes Licht", { exact: true }).click(); await confirmed();
+      await expect(dialog.getByLabel("Heilendes Licht", { exact: true })).toBeChecked();
       const group = await rpc<any>(page, "groups.read");
       expect(group.player.skills).toContain("mending_light"); expect(group.qualification.roles).toContain("healer");
       const [unarmed] = await pool.query<RowDataPacket[]>("SELECT selectedClass FROM playerProfiles WHERE userId=?", [userId]);
@@ -104,7 +112,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(persisted.settings.hotbar[0]).toBe("9"); expect(persisted.settings.autoLoot).toBe(false);
       expect(persisted.equipment).toEqual([]); expect(persisted.items.find(i => i.id === item.id)?.status).toBe("owned");
       expect(errors).toEqual([]);
-      await info.attach("ax1-real-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, userId, viewport, qualification: group.qualification, actions, inventory: persisted, auth: "public_registration", items: "canonical_encounter_loot" }), contentType: "application/json" });
+      await info.attach("ax1-real-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, userId, viewport, qualification: group.qualification, actions, inventory: persisted, environment: await assetEvidence(), auth: "public_registration", items: "canonical_encounter_loot" }), contentType: "application/json" });
     } finally { await page.close(); await pool.end(); }
   });
 }

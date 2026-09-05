@@ -19,6 +19,7 @@ export class AnimatedGlbActor {
   private active: THREE.AnimationAction | null = null;
   private locomotion: GlbPose = "idle";
   private oneShot = false;
+  private fallbackAttack = 0;
   private disposed = false;
   private readonly footPivot = new THREE.Group();
   private readonly bounds = new THREE.Box3();
@@ -54,7 +55,7 @@ export class AnimatedGlbActor {
   };
 
   private play(pose: GlbPose, once: boolean): boolean {
-    const clip = clipNames[pose].map(name => this.clips.get(name)).find(Boolean) ?? this.clips.get("idle");
+    const clip = clipNames[pose].map(name => this.clips.get(name)).find(Boolean) ?? (once ? undefined : this.clips.get("idle"));
     if (!clip) return false;
     const next = this.mixer.clipAction(clip);
     if (next === this.active && !once) return true;
@@ -76,11 +77,16 @@ export class AnimatedGlbActor {
   playOnce(pose: "attack" | "jump" | "death" | "interact"): void {
     if (this.disposed) return;
     this.oneShot = this.play(pose, true);
+    if (pose === "attack" && !this.oneShot) this.fallbackAttack = 0.3;
   }
 
   update(delta: number): void {
     if (this.disposed || !Number.isFinite(delta) || delta <= 0) return;
     this.mixer.update(Math.min(delta, 0.25));
+    // Static avatars get a brief presentation recoil only after a confirmed attack.
+    // This wrapper animation never changes canonical player coordinates.
+    this.fallbackAttack = Math.max(0, this.fallbackAttack - delta);
+    this.group.rotation.z = this.fallbackAttack > 0 ? Math.sin((1 - this.fallbackAttack / 0.3) * Math.PI) * 0.16 : 0;
     // In-place locomotion keeps the lowest animated contact on the sampled
     // ground. The authored Jump may leave it; root motion never moves the actor.
     if (this.active?.getClip().name.toLowerCase() !== "jump") {

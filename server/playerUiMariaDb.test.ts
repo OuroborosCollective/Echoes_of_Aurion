@@ -40,7 +40,7 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
   afterAll(async () => { if (pool) { if (isolated) await clean(); await pool.end(); } });
   it("persists optimistic-revision controls and rejects a competing stale save", async () => {
     const settings = (await readPlayerUi(owner)).settings;
-    expect(settings).toEqual({ revision: 0, autoLoot: true, hotbar: defaultHotbar });
+    expect(settings).toEqual({ revision: 0, autoLoot: true, analyticsConsent: false, hotbar: defaultHotbar });
     const outcomes = await Promise.allSettled([savePlayerControls(owner, { ...settings, autoLoot: false }), savePlayerControls(owner, { ...settings, hotbar: ["9", "8", "7", "6", "5"] })]);
     expect(outcomes.filter(v => v.status === "fulfilled")).toHaveLength(1);
     expect(outcomes.filter(v => v.status === "rejected")).toHaveLength(1);
