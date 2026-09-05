@@ -129,12 +129,13 @@ for (const viewport of [
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-world-hud.png`) });
       for (const name of ["Inventar", "Charakter", "Aufträge & Kontakte"]) {
         await hud.getByRole("button", { name, exact: true }).click();
+        await expect(dialog).toHaveCSS("opacity", "1");
         const box = (await dialog.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0); expect(box.y).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
         expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
         expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-        await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-${name.split(" ")[0]}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-${name.split(" ")[0]}.png`), animations: "disabled" });
         await dialog.getByRole("button", { name: "Close", exact: true }).click();
       }
       // Walk around the plaza fountain, then north to the Royal Forge.
