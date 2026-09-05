@@ -788,7 +788,7 @@ export const itemInstances = mysqlTable("itemInstances", {
   itemLevel: int("itemLevel").notNull(),
   affixesJson: text("affixesJson").notNull(),
   setKey: varchar("setKey", { length: 96 }),
-  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed"]).default("owned").notNull(),
+  status: mysqlEnum("status", ["owned", "listed", "sold", "consumed", "guild_custody"]).default("owned").notNull(),
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [

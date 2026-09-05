@@ -110,7 +110,7 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
-          const lastLate = journal.entries.find(entry => entry.tag === "0028_aurion_world_checkpoint");
+          const lastLate = journal.entries.find(entry => entry.tag === "0031_aurion_profession_crafting_persistence");
           if (!lastLate || !Number.isSafeInteger(Number(lastLate.when))) throw new Error("late journal timestamp missing");
           const legacyWatermark = Number(lastLate.when) + 10_000_000;
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
@@ -139,7 +139,7 @@ jobs:
           (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
           node dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs dist-production-apply "$GITHUB_SHA"
 
-      - name: Apply 0021 through 0028 despite the legacy watermark
+      - name: Apply 0021 through 0031 despite the legacy watermark
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
           AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
@@ -159,16 +159,16 @@ jobs:
             "0025_aurion_loot_mastery_ethos",
             "0026_aurion_faction_questline_state",
             "0027_aurion_faction_questline_rewards",
-            "0028_aurion_world_checkpoint",
+            "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
           ];
           if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
-          if (receipt.preflight?.absentCount !== 8 || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
-          if (receipt.postflight?.matchCount !== 8 || receipt.postflight?.absentCount !== 0 || receipt.postflight?.driftCount !== 0) throw new Error("postflight schema mismatch");
+          if (receipt.preflight?.absentCount !== 11 || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
+          if (receipt.postflight?.matchCount !== 11 || receipt.postflight?.absentCount !== 0 || receipt.postflight?.driftCount !== 0) throw new Error("postflight schema mismatch");
           if (receipt.appliedMigrationTags?.join(",") !== tags.join(",")) throw new Error("bounded migration set mismatch");
           if (receipt.repairedJournalTags?.length !== 0) throw new Error("unexpected journal repair on clean 0020 prefix");
           NODE
 
-      - name: Prove all 29 journal rows exist while the historical watermark is untouched
+      - name: Prove all 32 journal rows exist while the historical watermark is untouched
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
         run: |
@@ -180,7 +180,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 29) throw new Error("expected 29 journal rows after bounded apply");
+            if (Number(rows[0]?.rowCount) !== 32) throw new Error("expected 32 journal rows after bounded apply");
             if (Number(rows[0]?.maxCreatedAt) !== expectedWatermark) throw new Error("legacy historical watermark was rewritten");
           } finally {
             await connection.end();
@@ -206,7 +206,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 29 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
+            if (Number(rows[0]?.rowCount) !== 32 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
               throw new Error("retry changed historical journal state");
             }
           } finally {

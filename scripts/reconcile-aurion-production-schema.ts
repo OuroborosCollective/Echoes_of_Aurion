@@ -1,10 +1,10 @@
+import { readProductionSchemaContracts } from "./aurionProductionSchemaContracts";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import {
-  classifyMigrationContract,
+  classifyMigrationContracts,
   lateAurionMigrationTags,
-  parseLateMigrationSql,
   type ExpectedMigration,
   type ObservedIndex,
   type ObservedTable,
@@ -93,10 +93,7 @@ function safeIdentifier(value: string): string {
 }
 
 async function expectedMigrations(): Promise<ExpectedMigration[]> {
-  return Promise.all(lateAurionMigrationTags.map(async tag => {
-    const sql = await readFile(path.join(projectRoot, "drizzle", `${tag}.sql`), "utf8");
-    return parseLateMigrationSql(tag, sql);
-  }));
+  return readProductionSchemaContracts(projectRoot);
 }
 
 function unreadableReceipt(error: unknown) {
@@ -177,6 +174,11 @@ async function main() {
       expectedTableNames,
     );
 
+    failureStage = "READ_SCHEMA_CHECKS";
+    const [checkRows] = await connection.query<(RowDataPacket & { TABLE_NAME: string; CONSTRAINT_NAME: string; CHECK_CLAUSE: string })[]>(
+      `SELECT TABLE_NAME,CONSTRAINT_NAME,CHECK_CLAUSE FROM information_schema.check_constraints WHERE constraint_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,CONSTRAINT_NAME`,
+      expectedTableNames,
+    );
     const tableNamesPresent = new Set(columnRows.map(row => row.TABLE_NAME));
     const observedTables = new Map<string, ObservedTable>();
     for (const tableName of tableNamesPresent) {
@@ -194,10 +196,10 @@ async function main() {
         unique: index.unique,
         columns: index.columns.sort((left, right) => left.sequence - right.sequence).map(column => column.name),
       }));
-      observedTables.set(tableName, { name: tableName, columns, indexes });
+      observedTables.set(tableName, { name: tableName, columns, indexes, checks: checkRows.filter(row => row.TABLE_NAME === tableName).map(row => ({ name: row.CONSTRAINT_NAME, expression: row.CHECK_CLAUSE })) });
     }
 
-    const migrations = expected.map(migration => classifyMigrationContract(migration, observedTables));
+    const migrations = classifyMigrationContracts(expected, observedTables);
     failureStage = "READ_DRIZZLE_JOURNAL";
     const journal = await readDrizzleJournal(connection);
     const driftCount = migrations.filter(migration => migration.state === "PRESENT_SCHEMA_DRIFT").length;

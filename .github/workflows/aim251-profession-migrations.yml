@@ -64,3 +64,8 @@ jobs:
         run: pnpm exec drizzle-kit migrate
       - name: Verify existing crafting, mastery, concurrency, output origins and rollback
         run: pnpm vitest run server/craftingReceipt.e2e.test.ts server/aim251ProfessionPersistenceMariaDb.test.ts
+
+      - name: Verify all physical late schema contracts after the complete chain
+        env:
+          AURION_RECONCILIATION_SOURCE_SHA: ${{ github.sha }}
+        run: node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match

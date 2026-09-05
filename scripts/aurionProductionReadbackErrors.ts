@@ -5,6 +5,7 @@ export type ReconciliationFailureStage =
   | "CONNECT_DATABASE"
   | "READ_SCHEMA_COLUMNS"
   | "READ_SCHEMA_INDEXES"
+  | "READ_SCHEMA_CHECKS"
   | "READ_DRIZZLE_JOURNAL"
   | "CLOSE_DATABASE";
 

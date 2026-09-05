@@ -12,6 +12,7 @@ on:
     paths:
       - "scripts/reconcile-aurion-production-schema.ts"
       - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/aurionProductionSchemaContracts.ts"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/aurion-production-schema-readback.yml"
@@ -35,6 +36,12 @@ on:
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
       - "drizzle/0028_aurion_world_checkpoint.sql"
+      - "drizzle/0029_aurion_guild_kingdom_authority.sql"
+      - "drizzle/0030_aurion_guild_bank_economy.sql"
+      - "drizzle/0031_aurion_profession_crafting_persistence.sql"
+      - "drizzle/0001_shocking_doctor_octopus.sql"
+      - "drizzle/0009_rainy_multiple_man.sql"
+      - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
       - ".github/workflows/aurion-root-reconciliation-artifact-proof.yml"
 permissions:
   contents: read
@@ -245,7 +252,7 @@ jobs:
           set -e
           test "$host_resolution_status" -ne 0
 
-      - name: Prove fixed root runner sees all eight migrations absent
+      - name: Prove fixed root runner sees all eleven migrations absent
         run: |
           set -euo pipefail
           sudo /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" > root-absent.json
@@ -255,11 +262,11 @@ jobs:
           if(r.sourceRevision!==process.env.GITHUB_SHA||r.readOnly!==true||r.databaseCredentialReturned!==false) throw new Error("root receipt boundary mismatch");
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.rootFilesystemReadOnly!==true||r.execution.releaseMountedReadOnly!==true||r.execution.environmentMountedReadOnly!==true) throw new Error("root receipt Docker execution mismatch");
           if(r.overallState==="UNREADABLE_FAIL_CLOSED"||r.errorClass==="DATABASE_HOST_UNRESOLVABLE") throw new Error("root runner did not reach the private MariaDB network");
-          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==8) throw new Error("expected eight absent late migrations");
+          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==11) throw new Error("expected eleven absent late migrations");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
 
-      - name: Apply 0021 through 0028 only inside ephemeral proof database
+      - name: Apply 0021 through 0031 only inside ephemeral proof database
         run: |
           set -euo pipefail
           root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
@@ -280,7 +287,7 @@ jobs:
             "0025_aurion_loot_mastery_ethos",
             "0026_aurion_faction_questline_state",
             "0027_aurion_faction_questline_rewards",
-            "0028_aurion_world_checkpoint",
+            "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
           ];
           const db=await mysql.createConnection(process.env.DATABASE_URL);
           try {
@@ -298,7 +305,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("root-match.json","utf8"));
-          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==8) throw new Error("root match proof failed");
+          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==11) throw new Error("root match proof failed");
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.containerExitStatus!==0) throw new Error("root match did not use the expected Docker executor");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary,drizzleJournal:r.drizzleJournal}));
           NODE

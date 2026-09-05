@@ -11,15 +11,16 @@ const tags = [
   "0025_aurion_loot_mastery_ethos",
   "0026_aurion_faction_questline_state",
   "0027_aurion_faction_questline_rewards",
-  "0028_aurion_world_checkpoint",
+  "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
 ];
+const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 
 const requiredFiles = [
   "bin/apply.cjs",
   "bin/mysql-client-config.cjs",
   "bin/reconcile.cjs",
   "drizzle/meta/_journal.json",
-  ...tags.map(tag => `drizzle/${tag}.sql`),
+  ...contractTags.map(tag => `drizzle/${tag}.sql`),
   "deploy/aurion-production-schema-apply",
   "deploy/aurion-production-schema-apply-core",
   "deploy/aurion-production-schema-apply.environment.template",

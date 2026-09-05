@@ -84,7 +84,7 @@ jobs:
           import fs from "node:fs";
           const tags=[
             "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs",
-            "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint",
+            "0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence",
           ];
           const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==="object"?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
           const ledger=JSON.parse(fs.readFileSync("migration-ledger/migration-ledger.json","utf8"));
