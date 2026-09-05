@@ -260,7 +260,14 @@ test("native encounter survives a world return and commits the quest reward once
     await expect(page.getByLabel("Gildenname", { exact: true })).toBeVisible({timeout:10_000});
     await page.getByLabel("Gildenname", { exact: true }).fill("Sternwacht Regression");
     await page.getByLabel("Gildenkürzel", { exact: true }).fill("A269B");
+    const firstBankRead = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/guild/bank" && response.request().method() === "GET"
+    );
     await page.getByRole("button", { name: "Gilde gründen", exact: true }).click({timeout:10_000});
+    const bankResponse = await firstBankRead;
+    const bankBody = await bankResponse.json();
+    expect(bankResponse.status(), JSON.stringify(bankBody)).toBe(200);
+    expect(bankBody).toMatchObject({ success: true, bank: { actorUserId: before[0].userId, playerPointsExact: "20" } });
     const bank = page.getByTestId("guild-bank-panel");
     await expect(bank.getByText("20 AURION", { exact: true })).toBeVisible();
     const [guildRows] = await pool.query<RowDataPacket[]>("SELECT guildId FROM guildMemberships WHERE userId=? AND status='active'", [before[0].userId]);
