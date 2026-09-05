@@ -1749,7 +1749,8 @@ export async function getActiveGuildForUser(userId: number) {
   if(memberships.length>1)throw new Error("MULTIPLE_ACTIVE_GUILDS_NOT_ALLOWED");
   if (!memberships[0]) return undefined;
   const guild = await db.select().from(guilds).where(eq(guilds.id, memberships[0].guildId)).limit(1);
-  return guild[0] ? { guild: guild[0], membership: memberships[0] } : undefined;
+  if(!guild[0])throw new Error("GUILD_MEMBERSHIP_READBACK_MISSING");
+  return { guild: guild[0], membership: memberships[0] };
 }
 
 export async function grantProgress(values: { userId: number; kind: "xp" | "points" | "victory" | "weapon_xp"; delta: number; source: string; reason: string; idempotencyKey: string; weaponTrack?: WeaponTrack }) {

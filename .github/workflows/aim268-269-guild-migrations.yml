@@ -9,6 +9,8 @@ on:
       - "client/src/lib/guildBankClient.ts"
       - "client/src/components/GuildBankPanel*"
       - "server/db.ts"
+      - "server/routers.ts"
+      - "server/guildMineTransport.test.ts"
       - "server/aim269GuildCreationMariaDb.test.ts"
       - "server/guildGovernance*.ts"
       - "server/aim268GuildGovernance*.test.ts"
@@ -31,6 +33,8 @@ on:
       - "client/src/lib/guildBankClient.ts"
       - "client/src/components/GuildBankPanel*"
       - "server/db.ts"
+      - "server/routers.ts"
+      - "server/guildMineTransport.test.ts"
       - "server/aim269GuildCreationMariaDb.test.ts"
       - "server/guildGovernance*.ts"
       - "server/aim268GuildGovernance*.test.ts"
@@ -81,7 +85,7 @@ jobs:
           set -euo pipefail
           pnpm verify:migrations
           pnpm check
-          pnpm vitest run server/aim268GuildGovernance.test.ts
+          pnpm vitest run server/aim268GuildGovernance.test.ts server/guildMineTransport.test.ts
           if test -f server/aim269GuildBank.test.ts; then pnpm vitest run server/aim269GuildBank.test.ts; fi
           git diff --check
       - name: Apply the complete journal into isolated MariaDB
