@@ -5,8 +5,6 @@ on:
     paths:
       - "drizzle/0028_aurion_world_checkpoint.sql"
       - "drizzle/aurionWorldCheckpointSchema.ts"
-      - "drizzle/meta/_journal.json"
-      - "drizzle.config.ts"
       - "server/worldCheckpointProtocol.ts"
       - "server/worldCheckpointProtocol.test.ts"
       - "server/worldCheckpointRepository.ts"
@@ -20,8 +18,6 @@ on:
     paths:
       - "drizzle/0028_aurion_world_checkpoint.sql"
       - "drizzle/aurionWorldCheckpointSchema.ts"
-      - "drizzle/meta/_journal.json"
-      - "drizzle.config.ts"
       - "server/worldCheckpointProtocol.ts"
       - "server/worldCheckpointProtocol.test.ts"
       - "server/worldCheckpointRepository.ts"
@@ -51,6 +47,7 @@ jobs:
       EXPECTED_BASE_SHA: "872d786d506eb4792898a81dbd234e16c681039d"
       EXPECTED_SQL_SHA256: "a52b2efdbd972c96f7ba4918a48cca1c7c37ded4cc63d6bc1859cf26f3fd9da4"
       EXPECTED_MANIFEST_SHA256: "687ac526cee74fe5f600017a845a114aea61952c309418b993f099d0244867bc"
+      DATABASE_URL: mysql://root:aurion-checkpoint-proof-only@127.0.0.1:33328/aurion_world_checkpoint_0028
 
     steps:
       - name: Check out exact source revision
@@ -61,9 +58,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify source identity
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
 
       - uses: pnpm/action-setup@v4
 
@@ -75,7 +70,7 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify static contracts and deterministic protocol
+      - name: Verify static 0028 contracts
         run: |
           set -euo pipefail
           pnpm check
@@ -91,47 +86,35 @@ jobs:
       - name: Start isolated MariaDB 11.4
         run: |
           set -euo pipefail
-          docker run -d \
-            --name "$TEST_DB_CONTAINER" \
+          docker run -d --name "$TEST_DB_CONTAINER" \
             -p "127.0.0.1:${TEST_DB_PORT}:3306" \
             -e MARIADB_ROOT_PASSWORD="$TEST_DB_PASSWORD" \
             -e MARIADB_DATABASE="$TEST_DB_NAME" \
             mariadb:11.4
-          ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="$TEST_DB_PASSWORD" "$TEST_DB_CONTAINER" \
               mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
-              ready=1
-              break
+              exit 0
             fi
             sleep 1
           done
-          test "$ready" -eq 1
+          exit 1
 
       - name: Establish exact schema baseline through 0027
-        env:
-          DATABASE_URL: mysql://root:aurion-checkpoint-proof-only@127.0.0.1:33328/aurion_world_checkpoint_0028
         run: |
           set -euo pipefail
-          backup="$(mktemp)"
-          cp drizzle/meta/_journal.json "$backup"
-          restore_journal() {
-            cp "$backup" drizzle/meta/_journal.json
-            rm -f "$backup"
-          }
-          trap restore_journal EXIT
+          cp drizzle/meta/_journal.json /tmp/aurion-full-journal.json
+          trap 'cp /tmp/aurion-full-journal.json drizzle/meta/_journal.json' EXIT
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const path = "drizzle/meta/_journal.json";
           const journal = JSON.parse(fs.readFileSync(path, "utf8"));
           journal.entries = journal.entries.filter(entry => Number(entry.idx) <= 27);
-          if (journal.entries.length !== 28 || journal.entries.at(-1)?.tag !== "0027_aurion_faction_questline_rewards") {
-            throw new Error("unable to establish exact 0027 baseline");
-          }
+          if (journal.entries.length !== 28 || journal.entries.at(-1)?.tag !== "0027_aurion_faction_questline_rewards") throw new Error("unable to establish exact 0027 baseline");
           fs.writeFileSync(path, `${JSON.stringify(journal, null, 2)}\n`);
           NODE
           pnpm exec drizzle-kit migrate
-          restore_journal
+          cp /tmp/aurion-full-journal.json drizzle/meta/_journal.json
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
           node --input-type=module <<'NODE'
@@ -142,17 +125,26 @@ jobs:
             if (Number(journal[0]?.rowCount) !== 28) throw new Error("0027 baseline journal row count mismatch");
             const [tables] = await db.query("SELECT COUNT(*) AS rowCount FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='aurionWorldCheckpoints'");
             if (Number(tables[0]?.rowCount) !== 0) throw new Error("0028 table exists before migration");
-          } finally {
-            await db.end();
-          }
+          } finally { await db.end(); }
           NODE
 
-      - name: Apply 0028 and read back physical schema
-        env:
-          DATABASE_URL: mysql://root:aurion-checkpoint-proof-only@127.0.0.1:33328/aurion_world_checkpoint_0028
+      - name: Apply only 0028 and read back physical schema
         run: |
           set -euo pipefail
+          cp drizzle/meta/_journal.json /tmp/aurion-full-journal.json
+          trap 'cp /tmp/aurion-full-journal.json drizzle/meta/_journal.json' EXIT
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "drizzle/meta/_journal.json";
+          const journal = JSON.parse(fs.readFileSync(path, "utf8"));
+          journal.entries = journal.entries.filter(entry => Number(entry.idx) <= 28);
+          if (journal.entries.length !== 29 || journal.entries.at(-1)?.tag !== "0028_aurion_world_checkpoint") throw new Error("unable to isolate exact 0028 migration");
+          fs.writeFileSync(path, `${JSON.stringify(journal, null, 2)}\n`);
+          NODE
           pnpm exec drizzle-kit migrate
+          cp /tmp/aurion-full-journal.json drizzle/meta/_journal.json
+          trap - EXIT
+          git diff --exit-code -- drizzle/meta/_journal.json
           node --input-type=module <<'NODE'
           import mysql from "mysql2/promise";
           const db = await mysql.createConnection(process.env.DATABASE_URL);
@@ -164,44 +156,43 @@ jobs:
             if (columns.map(row => row.name).join(",") !== expected.join(",")) throw new Error("0028 physical column contract mismatch");
             const [indexes] = await db.query("SELECT index_name AS name, non_unique AS nonUnique FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='aurionWorldCheckpoints' GROUP BY index_name, non_unique");
             const unique = new Set(indexes.filter(row => Number(row.nonUnique) === 0).map(row => row.name));
-            for (const name of ["PRIMARY","aurionWorldCheckpoints_world_seed_epoch_uq","aurionWorldCheckpoints_revision_uq","aurionWorldCheckpoints_snapshot_hash_uq","aurionWorldCheckpoints_idempotency_uq"]) {
-              if (!unique.has(name)) throw new Error(`0028 unique contract missing: ${name}`);
-            }
-          } finally {
-            await db.end();
-          }
+            for (const name of ["PRIMARY","aurionWorldCheckpoints_world_seed_epoch_uq","aurionWorldCheckpoints_revision_uq","aurionWorldCheckpoints_snapshot_hash_uq","aurionWorldCheckpoints_idempotency_uq"]) if (!unique.has(name)) throw new Error(`0028 unique contract missing: ${name}`);
+          } finally { await db.end(); }
           NODE
 
       - name: Prove checkpoint persistence and exact replay
         env:
-          DATABASE_URL: mysql://root:aurion-checkpoint-proof-only@127.0.0.1:33328/aurion_world_checkpoint_0028
           AURION_WORLD_CHECKPOINT_E2E: "1"
-        run: |
-          set -euo pipefail
-          pnpm vitest run server/worldCheckpointRepository.e2e.test.ts
+        run: pnpm vitest run server/worldCheckpointRepository.e2e.test.ts
 
-      - name: Prove migration retry is a non-mutating no-op
-        env:
-          DATABASE_URL: mysql://root:aurion-checkpoint-proof-only@127.0.0.1:33328/aurion_world_checkpoint_0028
+      - name: Prove 0028 retry is a non-mutating no-op
         run: |
           set -euo pipefail
+          cp drizzle/meta/_journal.json /tmp/aurion-full-journal.json
+          trap 'cp /tmp/aurion-full-journal.json drizzle/meta/_journal.json' EXIT
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "drizzle/meta/_journal.json";
+          const journal = JSON.parse(fs.readFileSync(path, "utf8"));
+          journal.entries = journal.entries.filter(entry => Number(entry.idx) <= 28);
+          fs.writeFileSync(path, `${JSON.stringify(journal, null, 2)}\n`);
+          NODE
           pnpm exec drizzle-kit migrate
+          cp /tmp/aurion-full-journal.json drizzle/meta/_journal.json
+          trap - EXIT
+          git diff --exit-code -- drizzle/meta/_journal.json
           node --input-type=module <<'NODE'
           import mysql from "mysql2/promise";
           const db = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [journal] = await db.query("SELECT COUNT(*) AS rowCount FROM `__drizzle_migrations`");
-            if (Number(journal[0]?.rowCount) !== 29) throw new Error("migration replay changed journal cardinality");
+            if (Number(journal[0]?.rowCount) !== 29) throw new Error("0028 replay changed journal cardinality");
             const [tables] = await db.query("SELECT COUNT(*) AS rowCount FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='aurionWorldCheckpoints'");
             if (Number(tables[0]?.rowCount) !== 1) throw new Error("checkpoint table missing after replay");
-          } finally {
-            await db.end();
-          }
+          } finally { await db.end(); }
           NODE
 
-      - name: Emit sanitized revision-bound proof receipt
-        env:
-          DATABASE_URL: mysql://root:aurion-checkpoint-proof-only@127.0.0.1:33328/aurion_world_checkpoint_0028
+      - name: Emit sanitized revision-bound 0028 receipt
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -209,34 +200,17 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const sqlSha256 = crypto.createHash("sha256").update(fs.readFileSync("drizzle/0028_aurion_world_checkpoint.sql")).digest("hex");
-          if (sqlSha256 !== process.env.EXPECTED_SQL_SHA256) throw new Error("receipt SQL identity mismatch");
           const manifest = JSON.parse(fs.readFileSync("config/aurion-migration-wave-0028-manifest.json", "utf8"));
-          if (manifest.manifestSha256 !== process.env.EXPECTED_MANIFEST_SHA256) throw new Error("receipt manifest identity mismatch");
+          if (sqlSha256 !== process.env.EXPECTED_SQL_SHA256 || manifest.manifestSha256 !== process.env.EXPECTED_MANIFEST_SHA256) throw new Error("receipt source identity mismatch");
           const db = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [journal] = await db.query("SELECT COUNT(*) AS rowCount FROM `__drizzle_migrations`");
             const [tables] = await db.query("SELECT COUNT(*) AS rowCount FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='aurionWorldCheckpoints'");
-            const receipt = {
-              schemaVersion: 1,
-              recordType: "aurion_world_checkpoint_0028_proof",
-              sourceRevision: process.env.EXPECTED_SOURCE_SHA,
-              implementationBaseRevision: process.env.EXPECTED_BASE_SHA,
-              migrationTag: "0028_aurion_world_checkpoint",
-              sqlSha256,
-              manifestSha256: manifest.manifestSha256,
-              journalRowCount: Number(journal[0]?.rowCount),
-              checkpointTablePresent: Number(tables[0]?.rowCount) === 1,
-              replayNoOpVerified: Number(journal[0]?.rowCount) === 29,
-              databaseCredentialReturned: false,
-              productionMutationPerformed: false,
-            };
+            const receipt = { schemaVersion: 1, recordType: "aurion_world_checkpoint_0028_proof", sourceRevision: process.env.EXPECTED_SOURCE_SHA, implementationBaseRevision: process.env.EXPECTED_BASE_SHA, migrationTag: "0028_aurion_world_checkpoint", sqlSha256, manifestSha256: manifest.manifestSha256, journalRowCount: Number(journal[0]?.rowCount), checkpointTablePresent: Number(tables[0]?.rowCount) === 1, replayNoOpVerified: Number(journal[0]?.rowCount) === 29, databaseCredentialReturned: false, productionMutationPerformed: false };
             if (!receipt.checkpointTablePresent || !receipt.replayNoOpVerified) throw new Error("receipt physical readback incomplete");
             fs.writeFileSync("aurion-world-checkpoint-0028-proof.json", `${JSON.stringify(receipt, null, 2)}\n`);
-          } finally {
-            await db.end();
-          }
+          } finally { await db.end(); }
           NODE
-          cat aurion-world-checkpoint-0028-proof.json
 
       - name: Upload proof receipt
         uses: actions/upload-artifact@v4

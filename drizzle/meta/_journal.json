@@ -2,208 +2,35 @@
   "version": "7",
   "dialect": "mysql",
   "entries": [
-    {
-      "idx": 0,
-      "version": "5",
-      "when": 1786588157749,
-      "tag": "0000_oval_fenris",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1786592447209,
-      "tag": "0001_shocking_doctor_octopus",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1786592716789,
-      "tag": "0002_previous_scream",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1786613296290,
-      "tag": "0003_petite_vampiro",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1786613362695,
-      "tag": "0004_worried_hellcat",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1786623485204,
-      "tag": "0005_amusing_steve_rogers",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "5",
-      "when": 1786623761810,
-      "tag": "0006_brainy_the_hand",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "5",
-      "when": 1786627515380,
-      "tag": "0007_dazzling_loki",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "5",
-      "when": 1786627739353,
-      "tag": "0008_condemned_wong",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "5",
-      "when": 1786628557577,
-      "tag": "0009_rainy_multiple_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "5",
-      "when": 1786628962626,
-      "tag": "0010_hesitant_morph",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "5",
-      "when": 1786629129607,
-      "tag": "0011_quick_domino",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "5",
-      "when": 1786672931180,
-      "tag": "0012_greedy_johnny_blaze",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "5",
-      "when": 1787352615291,
-      "tag": "0013_panoramic_agent_brand",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "5",
-      "when": 1787428096901,
-      "tag": "0014_naive_supreme_intelligence",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "5",
-      "when": 1787435870347,
-      "tag": "0015_careless_photon",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "5",
-      "when": 1787768781898,
-      "tag": "0016_wasd_aurion_world",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "5",
-      "when": 1787768928386,
-      "tag": "0017_wasd_aurion_content_seed",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "5",
-      "when": 1787797466524,
-      "tag": "0018_wasd_aurion_exact_skill_progression",
-      "breakpoints": true
-    },
-    {
-      "idx": 19,
-      "version": "5",
-      "when": 1787805012516,
-      "tag": "0019_wasd_aurion_crafting_receipt_inventory",
-      "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "5",
-      "when": 1787841103616,
-      "tag": "0020_wasd_aurion_dialogue_quest_intents",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "5",
-      "when": 1787841103617,
-      "tag": "0021_aurion_global_world_state",
-      "breakpoints": true
-    },
-    {
-      "idx": 22,
-      "version": "5",
-      "when": 1787841103618,
-      "tag": "0022_aurion_world_chunk_deltas",
-      "breakpoints": true
-    },
-    {
-      "idx": 23,
-      "version": "5",
-      "when": 1787841103619,
-      "tag": "0023_aurion_world_presence_epochs",
-      "breakpoints": true
-    },
-    {
-      "idx": 24,
-      "version": "5",
-      "when": 1787841103620,
-      "tag": "0024_aurion_world_epoch_reactions",
-      "breakpoints": true
-    },
-    {
-      "idx": 25,
-      "version": "5",
-      "when": 1787841103621,
-      "tag": "0025_aurion_loot_mastery_ethos",
-      "breakpoints": true
-    },
-    {
-      "idx": 26,
-      "version": "5",
-      "when": 1787841103622,
-      "tag": "0026_aurion_faction_questline_state",
-      "breakpoints": true
-    },
-    {
-      "idx": 27,
-      "version": "5",
-      "when": 1787841103623,
-      "tag": "0027_aurion_faction_questline_rewards",
-      "breakpoints": true
-    },
-    {
-      "idx": 28,
-      "version": "5",
-      "when": 1787841103624,
-      "tag": "0028_aurion_world_checkpoint",
-      "breakpoints": true
-    }
+    { "idx": 0, "version": "5", "when": 1786588157749, "tag": "0000_oval_fenris", "breakpoints": true },
+    { "idx": 1, "version": "5", "when": 1786592447209, "tag": "0001_shocking_doctor_octopus", "breakpoints": true },
+    { "idx": 2, "version": "5", "when": 1786592716789, "tag": "0002_previous_scream", "breakpoints": true },
+    { "idx": 3, "version": "5", "when": 1786613296290, "tag": "0003_petite_vampiro", "breakpoints": true },
+    { "idx": 4, "version": "5", "when": 1786613362695, "tag": "0004_worried_hellcat", "breakpoints": true },
+    { "idx": 5, "version": "5", "when": 1786623485204, "tag": "0005_amusing_steve_rogers", "breakpoints": true },
+    { "idx": 6, "version": "5", "when": 1786623761810, "tag": "0006_brainy_the_hand", "breakpoints": true },
+    { "idx": 7, "version": "5", "when": 1786627515380, "tag": "0007_dazzling_loki", "breakpoints": true },
+    { "idx": 8, "version": "5", "when": 1786627739353, "tag": "0008_condemned_wong", "breakpoints": true },
+    { "idx": 9, "version": "5", "when": 1786628557577, "tag": "0009_rainy_multiple_man", "breakpoints": true },
+    { "idx": 10, "version": "5", "when": 1786628962626, "tag": "0010_hesitant_morph", "breakpoints": true },
+    { "idx": 11, "version": "5", "when": 1786629129607, "tag": "0011_quick_domino", "breakpoints": true },
+    { "idx": 12, "version": "5", "when": 1786672931180, "tag": "0012_greedy_johnny_blaze", "breakpoints": true },
+    { "idx": 13, "version": "5", "when": 1787352615291, "tag": "0013_panoramic_agent_brand", "breakpoints": true },
+    { "idx": 14, "version": "5", "when": 1787428096901, "tag": "0014_naive_supreme_intelligence", "breakpoints": true },
+    { "idx": 15, "version": "5", "when": 1787435870347, "tag": "0015_careless_photon", "breakpoints": true },
+    { "idx": 16, "version": "5", "when": 1787768781898, "tag": "0016_wasd_aurion_world", "breakpoints": true },
+    { "idx": 17, "version": "5", "when": 1787768928386, "tag": "0017_wasd_aurion_content_seed", "breakpoints": true },
+    { "idx": 18, "version": "5", "when": 1787797466524, "tag": "0018_wasd_aurion_exact_skill_progression", "breakpoints": true },
+    { "idx": 19, "version": "5", "when": 1787805012516, "tag": "0019_wasd_aurion_crafting_receipt_inventory", "breakpoints": true },
+    { "idx": 20, "version": "5", "when": 1787841103616, "tag": "0020_wasd_aurion_dialogue_quest_intents", "breakpoints": true },
+    { "idx": 21, "version": "5", "when": 1787841103617, "tag": "0021_aurion_global_world_state", "breakpoints": true },
+    { "idx": 22, "version": "5", "when": 1787841103618, "tag": "0022_aurion_world_chunk_deltas", "breakpoints": true },
+    { "idx": 23, "version": "5", "when": 1787841103619, "tag": "0023_aurion_world_presence_epochs", "breakpoints": true },
+    { "idx": 24, "version": "5", "when": 1787841103620, "tag": "0024_aurion_world_epoch_reactions", "breakpoints": true },
+    { "idx": 25, "version": "5", "when": 1787841103621, "tag": "0025_aurion_loot_mastery_ethos", "breakpoints": true },
+    { "idx": 26, "version": "5", "when": 1787841103622, "tag": "0026_aurion_faction_questline_state", "breakpoints": true },
+    { "idx": 27, "version": "5", "when": 1787841103623, "tag": "0027_aurion_faction_questline_rewards", "breakpoints": true },
+    { "idx": 28, "version": "5", "when": 1787841103624, "tag": "0028_aurion_world_checkpoint", "breakpoints": true },
+    { "idx": 29, "version": "5", "when": 1788565000000, "tag": "0029_aurion_guild_kingdom_authority", "breakpoints": true }
   ]
 }

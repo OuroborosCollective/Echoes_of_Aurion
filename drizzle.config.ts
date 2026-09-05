@@ -6,7 +6,11 @@ if (!connectionString) {
 }
 
 export default defineConfig({
-  schema: ["./drizzle/schema.ts", "./drizzle/aurionWorldCheckpointSchema.ts"],
+  schema: [
+    "./drizzle/schema.ts",
+    "./drizzle/aurionWorldCheckpointSchema.ts",
+    "./drizzle/guildGovernanceSchema.ts",
+  ],
   out: "./drizzle",
   dialect: "mysql",
   dbCredentials: {
