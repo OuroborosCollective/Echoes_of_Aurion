@@ -1,4 +1,4 @@
-import { validConfirmedPresences, ZONE_SNAPSHOT_MAX_CHARACTERS } from "@shared/zonePresenceContract";
+import { validConfirmedPresences, ZONE_SNAPSHOT_MAX_CHARACTERS, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 
 export type ZoneMovementInput = { x: -1 | 0 | 1; z: -1 | 0 | 1 };
 export type ZonePresenceSnapshot = {
@@ -25,6 +25,7 @@ function parseZoneMessage(raw: string): ZoneMessage | null {
     const message = value as Record<string, unknown>;
     if (message.type === "reject") return typeof message.code === "string" ? message as ZoneMessage : null;
     if (message.type !== "welcome" && message.type !== "snapshot") return null;
+    if (message.type === "welcome" && message.protocolVersion !== ZONE_PROTOCOL_VERSION) return { type: "reject", code: "PROTOCOL_VERSION_UNSUPPORTED" };
     const integer = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n);
     if (message.zoneId !== "observatory_threshold" || !integer(message.snapshotSeq) || (message.snapshotSeq as number) < 0 || !integer(message.tick) || (message.tick as number) < 0) return null;
     if (message.type === "welcome" && (typeof message.connectionId !== "string" || !/^[A-Za-z0-9_-]{12,96}$/.test(message.connectionId))) return null;
@@ -52,12 +53,13 @@ export class ZoneMovementClient {
     this.options.onStatus("connecting");
     const socket = new WebSocket(zoneWebSocketUrl(window.location.origin));
     let welcomed = false;
+    let rejected = false;
     let lastSnapshot = -1;
     let lastTick = -1;
     this.socket = socket;
     socket.addEventListener("open", () => {
       if (this.socket !== socket) { socket.close(1000, "retired zone client"); return; }
-      socket.send(JSON.stringify({ type: "hello", ticket, zoneId, protocolVersion: 1 }));
+      socket.send(JSON.stringify({ type: "hello", ticket, zoneId, protocolVersion: ZONE_PROTOCOL_VERSION }));
     });
     socket.addEventListener("message", event => {
       if (this.socket !== socket) return;
@@ -77,13 +79,17 @@ export class ZoneMovementClient {
         this.options.onSnapshot(message);
       } else if (message.type === "reject") {
         this.options.onReject(message.code);
-        if (message.code !== "STALE_CLIENT_SEQUENCE") this.options.onStatus("rejected");
+        if (message.code !== "STALE_CLIENT_SEQUENCE") {
+          rejected = true;
+          this.options.onStatus("rejected");
+          socket.close(1008, "zone command rejected");
+        }
       }
     });
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", event => {
       if (this.socket !== socket) return;
       this.socket = null;
-      this.options.onStatus("closed");
+      if (!rejected) this.options.onStatus(!welcomed && event.code === 1008 ? "rejected" : "closed");
     });
     socket.addEventListener("error", () => { if (this.socket === socket) this.options.onStatus("closed"); });
   }

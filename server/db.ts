@@ -1,3 +1,4 @@
+import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { glbImportStore } from "./glbImportStore";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { readControlSettings } from "./playerUiPersistence";
@@ -28,7 +29,7 @@ import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
 import { AURION_FACTION_QUESTLINE_REWARD_CONTENT_VERSION, AURION_FACTION_QUESTLINE_REWARD_RULESET_VERSION, resolveFactionQuestlineCompletion, getFactionQuestlineRewardDefinition, verifiedFactionCompletion, type FactionQuestlineReward } from "./aurionFactionQuestlineRewardProtocol";
 import { buildOpenWorldSnapshot } from "./openWorldProtocol";
 import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldClientDescriptor, type GlobalWorldPlan } from "./globalWorldProtocol";
-import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
+import { AURION_WORLD_EPOCH_RULESET_VERSION, canonicalWorldEpochRequestKey, createWorldPresenceLease, worldPresenceStoragePosition, worldPresenceGlobalPosition, nextWorldEpoch, type WorldPresenceLease } from "./worldPresenceProtocol";
 import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, toWorldChunkDeltaOverlay, type WorldChunkCoordinate, type WorldChunkDelta, type WorldChunkDeltaKind } from "./worldChunkProtocol";
 import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldChunkAction, type WorldChunkActionIntent } from "./worldChunkActionProtocol";
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "../shared/worldChunkStreamingProtocol";
@@ -188,19 +189,20 @@ export async function recordWorldPresenceLease(values: { userId: number; connect
   const lease = createWorldPresenceLease({ userId: values.userId, connectionId: values.connectionId, zoneId: values.zoneId, position: values.position, now });
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  const local = worldPresenceStoragePosition(lease.position);
   await db.insert(aurionWorldPresenceLeases).values({
     connectionId: lease.connectionId,
     userId: lease.userId,
     zoneId: lease.zoneId,
     chunkX: lease.chunk.x,
     chunkZ: lease.chunk.z,
-    positionX: lease.position.x,
-    positionZ: lease.position.z,
+    positionX: local.x,
+    positionZ: local.z,
     lastSeenAt: now,
     expiresAt: lease.expiresAt,
     disconnectedAt: null,
   }).onDuplicateKeyUpdate({
-    set: { userId: lease.userId, zoneId: lease.zoneId, chunkX: lease.chunk.x, chunkZ: lease.chunk.z, positionX: lease.position.x, positionZ: lease.position.z, lastSeenAt: now, expiresAt: lease.expiresAt, disconnectedAt: null },
+    set: { userId: lease.userId, zoneId: lease.zoneId, chunkX: lease.chunk.x, chunkZ: lease.chunk.z, positionX: local.x, positionZ: local.z, lastSeenAt: now, expiresAt: lease.expiresAt, disconnectedAt: null },
   });
   return lease;
 }
@@ -232,7 +234,7 @@ export async function listActiveWorldPresence(now = operationalDate()): Promise<
   ));
   const latestByUser = new Map<number, { userId: number; zoneId: string; chunk: WorldChunkCoordinate; position: { x: number; z: number } }>();
   rows.sort((left, right) => left.userId - right.userId || right.lastSeenAt.getTime() - left.lastSeenAt.getTime() || left.connectionId.localeCompare(right.connectionId)).forEach(row => {
-    if (!latestByUser.has(row.userId)) latestByUser.set(row.userId, Object.freeze({ userId: row.userId, zoneId: row.zoneId, chunk: Object.freeze({ x: row.chunkX, z: row.chunkZ }), position: Object.freeze({ x: row.positionX, z: row.positionZ }) }));
+    if (!latestByUser.has(row.userId)) latestByUser.set(row.userId, Object.freeze({ userId: row.userId, zoneId: row.zoneId, chunk: Object.freeze({ x: row.chunkX, z: row.chunkZ }), position: Object.freeze(worldPresenceGlobalPosition({ x: row.chunkX, z: row.chunkZ }, { x: row.positionX, z: row.positionZ })) }));
   });
   return Object.freeze(Array.from(latestByUser.values()));
 }
@@ -1030,8 +1032,7 @@ export async function getGameplayProgress(userId: number) {
   };
 }
 
-export const GLOBAL_WORLD_ID = "echoes-of-aurion-global";
-export const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
+export { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 
 /**
  * Resolves the persistent global world plan. Account count is a durable phase-one

@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { worldAssetCatalog, worldAssetRegion, worldAssetRegionSchema, worldAssetsForChunk, worldAssetLod } from "../shared/worldAssetProtocol";
+import { worldAssetCatalog, worldAssetRegion, worldAssetRegionSchema, worldAssetsForChunk, worldAssetLod, legacyWorldAssetRegion, legacyWorldAssetRegionSchema } from "../shared/worldAssetProtocol";
 import { WORLD_CHUNK_COORDINATE_LIMIT } from "../shared/worldChunkProtocol";
 
 describe("worldwide optimized GLB selection",()=>{
+ it("keeps the strict legacy response compatible and negotiates collision metadata through v2",()=>{
+  const legacy=legacyWorldAssetRegion("world","seed",{x:0,z:-1}), current=worldAssetRegion("world","seed",{x:0,z:-1});
+  expect(Object.keys(legacy).sort()).toEqual(["version","catalogHash","worldId","center","placements"].sort());
+  expect(legacy.version).toBe("aurion-world-assets.v1");expect(current.version).toBe("aurion-world-assets.v2");
+  expect(legacy.placements).toEqual(current.placements);
+  expect(legacyWorldAssetRegionSchema.safeParse(legacy).success).toBe(true);
+  expect(legacyWorldAssetRegionSchema.safeParse(current).success).toBe(false);
+  expect(worldAssetRegionSchema.safeParse(legacy).success).toBe(false);
+  expect(worldAssetRegionSchema.safeParse({...current,collisionHash:"unrelated"}).success).toBe(false);
+ });
  it("selects every supplied city and nature model across deterministic server chunks",()=>{
   const selected=new Set<string>();for(let x=-24;x<=24;x++)for(let z=-24;z<=24;z++)for(const p of worldAssetsForChunk("echoes-of-aurion-v1",{x,z}))selected.add(p.assetId);
   expect([...selected].sort()).toEqual(worldAssetCatalog.assets.map(a=>a.id).sort());expect(selected.size).toBe(152);

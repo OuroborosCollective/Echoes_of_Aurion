@@ -1,3 +1,4 @@
+import { splitWorldChunkPositionMm } from "@shared/worldChunkProtocol";
 import * as THREE from "three";
 import { validConfirmedPresences, ZONE_MAX_PRESENCES, type ConfirmedZonePresence } from "@shared/zonePresenceContract";
 
@@ -22,18 +23,22 @@ export class RemotePresenceProjection {
   apply(presences: unknown): void {
     if (this.disposed) return;
     if (!validConfirmedPresences(presences) || !presences.some(p => p.userId === this.selfUserId)) throw new Error("REMOTE_SNAPSHOT_INVALID");
+    const self=presences.find(p=>p.userId===this.selfUserId)!;
+    const center=splitWorldChunkPositionMm(self.position).coordinate;
+    const originX=center.x*64,originZ=center.z*64;
     const others = presences.filter(p => p.userId !== this.selfUserId).sort((a, b) => a.userId - b.userId);
     const transforms = others.map(p => {
       const x = p.position.x / 1000, z = p.position.z / 1000;
       const y = this.elevation(x, z);
       if (!Number.isFinite(y)) throw new Error("REMOTE_ELEVATION_INVALID");
-      return new THREE.Matrix4().makeTranslation(x, y + .85, z);
+      return new THREE.Matrix4().makeTranslation(x-originX, y + .85, z-originZ);
     });
     others.forEach((p, i) => {
       this.mesh.setMatrixAt(i, transforms[i]);
       // Display-only actor tint, stable for the confirmed account identity.
       this.mesh.setColorAt(i, new THREE.Color([0x66bbcc, 0xe3c578, 0xa4d090, 0xc3a1df][p.userId % 4]));
     });
+    this.mesh.position.set(originX, 0, originZ);
     this.mesh.count = others.length;
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;

@@ -1,3 +1,4 @@
+import { ZONE_POSITION_LIMIT, ZONE_POSITION_MIN } from "../shared/zonePresenceContract";
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
 import { AuthoritativeMovementZone, integrateZoneMovement } from "./zoneRuntime";
@@ -10,7 +11,7 @@ describe("authoritative zone movement", () => {
   });
 
   it("clamps the authoritative position at the confirmed zone boundary", () => {
-    expect(integrateZoneMovement({ x: 14_500, z: -14_500 }, { x: 1, z: -1 })).toEqual({ x: 14_500, z: -14_500 });
+    expect(integrateZoneMovement({ x: ZONE_POSITION_LIMIT, z: ZONE_POSITION_MIN }, { x: 1, z: -1 })).toEqual({ x: ZONE_POSITION_LIMIT, z: ZONE_POSITION_MIN });
   });
 
   it("confirms the stationary tick and accepted stop sequence without idle broadcasts", () => {
@@ -34,14 +35,16 @@ describe("authoritative zone movement", () => {
     expect(socket.send).toHaveBeenCalledTimes(count);
   });
 
-  it("publishes zero velocity at the boundary even without another client intent", () => {
+  it("publishes zero velocity at a real nature collider even without another client intent", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
     const zone = new AuthoritativeMovementZone("observatory_threshold");
     const { connectionId } = zone.join({ userId: 2, socket: socket as unknown as WebSocket });
-    zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
-    for (let tick = 0; tick < 43; tick += 1) expect(zone.tick()).toBe(true);
+    zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
+    for (let tick = 0; tick < 165; tick += 1) expect(zone.tick()).toBe(true);
+    zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: -1, z: 0 } });
+    for (let tick = 0; tick < 64; tick += 1) expect(zone.tick()).toBe(true);
     const boundary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
-    expect(boundary.presences[0].position.x).toBe(14_500);
+    expect(boundary.presences[0].position).toEqual({x:-21_760,z:-56_100});
     expect(zone.tick()).toBe(false);
     const stationary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
     expect(stationary.tick).toBe(boundary.tick + 1);

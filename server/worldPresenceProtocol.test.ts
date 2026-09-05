@@ -1,3 +1,4 @@
+import { ZONE_POSITION_LIMIT } from "../shared/zonePresenceContract";
 import { describe, expect, it } from "vitest";
 import {
   AURION_WORLD_EPOCH_RULESET_VERSION,
@@ -34,6 +35,6 @@ describe("worldPresenceProtocol", () => {
   it("rejects client-like invalid presence identity material", () => {
     expect(() => createWorldPresenceLease({ userId: 0, connectionId: "zone_peer_0123456789", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date() })).toThrow("userId");
     expect(() => createWorldPresenceLease({ userId: 1, connectionId: "short", zoneId: "observatory_threshold", position: { x: 0, z: 0 }, now: new Date() })).toThrow("connectionId");
-    expect(() => createWorldPresenceLease({ userId: 1, connectionId: "zone_peer_0123456789", zoneId: "observatory_threshold", position: { x: 14_501, z: 0 }, now: new Date() })).toThrow("position");
+    expect(() => createWorldPresenceLease({ userId: 1, connectionId: "zone_peer_0123456789", zoneId: "observatory_threshold", position: { x: ZONE_POSITION_LIMIT + 1, z: 0 }, now: new Date() })).toThrow("position");
   });
 });

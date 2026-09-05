@@ -1,3 +1,4 @@
+import { splitWorldChunkPositionMm } from "../shared/worldChunkProtocol";
 import {
   WORLD_CHUNK_BASE_REVISION,
   WORLD_CHUNK_SIZE_MM,
@@ -71,6 +72,9 @@ export function resolveWorldChunkAction(input: {
   if (input.actorUserId < 1) throw new Error("actorUserId must be positive");
   const intent = input.intent;
   assertIdempotencyKey(intent.idempotencyKey);
+  const actorChunk = splitWorldChunkPositionMm(input.actorPosition).coordinate;
+  if (actorChunk.x !== intent.coordinate.x || actorChunk.z !== intent.coordinate.z) throw new Error("world action actor is outside the requested chunk");
+  const actorLocal = { x: input.actorPosition.x - intent.coordinate.x * WORLD_CHUNK_SIZE_MM, z: input.actorPosition.z - intent.coordinate.z * WORLD_CHUNK_SIZE_MM };
   const base = generateBaseWorldChunk({ worldId: input.worldId, worldSeed: input.worldSeed, coordinate: intent.coordinate });
   if (intent.expectedBaseRevision !== WORLD_CHUNK_BASE_REVISION || intent.expectedBaseRevision !== base.baseRevision) throw new Error("world action base revision is stale");
   if (intent.expectedBaseHash !== base.deterministicHash) throw new Error("world action base hash is stale");
@@ -78,14 +82,14 @@ export function resolveWorldChunkAction(input: {
   if (intent.kind === "harvest_resource") {
     const resource = base.resources.find(candidate => candidate.id === intent.resourceId);
     if (!resource) throw new Error("world action resource is not in the generated chunk base");
-    assertReachable(input.actorPosition, resource.positionMm);
+    assertReachable(actorLocal, resource.positionMm);
     return Object.freeze({ kind: "resource_depleted", targetId: resource.id, payload: Object.freeze({ yieldKey: resource.yieldKey, resourceKind: resource.kind }) });
   }
 
   if (intent.kind === "place_structure") {
     assertInChunk(intent.xMm, "structure xMm");
     assertInChunk(intent.zMm, "structure zMm");
-    assertReachable(input.actorPosition, { x: intent.xMm, z: intent.zMm });
+    assertReachable(actorLocal, { x: intent.xMm, z: intent.zMm });
     return Object.freeze({
       kind: "structure_placed",
       targetId: derivedTargetId("structure", input.actorUserId, intent.idempotencyKey),
@@ -97,12 +101,12 @@ export function resolveWorldChunkAction(input: {
     if (!/^structure:[1-9][0-9]*:[0-9a-f]{16}$/.test(intent.structureId)) throw new Error("structureId is invalid");
     assertInChunk(intent.xMm, "structure xMm");
     assertInChunk(intent.zMm, "structure zMm");
-    assertReachable(input.actorPosition, { x: intent.xMm, z: intent.zMm });
+    assertReachable(actorLocal, { x: intent.xMm, z: intent.zMm });
     return Object.freeze({ kind: "structure_removed", targetId: intent.structureId, payload: Object.freeze({ xMm: intent.xMm, zMm: intent.zMm }) });
   }
 
   for (const [value, label] of [[intent.fromXmm, "road fromXmm"], [intent.fromZmm, "road fromZmm"], [intent.toXmm, "road toXmm"], [intent.toZmm, "road toZmm"]] as const) assertInChunk(value, label);
-  assertReachable(input.actorPosition, { x: intent.fromXmm, z: intent.fromZmm });
+  assertReachable(actorLocal, { x: intent.fromXmm, z: intent.fromZmm });
   const dx = intent.toXmm - intent.fromXmm;
   const dz = intent.toZmm - intent.fromZmm;
   if (dx * dx + dz * dz > WORLD_CHUNK_ROAD_MAX_LENGTH_MM * WORLD_CHUNK_ROAD_MAX_LENGTH_MM) throw new Error("road length exceeds the authoritative construction limit");

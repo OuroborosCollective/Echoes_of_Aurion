@@ -1,4 +1,4 @@
-import { worldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
+import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
@@ -37,7 +37,10 @@ const companionMemory = new CompanionMemoryStore();
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
-  worldAssets: router({ region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)) }),
+  worldAssets: router({
+    region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => legacyWorldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
+    regionV2: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
+  }),
   groups: router({
     read: protectedProcedure.query(({ ctx }) => readGroupForUser(ctx.user.id)),
     command: protectedProcedure.input(groupCommandSchema).mutation(({ ctx, input }) => commandGroupForUser(ctx.user.id, input)),

@@ -67,7 +67,7 @@ function openWithTicket(url: string, ticket: string): Promise<{ socket: WebSocke
     const socket = new WebSocket(url, { headers: { Origin: "http://127.0.0.1" } });
     const timeout = setTimeout(() => reject(new Error("Timed out while joining the read-only zone.")), 5_000);
     socket.once("error", reject);
-    socket.once("open", () => socket.send(JSON.stringify({ type: "hello", ticket, zoneId: "observatory_threshold", protocolVersion: 1 })));
+    socket.once("open", () => socket.send(JSON.stringify({ type: "hello", ticket, zoneId: "observatory_threshold", protocolVersion: 2 })));
     socket.on("message", raw => {
       const message = JSON.parse(raw.toString("utf8")) as ZoneMessage;
       if (message.type !== "welcome") return;
@@ -139,7 +139,7 @@ describeWithDatabase("zone gateway e2e", () => {
 
       const reused = new WebSocket(runtime.url, { headers: { Origin: "http://127.0.0.1" } });
       await once(reused, "open");
-      reused.send(JSON.stringify({ type: "hello", ticket: issued.ticket, zoneId: "observatory_threshold", protocolVersion: 1 }));
+      reused.send(JSON.stringify({ type: "hello", ticket: issued.ticket, zoneId: "observatory_threshold", protocolVersion: 2 }));
       const [closeCode] = await once(reused, "close") as [number];
       expect(closeCode).toBe(1008);
     } finally {

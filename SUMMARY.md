@@ -40,6 +40,7 @@
 * [Projektaufgaben](todo-qtgyichn.md)
 * [Echoes of Aurion — Erweiterung und Bereitstellung](todo.md)
 * [docs](docs/README.md)
+  * [Naturkollision und weltweite Bewegung](docs/world-nature-collision.md)
   * [Aurion Migration Chain Reconciliation — 2026-08-28](docs/AURION_MIGRATION_CHAIN_RECONCILIATION_2026-08-28.md)
   * [Aurion Questline Continuation Audit](docs/AURION_QUESTLINE_CONTINUATION_AUDIT.md)
   * [Aurion Questline Continuation Plan](docs/AURION_QUESTLINE_CONTINUATION_PLAN.md)

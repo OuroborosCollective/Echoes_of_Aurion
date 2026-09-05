@@ -10,9 +10,10 @@ describe("zone protocol", () => {
   });
 
   it("accepts only a versioned hello before a zone connection is authenticated", () => {
-    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 1 })).not.toBeNull();
-    expect(parseZoneHello({ type: "input", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 1 })).toBeNull();
-    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(23), zoneId: "observatory_threshold", protocolVersion: 1 })).toBeNull();
+    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 2 })).not.toBeNull();
+    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 1 })).toBeNull();
+    expect(parseZoneHello({ type: "input", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 2 })).toBeNull();
+    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(23), zoneId: "observatory_threshold", protocolVersion: 2 })).toBeNull();
   });
 
   it("accepts bounded integer movement intents and rejects invalid sequences or vectors", () => {
