@@ -72,6 +72,20 @@ export default function CommunityOverlay({
   onStarterCharacterSelected: (character: StarterCharacter) => void;
 }) {
   const [panel, setPanel] = useState<CommunityPanel>(null);
+  const [openedFromWorld, setOpenedFromWorld] = useState(false);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const requested = (event as CustomEvent<unknown>).detail;
+      if (!requested || typeof requested !== "object" || !("panel" in requested)) return;
+      if (!["chat", "partners", "market", "crafting"].includes(String(requested.panel))) return;
+      setPanel(requested.panel as CommunityPanel);
+      setOpenedFromWorld(true);
+    };
+    const reset = () => { setOpenedFromWorld(false); setPanel(null); };
+    window.addEventListener("aurion:open-community", open);
+    window.addEventListener("aurion:return-to-tower", reset);
+    return () => { window.removeEventListener("aurion:open-community", open); window.removeEventListener("aurion:return-to-tower", reset); };
+  }, []);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [chatBody, setChatBody] = useState("");
   const [requestNote, setRequestNote] = useState("");
@@ -228,7 +242,7 @@ export default function CommunityOverlay({
     if (next !== "forum") setSelectedThreadId(null);
   };
 
-  return <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen}>
+  return <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18} /><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
     <div id="aurion-community-dock" className="community-dock">
       <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("chat")} aria-label="Expeditionschat öffnen"><MessageCircle size={16} /><span>CHAT</span></button>

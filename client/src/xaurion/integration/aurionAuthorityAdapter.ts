@@ -61,6 +61,8 @@ export function bindAurionAuthorityProjection(
   },
 ): void {
   const player = engine.player;
+  // Standalone AX1 actors are fixtures, not connected Aurion accounts.
+  engine.simPlayers.dispose();
   const reject = { success: false, message: "Aurion server authority is required for this action." } as const;
   const worldCore = attachAurionWorldCore(engine);
   const baseStop = engine.stop.bind(engine);

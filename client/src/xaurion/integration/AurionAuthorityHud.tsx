@@ -1,0 +1,100 @@
+import { useEffect, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { VirtualJoystick } from "../components/VirtualJoystick";
+import { projectPlayerReadback, projectReadback, questReadbackSchema, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
+import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
+
+type Panel = "inventory" | "character" | "quests" | "map" | null;
+const classes = { unbound: "Noch keine Klasse", vanguard: "Vorhut", seer: "Seher", warden: "Hüter" } as const;
+const titles = { inventory: "Inventar", character: "Charakter", quests: "Aufträge & Kontakte", map: "Weltatlas" } as const;
+const community = (panel: "chat" | "partners" | "market" | "crafting") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
+
+export function AurionAuthorityHud({ userId, connected, position, onMove, onAction }: {
+  userId: number; connected: boolean; position?: { x: number; z: number };
+  onMove: (forward: number, right: number) => void; onAction: (command: AurionGameplayCommand) => void;
+}) {
+  const [panel, setPanel] = useState<Panel>(null);
+  const [message, setMessage] = useState("");
+  const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
+  const playerQuery = trpc.player.me.useQuery(undefined, options);
+  const questQuery = trpc.gameplay.progress.useQuery(undefined, options);
+  const worldQuery = trpc.gameplay.openWorld.useQuery(undefined, options);
+  const player = projectPlayerReadback(playerQuery, userId);
+  const quests = projectReadback(questReadbackSchema, questQuery, value => value.quests.length === 0);
+  const world = projectReadback(worldReadbackSchema, worldQuery);
+  const accept = trpc.gameplay.acceptQuest.useMutation();
+  const complete = trpc.gameplay.completeQuest.useMutation();
+  const chooseClass = trpc.player.chooseClass.useMutation();
+  const setWeapon = trpc.player.setWeaponLoadout.useMutation();
+  const pending = accept.isPending || complete.isPending || chooseClass.isPending || setWeapon.isPending;
+  const fresh = connected && player.state === "live" && !pending;
+  const act = async (operation: () => Promise<unknown>) => {
+    if (!fresh) return;
+    setMessage("");
+    try {
+      await operation();
+      await Promise.all([playerQuery.refetch(), questQuery.refetch()]);
+      setMessage("Änderung vom Server bestätigt.");
+    } catch { setMessage("Änderung nicht bestätigt. Bitte aktualisieren und erneut versuchen."); }
+  };
+  useEffect(() => {
+    const refresh = () => { void playerQuery.refetch(); void questQuery.refetch(); };
+    const open = () => setPanel("quests");
+    window.addEventListener("aurion:authoritative-action", refresh);
+    window.addEventListener("aurion:open-world-contacts", open);
+    return () => { window.removeEventListener("aurion:authoritative-action", refresh); window.removeEventListener("aurion:open-world-contacts", open); };
+  }, [playerQuery.refetch, questQuery.refetch]);
+  const profile = player.data?.profile;
+  const inventory = player.data?.inventory;
+
+  return <div className="aurion-authority-hud" data-testid="authoritative-world-hud">
+    <section className="aurion-authority-hud__profile" aria-label="Serverbestätigter Charakter" data-state={player.state}>
+      <small role="status">{readbackLabels[player.state]}</small>
+      {profile ? <><b>{classes[profile.selectedClass]} · Stufe {profile.level}</b><span>{profile.totalXp} EP · {profile.aurionPoints} AURION</span><span>{profile.victories} Siege</span></> : <b>Charakterdaten ausstehend</b>}
+    </section>
+    <nav className="aurion-authority-hud__menu" aria-label="Weltmenü">
+      {(Object.keys(titles) as Exclude<Panel, null>[]).map(key => <button key={key} onClick={() => setPanel(key)}>{titles[key]}</button>)}
+      <button onClick={() => community("partners")}>Gruppe</button><button onClick={() => community("chat")}>Chat</button>
+      <button onClick={() => community("market")}>Handel</button><button onClick={() => community("crafting")}>Handwerk</button>
+    </nav>
+    <div className="aurion-authority-hud__move"><VirtualJoystick onMove={onMove} /></div>
+    <div className="aurion-authority-hud__actions" aria-label="Aktionen">
+      {[1, 2, 3, 4, 5].map(slot => <button key={slot} disabled={!connected || panel !== null} onClick={() => onAction(String(slot) as AurionGameplayCommand)} aria-label={`Aktion ${slot}`}>{slot}</button>)}
+      <button disabled={!connected || panel !== null} onClick={() => onAction("E")}>Interaktion</button>
+    </div>
+    <Dialog open={panel !== null} onOpenChange={open => { if (!open) setPanel(null); }}>
+      <DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop">
+        <DialogTitle>{panel ? titles[panel] : "Aurion"}</DialogTitle>
+        <DialogDescription>Deine gespeicherten Fortschritte und bestätigten Weltinformationen.</DialogDescription>
+        {message && <p role="status">{message}</p>}
+        {panel === "inventory" && <div data-state={player.state}>
+          <p role="status">{readbackLabels[player.state]}</p>
+          {inventory?.length === 0 && <p>Dein Inventar ist leer.</p>}
+          {inventory?.map(item => <article key={item.id} className="aurion-authority-hud__card"><b>{item.baseItemKey.replaceAll("_", " ")}</b><p>{item.quality} · Stufe {item.itemLevel}</p>{item.affixes.map(affix => <p key={`${affix.slot}:${affix.key}`}>{affix.key}: {Object.entries(affix.stats).map(([key, value]) => `${key} ${value}`).join(", ")}</p>)}</article>)}
+          <p>Gegenstände handeln und herstellen:</p><button onClick={() => { setPanel(null); community("market"); }}>Handel öffnen</button><button onClick={() => { setPanel(null); community("crafting"); }}>Handwerk öffnen</button>
+        </div>}
+        {panel === "character" && <div data-state={player.state}>
+          <p role="status">{readbackLabels[player.state]}</p>
+          {profile && <><p>Klasse: {classes[profile.selectedClass]}</p><p>Stufe {profile.level} · Gesamt-EP {profile.totalXp}</p><p>{profile.aurionPoints} AURION · {profile.victories} Siege</p>
+            <fieldset disabled={!fresh}><legend>Klasse wählen</legend>{(["vanguard", "seer", "warden"] as const).map(playerClass => <button key={playerClass} aria-pressed={profile.selectedClass === playerClass} onClick={() => void act(() => chooseClass.mutateAsync({ playerClass }))}>{classes[playerClass]}</button>)}</fieldset>
+            <fieldset disabled={!fresh}><legend>Waffendisziplin</legend>{(["blade", "staff", "spear", "focus"] as const).map(weaponTrack => <button key={weaponTrack} aria-pressed={player.data?.weaponLoadout?.weaponTrack === weaponTrack} onClick={() => void act(() => setWeapon.mutateAsync({ weaponTrack }))}>{weaponTrack}</button>)}</fieldset>
+            <h3>Waffenmeisterschaft</h3>{player.data?.weaponMasteries.length === 0 && <p>Noch keine Meisterschaft erworben.</p>}{player.data?.weaponMasteries.map(item => <p key={item.weaponTrack}>{item.weaponTrack} · Stufe {item.level} · {item.xp} EP</p>)}</>}
+        </div>}
+        {panel === "quests" && <div data-state={quests.state}>
+          <p role="status">{readbackLabels[quests.state]}</p>
+          {quests.data?.quests.map(quest => <article key={quest.key} className="aurion-authority-hud__card"><b>{quest.title}</b><p>{quest.giver} · ab Stufe {quest.requiredLevel}</p><p>{quest.objective}</p><p>{quest.readyToTurnIn ? "Bereit zur Abgabe" : ({ locked: "Gesperrt", available: "Verfügbar", active: "Aktiv", completed: "Abgeschlossen" } as const)[quest.state]}</p>
+            {quest.state === "available" && <button disabled={!fresh || quests.state !== "live"} onClick={() => void act(() => accept.mutateAsync({ questKey: quest.key }))}>Bei {quest.giver} annehmen</button>}
+            {quest.readyToTurnIn && <button disabled={!fresh || quests.state !== "live"} onClick={() => void act(() => complete.mutateAsync({ questKey: quest.key, giver: quest.giver }))}>Bei {quest.giver} abgeben</button>}
+          </article>)}
+          {quests.data && <p>Schlüssel: {quests.data.keys.length ? quests.data.keys.join(", ") : "Keine"}</p>}
+        </div>}
+        {panel === "map" && <div data-state={world.state}>
+          <p role="status">{readbackLabels[world.state]}</p>
+          {world.data && <><p>Weltepoche {world.data.globalWorld.epoch}</p><p className="aurion-authority-hud__hash">Welt-Hash: {world.data.globalWorld.deterministicHash}</p></>}
+          {position && connected ? <p>Bestätigte Position: {(position.x / 1000).toFixed(2)} / {(position.z / 1000).toFixed(2)}</p> : <p>Position wartet auf die Zonenverbindung.</p>}
+        </div>}
+      </DialogContent>
+    </Dialog>
+  </div>;
+}
