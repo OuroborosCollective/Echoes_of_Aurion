@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import GuildBankPanel from "./GuildBankPanel";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -243,7 +244,7 @@ export default function CommunityOverlay({
     if (next !== "forum") setSelectedThreadId(null);
   };
 
-  return <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
+  const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18} /><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
     <div id="aurion-community-dock" className="community-dock">
       <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => open("chat")} aria-label="Expeditionschat öffnen"><MessageCircle size={16} /><span>CHAT</span></button>
@@ -349,4 +350,5 @@ export default function CommunityOverlay({
       </div>}
     </section>}
   </aside>;
+  return openedFromWorld && panel !== null ? createPortal(overlay, document.body) : overlay;
 }

@@ -257,9 +257,10 @@ test("native encounter survives a world return and commits the quest reward once
     await hud.getByRole("button", { name: "Charakter", exact: true }).click();
     await dialog.getByRole("button", { name: "Gilde öffnen", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Gildenverwaltung", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Gildenname", { exact: true })).toBeVisible({timeout:10_000});
     await page.getByLabel("Gildenname", { exact: true }).fill("Sternwacht Regression");
     await page.getByLabel("Gildenkürzel", { exact: true }).fill("A269B");
-    await page.getByRole("button", { name: "Gilde gründen", exact: true }).click();
+    await page.getByRole("button", { name: "Gilde gründen", exact: true }).click({timeout:10_000});
     const bank = page.getByTestId("guild-bank-panel");
     await expect(bank.getByText("20 AURION", { exact: true })).toBeVisible();
     const [guildRows] = await pool.query<RowDataPacket[]>("SELECT guildId FROM guildMemberships WHERE userId=? AND status='active'", [before[0].userId]);
