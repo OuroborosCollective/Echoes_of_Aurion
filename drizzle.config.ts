@@ -13,6 +13,7 @@ export default defineConfig({
     "./drizzle/guildBankSchema.ts",
     "./drizzle/professionPersistenceSchema.ts",
     "./drizzle/groupInstanceSchema.ts",
+    "./drizzle/playerUiSchema.ts",
   ],
   out: "./drizzle",
   dialect: "mysql",

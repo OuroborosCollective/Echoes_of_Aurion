@@ -1,0 +1,21 @@
+.ax1-imported-ui { --ax1-surface:#081a2e; --ax1-deep:#040d1a; --ax1-gold:#fbbf24; --ax1-cyan:#00f0ff; z-index:240; pointer-events:auto; color:#e5e7eb; font-family:system-ui,sans-serif; }
+.ax1-imported-ui button { cursor:pointer; touch-action:manipulation; }
+.ax1-imported-ui button:disabled { opacity:.45; cursor:not-allowed; }
+.ax1-imported-ui :focus-visible { outline:2px solid var(--ax1-cyan); outline-offset:3px; }
+.ax1-imported-ui select,.ax1-imported-ui input { background:#040d1a; color:#e5e7eb; border:1px solid #475569; border-radius:7px; padding:5px; max-width:100%; }
+.ax1-window { min-width:0; }.ax1-window-header { flex-wrap:wrap; flex-shrink:0; }
+.ax1-crest { width:40px; height:40px; flex-shrink:0; display:grid; place-items:center; color:var(--ax1-cyan); background:#f59e0b26; border:1px solid #f59e0b80; border-radius:12px; }
+.ax1-close { padding:9px; border:1px solid #374151; border-radius:10px; background:#0006; color:#d1d5db; }
+.ax1-badge { display:inline-block; padding:4px 8px; font:10px ui-monospace,monospace; border-radius:9px; color:var(--ax1-gold); background:#0009; border:1px solid #f59e0b55; overflow-wrap:anywhere; }
+.ax1-tab { display:inline-flex; align-items:center; justify-content:center; gap:5px; border:1px solid #374151; border-radius:8px; padding:7px 9px; font-size:11px; background:#0007; color:#cbd5e1; }
+.ax1-tab[aria-pressed=true],.ax1-tab[aria-selected=true] { color:var(--ax1-gold); border-color:var(--ax1-gold); background:#fbbf2420; }
+.ax1-primary { display:inline-flex; justify-content:center; gap:7px; border-radius:11px; padding:10px 13px; color:#17100a; background:linear-gradient(100deg,#f59e0b,#fde047); font-weight:700; font-size:12px; }
+.ax1-notice { padding:9px 12px; margin-top:8px; background:#002b38; color:#a5f3fc; border:1px solid #155e75; border-radius:10px; font-size:12px; }
+.ax1-bag-item,.ax1-bag-empty { position:relative; aspect-ratio:1; min-width:0; border:1px solid #374151; border-radius:9px; background:#0006; display:grid; place-items:center; }
+.ax1-bag-item>span { font-size:25px; }.ax1-bag-item>small { position:absolute; bottom:1px; right:3px; font-size:8px; max-width:95%; overflow:hidden; }
+.ax1-bag-item[aria-pressed=true] { outline:2px solid var(--ax1-gold); outline-offset:1px; }.ax1-loot-dot { position:absolute; top:0; right:3px; color:var(--ax1-gold); }
+.ax1-quality-normal { border-color:#64748b; color:#e2e8f0; background:#0f172a80; }.ax1-quality-magic { border-color:#22d3ee; color:#67e8f9; background:#08334480; }
+.ax1-quality-rare { border-color:#facc15; color:#fde047; background:#42200680; }.ax1-quality-set { border-color:#34d399; color:#6ee7b7; background:#064e3b80; }
+.ax1-quality-unique { border-color:#fb923c; color:#fdba74; background:#43140780; }.ax1-quality-mythic { border-color:#c084fc; color:#e9d5ff; background:#3b076480; }
+.ax1-imported-ui .custom-scrollbar { scrollbar-width:thin; scrollbar-color:#b8860b #040d1a; }
+@media(max-width:600px) { .ax1-window { padding:12px; } .ax1-window h3 { font-size:13px; } .ax1-window-header>div { min-width:0; } .ax1-paperdoll-slot { flex-wrap:wrap; } .ax1-paperdoll-slot>button:last-child:not(:first-child) { width:100%; } }

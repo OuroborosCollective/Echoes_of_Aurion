@@ -89,16 +89,18 @@ for (const viewport of [
       const hud = page.getByTestId("authoritative-world-hud");
       await expect(hud.getByText("0 EP · 0 AURION", { exact: true })).toBeVisible();
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();
-      await expect(page.getByRole("dialog").getByText("Dein Inventar ist leer.", { exact: true })).toBeVisible();
-      await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+      await expect(page.getByRole("dialog").getByText("Keine Gegenstände in dieser Ansicht.", { exact: true })).toBeVisible();
+      await page.getByRole("dialog").getByRole("button", { name: "Inventar schließen", exact: true }).click();
       await hud.getByRole("button", { name: "Charakter", exact: true }).click();
       const characterDialog = page.getByRole("dialog");
       await expect(characterDialog.getByRole("button", { name: "Hüter", exact: true })).toBeDisabled();
-      await characterDialog.getByRole("button", { name: "staff", exact: true }).click();
+      await characterDialog.getByRole("button", { name: "Skills & Meisterschaft", exact: true }).click();
+      await characterDialog.getByRole("button", { name: /^✦ Stab/ }).click();
+      await characterDialog.getByRole("button", { name: "Waffendisziplin wählen", exact: true }).click();
       await expect(characterDialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
       const [chosen] = await pool.query<RowDataPacket[]>("SELECT p.selectedClass, w.weaponTrack FROM playerProfiles p JOIN weaponLoadouts w ON w.userId=p.userId WHERE p.userId=?", [latestPresence!.userId]);
       expect(chosen[0]).toMatchObject({ selectedClass: "unbound", weaponTrack: "staff" });
-      await characterDialog.getByRole("button", { name: "Close", exact: true }).click();
+      await characterDialog.getByRole("button", { name: "Charakter schließen", exact: true }).click();
       await hud.getByRole("button", { name: "Weltatlas", exact: true }).click();
       await expect(page.getByRole("dialog").getByText(`Welt-Hash: ${confirmedWorld!.deterministicHash}`, { exact: true })).toBeVisible();
       await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
@@ -144,10 +146,15 @@ test("two authenticated accounts see the same confirmed movement and departure",
   const left = await leftContext.newPage(), right = await rightContext.newPage();
   type Presence = { userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
   let leftView: Presence[] = [], rightView: Presence[] = [];
+  let leftStopSequence = 0;
   const errors: string[] = [];
   const observe = (page: Page, update: (presences: Presence[]) => void) => {
     page.on("pageerror", error => errors.push(error.message));
-    page.on("websocket", socket => { if (socket.url().endsWith("/v1/ws")) socket.on("framereceived", frame => {
+    page.on("websocket", socket => { if (!socket.url().endsWith("/v1/ws")) return;
+      if (page === left) socket.on("framesent", frame => {
+        try { const value = JSON.parse(String(frame.payload)); if (value.type === "move" && value.input?.x === 0 && value.input?.z === 0) leftStopSequence = value.clientSeq; } catch { /* Only actual stop commands count. */ }
+      });
+      socket.on("framereceived", frame => {
       try { const value = JSON.parse(String(frame.payload)); if (["welcome", "snapshot"].includes(value.type) && Array.isArray(value.presences)) update(value.presences); } catch { /* Invalid frames cannot satisfy assertions. */ }
     }); });
   };
@@ -177,10 +184,21 @@ test("two authenticated accounts see the same confirmed movement and departure",
     await expect(left.getByTestId("confirmed-remote-player-count")).toHaveText("1 andere Explorer verbunden");
     await expect(right.getByTestId("confirmed-remote-player-count")).toHaveText("1 andere Explorer verbunden");
     const initial = { ...rightView.find(p => p.userId === leftUserId)!.position };
+    const stopBeforeMovement = leftStopSequence;
     await left.keyboard.down("w");
-    try { await expect.poll(() => rightView.find(p => p.userId === leftUserId)?.position.z !== initial.z, { timeout: 15_000 }).toBe(true); }
+    try { await expect.poll(() => { const actor = rightView.find(p => p.userId === leftUserId); return Boolean(actor && actor.position.z !== initial.z); }, { timeout: 15_000 }).toBe(true); }
     finally { await left.keyboard.up("w"); }
-    await expect.poll(() => JSON.stringify(rightView.find(p => p.userId === leftUserId)?.position) === JSON.stringify(leftView.find(p => p.userId === leftUserId)?.position)).toBe(true);
+    // A position comparison while frames are still queued does not prove convergence.
+    // Require both sockets to acknowledge the actual stop, then compare fixed-point values.
+    try {
+      await expect.poll(() => leftStopSequence, { timeout: 15_000 }).toBeGreaterThan(stopBeforeMovement);
+      await expect.poll(() => {
+        const a = leftView.find(p => p.userId === leftUserId), b = rightView.find(p => p.userId === leftUserId);
+        return Boolean(a && b && a.lastAcceptedClientSeq >= leftStopSequence && b.lastAcceptedClientSeq >= leftStopSequence && a.position.x === b.position.x && a.position.z === b.position.z);
+      }, { timeout: 15_000 }).toBe(true);
+    } finally {
+      await testInfo.attach("movement-stop-readback", { body: JSON.stringify({ leftStopSequence, leftView, rightView }), contentType: "application/json" });
+    }
     await expect.poll(async () => {
       const [rows] = await pool.query<RowDataPacket[]>("SELECT positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL", [leftUserId]);
       return rows.some(row => row.positionZ !== initial.z);
@@ -224,7 +242,7 @@ test("native encounter survives a world return and commits the quest reward once
     await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
     await dialog.getByRole("button", { name: "Bei Lyra annehmen", exact: true }).click();
     await expect(dialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
-    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();
     await hud.getByRole("button", { name: "Begegnungen", exact: true }).click();
     await dialog.getByRole("button", { name: "Sternwarte Asterion beginnen", exact: true }).click();
     const attack = hud.getByRole("button", { name: "Angreifen", exact: true });
@@ -253,7 +271,7 @@ test("native encounter survives a world return and commits the quest reward once
     await expect(dialog.getByRole("button", { name: "Bei Lyra abgeben", exact: true })).toHaveCount(0);
     const [reward] = await pool.query<RowDataPacket[]>("SELECT p.totalXp, p.aurionPoints, q.state FROM playerProfiles p JOIN gameplayQuestProgress q ON q.userId=p.userId WHERE p.userId=? AND q.questKey='astral_call'", [before[0].userId]);
     expect(reward[0]).toMatchObject({ totalXp: 122, aurionPoints: 20, state: "completed" });
-    await dialog.getByRole("tab", { name: "Kontakte", exact: true }).click();
+    await dialog.getByRole("button", { name: "Kontakte", exact: true }).click();
     await expect(dialog.getByTestId("npc-standing-panel").getByText("Neutral · Ansehen 5", { exact: true })).toBeVisible();
     await expect(dialog.getByTestId("npc-decision-panel").getByText("Noch keine bestätigten Verhaltensentscheidungen für Lyra und Orun.", { exact: true })).toBeVisible();
     const [relationships] = await pool.query<RowDataPacket[]>("SELECT scopeKey,eventJson,eventHash FROM aurionScopedMasteryEvents WHERE userId=?", [before[0].userId]);
@@ -261,9 +279,9 @@ test("native encounter survives a world return and commits the quest reward once
     for (const row of relationships) expect(createHash("sha256").update(row.eventJson).digest("hex")).toBe(row.eventHash);
     expect(relationships.map(row => row.scopeKey).sort()).toEqual(["v1:npc_relation:lyra", "v1:social:friendship"]);
     expect(errors).toEqual([]);
-    await dialog.getByRole("button", { name: "Close", exact: true }).click();
-    await hud.getByRole("button", { name: "Charakter", exact: true }).click();
-    await dialog.getByRole("button", { name: "Gilde öffnen", exact: true }).click();
+    await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();
+    await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
+    await hud.getByRole("button", { name: "Gilde öffnen", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Gildenverwaltung", exact: true })).toBeVisible();
     await expect(page.getByLabel("Gildenname", { exact: true })).toBeVisible({timeout:10_000});
     await page.getByLabel("Gildenname", { exact: true }).fill("Sternwacht Regression");

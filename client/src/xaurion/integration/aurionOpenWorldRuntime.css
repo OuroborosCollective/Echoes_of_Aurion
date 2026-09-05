@@ -89,7 +89,7 @@
  .aurion-encounter[data-active=false] button>span{display:none}
  .aurion-authority-hud__move{left:12px;bottom:max(18px,env(safe-area-inset-bottom))}
  .aurion-authority-hud__move>div{width:96px;height:96px}
- .aurion-authority-hud__actions{right:12px;display:grid;grid-template-columns:repeat(3,44px);gap:7px;padding:7px}
+ .aurion-authority-hud__actions{right:12px;display:grid;grid-template-columns:repeat(4,44px);gap:7px;padding:7px}
  .aurion-authority-hud__actions button{width:44px;height:44px}
  .aurion-authority-hud__dialog{padding:18px;gap:12px;border-radius:18px}
  .aurion-authority-hud__dialog h2{font-size:21px}
@@ -101,3 +101,5 @@
  .xaurion-runtime__bridge-status{top:91px}.aurion-encounter{top:121px}
  .ax1-npc-prompt{bottom:106px}.aurion-authority-hud__dialog{max-height:calc(100dvh - 16px);padding:16px}
 }
+.aurion-ui-feedback{position:absolute;left:50%;bottom:160px;transform:translateX(-50%);max-width:min(90vw,430px);padding:8px 12px;border-radius:10px;background:#041322ed;color:#bae6fd;border:1px solid #155e75;font-size:12px;pointer-events:none}
+.aurion-authority-hud__actions button[aria-pressed=true]{border-color:#34d399;color:#6ee7b7;background:#064e3bcc}

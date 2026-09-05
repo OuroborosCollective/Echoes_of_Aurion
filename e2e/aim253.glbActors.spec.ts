@@ -136,8 +136,20 @@ for (const viewport of [
         expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
         expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
         await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-${name.split(" ")[0]}.png`), animations: "disabled" });
-        await dialog.getByRole("button", { name: "Close", exact: true }).click();
+        await dialog.getByRole("button", { name: name === "Inventar" ? "Inventar schließen" : name === "Charakter" ? "Charakter schließen" : "Quest-Buch schließen", exact: true }).click();
       }
+      await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
+      await dialog.getByRole("button", { name: "Bei Lyra annehmen", exact: true }).click();
+      await expect(dialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
+      await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();
+      await hud.getByRole("button", { name: "Begegnungen", exact: true }).click();
+      await dialog.getByRole("button", { name: "Sternwarte Asterion beginnen", exact: true }).click();
+      const confirmedAttack=page.waitForResponse(r=>r.url().includes("gameplay.act")&&r.status()===200);
+      await hud.getByRole("button", { name: "Angriff", exact: true }).click();await confirmedAttack;
+      await expect.poll(async()=> (await pose(player))?.clip,{intervals:[40,80,100]}).toMatch(/attack|fight/i);
+      const attackPose=(await pose(player))!.bonePose;
+      await expect.poll(async()=> (await pose(player))?.bonePose,{intervals:[40,80,100]}).not.toBe(attackPose);
+      await page.screenshot({path:testInfo.outputPath(`${viewport.name}-confirmed-glb-attack.png`)});
       // Walk around the plaza fountain, then north to the Royal Forge.
       await expect.poll(() => presence?.userId).toBeGreaterThan(0);
       const origin = { ...presence!.position };
@@ -154,9 +166,9 @@ for (const viewport of [
       await expect.poll(async () => (await pose(player))?.clip).toBe("Idle");
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-near-smith.png`) });
       await page.getByRole("button", { name: "Schmied ansprechen", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Sternwartenschmiede", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "HANDWERK & BERUFE", exact: true })).toBeVisible();
       await expect.poll(async () => (await pose(smith))?.clip, { intervals: [50, 100, 200] }).toBe("ShopInteract");
-      const crafting = page.locator(".community-overlay[data-opened-from-world=true] .community-panel");
+      const crafting = page.getByRole("dialog");
       const craftBox = (await crafting.boundingBox())!;
       expect(craftBox.y).toBeGreaterThanOrEqual(0);
       expect(craftBox.y + craftBox.height).toBeLessThanOrEqual(viewport.height + 1);

@@ -151,7 +151,7 @@ function makeArtifact() {
     "0026_aurion_faction_questline_state",
     "0027_aurion_faction_questline_rewards",
     "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory",
-    "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances",
+    "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });

@@ -1,5 +1,7 @@
 import { glbImportStore } from "./glbImportStore";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
+import { readControlSettings } from "./playerUiPersistence";
+import { shouldAutoCollect } from "../shared/playerUiProtocol";
 import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
@@ -987,6 +989,7 @@ export async function createValidatedAurionLootDropV2(values: {
       id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemDefinitionId: resolved.itemDefinitionId, category: resolved.category,
       equipmentSlot: resolved.equipmentSlot ?? null, quality: resolved.quality, itemLevelExact: resolved.itemLevelExact, affixesJson: JSON.stringify(resolved.affixes),
       setId: resolved.setId ?? null, itemPower: resolved.itemPower, deterministicHash: resolved.deterministicHash,
+      status: shouldAutoCollect(resolved.quality, (await readControlSettings(tx, values.userId)).autoLoot) ? "owned" : "pending_pickup",
     });
     const receipt = (await tx.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.id, receiptId)).limit(1))[0];
     const item = (await tx.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id, itemId)).limit(1))[0];
@@ -1027,8 +1030,8 @@ export async function getGameplayProgress(userId: number) {
   };
 }
 
-const GLOBAL_WORLD_ID = "echoes-of-aurion-global";
-const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
+export const GLOBAL_WORLD_ID = "echoes-of-aurion-global";
+export const GLOBAL_WORLD_SEED = "echoes-of-aurion-v1";
 
 /**
  * Resolves the persistent global world plan. Account count is a durable phase-one
@@ -1877,7 +1880,8 @@ async function createLootDropInTransaction(tx: DatabaseTransaction, values: Para
   const receiptId = `drop_${originHash}`;
   const itemId = `item_${originHash}`;
   await tx.insert(lootDropReceipts).values({ id: receiptId, userId: values.userId, expeditionKey: values.expeditionKey, treasureClass: values.treasureClass, quality, seedDigest: values.seedDigest, idempotencyKey: values.idempotencyKey });
-  await tx.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey });
+  const pickupStatus = shouldAutoCollect(quality, (await readControlSettings(tx, values.userId)).autoLoot) ? "owned" as const : "pending_pickup" as const;
+  await tx.insert(itemInstances).values({ id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemKey, quality, itemLevel: values.itemLevel, affixesJson: JSON.stringify(affixes), setKey: setDefinition?.setKey, status: pickupStatus });
   return { applied: true as const, receiptId, itemId, quality };
 }
 
@@ -2098,13 +2102,15 @@ export async function sellItemToSystem(values: { itemId: string; sellerUserId: n
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
-    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).limit(1))[0];
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.sellerUserId)).for("update");
+    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).for("update").limit(1))[0];
     if (!item) throw new Error("Der Gegenstand ist nicht verfügbar oder gehört dir nicht.");
     const aurionGranted = systemSaleValue(item.itemLevel, item.quality as MarketQuality);
     const now = operationalDate();
     await tx.insert(playerProfiles).values({ userId: values.sellerUserId }).onDuplicateKeyUpdate({ set: { userId: values.sellerUserId } });
     await tx.insert(systemSaleReceipts).values({ id: newCommunityId("syssale"), itemId: item.id, sellerUserId: values.sellerUserId, aurionGranted });
-    await tx.update(itemInstances).set({ status: "sold", soldAt: now }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
+    const changed = await tx.update(itemInstances).set({ status: "sold", soldAt: now }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
+    if (changed[0].affectedRows !== 1) throw new Error("ITEM_STATE_CONFLICT");
     await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} + ${aurionGranted}` }).where(eq(playerProfiles.userId, values.sellerUserId));
     return { aurionGranted, itemId: item.id };
   });
@@ -2115,11 +2121,13 @@ export async function createMarketListing(values: { itemId: string; sellerUserId
   if (!db) throw new Error("Game database is not available");
   const askingPrice = assertMarketPrice(values.askingPrice);
   return db.transaction(async tx => {
-    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).limit(1))[0];
+    await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.sellerUserId)).for("update");
+    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, values.itemId), eq(itemInstances.ownerUserId, values.sellerUserId), eq(itemInstances.status, "owned"))).for("update").limit(1))[0];
     if (!item) throw new Error("Dieser Gegenstand kann nicht angeboten werden.");
     const id = newCommunityId("listing");
     await tx.insert(marketListings).values({ id, itemId: item.id, sellerUserId: values.sellerUserId, askingPrice });
-    await tx.update(itemInstances).set({ status: "listed" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
+    const changed = await tx.update(itemInstances).set({ status: "listed" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "owned")));
+    if (changed[0].affectedRows !== 1) throw new Error("ITEM_STATE_CONFLICT");
     return { id, askingPrice };
   });
 }
@@ -2128,10 +2136,11 @@ export async function cancelMarketListing(values: { listingId: string; sellerUse
   const db = await getDb();
   if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
-    const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.sellerUserId, values.sellerUserId), eq(marketListings.status, "active"))).limit(1))[0];
+    const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.sellerUserId, values.sellerUserId), eq(marketListings.status, "active"))).for("update").limit(1))[0];
     if (!listing) throw new Error("Dieses Angebot kann nicht zurückgenommen werden.");
     await tx.update(marketListings).set({ status: "cancelled", settledAt: operationalDate() }).where(and(eq(marketListings.id, listing.id), eq(marketListings.status, "active")));
-    await tx.update(itemInstances).set({ status: "owned" }).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed")));
+    const changed = await tx.update(itemInstances).set({ status: "owned" }).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed")));
+    if (changed[0].affectedRows !== 1) throw new Error("ITEM_STATE_CONFLICT");
     return { cancelled: true as const };
   });
 }
@@ -2142,19 +2151,20 @@ export async function buyMarketListing(values: { listingId: string; buyerUserId:
   return db.transaction(async tx => {
     const prior = (await tx.select().from(marketTransactionReceipts).where(eq(marketTransactionReceipts.idempotencyKey, values.idempotencyKey)).limit(1))[0];
     if (prior) return { applied: false as const, receipt: prior };
-    const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.status, "active"))).limit(1))[0];
+    const listing = (await tx.select().from(marketListings).where(and(eq(marketListings.id, values.listingId), eq(marketListings.status, "active"))).for("update").limit(1))[0];
     if (!listing) throw new Error("Dieses Angebot ist nicht mehr verfügbar.");
     assertNotOwnListing(listing.sellerUserId, values.buyerUserId);
     await tx.insert(playerProfiles).values([{ userId: values.buyerUserId }, { userId: listing.sellerUserId }]).onDuplicateKeyUpdate({ set: { updatedAt: operationalDate() } });
     const buyer = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.buyerUserId)).limit(1))[0];
     if (!buyer || buyer.aurionPoints < listing.askingPrice) throw new Error("Deine Aurion-Währung reicht für dieses Angebot nicht aus.");
-    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed"), eq(itemInstances.ownerUserId, listing.sellerUserId))).limit(1))[0];
+    const item = (await tx.select().from(itemInstances).where(and(eq(itemInstances.id, listing.itemId), eq(itemInstances.status, "listed"), eq(itemInstances.ownerUserId, listing.sellerUserId))).for("update").limit(1))[0];
     if (!item) throw new Error("Der angebotene Gegenstand ist nicht mehr verfügbar.");
     const receiptId = newCommunityId("marketrec");
     const now = operationalDate();
     await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} - ${listing.askingPrice}` }).where(eq(playerProfiles.userId, values.buyerUserId));
     await tx.update(playerProfiles).set({ aurionPoints: sql`${playerProfiles.aurionPoints} + ${listing.askingPrice}` }).where(eq(playerProfiles.userId, listing.sellerUserId));
-    await tx.update(itemInstances).set({ ownerUserId: values.buyerUserId, status: "owned" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "listed")));
+    const changed = await tx.update(itemInstances).set({ ownerUserId: values.buyerUserId, status: "owned" }).where(and(eq(itemInstances.id, item.id), eq(itemInstances.status, "listed")));
+    if (changed[0].affectedRows !== 1) throw new Error("ITEM_STATE_CONFLICT");
     await tx.update(marketListings).set({ status: "sold", buyerUserId: values.buyerUserId, settledAt: now }).where(and(eq(marketListings.id, listing.id), eq(marketListings.status, "active")));
     await tx.insert(marketTransactionReceipts).values({ id: receiptId, listingId: listing.id, itemId: item.id, sellerUserId: listing.sellerUserId, buyerUserId: values.buyerUserId, aurionTransferred: listing.askingPrice, idempotencyKey: values.idempotencyKey });
     const receipt = (await tx.select().from(marketTransactionReceipts).where(eq(marketTransactionReceipts.id, receiptId)).limit(1))[0];

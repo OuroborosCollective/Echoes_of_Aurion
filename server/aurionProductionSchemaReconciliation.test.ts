@@ -92,9 +92,9 @@ describe("Aurion production schema reconciliation", () => {
     expect(transactionIndex).toBeLessThan(metadataIndex);
   });
 
-  it("parses all twelve late SQL migrations from their real repository contracts", async () => {
+  it("parses all thirteen late SQL migrations from their real repository contracts", async () => {
     const migrations = await readProductionSchemaContracts(process.cwd());
-    expect(migrations).toHaveLength(12);
+    expect(migrations).toHaveLength(13);
     expect(migrations.every(migration => migration.tables.length > 0)).toBe(true);
     const tableNames = migrations.flatMap(migration => migration.tables.map(table => table.name));
     expect(tableNames).toContain("aurionGlobalWorldStates");

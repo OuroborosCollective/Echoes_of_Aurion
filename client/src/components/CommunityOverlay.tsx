@@ -80,6 +80,10 @@ export default function CommunityOverlay({
       const requested = (event as CustomEvent<unknown>).detail;
       if (!requested || typeof requested !== "object" || !("panel" in requested)) return;
       if (!["chat", "partners", "market", "crafting", "guild"].includes(String(requested.panel))) return;
+      if (requested.panel === "crafting" && document.querySelector('[data-testid="authoritative-world-hud"]')) {
+        window.dispatchEvent(new Event("aurion:open-world-crafting"));
+        return;
+      }
       setPanel(requested.panel as CommunityPanel);
       setOpenedFromWorld(true);
     };

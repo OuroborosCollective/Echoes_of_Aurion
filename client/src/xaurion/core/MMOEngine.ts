@@ -612,7 +612,17 @@ export class MMOEngine {
     // Context loss disposes this engine; recovery must create a fresh instance.
   };
 
+  public releaseControlInput(): void {
+    this.keysPressed = {};
+    this.isOrbitingCamera = false;
+    this.lastPinchDistance = 0;
+    this.setVirtualMovement(0, 0);
+  }
+  private controlsBlocked(): boolean {
+    return Boolean(document.querySelector('[data-aurion-panel="open"], [role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]'));
+  }
   private handleKeyDown = (e: KeyboardEvent) => {
+    if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     // If typing in chat input, ignore game keybinds
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
       return;
@@ -659,6 +669,7 @@ export class MMOEngine {
   };
 
   private handleMouseDown = (e: MouseEvent) => {
+    if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     if (e.button === 0 || e.button === 2) {
       this.isOrbitingCamera = true;
       this.lastMouseX = e.clientX;
@@ -667,6 +678,7 @@ export class MMOEngine {
   };
 
   private handleMouseMove = (e: MouseEvent) => {
+    if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     if (!this.isOrbitingCamera) return;
 
     const deltaX = e.clientX - this.lastMouseX;
@@ -683,12 +695,14 @@ export class MMOEngine {
   };
 
   private handleWheel = (e: WheelEvent) => {
+    if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     e.preventDefault();
     this.cameraDistance = Math.max(7.0, Math.min(28.0, this.cameraDistance + e.deltaY * 0.015));
     this.cameraHeight = this.cameraDistance * 0.55;
   };
 
   private handleTouchStart = (e: TouchEvent) => {
+    if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     if (e.touches.length === 1) {
       this.isOrbitingCamera = true;
       this.lastMouseX = e.touches[0].clientX;
@@ -703,6 +717,7 @@ export class MMOEngine {
   };
 
   private handleTouchMove = (e: TouchEvent) => {
+    if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     if (e.touches.length === 1 && this.isOrbitingCamera) {
       const touch = e.touches[0];
       const deltaX = touch.clientX - this.lastMouseX;

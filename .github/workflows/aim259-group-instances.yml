@@ -4,6 +4,15 @@ on:
   pull_request:
     paths:
       - "server/groupInstance*.ts"
+      - "server/playerUi*.ts"
+      - "server/amplitude*.ts"
+      - "server/_core/trpc.ts"
+      - "shared/worldAsset*"
+      - "assets/world/**"
+      - "scripts/*world-assets*"
+      - "client/src/xaurion/integration/WorldAssetProjection.ts"
+      - "shared/playerUi*.ts"
+      - "client/src/xaurion/components/**"
       - "server/aim259*.ts"
       - "shared/groupInstanceProtocol.ts"
       - "server/routers.ts"
@@ -14,6 +23,7 @@ on:
       - "client/src/App.tsx"
       - "drizzle/**"
       - "e2e/aim259.groups.spec.ts"
+      - "e2e/ax1.ui.spec.ts"
       - "playwright.aurion-groups.config.ts"
       - "scripts/prepare-aurion-group-runtime-proof.ts"
       - ".github/workflows/aim259-group-instances.yml"
@@ -21,6 +31,15 @@ on:
     branches: [main]
     paths:
       - "server/groupInstance*.ts"
+      - "server/playerUi*.ts"
+      - "server/amplitude*.ts"
+      - "server/_core/trpc.ts"
+      - "shared/worldAsset*"
+      - "assets/world/**"
+      - "scripts/*world-assets*"
+      - "client/src/xaurion/integration/WorldAssetProjection.ts"
+      - "shared/playerUi*.ts"
+      - "client/src/xaurion/components/**"
       - "shared/groupInstanceProtocol.ts"
       - "server/routers.ts"
       - "client/src/xaurion/integration/AurionGroupFinder.tsx"
@@ -48,6 +67,7 @@ jobs:
     env:
       DATABASE_URL: mysql://root:aurion-disposable-group-test@127.0.0.1:3306/aurion_group_test
       AURION_GROUP_E2E: "1"
+      AURION_UI_E2E: "1"
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       JWT_SECRET: aurion-disposable-group-ci-signing-key-never-production
       VITE_APP_ID: aurion-group-isolated-regression
@@ -66,11 +86,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm check
           pnpm verify:migrations
-          pnpm vitest run server/aim259GroupRules.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
+          pnpm vitest run server/aim259GroupRules.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
       - name: Apply full schema and test concurrent real database operations
         run: |
           pnpm exec drizzle-kit migrate
-          pnpm vitest run server/aim259GroupMariaDb.test.ts
+          pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
       - name: Build the exact runtime and install browser
         run: |
@@ -86,7 +106,7 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Five authenticated sessions, shared instance, heal and rejoin on phone/tablet/desktop
+      - name: Real groups and AX1 inventory, healer, controls and combat on phone/tablet/desktop
         run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
       - name: Upload revision-bound evidence and screenshots
         if: always()

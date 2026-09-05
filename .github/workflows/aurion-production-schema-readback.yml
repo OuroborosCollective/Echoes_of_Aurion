@@ -178,7 +178,7 @@ jobs:
                   "0025_aurion_loot_mastery_ethos",
                   "0026_aurion_faction_questline_state",
                   "0027_aurion_faction_questline_rewards",
-                  "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances",
+                  "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);

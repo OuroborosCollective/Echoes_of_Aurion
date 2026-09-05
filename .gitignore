@@ -123,3 +123,8 @@ client/public/__manus__/version.json
 .serena/
 playwright-migration-report/
 test-results/
+
+# Extracted, hash-verified derivatives of the committed game bundle
+client/public/world-assets/
+assets/world-source/
+deploy/__pycache__/

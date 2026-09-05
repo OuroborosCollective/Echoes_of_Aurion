@@ -1,3 +1,6 @@
+import { WorldAssetProjection } from "./WorldAssetProjection";
+import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
+import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
 import { useGlbCatalog } from "@/hooks/useGlbCatalog";
 import { WORLD_DEMONSTRATION_EVENT } from "@/lib/companionWorldInputs";
 import { VisibleCanvasCapture } from "@/lib/visibleCanvasCapture";
@@ -62,6 +65,9 @@ function validActivation(detail: unknown): ActivationSnapshot {
 
 export default function AurionOpenWorldRuntime() {
   const { user, isAuthenticated } = useAuth();
+  const rpcUtils = trpc.useUtils();
+  const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
+  const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
@@ -89,12 +95,21 @@ export default function AurionOpenWorldRuntime() {
   const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
+  const controlsQuery = trpc.player.ui.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated, staleTime: 15_000, refetchInterval: 10_000 });
+  const controlsRef = useRef<ControlSettings | null>(null);
+  const controls = playerUiReadbackSchema.safeParse(controlsQuery.data);
+  controlsRef.current = controls.success && controls.data.userId === user?.id && !controlsQuery.isError && !controlsQuery.isStale ? controls.data.settings : null;
 
-  const requestAuthoritativeAction = useCallback((command: AurionGameplayCommand) => {
-    if (document.querySelector('[role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]')) return;
-    window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
-    window.dispatchEvent(new CustomEvent("aurion:request-action", { detail: { command, source: "human" as const } }));
+  const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
+    if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
+    // A delegated auto-attack is not a new human demonstration for the companion.
+    if (!automated) window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
+    return requestConfirmedAction(command);
   }, []);
+  const requestHotbarAction = useCallback((command: AurionGameplayCommand) => {
+    const mapped = /^[1-5]$/.test(command) ? controlsRef.current?.hotbar[Number(command) - 1] : command;
+    if (mapped) void requestAuthoritativeAction(mapped);
+  }, [requestAuthoritativeAction]);
 
   const requestAuthoritativeMount = useCallback(() => {
     engineRef.current?.addChatMessage("system", "Aurion", "Mount bleibt auf dem -ax1-Keybind Z; die serverseitige Mount-Mutation folgt in der Progressionsmigration.");
@@ -105,7 +120,7 @@ export default function AurionOpenWorldRuntime() {
     const engine = engineRef.current;
     if (!engine || !zoneConnectedRef.current) return;
     if (serviceNpcRef.current?.interact(engine.player.position)) {
-      window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel: "crafting" } }));
+      window.dispatchEvent(new Event("aurion:open-world-crafting"));
       return;
     }
     const result = engine.interactNearby();
@@ -144,17 +159,21 @@ export default function AurionOpenWorldRuntime() {
     let engine: MMOEngine | undefined;
     let remotePresence: RemotePresenceProjection | undefined;
     let capture: VisibleCanvasCapture | undefined;
+    let worldAssets: WorldAssetProjection | undefined;
     const confirmedVisuals = new ConfirmedVisualEffects();
     const onConfirmedAction = (event: Event) => {
       if (disposed || !engine || engineRef.current !== engine) return;
       const effect = confirmedVisuals.accept((event as CustomEvent<unknown>).detail);
       if (!effect) return;
+      engine.player.triggerAttackAnimation();
       engine.player.playConfirmedGlbAttack();
+      if (containerRef.current) containerRef.current.dataset.confirmedAttackReceipt = effect.receiptKey;
       try { engine.particleSystem.emit(effect.kind, engine.player.position, undefined, 1, effect.receiptKey); }
       catch (error) { fail(error); }
     };
     const fail = (error: unknown) => {
       if (disposed) return;
+      worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       remotePresenceRef.current = null;
@@ -174,10 +193,14 @@ export default function AurionOpenWorldRuntime() {
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
       engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch));
       engineRef.current = engine;
-      engine.onProjectionTick = delta => serviceNpcRef.current?.update(delta);
+      worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
+        (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
+        center => rpcUtils.worldAssets.region.fetch(center),
+        evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); });
+      engine.onProjectionTick = delta => { serviceNpcRef.current?.update(delta); worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth); };
       engine.onRuntimeError = fail;
       bindAurionAuthorityProjection(engine, {
-        requestAction: requestAuthoritativeAction,
+        requestAction: requestHotbarAction,
         requestMount: requestAuthoritativeMount,
       });
       remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
@@ -194,6 +217,7 @@ export default function AurionOpenWorldRuntime() {
         const evidence = engine.player.glbPresentationEvidence();
         if (modelEvidenceRef.current) {
           modelEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
+          modelEvidenceRef.current.dataset.attack = JSON.stringify({ attacking: engine.player.isAttacking, remaining: engine.player.attackAnimTimer, visible: engine.player.rootGroup.visible, arm: engine.player.rightArmPivot.rotation.toArray(), weapon: engine.player.weaponPivot.rotation.toArray() });
           modelEvidenceRef.current.dataset.groundY = String(engine.player.group.position.y);
         }
         if (npcEvidenceRef.current) npcEvidenceRef.current.dataset.presentation = JSON.stringify(serviceNpcRef.current?.evidence() ?? null);
@@ -206,6 +230,7 @@ export default function AurionOpenWorldRuntime() {
     return () => {
       disposed = true;
       window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
+      worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       if (remotePresenceRef.current === remotePresence) remotePresenceRef.current = null;
@@ -320,7 +345,7 @@ export default function AurionOpenWorldRuntime() {
   const syncAx1HumanMovement = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (document.querySelector('[role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]')) {
+    if (document.querySelector(WORLD_PANEL_SELECTOR)) {
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
       engine.setVirtualMovement(0, 0);
@@ -337,7 +362,7 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     if (!activation) return;
-    const typing = () => Boolean(document.querySelector('[role="dialog"][data-state="open"]')) || ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase());
+    const typing = () => Boolean(document.querySelector(WORLD_PANEL_SELECTOR)) || ["INPUT", "TEXTAREA", "SELECT"].includes((document.activeElement?.tagName ?? "").toUpperCase());
     const down = (event: KeyboardEvent) => {
       if (event.repeat || typing()) return;
       const key = event.key.toLowerCase();
@@ -375,6 +400,12 @@ export default function AurionOpenWorldRuntime() {
         requestWorldInteraction();
         return;
       }
+      if (key === "r" || key === "t") {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (key === "r") void requestAuthoritativeAction("F");
+        else window.dispatchEvent(new Event("aurion:toggle-auto-attack"));
+        return;
+      }
       if (key === "tab") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -398,11 +429,16 @@ export default function AurionOpenWorldRuntime() {
       const virtual = virtualInputRef.current;
       if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) syncAx1HumanMovement();
     }, 100);
+    const panels = new MutationObserver(() => { if (document.querySelector(WORLD_PANEL_SELECTOR)) { releaseMovement(); engineRef.current?.releaseControlInput(); } });
+    panels.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state", "data-aurion-panel", "data-opened-from-world"] });
+    document.addEventListener("visibilitychange", releaseMovement);
     window.addEventListener("keydown", down, true);
     window.addEventListener("keyup", up, true);
     window.addEventListener("blur", releaseMovement);
     return () => {
       window.clearInterval(cameraFollowTimer);
+      panels.disconnect();
+      document.removeEventListener("visibilitychange", releaseMovement);
       window.removeEventListener("keydown", down, true);
       window.removeEventListener("keyup", up, true);
       window.removeEventListener("blur", releaseMovement);
@@ -439,6 +475,8 @@ export default function AurionOpenWorldRuntime() {
       {webglError && <div className="xaurion-runtime__error" role="alert"><b>OPEN WORLD ANGEHALTEN</b><span>Bitte kehre zur Sternwarte zurück und öffne die Welt erneut. Vorgang {webglError}</span></div>}
 
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
+      <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
+      {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
     </section>
   );

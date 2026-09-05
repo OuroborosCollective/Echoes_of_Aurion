@@ -1,3 +1,4 @@
+import { worldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { z } from "zod";
@@ -7,6 +8,8 @@ import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
+import { controlSettingsSchema, itemReferenceSchema } from "../shared/playerUiProtocol";
+import { readPlayerUi, savePlayerControls, collectPlayerLoot, equipPlayerItem, unequipPlayerItem } from "./playerUiPersistence";
 import { groupCommandSchema } from "../shared/groupInstanceProtocol";
 import { commandGroupForUser, readGroupForUser } from "./groupInstancePersistence";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
@@ -34,6 +37,7 @@ const companionMemory = new CompanionMemoryStore();
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  worldAssets: router({ region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)) }),
   groups: router({
     read: protectedProcedure.query(({ ctx }) => readGroupForUser(ctx.user.id)),
     command: protectedProcedure.input(groupCommandSchema).mutation(({ ctx, input }) => commandGroupForUser(ctx.user.id, input)),
@@ -115,6 +119,11 @@ export const appRouter = router({
     }),
   }),
   player: router({
+    ui: protectedProcedure.query(({ ctx }) => readPlayerUi(ctx.user.id)),
+    saveControls: protectedProcedure.input(controlSettingsSchema).mutation(({ ctx, input }) => savePlayerControls(ctx.user.id, input)),
+    collectLoot: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => collectPlayerLoot(ctx.user.id, input)),
+    equipItem: protectedProcedure.input(itemReferenceSchema.extend({ expectedItem: itemReferenceSchema.nullable() }).strict()).mutation(({ ctx, input }) => equipPlayerItem(ctx.user.id, input, input.expectedItem)),
+    unequipItem: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => unequipPlayerItem(ctx.user.id, input)),
     me: protectedProcedure.query(async ({ ctx }) => {
       const profile = await db.getOrCreatePlayerProfile(ctx.user.id);
       return {
