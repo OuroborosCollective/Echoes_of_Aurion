@@ -1,3 +1,4 @@
+import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionEncounterPanel } from "./AurionEncounterPanel";
 import { useEffect, useState } from "react";
@@ -92,6 +93,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
         </div>}
         {panel === "quests" && <div data-state={quests.state}>
           <NpcStandingPanel userId={userId} />
+          <NpcDecisionPanel userId={userId} />
           <p role="status">{readbackLabels[quests.state]}</p>
           {quests.data?.quests.map(quest => <article key={quest.key} className="aurion-authority-hud__card"><b>{quest.title}</b><p>{quest.giver} · ab Stufe {quest.requiredLevel}</p><p>{quest.objective}</p><p>{quest.readyToTurnIn ? "Bereit zur Abgabe" : ({ locked: "Gesperrt", available: "Verfügbar", active: "Aktiv", completed: "Abgeschlossen" } as const)[quest.state]}</p>
             {quest.state === "available" && <button disabled={!fresh || quests.state !== "live"} onClick={() => void act(() => accept.mutateAsync({ questKey: quest.key }))}>Bei {quest.giver} annehmen</button>}

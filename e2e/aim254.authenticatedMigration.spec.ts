@@ -247,6 +247,7 @@ test("native encounter survives a world return and commits the quest reward once
     const [reward] = await pool.query<RowDataPacket[]>("SELECT p.totalXp, p.aurionPoints, q.state FROM playerProfiles p JOIN gameplayQuestProgress q ON q.userId=p.userId WHERE p.userId=? AND q.questKey='astral_call'", [before[0].userId]);
     expect(reward[0]).toMatchObject({ totalXp: 122, aurionPoints: 20, state: "completed" });
     await expect(dialog.getByTestId("npc-standing-panel").getByText("Neutral · Ansehen 5", { exact: true })).toBeVisible();
+    await expect(dialog.getByTestId("npc-decision-panel").getByText("Noch keine bestätigten Verhaltensentscheidungen für Lyra und Orun.", { exact: true })).toBeVisible();
     const [relationships] = await pool.query<RowDataPacket[]>("SELECT scopeKey,eventJson,eventHash FROM aurionScopedMasteryEvents WHERE userId=?", [before[0].userId]);
     expect(relationships).toHaveLength(2);
     for (const row of relationships) expect(createHash("sha256").update(row.eventJson).digest("hex")).toBe(row.eventHash);

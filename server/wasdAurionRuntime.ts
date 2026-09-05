@@ -1,5 +1,6 @@
+import { encodeNpcSnapshot, type PublicNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { advanceNpcMemory, createNpcSnapshot, decodeNpcReceipt, encodeNpcReceipt, normalizeNpcRequest, npcHash, npcNeedsSchema, parseNpcJson, parseNpcMemory, type NpcRequest } from "./npcPersistenceProtocol";
 import { aurionDialogueReceipts, aurionNpcDecisionReceipts, aurionNpcStates, aurionPolityStates, aurionWorldResolutions } from "../drizzle/schema";
 import { getDb } from "./db";
@@ -210,4 +211,24 @@ export async function interpretAndRecordDialogue(input: {
     ...jsonParse<DialogueInterpretation>(readback.interpretationJson, interpretation),
     receiptId: readback.id,
   };
+}
+
+/** Read-only public projection. Raw NPC memories and observation text stay on the server. */
+export async function readConfirmedNpcPacket(userId: number) {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("NPC_PACKET_OWNER_INVALID");
+  const db = await getDb(); if(!db) throw new Error("Game database is not available");
+  return db.transaction(async tx => {
+    const states = await tx.select().from(aurionNpcStates).where(inArray(aurionNpcStates.npcId,["lyra","orun"])).limit(3);
+    if(states.length>2) throw new Error("NPC_PACKET_COUNT_INVALID");
+    const projection: PublicNpcSnapshot[]=[];
+    for(const state of states) {
+      if(state.lastResolutionIndex<0) continue;
+      const receipt=(await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId,state.npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,state.lastResolutionIndex))).limit(1))[0];
+      if(!receipt) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
+      const snapshot=decodeNpcReceipt(receipt.observationIdsJson,receipt);
+      if(snapshot.regionId!==state.regionId || npcHash(snapshot.needs)!==npcHash(npcNeedsSchema.parse(parseNpcJson(state.needsJson))) || npcHash(snapshot.memoryState)!==npcHash(parseNpcMemory(state.memoryJson,state.lastResolutionIndex))) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+      projection.push({npcId:snapshot.npcId,regionId:snapshot.regionId,resolutionIndex:snapshot.decision.resolutionIndex,goal:snapshot.decision.goal,needs:snapshot.needs,memoryCount:snapshot.memory.length,decisionHash:snapshot.decision.decisionHash});
+    }
+    return Object.freeze({userId,format:"aurion-public-npc.v2" as const,data:Buffer.from(encodeNpcSnapshot(projection)).toString("base64")});
+  });
 }
