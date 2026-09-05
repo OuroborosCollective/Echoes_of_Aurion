@@ -214,7 +214,7 @@ jobs:
           if(r.recordType!=="aurion_production_schema_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_FAILED"||r.failureStage!=="VERIFY_GITHUB_ACTIONS_OIDC"||r.errorClass!=="GITHUB_ACTIONS_OIDC_INVALID"||r.backup?.created!==false) process.exit(2);
           NODE
 
-      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0031
+      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0032
         run: |
           set -euo pipefail
           set +e
@@ -252,7 +252,7 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' "$backup_file")" = "root:root:600"
           sudo gzip -t "$backup_file"
           rows="$(docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM __drizzle_migrations" "$AURION_APPLY_TEST_DATABASE")"
-          test "$rows" -eq 32
+          test "$rows" -eq 33
 
       - name: Prove exact retry is a non-mutating no-op
         run: |

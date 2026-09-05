@@ -43,10 +43,14 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
         await expect(page.getByRole("heading", { name: "Gruppenexpedition", exact: true })).toBeVisible();
         await expect(page.getByRole("button", { name: "Gruppe suchen", exact: true })).toBeVisible();
       }
-      await pages[0]!.getByLabel(/Wächterhaltung/).check();
+      // Equipped state is acknowledged by the server, so it need not change
+      // synchronously at click time. Wait for the actual confirmed readmodel.
+      await pages[0]!.getByLabel(/Wächterhaltung/).click();
+      await expect(pages[0]!.getByLabel(/Wächterhaltung/)).toBeChecked();
       await expect(pages[0]!.getByRole("radio", { name: "Tank", exact: true })).toBeEnabled();
       await pages[0]!.getByRole("radio", { name: "Tank", exact: true }).check();
-      await pages[1]!.getByLabel(/Heilendes Licht/).check();
+      await pages[1]!.getByLabel(/Heilendes Licht/).click();
+      await expect(pages[1]!.getByLabel(/Heilendes Licht/)).toBeChecked();
       await expect(pages[1]!.getByRole("radio", { name: "Heiler", exact: true })).toBeEnabled();
       await pages[1]!.getByRole("radio", { name: "Heiler", exact: true }).check();
       // A healer with a SPEAR verifies the explicit weapon-independent rule.

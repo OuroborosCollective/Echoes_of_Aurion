@@ -119,7 +119,7 @@ jobs:
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
 
-      - name: Prove all eleven late migrations classify absent on a 0020-only database
+      - name: Prove all twelve late migrations classify absent on a 0020-only database
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts > absent.json
@@ -127,12 +127,12 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("absent.json","utf8"));
           if(receipt.overallState!=="RECONCILIATION_REQUIRED") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.absentCount!==11 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
+          if(receipt.summary.absentCount!==12 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
 
-      - name: Apply 0021 through 0031 only inside this isolated proof database
+      - name: Apply 0021 through 0032 only inside this isolated proof database
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -159,7 +159,7 @@ jobs:
           console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
           NODE
 
-      - name: Prove all eleven late migrations match after isolated apply
+      - name: Prove all twelve late migrations match after isolated apply
         run: |
           set -euo pipefail
           set +e
@@ -172,7 +172,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
           if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.matchCount!==11 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
+          if(receipt.summary.matchCount!==12 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
           console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
 
