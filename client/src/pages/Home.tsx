@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState } from "@/lib/companionWorldInputs";
+import { WORLD_DEMONSTRATION_EVENT, actionFromWorldIntent, observedWorldState, queueHumanDemonstration, type PendingHumanDemonstration } from "@/lib/companionWorldInputs";
 import { parseOwnedEncounterReadback } from "@shared/encounterReadback";
 /**
  * Echoes of Aurion — Expedition console
@@ -59,7 +59,7 @@ type WorldStreamAnchor = {
   deterministicHash: string;
 };
 
-type PendingCompanionAction = { id: number; action: CompanionAction; issuedAt: number };
+type PendingCompanionAction = PendingHumanDemonstration;
 const companionMissionPhaseValue: Record<MissionState["phase"], number> = { active: 0, transition: 0.25, quest_ready: 0.5, dungeon_ready: 0.75, victory: 1 };
 
 const initialMission: MissionState = { arena: 0, arenaName: "Sternwarte Asterion", objective: "Brich den ersten Resonanzanker des Sentinels.", sentinelHp: 112, sentinelMaxHp: 112, explorerHp: 100, echoHp: 100, shield: false, marked: false, phase: "active" };
@@ -668,17 +668,21 @@ export default function Home() {
     appendLedger({ kind: /^[1-9]$/.test(code) ? "combat" : "command", title: `Partner-Impuls ${code}`, detail: ability ? `${provider} aktiviert ${ability.name}.` : `${provider} erhält den Bewegungsbefehl ${code}.` });
     setLastSignal(ability ? `${provider}: ${ability.name} ausgelöst.` : `${provider}: Kurs ${code} bestätigt.`); setCommandText("");
   };
-  const queueCompanionAction = (action: CompanionAction): void => {
+  const queueCompanionAction = (action: CompanionAction, source: PendingHumanDemonstration["source"] = "action"): void => {
     if (loadCompanionSession()?.mode !== "learning") return;
-    companionActionSequence.current += 1;
-    lastCompanionAction.current = { id: companionActionSequence.current, action, issuedAt: Date.now() };
+    const next = queueHumanDemonstration(lastCompanionAction.current, action, Date.now(), companionActionSequence.current + 1, source);
+    companionActionSequence.current = Math.max(companionActionSequence.current, next.id);
+    lastCompanionAction.current = next;
   };
   useEffect(() => {
     const observe = (event: Event) => {
       const session = loadCompanionSession();
       if (session?.mode !== "learning" || session.userId !== user?.id) return;
-      const action = actionFromWorldIntent((event as CustomEvent<unknown>).detail);
-      if (action) queueCompanionAction(action);
+      const detail = (event as CustomEvent<unknown>).detail;
+      const action = actionFromWorldIntent(detail);
+      const movement = Boolean(detail && typeof detail === "object" && "kind" in detail && detail.kind === "move");
+      if (action) queueCompanionAction(action, movement ? "movement" : "action");
+      else if (movement && lastCompanionAction.current?.source === "movement") lastCompanionAction.current = undefined;
     };
     window.addEventListener(WORLD_DEMONSTRATION_EVENT, observe);
     return () => window.removeEventListener(WORLD_DEMONSTRATION_EVENT, observe);

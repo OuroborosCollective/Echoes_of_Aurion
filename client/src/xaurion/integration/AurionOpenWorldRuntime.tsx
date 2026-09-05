@@ -257,7 +257,7 @@ export default function AurionOpenWorldRuntime() {
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
     const key = `${input.x}:${input.z}`;
-    if (key !== demonstratedMovementRef.current) {
+    if (input.x !== 0 || input.z !== 0 || key !== demonstratedMovementRef.current) {
       demonstratedMovementRef.current = key;
       window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "move", x: input.x, z: input.z } }));
     }
@@ -338,16 +338,23 @@ export default function AurionOpenWorldRuntime() {
       keysRef.current.delete(key);
       syncAx1HumanMovement();
     };
+    const releaseMovement = () => {
+      keysRef.current.clear(); virtualInputRef.current = { forward: 0, right: 0 };
+      engineRef.current?.setVirtualMovement(0, 0);
+      sendAuthoritativeMovement({ x: 0, z: 0 });
+    };
     const cameraFollowTimer = window.setInterval(() => {
       const virtual = virtualInputRef.current;
       if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) syncAx1HumanMovement();
     }, 100);
     window.addEventListener("keydown", down, true);
     window.addEventListener("keyup", up, true);
+    window.addEventListener("blur", releaseMovement);
     return () => {
       window.clearInterval(cameraFollowTimer);
       window.removeEventListener("keydown", down, true);
       window.removeEventListener("keyup", up, true);
+      window.removeEventListener("blur", releaseMovement);
       engineRef.current?.setVirtualMovement(0, 0);
       sendAuthoritativeMovement({ x: 0, z: 0 });
       keysRef.current.clear();

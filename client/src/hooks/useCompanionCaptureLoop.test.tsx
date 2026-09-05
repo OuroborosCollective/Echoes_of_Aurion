@@ -53,4 +53,26 @@ describe("companion capture generation", () => {
     now = 1000; pending.current = { id: 3, issuedAt: 1000 };
     await act(() => vi.advanceTimersByTimeAsync(100)); expect(accept).toHaveBeenCalledTimes(1);
   });
+  it("retries a held input after a slow frame without relabeling that stale frame", async () => {
+    vi.useFakeTimers();
+    let now = 1000, resolve!: (sample: CompanionFrameSample) => void;
+    const pending = { current: { id: 1, issuedAt: now } as { id: number; issuedAt: number } | undefined };
+    const capture = vi.fn(() => new Promise<CompanionFrameSample>(done => { resolve = done; })), accept = vi.fn(() => true);
+    renderHook(() => useCompanionCaptureLoop({ enabled: true, scope: "held", pending, now: () => now, capture, accept, onError: vi.fn() }));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    now = 3000; pending.current = { id: 1, issuedAt: now };
+    await act(async () => resolve(sample));
+    expect(accept).not.toHaveBeenCalled(); // Live human input cannot make the old image fresh.
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(capture).toHaveBeenCalledTimes(2);
+    now = 3100; pending.current = { id: 1, issuedAt: now };
+    await act(async () => resolve({ ...sample, capturedAt: 3000 }));
+    expect(accept).toHaveBeenCalledTimes(1);
+    pending.current = { id: 2, issuedAt: now };
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    pending.current = undefined; // Key release retires the active movement label.
+    await act(async () => resolve({ ...sample, capturedAt: 3100 }));
+    expect(accept).toHaveBeenCalledTimes(1);
+  });
+
 });
