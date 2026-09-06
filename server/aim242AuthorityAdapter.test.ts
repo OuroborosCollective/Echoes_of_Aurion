@@ -55,6 +55,33 @@ describe("AIM-242 AX1 controls behind WASD authority", () => {
     expect(runtime).not.toContain("partyManager.inviteMember(player)");
   });
 
+  it("keeps the Aurion website outside gameplay mutation authority", () => {
+    const app = read("client/src/App.tsx");
+    const website = [
+      read("client/src/pages/Home.tsx"),
+      read("client/src/pages/Account.tsx"),
+      read("client/src/pages/Community.tsx"),
+      read("client/src/components/CommunityOverlay.tsx"),
+    ].join("\n");
+    expect(app).toContain('location !== "/play"');
+    expect(app).not.toContain("AurionGroupsPage");
+    expect(website).not.toContain("trpc.gameplay.acceptQuest");
+    expect(website).not.toContain("trpc.gameplay.completeQuest");
+    expect(website).not.toContain("trpc.gameplay.startEncounter");
+    expect(website).not.toContain("trpc.gameplay.act");
+    expect(website).not.toContain("trpc.groups.command");
+    expect(website).not.toContain("trpc.player.chooseClass");
+    expect(website).not.toContain("trpc.player.setWeaponLoadout");
+    expect(website).not.toContain("trpc.player.equipItem");
+    expect(website).not.toContain("trpc.player.unequipItem");
+    expect(website).not.toContain("trpc.player.collectLoot");
+    expect(website).not.toContain("trpc.crafting.craft");
+    expect(website).not.toContain("trpc.crafting.materializeBonus");
+    expect(website).not.toContain("trpc.market.sellToSystem");
+    expect(website).not.toContain("trpc.market.createListing");
+    expect(website).not.toContain("trpc.market.buyListing");
+  });
+
   it("keeps local combat/progression methods projection-only in integrated mode", () => {
     const adapter = read("client/src/xaurion/integration/aurionAuthorityAdapter.ts");
     const compact = adapter.replace(/\s+/g, "");
