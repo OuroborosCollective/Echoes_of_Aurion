@@ -106,7 +106,8 @@ describe("Aurion production schema reconciliation", () => {
     expect(tableNames).toContain("aurionFactionQuestlineStates");
     expect(tableNames).toContain("aurionFactionQuestlineRewardReceipts");
     expect(tableNames).toContain("aurionWorldCheckpoints");
-    expect(tableNames).toContain("aurionStarterEquipmentReceipts");
+    expect(tableNames).toContain("aurionAx1StarterEquipmentReceipts");
+    expect(tableNames).toContain("aurionAx1StarterEquipmentStates");
   });
 
   it("does not mistake enum string literals such as 'unique' for UNIQUE constraints", async () => {
