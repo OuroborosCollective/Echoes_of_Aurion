@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createPool, type Pool } from "mysql2/promise";
+import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { aurionGlobalWorldStates, playerProfiles, users, weaponLoadouts } from "../drizzle/schema";
 import { aurionGroupCoordinator, aurionGroupParties, aurionGroupPlayers, aurionGroupReceipts, aurionGroupTickets } from "../drizzle/groupInstanceSchema";
@@ -31,8 +31,8 @@ suite("AIM-259 atomic group completion mastery", () => {
 
   beforeAll(async () => {
     pool = createPool(process.env.DATABASE_URL!);
-    const [rows] = await pool.query("SELECT DATABASE() AS name");
-    if (!(rows as Array<{ name: string }>)[0]?.name.endsWith("_group_test")) throw new Error("ISOLATED_GROUP_TEST_DATABASE_REQUIRED");
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name");
+    if (!String(rows[0]?.name ?? "").endsWith("_group_test")) throw new Error("ISOLATED_GROUP_TEST_DATABASE_REQUIRED");
     if (!/^[a-f0-9]{40}$/.test(process.env.AURION_RELEASE_SHA ?? "")) throw new Error("EXACT_TEST_REVISION_REQUIRED");
     isolated = true;
   });
@@ -129,8 +129,8 @@ suite("AIM-259 atomic group completion mastery", () => {
       });
     }
 
-    const [profiles] = await pool.query<Array<{ totalXp: number; aurionPoints: number }>>("SELECT totalXp,aurionPoints FROM playerProfiles WHERE userId IN (?) ORDER BY userId", [ids]);
-    expect(profiles).toEqual(Array(5).fill({ totalXp: 0, aurionPoints: 0 }));
+    const [profiles] = await pool.query<RowDataPacket[]>("SELECT totalXp,aurionPoints FROM playerProfiles WHERE userId IN (?) ORDER BY userId", [ids]);
+    expect(profiles.map(row => ({ totalXp: Number(row.totalXp), aurionPoints: Number(row.aurionPoints) }))).toEqual(Array(5).fill({ totalXp: 0, aurionPoints: 0 }));
 
     const replay = await commandGroupForUser(actorUserId, request);
     expect(replay.applied).toBe(false);
@@ -147,7 +147,8 @@ suite("AIM-259 atomic group completion mastery", () => {
     expect(afterFailure.party).toMatchObject({ phase: "active", bossHp: staged.bossHp, bossIndex: staged.bossIndex, instanceRevision: staged.instanceRevision });
     const db = (await getDb())!;
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(0);
-    expect(await db.select().from(aurionGroupReceipts).where(eq(aurionGroupReceipts.userId, actorUserId))).toEqual(expect.not.arrayContaining([expect.objectContaining({ expectedRevision: request.expectedRevision })]));
+    const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGroupReceipts WHERE userId=? AND expectedRevision=?", [actorUserId, request.expectedRevision]);
+    expect(Number(receipts[0]?.count ?? -1)).toBe(0);
 
     await pool.query("DROP TRIGGER aim259_abort_group_mastery");
     const retry = await commandGroupForUser(actorUserId, request);
