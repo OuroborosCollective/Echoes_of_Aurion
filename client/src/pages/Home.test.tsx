@@ -14,7 +14,7 @@ describe("Home", () => {
     expect(screen.getByText("Konto erforderlich", { exact: true })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
-    expect(screen.getByRole("button", { name: "GLB-Einreichung öffnen", exact: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "GLB-Einreichung öffnen" })).toBeTruthy();
   });
 
   it("öffnet über den Konto-CTA ausschließlich den sicheren Authvertrag", async () => {
