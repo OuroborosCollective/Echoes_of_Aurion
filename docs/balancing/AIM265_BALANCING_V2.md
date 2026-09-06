@@ -1,16 +1,19 @@
-# AIM-265 — Reproduzierbare Berechnung der Migrationsregeln
+---
+description: Reproduzierbare Balancing-Analyse für WASD-Regelparameter.
+---
 
-Normative Quelle: `Wasd@7bd039bb79681d2df342abe160579f89ca3ff8ed`.
-Engine-/Contentquelle: `-ax1@d356881538dae23c3aa97364a5596d48b6ac3079`.
-Host-Basis: `Echoes_of_Aurion@c3596b4fdb358b14e58526d8f19893b08b01fb22`.
+# AIM-265 — WASD Balancing v2
 
-Der [maschinenlesbare Kandidat](aim265-candidate.json) trägt
-`aurion-balancing-candidate.v2`, `final: false` und SHA-256-Bindungen an die
-tatsächlich ausgeführten Quelldateien. Er ist eine Berechnungsgrundlage. Er
-behauptet keine aktiven Dungeon-Instanzen, zusätzliche Monsterpopulationen oder
-bereits implementierte Rezepte.
+Diese Lane berechnet **Kandidaten für WASD-Regeln**. Sie definiert keine Aurion-Gameplay-Physik.
 
-## Ausführen und unabhängig prüfen
+## Ownership
+
+- **WASD**: normative XP-, Dungeon-, Boss-, Economy-, Chunk-, Housing- und Guild-Balancingregeln.
+- **AX1**: sichtbare Content-/Runtime-Projektion der bestätigten Werte.
+- **Aurion**: Rechenberichte, Kandidaten-JSON, Provenienz und bestätigte Readmodels speichern/anzeigen.
+- **Wolfram/CAG**: Analyse/Falsifikation; niemals Runtime-Authority.
+
+## Reproduzierbare Prüfung
 
 ```sh
 node --import tsx scripts/balancing/replay-aim265.mjs /tmp/aurion-balancing-v2.json
@@ -19,67 +22,48 @@ diff -u docs/balancing/aim265-candidate.json /tmp/aurion-balancing-v2.json
 python -m unittest discover -s scripts/balancing -p 'test_*.py'
 ```
 
-TypeScript ruft die echten Protokolle auf. Python prüft die Ergebnisse unabhängig
-mit Newton-Integerwurzel, rationalen Zahlen, vollständiger XP-Summe bis Level
-10.000 und Graphsuche. Manipulierte XP, ausgelassene Rezepte, falsche negative
-Chunk-Koordinaten, fallende Dungeon-Rewards und getrennte Straßen werden abgelehnt.
-Der CI-Lauf prüft außerdem TypeScript und die betroffenen Regressionen.
+Der maschinenlesbare Kandidat bleibt `final: false`. Ein erfolgreicher Replay macht keinen Wert automatisch gameplaywirksam.
 
 ## Berechnungsabdeckung
 
-| Fläche | Rechnung | Fachlicher Nachweis, der noch fehlt |
+| Fläche | Rechenbeleg | Für Gameplay noch erforderlich |
 | --- | --- | --- |
-| 14 Professionen | Normative XP-Wurzel, getrennte Scopes, Level 1 bis 10.000 und 10^24, begrenzte Modifikatoren | Alle Tätigkeiten an bestätigte Spielaktionen anbinden; bislang ist der Speer-Craft verbunden |
-| 9 Tätigkeiten, 11 Rezepte | Quellzeiten, Materialmengen, Intervall für Beschaffung, exakter Bonus-Carry | Laufwege, Konkurrenz um Ressourcen, Input-Budgets und Verkaufs-/Salvage-Sinks |
-| 4 Dungeon-Katalogeinträge | Einstiegs-XP, Rollenbedarf 1/1/3, Quell-Rewards | Echte Queue, Rollenfähigkeit, Instanz und Completion-Receipt aus AIM-259 |
-| Dungeon-Protokoll | 192 Varianten-/Gruppen-/Etagen-Szenarien; keine fallenden Budgets, Belohnungen oder HP | Tatsächliche Instanz-/Kampfprojektion; Kandidatenwerte werden dadurch nicht aktiviert |
-| 4 Weltbosse | 60 TTK-Szenarien, 100-ms-Respawn-Ticks, Chunk-Koordinaten | Reale Loadouts, Heilung, Rüstung, Schadensbelege, Boss-/Pity-Ledger |
-| 6 Gildengebäude | Alle Ausbaustufen, Kosten als Dreieckssumme, begrenzte Perks | Belege der jeweiligen Perk-Verbraucher |
-| 4 Housing-Blueprints | Vollständige Kostenvektoren, Quell-Perks als unfertige Kandidaten | Tower-Bridge und tatsächliche Perk-/Slotwirkung aus AIM-261 |
-| Population und Ökonomie | 1–10.000 Spieler, Siedlungskapazität, Monster-Anzeigelimits, 60 Sink-/Farmraten-Szenarien | Keine Prognose ohne gemessene Farmraten; unendlicher Bonus-Yield braucht wirksame Sinks |
-| Chunks und Straßen | Negative Grenzen, Ressourcenbereich, 279 zusammenhängende Wegzellen über 3×3 Chunks | Topologische Verbindung beweist keine Begehbarkeit über Terrain-/Kollisionsgrenzen |
+| Mastery/Professionen | exakte cap-freie XP-Progression und Scope-Replays | Übernahme in gebundenes WASD-Ruleset |
+| Rezepte/Gathering | Zeit, Inputs, Yield/Carry und Qualitätskandidaten | WASD Crafting-/Gathering-Regel + echte Action Receipts |
+| Dungeons | Varianten-/Gruppen-/Etagen-Szenarien und Monotoniechecks | WASD Instance-/Combat-/Reward-Regel |
+| Weltbosse | TTK-/Gruppenszenarien und Respawn-Kandidaten | WASD Boss-/Loot-/Pity-Regel |
+| Guild/Housing | Kosten- und Perk-Kandidaten | WASD Guild/Housing-Regel |
+| Population/Economy | Spielerzahl-, Sink- und Farmraten-Szenarien | gemessene Daten + WASD Economy-Regel |
+| Chunks/Straßen | Fixed-point Grenzen und topologische Konnektivität | WASD Terrain/Collision/Placement-Regel |
 
-Die Monsterbudgets der laufenden `openWorldProtocol`-Projektion und die noch nicht
-integrierten `aurionChunkPerformanceProtocol`-Kandidaten werden getrennt ausgewiesen.
-Ein Handybudget darf den autoritativen 100-ms-Takt oder die gemeinsame
-Monsterpopulation nicht verändern. Ebenso sind die 64-m-Aurionschunks, die
-32-m-Einstiegskarte und die 80-m-AX1-Darstellungszellen unterschiedliche Flächen.
+## Bekannte Rechenkorrekturen
 
-## Bestätigte Korrekturen
+### Koordinaten
 
-Der WASD-Stadtplaner verwendet eine zweidimensionale X/Y-Fläche. Aurion bildet
-diese auf X/Z ab; Y ist Höhe. Die bisherige Übernahme verschob Gebäude nach oben
-und ignorierte ihren Z-Abstand. `wasd:city-layout:xz:v2` erhält die Höhe, prüft
-negative Z-Sektoren, akzeptiert auch path/street-Anker und lehnt doppelte Kennungen
-oder ungültige Koordinaten ab. Nach jeder Verschiebung werden frühere Hindernisse
-erneut geprüft. Ein überschrittener Sektor-/Arbeitsbereich wird abgelehnt.
-Vorhandene Straßenanker bedeuten weiterhin nur, dass ein Anker existiert; es wird
-keine erfundene Navigation oder automatisch gebaute Straße gemeldet.
+WASD-Algorithmen müssen in der AX1-Welt korrekt auf die X/Z-Bodenfläche projiziert werden; Y bleibt Höhe. Ein Adapter darf diese Darstellung übersetzen, aber Aurion besitzt dadurch keine Platzierungsregel.
 
-`aurion-dungeon-progression.v1` wählte bei jeder Etage neue Affixe. Ein echter
-Gegenlauf auf der Host-Basis zeigt im Normal-Modus von Etage 1 zu 2 einen Rückgang
-von 14.002 auf 12.502 Gefahren-Basispunkte und von 20.188 auf 19.938 Reward-Punkte.
-Im Endless-Modus fallen beide Werte ebenfalls. Die Version v2 bindet die
-Affix-Reihenfolge an denselben unveränderlichen Laufbeleg; höhere Etagen erweitern
-dessen Präfix. Der Etagenhash bleibt verschieden. Die neue Regel wird nicht in
-historische Receipts zurückgeschrieben. AIM-259 muss einen stabilen Laufbeleg von
-fortlaufenden Aktionsbelegen unterscheiden.
+### Dungeon-Fortschritt
 
-## Wolfram und Quellen
+Frühere Kandidaten konnten durch neu gewählte Affixe auf höheren Etagen sinkende Gefahren-/Rewardbudgets erzeugen. Die korrigierte Kandidatenlogik hält Lauf-/Affixreihenfolge stabil und erweitert sie monoton. **Final wird diese Regel erst, wenn sie in WASD versioniert und dort getestet ist.**
 
-WolframContext und WolframLanguageEvaluator wurden am 5. September 2026 versucht.
-Beide scheiterten vor einer Berechnung mit HTTP 404 am MCP-Endpunkt. Deshalb ist
-`executionVerified: false`. [Der vorbereitete Wolfram-Replay](../../scripts/balancing/aim265-wolfram.wl)
-kann nach Wiederherstellung des Connectors denselben JSON-Eingang prüfen. Ein
-lokaler Python-Erfolg ersetzt keinen Wolfram-Ausführungsbeleg.
+## Wolfram
 
-Parallel Search lieferte Primärdokumentation zu
-[Quotient und Floor](https://reference.wolfram.com/language/ref/Quotient.html),
-[QuotientRemainder](https://reference.wolfram.com/language/ref/QuotientRemainder.html)
-und [Graph-Zusammenhang](https://reference.wolfram.com/language/ref/ConnectedGraphQ.html).
-Diese Quellen begründen die Prüfmethoden; sie liefern keine Aurion-Balancingkonstanten.
+Die bisherigen Wolfram-MCP-Aufrufe scheiterten vor einer Berechnung mit HTTP 404. Deshalb existiert daraus kein Provider-Erfolgsbeleg. Lokale exakte Replays bleiben gültige lokale Evidence, aber werden nicht als Wolfram-Ergebnis bezeichnet.
 
-Der bestehende Auftrag autorisiert diese Migrationsspur bis zum geprüften Release.
-Agent Consent Patterns wird als Action-Receipt-/Authority-Boundary-Regel angewandt:
-Berechnung ist keine Freigabe neuer Rewards, und ein Eintrag im Katalog ist kein
-aktives Spielobjekt. CI-, Datenbank- und Produktionsbelege bleiben getrennt.
+Ein späterer CAG-Erfolg darf:
+
+- Formeln prüfen;
+- Sensitivitäten berechnen;
+- Gegenbeispiele finden;
+- Parameterkandidaten erzeugen.
+
+Er darf keine Gameplay-Werte live setzen. Die Übernahme erfolgt ausschließlich über einen WASD-Ruleset-Change.
+
+## Acceptance
+
+- jede zentrale Kurve reproduzierbar;
+- Kandidat und finale WASD-Regel klar getrennt;
+- keine Aurion-Route wendet einen Kandidaten als Gameplayregel an;
+- AX1 rendert nur bestätigte Werte;
+- fehlende Messdaten werden als offen ausgewiesen;
+- Browser-, DB-, Wolfram- und Regel-Evidence bleiben getrennte Ebenen.
