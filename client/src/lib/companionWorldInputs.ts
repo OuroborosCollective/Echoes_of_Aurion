@@ -1,4 +1,3 @@
-import { parseOwnedEncounterReadback } from "@shared/encounterReadback";
 import type { CompanionAction, CompanionStateMask, CompanionStateVector } from "./companionLearning";
 
 export const WORLD_DEMONSTRATION_EVENT = "aurion:world-demonstration";
@@ -11,15 +10,13 @@ export function actionFromWorldIntent(input: unknown): CompanionAction | null {
   if (input.kind === "action" && "command" in input && typeof input.command === "string" && /^[EF1-9]$/.test(input.command)) return [0.5, 0.5, 1, 1];
   return null;
 }
-/** Zero with mask=0 is unknown, never a claim of zero health or invented default health. */
-export function observedWorldState(input: unknown, userId: number, fresh: boolean): { vector: CompanionStateVector; mask: CompanionStateMask } {
-  const vector: CompanionStateVector = [0, 0, 0, 0, 0, 0];
-  const mask: CompanionStateMask = [0, 0, 0, 0, 0, 0];
-  if (fresh) {
-    try { const current = parseOwnedEncounterReadback(input, userId).active; if (current) { vector[2] = current.bossHp / current.maxBossHp; mask[2] = 1; } }
-    catch { /* Invalid/foreign data cannot label a demonstration. */ }
-  }
-  return { vector, mask };
+
+/**
+ * Until a WASD-owned state-vector contract is attached, state labels remain
+ * explicitly unknown. Legacy Aurion encounter HP is never reused as gameplay truth.
+ */
+export function observedWorldState(_input: unknown, _userId: number, _fresh: boolean): { vector: CompanionStateVector; mask: CompanionStateMask } {
+  return { vector: [0, 0, 0, 0, 0, 0], mask: [0, 0, 0, 0, 0, 0] };
 }
 
 export type PendingHumanDemonstration = Readonly<{ id: number; action: CompanionAction; issuedAt: number; source: "movement" | "action" }>;
