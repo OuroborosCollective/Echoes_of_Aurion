@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GROUP_RULESET, type GroupParty, type GroupRole, type RosterMember } from "../shared/groupInstanceProtocol";
 import { activityXpAwardExact } from "./aurionBalancingProtocol";
 import { buildGlobalWorldPlan } from "./globalWorldProtocol";
-import { buildGroupCompletionMasteryPlan } from "./groupCompletionMastery";
+import { buildGroupCompletionMasteryPlan, buildGroupCompletionResultPlan } from "./groupCompletionMastery";
 import { groupHash, issueGroupTicket } from "./groupInstanceRules";
 import {
   SCOPED_MASTERY_RULESET_VERSION,
@@ -114,6 +114,27 @@ describe("AIM-259 group completion mastery", () => {
     }
   });
 
+  it("creates five deterministic accepted-result candidates without inventing a reward amount", () => {
+    const { party, ticket } = clearedFixture();
+    const first = buildGroupCompletionResultPlan(party, ticket);
+    const replay = buildGroupCompletionResultPlan(party, ticket);
+    expect(first).toEqual(replay);
+    expect(first).toHaveLength(5);
+    expect(new Set(first.map(result => result.expeditionKey))).toEqual(new Set([`group-dungeon:${ticket.id}`]));
+    expect(new Set(first.map(result => result.seedDigest)).size).toBe(1);
+    expect(new Set(first.map(result => result.resultDigest)).size).toBe(5);
+    expect(new Set(first.map(result => result.idempotencyKey)).size).toBe(5);
+    expect(first.map(result => result.userId)).toEqual([...ticket.roster].map(member => member.userId).sort((a, b) => a - b));
+    for (const result of first) {
+      expect(result.confirmedByUserId).toBe(result.userId);
+      expect(result.seedDigest).toMatch(/^[a-f0-9]{64}$/);
+      expect(result.resultDigest).toMatch(/^[a-f0-9]{64}$/);
+      expect(result).not.toHaveProperty("xp");
+      expect(result).not.toHaveProperty("gold");
+      expect(result).not.toHaveProperty("loot");
+    }
+  });
+
   it("derives awards from each persisted exact scope level instead of mutable profile level or the normalized ticket budget", () => {
     const { party, ticket } = clearedFixture();
     const userId = ticket.roster[0]!.userId;
@@ -164,6 +185,9 @@ describe("AIM-259 group completion mastery", () => {
       { ...party, bossIndex: ticket.bosses.length - 1 },
       { ...party, bossHp: 1 },
       { ...party, instanceRevision: 0 },
-    ]) expect(() => buildGroupCompletionMasteryPlan(invalid, ticket)).toThrow("GROUP_COMPLETION_EVIDENCE_REQUIRED");
+    ]) {
+      expect(() => buildGroupCompletionMasteryPlan(invalid, ticket)).toThrow("GROUP_COMPLETION_EVIDENCE_REQUIRED");
+      expect(() => buildGroupCompletionResultPlan(invalid, ticket)).toThrow("GROUP_COMPLETION_EVIDENCE_REQUIRED");
+    }
   });
 });
