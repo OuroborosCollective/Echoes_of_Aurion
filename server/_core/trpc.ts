@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import { aurionQuests, type QuestKey } from "../gameplayProtocol";
+import { getQuest, type QuestKey } from "../gameplayProtocol";
 import { assertQuestNpcAuthority } from "../questNpcAuthority";
 import type { TrpcContext } from "./context";
 
@@ -10,10 +10,12 @@ const t = initTRPC.context<TrpcContext>().create({ transformer: superjson });
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
+/** Compatibility guard for the isolated legacy tRPC quest surface. `/play` does not use it. */
 function questInput(value: unknown): { questKey: QuestKey; giver?: string } | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  if (typeof raw.questKey !== "string" || !(raw.questKey in aurionQuests)) return null;
+  if (typeof raw.questKey !== "string") return null;
+  try { getQuest(raw.questKey as QuestKey); } catch { return null; }
   if (raw.giver !== undefined && typeof raw.giver !== "string") return null;
   return { questKey: raw.questKey as QuestKey, ...(typeof raw.giver === "string" ? { giver: raw.giver } : {}) };
 }
