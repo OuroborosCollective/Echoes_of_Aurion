@@ -113,7 +113,8 @@ jobs:
       - name: Apply full schema and test concurrent real database operations
         run: |
           pnpm exec drizzle-kit migrate
-          pnpm vitest run server/aim259GroupMariaDb.test.ts server/aim259GroupCompletionMariaDb.test.ts server/playerUiMariaDb.test.ts server/worldNatureCollisionMariaDb.test.ts
+          pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts server/worldNatureCollisionMariaDb.test.ts
+          pnpm vitest run server/aim259GroupCompletionMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
       - name: Build the exact runtime and install browser
         run: |
