@@ -37,7 +37,7 @@ export default function Ax1CompanionOverlay() {
   const [session, setSession] = useState<CompanionSession | null>(() => loadCompanionSession());
   const [rows, setRows] = useState(() => companionDatasetCount());
   const [message, setMessage] = useState("");
-  const pending = useRef<PendingHumanDemonstration>();
+  const pending = useRef<PendingHumanDemonstration | undefined>(undefined);
   const nextPendingId = useRef(0);
   const createGatewaySession = trpc.gateway.createSession.useMutation();
   const revokeGatewaySession = trpc.gateway.revokeSession.useMutation();
