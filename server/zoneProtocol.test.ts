@@ -1,3 +1,4 @@
+import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
 import { describe, expect, it } from "vitest";
 import { createZoneTicket, digestZoneTicket, isAllowedZoneOrigin, parseZoneHello, parseZoneMove } from "./zoneProtocol";
 
@@ -9,11 +10,11 @@ describe("zone protocol", () => {
     expect(digestZoneTicket(ticket)).toBe(digestZoneTicket(ticket));
   });
 
-  it("accepts only a versioned hello before a zone connection is authenticated", () => {
-    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 2 })).not.toBeNull();
-    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 1 })).toBeNull();
-    expect(parseZoneHello({ type: "input", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: 2 })).toBeNull();
-    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(23), zoneId: "observatory_threshold", protocolVersion: 2 })).toBeNull();
+  it("accepts only the current versioned hello before a zone connection is authenticated", () => {
+    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION })).not.toBeNull();
+    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION - 1 })).toBeNull();
+    expect(parseZoneHello({ type: "input", ticket: "x".repeat(24), zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION })).toBeNull();
+    expect(parseZoneHello({ type: "hello", ticket: "x".repeat(23), zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION })).toBeNull();
   });
 
   it("accepts bounded integer movement intents and rejects invalid sequences or vectors", () => {
