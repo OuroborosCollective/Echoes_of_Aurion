@@ -6,17 +6,13 @@ export type ActionOutcome={confirmed:boolean;completed:boolean;message:string};
 export type ActionCompletion=(outcome:ActionOutcome)=>void;
 
 /**
- * Connected live gameplay never falls back to Aurion's legacy encounter route.
- * Basic attack is settled by the WASD zone combat event. Skills/interactions
- * fail closed until their WASD command contracts are migrated.
+ * AX1 requests gameplay only from the live WASD zone contract.
+ * There is deliberately no Aurion encounter/arena fallback.
  */
 export function requestConfirmedAction(command:AurionGameplayCommand):Promise<ActionOutcome>{
-  if(zoneCombatAvailable()){
-    if(command==="F")return requestZoneBasicAttack();
-    return Promise.resolve({confirmed:false,completed:false,message:`${command} ist im WASD-Zonenvertrag noch nicht freigeschaltet; kein Legacy-Arena-Fallback.`});
-  }
-  // Compatibility only for non-zone legacy/test surfaces. `/play` must never use this path.
-  return new Promise(resolve=>{let finished=false;const timeout=window.setTimeout(()=>finish({confirmed:false,completed:false,message:"Keine Bestätigung erhalten. Auto-Angriff wurde angehalten."}),20_000);const finish:ActionCompletion=outcome=>{if(!finished){finished=true;window.clearTimeout(timeout);resolve(outcome);}};window.dispatchEvent(new CustomEvent("aurion:request-action",{detail:{command,source:"human",complete:finish}}));});
+  if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"WASD-Zonenvertrag nicht verbunden; kein Aurion-Gameplay-Fallback."});
+  if(command==="F")return requestZoneBasicAttack();
+  return Promise.resolve({confirmed:false,completed:false,message:`${command} ist im WASD-Zonenvertrag noch nicht freigeschaltet.`});
 }
 
 /** Timers schedule requests only. This controller cannot infer damage, issue receipts or retry a lost action. */
