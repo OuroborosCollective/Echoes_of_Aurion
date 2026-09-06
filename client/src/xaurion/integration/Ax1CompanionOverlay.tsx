@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { operationalNow } from "@shared/operationalClock";
+import { companionCaptureNow } from "@/lib/companionCaptureClock";
 import type { CompanionSession } from "@shared/companionLearningProtocol";
 import {
   companionDatasetCount,
@@ -73,7 +73,7 @@ export default function Ax1CompanionOverlay() {
       const movement = Boolean(detail && typeof detail === "object" && "kind" in detail && detail.kind === "move");
       if (action) {
         nextPendingId.current += 1;
-        pending.current = queueHumanDemonstration(pending.current, action, operationalNow(), nextPendingId.current, movement ? "movement" : "action");
+        pending.current = queueHumanDemonstration(pending.current, action, companionCaptureNow(), nextPendingId.current, movement ? "movement" : "action");
       } else if (movement && pending.current?.source === "movement") {
         pending.current = undefined;
       }
@@ -86,7 +86,7 @@ export default function Ax1CompanionOverlay() {
     enabled: session?.mode === "learning",
     scope: `${user?.id ?? 0}:${session?.sessionId ?? "none"}:ax1-world`,
     pending,
-    now: operationalNow,
+    now: companionCaptureNow,
     capture: requestCompanionFrame,
     accept: (sample, action) => {
       const row = recordCompanionObservation({
@@ -119,7 +119,6 @@ export default function Ax1CompanionOverlay() {
     if (!isAuthenticated || !user?.id || createGatewaySession.isPending) return;
     setMessage("");
     try {
-      // The gateway owns the canonical WASD command set. The UI does not mint one.
       const next = await createGatewaySession.mutateAsync({ providerLabel: provider });
       const compact: GatewayPairing = {
         sessionId: next.sessionId,
