@@ -17,8 +17,29 @@ async function rpc(page: Page, procedure: string, input?: unknown) {
 }
 async function read(page: Page): Promise<GroupReadmodel> { return groupReadmodelSchema.parse(await rpc(page, "groups.read")); }
 
+async function launchAx1AndOpenGroups(page: Page) {
+  await page.goto("/");
+  const prepare = page.getByRole("button", { name: "SPIELSTART VORBEREITEN", exact: true });
+  await expect(prepare).toBeVisible({ timeout: 20_000 });
+  await prepare.click();
+  const launch = page.getByRole("button", { name: "AX1 OPEN WORLD STARTEN", exact: true });
+  await expect(launch).toBeVisible();
+  await launch.click();
+  await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
+  const runtime = page.getByTestId("xaurion-open-world-runtime");
+  await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+  const hud = page.getByTestId("authoritative-world-hud");
+  await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
+  await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "Gruppenexpedition", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.getByRole("button", { name: "Gruppe suchen", exact: true })).toBeVisible();
+  return { runtime, hud, dialog };
+}
+
 for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tablet", width: 800, height: 1280 }, { name: "desktop", width: 1440, height: 1000 }]) {
   test(`five real browser sessions share one revision-bound instance on ${viewport.name}`, async ({ browser, baseURL }, info) => {
+    test.setTimeout(300_000);
     expect(baseURL).toBe("http://127.0.0.1:3000");
     const url = new URL(process.env.DATABASE_URL!);
     expect(url.hostname).toBe("127.0.0.1"); expect(url.pathname).toBe("/aurion_group_test");
@@ -34,14 +55,13 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(health).toMatchObject({ service: "echoes-of-aurion", status: "ok", revision: process.env.AURION_RELEASE_SHA });
       for (let i = 0; i < 5; i++) {
         const page = pages[i]!;
-        // Disposable test accounts use the real registration and signed-cookie
-        // path. No test auth bypass and no mocked API response is installed.
+        // Disposable accounts use real registration and server persistence. The
+        // only browser group UI is the AX1 `/play` HUD; Aurion has no `/groups`
+        // website route and therefore cannot own group gameplay.
         await rpc(page, "auth.registerLocal", { handle: `aim259_${viewport.name}_${i}`, password: "Aurion-disposable-group-regression-259!" });
         await rpc(page, "player.me");
         await rpc(page, "player.setWeaponLoadout", { weaponTrack: (["blade", "spear", "staff", "focus", "blade"] as const)[i] });
-        await page.goto("/groups");
-        await expect(page.getByRole("heading", { name: "Gruppenexpedition", exact: true })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Gruppe suchen", exact: true })).toBeVisible();
+        await launchAx1AndOpenGroups(page);
       }
       // Equipped state is acknowledged by the server, so it need not change
       // synchronously at click time. Wait for the actual confirmed readmodel.
@@ -86,7 +106,14 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await pages[1]!.getByRole("button", { name: "Instanz verlassen, Platz behalten", exact: true }).click();
       await expect(pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true })).toBeVisible();
       expect((await read(pages[1]!)).player.status).toBe("formed");
-      await pages[1]!.reload();
+
+      // A browser reload cannot replay a consumed launch snapshot. Re-entry must
+      // traverse the portal and obtain a fresh confirmed launch before the same
+      // persisted group ticket is allowed back into the AX1 runtime.
+      await pages[1]!.getByTestId("xaurion-open-world-runtime").getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+      await expect(pages[1]!).toHaveURL(/\/$/, { timeout: 15_000 });
+      await launchAx1AndOpenGroups(pages[1]!);
+      await expect(pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true })).toBeVisible();
       await pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }).click();
       await expect(pages[1]!.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id);
       await pages[1]!.screenshot({ path: info.outputPath(`group-${viewport.name}.png`), fullPage: true });
@@ -95,7 +122,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(storedTickets[0]).toMatchObject({ id: ticket.id, sourceRevision: health.revision, ticketHash: ticket.hash });
       expect(JSON.parse(storedTickets[0]!.ticketJson)).toEqual(ticket);
       const finalReadback = await read(pages[0]!);
-      const evidence = { kind: "aurion-group-runtime-evidence.v1", runtime: "isolated-real-http-mariadb", sourceRevision: health.revision, runtimeHealth: health, viewport, sessionUserIds: admitted.map(s => s.player.userId), partyId: ticket.partyId, ticketId: ticket.id, ticketHash: ticket.hash, databaseReadback: true, sourceWorldHash: ticket.worldHash, worldSnapshotSha256: ticket.worldSnapshotSha256, instanceRevision: finalReadback.party!.instanceRevision, sharedHealingConfirmed: true, rejoinConfirmed: true, production: false };
+      const evidence = { kind: "aurion-group-runtime-evidence.v1", runtime: "isolated-real-http-mariadb", sourceRevision: health.revision, runtimeHealth: health, viewport, sessionUserIds: admitted.map(s => s.player.userId), partyId: ticket.partyId, ticketId: ticket.id, ticketHash: ticket.hash, databaseReadback: true, sourceWorldHash: ticket.worldHash, worldSnapshotSha256: ticket.worldSnapshotSha256, instanceRevision: finalReadback.party!.instanceRevision, sharedHealingConfirmed: true, rejoinConfirmed: true, rejoinRoute: "portal-confirmed-ax1-launch", production: false };
       const evidenceJson = JSON.stringify(evidence, null, 2);
       await writeFile(info.outputPath(`group-evidence-${viewport.name}.json`), evidenceJson);
       await info.attach("revision-bound-group-evidence", { body: evidenceJson, contentType: "application/json" });
