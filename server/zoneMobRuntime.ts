@@ -1,38 +1,31 @@
 import type { ConfirmedZonePresence } from "../shared/zonePresenceContract";
 import type { ConfirmedZoneMob } from "../shared/zoneMobContract";
-import { initialMobRuntimeState, observatoryMobDefinitions, publicMobSnapshot, resolveMobFsmTick, type MobRuntimeState } from "./mobFsmProtocol";
+import { applyMobCombatState, initialMobRuntimeState, observatoryMobDefinitions, publicMobSnapshot, resolveMobFsmTick, type MobRuntimeState } from "./mobFsmProtocol";
 import { worldNatureCollision } from "./worldNatureCollision";
 
-function sameMob(left: ConfirmedZoneMob, right: ConfirmedZoneMob): boolean {
-  return left.entityId===right.entityId&&left.state===right.state&&left.position.x===right.position.x&&left.position.z===right.position.z&&left.targetEntityId===right.targetEntityId;
-}
+function sameMob(left:ConfirmedZoneMob,right:ConfirmedZoneMob):boolean{return left.entityId===right.entityId&&left.state===right.state&&left.position.x===right.position.x&&left.position.z===right.position.z&&left.targetEntityId===right.targetEntityId&&left.health===right.health&&left.maxHealth===right.maxHealth;}
 
-/** Server-only runtime owner for hostile mob movement/target state in the live zone. */
+/** Server-only AX1 projection state. WASD deltas are the only combat mutation input. */
 export class ZoneMobRuntime {
-  private readonly states = new Map<string,MobRuntimeState>();
+  private readonly states=new Map<string,MobRuntimeState>();
+  constructor(){observatoryMobDefinitions.forEach(definition=>this.states.set(definition.entityId,initialMobRuntimeState(definition,0)));}
 
-  constructor() {
-    observatoryMobDefinitions.forEach(definition=>this.states.set(definition.entityId,initialMobRuntimeState(definition,0)));
-  }
-
-  tick(presences: readonly ConfirmedZonePresence[], tick: number): boolean {
+  tick(presences:readonly ConfirmedZonePresence[],tick:number):boolean{
     let changed=false;
     for(const entityId of [...this.states.keys()].sort()){
-      const current=this.states.get(entityId)!;
-      const before=publicMobSnapshot(current);
-      const next=resolveMobFsmTick({
-        current,presences,tick,
-        resolveMovement:(from,desired)=>worldNatureCollision.resolve(from,desired),
-      });
-      this.states.set(entityId,next);
-      if(!sameMob(before,publicMobSnapshot(next))) changed=true;
+      const current=this.states.get(entityId)!,before=publicMobSnapshot(current);
+      const next=resolveMobFsmTick({current,presences,tick,resolveMovement:(from,desired)=>worldNatureCollision.resolve(from,desired)});
+      this.states.set(entityId,next);if(!sameMob(before,publicMobSnapshot(next)))changed=true;
     }
     return changed;
   }
 
-  snapshot(): readonly ConfirmedZoneMob[] {
-    return Object.freeze([...this.states.values()].map(publicMobSnapshot).sort((a,b)=>a.entityId<b.entityId?-1:a.entityId>b.entityId?1:0));
+  applyCombatState(entityId:string,values:{health:number;stamina?:number;nextAttackTick?:number}):MobRuntimeState|undefined{
+    const current=this.states.get(entityId);if(!current)return undefined;
+    const next=applyMobCombatState(current,values);this.states.set(entityId,next);return next;
   }
 
-  stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
+  snapshot():readonly ConfirmedZoneMob[]{return Object.freeze([...this.states.values()].map(publicMobSnapshot).sort((a,b)=>a.entityId<b.entityId?-1:a.entityId>b.entityId?1:0));}
+  stateFor(entityId:string):MobRuntimeState|undefined{return this.states.get(entityId);}
+  orderedStates():readonly MobRuntimeState[]{return Object.freeze([...this.states.values()].sort((a,b)=>a.definition.entityId<b.definition.entityId?-1:a.definition.entityId>b.definition.entityId?1:0));}
 }
