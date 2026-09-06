@@ -19,11 +19,8 @@ async function read(page: Page): Promise<GroupReadmodel> { return groupReadmodel
 
 async function launchAx1AndOpenGroups(page: Page) {
   await page.goto("/");
-  const prepare = page.getByRole("button", { name: "SPIELSTART VORBEREITEN", exact: true });
-  await expect(prepare).toBeVisible({ timeout: 20_000 });
-  await prepare.click();
-  const launch = page.getByRole("button", { name: "AX1 OPEN WORLD STARTEN", exact: true });
-  await expect(launch).toBeVisible();
+  const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
+  await expect(launch).toBeVisible({ timeout: 20_000 });
   await launch.click();
   await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
   const runtime = page.getByTestId("xaurion-open-world-runtime");
@@ -86,7 +83,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       for (const page of pages) {
         await expect(page.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true })).toBeVisible();
         await page.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }).click();
-        await expect(page.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toBeVisible();
+        await expect.poll(async () => (await read(page)).player.status, { timeout: 30_000 }).toBe("entered");
+        await expect(page.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toBeVisible({ timeout: 15_000 });
       }
       const admitted = await Promise.all(pages.map(read));
       const ticket = admitted[0]!.ticket!;
@@ -115,7 +113,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await launchAx1AndOpenGroups(pages[1]!);
       await expect(pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true })).toBeVisible();
       await pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }).click();
-      await expect(pages[1]!.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id);
+      await expect.poll(async () => (await read(pages[1]!)).player.status, { timeout: 30_000 }).toBe("entered");
+      await expect(pages[1]!.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id, { timeout: 15_000 });
       await pages[1]!.screenshot({ path: info.outputPath(`group-${viewport.name}.png`), fullPage: true });
       const [storedTickets] = await pool.query<RowDataPacket[]>("SELECT id,partyId,sourceRevision,ticketHash,ticketJson FROM aurionGroupTickets WHERE id=?", [ticket.id]);
       expect(storedTickets).toHaveLength(1);
