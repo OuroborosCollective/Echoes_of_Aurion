@@ -20,12 +20,13 @@ async function register(page: Page, handle: string): Promise<void> {
 }
 
 async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["getByTestId"]>; snapshot: any }> {
-  const solo = page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ });
-  const enter = page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true });
-  await expect(solo.or(enter).first()).toBeVisible({ timeout: 30_000 });
-  if (await solo.isVisible()) await solo.click();
+  const prepare = page.getByRole("button", { name: "SPIELSTART VORBEREITEN", exact: true });
+  const launch = page.getByRole("button", { name: "AX1 OPEN WORLD STARTEN", exact: true });
+  await expect(prepare.or(launch).first()).toBeVisible({ timeout: 30_000 });
+  if (await prepare.isVisible()) await prepare.click();
+  await expect(launch).toBeVisible({ timeout: 30_000 });
   const response = page.waitForResponse(candidate => candidate.url().includes("gameplay.enterOpenWorld") && candidate.status() === 200);
-  await enter.click();
+  await launch.click();
   const body = await (await response).json();
   const snapshot = (Array.isArray(body) ? body : [body]).map(value => value.result?.data?.json).find(Boolean);
   const runtime = page.getByTestId("xaurion-open-world-runtime");
@@ -67,7 +68,6 @@ for (const viewport of [
       const health = await page.request.get("/healthz");
       expect(await health.json()).toMatchObject({ status: "ok", revision: process.env.AURION_RELEASE_SHA });
       await register(page, `aim254_${viewport.name}`);
-      await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
       await expect(page.getByRole("heading", { name: /Willkommen zurück/ })).toBeVisible();
       const first = await enterAx1(page);
       expect(first.snapshot?.globalWorld?.worldSeed).toBe("echoes-of-aurion-v1");
@@ -153,13 +153,11 @@ test("two authenticated AX1 clients converge and departure removes the remote ac
 
   try {
     await register(left, "aim254_coop_left");
-    await left.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     await enterAx1(left);
     await expect.poll(() => leftView.length).toBe(1);
     const leftUserId = leftView[0].userId;
 
     await register(right, "aim254_coop_right");
-    await right.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     await enterAx1(right);
     await expect.poll(() => leftView.length).toBe(2);
     await expect.poll(() => rightView.length).toBe(2);
@@ -202,7 +200,6 @@ test("explicit companion learning captures the visible AX1 world and stores a bo
   try {
     await page.setViewportSize({ width: 800, height: 1280 });
     await register(page, "aim239_companion");
-    await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     const { runtime } = await enterAx1(page);
     await runtime.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
