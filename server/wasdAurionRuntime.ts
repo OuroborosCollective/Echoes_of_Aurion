@@ -1,7 +1,7 @@
 import { encodeNpcSnapshot, type PublicNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import { advanceNpcMemory, createNpcSnapshot, decodeNpcReceipt, encodeNpcReceipt, normalizeNpcRequest, npcHash, npcNeedsSchema, parseNpcJson, parseNpcMemory, type NpcRequest } from "./npcPersistenceProtocol";
+import { advanceNpcMemory, createNpcLifeSnapshot, decodeNpcReceipt, encodeNpcLifeReceipt, NPC_LIFE_RECEIPT_VERSION, normalizeNpcRequest, npcHash, npcNeedsSchema, npcReceiptVersion, npcRequestHash, parseNpcJson, parseNpcMemory, type NpcRequest, type NpcSnapshot } from "./npcPersistenceProtocol";
 import { aurionDialogueReceipts, aurionNpcDecisionReceipts, aurionNpcStates, aurionPolityStates, aurionWorldResolutions } from "../drizzle/schema";
 import { getDb } from "./db";
 import {
@@ -15,8 +15,6 @@ import {
   resolveWorldReaction,
   type DialogueInterpretation,
   type LanguageProfile,
-  type NpcNeedEvent,
-  type NpcNeedState,
   type PolityGovernmentType,
   type PolityState,
   type WorldReaction,
@@ -89,19 +87,32 @@ export async function resolveAndRecordWorld(input: {
   return { reaction: jsonParse<WorldReaction>(readback.reactionJson, reaction), source: "created" };
 }
 
-export type AurionNpcReadModel = {
-  npcId: string;
-  regionId: string;
-  needs: NpcNeedState;
-  memory: readonly string[];
-  decision: Awaited<ReturnType<typeof decideNpcGoal>>;
-  source: "persisted" | "created";
-};
+export type AurionNpcReadModel = NpcSnapshot & Readonly<{ source: "persisted" | "created" }>;
 
-/** Applies bounded needs and stores exactly one decision per NPC and resolution. */
+function assertNpcStateMatchesReceipt(state: { npcId: string; regionId: string; needsJson: string; memoryJson: string; lastResolutionIndex: number }, snapshot: NpcSnapshot): void {
+  if (snapshot.npcId !== state.npcId || snapshot.regionId !== state.regionId || snapshot.decision.resolutionIndex !== state.lastResolutionIndex || npcHash(snapshot.needs) !== npcHash(npcNeedsSchema.parse(parseNpcJson(state.needsJson))) || npcHash(snapshot.memoryState) !== npcHash(parseNpcMemory(state.memoryJson,state.lastResolutionIndex))) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+}
+
+/** Read the exact latest confirmed NPC receipt. This is server-internal and never synthesizes a default state. */
+export async function readConfirmedNpcState(npcId: string): Promise<NpcSnapshot | null> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(npcId)) throw new Error("NPC_ID_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  return db.transaction(async tx => {
+    const state = (await tx.select().from(aurionNpcStates).where(eq(aurionNpcStates.npcId,npcId)).limit(1))[0];
+    if (!state || state.lastResolutionIndex < 0) return null;
+    const receipt = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId,npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,state.lastResolutionIndex))).limit(1))[0];
+    if (!receipt) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
+    const snapshot = decodeNpcReceipt(receipt.observationIdsJson,receipt);
+    assertNpcStateMatchesReceipt(state,snapshot);
+    return snapshot;
+  });
+}
+
+/** Applies bounded needs and stores exactly one versioned life decision per NPC and resolution. */
 export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcReadModel> {
   const input = normalizeNpcRequest(raw);
-  const requestHash = npcHash(input);
+  const v3RequestHash = npcRequestHash(input,NPC_LIFE_RECEIPT_VERSION);
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   return db.transaction(async tx => {
@@ -112,12 +123,14 @@ export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcRea
     if (!current) throw new Error("NPC_STATE_REQUIRED");
     const prior = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId, input.npcId), eq(aurionNpcDecisionReceipts.resolutionIndex, input.resolutionIndex))).limit(1))[0];
     if (prior) {
-      const snapshot = decodeNpcReceipt(prior.observationIdsJson, { ...prior, requestHash });
-      return { ...snapshot, source: "persisted" as const };
+      const version = npcReceiptVersion(prior.observationIdsJson);
+      const snapshot = decodeNpcReceipt(prior.observationIdsJson, { ...prior, requestHash: npcRequestHash(input,version) });
+      return Object.freeze({ ...snapshot, source: "persisted" as const });
     }
     if (input.resolutionIndex <= current.lastResolutionIndex) throw new Error("NPC_RESOLUTION_OUT_OF_ORDER");
     const currentNeeds = npcNeedsSchema.parse(parseNpcJson(current.needsJson));
     const currentMemory = parseNpcMemory(current.memoryJson, current.lastResolutionIndex);
+    let previousLifeState = undefined;
     if (current.lastResolutionIndex >= 0) {
       const latest = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId, input.npcId), eq(aurionNpcDecisionReceipts.resolutionIndex, current.lastResolutionIndex))).limit(1))[0];
       if (!latest) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
@@ -129,20 +142,22 @@ export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcRea
         if (old.decisionHash !== latest.decisionHash || old.goal !== latest.goal) throw new Error("NPC_STORED_CONTENT_CORRUPT");
       } else {
         const proof = decodeNpcReceipt(latest.observationIdsJson, latest);
-        if (proof.regionId !== current.regionId || npcHash(proof.needs) !== npcHash(currentNeeds) || npcHash(proof.memoryState) !== npcHash(currentMemory)) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+        assertNpcStateMatchesReceipt(current,proof);
+        previousLifeState = "lifeState" in proof ? proof.lifeState : undefined;
       }
     }
     const needs = resolveNpcNeeds({ current: currentNeeds, events: input.needEvents });
     const memory = advanceNpcMemory(currentMemory, input.memory, input.resolutionIndex);
-    const snapshot = createNpcSnapshot({ ...input, needs, memoryState: memory });
-    const id = "npc_" + npcHash(["aurion-npc-decision.v2", input.npcId, input.resolutionIndex]).slice(0, 56);
-    const envelope = encodeNpcReceipt(requestHash, snapshot);
+    const snapshot = createNpcLifeSnapshot({ ...input, needs, memoryState: memory, ...(previousLifeState ? { previousLifeState } : {}) });
+    const id = "npc_" + npcHash([NPC_LIFE_RECEIPT_VERSION, input.npcId, input.resolutionIndex]).slice(0, 56);
+    const envelope = encodeNpcLifeReceipt(v3RequestHash, snapshot);
     await tx.update(aurionNpcStates).set({ regionId: input.regionId, needsJson: JSON.stringify(needs), memoryJson: JSON.stringify(memory), languageProfileId: input.languageProfileId, lastResolutionIndex: input.resolutionIndex }).where(eq(aurionNpcStates.npcId, input.npcId));
-    // observationIdsJson is a versioned JSON envelope from v2 onward; no information is inferred on replay.
+    // observationIdsJson is a versioned receipt envelope. All life state is receipt-owned and replay-verifiable.
     await tx.insert(aurionNpcDecisionReceipts).values({ id, npcId: input.npcId, regionId: input.regionId, resolutionIndex: input.resolutionIndex, observationIdsJson: envelope, goal: snapshot.decision.goal, decisionHash: snapshot.decision.decisionHash });
     const row = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id, id)).limit(1))[0];
     if (!row) throw new Error("NPC decision readback failed");
-    return { ...decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash }), source: "created" as const };
+    const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
+    return Object.freeze({ ...readback, source: "created" as const });
   });
 }
 
@@ -226,7 +241,7 @@ export async function readConfirmedNpcPacket(userId: number) {
       const receipt=(await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId,state.npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,state.lastResolutionIndex))).limit(1))[0];
       if(!receipt) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
       const snapshot=decodeNpcReceipt(receipt.observationIdsJson,receipt);
-      if(snapshot.regionId!==state.regionId || npcHash(snapshot.needs)!==npcHash(npcNeedsSchema.parse(parseNpcJson(state.needsJson))) || npcHash(snapshot.memoryState)!==npcHash(parseNpcMemory(state.memoryJson,state.lastResolutionIndex))) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+      assertNpcStateMatchesReceipt(state,snapshot);
       projection.push({npcId:snapshot.npcId,regionId:snapshot.regionId,resolutionIndex:snapshot.decision.resolutionIndex,goal:snapshot.decision.goal,needs:snapshot.needs,memoryCount:snapshot.memory.length,decisionHash:snapshot.decision.decisionHash});
     }
     return Object.freeze({userId,format:"aurion-public-npc.v2" as const,data:Buffer.from(encodeNpcSnapshot(projection)).toString("base64")});
