@@ -32,6 +32,20 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
   const baseStop=engine.stop.bind(engine);let stopped=false;
   engine.stop=()=>{if(!stopped){stopped=true;detachZoneProjection();worldCore.stop();}baseStop();};
 
+  // A production-assigned GLB is only allowed to replace AX1's procedural player
+  // when the loaded asset itself proves real idle and attack clips. Missing clips
+  // fall back to AX1 instead of exposing bind/T-pose or fake recoil animation.
+  const equipGlbModel=player.equipGlbModel.bind(player);
+  player.equipGlbModel=async modelId=>{
+    const equipped=await equipGlbModel(modelId);
+    if(!equipped||!modelId)return equipped;
+    const evidence=player.glbPresentationEvidence();
+    const supported=new Set(evidence?.supportedPoses??[]);
+    if(supported.has("idle")&&supported.has("attack"))return true;
+    await equipGlbModel(null);
+    return false;
+  };
+
   engine.castClassSkill=index=>{if(index>=0&&index<5)handlers.requestAction(String(index+1) as AurionGameplayCommand);};
   engine.toggleMount=()=>handlers.requestMount();
   engine.interactNearby=()=>{if(engine.nearbyLoot)handlers.requestAction("E");return{};};
