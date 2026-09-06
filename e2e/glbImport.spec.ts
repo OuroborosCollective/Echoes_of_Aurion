@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { createHash } from "node:crypto";
-import { testGlb } from "../server/glbImportFixtures";
+import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable GLB CI database");
 test("admin upload persists bytes and assignment, deduplicates, and renders the published avatar", async ({ page, baseURL, request }, testInfo) => {
@@ -27,7 +27,9 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     await page.goto('/ops/glb-upload');
     const input = page.locator('#smartGlbFile');
     await expect(input).toBeEnabled();
-    const bytes = testGlb('Aurion_Player', { nodes: [{ name: 'Aurion_Player', mesh: 0 }, { name: 'root_joint' }], skins: [{ joints: [1] }] });
+    // The production player gate requires real Idle + Attack clips. A skin-only GLB
+    // must fail closed instead of replacing AX1 with a T-pose.
+    const bytes = testAnimatedPlayerGlb('Aurion_Player');
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     const upload = async () => {
       const response = page.waitForResponse(r => r.url().endsWith('/api/admin/glb-smart-upload') && r.request().method() === 'POST');
@@ -67,9 +69,16 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     await page.getByRole('button', { name: 'IN DIE OPEN WORLD', exact: true }).click();
     await expect(page.getByTestId('xaurion-open-world-runtime')).toBeVisible();
     await expect(page.getByTestId('glb-model-status')).toHaveText('active', { timeout: 45_000 });
+    const presentation = page.getByTestId('glb-presentation');
+    await expect.poll(async () => {
+      const raw = await presentation.getAttribute('data-presentation');
+      if (!raw) return null;
+      const evidence = JSON.parse(raw);
+      return { clip: evidence?.clip ?? null, poses: evidence?.supportedPoses ?? [], names: evidence?.animationNames ?? [] };
+    }, { timeout: 15_000 }).toMatchObject({ clip: 'Idle', poses: expect.arrayContaining(['idle', 'attack']), names: expect.arrayContaining(['Attack', 'Idle']) });
     expect(fetched.length).toBeGreaterThan(0);
     await expect(page.locator('#three-viewport canvas')).toBeVisible();
     await page.locator('#three-viewport canvas').screenshot({ path: testInfo.outputPath('imported-avatar.png') });
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, receipt, db: rows[0], byteReadback: true, rendererLoaded: true }), contentType: 'application/json' });
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, receipt, db: rows[0], byteReadback: true, rendererLoaded: true, animationContract: ['Idle', 'Attack'] }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
