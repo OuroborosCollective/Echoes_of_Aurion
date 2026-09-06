@@ -1,45 +1,102 @@
 ---
-description: Technischer Projektüberblick und nachweisgebundener Veröffentlichungsstand.
+description: Aktueller technischer Projektüberblick für Echoes of Aurion.
 ---
 
 # Echoes of Aurion
 
-**Echoes of Aurion** ist ein serverautoritäres 3D-Open-World-MMORPG für Browser und Mobilgeräte. Die Runtime entwickelt sich auf `main`. Dieser Überblick trennt implementierte Systeme von produktiv nachgewiesenen Funktionen.
+**Echoes of Aurion** ist der Produkt- und Hostingrahmen für ein persistentes 3D-MMORPG. Seit dem Architektur-Cutover vom 6. September 2026 sind Website, Spielruntime und Gameplayregeln strikt getrennt.
 
-Die Referenzrevision ist `main@c0ad8967046c52141cf1b5f69874a0c53117fbe2`. Der vollständige Evidenzstand steht im [AURION\_MIGRATION\_TRUTH\_SNAPSHOT\_2026-08-28.md](AURION_MIGRATION_TRUTH_SNAPSHOT_2026-08-28.md "mention").
+{% hint style="info" %}
+Die verbindliche Zuständigkeitsmatrix steht in [Architektur-Ownership: Aurion · AX1 · WASD](ARCHITECTURE_OWNERSHIP.md). Bei Widerspruch mit älteren Dokumenten gilt diese Matrix.
+{% endhint %}
 
-## Architektur
+## Architektur in einem Satz
 
-Die Welt entsteht aus einem versionierten Seed. Der Server autorisiert Bewegung, Kampf, Loot, Quests, Präsenz, Epochen und Weltänderungen. Clients zeigen nur bestätigte Readmodels.
+**Aurion hostet Website, Auth, Community und Persistenz; AX1 betreibt `/play`, Renderer und Spieloberfläche; WASD besitzt sämtliche Gameplay- und Simulationsregeln.**
 
-Die Anwendung verwendet React, TypeScript, Vite und Babylon.js. Das Streaming passt Detailstufen an Gerätebudgets an. Diese Budgets ändern niemals den kanonischen Weltzustand.
+| System | Verantwortung |
+| --- | --- |
+| **Aurion** | Landing Page, Account/Auth, Community, Forum, Community-Events, Asset-/Ops-Verwaltung, MariaDB, Receipts, read-only Readmodels |
+| **AX1** | `/play`, 3D-Runtime, Kamera, HUD, Eingaben, Animationen, visuelle/contentbezogene Projektion |
+| **WASD** | Bewegung, Combat, Quests, Progression, Mastery, Loot, Crafting, Economy, Gruppen/Dungeons, NPC/Mobs, Welt/Chunks, Housing, Guild/Kingdom, Balancing |
 
-## Implementierte Systeme
+Aurion ist **keine** zweite Gameplay-Engine. Ein Datenbank-Write speichert nur ein bereits bestätigtes Ergebnis; er definiert die zugrunde liegende Spielregel nicht.
 
-Der aktuelle Quellstand enthält folgende Systeme:
+## Website
 
-* Deterministische Welt-, Chunk- und Streamingverträge.
-* Serverseitige Quests, Loot, Iteminstanzen, Mastery und Ethos.
-* Präsenz, Welt-Epochen und begrenzte Reaktionsketten.
-* Faction-Questentscheidungen mit idempotenten Belohnungsbelegen.
-* Audio-Cues als reine Präsentation.
+Die Aurion-Website trägt:
 
-Aurion verwendet keine Klassen und keine globale Charakterstufe. Fähigkeiten haben eigene XP und eigene, offene Fortschrittslogik. Builds entstehen aus Fähigkeiten, Ausrüstung und Entscheidungen.
+- Registrierung, Login, Session und Accountverwaltung;
+- Community und Forum;
+- Community-Events;
+- Asset-/GLB-Governance und Operations;
+- read-only Charakterdaten wie Level, Skill-/Masterystände, Gildenzugehörigkeit, Inventar, Ausrüstung, Achievements bei vorhandener bestätigter Projektion und Companion-Trainingsmetadaten.
 
-## Nachweisstand
+Die Website darf diese Gameplaydaten **nicht verändern**. Es gibt dort keine Quest-, Combat-, Loot-, Crafting-, Progressions-, Equipment-, Economy-, Dungeon-, Housing- oder Guild-/Kingdom-Gameplay-Authority.
 
-Die Systeme sind in `main` vorhanden und überwiegend durch Verträge oder Tests belegt. Das beweist keine vollständige Produktionsfreigabe.
+## Spiel
 
-Die öffentliche Root-Website zeigt weiterhin eine ältere statische Oberfläche. Die vollständige API-Laufzeit, Produktionsdatenbank-Migrationen und der durchgängige Browsernachweis bleiben separat zu verifizieren.
+`/play` gehört AX1. AX1 nimmt Eingaben an und rendert bestätigte Zustände. Lokale Animation, Prediction oder UI-Zustand ist niemals alleinige Gameplay-Evidence.
 
-Die Hauptschritte vor einer vollständigen Freigabe sind:
+Gameplayänderungen folgen der Kette:
 
-1. Produktionsschema bis Migration `0027` sicher abgleichen.
-2. Die Migrationskette für neue und bestehende Umgebungen reparieren.
-3. Den vollständigen Golden Slice mit Datenbank- und Browser-Readback prüfen.
+```text
+AX1 intent
+→ WASD deterministic rule / logical tick
+→ confirmed result + receipt
+→ Aurion persistence/transport
+→ AX1 read-only projection
+```
 
-Bis dahin gilt eine Funktion nur im höchsten belegten Evidenzstatus. Datei-, Test- oder PR-Existenz allein ist kein Produktionsnachweis.
+Wo ein WASD-Vertrag noch nicht vollständig migriert ist, gilt fail-closed: keine Aurion-Ersatzregel.
 
-## Historische Inhalte
+## Persistenz
 
-Frühere Seiten zu einem lokalen Einzelspieler-Prototyp, einer simulierten Partnerkopplung oder einer itch.io-Auslieferung beschreiben historische Kandidaten. Sie sind keine Aussage über die aktuelle Aurion-Runtime oder eine veröffentlichte Produktion.
+MariaDB hält Account-/Communitydaten sowie bestätigte Gameplay-Evidence und Readmodels. Kritische Gameplay-Outcomes müssen ihre Herkunft über WASD-Receipt, Source-/Ruleset-Version oder eine gleichwertige revisionsgebundene Provenienz belegen.
+
+Persistenz ist nicht Gameplay-Ownership.
+
+## Assets
+
+Aurion verwaltet Upload, Quarantäne, Review, SHA-256/Bytes, Sichtbarkeit und visuelle Asset-Zuweisungen. AX1 rendert freigegebene Assets. WASD bestimmt Stats, Collision-, Spawn-, Item-, Mob- und sonstige Gameplaysemantik.
+
+Ein GLB kann deshalb niemals durch seine Metadaten Schaden, HP, Drops oder Regeln festlegen.
+
+## Companion Learning
+
+Companion-Lernvorgänge dürfen im Spiel über AX1 aufgezeichnet und als Evidence gespeichert werden. Die Aurion-Accountseite darf Trainings-/Sample-/Receipt-Metadaten anzeigen, aber keinen Companion steuern und kein Gameplay aus Trainingsdaten erzeugen.
+
+## Determinismus und Balancing
+
+WASD ist die normative Regelquelle. Reproduzierbare Simulation, Tick-/Sequence-Semantik, RNG, Progressionskurven und Gameplay-Balancing werden dort versioniert.
+
+Wolfram/CAG kann Formeln analysieren und falsifizieren. Es ist ein Analysewerkzeug, keine Runtime-Authority.
+
+## Evidence
+
+Eine grüne Ebene beweist nur sich selbst:
+
+- Website-Health beweist den Aurion-Host;
+- DB-Readback beweist Persistenz;
+- AX1-Animation beweist Präsentation;
+- WASD-Receipt/Reducer beweist Gameplayregel/-zustand;
+- Browser-E2E beweist die sichtbare Zusammenschaltung, wenn alle Quellen revisionsgleich gebunden sind.
+
+Dateiexistenz, PR-Status, Linear-Status oder ein gesunder Container allein sind kein vollständiger Produktionsnachweis.
+
+## Aktuelle Arbeitsregeln
+
+- Keine Fake-/Mock-Wahrheit in Production-Pfaden.
+- Keine Aurion-Gameplay-Abkürzungen über Website, Admin, MCP oder SQL.
+- Alte Arena-/Encounter-/Aurion-Quest-/Aurion-Progressionspfade gelten als Legacy-Migrationsschuld.
+- Nach jeder Integration: relevante Regressionen + Runtime-/DB-/Browser-Readback.
+- Jede Migrationslane endet mit Merge, `main`-Readback und **0 offenen PRs**, bevor die nächste beginnt.
+
+## Dokumentation
+
+- [Architektur-Ownership](ARCHITECTURE_OWNERSHIP.md) — normative Grenze.
+- [Dokumentationsindex](docs/README.md) — aktuelle technische Dokumente.
+- [WASD Normative Ruleset](docs/migrations/AIM252_WASD_NORMATIVE_RULESET.md) — Gameplay-Quellenbindung.
+- [AX1 Source Reconciliation](docs/migrations/AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md) — revisionsgebundene Engine-/Content-Provenienz.
+
+Datiertes `guardian/`- und `qa/`-Material ist historische Evidence. Es beschreibt den Stand seiner jeweiligen Revision und ist keine aktuelle Architekturdefinition.
