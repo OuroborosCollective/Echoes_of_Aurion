@@ -150,6 +150,8 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     // launch. The same UI command rejoins the immutable ticket.
     await clickLiveGroupButton(dialog.getByRole("button", { name: "Instanz verlassen, Platz behalten", exact: true }));
     await expect.poll(async () => (await read(healerPage)).player.status).toBe("formed");
+    await healerPage.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible({ timeout: 15_000 });
     await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(healerPage).toHaveURL(/\/$/, { timeout: 15_000 });
     const relaunched = await launchAx1AndOpenGroups(healerPage);
