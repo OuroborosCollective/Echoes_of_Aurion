@@ -32,7 +32,7 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     const firstRuntime = createAutonomousNpcLifeRuntime({ enabled: true });
     await firstRuntime.resolveOnce({ tick: 600 });
     const first = firstRuntime.readback();
-    expect(first).toMatchObject({ status: "confirmed", lastGatewayTick: 600, lastResolutionIndex: 0, npcReceiptSource: "created", worldReceiptSource: "created" });
+    expect(first).toMatchObject({ status: "confirmed", lastGatewayTick: 600, lastResolutionIndex: 0, worldRegionId: "observatory_threshold", npcReceiptSource: "created", worldReceiptSource: "created" });
     expect(first.decisionHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.lifeStateHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.worldReactionHash).toMatch(/^[a-f0-9]{64}$/);
@@ -43,6 +43,8 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
     expect(second.status).toBe("confirmed");
     expect(second.lastResolutionIndex).toBe(1);
     expect(second.decisionHash).not.toBe(first.decisionHash);
+    expect(typeof second.worldRegionId).toBe("string");
+    expect(hubs).toContain(second.worldRegionId as (typeof hubs)[number]);
 
     const [receipts] = await pool.query<RowDataPacket[]>("SELECT resolutionIndex,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? ORDER BY resolutionIndex",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     expect(receipts).toHaveLength(2);
