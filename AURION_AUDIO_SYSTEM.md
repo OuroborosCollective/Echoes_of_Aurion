@@ -1,35 +1,62 @@
-# Aurion Audio System v1
+---
+description: Audio als reine AX1-Präsentations- und Side-Channel-Schicht.
+---
 
-## Zweck und Grenze
+# Aurion Audio System
 
-Das Audiosystem ist eine **reine Präsentationsschicht**. Es liest bestätigte beziehungsweise lokal sichtbare Gameplayereignisse und kann niemals Bewegung, Schaden, Loot, Questfortschritt, XP, Weltzustand oder Persistenz autorisieren. Jeder Cue ist an `shared/audioProtocol.ts` gebunden. Die Runtime akzeptiert ausschließlich valide `AudioEvent`-Payloads über `aurion:audio-cue`; unbekannte und kategoriewidrige Payloads werden verworfen.
+## Zweck und Ownership
 
-## Kategorien und Trigger
+Audio ist eine **reine Präsentationsschicht**.
 
-| Kategorie | Triggerquelle | Cuefamilie | Verhalten |
-| --- | --- | --- | --- |
-| Ambient | bestätigte Zone/Chunk-/Tower-Sichtbarkeit | Tower, Plains, Forest, Cave, City, Wetland, Stone Ruins, Cinder Vault | ein Loop pro aktiver Zone; optionaler Assetpfad plus Fallback |
-| Interaction | sichtbare NPC-Interaktion, bestätigtes Lootreadmodell | maskulin, feminin, neutral, Schraubenbeutel | kurzer Cue ohne Zustandsmutation |
-| Combat | bestätigte Kampfaction oder sichtbar bestätigter Gegnerimpuls | scharf, spitz, stumpf; Magie, Heilung, Buff; Wolf, Mensch, Monster für Angriff und Tod | deduplizierte One-Shots auf dem Combat-Bus |
-| Movement | lokaler Schritt auf bestätigter Oberfläche | Footstep und Run für Erde, Gras, Stein, Holz, Wasser | kurzer Surface-Cue mit 80-ms-Deduplizierung |
-| Resource | bestätigter Ernte-/Abbaureceipt | Pflanzenernte, Holzhacken, Erzabbau mit Picke | erst nach serverseitiger Bestätigung auslösen |
-| Crafting | bestätigter Crafting-Receipt oder sichtbarer bestätigter Arbeitsschritt | Werkbank-Säge | erst nach serverseitiger Bestätigung auslösen |
-| Progression | bestätigter Level-up-/Victory-Event | Level-up | niemals aus UI-Vorschau |
+- **AX1** besitzt Audioausgabe, Busse, Cue-Rendering und visuell/auditiv synchronisierte Presentation.
+- **WASD** besitzt die Gameplayevents, aus denen gameplaybezogene Cues abgeleitet werden.
+- **Aurion** darf Audioassets, Freigabemetadaten und Preferences hosten/persistieren, aber keine Gameplaywirkung aus Audio erzeugen.
 
-## Aktuelle Ereignisbrücke
+Audio kann niemals Bewegung, Treffer, Schaden, Loot, Questfortschritt, XP, Crafting, World-State oder Persistenz autorisieren.
 
-Die Ambientauswahl bleibt deterministisch und nutzt ausschließlich vorhandene Zustände: Home spielt Tower, Arena 3 Cinder Vault, Arena 2 Cave, Arena 1 City, die globale gestreamte Expanse Forest und der verbleibende Expeditionspfad Plains. Die Babylon-Szene übergibt einen bestätigten Explorerangriff als `combat.attack.pointed`, Echo-Impulse als `combat.magic`, Sentinelangriffe als `combat.creature.monster.attack` und den bestätigten Sentinel-Sieg als `combat.creature.monster.death`. Die Home-Komponente validiert die Payload per `isAudioEvent` und leitet sie anschließend an `AurionSoundscape` weiter. Damit bestehen keine parallelen Autoritätspfade und keine Audioaktion beeinflusst Spielwerte.
+## Eventfluss
 
-Die vollständige SFX-Matrix steht ebenfalls über die typsichere, validierte `aurion:audio-cue`-Brücke bereit. Künftige Waffen-, Heil-/Buff-, Wolf-/Mensch- sowie Loot-/Ernte-/Mining-/Craftingdienste dürfen einen Cue ausschließlich aus einem bestätigten Readmodell oder Receipt ableiten. Der Renderer besitzt für jeden registrierten Cue einen synthetischen Fallback, falls ein optionales WAV nicht geladen oder dekodiert werden kann.
+```text
+WASD confirmed gameplay event
+→ Aurion transport/readback if persistence is involved
+→ AX1 validated audio cue
+→ audio output
+```
 
-## Browser- und Mobilverhalten
+Für rein lokale UI-Sounds darf AX1 direkt einen UI-Cue auslösen, solange dieser keine Gameplaybedeutung besitzt.
 
-AudioContext wird ausschließlich durch direkte Nutzerinteraktion freigeschaltet. Autoplay-Fehler bleiben nicht-blockierend; ein fehlendes oder defektes Asset darf den Renderer nicht unterbrechen. Bus-Lautstärken sind für mobile Lautsprecher konservativ voreingestellt. Der Ambient-Loop wird beim Tower-/Expanse-Wechsel ersetzt und beim React-/Babylon-Unmount vollständig beendet. Kurz-SFX sind mono, 44.1 kHz, 16-bit PCM und belegen gemeinsam gemessene 0.928659 MiB.
+## Cue-Klassen
+
+| Kategorie | Quelle |
+| --- | --- |
+| Ambient | bestätigte sichtbare AX1 Zone/Region/Environment-Projektion |
+| Movement | sichtbare bestätigte Bewegung/Oberfläche |
+| Combat | bestätigtes WASD Combat-Event |
+| Interaction | bestätigte Interaktion bzw. rein lokale UI-Aktion |
+| Loot/Resource/Crafting | erst nach bestätigtem WASD-Receipt/Event |
+| Progression | erst nach bestätigtem WASD-Progressions-Event |
+
+Ein Cue darf niemals als Bestätigung des Events zurück in Gameplaycode fließen.
+
+## Runtimegrenzen
+
+- ein AudioContext ist Presentation-Infrastruktur, keine Authority;
+- Autoplay-/Decodefehler bleiben nicht-blockierend;
+- fehlende Assets dürfen Gameplaystate nicht verändern;
+- Deduplizierung, Fade, Lautstärke und Device-Budgets sind rein visuell/auditiv;
+- Render-/Wall-clock-Zeit darf nur Audioanimation steuern, nicht WASD-Semantik.
 
 ## Assetvertrag
 
-Zone-Musik und SFX werden mit SHA-256, Format, Dauer, Quelldefinition, Contentversion und Zielcue inventarisiert. Ein Asset wird erst nach technischem Decode-Readback und Review als `active` geführt. Die 21 SFX sind durch `scripts/generate_aurion_sfx.py` revisionsgebunden renderbar; die drei neuen Weltambiences sind als `ambient-forest-world.wav`, `ambient-cave-world.wav` und `ambient-city-world.wav` inventarisiert und werden vom Static-/Itch-Packager mitgeführt. Ein zweiter Renderlauf erzeugte identische SHA-256-Listen. Die Runtime besitzt für alle Cues einen deterministischen Synth-Fallback; externe Audio-URLs sind optional und niemals gameplaykritisch.
+Audioassets können mit SHA-256, Format, Dauer, Quelle, Contentversion und Cue-Ziel inventarisiert werden. `active` bedeutet ausschließlich: technisch geprüft und für Presentation freigegeben.
 
-## Rückkehrpunkt
+Ein Assetname, Cue oder Sound darf keine Attackrange, Damage, Lootchance, Questwirkung oder andere Gameplayregel definieren.
 
-Die Integration bleibt auf dem Kandidatenbranch `feature/aurion-audio-system` vom Aurion-Main-Head `73542eabfe981135593676648d5a2717f3b2c0a8`. Es gibt keine Datenbankmigration, keinen Scheduler und keine Produktionsmutation.
+## Evidence
+
+- WASD Receipt/Event beweist den fachlichen Trigger;
+- AX1 Audio-Test beweist die Presentation;
+- Asset-Hash/Decode beweist die Audiodatei;
+- Aurion-Host-/DB-Readback beweist gegebenenfalls gespeicherte Asset-/Preference-Daten.
+
+Diese Evidenceebenen bleiben getrennt.
