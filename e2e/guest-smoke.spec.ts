@@ -25,8 +25,7 @@ test("guest cannot start AX1 before authentication", async ({ page }) => {
   const errors = recordUnexpectedConsoleErrors(page);
   await page.goto("/");
   await expect(page.getByText("Konto erforderlich", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toHaveCount(0);
   await expect(page.locator("canvas")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
