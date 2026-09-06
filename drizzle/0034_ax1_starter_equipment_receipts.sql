@@ -8,7 +8,7 @@ CREATE TABLE `aurionAx1StarterEquipmentReceipts` (
   `contentSha256` varchar(64) NOT NULL,
   `createdAt` timestamp NOT NULL DEFAULT (now()),
   CONSTRAINT `aurionAx1StarterEquipmentReceipts_id` PRIMARY KEY (`id`),
-  CONSTRAINT `aurionAx1StarterEquipmentReceipts_user_definition_uq` UNIQUE(`userId`,`definitionId`)
+  CONSTRAINT `aurionAx1StarterEquipmentReceipts_user_definition_source_uq` UNIQUE(`userId`,`definitionId`,`sourceRevision`,`sourceBlobSha`)
 );
 --> statement-breakpoint
 CREATE INDEX `aurionAx1StarterEquipmentReceipts_user_created_idx` ON `aurionAx1StarterEquipmentReceipts` (`userId`,`createdAt`);
