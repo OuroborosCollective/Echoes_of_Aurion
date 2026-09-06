@@ -77,14 +77,24 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       const auto = hud.getByRole("button", { name: "Auto-Angriff", exact: true, includeHidden: true });
       await page.getByTestId("glb-presentation").evaluate(element => {
         const samples: unknown[] = []; (window as any).__ax1AttackSamples = samples;
-        new MutationObserver(() => { const sample=JSON.parse(element.getAttribute("data-attack")||"{}"); if(sample.attacking && sample.visible && samples.length<30)samples.push(sample); }).observe(element,{attributes:true,attributeFilter:["data-attack"]});
+        const record = () => {
+          const procedural = JSON.parse(element.getAttribute("data-attack") || "{}");
+          const glb = JSON.parse(element.getAttribute("data-presentation") || "null");
+          if (glb && /attack|fight/i.test(String(glb.clip)) && samples.length < 30) {
+            samples.push({ kind: "glb", clip: glb.clip, clipTime: glb.clipTime, bonePose: glb.bonePose });
+          } else if (procedural.attacking && procedural.visible && samples.length < 30) {
+            samples.push({ kind: "procedural", remaining: procedural.remaining, arm: procedural.arm, weapon: procedural.weapon });
+          }
+        };
+        new MutationObserver(record).observe(element,{attributes:true,attributeFilter:["data-attack","data-presentation"]});
+        record();
       });
       const action = page.waitForResponse(r => r.url().includes("gameplay.act") && r.status() === 200);
       await attack.click(); await action;
       await expect(page.locator("#three-viewport")).toHaveAttribute("data-confirmed-attack-receipt", /.+/);
       await expect.poll(()=>page.evaluate(()=>(window as any).__ax1AttackSamples.length),{timeout:10_000}).toBeGreaterThan(1);
       const animation=await page.evaluate(()=>(window as any).__ax1AttackSamples);
-      expect(new Set(animation.map((sample:any)=>JSON.stringify(sample.arm))).size).toBeGreaterThan(1);
+      expect(new Set(animation.map((sample:any)=>sample.kind === "glb" ? `glb:${sample.bonePose}:${Math.round(sample.clipTime*1000)}` : `procedural:${JSON.stringify(sample.arm)}`)).size).toBeGreaterThan(1);
       const [boss]=await pool.query<RowDataPacket[]>("SELECT bossHp,maxBossHp FROM gameplaySessions WHERE userId=?",[userId]);
       expect(boss[0].bossHp).toBeLessThan(boss[0].maxBossHp);
       const receipts = async () => { const [rows] = await pool.query<RowDataPacket[]>("SELECT sequence,command,damage FROM gameplayActionReceipts WHERE userId=? ORDER BY sequence", [userId]); return rows; };
