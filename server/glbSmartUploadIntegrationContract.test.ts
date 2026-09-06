@@ -8,7 +8,8 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), "u
 describe("smart GLB upload integration contract", () => {
   it("registers the authenticated runtime route after the upload-sized JSON parser", () => {
     const index = read("server/_core/index.ts");
-    const parserIndex = index.indexOf('app.use(express.json({ limit: "50mb" }))');
+    const parserMatch = /app\.use\(express\.json\(\{\s*limit\s*:\s*["']50mb["']\s*\}\)\)/.exec(index);
+    const parserIndex = parserMatch?.index ?? -1;
     const routeIndex = index.indexOf("registerGlbSmartUpload(app)");
     expect(parserIndex).toBeGreaterThan(-1);
     expect(routeIndex).toBeGreaterThan(parserIndex);
