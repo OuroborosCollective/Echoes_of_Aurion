@@ -35,7 +35,10 @@ async function launchAx1AndOpenGroups(page: Page) {
 
 for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tablet", width: 800, height: 1280 }, { name: "desktop", width: 1440, height: 1000 }]) {
   test(`five real browser sessions share one revision-bound instance on ${viewport.name}`, async ({ browser, baseURL }, info) => {
-    test.setTimeout(300_000);
+    // Five independent WebGL contexts plus a portal return/relaunch are intentionally
+    // expensive on GitHub's software-rendered Chromium runner. Keep every assertion;
+    // give the proof enough wall-clock budget instead of treating CI rendering cost as gameplay failure.
+    test.setTimeout(600_000);
     expect(baseURL).toBe("http://127.0.0.1:3000");
     const url = new URL(process.env.DATABASE_URL!);
     expect(url.hostname).toBe("127.0.0.1"); expect(url.pathname).toBe("/aurion_group_test");
@@ -110,8 +113,13 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await pages[1]!.getByTestId("xaurion-open-world-runtime").getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
       await expect(pages[1]!).toHaveURL(/\/$/, { timeout: 15_000 });
       await launchAx1AndOpenGroups(pages[1]!);
-      await expect(pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true })).toBeVisible();
-      await pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }).click();
+      const rejoin = pages[1]!.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true });
+      await expect(rejoin).toBeVisible({ timeout: 30_000 });
+      await expect(rejoin).toBeEnabled();
+      // The 2-second readmodel refresh can replace the React button between
+      // Playwright's actionability checks. Dispatch the already-visible/enabled
+      // control's normal DOM click so the same UI handler sends the real command.
+      await rejoin.evaluate((button: HTMLButtonElement) => button.click());
       await expect.poll(async () => (await read(pages[1]!)).player.status, { timeout: 30_000 }).toBe("entered");
       await expect(pages[1]!.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id, { timeout: 15_000 });
       await pages[1]!.screenshot({ path: info.outputPath(`group-${viewport.name}.png`), fullPage: true });
