@@ -50,11 +50,14 @@ describe("AIM-242 -ax1 controls behind Aurion authority", () => {
 
   it("keeps local combat/progression methods projection-only in Aurion integrated mode", () => {
     const adapter = read("client/src/xaurion/integration/aurionAuthorityAdapter.ts");
-    expect(adapter).toContain("player.takeDamage = () => ({ damageTaken: 0");
-    expect(adapter).toContain("player.gainXp = () => false");
-    expect(adapter).toContain("player.consumeResource = () => false");
-    expect(adapter).toContain("player.equipItem = () => null");
-    expect(adapter).toContain("engine.castClassSkill = index =>");
-    expect(adapter).toContain('handlers.requestAction("E")');
+    const compact = adapter.replace(/\s+/g, "");
+    expect(compact).toContain("engine.mobManager.enableServerAuthority()");
+    expect(compact).toContain("attachAx1ZoneProjection(engine)");
+    expect(compact).toContain("player.takeDamage=()=>({damageTaken:0,isDead:false,dodged:false})");
+    expect(compact).toContain("player.gainXp=()=>false");
+    expect(compact).toContain("player.consumeResource=()=>false");
+    expect(compact).toContain("player.equipItem=()=>null");
+    expect(compact).toContain("engine.castClassSkill=index=>");
+    expect(compact).toContain('handlers.requestAction("E")');
   });
 });
