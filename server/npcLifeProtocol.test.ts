@@ -78,7 +78,7 @@ describe("AIM-263 autonomous deterministic NPC life", () => {
     const result = resolveNpcLife({ ...base(3), economy: { currentHubId: "observatory_threshold", wealthCopper: 2_000, hungerBps: 4_000, fatigueBps: 3_000, tradeProwessBps: 10_500, harvestYieldBps: 10_000 } });
     expect(result.state.economy?.wealthCopper).toBe(2_000);
     expect(Object.isFrozen(result.state.economy)).toBe(true);
-    const tampered = { ...result.state, currentGoal: "expand_influence" };
+    const tampered = { ...result.state, decisionCount: result.state.decisionCount + 1 };
     expect(() => parseNpcLifeState(tampered)).toThrow("STATE_HASH_INVALID");
   });
 });
