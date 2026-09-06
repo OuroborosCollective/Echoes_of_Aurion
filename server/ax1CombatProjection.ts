@@ -7,19 +7,24 @@ import type { ZoneMobArchetype } from "../shared/zoneMobContract";
  */
 export const AX1_GAME_SOURCE_REVISION = "d356881538dae23c3aa97364a5596d48b6ac3079" as const;
 export const AX1_MOB_SOURCE_PATH = "src/entities/MobManager.ts" as const;
+export const AX1_MOB_SOURCE_GIT_BLOB_SHA = "774b42d03ad0e3c0a1b41ebce4ad352d6170cfc5" as const;
 export const AX1_STARTER_SOURCE_PATH = "src/data/mmorpgData.ts" as const;
-export const AX1_MOB_SOURCE_GIT_BLOB_SHA = "" as const;
+export const AX1_STARTER_SOURCE_GIT_BLOB_SHA = "2e44ad352041c33a5a9e441c3d28ca1392dd1efe" as const;
 export const AX1_STARTER_BLADE_ITEM_ID = "item_sword_starter" as const;
 export const AX1_STARTER_BLADE_NAME = "Apprentice Steel Blade" as const;
 export const AX1_STARTER_BLADE_ATTACK_BONUS = 15 as const;
 export const AX1_STARTER_BLADE_MAX_HP_BONUS = 20 as const;
 export const AX1_PLAYER_BASIC_MELEE_RANGE_FIXED = 4_500 as const;
 
-export type Ax1MobProjection = Readonly<{
-  maxHealth: number;
-  attackRangeFixed: number;
-  attackCooldownTicks: number;
-}>;
+export type Ax1MobProjection = Readonly<{ maxHealth: number; attackRangeFixed: number; attackCooldownTicks: number }>;
+export type AurionPersistedClass = "unbound" | "vanguard" | "seer" | "warden";
+
+const baseHealthByClass: Readonly<Record<AurionPersistedClass, number>> = Object.freeze({
+  unbound: 520,
+  vanguard: 520,
+  seer: 360,
+  warden: 420,
+});
 
 const rangeMeters: Readonly<Record<ZoneMobArchetype, number>> = Object.freeze({
   clockwork_stalker: 2.8,
@@ -30,7 +35,6 @@ const rangeMeters: Readonly<Record<ZoneMobArchetype, number>> = Object.freeze({
   titan_boss: 5,
 });
 
-/** AX1's authored cooldowns expressed on WASD/Aurion's canonical 10 Hz tick. */
 const cooldownTicks: Readonly<Record<ZoneMobArchetype, number>> = Object.freeze({
   clockwork_stalker: 18,
   aether_wisp: 25,
@@ -40,10 +44,10 @@ const cooldownTicks: Readonly<Record<ZoneMobArchetype, number>> = Object.freeze(
   titan_boss: 25,
 });
 
-/**
- * Exact health formula projection for regular AX1 mob archetypes. The world boss
- * uses AX1's explicit 5200 HP definition rather than the regular formula.
- */
+export function ax1PlayerBaseMaxHealth(selectedClass: AurionPersistedClass, hasStarterBlade: boolean): number {
+  return baseHealthByClass[selectedClass] + (hasStarterBlade ? AX1_STARTER_BLADE_MAX_HP_BONUS : 0);
+}
+
 export function ax1MobMaxHealth(archetype: ZoneMobArchetype, level: number): number {
   if (!Number.isSafeInteger(level) || level < 1 || level > 10_000) throw new Error("AX1_MOB_LEVEL_INVALID");
   switch (archetype) {
@@ -65,7 +69,5 @@ export function ax1MobCombatProjection(archetype: ZoneMobArchetype, level: numbe
 }
 
 export function ax1StarterWeaponBonus(weaponTrack: "blade" | "staff" | "spear" | "focus" | null | undefined): number {
-  // AX1's explicit new-character loadout is the Apprentice Steel Blade. Other
-  // tracks must be backed by their own persisted item before they gain a bonus.
   return weaponTrack === "blade" ? AX1_STARTER_BLADE_ATTACK_BONUS : 0;
 }
