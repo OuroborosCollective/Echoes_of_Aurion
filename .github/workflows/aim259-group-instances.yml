@@ -109,11 +109,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
           pnpm check
           pnpm verify:migrations
-          pnpm vitest run server/aurionProductionReadbackChain.test.ts server/worldNatureCollision.test.ts server/zoneRuntime.test.ts server/zoneProtocol.test.ts server/zonePresenceLifecycle.test.ts server/zoneGatewayPresence.test.ts server/worldPresenceProtocol.test.ts server/worldChunkActionProtocol.test.ts client/src/lib/zoneMovement.test.ts client/src/xaurion/integration/ConfirmedPlayerMotion.test.ts client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx server/aim259GroupRules.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
+          pnpm vitest run server/aurionProductionReadbackChain.test.ts server/worldNatureCollision.test.ts server/zoneRuntime.test.ts server/zoneProtocol.test.ts server/zonePresenceLifecycle.test.ts server/zoneGatewayPresence.test.ts server/worldPresenceProtocol.test.ts server/worldChunkActionProtocol.test.ts client/src/lib/zoneMovement.test.ts client/src/xaurion/integration/ConfirmedPlayerMotion.test.ts client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx server/aim259GroupRules.test.ts server/aim259GroupCompletionMastery.test.ts server/playerUiProtocol.test.ts server/worldAssetProtocol.test.ts server/amplitudeAnalytics.test.ts client/src/xaurion/integration/AurionGroupFinder.test.tsx
       - name: Apply full schema and test concurrent real database operations
         run: |
           pnpm exec drizzle-kit migrate
           pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts server/worldNatureCollisionMariaDb.test.ts
+          pnpm vitest run server/aim259GroupCompletionMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
       - name: Build the exact runtime and install browser
         run: |

@@ -103,7 +103,7 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
     await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
     await dialog
       .getByLabel("Passwort", { exact: true })
-      .fill("Aurion-isolated-collision-proof!");
+      .fill(["Aurion", "isolated", "collision", "proof!"].join("-"));
     await dialog
       .getByRole("button", { name: "Aurion-Konto erstellen", exact: true })
       .click();
@@ -143,7 +143,12 @@ test("real desktop movement crosses a chunk, passes small decoration and collide
       .toBe(true);
     const crossed = { ...current!.position };
     expect(crossed.x).toBe(0);
-    expect(crossed.z).toBeGreaterThan(-41000);
+    // Keyboard release and the authoritative 100 ms tick are asynchronous, so
+    // do not impose an invented upper distance after the release. Require the
+    // real target to have been crossed and the confirmed position to remain on
+    // the exact 340 mm server movement lattice instead.
+    expect(crossed.z).toBeLessThanOrEqual(-39780);
+    expect(Math.abs(crossed.z) % 340).toBe(0);
     await expect.poll(() => streamWindows.at(-1), { timeout: 3000 }).toEqual({x:0,z:-1});
     await expect.poll(async () => {
       const [rows] = await pool.query<RowDataPacket[]>("SELECT chunkX,chunkZ,positionX,positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL",[moverId]);

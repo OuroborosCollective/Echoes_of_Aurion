@@ -7,6 +7,7 @@ import { operationalNow } from "../shared/operationalClock";
 import { GROUP_RULESET, groupCommandSchema, groupPartySchema, groupPlayerSchema, groupReadmodelSchema, type GroupCommand, type GroupParty, type GroupPlayer, type GroupReadmodel, type GroupTicket, type RosterMember } from "../shared/groupInstanceProtocol";
 import { assertGroupRoster, groupCatalog, groupHash, groupQualification, GROUP_LEASE_MS, GROUP_QUEUE_LIMIT, issueGroupTicket, oldestCompleteGroup, resolveGroupExchange, verifyGroupTicket } from "./groupInstanceRules";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
+import { commitGroupCompletionMastery } from "./groupCompletionMastery";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -212,7 +213,9 @@ export async function commandGroupForUser(userId: number, raw: GroupCommand) {
           // Admission rate is operational metadata; outcomes depend only on the
           // frozen ticket, the accepted command and persisted instance revision.
           if (nowMs < party.lastActionAtMs + 1_000) throw new Error("GROUP_ACTION_RATE_LIMITED");
+          const priorPhase = party.phase;
           party = resolveGroupExchange(party, ticket, userId, action, members.filter(m => m.status === "entered").map(m => m.userId));
+          if (priorPhase === "active" && party.phase === "cleared") await commitGroupCompletionMastery(tx, party, ticket);
           party.lastActionAtMs = nowMs;
           await writeParty(tx, party);
           await writePlayer(tx, { ...player, revision: player.revision + 1 });
