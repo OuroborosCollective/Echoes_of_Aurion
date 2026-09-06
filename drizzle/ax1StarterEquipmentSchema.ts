@@ -1,4 +1,4 @@
-import { index, int, mysqlTable, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Aurion persists provenance only. The starter definition itself is owned by AX1
@@ -17,3 +17,11 @@ export const aurionAx1StarterEquipmentReceipts = mysqlTable("aurionAx1StarterEqu
   uniqueIndex("aurionAx1StarterEquipmentReceipts_user_definition_uq").on(table.userId, table.definitionId),
   index("aurionAx1StarterEquipmentReceipts_user_created_idx").on(table.userId, table.createdAt),
 ]);
+
+/** Mutable paperdoll projection separated from the immutable source receipt. */
+export const aurionAx1StarterEquipmentStates = mysqlTable("aurionAx1StarterEquipmentStates", {
+  userId: int("userId").primaryKey(),
+  receiptId: varchar("receiptId", { length: 64 }).notNull().unique(),
+  status: mysqlEnum("status", ["owned", "equipped"]).default("equipped").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("aurionAx1StarterEquipmentStates_status_idx").on(table.status)]);
