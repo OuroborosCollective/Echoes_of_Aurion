@@ -29,7 +29,7 @@ describe("authoritative zone movement", () => {
     expect(integrateZoneMovement({ x: ZONE_POSITION_LIMIT, z: ZONE_POSITION_MIN }, { x: 1, z: -1 })).toEqual({ x: ZONE_POSITION_LIMIT, z: ZONE_POSITION_MIN });
   });
 
-  it("confirms the stationary tick and accepted stop sequence without idle broadcasts", () => {
+  it("confirms a stationary player and accepted stop sequence while autonomous mobs may advance the world tick", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
     const zone = new AuthoritativeMovementZone("observatory_threshold");
     const { connectionId } = zone.join({ userId: 1, socket: socket as unknown as WebSocket });
@@ -38,35 +38,36 @@ describe("authoritative zone movement", () => {
     expect(zone.tick()).toBe(true);
     const moving = latest();
     zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: 0, z: 0 } });
-    expect(zone.tick()).toBe(false);
+    zone.tick();
     const stopped = latest();
     expect(stopped.tick).toBe(moving.tick + 1);
     expect(stopped.presences[0]).toMatchObject({ position: moving.presences[0].position, lastAcceptedClientSeq: 2 });
     expect(stopped.snapshotSeq).toBeGreaterThan(moving.snapshotSeq);
-    const count = socket.send.mock.calls.length;
-    zone.tick();
+    const stoppedPosition = { ...moving.presences[0].position };
+    for (let tick = 0; tick < 4; tick += 1) {
+      zone.tick();
+      expect(zone.positionForConnection(connectionId)).toEqual(stoppedPosition);
+    }
     expect(zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: -1, z: 0 } })).toBe("stale");
     zone.tick();
-    expect(socket.send).toHaveBeenCalledTimes(count);
+    expect(zone.positionForConnection(connectionId)).toEqual(stoppedPosition);
   });
 
-  it("publishes zero velocity at a real nature collider even without another client intent", () => {
+  it("keeps the player pinned at a real nature collider while autonomous world state may continue changing", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
     const zone = new AuthoritativeMovementZone("observatory_threshold");
     const { connectionId } = zone.join({ userId: 2, socket: socket as unknown as WebSocket });
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
-    for (let tick = 0; tick < 165; tick += 1) expect(zone.tick()).toBe(true);
+    for (let tick = 0; tick < 165; tick += 1) zone.tick();
     zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: -1, z: 0 } });
-    for (let tick = 0; tick < 64; tick += 1) expect(zone.tick()).toBe(true);
+    for (let tick = 0; tick < 64; tick += 1) zone.tick();
     const boundary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
-    expect(boundary.presences[0].position).toEqual({x:-21_760,z:-56_100});
-    expect(zone.tick()).toBe(false);
-    const stationary = JSON.parse(socket.send.mock.calls.at(-1)![0]);
-    expect(stationary.tick).toBe(boundary.tick + 1);
-    expect(stationary.presences).toEqual(boundary.presences);
-    const count = socket.send.mock.calls.length;
-    zone.tick();
-    expect(socket.send).toHaveBeenCalledTimes(count);
+    const boundaryPosition = {x:-21_760,z:-56_100};
+    expect(boundary.presences[0].position).toEqual(boundaryPosition);
+    for (let tick = 0; tick < 4; tick += 1) {
+      zone.tick();
+      expect(zone.positionForConnection(connectionId)).toEqual(boundaryPosition);
+    }
   });
   it("replaces an authenticated user's old connection without duplicating their entity", () => {
     const socket = () => ({ readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() });
