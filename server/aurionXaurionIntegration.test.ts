@@ -24,11 +24,15 @@ function sourceHashBeforeDeterminism(path: string): string {
 }
 
 describe("AIM-239 xaurion integration boundary", () => {
-  it("keeps xaurion rendering mounted behind the confirmed Aurion world transition", () => {
+  it("mounts xaurion only after the confirmed Aurion world transition on the isolated play route", () => {
     const app = read("client/src/App.tsx");
+    const playRoute = read("client/src/xaurion/integration/AurionPlayRoute.tsx");
     const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
-    expect(app).toContain("AurionOpenWorldRuntime");
-    expect(runtime).toContain("aurion:load-open-world");
+    expect(app).toContain('<Route path="/play" component={AurionPlayRoute} />');
+    expect(app).toContain('window.addEventListener("aurion:load-open-world", launch)');
+    expect(app).toContain("persistConfirmedPlayLaunch(detail)");
+    expect(app).not.toContain("<AurionOpenWorldRuntime");
+    expect(playRoute).toContain("AurionOpenWorldRuntime");
     expect(runtime).toContain("ZoneMovementClient");
     expect(runtime).toContain("issueZoneTicket");
   });
