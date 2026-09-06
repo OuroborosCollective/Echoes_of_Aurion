@@ -255,6 +255,8 @@ test("explicit companion learning captures the visible AX1 world and stores a bo
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
     await expect(dialog.getByText(/^[1-9][0-9]* lokale Beobachtungszeilen$/)).toBeVisible();
     await dialog.getByRole("button", { name: "Aufzeichnung beenden", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
     await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(page.getByTestId("xaurion-open-world-runtime")).toHaveCount(0);
     await testInfo.attach("visible-companion-readback", { body: JSON.stringify({ userId, sessionId, memoryHash: receipt!.memoryHash, featureCount: 16, unknownStateMasked: true, rendererCount: 1 }), contentType: "application/json" });
