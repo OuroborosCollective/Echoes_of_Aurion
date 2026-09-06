@@ -1,9 +1,24 @@
 import { ZONE_POSITION_LIMIT, ZONE_POSITION_MIN } from "../shared/zonePresenceContract";
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
+import { MOB_COLLISION_SUBSTEP_MAX_MM, mobCollisionSubsteps } from "./zoneMobRuntime";
 import { AuthoritativeMovementZone, integrateZoneMovement } from "./zoneRuntime";
 
 describe("authoritative zone movement", () => {
+  it("keeps every balanced mob collision sweep within the authoritative 340 mm per-axis contract", () => {
+    for(const distance of [425,450,550,750]){
+      const from={x:12_345,z:-9_876},desired={x:12_345+distance,z:-9_876-distance};
+      const targets=mobCollisionSubsteps(from,desired);
+      expect(targets.at(-1)).toEqual(desired);
+      let previous=from;
+      for(const target of targets){
+        expect(Math.abs(target.x-previous.x)).toBeLessThanOrEqual(MOB_COLLISION_SUBSTEP_MAX_MM);
+        expect(Math.abs(target.z-previous.z)).toBeLessThanOrEqual(MOB_COLLISION_SUBSTEP_MAX_MM);
+        previous=target;
+      }
+    }
+  });
+
   it("integrates cardinal and diagonal intents with fixed-point integer steps", () => {
     expect(integrateZoneMovement({ x: 0, z: 0 }, { x: 1, z: 0 })).toEqual({ x: 340, z: 0 });
     expect(integrateZoneMovement({ x: 0, z: 0 }, { x: 1, z: -1 })).toEqual({ x: 240, z: -240 });
