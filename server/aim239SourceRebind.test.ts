@@ -52,7 +52,7 @@ describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
     expect(baseline.sources.gameplayEngine).toEqual({ repository: "OuroborosCollective/-ax1", ref: "main", revision: "d356881538dae23c3aa97364a5596d48b6ac3079", previousRevision: "b9a0c19cb3d2d34212075983e64891274489e32a", role: "canonical_gameplay_content_engine_source" });
   });
 
-  it("binds the rebase lane to the exact Aurion authority baseline", () => {
+  it("binds the historical rebase lane to its exact Aurion baseline without making that baseline current authority", () => {
     expect(baseline.sources.aurionBaseline).toEqual({ repository: "OuroborosCollective/Echoes_of_Aurion", ref: "main", revision: "d6549a2319ffc5de0e364bd54eeca8a1e4a3ed4a", role: "production_authority_host" });
     expect(baseline.reconcileTask).toBe("AIM-266");
   });
@@ -90,11 +90,14 @@ describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
     expect(byPath.get("src/components/GuildManagementModal.tsx")?.targetAim).toBe("AIM-258");
   });
 
-  it("records every delta path in the human-readable ownership matrix", () => {
+  it("records every delta path while marking the matrix historical and deferring current ownership to the canonical contract", () => {
     for (const entry of manifest.decisions) expect(matrix).toContain(`\`${entry.path}\``);
-    expect(matrix).toContain("Arelorian/WASD");
-    expect(matrix).toContain("Echoes_of_Aurion");
-    expect(matrix).toContain("38 files");
+    expect(matrix).toContain("Historical source evidence only");
+    expect(matrix).toContain("ARCHITECTURE_OWNERSHIP.md");
+    expect(matrix).toContain("**WASD**");
+    expect(matrix).toContain("**AX1**");
+    expect(matrix).toContain("**Aurion**");
+    expect(matrix).toContain("38 Dateien");
   });
 
   it("preserves Aurion hosting while mounting AX1 only through the explicit play bridge and keeping the atlas read-only", () => {
