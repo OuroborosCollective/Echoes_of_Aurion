@@ -59,7 +59,7 @@ describe("open world session ownership", () => {
     try {
       render(<AurionOpenWorldRuntime />); enter();
       act(() => fixture.tickets[0].onSuccess({ticket:"current-fixture"}));
-      const snapshot: ZonePresenceSnapshot={type:"snapshot",zoneId:"observatory_threshold",snapshotSeq:2,tick:95,presences:[{entityId:"player:1",userId:1,position:{x:0,z:-32300},lastAcceptedClientSeq:1}]};
+      const snapshot: ZonePresenceSnapshot={type:"snapshot",zoneId:"observatory_threshold",snapshotSeq:2,tick:95,presences:[{entityId:"player:1",userId:1,position:{x:0,z:-32300},lastAcceptedClientSeq:1}],mobs:[],combatants:[]};
       act(() => fixture.snapshots[0](snapshot));
       expect(received).toEqual([{userId:1,position:{x:0,z:-32300}}]);
       expect(fixture.connections).toHaveLength(1);
