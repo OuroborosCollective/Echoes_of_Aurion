@@ -1,19 +1,20 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ConfirmedZonePresence } from "../shared/zonePresenceContract";
-import { initialMobRuntimeState, nearestAggroTarget, observatoryMobDefinitions, publicMobSnapshot, resolveMobFsmTick, type MobRuntimeState } from "./mobFsmProtocol";
+import { observatoryMobDefinitions } from "./ax1MobContent";
+import { initialMobRuntimeState, nearestAggroTarget, publicMobSnapshot, resolveMobFsmTick, type MobRuntimeState } from "./wasdMobFsmProtocol";
 
 const player=(userId:number,x:number,z:number):ConfirmedZonePresence=>({entityId:`player:${userId}`,userId,position:{x,z},lastAcceptedClientSeq:1});
 const definition=(id:string)=>observatoryMobDefinitions.find(row=>row.entityId===id)!;
 
-describe("AIM-263 server-authoritative mob FSM",()=>{
-  it("ports the sixteen existing visual mob identities into stable server definitions",()=>{
+describe("AIM-263 WASD mob FSM over AX1 content",()=>{
+  it("ports the sixteen AX1 visual mob identities into stable content definitions",()=>{
     expect(observatoryMobDefinitions).toHaveLength(16);
     expect(new Set(observatoryMobDefinitions.map(row=>row.entityId)).size).toBe(16);
     expect(observatoryMobDefinitions.find(row=>row.archetype==="titan_boss")).toMatchObject({isBoss:true,isElite:true,homePosition:{x:0,z:68_000}});
   });
 
-  it("uses exact -ax1 proximity classes: normal 16m, elite 22m, boss 28m",()=>{
+  it("uses exact WASD proximity classes: normal 16m, elite 22m, boss 28m",()=>{
     const normal=definition("mob_1"),elite=definition("mob_3"),boss=definition("mob_6");
     expect(nearestAggroTarget(normal,normal.homePosition,[player(1,normal.homePosition.x+15_999,normal.homePosition.z)])?.entityId).toBe("player:1");
     expect(nearestAggroTarget(normal,normal.homePosition,[player(1,normal.homePosition.x+16_001,normal.homePosition.z)])).toBeNull();
@@ -73,13 +74,14 @@ describe("AIM-263 server-authoritative mob FSM",()=>{
       expect(left).toEqual(right);
     }
     expect(["idle","patrolling"]).toContain(left.state);
-    const source=readFileSync("server/mobFsmProtocol.ts","utf8");
+    const source=readFileSync("server/wasdMobFsmProtocol.ts","utf8");
     expect(source).not.toContain("Date.now");
     expect(source).not.toContain("performance.now");
     expect(source).not.toContain("Math.random");
+    expect(readFileSync("server/ax1MobContent.ts","utf8")).not.toContain("resolveMobFsmTick");
   });
 
-  it("publishes only bounded authoritative projection state and never runtime internals or a local-player fallback",()=>{
+  it("publishes only bounded authoritative projection state and never runtime internals",()=>{
     const def=definition("mob_6");
     const state=initialMobRuntimeState(def,0);
     const snapshot=publicMobSnapshot(state);
