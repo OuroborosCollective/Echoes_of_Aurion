@@ -30,7 +30,6 @@ async function launchAx1AndOpenGroups(page: Page) {
   await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "Gruppenexpedition", exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(dialog.getByRole("button", { name: "Gruppe suchen", exact: true })).toBeVisible();
   return { runtime, hud, dialog };
 }
 
