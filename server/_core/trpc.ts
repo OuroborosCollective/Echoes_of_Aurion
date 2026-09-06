@@ -20,9 +20,28 @@ function questInput(value: unknown): { questKey: QuestKey; giver?: string } | nu
   return { questKey: raw.questKey as QuestKey, ...(typeof raw.giver === "string" ? { giver: raw.giver } : {}) };
 }
 
+/**
+ * These routes belonged to the retired Aurion arena/encounter authority.
+ * AX1 `/play` already uses the WASD zone combat contract instead. Keep the
+ * route shapes temporarily for compatibility, but make the old write surface
+ * unreachable before any resolver or database effect can execute.
+ */
+export const RETIRED_AURION_GAMEPLAY_WRITE_PATHS = Object.freeze([
+  "gameplay.startEncounter",
+  "gameplay.act",
+] as const);
+const retiredAurionGameplayWritePaths = new Set<string>(RETIRED_AURION_GAMEPLAY_WRITE_PATHS);
+
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+
+  if (retiredAurionGameplayWritePaths.has(opts.path)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "LEGACY_AURION_GAMEPLAY_WRITE_RETIRED",
+    });
+  }
 
   if (opts.path === "gameplay.acceptQuest" || opts.path === "gameplay.completeQuest") {
     const parsed = questInput(await opts.getRawInput());
