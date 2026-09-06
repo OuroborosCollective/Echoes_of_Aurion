@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
  */
 export const WASD_GAMEPLAY_SOURCE_REVISION = "328240450d33490637f8cc4ae87d3fbeecca27c9" as const;
 export const WASD_ARE_DETERMINISM_SOURCE_PATH = "server/src/core/determinism/AREDeterminism.ts" as const;
-export const WASD_ARE_DETERMINISM_SOURCE_SHA256 = "52841e5c901604b32cbd56dcb2ce62bc43218895" as const;
+export const WASD_ARE_DETERMINISM_SOURCE_GIT_BLOB_SHA = "52841e5c901604b32cbd56dcb2ce62bc43218895" as const;
 export const ARE_SIMULATION_TICK_HZ = 10 as const;
 export const ARE_SIMULATION_TICK_MS = 100 as const;
 
