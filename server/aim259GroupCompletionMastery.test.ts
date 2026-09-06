@@ -64,7 +64,7 @@ function completionKeys(dungeonId: string): readonly ScopedMasteryKey[] {
   return [masteryKeys.combat(dungeonId), masteryKeys.action(`dungeon_completion:${dungeonId}`)];
 }
 
-function historicalState(userId: number, dungeonId: string, completions: number): readonly ScopedMasteryState[] {
+function historicalState(userId: number, dungeonId: string, completions: number, amountExact = "250"): readonly ScopedMasteryState[] {
   const keys = completionKeys(dungeonId);
   const events: ScopedMasteryEvent[] = [];
   for (let index = 0; index < completions; index += 1) {
@@ -74,7 +74,7 @@ function historicalState(userId: number, dungeonId: string, completions: number)
         idempotencyKey: `history_event_${userId}_${index}_${key.scopeType}`,
         resolutionIndex: index + 1,
         key,
-        amountExact: "250",
+        amountExact,
         useCountExact: "1",
         serverValidated: true,
         activeDurationTicks: 1,
@@ -118,7 +118,7 @@ describe("AIM-259 group completion mastery", () => {
     const { party, ticket } = clearedFixture();
     const userId = ticket.roster[0]!.userId;
     const prior = historicalState(userId, ticket.dungeonId, 6);
-    const currentByUser = { [String(userId)]: prior };
+    const currentByUser: Record<string, readonly ScopedMasteryState[]> = { [String(userId)]: prior };
     for (const member of ticket.roster.slice(1)) currentByUser[String(member.userId)] = historicalState(member.userId, ticket.dungeonId, 0);
 
     const plan = buildGroupCompletionMasteryPlan(party, ticket, currentByUser);
@@ -136,14 +136,19 @@ describe("AIM-259 group completion mastery", () => {
     }
   });
 
-  it("applies the versioned repetition curve from prior confirmed completions without double-penalizing the scoped event", () => {
+  it("applies the versioned repetition curve from prior confirmed uses without conflating it with mastery-level growth", () => {
     const { party, ticket } = clearedFixture();
     const fresh: Record<string, readonly ScopedMasteryState[]> = {};
     const repeated: Record<string, readonly ScopedMasteryState[]> = {};
     for (const member of ticket.roster) {
-      fresh[String(member.userId)] = historicalState(member.userId, ticket.dungeonId, 0);
-      repeated[String(member.userId)] = historicalState(member.userId, ticket.dungeonId, 20);
+      fresh[String(member.userId)] = historicalState(member.userId, ticket.dungeonId, 0, "0");
+      repeated[String(member.userId)] = historicalState(member.userId, ticket.dungeonId, 20, "0");
     }
+    const freshState = fresh[String(ticket.roster[0]!.userId)]![0]!;
+    const repeatedState = repeated[String(ticket.roster[0]!.userId)]![0]!;
+    expect(repeatedState.progression.levelExact).toBe(freshState.progression.levelExact);
+    expect(repeatedState.lifetimeUsesExact).toBe("20");
+
     const first = buildGroupCompletionMasteryPlan(party, ticket, fresh)[0]!.events[0]!;
     const later = buildGroupCompletionMasteryPlan(party, ticket, repeated)[0]!.events[0]!;
     expect(BigInt(later.amountExact)).toBeLessThan(BigInt(first.amountExact));
