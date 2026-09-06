@@ -1,5 +1,6 @@
 export const ZONE_MAX_PRESENCES = 128;
-export const ZONE_PROTOCOL_VERSION = 2 as const;
+/** v3 adds server-confirmed hostile mob projections. v2 clients must fail closed instead of keeping local mob AI authority. */
+export const ZONE_PROTOCOL_VERSION = 3 as const;
 import { WORLD_CHUNK_COORDINATE_LIMIT, WORLD_CHUNK_SIZE_MM } from "./worldChunkProtocol";
 export const ZONE_POSITION_MIN = -WORLD_CHUNK_COORDINATE_LIMIT * WORLD_CHUNK_SIZE_MM - WORLD_CHUNK_SIZE_MM / 2;
 export const ZONE_POSITION_LIMIT = WORLD_CHUNK_COORDINATE_LIMIT * WORLD_CHUNK_SIZE_MM + WORLD_CHUNK_SIZE_MM / 2 - 1;
