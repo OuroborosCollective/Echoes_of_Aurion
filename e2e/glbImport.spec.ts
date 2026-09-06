@@ -20,8 +20,9 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     await dialog.getByLabel('Passwort', { exact: true }).fill('Aurion-isolated-glb-test-only!');
     await dialog.getByRole('button', { name: 'Aurion-Konto erstellen', exact: true }).click();
     // Registration returns directly to the Aurion account/community portal. It
-    // must not enter or prepare gameplay as a side effect of authentication.
+    // must not enter gameplay as a side effect of authentication.
     await expect(page.getByRole('heading', { name: /Willkommen zurück/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'SPIEL BETRETEN', exact: true })).toBeVisible();
     expect((await page.request.get('/api/admin/glb-import/status')).status()).toBe(403);
     // Explicit fixture setup, guarded above against any live target.
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_browser_admin'");
@@ -63,11 +64,8 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     const fetched: string[] = [];
     page.on('response', response => { if (response.url().endsWith(receipt.storageUrl) && response.status() === 200) fetched.push(response.url()); });
     await page.goto('/');
-    const prepare = page.getByRole('button', { name: 'SPIELSTART VORBEREITEN', exact: true });
-    await expect(prepare).toBeVisible({ timeout: 30_000 });
-    await prepare.click();
-    const launch = page.getByRole('button', { name: 'AX1 OPEN WORLD STARTEN', exact: true });
-    await expect(launch).toBeVisible();
+    const launch = page.getByRole('button', { name: 'SPIEL BETRETEN', exact: true });
+    await expect(launch).toBeVisible({ timeout: 30_000 });
     await launch.click();
     await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
     await expect(page.getByTestId('xaurion-open-world-runtime')).toBeVisible();
@@ -82,6 +80,6 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     expect(fetched.length).toBeGreaterThan(0);
     await expect(page.locator('#three-viewport canvas')).toBeVisible();
     await page.locator('#three-viewport canvas').screenshot({ path: testInfo.outputPath('imported-avatar.png') });
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, receipt, db: rows[0], byteReadback: true, rendererLoaded: true, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-ax1' }), contentType: 'application/json' });
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, receipt, db: rows[0], byteReadback: true, rendererLoaded: true, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-ax1-single-action' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
