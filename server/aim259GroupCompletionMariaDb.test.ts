@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { aurionGlobalWorldStates, playerProfiles, users, weaponLoadouts } from "../drizzle/schema";
+import { aurionGlobalWorldStates, expeditionResultReceipts, playerProfiles, users, weaponLoadouts } from "../drizzle/schema";
 import { aurionGroupCoordinator, aurionGroupParties, aurionGroupPlayers, aurionGroupReceipts, aurionGroupTickets } from "../drizzle/groupInstanceSchema";
 import { aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import type { GroupCommand, GroupRole } from "../shared/groupInstanceProtocol";
@@ -20,7 +20,9 @@ suite("AIM-259 atomic group completion mastery", () => {
   async function clean() {
     if (!isolated) throw new Error("ISOLATED_GROUP_TEST_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS aim259_abort_group_mastery");
+    await pool.query("DROP TRIGGER IF EXISTS aim259_abort_group_result");
     await pool.query("DELETE FROM aurionScopedMasteryEvents WHERE userId IN (?)", [ids]);
+    await pool.query("DELETE FROM expeditionResultReceipts WHERE userId IN (?)", [ids]);
     for (const table of ["aurionGroupReceipts", "aurionGroupTickets", "aurionGroupParties", "aurionGroupPlayers", "aurionGroupCoordinator"]) {
       await pool.query(`DELETE FROM \`${table}\``);
     }
@@ -106,7 +108,7 @@ suite("AIM-259 atomic group completion mastery", () => {
     return { ticket, actorUserId, request, staged };
   }
 
-  it("commits the final boss clear and exactly two scoped mastery events per real party member, with replay unchanged", async () => {
+  it("commits the final boss clear, ten mastery events and five accepted result receipts, with replay unchanged", async () => {
     const { ticket, actorUserId, request } = await stageFinalStrike();
     const first = await commandGroupForUser(actorUserId, request);
     expect(first.applied).toBe(true);
@@ -129,6 +131,17 @@ suite("AIM-259 atomic group completion mastery", () => {
       });
     }
 
+    const resultRows = await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`));
+    expect(resultRows).toHaveLength(5);
+    expect(resultRows.map(row => row.userId).sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b));
+    expect(new Set(resultRows.map(row => row.seedDigest)).size).toBe(1);
+    expect(new Set(resultRows.map(row => row.resultDigest)).size).toBe(5);
+    expect(new Set(resultRows.map(row => row.idempotencyKey)).size).toBe(5);
+    resultRows.forEach(row => {
+      expect(row.status).toBe("accepted");
+      expect(row.confirmedByUserId).toBe(row.userId);
+    });
+
     const [profiles] = await pool.query<RowDataPacket[]>("SELECT totalXp,aurionPoints FROM playerProfiles WHERE userId IN (?) ORDER BY userId", [ids]);
     expect(profiles.map(row => ({ totalXp: Number(row.totalXp), aurionPoints: Number(row.aurionPoints) }))).toEqual(Array(5).fill({ totalXp: 0, aurionPoints: 0 }));
 
@@ -136,6 +149,7 @@ suite("AIM-259 atomic group completion mastery", () => {
     expect(replay.applied).toBe(false);
     expect(replay.result).toEqual(first.result);
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(10);
+    expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(5);
   });
 
   it("rolls back the boss clear, command receipt and all mastery evidence when MariaDB rejects the first mastery insert", async () => {
@@ -147,6 +161,7 @@ suite("AIM-259 atomic group completion mastery", () => {
     expect(afterFailure.party).toMatchObject({ phase: "active", bossHp: staged.bossHp, bossIndex: staged.bossIndex, instanceRevision: staged.instanceRevision });
     const db = (await getDb())!;
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(0);
+    expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(0);
     const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGroupReceipts WHERE userId=? AND expectedRevision=?", [actorUserId, request.expectedRevision]);
     expect(Number(receipts[0]?.count ?? -1)).toBe(0);
 
@@ -154,5 +169,26 @@ suite("AIM-259 atomic group completion mastery", () => {
     const retry = await commandGroupForUser(actorUserId, request);
     expect(retry.result.party?.phase).toBe("cleared");
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(10);
+    expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(5);
+  });
+
+  it("rolls back the boss clear and all ten mastery events when MariaDB rejects the first result receipt", async () => {
+    const { ticket, actorUserId, request, staged } = await stageFinalStrike();
+    await pool.query("CREATE TRIGGER aim259_abort_group_result BEFORE INSERT ON expeditionResultReceipts FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AIM259_FORCED_RESULT_ROLLBACK'");
+
+    await expect(commandGroupForUser(actorUserId, request)).rejects.toMatchObject({ cause: { code: "ER_SIGNAL_EXCEPTION" } });
+    const afterFailure = await readGroupForUser(actorUserId);
+    expect(afterFailure.party).toMatchObject({ phase: "active", bossHp: staged.bossHp, bossIndex: staged.bossIndex, instanceRevision: staged.instanceRevision });
+    const db = (await getDb())!;
+    expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(0);
+    expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(0);
+    const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGroupReceipts WHERE userId=? AND expectedRevision=?", [actorUserId, request.expectedRevision]);
+    expect(Number(receipts[0]?.count ?? -1)).toBe(0);
+
+    await pool.query("DROP TRIGGER aim259_abort_group_result");
+    const retry = await commandGroupForUser(actorUserId, request);
+    expect(retry.result.party?.phase).toBe("cleared");
+    expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(10);
+    expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(5);
   });
 });

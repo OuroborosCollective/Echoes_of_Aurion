@@ -1,10 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { expeditionResultReceipts } from "../drizzle/schema";
 import { aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import { GROUP_RULESET, type GroupParty, type GroupTicket } from "../shared/groupInstanceProtocol";
 import { activityXpAwardExact } from "./aurionBalancingProtocol";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import { getDb } from "./db";
 import { groupHash } from "./groupInstanceRules";
+import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import {
   SCOPED_MASTERY_RULESET_VERSION,
   canonicalScopedMasteryKey,
@@ -23,6 +25,15 @@ export type GroupCompletionMasteryPlan = Readonly<{
   userId: number;
   keys: readonly ScopedMasteryKey[];
   events: readonly ScopedMasteryEvent[];
+}>;
+
+export type GroupCompletionResultPlan = Readonly<{
+  userId: number;
+  expeditionKey: string;
+  seedDigest: string;
+  resultDigest: string;
+  confirmedByUserId: number;
+  idempotencyKey: string;
 }>;
 
 function assertClearedInstance(party: GroupParty, ticket: GroupTicket) {
@@ -47,6 +58,51 @@ function completionKeys(ticket: GroupTicket): readonly ScopedMasteryKey[] {
 function boundedRepetition(value: string): number {
   const exact = BigInt(value);
   return exact > 1_000_000n ? 1_000_000 : Number(exact);
+}
+
+/**
+ * Builds one canonical expedition-result authority per confirmed party member.
+ * It intentionally grants no XP, gold or loot by itself: downstream reward
+ * paths still require this accepted receipt plus their own server-owned rules.
+ */
+export function buildGroupCompletionResultPlan(
+  party: GroupParty,
+  ticket: GroupTicket,
+): readonly GroupCompletionResultPlan[] {
+  assertClearedInstance(party, ticket);
+  const expeditionKey = `group-dungeon:${ticket.id}`;
+  const seedDigest = groupHash({
+    kind: "group_completion_seed",
+    ruleset: GROUP_RULESET,
+    ticketHash: ticket.hash,
+    worldHash: ticket.worldHash,
+    worldSnapshotSha256: ticket.worldSnapshotSha256,
+    dungeonId: ticket.dungeonId,
+    variant: ticket.variant,
+  });
+
+  return Object.freeze([...ticket.roster]
+    .sort((left, right) => left.userId - right.userId)
+    .map(member => Object.freeze({
+      userId: member.userId,
+      expeditionKey,
+      seedDigest,
+      resultDigest: groupHash({
+        kind: "group_completion_result",
+        ruleset: GROUP_RULESET,
+        ticketHash: ticket.hash,
+        partyId: party.id,
+        rosterHash: party.rosterHash,
+        userId: member.userId,
+        dungeonId: ticket.dungeonId,
+        variant: ticket.variant,
+        bossIndex: party.bossIndex,
+        bossHp: party.bossHp,
+        instanceRevision: party.instanceRevision,
+      }),
+      confirmedByUserId: member.userId,
+      idempotencyKey: `group-result:${ticket.id}:${member.userId}`,
+    })));
 }
 
 /**
@@ -139,10 +195,48 @@ async function currentCompletionMastery(tx: Transaction, userId: number, ticket:
   return resolveCoupledMasteries({ actorId: actorId(userId), keys, events: historicalEvents });
 }
 
+async function commitGroupCompletionResults(tx: Transaction, party: GroupParty, ticket: GroupTicket) {
+  const plan = buildGroupCompletionResultPlan(party, ticket);
+  for (const result of plan) {
+    const prior = (await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.idempotencyKey, result.idempotencyKey)).limit(1))[0];
+    if (prior) {
+      if (
+        prior.userId !== result.userId
+        || prior.expeditionKey !== result.expeditionKey
+        || prior.seedDigest !== result.seedDigest
+        || prior.resultDigest !== result.resultDigest
+        || prior.confirmedByUserId !== result.confirmedByUserId
+        || prior.status !== "accepted"
+      ) throw new Error("GROUP_COMPLETION_RESULT_CONFLICT");
+      continue;
+    }
+    await tx.insert(expeditionResultReceipts).values({
+      id: rewardReceiptIdentity("expres", result.userId, result.idempotencyKey),
+      ...result,
+    });
+  }
+
+  const rows = await tx.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, plan[0]!.expeditionKey));
+  if (rows.length !== plan.length) throw new Error("GROUP_COMPLETION_RESULT_EVIDENCE_INCOMPLETE");
+  for (const expected of plan) {
+    const row = rows.find(candidate => candidate.userId === expected.userId);
+    if (
+      !row
+      || row.idempotencyKey !== expected.idempotencyKey
+      || row.seedDigest !== expected.seedDigest
+      || row.resultDigest !== expected.resultDigest
+      || row.confirmedByUserId !== expected.confirmedByUserId
+      || row.status !== "accepted"
+    ) throw new Error("GROUP_COMPLETION_RESULT_READBACK_FAILED");
+  }
+  return Object.freeze({ expeditionKey: plan[0]!.expeditionKey, receiptCount: rows.length });
+}
+
 /**
- * Appends exactly two scoped mastery events per roster member in the caller's
- * existing group-command transaction. Any insert/readback failure therefore rolls
- * back the boss clear, party state, player revision and mastery evidence together.
+ * Appends exactly two scoped mastery events plus one accepted expedition-result
+ * receipt per roster member in the caller's existing group-command transaction.
+ * Any insert/readback failure therefore rolls back boss clear, party state,
+ * player revision, mastery evidence and reward authority together.
  */
 export async function commitGroupCompletionMastery(tx: Transaction, party: GroupParty, ticket: GroupTicket) {
   const currentByUser: Record<string, readonly ScopedMasteryState[]> = {};
@@ -181,5 +275,6 @@ export async function commitGroupCompletionMastery(tx: Transaction, party: Group
     }
   }
 
-  return Object.freeze({ receiptId: ticket.id, eventCount: receiptRows.length });
+  const results = await commitGroupCompletionResults(tx, party, ticket);
+  return Object.freeze({ receiptId: ticket.id, eventCount: receiptRows.length, resultReceiptCount: results.receiptCount, expeditionKey: results.expeditionKey });
 }
