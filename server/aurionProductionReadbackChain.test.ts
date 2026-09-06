@@ -15,17 +15,19 @@ describe("Aurion post-deploy production schema readback", () => {
     const classifier=readback.match(/RAW_PATH="\$raw"[\s\S]*?node -e '([\s\S]*?)\n            '/)?.[1];
     expect(classifier).toBeDefined();
     const tags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21).map((e:{tag:string})=>e.tag);
-    expect(tags).toHaveLength(13);
+    expect(tags).toContain("0034_ax1_starter_equipment_receipts");
+    const migrationCount=tags.length;
+    expect(migrationCount).toBeGreaterThan(0);
     const sourceRevision="a".repeat(40),imageDigest="sha256:"+"b".repeat(64);
-    const fixture={schemaVersion:1,recordType:"aurion_production_schema_reconciliation",sourceRevision,readOnly:true,databaseCredentialReturned:false,overallState:"PRESENT_SCHEMA_MATCH",execution:{mode:"docker",network:"echoes-of-aurion-internal",imageDigest,rootFilesystemReadOnly:true,releaseMountedReadOnly:true,environmentMountedReadOnly:true,containerExitStatus:0},migrations:tags.map((tag:string)=>({tag,state:"PRESENT_SCHEMA_MATCH"})),summary:{migrationCount:13,matchCount:13,absentCount:0,driftCount:0}};
+    const fixture={schemaVersion:1,recordType:"aurion_production_schema_reconciliation",sourceRevision,readOnly:true,databaseCredentialReturned:false,overallState:"PRESENT_SCHEMA_MATCH",execution:{mode:"docker",network:"echoes-of-aurion-internal",imageDigest,rootFilesystemReadOnly:true,releaseMountedReadOnly:true,environmentMountedReadOnly:true,containerExitStatus:0},migrations:tags.map((tag:string)=>({tag,state:"PRESENT_SCHEMA_MATCH"})),summary:{migrationCount,matchCount:migrationCount,absentCount:0,driftCount:0}};
     const classify=(receipt:unknown)=>{
       let result="";
       runInNewContext(classifier!,{require:(name:string)=>{if(name!=="node:fs")throw Error("UNEXPECTED_IMPORT");return {readFileSync:()=>JSON.stringify(receipt),writeFileSync:(_path:string,body:string)=>{result=body;}};},process:{env:{RAW_PATH:"unit-input",RESULT_PATH:"unit-output",RUNNER_STATUS:"0",EXPECTED_SHA:sourceRevision,EXPECTED_DOCKER_NETWORK:fixture.execution.network,EXPECTED_IMAGE_DIGEST:imageDigest}}});
       return JSON.parse(result);
     };
-    expect(classify(fixture)).toMatchObject({state:"PRESENT_SCHEMA_MATCH",summary:{migrationCount:13,matchCount:13}});
+    expect(classify(fixture)).toMatchObject({state:"PRESENT_SCHEMA_MATCH",summary:{migrationCount,matchCount:migrationCount}});
     for(const invalid of [
-      {...fixture,summary:{...fixture.summary,migrationCount:11}},
+      {...fixture,summary:{...fixture.summary,migrationCount:migrationCount-1}},
       {...fixture,migrations:fixture.migrations.slice(0,-1)},
       {...fixture,migrations:[...fixture.migrations.slice(0,-1),fixture.migrations[0]]},
       {...fixture,sourceRevision:"c".repeat(40)},
