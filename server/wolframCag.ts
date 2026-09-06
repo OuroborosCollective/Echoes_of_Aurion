@@ -182,14 +182,14 @@ export function createWolframCagClient(options: Readonly<{
   }
 
   return Object.freeze({
-    languageCompute: input => call("language_compute", {
+    languageCompute: async input => call("language_compute", {
       code: boundedText(input.code, "code"),
       timeConstraint: input.timeConstraint === undefined ? 60 : boundedInteger(input.timeConstraint, "timeConstraint", 1, 60),
       maxChars: input.maxChars === undefined ? 10_000 : boundedInteger(input.maxChars, "maxChars", 1, 20_000),
     }, "POST"),
-    languageHints: input => call("language_hints", { context: boundedText(input.context, "context") }, "POST"),
-    alphaResults: input => call("alpha_results", { input: boundedText(input.input, "input") }, "GET"),
-    alphaContext: input => call("alpha_context", {
+    languageHints: async input => call("language_hints", { context: boundedText(input.context, "context") }, "POST"),
+    alphaResults: async input => call("alpha_results", { input: boundedText(input.input, "input") }, "GET"),
+    alphaContext: async input => call("alpha_context", {
       context: boundedText(input.context, "context"),
       count: input.count === undefined ? 5 : boundedInteger(input.count, "count", 1, 10),
     }, "POST"),
