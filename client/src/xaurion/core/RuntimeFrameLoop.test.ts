@@ -6,16 +6,28 @@ describe("render loop lifecycle", () => {
   let sequence: number;
   beforeEach(() => {
     callbacks = new Map(); sequence = 0;
+    vi.spyOn(performance, "now").mockReturnValue(0);
     vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
       callbacks.set(++sequence, callback); return sequence;
     }));
     vi.stubGlobal("cancelAnimationFrame", vi.fn((id: number) => callbacks.delete(id)));
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
   const frame = (time: number) => {
     const pending = [...callbacks.values()]; callbacks.clear();
     pending.forEach(callback => callback(time));
   };
+
+  it("bounds slow render deltas to fifty milliseconds so short visual actions span real frames", () => {
+    const step = vi.fn();
+    const loop = new RuntimeFrameLoop(step, vi.fn());
+    loop.start(); frame(100);
+    expect(step).toHaveBeenCalledTimes(1);
+    expect(step).toHaveBeenLastCalledWith(0.05);
+    frame(350);
+    expect(step).toHaveBeenLastCalledWith(0.05);
+    loop.stop();
+  });
 
   it("reports a late render failure once and cancels further work", () => {
     const failure = new Error("renderer unavailable");

@@ -7,7 +7,10 @@ export class RuntimeFrameLoop {
   constructor(
     private readonly step: (deltaSeconds: number) => void,
     private readonly onError: (error: unknown) => void,
-    private readonly maxDeltaSeconds = 0.1,
+    // Projection-only bound: short visible actions must span several actual render
+    // frames even when software WebGL stalls. Server movement/gameplay authority is
+    // independent from this client interpolation clock.
+    private readonly maxDeltaSeconds = 0.05,
   ) {}
 
   start() {
