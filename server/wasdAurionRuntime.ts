@@ -45,8 +45,45 @@ function digestText(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function assertIndex(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error("resolutionIndex must be a non-negative safe integer");
+}
+
+function canonicalWorldSignals(signals: readonly WorldSignal[]): string {
+  const normalized = signals.map(signal => ({
+    id: signal.id,
+    kind: signal.kind,
+    regionId: signal.regionId,
+    magnitude: signal.magnitude,
+    sourceReceiptId: signal.sourceReceiptId,
+    resolutionIndex: signal.resolutionIndex,
+  })).sort((left,right) => left.resolutionIndex - right.resolutionIndex
+    || compareText(left.regionId,right.regionId)
+    || compareText(left.kind,right.kind)
+    || compareText(left.sourceReceiptId,right.sourceReceiptId)
+    || compareText(left.id,right.id));
+  if (new Set(normalized.map(signal => signal.id)).size !== normalized.length) throw new Error("WORLD_DUPLICATE_SIGNAL_EVIDENCE");
+  return JSON.stringify(normalized);
+}
+
+function storedWorldSignals(raw: string): string {
+  try {
+    const value = JSON.parse(raw);
+    if (!Array.isArray(value)) throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+    return canonicalWorldSignals(value as WorldSignal[]);
+  } catch (error) {
+    if (error instanceof Error && error.message === "WORLD_DUPLICATE_SIGNAL_EVIDENCE") throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+    if (error instanceof Error && error.message === "WORLD_STORED_CONTENT_CORRUPT") throw error;
+    throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+  }
+}
+
+function worldResolutionRowId(regionId: string, resolutionIndex: number): string {
+  return `world_${digestText(`${regionId}\u001f${resolutionIndex}`).slice(0,58)}`;
 }
 
 export type AurionWorldReadModel = {
@@ -54,7 +91,17 @@ export type AurionWorldReadModel = {
   source: "persisted" | "created";
 };
 
-/** Persists a pure resolver output once per region/index; retries return the first confirmed reaction. */
+type WorldResolutionRow = typeof aurionWorldResolutions.$inferSelect;
+
+function verifiedWorldReadback(row: WorldResolutionRow, expected: { worldSeedDigest: string; signalsJson: string; reaction: WorldReaction }): WorldReaction {
+  if (row.worldSeedDigest !== expected.worldSeedDigest || storedWorldSignals(row.signalsJson) !== expected.signalsJson) throw new Error("WORLD_RESOLUTION_INPUT_CONFLICT");
+  if (row.ruleSetVersion !== expected.reaction.ruleSetVersion || row.contentVersion !== expected.reaction.contentVersion || row.reactionHash !== expected.reaction.deterministicHash) throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+  const stored = jsonParse<WorldReaction | null>(row.reactionJson,null);
+  if (!stored || stored.deterministicHash !== row.reactionHash || npcHash(stored) !== npcHash(expected.reaction)) throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+  return stored;
+}
+
+/** Persists a pure resolver output once per region/index; retries must reproduce the exact same request. */
 export async function resolveAndRecordWorld(input: {
   worldSeed: string;
   regionId: string;
@@ -64,27 +111,35 @@ export async function resolveAndRecordWorld(input: {
   assertIndex(input.resolutionIndex);
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
-  const prior = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.regionId, input.regionId)))
-    .find(row => row.resolutionIndex === input.resolutionIndex);
-  if (prior) {
-    return { reaction: jsonParse<WorldReaction>(prior.reactionJson, resolveWorldReaction(input)), source: "persisted" };
-  }
   const reaction = resolveWorldReaction(input);
   const worldSeedDigest = buildWorldSeedDigest(input);
-  await db.insert(aurionWorldResolutions).values({
-    id: runtimeId("world"),
-    regionId: input.regionId,
-    worldSeedDigest,
-    ruleSetVersion: reaction.ruleSetVersion,
-    contentVersion: reaction.contentVersion,
-    resolutionIndex: input.resolutionIndex,
-    signalsJson: JSON.stringify(input.signals),
-    reactionJson: JSON.stringify(reaction),
-    reactionHash: reaction.deterministicHash,
-  });
-  const readback = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.reactionHash, reaction.deterministicHash)).limit(1))[0];
+  const signalsJson = canonicalWorldSignals(input.signals);
+  const expected = { worldSeedDigest, signalsJson, reaction };
+  const prior = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.regionId, input.regionId)))
+    .find(row => row.resolutionIndex === input.resolutionIndex);
+  if (prior) return { reaction: verifiedWorldReadback(prior,expected), source: "persisted" };
+
+  const id = worldResolutionRowId(input.regionId,input.resolutionIndex);
+  try {
+    await db.insert(aurionWorldResolutions).values({
+      id,
+      regionId: input.regionId,
+      worldSeedDigest,
+      ruleSetVersion: reaction.ruleSetVersion,
+      contentVersion: reaction.contentVersion,
+      resolutionIndex: input.resolutionIndex,
+      signalsJson,
+      reactionJson: JSON.stringify(reaction),
+      reactionHash: reaction.deterministicHash,
+    });
+  } catch (error) {
+    const collided = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.id,id)).limit(1))[0];
+    if (!collided) throw error;
+    return { reaction: verifiedWorldReadback(collided,expected), source: "persisted" };
+  }
+  const readback = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.id,id)).limit(1))[0];
   if (!readback) throw new Error("World resolution readback failed");
-  return { reaction: jsonParse<WorldReaction>(readback.reactionJson, reaction), source: "created" };
+  return { reaction: verifiedWorldReadback(readback,expected), source: "created" };
 }
 
 export type AurionNpcReadModel = NpcSnapshot & Readonly<{ source: "persisted" | "created" }>;
