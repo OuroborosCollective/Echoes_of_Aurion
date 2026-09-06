@@ -2,7 +2,6 @@ import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT, ZONE_POSITION_MIN, ZONE_PROTOCOL_VERSION, validWorldPosition } from "@shared/zonePresenceContract";
 import {
   makeZoneConnectionId,
-  ZONE_FIXED_POINT_SCALE,
   type ZoneId,
   type ZoneMove,
   type ZonePosition,
@@ -10,8 +9,9 @@ import {
   type ZoneSnapshot,
   type ZoneWelcome,
 } from "./zoneProtocol";
-
+import { ZoneMobRuntime } from "./zoneMobRuntime";
 import { worldNatureCollision } from "./worldNatureCollision";
+
 const CARDINAL_STEP_FIXED = 340;
 const DIAGONAL_STEP_FIXED = 240;
 
@@ -24,17 +24,9 @@ type PresencePeer = {
   position: ZonePosition;
 };
 
-function serialize(payload: ZoneWelcome | ZoneSnapshot) {
-  return JSON.stringify(payload);
-}
-
-function compareBinary(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function clampFixed(value: number): number {
-  return Math.max(ZONE_POSITION_MIN, Math.min(ZONE_POSITION_LIMIT, value));
-}
+function serialize(payload: ZoneWelcome | ZoneSnapshot) { return JSON.stringify(payload); }
+function compareBinary(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
+function clampFixed(value: number): number { return Math.max(ZONE_POSITION_MIN, Math.min(ZONE_POSITION_LIMIT, value)); }
 
 /** Pure Level-A movement step: positions are millimetre-like fixed-point integers, never client coordinates. */
 export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["input"]): ZonePosition {
@@ -47,9 +39,10 @@ export function integrateZoneMovement(position: ZonePosition, input: ZoneMove["i
   });
 }
 
-/** First writable slice: clients submit only ordered movement intents; this zone owns all resulting positions. */
+/** Browser clients submit only ordered movement intents; this zone owns players and hostile-mob target/movement state. */
 export class AuthoritativeMovementZone {
   private readonly peers = new Map<string, PresencePeer>();
+  private readonly mobRuntime = new ZoneMobRuntime();
   private snapshotSeq = 0;
   private tickNumber = 0;
   private inputAcknowledgementPending = false;
@@ -74,7 +67,10 @@ export class AuthoritativeMovementZone {
       lastAcceptedClientSeq: 0,
       position: { x: 0, z: 0 },
     });
-    const welcome: ZoneWelcome = { type: "welcome", protocolVersion: ZONE_PROTOCOL_VERSION, connectionId, zoneId: this.zoneId, snapshotSeq: ++this.snapshotSeq, tick: this.tickNumber, presences: this.presences() };
+    const welcome: ZoneWelcome = {
+      type: "welcome", protocolVersion: ZONE_PROTOCOL_VERSION, connectionId, zoneId: this.zoneId,
+      snapshotSeq: ++this.snapshotSeq, tick: this.tickNumber, presences: this.presences(), mobs: this.mobRuntime.snapshot(),
+    };
     this.broadcastSnapshot();
     return welcome;
   }
@@ -88,6 +84,8 @@ export class AuthoritativeMovementZone {
     const position = this.peers.get(connectionId)?.position;
     return position ? { ...position } : undefined;
   }
+
+  mobSnapshot() { return this.mobRuntime.snapshot(); }
 
   submitMovement(connectionId: string, move: ZoneMove): "accepted" | "stale" | "missing" {
     const peer = this.peers.get(connectionId);
@@ -109,13 +107,12 @@ export class AuthoritativeMovementZone {
       peer.position = next;
       changed = true;
     });
-    // Publish the first stationary tick too: the renderer needs confirmed zero
-    // velocity after stopping or reaching the boundary. New intents also need
-    // acknowledgement even when their resulting position remains unchanged.
-    if (changed || this.movedLastTick || this.inputAcknowledgementPending) this.broadcastSnapshot();
+    const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
+    // Mobs are server-owned and may move even while players stand still, therefore any mob transition/movement publishes a snapshot.
+    if (changed || mobsChanged || this.movedLastTick || this.inputAcknowledgementPending) this.broadcastSnapshot();
     this.movedLastTick = changed;
     this.inputAcknowledgementPending = false;
-    return changed;
+    return changed || mobsChanged;
   }
 
   private presences(): ZonePresence[] {
@@ -125,17 +122,17 @@ export class AuthoritativeMovementZone {
   }
 
   private broadcastSnapshot(): void {
-    const snapshot: ZoneSnapshot = { type: "snapshot", zoneId: this.zoneId, snapshotSeq: ++this.snapshotSeq, tick: this.tickNumber, presences: this.presences() };
+    const snapshot: ZoneSnapshot = {
+      type: "snapshot", zoneId: this.zoneId, snapshotSeq: ++this.snapshotSeq, tick: this.tickNumber,
+      presences: this.presences(), mobs: this.mobRuntime.snapshot(),
+    };
     const serialized = serialize(snapshot);
-    this.peers.forEach(peer => {
-      if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized);
-    });
+    this.peers.forEach(peer => { if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(serialized); });
   }
 }
 
 export class ZoneRegistry {
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
-
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
     if (existing) return existing;
@@ -143,8 +140,5 @@ export class ZoneRegistry {
     this.zones.set(zoneId, zone);
     return zone;
   }
-
-  tick(): void {
-    Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).forEach(([, zone]) => zone.tick());
-  }
+  tick(): void { Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).forEach(([, zone]) => zone.tick()); }
 }
