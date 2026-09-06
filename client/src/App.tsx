@@ -13,16 +13,17 @@ import AurionGroupsPage from "./xaurion/integration/AurionGroupFinder";
 import AurionPlayRoute, { persistConfirmedPlayLaunch } from "./xaurion/integration/AurionPlayRoute";
 
 function PlayNavigationBridge() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   useEffect(() => {
     const launch = (event: Event) => {
+      if (location === "/play") return;
       const detail = (event as CustomEvent<unknown>).detail;
       if (!persistConfirmedPlayLaunch(detail)) return;
       navigate("/play");
     };
     window.addEventListener("aurion:load-open-world", launch);
     return () => window.removeEventListener("aurion:load-open-world", launch);
-  }, [navigate]);
+  }, [location, navigate]);
   return null;
 }
 
