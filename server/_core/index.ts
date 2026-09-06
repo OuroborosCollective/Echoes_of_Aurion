@@ -17,6 +17,7 @@ import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
 import { registerGuildBankRoutes } from "../guildBankRoutes";
 import { consumeZoneConnectionTicket, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
+import { createAutonomousNpcLifeRuntime } from "../autonomousNpcLifeRuntime";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -65,6 +66,7 @@ async function startServer() {
       wolframCag = readback;
     });
   }
+  const autonomousNpcLife = createAutonomousNpcLifeRuntime();
 
   const app = express();
   if (process.env.NODE_ENV === "production") {
@@ -93,6 +95,7 @@ async function startServer() {
     service: "echoes-of-aurion",
     ...(releaseRevision ? { revision: releaseRevision } : {}),
     wolframCag,
+    npcLife: autonomousNpcLife.readback(),
   }));
   registerGlbSmartUpload(app);
   registerStarterGlbRuntimeAssets(app);
@@ -105,7 +108,7 @@ async function startServer() {
   registerZoneGateway(server, undefined, consumeZoneConnectionTicket, {
     upsert: recordWorldPresenceLease,
     release: releaseWorldPresenceLease,
-  });
+  }, autonomousNpcLife.enabled ? autonomousNpcLife : undefined);
   app.use(
     "/api/trpc",
     createExpressMiddleware({

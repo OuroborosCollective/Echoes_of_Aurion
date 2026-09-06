@@ -1,7 +1,7 @@
 import { encodeNpcSnapshot, type PublicNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import { advanceNpcMemory, createNpcSnapshot, decodeNpcReceipt, encodeNpcReceipt, normalizeNpcRequest, npcHash, npcNeedsSchema, parseNpcJson, parseNpcMemory, type NpcRequest } from "./npcPersistenceProtocol";
+import { advanceNpcMemory, createNpcLifeSnapshot, decodeNpcReceipt, encodeNpcLifeReceipt, NPC_LIFE_RECEIPT_VERSION, normalizeNpcRequest, npcHash, npcNeedsSchema, npcReceiptVersion, npcRequestHash, parseNpcJson, parseNpcMemory, type NpcRequest, type NpcSnapshot } from "./npcPersistenceProtocol";
 import { aurionDialogueReceipts, aurionNpcDecisionReceipts, aurionNpcStates, aurionPolityStates, aurionWorldResolutions } from "../drizzle/schema";
 import { getDb } from "./db";
 import {
@@ -15,8 +15,6 @@ import {
   resolveWorldReaction,
   type DialogueInterpretation,
   type LanguageProfile,
-  type NpcNeedEvent,
-  type NpcNeedState,
   type PolityGovernmentType,
   type PolityState,
   type WorldReaction,
@@ -47,8 +45,45 @@ function digestText(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function assertIndex(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error("resolutionIndex must be a non-negative safe integer");
+}
+
+function canonicalWorldSignals(signals: readonly WorldSignal[]): string {
+  const normalized = signals.map(signal => ({
+    id: signal.id,
+    kind: signal.kind,
+    regionId: signal.regionId,
+    magnitude: signal.magnitude,
+    sourceReceiptId: signal.sourceReceiptId,
+    resolutionIndex: signal.resolutionIndex,
+  })).sort((left,right) => left.resolutionIndex - right.resolutionIndex
+    || compareText(left.regionId,right.regionId)
+    || compareText(left.kind,right.kind)
+    || compareText(left.sourceReceiptId,right.sourceReceiptId)
+    || compareText(left.id,right.id));
+  if (new Set(normalized.map(signal => signal.id)).size !== normalized.length) throw new Error("WORLD_DUPLICATE_SIGNAL_EVIDENCE");
+  return JSON.stringify(normalized);
+}
+
+function storedWorldSignals(raw: string): string {
+  try {
+    const value = JSON.parse(raw);
+    if (!Array.isArray(value)) throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+    return canonicalWorldSignals(value as WorldSignal[]);
+  } catch (error) {
+    if (error instanceof Error && error.message === "WORLD_DUPLICATE_SIGNAL_EVIDENCE") throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+    if (error instanceof Error && error.message === "WORLD_STORED_CONTENT_CORRUPT") throw error;
+    throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+  }
+}
+
+function worldResolutionRowId(regionId: string, resolutionIndex: number): string {
+  return `world_${digestText(`${regionId}\u001f${resolutionIndex}`).slice(0,58)}`;
 }
 
 export type AurionWorldReadModel = {
@@ -56,7 +91,17 @@ export type AurionWorldReadModel = {
   source: "persisted" | "created";
 };
 
-/** Persists a pure resolver output once per region/index; retries return the first confirmed reaction. */
+type WorldResolutionRow = typeof aurionWorldResolutions.$inferSelect;
+
+function verifiedWorldReadback(row: WorldResolutionRow, expected: { worldSeedDigest: string; signalsJson: string; reaction: WorldReaction }): WorldReaction {
+  if (row.worldSeedDigest !== expected.worldSeedDigest || storedWorldSignals(row.signalsJson) !== expected.signalsJson) throw new Error("WORLD_RESOLUTION_INPUT_CONFLICT");
+  if (row.ruleSetVersion !== expected.reaction.ruleSetVersion || row.contentVersion !== expected.reaction.contentVersion || row.reactionHash !== expected.reaction.deterministicHash) throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+  const stored = jsonParse<WorldReaction | null>(row.reactionJson,null);
+  if (!stored || stored.deterministicHash !== row.reactionHash || npcHash(stored) !== npcHash(expected.reaction)) throw new Error("WORLD_STORED_CONTENT_CORRUPT");
+  return stored;
+}
+
+/** Persists a pure resolver output once per region/index; retries must reproduce the exact same request. */
 export async function resolveAndRecordWorld(input: {
   worldSeed: string;
   regionId: string;
@@ -66,42 +111,63 @@ export async function resolveAndRecordWorld(input: {
   assertIndex(input.resolutionIndex);
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
-  const prior = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.regionId, input.regionId)))
-    .find(row => row.resolutionIndex === input.resolutionIndex);
-  if (prior) {
-    return { reaction: jsonParse<WorldReaction>(prior.reactionJson, resolveWorldReaction(input)), source: "persisted" };
-  }
   const reaction = resolveWorldReaction(input);
   const worldSeedDigest = buildWorldSeedDigest(input);
-  await db.insert(aurionWorldResolutions).values({
-    id: runtimeId("world"),
-    regionId: input.regionId,
-    worldSeedDigest,
-    ruleSetVersion: reaction.ruleSetVersion,
-    contentVersion: reaction.contentVersion,
-    resolutionIndex: input.resolutionIndex,
-    signalsJson: JSON.stringify(input.signals),
-    reactionJson: JSON.stringify(reaction),
-    reactionHash: reaction.deterministicHash,
-  });
-  const readback = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.reactionHash, reaction.deterministicHash)).limit(1))[0];
+  const signalsJson = canonicalWorldSignals(input.signals);
+  const expected = { worldSeedDigest, signalsJson, reaction };
+  const prior = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.regionId, input.regionId)))
+    .find(row => row.resolutionIndex === input.resolutionIndex);
+  if (prior) return { reaction: verifiedWorldReadback(prior,expected), source: "persisted" };
+
+  const id = worldResolutionRowId(input.regionId,input.resolutionIndex);
+  try {
+    await db.insert(aurionWorldResolutions).values({
+      id,
+      regionId: input.regionId,
+      worldSeedDigest,
+      ruleSetVersion: reaction.ruleSetVersion,
+      contentVersion: reaction.contentVersion,
+      resolutionIndex: input.resolutionIndex,
+      signalsJson,
+      reactionJson: JSON.stringify(reaction),
+      reactionHash: reaction.deterministicHash,
+    });
+  } catch (error) {
+    const collided = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.id,id)).limit(1))[0];
+    if (!collided) throw error;
+    return { reaction: verifiedWorldReadback(collided,expected), source: "persisted" };
+  }
+  const readback = (await db.select().from(aurionWorldResolutions).where(eq(aurionWorldResolutions.id,id)).limit(1))[0];
   if (!readback) throw new Error("World resolution readback failed");
-  return { reaction: jsonParse<WorldReaction>(readback.reactionJson, reaction), source: "created" };
+  return { reaction: verifiedWorldReadback(readback,expected), source: "created" };
 }
 
-export type AurionNpcReadModel = {
-  npcId: string;
-  regionId: string;
-  needs: NpcNeedState;
-  memory: readonly string[];
-  decision: Awaited<ReturnType<typeof decideNpcGoal>>;
-  source: "persisted" | "created";
-};
+export type AurionNpcReadModel = NpcSnapshot & Readonly<{ source: "persisted" | "created" }>;
 
-/** Applies bounded needs and stores exactly one decision per NPC and resolution. */
+function assertNpcStateMatchesReceipt(state: { npcId: string; regionId: string; needsJson: string; memoryJson: string; lastResolutionIndex: number }, snapshot: NpcSnapshot): void {
+  if (snapshot.npcId !== state.npcId || snapshot.regionId !== state.regionId || snapshot.decision.resolutionIndex !== state.lastResolutionIndex || npcHash(snapshot.needs) !== npcHash(npcNeedsSchema.parse(parseNpcJson(state.needsJson))) || npcHash(snapshot.memoryState) !== npcHash(parseNpcMemory(state.memoryJson,state.lastResolutionIndex))) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+}
+
+/** Read the exact latest confirmed NPC receipt. This is server-internal and never synthesizes a default state. */
+export async function readConfirmedNpcState(npcId: string): Promise<NpcSnapshot | null> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(npcId)) throw new Error("NPC_ID_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
+  return db.transaction(async tx => {
+    const state = (await tx.select().from(aurionNpcStates).where(eq(aurionNpcStates.npcId,npcId)).limit(1))[0];
+    if (!state || state.lastResolutionIndex < 0) return null;
+    const receipt = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId,npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,state.lastResolutionIndex))).limit(1))[0];
+    if (!receipt) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
+    const snapshot = decodeNpcReceipt(receipt.observationIdsJson,receipt);
+    assertNpcStateMatchesReceipt(state,snapshot);
+    return snapshot;
+  });
+}
+
+/** Applies bounded needs and stores exactly one versioned life decision per NPC and resolution. */
 export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcReadModel> {
   const input = normalizeNpcRequest(raw);
-  const requestHash = npcHash(input);
+  const v3RequestHash = npcRequestHash(input,NPC_LIFE_RECEIPT_VERSION);
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
   return db.transaction(async tx => {
@@ -112,12 +178,14 @@ export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcRea
     if (!current) throw new Error("NPC_STATE_REQUIRED");
     const prior = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId, input.npcId), eq(aurionNpcDecisionReceipts.resolutionIndex, input.resolutionIndex))).limit(1))[0];
     if (prior) {
-      const snapshot = decodeNpcReceipt(prior.observationIdsJson, { ...prior, requestHash });
-      return { ...snapshot, source: "persisted" as const };
+      const version = npcReceiptVersion(prior.observationIdsJson);
+      const snapshot = decodeNpcReceipt(prior.observationIdsJson, { ...prior, requestHash: npcRequestHash(input,version) });
+      return Object.freeze({ ...snapshot, source: "persisted" as const });
     }
     if (input.resolutionIndex <= current.lastResolutionIndex) throw new Error("NPC_RESOLUTION_OUT_OF_ORDER");
     const currentNeeds = npcNeedsSchema.parse(parseNpcJson(current.needsJson));
     const currentMemory = parseNpcMemory(current.memoryJson, current.lastResolutionIndex);
+    let previousLifeState = undefined;
     if (current.lastResolutionIndex >= 0) {
       const latest = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId, input.npcId), eq(aurionNpcDecisionReceipts.resolutionIndex, current.lastResolutionIndex))).limit(1))[0];
       if (!latest) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
@@ -129,20 +197,22 @@ export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcRea
         if (old.decisionHash !== latest.decisionHash || old.goal !== latest.goal) throw new Error("NPC_STORED_CONTENT_CORRUPT");
       } else {
         const proof = decodeNpcReceipt(latest.observationIdsJson, latest);
-        if (proof.regionId !== current.regionId || npcHash(proof.needs) !== npcHash(currentNeeds) || npcHash(proof.memoryState) !== npcHash(currentMemory)) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+        assertNpcStateMatchesReceipt(current,proof);
+        previousLifeState = "lifeState" in proof ? proof.lifeState : undefined;
       }
     }
     const needs = resolveNpcNeeds({ current: currentNeeds, events: input.needEvents });
     const memory = advanceNpcMemory(currentMemory, input.memory, input.resolutionIndex);
-    const snapshot = createNpcSnapshot({ ...input, needs, memoryState: memory });
-    const id = "npc_" + npcHash(["aurion-npc-decision.v2", input.npcId, input.resolutionIndex]).slice(0, 56);
-    const envelope = encodeNpcReceipt(requestHash, snapshot);
+    const snapshot = createNpcLifeSnapshot({ ...input, needs, memoryState: memory, ...(previousLifeState ? { previousLifeState } : {}) });
+    const id = "npc_" + npcHash([NPC_LIFE_RECEIPT_VERSION, input.npcId, input.resolutionIndex]).slice(0, 56);
+    const envelope = encodeNpcLifeReceipt(v3RequestHash, snapshot);
     await tx.update(aurionNpcStates).set({ regionId: input.regionId, needsJson: JSON.stringify(needs), memoryJson: JSON.stringify(memory), languageProfileId: input.languageProfileId, lastResolutionIndex: input.resolutionIndex }).where(eq(aurionNpcStates.npcId, input.npcId));
-    // observationIdsJson is a versioned JSON envelope from v2 onward; no information is inferred on replay.
+    // observationIdsJson is a versioned receipt envelope. All life state is receipt-owned and replay-verifiable.
     await tx.insert(aurionNpcDecisionReceipts).values({ id, npcId: input.npcId, regionId: input.regionId, resolutionIndex: input.resolutionIndex, observationIdsJson: envelope, goal: snapshot.decision.goal, decisionHash: snapshot.decision.decisionHash });
     const row = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id, id)).limit(1))[0];
     if (!row) throw new Error("NPC decision readback failed");
-    return { ...decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash }), source: "created" as const };
+    const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
+    return Object.freeze({ ...readback, source: "created" as const });
   });
 }
 
@@ -226,7 +296,7 @@ export async function readConfirmedNpcPacket(userId: number) {
       const receipt=(await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId,state.npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,state.lastResolutionIndex))).limit(1))[0];
       if(!receipt) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
       const snapshot=decodeNpcReceipt(receipt.observationIdsJson,receipt);
-      if(snapshot.regionId!==state.regionId || npcHash(snapshot.needs)!==npcHash(npcNeedsSchema.parse(parseNpcJson(state.needsJson))) || npcHash(snapshot.memoryState)!==npcHash(parseNpcMemory(state.memoryJson,state.lastResolutionIndex))) throw new Error("NPC_STORED_CONTENT_CORRUPT");
+      assertNpcStateMatchesReceipt(state,snapshot);
       projection.push({npcId:snapshot.npcId,regionId:snapshot.regionId,resolutionIndex:snapshot.decision.resolutionIndex,goal:snapshot.decision.goal,needs:snapshot.needs,memoryCount:snapshot.memory.length,decisionHash:snapshot.decision.decisionHash});
     }
     return Object.freeze({userId,format:"aurion-public-npc.v2" as const,data:Buffer.from(encodeNpcSnapshot(projection)).toString("base64")});
