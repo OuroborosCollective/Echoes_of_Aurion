@@ -15,6 +15,7 @@ on:
       - 'server/guildBankProtocol.ts'
       - 'server/wolframCag*'
       - 'server/adminMcp*'
+      - 'server/_core/index.ts'
       - 'server/aim265*'
       - 'shared/aurion*Catalog.json'
       - 'shared/worldChunk*Protocol.ts'
@@ -35,6 +36,7 @@ on:
       - 'server/guildBankProtocol.ts'
       - 'server/wolframCag*'
       - 'server/adminMcp*'
+      - 'server/_core/index.ts'
       - 'server/aim265*'
       - 'shared/aurion*Catalog.json'
       - 'shared/worldChunk*Protocol.ts'
@@ -67,7 +69,7 @@ jobs:
           python scripts/balancing/verify-aim265.py /tmp/aurion-balancing-v2.json > /tmp/aurion-balancing-oracle.json
           diff -u docs/balancing/aim265-candidate.json /tmp/aurion-balancing-v2.json
           python -m unittest discover -s scripts/balancing -p 'test_*.py'
-          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/adminMcp.test.ts
+          pnpm exec vitest run server/aim249BalancingModel.test.ts server/aim250RegionProgression.test.ts server/aim265SpatialCalculation.test.ts server/wasdAurionWorldIntegrityProtocol.test.ts server/openWorldProtocol.test.ts server/wolframCag.test.ts server/wolframCagRuntimeReadback.test.ts server/adminMcp.test.ts
       - name: Run real Wolfram CAG canary when CI has the provisioned key
         env:
           WOLFRAM_CAG_API_KEY: ${{ secrets.WOLFRAM_CAG_API_KEY }}
