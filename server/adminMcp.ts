@@ -20,6 +20,7 @@ import {
   type AurionAdminMcpSettings,
 } from "./adminMcpProtocol";
 import { resolveApprovedGatewayHost } from "./gatewayHost";
+import { requireWolframCagClient, runAurionWolframCagCanary, wolframCagConfigurationStatus } from "./wolframCag";
 
 type AdminActor = {
   userId: number;
@@ -101,13 +102,25 @@ export async function authenticateAdminGlbBearer(request: Request): Promise<{ id
   return { id: actor.userId, role: "admin" };
 }
 
-export function adminMcpCapabilities(scopes: readonly string[] = []) {
+export function adminMcpCapabilities(
+  scopes: readonly string[] = [],
+  options: Readonly<{ wolframConfigured?: boolean }> = {},
+) {
   const writable = scopes.includes(AURION_ADMIN_GLB_WRITE_SCOPE);
+  const wolframConfigured = options.wolframConfigured === true;
   return Object.freeze({
     protocol: "aurion.admin-mcp.v1",
     tools: Object.freeze([
       Object.freeze({ name: "aurion_admin_get_capabilities", mode: "read", description: "Lists the current safe capabilities and boundaries." }),
       Object.freeze({ name: "aurion_admin_get_world_overview", mode: "read", description: "Reads the confirmed global world descriptor without advancing an epoch." }),
+      Object.freeze({ name: "aurion_admin_wolfram_status", mode: "read", description: "Reports secret-free Wolfram CAG runtime configuration without making a provider request." }),
+      ...(wolframConfigured ? [
+        { name: "aurion_admin_wolfram_compute", mode: "read", description: "Evaluates bounded Wolfram Language code as external evidence only." },
+        { name: "aurion_admin_wolfram_hints", mode: "read", description: "Retrieves bounded Wolfram Language hints for an engineering or balancing task." },
+        { name: "aurion_admin_wolfram_alpha_results", mode: "read", description: "Retrieves Wolfram Alpha results as external evidence only." },
+        { name: "aurion_admin_wolfram_alpha_context", mode: "read", description: "Retrieves bounded Wolfram Alpha factual context." },
+        { name: "aurion_admin_wolfram_canary", mode: "read", description: "Runs the fixed exact Wolfram CAG computation canary." },
+      ] : []),
       ...(writable ? [
         { name: "aurion_admin_glb_plan", mode: "read", description: "Validate self-contained GLB bytes and derive the versioned target plan." },
         { name: "aurion_admin_glb_import", mode: "write", description: "Persist one admin-authorized GLB and fill only an unoccupied deterministic visual slot." },
@@ -115,6 +128,7 @@ export function adminMcpCapabilities(scopes: readonly string[] = []) {
         { name: "aurion_admin_glb_assign", mode: "write", description: "Replace one visual assignment only when the expected active asset still matches." },
       ] : []),
     ]),
+    wolfram: Object.freeze({ configured: wolframConfigured, mutationAuthority: "none" as const }),
     unavailable: Object.freeze([
       "world_delta_write",
       "object_placement",
@@ -131,13 +145,16 @@ export function adminMcpCapabilities(scopes: readonly string[] = []) {
 
 function createAdminMcpServer(actor: AdminActor) {
   const server = new McpServer({ name: "echoes-of-aurion-admin", version: "0.1.0" });
+  const content = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value) }] });
+  const wolframStatus = wolframCagConfigurationStatus();
+  const capabilities = adminMcpCapabilities(actor.scopes, { wolframConfigured: wolframStatus.configured });
   server.registerTool("aurion_admin_get_capabilities", {
     title: "Read Aurion admin MCP capabilities",
     description: "Read the verified, bounded capabilities and unavailable authority of the Aurion Admin MCP.",
     inputSchema: z.object({}),
   }, async () => ({
-    content: [{ type: "text", text: JSON.stringify(adminMcpCapabilities(actor.scopes)) }],
-    structuredContent: adminMcpCapabilities(actor.scopes),
+    content: [{ type: "text", text: JSON.stringify(capabilities) }],
+    structuredContent: capabilities,
   }));
   server.registerTool("aurion_admin_get_world_overview", {
     title: "Read the confirmed global Aurion world overview",
@@ -158,8 +175,41 @@ function createAdminMcpServer(actor: AdminActor) {
       structuredContent: result,
     };
   });
+  server.registerTool("aurion_admin_wolfram_status", {
+    title: "Read Wolfram CAG configuration status",
+    description: "Reports whether the server-side Wolfram CAG key is configured. It never returns the key and makes no provider request.",
+    inputSchema: z.object({}),
+  }, async () => content(wolframCagConfigurationStatus()));
+  if (wolframStatus.configured) {
+    const wolfram = requireWolframCagClient();
+    const boundedText = z.string().min(1).max(20_000);
+    server.registerTool("aurion_admin_wolfram_compute", {
+      title: "Evaluate Wolfram Language for Aurion analysis",
+      description: "Evaluates bounded Wolfram Language code. The result is external analysis evidence and has no gameplay mutation authority.",
+      inputSchema: z.object({ code: boundedText, timeConstraint: z.number().int().min(1).max(60).optional(), maxChars: z.number().int().min(1).max(20_000).optional() }).strict(),
+    }, async input => content(await wolfram.languageCompute(input)));
+    server.registerTool("aurion_admin_wolfram_hints", {
+      title: "Retrieve Wolfram Language hints",
+      description: "Retrieves Wolfram Language coding recommendations as external evidence only.",
+      inputSchema: z.object({ context: boundedText }).strict(),
+    }, async input => content(await wolfram.languageHints(input)));
+    server.registerTool("aurion_admin_wolfram_alpha_results", {
+      title: "Retrieve Wolfram Alpha results",
+      description: "Retrieves bounded Wolfram Alpha results. Returned data cannot directly mutate Aurion gameplay state.",
+      inputSchema: z.object({ input: boundedText }).strict(),
+    }, async input => content(await wolfram.alphaResults(input)));
+    server.registerTool("aurion_admin_wolfram_alpha_context", {
+      title: "Retrieve Wolfram Alpha context",
+      description: "Retrieves bounded Wolfram Alpha factual context as external evidence only.",
+      inputSchema: z.object({ context: boundedText, count: z.number().int().min(1).max(10).optional() }).strict(),
+    }, async input => content(await wolfram.alphaContext(input)));
+    server.registerTool("aurion_admin_wolfram_canary", {
+      title: "Run the exact Aurion Wolfram CAG canary",
+      description: "Evaluates a fixed exact sum and verifies the expected result before reporting provider evidence.",
+      inputSchema: z.object({}),
+    }, async () => content(await runAurionWolframCagCanary(wolfram)));
+  }
   if (actor.scopes.includes(AURION_ADMIN_GLB_WRITE_SCOPE)) {
-    const content = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value) }] });
     const payload = z.string().min(16).max(MAX_GLB_BASE64_CHARS);
     server.registerTool("aurion_admin_glb_plan", { description: "Validate GLB bytes and return their deterministic import plan without publishing anything.", inputSchema: z.object({ contentBase64: payload }) }, async input => content(buildGlbImportPlan(input.contentBase64)));
     server.registerTool("aurion_admin_glb_import", { description: "Import one supplied GLB into durable Aurion storage. Requires its exact plan hash. Existing occupied targets are reported as conflicts and preserved.", inputSchema: z.object({ displayName: z.string().trim().min(3).max(120), contentBase64: payload, expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }) }, async input => content(await glbImportStore().ingest(actor.userId, input)));

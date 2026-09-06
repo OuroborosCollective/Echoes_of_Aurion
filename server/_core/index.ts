@@ -16,6 +16,7 @@ import { registerZoneGateway } from "../zoneGateway";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
 import { registerGuildBankRoutes } from "../guildBankRoutes";
 import { consumeZoneConnectionTicket, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
+import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -58,6 +59,13 @@ async function startServer() {
     throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");
   }
 
+  let wolframCag = initialWolframCagRuntimeReadback();
+  if (wolframCag.configured) {
+    void resolveWolframCagRuntimeReadback().then(readback => {
+      wolframCag = readback;
+    });
+  }
+
   const app = express();
   if (process.env.NODE_ENV === "production") {
     app.set("trust proxy", parseInt(process.env.TRUST_PROXY_HOPS || "1", 10));
@@ -84,6 +92,7 @@ async function startServer() {
     status: "ok",
     service: "echoes-of-aurion",
     ...(releaseRevision ? { revision: releaseRevision } : {}),
+    wolframCag,
   }));
   registerGlbSmartUpload(app);
   registerStarterGlbRuntimeAssets(app);
