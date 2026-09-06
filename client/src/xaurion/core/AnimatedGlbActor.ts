@@ -7,6 +7,20 @@ const clipNames: Record<GlbPose, readonly string[]> = {
   death: ["death"], interact: ["shopinteract", "interact"],
 };
 
+// Aurion's authoritative cardinal movement is 340 mm per 100 ms tick = 3.4 m/s.
+// Treat that as running presentation immediately; otherwise the avatar visibly
+// slides while a slow Walk clip catches up with already-confirmed movement.
+export const GLB_RUN_THRESHOLD_METERS_PER_SECOND = 2.4;
+const LOCOMOTION_BLEND_SECONDS = 0.055;
+const ONESHOT_BLEND_SECONDS = 0.035;
+const targetClipSeconds: Partial<Record<GlbPose, number>> = {
+  walk: 0.82,
+  run: 0.52,
+  attack: 0.62,
+  jump: 0.8,
+  interact: 0.85,
+};
+
 /** Presentation only: imported transforms/rig are preserved inside a metre-sized,
  * foot-anchored wrapper. Animation never changes authoritative world coordinates.
  */
@@ -16,6 +30,7 @@ export class AnimatedGlbActor {
   private readonly mixer: THREE.AnimationMixer;
   private readonly clips = new Map<string, THREE.AnimationClip>();
   private readonly bones: THREE.Bone[] = [];
+  private readonly bonesByName = new Map<string, THREE.Bone>();
   private active: THREE.AnimationAction | null = null;
   private locomotion: GlbPose = "idle";
   private oneShot = false;
@@ -40,12 +55,18 @@ export class AnimatedGlbActor {
     this.group.scale.setScalar(heightMeters / height);
     this.group.add(pivot);
     this.heightMeters = heightMeters;
-    model.traverse(node => { if ((node as THREE.Bone).isBone) this.bones.push(node as THREE.Bone); });
+    model.traverse(node => {
+      if (!(node as THREE.Bone).isBone) return;
+      const bone = node as THREE.Bone;
+      this.bones.push(bone);
+      if (bone.name) this.bonesByName.set(bone.name, bone);
+    });
     for (const clip of animations) this.clips.set(clip.name.toLowerCase().replace(/[^a-z0-9]/g, ""), clip);
     this.mixer = new THREE.AnimationMixer(model);
     this.mixer.addEventListener("finished", this.finished);
     this.play("idle", false);
     this.mixer.update(0);
+    this.relaxIdleArms();
   }
 
   private finished = (event: { action: THREE.AnimationAction }) => {
@@ -54,23 +75,29 @@ export class AnimatedGlbActor {
     this.play(this.locomotion, false);
   };
 
+  private playbackRate(pose: GlbPose, clip: THREE.AnimationClip): number {
+    const target = targetClipSeconds[pose];
+    if (!target || !Number.isFinite(clip.duration) || clip.duration <= 0) return 1;
+    return THREE.MathUtils.clamp(clip.duration / target, 1, 3.25);
+  }
+
   private play(pose: GlbPose, once: boolean): boolean {
     const clip = clipNames[pose].map(name => this.clips.get(name)).find(Boolean) ?? (once ? undefined : this.clips.get("idle"));
     if (!clip) return false;
     const next = this.mixer.clipAction(clip);
     if (next === this.active && !once) return true;
     const previous = this.active;
-    next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1);
+    next.reset().setEffectiveTimeScale(this.playbackRate(pose, clip)).setEffectiveWeight(1);
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;
     next.play();
-    if (previous && previous !== next) previous.crossFadeTo(next, 0.15, false);
+    if (previous && previous !== next) previous.crossFadeTo(next, once ? ONESHOT_BLEND_SECONDS : LOCOMOTION_BLEND_SECONDS, false);
     this.active = next;
     return true;
   }
 
   setLocomotion(speedMetersPerSecond: number): void {
-    this.locomotion = speedMetersPerSecond > 4.5 ? "run" : speedMetersPerSecond > 0.05 ? "walk" : "idle";
+    this.locomotion = speedMetersPerSecond >= GLB_RUN_THRESHOLD_METERS_PER_SECOND ? "run" : speedMetersPerSecond > 0.05 ? "walk" : "idle";
     if (!this.oneShot) this.play(this.locomotion, false);
   }
 
@@ -80,9 +107,37 @@ export class AnimatedGlbActor {
     if (pose === "attack" && !this.oneShot) this.fallbackAttack = 0.3;
   }
 
+  /**
+   * Some imported idle clips retain a near bind/T-pose shoulder direction.
+   * Preserve authored relaxed idles, but when an upper arm is still too
+   * horizontal, bend only that presentation bone toward a neutral down/forward
+   * rest. This never feeds back into simulation or authoritative coordinates.
+   */
+  private relaxIdleArms(): void {
+    if (this.oneShot || this.locomotion !== "idle") return;
+    const localAxis = new THREE.Vector3(0, 1, 0);
+    for (const [name, side] of [["UpperArm_L", 1], ["UpperArm_R", -1]] as const) {
+      const bone = this.bonesByName.get(name);
+      if (!bone) continue;
+      bone.updateWorldMatrix(true, false);
+      const worldRotation = bone.getWorldQuaternion(new THREE.Quaternion());
+      const direction = localAxis.clone().applyQuaternion(worldRotation).normalize();
+      // Already relaxed enough: respect the authored animation.
+      if (direction.y <= -0.82) continue;
+      const target = new THREE.Vector3(side * 0.12, -0.985, 0.08).normalize();
+      const correction = new THREE.Quaternion().setFromUnitVectors(direction, target);
+      const correctedWorld = correction.multiply(worldRotation);
+      const parentWorld = bone.parent?.getWorldQuaternion(new THREE.Quaternion()) ?? new THREE.Quaternion();
+      const correctedLocal = parentWorld.invert().multiply(correctedWorld);
+      bone.quaternion.slerp(correctedLocal, 0.72);
+    }
+    this.group.updateMatrixWorld(true);
+  }
+
   update(delta: number): void {
     if (this.disposed || !Number.isFinite(delta) || delta <= 0) return;
     this.mixer.update(Math.min(delta, 0.25));
+    this.relaxIdleArms();
     // Static avatars get a brief presentation recoil only after a confirmed attack.
     // This wrapper animation never changes canonical player coordinates.
     this.fallbackAttack = Math.max(0, this.fallbackAttack - delta);
