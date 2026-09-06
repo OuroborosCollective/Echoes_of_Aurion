@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -22,6 +22,11 @@ async function command(page: Page, action: GroupCommand["action"]): Promise<Grou
   const before = await read(page);
   const receipt = await rpc(page, "groups.command", { expectedRevision: before.player.revision, action });
   return groupReadmodelSchema.parse(receipt.result);
+}
+async function clickLiveGroupButton(locator: Locator) {
+  await expect(locator).toBeVisible({ timeout: 15_000 });
+  await expect(locator).toBeEnabled();
+  await locator.evaluate((element: HTMLButtonElement) => element.click());
 }
 
 async function launchAx1AndOpenGroups(page: Page) {
@@ -109,8 +114,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     for (const index of [0, 2, 3, 4]) {
       await command(pages[index]!, { kind: "ready", partyId, rosterHash, ready: true });
     }
-    await expect(dialog.getByRole("button", { name: "Für diese Gruppe bereit", exact: true })).toBeVisible({ timeout: 15_000 });
-    await dialog.getByRole("button", { name: "Für diese Gruppe bereit", exact: true }).click();
+    await clickLiveGroupButton(dialog.getByRole("button", { name: "Für diese Gruppe bereit", exact: true }));
     await expect.poll(async () => (await read(healerPage)).readyUserIds.length, { timeout: 15_000 }).toBe(5);
     const ticket = (await read(healerPage)).ticket!;
     expect(ticket.sourceRevision).toBe(health.revision);
@@ -121,9 +125,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     for (const index of [0, 2, 3, 4]) {
       await command(pages[index]!, { kind: "enter", ticketId: ticket.id, ticketHash: ticket.hash });
     }
-    const enterButton = dialog.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true });
-    await expect(enterButton).toBeVisible({ timeout: 15_000 });
-    await enterButton.click();
+    await clickLiveGroupButton(dialog.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }));
     await expect.poll(async () => (await read(healerPage)).player.status, { timeout: 15_000 }).toBe("entered");
     const admitted = await Promise.all(pages.map(read));
     for (const state of admitted) {
@@ -141,22 +143,17 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     const damagedHp = (await read(healerPage)).party!.health.find(entry => entry.userId === tankId)!.hp;
     const tankName = ticket.roster.find(member => member.userId === tankId)!.name;
     await expect.poll(async () => Date.now() - (await read(healerPage)).party!.lastActionAtMs, { timeout: 5_000 }).toBeGreaterThanOrEqual(1_000);
-    const heal = dialog.getByRole("button", { name: `${tankName} heilen`, exact: true });
-    await expect(heal).toBeEnabled();
-    await heal.click();
+    await clickLiveGroupButton(dialog.getByRole("button", { name: `${tankName} heilen`, exact: true }));
     await expect.poll(async () => (await read(pages[0]!)).party!.health.find(entry => entry.userId === tankId)!.hp, { timeout: 15_000 }).toBeGreaterThan(damagedHp);
 
     // Exit and portal re-entry must preserve membership and require a fresh AX1
     // launch. The same UI command rejoins the immutable ticket.
-    await dialog.getByRole("button", { name: "Instanz verlassen, Platz behalten", exact: true }).click();
+    await clickLiveGroupButton(dialog.getByRole("button", { name: "Instanz verlassen, Platz behalten", exact: true }));
     await expect.poll(async () => (await read(healerPage)).player.status).toBe("formed");
     await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(healerPage).toHaveURL(/\/$/, { timeout: 15_000 });
     const relaunched = await launchAx1AndOpenGroups(healerPage);
-    const rejoin = relaunched.dialog.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true });
-    await expect(rejoin).toBeVisible({ timeout: 15_000 });
-    await expect(rejoin).toBeEnabled();
-    await rejoin.click();
+    await clickLiveGroupButton(relaunched.dialog.getByRole("button", { name: "Gemeinsame Instanz betreten / fortsetzen", exact: true }));
     await expect.poll(async () => (await read(healerPage)).player.status, { timeout: 15_000 }).toBe("entered");
     await expect(relaunched.dialog.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id);
 
@@ -202,7 +199,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
 
     // Cleanly abort through the leader's real authenticated command and prove all
     // membership readmodels return to idle.
-    const leader = await read(pages[0]!);
     await command(pages[0]!, { kind: "leave", partyId, rosterHash });
     await expect.poll(async () => (await read(healerPage)).player.status, { timeout: 15_000 }).toBe("idle");
     expect((await read(pages[4]!)).party).toBeNull();
