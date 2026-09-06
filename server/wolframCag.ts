@@ -21,7 +21,10 @@ const MAX_TIMEOUT_MS = 60_000;
 const MAX_INPUT_CHARS = 20_000;
 const MAX_RESULT_CHARS = 50_000;
 const MAX_DECLARED_RESPONSE_BYTES = 200_000;
-const apiKeyPattern = /^[\x21-\x7e]{16,512}$/;
+// Wolfram documents the CAG key as an opaque Authorization-header value and
+// publishes no minimum length. Only reject values unsafe to place in a header;
+// validity itself belongs to the provider's authenticated 200/403 response.
+const apiKeyPattern = /^[\x21-\x7e]{1,512}$/;
 const uuidPattern = /^[A-Za-z0-9._:-]{1,160}$/;
 
 type FetchLike = typeof fetch;

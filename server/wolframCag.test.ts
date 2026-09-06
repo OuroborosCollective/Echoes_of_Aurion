@@ -51,12 +51,18 @@ describe("Wolfram CAG provider boundary", () => {
     await expect(client.languageHints({ context: "balance a dungeon" })).rejects.toThrow("WOLFRAM_CAG_HTTP_401");
   });
 
-  it("distinguishes missing, invalid and configured runtime keys without exposing them", () => {
+  it("distinguishes missing, header-unsafe and provider-shaped runtime keys without exposing them", () => {
     expect(wolframCagConfigurationStatus({})).toMatchObject({ configured: false, configurationState: "missing_key" });
     expect(wolframCagConfigurationStatus({ WOLFRAM_CAG_API_KEY: "bad key" })).toMatchObject({ configured: false, configurationState: "invalid_key" });
+    expect(wolframCagConfigurationStatus({ WOLFRAM_CAG_API_KEY: "bad\nkey" })).toMatchObject({ configured: false, configurationState: "invalid_key" });
+    // CAG documentation treats the key as opaque and states no minimum length.
+    // A short printable provider-issued value must reach Wolfram for 200/403 truth.
+    const shortProviderKey = "ABC123xyz";
+    expect(wolframCagConfigurationStatus({ WOLFRAM_CAG_API_KEY: shortProviderKey })).toMatchObject({ configured: true, configurationState: "configured" });
     const configured = wolframCagConfigurationStatus({ WOLFRAM_CAG_API_KEY: key });
     expect(configured).toMatchObject({ configured: true, configurationState: "configured", mutationAuthority: "none" });
     expect(JSON.stringify(configured)).not.toContain(key);
+    expect(JSON.stringify(configured)).not.toContain(shortProviderKey);
   });
 
   it("runs the deterministic exact computation canary", async () => {
