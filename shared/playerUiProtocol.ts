@@ -22,7 +22,9 @@ export const aurionControlSkills = [
   { command: "9", name: "Aurion-Resonanz", icon: "✺", color: "#e879f9" },
 ] as const;
 export const uiSlots = ["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet", "belt", "ring", "amulet", "focus", "relic"] as const;
-export const itemReferenceSchema = z.object({ id: z.string().min(8).max(64), version: z.enum(["legacy", "aurion_v2"]) }).strict();
+export const itemRecordVersionSchema = z.enum(["legacy", "aurion_v2", "ax1_starter"]);
+export type ItemRecordVersion = z.infer<typeof itemRecordVersionSchema>;
+export const itemReferenceSchema = z.object({ id: z.string().min(8).max(64), version: itemRecordVersionSchema }).strict();
 export const uiItemSchema = itemReferenceSchema.extend({
   name: z.string().min(1), definition: z.string().min(1), levelExact: z.string().regex(/^[1-9][0-9]*$/),
   quality: z.enum(["normal", "magic", "rare", "set", "unique", "mythic"]),
@@ -34,7 +36,7 @@ export const playerUiReadbackSchema = z.object({
   version: z.literal(PLAYER_UI_VERSION), userId: z.number().int().positive(),
   settings: controlSettingsSchema,
   items: z.array(uiItemSchema).max(500),
-  equipment: z.array(z.object({ slot: z.enum(uiSlots), id: z.string(), version: z.enum(["legacy", "aurion_v2"]) })).max(12),
+  equipment: z.array(z.object({ slot: z.enum(uiSlots), id: z.string(), version: itemRecordVersionSchema })).max(12),
 }).superRefine((v, ctx) => {
   const key = (i: {id: string; version: string}) => `${i.version}:${i.id}`;
   if (new Set(v.items.map(key)).size !== v.items.length || new Set(v.equipment.map(e => e.slot)).size !== v.equipment.length || new Set(v.equipment.map(key)).size !== v.equipment.length) ctx.addIssue({ code: "custom", message: "Doppelte Gegenstände" });
