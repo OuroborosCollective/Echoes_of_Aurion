@@ -17,6 +17,7 @@ async function register(page: Page, handle: string): Promise<void> {
   await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
   await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-regression-254!");
   await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+  await expect(page.getByRole("button", { name: "SPIELSTART VORBEREITEN", exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
 async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["getByTestId"]>; snapshot: any }> {
@@ -68,7 +69,6 @@ for (const viewport of [
       const health = await page.request.get("/healthz");
       expect(await health.json()).toMatchObject({ status: "ok", revision: process.env.AURION_RELEASE_SHA });
       await register(page, `aim254_${viewport.name}`);
-      await expect(page.getByRole("heading", { name: /Willkommen zurück/ })).toBeVisible();
       const first = await enterAx1(page);
       expect(first.snapshot?.globalWorld?.worldSeed).toBe("echoes-of-aurion-v1");
       expect(first.snapshot?.globalWorld?.deterministicHash).toMatch(/^fnv1a-[0-9a-f]{8}$/);
