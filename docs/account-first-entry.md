@@ -1,20 +1,54 @@
+---
+description: Aktueller Account- und Portalfluss ohne Aurion-Gameplay-Authority.
+---
+
 # Konto-zentrierter Aurion-Einstieg
 
-## Ziel und Bindung
+Aurion ist vor dem Spiel das **Portal**, nicht der Spielkern.
 
-Diese Änderung betrifft ausschließlich die Aurion-Clientführung auf Grundlage von Aurion-Revision `80071370c716b3293af3e62b7544a0d0f172fe98`. Wasd bleibt auf `a4d99432e47b82ce98105eadb30360cd8040ad13` gebunden und liefert für diese UX-Änderung keine neue Spielsemantik.
+## Route ownership
 
-| Bereich | Entscheidung | Nachweis |
+| Route/Fläche | Owner | Zweck |
 | --- | --- | --- |
-| Audit | Die Startseite positioniert den bestehenden MCP-/Partner-Slot als primäre Eintrittshürde. | Bestehender Gate- und Loadout-Pfad in `client/src/pages/Home.tsx`. |
-| Vertrag | Der Standardzugang ist ein Aurion-Konto über die bestehende sichere Kontooberfläche; OIDC bleibt über den serverseitigen FusionAuth-Pfad, lokales Konto bleibt optional. | `LocalAuthPanel.tsx`, `/api/oauth/start`, `auth.registerLocal`, `auth.loginLocal`. |
-| Datenpfad | Unverändert. Konto-, OIDC-, Gateway-, Quest- und Fortschrittsmutationen bleiben serverseitig. | Keine Server-, Schema- oder Migrationsdatei Teil dieser Scheibe. |
-| Client | Gast sieht Kontoerstellung/Anmeldung als Hauptaktion. Nach Authentifizierung ist Solo die Standardaktion; MCP-Kopplung ist als optionales Feature erreichbar. | Komponenten- und Browsertests. |
-| Assets | Keine Wasd-GLB-Übernahme, Aktivierung oder Katalogänderung. | Diffprüfung ohne Assetdateien. |
-| Tests | Gast darf nicht direkt in Solo-/Gameplayzustand wechseln; Konto- und optionale MCP-Aktionen sind sichtbar. | `Home.test.tsx`, Typprüfung, volle Suite, Produktionsbuild. |
-| Readback | Browser zeigt die Kontoerstellung vor jeder Koop- oder Soloaktion; FusionAuth-OIDC-Start bleibt verfügbar. | Sichtbarer Browserreadback nach Kandidatenrollout. |
-| Release | Neuer Branch und Draft-PR; kein Datenbankapply. Merge und Produktion nur nach frischer expliziter Freigabe. | Git-/PR-Head-Abgleich und Releaseevidenz. |
+| `/` | Aurion | Landing, Login/Account, Communitynavigation, bewusster Spielstart |
+| `/account` | Aurion | Account + read-only persistierte Charakter-/Companiondaten |
+| `/community` | Aurion | Community, Forum und Community-Events |
+| `/play` | AX1 | eigentliche Spielruntime |
 
-## Ausgeschlossen
+WASD bleibt die Gameplayregelquelle für alles, was nach dem Start im Spiel passiert.
 
-Die Änderung führt keine neue Authentifizierung ein, ändert keine OIDC-Secrets, entfernt keine MCP-Funktion, erzeugt keinen direkten XP-/Loot-/Questpfad, übernimmt keinen Wasd-10-Hz-Tick und aktiviert keine GLB-Assets.
+## Einstieg
+
+1. Gast sieht Aurion Landing Page und Accountzugang.
+2. Anmeldung/Registrierung erzeugt nur Auth-/Accountstate.
+3. Ein expliziter Startwunsch navigiert in die AX1-`/play`-Runtime.
+4. AX1 erzeugt Intents; WASD entscheidet Gameplayzustand.
+5. Rückkehr beendet die Spielruntime und führt zurück zum Aurion-Portal.
+
+Auth darf nie als Nebeneffekt Combat-, Quest-, Progressions- oder World-State erzeugen.
+
+## Accountseite
+
+Die Accountseite darf bestätigte persistierte Daten anzeigen:
+
+- Level und Gesamtfortschritt;
+- Skill-/Mastery-Stände;
+- Gildenzugehörigkeit;
+- Inventar und Ausrüstung;
+- Achievements nur bei vorhandener bestätigter WASD-Projektion;
+- Companion-Trainings-/Sample-/Receipt-Metadaten.
+
+Sie darf **keine** Gameplaymutation anbieten. Insbesondere kein Equip, Craft, Loot, Quest, Progression, Combat, Market, Dungeon, Housing oder Guild-/Kingdom-Gameplay.
+
+## Community
+
+Community- und Forum-Schreibrechte sind echte Aurion-Ownership. Community-Event-Metadaten dürfen geschrieben werden. Gameplayfolgen eines Events benötigen dagegen einen separaten WASD-Regelvertrag.
+
+## Acceptance
+
+- Gast kann keinen Gameplayzustand über Websitecalls erzeugen;
+- Login verändert nur Account/Session;
+- `/play` mountet AX1, nicht `Home.tsx`-Gameplay;
+- Account-/Communityseiten besitzen keine Gameplaymutationsrouten;
+- read-only Daten zeigen nur persistierte bestätigte Evidence;
+- fehlende/stale Daten werden ehrlich als nicht verfügbar/stale dargestellt.
