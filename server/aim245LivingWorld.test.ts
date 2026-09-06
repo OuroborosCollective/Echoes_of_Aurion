@@ -6,11 +6,34 @@ const market: MarketState = { hubId: "emberfall", controllingGuild: "Bronze Synd
 const npc: NpcEconomyState = { npcId: "merchant:torin", name: "Torin", currentHubId: "emberfall", wealthCopper: 2000, hungerBps: 3200, fatigueBps: 2100, tradeProwessBps: 11000, harvestYieldBps: 10500, memory: [] };
 const read = (path: string) => readFileSync(path, "utf8");
 
-describe("AIM-245 living world migration", () => {
+describe("AIM-245/AIM-263 living world migration", () => {
   it("resolves identical economy and caravan outcomes from the same world tick", () => {
     const input = { worldSeed: "aurion-world", resolutionIndex: 42, market, npc, polityStability: 72 } as const;
     expect(resolveLivingWorldTick(input)).toEqual(resolveLivingWorldTick(input));
     expect(resolveLivingWorldTick(input).deterministicHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("lets the last confirmed NPC goal choose the next normal world action", () => {
+    expect(resolveLivingWorldTick({ worldSeed: "goal", resolutionIndex: 10, market, npc, polityStability: 72, preferredGoal: "seek_safety" }).action).toBe("patrol");
+    expect(resolveLivingWorldTick({ worldSeed: "goal", resolutionIndex: 10, market, npc, polityStability: 72, preferredGoal: "gather_resources" }).action).toBe("produce");
+    expect(resolveLivingWorldTick({ worldSeed: "goal", resolutionIndex: 10, market, npc, polityStability: 72, preferredGoal: "socialize" }).action).toBe("socialize");
+    expect(["trade","caravan"]).toContain(resolveLivingWorldTick({ worldSeed: "goal", resolutionIndex: 10, market, npc, polityStability: 72, preferredGoal: "trade" }).action);
+  });
+
+  it("allows urgent biological needs to interrupt a strategic goal and changes the actual need state", () => {
+    const hungry = resolveLivingWorldTick({ worldSeed: "survival", resolutionIndex: 2, market, npc: { ...npc, hungerBps: 8_500 }, polityStability: 72, preferredGoal: "expand_influence" });
+    expect(hungry.action).toBe("consume");
+    expect(hungry.npc.hungerBps).toBeLessThan(8_500);
+    const tired = resolveLivingWorldTick({ worldSeed: "survival", resolutionIndex: 3, market, npc: { ...npc, fatigueBps: 9_000 }, polityStability: 72, preferredGoal: "trade" });
+    expect(tired.action).toBe("rest");
+    expect(tired.npc.fatigueBps).toBeLessThan(9_000);
+  });
+
+  it("moves the NPC to the destination only after a confirmed non-ambushed caravan", () => {
+    const candidate = Array.from({ length: 200 }, (_, resolutionIndex) => resolveLivingWorldTick({ worldSeed: "movement", resolutionIndex, market, npc, polityStability: 100, preferredGoal: "expand_influence" })).find(result => result.action === "caravan" && !result.caravan.ambushed);
+    expect(candidate).toBeTruthy();
+    expect(candidate!.caravan.destination).not.toBeNull();
+    expect(candidate!.npc.currentHubId).toBe(candidate!.caravan.destination);
   });
 
   it("prices scarcity and remembered trade affinity deterministically", () => {
@@ -29,8 +52,14 @@ describe("AIM-245 living world migration", () => {
     expect(socialMasteryEvidence("leadership", "civic_123", 9)).toMatchObject({ disciplineId: "council", amountExact: "5" });
   });
 
-  it("persists NPC memory/decisions, polity and world economy through existing Aurion runtime paths", () => {
+  it("reads confirmed NPC continuity, fixes satisfaction signs and refreshes only newly observed memory", () => {
     const runtime = read("server/ax1LivingWorldRuntime.ts");
+    expect(runtime).toContain("readConfirmedNpcState");
+    expect(runtime).toContain("resolution.caravan.ambushed ? -0.18");
+    expect(runtime).toContain('resolution.action === "produce" ? 0.07');
+    expect(runtime).toContain("newestMemory");
+    expect(runtime).toContain("opportunities: lifeOpportunities");
+    expect(runtime).toContain("economy:");
     expect(runtime).toContain("resolveAndRecordNpc");
     expect(runtime).toContain("resolveAndRecordPolity");
     expect(runtime).toContain("resolveAndRecordWorld");
