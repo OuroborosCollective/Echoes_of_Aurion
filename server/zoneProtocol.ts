@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
+import type { ConfirmedZoneMob } from "@shared/zoneMobContract";
 
 export const zoneIdSchema = z.literal("observatory_threshold");
 export type ZoneId = z.infer<typeof zoneIdSchema>;
@@ -28,8 +29,8 @@ export const zoneMoveSchema = z.object({
 export type ZoneMove = z.infer<typeof zoneMoveSchema>;
 export type ZonePosition = { x: number; z: number };
 export type ZonePresence = { entityId: string; userId: number; position: ZonePosition; lastAcceptedClientSeq: number };
-export type ZoneWelcome = { type: "welcome"; protocolVersion: typeof ZONE_PROTOCOL_VERSION; connectionId: string; zoneId: ZoneId; snapshotSeq: number; tick: number; presences: ZonePresence[] };
-export type ZoneSnapshot = { type: "snapshot"; zoneId: ZoneId; snapshotSeq: number; tick: number; presences: ZonePresence[] };
+export type ZoneWelcome = { type: "welcome"; protocolVersion: typeof ZONE_PROTOCOL_VERSION; connectionId: string; zoneId: ZoneId; snapshotSeq: number; tick: number; presences: ZonePresence[]; mobs: readonly ConfirmedZoneMob[] };
+export type ZoneSnapshot = { type: "snapshot"; zoneId: ZoneId; snapshotSeq: number; tick: number; presences: ZonePresence[]; mobs: readonly ConfirmedZoneMob[] };
 export type ZoneReject = { type: "reject"; code: "INVALID_MESSAGE" | "STALE_CLIENT_SEQUENCE" | "UNSUPPORTED_ZONE_COMMAND" | "PROTOCOL_VERSION_UNSUPPORTED" };
 
 export function createZoneTicket(): string {
