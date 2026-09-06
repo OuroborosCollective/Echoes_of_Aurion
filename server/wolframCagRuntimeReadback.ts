@@ -10,7 +10,7 @@ export type WolframCagRuntimeReadback = Readonly<{
   configured: boolean;
   providerCallExecuted: boolean;
   providerCanaryVerified: boolean;
-  status: "not_configured" | "verified" | "provider_failed";
+  status: "not_configured" | "pending" | "verified" | "provider_failed";
   failureFamily: string | null;
   requestSha256: string | null;
   responseSha256: string | null;
@@ -40,7 +40,7 @@ export function initialWolframCagRuntimeReadback(environment: NodeJS.ProcessEnv 
     configured: configuration.configured,
     providerCallExecuted: false,
     providerCanaryVerified: false,
-    status: "not_configured",
+    status: configuration.configured ? "pending" : "not_configured",
     failureFamily: configuration.configured ? null : configuration.configurationState,
     requestSha256: null,
     responseSha256: null,
