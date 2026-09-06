@@ -7,7 +7,7 @@ import { createARESeed, SeededARERng, type ARERng, WASD_GAMEPLAY_SOURCE_REVISION
  */
 export const WASD_COMBAT_DELTA_SOURCE_REVISION = WASD_GAMEPLAY_SOURCE_REVISION;
 export const WASD_COMBAT_DELTA_SOURCE_PATH = "server/src/modules/combat/CombatDeltaResolver.ts" as const;
-export const WASD_COMBAT_DELTA_SOURCE_SHA256 = "ee3985d61b7e021683ec80b61463691a4c3f5fa9" as const;
+export const WASD_COMBAT_DELTA_SOURCE_GIT_BLOB_SHA = "ee3985d61b7e021683ec80b61463691a4c3f5fa9" as const;
 
 export type CombatDeltaAction = "melee" | "spell";
 export interface CombatDeltaEntityView {
@@ -21,13 +21,8 @@ export interface CombatDeltaEntityView {
   identity?: { npcId?: string };
 }
 export interface CombatDeltaContext { tick: number; sequence: number; weaponBonus?: number }
-export interface CombatDeltaResult {
-  success: boolean; hit: boolean; damage: number; crit: boolean; killed: boolean; defenderHealth: number; reason?: "no_stamina";
-}
-export interface CombatDelta {
-  kind: "combat_delta"; action: CombatDeltaAction; tick: number; sequence: number; attackerId: string; defenderId: string;
-  staminaDelta: number; healthDelta: number; result: CombatDeltaResult;
-}
+export interface CombatDeltaResult { success: boolean; hit: boolean; damage: number; crit: boolean; killed: boolean; defenderHealth: number; reason?: "no_stamina" }
+export interface CombatDelta { kind: "combat_delta"; action: CombatDeltaAction; tick: number; sequence: number; attackerId: string; defenderId: string; staminaDelta: number; healthDelta: number; result: CombatDeltaResult }
 export interface CombatStatePatch { attacker: { id: string; stamina: number }; defender: { id: string; health: number } }
 
 const STAMINA_COST = 8;
@@ -46,53 +41,33 @@ export function calculateCombatHitChance(attacker: CombatDeltaEntityView | numbe
 }
 
 function createCombatRng(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: Required<CombatDeltaContext>): SeededARERng {
-  return new SeededARERng(createARESeed([
-    "combat_delta", action, stableEntityId(attacker), stableEntityId(defender), context.tick, context.sequence,
-    context.weaponBonus, attacker.stamina ?? 0, defender.health ?? 0,
-  ]));
+  return new SeededARERng(createARESeed(["combat_delta", action, stableEntityId(attacker), stableEntityId(defender), context.tick, context.sequence, context.weaponBonus, attacker.stamina ?? 0, defender.health ?? 0]));
 }
-
 function calculateCombatDamage(attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, weaponBonus: number, rng: ARERng): number {
-  const atk = combatLevel(attacker);
-  const def = combatLevel(defender);
-  const base = 5 + atk + Math.max(0, weaponBonus);
-  const mitigation = Math.floor(def * 0.3);
+  const base = 5 + combatLevel(attacker) + Math.max(0, weaponBonus);
+  const mitigation = Math.floor(combatLevel(defender) * 0.3);
   return Math.max(1, base - mitigation + rng.nextInt(4));
 }
 
 export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext): CombatDelta {
-  const normalizedContext: Required<CombatDeltaContext> = {
-    tick: safeInteger(context.tick, 0), sequence: safeInteger(context.sequence, 0), weaponBonus: safeInteger(context.weaponBonus, 0),
-  };
-  const attackerId = stableEntityId(attacker);
-  const defenderId = stableEntityId(defender);
+  const normalizedContext: Required<CombatDeltaContext> = { tick: safeInteger(context.tick, 0), sequence: safeInteger(context.sequence, 0), weaponBonus: safeInteger(context.weaponBonus, 0) };
+  const attackerId = stableEntityId(attacker), defenderId = stableEntityId(defender);
   const staminaBefore = typeof attacker.stamina === "number" ? attacker.stamina : 100;
   const healthBefore = typeof defender.health === "number" ? defender.health : 100;
   const staminaCost = action === "melee" ? STAMINA_COST : 0;
-  if (action === "melee" && staminaBefore <= 0) {
-    return Object.freeze({ kind:"combat_delta", action, tick:normalizedContext.tick, sequence:normalizedContext.sequence, attackerId, defenderId,
-      staminaDelta:0, healthDelta:0, result:Object.freeze({ success:false, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore, reason:"no_stamina" }) });
-  }
+  if (action === "melee" && staminaBefore <= 0) return Object.freeze({ kind:"combat_delta", action, tick:normalizedContext.tick, sequence:normalizedContext.sequence, attackerId, defenderId, staminaDelta:0, healthDelta:0, result:Object.freeze({ success:false, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore, reason:"no_stamina" }) });
   const rng = createCombatRng(action, attacker, defender, normalizedContext);
   const hit = rng.nextFloat() <= calculateCombatHitChance(attacker, defender);
-  if (!hit) {
-    return Object.freeze({ kind:"combat_delta", action, tick:normalizedContext.tick, sequence:normalizedContext.sequence, attackerId, defenderId,
-      staminaDelta:-staminaCost, healthDelta:0, result:Object.freeze({ success:true, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore }) });
-  }
+  if (!hit) return Object.freeze({ kind:"combat_delta", action, tick:normalizedContext.tick, sequence:normalizedContext.sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:0, result:Object.freeze({ success:true, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore }) });
   const crit = rng.nextFloat() < 0.08;
   const baseDamage = calculateCombatDamage(attacker, defender, normalizedContext.weaponBonus, rng.fork("damage"));
   const damage = crit ? Math.floor(baseDamage * 1.75) : baseDamage;
   const healthAfter = Math.max(0, healthBefore - damage);
-  return Object.freeze({ kind:"combat_delta", action, tick:normalizedContext.tick, sequence:normalizedContext.sequence, attackerId, defenderId,
-    staminaDelta:-staminaCost, healthDelta:healthAfter-healthBefore,
-    result:Object.freeze({ success:true, hit:true, damage, crit, killed:healthAfter<=0, defenderHealth:healthAfter }) });
+  return Object.freeze({ kind:"combat_delta", action, tick:normalizedContext.tick, sequence:normalizedContext.sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:healthAfter-healthBefore, result:Object.freeze({ success:true, hit:true, damage, crit, killed:healthAfter<=0, defenderHealth:healthAfter }) });
 }
 
 export function reduceCombatDelta(attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, delta: CombatDelta): CombatStatePatch {
   const staminaBefore = typeof attacker.stamina === "number" ? attacker.stamina : 100;
   const healthBefore = typeof defender.health === "number" ? defender.health : 100;
-  return Object.freeze({
-    attacker:Object.freeze({ id:delta.attackerId, stamina:Math.max(0, staminaBefore + delta.staminaDelta) }),
-    defender:Object.freeze({ id:delta.defenderId, health:Math.max(0, healthBefore + delta.healthDelta) }),
-  });
+  return Object.freeze({ attacker:Object.freeze({ id:delta.attackerId, stamina:Math.max(0, staminaBefore + delta.staminaDelta) }), defender:Object.freeze({ id:delta.defenderId, health:Math.max(0, healthBefore + delta.healthDelta) }) });
 }
