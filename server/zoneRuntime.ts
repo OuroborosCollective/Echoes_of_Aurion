@@ -1,39 +1,41 @@
 import type WebSocket from "ws";
-import { ZONE_MAX_PRESENCES, ZONE_POSITION_LIMIT, ZONE_POSITION_MIN, ZONE_PROTOCOL_VERSION, validWorldPosition } from "@shared/zonePresenceContract";
+import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import { makeZoneConnectionId, type ZoneAttack, type ZoneId, type ZoneMove, type ZonePosition, type ZonePresence, type ZoneServerMessage, type ZoneSnapshot, type ZoneWelcome } from "./zoneProtocol";
 import { ZoneMobRuntime } from "./zoneMobRuntime";
 import { worldNatureCollision } from "./worldNatureCollision";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
-import { mobDistance } from "./mobFsmProtocol";
+import { mobDistance } from "./wasdMobFsmProtocol";
 import { reduceCombatDelta, resolveCombatDelta } from "./wasdCombatDeltaProtocol";
 import { WASD_GAMEPLAY_SOURCE_REVISION } from "./wasdAREDeterminism";
 import { regenerateWasdStamina, WASD_MAX_STAMINA } from "./wasdStaminaProtocol";
+import { integrateWasdZoneMovement } from "./wasdZoneMovementProtocol";
+import { WASD_DEFAULT_ZONE_COMBAT_PROFILE, validWasdZoneCombatProfile, type WasdZoneCombatProfile } from "./wasdCombatProfileProtocol";
 
-const CARDINAL_STEP_FIXED=340,DIAGONAL_STEP_FIXED=240;
-export type ZoneCombatProfile=Readonly<{combatLevel:number;maxHealth:number;weaponBonus:number}>;
-export const DEFAULT_ZONE_COMBAT_PROFILE:ZoneCombatProfile=Object.freeze({combatLevel:1,maxHealth:540,weaponBonus:15});
+export type ZoneCombatProfile = WasdZoneCombatProfile;
+export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile = WASD_DEFAULT_ZONE_COMBAT_PROFILE;
 
 type PresencePeer={connectionId:string;userId:number;socket:WebSocket;input:ZoneMove["input"];lastAcceptedClientSeq:number;position:ZonePosition;combatLevel:number;health:number;maxHealth:number;stamina:number;weaponBonus:number;lastCombatSequence:number;};
 type AttackResult="accepted"|"stale"|"missing"|"invalid_target"|"out_of_range"|"dead";
 function serialize(payload:ZoneServerMessage){return JSON.stringify(payload);}
 function compareBinary(left:string,right:string):number{return left<right?-1:left>right?1:0;}
-function clampFixed(value:number):number{return Math.max(ZONE_POSITION_MIN,Math.min(ZONE_POSITION_LIMIT,value));}
-function validProfile(profile:ZoneCombatProfile):boolean{return Number.isSafeInteger(profile.combatLevel)&&profile.combatLevel>=1&&profile.combatLevel<=10_000&&Number.isSafeInteger(profile.maxHealth)&&profile.maxHealth>=1&&profile.maxHealth<=1_000_000&&Number.isSafeInteger(profile.weaponBonus)&&profile.weaponBonus>=0&&profile.weaponBonus<=100_000;}
 
-/** Pure Level-A movement projection; combat/quest rules do not live here. */
-export function integrateZoneMovement(position:ZonePosition,input:ZoneMove["input"]):ZonePosition{if(!validWorldPosition(position)||![input.x,input.z].every(v=>Number.isInteger(v)&&Math.abs(v)<=1))throw Error("MOVEMENT_COORDINATE_INVALID");const step=input.x!==0&&input.z!==0?DIAGONAL_STEP_FIXED:CARDINAL_STEP_FIXED;return worldNatureCollision.resolve(position,{x:clampFixed(position.x+input.x*step),z:clampFixed(position.z+input.z*step)});}
+/** Compatibility entry point; the movement law itself is owned by WASD. */
+export function integrateZoneMovement(position:ZonePosition,input:ZoneMove["input"]):ZonePosition{
+  return integrateWasdZoneMovement(position,input,(from,desired)=>worldNatureCollision.resolve(from,desired));
+}
 
 /**
- * AX1 supplies the visible world/FSM/content parameters. WASD reducers are the
- * only combat transition authority. Quest state is intentionally absent.
+ * Zone orchestration owns authenticated peers, transport order and projection.
+ * AX1 supplies visible/content parameters; WASD owns movement/combat/FSM transitions.
+ * Quest state is intentionally absent.
  */
 export class AuthoritativeMovementZone{
   private readonly peers=new Map<string,PresencePeer>();private readonly mobRuntime=new ZoneMobRuntime();private snapshotSeq=0;private tickNumber=0;private combatSequence=0;private inputAcknowledgementPending=false;private movedLastTick=false;
   constructor(readonly zoneId:ZoneId){}
 
   join(values:{userId:number;socket:WebSocket;combatProfile?:ZoneCombatProfile}):ZoneWelcome{
-    if(!Number.isSafeInteger(values.userId)||values.userId<1)throw new Error("ZONE_USER_INVALID");const profile=values.combatProfile??DEFAULT_ZONE_COMBAT_PROFILE;if(!validProfile(profile))throw new Error("ZONE_COMBAT_PROFILE_INVALID");
+    if(!Number.isSafeInteger(values.userId)||values.userId<1)throw new Error("ZONE_USER_INVALID");const profile=values.combatProfile??DEFAULT_ZONE_COMBAT_PROFILE;if(!validWasdZoneCombatProfile(profile))throw new Error("ZONE_COMBAT_PROFILE_INVALID");
     const previous=[...this.peers.values()].find(peer=>peer.userId===values.userId);if(!previous&&this.peers.size>=ZONE_MAX_PRESENCES)throw new Error("ZONE_CAPACITY_REACHED");if(previous){this.peers.delete(previous.connectionId);previous.socket.close(1000,"superseded by authenticated reconnect");}
     const connectionId=makeZoneConnectionId();this.peers.set(connectionId,{connectionId,userId:values.userId,socket:values.socket,input:{x:0,z:0},lastAcceptedClientSeq:0,position:{x:0,z:0},combatLevel:profile.combatLevel,health:profile.maxHealth,maxHealth:profile.maxHealth,stamina:WASD_MAX_STAMINA,weaponBonus:profile.weaponBonus,lastCombatSequence:0});
     const welcome:ZoneWelcome={type:"welcome",protocolVersion:ZONE_PROTOCOL_VERSION,connectionId,selfEntityId:`player:${values.userId}`,zoneId:this.zoneId,snapshotSeq:++this.snapshotSeq,tick:this.tickNumber,presences:this.presences(),mobs:this.mobRuntime.snapshot(),combatants:this.combatants()};this.broadcastSnapshot();return welcome;
