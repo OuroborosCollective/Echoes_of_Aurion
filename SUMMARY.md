@@ -19,7 +19,6 @@
   * [VPS Deployment](VPS_DEPLOYMENT.md)
   * [Android APK Build](ANDROID_BUILD.md)
 * [Presentation & Side-Channels](AURION_AUDIO_SYSTEM.md)
-  * [Audio Asset Ledger](AURION_AUDIO_ASSET_LEDGER.md)
   * [Companion Memory VPS Setup](COMPANION_MEMORY_VPS_SETUP.md)
 
 {% hint style="warning" %}
