@@ -201,7 +201,9 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await auto.click();
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();
-      await expect(auto).toHaveAttribute("aria-pressed", "false");
+      // Radix correctly removes modal background controls from the accessibility tree.
+      // Read the actual DOM state while the modal is open, then prove no further WASD attacks occur.
+      await expect(hud.locator('button[aria-label="Auto-Angriff"]')).toHaveAttribute("aria-pressed", "false");
       const stoppedAt = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
       await page.waitForTimeout(1_400);
       expect(combatEvents.filter(event => event.attackerEntityId === selfEntityId).length).toBe(stoppedAt);
