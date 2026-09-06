@@ -11,7 +11,7 @@ describe("Home", () => {
     render(<RealClientHarness><Home /></RealClientHarness>);
     expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /AX1 OPEN WORLD STARTEN/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /SPIEL BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
     expect(screen.getByRole("button", { name: "GLB-Einreichung öffnen" })).toBeTruthy();
     expect(screen.queryByText(/Markt|Crafting|Boss|Questgeber/i)).toBeNull();
