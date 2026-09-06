@@ -91,8 +91,13 @@ jobs:
       AURION_PROFESSION_E2E: "1"
       AURION_ENCOUNTER_E2E: "1"
       AURION_NPC_E2E: "1"
+      AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AURION_TEST_SOURCE_SHA }}
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_TEST_SOURCE_SHA"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -113,5 +118,5 @@ jobs:
 
       - name: Verify all physical late schema contracts after the complete chain
         env:
-          AURION_RECONCILIATION_SOURCE_SHA: ${{ github.sha }}
+          AURION_RECONCILIATION_SOURCE_SHA: ${{ env.AURION_TEST_SOURCE_SHA }}
         run: node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
