@@ -138,7 +138,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
         const { createLootDrop } = await import("./server/db.ts");
         const input = JSON.parse(process.argv[1]);
         const drops = [];
-        for (const qualityRoll of [9996, 400]) drops.push(await createLootDrop({ ...input, treasureClass: "asterion_t2_weapons", qualityRoll, affixRoll: 0, magicFind: 0, itemLevel: 1, seedDigest, resultReceiptId: input.resultReceiptId, idempotencyKey: "ax1-ui-fixture:" + input.userId + ":" + qualityRoll }));
+        for (const qualityRoll of [9996, 400]) drops.push(await createLootDrop({ ...input, treasureClass: "asterion_t2_weapons", qualityRoll, affixRoll: 0, magicFind: 0, itemLevel: 1, idempotencyKey: "ax1-ui-fixture:" + input.userId + ":" + qualityRoll }));
         console.log("AX1_FIXTURE_JSON=" + JSON.stringify(drops)); process.exit(0);
       `, JSON.stringify(fixtureInput)], { encoding: "utf8", timeout: 30_000 });
       const fixtureDrops: { itemId: string; receiptId: string; quality: string }[] = JSON.parse(fixtureOutput.split("\n").find(line => line.startsWith("AX1_FIXTURE_JSON="))!.slice("AX1_FIXTURE_JSON=".length));
