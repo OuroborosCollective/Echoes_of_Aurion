@@ -85,6 +85,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         resolutionIndex,
         regionId: AUTONOMOUS_NPC_LIFE_HOME_REGION,
       });
+      if (!("lifeState" in result.npc)) throw new Error("NPC_LIFE_V3_RECEIPT_REQUIRED");
       const confirmed = await readConfirmedNpcState(AUTONOMOUS_NPC_LIFE_NPC_ID);
       if (!confirmed || !("lifeState" in confirmed)) throw new Error("NPC_LIFE_RECEIPT_READBACK_REQUIRED");
       if (confirmed.decision.resolutionIndex !== resolutionIndex || confirmed.decision.decisionHash !== result.npc.decision.decisionHash) throw new Error("NPC_LIFE_RECEIPT_READBACK_MISMATCH");
