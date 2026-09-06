@@ -12,6 +12,11 @@ on:
       - "shared/worldIdentity.ts"
       - "shared/zonePresenceContract.ts"
       - "server/zone*.ts"
+      - "server/autonomousNpcLife*.ts"
+      - "server/ax1LivingWorld*.ts"
+      - "server/npcLife*.ts"
+      - "server/npcPersistenceProtocol.ts"
+      - "server/wasdAurionRuntime.ts"
       - "server/worldNatureCollision*.ts"
       - "server/worldPresenceProtocol.ts"
       - "server/worldChunkActionProtocol.ts"
@@ -50,6 +55,11 @@ on:
       - "shared/worldIdentity.ts"
       - "shared/zonePresenceContract.ts"
       - "server/zone*.ts"
+      - "server/autonomousNpcLife*.ts"
+      - "server/ax1LivingWorld*.ts"
+      - "server/npcLife*.ts"
+      - "server/npcPersistenceProtocol.ts"
+      - "server/wasdAurionRuntime.ts"
       - "server/worldNatureCollision*.ts"
       - "server/worldPresenceProtocol.ts"
       - "server/worldChunkActionProtocol.ts"
@@ -129,9 +139,42 @@ jobs:
             if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
             sleep 1
           done
+          cat /tmp/aim259-runtime.log
           exit 1
       - name: Real groups and AX1 inventory, healer, controls and combat on phone/tablet/desktop
         run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
+      - name: Verify autonomous NPC life health against confirmed receipts
+        run: |
+          mkdir -p test-results
+          curl --fail --silent http://127.0.0.1:3000/healthz > test-results/aim259-autonomous-npc-life-health.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const health = JSON.parse(fs.readFileSync("test-results/aim259-autonomous-npc-life-health.json", "utf8"));
+          const expectedRevision = process.env.AURION_RELEASE_SHA;
+          if (health.status !== "ok" || health.service !== "echoes-of-aurion" || health.revision !== expectedRevision) throw new Error("AURION_RUNTIME_HEALTH_REVISION_MISMATCH");
+          const life = health.npcLife;
+          const hash = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+          if (!life || life.enabled !== true || life.status !== "confirmed" || life.intervalTicks !== 600) throw new Error("NPC_LIFE_RUNTIME_NOT_CONFIRMED");
+          if (!Number.isSafeInteger(life.lastGatewayTick) || life.lastGatewayTick < 600 || life.lastGatewayTick % 600 !== 0) throw new Error("NPC_LIFE_GATEWAY_TICK_INVALID");
+          if (!Number.isSafeInteger(life.lastResolutionIndex) || life.lastResolutionIndex < 0) throw new Error("NPC_LIFE_RESOLUTION_INVALID");
+          if (![life.decisionHash, life.lifeStateHash, life.worldReactionHash].every(hash)) throw new Error("NPC_LIFE_HASH_READBACK_INVALID");
+          if (life.failureCode !== null || !life.currentHubId || !life.goal || !life.longTermGoal) throw new Error("NPC_LIFE_RUNTIME_READBACK_INCOMPLETE");
+          const pool = mysql.createPool(process.env.DATABASE_URL);
+          try {
+            const [stateRows] = await pool.query("SELECT npcId,regionId,lastResolutionIndex FROM aurionNpcStates WHERE npcId=?", [life.npcId]);
+            if (stateRows.length !== 1 || stateRows[0].lastResolutionIndex !== life.lastResolutionIndex) throw new Error("NPC_LIFE_STATE_ROW_MISMATCH");
+            const [receiptRows] = await pool.query("SELECT goal,decisionHash,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? AND resolutionIndex=?", [life.npcId, life.lastResolutionIndex]);
+            if (receiptRows.length !== 1 || receiptRows[0].goal !== life.goal || receiptRows[0].decisionHash !== life.decisionHash) throw new Error("NPC_LIFE_DECISION_RECEIPT_MISMATCH");
+            const envelope = JSON.parse(receiptRows[0].observationIdsJson);
+            if (envelope.version !== "aurion-npc-decision.v3" || envelope.snapshot?.lifeState?.stateHash !== life.lifeStateHash || envelope.snapshot?.lifeState?.economy?.currentHubId !== life.currentHubId) throw new Error("NPC_LIFE_V3_RECEIPT_MISMATCH");
+            const [worldRows] = await pool.query("SELECT reactionHash FROM aurionWorldResolutions WHERE regionId=? AND resolutionIndex=?", [life.homeRegionId, life.lastResolutionIndex]);
+            if (worldRows.length !== 1 || worldRows[0].reactionHash !== life.worldReactionHash) throw new Error("NPC_LIFE_WORLD_RECEIPT_MISMATCH");
+            console.log(JSON.stringify({ recordType: "aurion_autonomous_npc_life_runtime_readback", sourceRevision: expectedRevision, npcId: life.npcId, lastGatewayTick: life.lastGatewayTick, lastResolutionIndex: life.lastResolutionIndex, currentHubId: life.currentHubId, goal: life.goal, longTermGoal: life.longTermGoal, decisionHash: life.decisionHash, lifeStateHash: life.lifeStateHash, worldReactionHash: life.worldReactionHash, receiptBound: true }));
+          } finally {
+            await pool.end();
+          }
+          NODE
       - name: Upload revision-bound evidence and screenshots
         if: always()
         uses: actions/upload-artifact@v4
