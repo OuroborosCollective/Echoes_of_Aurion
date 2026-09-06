@@ -31,6 +31,7 @@ const baseline = JSON.parse(readFileSync("docs/migrations/aim239-source-baseline
 const manifest = JSON.parse(readFileSync(baseline.finalDelta.manifestPath, "utf8")) as DeltaManifest;
 const matrix = readFileSync("docs/migrations/AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
+const playRoute = readFileSync("client/src/xaurion/integration/AurionPlayRoute.tsx", "utf8");
 const atlas = readFileSync("client/src/xaurion/components/WorldMapModal.tsx", "utf8");
 
 function stableStringify(value: unknown): string {
@@ -128,9 +129,12 @@ describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
     expect(matrix).toContain("38 files");
   });
 
-  it("preserves current Aurion host and read-only atlas integration", () => {
+  it("preserves Aurion hosting while mounting AX1 only on the explicit play route and keeping the atlas read-only", () => {
     expect(app).toContain('path="/ops/glb-upload"');
-    expect(app).toContain("AurionOpenWorldRuntime");
+    expect(app).toContain('<Route path="/play" component={AurionPlayRoute} />');
+    expect(app).toContain("persistConfirmedPlayLaunch");
+    expect(app).not.toContain("<AurionOpenWorldRuntime");
+    expect(playRoute).toContain("AurionOpenWorldRuntime");
     expect(atlas).toContain("Array.from(p.chunkManager.chunks.values())");
     expect(atlas).not.toContain("getAllChunks()");
   });
