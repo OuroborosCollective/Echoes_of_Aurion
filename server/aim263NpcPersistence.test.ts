@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceNpcMemory, createNpcSnapshot, decodeNpcReceipt, encodeNpcReceipt, normalizeNpcRequest, npcHash, parseNpcMemory } from "./npcPersistenceProtocol";
+import { NPC_LIFE_RECEIPT_VERSION, advanceNpcMemory, createNpcLifeSnapshot, createNpcSnapshot, decodeNpcReceipt, encodeNpcLifeReceipt, encodeNpcReceipt, normalizeNpcRequest, npcHash, npcRequestHash, parseNpcMemory } from "./npcPersistenceProtocol";
 import { resolveNpcNeeds } from "./wasdAurionProtocol";
 
 const empty = () => parseNpcMemory("[]", -1);
@@ -30,7 +30,7 @@ describe("AIM-263 deterministic immutable NPC persistence", () => {
     expect(() => normalizeNpcRequest({ ...input, resolutionIndex: 2147483648 })).toThrow();
     expect(() => normalizeNpcRequest({ ...input, needEvents: [{ id: "evt", need: "safety", delta: .1, sourceReceiptId: "receipt", resolutionIndex: 2 }] })).toThrow("RESOLUTION_MISMATCH");
   });
-  it("returns only the exact receipt snapshot and rejects tamper, identity and retry conflicts", () => {
+  it("returns only the exact legacy v2 receipt snapshot and rejects tamper, identity and retry conflicts", () => {
     const snapshot = createNpcSnapshot({ npcId: "lyra", regionId: "observatory_threshold", resolutionIndex: 2, needs: resolveNpcNeeds({ events: [] }), observationIds: ["receipt:1"], memoryState: advanceNpcMemory(empty(), ["remember"], 2) });
     const requestHash = npcHash({ request: 1 });
     const raw = encodeNpcReceipt(requestHash, snapshot);
@@ -42,5 +42,19 @@ describe("AIM-263 deterministic immutable NPC persistence", () => {
     expect(() => decodeNpcReceipt(JSON.stringify(tampered), expected)).toThrow("CORRUPT");
     expect(() => decodeNpcReceipt('["old"]', expected)).toThrow("RECONCILIATION");
     expect(() => decodeNpcReceipt(" ".repeat(65536), expected)).toThrow("CORRUPT");
+  });
+  it("stores the full autonomous life state in v3 and rejects coordinated snapshot tamper", () => {
+    const input = normalizeNpcRequest({ npcId: "lyra", regionId: "observatory_threshold", resolutionIndex: 7, roleId: "seer", needEvents: [], observationIds: ["world:7"], memory: ["danger:road"], opportunities: [{ id: "safe:7", kind: "safe_hub", regionId: "observatory_threshold", targetId: "hub:observatory_threshold", benefitBps: 8000, riskBps: 500, distanceBps: 0, sourceReceiptId: "world:7", resolutionIndex: 7 }], economy: { currentHubId: "observatory_threshold", wealthCopper: 1200, hungerBps: 2000, fatigueBps: 1500, tradeProwessBps: 10500, harvestYieldBps: 10000 } });
+    const memoryState = advanceNpcMemory(empty(),input.memory,input.resolutionIndex);
+    const snapshot = createNpcLifeSnapshot({ ...input, needs: resolveNpcNeeds({ events: [] }), memoryState });
+    const requestHash = npcRequestHash(input,NPC_LIFE_RECEIPT_VERSION);
+    const raw = encodeNpcLifeReceipt(requestHash,snapshot);
+    const expected = { npcId: snapshot.npcId, regionId: snapshot.regionId, resolutionIndex: 7, goal: snapshot.decision.goal, decisionHash: snapshot.decision.decisionHash, requestHash };
+    expect(decodeNpcReceipt(raw,expected)).toEqual(snapshot);
+    expect("lifeState" in decodeNpcReceipt(raw,expected)).toBe(true);
+    const tampered = JSON.parse(raw); tampered.snapshot.lifeState.personality.ambitionBps += 1; tampered.snapshotHash = npcHash(tampered.snapshot);
+    expect(() => decodeNpcReceipt(JSON.stringify(tampered),expected)).toThrow("STATE_HASH_INVALID");
+    const wrongRequest = { ...input, opportunities: [{ ...input.opportunities[0]!, benefitBps: 7999 }] };
+    expect(() => decodeNpcReceipt(raw,{ ...expected, requestHash: npcRequestHash(wrongRequest,NPC_LIFE_RECEIPT_VERSION) })).toThrow("INPUT_CONFLICT");
   });
 });
