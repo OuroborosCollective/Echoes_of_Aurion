@@ -1,9 +1,46 @@
+---
+description: Persistenz- und Evidence-Grenze für Companion-Trainingsdaten.
+---
+
 # Companion Memory VPS Setup
 
-Der Companion nutzt eine **local-first** Memory-Pipeline. Jede gültige Beobachtung wird lokal als nutzergebundene JSONL-Episode gespeichert. Wenn `REDIS_URL` gesetzt ist, wird zusätzlich eine idempotente Redis-Replikation in einer separaten Datenbank und unter dem Namespace `aurion:companion:memory:<userId>:<sessionId>:<sequence>` ausgeführt.
+## Ownership
 
-Auf dem Ziel-VPS wurde der laufende Aurion-Container read-only inventarisiert. Der Container und `redis-comn-redis-1` teilen sich das Docker-Netzwerk `areloria_arelorian-network`; Milvus läuft in einem getrennten Storage-Netzwerk. Deshalb wird für diesen Integrationsstand Redis verwendet. Die Redis-URL enthält keine im Repository gespeicherten Zugangsdaten und wird nur im VPS-Environment gesetzt.
+Companion-Lernen ist von Gameplay-Authority getrennt:
 
-Die Produktionsumgebung `/opt/echoes-of-aurion/.env.production` wurde vor der Änderung mit einem UTC-Zeitstempel-Backup gesichert. Anschließend wurde `REDIS_URL` aus dem vorhandenen Redis-Container-Secret innerhalb des VPS erzeugt und der Aurion-Container mit dem bestehenden Image-Tag `production` kontrolliert recreated. Der Container meldete danach `Started`; die Secretwerte werden nicht dokumentiert.
+- **AX1** erfasst im sichtbaren Spiel ausdrücklich freigegebene Trainingsbeobachtungen und Bedienaktionen.
+- **WASD** bleibt Eigentümer jeder Gameplayentscheidung, auch wenn ein Companion später Vorschläge oder gelernte Aktionen nutzt.
+- **Aurion** darf Trainingssamples, Feature-/State-Vektoren, Aktionslabels, Session-/Sequence-IDs und Receipts persistieren und auf der Accountseite **read-only** anzeigen.
 
-Milvus bleibt als spätere Embedding-/Semantikschicht vorgesehen. Rohbilder werden nicht nach Redis repliziert; der Serveradapter speichert nur Feature-Vektoren, Aktionslabels, Zustandsmasken und kurze Notizen. Ein Redis-Ausfall führt nicht zum Verlust der lokalen Memory-Aufzeichnung.
+Aurion, Redis oder eine Trainingsdatenbank dürfen niemals aus einem gespeicherten Sample eigenständig einen Gameplaybefehl ausführen.
+
+## Persistenz
+
+Die bestehende Pipeline ist local-first. Gültige Beobachtungen können nutzer- und sessiongebunden als append-only JSONL-Evidence gespeichert werden. Wenn `REDIS_URL` gesetzt ist, kann eine idempotente Redis-Replikation unter einem nutzer-/session-/sequenzgebundenen Namespace erfolgen.
+
+Rohbilder werden nicht als allgemeine Redis-Memory repliziert. Der Serveradapter hält nur die für das Training vorgesehenen gebundenen Feature-/Action-/State-Daten und kurze Notizen.
+
+Secrets und Connection Strings gehören ausschließlich in das nicht versionierte Runtime-Environment und werden weder in Dokumentation noch Receipts ausgegeben.
+
+## Failure boundary
+
+- Redis-Ausfall darf Gameplay nicht verändern.
+- Trainingsspeicher-Ausfall darf keine WASD-Regel umgehen.
+- Ein fehlendes Sample wird als fehlende Evidence behandelt, nicht synthetisch ersetzt.
+- Replay/duplicate Sample IDs dürfen keine zweite Trainingsbeobachtung erzeugen.
+
+## Aurion Account Readmodel
+
+Die Website darf beispielsweise anzeigen:
+
+- Anzahl bestätigter Samples;
+- Session IDs;
+- Sequence-/Sample IDs;
+- Zeit-/Receipt-Metadaten;
+- Trainings-/Dataset-Status.
+
+Sie darf keinen Companion starten, stoppen, steuern, trainieren oder eine gelernte Aktion direkt ins Spiel senden.
+
+## Evidence
+
+Ein gespeichertes Sample beweist ausschließlich die gespeicherte Trainingsbeobachtung. Es beweist weder, dass ein Modell daraus gelernt hat, noch dass eine spätere Companion-Aktion korrekt ist. Lern-/Modellevidence und WASD-Gameplay-Evidence müssen separat geprüft werden.
