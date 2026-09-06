@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
+import type { NpcGoal } from "./wasdAurionProtocol";
 
-export const AX1_LIVING_WORLD_RULESET = "aurion-ax1-living-world.v1" as const;
+export const AX1_LIVING_WORLD_RULESET = "aurion-ax1-living-world.v2" as const;
 export const livingWorldSocialActions = ["negotiation", "diplomacy", "intimidation", "friendship", "trade", "leadership", "politics"] as const;
 export type LivingWorldSocialAction = (typeof livingWorldSocialActions)[number];
 export type HubId = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault";
@@ -28,7 +29,8 @@ export type LivingWorldResolution = Readonly<{
   resolutionIndex: number;
   market: MarketState;
   npc: NpcEconomyState;
-  action: "consume" | "produce" | "trade" | "caravan" | "patrol";
+  preferredGoal: NpcGoal | null;
+  action: "consume" | "produce" | "trade" | "caravan" | "patrol" | "rest" | "socialize";
   commodity: CommodityId;
   quantity: number;
   unitPriceCopper: number;
@@ -100,10 +102,22 @@ export function socialMasteryEvidence(action: LivingWorldSocialAction, sourceRec
   return Object.freeze({ disciplineId, amountExact, sourceReceiptId, resolutionIndex, reputationDelta });
 }
 
+function actionForGoal(goal: NpcGoal | undefined, wealthCopper: number, unitPriceCopper: number): LivingWorldResolution["action"] {
+  if (!goal) return wealthCopper < unitPriceCopper * 2 ? "produce" : "trade";
+  switch (goal) {
+    case "seek_safety": return "patrol";
+    case "gather_resources": return "produce";
+    case "socialize": return "socialize";
+    case "gain_reputation": return "patrol";
+    case "trade": return "trade";
+    case "expand_influence": return "trade";
+  }
+}
+
 /** One server-owned fixed logical resolution; browser inputs never choose prices, drops, ticks or outcomes. */
-export function resolveLivingWorldTick(input: Readonly<{ worldSeed: string; resolutionIndex: number; market: MarketState; npc: NpcEconomyState; polityStability: number }>): LivingWorldResolution {
-  if (!input.worldSeed.trim() || !Number.isSafeInteger(input.resolutionIndex) || input.resolutionIndex < 0) throw new Error("invalid living world context");
-  let rng = seed32(`${input.worldSeed}:${input.resolutionIndex}:${input.npc.npcId}:${AX1_LIVING_WORLD_RULESET}`);
+export function resolveLivingWorldTick(input: Readonly<{ worldSeed: string; resolutionIndex: number; market: MarketState; npc: NpcEconomyState; polityStability: number; preferredGoal?: NpcGoal }>): LivingWorldResolution {
+  if (!input.worldSeed.trim() || !Number.isSafeInteger(input.resolutionIndex) || input.resolutionIndex < 0 || input.npc.currentHubId !== input.market.hubId) throw new Error("invalid living world context");
+  let rng = seed32(`${input.worldSeed}:${input.resolutionIndex}:${input.npc.npcId}:${input.preferredGoal ?? "none"}:${AX1_LIVING_WORLD_RULESET}`);
   const roll = () => { const result = next(rng); rng = result.seed; return result.value; };
   const hunger = boundedInt(input.npc.hungerBps, 0, 10_000, "hungerBps");
   const fatigue = boundedInt(input.npc.fatigueBps, 0, 10_000, "fatigueBps");
@@ -113,12 +127,13 @@ export function resolveLivingWorldTick(input: Readonly<{ worldSeed: string; reso
   const demandBps = clamp(5_000 + hunger + Math.round(fatigue * 0.25), 0, 20_000);
   const unitPriceCopper = marketPriceCopper({ commodity, stock: input.market.stock[commodity], demandBps, taxRateBasisPoints: input.market.taxRateBasisPoints, memoryAffinityBps });
   const quantity = Math.max(1, Math.floor((2 + roll() * 4) * clamp(input.npc.harvestYieldBps / 10_000, 0.5, 2)));
-  let action: LivingWorldResolution["action"] = hunger >= 7_500 ? "consume" : fatigue >= 8_500 ? "patrol" : input.npc.wealthCopper < unitPriceCopper * 2 ? "produce" : "trade";
+  let action: LivingWorldResolution["action"] = hunger >= 7_500 ? "consume" : fatigue >= 8_500 ? "rest" : actionForGoal(input.preferredGoal,input.npc.wealthCopper,unitPriceCopper);
   const destinations = (["observatory_threshold", "windhollow", "emberfall", "cinder_vault"] as const).filter(hub => hub !== input.market.hubId);
   let destination: HubId | null = null;
   let securityIndex = 100;
   let ambushed = false;
-  if (action === "trade" && roll() > 0.45) {
+  const caravanThreshold = input.preferredGoal === "expand_influence" ? 0.25 : 0.45;
+  if (action === "trade" && roll() > caravanThreshold) {
     action = "caravan";
     destination = destinations[Math.floor(roll() * destinations.length)]!;
     const rememberedThreat = input.npc.memory.some(entry => entry.startsWith("danger:")) ? 60 : 10;
@@ -126,11 +141,16 @@ export function resolveLivingWorldTick(input: Readonly<{ worldSeed: string; reso
     ambushed = roll() < (100 - securityIndex) / 300;
   }
   const taxCopper = action === "trade" || action === "caravan" ? Math.floor(unitPriceCopper * quantity * input.market.taxRateBasisPoints / 10_000) : 0;
-  const memoryEntry = action === "caravan" ? `trade:${destination}:${commodity}:${unitPriceCopper}:security=${securityIndex}${ambushed ? ":ambushed" : ""}` : `${action}:${input.market.hubId}:${commodity}:${unitPriceCopper}`;
+  const memoryEntry = action === "caravan" ? `trade:${destination}:${commodity}:${unitPriceCopper}:security=${securityIndex}${ambushed ? ":ambushed" : ""}` : action === "socialize" ? `social:${input.market.hubId}` : `${action}:${input.market.hubId}:${commodity}:${unitPriceCopper}`;
   const nextMemory = Object.freeze([...input.npc.memory, memoryEntry].slice(-24));
-  const stabilityDelta = ambushed ? -2 : action === "patrol" ? 1 : taxCopper > 0 ? 1 : 0;
-  const market: MarketState = Object.freeze({ ...input.market, treasuryCopper: input.market.treasuryCopper + taxCopper, stock: Object.freeze({ ...input.market.stock, [commodity]: Math.max(0, input.market.stock[commodity] + (action === "produce" ? quantity : action === "consume" || action === "trade" || action === "caravan" ? -Math.min(quantity, input.market.stock[commodity]) : 0)) }) });
-  const npc: NpcEconomyState = Object.freeze({ ...input.npc, wealthCopper: Math.max(0, input.npc.wealthCopper + (action === "produce" ? 0 : action === "consume" ? -Math.min(input.npc.wealthCopper, unitPriceCopper) : unitPriceCopper * quantity - taxCopper)), memory: nextMemory });
-  const deterministicHash = hash(AX1_LIVING_WORLD_RULESET, input.worldSeed, input.resolutionIndex, npc.npcId, action, commodity, quantity, unitPriceCopper, taxCopper, destination ?? "none", securityIndex, ambushed ? 1 : 0, ...nextMemory);
-  return Object.freeze({ resolutionIndex: input.resolutionIndex, market, npc, action, commodity, quantity, unitPriceCopper, taxCopper, caravan: Object.freeze({ destination, securityIndex, ambushed }), nextMemory, stabilityDelta, deterministicHash });
+  const stabilityDelta = ambushed ? -2 : action === "patrol" ? 1 : action === "socialize" ? 1 : taxCopper > 0 ? 1 : 0;
+  const stockDelta = action === "produce" ? quantity : action === "consume" || action === "trade" || action === "caravan" ? -Math.min(quantity, input.market.stock[commodity]) : 0;
+  const market: MarketState = Object.freeze({ ...input.market, treasuryCopper: input.market.treasuryCopper + taxCopper, stock: Object.freeze({ ...input.market.stock, [commodity]: Math.max(0, input.market.stock[commodity] + stockDelta) }) });
+  const wealthDelta = action === "consume" ? -Math.min(input.npc.wealthCopper, unitPriceCopper) : action === "trade" || action === "caravan" ? unitPriceCopper * quantity - taxCopper : 0;
+  const hungerDelta = action === "consume" ? -3_000 : action === "rest" ? 100 : action === "produce" ? 350 : action === "caravan" ? 450 : action === "patrol" ? 300 : action === "socialize" ? 150 : 220;
+  const fatigueDelta = action === "rest" ? -3_500 : action === "produce" ? 350 : action === "caravan" ? 550 : action === "patrol" ? 450 : action === "socialize" ? 100 : action === "consume" ? 80 : 180;
+  const currentHubId = action === "caravan" && destination && !ambushed ? destination : input.npc.currentHubId;
+  const npc: NpcEconomyState = Object.freeze({ ...input.npc, currentHubId, wealthCopper: Math.max(0, input.npc.wealthCopper + wealthDelta), hungerBps: Math.round(clamp(hunger + hungerDelta,0,10_000)), fatigueBps: Math.round(clamp(fatigue + fatigueDelta,0,10_000)), memory: nextMemory });
+  const deterministicHash = hash(AX1_LIVING_WORLD_RULESET, input.worldSeed, input.resolutionIndex, npc.npcId, input.preferredGoal ?? "none", action, commodity, quantity, unitPriceCopper, taxCopper, destination ?? "none", securityIndex, ambushed ? 1 : 0, npc.currentHubId, npc.wealthCopper, npc.hungerBps, npc.fatigueBps, ...nextMemory);
+  return Object.freeze({ resolutionIndex: input.resolutionIndex, market, npc, preferredGoal: input.preferredGoal ?? null, action, commodity, quantity, unitPriceCopper, taxCopper, caravan: Object.freeze({ destination, securityIndex, ambushed }), nextMemory, stabilityDelta, deterministicHash });
 }
