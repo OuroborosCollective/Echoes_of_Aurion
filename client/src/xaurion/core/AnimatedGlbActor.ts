@@ -2,24 +2,20 @@ import * as THREE from "three";
 
 export type GlbPose = "idle" | "walk" | "run" | "attack" | "jump" | "death" | "interact";
 const clipNames: Record<GlbPose, readonly string[]> = {
-  idle: ["idle"], walk: ["walk", "run"], run: ["run", "walk"],
-  attack: ["attackcombo", "attack", "fight"], jump: ["jump"],
-  death: ["death"], interact: ["shopinteract", "interact"],
+  idle: ["idle", "standingidle", "standidle", "breathingidle", "breathidle"],
+  walk: ["walk", "walking", "walkforward", "locomotionwalk", "run"],
+  run: ["run", "running", "sprint", "runforward", "walk"],
+  attack: ["attackcombo", "meleeattack", "attack", "slash", "swing", "strike", "fight"],
+  jump: ["jump", "jumping"],
+  death: ["death", "die", "dying"],
+  interact: ["shopinteract", "interact", "interaction", "use"],
 };
 
-// Aurion's authoritative cardinal movement is 340 mm per 100 ms tick = 3.4 m/s.
-// Treat that as running presentation immediately; otherwise the avatar visibly
-// slides while a slow Walk clip catches up with already-confirmed movement.
 export const GLB_RUN_THRESHOLD_METERS_PER_SECOND = 2.4;
 const LOCOMOTION_BLEND_SECONDS = 0.055;
 const ONESHOT_BLEND_SECONDS = 0.035;
-const targetClipSeconds: Partial<Record<GlbPose, number>> = {
-  walk: 0.82,
-  run: 0.52,
-  attack: 0.62,
-  jump: 0.8,
-  interact: 0.85,
-};
+const targetClipSeconds: Partial<Record<GlbPose, number>> = { walk: 0.82, run: 0.52, attack: 0.62, jump: 0.8, interact: 0.85 };
+const normalizeClipName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** Presentation only: imported transforms/rig are preserved inside a metre-sized,
  * foot-anchored wrapper. Animation never changes authoritative world coordinates.
@@ -34,7 +30,6 @@ export class AnimatedGlbActor {
   private active: THREE.AnimationAction | null = null;
   private locomotion: GlbPose = "idle";
   private oneShot = false;
-  private fallbackAttack = 0;
   private disposed = false;
   private readonly footPivot = new THREE.Group();
   private readonly bounds = new THREE.Box3();
@@ -61,7 +56,10 @@ export class AnimatedGlbActor {
       this.bones.push(bone);
       if (bone.name) this.bonesByName.set(bone.name, bone);
     });
-    for (const clip of animations) this.clips.set(clip.name.toLowerCase().replace(/[^a-z0-9]/g, ""), clip);
+    for (const clip of animations) {
+      const normalized = normalizeClipName(clip.name);
+      if (normalized && !this.clips.has(normalized)) this.clips.set(normalized, clip);
+    }
     this.mixer = new THREE.AnimationMixer(model);
     this.mixer.addEventListener("finished", this.finished);
     this.play("idle", false);
@@ -70,10 +68,26 @@ export class AnimatedGlbActor {
   }
 
   private finished = (event: { action: THREE.AnimationAction }) => {
-    if (event.action !== this.active || this.active.getClip().name.toLowerCase() === "death") return;
+    if (event.action !== this.active || normalizeClipName(this.active.getClip().name).includes("death")) return;
     this.oneShot = false;
     this.play(this.locomotion, false);
   };
+
+  private resolveClip(pose: GlbPose): THREE.AnimationClip | undefined {
+    const aliases = clipNames[pose];
+    for (const alias of aliases) {
+      const exact = this.clips.get(alias);
+      if (exact) return exact;
+    }
+    const entries = [...this.clips.entries()].sort(([left], [right]) => left.localeCompare(right));
+    for (const alias of aliases) {
+      const contained = entries.find(([name]) => name.includes(alias) || alias.includes(name));
+      if (contained) return contained[1];
+    }
+    return undefined;
+  }
+
+  supportsPose(pose: GlbPose): boolean { return Boolean(this.resolveClip(pose)); }
 
   private playbackRate(pose: GlbPose, clip: THREE.AnimationClip): number {
     const target = targetClipSeconds[pose];
@@ -82,7 +96,7 @@ export class AnimatedGlbActor {
   }
 
   private play(pose: GlbPose, once: boolean): boolean {
-    const clip = clipNames[pose].map(name => this.clips.get(name)).find(Boolean) ?? (once ? undefined : this.clips.get("idle"));
+    const clip = this.resolveClip(pose) ?? (once ? undefined : this.resolveClip("idle"));
     if (!clip) return false;
     const next = this.mixer.clipAction(clip);
     if (next === this.active && !once) return true;
@@ -101,20 +115,15 @@ export class AnimatedGlbActor {
     if (!this.oneShot) this.play(this.locomotion, false);
   }
 
-  playOnce(pose: "attack" | "jump" | "death" | "interact"): void {
-    if (this.disposed) return;
+  playOnce(pose: "attack" | "jump" | "death" | "interact"): boolean {
+    if (this.disposed) return false;
     this.oneShot = this.play(pose, true);
-    if (pose === "attack" && !this.oneShot) this.fallbackAttack = 0.3;
+    return this.oneShot;
   }
 
-  /**
-   * Some imported idle clips retain a near bind/T-pose shoulder direction.
-   * Preserve authored relaxed idles, but when an upper arm is still too
-   * horizontal, bend only that presentation bone toward a neutral down/forward
-   * rest. This never feeds back into simulation or authoritative coordinates.
-   */
+  /** Presentation-only correction for imported idle clips whose shoulder keyframes are still near bind pose. */
   private relaxIdleArms(): void {
-    if (this.oneShot || this.locomotion !== "idle") return;
+    if (this.oneShot || this.locomotion !== "idle" || !this.supportsPose("idle")) return;
     const localAxis = new THREE.Vector3(0, 1, 0);
     for (const [name, side] of [["UpperArm_L", 1], ["UpperArm_R", -1]] as const) {
       const bone = this.bonesByName.get(name);
@@ -122,7 +131,6 @@ export class AnimatedGlbActor {
       bone.updateWorldMatrix(true, false);
       const worldRotation = bone.getWorldQuaternion(new THREE.Quaternion());
       const direction = localAxis.clone().applyQuaternion(worldRotation).normalize();
-      // Already relaxed enough: respect the authored animation.
       if (direction.y <= -0.82) continue;
       const target = new THREE.Vector3(side * 0.12, -0.985, 0.08).normalize();
       const correction = new THREE.Quaternion().setFromUnitVectors(direction, target);
@@ -138,13 +146,8 @@ export class AnimatedGlbActor {
     if (this.disposed || !Number.isFinite(delta) || delta <= 0) return;
     this.mixer.update(Math.min(delta, 0.25));
     this.relaxIdleArms();
-    // Static avatars get a brief presentation recoil only after a confirmed attack.
-    // This wrapper animation never changes canonical player coordinates.
-    this.fallbackAttack = Math.max(0, this.fallbackAttack - delta);
-    this.group.rotation.z = this.fallbackAttack > 0 ? Math.sin((1 - this.fallbackAttack / 0.3) * Math.PI) * 0.16 : 0;
-    // In-place locomotion keeps the lowest animated contact on the sampled
-    // ground. The authored Jump may leave it; root motion never moves the actor.
-    if (this.active?.getClip().name.toLowerCase() !== "jump") {
+    this.group.rotation.z = 0;
+    if (this.active && !normalizeClipName(this.active.getClip().name).includes("jump")) {
       this.group.parent?.updateWorldMatrix(true, false);
       this.group.updateMatrixWorld(true);
       this.bounds.setFromObject(this.model, true);
@@ -156,15 +159,14 @@ export class AnimatedGlbActor {
   }
 
   evidence() {
-    // Read actual mixer/bone state; this is not a simulated success flag.
     const measured = new THREE.Box3().setFromObject(this.model, true);
     let pose = 2166136261;
-    for (const bone of this.bones) for (const value of [...bone.quaternion.toArray(), ...bone.position.toArray()]) {
-      pose = Math.imul(pose ^ Math.round(value * 100_000), 16777619) >>> 0;
-    }
-    return { heightMeters: this.heightMeters, renderedHeightMeters: measured.max.y - measured.min.y,
-      feetY: measured.min.y, clip: this.active?.getClip().name ?? null,
-      clipTime: this.active?.time ?? 0, boneCount: this.bones.length, bonePose: pose.toString(16) };
+    for (const bone of this.bones) for (const value of [...bone.quaternion.toArray(), ...bone.position.toArray()]) pose = Math.imul(pose ^ Math.round(value * 100_000), 16777619) >>> 0;
+    return { heightMeters: this.heightMeters, renderedHeightMeters: measured.max.y - measured.min.y, feetY: measured.min.y,
+      clip: this.active?.getClip().name ?? null, clipTime: this.active?.time ?? 0, boneCount: this.bones.length, bonePose: pose.toString(16),
+      supportedPoses: (Object.keys(clipNames) as GlbPose[]).filter(candidate => this.supportsPose(candidate)),
+      animationNames: [...this.clips.values()].map(clip => clip.name).sort(),
+    };
   }
 
   dispose(): void {
@@ -174,6 +176,5 @@ export class AnimatedGlbActor {
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.model);
     this.group.removeFromParent();
-    // Cached GLB geometry/textures are shared; retiring an actor must not dispose them.
   }
 }

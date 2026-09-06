@@ -13,9 +13,8 @@ import { ControlsModal } from "../components/ControlsModal";
 import { VirtualJoystick } from "../components/VirtualJoystick";
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
-import { AurionEncounterPanel } from "./AurionEncounterPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
-import { projectPlayerReadback, projectReadback, questReadbackSchema, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
+import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
 import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 
@@ -36,25 +35,20 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const [groupOpen, setGroupOpen] = useState(false);
   const [questTab, setQuestTab] = useState<"quests" | "contacts">("quests");
   const [pending, setPending] = useState(false);
-  const [combatBusy, setCombatBusy] = useState(false);
   const [autoActive, setAutoActive] = useState(false);
   const [startAfterClose, setStartAfterClose] = useState(false);
   const busy = useRef(false);
   const utils = trpc.useUtils();
   const options = { enabled: userId > 0, staleTime: 15_000, refetchInterval: 10_000 };
   const playerQuery = trpc.player.me.useQuery(undefined, options);
-  const questQuery = trpc.gameplay.progress.useQuery(undefined, options);
   const worldQuery = trpc.gameplay.openWorld.useQuery(undefined, options);
   const uiQuery = trpc.player.ui.useQuery(undefined, options);
   const groupQuery = trpc.groups.read.useQuery(undefined, { ...options, enabled: panel === "character" || groupOpen });
   const craftingQuery = trpc.crafting.read.useQuery(undefined, { ...options, enabled: panel === "crafting" });
   const player = projectPlayerReadback(playerQuery, userId);
-  const quests = projectReadback(questReadbackSchema, questQuery);
   const world = projectReadback(worldReadbackSchema, worldQuery);
   const ui = projectReadback(playerUiReadbackSchema.refine(v => v.userId === userId), uiQuery);
   const group = projectReadback(groupReadmodelSchema.refine(v => v.player.userId === userId), groupQuery);
-  const accept = trpc.gameplay.acceptQuest.useMutation();
-  const complete = trpc.gameplay.completeQuest.useMutation();
   const chooseClass = trpc.player.chooseClass.useMutation();
   const setWeapon = trpc.player.setWeaponLoadout.useMutation();
   const saveControls = trpc.player.saveControls.useMutation();
@@ -71,12 +65,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const auto = useMemo(() => new ConfirmedAutoAttack(() => action.current("F", true), () => permitted.current && !document.hidden && !document.querySelector(WORLD_PANEL_SELECTOR), (active, note) => { setAutoActive(active); if (note) setMessage(note); }), [userId]);
   const openPanel = useCallback((value: Panel) => { auto.stop(); onMove(0, 0); setExpandedMenu(false); setMessage(""); setPanel(value); }, [auto, onMove]);
   const refresh = useCallback(async () => {
-    const results = await Promise.all([playerQuery.refetch(), questQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch()]);
+    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch()]);
     if (results.some(r => r.isError)) throw new Error("UI_READBACK_UNAVAILABLE");
-    const parsed = playerUiReadbackSchema.parse(results[2].data);
+    const parsed = playerUiReadbackSchema.parse(results[1].data);
     if (parsed.userId !== userId) throw new Error("UI_READBACK_OWNER_MISMATCH");
     await utils.gameplay.relationshipStanding.invalidate();
-  }, [playerQuery.refetch, questQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, utils, userId]);
+  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, utils, userId]);
   const act = async (operation: () => Promise<unknown>) => {
     if (!fresh || busy.current) return;
     busy.current = true; setPending(true); auto.stop(); setMessage("");
@@ -107,9 +101,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     const controls = () => openPanel("controls");
     const shortcut = (e: Event) => { const next = (e as CustomEvent<{ panel?: Panel }>).detail?.panel; if (next && ["inventory", "character", "quests", "map"].includes(next)) openPanel(next); };
     const toggle = () => { if (autoActive) auto.stop(); else auto.start(); };
-    const status = (e: Event) => setCombatBusy(Boolean((e as CustomEvent<{ busy?: boolean }>).detail?.busy));
     const stop = () => auto.stop();
-    const events = [["aurion:authoritative-action", update], ["aurion:open-world-contacts", contacts], ["aurion:open-world-crafting", crafting], ["aurion:open-world-controls", controls], ["aurion:open-world-panel", shortcut], ["aurion:toggle-auto-attack", toggle], ["aurion:encounter-status", status], ["blur", stop]] as const;
+    const events = [["aurion:authoritative-action", update], ["aurion:open-world-contacts", contacts], ["aurion:open-world-crafting", crafting], ["aurion:open-world-controls", controls], ["aurion:open-world-panel", shortcut], ["aurion:toggle-auto-attack", toggle], ["blur", stop]] as const;
     events.forEach(([name, handler]) => window.addEventListener(name, handler));
     document.addEventListener("visibilitychange", stop);
     return () => { events.forEach(([name, handler]) => window.removeEventListener(name, handler)); document.removeEventListener("visibilitychange", stop); };
@@ -135,13 +128,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     return () => { observer.disconnect(); auto.stop(); };
   }, [auto]);
   const profile = player.data?.profile;
-  const actionDisabled = !connected || panel !== null || groupOpen || expandedMenu || combatBusy || pending;
+  const actionDisabled = !connected || panel !== null || groupOpen || expandedMenu || pending;
   return <div className="aurion-authority-hud xaurion-game-hud" data-testid="authoritative-world-hud">
     <section className="aurion-authority-hud__profile" aria-label="Serverbestätigter Charakter" data-state={player.state}>
       <div className="ax1-unit-portrait" aria-hidden="true"><UserRound size={27} />{profile && <span>{profile.level}</span>}</div><div className="ax1-unit-values">{profile ? <><b>{classes[profile.selectedClass]} · Stufe {profile.level}</b><span>{profile.totalXp} EP · {profile.aurionPoints} AURION</span><span className="ax1-unit-detail">{profile.victories} Siege</span></> : <b>Charakterdaten ausstehend</b>}<small role="status" className={player.state === "live" ? "sr-only" : undefined}>{readbackLabels[player.state]}</small><span data-testid="confirmed-remote-player-count" className="sr-only">{connected ? remotePlayers.length + " andere Explorer verbunden" : "Mitspieler werden verbunden"}</span></div>
     </section>
     <nav className="aurion-authority-hud__menu" aria-label="Weltmenü" data-expanded={expandedMenu}>{menu.map(([key, label, Icon]) => <button type="button" key={key} title={`${label} [${panelShortcuts[key]}]`} aria-label={label} aria-keyshortcuts={panelShortcuts[key]} onClick={() => openPanel(key)}><Icon size={19} /></button>)}<button type="button" className="ax1-menu-more" title="Weitere Menüs" aria-label="Weitere Menüs" aria-expanded={expandedMenu} onClick={() => { auto.stop(); setExpandedMenu(v => !v); }}><Menu size={19} /></button><div className="ax1-secondary-menu"><button type="button" aria-label="Steuerung & Skills" title="Steuerung & Skills" onClick={() => openPanel("controls")}><Gamepad2 size={19} /></button><button type="button" title="Companion" aria-label="Companion" onClick={() => { auto.stop(); setExpandedMenu(false); window.dispatchEvent(new Event("aurion:open-companion")); }}><Sparkles size={19} /></button><button type="button" title="Gruppe" aria-label="Gruppe" onClick={() => { auto.stop(); onMove(0, 0); setExpandedMenu(false); setGroupOpen(true); }}><Users size={19} /></button><button type="button" title="Chat" aria-label="Chat" onClick={() => { auto.stop(); setExpandedMenu(false); community("chat"); }}><MessageSquare size={19} /></button><button type="button" title="Gilde" aria-label="Gilde öffnen" onClick={() => { auto.stop(); setExpandedMenu(false); community("guild"); }}><Users size={19} /></button><button type="button" title="Handel" aria-label="Handel" onClick={() => { auto.stop(); setExpandedMenu(false); community("market"); }}><Coins size={19} /></button><button type="button" title="Handwerk" aria-label="Handwerk" onClick={() => openPanel("crafting")}><Hammer size={19} /></button></div></nav>
-    <AurionEncounterPanel userId={userId} connected={connected} onAttack={() => { void onAction("F"); }} />
     {groupOpen && <AurionGroupFinder open onClose={() => setGroupOpen(false)} />}
     <div className="aurion-authority-hud__move"><VirtualJoystick onMove={onMove} /></div>
     <div className="aurion-authority-hud__actions" aria-label="Aktionen">
@@ -154,7 +146,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     {ui.state === "error" && <p className="aurion-ui-feedback" role="alert">Inventardaten sind nicht verfügbar.</p>}
     <InventoryModal isOpen={panel === "inventory"} onClose={() => openPanel(null)} readback={ui.data} points={profile?.aurionPoints} pending={!fresh} message={message || (ui.state !== "live" ? readbackLabels[ui.state] : "")} onEquip={item => { const previous = ui.data?.equipment.find(e => e.slot === item.slot); void act(() => equip.mutateAsync({ id: item.id, version: item.version, expectedItem: previous ? { id: previous.id, version: previous.version } : null })); }} onUnequip={item => { void act(() => unequip.mutateAsync({ id: item.id, version: item.version })); }} onCollect={item => { void act(() => collect.mutateAsync({ id: item.id, version: item.version })); }} onToggleAutoLoot={toggleLoot} onCraft={() => openPanel("crafting")} />
     <CharacterModal isOpen={panel === "character"} onClose={() => openPanel(null)} player={player.data} settings={ui.data?.settings} pending={!fresh} message={message} group={group.state === "live" ? group.data : undefined} onBind={bind} onClass={playerClass => { void act(() => chooseClass.mutateAsync({ playerClass })); }} onWeapon={weaponTrack => { void act(() => setWeapon.mutateAsync({ weaponTrack })); }} onRoleSkill={(skill, equipped) => { const current = group.data?.player; if (current) void act(() => groupCommand.mutateAsync({ expectedRevision: current.revision, action: { kind: "equip", skills: equipped ? [...new Set([...current.skills, skill])] : current.skills.filter(s => s !== skill) } })); }} onInventory={() => openPanel("inventory")} />
-    {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} quests={quests.data?.quests} keys={quests.data?.keys} pending={!fresh || quests.state !== "live"} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} onAccept={q => { void act(() => accept.mutateAsync({ questKey: q.key })); }} onComplete={q => { void act(() => complete.mutateAsync({ questKey: q.key, giver: q.giver })); }} />}
+    {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} pending={false} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} />}
     <CraftingModal isOpen={panel === "crafting"} onClose={() => openPanel(null)} inventory={ui.data} readback={!craftingQuery.isError ? craftingQuery.data : undefined} pending={!fresh || craftingQuery.isFetching || craftingQuery.isError} message={message} onCraft={inputItemId => { void act(() => craft.mutateAsync({ recipeKey: "temper_aurion_spear", inputItemId })); }} onBonus={batch => { void act(() => bonus.mutateAsync({ receiptId: batch.receiptId, expectedOutputIndexExact: batch.nextOutputIndexExact, count: Math.min(10, Number(batch.remainingQuantityExact)) })); }} />
     <ControlsModal open={panel === "controls"} onClose={() => openPanel(null)} settings={ui.data?.settings} pending={!fresh} message={message} onBind={bind} onAutoLoot={toggleLoot} onAnalytics={() => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data!.settings, analyticsConsent: !ui.data!.settings.analyticsConsent })); }} onStartAuto={() => { openPanel(null); setStartAfterClose(true); }} />
     <Dialog open={panel === "map"} onOpenChange={open => { if (!open) openPanel(null); }}><DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop"><DialogTitle>Weltatlas</DialogTitle><DialogDescription>Die Welt und deine bestätigte Position.</DialogDescription><div data-state={world.state}><p role="status">{readbackLabels[world.state]}</p>{world.data && <><p>Weltepoche {world.data.globalWorld.epoch}</p><p className="aurion-authority-hud__hash">Welt-Hash: {world.data.globalWorld.deterministicHash}</p></>}{position && connected ? <p>Bestätigte Position: {(position.x / 1000).toFixed(2)} / {(position.z / 1000).toFixed(2)}</p> : <p>Position wartet auf die Zonenverbindung.</p>}{connected && remotePlayers.map(p => <p key={p.userId}>Explorer {p.userId}: {(p.position.x / 1000).toFixed(2)} / {(p.position.z / 1000).toFixed(2)}</p>)}</div></DialogContent></Dialog>

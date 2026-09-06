@@ -92,9 +92,10 @@ describe("Aurion production schema reconciliation", () => {
     expect(transactionIndex).toBeLessThan(metadataIndex);
   });
 
-  it("parses all thirteen late SQL migrations from their real repository contracts", async () => {
+  it("parses every canonical late SQL migration from its real repository contract", async () => {
     const migrations = await readProductionSchemaContracts(process.cwd());
-    expect(migrations).toHaveLength(13);
+    expect(migrations).toHaveLength(lateAurionMigrationTags.length);
+    expect(migrations.map(migration => migration.tag)).toEqual([...lateAurionMigrationTags]);
     expect(migrations.every(migration => migration.tables.length > 0)).toBe(true);
     const tableNames = migrations.flatMap(migration => migration.tables.map(table => table.name));
     expect(tableNames).toContain("aurionGlobalWorldStates");
@@ -105,6 +106,8 @@ describe("Aurion production schema reconciliation", () => {
     expect(tableNames).toContain("aurionFactionQuestlineStates");
     expect(tableNames).toContain("aurionFactionQuestlineRewardReceipts");
     expect(tableNames).toContain("aurionWorldCheckpoints");
+    expect(tableNames).toContain("aurionAx1StarterEquipmentReceipts");
+    expect(tableNames).toContain("aurionAx1StarterEquipmentStates");
   });
 
   it("does not mistake enum string literals such as 'unique' for UNIQUE constraints", async () => {

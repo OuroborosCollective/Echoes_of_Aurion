@@ -31,6 +31,13 @@ on:
       - "drizzle/0025_aurion_loot_mastery_ethos.sql"
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
+      - "drizzle/0028_aurion_world_checkpoint.sql"
+      - "drizzle/0029_aurion_guild_kingdom_authority.sql"
+      - "drizzle/0030_aurion_guild_bank_economy.sql"
+      - "drizzle/0031_aurion_profession_crafting_persistence.sql"
+      - "drizzle/0032_aurion_group_instances.sql"
+      - "drizzle/0033_aurion_ax1_ui_controls.sql"
+      - "drizzle/0034_ax1_starter_equipment_receipts.sql"
   push:
     branches: [main]
     paths:
@@ -54,6 +61,7 @@ on:
       - "server/aurionProductionReadbackErrors.test.ts"
       - "server/aurionProductionSchemaReconciliation.test.ts"
       - "server/aurionProductionSchemaReconcileDockerRunner.test.ts"
+      - "drizzle/meta/_journal.json"
       - "drizzle/0021_aurion_global_world_state.sql"
       - "drizzle/0022_aurion_world_chunk_deltas.sql"
       - "drizzle/0023_aurion_world_presence_epochs.sql"
@@ -61,6 +69,13 @@ on:
       - "drizzle/0025_aurion_loot_mastery_ethos.sql"
       - "drizzle/0026_aurion_faction_questline_state.sql"
       - "drizzle/0027_aurion_faction_questline_rewards.sql"
+      - "drizzle/0028_aurion_world_checkpoint.sql"
+      - "drizzle/0029_aurion_guild_kingdom_authority.sql"
+      - "drizzle/0030_aurion_guild_bank_economy.sql"
+      - "drizzle/0031_aurion_profession_crafting_persistence.sql"
+      - "drizzle/0032_aurion_group_instances.sql"
+      - "drizzle/0033_aurion_ax1_ui_controls.sql"
+      - "drizzle/0034_ax1_starter_equipment_receipts.sql"
 
 permissions:
   contents: read

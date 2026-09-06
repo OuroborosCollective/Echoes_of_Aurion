@@ -31,6 +31,8 @@ const baseline = JSON.parse(readFileSync("docs/migrations/aim239-source-baseline
 const manifest = JSON.parse(readFileSync(baseline.finalDelta.manifestPath, "utf8")) as DeltaManifest;
 const matrix = readFileSync("docs/migrations/AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
+const bridge = readFileSync("client/src/xaurion/integration/Ax1PlayNavigationBridge.tsx", "utf8");
+const playRoute = readFileSync("client/src/xaurion/integration/AurionPlayRoute.tsx", "utf8");
 const atlas = readFileSync("client/src/xaurion/components/WorldMapModal.tsx", "utf8");
 
 function stableStringify(value: unknown): string {
@@ -39,7 +41,6 @@ function stableStringify(value: unknown): string {
   const record = value as Record<string, unknown>;
   return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
 }
-
 function manifestDigest(value: DeltaManifest): string {
   const { manifestSha256: _ignored, ...unsigned } = value;
   return createHash("sha256").update(stableStringify(unsigned), "utf8").digest("hex");
@@ -47,41 +48,18 @@ function manifestDigest(value: DeltaManifest): string {
 
 describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
   it("pins unchanged normative WASD rules and the final -ax1 content/engine source", () => {
-    expect(baseline.sources.normativeRules).toEqual({
-      repository: "OuroborosCollective/Wasd",
-      ref: "main",
-      revision: "7bd039bb79681d2df342abe160579f89ca3ff8ed",
-      role: "normative_rules",
-    });
-    expect(baseline.sources.gameplayEngine).toEqual({
-      repository: "OuroborosCollective/-ax1",
-      ref: "main",
-      revision: "d356881538dae23c3aa97364a5596d48b6ac3079",
-      previousRevision: "b9a0c19cb3d2d34212075983e64891274489e32a",
-      role: "canonical_gameplay_content_engine_source",
-    });
+    expect(baseline.sources.normativeRules).toEqual({ repository: "OuroborosCollective/Wasd", ref: "main", revision: "7bd039bb79681d2df342abe160579f89ca3ff8ed", role: "normative_rules" });
+    expect(baseline.sources.gameplayEngine).toEqual({ repository: "OuroborosCollective/-ax1", ref: "main", revision: "d356881538dae23c3aa97364a5596d48b6ac3079", previousRevision: "b9a0c19cb3d2d34212075983e64891274489e32a", role: "canonical_gameplay_content_engine_source" });
   });
 
   it("binds the rebase lane to the exact Aurion authority baseline", () => {
-    expect(baseline.sources.aurionBaseline).toEqual({
-      repository: "OuroborosCollective/Echoes_of_Aurion",
-      ref: "main",
-      revision: "d6549a2319ffc5de0e364bd54eeca8a1e4a3ed4a",
-      role: "production_authority_host",
-    });
+    expect(baseline.sources.aurionBaseline).toEqual({ repository: "OuroborosCollective/Echoes_of_Aurion", ref: "main", revision: "d6549a2319ffc5de0e364bd54eeca8a1e4a3ed4a", role: "production_authority_host" });
     expect(baseline.reconcileTask).toBe("AIM-266");
   });
 
   it("classifies every file in the one-commit 38-file source delta exactly once", () => {
     expect(manifest.task).toBe("AIM-266");
-    expect(manifest.source).toMatchObject({
-      repository: "OuroborosCollective/-ax1",
-      baseRevision: "b9a0c19cb3d2d34212075983e64891274489e32a",
-      revision: "d356881538dae23c3aa97364a5596d48b6ac3079",
-      commitCount: 1,
-      sourceCommitVerified: false,
-      sourceCheckRuns: 0,
-    });
+    expect(manifest.source).toMatchObject({ repository: "OuroborosCollective/-ax1", baseRevision: "b9a0c19cb3d2d34212075983e64891274489e32a", revision: "d356881538dae23c3aa97364a5596d48b6ac3079", commitCount: 1, sourceCommitVerified: false, sourceCheckRuns: 0 });
     expect(manifest.summary).toMatchObject({ changedFiles: 38, added: 10, modified: 28, additions: 8855, deletions: 716 });
     expect(manifest.decisions).toHaveLength(38);
     expect(new Set(manifest.decisions.map(entry => entry.path)).size).toBe(38);
@@ -93,16 +71,7 @@ describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
 
   it("keeps all critical source authority surfaces non-direct", () => {
     const byPath = new Map(manifest.decisions.map(entry => [entry.path, entry]));
-    for (const path of [
-      "server.ts",
-      "server/mariadb.ts",
-      "src/components/DeterminismDebugOverlay.tsx",
-      "src/components/GuildManagementModal.tsx",
-      "src/entities/LootDropManager.ts",
-      "src/world/WorldChunkManager.ts",
-    ]) {
-      expect(byPath.get(path)?.decision).not.toBe("direct");
-    }
+    for (const path of ["server.ts", "server/mariadb.ts", "src/components/DeterminismDebugOverlay.tsx", "src/components/GuildManagementModal.tsx", "src/entities/LootDropManager.ts", "src/world/WorldChunkManager.ts"]) expect(byPath.get(path)?.decision).not.toBe("direct");
     expect(byPath.get("server.ts")?.decision).toBe("reject-raw");
     expect(byPath.get("server/mariadb.ts")?.decision).toBe("reject-raw");
     expect(byPath.get("src/entities/SimulatedRealmPlayers.ts")?.decision).toBe("dev-only");
@@ -128,21 +97,19 @@ describe("AIM-266 final -ax1 source and ownership reconciliation", () => {
     expect(matrix).toContain("38 files");
   });
 
-  it("preserves current Aurion host and read-only atlas integration", () => {
+  it("preserves Aurion hosting while mounting AX1 only through the explicit play bridge and keeping the atlas read-only", () => {
     expect(app).toContain('path="/ops/glb-upload"');
-    expect(app).toContain("AurionOpenWorldRuntime");
+    expect(app).toContain('<Route path="/play" component={AurionPlayRoute} />');
+    expect(app).toContain("Ax1PlayNavigationBridge");
+    expect(app).not.toContain("<AurionOpenWorldRuntime");
+    expect(bridge).toContain("persistConfirmedPlayLaunch(snapshot)");
+    expect(bridge).toContain('navigate("/play")');
+    expect(playRoute).toContain("AurionOpenWorldRuntime");
     expect(atlas).toContain("Array.from(p.chunkManager.chunks.values())");
     expect(atlas).not.toContain("getAllChunks()");
   });
 
   it("expands the forbidden standalone-authority contract for the final update", () => {
-    for (const forbidden of [
-      "/api/player/save",
-      "/api/database/configure",
-      "client-selected guild owner, ruler, territory or capital",
-      "client-provided guild bank item object or balance",
-      "synthetic server hash presented as production evidence",
-      "in-memory fallback presented as persisted success",
-    ]) expect(baseline.bannedStandaloneAuthority).toContain(forbidden);
+    for (const forbidden of ["/api/player/save", "/api/database/configure", "client-selected guild owner, ruler, territory or capital", "client-provided guild bank item object or balance", "synthetic server hash presented as production evidence", "in-memory fallback presented as persisted success"]) expect(baseline.bannedStandaloneAuthority).toContain(forbidden);
   });
 });

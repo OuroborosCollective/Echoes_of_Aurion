@@ -5,7 +5,18 @@ import { projectReadback, readbackLabels } from "./authoritativeHudProjection";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Crosshair } from "lucide-react";
 
-export function AurionEncounterPanel({ userId, connected, onAttack }: { userId: number; connected: boolean; onAttack: () => void }) {
+type Props = { userId: number; connected: boolean; onAttack: () => void };
+
+/**
+ * Compatibility-only legacy surface. The AX1 `/play` route is owned by AX1 +
+ * WASD zone gameplay and must never expose or invoke Aurion gameplaySessions.
+ */
+export function AurionEncounterPanel(props: Props) {
+  if (typeof window !== "undefined" && window.location.pathname === "/play") return null;
+  return <LegacyAurionEncounterPanel {...props} />;
+}
+
+function LegacyAurionEncounterPanel({ userId, connected, onAttack }: Props) {
   const [open, setOpen] = useState(false);
   const starting = useRef(false);
   const [busy, setBusy] = useState(false);

@@ -8,7 +8,6 @@ const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptati
   files: Array<{ path: string; sourceSha256: string; targetSha256: string; adaptations: Array<{ before: string; after: string; occurrences: number }> }>;
 };
 
-/** Preserve the original source pin while permitting only the reviewed deterministic deltas. */
 function sourceHashBeforeDeterminism(path: string): string {
   const entry = adaptations.files.find(file => file.path === path);
   if (!entry) throw new Error(`Missing deterministic adaptation evidence: ${path}`);
@@ -24,16 +23,24 @@ function sourceHashBeforeDeterminism(path: string): string {
 }
 
 describe("AIM-239 xaurion integration boundary", () => {
-  it("keeps xaurion rendering mounted behind the confirmed Aurion world transition", () => {
+  it("mounts AX1 only after its navigation bridge persists a confirmed world launch", () => {
     const app = read("client/src/App.tsx");
+    const bridge = read("client/src/xaurion/integration/Ax1PlayNavigationBridge.tsx");
+    const playRoute = read("client/src/xaurion/integration/AurionPlayRoute.tsx");
     const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
-    expect(app).toContain("AurionOpenWorldRuntime");
-    expect(runtime).toContain("aurion:load-open-world");
+    expect(app).toContain('<Route path="/play" component={AurionPlayRoute} />');
+    expect(app).toContain("Ax1PlayNavigationBridge");
+    expect(app).not.toContain("<AurionOpenWorldRuntime");
+    expect(bridge).toContain("AX1_PLAY_REQUEST_EVENT");
+    expect(bridge).toContain("trpc.gameplay.enterOpenWorld.useMutation()");
+    expect(bridge).toContain("persistConfirmedPlayLaunch(snapshot)");
+    expect(bridge).toContain('navigate("/play")');
+    expect(playRoute).toContain("AurionOpenWorldRuntime");
     expect(runtime).toContain("ZoneMovementClient");
     expect(runtime).toContain("issueZoneTicket");
   });
 
-  it("does not allow the xaurion runtime to become a second database authority", () => {
+  it("does not allow the AX1 runtime to become a second database authority", () => {
     const sync = read("client/src/xaurion/core/SyncManager.ts");
     const chunks = read("client/src/xaurion/world/WorldChunkManager.ts");
     for (const source of [sync, chunks]) {
@@ -53,22 +60,25 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(sound).not.toContain("new AudioContext");
   });
 
-  it("returns from xaurion through the existing tower return handler", () => {
+  it("owns world return inside the play route instead of the Aurion landing page", () => {
     const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
-    const hud = read("client/src/components/OpenWorldHud.tsx");
-    expect(runtime).toContain("aurion:xaurion-return-request");
+    const playRoute = read("client/src/xaurion/integration/AurionPlayRoute.tsx");
     const home = read("client/src/pages/Home.tsx");
-    expect(home).toContain('window.addEventListener("aurion:xaurion-return-request", returnToTowerHome)');
-    expect(home).toContain('window.removeEventListener("aurion:xaurion-return-request", returnToTowerHome)');
-    expect(hud).not.toContain("aurion:xaurion-return-request");
-    expect(hud).toContain("onReturn");
+    expect(runtime).toContain("aurion:xaurion-return-request");
+    expect(playRoute).toContain('window.addEventListener("aurion:xaurion-return-request", requestLeave)');
+    expect(playRoute).toContain('window.addEventListener("aurion:return-to-tower", leave)');
+    expect(playRoute).toContain('navigate("/")');
+    expect(home).not.toContain("aurion:xaurion-return-request");
+    expect(home).not.toContain("returnToTowerHome");
   });
 
-  it("keeps the existing Aurion audio, tower and MariaDB-facing surfaces intact", () => {
+  it("keeps Aurion website, audio and MariaDB hosting surfaces while removing tower gameplay ownership", () => {
     const home = read("client/src/pages/Home.tsx");
     const soundscape = read("client/src/lib/soundscape.ts");
     const db = read("server/db.ts");
-    expect(home).toContain("TowerHomePanel");
+    expect(home).toContain("AURION // WEBSITE · COMMUNITY · DATENHALTUNG");
+    expect(home).not.toContain("TowerHomePanel");
+    expect(home).not.toContain("MissionState");
     expect(soundscape).toContain("AurionSoundscape");
     expect(db).toContain("DATABASE_URL");
   });

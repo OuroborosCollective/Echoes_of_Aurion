@@ -10,7 +10,7 @@ export const lateAurionMigrationTags = [
   "0029_aurion_guild_kingdom_authority",
   "0030_aurion_guild_bank_economy",
   "0031_aurion_profession_crafting_persistence",
-  "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls",
+  "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
