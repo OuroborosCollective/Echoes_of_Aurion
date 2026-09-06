@@ -15,6 +15,7 @@ export type AutonomousNpcLifeReadback = Readonly<{
   lastGatewayTick: number | null;
   lastResolutionIndex: number | null;
   currentHubId: string | null;
+  worldRegionId: string | null;
   action: string | null;
   goal: string | null;
   longTermGoal: string | null;
@@ -63,6 +64,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     lastGatewayTick: null,
     lastResolutionIndex: null,
     currentHubId: null,
+    worldRegionId: null,
     action: null,
     goal: null,
     longTermGoal: null,
@@ -101,6 +103,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         lastGatewayTick: tick,
         lastResolutionIndex: resolutionIndex,
         currentHubId,
+        worldRegionId: result.world.reaction.regionId,
         action: result.resolution.action,
         goal: confirmed.decision.goal,
         longTermGoal: confirmed.lifeState.longTermGoal,
