@@ -13,7 +13,14 @@ if (!status.configured) {
   const client = requireWolframCagClient();
   try {
     const result = await runAurionWolframCagCanary(client);
-    process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.stdout.write(`${JSON.stringify({
+      protocol: "aurion.wolfram-cag-ci.v2",
+      status: "PROVIDER_CANARY_VERIFIED",
+      providerCallExecuted: true,
+      providerCanaryVerified: true,
+      canary: result,
+      mutationAuthority: "none",
+    })}\n`);
   } catch (error) {
     const classify = (value: unknown) => {
       const message = value instanceof Error ? value.message : String(value);
@@ -46,13 +53,29 @@ if (!status.configured) {
       await attempt("language_hints_minimal", () => client.languageHints({ context: "Wolfram Language code for 2+2" })),
       await attempt("alpha_context_minimal", () => client.alphaContext({ context: "What is 2+2?", count: 1 })),
     ]);
+    const canaryFailureFamily = classify(error);
+    const successfulComponents = diagnostics.filter(entry => entry.state === "success").map(entry => entry.component);
+    const failedFamilies = diagnostics.filter((entry): entry is Extract<(typeof diagnostics)[number], { state: "failure" }> => entry.state === "failure").map(entry => entry.failureFamily);
+    const credentialAcceptedEvidence = successfulComponents.length > 0;
+    const onlyProvider5xx = /^http_5\d\d$/.test(canaryFailureFamily)
+      && failedFamilies.length > 0
+      && failedFamilies.every(family => /^http_5\d\d$/.test(family));
+    const degradedProvider = credentialAcceptedEvidence && onlyProvider5xx;
+
     process.stdout.write(`${JSON.stringify({
-      protocol: "aurion.wolfram-cag-provider-diagnostic.v1",
-      configured: true,
-      canaryFailureFamily: classify(error),
+      protocol: "aurion.wolfram-cag-ci.v2",
+      status: degradedProvider ? "DEGRADED_PROVIDER" : "PROVIDER_CANARY_FAILED",
+      providerCallExecuted: true,
+      providerCanaryVerified: false,
+      credentialAcceptedEvidence,
+      canaryFailureFamily,
+      availableComponents: successfulComponents,
       diagnostics,
       mutationAuthority: "none",
     })}\n`);
-    process.exitCode = 1;
+
+    // AIM-265 must not be artificially blocked by a verified provider 5xx outage.
+    // Credentials/configuration failures (including HTTP 403) remain hard failures.
+    process.exitCode = degradedProvider ? 0 : 1;
   }
 }
