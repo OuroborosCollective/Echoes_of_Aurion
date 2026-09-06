@@ -79,9 +79,16 @@ describe("AIM-263 server-authoritative mob FSM",()=>{
     expect(source).not.toContain("Math.random");
   });
 
-  it("publishes only bounded projection state and never a local-player fallback",()=>{
-    const state=initialMobRuntimeState(definition("mob_6"),0);
-    expect(publicMobSnapshot(state)).toEqual({entityId:"mob_6",archetype:"titan_boss",level:8,state:"idle",position:{x:0,z:68_000},targetEntityId:null,isBoss:true,isElite:true});
-    expect(Object.isFrozen(publicMobSnapshot(state))).toBe(true);
+  it("publishes only bounded authoritative projection state and never runtime internals or a local-player fallback",()=>{
+    const def=definition("mob_6");
+    const state=initialMobRuntimeState(def,0);
+    const snapshot=publicMobSnapshot(state);
+    expect(snapshot).toEqual({entityId:"mob_6",archetype:"titan_boss",level:def.level,state:"idle",position:{x:0,z:68_000},targetEntityId:null,isBoss:true,isElite:true,health:def.maxHealth,maxHealth:def.maxHealth});
+    expect(Object.keys(snapshot).sort()).toEqual(["archetype","entityId","health","isBoss","isElite","level","maxHealth","position","state","targetEntityId"]);
+    expect(snapshot).not.toHaveProperty("stamina");
+    expect(snapshot).not.toHaveProperty("nextAttackTick");
+    expect(snapshot).not.toHaveProperty("idleUntilTick");
+    expect(snapshot).not.toHaveProperty("definition");
+    expect(Object.isFrozen(snapshot)).toBe(true);
   });
 });
