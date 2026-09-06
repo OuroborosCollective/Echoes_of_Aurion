@@ -51,7 +51,7 @@ const initialDefinitions: readonly MobDefinition[] = Object.freeze([
   isBoss: isBoss as boolean,
   isElite: isElite as boolean,
   attackRangeFixed: (isBoss as boolean) ? 5_000 : 2_200,
-}))).sort((left,right)=>left.entityId < right.entityId ? -1 : left.entityId > right.entityId ? 1 : 0));
+})).sort((left,right)=>left.entityId < right.entityId ? -1 : left.entityId > right.entityId ? 1 : 0));
 
 export const observatoryMobDefinitions = initialDefinitions;
 
