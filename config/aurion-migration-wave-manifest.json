@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0033",
+  "waveId": "aurion-production-0021-0034",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -53,6 +53,10 @@
     },
     {
       "tag": "0033_aurion_ax1_ui_controls",
+      "source": "aurion"
+    },
+    {
+      "tag": "0034_ax1_starter_equipment_receipts",
       "source": "aurion"
     }
   ],
