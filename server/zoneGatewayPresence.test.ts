@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { ZONE_PROTOCOL_VERSION } from "../shared/zonePresenceContract";
 import WebSocket from "ws";
 import { describe, expect, it, vi } from "vitest";
 import { registerZoneGateway } from "./zoneGateway";
@@ -34,7 +35,7 @@ function onceClose(socket: WebSocket): Promise<void> {
 }
 
 describe("zoneGateway world presence bridge", () => {
-  it("creates and releases a server-observed world presence only around an accepted zone connection", async () => {
+  it("creates and releases a server-observed world presence only around an accepted current-protocol zone connection", async () => {
     const server = createServer();
     const upsert = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
@@ -56,17 +57,20 @@ describe("zoneGateway world presence bridge", () => {
     const legacy = new WebSocket(endpoint, { origin: "http://localhost" });
     await onceOpen(legacy);
     const legacyReject = onceMessageOfType(legacy, "reject"), legacyClosed = onceClose(legacy);
-    legacy.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: 1 }));
+    legacy.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION - 1 }));
     expect(await legacyReject).toMatchObject({code:"PROTOCOL_VERSION_UNSUPPORTED"});
     await legacyClosed;expect(consumeTicket).not.toHaveBeenCalled();
     const socket = new WebSocket(endpoint, { origin: "http://localhost" });
     try {
       await onceOpen(socket);
       const welcomePromise = onceMessageOfType(socket, "welcome");
-      socket.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: 2 }));
+      socket.send(JSON.stringify({ type: "hello", ticket: "aurion_zone_012345678901234567890123456789", zoneId: "observatory_threshold", protocolVersion: ZONE_PROTOCOL_VERSION }));
       const welcome = await welcomePromise;
       expect(welcome.type).toBe("welcome");
-      expect(welcome.protocolVersion).toBe(2);
+      expect(welcome.protocolVersion).toBe(ZONE_PROTOCOL_VERSION);
+      expect(welcome.selfEntityId).toBe("player:73");
+      expect(Array.isArray(welcome.mobs)).toBe(true);
+      expect(Array.isArray(welcome.combatants)).toBe(true);
       expect(upsert).toHaveBeenCalledTimes(1);
       expect(upsert.mock.calls[0]?.[0]).toMatchObject({ userId: 73, zoneId: "observatory_threshold", position: { x: 0, z: 0 }, connectionId: expect.stringMatching(/^zone_peer_/) });
       const zone = registry.get("observatory_threshold");
