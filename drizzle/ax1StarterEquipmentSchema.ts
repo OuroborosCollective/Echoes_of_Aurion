@@ -14,7 +14,7 @@ export const aurionAx1StarterEquipmentReceipts = mysqlTable("aurionAx1StarterEqu
   contentSha256: varchar("contentSha256", { length: 64 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
-  uniqueIndex("aurionAx1StarterEquipmentReceipts_user_definition_uq").on(table.userId, table.definitionId),
+  uniqueIndex("aurionAx1StarterEquipmentReceipts_user_definition_source_uq").on(table.userId, table.definitionId, table.sourceRevision, table.sourceBlobSha),
   index("aurionAx1StarterEquipmentReceipts_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
