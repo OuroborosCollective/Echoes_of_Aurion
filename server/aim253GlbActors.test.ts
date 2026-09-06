@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { AnimatedGlbActor } from "../client/src/xaurion/core/AnimatedGlbActor";
+import { AnimatedGlbActor, GLB_RUN_THRESHOLD_METERS_PER_SECOND } from "../client/src/xaurion/core/AnimatedGlbActor";
 import { buildGlbImportPlan } from "./glbImportPlan";
 
 async function geometryAndRig(file: string) {
@@ -30,7 +30,7 @@ describe("owner-supplied Aurion actors", () => {
     expect(player.targetKey).toBe("starter_player");
     expect(smith.classification.animationNames).toEqual(["Idle", "ShopInteract"]);
   });
-  it("sizes and grounds the actual player, advances bone poses and switches walk/run/idle", async () => {
+  it("sizes and grounds the actual player, relaxes idle, runs at authoritative speed and keeps attacks compact", async () => {
     const gltf = await geometryAndRig("assets/characters/aurion-player-standard-animated.glb");
     const actor = new AnimatedGlbActor(gltf.scene, gltf.animations, 2);
     actor.group.updateMatrixWorld(true);
@@ -40,11 +40,22 @@ describe("owner-supplied Aurion actors", () => {
     const before = actor.evidence().bonePose;
     actor.update(0.2);
     expect(actor.evidence().bonePose).not.toBe(before);
-    actor.setLocomotion(2);
+
+    const upperArm = gltf.scene.getObjectByName("UpperArm_L") as THREE.Bone;
+    expect(upperArm?.isBone).toBe(true);
+    upperArm.updateWorldMatrix(true, false);
+    const idleArmDirection = new THREE.Vector3(0, 1, 0)
+      .applyQuaternion(upperArm.getWorldQuaternion(new THREE.Quaternion()))
+      .normalize();
+    expect(idleArmDirection.y).toBeLessThan(-0.75);
+
+    actor.setLocomotion(1.5);
     expect(actor.evidence().clip).toBe("Walk");
     const walking = actor.evidence().bonePose; actor.update(0.2);
     expect(actor.evidence().bonePose).not.toBe(walking);
-    actor.setLocomotion(6); expect(actor.evidence().clip).toBe("Run");
+    expect(GLB_RUN_THRESHOLD_METERS_PER_SECOND).toBeLessThan(3.4);
+    actor.setLocomotion(3.4); expect(actor.evidence().clip).toBe("Run");
+
     const scene = new THREE.Scene(), playerRoot = new THREE.Group(), avatarSlot = new THREE.Group();
     scene.add(playerRoot); playerRoot.add(avatarSlot); avatarSlot.add(actor.group);
     scene.updateMatrixWorld(true);
@@ -57,7 +68,10 @@ describe("owner-supplied Aurion actors", () => {
     }
     actor.setLocomotion(0); expect(actor.evidence().clip).toBe("Idle");
     actor.playOnce("attack"); expect(actor.evidence().clip).toBe("AttackCombo");
-    for (let i = 0; i < 80; i++) actor.update(0.1);
+    const attackPose = actor.evidence().bonePose;
+    actor.update(0.2);
+    expect(actor.evidence().bonePose).not.toBe(attackPose);
+    for (let i = 0; i < 6; i++) actor.update(0.1);
     expect(actor.evidence().clip).toBe("Idle");
     actor.dispose();
   });
