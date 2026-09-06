@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import { GROUP_RULESET, type GroupParty, type GroupTicket } from "../shared/groupInstanceProtocol";
 import { activityXpAwardExact } from "./aurionBalancingProtocol";
@@ -12,10 +12,12 @@ import {
   resolveCoupledMasteries,
   type ScopedMasteryEvent,
   type ScopedMasteryKey,
+  type ScopedMasteryState,
 } from "./scopedMasteryProtocol";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+const actorId = (userId: number) => `player:${userId}`;
 
 export type GroupCompletionMasteryPlan = Readonly<{
   userId: number;
@@ -35,55 +37,82 @@ function assertClearedInstance(party: GroupParty, ticket: GroupTicket) {
   ) throw new Error("GROUP_COMPLETION_EVIDENCE_REQUIRED");
 }
 
+function completionKeys(ticket: GroupTicket): readonly ScopedMasteryKey[] {
+  return Object.freeze([
+    masteryKeys.combat(ticket.dungeonId),
+    masteryKeys.action(`dungeon_completion:${ticket.dungeonId}`),
+  ] as const);
+}
+
+function boundedRepetition(value: string): number {
+  const exact = BigInt(value);
+  return exact > 1_000_000n ? 1_000_000 : Number(exact);
+}
+
 /**
- * v1 group instances are intentionally normalized to level one when the frozen
- * ticket is issued. Completion mastery therefore uses the existing exact level-one
- * dungeon-completion activity award and never reads a mutable player level, wall
- * clock, client reward, or a newer world snapshot.
+ * Builds mastery from the already-persisted exact mastery state. The frozen
+ * ticket owns dungeon identity and completion evidence; mutable profile level,
+ * wall clock and client reward values never enter the award.
+ *
+ * AIM-249's versioned dungeon-completion activity weighting is applied at each
+ * scope's current exact level. Prior confirmed completions drive its diminishing
+ * repetition curve, while the scoped-mastery event itself records the already
+ * reduced exact amount without applying a second repetition penalty.
  */
-export function buildGroupCompletionMasteryPlan(party: GroupParty, ticket: GroupTicket): readonly GroupCompletionMasteryPlan[] {
+export function buildGroupCompletionMasteryPlan(
+  party: GroupParty,
+  ticket: GroupTicket,
+  currentByUser: Readonly<Record<string, readonly ScopedMasteryState[]>> = {},
+): readonly GroupCompletionMasteryPlan[] {
   assertClearedInstance(party, ticket);
-  const amountExact = activityXpAwardExact({
-    levelExact: "1",
-    scope: "combat_action",
-    activity: "dungeon_completion",
-    repetitionStreak: 0,
-  });
   const activeDurationTicks = party.instanceRevision;
-  const distinctContextCount = Math.max(1, ticket.affixes.length);
-  const contextMetricsExact = Object.freeze({
-    completions: "1",
-    bosses: String(ticket.bosses.length),
-    affixes: String(ticket.affixes.length),
-  });
+  const distinctContextCount = Math.max(1, ticket.affixes.length + 1);
 
   return Object.freeze([...ticket.roster]
     .sort((left, right) => left.userId - right.userId)
     .map(member => {
-      const keys = Object.freeze([
-        masteryKeys.combat(ticket.dungeonId),
-        masteryKeys.action(`dungeon_completion:${ticket.dungeonId}`),
-      ] as const);
-      const events = Object.freeze(keys.map(key => Object.freeze({
-        receiptId: ticket.id,
-        idempotencyKey: groupHash({
-          ruleset: GROUP_RULESET,
-          ticketId: ticket.id,
-          userId: member.userId,
-          scopeKey: canonicalScopedMasteryKey(key),
-        }),
-        resolutionIndex: party.instanceRevision,
-        key,
-        amountExact,
-        useCountExact: "1",
-        contextMetricsExact,
-        serverValidated: true,
-        activeDurationTicks,
-        repetitionStreak: 0,
-        distinctContextCount,
-        ruleSetVersion: SCOPED_MASTERY_RULESET_VERSION,
-        contentVersion: GROUP_RULESET,
-      } satisfies ScopedMasteryEvent)));
+      const keys = completionKeys(ticket);
+      const current = currentByUser[String(member.userId)] ?? resolveCoupledMasteries({ actorId: actorId(member.userId), keys, events: [] });
+      const currentByKey = new Map(current.map(state => [canonicalScopedMasteryKey(state.key), state] as const));
+      if (currentByKey.size !== keys.length || keys.some(key => !currentByKey.has(canonicalScopedMasteryKey(key)))) throw new Error("GROUP_COMPLETION_MASTERY_STATE_INCOMPLETE");
+      const actionState = currentByKey.get(canonicalScopedMasteryKey(keys[1]!))!;
+      const priorCompletions = boundedRepetition(actionState.lifetimeUsesExact);
+      const contextMetricsExact = Object.freeze({
+        completions: "1",
+        prior_completions: String(priorCompletions),
+        bosses: String(ticket.bosses.length),
+        affixes: String(ticket.affixes.length),
+        [`variant_${ticket.variant}`]: "1",
+      });
+      const events = Object.freeze(keys.map(key => {
+        const state = currentByKey.get(canonicalScopedMasteryKey(key))!;
+        const amountExact = activityXpAwardExact({
+          levelExact: state.progression.levelExact,
+          scope: "combat_action",
+          activity: "dungeon_completion",
+          repetitionStreak: priorCompletions,
+        });
+        return Object.freeze({
+          receiptId: ticket.id,
+          idempotencyKey: groupHash({
+            ruleset: GROUP_RULESET,
+            ticketId: ticket.id,
+            userId: member.userId,
+            scopeKey: canonicalScopedMasteryKey(key),
+          }),
+          resolutionIndex: party.instanceRevision,
+          key,
+          amountExact,
+          useCountExact: "1",
+          contextMetricsExact,
+          serverValidated: true,
+          activeDurationTicks,
+          repetitionStreak: 0,
+          distinctContextCount,
+          ruleSetVersion: SCOPED_MASTERY_RULESET_VERSION,
+          contentVersion: GROUP_RULESET,
+        } satisfies ScopedMasteryEvent);
+      }));
       return Object.freeze({ userId: member.userId, keys, events });
     }));
 }
@@ -99,13 +128,27 @@ function parsePersistedEvent(row: typeof aurionScopedMasteryEvents.$inferSelect)
   return event;
 }
 
+async function currentCompletionMastery(tx: Transaction, userId: number, ticket: GroupTicket) {
+  const keys = completionKeys(ticket);
+  const scopeKeys = keys.map(canonicalScopedMasteryKey);
+  const historicalRows = await tx.select().from(aurionScopedMasteryEvents).where(and(
+    eq(aurionScopedMasteryEvents.userId, userId),
+    inArray(aurionScopedMasteryEvents.scopeKey, scopeKeys),
+  ));
+  const historicalEvents = historicalRows.map(parsePersistedEvent);
+  return resolveCoupledMasteries({ actorId: actorId(userId), keys, events: historicalEvents });
+}
+
 /**
  * Appends exactly two scoped mastery events per roster member in the caller's
  * existing group-command transaction. Any insert/readback failure therefore rolls
  * back the boss clear, party state, player revision and mastery evidence together.
  */
 export async function commitGroupCompletionMastery(tx: Transaction, party: GroupParty, ticket: GroupTicket) {
-  const plan = buildGroupCompletionMasteryPlan(party, ticket);
+  const currentByUser: Record<string, readonly ScopedMasteryState[]> = {};
+  for (const member of ticket.roster) currentByUser[String(member.userId)] = await currentCompletionMastery(tx, member.userId, ticket);
+  const plan = buildGroupCompletionMasteryPlan(party, ticket, currentByUser);
+
   for (const member of plan) {
     for (const event of member.events) {
       const scopeKey = canonicalScopedMasteryKey(event.key);
@@ -132,13 +175,7 @@ export async function commitGroupCompletionMastery(tx: Transaction, party: Group
       if (!expectedScopes.has(canonicalScopedMasteryKey(event.key))) throw new Error("GROUP_COMPLETION_MASTERY_SCOPE_MISMATCH");
     }
 
-    const historicalRows = await tx.select().from(aurionScopedMasteryEvents).where(and(
-      eq(aurionScopedMasteryEvents.userId, member.userId),
-    ));
-    const historicalEvents = historicalRows
-      .filter(row => expectedScopes.has(row.scopeKey))
-      .map(parsePersistedEvent);
-    const states = resolveCoupledMasteries({ actorId: String(member.userId), keys: member.keys, events: historicalEvents });
+    const states = await currentCompletionMastery(tx, member.userId, ticket);
     if (states.length !== member.keys.length || states.some(state => !state.appliedReceiptIds.includes(ticket.id))) {
       throw new Error("GROUP_COMPLETION_MASTERY_READBACK_FAILED");
     }
