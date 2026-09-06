@@ -25,6 +25,12 @@ export type WorldPresenceSink = {
   release(values: { connectionId: string }): Promise<unknown>;
 };
 
+/** Server-only slow-lane hook derived from the same authoritative 100-ms tick. */
+export type ZoneFixedTickSink = {
+  intervalTicks: number;
+  observe(values: { tick: number }): Promise<unknown>;
+};
+
 function closePolicyViolation(socket: WebSocket): void {
   socket.close(1008, "zone authorization rejected");
 }
@@ -42,12 +48,23 @@ function rejectZoneInput(socket: WebSocket, code: ZoneReject["code"]): void {
 }
 
 /** Adds `/v1/ws` to the existing HTTP server without altering tRPC or MCP routes. */
-export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry = new ZoneRegistry(), consumeTicket: ZoneTicketConsumer, worldPresence?: WorldPresenceSink) {
+export function registerZoneGateway(server: HttpServer, registry: ZoneRegistry = new ZoneRegistry(), consumeTicket: ZoneTicketConsumer, worldPresence?: WorldPresenceSink, fixedTick?: ZoneFixedTickSink) {
+  if (fixedTick && (!Number.isSafeInteger(fixedTick.intervalTicks) || fixedTick.intervalTicks < 1)) throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
   const presenceObservers = new Set<() => void>();
+  let gatewayTick = 0;
+  let fixedTickChain: Promise<void> = Promise.resolve();
   const tickTimer = setInterval(() => {
     registry.tick();
+    gatewayTick += 1;
     presenceObservers.forEach(observe => observe());
+    if (fixedTick && gatewayTick % fixedTick.intervalTicks === 0) {
+      const tick = gatewayTick;
+      const run = fixedTickChain.then(() => fixedTick.observe({ tick })).then(() => undefined);
+      fixedTickChain = run.catch(error => {
+        console.error("[Aurion Zone] Fixed-tick sink failed", error);
+      });
+    }
   }, ZONE_TICK_MS);
 
   server.on("upgrade", (request, socket, head) => {
