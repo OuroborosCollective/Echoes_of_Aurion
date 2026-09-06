@@ -6,18 +6,18 @@ import Home from "./Home";
 import { RealClientHarness } from "@/test/realClientHarness";
 
 describe("Home", () => {
-  it("priorisiert für Gäste Konto und Community statt Gameplay", () => {
+  it("prioritizes account/community and renders no gameplay for guests", () => {
     window.history.replaceState({}, "", "/");
     render(<RealClientHarness><Home /></RealClientHarness>);
-
     expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Konto erforderlich", { exact: true })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/i })).toBeNull();
+    expect(screen.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /AX1 OPEN WORLD STARTEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
     expect(screen.getByRole("button", { name: "GLB-Einreichung öffnen" })).toBeTruthy();
+    expect(screen.queryByText(/Markt|Crafting|Boss|Questgeber/i)).toBeNull();
   });
 
-  it("öffnet über den Konto-CTA ausschließlich den sicheren Authvertrag", async () => {
+  it("opens only the account authentication contract from the account CTA", async () => {
     const user = userEvent.setup();
     let openRequests = 0;
     const onOpen = () => { openRequests += 1; };
@@ -32,7 +32,7 @@ describe("Home", () => {
     }
   });
 
-  it("owns no AX1 return bridge or legacy gameplay request handler", () => {
+  it("owns neither AX1 return nor legacy gameplay action handlers", () => {
     render(<RealClientHarness><Home /></RealClientHarness>);
     let returns = 0;
     const returned = () => { returns += 1; };
