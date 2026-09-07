@@ -127,7 +127,7 @@ describe("GLB upload website runtime", () => {
     expect(body).toMatchObject({ fileName: "universal-female.glb", purpose: "npc-fallback" });
     expect(body).not.toHaveProperty("assetType");
     await waitFor(() => expect(screen.getByText("Im zweckgebundenen Katalog · kein automatisches Gameplay-Ziel")).toBeTruthy());
-    expect(screen.getByText("NPC-Fallback · niemals Spieler")).toBeTruthy();
+    expect(screen.getAllByText("NPC-Fallback · niemals Spieler").length).toBeGreaterThanOrEqual(2);
   });
 
   it("continues the batch when one file is invalid", async () => {
