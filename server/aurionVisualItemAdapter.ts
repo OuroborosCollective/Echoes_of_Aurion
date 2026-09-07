@@ -7,6 +7,7 @@ import {
   type VisualItemDescriptor,
 } from "../shared/visualItemProtocol";
 import {
+  AURION_LOOT_RULESET_VERSION,
   aurionAffixSlots,
   aurionEquipmentSlots,
   aurionItemCategories,
@@ -39,11 +40,34 @@ export const storedDeterministicLootResultSchema = z.object({
   deterministicHash: sha256Schema,
 }).strict();
 
+export function rederiveStoredDeterministicLootHash(loot: Omit<DeterministicLootResult, "deterministicHash">): string {
+  return digest(
+    AURION_LOOT_RULESET_VERSION,
+    loot.contextHash,
+    loot.itemDefinitionId,
+    loot.quality,
+    loot.itemLevelExact,
+    ...loot.affixes.flatMap(affix => [
+      affix.id,
+      affix.slot,
+      affix.groupId,
+      ...Object.entries(affix.stats)
+        .sort(([left], [right]) => textCompare(left, right))
+        .map(([stat, amount]) => `${stat}:${amount}`),
+    ]),
+    loot.setId ?? "none",
+    String(loot.itemPower),
+  );
+}
+
 export function parseStoredDeterministicLootResult(value: string): DeterministicLootResult {
   let parsed: unknown;
   try { parsed = JSON.parse(value); }
   catch { throw new Error("stored visual loot receipt JSON is invalid"); }
-  return storedDeterministicLootResultSchema.parse(parsed) as DeterministicLootResult;
+  const loot = storedDeterministicLootResultSchema.parse(parsed) as DeterministicLootResult;
+  const derived = rederiveStoredDeterministicLootHash(loot);
+  if (derived !== loot.deterministicHash) throw new Error("stored visual loot deterministic hash mismatch");
+  return loot;
 }
 
 export type ConfirmedVisualItemInput = Readonly<{
