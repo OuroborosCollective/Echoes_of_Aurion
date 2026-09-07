@@ -25,10 +25,11 @@ const viewports = [
 ] as const;
 
 async function equipRealV2Item(userId: number, key: string) {
+  const serverSeedDigest = createHash("sha256").update(`aim286-browser-seed:${key}`).digest("hex");
   const accepted = await recordValidatedExpeditionResult({
     userId,
     expeditionKey: `aim286-browser:${key}:expedition`,
-    seedDigest: "f".repeat(64),
+    seedDigest: serverSeedDigest,
     resultDigest: createHash("sha256").update(`aim286-browser-result:${key}`).digest("hex"),
     confirmedByUserId: userId,
     idempotencyKey: `aim286-browser:${key}:result`,
@@ -44,17 +45,17 @@ async function equipRealV2Item(userId: number, key: string) {
     zoneLevelExact: "42",
     monsterLevelExact: "42",
     luckBps: 0,
-    serverSeedDigest: createHash("sha256").update(`aim286-browser-seed:${key}`).digest("hex"),
+    serverSeedDigest,
   } as const;
   let resolutionIndex = -1;
   for (let candidate = 0; candidate < 256; candidate += 1) {
     const resolved = resolveDeterministicLoot({ context: { ...baseContext, resolutionIndex: candidate }, ...aurionLootCatalogV2 });
-    if (["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet"].includes(resolved.equipmentSlot ?? "")) {
+    if (resolved.equipmentSlot === "main_hand") {
       resolutionIndex = candidate;
       break;
     }
   }
-  if (resolutionIndex < 0) throw new Error("AIM286_BROWSER_EQUIPMENT_FIXTURE_NOT_FOUND");
+  if (resolutionIndex < 0) throw new Error("AIM286_BROWSER_MAIN_HAND_FIXTURE_NOT_FOUND");
   const drop = await createValidatedAurionLootDropV2({
     userId,
     context: { ...baseContext, resolutionIndex },
@@ -63,9 +64,9 @@ async function equipRealV2Item(userId: number, key: string) {
   const ref = { id: drop.item.id, version: "aurion_v2" as const };
   let ui = await readPlayerUi(userId);
   const item = ui.items.find(candidate => candidate.id === ref.id && candidate.version === ref.version);
-  if (!item?.slot) throw new Error("AIM286_BROWSER_ITEM_SLOT_MISSING");
+  if (item?.slot !== "main_hand") throw new Error("AIM286_BROWSER_MAIN_HAND_ITEM_MISSING");
   if (item.status === "pending_pickup") ui = await collectPlayerLoot(userId, ref);
-  const current = ui.equipment.find(binding => binding.slot === item.slot);
+  const current = ui.equipment.find(binding => binding.slot === "main_hand");
   await equipPlayerItem(userId, ref, current ? { id: current.id, version: current.version } : null);
   return drop;
 }
