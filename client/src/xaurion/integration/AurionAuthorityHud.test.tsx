@@ -12,6 +12,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
 } }));
 vi.mock("../components/VirtualJoystick", () => ({ VirtualJoystick: () => null }));
 const confirmed = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "warden" }, capabilities: { canChooseClass: false, classUnlockLevel: 36 }, weaponMasteries: [], inventory: [] };
+const uiState = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, hotbar: ["1", "2", "3", "4", "5"] }, items: [], equipment: [] };
 const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onAction={fixtures.onAction} />);
 describe("server-backed Aurion HUD", () => {
   beforeEach(() => { fixtures.ui.data = undefined; fixtures.ui.isError = false; fixtures.ui.isStale = false; fixtures.player.data = undefined; fixtures.player.isError = false; fixtures.player.isStale = false; fixtures.standing.data = undefined; fixtures.standing.isStale = false; fixtures.standing.isError = false; vi.clearAllMocks(); fixtures.player.refetch.mockResolvedValue({ isError: false }); fixtures.other.refetch.mockResolvedValue({ isError: false }); fixtures.ui.refetch.mockImplementation(async () => ({ data: fixtures.ui.data, isError: false })); fixtures.mutate.mockResolvedValue({}); });
@@ -56,6 +57,17 @@ describe("server-backed Aurion HUD", () => {
     expect(choice.closest("fieldset")?.disabled).toBe(true);
     fireEvent.click(choice);
     expect(fixtures.mutate).not.toHaveBeenCalled();
+  });
+  it("keeps a live inventory setting actionable when only the unrelated player readback is stale", async () => {
+    fixtures.player.data = confirmed; fixtures.player.isStale = true; fixtures.ui.data = uiState;
+    mount(); fireEvent.click(screen.getByRole("button", { name: "Inventar" }));
+    const toggle = screen.getByRole("button", { name: "Auto-Loot AN", exact: true }) as HTMLButtonElement;
+    expect(toggle.disabled).toBe(false);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(fixtures.mutate).toHaveBeenCalledTimes(1));
+    expect(fixtures.mutate).toHaveBeenCalledWith(expect.objectContaining({ revision: 0, autoLoot: false }));
+    await waitFor(() => expect(fixtures.ui.refetch).toHaveBeenCalled());
+    expect(fixtures.player.refetch).toHaveBeenCalled();
   });
   it("shows confirmed NPC standing and labels stale relationship data", () => {
     fixtures.standing.data = { userId: 7, social: [], entries: [{ kind: "npc_relation", id: "lyra", score: 5, tier: "NEUTRAL", sourceCount: 1, xpExact: "4", levelExact: "1" }] };
