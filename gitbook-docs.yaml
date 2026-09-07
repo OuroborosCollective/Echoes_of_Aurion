@@ -2,10 +2,28 @@ $schema: https://api.gitbook.com/gitbook-docs.yaml
 site:
   title: Echoes of Aurion
   structure:
-    - type: space
-      key: space-echoes-of-aurion
+    - type: section
+      key: section-1
       title: Echoes of Aurion
-      path: aurion
+      path: echoes-of-aurion
       default: true
-      content:
-        directory: ./
+      children:
+        - type: space
+          key: space-echoes-of-aurion
+          title: Echoes of Aurion
+          path: aurion
+          default: true
+          content:
+            directory: ./
+    - type: section
+      key: section-2
+      title: Echoes_of_Aurion Landing
+      path: echoes_of_aurion-landing
+      children:
+        - type: space
+          key: space-1
+          title: Landing Page
+          path: landing-page
+          default: true
+          content:
+            directory: ./echoes_of_aurion-landing/landing-page
