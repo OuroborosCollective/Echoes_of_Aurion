@@ -18,6 +18,9 @@ on:
       - "client/src/xaurion/integration/EquipmentCatalogProjection.test.ts"
       - "client/src/xaurion/core/VisualItem*.ts"
       - "client/src/xaurion/core/AnimatedGlbActor.ts"
+      - "e2e/aim286.visualItemRuntime.spec.ts"
+      - "playwright.aim286.config.ts"
+      - "assets/characters/aurion-player-standard-animated.glb"
       - "package.json"
       - "pnpm-lock.yaml"
   workflow_dispatch:
@@ -56,6 +59,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -94,3 +98,99 @@ jobs:
 
       - name: Build production runtime
         run: pnpm build
+
+  browser-v2-equipment:
+    name: Real V2 equipment browser (${{ matrix.viewport }})
+    needs: visual-item-runtime
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [phone, tablet, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_browser_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
+      AURION_UI_E2E: '1'
+      AURION_E2E_ISOLATED: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-ci-aim286-browser-key-never-production
+      VITE_APP_ID: aurion-isolated-aim286-browser-test
+      AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-aim286-browser-assets
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+
+      - name: Apply complete migration journal to real browser MariaDB
+        run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+
+      - name: Build exact production application
+        run: pnpm build
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start built application against isolated MariaDB
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-aim286-browser-server.log 2>&1 &
+          echo $! >/tmp/aurion-aim286-browser-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aurion-aim286-browser-server.log
+          exit 1
+
+      - name: Prove V2 item in built browser runtime
+        env:
+          AIM286_VIEWPORT: ${{ matrix.viewport }}
+        run: pnpm exec playwright test --config=playwright.aim286.config.ts --grep "on $AIM286_VIEWPORT$"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim286-v2-equipment-${{ matrix.viewport }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-aim286-report/
+            /tmp/aurion-aim286-browser-server.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop isolated application
+        if: always()
+        run: |
+          if test -f /tmp/aurion-aim286-browser-server.pid; then
+            kill "$(cat /tmp/aurion-aim286-browser-server.pid)" 2>/dev/null || true
+          fi
