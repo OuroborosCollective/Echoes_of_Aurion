@@ -1,0 +1,62 @@
+name: AIM-281 Visual Item Contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim281-visual-item-contract.yml"
+      - "shared/visualItemProtocol.ts"
+      - "server/aurionVisualItemAdapter.ts"
+      - "server/aurionVisualItemAdapter.test.ts"
+      - "server/aurionLootProtocol.ts"
+      - "server/aurionLootProtocol.test.ts"
+      - "server/aurionLootCatalog.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-281-visual-item-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-item-contract:
+    name: Loot V2 visual boundary, typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Run visual authority and loot determinism regressions
+        run: >-
+          pnpm exec vitest run
+          server/aurionVisualItemAdapter.test.ts
+          server/aurionLootProtocol.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build production runtime
+        run: pnpm build
