@@ -8,6 +8,7 @@ import {
   type ConfirmedEquipmentVisualReadback,
 } from "../shared/confirmedEquipmentVisualProtocol";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
+import { visualItemDescriptorSchema } from "../shared/visualItemProtocol";
 import { aurionLootBaseCatalog } from "./aurionLootCatalog";
 import { parseStoredDeterministicLootResult, projectConfirmedLootToVisualItem } from "./aurionVisualItemAdapter";
 import { getDb } from "./db";
@@ -85,6 +86,17 @@ export function projectConfirmedEquipmentVisualReadback(
     const rowAffixes = parseJson(row.affixesJson, "EQUIPMENT_VISUAL_V2_AFFIX_JSON_INVALID");
     if (canonicalJson(rowAffixes) !== canonicalJson(resolved.affixes)) throw new Error("EQUIPMENT_VISUAL_V2_AFFIX_MISMATCH");
 
+    const immutableDescriptor = projectConfirmedLootToVisualItem({
+      loot: resolved,
+      baseDefinition: definition,
+      lootReceiptId: receipt.id,
+      visualEventIndex: 0,
+      visual: null,
+    });
+    // The internal compiler contract is deeply readonly. Re-parse at the HTTP
+    // boundary so the shared Zod transport type has its normal mutable-array shape
+    // without weakening the immutable core object.
+    const visualDescriptor = visualItemDescriptorSchema.parse(immutableDescriptor);
     equipment.push({
       uiSlot: binding.slot,
       equipmentSlot,
@@ -92,13 +104,7 @@ export function projectConfirmedEquipmentVisualReadback(
       version: "aurion_v2",
       definition: uiItem.definition,
       receiptId: uiItem.receiptId,
-      visualDescriptor: projectConfirmedLootToVisualItem({
-        loot: resolved,
-        baseDefinition: definition,
-        lootReceiptId: receipt.id,
-        visualEventIndex: 0,
-        visual: null,
-      }),
+      visualDescriptor,
     });
   }
 
