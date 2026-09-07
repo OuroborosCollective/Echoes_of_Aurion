@@ -19,12 +19,7 @@ export const AX1_PLAYER_BASIC_MELEE_RANGE_FIXED = 4_500 as const;
 export type Ax1MobProjection = Readonly<{ maxHealth: number; attackRangeFixed: number; attackCooldownTicks: number }>;
 export type AurionPersistedClass = "unbound" | "vanguard" | "seer" | "warden";
 
-const baseHealthByClass: Readonly<Record<AurionPersistedClass, number>> = Object.freeze({
-  unbound: 520,
-  vanguard: 520,
-  seer: 360,
-  warden: 420,
-});
+const CLASSLESS_BASE_HEALTH = 520;
 
 const rangeMeters: Readonly<Record<ZoneMobArchetype, number>> = Object.freeze({
   clockwork_stalker: 2.8,
@@ -45,7 +40,8 @@ const cooldownTicks: Readonly<Record<ZoneMobArchetype, number>> = Object.freeze(
 });
 
 export function ax1PlayerBaseMaxHealth(selectedClass: AurionPersistedClass, hasStarterBlade: boolean): number {
-  return baseHealthByClass[selectedClass] + (hasStarterBlade ? AX1_STARTER_BLADE_MAX_HP_BONUS : 0);
+  void selectedClass;
+  return CLASSLESS_BASE_HEALTH + (hasStarterBlade ? AX1_STARTER_BLADE_MAX_HP_BONUS : 0);
 }
 
 export function ax1MobMaxHealth(archetype: ZoneMobArchetype, level: number): number {

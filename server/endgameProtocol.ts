@@ -20,25 +20,28 @@ export function isServerEvidenceDigest(value: string): boolean {
   return /^[a-f0-9]{64}$/i.test(value);
 }
 
-export const CLASS_UNLOCK_LEVEL = 36;
-export const MAX_PLAYER_LEVEL = 50;
+/** Legacy metadata only; classes never authorize gameplay. */
+export const CLASS_UNLOCK_LEVEL = Number.POSITIVE_INFINITY;
 
 export function xpRequiredForNextLevel(level: number): number {
-  if (!Number.isInteger(level) || level < 1 || level >= MAX_PLAYER_LEVEL) return 0;
+  if (!Number.isSafeInteger(level) || level < 1) return 0;
   return 100 + 18 * level + 4 * level * level;
 }
 
 export function levelFromTotalXp(totalXp: number): number {
-  if (!Number.isInteger(totalXp) || totalXp < 0) return 1;
-  let remaining = totalXp;
-  let level = 1;
-  while (level < MAX_PLAYER_LEVEL) {
-    const requirement = xpRequiredForNextLevel(level);
-    if (remaining < requirement) break;
-    remaining -= requirement;
-    level += 1;
+  if (!Number.isSafeInteger(totalXp) || totalXp < 0) return 1;
+  const cumulativeXpThrough = (level: number) =>
+    (4 * level * (level + 1) * (2 * level + 1)) / 6 +
+    (18 * level * (level + 1)) / 2 + 100 * level;
+  let low = 1;
+  let high = 2;
+  while (cumulativeXpThrough(high - 1) <= totalXp && high < Number.MAX_SAFE_INTEGER / 2) high *= 2;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (cumulativeXpThrough(middle - 1) <= totalXp) low = middle;
+    else high = middle - 1;
   }
-  return level;
+  return low;
 }
 
 export function isPlayerClass(value: string): value is PlayerClass {
@@ -46,7 +49,9 @@ export function isPlayerClass(value: string): value is PlayerClass {
 }
 
 export function canChooseClass(level: number, currentClass: "unbound" | PlayerClass): boolean {
-  return Number.isInteger(level) && level >= CLASS_UNLOCK_LEVEL && currentClass === "unbound";
+  void level;
+  void currentClass;
+  return false;
 }
 
 /**

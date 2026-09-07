@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { canChooseClass, CLASS_UNLOCK_LEVEL, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
+import { canChooseClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, resolveLoot, rollLootQuality, setBonusForOwnedPieces, xpRequiredForNextLevel } from "./endgameProtocol";
 
 describe("endgame protocol", () => {
-  it("keeps the XP requirement monotone through the class unlock", () => {
+  it("keeps the XP requirement monotone without a level cap", () => {
     expect(xpRequiredForNextLevel(35)).toBe(5630);
-    expect(xpRequiredForNextLevel(CLASS_UNLOCK_LEVEL)).toBe(5932);
+    expect(xpRequiredForNextLevel(36)).toBe(5932);
     expect(xpRequiredForNextLevel(36)).toBeGreaterThan(xpRequiredForNextLevel(35));
+    expect(xpRequiredForNextLevel(50_000)).toBeGreaterThan(0);
   });
 
-  it("allows exactly one class selection only at the server unlock level", () => {
+  it("keeps legacy class selection disabled because progression is classless", () => {
     expect(canChooseClass(35, "unbound")).toBe(false);
-    expect(canChooseClass(36, "unbound")).toBe(true);
     expect(canChooseClass(36, "seer")).toBe(false);
   });
 
@@ -24,6 +24,7 @@ describe("endgame protocol", () => {
   it("never decreases derived level as confirmed XP grows", () => {
     expect(levelFromTotalXp(0)).toBe(1);
     expect(levelFromTotalXp(10_000)).toBeGreaterThanOrEqual(levelFromTotalXp(5_000));
+    expect(levelFromTotalXp(Number.MAX_SAFE_INTEGER)).toBeGreaterThan(50);
   });
 
   it("resolves server-owned treasure entries and affixes rather than accepting a browser payload", () => {
