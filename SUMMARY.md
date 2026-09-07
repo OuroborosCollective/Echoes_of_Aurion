@@ -1,6 +1,6 @@
 # Table of contents
 
-* [Echoes of Aurion](README.md)
+* [Aarelogic · Echoes of Aurion](README.md)
 * [Architektur-Ownership: Aurion · AX1 · WASD](ARCHITECTURE_OWNERSHIP.md)
 * [Technische Dokumentation](docs/README.md)
   * [Account-zentrierter Aurion-Einstieg](docs/account-first-entry.md)
