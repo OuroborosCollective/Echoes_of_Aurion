@@ -19,6 +19,7 @@ type ProjectedNpc = {
 };
 
 const NPC_FALLBACK_LOW_LOD_DISTANCE_METERS = 42;
+const NPC_VERY_FAR_PROXY_CAPACITY = 256;
 function near(left: number, right: number): boolean { return Math.abs(left - right) <= 0.01; }
 
 /**
@@ -50,17 +51,29 @@ export class NpcFallbackProjection {
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
   private readonly equipment: EquipmentCatalogProjection;
+  readonly farProxyMesh: THREE.InstancedMesh;
+  private readonly farProxyGeometry = new THREE.CapsuleGeometry(.28, 1, 2, 4);
+  private readonly farProxyMaterial = new THREE.MeshStandardMaterial({ color: 0xb7a56b, roughness: .82 });
+  private readonly proxyPosition = new THREE.Vector3();
+  private readonly proxyMatrix = new THREE.Matrix4();
   private disposed = false;
   private refreshBusy = false;
   private lastRefreshTick = -150;
   private lodCounts: ActorLodCounts = emptyActorLodCounts();
   private mixerUpdatesLastFrame = 0;
   private mixerUpdatesTotal = 0;
+  private farProxyCount = 0;
+  private farProxyOverflow = 0;
 
   constructor(private readonly engine: MMOEngine) {
     this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
     this.remotePublic = new RemotePublicAppearanceProjection(engine);
     this.equipment = new EquipmentCatalogProjection(engine);
+    this.farProxyMesh = new THREE.InstancedMesh(this.farProxyGeometry, this.farProxyMaterial, NPC_VERY_FAR_PROXY_CAPACITY);
+    this.farProxyMesh.name = "aurion-npc-very-far-proxies";
+    this.farProxyMesh.count = 0;
+    this.farProxyMesh.frustumCulled = false;
+    engine.scene.add(this.farProxyMesh);
     void this.refreshCatalog();
   }
 
@@ -124,9 +137,11 @@ export class NpcFallbackProjection {
       actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, variantKey: selection.variantKey, lod: selection.lod, source: "catalog" });
       currentVisual.group.add(actor.group);
       const band = actorLodBand(this.distanceToCamera(npc));
-      const useProceduralProxy = band === "very_far";
-      actor.group.visible = !useProceduralProxy;
-      currentVisual.body.forEach(mesh => { mesh.visible = useProceduralProxy; });
+      const veryFar = band === "very_far";
+      actor.group.visible = !veryFar;
+      // Keep the old cheap body visible until the next update has actually
+      // placed this NPC into the shared instanced proxy. No actor vanishes.
+      currentVisual.body.forEach(mesh => { mesh.visible = veryFar; });
       this.projected.set(npc.id, {
         sha256: selection.entry.sha256,
         actor,
@@ -141,11 +156,40 @@ export class NpcFallbackProjection {
     }
   }
 
+  private projectVeryFarInstances(candidates: readonly ProjectedNpc[]): void {
+    let count = 0;
+    let overflow = 0;
+    for (const projected of candidates) {
+      if (count >= NPC_VERY_FAR_PROXY_CAPACITY) {
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+        overflow += 1;
+        continue;
+      }
+      const parent = projected.actor.group.parent;
+      if (!parent) {
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+        overflow += 1;
+        continue;
+      }
+      parent.updateWorldMatrix(true, false);
+      parent.getWorldPosition(this.proxyPosition);
+      this.proxyMatrix.makeTranslation(this.proxyPosition.x, this.proxyPosition.y + .8, this.proxyPosition.z);
+      this.farProxyMesh.setMatrixAt(count, this.proxyMatrix);
+      projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+      count += 1;
+    }
+    this.farProxyMesh.count = count;
+    this.farProxyMesh.instanceMatrix.needsUpdate = true;
+    this.farProxyCount = count;
+    this.farProxyOverflow = overflow;
+  }
+
   update(delta: number, logicalTick: number): void {
     if (this.disposed) return;
     const liveNpc = new Map(this.engine.npcs.map(npc => [npc.id, npc] as const));
     const counts = { near: 0, mid: 0, far: 0, very_far: 0 } satisfies Record<ActorLodBand, number>;
     const frameDelta = Number.isFinite(delta) && delta > 0 ? Math.min(delta, .25) : 0;
+    const veryFarCandidates: ProjectedNpc[] = [];
     let mixerUpdates = 0;
 
     for (const [npcId, projected] of this.projected) {
@@ -154,10 +198,17 @@ export class NpcFallbackProjection {
       const band = actorLodBand(this.distanceToCamera(npc));
       counts[band] += 1;
       projected.lod = band;
-      const useProceduralProxy = band === "very_far";
-      projected.actor.group.visible = !useProceduralProxy;
-      projected.proceduralMeshes.forEach(mesh => { mesh.visible = useProceduralProxy; });
-      if (useProceduralProxy || !actorUsesSkinnedVisual(band)) {
+      if (band === "very_far") {
+        projected.actor.group.visible = false;
+        projected.accumulatedAnimationDelta = 0;
+        veryFarCandidates.push(projected);
+        continue;
+      }
+
+      projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+      projected.actor.group.visible = true;
+      if (!actorUsesSkinnedVisual(band)) {
+        // Far keeps the already-selected low-LOD GLB as a static idle visual.
         projected.accumulatedAnimationDelta = 0;
         continue;
       }
@@ -169,6 +220,7 @@ export class NpcFallbackProjection {
       }
     }
 
+    this.projectVeryFarInstances(veryFarCandidates);
     this.lodCounts = Object.freeze({ ...counts });
     this.mixerUpdatesLastFrame = mixerUpdates;
     this.mixerUpdatesTotal += mixerUpdates;
@@ -194,12 +246,12 @@ export class NpcFallbackProjection {
   crowdEvidence() {
     const activeSkinnedActors = [...this.projected.values()].filter(projected => projected.actor.group.visible && actorUsesSkinnedVisual(projected.lod)).length;
     const staticGlbActors = [...this.projected.values()].filter(projected => projected.actor.group.visible && projected.lod === "far").length;
-    const proceduralProxies = [...this.projected.values()].filter(projected => projected.lod === "very_far").length;
     return Object.freeze({
       projectedNpcs: this.projected.size,
       activeSkinnedActors,
       staticGlbActors,
-      proceduralProxies,
+      instancedVeryFarProxies: this.farProxyCount,
+      proxyOverflowFallbacks: this.farProxyOverflow,
       lod: this.lodCounts,
       mixerUpdatesLastFrame: this.mixerUpdatesLastFrame,
       mixerUpdatesTotal: this.mixerUpdatesTotal,
@@ -218,5 +270,9 @@ export class NpcFallbackProjection {
     this.uploadedWorld.dispose();
     for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);
     this.pending.clear();
+    this.engine.scene.remove(this.farProxyMesh);
+    this.farProxyGeometry.dispose();
+    this.farProxyMaterial.dispose();
+    this.farProxyMesh.dispose();
   }
 }
