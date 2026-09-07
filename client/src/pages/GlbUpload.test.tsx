@@ -30,6 +30,8 @@ function serverReadback(fileName: string, purpose: "auto" | "npc-fallback" = "au
       skinCount: 1,
       socketCount: isPlayer ? 14 : 0,
       lod: null,
+      equipmentSlot: null,
+      worldFamily: null,
     },
   };
 }
@@ -62,6 +64,16 @@ describe("GLB upload website runtime", () => {
     vi.unstubAllGlobals();
   });
 
+  it("provides a dedicated touch-capable vertical scroll surface for the long intake page", async () => {
+    mockSuccessfulFetch();
+    render(<GlbUpload />);
+    const region = await screen.findByTestId("glb-upload-scroll-region");
+    expect(region.className).toContain("overflow-y-auto");
+    expect(region.className).toContain("touch-pan-y");
+    expect(region.className).toContain("overscroll-y-contain");
+    expect(region.getAttribute("tabindex")).toBe("0");
+  });
+
   it("uploads multiple GLBs sequentially without browser-authored asset types and renders each server readback", async () => {
     const fetchMock = mockSuccessfulFetch();
     render(<GlbUpload />);
@@ -92,7 +104,7 @@ describe("GLB upload website runtime", () => {
     expect(firstBody).toMatchObject({ displayName: "aurion player standard", fileName: "aurion-player-standard.glb" });
     expect(secondBody).toMatchObject({ displayName: "starter spider", fileName: "starter-spider.glb" });
 
-    await waitFor(() => expect(screen.getByText("2/2 Dateien wurden angenommen. Jede Datei besitzt einen eigenen serverseitigen Klassifikationsnachweis.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("2/2 Dateien wurden angenommen.")).toBeTruthy());
     expect(screen.getByText("aurion-player-standard.glb")).toBeTruthy();
     expect(screen.getByText("starter-spider.glb")).toBeTruthy();
     expect(screen.getByText("character")).toBeTruthy();
@@ -107,15 +119,15 @@ describe("GLB upload website runtime", () => {
     await waitFor(() => expect(input?.disabled).toBe(false));
     expect(purpose?.value).toBe("auto");
     fireEvent.change(purpose!, { target: { value: "npc-fallback" } });
-    expect(screen.getByText("Nur NPC-Fallback · niemals Spieler")).toBeTruthy();
+    expect(screen.getByText("NPC-Fallback · niemals Spieler")).toBeTruthy();
     fireEvent.change(input!, { target: { files: [glbFile("universal-female.glb")] } });
 
     await waitFor(() => expect(fetchMock.mock.calls.filter(call => call[1]?.body)).toHaveLength(1));
     const body = JSON.parse(String(fetchMock.mock.calls.find(call => call[1]?.body)?.[1]?.body));
     expect(body).toMatchObject({ fileName: "universal-female.glb", purpose: "npc-fallback" });
     expect(body).not.toHaveProperty("assetType");
-    await waitFor(() => expect(screen.getByText("Im begrenzten NPC-Fallback-Pool · kein Spielerziel")).toBeTruthy());
-    expect(screen.getByText("NPC-Fallback")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Im zweckgebundenen Katalog · kein automatisches Gameplay-Ziel")).toBeTruthy());
+    expect(screen.getByText("NPC-Fallback · niemals Spieler")).toBeTruthy();
   });
 
   it("continues the batch when one file is invalid", async () => {
