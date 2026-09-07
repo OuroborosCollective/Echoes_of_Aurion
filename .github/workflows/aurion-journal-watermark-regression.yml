@@ -6,6 +6,8 @@ on:
       - "scripts/apply-aurion-production-schema.ts"
       - "scripts/build-aurion-production-apply-artifact.mjs"
       - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
+      - "server/aurionProductionSchemaApplyWorkflow.test.ts"
+      - ".github/workflows/aurion-production-schema-apply.yml"
       - "drizzle/**"
       - ".github/workflows/aurion-journal-watermark-regression.yml"
   push:
@@ -14,6 +16,8 @@ on:
       - "scripts/apply-aurion-production-schema.ts"
       - "scripts/build-aurion-production-apply-artifact.mjs"
       - "server/aurionProductionSchemaApplyDockerRunner.test.ts"
+      - "server/aurionProductionSchemaApplyWorkflow.test.ts"
+      - ".github/workflows/aurion-production-schema-apply.yml"
       - "drizzle/**"
       - ".github/workflows/aurion-journal-watermark-regression.yml"
 
@@ -53,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm check
-          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts
+          pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionProductionSchemaApplyWorkflow.test.ts
 
       - name: Start isolated MariaDB
         run: |
