@@ -73,6 +73,8 @@ export const glbCatalogEntrySchema = z.object({
   subcategory: z.string().max(64).nullable().default(null),
   equipmentSlot: z.enum(glbEquipmentSlots).nullable().default(null),
 });
+export type GlbCatalogEntry = z.infer<typeof glbCatalogEntrySchema>;
+
 export const glbRuntimeCatalogSchema = z.object({
   version: z.literal(GLB_IMPORT_VERSION),
   revision: z.string().regex(/^[a-f0-9]{64}$/),

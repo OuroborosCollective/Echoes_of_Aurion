@@ -7,7 +7,8 @@ import { authenticateAdminGlbBearer } from "./adminMcp";
 import { glbImportStore } from "./glbImportStore";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { checkGlbStorage } from "./glbFileStore";
-import { glbImportPurposes, type GlbImportPurpose } from "../shared/glbImportContract";
+import { glbImportPurposes, type GlbEquipmentSlot, type GlbImportPurpose, type GlbRuntimeCatalog } from "../shared/glbImportContract";
+import { readPlayerUi } from "./playerUiPersistence";
 import { z } from "zod";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
@@ -19,6 +20,17 @@ type GlbSmartUploadDependencies = Readonly<{
   authenticate: (request: Request) => Promise<AuthenticatedUploader | null>;
   uploadAsset: UploadAsset;
 }>;
+
+const uiEquipmentVisualSlot = Object.freeze({
+  main_hand: "weapon",
+  off_hand: "shield",
+  focus: "shield",
+  head: "helmet",
+  chest: "chest",
+  hands: "arms",
+  legs: "legs",
+  feet: "boots",
+} satisfies Partial<Record<string, GlbEquipmentSlot>>);
 
 function defaultDependencies(): GlbSmartUploadDependencies {
   return {
@@ -69,6 +81,38 @@ function validGlbFileName(value: unknown): value is string {
 function parsePurpose(value: unknown): GlbImportPurpose | null {
   if (value === undefined) return "auto";
   return typeof value === "string" && (glbImportPurposes as readonly string[]).includes(value) ? value as GlbImportPurpose : null;
+}
+
+export function publicPlayerCharacterEntries(catalog: GlbRuntimeCatalog) {
+  return Object.freeze(catalog.entries
+    .filter(entry => entry.purpose === "player-public" && entry.assetType === "character" && entry.targetKey === null)
+    .slice()
+    .sort((left, right) => left.assetId.localeCompare(right.assetId) || left.sha256.localeCompare(right.sha256)));
+}
+
+export function parseRequestedPresenceUserIds(value: unknown): readonly number[] {
+  if (typeof value !== "string" || value.length < 1 || value.length > 1400) return Object.freeze([]);
+  const ids = Array.from(new Set(value.split(",").map(part => Number(part)).filter(id => Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647))).sort((a, b) => a - b);
+  if (ids.length > 128) throw new Error("GLB_PRESENCE_QUERY_LIMIT");
+  return Object.freeze(ids);
+}
+
+export function projectConfirmedEquipmentVisuals(ui: Awaited<ReturnType<typeof readPlayerUi>>) {
+  const items = new Map(ui.items.map(item => [`${item.version}:${item.id}`, item] as const));
+  const equipment = ui.equipment.flatMap(binding => {
+    const equipmentSlot = uiEquipmentVisualSlot[binding.slot as keyof typeof uiEquipmentVisualSlot] ?? null;
+    const item = items.get(`${binding.version}:${binding.id}`);
+    if (!equipmentSlot || !item || item.status !== "equipped") return [];
+    return [Object.freeze({
+      uiSlot: binding.slot,
+      equipmentSlot,
+      itemId: binding.id,
+      version: binding.version,
+      definition: item.definition,
+      receiptId: item.receiptId,
+    })];
+  }).sort((left, right) => left.equipmentSlot.localeCompare(right.equipmentSlot) || left.itemId.localeCompare(right.itemId));
+  return Object.freeze({ version: ui.version, userId: ui.userId, equipment: Object.freeze(equipment) });
 }
 
 export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependencies = defaultDependencies()) {
@@ -148,6 +192,22 @@ export function registerGlbSmartUpload(app: Express): void {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await operation(request, user)); }
     catch (error) { const code = error instanceof Error && /^GLB_[A-Z_]+$/.test(error.message) ? error.message : "GLB_OPERATION_FAILED"; response.status(code.includes("CHANGED") || code.includes("BUSY") ? 409 : 422).json({ error: code }); }
   };
+  const playerRoute = (operation: (request: Request, user: AuthenticatedUploader) => Promise<unknown>) => async (request: Request, response: Response) => {
+    let rawUser: Awaited<ReturnType<typeof sdk.authenticateRequest>>;
+    try { rawUser = await sdk.authenticateRequest(request); }
+    catch { response.status(401).json({ error: "GLB_PLAYER_AUTHENTICATION_REQUIRED" }); return; }
+    if (!rawUser) { response.status(401).json({ error: "GLB_PLAYER_AUTHENTICATION_REQUIRED" }); return; }
+    const user: AuthenticatedUploader = { id: rawUser.id, role: rawUser.role };
+    try {
+      response.setHeader("Cache-Control", "no-store");
+      response.json(await operation(request, user));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GLB_PLAYER_OPERATION_FAILED";
+      const code = /^GLB_[A-Z_]+$/.test(message) || message === "CHARACTER_BINDING_IMMUTABLE" ? message : "GLB_PLAYER_OPERATION_FAILED";
+      response.status(code === "CHARACTER_BINDING_IMMUTABLE" ? 409 : 422).json({ error: code });
+    }
+  };
+
   app.post("/api/admin/glb-import/agent-session", adminRoute(async (request, user) => {
     if (request.header("authorization")) throw new Error("GLB_BROWSER_LOGIN_REQUIRED");
     if ((await db.getUserById(user.id))?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
@@ -163,6 +223,39 @@ export function registerGlbSmartUpload(app: Express): void {
     return glbImportStore().ingest(user.id, { ...input, purpose: input.purpose ?? "auto" });
   }));
   app.post("/api/admin/glb-import/assign", adminRoute(async (request, user) => glbImportStore().assign(user.id, z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }).strict().parse(request.body))));
+
+  app.get("/api/game/public-player-characters", playerRoute(async (_request, user) => {
+    const catalog = await glbImportStore().catalog();
+    const selected = await db.getPlayerCharacterAppearance(user.id);
+    return {
+      version: catalog.version,
+      revision: catalog.revision,
+      entries: publicPlayerCharacterEntries(catalog),
+      selected: selected ? { assetId: selected.assetId, displayName: selected.displayName, storageUrl: selected.storageUrl, visibility: selected.visibility } : null,
+      immutable: Boolean(selected),
+    };
+  }));
+  app.post("/api/game/public-player-characters/select", playerRoute(async (request, user) => {
+    const input = z.object({ assetId: z.string().min(8).max(64) }).strict().parse(request.body);
+    const catalog = await glbImportStore().catalog();
+    const allowed = publicPlayerCharacterEntries(catalog).find(entry => entry.assetId === input.assetId);
+    if (!allowed) throw new Error("GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED");
+    const selected = await db.equipPlayerCharacterAppearance({ userId: user.id, assetId: allowed.assetId });
+    return { assetId: selected.assetId, displayName: selected.displayName, storageUrl: selected.storageUrl, visibility: selected.visibility, immutable: true };
+  }));
+  app.get("/api/game/public-player-appearances", playerRoute(async request => {
+    const requested = parseRequestedPresenceUserIds(request.query.userIds);
+    if (!requested.length) return { appearances: [] };
+    const active = new Set((await db.listActiveWorldPresence()).map(presence => presence.userId));
+    const appearances = (await Promise.all(requested.filter(userId => active.has(userId)).map(async userId => {
+      const appearance = await db.getPlayerCharacterAppearance(userId);
+      if (!appearance || appearance.visibility !== "public") return null;
+      return { userId, assetId: appearance.assetId, displayName: appearance.displayName, storageUrl: appearance.storageUrl };
+    }))).filter((value): value is NonNullable<typeof value> => value !== null);
+    return { appearances };
+  }));
+  app.get("/api/game/confirmed-equipment-visuals", playerRoute(async (_request, user) => projectConfirmedEquipmentVisuals(await readPlayerUi(user.id))));
+
   app.get("/api/game/glb-catalog", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }
     catch { response.status(503).json({ error: "GLB_CATALOG_UNAVAILABLE" }); }

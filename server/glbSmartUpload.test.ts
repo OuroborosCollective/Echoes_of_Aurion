@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGlbSmartUploadHandler } from "./glbSmartUpload";
+import { createGlbSmartUploadHandler, parseRequestedPresenceUserIds, publicPlayerCharacterEntries } from "./glbSmartUpload";
 import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
+import type { GlbRuntimeCatalog } from "../shared/glbImportContract";
 
 const weaponGlb = () => testGlb("Aurion_Spear_Weapon").toString("base64");
 const characterGlb = () => testAnimatedPlayerGlb("Aurion_Player").toString("base64");
@@ -122,5 +123,26 @@ describe("smart GLB upload runtime", () => {
     const harness = responseHarness();
     await handler({ body: { displayName: "Sunward Spear", fileName: "sunward-spear.glb", contentBase64: weaponGlb() } } as any, harness.response);
     expect(harness.read()).toEqual({ statusCode: 502, body: { error: "GLB storage or metadata persistence failed" } });
+  });
+
+  it("exposes only unassigned character assets explicitly approved for the public player lane", () => {
+    const source: GlbRuntimeCatalog = {
+      version: "aurion.glb-import.v1",
+      revision: "f".repeat(64),
+      entries: [
+        { assetId: "glb_public_b", sha256: "b".repeat(64), displayName: "B", assetType: "character", storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null, purpose: "player-public", subcategory: "rigged-character", equipmentSlot: null },
+        { assetId: "glb_npc", sha256: "c".repeat(64), displayName: "NPC", assetType: "character", storageUrl: `/api/assets/glb/${"c".repeat(64)}.glb`, targetKey: null, purpose: "npc-fallback", subcategory: "rigged-character", equipmentSlot: null },
+        { assetId: "glb_public_a", sha256: "a".repeat(64), displayName: "A", assetType: "character", storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null, purpose: "player-public", subcategory: "rigged-character", equipmentSlot: null },
+        { assetId: "glb_targeted", sha256: "d".repeat(64), displayName: "Targeted", assetType: "character", storageUrl: `/api/assets/glb/${"d".repeat(64)}.glb`, targetKey: "starter_player", purpose: "player-public", subcategory: "rigged-character", equipmentSlot: null },
+      ],
+    };
+    expect(publicPlayerCharacterEntries(source).map(entry => entry.assetId)).toEqual(["glb_public_a", "glb_public_b"]);
+  });
+
+  it("bounds and canonicalizes requested remote presence identities", () => {
+    expect(parseRequestedPresenceUserIds("9,2,9,not-a-user,3")).toEqual([2, 3, 9]);
+    expect(parseRequestedPresenceUserIds(undefined)).toEqual([]);
+    const tooMany = Array.from({ length: 129 }, (_, index) => index + 1).join(",");
+    expect(() => parseRequestedPresenceUserIds(tooMany)).toThrow("GLB_PRESENCE_QUERY_LIMIT");
   });
 });
