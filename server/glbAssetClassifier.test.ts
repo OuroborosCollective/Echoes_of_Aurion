@@ -17,22 +17,14 @@ function glbBase64(json: Record<string, unknown>): string {
   return bytes.toString("base64");
 }
 
-function animationNames(names: readonly string[]) {
-  return names.map(name => ({ name, channels: [], samplers: [] }));
-}
+function animationNames(names: readonly string[]) { return names.map(name => ({ name, channels: [], samplers: [] })); }
 
 describe("GLB asset classifier", () => {
   it("classifies the standardized Aurion player rig as a character from sockets and player clips", () => {
     const result = classifyGlbBase64(glbBase64({
-      asset: { version: "2.0" },
-      scenes: [{ name: "Scene", nodes: [0] }],
-      nodes: [
-        { name: "Root" }, { name: "Aurion_Humanoid_Rig" },
-        { name: "Socket_Head" }, { name: "Socket_Chest" }, { name: "Socket_Hand_L" }, { name: "Socket_Hand_R" },
-        { name: "Socket_Weapon_L" }, { name: "Socket_Weapon_R" },
-      ],
-      meshes: [{ name: "Aurion_Player_Mesh", primitives: [] }],
-      skins: [{ name: "Aurion_Humanoid_Rig", joints: [0] }],
+      asset: { version: "2.0" }, scenes: [{ name: "Scene", nodes: [0] }],
+      nodes: [{ name: "Root" }, { name: "Aurion_Humanoid_Rig" }, { name: "Socket_Head" }, { name: "Socket_Chest" }, { name: "Socket_Hand_L" }, { name: "Socket_Hand_R" }, { name: "Socket_Weapon_L" }, { name: "Socket_Weapon_R" }],
+      meshes: [{ name: "Aurion_Player_Mesh", primitives: [] }], skins: [{ name: "Aurion_Humanoid_Rig", joints: [0] }],
       animations: animationNames(["AttackCombo", "Death", "Fight", "Idle", "Jump", "Run", "Walk"]),
     }));
     expect(result).toMatchObject({ assetType: "character", subcategory: "standardized-humanoid", confidence: "high", skinCount: 1 });
@@ -41,14 +33,9 @@ describe("GLB asset classifier", () => {
 
   it("classifies universal humanoids with the supplied seven-clip rig without inventing an enemy", () => {
     const result = classifyGlbBase64(glbBase64({
-      asset: { version: "2.0" },
-      scenes: [{ name: "Scene", nodes: [0] }],
-      nodes: [
-        { name: "Head" }, { name: "hand_l" }, { name: "hand_r" },
-        { name: "upperarm_l" }, { name: "upperarm_r" }, { name: "thigh_l" }, { name: "thigh_r" },
-      ],
-      meshes: [{ name: "Superhero_Female", primitives: [] }, { name: "Hair_Buns", primitives: [] }],
-      skins: [{ name: "Armature", joints: [0] }],
+      asset: { version: "2.0" }, scenes: [{ name: "Scene", nodes: [0] }],
+      nodes: [{ name: "Head" }, { name: "hand_l" }, { name: "hand_r" }, { name: "upperarm_l" }, { name: "upperarm_r" }, { name: "thigh_l" }, { name: "thigh_r" }],
+      meshes: [{ name: "Superhero_Female", primitives: [] }, { name: "Hair_Buns", primitives: [] }], skins: [{ name: "Armature", joints: [0] }],
       animations: animationNames(["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"]),
     }));
     expect(result).toMatchObject({ assetType: "character", subcategory: "universal-humanoid", confidence: "high", skinCount: 1, socketCount: 0 });
@@ -56,13 +43,9 @@ describe("GLB asset classifier", () => {
 
   it("recognizes Slot_* equipment attachment nodes as standardized character sockets", () => {
     const result = classifyGlbBase64(glbBase64({
-      asset: { version: "2.0" },
-      scenes: [{ name: "Scene", nodes: [0] }],
-      nodes: [
-        { name: "Root" }, { name: "Slot_Head" }, { name: "Slot_Chest" }, { name: "Slot_Hand_L" }, { name: "Slot_Hand_R" },
-      ],
-      meshes: [{ name: "Superhero_Male", primitives: [] }],
-      skins: [{ name: "Armature", joints: [0] }],
+      asset: { version: "2.0" }, scenes: [{ name: "Scene", nodes: [0] }],
+      nodes: [{ name: "Root" }, { name: "Slot_Head" }, { name: "Slot_Chest" }, { name: "Slot_Hand_L" }, { name: "Slot_Hand_R" }],
+      meshes: [{ name: "Superhero_Male", primitives: [] }], skins: [{ name: "Armature", joints: [0] }],
       animations: animationNames(["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"]),
     }));
     expect(result).toMatchObject({ assetType: "character", subcategory: "standardized-humanoid", confidence: "high" });
@@ -70,34 +53,28 @@ describe("GLB asset classifier", () => {
   });
 
   it("classifies an eight-legged combat rig as the starter spider enemy", () => {
-    const legs = Array.from({ length: 4 }, (_, index) => index + 1).flatMap(index => [
-      { name: `Leg_L${index}_Upper` }, { name: `Leg_R${index}_Upper` },
-    ]);
-    const result = classifyGlbBase64(glbBase64({
-      asset: { version: "2.0" },
-      nodes: [{ name: "Spider_Monster_Rig" }, { name: "Body" }, ...legs],
-      meshes: [{ name: "Spider_Mesh", primitives: [] }],
-      skins: [{ name: "Spider_Monster_Rig", joints: [0] }],
-      animations: animationNames(["Idle", "Walk", "Attack", "Death"]),
-    }));
+    const legs = Array.from({ length: 4 }, (_, index) => index + 1).flatMap(index => [{ name: `Leg_L${index}_Upper` }, { name: `Leg_R${index}_Upper` }]);
+    const result = classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Spider_Monster_Rig" }, { name: "Body" }, ...legs], meshes: [{ name: "Spider_Mesh", primitives: [] }], skins: [{ name: "Spider_Monster_Rig", joints: [0] }], animations: animationNames(["Idle", "Walk", "Attack", "Death"]) }));
     expect(result).toMatchObject({ assetType: "enemy", subcategory: "spider", confidence: "high" });
   });
 
   it("classifies the humanoid starter monster LOD set as enemy LODs instead of player characters", () => {
-    const result = classifyGlbBase64(glbBase64({
-      asset: { version: "2.0" },
-      nodes: [{ name: "root" }, { name: "Monster_LOD2" }, { name: "Aurion_Humanoid_Rig" }],
-      meshes: [{ name: "monster_mesh", primitives: [] }],
-      skins: [{ name: "Aurion_Humanoid_Rig", joints: [0] }],
-      animations: animationNames(["Attack", "Death", "Idle", "Walk"]),
-    }));
+    const result = classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "root" }, { name: "Monster_LOD2" }, { name: "Aurion_Humanoid_Rig" }], meshes: [{ name: "monster_mesh", primitives: [] }], skins: [{ name: "Aurion_Humanoid_Rig", joints: [0] }], animations: animationNames(["Attack", "Death", "Idle", "Walk"]) }));
     expect(result).toMatchObject({ assetType: "enemy", subcategory: "rigged-monster-lod2", lod: 2 });
   });
 
   it("classifies explicit static equipment and world assets conservatively", () => {
-    expect(classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Sunward_Spear_Weapon" }], meshes: [{ name: "Spear_Blade" }] })).assetType).toBe("weapon");
-    expect(classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Warden_Chestplate_Armor" }], meshes: [{ name: "Armor_Mesh" }] })).assetType).toBe("armor");
-    expect(classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Asterion_Courtyard_Arena" }], meshes: [{ name: "Terrain" }] })).assetType).toBe("arena");
+    expect(classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Sunward_Spear_Weapon" }], meshes: [{ name: "Spear_Blade" }] }))).toMatchObject({ assetType: "weapon", equipmentSlot: "weapon" });
+    expect(classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Warden_Chestplate_Armor" }], meshes: [{ name: "Armor_Mesh" }] }))).toMatchObject({ assetType: "armor", equipmentSlot: "chest" });
+    expect(classifyGlbBase64(glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Asterion_Courtyard_Arena" }], meshes: [{ name: "Terrain" }] }))).toMatchObject({ assetType: "arena", worldFamily: "environment" });
+  });
+
+  it("uses the upload filename as a bounded hint for generic static exports", () => {
+    const generic = glbBase64({ asset: { version: "2.0" }, nodes: [{ name: "Object" }], meshes: [{ name: "Mesh" }] });
+    expect(classifyGlbBase64(generic, "Aethelgard_House.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "building" });
+    expect(classifyGlbBase64(generic, "Forest_Oak_LOD1.glb")).toMatchObject({ assetType: "arena", worldFamily: "nature", subcategory: "tree", lod: 1 });
+    expect(classifyGlbBase64(generic, "Royal_Pauldrons.glb")).toMatchObject({ assetType: "armor", equipmentSlot: "shoulders", subcategory: "equipment-shoulders" });
+    expect(classifyGlbBase64(generic, "Aether_Teleporter.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "teleporter" });
   });
 
   it("fails closed when a GLB cannot be classified safely", () => {
