@@ -49,7 +49,8 @@ describe("server-backed Aurion HUD", () => {
   });
   it("projects confirmed currency and treats stale data as read-only", () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; mount();
-    expect(screen.getByText("290 EP · 23 AURION")).toBeTruthy();
+    expect(screen.getByText("290 EP · 2 Siege")).toBeTruthy();
+    expect(screen.getByText(/◆\s*23/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Charakter" }));
     const choice = screen.getByRole("button", { name: "Vorhut" });
     expect(choice.closest("fieldset")?.disabled).toBe(true);
