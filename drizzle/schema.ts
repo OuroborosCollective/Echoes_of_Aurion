@@ -308,6 +308,40 @@ export const aurionProgressionReceipts = mysqlTable("aurionProgressionReceipts",
   index("aurionProgressionReceipts_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
+/** Append-only identity ledger for migration source files and manifests. */
+export const aurionContentHashLedger = mysqlTable("aurionContentHashLedger", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  sourceRevision: varchar("sourceRevision", { length: 256 }).notNull(),
+  sourcePath: varchar("sourcePath", { length: 512 }).notNull(),
+  fileHash: varchar("fileHash", { length: 64 }).notNull(),
+  manifestHash: varchar("manifestHash", { length: 64 }).notNull(),
+  migrationTag: varchar("migrationTag", { length: 128 }).notNull(),
+  contentKind: mysqlEnum("contentKind", ["sql", "schema", "protocol", "manifest", "asset"]).notNull(),
+  sourceSizeBytes: int("sourceSizeBytes").notNull(),
+  identityHash: varchar("identityHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionContentHashLedger_identity_uq").on(table.identityHash),
+  uniqueIndex("aurionContentHashLedger_source_revision_path_uq").on(table.sourceRevision, table.sourcePath),
+  index("aurionContentHashLedger_migration_created_idx").on(table.migrationTag, table.createdAt),
+]);
+
+/** Redacted root-only audit evidence; status is fail-closed for unreadable or drifting sources. */
+export const aurionContentHashAuditReceipts = mysqlTable("aurionContentHashAuditReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ledgerId: varchar("ledgerId", { length: 64 }).notNull(),
+  status: mysqlEnum("status", ["VERIFIED", "DRIFT", "UNREADABLE"]).notNull(),
+  checkedCount: int("checkedCount").notNull(),
+  driftCount: int("driftCount").notNull(),
+  evidenceDigest: varchar("evidenceDigest", { length: 64 }).notNull(),
+  redactedJson: text("redactedJson").notNull(),
+  createdByRole: varchar("createdByRole", { length: 32 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionContentHashAuditReceipts_evidence_uq").on(table.evidenceDigest),
+  index("aurionContentHashAuditReceipts_status_created_idx").on(table.status, table.createdAt),
+]);
+
 /** Versioned loot bases cover weapons, armor, accessories, foci and crafting components without client-defined item types. */
 export const aurionLootBaseDefinitions = mysqlTable("aurionLootBaseDefinitions", {
   id: varchar("id", { length: 96 }).primaryKey(),
