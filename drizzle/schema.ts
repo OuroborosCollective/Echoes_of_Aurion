@@ -565,6 +565,46 @@ export const aurionNpcDecisionReceipts = mysqlTable("aurionNpcDecisionReceipts",
   index("aurionNpcDecisionReceipts_region_created_idx").on(table.regionId, table.createdAt),
 ]);
 
+/** Account/character-bound NPC memory evidence. Gameplay truth is supplied by a confirmed result receipt. */
+export const aurionNpcMemoryReceipts = mysqlTable("aurionNpcMemoryReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  characterId: varchar("characterId", { length: 128 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  worldRevision: varchar("worldRevision", { length: 128 }).notNull(),
+  resultReceiptId: varchar("resultReceiptId", { length: 128 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  memoryJson: text("memoryJson").notNull(),
+  memoryHash: varchar("memoryHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcMemoryReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionNpcMemoryReceipts_character_receipt_uq").on(table.userId, table.characterId, table.npcId, table.resultReceiptId),
+  index("aurionNpcMemoryReceipts_user_npc_created_idx").on(table.userId, table.npcId, table.createdAt),
+]);
+
+/** Review-only quest offer projection derived from one immutable NPC memory receipt. */
+export const aurionNpcQuestOffers = mysqlTable("aurionNpcQuestOffers", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  memoryReceiptId: varchar("memoryReceiptId", { length: 64 }).notNull(),
+  userId: int("userId").notNull(),
+  characterId: varchar("characterId", { length: 128 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  worldRevision: varchar("worldRevision", { length: 128 }).notNull(),
+  resultReceiptId: varchar("resultReceiptId", { length: 128 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  offerKey: varchar("offerKey", { length: 128 }).notNull(),
+  offerJson: text("offerJson").notNull(),
+  offerHash: varchar("offerHash", { length: 64 }).notNull(),
+  reviewOnly: int("reviewOnly").notNull().default(1),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcQuestOffers_receipt_offer_uq").on(table.memoryReceiptId, table.offerKey),
+  uniqueIndex("aurionNpcQuestOffers_hash_uq").on(table.offerHash),
+  index("aurionNpcQuestOffers_user_npc_created_idx").on(table.userId, table.npcId, table.createdAt),
+]);
+
 /** Versioned polity snapshot; conflicts are fictional game state and never trigger destructive real-world actions. */
 export const aurionPolityStates = mysqlTable("aurionPolityStates", {
   polityId: varchar("polityId", { length: 96 }).primaryKey(),
