@@ -1,0 +1,72 @@
+name: AIM-285 Visual Item Attachment
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim285-visual-item-attachment.yml"
+      - "client/src/xaurion/core/VisualItemAttachmentController.ts"
+      - "client/src/xaurion/core/VisualItemAttachmentController.test.ts"
+      - "client/src/xaurion/core/VisualItemGlbOverrideResolver.ts"
+      - "client/src/xaurion/core/VisualItemGlbOverrideResolver.test.ts"
+      - "client/src/xaurion/core/VisualItemMaterialCompiler.ts"
+      - "client/src/xaurion/core/VisualItemMaterialCompiler.test.ts"
+      - "client/src/xaurion/core/VisualItemGeometryCompiler.ts"
+      - "client/src/xaurion/core/VisualItemGeometryCompiler.test.ts"
+      - "client/src/xaurion/core/AnimatedGlbActor.ts"
+      - "server/aim253GlbActors.test.ts"
+      - "shared/visualItemProtocol.ts"
+      - "shared/glbImportContract.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-285-visual-item-attachment-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-item-attachment:
+    name: Actor anchors, stale loads, lifecycle, typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Run attachment, actor, GLB source and authority regressions
+        run: >-
+          pnpm exec vitest run
+          client/src/xaurion/core/VisualItemAttachmentController.test.ts
+          client/src/xaurion/core/VisualItemGlbOverrideResolver.test.ts
+          client/src/xaurion/core/VisualItemMaterialCompiler.test.ts
+          client/src/xaurion/core/VisualItemGeometryCompiler.test.ts
+          server/aim253GlbActors.test.ts
+          server/aurionVisualItemAdapter.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build production runtime
+        run: pnpm build
