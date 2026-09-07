@@ -14,15 +14,17 @@ vi.mock("@/components/DashboardLayout", () => ({
   default: ({ children }: { children: unknown }) => <>{children}</>,
 }));
 
-function serverReadback(fileName: string) {
-  const isPlayer = fileName.includes("player");
+function serverReadback(fileName: string, purpose: "auto" | "npc-fallback" = "auto") {
+  const isFallback = purpose === "npc-fallback";
+  const isPlayer = isFallback || fileName.includes("player");
   return {
-    receipt: { version: "aurion.glb-import.v1", assetId: "glb_test123", sha256: "a".repeat(64), bytes: 100, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, assetType: isPlayer ? "character" : "enemy", targetKey: isPlayer ? "starter_player" : "starter_spider", planSha256: "b".repeat(64), status: "assigned", activeAssetId: "glb_test123", deduplicated: false },
+    receipt: { version: "aurion.glb-import.v1", assetId: "glb_test123", sha256: "a".repeat(64), bytes: 100, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, assetType: isPlayer ? "character" : "enemy", targetKey: isFallback ? null : isPlayer ? "starter_player" : "starter_spider", planSha256: "b".repeat(64), status: isFallback ? "catalog" : "assigned", activeAssetId: isFallback ? null : "glb_test123", deduplicated: false },
     accepted: true as const,
     fileName,
+    purpose,
     classification: {
       assetType: isPlayer ? "character" as const : "enemy" as const,
-      subcategory: isPlayer ? "standard_player" : "spider",
+      subcategory: isFallback ? "universal-humanoid" : isPlayer ? "standard_player" : "spider",
       confidence: "high" as const,
       animationNames: isPlayer ? ["Idle", "Walk", "Run"] : ["Idle", "Walk", "Attack", "Death"],
       skinCount: 1,
@@ -35,11 +37,11 @@ function serverReadback(fileName: string) {
 function mockSuccessfulFetch() {
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     if (!init?.body) return { ok: true, json: async () => ({ writable: true, catalog: { version: "aurion.glb-import.v1", revision: "c".repeat(64), entries: [] } }) } as Response;
-    const body = JSON.parse(String(init?.body)) as { fileName: string };
+    const body = JSON.parse(String(init?.body)) as { fileName: string; purpose?: "auto" | "npc-fallback" };
     return {
       ok: true,
       status: 201,
-      json: async () => serverReadback(body.fileName),
+      json: async () => serverReadback(body.fileName, body.purpose ?? "auto"),
     } as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -81,6 +83,7 @@ describe("GLB upload website runtime", () => {
       expect(call[1]).toMatchObject({ method: "POST", credentials: "include" });
       const requestBody = JSON.parse(String(call[1]?.body)) as Record<string, unknown>;
       expect(typeof requestBody.contentBase64).toBe("string");
+      expect(requestBody.purpose).toBe("auto");
       expect(requestBody).not.toHaveProperty("assetType");
     }
 
@@ -94,6 +97,25 @@ describe("GLB upload website runtime", () => {
     expect(screen.getByText("starter-spider.glb")).toBeTruthy();
     expect(screen.getByText("character")).toBeTruthy();
     expect(screen.getByText("enemy")).toBeTruthy();
+  });
+
+  it("requires an explicit visible choice before using the bounded NPC fallback purpose", async () => {
+    const fetchMock = mockSuccessfulFetch();
+    render(<GlbUpload />);
+    const purpose = document.querySelector<HTMLSelectElement>("#smartGlbPurpose");
+    const input = document.querySelector<HTMLInputElement>("#smartGlbFile");
+    await waitFor(() => expect(input?.disabled).toBe(false));
+    expect(purpose?.value).toBe("auto");
+    fireEvent.change(purpose!, { target: { value: "npc-fallback" } });
+    expect(screen.getByText("Nur NPC-Fallback · niemals Spieler")).toBeTruthy();
+    fireEvent.change(input!, { target: { files: [glbFile("universal-female.glb")] } });
+
+    await waitFor(() => expect(fetchMock.mock.calls.filter(call => call[1]?.body)).toHaveLength(1));
+    const body = JSON.parse(String(fetchMock.mock.calls.find(call => call[1]?.body)?.[1]?.body));
+    expect(body).toMatchObject({ fileName: "universal-female.glb", purpose: "npc-fallback" });
+    expect(body).not.toHaveProperty("assetType");
+    await waitFor(() => expect(screen.getByText("Im begrenzten NPC-Fallback-Pool · kein Spielerziel")).toBeTruthy());
+    expect(screen.getByText("NPC-Fallback")).toBeTruthy();
   });
 
   it("continues the batch when one file is invalid", async () => {
