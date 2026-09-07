@@ -12,6 +12,7 @@ type ProjectedNpc = Readonly<{
   proceduralMeshes: readonly THREE.Object3D[];
 }>;
 
+const NPC_FALLBACK_LOW_LOD_DISTANCE_METERS = 42;
 function near(left: number, right: number): boolean { return Math.abs(left - right) <= 0.01; }
 
 /**
@@ -72,9 +73,14 @@ export class NpcFallbackProjection {
     this.projected.delete(npcId);
   }
 
+  private preferredLod(npc: NPCCharacter): 0 | 1 {
+    const distance = Math.hypot(npc.x - this.engine.camera.position.x, npc.z - this.engine.camera.position.z);
+    return distance >= NPC_FALLBACK_LOW_LOD_DISTANCE_METERS ? 1 : 0;
+  }
+
   private async project(npc: NPCCharacter): Promise<void> {
     if (this.disposed || this.pending.has(npc.id)) return;
-    const selection = selectNpcGlb(this.catalog, npc.id);
+    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc));
     if (!selection || selection.source !== "fallback") { this.restoreNpc(npc.id); return; }
     const existing = this.projected.get(npc.id);
     if (existing?.sha256 === selection.entry.sha256) return;
@@ -85,7 +91,7 @@ export class NpcFallbackProjection {
     try {
       const loaded = await glbManager.loadModel(selection.entry.storageUrl);
       if (this.disposed) return;
-      const currentSelection = selectNpcGlb(this.catalog, npc.id);
+      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc));
       if (!currentSelection || currentSelection.source !== "fallback" || currentSelection.entry.sha256 !== selection.entry.sha256) return;
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
@@ -93,7 +99,7 @@ export class NpcFallbackProjection {
       this.restoreNpc(npc.id);
       const actor = new AnimatedGlbActor(loaded.scene, loaded.animations, 2);
       actor.group.name = `aurion-npc-fallback:${npc.id}`;
-      actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, source: "catalog" });
+      actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, variantKey: selection.variantKey, lod: selection.lod, source: "catalog" });
       currentVisual.group.add(actor.group);
       currentVisual.body.forEach(mesh => { mesh.visible = false; });
       this.projected.set(npc.id, Object.freeze({ sha256: selection.entry.sha256, actor, proceduralMeshes: Object.freeze(currentVisual.body.slice()) }));
