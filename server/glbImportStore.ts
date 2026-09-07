@@ -1,16 +1,61 @@
 import { createHash } from "node:crypto";
 import { createPool, type Pool, type PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { operationalDate } from "../shared/operationalClock";
-import { GLB_IMPORT_VERSION, NPC_FALLBACK_DISPLAY_PREFIX, glbImportReceiptSchema, glbRuntimeCatalogSchema, type GlbImportPurpose, type GlbImportReceipt } from "../shared/glbImportContract";
+import {
+  EQUIPMENT_DISPLAY_PREFIX,
+  GLB_IMPORT_VERSION,
+  NPC_FALLBACK_DISPLAY_PREFIX,
+  PUBLIC_PLAYER_DISPLAY_PREFIX,
+  WORLD_ENVIRONMENT_DISPLAY_PREFIX,
+  WORLD_NATURE_DISPLAY_PREFIX,
+  glbEquipmentSlotFromDisplayName,
+  glbImportReceiptSchema,
+  glbPurposeFromDisplayName,
+  glbRuntimeCatalogSchema,
+  glbSubcategoryFromDisplayName,
+  type GlbImportPurpose,
+  type GlbImportReceipt,
+} from "../shared/glbImportContract";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { persistGlbBytes, readStoredGlb } from "./glbFileStore";
+import type { GlbAssetClassification } from "./glbAssetClassifier";
 
-function canonicalDisplayName(displayName: string, purpose: GlbImportPurpose): string {
+const PURPOSE_PREFIXES = [
+  NPC_FALLBACK_DISPLAY_PREFIX,
+  WORLD_ENVIRONMENT_DISPLAY_PREFIX,
+  WORLD_NATURE_DISPLAY_PREFIX,
+  PUBLIC_PLAYER_DISPLAY_PREFIX,
+  EQUIPMENT_DISPLAY_PREFIX,
+] as const;
+
+function stripPurposePrefix(displayName: string): string {
   const trimmed = displayName.trim();
-  const withoutFallbackPrefix = trimmed.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? trimmed.slice(NPC_FALLBACK_DISPLAY_PREFIX.length).trim() : trimmed;
-  const result = purpose === "npc-fallback"
-    ? `${NPC_FALLBACK_DISPLAY_PREFIX}${withoutFallbackPrefix}`.slice(0, 120).trim()
-    : trimmed;
+  for (const prefix of PURPOSE_PREFIXES) {
+    if (!trimmed.startsWith(prefix)) continue;
+    const remainder = trimmed.slice(prefix.length).trim();
+    if (prefix === EQUIPMENT_DISPLAY_PREFIX || prefix === WORLD_ENVIRONMENT_DISPLAY_PREFIX || prefix === WORLD_NATURE_DISPLAY_PREFIX) {
+      const parts = remainder.split(" · ");
+      return parts.length > 1 ? parts.slice(1).join(" · ").trim() : remainder;
+    }
+    return remainder;
+  }
+  return trimmed;
+}
+
+function canonicalDisplayName(displayName: string, purpose: GlbImportPurpose, classification: GlbAssetClassification): string {
+  const base = stripPurposePrefix(displayName);
+  const prefix = purpose === "npc-fallback"
+    ? NPC_FALLBACK_DISPLAY_PREFIX
+    : purpose === "world-environment"
+      ? `${WORLD_ENVIRONMENT_DISPLAY_PREFIX}${classification.subcategory} · `
+      : purpose === "world-nature"
+        ? `${WORLD_NATURE_DISPLAY_PREFIX}${classification.subcategory} · `
+        : purpose === "player-public"
+          ? PUBLIC_PLAYER_DISPLAY_PREFIX
+          : purpose === "equipment"
+            ? `${EQUIPMENT_DISPLAY_PREFIX}${classification.equipmentSlot} · `
+            : "";
+  const result = `${prefix}${base}`.slice(0, 120).trim();
   if (result.length < 3 || result.length > 120 || /[<>]/.test(result)) throw new Error("GLB_NAME_INVALID");
   return result;
 }
@@ -42,20 +87,17 @@ export class GlbImportStore {
     }
   }
 
-  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; expectedPlanSha256?: string }): Promise<GlbImportReceipt> {
+  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; fileName?: string; expectedPlanSha256?: string }): Promise<GlbImportReceipt> {
     const purpose = input.purpose ?? "auto";
-    const plan = buildGlbImportPlan(input.contentBase64, purpose);
+    const plan = buildGlbImportPlan(input.contentBase64, purpose, input.fileName ?? input.displayName);
     if (input.expectedPlanSha256 && plan.planSha256 !== input.expectedPlanSha256) throw new Error("GLB_IMPORT_PLAN_CHANGED");
-    const displayName = canonicalDisplayName(input.displayName, purpose);
+    const displayName = canonicalDisplayName(input.displayName, purpose, plan.classification);
     return this.locked(actorUserId, async connection => {
       const [existing] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE sha256 = ? FOR UPDATE", [plan.sha256]);
       const storageKey = `local-glb/${plan.sha256}.glb`;
       if (existing[0] && existing[0].storageKey !== storageKey) throw new Error("GLB_EXISTING_ASSET_REQUIRES_REVIEW");
       if (existing[0] && (existing[0].assetType !== plan.assetType || existing[0].bytes !== plan.bytes)) throw new Error("GLB_METADATA_DRIFT");
-      if (existing[0]) {
-        const existingFallback = String(existing[0].displayName).startsWith(NPC_FALLBACK_DISPLAY_PREFIX);
-        if (existingFallback !== (purpose === "npc-fallback")) throw new Error("GLB_IMPORT_PURPOSE_CHANGED");
-      }
+      if (existing[0] && glbPurposeFromDisplayName(String(existing[0].displayName)) !== purpose) throw new Error("GLB_IMPORT_PURPOSE_CHANGED");
       const stored = { key: storageKey, url: `/api/assets/glb/${plan.sha256}.glb` };
       const assetId = existing[0]?.id ?? plan.assetId;
       if (!existing.length) {
@@ -63,8 +105,9 @@ export class GlbImportStore {
         if (Number(count[0]?.count) >= 500) throw new Error("GLB_CATALOG_LIMIT");
         await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
         await connection.execute("INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId, reviewedByUserId, reviewedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)", [assetId, displayName, plan.assetType, stored.key, stored.url, plan.sha256, plan.bytes, actorUserId, actorUserId, operationalDate()]);
+      } else {
+        await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
       }
-      if (existing.length) await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
       const archived = existing[0] && existing[0].status !== "approved";
       let activeAssetId: string | null = null;
       let status: GlbImportReceipt["status"] = archived ? "archived" : "catalog";
@@ -75,7 +118,6 @@ export class GlbImportStore {
         if (activeAssetId && activeAssetId !== assetId) status = "conflict";
         else {
           if (!activeAssetId) {
-            // Old inactive/rejected assignment rows never become active again implicitly.
             await connection.execute("UPDATE glbAssignments SET active = 0 WHERE targetType = ? AND targetKey = ? AND active = 1", [plan.assetType, plan.targetKey]);
             const assignmentId = `assign_${createHash("sha256").update(`${plan.assetType}:${plan.targetKey}:${plan.sha256}`).digest("hex").slice(0, 48)}`;
             await connection.execute("INSERT INTO glbAssignments (id, assetId, targetType, targetKey, active, assignedByUserId) VALUES (?, ?, ?, ?, 1, ?) ON DUPLICATE KEY UPDATE active = 1", [assignmentId, assetId, plan.assetType, plan.targetKey, actorUserId]);
@@ -83,16 +125,26 @@ export class GlbImportStore {
           activeAssetId = assetId; status = "assigned";
         }
       }
-      const [readback] = await connection.query<RowDataPacket[]>("SELECT id, sha256, bytes, storageUrl FROM glbAssets WHERE id = ?", [assetId]);
+      const [readback] = await connection.query<RowDataPacket[]>("SELECT id, sha256, bytes, storageUrl, displayName FROM glbAssets WHERE id = ?", [assetId]);
       const row = readback[0];
-      if (!row || row.sha256 !== plan.sha256 || row.bytes !== plan.bytes || row.storageUrl !== stored.url) throw new Error("GLB_IMPORT_READBACK_FAILED");
+      if (!row || row.sha256 !== plan.sha256 || row.bytes !== plan.bytes || row.storageUrl !== stored.url || glbPurposeFromDisplayName(String(row.displayName)) !== purpose) throw new Error("GLB_IMPORT_READBACK_FAILED");
       return glbImportReceiptSchema.parse({ version: GLB_IMPORT_VERSION, assetId, sha256: row.sha256, bytes: row.bytes, storageUrl: row.storageUrl, assetType: plan.assetType, targetKey: plan.targetKey, planSha256: plan.planSha256, status, activeAssetId, deduplicated: Boolean(existing.length) });
     });
   }
 
   async catalog() {
     const [rows] = await this.pool.query<RowDataPacket[]>("SELECT g.id AS assetId, g.sha256, g.displayName, g.assetType, g.storageUrl, a.targetKey FROM glbAssets g LEFT JOIN glbAssignments a ON a.assetId = g.id AND a.active = 1 WHERE g.status = 'approved' AND g.storageKey LIKE 'local-glb/%' ORDER BY g.sha256, a.targetKey LIMIT 501");
-    const entries = rows.map(row => ({ assetId: row.assetId, sha256: row.sha256, displayName: row.displayName, assetType: row.assetType, storageUrl: row.storageUrl, targetKey: row.targetKey ?? null }));
+    const entries = rows.map(row => ({
+      assetId: row.assetId,
+      sha256: row.sha256,
+      displayName: row.displayName,
+      assetType: row.assetType,
+      storageUrl: row.storageUrl,
+      targetKey: row.targetKey ?? null,
+      purpose: glbPurposeFromDisplayName(String(row.displayName)),
+      subcategory: glbSubcategoryFromDisplayName(String(row.displayName)),
+      equipmentSlot: glbEquipmentSlotFromDisplayName(String(row.displayName)),
+    }));
     return glbRuntimeCatalogSchema.parse({ version: GLB_IMPORT_VERSION, revision: createHash("sha256").update(JSON.stringify(entries)).digest("hex"), entries });
   }
 
@@ -101,7 +153,7 @@ export class GlbImportStore {
       const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
       const asset = assets[0];
       if (!asset || asset.status !== "approved" || asset.assetType !== input.targetType) throw new Error("GLB_APPROVED_MATCHING_ASSET_REQUIRED");
-      if (String(asset.displayName).startsWith(NPC_FALLBACK_DISPLAY_PREFIX)) throw new Error("GLB_NPC_FALLBACK_ASSIGNMENT_FORBIDDEN");
+      if (glbPurposeFromDisplayName(String(asset.displayName)) !== "auto") throw new Error("GLB_PURPOSE_ASSIGNMENT_FORBIDDEN");
       if (!/^[A-Za-z0-9_-]{2,120}$/.test(input.targetKey)) throw new Error("GLB_TARGET_INVALID");
       if (asset.storageKey.startsWith("local-glb/")) {
         const bytes = await readStoredGlb(asset.sha256, this.storageRoot);
