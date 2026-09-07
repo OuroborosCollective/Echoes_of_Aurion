@@ -605,6 +605,29 @@ export const aurionNpcQuestOffers = mysqlTable("aurionNpcQuestOffers", {
   index("aurionNpcQuestOffers_user_npc_created_idx").on(table.userId, table.npcId, table.createdAt),
 ]);
 
+/** Versioned faction standing and fictional warfront state, bound to a confirmed world receipt. */
+export const aurionFactionWarfrontReceipts = mysqlTable("aurionFactionWarfrontReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  characterId: varchar("characterId", { length: 128 }).notNull(),
+  faction: varchar("faction", { length: 96 }).notNull(),
+  worldRevision: varchar("worldRevision", { length: 128 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 128 }).notNull(),
+  sequence: int("sequence").notNull(),
+  standingDeltaBps: int("standingDeltaBps").notNull(),
+  loyaltyDeltaBps: int("loyaltyDeltaBps").notNull(),
+  warfrontJson: text("warfrontJson").notNull(),
+  stateHash: varchar("stateHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionFactionWarfrontReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionFactionWarfrontReceipts_actor_faction_sequence_uq").on(table.userId, table.characterId, table.faction, table.sequence),
+  uniqueIndex("aurionFactionWarfrontReceipts_state_hash_uq").on(table.stateHash),
+  uniqueIndex("aurionFactionWarfrontReceipts_source_receipt_uq").on(table.userId, table.characterId, table.sourceReceiptId),
+  index("aurionFactionWarfrontReceipts_faction_created_idx").on(table.faction, table.createdAt),
+]);
+
 /** Versioned polity snapshot; conflicts are fictional game state and never trigger destructive real-world actions. */
 export const aurionPolityStates = mysqlTable("aurionPolityStates", {
   polityId: varchar("polityId", { length: 96 }).primaryKey(),

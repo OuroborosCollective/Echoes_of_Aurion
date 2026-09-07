@@ -1,0 +1,23 @@
+CREATE TABLE `aurionFactionWarfrontReceipts` (
+  `id` varchar(64) NOT NULL,
+  `userId` int NOT NULL,
+  `characterId` varchar(128) NOT NULL,
+  `faction` varchar(96) NOT NULL,
+  `worldRevision` varchar(128) NOT NULL,
+  `sourceReceiptId` varchar(128) NOT NULL,
+  `sequence` int NOT NULL,
+  `standingDeltaBps` int NOT NULL,
+  `loyaltyDeltaBps` int NOT NULL,
+  `warfrontJson` text NOT NULL,
+  `stateHash` varchar(64) NOT NULL,
+  `idempotencyKey` varchar(128) NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT (now()),
+  CONSTRAINT `aurionFactionWarfrontReceipts_id` PRIMARY KEY (`id`),
+  UNIQUE KEY `aurionFactionWarfrontReceipts_idempotency_uq` (`idempotencyKey`),
+  UNIQUE KEY `aurionFactionWarfrontReceipts_actor_faction_sequence_uq` (`userId`,`characterId`,`faction`,`sequence`),
+  UNIQUE KEY `aurionFactionWarfrontReceipts_state_hash_uq` (`stateHash`),
+  UNIQUE KEY `aurionFactionWarfrontReceipts_source_receipt_uq` (`userId`,`characterId`,`sourceReceiptId`),
+  KEY `aurionFactionWarfrontReceipts_faction_created_idx` (`faction`,`createdAt`),
+  CONSTRAINT `aurionFactionWarfrontReceipts_standing_delta_ck` CHECK (`standingDeltaBps` BETWEEN -10000 AND 10000),
+  CONSTRAINT `aurionFactionWarfrontReceipts_loyalty_delta_ck` CHECK (`loyaltyDeltaBps` BETWEEN -10000 AND 10000)
+);
