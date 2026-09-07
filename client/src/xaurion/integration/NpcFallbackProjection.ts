@@ -41,6 +41,7 @@ export class NpcFallbackProjection {
   private readonly projected = new Map<string, ProjectedNpc>();
   private readonly pending = new Set<string>();
   private disposed = false;
+  private refreshBusy = false;
   private lastRefreshTick = -150;
 
   constructor(private readonly engine: MMOEngine) {
@@ -48,20 +49,33 @@ export class NpcFallbackProjection {
   }
 
   private async refreshCatalog(): Promise<void> {
+    if (this.refreshBusy || this.disposed) return;
+    this.refreshBusy = true;
     try {
       const response = await fetch("/api/game/glb-catalog", { credentials: "same-origin" });
       if (!response.ok) throw new Error("GLB_CATALOG_UNAVAILABLE");
       const catalog = glbRuntimeCatalogSchema.parse(await response.json());
       if (!this.disposed) this.catalog = catalog;
     } catch {
-      if (!this.disposed) this.catalog = null;
+      // Keep the last confirmed catalog through transient transport failures.
+      // A later confirmed catalog can still revoke/reselect a fallback.
+    } finally {
+      this.refreshBusy = false;
     }
+  }
+
+  private restoreNpc(npcId: string): void {
+    const previous = this.projected.get(npcId);
+    if (!previous) return;
+    previous.actor.dispose();
+    previous.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+    this.projected.delete(npcId);
   }
 
   private async project(npc: NPCCharacter): Promise<void> {
     if (this.disposed || this.pending.has(npc.id)) return;
     const selection = selectNpcGlb(this.catalog, npc.id);
-    if (!selection || selection.source !== "fallback") return;
+    if (!selection || selection.source !== "fallback") { this.restoreNpc(npc.id); return; }
     const existing = this.projected.get(npc.id);
     if (existing?.sha256 === selection.entry.sha256) return;
     const procedural = findProceduralNpcVisual(this.engine.scene, npc);
@@ -76,10 +90,7 @@ export class NpcFallbackProjection {
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
 
-      const previous = this.projected.get(npc.id);
-      previous?.actor.dispose();
-      previous?.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
-
+      this.restoreNpc(npc.id);
       const actor = new AnimatedGlbActor(loaded.scene, loaded.animations, 2);
       actor.group.name = `aurion-npc-fallback:${npc.id}`;
       actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, source: "catalog" });
@@ -100,6 +111,8 @@ export class NpcFallbackProjection {
       this.lastRefreshTick = logicalTick;
       void this.refreshCatalog();
     }
+    const liveNpcIds = new Set(this.engine.npcs.map(npc => npc.id));
+    for (const npcId of [...this.projected.keys()]) if (!liveNpcIds.has(npcId)) this.restoreNpc(npcId);
     for (const npc of this.engine.npcs) void this.project(npc);
   }
 
@@ -114,11 +127,7 @@ export class NpcFallbackProjection {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const projected of this.projected.values()) {
-      projected.actor.dispose();
-      projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
-    }
-    this.projected.clear();
+    for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);
     this.pending.clear();
   }
 }
