@@ -19,6 +19,7 @@ export type GlbAssetClassification = Readonly<{
 
 const JSON_CHUNK_TYPE = 0x4e4f534a;
 const WEAPON_KEYWORDS = ["weapon", "sword", "spear", "staff", "blade", "bow", "axe", "dagger", "focus", "rifle", "pistol", "cannon", "hammer", "wand", "lance", "mace"] as const;
+const MONSTER_KEYWORDS = ["monster", "beast", "creature", "mob", "spider", "golem", "demon"] as const;
 const EQUIPMENT_SLOT_RULES: readonly [GlbEquipmentSlot, readonly string[]][] = [
   ["shield", ["shield", "buckler", "offhand", "tome", "grimoire", "orb", "book", "catalyst"]],
   ["helmet", ["helmet", "helm", "hat", "cowl", "hood", "crown", "goggles", "headpiece", "mask"]],
@@ -111,6 +112,13 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
     return Object.freeze({ assetType: "character", subcategory: "blacksmith-npc", confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
   }
 
+  const combatSet = ["idle", "walk", "attack", "death"].every(name => animationSet.has(name));
+  const explicitMonster = hasKeyword(searchable, MONSTER_KEYWORDS);
+  if (skinCount > 0 && combatSet && explicitMonster) {
+    const spiderSignals = searchable.includes("spider") || nodeNames.filter(name => /^leg_[lr][1-4]_/i.test(name)).length >= 8;
+    return Object.freeze({ assetType: "enemy", subcategory: spiderSignals ? "spider" : lod === null ? "rigged-monster" : `rigged-monster-lod${lod}`, confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
+  }
+
   const humanoidBoneSignals = ["head", "hand_l", "hand_r", "upperarm_l", "upperarm_r", "thigh_l", "thigh_r"]
     .filter(name => nodeNames.some(nodeName => nodeName.toLowerCase() === name)).length;
   const universalHumanoidClips = ["idle", "walk", "run", "fight", "attack2", "castspell", "death"]
@@ -125,7 +133,6 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
     return Object.freeze({ assetType: "character", subcategory, confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
   }
 
-  const combatSet = ["idle", "walk", "attack", "death"].every(name => animationSet.has(name));
   if (skinCount > 0 && combatSet) {
     const spiderSignals = searchable.includes("spider") || nodeNames.filter(name => /^leg_[lr][1-4]_/i.test(name)).length >= 8;
     return Object.freeze({ assetType: "enemy", subcategory: spiderSignals ? "spider" : lod === null ? "rigged-monster" : `rigged-monster-lod${lod}`, confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
