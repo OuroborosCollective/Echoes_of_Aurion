@@ -61,7 +61,7 @@ describe("server-backed Aurion HUD", () => {
   it("keeps a live inventory setting actionable when only the unrelated player readback is stale", async () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; fixtures.ui.data = uiState;
     mount(); fireEvent.click(screen.getByRole("button", { name: "Inventar" }));
-    const toggle = screen.getByRole("button", { name: "Auto-Loot AN", exact: true }) as HTMLButtonElement;
+    const toggle = screen.getByRole("button", { name: "Auto-Loot AN" }) as HTMLButtonElement;
     expect(toggle.disabled).toBe(false);
     fireEvent.click(toggle);
     await waitFor(() => expect(fixtures.mutate).toHaveBeenCalledTimes(1));
