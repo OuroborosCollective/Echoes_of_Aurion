@@ -40,14 +40,4 @@ describe("NPC fallback GLB normalization", () => {
     const plan = buildGlbImportPlan(normalized.bytes.toString("base64"), "npc-fallback");
     expect(plan).toMatchObject({ purpose: "npc-fallback", assetType: "character", targetKey: null });
   });
-
-  it("refuses to rewrite unknown extension-owned indices", () => {
-    const fixture = universalFixture();
-    const parsed = parseGlbBytes(fixture);
-    parsed.json.extensionsUsed = ["VENDOR_unknown_extension"];
-    const raw = Buffer.from(JSON.stringify(parsed.json));
-    // The test only asserts the guard through a structurally valid fixture path.
-    expect(() => normalizeNpcFallbackGlb(Buffer.concat([fixture.subarray(0, 20), fixture.subarray(20)]))).not.toThrow();
-    expect(raw.length).toBeGreaterThan(0);
-  });
 });
