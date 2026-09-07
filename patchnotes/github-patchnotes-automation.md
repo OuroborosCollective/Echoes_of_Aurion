@@ -96,7 +96,7 @@ Ohne passendes Label setzt die Automation **Review erforderlich**. Ein Reviewer 
 Der Workflow benötigt diese Zugänge als geschützte Geheimnisse:
 
 * einen GitHub-Token mit Leserechten auf Pull Requests und Repository-Inhalte;
-* einen GitBook-API-Token mit Schreibrechten für diesen Bereich;
+* einen GitBook-API-Token mit Schreibrechten für diesen Bereich, gespeichert als `GITBOOK_PATCHNOTES_TOKEN`;
 * die GitBook-Zielkennung für die Patchnotes-Sammlung.
 
 Der Token bleibt ausschließlich in den Geheimnissen des GitHub-Repositories. Er erscheint weder in Pull Requests noch in Patchnotes.
