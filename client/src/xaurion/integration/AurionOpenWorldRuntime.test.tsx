@@ -10,9 +10,12 @@ const fixture = vi.hoisted(() => {
     start: vi.fn(), stop: vi.fn(), observePlayerEquipment: () => vi.fn(),
     onRuntimeError: undefined as ((error: unknown) => void) | undefined,
   });
+  type ZoneStatus = "connecting" | "connected" | "closed" | "rejected";
   return {
     engines: [] as ReturnType<typeof makeEngine>[], makeEngine,
     snapshots: [] as Array<(snapshot: ZonePresenceSnapshot) => void>,
+    statuses: [] as Array<(status: ZoneStatus) => void>,
+    rejects: [] as Array<(code: string) => void>,
     tickets: [] as Array<{ onSuccess: (value: { ticket: string }) => void; onError: () => void }>,
     connections: [] as Array<{ connect: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; sendMovement: ReturnType<typeof vi.fn> }>,
   };
@@ -31,8 +34,14 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
 vi.mock("../core/MMOEngine", () => ({ MMOEngine: Object.assign(vi.fn(() => {
   const engine = fixture.makeEngine(); fixture.engines.push(engine); return engine;
 }), { checkWebGLSupport: () => ({ supported: true }) }) }));
-vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn((options: {onSnapshot: (snapshot: ZonePresenceSnapshot) => void}) => {
+vi.mock("@/lib/zoneMovement", () => ({ ZoneMovementClient: vi.fn((options: {
+  onStatus: (status: "connecting" | "connected" | "closed" | "rejected") => void;
+  onSnapshot: (snapshot: ZonePresenceSnapshot) => void;
+  onReject: (code: string) => void;
+}) => {
+  fixture.statuses.push(options.onStatus);
   fixture.snapshots.push(options.onSnapshot);
+  fixture.rejects.push(options.onReject);
   const client = { connect: vi.fn(), close: vi.fn(), sendMovement: vi.fn() }; fixture.connections.push(client); return client;
 }) }));
 vi.mock("./aurionAuthorityAdapter", () => ({ bindAurionAuthorityProjection: vi.fn() }));
@@ -51,7 +60,7 @@ vi.mock("../components/PartyModal", () => ({ PartyModal: () => null }));
 
 const enter = () => fireEvent(window, new CustomEvent("aurion:load-open-world", { detail: { displayName: "Aurion", globalWorld: { epoch: 0, worldSeed: "fixture" } } }));
 describe("open world session ownership", () => {
-  beforeEach(() => { fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; });
+  beforeEach(() => { fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = []; });
   it("forwards confirmed active-runtime positions to the shared stream and retires the callback on return", () => {
     const received: unknown[] = [];
     const listener = (event: Event) => received.push((event as CustomEvent).detail);
@@ -78,6 +87,38 @@ describe("open world session ownership", () => {
     expect(fixture.tickets).toHaveLength(2);
     act(() => fixture.tickets[1].onSuccess({ ticket: "current-fixture" }));
     expect(fixture.connections[0].connect).toHaveBeenCalledWith("current-fixture");
+  });
+
+  it("requests a fresh one-time ticket after a transient pre-welcome zone rejection", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AurionOpenWorldRuntime />); enter();
+      expect(fixture.tickets).toHaveLength(1);
+      act(() => fixture.tickets[0].onSuccess({ ticket: "first-fixture" }));
+      expect(fixture.connections).toHaveLength(1);
+
+      // A server-side handshake failure closes the socket with 1008 before welcome;
+      // ZoneMovementClient reports that transport state as rejected without a reject code.
+      act(() => fixture.statuses[0]("rejected"));
+      act(() => { vi.advanceTimersByTime(10_000); });
+
+      expect(fixture.tickets).toHaveLength(2);
+      act(() => fixture.tickets[1].onSuccess({ ticket: "retry-fixture" }));
+      expect(fixture.connections).toHaveLength(2);
+      expect(fixture.connections[1].connect).toHaveBeenCalledWith("retry-fixture");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("does not retry a zone transport after an explicit fatal protocol rejection", () => {
+    vi.useFakeTimers();
+    try {
+      render(<AurionOpenWorldRuntime />); enter();
+      act(() => fixture.tickets[0].onSuccess({ ticket: "first-fixture" }));
+      act(() => fixture.rejects[0]("PROTOCOL_VERSION_UNSUPPORTED"));
+      act(() => fixture.statuses[0]("rejected"));
+      act(() => { vi.advanceTimersByTime(30_000); });
+      expect(fixture.tickets).toHaveLength(1);
+    } finally { vi.useRealTimers(); }
   });
 
   it("closes the active session and removes controls after a late renderer error", () => {
