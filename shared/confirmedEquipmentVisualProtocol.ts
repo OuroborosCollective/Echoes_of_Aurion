@@ -1,9 +1,20 @@
 import { z } from "zod";
-import { glbEquipmentSlots } from "./glbImportContract";
+import { glbEquipmentSlots, type GlbEquipmentSlot } from "./glbImportContract";
 import { itemRecordVersionSchema, uiSlots } from "./playerUiProtocol";
 import { visualItemDescriptorSchema } from "./visualItemProtocol";
 
 export const CONFIRMED_EQUIPMENT_VISUAL_VERSION = "aurion-equipment-visuals.v2" as const;
+
+export const uiEquipmentVisualSlot = Object.freeze({
+  main_hand: "weapon",
+  off_hand: "shield",
+  focus: "shield",
+  head: "helmet",
+  chest: "chest",
+  hands: "arms",
+  legs: "legs",
+  feet: "boots",
+} satisfies Partial<Record<(typeof uiSlots)[number], GlbEquipmentSlot>>);
 
 const confirmedEquipmentBaseSchema = z.object({
   uiSlot: z.enum(uiSlots),
