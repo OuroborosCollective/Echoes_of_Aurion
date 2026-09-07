@@ -30,6 +30,20 @@ function spiderGlb(): string {
   });
 }
 
+function universalCharacterGlb(): string {
+  return glbBase64({
+    asset: { version: "2.0" },
+    scenes: [{ name: "Scene", nodes: [0] }],
+    nodes: [
+      { name: "Head" }, { name: "hand_l" }, { name: "hand_r" },
+      { name: "upperarm_l" }, { name: "upperarm_r" }, { name: "thigh_l" }, { name: "thigh_r" },
+    ],
+    meshes: [{ name: "Superhero_Female", primitives: [] }],
+    skins: [{ name: "Armature", joints: [0] }],
+    animations: ["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"].map(name => ({ name, channels: [], samplers: [] })),
+  });
+}
+
 function responseHarness() {
   let statusCode = 200;
   let body: unknown;
@@ -61,11 +75,58 @@ describe("smart GLB upload runtime", () => {
       displayName: "Starter Spider",
       assetType: "enemy",
       createdByUserId: 17,
+      purpose: "auto",
     });
     expect(harness.read().body).toMatchObject({
       accepted: true,
+      purpose: "auto",
       classification: { assetType: "enemy", subcategory: "spider", confidence: "high" },
     });
+  });
+
+  it("accepts an explicit character-only NPC fallback purpose without allowing the browser to author its type", async () => {
+    const uploadAsset = vi.fn(async input => ({ receipt: { assetId: "glb_fallback", targetKey: null, status: "catalog" }, input }));
+    const handler = createGlbSmartUploadHandler({ authenticate: async () => ({ id: 17, role: "admin" }), uploadAsset });
+    const harness = responseHarness();
+    await handler({ body: {
+      displayName: "Universal Buns Female",
+      fileName: "buns.glb",
+      assetType: "enemy",
+      purpose: "npc-fallback",
+      contentBase64: universalCharacterGlb(),
+    } } as any, harness.response);
+
+    expect(harness.read().statusCode).toBe(201);
+    expect(uploadAsset).toHaveBeenCalledWith(expect.objectContaining({
+      displayName: "Universal Buns Female",
+      assetType: "character",
+      purpose: "npc-fallback",
+      createdByUserId: 17,
+    }));
+    expect(harness.read().body).toMatchObject({
+      accepted: true,
+      purpose: "npc-fallback",
+      classification: { assetType: "character", subcategory: "universal-humanoid" },
+      receipt: { targetKey: null, status: "catalog" },
+    });
+  });
+
+  it("rejects non-character bytes when the protected purpose is NPC fallback", async () => {
+    const uploadAsset = vi.fn();
+    const handler = createGlbSmartUploadHandler({ authenticate: async () => ({ id: 17, role: "admin" }), uploadAsset });
+    const harness = responseHarness();
+    await handler({ body: { displayName: "Not an NPC", fileName: "spider.glb", purpose: "npc-fallback", contentBase64: spiderGlb() } } as any, harness.response);
+    expect(harness.read()).toEqual({ statusCode: 422, body: { error: "GLB_NPC_FALLBACK_CHARACTER_REQUIRED" } });
+    expect(uploadAsset).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown import purposes instead of silently broadening authority", async () => {
+    const uploadAsset = vi.fn();
+    const handler = createGlbSmartUploadHandler({ authenticate: async () => ({ id: 17, role: "admin" }), uploadAsset });
+    const harness = responseHarness();
+    await handler({ body: { displayName: "Character", fileName: "character.glb", purpose: "replace-player", contentBase64: universalCharacterGlb() } } as any, harness.response);
+    expect(harness.read().statusCode).toBe(400);
+    expect(uploadAsset).not.toHaveBeenCalled();
   });
 
   it("rejects authenticated non-admin users before parsing or persisting bytes", async () => {
