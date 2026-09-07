@@ -7,6 +7,7 @@ import { glbManager } from "../core/GLBModelManager";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
+import { EquipmentCatalogProjection } from "./EquipmentCatalogProjection";
 
 type ProjectedNpc = Readonly<{
   sha256: string;
@@ -45,6 +46,7 @@ export class NpcFallbackProjection {
   private readonly pending = new Set<string>();
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
+  private readonly equipment: EquipmentCatalogProjection;
   private disposed = false;
   private refreshBusy = false;
   private lastRefreshTick = -150;
@@ -52,6 +54,7 @@ export class NpcFallbackProjection {
   constructor(private readonly engine: MMOEngine) {
     this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
     this.remotePublic = new RemotePublicAppearanceProjection(engine);
+    this.equipment = new EquipmentCatalogProjection(engine);
     void this.refreshCatalog();
   }
 
@@ -65,6 +68,7 @@ export class NpcFallbackProjection {
       if (!this.disposed) {
         this.catalog = catalog;
         this.uploadedWorld.setCatalog(catalog);
+        this.equipment.setCatalog(catalog);
       }
     } catch {
       // Keep the last confirmed catalog through transient transport failures.
@@ -124,6 +128,7 @@ export class NpcFallbackProjection {
     for (const projected of this.projected.values()) projected.actor.update(delta);
     this.uploadedWorld.update();
     this.remotePublic.update(delta, logicalTick);
+    this.equipment.update(delta, logicalTick);
     if (logicalTick - this.lastRefreshTick >= 150) {
       this.lastRefreshTick = logicalTick;
       void this.refreshCatalog();
@@ -143,10 +148,12 @@ export class NpcFallbackProjection {
 
   uploadedWorldEvidence() { return this.uploadedWorld.evidence(); }
   remotePublicEvidence() { return this.remotePublic.evidence(); }
+  equipmentEvidence() { return this.equipment.evidence(); }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.equipment.dispose();
     this.remotePublic.dispose();
     this.uploadedWorld.dispose();
     for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);
