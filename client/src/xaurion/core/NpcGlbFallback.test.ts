@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { NPC_FALLBACK_DISPLAY_PREFIX } from "@shared/glbImportContract";
-import { isNpcFallbackCatalogEntry, npcFallbackPool, npcVisualIdentityHash, selectNpcGlb } from "./NpcGlbFallback";
+import { isNpcFallbackCatalogEntry, npcFallbackPool, npcFallbackVariants, npcVisualIdentityHash, selectNpcGlb } from "./NpcGlbFallback";
 
 const entry = (assetId: string, sha: string, displayName: string, targetKey: string | null = null) => ({
   assetId,
@@ -45,6 +45,17 @@ describe("deterministic NPC GLB fallback selection", () => {
     const second = selectNpcGlb(catalog([candidates[1]!, candidates[2]!, candidates[0]!]), "questgiver:lyra");
     expect(first?.entry.sha256).toBe(second?.entry.sha256);
     expect(first?.fallbackIndex).toBe(npcVisualIdentityHash("questgiver:lyra") % 3);
+  });
+
+  it("treats LOD0 and LOD1 as one character identity and honors an explicit presentation LOD", () => {
+    const other = entry("glb_other", "c", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Male Beard LOD0`);
+    const high = entry("glb_buns_lod0", "a", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Female Buns LOD0`);
+    const low = entry("glb_buns_lod1", "b", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Female Buns LOD1`);
+    const variants = npcFallbackVariants(catalog([low, other, high]));
+    expect(variants).toHaveLength(2);
+    const identity = Array.from({ length: 100 }, (_, index) => `npc:${index}`).find(candidate => selectNpcGlb(catalog([low, other, high]), candidate)?.variantKey === "universal female buns")!;
+    expect(selectNpcGlb(catalog([low, other, high]), identity, null, 0)?.entry.assetId).toBe("glb_buns_lod0");
+    expect(selectNpcGlb(catalog([low, other, high]), identity, null, 1)?.entry.assetId).toBe("glb_buns_lod1");
   });
 
   it("returns no visual claim when no approved fallback exists", () => {
