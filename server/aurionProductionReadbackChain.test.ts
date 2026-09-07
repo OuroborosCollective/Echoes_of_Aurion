@@ -11,11 +11,16 @@ describe("Aurion post-deploy production schema readback", () => {
   const runner = read("deploy/aurion-production-schema-reconcile");
   const networkContract = JSON.parse(read("deploy/aurion-reconcile-runtime-network.conf"));
 
-  it("executes the production receipt classifier against all journaled migrations", () => {
+  it("executes the production receipt classifier against the explicitly approved production wave", () => {
     const classifier=readback.match(/RAW_PATH="\$raw"[\s\S]*?node -e '([\s\S]*?)\n            '/)?.[1];
     expect(classifier).toBeDefined();
-    const tags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21).map((e:{tag:string})=>e.tag);
+    const journalTags=JSON.parse(read("drizzle/meta/_journal.json")).entries.filter((e:{idx:number})=>e.idx>=21).map((e:{tag:string})=>e.tag);
+    const wave=JSON.parse(read("config/aurion-migration-wave-manifest.json"));
+    expect(wave).toMatchObject({schemaVersion:"aurion.migration-wave-manifest.v2",recordType:"aurion_migration_wave_manifest",policy:{futureTagsRequireNewManifest:true}});
+    const tags=wave.migrations.map((entry:{tag:string})=>entry.tag);
     expect(tags).toContain("0034_ax1_starter_equipment_receipts");
+    expect(journalTags.slice(0,tags.length)).toEqual(tags);
+    expect(journalTags.length).toBeGreaterThanOrEqual(tags.length);
     const migrationCount=tags.length;
     expect(migrationCount).toBeGreaterThan(0);
     const sourceRevision="a".repeat(40),imageDigest="sha256:"+"b".repeat(64);

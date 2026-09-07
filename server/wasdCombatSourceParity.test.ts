@@ -30,12 +30,13 @@ describe("pinned AX1/WASD live combat contract",()=>{
     expect(Object.keys(delta)).not.toContain("quest");
   });
 
-  it("projects AX1 starter and mob values without letting AX1 resolve hits",()=>{
+  it("projects classless AX1 starter health and mob values without letting AX1 resolve hits",()=>{
     expect(AX1_STARTER_BLADE_ATTACK_BONUS).toBe(15);
     expect(AX1_STARTER_BLADE_MAX_HP_BONUS).toBe(20);
-    expect(ax1PlayerBaseMaxHealth("vanguard",true)).toBe(540);
-    expect(ax1PlayerBaseMaxHealth("seer",true)).toBe(380);
-    expect(ax1PlayerBaseMaxHealth("warden",true)).toBe(440);
+    for (const playerClass of ["unbound", "vanguard", "seer", "warden"] as const) {
+      expect(ax1PlayerBaseMaxHealth(playerClass,false)).toBe(520);
+      expect(ax1PlayerBaseMaxHealth(playerClass,true)).toBe(540);
+    }
     expect(ax1MobCombatProjection("aether_wisp",2)).toEqual({maxHealth:210,attackRangeFixed:14_000,attackCooldownTicks:25});
     expect(ax1MobCombatProjection("steam_drake",4)).toEqual({maxHealth:740,attackRangeFixed:12_000,attackCooldownTicks:18});
     expect(ax1MobCombatProjection("titan_boss",15)).toEqual({maxHealth:5_200,attackRangeFixed:5_000,attackCooldownTicks:25});
