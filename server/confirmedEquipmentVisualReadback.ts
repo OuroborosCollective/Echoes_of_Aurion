@@ -4,6 +4,7 @@ import {
   CONFIRMED_EQUIPMENT_VISUAL_VERSION,
   confirmedEquipmentVisualReadbackSchema,
   uiEquipmentVisualSlot,
+  type ConfirmedEquipmentVisual,
   type ConfirmedEquipmentVisualReadback,
 } from "../shared/confirmedEquipmentVisualProtocol";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
@@ -31,14 +32,15 @@ export function projectConfirmedEquipmentVisualReadback(
   const rowsById = new Map(v2Rows.map(row => [row.id, row] as const));
   const receiptsById = new Map(receipts.map(receipt => [receipt.id, receipt] as const));
   const uiItems = new Map(ui.items.map(item => [`${item.version}:${item.id}`, item] as const));
+  const equipment: ConfirmedEquipmentVisual[] = [];
 
-  const equipment = ui.equipment.flatMap(binding => {
+  for (const binding of ui.equipment) {
     const equipmentSlot = uiEquipmentVisualSlot[binding.slot as keyof typeof uiEquipmentVisualSlot] ?? null;
     const uiItem = uiItems.get(`${binding.version}:${binding.id}`);
-    if (!equipmentSlot || !uiItem || uiItem.status !== "equipped") return [];
+    if (!equipmentSlot || !uiItem || uiItem.status !== "equipped") continue;
 
     if (binding.version !== "aurion_v2") {
-      return [Object.freeze({
+      equipment.push({
         uiSlot: binding.slot,
         equipmentSlot,
         itemId: binding.id,
@@ -46,7 +48,8 @@ export function projectConfirmedEquipmentVisualReadback(
         definition: uiItem.definition,
         receiptId: uiItem.receiptId,
         visualDescriptor: null,
-      })];
+      });
+      continue;
     }
 
     const row = rowsById.get(binding.id);
@@ -82,25 +85,24 @@ export function projectConfirmedEquipmentVisualReadback(
     const rowAffixes = parseJson(row.affixesJson, "EQUIPMENT_VISUAL_V2_AFFIX_JSON_INVALID");
     if (canonicalJson(rowAffixes) !== canonicalJson(resolved.affixes)) throw new Error("EQUIPMENT_VISUAL_V2_AFFIX_MISMATCH");
 
-    const visualDescriptor = projectConfirmedLootToVisualItem({
-      loot: resolved,
-      baseDefinition: definition,
-      lootReceiptId: receipt.id,
-      visualEventIndex: 0,
-      visual: null,
-    });
-
-    return [Object.freeze({
+    equipment.push({
       uiSlot: binding.slot,
       equipmentSlot,
       itemId: binding.id,
-      version: "aurion_v2" as const,
+      version: "aurion_v2",
       definition: uiItem.definition,
       receiptId: uiItem.receiptId,
-      visualDescriptor,
-    })];
-  }).sort((left, right) => left.equipmentSlot.localeCompare(right.equipmentSlot) || left.itemId.localeCompare(right.itemId));
+      visualDescriptor: projectConfirmedLootToVisualItem({
+        loot: resolved,
+        baseDefinition: definition,
+        lootReceiptId: receipt.id,
+        visualEventIndex: 0,
+        visual: null,
+      }),
+    });
+  }
 
+  equipment.sort((left, right) => left.equipmentSlot.localeCompare(right.equipmentSlot) || left.itemId.localeCompare(right.itemId));
   return confirmedEquipmentVisualReadbackSchema.parse({
     version: CONFIRMED_EQUIPMENT_VISUAL_VERSION,
     userId: ui.userId,
