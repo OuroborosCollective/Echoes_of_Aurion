@@ -1,0 +1,96 @@
+name: AIM-286 Visual Item Runtime
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim286-visual-item-runtime.yml"
+      - "shared/confirmedEquipmentVisualProtocol.ts"
+      - "shared/visualItemProtocol.ts"
+      - "server/confirmedEquipmentVisualReadback.ts"
+      - "server/confirmedEquipmentVisualReadback.test.ts"
+      - "server/confirmedEquipmentVisualReadback.mariadb.test.ts"
+      - "server/confirmedEquipmentVisualRoutes.ts"
+      - "server/aurionVisualItemAdapter.ts"
+      - "server/aurionVisualItemAdapter.test.ts"
+      - "server/playerUiPersistence.ts"
+      - "server/_core/index.ts"
+      - "client/src/xaurion/integration/EquipmentCatalogProjection.ts"
+      - "client/src/xaurion/integration/EquipmentCatalogProjection.test.ts"
+      - "client/src/xaurion/core/VisualItem*.ts"
+      - "client/src/xaurion/core/AnimatedGlbActor.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-286-visual-item-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-item-runtime:
+    name: Receipt truth, MariaDB projection, client runtime, typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_ui_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_ui_test
+      AURION_UI_E2E: '1'
+      AURION_E2E_ISOLATED: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-ci-visual-item-key-never-production
+      VITE_APP_ID: aurion-isolated-visual-item-test
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Apply complete migration journal to real MariaDB
+        run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+
+      - name: Run receipt, MariaDB and live projection regressions
+        run: >-
+          pnpm exec vitest run
+          server/confirmedEquipmentVisualReadback.test.ts
+          server/confirmedEquipmentVisualReadback.mariadb.test.ts
+          server/aurionVisualItemAdapter.test.ts
+          client/src/xaurion/integration/EquipmentCatalogProjection.test.ts
+          client/src/xaurion/core/VisualItemAttachmentController.test.ts
+          client/src/xaurion/core/VisualItemGlbOverrideResolver.test.ts
+          client/src/xaurion/core/VisualItemMaterialCompiler.test.ts
+          client/src/xaurion/core/VisualItemGeometryCompiler.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build production runtime
+        run: pnpm build
