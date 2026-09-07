@@ -282,6 +282,32 @@ export const skillProgressionEvents = mysqlTable("skillProgressionEvents", {
   index("skillProgressionEvents_user_skill_created_idx").on(table.userId, table.skillId, table.createdAt),
 ]);
 
+/** Canonical server-confirmed link between result, loot, mastery, XP, and level projection. */
+export const aurionProgressionReceipts = mysqlTable("aurionProgressionReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  characterId: varchar("characterId", { length: 128 }).notNull(),
+  actionKind: mysqlEnum("actionKind", ["encounter", "weapon_use", "skill_use", "loot_claim"]).notNull(),
+  weaponTrack: varchar("weaponTrack", { length: 64 }).notNull(),
+  skillId: varchar("skillId", { length: 96 }).notNull(),
+  resultReceiptId: varchar("resultReceiptId", { length: 128 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 128 }).notNull(),
+  lootReceiptId: varchar("lootReceiptId", { length: 128 }),
+  masteryEventId: varchar("masteryEventId", { length: 128 }),
+  xpGrantedExact: varchar("xpGrantedExact", { length: 128 }).notNull(),
+  levelExact: varchar("levelExact", { length: 128 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 96 }).notNull(),
+  contentVersion: varchar("contentVersion", { length: 96 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionProgressionReceipts_user_character_result_uq").on(table.userId, table.characterId, table.resultReceiptId),
+  uniqueIndex("aurionProgressionReceipts_hash_uq").on(table.receiptHash),
+  uniqueIndex("aurionProgressionReceipts_idempotency_uq").on(table.idempotencyKey),
+  index("aurionProgressionReceipts_user_created_idx").on(table.userId, table.createdAt),
+]);
+
 /** Versioned loot bases cover weapons, armor, accessories, foci and crafting components without client-defined item types. */
 export const aurionLootBaseDefinitions = mysqlTable("aurionLootBaseDefinitions", {
   id: varchar("id", { length: 96 }).primaryKey(),
