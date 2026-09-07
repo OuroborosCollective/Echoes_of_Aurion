@@ -38,6 +38,14 @@ export function glbEquipmentSlotFromDisplayName(displayName: string): GlbEquipme
   return (glbEquipmentSlots as readonly string[]).includes(slot) ? slot as GlbEquipmentSlot : null;
 }
 
+export function glbSubcategoryFromDisplayName(displayName: string): string | null {
+  const purpose = glbPurposeFromDisplayName(displayName);
+  if (purpose === "world-environment") return displayName.slice(WORLD_ENVIRONMENT_DISPLAY_PREFIX.length).split(" · ", 1)[0] || null;
+  if (purpose === "world-nature") return displayName.slice(WORLD_NATURE_DISPLAY_PREFIX.length).split(" · ", 1)[0] || null;
+  if (purpose === "equipment") return glbEquipmentSlotFromDisplayName(displayName);
+  return null;
+}
+
 export const glbImportReceiptSchema = z.object({
   version: z.literal(GLB_IMPORT_VERSION),
   assetId: z.string().min(8).max(64),
