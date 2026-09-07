@@ -53,6 +53,10 @@ const weaponForAurion = (value: "blade" | "staff" | "spear" | "focus" | undefine
   return "blade" as const;
 };
 
+const ZONE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000] as const;
+const ZONE_MAX_RECONNECT_ATTEMPTS = 8;
+const FATAL_ZONE_REJECT_CODES = new Set(["PROTOCOL_VERSION_UNSUPPORTED", "INVALID_MESSAGE", "UNSUPPORTED_ZONE_COMMAND"]);
+
 function validActivation(detail: unknown): ActivationSnapshot {
   if (!detail || typeof detail !== "object") return Object.freeze({ displayName: "Aurion Open World" });
   const value = detail as Record<string, unknown>;
@@ -74,6 +78,7 @@ export default function AurionOpenWorldRuntime() {
   const motionRef = useRef<ConfirmedPlayerMotion | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
   const zoneConnectedRef = useRef(false);
+  const zoneReconnectAttemptsRef = useRef(0);
   const remotePresenceRef = useRef<RemotePresenceProjection | null>(null);
   const keysRef = useRef(new Set<string>());
   const demonstratedMovementRef = useRef("0:0");
@@ -88,6 +93,7 @@ export default function AurionOpenWorldRuntime() {
   const [modelStatus, setModelStatus] = useState("procedural");
   const [webglError, setWebglError] = useState<string | null>(null);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
+  const [zoneRetryEpoch, setZoneRetryEpoch] = useState(0);
   const [currentClassId, setCurrentClassId] = useState<CharacterClassId>("knight");
   const [confirmedPosition, setConfirmedPosition] = useState<{ x: number; z: number }>();
   const [remotePlayers, setRemotePlayers] = useState<readonly ConfirmedZonePresence[]>([]);
@@ -132,6 +138,8 @@ export default function AurionOpenWorldRuntime() {
 
   useEffect(() => {
     const onLoad = (event: Event) => {
+      zoneReconnectAttemptsRef.current = 0;
+      setZoneRetryEpoch(0);
       setWebglError(null);
       setConfirmedPosition(undefined);
       setRemotePlayers([]);
@@ -290,6 +298,24 @@ export default function AurionOpenWorldRuntime() {
     if (!activation || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
     let disposed = false;
     let client: ZoneMovementClient | undefined;
+    let retryTimer: number | undefined;
+    let fatalReject = false;
+
+    const scheduleReconnect = () => {
+      if (disposed || fatalReject || retryTimer !== undefined) return;
+      if (zoneReconnectAttemptsRef.current >= ZONE_MAX_RECONNECT_ATTEMPTS) {
+        setZoneStatus("rejected");
+        return;
+      }
+      const attempt = zoneReconnectAttemptsRef.current++;
+      const delay = ZONE_RECONNECT_DELAYS_MS[Math.min(attempt, ZONE_RECONNECT_DELAYS_MS.length - 1)]!;
+      setZoneStatus("connecting");
+      retryTimer = window.setTimeout(() => {
+        retryTimer = undefined;
+        if (!disposed) setZoneRetryEpoch(value => value + 1);
+      }, delay);
+    };
+
     setZoneStatus("connecting");
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "xaurion-open-world-v1" }, {
       onSuccess: ({ ticket }) => {
@@ -298,10 +324,22 @@ export default function AurionOpenWorldRuntime() {
           onStatus: status => {
             if (disposed) return;
             zoneConnectedRef.current = status === "connected";
-            setZoneStatus(status);
+            if (status === "connected") {
+              zoneReconnectAttemptsRef.current = 0;
+              setZoneStatus("connected");
+              void playerSnapshot.refetch?.();
+              void controlsQuery.refetch?.();
+              return;
+            }
             if (status !== "connected") { remotePresenceRef.current?.clear(); setRemotePlayers([]); motionRef.current?.stop(); }
+            if (status === "closed" || (status === "rejected" && !fatalReject)) scheduleReconnect();
+            else setZoneStatus(status);
           },
-          onReject: () => { if (!disposed) setZoneStatus("rejected"); },
+          onReject: code => {
+            if (disposed) return;
+            fatalReject = FATAL_ZONE_REJECT_CODES.has(code);
+            if (fatalReject) setZoneStatus("rejected");
+          },
           onSnapshot: snapshot => {
             if (disposed) return;
             const self = snapshot.presences.find(presence => presence.userId === user.id);
@@ -320,16 +358,17 @@ export default function AurionOpenWorldRuntime() {
         zoneClientRef.current = client;
         client.connect(ticket);
       },
-      onError: () => { if (!disposed) setZoneStatus("rejected"); },
+      onError: () => { if (!disposed) scheduleReconnect(); },
     });
     return () => {
       disposed = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       zoneConnectedRef.current = false;
       motionRef.current?.stop();
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
-  }, [activation, webglError, isAuthenticated, user?.id]);
+  }, [activation, webglError, isAuthenticated, user?.id, zoneRetryEpoch]);
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
