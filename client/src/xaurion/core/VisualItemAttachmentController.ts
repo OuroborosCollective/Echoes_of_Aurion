@@ -148,9 +148,11 @@ export class VisualItemAttachmentController {
       detachWithoutDisposingSharedGlb(loaded.scene);
       return Object.freeze({ status: "stale", slot, identity, source: "glb", detail: "STALE_REQUEST" });
     }
-    if (hasRiggedEquipment(loaded.scene) || !hasFiniteRenderableBounds(loaded.scene)) {
+    const rigged = hasRiggedEquipment(loaded.scene);
+    const finiteBounds = hasFiniteRenderableBounds(loaded.scene);
+    if (rigged || !finiteBounds) {
       detachWithoutDisposingSharedGlb(loaded.scene);
-      return Object.freeze({ status: "invalid_glb", slot, identity, source: "glb", detail: hasRiggedEquipment(loaded.scene) ? "RIGGED_EQUIPMENT_UNSUPPORTED" : "GLB_BOUNDS_INVALID" });
+      return Object.freeze({ status: "invalid_glb", slot, identity, source: "glb", detail: rigged ? "RIGGED_EQUIPMENT_UNSUPPORTED" : "GLB_BOUNDS_INVALID" });
     }
     const owned: OwnedAttachment = {
       identity,
