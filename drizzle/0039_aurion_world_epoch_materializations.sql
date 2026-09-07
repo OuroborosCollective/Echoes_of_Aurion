@@ -1,0 +1,20 @@
+CREATE TABLE `aurionWorldEpochMaterializations` (
+  `id` varchar(64) NOT NULL,
+  `worldId` varchar(64) NOT NULL,
+  `epoch` int NOT NULL,
+  `resolutionIndex` int NOT NULL,
+  `reactionReceiptId` varchar(96) NOT NULL,
+  `reactionHash` varchar(64) NOT NULL,
+  `presenceDigest` varchar(64) NOT NULL,
+  `presenceJson` text NOT NULL,
+  `materializationJson` text NOT NULL,
+  `materializationHash` varchar(64) NOT NULL,
+  `idempotencyKey` varchar(128) NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT (now()),
+  CONSTRAINT `aurionWorldEpochMaterializations_id` PRIMARY KEY (`id`),
+  UNIQUE KEY `aurionWorldEpochMaterializations_world_epoch_uq` (`worldId`,`epoch`),
+  UNIQUE KEY `aurionWorldEpochMaterializations_resolution_uq` (`worldId`,`resolutionIndex`),
+  UNIQUE KEY `aurionWorldEpochMaterializations_hash_uq` (`materializationHash`),
+  UNIQUE KEY `aurionWorldEpochMaterializations_idempotency_uq` (`idempotencyKey`),
+  KEY `aurionWorldEpochMaterializations_world_created_idx` (`worldId`,`createdAt`)
+);
