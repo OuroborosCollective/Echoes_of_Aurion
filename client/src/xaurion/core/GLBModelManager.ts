@@ -1,4 +1,4 @@
-import { glbRuntimeCatalogSchema } from "@shared/glbImportContract";
+import { glbRuntimeCatalogSchema, type GlbEquipmentSlot, type GlbImportPurpose } from "@shared/glbImportContract";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -25,6 +25,9 @@ export interface GLBModelEntry {
     | 'boots'
     | 'prop'
     | 'architecture';
+  purpose?: GlbImportPurpose;
+  subcategory?: string | null;
+  equipmentSlot?: GlbEquipmentSlot | null;
   equipSlot?: string;
   weaponType?: WeaponType;
   rarity?: ItemRarity;
@@ -72,6 +75,17 @@ export interface WatchStatus {
   recentEvents: WatcherEvent[];
 }
 
+function runtimeCategory(entry: ReturnType<typeof glbRuntimeCatalogSchema.parse>["entries"][number]): GLBModelEntry["category"] {
+  if (entry.purpose === "world-environment") return 'architecture';
+  if (entry.purpose === "world-nature") return 'prop';
+  if (entry.purpose === "equipment" && entry.equipmentSlot) return entry.equipmentSlot;
+  if (entry.assetType === 'character') return 'character_avatar';
+  if (entry.assetType === 'enemy') return 'mob';
+  if (entry.assetType === 'arena') return 'architecture';
+  if (entry.assetType === 'weapon') return 'weapon';
+  return 'prop';
+}
+
 export class GLBModelManager {
   private static instance: GLBModelManager;
   private loader = new GLTFLoader();
@@ -84,9 +98,7 @@ export class GLBModelManager {
   private constructor() {}
 
   public static getInstance(): GLBModelManager {
-    if (!GLBModelManager.instance) {
-      GLBModelManager.instance = new GLBModelManager();
-    }
+    if (!GLBModelManager.instance) GLBModelManager.instance = new GLBModelManager();
     return GLBModelManager.instance;
   }
 
@@ -95,59 +107,31 @@ export class GLBModelManager {
     if (!response.ok) throw new Error('GLB_CATALOG_UNAVAILABLE');
     const catalog = glbRuntimeCatalogSchema.parse(await response.json());
     this.setAuthoritativeCatalog(catalog.entries.map(entry => ({
-      id: entry.assetId, name: entry.displayName, fileName: `${entry.sha256}.glb`, url: entry.storageUrl,
-      category: entry.assetType === 'character' ? 'character_avatar' : entry.assetType === 'enemy' ? 'mob' : entry.assetType === 'arena' ? 'architecture' : entry.assetType === 'weapon' ? 'weapon' : 'prop',
-      status: 'approved', animations: [], description: `Aurion catalog: ${entry.targetKey ?? entry.assetType}`,
+      id: entry.assetId,
+      name: entry.displayName,
+      fileName: `${entry.sha256}.glb`,
+      url: entry.storageUrl,
+      category: runtimeCategory(entry),
+      purpose: entry.purpose,
+      subcategory: entry.subcategory,
+      equipmentSlot: entry.equipmentSlot,
+      equipSlot: entry.equipmentSlot ?? undefined,
+      status: 'approved',
+      animations: [],
+      description: `Aurion catalog: ${entry.purpose}:${entry.subcategory ?? entry.targetKey ?? entry.assetType}`,
     })));
     return this.catalog;
   }
 
-  public setAuthoritativeCatalog(models: GLBModelEntry[]): void {
-    this.catalog = Array.isArray(models) ? models.slice() : [];
-  }
+  public setAuthoritativeCatalog(models: GLBModelEntry[]): void { this.catalog = Array.isArray(models) ? models.slice() : []; }
+  public getCachedCatalog(): GLBModelEntry[] { return this.catalog; }
 
-  public getCachedCatalog(): GLBModelEntry[] {
-    return this.catalog;
+  public async scanExternalDirectory(directoryPath?: string): Promise<{ success: boolean; scannedDirectory: string; totalModels: number; models: GLBModelEntry[]; watchStatus?: WatchStatus }> {
+    return { success: false, scannedDirectory: directoryPath || 'Aurion server-authoritative asset catalog', totalModels: this.catalog.length, models: this.catalog.slice(), watchStatus: (await this.getWatchStatus()) || undefined };
   }
-
-  public async scanExternalDirectory(directoryPath?: string): Promise<{
-    success: boolean;
-    scannedDirectory: string;
-    totalModels: number;
-    models: GLBModelEntry[];
-    watchStatus?: WatchStatus;
-  }> {
-    return {
-      success: false,
-      scannedDirectory: directoryPath || 'Aurion server-authoritative asset catalog',
-      totalModels: this.catalog.length,
-      models: this.catalog.slice(),
-      watchStatus: (await this.getWatchStatus()) || undefined,
-    };
-  }
-
-  public async getWatchStatus(): Promise<WatchStatus | null> {
-    return {
-      isWatching: false,
-      watchedDirectories: [],
-      totalModels: this.catalog.length,
-      activeDirectory: 'Aurion authority',
-      lastScanTime: null,
-      lastEventTime: null,
-      recentEvents: [],
-    };
-  }
-
-  public async toggleFileWatcher(_active: boolean, _directory?: string): Promise<boolean> {
-    return false;
-  }
-
-  public subscribeToWatchEvents(onEvent: (event: WatcherEvent) => void): () => void {
-    this.eventListeners.add(onEvent);
-    return () => {
-      this.eventListeners.delete(onEvent);
-    };
-  }
+  public async getWatchStatus(): Promise<WatchStatus | null> { return { isWatching: false, watchedDirectories: [], totalModels: this.catalog.length, activeDirectory: 'Aurion authority', lastScanTime: null, lastEventTime: null, recentEvents: [] }; }
+  public async toggleFileWatcher(_active: boolean, _directory?: string): Promise<boolean> { return false; }
+  public subscribeToWatchEvents(onEvent: (event: WatcherEvent) => void): () => void { this.eventListeners.add(onEvent); return () => { this.eventListeners.delete(onEvent); }; }
 
   public convertToRpgItem(model: GLBModelEntry): RPGItem {
     if (model.url.startsWith('/api/assets/glb/')) throw new Error('GLB_VISUAL_CATALOG_CANNOT_GRANT_ITEMS');
@@ -161,7 +145,6 @@ export class GLBModelManager {
     else if (model.category === 'legs' || model.equipSlot === 'legs') slot = 'legs';
     else if (model.category === 'boots' || model.equipSlot === 'boots') slot = 'boots';
     else if (model.category === 'character_avatar') slot = 'relic';
-
     let icon = '⚔️';
     if (slot === 'shield') icon = model.category === 'offhand' ? '📖' : '🛡️';
     else if (slot === 'helmet') icon = '🪖';
@@ -170,30 +153,11 @@ export class GLBModelManager {
     else if (model.weaponType === 'arcane') icon = '🔮';
     else if (model.weaponType === 'heavy_tech') icon = '⚙️';
     else if (model.category === 'character_avatar') icon = '✨';
-
     return {
-      id: `glb_item_${model.id}`,
-      name: model.name,
-      description: model.description || `Registered 3D asset from ${model.fileName}`,
-      icon,
-      rarity: model.rarity || 'epic',
-      slot,
-      weaponType: model.weaponType || (slot === 'weapon' ? 'blade' : undefined),
-      levelReq: 1,
-      stats: {
-        attack: model.itemStats?.attack || 0,
-        spellPower: model.itemStats?.spellPower || 0,
-        armor: model.itemStats?.armor || 0,
-        critChance: model.itemStats?.critChance || 0,
-        moveSpeed: model.itemStats?.moveSpeed || 0,
-        maxHp: model.itemStats?.maxHp || 0,
-        maxResource: model.itemStats?.maxResource || 0,
-      },
-      valueGold: 500,
-      effectDescription: `3D Model Mesh: ${model.fileName} (${model.triangleBudget} tris)`,
-      glbModelId: model.id,
-      glbModelUrl: model.url,
-      isGlbModel: true,
+      id: `glb_item_${model.id}`, name: model.name, description: model.description || `Registered 3D asset from ${model.fileName}`, icon,
+      rarity: model.rarity || 'epic', slot, weaponType: model.weaponType || (slot === 'weapon' ? 'blade' : undefined), levelReq: 1,
+      stats: { attack: model.itemStats?.attack || 0, spellPower: model.itemStats?.spellPower || 0, armor: model.itemStats?.armor || 0, critChance: model.itemStats?.critChance || 0, moveSpeed: model.itemStats?.moveSpeed || 0, maxHp: model.itemStats?.maxHp || 0, maxResource: model.itemStats?.maxResource || 0 },
+      valueGold: 500, effectDescription: `3D Model Mesh: ${model.fileName} (${model.triangleBudget} tris)`, glbModelId: model.id, glbModelUrl: model.url, isGlbModel: true,
     };
   }
 
@@ -201,120 +165,47 @@ export class GLBModelManager {
     const found = this.catalog.find((c) => c.id === urlOrId);
     const isDirectUrl = /^(?:https?:)?\/\//.test(urlOrId) || urlOrId.startsWith('/');
     const url = found ? found.url : isDirectUrl ? urlOrId : `/glb-assets/${urlOrId}`;
-
-    if (this.cache.has(url)) {
-      const cached = this.cache.get(url)!;
-      return {
-        scene: cloneSkeleton(cached.scene) as THREE.Group,
-        animations: cached.animations,
-      };
-    }
-
+    if (this.cache.has(url)) { const cached = this.cache.get(url)!; return { scene: cloneSkeleton(cached.scene) as THREE.Group, animations: cached.animations }; }
     return new Promise((resolve, reject) => {
-      this.loader.load(
-        url,
-        (gltf) => {
-          gltf.scene.traverse((node) => {
-            if ((node as THREE.Mesh).isMesh) {
-              node.castShadow = true;
-              node.receiveShadow = true;
-            }
+      this.loader.load(url, (gltf) => {
+        gltf.scene.traverse((node) => { if ((node as THREE.Mesh).isMesh) { node.castShadow = true; node.receiveShadow = true; } });
+        this.cache.set(url, { scene: gltf.scene, animations: gltf.animations });
+        resolve({ scene: cloneSkeleton(gltf.scene) as THREE.Group, animations: gltf.animations });
+      }, undefined, (err) => {
+        if (url.startsWith("/api/assets/glb/")) { reject(err); return; }
+        if (!url.includes('/models/glb/')) {
+          const fallbackUrl = `/models/glb/${urlOrId.replace(/^.*[\\/]/, '')}`;
+          this.loader.load(fallbackUrl, (gltf) => {
+            gltf.scene.traverse((node) => { if ((node as THREE.Mesh).isMesh) { node.castShadow = true; node.receiveShadow = true; } });
+            this.cache.set(url, { scene: gltf.scene, animations: gltf.animations }); resolve({ scene: cloneSkeleton(gltf.scene) as THREE.Group, animations: gltf.animations });
+          }, undefined, (fallbackErr) => {
+            console.warn(`Could not load GLB model from ${url} or fallback ${fallbackUrl}, using procedural mesh fallback:`, fallbackErr);
+            const fallbackGroup = new THREE.Group(); fallbackGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.3, metalness: 0.8 }))); resolve({ scene: fallbackGroup, animations: [] });
           });
-
-          this.cache.set(url, {
-            scene: gltf.scene,
-            animations: gltf.animations,
-          });
-
-          resolve({
-            scene: cloneSkeleton(gltf.scene) as THREE.Group,
-            animations: gltf.animations,
-          });
-        },
-        undefined,
-        (err) => {
-          if (url.startsWith("/api/assets/glb/")) { reject(err); return; }
-          if (!url.includes('/models/glb/')) {
-            const fallbackUrl = `/models/glb/${urlOrId.replace(/^.*[\\/]/, '')}`;
-            this.loader.load(
-              fallbackUrl,
-              (gltf) => {
-                gltf.scene.traverse((node) => {
-                  if ((node as THREE.Mesh).isMesh) {
-                    node.castShadow = true;
-                    node.receiveShadow = true;
-                  }
-                });
-                this.cache.set(url, { scene: gltf.scene, animations: gltf.animations });
-                resolve({ scene: cloneSkeleton(gltf.scene) as THREE.Group, animations: gltf.animations });
-              },
-              undefined,
-              (fallbackErr) => {
-                console.warn(`Could not load GLB model from ${url} or fallback ${fallbackUrl}, using procedural mesh fallback:`, fallbackErr);
-                const fallbackGroup = new THREE.Group();
-                const fallbackMesh = new THREE.Mesh(
-                  new THREE.BoxGeometry(0.3, 0.3, 0.3),
-                  new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.3, metalness: 0.8 })
-                );
-                fallbackGroup.add(fallbackMesh);
-                resolve({ scene: fallbackGroup, animations: [] });
-              }
-            );
-          } else {
-            console.warn(`Could not load external GLB model from ${url}, using procedural mesh fallback:`, err);
-            const fallbackGroup = new THREE.Group();
-            const fallbackMesh = new THREE.Mesh(
-              new THREE.BoxGeometry(0.3, 0.3, 0.3),
-              new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.3, metalness: 0.8 })
-            );
-            fallbackGroup.add(fallbackMesh);
-            resolve({ scene: fallbackGroup, animations: [] });
-          }
+        } else {
+          console.warn(`Could not load external GLB model from ${url}, using procedural mesh fallback:`, err);
+          const fallbackGroup = new THREE.Group(); fallbackGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.3, metalness: 0.8 }))); resolve({ scene: fallbackGroup, animations: [] });
         }
-      );
+      });
     });
   }
 
   public async loadEquipmentMesh(modelIdOrUrl: string, slot: string): Promise<THREE.Group | null> {
     try {
       const { scene } = await this.loadModel(modelIdOrUrl);
-      const container = new THREE.Group();
-      container.name = `glb_socket_${slot}_${modelIdOrUrl}`;
-
-      const box = new THREE.Box3().setFromObject(scene);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const maxDim = Math.max(size.x, size.y, size.z);
-
+      const container = new THREE.Group(); container.name = `glb_socket_${slot}_${modelIdOrUrl}`;
+      const box = new THREE.Box3().setFromObject(scene); const size = new THREE.Vector3(); box.getSize(size); const maxDim = Math.max(size.x, size.y, size.z);
       let targetScale = 1.0;
-      if (slot === 'weapon') {
-        targetScale = maxDim > 0 ? 1.4 / maxDim : 1.0;
-        scene.position.set(0, 0, 0);
-        scene.rotation.set(0, 0, 0);
-      } else if (slot === 'shield' || slot === 'offhand') {
-        targetScale = maxDim > 0 ? 1.1 / maxDim : 1.0;
-        scene.position.set(0, 0, 0);
-      } else if (slot === 'helmet' || slot === 'head') {
-        targetScale = maxDim > 0 ? 0.9 / maxDim : 1.0;
-        scene.position.set(0, 0, 0);
-      } else if (slot === 'chest') {
-        targetScale = maxDim > 0 ? 1.2 / maxDim : 1.0;
-        scene.position.set(0, 0, 0);
-      }
-
-      scene.scale.set(targetScale, targetScale, targetScale);
-      container.add(scene);
-      return container;
-    } catch (err) {
-      console.warn(`Could not load GLB equipment socket for ${modelIdOrUrl}:`, err);
-      return null;
-    }
+      if (slot === 'weapon') { targetScale = maxDim > 0 ? 1.4 / maxDim : 1.0; scene.position.set(0, 0, 0); scene.rotation.set(0, 0, 0); }
+      else if (slot === 'shield' || slot === 'offhand') { targetScale = maxDim > 0 ? 1.1 / maxDim : 1.0; scene.position.set(0, 0, 0); }
+      else if (slot === 'helmet' || slot === 'head') { targetScale = maxDim > 0 ? 0.9 / maxDim : 1.0; scene.position.set(0, 0, 0); }
+      else if (slot === 'chest') { targetScale = maxDim > 0 ? 1.2 / maxDim : 1.0; scene.position.set(0, 0, 0); }
+      scene.scale.set(targetScale, targetScale, targetScale); container.add(scene); return container;
+    } catch (err) { console.warn(`Could not load GLB equipment socket for ${modelIdOrUrl}:`, err); return null; }
   }
 
   public async uploadModelExternal(fileName: string, _base64Data: string, metadata: Partial<GLBModelEntry>) {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('aurion:xaurion-glb-upload-request', { detail: { fileName, metadata } }));
-    }
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('aurion:xaurion-glb-upload-request', { detail: { fileName, metadata } }));
     return { success: false, delegated: true, reason: 'AURION_ASSET_AUTHORITY_REQUIRED' };
   }
 }
