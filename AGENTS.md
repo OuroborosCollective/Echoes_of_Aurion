@@ -46,6 +46,4 @@ https://gitbook.com/docs/skill.md
 
 When making changes, preserve GitBook sync metadata such as frontmatter, `SUMMARY.md`, `gitbook-docs.yaml`, `.gitbook/`, and asset links unless the requested edit explicitly requires changing them.
 
-For this repository, **GitHub `main` is the canonical documentation source**. Because GitBook is connected through Git Sync, prefer repository changes and let GitBook import them rather than independently creating competing page truth.
-
 <!-- gitbook-agent-instructions:end -->

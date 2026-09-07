@@ -20,7 +20,3 @@
   * [Android APK Build](ANDROID_BUILD.md)
 * [Presentation & Side-Channels](AURION_AUDIO_SYSTEM.md)
   * [Companion Memory VPS Setup](COMPANION_MEMORY_VPS_SETUP.md)
-
-{% hint style="warning" %}
-Datiertes `guardian/`-, `qa/`-, ältere Audit-, TODO-, Prototype- und Source-Ledger-Material ist historische Evidence oder Migrationsprovenienz und **nicht** Teil der kanonischen GitBook-Navigation. Bei Widerspruch gelten `ARCHITECTURE_OWNERSHIP.md`, der aktuelle WASD-Regelvertrag und der aktuelle Code-/Runtime-Readback.
-{% endhint %}
