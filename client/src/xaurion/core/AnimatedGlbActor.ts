@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { GlbEquipmentSlot } from "@shared/glbImportContract";
 
 export type GlbPose = "idle" | "walk" | "run" | "attack" | "jump" | "death" | "interact";
 const clipNames: Record<GlbPose, readonly string[]> = {
@@ -10,15 +11,28 @@ const clipNames: Record<GlbPose, readonly string[]> = {
   death: ["death", "die", "dying"],
   interact: ["shopinteract", "interact", "interaction", "use"],
 };
+const equipmentAnchors: Record<GlbEquipmentSlot, readonly string[]> = {
+  weapon: ["socketweaponr", "slotweaponr", "slothandr", "handr", "righthand"],
+  shield: ["socketweaponl", "slotoffhand", "slothandl", "handl", "lefthand"],
+  helmet: ["sockethead", "slothead", "head"],
+  chest: ["socketchest", "slotchest", "upperchest", "chest", "spine2", "spine"],
+  shoulders: ["socketshoulders", "slotshoulders", "upperchest", "spine2", "spine"],
+  arms: ["socketarms", "slotarms", "upperchest", "spine2", "spine"],
+  legs: ["socketlegs", "slotlegs", "pelvis", "hips"],
+  boots: ["socketboots", "slotboots", "pelvis", "hips"],
+};
+const equipmentTargetSize: Record<GlbEquipmentSlot, number> = { weapon: 1.35, shield: 1.0, helmet: 0.7, chest: 1.2, shoulders: 1.2, arms: 1.05, legs: 1.1, boots: 0.85 };
 
 export const GLB_RUN_THRESHOLD_METERS_PER_SECOND = 2.4;
 const LOCOMOTION_BLEND_SECONDS = 0.055;
 const ONESHOT_BLEND_SECONDS = 0.035;
 const targetClipSeconds: Partial<Record<GlbPose, number>> = { walk: 0.82, run: 0.52, attack: 0.62, jump: 0.8, interact: 0.85 };
 const normalizeClipName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+const normalizeNodeName = normalizeClipName;
 
 /** Presentation only: imported transforms/rig are preserved inside a metre-sized,
- * foot-anchored wrapper. Animation never changes authoritative world coordinates.
+ * foot-anchored wrapper. Animation and attached visuals never change authoritative
+ * world coordinates, equipment ownership or item stats.
  */
 export class AnimatedGlbActor {
   readonly group = new THREE.Group();
@@ -27,6 +41,8 @@ export class AnimatedGlbActor {
   private readonly clips = new Map<string, THREE.AnimationClip>();
   private readonly bones: THREE.Bone[] = [];
   private readonly bonesByName = new Map<string, THREE.Bone>();
+  private readonly nodesByName = new Map<string, THREE.Object3D>();
+  private readonly attachments = new Map<GlbEquipmentSlot, THREE.Group>();
   private active: THREE.AnimationAction | null = null;
   private locomotion: GlbPose = "idle";
   private oneShot = false;
@@ -51,6 +67,10 @@ export class AnimatedGlbActor {
     this.group.add(pivot);
     this.heightMeters = heightMeters;
     model.traverse(node => {
+      if (node.name) {
+        const normalized = normalizeNodeName(node.name);
+        if (normalized && !this.nodesByName.has(normalized)) this.nodesByName.set(normalized, node);
+      }
       if (!(node as THREE.Bone).isBone) return;
       const bone = node as THREE.Bone;
       this.bones.push(bone);
@@ -121,6 +141,56 @@ export class AnimatedGlbActor {
     return this.oneShot;
   }
 
+  private attachmentAnchor(slot: GlbEquipmentSlot): THREE.Object3D | null {
+    for (const alias of equipmentAnchors[slot]) {
+      const node = this.nodesByName.get(alias);
+      if (node) return node;
+    }
+    return null;
+  }
+
+  detachEquipment(slot: GlbEquipmentSlot): void {
+    const previous = this.attachments.get(slot);
+    if (!previous) return;
+    previous.removeFromParent();
+    this.attachments.delete(slot);
+  }
+
+  /** Attach a visual clone to a known rig node. This is deliberately not an equip mutation. */
+  attachEquipment(slot: GlbEquipmentSlot, visual: THREE.Group): boolean {
+    if (this.disposed) return false;
+    const anchor = this.attachmentAnchor(slot);
+    if (!anchor) return false;
+    visual.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(visual, true);
+    if (bounds.isEmpty()) return false;
+    const size = bounds.getSize(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return false;
+
+    this.detachEquipment(slot);
+    const holder = new THREE.Group();
+    holder.name = `aurion-confirmed-equipment:${slot}`;
+    holder.userData.confirmedEquipmentSlot = slot;
+    const scale = THREE.MathUtils.clamp(equipmentTargetSize[slot] / maxDimension, 0.05, 8);
+    const center = bounds.getCenter(new THREE.Vector3());
+    visual.scale.setScalar(scale);
+    // Generic catalog assets have no gameplay-authored transform. Centering keeps
+    // them bounded around the confirmed attachment node; author-provided sockets
+    // on standardized rigs still carry the animated body transform.
+    visual.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+    visual.traverse(node => {
+      if (!(node as THREE.Mesh).isMesh) return;
+      const mesh = node as THREE.Mesh;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+    });
+    holder.add(visual);
+    anchor.add(holder);
+    this.attachments.set(slot, holder);
+    return true;
+  }
+
   /** Presentation-only correction for imported idle clips whose shoulder keyframes are still near bind pose. */
   private relaxIdleArms(): void {
     if (this.oneShot || this.locomotion !== "idle" || !this.supportsPose("idle")) return;
@@ -166,12 +236,14 @@ export class AnimatedGlbActor {
       clip: this.active?.getClip().name ?? null, clipTime: this.active?.time ?? 0, boneCount: this.bones.length, bonePose: pose.toString(16),
       supportedPoses: (Object.keys(clipNames) as GlbPose[]).filter(candidate => this.supportsPose(candidate)),
       animationNames: [...this.clips.values()].map(clip => clip.name).sort(),
+      equipmentSlots: [...this.attachments.keys()].sort(),
     };
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const slot of [...this.attachments.keys()]) this.detachEquipment(slot);
     this.mixer.removeEventListener("finished", this.finished);
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.model);
