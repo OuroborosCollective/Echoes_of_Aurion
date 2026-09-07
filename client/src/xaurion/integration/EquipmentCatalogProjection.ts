@@ -111,9 +111,7 @@ export class EquipmentCatalogProjection {
     return true;
   }
 
-  private removeCompat(slot: GlbEquipmentSlot): void {
-    this.compat.delete(slot);
-  }
+  private removeCompat(slot: GlbEquipmentSlot): void { this.compat.delete(slot); }
 
   private clear(): void {
     for (const slot of [...this.compat.keys()]) this.compat.delete(slot);
@@ -165,7 +163,9 @@ export class EquipmentCatalogProjection {
     if (this.disposed) return;
     const current = this.confirmed?.equipment.find(value => value.equipmentSlot === binding.equipmentSlot);
     if (!current || current.version !== "aurion_v2" || bindingIdentity(current) !== identity) {
-      this.v2Controller.invalidate(binding.equipmentSlot);
+      const active = this.v2Controller.evidence().find(value => value.slot === binding.equipmentSlot);
+      if (active?.identity === outcome.identity) this.v2Controller.detach(binding.equipmentSlot);
+      else this.v2Controller.invalidate(binding.equipmentSlot);
       return;
     }
     if (outcome.status === "attached") {
@@ -188,8 +188,7 @@ export class EquipmentCatalogProjection {
     try {
       const response = await fetch("/api/game/confirmed-equipment-visuals-v2", { credentials: "include", cache: "no-store" });
       if (!response.ok) throw new Error("EQUIPMENT_VISUAL_READBACK_UNAVAILABLE");
-      const body = confirmedEquipmentVisualReadbackSchema.parse(await response.json());
-      this.confirmed = Object.freeze({ ...body, equipment: Object.freeze(body.equipment.map(value => Object.freeze({ ...value }))) });
+      this.confirmed = confirmedEquipmentVisualReadbackSchema.parse(await response.json());
       await this.reconcile();
     } catch {
       // Keep the last fully proven readback/visuals through transient failures.
