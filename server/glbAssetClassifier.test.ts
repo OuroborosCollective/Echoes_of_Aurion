@@ -39,6 +39,36 @@ describe("GLB asset classifier", () => {
     expect(result.socketCount).toBeGreaterThanOrEqual(4);
   });
 
+  it("classifies universal humanoids with the supplied seven-clip rig without inventing an enemy", () => {
+    const result = classifyGlbBase64(glbBase64({
+      asset: { version: "2.0" },
+      scenes: [{ name: "Scene", nodes: [0] }],
+      nodes: [
+        { name: "Head" }, { name: "hand_l" }, { name: "hand_r" },
+        { name: "upperarm_l" }, { name: "upperarm_r" }, { name: "thigh_l" }, { name: "thigh_r" },
+      ],
+      meshes: [{ name: "Superhero_Female", primitives: [] }, { name: "Hair_Buns", primitives: [] }],
+      skins: [{ name: "Armature", joints: [0] }],
+      animations: animationNames(["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"]),
+    }));
+    expect(result).toMatchObject({ assetType: "character", subcategory: "universal-humanoid", confidence: "high", skinCount: 1, socketCount: 0 });
+  });
+
+  it("recognizes Slot_* equipment attachment nodes as standardized character sockets", () => {
+    const result = classifyGlbBase64(glbBase64({
+      asset: { version: "2.0" },
+      scenes: [{ name: "Scene", nodes: [0] }],
+      nodes: [
+        { name: "Root" }, { name: "Slot_Head" }, { name: "Slot_Chest" }, { name: "Slot_Hand_L" }, { name: "Slot_Hand_R" },
+      ],
+      meshes: [{ name: "Superhero_Male", primitives: [] }],
+      skins: [{ name: "Armature", joints: [0] }],
+      animations: animationNames(["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"]),
+    }));
+    expect(result).toMatchObject({ assetType: "character", subcategory: "standardized-humanoid", confidence: "high" });
+    expect(result.socketCount).toBe(4);
+  });
+
   it("classifies an eight-legged combat rig as the starter spider enemy", () => {
     const legs = Array.from({ length: 4 }, (_, index) => index + 1).flatMap(index => [
       { name: `Leg_L${index}_Upper` }, { name: `Leg_R${index}_Upper` },

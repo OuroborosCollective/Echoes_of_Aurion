@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { decodeValidatedGlbBase64 } from "./adminProtocol";
 import { classifyGlbBase64, type GlbAssetClassification } from "./glbAssetClassifier";
-import { GLB_IMPORT_VERSION } from "../shared/glbImportContract";
+import { GLB_IMPORT_VERSION, type GlbImportPurpose } from "../shared/glbImportContract";
 
 type Json = Record<string, any>;
 function integer(value: unknown, fallback = -1): number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : fallback; }
@@ -130,11 +130,14 @@ export function automaticGlbTarget(classification: GlbAssetClassification): stri
   return matches.length === 1 ? `${classification.assetType}_${matches[0]![0]}` : null;
 }
 
-export function buildGlbImportPlan(contentBase64: string) {
+export function buildGlbImportPlan(contentBase64: string, purpose: GlbImportPurpose = "auto") {
   const payload = decodeValidatedGlbBase64(contentBase64);
   validateImportGeometry(payload.bytes);
   const classification = classifyGlbBase64(contentBase64);
-  const targetKey = automaticGlbTarget(classification);
-  const identity = { version: GLB_IMPORT_VERSION, sha256: payload.sha256, bytes: payload.bytes.length, assetType: classification.assetType, subcategory: classification.subcategory, targetKey };
+  if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
+  const targetKey = purpose === "npc-fallback" ? null : automaticGlbTarget(classification);
+  // Purpose participates in the plan identity so an approved auto-assignment
+  // plan can never be replayed as a fallback-only import, or vice versa.
+  const identity = { version: GLB_IMPORT_VERSION, purpose, sha256: payload.sha256, bytes: payload.bytes.length, assetType: classification.assetType, subcategory: classification.subcategory, targetKey };
   return { ...identity, classification, assetId: `glb_${payload.sha256.slice(0, 48)}`, planSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
 }

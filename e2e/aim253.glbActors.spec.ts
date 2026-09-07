@@ -38,6 +38,17 @@ for (const viewport of [
         } catch { /* Invalid frames cannot satisfy movement evidence. */ }
       });
     });
+    const steerConfirmedAxis = async (axis: "x" | "z", targetMm: number, positiveKey: "d" | "s", negativeKey: "a" | "w", toleranceMm = 450) => {
+      await expect.poll(() => presence?.position[axis], { timeout: 15_000 }).toBeDefined();
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const current = presence!.position[axis];
+        if (Math.abs(current - targetMm) <= toleranceMm) return;
+        const key = current < targetMm ? positiveKey : negativeKey;
+        await page.keyboard.press(key, { delay: 120 });
+        await expect.poll(() => presence!.position[axis], { timeout: 3_000, intervals: [25, 50, 100] }).not.toBe(current);
+      }
+      throw new Error(`CONFIRMED_AXIS_TARGET_NOT_REACHED:${axis}:${presence!.position[axis]}:${targetMm}`);
+    };
     try {
       await page.setViewportSize(viewport);
       const health = await page.request.get("/healthz");
@@ -150,16 +161,14 @@ for (const viewport of [
       expect(Number(legacyActions[0].count)).toBe(0);
 
       const origin = { ...presence!.position };
-      await page.keyboard.down("d");
-      try {
-        await expect.poll(() => presence!.position.x, { timeout: 15_000 }).toBeGreaterThan(origin.x);
-        await expect.poll(() => presence!.position.x, { intervals: [50], timeout: 15_000 }).toBeGreaterThanOrEqual(5500);
-      } finally { await page.keyboard.up("d"); }
-      await page.keyboard.down("w");
-      try {
-        await expect.poll(async () => (await pose(player))?.clip, { timeout: 15_000 }).toMatch(/^(Walk|Run)$/);
-        await expect(page.getByRole("button", { name: "Schmied ansprechen", exact: true })).toBeVisible({ timeout: 15_000 });
-      } finally { await page.keyboard.up("w"); }
+      await page.keyboard.press("d", { delay: 120 });
+      await expect.poll(() => presence!.position.x, { timeout: 3_000, intervals: [25, 50, 100] }).toBeGreaterThan(origin.x);
+      await steerConfirmedAxis("x", 3000, "d", "a");
+      await page.keyboard.press("w", { delay: 120 });
+      await expect.poll(async () => (await pose(player))?.clip, { timeout: 3_000 }).toMatch(/^(Walk|Run|Idle)$/);
+      await steerConfirmedAxis("z", -13000, "s", "w");
+      await expect.poll(() => presence && Math.hypot(presence.position.x - 3000, presence.position.z + 14000), { timeout: 5_000 }).toBeLessThanOrEqual(5000);
+      await expect(page.getByRole("button", { name: "Schmied ansprechen", exact: true })).toBeVisible({ timeout: 15_000 });
       await expect.poll(async () => (await pose(player))?.clip).toBe("Idle");
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-near-smith.png`) });
       await page.getByRole("button", { name: "Schmied ansprechen", exact: true }).click();
@@ -175,7 +184,8 @@ for (const viewport of [
       await testInfo.attach("actual-glb-actor-readback", { contentType: "application/json", body: JSON.stringify({
         revision: process.env.AURION_RELEASE_SHA, viewport: viewport.name, assignments,
         player: await pose(player), smith: await pose(smith), uploadedByteReadback: true,
-        idlePoseChanged: true, serverMovementObserved: true, interactionObserved: "ShopInteract", profile, actions, movement,
+        idlePoseChanged: true, serverMovementObserved: true, confirmedSmithApproach: presence?.position,
+        interactionObserved: "ShopInteract", profile, actions, movement,
         legacyGameplaySessions: 0, legacyGameplayActions: 0, launchRoute: "portal-confirmed-ax1-single-action",
       }) });
     } finally { await page.close(); await pool.end(); }

@@ -7,12 +7,13 @@ import { authenticateAdminGlbBearer } from "./adminMcp";
 import { glbImportStore } from "./glbImportStore";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { checkGlbStorage } from "./glbFileStore";
+import { glbImportPurposes, type GlbImportPurpose } from "../shared/glbImportContract";
 import { z } from "zod";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
 type AuthenticatedUploader = Readonly<{ id: number; role: "user" | "admin" }>;
-type UploadAsset = (values: { displayName: string; assetType: GlbAssetType; contentBase64: string; createdByUserId: number }) => Promise<unknown>;
+type UploadAsset = (values: { displayName: string; assetType: GlbAssetType; contentBase64: string; createdByUserId: number; purpose: GlbImportPurpose }) => Promise<unknown>;
 
 type GlbSmartUploadDependencies = Readonly<{
   authenticate: (request: Request) => Promise<AuthenticatedUploader | null>;
@@ -37,7 +38,22 @@ function defaultDependencies(): GlbSmartUploadDependencies {
       const user = await sdk.authenticateRequest(request);
       return user ? { id: user.id, role: user.role } : null;
     },
-    uploadAsset: values => db.uploadGlbAsset(values),
+    uploadAsset: async values => {
+      if (values.purpose === "npc-fallback") {
+        const receipt = await glbImportStore().ingest(values.createdByUserId, {
+          displayName: values.displayName,
+          contentBase64: values.contentBase64,
+          purpose: values.purpose,
+        });
+        return { receipt };
+      }
+      return db.uploadGlbAsset({
+        displayName: values.displayName,
+        assetType: values.assetType,
+        contentBase64: values.contentBase64,
+        createdByUserId: values.createdByUserId,
+      });
+    },
   };
 }
 
@@ -47,6 +63,11 @@ function validDisplayName(value: unknown): value is string {
 
 function validGlbFileName(value: unknown): value is string {
   return typeof value === "string" && value.length >= 5 && value.length <= 180 && /^[^/\\<>:"|?*]+\.glb$/i.test(value);
+}
+
+function parsePurpose(value: unknown): GlbImportPurpose | null {
+  if (value === undefined) return "auto";
+  return typeof value === "string" && (glbImportPurposes as readonly string[]).includes(value) ? value as GlbImportPurpose : null;
 }
 
 export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependencies = defaultDependencies()) {
@@ -71,14 +92,16 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
     const displayName = validDisplayName(body.displayName) ? body.displayName.trim() : null;
     const fileName = validGlbFileName(body.fileName) ? body.fileName : null;
     const contentBase64 = typeof body.contentBase64 === "string" ? body.contentBase64 : null;
-    if (!displayName || !fileName || !contentBase64) {
-      response.status(400).json({ error: "A valid displayName, .glb fileName and binary payload are required" });
+    const purpose = parsePurpose(body.purpose);
+    if (!displayName || !fileName || !contentBase64 || !purpose) {
+      response.status(400).json({ error: "A valid displayName, .glb fileName, import purpose and binary payload are required" });
       return;
     }
 
     let classification: GlbAssetClassification;
     try {
       classification = classifyGlbBase64(contentBase64);
+      if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
     } catch (error) {
       response.status(422).json({ error: error instanceof Error ? error.message : "GLB classification failed" });
       return;
@@ -90,10 +113,12 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
         assetType: classification.assetType,
         contentBase64,
         createdByUserId: user.id,
+        purpose,
       });
       response.status(201).json({
         accepted: true,
         fileName,
+        purpose,
         classification,
         asset,
         ...((asset as { receipt?: unknown })?.receipt ? { receipt: (asset as { receipt: unknown }).receipt } : {}),
@@ -128,8 +153,14 @@ export function registerGlbSmartUpload(app: Express): void {
     return issueGlbAgentSession(user.id, process.env.JWT_SECRET ?? "");
   }));
   app.get("/api/admin/glb-import/status", adminRoute(async () => ({ ...(await checkGlbStorage()), catalog: await glbImportStore().catalog() })));
-  app.post("/api/admin/glb-import/plan", adminRoute(async request => buildGlbImportPlan(z.object({ contentBase64: z.string().max(34 * 1024 * 1024) }).parse(request.body).contentBase64)));
-  app.post("/api/admin/glb-import/apply", adminRoute(async (request, user) => glbImportStore().ingest(user.id, z.object({ displayName: z.string().min(3).max(120), contentBase64: z.string().max(34 * 1024 * 1024), expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body))));
+  app.post("/api/admin/glb-import/plan", adminRoute(async request => {
+    const input = z.object({ contentBase64: z.string().max(34 * 1024 * 1024), purpose: z.enum(glbImportPurposes).optional() }).strict().parse(request.body);
+    return buildGlbImportPlan(input.contentBase64, input.purpose ?? "auto");
+  }));
+  app.post("/api/admin/glb-import/apply", adminRoute(async (request, user) => {
+    const input = z.object({ displayName: z.string().min(3).max(120), contentBase64: z.string().max(34 * 1024 * 1024), purpose: z.enum(glbImportPurposes).optional(), expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body);
+    return glbImportStore().ingest(user.id, { ...input, purpose: input.purpose ?? "auto" });
+  }));
   app.post("/api/admin/glb-import/assign", adminRoute(async (request, user) => glbImportStore().assign(user.id, z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }).strict().parse(request.body))));
   app.get("/api/game/glb-catalog", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }

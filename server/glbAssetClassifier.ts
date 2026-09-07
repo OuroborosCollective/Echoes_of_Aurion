@@ -60,6 +60,8 @@ function detectLod(names: readonly string[]): number | null {
   return null;
 }
 
+const normalizeAnimationName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 export function classifyGlbBase64(contentBase64: string): GlbAssetClassification {
   const { bytes } = decodeValidatedGlbBase64(contentBase64);
   const json = parseGlbJson(bytes);
@@ -71,19 +73,30 @@ export function classifyGlbBase64(contentBase64: string): GlbAssetClassification
   const skinCount = Array.isArray(json.skins) ? json.skins.length : 0;
   const allNames = [...nodeNames, ...meshNames, ...skinNames, ...sceneNames];
   const searchable = allNames.join(" ").toLowerCase();
-  const socketCount = nodeNames.filter(name => /^socket_/i.test(name)).length;
+  // Quaternius-style universal characters use Slot_* while Aurion's original
+  // standardized rig uses Socket_*. Both are attachment surfaces, not evidence
+  // that the asset must be a player character.
+  const socketCount = nodeNames.filter(name => /^(?:socket|slot)_/i.test(name)).length;
   const animationSet = new Set(animationNames.map(name => name.toLowerCase()));
+  const normalizedAnimationSet = new Set(animationNames.map(normalizeAnimationName));
   const lod = detectLod(allNames);
 
   if (skinCount > 0 && hasKeyword(searchable, ["blacksmith", "schmied"]) && animationSet.has("idle") && animationSet.has("shopinteract")) {
     return Object.freeze({ assetType: "character", subcategory: "blacksmith-npc", confidence: "high", animationNames: Object.freeze(animationNames), nodeNames: Object.freeze(nodeNames), skinCount, socketCount, lod });
   }
 
+  const humanoidBoneSignals = ["head", "hand_l", "hand_r", "upperarm_l", "upperarm_r", "thigh_l", "thigh_r"]
+    .filter(name => nodeNames.some(nodeName => nodeName.toLowerCase() === name)).length;
+  const universalHumanoidClips = ["idle", "walk", "run", "fight", "attack2", "castspell", "death"]
+    .every(name => normalizedAnimationSet.has(name));
+  const universalHumanoidSignals = universalHumanoidClips && humanoidBoneSignals >= 6;
   const playerSignals = socketCount >= 4
     || (searchable.includes("aurion_humanoid_rig") && (animationSet.has("attackcombo") || animationSet.has("fight")))
-    || hasKeyword(searchable, ["player", "explorer", "character"]);
+    || hasKeyword(searchable, ["player", "explorer", "character"])
+    || universalHumanoidSignals;
   if (skinCount > 0 && playerSignals) {
-    return Object.freeze({ assetType: "character", subcategory: socketCount >= 4 ? "standardized-humanoid" : "rigged-character", confidence: "high", animationNames: Object.freeze(animationNames), nodeNames: Object.freeze(nodeNames), skinCount, socketCount, lod });
+    const subcategory = universalHumanoidSignals && socketCount < 4 ? "universal-humanoid" : socketCount >= 4 ? "standardized-humanoid" : "rigged-character";
+    return Object.freeze({ assetType: "character", subcategory, confidence: "high", animationNames: Object.freeze(animationNames), nodeNames: Object.freeze(nodeNames), skinCount, socketCount, lod });
   }
 
   const combatSet = ["idle", "walk", "attack", "death"].every(name => animationSet.has(name));

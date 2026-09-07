@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { MMOEngine } from "../core/MMOEngine";
 import { RuntimeFrameLoop } from "../core/RuntimeFrameLoop";
+import { NpcFallbackProjection } from "./NpcFallbackProjection";
 
 export type AurionWorldContext = Readonly<{ epoch: number; worldSeed: string }>;
 
@@ -11,6 +12,7 @@ type WorldCoreMetrics = Readonly<{
   drawCalls: number;
   triangles: number;
   vegetationInstances: number;
+  npcFallbacks: number;
   lod: Readonly<{ high: number; medium: number; low: number; culled: number }>;
   occlusion: Readonly<{ tested: number; occluded: number }>;
   particles: Readonly<{ tier: string; budget: number; active: number; pooled: number; reused: number; droppedBursts: number; tickRate: number }> | null;
@@ -103,7 +105,7 @@ export class GlobalWeatherEngine {
     { type: "aether_rain", color: 0x10b981, fogColor: 0x064e3b, fogDensity: 0.009, intensity: 0.28 },
     { type: "astral_eclipse", color: 0x7c3aed, fogColor: 0x1e1b4b, fogDensity: 0.012, intensity: 0.22 },
   ];
-  readonly phaseDurationTicks = 3000; // 5 minutes at normative 10 Hz.
+  readonly phaseDurationTicks = 3000;
 
   state(epoch: number, logicalTick: number): WeatherState {
     const phaseIndex = Math.floor((epoch + logicalTick) / this.phaseDurationTicks) % this.phases.length;
@@ -181,7 +183,6 @@ export class OcclusionCullingSystem {
   }
 }
 
-/** GPU-instanced vegetation adapted from -ax1 but grounded on Aurion's existing terrain. */
 export class InstancedVegetationSystem {
   readonly group = new THREE.Group();
   readonly instanceCount: number;
@@ -255,9 +256,11 @@ export class AurionWorldCore {
   private readonly occlusion = new OcclusionCullingSystem();
   private readonly ambient = new THREE.AmbientLight(0xfff7ed, 0.3);
   private readonly vegetation: InstancedVegetationSystem;
+  private readonly npcFallbacks: NpcFallbackProjection;
   private disposed = false;
   private readonly frameLoop = new RuntimeFrameLoop(delta => {
     this.loop.advance(delta);
+    this.npcFallbacks.update(delta, this.loop.tick);
     this.lod.update(this.engine.camera);
   }, error => {
     this.engine.stop();
@@ -269,6 +272,7 @@ export class AurionWorldCore {
     const terrain = new TerrainBarycentric((x, z) => engine.landscape.chunkManager.getElevationAt(x, z));
     const rng = new DeterministicPRNG(seed32(`${context.worldSeed}:${context.epoch}`));
     this.vegetation = new InstancedVegetationSystem(engine.scene, terrain, rng);
+    this.npcFallbacks = new NpcFallbackProjection(engine);
     engine.scene.add(this.ambient);
     this.lod.register("instanced-vegetation", this.vegetation.group);
     this.loop.onTick = tick => this.fixedTick(tick);
@@ -292,6 +296,7 @@ export class AurionWorldCore {
         drawCalls: this.engine.renderer.info.render.calls,
         triangles: this.engine.renderer.info.render.triangles,
         vegetationInstances: this.vegetation.instanceCount,
+        npcFallbacks: this.npcFallbacks.evidence().length,
         lod: Object.freeze({ ...this.lod.stats }),
         occlusion: Object.freeze({ tested: this.occlusion.stats.tested, occluded: this.occlusion.stats.occluded }),
         particles: this.engine.particleSystem?.metrics ?? null,
@@ -305,6 +310,7 @@ export class AurionWorldCore {
     this.disposed = true;
     this.frameLoop.stop();
     this.lod.clear();
+    this.npcFallbacks.dispose();
     this.vegetation.dispose(this.engine.scene);
     this.engine.scene.remove(this.ambient);
     this.ambient.dispose();
