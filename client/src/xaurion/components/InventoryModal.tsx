@@ -1,11 +1,12 @@
 /** Port of -ax1 InventoryModal@d356881 (d870c06): paperdoll / categorized bag / inspector.
  * Local gold, forged stats and simulated equip callbacks are replaced by confirmed item instances. */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Package, Shield, Sword, Sparkles, X, ArrowUpDown, Hammer } from "lucide-react";
 import { Ax1Modal } from "./Ax1Modal";
 import type { PlayerUiReadback, UiItem } from "@shared/playerUiProtocol";
 
 const qualityLabel = { normal: "Gewöhnlich", magic: "Magisch", rare: "Selten", set: "Set", unique: "Einzigartig", mythic: "Mythisch" };
+const qualityRank = { mythic: 5, unique: 4, set: 3, rare: 2, magic: 1, normal: 0 };
 const slotLabels = { main_hand: "Haupthand-Waffe", off_hand: "Nebenhand", head: "Kopfschutz", chest: "Brustharnisch", hands: "Handschutz", legs: "Beinschienen", feet: "Stiefel", belt: "Gürtel", ring: "Ring", amulet: "Amulett", focus: "Fokus", relic: "Relikt" };
 export const itemKey = (item: Pick<UiItem, "id" | "version">) => `${item.version}:${item.id}`;
 export const itemIcon = (item: UiItem) => item.slot === "main_hand" ? "⚔" : item.slot === "off_hand" ? "⛨" : item.slot === "focus" || item.slot === "relic" ? "✦" : item.slot ? "◇" : "▧";
@@ -16,11 +17,25 @@ export function InventoryModal({ isOpen, onClose, readback, points, pending, mes
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [bagFilter, setBagFilter] = useState<"all" | "gear" | "materials" | "loot">("all");
   const [sortBy, setSortBy] = useState<"rarity" | "name">("rarity");
-  const inventory = readback?.items.filter(i => i.status !== "equipped") ?? [];
-  const selectedItem = readback?.items.find(i => itemKey(i) === selectedKey);
-  const equipment = readback?.items.filter(i => i.status === "equipped") ?? [];
-  const filtered = inventory.filter(i => bagFilter === "all" || (bagFilter === "gear" && i.slot) || (bagFilter === "materials" && !i.slot) || (bagFilter === "loot" && i.status === "pending_pickup"))
-    .sort((a, b) => sortBy === "name" ? a.name.localeCompare(b.name) : ["normal", "magic", "rare", "set", "unique", "mythic"].indexOf(b.quality) - ["normal", "magic", "rare", "set", "unique", "mythic"].indexOf(a.quality) || a.name.localeCompare(b.name));
+
+  const { inventory, equipment } = useMemo(() => {
+    if (!readback) return { inventory: [], equipment: [] };
+    const inv: UiItem[] = [];
+    const eq: UiItem[] = [];
+    for (const item of readback.items) {
+      if (item.status === "equipped") eq.push(item);
+      else inv.push(item);
+    }
+    return { inventory: inv, equipment: eq };
+  }, [readback]);
+
+  const selectedItem = useMemo(() => readback?.items.find(i => itemKey(i) === selectedKey), [readback, selectedKey]);
+
+  const filtered = useMemo(() => {
+    return inventory.filter(i => bagFilter === "all" || (bagFilter === "gear" && i.slot) || (bagFilter === "materials" && !i.slot) || (bagFilter === "loot" && i.status === "pending_pickup"))
+      .sort((a, b) => sortBy === "name" ? a.name.localeCompare(b.name) : (qualityRank[b.quality as keyof typeof qualityRank] ?? 0) - (qualityRank[a.quality as keyof typeof qualityRank] ?? 0) || a.name.localeCompare(b.name));
+  }, [inventory, bagFilter, sortBy]);
+
   const renderSlot = (slot: keyof typeof slotLabels) => {
     const item = equipment.find(i => i.slot === slot);
     return <div key={slot} className={`ax1-paperdoll-slot group relative p-1.5 rounded-xl border flex items-center gap-2 ${item ? `ax1-quality-${item.quality}` : "border-gray-800 bg-black/40"}`} data-slot={slot} data-item-id={item?.id ?? ""}>
