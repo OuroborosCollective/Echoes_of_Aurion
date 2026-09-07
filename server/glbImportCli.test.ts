@@ -9,7 +9,7 @@ import { buildGlbImportPlan } from "./glbImportPlan";
 import { importAsset, readAsset } from "../scripts/glb-import.mjs";
 
 describe("agent GLB import client", () => {
-  it("binds plan/apply to actual file bytes, keeps dry runs read-only, and rejects server drift and symlinks", async () => {
+  it("binds plan/apply to actual file bytes and the default auto purpose, keeps dry runs read-only, and rejects server drift and symlinks", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "glb-cli-"));
     try {
       const file = path.join(root, "spear.glb"), bytes = testGlb(); await writeFile(file, bytes);
@@ -18,7 +18,9 @@ describe("agent GLB import client", () => {
       const fetcher = async (url: string, init: RequestInit) => {
         calls.push(url); expect(init.redirect).toBe("error");
         expect(init.headers).toMatchObject({ Authorization: "Bearer isolated-test-token" });
-        const body = JSON.parse(String(init.body)); expect(body.contentBase64).toBe(bytes.toString("base64"));
+        const body = JSON.parse(String(init.body));
+        expect(body.contentBase64).toBe(bytes.toString("base64"));
+        expect(body.purpose).toBe("auto");
         if (url.endsWith('/plan')) return { ok: true, json: async () => plan };
         expect(body.expectedPlanSha256).toBe(plan.planSha256);
         return { ok: true, json: async () => ({ ...plan, status: 'assigned' }) };
@@ -27,6 +29,31 @@ describe("agent GLB import client", () => {
       await importAsset(file, "isolated-test-token", { fetcher }); expect(calls).toHaveLength(3);
       await expect(importAsset(file, "isolated-test-token", { fetcher: async () => ({ ok: true, json: async () => ({ ...plan, sha256: '0'.repeat(64) }) }) })).rejects.toThrow('GLB_PLAN_READBACK_FAILED');
       const link = path.join(root, 'link.glb'); await symlink(file, link); await expect(readAsset(link)).rejects.toThrow();
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("requires fallback plans to remain character-only, unassigned and catalog-only through apply readback", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "glb-cli-fallback-"));
+    try {
+      const bytes = testGlb("Superhero_Female", {
+        nodes: [
+          { name: "Superhero_Female", mesh: 0 }, { name: "Head" }, { name: "hand_l" }, { name: "hand_r" },
+          { name: "upperarm_l" }, { name: "upperarm_r" }, { name: "thigh_l" }, { name: "thigh_r" },
+        ],
+        skins: [{ name: "Armature", joints: [1] }],
+        animations: ["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"].map(name => ({ name, channels: [], samplers: [] })),
+      });
+      const file = path.join(root, "universal-female.glb"); await writeFile(file, bytes);
+      const plan = buildGlbImportPlan(bytes.toString("base64"), "npc-fallback");
+      expect(plan).toMatchObject({ purpose: "npc-fallback", assetType: "character", targetKey: null });
+      const fetcher = async (url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        expect(body.purpose).toBe("npc-fallback");
+        if (url.endsWith('/plan')) return { ok: true, json: async () => plan };
+        return { ok: true, json: async () => ({ ...plan, status: 'catalog' }) };
+      };
+      const receipt = await importAsset(file, "isolated-test-token", { purpose: "npc-fallback", fetcher });
+      expect(receipt).toMatchObject({ assetType: "character", targetKey: null, status: "catalog" });
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 });
