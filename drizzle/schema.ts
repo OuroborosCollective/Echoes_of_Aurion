@@ -489,6 +489,27 @@ export const aurionWorldChunkDeltas = mysqlTable("aurionWorldChunkDeltas", {
   index("aurionWorldChunkDeltas_chunk_created_idx").on(table.worldId, table.chunkX, table.chunkZ, table.createdAt),
 ]);
 
+/** Deterministic conflict outcomes are evidence only; the seed-generated base world is never persisted. */
+export const aurionWorldChunkDeltaConflicts = mysqlTable("aurionWorldChunkDeltaConflicts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  chunkX: int("chunkX").notNull(),
+  chunkZ: int("chunkZ").notNull(),
+  baseRevision: int("baseRevision").notNull(),
+  sequence: int("sequence").notNull(),
+  leftHash: varchar("leftHash", { length: 64 }).notNull(),
+  rightHash: varchar("rightHash", { length: 64 }).notNull(),
+  winnerId: varchar("winnerId", { length: 64 }).notNull(),
+  resolutionHash: varchar("resolutionHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldChunkDeltaConflicts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionWorldChunkDeltaConflicts_resolution_hash_uq").on(table.resolutionHash),
+  uniqueIndex("aurionWorldChunkDeltaConflicts_scope_uq").on(table.worldId, table.chunkX, table.chunkZ, table.baseRevision, table.sequence),
+  index("aurionWorldChunkDeltaConflicts_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
 /** Server-observed zone connection leases. A browser cannot author a presence record without consuming a one-time zone ticket. */
 export const aurionWorldPresenceLeases = mysqlTable("aurionWorldPresenceLeases", {
   connectionId: varchar("connectionId", { length: 96 }).primaryKey(),
