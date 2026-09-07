@@ -3,17 +3,20 @@ import { glbRuntimeCatalogSchema, type GlbRuntimeCatalog } from "@shared/glbImpo
 import type { NPCCharacter } from "../types";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
+import { actorLodBand, actorUsesSkinnedVisual, emptyActorLodCounts, shouldUpdateActorAnimation, type ActorLodBand, type ActorLodCounts } from "../core/actorLod";
 import { glbManager } from "../core/GLBModelManager";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
 import { EquipmentCatalogProjection } from "./EquipmentCatalogProjection";
 
-type ProjectedNpc = Readonly<{
+type ProjectedNpc = {
   sha256: string;
   actor: AnimatedGlbActor;
   proceduralMeshes: readonly THREE.Object3D[];
-}>;
+  accumulatedAnimationDelta: number;
+  lod: ActorLodBand;
+};
 
 const NPC_FALLBACK_LOW_LOD_DISTANCE_METERS = 42;
 function near(left: number, right: number): boolean { return Math.abs(left - right) <= 0.01; }
@@ -50,6 +53,9 @@ export class NpcFallbackProjection {
   private disposed = false;
   private refreshBusy = false;
   private lastRefreshTick = -150;
+  private lodCounts: ActorLodCounts = emptyActorLodCounts();
+  private mixerUpdatesLastFrame = 0;
+  private mixerUpdatesTotal = 0;
 
   constructor(private readonly engine: MMOEngine) {
     this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
@@ -86,9 +92,12 @@ export class NpcFallbackProjection {
     this.projected.delete(npcId);
   }
 
+  private distanceToCamera(npc: NPCCharacter): number {
+    return Math.hypot(npc.x - this.engine.camera.position.x, npc.z - this.engine.camera.position.z);
+  }
+
   private preferredLod(npc: NPCCharacter): 0 | 1 {
-    const distance = Math.hypot(npc.x - this.engine.camera.position.x, npc.z - this.engine.camera.position.z);
-    return distance >= NPC_FALLBACK_LOW_LOD_DISTANCE_METERS ? 1 : 0;
+    return this.distanceToCamera(npc) >= NPC_FALLBACK_LOW_LOD_DISTANCE_METERS ? 1 : 0;
   }
 
   private async project(npc: NPCCharacter): Promise<void> {
@@ -114,8 +123,17 @@ export class NpcFallbackProjection {
       actor.group.name = `aurion-npc-fallback:${npc.id}`;
       actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, variantKey: selection.variantKey, lod: selection.lod, source: "catalog" });
       currentVisual.group.add(actor.group);
-      currentVisual.body.forEach(mesh => { mesh.visible = false; });
-      this.projected.set(npc.id, Object.freeze({ sha256: selection.entry.sha256, actor, proceduralMeshes: Object.freeze(currentVisual.body.slice()) }));
+      const band = actorLodBand(this.distanceToCamera(npc));
+      const useProceduralProxy = band === "very_far";
+      actor.group.visible = !useProceduralProxy;
+      currentVisual.body.forEach(mesh => { mesh.visible = useProceduralProxy; });
+      this.projected.set(npc.id, {
+        sha256: selection.entry.sha256,
+        actor,
+        proceduralMeshes: Object.freeze(currentVisual.body.slice()),
+        accumulatedAnimationDelta: 0,
+        lod: band,
+      });
     } catch {
       // Fail visibly to the existing procedural NPC. No GLB success is claimed.
     } finally {
@@ -125,7 +143,35 @@ export class NpcFallbackProjection {
 
   update(delta: number, logicalTick: number): void {
     if (this.disposed) return;
-    for (const projected of this.projected.values()) projected.actor.update(delta);
+    const liveNpc = new Map(this.engine.npcs.map(npc => [npc.id, npc] as const));
+    const counts = { near: 0, mid: 0, far: 0, very_far: 0 } satisfies Record<ActorLodBand, number>;
+    const frameDelta = Number.isFinite(delta) && delta > 0 ? Math.min(delta, .25) : 0;
+    let mixerUpdates = 0;
+
+    for (const [npcId, projected] of this.projected) {
+      const npc = liveNpc.get(npcId);
+      if (!npc) { this.restoreNpc(npcId); continue; }
+      const band = actorLodBand(this.distanceToCamera(npc));
+      counts[band] += 1;
+      projected.lod = band;
+      const useProceduralProxy = band === "very_far";
+      projected.actor.group.visible = !useProceduralProxy;
+      projected.proceduralMeshes.forEach(mesh => { mesh.visible = useProceduralProxy; });
+      if (useProceduralProxy || !actorUsesSkinnedVisual(band)) {
+        projected.accumulatedAnimationDelta = 0;
+        continue;
+      }
+      projected.accumulatedAnimationDelta = Math.min(.25, projected.accumulatedAnimationDelta + frameDelta);
+      if (projected.accumulatedAnimationDelta > 0 && shouldUpdateActorAnimation(logicalTick, `npc:${npcId}`, band)) {
+        projected.actor.update(projected.accumulatedAnimationDelta);
+        projected.accumulatedAnimationDelta = 0;
+        mixerUpdates += 1;
+      }
+    }
+
+    this.lodCounts = Object.freeze({ ...counts });
+    this.mixerUpdatesLastFrame = mixerUpdates;
+    this.mixerUpdatesTotal += mixerUpdates;
     this.uploadedWorld.update();
     this.remotePublic.update(delta, logicalTick);
     this.equipment.update(delta, logicalTick);
@@ -133,17 +179,31 @@ export class NpcFallbackProjection {
       this.lastRefreshTick = logicalTick;
       void this.refreshCatalog();
     }
-    const liveNpcIds = new Set(this.engine.npcs.map(npc => npc.id));
-    for (const npcId of [...this.projected.keys()]) if (!liveNpcIds.has(npcId)) this.restoreNpc(npcId);
     for (const npc of this.engine.npcs) void this.project(npc);
   }
 
-  evidence(): readonly Readonly<{ npcId: string; sha256: string; presentation: ReturnType<AnimatedGlbActor["evidence"]> }>[] {
+  evidence(): readonly Readonly<{ npcId: string; sha256: string; lod: ActorLodBand; presentation: ReturnType<AnimatedGlbActor["evidence"]> }>[] {
     return Object.freeze([...this.projected.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([npcId, projected]) => Object.freeze({
       npcId,
       sha256: projected.sha256,
+      lod: projected.lod,
       presentation: projected.actor.evidence(),
     })));
+  }
+
+  crowdEvidence() {
+    const activeSkinnedActors = [...this.projected.values()].filter(projected => projected.actor.group.visible && actorUsesSkinnedVisual(projected.lod)).length;
+    const staticGlbActors = [...this.projected.values()].filter(projected => projected.actor.group.visible && projected.lod === "far").length;
+    const proceduralProxies = [...this.projected.values()].filter(projected => projected.lod === "very_far").length;
+    return Object.freeze({
+      projectedNpcs: this.projected.size,
+      activeSkinnedActors,
+      staticGlbActors,
+      proceduralProxies,
+      lod: this.lodCounts,
+      mixerUpdatesLastFrame: this.mixerUpdatesLastFrame,
+      mixerUpdatesTotal: this.mixerUpdatesTotal,
+    });
   }
 
   uploadedWorldEvidence() { return this.uploadedWorld.evidence(); }
