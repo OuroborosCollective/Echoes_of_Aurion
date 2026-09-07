@@ -47,6 +47,14 @@ export class RemotePresenceProjection {
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
+  private assertRenderable(presences: readonly ConfirmedZonePresence[]): void {
+    for (const presence of presences) {
+      const x = presence.position.x / 1000;
+      const z = presence.position.z / 1000;
+      if (!Number.isFinite(this.elevation(x, z))) throw new Error("REMOTE_ELEVATION_INVALID");
+    }
+  }
+
   private onAppearanceActive = (event: Event) => {
     if (this.disposed) return;
     const value = (event as CustomEvent<{ userIds?: unknown }>).detail?.userIds;
@@ -60,10 +68,16 @@ export class RemotePresenceProjection {
     if (!validConfirmedPresences(presences) || !presences.some(p => p.userId === this.selfUserId)) throw new Error("REMOTE_SNAPSHOT_INVALID");
     const self = presences.find(p => p.userId === this.selfUserId)!;
     const center = splitWorldChunkPositionMm(self.position).coordinate;
+    const next = Object.freeze(presences
+      .filter(p => p.userId !== this.selfUserId)
+      .sort((a, b) => a.userId - b.userId)
+      .map(p => Object.freeze({ ...p, position: Object.freeze({ ...p.position }) })));
+
+    // Fail closed before mutating either the confirmed read model or the visible mesh.
+    this.assertRenderable(next);
     this.originX = center.x * 64;
     this.originZ = center.z * 64;
-    const others = presences.filter(p => p.userId !== this.selfUserId).sort((a, b) => a.userId - b.userId);
-    this.current = Object.freeze(others.map(p => Object.freeze({ ...p, position: Object.freeze({ ...p.position }) })));
+    this.current = next;
     this.render();
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CONFIRMED_REMOTE_PRESENCES_EVENT, { detail: { presences: this.current } }));
   }
