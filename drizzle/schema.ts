@@ -628,6 +628,31 @@ export const aurionFactionWarfrontReceipts = mysqlTable("aurionFactionWarfrontRe
   index("aurionFactionWarfrontReceipts_faction_created_idx").on(table.faction, table.createdAt),
 ]);
 
+/** Canonical atomic trade/crafting evidence; resources and results are bound to server receipts. */
+export const aurionTradeCraftingReceipts = mysqlTable("aurionTradeCraftingReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  characterId: varchar("characterId", { length: 128 }).notNull(),
+  operationKind: mysqlEnum("operationKind", ["trade", "crafting"]).notNull(),
+  operationId: varchar("operationId", { length: 128 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 128 }).notNull(),
+  worldRevision: varchar("worldRevision", { length: 128 }).notNull(),
+  marketContext: varchar("marketContext", { length: 128 }).notNull(),
+  professionContext: varchar("professionContext", { length: 128 }),
+  resourceDeltasJson: text("resourceDeltasJson").notNull(),
+  resultJson: text("resultJson").notNull(),
+  resultHash: varchar("resultHash", { length: 64 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionTradeCraftingReceipts_idempotency_uq").on(table.idempotencyKey),
+  uniqueIndex("aurionTradeCraftingReceipts_operation_uq").on(table.userId, table.characterId, table.operationId),
+  uniqueIndex("aurionTradeCraftingReceipts_source_uq").on(table.userId, table.characterId, table.sourceReceiptId),
+  uniqueIndex("aurionTradeCraftingReceipts_receipt_hash_uq").on(table.receiptHash),
+  index("aurionTradeCraftingReceipts_user_kind_created_idx").on(table.userId, table.operationKind, table.createdAt),
+]);
+
 /** Versioned polity snapshot; conflicts are fictional game state and never trigger destructive real-world actions. */
 export const aurionPolityStates = mysqlTable("aurionPolityStates", {
   polityId: varchar("polityId", { length: 96 }).primaryKey(),

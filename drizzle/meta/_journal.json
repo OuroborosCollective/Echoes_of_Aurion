@@ -38,6 +38,7 @@
     { "idx": 33, "version": "5", "when": 1788640800000, "tag": "0033_aurion_ax1_ui_controls", "breakpoints": true },
     { "idx": 34, "version": "5", "when": 1788678000000, "tag": "0034_ax1_starter_equipment_receipts", "breakpoints": true },
     { "idx": 35, "version": "5", "when": 1788681600000, "tag": "0035_aurion_npc_memory_quest_offers", "breakpoints": true },
-    { "idx": 36, "version": "5", "when": 1788685200000, "tag": "0036_aurion_faction_warfront_receipts", "breakpoints": true }
+    { "idx": 36, "version": "5", "when": 1788685200000, "tag": "0036_aurion_faction_warfront_receipts", "breakpoints": true },
+    { "idx": 37, "version": "5", "when": 1788688800000, "tag": "0037_aurion_trade_crafting_receipts", "breakpoints": true }
   ]
 }

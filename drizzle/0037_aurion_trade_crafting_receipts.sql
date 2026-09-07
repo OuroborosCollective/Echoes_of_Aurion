@@ -1,0 +1,23 @@
+CREATE TABLE `aurionTradeCraftingReceipts` (
+  `id` varchar(64) NOT NULL,
+  `userId` int NOT NULL,
+  `characterId` varchar(128) NOT NULL,
+  `operationKind` enum('trade','crafting') NOT NULL,
+  `operationId` varchar(128) NOT NULL,
+  `sourceReceiptId` varchar(128) NOT NULL,
+  `worldRevision` varchar(128) NOT NULL,
+  `marketContext` varchar(128) NOT NULL,
+  `professionContext` varchar(128),
+  `resourceDeltasJson` text NOT NULL,
+  `resultJson` text NOT NULL,
+  `resultHash` varchar(64) NOT NULL,
+  `receiptHash` varchar(64) NOT NULL,
+  `idempotencyKey` varchar(128) NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT (now()),
+  CONSTRAINT `aurionTradeCraftingReceipts_id` PRIMARY KEY (`id`),
+  UNIQUE KEY `aurionTradeCraftingReceipts_idempotency_uq` (`idempotencyKey`),
+  UNIQUE KEY `aurionTradeCraftingReceipts_operation_uq` (`userId`,`characterId`,`operationId`),
+  UNIQUE KEY `aurionTradeCraftingReceipts_source_uq` (`userId`,`characterId`,`sourceReceiptId`),
+  UNIQUE KEY `aurionTradeCraftingReceipts_receipt_hash_uq` (`receiptHash`),
+  KEY `aurionTradeCraftingReceipts_user_kind_created_idx` (`userId`,`operationKind`,`createdAt`)
+);
