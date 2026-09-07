@@ -21,7 +21,8 @@ export async function readAsset(filename) {
   } finally { await file.close(); }
 }
 
-export async function importAsset(filename, token, { dryRun = false, fetcher = fetch } = {}) {
+export async function importAsset(filename, token, { dryRun = false, purpose = 'auto', fetcher = fetch } = {}) {
+  if (!['auto', 'npc-fallback'].includes(purpose)) throw new Error('GLB_PURPOSE_INVALID');
   const { bytes, sha256 } = await readAsset(filename);
   const request = async (endpoint, body) => {
     const response = await fetcher(`https://arelogic.space/api/admin/glb-import/${endpoint}`, {
@@ -32,18 +33,20 @@ export async function importAsset(filename, token, { dryRun = false, fetcher = f
     return response.json();
   };
   const contentBase64 = bytes.toString('base64');
-  const plan = await request('plan', { contentBase64 });
-  if (plan.version !== 'aurion.glb-import.v1' || plan.sha256 !== sha256 || plan.bytes !== bytes.length || !/^[a-f0-9]{64}$/.test(plan.planSha256)) throw new Error('GLB_PLAN_READBACK_FAILED');
-  if (dryRun) return { dryRun: true, sha256, targetKey: plan.targetKey, planSha256: plan.planSha256 };
+  const plan = await request('plan', { contentBase64, purpose });
+  if (plan.version !== 'aurion.glb-import.v1' || plan.purpose !== purpose || plan.sha256 !== sha256 || plan.bytes !== bytes.length || !/^[a-f0-9]{64}$/.test(plan.planSha256)) throw new Error('GLB_PLAN_READBACK_FAILED');
+  if (purpose === 'npc-fallback' && (plan.assetType !== 'character' || plan.targetKey !== null)) throw new Error('GLB_NPC_FALLBACK_PLAN_INVALID');
+  if (dryRun) return { dryRun: true, purpose, sha256, targetKey: plan.targetKey, planSha256: plan.planSha256 };
   const displayName = path.basename(filename, path.extname(filename)).replace(/[_-]+/g, ' ').slice(0, 120).padEnd(3, ' ');
-  const receipt = await request('apply', { displayName, contentBase64, expectedPlanSha256: plan.planSha256 });
+  const receipt = await request('apply', { displayName, contentBase64, purpose, expectedPlanSha256: plan.planSha256 });
   if (receipt.sha256 !== sha256 || receipt.bytes !== bytes.length || receipt.planSha256 !== plan.planSha256 || !['assigned', 'catalog', 'conflict', 'archived'].includes(receipt.status)) throw new Error('GLB_IMPORT_READBACK_FAILED');
+  if (purpose === 'npc-fallback' && (receipt.assetType !== 'character' || receipt.targetKey !== null || receipt.status !== 'catalog')) throw new Error('GLB_NPC_FALLBACK_READBACK_FAILED');
   return receipt;
 }
 
 async function main(args) {
   if (!args.length || args.includes('--help')) {
-    process.stdout.write('Usage: node scripts/glb-import.mjs [--dry-run] [--watch DIRECTORY | FILE.glb ...]\nAuth: AURION_GLB_TOKEN_FILE (0600) or AURION_GLB_BEARER_TOKEN; Admin GLB session from /ops/glb-upload, or OAuth admin read + assets.write scopes.\nWatch scans stable GLBs every 2 seconds; conflicts never replace active models automatically.\n'); return;
+    process.stdout.write('Usage: node scripts/glb-import.mjs [--dry-run] [--npc-fallback] [--watch DIRECTORY | FILE.glb ...]\nAuth: AURION_GLB_TOKEN_FILE (0600) or AURION_GLB_BEARER_TOKEN; Admin GLB session from /ops/glb-upload, or OAuth admin read + assets.write scopes.\n--npc-fallback accepts only character GLBs and catalogs them without assigning any player/NPC target.\nWatch scans stable GLBs every 2 seconds; conflicts never replace active models automatically.\n'); return;
   }
   let token = process.env.AURION_GLB_BEARER_TOKEN;
   if (process.env.AURION_GLB_TOKEN_FILE) {
@@ -56,10 +59,11 @@ async function main(args) {
   }
   if (!token || /\s/.test(token)) throw new Error('GLB_BEARER_TOKEN_REQUIRED');
   const dryRun = args.includes('--dry-run');
-  const files = args.filter(value => value !== '--dry-run');
+  const purpose = args.includes('--npc-fallback') ? 'npc-fallback' : 'auto';
+  const files = args.filter(value => value !== '--dry-run' && value !== '--npc-fallback');
   const run = async filename => {
-    const receipt = await importAsset(filename, token, { dryRun });
-    process.stdout.write(`${JSON.stringify({ file: path.basename(filename), ...receipt })}\n`);
+    const receipt = await importAsset(filename, token, { dryRun, purpose });
+    process.stdout.write(`${JSON.stringify({ file: path.basename(filename), purpose, ...receipt })}\n`);
     return receipt;
   };
   if (files[0] !== '--watch') {
