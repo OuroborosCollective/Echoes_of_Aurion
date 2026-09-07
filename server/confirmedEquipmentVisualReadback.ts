@@ -6,48 +6,29 @@ import {
   uiEquipmentVisualSlot,
   type ConfirmedEquipmentVisualReadback,
 } from "../shared/confirmedEquipmentVisualProtocol";
+import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 import { aurionLootBaseCatalog } from "./aurionLootCatalog";
 import { parseStoredDeterministicLootResult, projectConfirmedLootToVisualItem } from "./aurionVisualItemAdapter";
 import { getDb } from "./db";
 import { readPlayerUi } from "./playerUiPersistence";
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(value);
-}
+type V2ItemRow = typeof aurionItemInstancesV2.$inferSelect;
+type V2ReceiptRow = typeof aurionLootDropReceiptsV2.$inferSelect;
 
+function canonicalJson(value: unknown): string { return JSON.stringify(value); }
 function parseJson(value: string, code: string): unknown {
   try { return JSON.parse(value); }
   catch { throw new Error(code); }
 }
 
-/**
- * Server-only readback. V2 visuals are projected exclusively from immutable loot
- * receipt + item-instance truth. Legacy/AX1 entries remain explicitly compatible
- * and do not receive invented V2 hashes or descriptors.
- */
-export async function readConfirmedEquipmentVisuals(userId: number): Promise<ConfirmedEquipmentVisualReadback> {
-  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("EQUIPMENT_VISUAL_USER_INVALID");
-  const ui = await readPlayerUi(userId);
-  const db = await getDb();
-  if (!db) throw new Error("DATABASE_UNAVAILABLE");
-
-  const v2Bindings = ui.equipment.filter(binding => binding.version === "aurion_v2");
-  const v2Ids = v2Bindings.map(binding => binding.id);
-  const v2Rows = v2Ids.length
-    ? await db.select().from(aurionItemInstancesV2).where(and(
-        eq(aurionItemInstancesV2.ownerUserId, userId),
-        eq(aurionItemInstancesV2.status, "equipped"),
-        inArray(aurionItemInstancesV2.id, v2Ids),
-      ))
-    : [];
+export function projectConfirmedEquipmentVisualReadback(
+  ui: PlayerUiReadback,
+  v2Rows: readonly V2ItemRow[],
+  receipts: readonly V2ReceiptRow[],
+): ConfirmedEquipmentVisualReadback {
+  if (new Set(v2Rows.map(row => row.id)).size !== v2Rows.length) throw new Error("EQUIPMENT_VISUAL_V2_ITEM_DUPLICATE");
+  if (new Set(receipts.map(receipt => receipt.id)).size !== receipts.length) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_DUPLICATE");
   const rowsById = new Map(v2Rows.map(row => [row.id, row] as const));
-  const receiptIds = v2Rows.map(row => row.lootReceiptId);
-  const receipts = receiptIds.length
-    ? await db.select().from(aurionLootDropReceiptsV2).where(and(
-        eq(aurionLootDropReceiptsV2.userId, userId),
-        inArray(aurionLootDropReceiptsV2.id, receiptIds),
-      ))
-    : [];
   const receiptsById = new Map(receipts.map(receipt => [receipt.id, receipt] as const));
   const uiItems = new Map(ui.items.map(item => [`${item.version}:${item.id}`, item] as const));
 
@@ -69,13 +50,13 @@ export async function readConfirmedEquipmentVisuals(userId: number): Promise<Con
     }
 
     const row = rowsById.get(binding.id);
-    if (!row || row.ownerUserId !== userId || row.status !== "equipped") throw new Error("EQUIPMENT_VISUAL_V2_ITEM_MISSING");
+    if (!row || row.ownerUserId !== ui.userId || row.status !== "equipped") throw new Error("EQUIPMENT_VISUAL_V2_ITEM_MISSING");
     if (row.lootReceiptId !== uiItem.receiptId || row.baseItemDefinitionId !== uiItem.definition || row.equipmentSlot !== binding.slot || row.quality !== uiItem.quality) {
       throw new Error("EQUIPMENT_VISUAL_V2_UI_MISMATCH");
     }
 
     const receipt = receiptsById.get(row.lootReceiptId);
-    if (!receipt || receipt.userId !== userId || receipt.id !== row.lootReceiptId) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_MISSING");
+    if (!receipt || receipt.userId !== ui.userId || receipt.id !== row.lootReceiptId) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_MISSING");
     const resolved = parseStoredDeterministicLootResult(receipt.resolvedJson);
     const definition = aurionLootBaseCatalog.find(candidate => candidate.id === row.baseItemDefinitionId);
     if (!definition) throw new Error("EQUIPMENT_VISUAL_V2_DEFINITION_MISSING");
@@ -122,7 +103,36 @@ export async function readConfirmedEquipmentVisuals(userId: number): Promise<Con
 
   return confirmedEquipmentVisualReadbackSchema.parse({
     version: CONFIRMED_EQUIPMENT_VISUAL_VERSION,
-    userId,
+    userId: ui.userId,
     equipment,
   });
+}
+
+/**
+ * Server-only readback. V2 visuals are projected exclusively from immutable loot
+ * receipt + item-instance truth. Legacy/AX1 entries remain explicitly compatible
+ * and do not receive invented V2 hashes or descriptors.
+ */
+export async function readConfirmedEquipmentVisuals(userId: number): Promise<ConfirmedEquipmentVisualReadback> {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("EQUIPMENT_VISUAL_USER_INVALID");
+  const ui = await readPlayerUi(userId);
+  const db = await getDb();
+  if (!db) throw new Error("DATABASE_UNAVAILABLE");
+
+  const v2Ids = ui.equipment.filter(binding => binding.version === "aurion_v2").map(binding => binding.id);
+  const v2Rows = v2Ids.length
+    ? await db.select().from(aurionItemInstancesV2).where(and(
+        eq(aurionItemInstancesV2.ownerUserId, userId),
+        eq(aurionItemInstancesV2.status, "equipped"),
+        inArray(aurionItemInstancesV2.id, v2Ids),
+      ))
+    : [];
+  const receiptIds = v2Rows.map(row => row.lootReceiptId);
+  const receipts = receiptIds.length
+    ? await db.select().from(aurionLootDropReceiptsV2).where(and(
+        eq(aurionLootDropReceiptsV2.userId, userId),
+        inArray(aurionLootDropReceiptsV2.id, receiptIds),
+      ))
+    : [];
+  return projectConfirmedEquipmentVisualReadback(ui, v2Rows, receipts);
 }
