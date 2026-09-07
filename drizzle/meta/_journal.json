@@ -40,6 +40,7 @@
     { "idx": 35, "version": "5", "when": 1788681600000, "tag": "0035_aurion_npc_memory_quest_offers", "breakpoints": true },
     { "idx": 36, "version": "5", "when": 1788685200000, "tag": "0036_aurion_faction_warfront_receipts", "breakpoints": true },
     { "idx": 37, "version": "5", "when": 1788688800000, "tag": "0037_aurion_trade_crafting_receipts", "breakpoints": true },
-    { "idx": 38, "version": "5", "when": 1788692400000, "tag": "0038_aurion_world_chunk_delta_conflicts", "breakpoints": true }
+    { "idx": 38, "version": "5", "when": 1788692400000, "tag": "0038_aurion_world_chunk_delta_conflicts", "breakpoints": true },
+    { "idx": 39, "version": "5", "when": 1788696000000, "tag": "0039_aurion_world_epoch_materializations", "breakpoints": true }
   ]
 }

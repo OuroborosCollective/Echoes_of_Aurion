@@ -559,6 +559,28 @@ export const aurionWorldEpochReactions = mysqlTable("aurionWorldEpochReactions",
   index("aurionWorldEpochReactions_world_created_idx").on(table.worldId, table.createdAt),
 ]);
 
+/** Idempotent materialization of confirmed epoch reactions and presence evidence. */
+export const aurionWorldEpochMaterializations = mysqlTable("aurionWorldEpochMaterializations", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  reactionReceiptId: varchar("reactionReceiptId", { length: 96 }).notNull(),
+  reactionHash: varchar("reactionHash", { length: 64 }).notNull(),
+  presenceDigest: varchar("presenceDigest", { length: 64 }).notNull(),
+  presenceJson: text("presenceJson").notNull(),
+  materializationJson: text("materializationJson").notNull(),
+  materializationHash: varchar("materializationHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldEpochMaterializations_world_epoch_uq").on(table.worldId, table.epoch),
+  uniqueIndex("aurionWorldEpochMaterializations_resolution_uq").on(table.worldId, table.resolutionIndex),
+  uniqueIndex("aurionWorldEpochMaterializations_hash_uq").on(table.materializationHash),
+  uniqueIndex("aurionWorldEpochMaterializations_idempotency_uq").on(table.idempotencyKey),
+  index("aurionWorldEpochMaterializations_world_created_idx").on(table.worldId, table.createdAt),
+]);
+
 /** Latest bounded NPC needs/memory state. Full causal decisions remain in the receipt table. */
 export const aurionNpcStates = mysqlTable("aurionNpcStates", {
   npcId: varchar("npcId", { length: 96 }).primaryKey(),
