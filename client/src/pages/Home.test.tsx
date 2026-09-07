@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it } from "vitest";
@@ -24,7 +24,12 @@ describe("Home", () => {
     window.addEventListener("aurion:open-local-auth", onOpen);
     try {
       render(<RealClientHarness><Home /></RealClientHarness>);
-      await user.click(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i })[0]!);
+      const accountButton = screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i })[0]! as HTMLButtonElement;
+      // The real client performs auth.me first. The CTA is deliberately disabled
+      // while that readback is pending, so the contract test must not race the
+      // network probe and mistake a disabled-button no-op for an auth failure.
+      await waitFor(() => expect(accountButton.disabled).toBe(false));
+      await user.click(accountButton);
       expect(openRequests).toBe(1);
       expect(document.querySelector("canvas")).toBeNull();
     } finally {
