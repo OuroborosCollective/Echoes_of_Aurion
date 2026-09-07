@@ -19,7 +19,8 @@ describe("open-world protocol", () => {
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false }))).toBe("observatory_threshold");
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 2, completed: ["astral_call"], activeQuest: null, canEnterDungeon: false }))).toBe("windhollow");
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false }))).toBe("emberfall");
-    expect(zoneForOpenWorldProgress(snapshotInput({ level: 4, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }))).toBe("cinder_vault");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 4, completed: ["astral_call", "archive_of_echoes"], activeQuest: null, canEnterDungeon: true }))).toBe("cinder_vault");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }))).toBe("starfall_crater");
   });
 
   it("returns an immutable display snapshot with only explicitly confirmed skill receipts", () => {
@@ -73,7 +74,7 @@ describe("open-world protocol", () => {
     expect(lyra?.autonomy.goal).toBe("expand_influence");
     expect(lyra?.autonomy.decisionHash).toHaveLength(64);
     expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
-    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "windhollow"]);
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "starfall_crater", "windhollow"]);
     expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 

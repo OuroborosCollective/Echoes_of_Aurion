@@ -1,9 +1,9 @@
 import { ax1DamageForAction } from "./ax1CombatAuthority";
 
-export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key";
+export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance";
 export type QuestState = "locked" | "available" | "active" | "completed";
 export type McpAction = "run" | "attack" | "interact" | "skill_1" | "skill_2" | "skill_3" | "skill_4" | "skill_5" | "skill_6" | "skill_7" | "skill_8" | "skill_9";
-export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault";
+export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater";
 
 export type QuestDefinition = {
   key: QuestKey;
@@ -43,6 +43,15 @@ export const aurionQuestline: readonly QuestDefinition[] = [
     requires: "archive_of_echoes",
     reward: { xp: 360, points: 60, dungeonKey: "ember_key" },
   },
+  {
+    key: "starfall_resonance",
+    giver: "Lyra",
+    title: "Resonanz des Sternenfalls",
+    objective: "Untersuche den Einschlagkrater und besiege den Sternenfall-Wächter.",
+    requiredLevel: 4,
+    requires: "ember_key",
+    reward: { xp: 500, points: 75 },
+  },
 ] as const;
 
 export const dungeonDefinition = {
@@ -72,6 +81,7 @@ export const aurionEncounters: readonly {
   { key: "archive", name: "Versunkene Archivhalle", enemyName: "Archiv-Sentinel", maxBossHp: 154, questKey: "archive_of_echoes" },
   { key: "solarium", name: "Solarium der letzten Flamme", enemyName: "Solar-Sentinel", maxBossHp: 198, questKey: "ember_key" },
   { key: "cinder_vault", name: "Aschengewölbe", enemyName: "Glutwächter", maxBossHp: 258, questKey: null, requiresDungeonKey: "ember_key" },
+  { key: "starfall_crater", name: "Sternenfall-Krater", enemyName: "Sternenfall-Wächter", maxBossHp: 320, questKey: "starfall_resonance" },
 ] as const;
 
 export function getQuest(key: QuestKey): QuestDefinition {
