@@ -53,7 +53,7 @@ const armorSlotMap = Object.freeze({
   feet: "boots",
 } satisfies Readonly<Partial<Record<string, GlbEquipmentSlot>>>);
 
-function expectedEquipmentSlot(descriptor: VisualItemDescriptor): GlbEquipmentSlot | null {
+export function visualItemEquipmentSlot(descriptor: VisualItemDescriptor): GlbEquipmentSlot | null {
   if (descriptor.category === "weapon") {
     if (descriptor.familyId === "shield" || descriptor.equipmentSlot === "off_hand") return "shield";
     return descriptor.equipmentSlot === "main_hand" ? "weapon" : null;
@@ -84,7 +84,7 @@ export function resolveVisualItemRenderSource(
   lod: VisualItemLod,
   catalog: GlbRuntimeCatalog,
 ): VisualItemRenderSource {
-  const slot = expectedEquipmentSlot(descriptor);
+  const slot = visualItemEquipmentSlot(descriptor);
   if (!slot) return fallback(descriptor, lod, "ITEM_SLOT_UNSUPPORTED");
 
   const assetId = descriptor.visual?.glbAssetId ?? null;
