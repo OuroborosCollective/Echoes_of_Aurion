@@ -83,7 +83,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const groupCommand = trpc.groups.command.useMutation();
   const craft = trpc.crafting.craft.useMutation();
   const bonus = trpc.crafting.materializeBonus.useMutation();
-  const fresh = connected && player.state === "live" && ui.state === "live" && !pending;
+  const uiFresh = connected && ui.state === "live" && !pending;
+  const fresh = uiFresh && player.state === "live";
   const permitted = useRef(false);
   permitted.current = connected && panel === null && !groupOpen && !expandedMenu && !pending;
   const action = useRef(onAction); action.current = onAction;
@@ -96,8 +97,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     if (parsed.userId !== userId) throw new Error("UI_READBACK_OWNER_MISMATCH");
     await utils.gameplay.relationshipStanding.invalidate();
   }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, utils, userId]);
-  const act = async (operation: () => Promise<unknown>) => {
-    if (!fresh || busy.current) return;
+  const act = async (operation: () => Promise<unknown>, ready = fresh) => {
+    if (!ready || busy.current) return;
     busy.current = true; setPending(true); auto.stop(); setMessage("");
     let applied = false;
     try { await operation(); applied = true; }
@@ -112,9 +113,9 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     const hotbar = [...settings.hotbar]; const previousSlot = hotbar.indexOf(command);
     if (previousSlot >= 0) hotbar[previousSlot] = hotbar[slot]!;
     hotbar[slot] = command;
-    void act(() => saveControls.mutateAsync({ ...settings, hotbar }));
+    void act(() => saveControls.mutateAsync({ ...settings, hotbar }), uiFresh);
   };
-  const toggleLoot = () => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data!.settings, autoLoot: !ui.data!.settings.autoLoot })); };
+  const toggleLoot = () => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data!.settings, autoLoot: !ui.data!.settings.autoLoot }), uiFresh); };
   useEffect(() => {
     if (!permitted.current) auto.stop();
     if (startAfterClose && permitted.current) { setStartAfterClose(false); auto.start(); }
@@ -237,7 +238,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     </div>
 
     {groupOpen && <AurionGroupFinder open onClose={() => setGroupOpen(false)} />}
-
     <div className="ax1-hud-bottom">
       <div className="ax1-hud-bottom-left">
         <button type="button" className="ax1-realm-chat" onClick={() => community("chat")}><MessageSquare size={15} /> Realm-Chat</button>
@@ -246,7 +246,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
 
       <div className="ax1-hud-bottom-right">
         <div className="ax1-utility-actions" aria-label="Schnellaktionen">
-          <button type="button" disabled={!fresh} aria-label="Auto-Loot" aria-pressed={ui.data?.settings.autoLoot ?? false} onClick={toggleLoot}><Sparkles size={17} /><span>A-LOOT</span></button>
+          <button type="button" disabled={!uiFresh} aria-label="Auto-Loot" aria-pressed={ui.data?.settings.autoLoot ?? false} onClick={toggleLoot}><Sparkles size={17} /><span>A-LOOT</span></button>
           <button type="button" disabled={actionDisabled} onClick={() => onInteract ? onInteract() : void onAction("E")} aria-label="Interaktion" title="Interaktion [F]"><Hand size={17} /><span>ACTION</span></button>
           <button type="button" disabled={!connected || panel !== null || groupOpen || pending} onClick={() => autoActive ? auto.stop() : auto.start()} aria-label="Auto-Angriff" title="Auto-Angriff [T]" aria-pressed={autoActive}><Repeat size={17} /><span>{autoActive ? "AUTO AN" : "AUTO"}</span></button>
           <button type="button" onClick={() => openPanel("controls")} aria-label="Steuerung & Skills"><Gamepad2 size={17} /><span>CTRL</span></button>
@@ -269,11 +269,11 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
 
     {panel === null && message && <p className="aurion-ui-feedback" role="status">{message}</p>}
     {ui.state === "error" && <p className="aurion-ui-feedback" role="alert">Inventardaten sind nicht verfügbar.</p>}
-    <InventoryModal isOpen={panel === "inventory"} onClose={() => openPanel(null)} readback={ui.data} points={profile?.aurionPoints} pending={!fresh} message={message || (ui.state !== "live" ? readbackLabels[ui.state] : "")} onEquip={item => { const previous = ui.data?.equipment.find(e => e.slot === item.slot); void act(() => equip.mutateAsync({ id: item.id, version: item.version, expectedItem: previous ? { id: previous.id, version: previous.version } : null })); }} onUnequip={item => { void act(() => unequip.mutateAsync({ id: item.id, version: item.version })); }} onCollect={item => { void act(() => collect.mutateAsync({ id: item.id, version: item.version })); }} onToggleAutoLoot={toggleLoot} onCraft={() => openPanel("crafting")} />
+    <InventoryModal isOpen={panel === "inventory"} onClose={() => openPanel(null)} readback={ui.data} points={profile?.aurionPoints} pending={!uiFresh} message={message || (ui.state !== "live" ? readbackLabels[ui.state] : "")} onEquip={item => { const previous = ui.data?.equipment.find(e => e.slot === item.slot); void act(() => equip.mutateAsync({ id: item.id, version: item.version, expectedItem: previous ? { id: previous.id, version: previous.version } : null }), uiFresh); }} onUnequip={item => { void act(() => unequip.mutateAsync({ id: item.id, version: item.version }), uiFresh); }} onCollect={item => { void act(() => collect.mutateAsync({ id: item.id, version: item.version }), uiFresh); }} onToggleAutoLoot={toggleLoot} onCraft={() => openPanel("crafting")} />
     <CharacterModal isOpen={panel === "character"} onClose={() => openPanel(null)} player={player.data} settings={ui.data?.settings} pending={!fresh} message={message} group={group.state === "live" ? group.data : undefined} onBind={bind} onClass={playerClass => { void act(() => chooseClass.mutateAsync({ playerClass })); }} onWeapon={weaponTrack => { void act(() => setWeapon.mutateAsync({ weaponTrack })); }} onRoleSkill={(skill, equipped) => { const current = group.data?.player; if (current) void act(() => groupCommand.mutateAsync({ expectedRevision: current.revision, action: { kind: "equip", skills: equipped ? [...new Set([...current.skills, skill])] : current.skills.filter(s => s !== skill) } })); }} onInventory={() => openPanel("inventory")} />
     {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} pending={false} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} />}
     <CraftingModal isOpen={panel === "crafting"} onClose={() => openPanel(null)} inventory={ui.data} readback={!craftingQuery.isError ? craftingQuery.data : undefined} pending={!fresh || craftingQuery.isFetching || craftingQuery.isError} message={message} onCraft={inputItemId => { void act(() => craft.mutateAsync({ recipeKey: "temper_aurion_spear", inputItemId })); }} onBonus={batch => { void act(() => bonus.mutateAsync({ receiptId: batch.receiptId, expectedOutputIndexExact: batch.nextOutputIndexExact, count: Math.min(10, Number(batch.remainingQuantityExact)) })); }} />
-    <ControlsModal open={panel === "controls"} onClose={() => openPanel(null)} settings={ui.data?.settings} pending={!fresh} message={message} onBind={bind} onAutoLoot={toggleLoot} onAnalytics={() => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data!.settings, analyticsConsent: !ui.data!.settings.analyticsConsent })); }} onStartAuto={() => { openPanel(null); setStartAfterClose(true); }} />
+    <ControlsModal open={panel === "controls"} onClose={() => openPanel(null)} settings={ui.data?.settings} pending={!uiFresh} message={message} onBind={bind} onAutoLoot={toggleLoot} onAnalytics={() => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data!.settings, analyticsConsent: !ui.data!.settings.analyticsConsent }), uiFresh); }} onStartAuto={() => { openPanel(null); setStartAfterClose(true); }} />
     <Dialog open={panel === "map"} onOpenChange={open => { if (!open) openPanel(null); }}><DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop"><DialogTitle>Weltatlas</DialogTitle><DialogDescription>Die Welt und deine bestätigte Position.</DialogDescription><div data-state={world.state}><p role="status">{readbackLabels[world.state]}</p>{world.data && <><p>Weltepoche {world.data.globalWorld.epoch}</p><p className="aurion-authority-hud__hash">Welt-Hash: {world.data.globalWorld.deterministicHash}</p></>}{position && connected ? <p>Bestätigte Position: {(position.x / 1000).toFixed(2)} / {(position.z / 1000).toFixed(2)}</p> : <p>Position wartet auf die Zonenverbindung.</p>}{connected && remotePlayers.map(p => <p key={p.userId}>Explorer {p.userId}: {(p.position.x / 1000).toFixed(2)} / {(p.position.z / 1000).toFixed(2)}</p>)}</div></DialogContent></Dialog>
   </div>;
 }
