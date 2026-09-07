@@ -110,7 +110,6 @@ export default function AurionOpenWorldRuntime() {
 
   const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
     if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
-    // A delegated auto-attack is not a new human demonstration for the companion.
     if (!automated) window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
     return requestConfirmedAction(command);
   }, []);
@@ -331,7 +330,9 @@ export default function AurionOpenWorldRuntime() {
               void controlsQuery.refetch?.();
               return;
             }
-            if (status !== "connected") { remotePresenceRef.current?.clear(); setRemotePlayers([]); motionRef.current?.stop(); }
+            remotePresenceRef.current?.clear();
+            setRemotePlayers([]);
+            motionRef.current?.stop();
             if (status === "closed" || (status === "rejected" && !fatalReject)) scheduleReconnect();
             else setZoneStatus(status);
           },
