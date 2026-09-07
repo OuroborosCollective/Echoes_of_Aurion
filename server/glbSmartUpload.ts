@@ -7,7 +7,8 @@ import { authenticateAdminGlbBearer } from "./adminMcp";
 import { glbImportStore } from "./glbImportStore";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { checkGlbStorage } from "./glbFileStore";
-import { glbImportPurposes, type GlbImportPurpose, type GlbRuntimeCatalog } from "../shared/glbImportContract";
+import { glbImportPurposes, type GlbEquipmentSlot, type GlbImportPurpose, type GlbRuntimeCatalog } from "../shared/glbImportContract";
+import { readPlayerUi } from "./playerUiPersistence";
 import { z } from "zod";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
@@ -19,6 +20,17 @@ type GlbSmartUploadDependencies = Readonly<{
   authenticate: (request: Request) => Promise<AuthenticatedUploader | null>;
   uploadAsset: UploadAsset;
 }>;
+
+const uiEquipmentVisualSlot = Object.freeze({
+  main_hand: "weapon",
+  off_hand: "shield",
+  focus: "shield",
+  head: "helmet",
+  chest: "chest",
+  hands: "arms",
+  legs: "legs",
+  feet: "boots",
+} satisfies Partial<Record<string, GlbEquipmentSlot>>);
 
 function defaultDependencies(): GlbSmartUploadDependencies {
   return {
@@ -83,6 +95,24 @@ export function parseRequestedPresenceUserIds(value: unknown): readonly number[]
   const ids = Array.from(new Set(value.split(",").map(part => Number(part)).filter(id => Number.isSafeInteger(id) && id > 0 && id <= 2_147_483_647))).sort((a, b) => a - b);
   if (ids.length > 128) throw new Error("GLB_PRESENCE_QUERY_LIMIT");
   return Object.freeze(ids);
+}
+
+export function projectConfirmedEquipmentVisuals(ui: Awaited<ReturnType<typeof readPlayerUi>>) {
+  const items = new Map(ui.items.map(item => [`${item.version}:${item.id}`, item] as const));
+  const equipment = ui.equipment.flatMap(binding => {
+    const equipmentSlot = uiEquipmentVisualSlot[binding.slot as keyof typeof uiEquipmentVisualSlot] ?? null;
+    const item = items.get(`${binding.version}:${binding.id}`);
+    if (!equipmentSlot || !item || item.status !== "equipped") return [];
+    return [Object.freeze({
+      uiSlot: binding.slot,
+      equipmentSlot,
+      itemId: binding.id,
+      version: binding.version,
+      definition: item.definition,
+      receiptId: item.receiptId,
+    })];
+  }).sort((left, right) => left.equipmentSlot.localeCompare(right.equipmentSlot) || left.itemId.localeCompare(right.itemId));
+  return Object.freeze({ version: ui.version, userId: ui.userId, equipment: Object.freeze(equipment) });
 }
 
 export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependencies = defaultDependencies()) {
@@ -224,6 +254,7 @@ export function registerGlbSmartUpload(app: Express): void {
     }))).filter((value): value is NonNullable<typeof value> => value !== null);
     return { appearances };
   }));
+  app.get("/api/game/confirmed-equipment-visuals", playerRoute(async (_request, user) => projectConfirmedEquipmentVisuals(await readPlayerUi(user.id))));
 
   app.get("/api/game/glb-catalog", async (_request, response) => {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }
