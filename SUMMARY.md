@@ -20,3 +20,5 @@
   * [Android APK Build](ANDROID_BUILD.md)
 * [Presentation & Side-Channels](AURION_AUDIO_SYSTEM.md)
   * [Companion Memory VPS Setup](COMPANION_MEMORY_VPS_SETUP.md)
+* [Patchnotes](patchnotes/README.md)
+  * [GitHub-Patchnotes-Automation](patchnotes/github-patchnotes-automation.md)

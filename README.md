@@ -10,7 +10,7 @@ description: Produktzentrale, Architektur und Betrieb für Echoes of Aurion.
 
 Website, Spielruntime und Gameplay folgen klaren Verantwortungsgrenzen. So bleiben Produkt, Betrieb und Spielregeln nachvollziehbar.
 
-<table data-view="cards"><thead><tr><th>Bereich</th><th data-card-target data-type="content-ref">Ziel</th></tr></thead><tbody><tr><td><strong>Technische Dokumentation</strong><br>Architektur, Verträge und aktuelle Integrationsarbeit.</td><td><a href="docs/">docs</a></td></tr><tr><td><strong>Betrieb</strong><br>Deployments, Infrastruktur und mobile Builds.</td><td><a href="CONTAINER_RUNTIME_DEPLOYMENT.md">CONTAINER_RUNTIME_DEPLOYMENT.md</a></td></tr><tr><td><strong>Präsentation</strong><br>Audio, Companion Memory und Side-Channels.</td><td><a href="AURION_AUDIO_SYSTEM.md">AURION_AUDIO_SYSTEM.md</a></td></tr></tbody></table>
+<table data-view="cards"><thead><tr><th>Bereich</th><th data-card-target data-type="content-ref">Ziel</th></tr></thead><tbody><tr><td><strong>Technische Dokumentation</strong><br>Architektur, Verträge und aktuelle Integrationsarbeit.</td><td><a href="docs/">docs</a></td></tr><tr><td><strong>Betrieb</strong><br>Deployments, Infrastruktur und mobile Builds.</td><td><a href="CONTAINER_RUNTIME_DEPLOYMENT.md">CONTAINER_RUNTIME_DEPLOYMENT.md</a></td></tr><tr><td><strong>Patchnotes</strong><br>Nachvollziehbare Änderungen aus gemergten Pull Requests.</td><td><a href="patchnotes/">patchnotes</a></td></tr><tr><td><strong>Präsentation</strong><br>Audio, Companion Memory und Side-Channels.</td><td><a href="AURION_AUDIO_SYSTEM.md">AURION_AUDIO_SYSTEM.md</a></td></tr></tbody></table>
 
 ### Plattform
 
