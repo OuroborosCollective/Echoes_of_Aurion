@@ -16,10 +16,11 @@ describe("smart GLB upload integration contract", () => {
     expect(index).toContain('import { registerGlbSmartUpload } from "../glbSmartUpload"');
   });
 
-  it("keeps classification server-authoritative instead of accepting a browser asset type", () => {
+  it("keeps classification server-authoritative while binding safe filename evidence", () => {
     const runtime = read("server/glbSmartUpload.ts");
     const page = read("client/src/pages/GlbUpload.tsx");
-    expect(runtime).toContain("classification = classifyGlbBase64(contentBase64)");
+    expect(runtime).toContain("classification = classifyGlbBase64(contentBase64, fileName)");
+    expect(runtime).toContain("buildGlbImportPlan(contentBase64, purpose, fileName)");
     expect(runtime).toContain("assetType: classification.assetType");
     expect(page).toContain('fetch("/api/admin/glb-smart-upload"');
 
