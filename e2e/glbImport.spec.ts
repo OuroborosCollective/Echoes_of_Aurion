@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable GLB CI database");
-test("admin upload persists bytes and assignment, deduplicates, and renders the published avatar", async ({ page, baseURL, request }, testInfo) => {
+test("admin upload persists bytes and assignment, deduplicates, scrolls on mobile, and renders the published avatar", async ({ page, baseURL, request }, testInfo) => {
   expect(baseURL).toBe("http://127.0.0.1:3000");
   const target = new URL(process.env.DATABASE_URL!);
   expect(target.hostname).toBe("127.0.0.1"); expect(target.pathname).toBe("/aurion_glb_test");
@@ -26,7 +26,16 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     expect((await page.request.get('/api/admin/glb-import/status')).status()).toBe(403);
     // Explicit fixture setup, guarded above against any live target.
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_browser_admin'");
+    await page.setViewportSize({ width: 412, height: 732 });
     await page.goto('/ops/glb-upload');
+    const scrollRegion = page.getByTestId('glb-upload-scroll-region');
+    await expect(scrollRegion).toBeVisible();
+    const scrollMetrics = await scrollRegion.evaluate(element => ({ scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+    await scrollRegion.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    await scrollRegion.evaluate(element => { element.scrollTop = 0; });
+
     const input = page.locator('#smartGlbFile');
     await expect(input).toBeEnabled();
     // The production player gate requires real Idle + Attack clips. A skin-only GLB
@@ -80,6 +89,6 @@ test("admin upload persists bytes and assignment, deduplicates, and renders the 
     expect(fetched.length).toBeGreaterThan(0);
     await expect(page.locator('#three-viewport canvas')).toBeVisible();
     await page.locator('#three-viewport canvas').screenshot({ path: testInfo.outputPath('imported-avatar.png') });
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, receipt, db: rows[0], byteReadback: true, rendererLoaded: true, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-ax1-single-action' }), contentType: 'application/json' });
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, receipt, db: rows[0], byteReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-ax1-single-action' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
