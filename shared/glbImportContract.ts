@@ -2,6 +2,16 @@ import { z } from "zod";
 
 export const GLB_IMPORT_VERSION = "aurion.glb-import.v1" as const;
 export const glbTargetTypes = ["character", "enemy", "weapon", "armor", "arena"] as const;
+export const glbImportPurposes = ["auto", "npc-fallback"] as const;
+export type GlbImportPurpose = (typeof glbImportPurposes)[number];
+
+/**
+ * Deliberately server-authored marker for approved character assets that are
+ * eligible for presentation-only NPC fallback selection. This is not gameplay
+ * state and never grants an assignment to a player or NPC target.
+ */
+export const NPC_FALLBACK_DISPLAY_PREFIX = "NPC Fallback · " as const;
+
 export const glbImportReceiptSchema = z.object({
   version: z.literal(GLB_IMPORT_VERSION),
   assetId: z.string().min(8).max(64),
