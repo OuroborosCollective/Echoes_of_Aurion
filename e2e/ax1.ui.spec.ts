@@ -68,8 +68,10 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
       await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-ui-regression!");
       await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-      await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
-      await page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true }).click();
+      const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
+      await expect(launch).toBeVisible({ timeout: 30_000 });
+      await launch.click();
+      await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
 
       const runtime = page.getByTestId("xaurion-open-world-runtime");
       const hud = page.getByTestId("authoritative-world-hud");
@@ -136,7 +138,6 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await page.screenshot({ path: info.outputPath(`${viewport.name}-skills.png`) });
       await dialog.getByRole("button", { name: "Charakter schließen", exact: true }).click();
 
-      // `/play` must not expose or mutate Aurion gameplaySessions quests/arena.
       await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByText("Keine WASD-bestätigten Aufträge in dieser Ansicht.", { exact: true })).toBeVisible();
@@ -149,8 +150,6 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(Number(legacySessionsBefore[0].count)).toBe(0);
       expect(Number(legacyReceiptsBefore[0].count)).toBe(0);
 
-      // The nearest AX1 mob acquires the player and WASD must reduce real player HP
-      // without any active quest or legacy encounter session.
       await expect.poll(
         () => combatEvents.some(event => event.defenderEntityId === selfEntityId && event.damage > 0),
         { timeout: 30_000 },
@@ -201,14 +200,11 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await auto.click();
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();
-      // Radix correctly removes modal background controls from the accessibility tree.
-      // Read the actual DOM state while the modal is open, then prove no further WASD attacks occur.
       await expect(hud.locator('button[aria-label="Auto-Angriff"]')).toHaveAttribute("aria-pressed", "false");
       const stoppedAt = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
       await page.waitForTimeout(1_400);
       expect(combatEvents.filter(event => event.attackerEntityId === selfEntityId).length).toBe(stoppedAt);
 
-      // Starter state is real equipment: it can leave and return to the paperdoll.
       await dialog.getByRole("button", { name: "Haupthand-Waffe: Apprentice Steel Blade", exact: true }).click();
       await dialog.getByRole("button", { name: "Ablegen", exact: true }).click();
       await confirmed();
@@ -252,6 +248,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
           animation,
           environment: environmentReadback,
           legacyArena: { sessions: Number(legacySessionsAfter[0].count), actionReceipts: Number(legacyReceiptsAfter[0].count) },
+          launchRoute: "portal-confirmed-ax1-single-action",
         }),
         contentType: "application/json",
       });

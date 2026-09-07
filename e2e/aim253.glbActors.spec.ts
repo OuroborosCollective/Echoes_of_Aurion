@@ -50,8 +50,7 @@ for (const viewport of [
       await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
       await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-disposable-actors-test-only!");
       await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-      await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
-      await expect(page.getByRole("heading", { name: /Willkommen zurück/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
       // Only the disposable fixture account receives upload permission. Every
       // upload, replacement, catalog read and gameplay action uses the real API.
       await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
@@ -96,11 +95,10 @@ for (const viewport of [
         if (response.status() === 200 && [playerReceipt.storageUrl, smithReceipt.storageUrl].some(url => response.url().endsWith(url))) loaded.add(new URL(response.url()).pathname);
       });
       await page.goto("/");
-      const solo = page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ });
-      const enter = page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true });
-      await expect(solo.or(enter).first()).toBeVisible({ timeout: 30_000 });
-      if (await solo.isVisible()) await solo.click();
-      await enter.click();
+      const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
+      await expect(launch).toBeVisible({ timeout: 30_000 });
+      await launch.click();
+      await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
       const runtime = page.getByTestId("xaurion-open-world-runtime");
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
@@ -151,7 +149,6 @@ for (const viewport of [
       expect(Number(legacySessions[0].count)).toBe(0);
       expect(Number(legacyActions[0].count)).toBe(0);
 
-      // Walk around the plaza fountain, then north to the Royal Forge.
       const origin = { ...presence!.position };
       await page.keyboard.down("d");
       try {
@@ -179,7 +176,7 @@ for (const viewport of [
         revision: process.env.AURION_RELEASE_SHA, viewport: viewport.name, assignments,
         player: await pose(player), smith: await pose(smith), uploadedByteReadback: true,
         idlePoseChanged: true, serverMovementObserved: true, interactionObserved: "ShopInteract", profile, actions, movement,
-        legacyGameplaySessions: 0, legacyGameplayActions: 0,
+        legacyGameplaySessions: 0, legacyGameplayActions: 0, launchRoute: "portal-confirmed-ax1-single-action",
       }) });
     } finally { await page.close(); await pool.end(); }
   });

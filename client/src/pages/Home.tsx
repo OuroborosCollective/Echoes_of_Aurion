@@ -16,7 +16,6 @@ function openCommunity(panel: CommunityPanel): void {
 /** Aurion website: account, community and read-only persisted information only. */
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
-  const [portalReady, setPortalReady] = useState(false);
   const [launchMessage, setLaunchMessage] = useState("");
 
   useEffect(() => {
@@ -42,7 +41,7 @@ export default function Home() {
           <h2 className="font-serif text-3xl text-amber-100 sm:text-5xl">{isAuthenticated ? "Willkommen zurück" : "Dein Zugang zu Echoes of Aurion"}</h2>
           <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-300">Aurion trägt Konto, Forum, Community-Events und persistente Daten. Charakter-, Skill-, Inventar-, Ausrüstungs-, Gilden- und Companionstände werden auf der Website nur gelesen. Die Spieloberfläche gehört AX1; sämtliche Gameplay-Regeln und Zustandsübergänge gehören WASD.</p>
 
-          {!isAuthenticated ? <div className="mt-8"><button type="button" disabled={loading} onClick={openAccountAccess} className="min-h-12 rounded-xl bg-amber-200 px-5 font-bold text-slate-950 disabled:opacity-60"><ShieldCheck className="mr-2 inline size-4"/>KONTO ANLEGEN / ANMELDEN</button></div> : <div className="mt-8 space-y-4"><p className="text-sm text-slate-300">Angemeldet als <b className="text-slate-100">{user?.name ?? `Explorer ${user?.id ?? ""}`}</b>.</p><div className="flex flex-wrap gap-3"><Link href="/account" className="min-h-12 rounded-xl border border-cyan-300/30 px-5 py-3 font-semibold"><UserRound className="mr-2 inline size-4"/>KONTO & CHARAKTERDATEN</Link>{!portalReady ? <button type="button" onClick={() => { setPortalReady(true); setLaunchMessage(""); }} className="min-h-12 rounded-xl bg-amber-200 px-5 font-bold text-slate-950"><Compass className="mr-2 inline size-4"/>SPIELSTART VORBEREITEN</button> : <button type="button" onClick={() => window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT))} className="min-h-12 rounded-xl bg-cyan-300 px-5 font-bold text-slate-950"><Compass className="mr-2 inline size-4"/>AX1 OPEN WORLD STARTEN</button>}</div>{launchMessage && <p role="status" className="text-sm text-cyan-100">{launchMessage}</p>}</div>}
+          {!isAuthenticated ? <div className="mt-8"><button type="button" disabled={loading} onClick={openAccountAccess} className="min-h-12 rounded-xl bg-amber-200 px-5 font-bold text-slate-950 disabled:opacity-60"><ShieldCheck className="mr-2 inline size-4"/>KONTO ANLEGEN / ANMELDEN</button></div> : <div className="mt-8 space-y-4"><p className="text-sm text-slate-300">Angemeldet als <b className="text-slate-100">{user?.name ?? `Explorer ${user?.id ?? ""}`}</b>.</p><div className="flex flex-wrap gap-3"><button type="button" onClick={() => { setLaunchMessage(""); window.dispatchEvent(new Event(AX1_PLAY_REQUEST_EVENT)); }} className="min-h-12 rounded-xl bg-cyan-300 px-5 font-bold text-slate-950"><Compass className="mr-2 inline size-4"/>SPIEL BETRETEN</button><Link href="/account" className="min-h-12 rounded-xl border border-cyan-300/30 px-5 py-3 font-semibold"><UserRound className="mr-2 inline size-4"/>KONTO & CHARAKTERDATEN</Link></div>{launchMessage && <p role="status" className="text-sm text-cyan-100">{launchMessage}</p>}</div>}
         </div>
       </section>
 

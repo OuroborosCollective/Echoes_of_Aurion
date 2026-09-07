@@ -17,15 +17,14 @@ async function register(page: Page, handle: string): Promise<void> {
   await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
   await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-regression-254!");
   await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+  await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
 }
 
 async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["getByTestId"]>; snapshot: any }> {
-  const solo = page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ });
-  const enter = page.getByRole("button", { name: "IN DIE OPEN WORLD", exact: true });
-  await expect(solo.or(enter).first()).toBeVisible({ timeout: 30_000 });
-  if (await solo.isVisible()) await solo.click();
+  const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
+  await expect(launch).toBeVisible({ timeout: 30_000 });
   const response = page.waitForResponse(candidate => candidate.url().includes("gameplay.enterOpenWorld") && candidate.status() === 200);
-  await enter.click();
+  await launch.click();
   const body = await (await response).json();
   const snapshot = (Array.isArray(body) ? body : [body]).map(value => value.result?.data?.json).find(Boolean);
   const runtime = page.getByTestId("xaurion-open-world-runtime");
@@ -67,8 +66,6 @@ for (const viewport of [
       const health = await page.request.get("/healthz");
       expect(await health.json()).toMatchObject({ status: "ok", revision: process.env.AURION_RELEASE_SHA });
       await register(page, `aim254_${viewport.name}`);
-      await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
-      await expect(page.getByRole("heading", { name: /Willkommen zurück/ })).toBeVisible();
       const first = await enterAx1(page);
       expect(first.snapshot?.globalWorld?.worldSeed).toBe("echoes-of-aurion-v1");
       expect(first.snapshot?.globalWorld?.deterministicHash).toMatch(/^fnv1a-[0-9a-f]{8}$/);
@@ -117,7 +114,7 @@ for (const viewport of [
       expect(Number(legacySessionsAfter[0].count)).toBe(0);
       expect(errors).toEqual([]);
       await testInfo.attach("migration-readback", {
-        body: JSON.stringify({ viewport: viewport.name, revision: process.env.AURION_RELEASE_SHA, authenticatedUserId: latestPresence!.userId, worldHash: first.snapshot?.globalWorld?.deterministicHash, persistedPresenceVerified: true, movementAccepted: true, returnedAndReentered: true, legacyGameplaySessions: 0, contextLossChecked: viewport.name === "desktop" }),
+        body: JSON.stringify({ viewport: viewport.name, revision: process.env.AURION_RELEASE_SHA, authenticatedUserId: latestPresence!.userId, worldHash: first.snapshot?.globalWorld?.deterministicHash, persistedPresenceVerified: true, movementAccepted: true, returnedAndReentered: true, legacyGameplaySessions: 0, contextLossChecked: viewport.name === "desktop", launchRoute: "portal-confirmed-ax1-single-action" }),
         contentType: "application/json",
       });
     } finally { await page.close(); await pool.end(); }
@@ -153,13 +150,11 @@ test("two authenticated AX1 clients converge and departure removes the remote ac
 
   try {
     await register(left, "aim254_coop_left");
-    await left.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     await enterAx1(left);
     await expect.poll(() => leftView.length).toBe(1);
     const leftUserId = leftView[0].userId;
 
     await register(right, "aim254_coop_right");
-    await right.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     await enterAx1(right);
     await expect.poll(() => leftView.length).toBe(2);
     await expect.poll(() => rightView.length).toBe(2);
@@ -188,7 +183,7 @@ test("two authenticated AX1 clients converge and departure removes the remote ac
       return Number(rows[0].active);
     }, { timeout: 15_000 }).toBe(0);
     expect(errors).toEqual([]);
-    await testInfo.attach("two-account-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, leftUserId, rightUserId, replicatedMovement: true, departedActorRemoved: true, databasePresenceReleased: true }), contentType: "application/json" });
+    await testInfo.attach("two-account-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, leftUserId, rightUserId, replicatedMovement: true, departedActorRemoved: true, databasePresenceReleased: true, launchRoute: "portal-confirmed-ax1-single-action" }), contentType: "application/json" });
   } finally { await leftContext.close(); await rightContext.close(); await pool.end(); }
 });
 
@@ -202,7 +197,6 @@ test("explicit companion learning captures the visible AX1 world and stores a bo
   try {
     await page.setViewportSize({ width: 800, height: 1280 });
     await register(page, "aim239_companion");
-    await page.getByRole("button", { name: /ALLEIN DIE STERNWARTE BETRETEN/ }).click();
     const { runtime } = await enterAx1(page);
     await runtime.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
@@ -258,8 +252,10 @@ test("explicit companion learning captures the visible AX1 world and stores a bo
     await runtime.getByRole("button", { name: "Companion", exact: true }).click();
     await expect(dialog.getByText(/^[1-9][0-9]* lokale Beobachtungszeilen$/)).toBeVisible();
     await dialog.getByRole("button", { name: "Aufzeichnung beenden", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
     await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(page.getByTestId("xaurion-open-world-runtime")).toHaveCount(0);
-    await testInfo.attach("visible-companion-readback", { body: JSON.stringify({ userId, sessionId, memoryHash: receipt!.memoryHash, featureCount: 16, unknownStateMasked: true, rendererCount: 1 }), contentType: "application/json" });
+    await testInfo.attach("visible-companion-readback", { body: JSON.stringify({ userId, sessionId, memoryHash: receipt!.memoryHash, featureCount: 16, unknownStateMasked: true, rendererCount: 1, launchRoute: "portal-confirmed-ax1-single-action" }), contentType: "application/json" });
   } finally { await page.close(); await pool.end(); }
 });

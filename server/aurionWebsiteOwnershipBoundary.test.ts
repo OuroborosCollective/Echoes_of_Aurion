@@ -41,15 +41,39 @@ describe("Aurion website ownership boundary", () => {
     expect(mutationSurfaces(host)).toEqual([]);
   });
 
-  it("keeps account and community pages read-only for gameplay state", () => {
+  it("allows owned read-only gameplay projections on account/community pages but no gameplay mutations", () => {
     const account = source("client/src/pages/Account.tsx");
     const community = source("client/src/pages/Community.tsx");
 
+    expect(account).toContain("trpc.player.ui.useQuery");
+    expect(account).toContain("trpc.crafting.read.useQuery");
+    expect(account).toContain("trpc.groups.read.useQuery");
+    expect(account).toContain("trpc.guild.mine.useQuery");
+    expect(account).toContain("Read-only Projektion");
+
     for (const page of [account, community]) {
-      for (const forbidden of ["gameplay.", "crafting.", "market.", "groups.command", "guild.command", "world."]) {
-        expect(page).not.toContain(`trpc.${forbidden}`);
-      }
       expect(mutationSurfaces(page)).toEqual([]);
+      expect(page).not.toMatch(/trpc\.[A-Za-z0-9_.]+\.(?:mutate|mutateAsync)\s*\(/);
+    }
+
+    for (const forbidden of [
+      "trpc.gameplay.startEncounter",
+      "trpc.gameplay.act",
+      "trpc.gameplay.acceptQuest",
+      "trpc.gameplay.completeQuest",
+      "trpc.crafting.craft",
+      "trpc.market.createListing",
+      "trpc.market.buyListing",
+      "trpc.groups.command",
+      "trpc.guild.command",
+      "trpc.player.collectLoot",
+      "trpc.player.equipItem",
+      "trpc.player.unequipItem",
+      "trpc.player.chooseClass",
+      "trpc.player.setWeaponLoadout",
+    ]) {
+      expect(account).not.toContain(forbidden);
+      expect(community).not.toContain(forbidden);
     }
   });
 
