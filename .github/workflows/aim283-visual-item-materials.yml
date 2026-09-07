@@ -1,0 +1,67 @@
+name: AIM-283 Visual Item Materials
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim283-visual-item-materials.yml"
+      - "client/src/xaurion/core/VisualItemMaterialCompiler.ts"
+      - "client/src/xaurion/core/VisualItemMaterialCompiler.test.ts"
+      - "client/src/xaurion/core/VisualItemGeometryCompiler.ts"
+      - "client/src/xaurion/core/VisualItemGeometryCompiler.test.ts"
+      - "shared/visualItemProtocol.ts"
+      - "server/aurionVisualItemAdapter.ts"
+      - "server/aurionVisualItemAdapter.test.ts"
+      - "server/aurionLootProtocol.ts"
+      - "server/aurionLootProtocol.test.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-283-visual-item-materials-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-item-materials:
+    name: Material/VFX budgets, typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Run material, geometry and authority regressions
+        run: >-
+          pnpm exec vitest run
+          client/src/xaurion/core/VisualItemMaterialCompiler.test.ts
+          client/src/xaurion/core/VisualItemGeometryCompiler.test.ts
+          server/aurionVisualItemAdapter.test.ts
+          server/aurionLootProtocol.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build production runtime
+        run: pnpm build
