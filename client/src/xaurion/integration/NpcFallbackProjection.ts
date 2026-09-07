@@ -6,6 +6,7 @@ import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
 import { glbManager } from "../core/GLBModelManager";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
+import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
 
 type ProjectedNpc = Readonly<{
   sha256: string;
@@ -43,12 +44,14 @@ export class NpcFallbackProjection {
   private readonly projected = new Map<string, ProjectedNpc>();
   private readonly pending = new Set<string>();
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
+  private readonly remotePublic: RemotePublicAppearanceProjection;
   private disposed = false;
   private refreshBusy = false;
   private lastRefreshTick = -150;
 
   constructor(private readonly engine: MMOEngine) {
     this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
+    this.remotePublic = new RemotePublicAppearanceProjection(engine);
     void this.refreshCatalog();
   }
 
@@ -120,6 +123,7 @@ export class NpcFallbackProjection {
     if (this.disposed) return;
     for (const projected of this.projected.values()) projected.actor.update(delta);
     this.uploadedWorld.update();
+    this.remotePublic.update(delta, logicalTick);
     if (logicalTick - this.lastRefreshTick >= 150) {
       this.lastRefreshTick = logicalTick;
       void this.refreshCatalog();
@@ -138,10 +142,12 @@ export class NpcFallbackProjection {
   }
 
   uploadedWorldEvidence() { return this.uploadedWorld.evidence(); }
+  remotePublicEvidence() { return this.remotePublic.evidence(); }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.remotePublic.dispose();
     this.uploadedWorld.dispose();
     for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);
     this.pending.clear();
