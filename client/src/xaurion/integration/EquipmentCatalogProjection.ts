@@ -12,6 +12,8 @@ import { selectEquipmentCatalogAsset } from "../core/UploadedAssetRuntime";
 import { VisualItemAttachmentController, type VisualItemAttachmentTarget } from "../core/VisualItemAttachmentController";
 import { AurionVisualClock } from "../core/VisualItemMaterialCompiler";
 
+export const EQUIPMENT_VISUAL_EVIDENCE_EVENT = "aurion:xaurion-equipment-visual-evidence" as const;
+
 type CompatAttachment = Readonly<{ identity: string; sha256: string; holder: THREE.Group }>;
 
 // These are exactly the existing Aurion AnimatedGlbActor attachment aliases.
@@ -212,6 +214,10 @@ export class EquipmentCatalogProjection {
     }
   }
 
+  private publishEvidence(): void {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(EQUIPMENT_VISUAL_EVIDENCE_EVENT, { detail: this.evidence() }));
+  }
+
   update(delta: number, logicalTick: number): void {
     if (this.disposed) return;
     if (Number.isFinite(delta) && delta > 0) this.visualClock.advance(Math.min(delta, 0.25));
@@ -222,6 +228,7 @@ export class EquipmentCatalogProjection {
       void this.reconcile();
     }
     if (logicalTick - this.lastRefreshTick >= 150) { this.lastRefreshTick = logicalTick; void this.refresh(); }
+    if (logicalTick % 10 === 0) this.publishEvidence();
   }
 
   evidence() {
