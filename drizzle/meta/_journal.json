@@ -36,6 +36,7 @@
     { "idx": 31, "version": "5", "when": 1788570000000, "tag": "0031_aurion_profession_crafting_persistence", "breakpoints": true },
     { "idx": 32, "version": "5", "when": 1788639000000, "tag": "0032_aurion_group_instances", "breakpoints": true },
     { "idx": 33, "version": "5", "when": 1788640800000, "tag": "0033_aurion_ax1_ui_controls", "breakpoints": true },
-    { "idx": 34, "version": "5", "when": 1788678000000, "tag": "0034_ax1_starter_equipment_receipts", "breakpoints": true }
+    { "idx": 34, "version": "5", "when": 1788678000000, "tag": "0034_ax1_starter_equipment_receipts", "breakpoints": true },
+    { "idx": 35, "version": "5", "when": 1788681600000, "tag": "0035_aurion_npc_memory_quest_offers", "breakpoints": true }
   ]
 }
