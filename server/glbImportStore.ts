@@ -1,9 +1,19 @@
 import { createHash } from "node:crypto";
 import { createPool, type Pool, type PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { operationalDate } from "../shared/operationalClock";
-import { GLB_IMPORT_VERSION, glbImportReceiptSchema, glbRuntimeCatalogSchema, type GlbImportReceipt } from "../shared/glbImportContract";
+import { GLB_IMPORT_VERSION, NPC_FALLBACK_DISPLAY_PREFIX, glbImportReceiptSchema, glbRuntimeCatalogSchema, type GlbImportPurpose, type GlbImportReceipt } from "../shared/glbImportContract";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { persistGlbBytes, readStoredGlb } from "./glbFileStore";
+
+function canonicalDisplayName(displayName: string, purpose: GlbImportPurpose): string {
+  const trimmed = displayName.trim();
+  const withoutFallbackPrefix = trimmed.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? trimmed.slice(NPC_FALLBACK_DISPLAY_PREFIX.length).trim() : trimmed;
+  const result = purpose === "npc-fallback"
+    ? `${NPC_FALLBACK_DISPLAY_PREFIX}${withoutFallbackPrefix}`.slice(0, 120).trim()
+    : trimmed;
+  if (result.length < 3 || result.length > 120 || /[<>]/.test(result)) throw new Error("GLB_NAME_INVALID");
+  return result;
+}
 
 export class GlbImportStore {
   private readonly pool: Pool;
@@ -32,22 +42,27 @@ export class GlbImportStore {
     }
   }
 
-  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; expectedPlanSha256?: string }): Promise<GlbImportReceipt> {
-    const plan = buildGlbImportPlan(input.contentBase64);
+  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; expectedPlanSha256?: string }): Promise<GlbImportReceipt> {
+    const purpose = input.purpose ?? "auto";
+    const plan = buildGlbImportPlan(input.contentBase64, purpose);
     if (input.expectedPlanSha256 && plan.planSha256 !== input.expectedPlanSha256) throw new Error("GLB_IMPORT_PLAN_CHANGED");
-    if (input.displayName.trim().length < 3 || input.displayName.trim().length > 120 || /[<>]/.test(input.displayName)) throw new Error("GLB_NAME_INVALID");
+    const displayName = canonicalDisplayName(input.displayName, purpose);
     return this.locked(actorUserId, async connection => {
       const [existing] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE sha256 = ? FOR UPDATE", [plan.sha256]);
       const storageKey = `local-glb/${plan.sha256}.glb`;
       if (existing[0] && existing[0].storageKey !== storageKey) throw new Error("GLB_EXISTING_ASSET_REQUIRES_REVIEW");
       if (existing[0] && (existing[0].assetType !== plan.assetType || existing[0].bytes !== plan.bytes)) throw new Error("GLB_METADATA_DRIFT");
+      if (existing[0]) {
+        const existingFallback = String(existing[0].displayName).startsWith(NPC_FALLBACK_DISPLAY_PREFIX);
+        if (existingFallback !== (purpose === "npc-fallback")) throw new Error("GLB_IMPORT_PURPOSE_CHANGED");
+      }
       const stored = { key: storageKey, url: `/api/assets/glb/${plan.sha256}.glb` };
       const assetId = existing[0]?.id ?? plan.assetId;
       if (!existing.length) {
         const [count] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM glbAssets WHERE storageKey LIKE 'local-glb/%' AND status = 'approved'");
         if (Number(count[0]?.count) >= 500) throw new Error("GLB_CATALOG_LIMIT");
         await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
-        await connection.execute("INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId, reviewedByUserId, reviewedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)", [assetId, input.displayName.trim(), plan.assetType, stored.key, stored.url, plan.sha256, plan.bytes, actorUserId, actorUserId, operationalDate()]);
+        await connection.execute("INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId, reviewedByUserId, reviewedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)", [assetId, displayName, plan.assetType, stored.key, stored.url, plan.sha256, plan.bytes, actorUserId, actorUserId, operationalDate()]);
       }
       if (existing.length) await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
       const archived = existing[0] && existing[0].status !== "approved";
@@ -86,6 +101,7 @@ export class GlbImportStore {
       const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
       const asset = assets[0];
       if (!asset || asset.status !== "approved" || asset.assetType !== input.targetType) throw new Error("GLB_APPROVED_MATCHING_ASSET_REQUIRED");
+      if (String(asset.displayName).startsWith(NPC_FALLBACK_DISPLAY_PREFIX)) throw new Error("GLB_NPC_FALLBACK_ASSIGNMENT_FORBIDDEN");
       if (!/^[A-Za-z0-9_-]{2,120}$/.test(input.targetKey)) throw new Error("GLB_TARGET_INVALID");
       if (asset.storageKey.startsWith("local-glb/")) {
         const bytes = await readStoredGlb(asset.sha256, this.storageRoot);
