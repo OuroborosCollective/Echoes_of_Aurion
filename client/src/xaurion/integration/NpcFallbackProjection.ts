@@ -5,6 +5,7 @@ import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
 import { glbManager } from "../core/GLBModelManager";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
+import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 
 type ProjectedNpc = Readonly<{
   sha256: string;
@@ -33,19 +34,21 @@ export function findProceduralNpcVisual(scene: THREE.Scene, npc: Pick<NPCCharact
 }
 
 /**
- * Presentation-only adapter for the still-rendered AX1/procedural NPC surface.
- * It never writes NPC/gameplay state. A failed catalog read or GLB load leaves
- * the original procedural body visible rather than inventing success.
+ * Presentation-only adapter for catalog-backed visuals still hosted on the
+ * legacy AX1 projection tick. It never writes NPC/gameplay/world truth. Failed
+ * catalog or GLB reads retain the existing procedural/world presentation.
  */
 export class NpcFallbackProjection {
   private catalog: GlbRuntimeCatalog | null = null;
   private readonly projected = new Map<string, ProjectedNpc>();
   private readonly pending = new Set<string>();
+  private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private disposed = false;
   private refreshBusy = false;
   private lastRefreshTick = -150;
 
   constructor(private readonly engine: MMOEngine) {
+    this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
     void this.refreshCatalog();
   }
 
@@ -56,10 +59,13 @@ export class NpcFallbackProjection {
       const response = await fetch("/api/game/glb-catalog", { credentials: "same-origin" });
       if (!response.ok) throw new Error("GLB_CATALOG_UNAVAILABLE");
       const catalog = glbRuntimeCatalogSchema.parse(await response.json());
-      if (!this.disposed) this.catalog = catalog;
+      if (!this.disposed) {
+        this.catalog = catalog;
+        this.uploadedWorld.setCatalog(catalog);
+      }
     } catch {
       // Keep the last confirmed catalog through transient transport failures.
-      // A later confirmed catalog can still revoke/reselect a fallback.
+      // A later confirmed catalog can still revoke/reselect a visual.
     } finally {
       this.refreshBusy = false;
     }
@@ -113,6 +119,7 @@ export class NpcFallbackProjection {
   update(delta: number, logicalTick: number): void {
     if (this.disposed) return;
     for (const projected of this.projected.values()) projected.actor.update(delta);
+    this.uploadedWorld.update();
     if (logicalTick - this.lastRefreshTick >= 150) {
       this.lastRefreshTick = logicalTick;
       void this.refreshCatalog();
@@ -130,9 +137,12 @@ export class NpcFallbackProjection {
     })));
   }
 
+  uploadedWorldEvidence() { return this.uploadedWorld.evidence(); }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.uploadedWorld.dispose();
     for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);
     this.pending.clear();
   }
