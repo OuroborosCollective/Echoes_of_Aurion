@@ -130,14 +130,38 @@ export function automaticGlbTarget(classification: GlbAssetClassification): stri
   return matches.length === 1 ? `${classification.assetType}_${matches[0]![0]}` : null;
 }
 
-export function buildGlbImportPlan(contentBase64: string, purpose: GlbImportPurpose = "auto") {
+function assertPurpose(classification: GlbAssetClassification, purpose: GlbImportPurpose): void {
+  if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
+  if (purpose === "world-environment" && (classification.assetType !== "arena" || classification.worldFamily !== "environment")) throw new Error("GLB_WORLD_ENVIRONMENT_REQUIRED");
+  if (purpose === "world-nature" && (classification.assetType !== "arena" || classification.worldFamily !== "nature")) throw new Error("GLB_WORLD_NATURE_REQUIRED");
+  if (purpose === "equipment" && !(["weapon", "armor"] as const).includes(classification.assetType as "weapon" | "armor") ) throw new Error("GLB_EQUIPMENT_REQUIRED");
+  if (purpose === "equipment" && !classification.equipmentSlot) throw new Error("GLB_EQUIPMENT_SLOT_REQUIRED");
+  if (purpose === "player-public") {
+    if (classification.assetType !== "character") throw new Error("GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED");
+    const animations = new Set(classification.animationNames.map(name => name.toLowerCase().replace(/[^a-z0-9]/g, "")));
+    const hasIdle = animations.has("idle") || animations.has("standingidle") || animations.has("breathingidle");
+    const hasLocomotion = animations.has("walk") || animations.has("run") || animations.has("walking") || animations.has("running");
+    const hasAttack = animations.has("attack") || animations.has("attack2") || animations.has("fight") || animations.has("attackcombo");
+    if (!hasIdle || !hasLocomotion || !hasAttack) throw new Error("GLB_PUBLIC_PLAYER_ANIMATIONS_REQUIRED");
+  }
+}
+
+export function buildGlbImportPlan(contentBase64: string, purpose: GlbImportPurpose = "auto", sourceName = "") {
   const payload = decodeValidatedGlbBase64(contentBase64);
   validateImportGeometry(payload.bytes);
-  const classification = classifyGlbBase64(contentBase64);
-  if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
-  const targetKey = purpose === "npc-fallback" ? null : automaticGlbTarget(classification);
-  // Purpose participates in the plan identity so an approved auto-assignment
-  // plan can never be replayed as a fallback-only import, or vice versa.
-  const identity = { version: GLB_IMPORT_VERSION, purpose, sha256: payload.sha256, bytes: payload.bytes.length, assetType: classification.assetType, subcategory: classification.subcategory, targetKey };
+  const classification = classifyGlbBase64(contentBase64, sourceName);
+  assertPurpose(classification, purpose);
+  const targetKey = purpose === "auto" ? automaticGlbTarget(classification) : null;
+  const identity = {
+    version: GLB_IMPORT_VERSION,
+    purpose,
+    sha256: payload.sha256,
+    bytes: payload.bytes.length,
+    assetType: classification.assetType,
+    subcategory: classification.subcategory,
+    equipmentSlot: classification.equipmentSlot,
+    worldFamily: classification.worldFamily,
+    targetKey,
+  };
   return { ...identity, classification, assetId: `glb_${payload.sha256.slice(0, 48)}`, planSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
 }

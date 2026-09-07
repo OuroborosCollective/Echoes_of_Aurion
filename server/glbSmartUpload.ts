@@ -13,7 +13,7 @@ import { z } from "zod";
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
 type AuthenticatedUploader = Readonly<{ id: number; role: "user" | "admin" }>;
-type UploadAsset = (values: { displayName: string; assetType: GlbAssetType; contentBase64: string; createdByUserId: number; purpose: GlbImportPurpose }) => Promise<unknown>;
+type UploadAsset = (values: { displayName: string; fileName: string; assetType: GlbAssetType; contentBase64: string; createdByUserId: number; purpose: GlbImportPurpose }) => Promise<unknown>;
 
 type GlbSmartUploadDependencies = Readonly<{
   authenticate: (request: Request) => Promise<AuthenticatedUploader | null>;
@@ -39,9 +39,10 @@ function defaultDependencies(): GlbSmartUploadDependencies {
       return user ? { id: user.id, role: user.role } : null;
     },
     uploadAsset: async values => {
-      if (values.purpose === "npc-fallback") {
+      if (values.purpose !== "auto") {
         const receipt = await glbImportStore().ingest(values.createdByUserId, {
           displayName: values.displayName,
+          fileName: values.fileName,
           contentBase64: values.contentBase64,
           purpose: values.purpose,
         });
@@ -100,8 +101,8 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
 
     let classification: GlbAssetClassification;
     try {
-      classification = classifyGlbBase64(contentBase64);
-      if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
+      classification = classifyGlbBase64(contentBase64, fileName);
+      buildGlbImportPlan(contentBase64, purpose, fileName);
     } catch (error) {
       response.status(422).json({ error: error instanceof Error ? error.message : "GLB classification failed" });
       return;
@@ -110,6 +111,7 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
     try {
       const asset = await dependencies.uploadAsset({
         displayName,
+        fileName,
         assetType: classification.assetType,
         contentBase64,
         createdByUserId: user.id,
@@ -148,17 +150,16 @@ export function registerGlbSmartUpload(app: Express): void {
   };
   app.post("/api/admin/glb-import/agent-session", adminRoute(async (request, user) => {
     if (request.header("authorization")) throw new Error("GLB_BROWSER_LOGIN_REQUIRED");
-    // A session cannot issue or extend another session; only the normal admin login may mint it.
     if ((await db.getUserById(user.id))?.role !== "admin") throw new Error("GLB_ADMIN_REQUIRED");
     return issueGlbAgentSession(user.id, process.env.JWT_SECRET ?? "");
   }));
   app.get("/api/admin/glb-import/status", adminRoute(async () => ({ ...(await checkGlbStorage()), catalog: await glbImportStore().catalog() })));
   app.post("/api/admin/glb-import/plan", adminRoute(async request => {
-    const input = z.object({ contentBase64: z.string().max(34 * 1024 * 1024), purpose: z.enum(glbImportPurposes).optional() }).strict().parse(request.body);
-    return buildGlbImportPlan(input.contentBase64, input.purpose ?? "auto");
+    const input = z.object({ contentBase64: z.string().max(34 * 1024 * 1024), fileName: z.string().min(5).max(180).optional(), purpose: z.enum(glbImportPurposes).optional() }).strict().parse(request.body);
+    return buildGlbImportPlan(input.contentBase64, input.purpose ?? "auto", input.fileName ?? "");
   }));
   app.post("/api/admin/glb-import/apply", adminRoute(async (request, user) => {
-    const input = z.object({ displayName: z.string().min(3).max(120), contentBase64: z.string().max(34 * 1024 * 1024), purpose: z.enum(glbImportPurposes).optional(), expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body);
+    const input = z.object({ displayName: z.string().min(3).max(120), fileName: z.string().min(5).max(180).optional(), contentBase64: z.string().max(34 * 1024 * 1024), purpose: z.enum(glbImportPurposes).optional(), expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body);
     return glbImportStore().ingest(user.id, { ...input, purpose: input.purpose ?? "auto" });
   }));
   app.post("/api/admin/glb-import/assign", adminRoute(async (request, user) => glbImportStore().assign(user.id, z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }).strict().parse(request.body))));
