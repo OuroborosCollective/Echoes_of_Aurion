@@ -52,4 +52,12 @@ export const visualItemDescriptorSchema = z.object({
   }).strict(),
   visualSeed: sha256Schema,
 }).strict();
-export type VisualItemDescriptor = z.infer<typeof visualItemDescriptorSchema>;
+
+type ParsedVisualItemDescriptor = z.infer<typeof visualItemDescriptorSchema>;
+export type VisualItemDescriptor = Readonly<
+  Omit<ParsedVisualItemDescriptor, "affixes" | "visual" | "source"> & {
+    affixes: readonly Readonly<ParsedVisualItemDescriptor["affixes"][number]>[];
+    visual: Readonly<NonNullable<ParsedVisualItemDescriptor["visual"]>> | null;
+    source: Readonly<ParsedVisualItemDescriptor["source"]>;
+  }
+>;
