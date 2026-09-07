@@ -1,4 +1,8 @@
-# Echoes of Aurion – containerisierte Produktionslaufzeit
+---
+description: Kontrollierte Bereitstellung und Rücknahme des Aurion-Containerdienstes.
+---
+
+# Betrieb
 
 ## Zweck und Geltungsbereich
 

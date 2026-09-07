@@ -1,7 +1,21 @@
-# Echoes of Aurion — VPS Deployment
+---
+description: Historischer statischer Fallbackpfad für Aurion-Releases auf dem VPS.
+---
 
-Die Produktionsfassung wird als statisches React-/Babylon-Bundle unter `/var/www/echoes-of-aurion/releases/<timestamp>` abgelegt. Der Symlink `current` verweist auf die aktive Freigabe; dadurch kann ein Rollback ohne erneuten Build auf eine frühere Release-Fassung erfolgen.
+# VPS Deployment
 
-Die Hauptdomain `arelogic.space` wird ausschließlich für **Echoes of Aurion** geschaltet. Vor der Umschaltung werden die bisherige Nginx-Datei und der vorhandene Domain-Webroot unter `/var/backups/echoes-of-aurion/` gesichert. TLS wird über ein separates Zertifikat mit dem Namen `echoes-of-aurion-arelogic` ausgestellt, damit vorhandene abgelaufene Zertifikatsbestände nicht überschrieben werden.
+## Status
 
-Nach erfolgreicher Bereitstellung muss der Root-Passwortzugang in einem separaten Sicherheitsdurchgang durch einen dedizierten Deploy-Account mit SSH-Schlüssel ersetzt werden. Dieser Schritt verändert die derzeitige Fernzugriffsstrategie und wird daher erst nach der erfolgreichen Abnahme des Spiels ausgeführt.
+Dieser statische Nginx-Pfad ist ein manuell auslösbarer Rückfallweg. Er ist nicht die aktuelle Produktionslaufzeit. Die verbindliche Bereitstellung erfolgt über den Docker-/Traefik-Containerdienst.
+
+Der Pfad darf einen Container-Release nach einem Merge nicht überschreiben. Eine Aktivierung benötigt eine separate Freigabe und einen dokumentierten Rollbackplan.
+
+## Historischer Ablauf
+
+Die frühere Bereitstellung legt ein statisches React-/Babylon-Bundle unter `/var/www/echoes-of-aurion/releases/<timestamp>` ab. Der Symlink `current` verweist auf die aktive Fassung. Damit ist ein Rollback auf ein vorhandenes Release ohne neuen Build möglich.
+
+Die Hauptdomain `arelogic.space` ist ausschließlich für **Echoes of Aurion** vorgesehen. Vor einer historischen Umschaltung werden die vorhandene Nginx-Konfiguration und der Domain-Webroot unter `/var/backups/echoes-of-aurion/` gesichert. TLS erhält ein separates Zertifikat namens `echoes-of-aurion-arelogic`.
+
+## Sicherheitsnacharbeit
+
+Nach einer erfolgreichen, ausdrücklich freigegebenen Aktivierung ersetzt ein separater Sicherheitsdurchgang Root-Passwortzugang durch einen dedizierten Deploy-Account mit SSH-Schlüssel. Dieser Schritt benötigt eine eigene Freigabe.

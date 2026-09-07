@@ -1,4 +1,8 @@
-# Echoes of Aurion — Hostinger Traefik Deployment
+---
+description: Prüfbare Traefik-Konfiguration für den kontrollierten Aurion-Containerbetrieb.
+---
+
+# Traefik Deployment
 
 Diese Vorlage ersetzt die bestehende Nginx-Produktionsbereitstellung **nicht automatisch**. Sie bereitet Aurion für einen Docker-basierten Hostinger-VPS vor, auf dem Traefik bereits TLS, Routing und das externe Docker-Netzwerk verwaltet.
 
