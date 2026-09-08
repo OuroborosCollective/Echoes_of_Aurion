@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -31,7 +32,9 @@ async function startServer(){
   const releaseRevision=process.env.AURION_RELEASE_SHA?.trim().toLowerCase();if(releaseRevision&&!/^[a-f0-9]{40}$/.test(releaseRevision))throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");
   let wolframCag=initialWolframCagRuntimeReadback();if(wolframCag.configured)void resolveWolframCagRuntimeReadback().then(readback=>{wolframCag=readback;});
   const autonomousNpcLife=createAutonomousNpcLifeRuntime();
-  const app=express();if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
+  const app=express();
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
   app.use((req,res,next)=>{const origin=allowedCorsOrigin(req.headers.origin);if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Access-Control-Allow-Credentials","true");res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization, X-Requested-With");res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");res.setHeader("Vary","Origin");}if(req.method==="OPTIONS"){if(!origin)return res.status(403).end();return res.status(204).end();}next();});
   app.use(express.json({limit:"50mb"}));app.use(express.urlencoded({limit:"50mb",extended:true}));
   app.get("/healthz",(_req,res)=>res.status(200).json({status:"ok",service:"echoes-of-aurion",...(releaseRevision?{revision:releaseRevision}:{}),wolframCag,npcLife:autonomousNpcLife.readback()}));
