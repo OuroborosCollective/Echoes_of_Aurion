@@ -1,14 +1,74 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import {
   VISUAL_ITEM_DESCRIPTOR_VERSION,
   visualItemDescriptorSchema,
   type CanonicalVisualMetadata,
   type VisualItemDescriptor,
 } from "../shared/visualItemProtocol";
-import type { DeterministicLootResult, LootBaseDefinition } from "./aurionLootProtocol";
+import {
+  AURION_LOOT_RULESET_VERSION,
+  aurionAffixSlots,
+  aurionEquipmentSlots,
+  aurionItemCategories,
+  aurionLootQualities,
+  type DeterministicLootResult,
+  type LootBaseDefinition,
+} from "./aurionLootProtocol";
 
 const textCompare = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
 const digest = (...parts: readonly string[]): string => createHash("sha256").update(parts.join("\u001f"), "utf8").digest("hex");
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+const exactLevelSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
+
+/** Strict parser for the immutable `resolvedJson` stored with aurion-loot.v2 receipts. */
+export const storedDeterministicLootResultSchema = z.object({
+  itemDefinitionId: z.string().min(1).max(160),
+  category: z.enum(aurionItemCategories),
+  equipmentSlot: z.enum(aurionEquipmentSlots).optional(),
+  quality: z.enum(aurionLootQualities),
+  itemLevelExact: exactLevelSchema,
+  affixes: z.array(z.object({
+    id: z.string().min(1).max(160),
+    slot: z.enum(aurionAffixSlots),
+    groupId: z.string().min(1).max(160),
+    stats: z.record(z.string(), z.number().int().finite()),
+  }).strict()).max(5),
+  setId: z.string().min(1).max(160).optional(),
+  itemPower: z.number().int().nonnegative(),
+  contextHash: sha256Schema,
+  deterministicHash: sha256Schema,
+}).strict();
+
+export function rederiveStoredDeterministicLootHash(loot: Omit<DeterministicLootResult, "deterministicHash">): string {
+  return digest(
+    AURION_LOOT_RULESET_VERSION,
+    loot.contextHash,
+    loot.itemDefinitionId,
+    loot.quality,
+    loot.itemLevelExact,
+    ...loot.affixes.flatMap(affix => [
+      affix.id,
+      affix.slot,
+      affix.groupId,
+      ...Object.entries(affix.stats)
+        .sort(([left], [right]) => textCompare(left, right))
+        .map(([stat, amount]) => `${stat}:${amount}`),
+    ]),
+    loot.setId ?? "none",
+    String(loot.itemPower),
+  );
+}
+
+export function parseStoredDeterministicLootResult(value: string): DeterministicLootResult {
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); }
+  catch { throw new Error("stored visual loot receipt JSON is invalid"); }
+  const loot = storedDeterministicLootResultSchema.parse(parsed) as DeterministicLootResult;
+  const derived = rederiveStoredDeterministicLootHash(loot);
+  if (derived !== loot.deterministicHash) throw new Error("stored visual loot deterministic hash mismatch");
+  return loot;
+}
 
 export type ConfirmedVisualItemInput = Readonly<{
   loot: DeterministicLootResult;

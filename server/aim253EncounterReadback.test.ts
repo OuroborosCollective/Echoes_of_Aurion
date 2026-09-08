@@ -1,13 +1,27 @@
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
 import { describe, expect, it } from "vitest";
-import { parseOwnedEncounterReadback } from "../shared/encounterReadback";
-const value = () => ({ active: { id: "game_test", userId: 7, encounterKey: "asterion", status: "active", bossHp: 100, maxBossHp: 112, nextSequence: 2 }, encounters: ["asterion", "archive", "solarium", "cinder_vault"].map(key => ({ key, name: key, enemyName: key, available: key === "asterion" })) });
+import { encounterKeys, parseOwnedEncounterReadback } from "../shared/encounterReadback";
+import { aurionEncounters } from "./gameplayProtocol";
+
+const value = () => ({
+  active: { id: "game_test", userId: 7, encounterKey: "asterion", status: "active", bossHp: 100, maxBossHp: 112, nextSequence: 2 },
+  encounters: encounterKeys.map(key => ({ key, name: key, enemyName: key, available: key === "asterion" })),
+});
+
 describe("owned encounter recovery boundary", () => {
+  it("keeps the shared readback choices exactly aligned with the canonical gameplay encounter catalog", () => {
+    expect(aurionEncounters.map(encounter => encounter.key)).toEqual([...encounterKeys]);
+  });
+  it("keeps every published encounter inside the deterministic session-identity contract", () => {
+    const identities = encounterKeys.map((key, index) => encounterSessionIdentity(7, index + 1, key));
+    expect(new Set(identities).size).toBe(encounterKeys.length);
+    expect(() => encounterSessionIdentity(7, 1, "not-an-encounter")).toThrow("INVALID_ENCOUNTER_IDENTITY_CONTEXT");
+  });
   it("projects only a valid owned server state", () => { expect(parseOwnedEncounterReadback(value(), 7).active?.nextSequence).toBe(2); expect(() => parseOwnedEncounterReadback(value(), 8)).toThrow(); });
   it.each([0, -1, NaN, Infinity, 1.5, 2_147_483_648])("rejects invalid sequence %s", nextSequence => { const data = value(); data.active.nextSequence = nextSequence; expect(() => parseOwnedEncounterReadback(data, 7)).toThrow(); });
   it("rejects fabricated HP, duplicate choices and incomplete responses", () => {
     const data = value(); data.active.bossHp = 113; expect(() => parseOwnedEncounterReadback(data, 7)).toThrow();
-    const duplicate = value(); duplicate.encounters[1] = duplicate.encounters[0]; expect(() => parseOwnedEncounterReadback(duplicate, 7)).toThrow();
+    const duplicate = value(); duplicate.encounters[1] = duplicate.encounters[0]!; expect(() => parseOwnedEncounterReadback(duplicate, 7)).toThrow();
     expect(() => parseOwnedEncounterReadback({}, 7)).toThrow();
   });
 });

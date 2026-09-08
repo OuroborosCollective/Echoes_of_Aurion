@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { registerMcpGateway } from "../gateway";
 import { registerAdminMcp } from "../adminMcp";
 import { registerGlbSmartUpload } from "../glbSmartUpload";
+import { registerConfirmedEquipmentVisualRoutes } from "../confirmedEquipmentVisualRoutes";
 import { registerStarterGlbRuntimeAssets } from "../starterGlbRuntimeAssets";
 import { registerZoneGateway } from "../zoneGateway";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
@@ -34,7 +35,7 @@ async function startServer(){
   app.use((req,res,next)=>{const origin=allowedCorsOrigin(req.headers.origin);if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Access-Control-Allow-Credentials","true");res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization, X-Requested-With");res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");res.setHeader("Vary","Origin");}if(req.method==="OPTIONS"){if(!origin)return res.status(403).end();return res.status(204).end();}next();});
   app.use(express.json({limit:"50mb"}));app.use(express.urlencoded({limit:"50mb",extended:true}));
   app.get("/healthz",(_req,res)=>res.status(200).json({status:"ok",service:"echoes-of-aurion",...(releaseRevision?{revision:releaseRevision}:{}),wolframCag,npcLife:autonomousNpcLife.readback()}));
-  registerGlbSmartUpload(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
+  registerGlbSmartUpload(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
   registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
   app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);
   const preferredPort=parseInt(process.env.PORT||"3000",10),strictPort=process.env.STRICT_PORT==="true",port=strictPort?preferredPort:await findAvailablePort(preferredPort),host=process.env.HOST||"0.0.0.0";if(port!==preferredPort)console.log(`Port ${preferredPort} is busy, using port ${port} instead`);server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
