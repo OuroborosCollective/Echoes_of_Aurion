@@ -7,8 +7,8 @@ export function testGlb(name = "Aurion_Spear_Weapon", extra: Record<string, unkn
 }
 
 /** Renderable player fixture with real Idle and Attack animation clips.
- * Set includeLocomotion for player-public tests, whose production contract also
- * requires Walk/Run. The mesh remains deliberately tiny; animation contract is what matters.
+ * Public-player fixtures also carry Walk because that production lane requires
+ * Idle + locomotion + attack. The mesh is deliberately tiny; animation contract is what matters.
  */
 export function testAnimatedPlayerGlb(name = "Aurion_Player", includeLocomotion = false): Buffer {
   const positions = Buffer.alloc(36);
@@ -19,9 +19,10 @@ export function testAnimatedPlayerGlb(name = "Aurion_Player", includeLocomotion 
   const attackTranslations = Buffer.alloc(24);
   [0, 0, 0, 0.15, 0, 0].forEach((value, index) => attackTranslations.writeFloatLE(value, index * 4));
   const binary = Buffer.concat([positions, times, idleTranslations, attackTranslations]);
+  const locomotion = includeLocomotion || /public/i.test(name);
   const animations = [
     { name: "Idle", samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] },
-    ...(includeLocomotion ? [{ name: "Walk", samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] }] : []),
+    ...(locomotion ? [{ name: "Walk", samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] }] : []),
     { name: "Attack", samplers: [{ input: 1, output: 3, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] },
   ];
   const source = {
