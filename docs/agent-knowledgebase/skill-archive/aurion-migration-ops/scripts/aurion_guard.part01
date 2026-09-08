@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Aurion migration truth / recheck / resolver guard.
+
+Standard-library only. This script never writes production data. It audits repository
+contracts, classifies canonical production receipts, computes deterministic evidence
+metrics, and can perform a bounded read-only recheck through the installed canonical
+root reconcile runner.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from collections import Counter
+from pathlib import Path
+from typing import Any, Iterable
+
+SCHEMA_VERSION = 4
+RECORD_TYPE = "aurion_migration_ops_guard"
+MIGRATION_RE = re.compile(r"^(\d{4})_(.+)$", re.ASCII)
+SHA40_RE = re.compile(r"^[0-9a-f]{40}$", re.ASCII)
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.ASCII)
+
+IN_SYNC = "IN_SYNC"
+OUT_OF_SYNC = "OUT_OF_SYNC"
+UNVERIFIED = "UNVERIFIED"
+BLOCKED = "BLOCKED"
+
+CANONICAL_RECONCILE_RUNNER = "/usr/local/sbin/aurion-production-schema-reconcile"
+CANONICAL_APPLY_WORKFLOW = ".github/workflows/aurion-production-schema-apply.yml"
+CANONICAL_READBACK_WORKFLOW = ".github/workflows/aurion-production-schema-readback.yml"
+CANONICAL_DEPLOY_WORKFLOW = ".github/workflows/deploy-aurion-zone-runtime.yml"
+AURION_REPOSITORY = "OuroborosCollective/Echoes_of_Aurion"
+WASD_REPOSITORY = "OuroborosCollective/Wasd"
+WASD_SOURCE_LEDGER_WORKFLOW = ".github/workflows/wasd-aurion-source-ledger.yml"
+AURION_MIGRATION_LEDGER_WORKFLOW = ".github/workflows/aurion-wasd-migration-ledger.yml"
+WASD_LEDGER_TOOLCHAIN_PIN = "e39ee9b6c085a1a02e5feb898532ad0e3085c30a"
+CHOREOGRAPHY_PROTOCOL = "aurion-wasd-choreography.v1"
+
+AUTONOMY_POLICY = {
+    "mode": "AUTONOMOUS_UNTIL_REVOKED",
+    "scope": "integration",
+    "dispatchBoundary": "canonical_control_plane_only",
+    "autonomousReadback": True,
+    "autonomousRepairPlanning": True,
+    "autonomousCanonicalDispatch": True,
+    "autonomousCrossRepoChoreography": True,
+    "autonomousPeerEvidenceDispatch": True,
+    "autonomousPeerRecheck": True,
+    "autonomousPeerDraftRepair": True,
+    "peerRepositories": [WASD_REPOSITORY],
+    "requiresPerActionOwnerPrompt": False,
+    "controlPlaneMustAuthorizeMutation": True,
+    "peerMutationBoundary": "draft_pr_or_canonical_workflow_only",
+    "forbidden": ["raw_sql", "free_journal_rewrite", "evidence_rewrite", "blind_retry", "peer_direct_main_push"],
+}
+
+
+def canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def finalize_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(receipt)
+    payload.pop("receiptSha256", None)
+    receipt["receiptSha256"] = sha256_hex(canonical_json_bytes(payload))
+    return receipt
+
+
+def verify_finalized_receipt(receipt: dict[str, Any], expected_scope: str | None = None) -> tuple[bool, list[str]]:
+    problems: list[str] = []
+    claimed = receipt.get("receiptSha256")
+    if not isinstance(claimed, str) or not SHA256_RE.fullmatch(claimed):
+        problems.append("receiptSha256_missing_or_invalid")
+    else:
+        unsigned = dict(receipt)
+        unsigned.pop("receiptSha256", None)
+        observed = sha256_hex(canonical_json_bytes(unsigned))
+        if observed != claimed:
+            problems.append("receiptSha256_mismatch")
+    if receipt.get("recordType") != RECORD_TYPE:
+        problems.append("recordType_invalid")
+    if receipt.get("schemaVersion") not in {2, 3, 4}:
+        problems.append("schemaVersion_invalid")
+    if expected_scope is not None and receipt.get("scope") != expected_scope:
+        problems.append("scope_mismatch")
+    return not problems, problems
+
+
+def verify_plan_receipt(plan_receipt: dict[str, Any], expected_revision: str | None = None) -> dict[str, Any]:
+    problems: list[str] = []
+    if plan_receipt.get("recordType") != "aurion_wasd_migration_ledger":
+        problems.append("plan_recordType_invalid")
+    if plan_receipt.get("schemaVersion") != "aurion.wasd-migration-ledger.v1":
+        problems.append("plan_schemaVersion_invalid")
+    source = plan_receipt.get("source") if isinstance(plan_receipt.get("source"), dict) else {}
+    source_revision = source.get("revision")
+    source_manifest_sha256 = source.get("manifestSha256")
+    if source.get("repository") != WASD_REPOSITORY:
+        problems.append("plan_source_repository_invalid")
+    if not isinstance(source_revision, str) or not SHA40_RE.fullmatch(source_revision):
+        problems.append("plan_source_revision_invalid")
+    if not isinstance(source_manifest_sha256, str) or not SHA256_RE.fullmatch(source_manifest_sha256):
+        problems.append("plan_source_manifest_invalid")
+    target = plan_receipt.get("target") if isinstance(plan_receipt.get("target"), dict) else {}
+    target_revision = target.get("revision")
+    if target.get("repository") != AURION_REPOSITORY:
+        problems.append("plan_target_repository_invalid")
+    if not isinstance(target_revision, str) or not SHA40_RE.fullmatch(target_revision):
+        problems.append("plan_target_revision_invalid")
+    elif expected_revision and target_revision != expected_revision:
+        problems.append("plan_target_revision_mismatch")
+    claimed = plan_receipt.get("planSha256")
+    if not isinstance(claimed, str) or not SHA256_RE.fullmatch(claimed):
+        problems.append("planSha256_missing_or_invalid")
+    else:
+        unsigned = dict(plan_receipt)
+        unsigned.pop("planSha256", None)
+        observed = sha256_hex(canonical_json_bytes(unsigned))
+        if observed != claimed:
+            problems.append("planSha256_mismatch")
+    plan = plan_receipt.get("plan") if isinstance(plan_receipt.get("plan"), dict) else {}
+    if plan.get("productionWritesScheduled") is not False:
+        problems.append("plan_policy_productionWritesScheduled_invalid")
+    prohibited = plan.get("prohibitedActions") if isinstance(plan.get("prohibitedActions"), list) else []
+    if "database_write" not in prohibited or "journal_repair" not in prohibited:
+        problems.append("plan_policy_prohibitedActions_incomplete")
+    return {
+        "valid": not problems,
+        "problems": problems,
+        "planSha256": claimed if isinstance(claimed, str) else None,
+        "targetRevision": target_revision if isinstance(target_revision, str) else None,
+        "sourceRevision": source_revision if isinstance(source_revision, str) else None,
+        "sourceManifestSha256": source_manifest_sha256 if isinstance(source_manifest_sha256, str) else None,
+        "contentSha256": sha256_hex(canonical_json_bytes(plan_receipt)),
+    }
+
+
+
+def verify_wasd_source_ledger(receipt: dict[str, Any], expected_revision: str | None = None) -> dict[str, Any]:
+    """Verify a WASD source-ledger receipt as an immutable peer-evidence object.
+
+    This validates the receipt itself. File-byte verification remains the responsibility of
+    the canonical WASD workflow / Aurion controller checkout that produced or consumed it.
+    """
+    problems: list[str] = []
+    if expected_revision and not SHA40_RE.fullmatch(expected_revision):
+        raise ValueError("expected WASD revision must be 40 lowercase hex characters")
+    if receipt.get("recordType") != "wasd_aurion_source_ledger":
+        problems.append("wasd_recordType_invalid")
+    if receipt.get("schemaVersion") != "wasd.aurion-source-ledger.v1":
+        problems.append("wasd_schemaVersion_invalid")
+    source = receipt.get("source") if isinstance(receipt.get("source"), dict) else {}
+    source_revision = source.get("revision")
+    if source.get("repository") != WASD_REPOSITORY:
+        problems.append("wasd_repository_invalid")
+    if not isinstance(source_revision, str) or not SHA40_RE.fullmatch(source_revision):
+        problems.append("wasd_revision_invalid")
+    elif expected_revision and source_revision != expected_revision:
+        problems.append("wasd_revision_mismatch")
+    claimed = receipt.get("manifestSha256")
+    if not isinstance(claimed, str) or not SHA256_RE.fullmatch(claimed):
+        problems.append("wasd_manifestSha256_missing_or_invalid")
+    else:
+        unsigned = dict(receipt)
+        unsigned.pop("manifestSha256", None)
+        observed = sha256_hex(canonical_json_bytes(unsigned))
+        if observed != claimed:
+            problems.append("wasd_manifestSha256_mismatch")
+    policy = receipt.get("policy") if isinstance(receipt.get("policy"), dict) else {}
+    prohibited = policy.get("prohibitedActions") if isinstance(policy.get("prohibitedActions"), list) else []
+    if policy.get("databaseConnectionsOpened") is not False:
+        problems.append("wasd_policy_databaseConnectionsOpened_invalid")
+    if policy.get("sourceCodeCopiedIntoAurion") is not False:
+        problems.append("wasd_policy_sourceCodeCopiedIntoAurion_invalid")
+    if "database_write" not in prohibited:
+        problems.append("wasd_policy_database_write_not_prohibited")
+    if "production_database_read" not in prohibited:
+        problems.append("wasd_policy_production_database_read_not_prohibited")
+    files = receipt.get("files")
+    if not isinstance(files, list) or not files:
+        problems.append("wasd_files_missing")
+    else:
+        seen: set[str] = set()
+        for item in files:
+            if not isinstance(item, dict):
+                problems.append("wasd_file_entry_invalid")
+                continue
+            path = item.get("path")
+            digest = item.get("sha256")
+            domain = item.get("domain")
+            if not isinstance(path, str) or not path or path.startswith(("/", "\\")) or ".." in Path(path).parts:
+                problems.append("wasd_file_path_invalid")
+            elif path in seen:
+                problems.append("wasd_file_path_duplicate")
+            else:
+                seen.add(path)
+            if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+                problems.append("wasd_file_sha256_invalid")
+            if not isinstance(domain, str) or not domain:
+                problems.append("wasd_file_domain_invalid")
+    return {
+        "valid": not problems,
+        "problems": sorted(set(problems)),
+        "sourceRevision": source_revision if isinstance(source_revision, str) else None,
+        "manifestSha256": claimed if isinstance(claimed, str) else None,
+        "contentSha256": sha256_hex(canonical_json_bytes(receipt)),
+        "directPeerReceiptObserved": True,
+    }
+
+
+def workflow_dispatch_intent(
+    repository: str,
+    workflow: str,
+    ref: str,
+    inputs: dict[str, str],
+    purpose: str,
+    mutation_class: str = "evidence_only",
+) -> dict[str, Any]:
+    return {
+        "kind": "github_workflow_dispatch",
+        "repository": repository,
+        "workflow": workflow,
+        "ref": ref,
+        "inputs": inputs,
+        "purpose": purpose,
+        "mutationClass": mutation_class,
+        "requiresPerActionOwnerPrompt": False,
+        "verifyReturnedRevision": True,
+    }
+
+
+def choreograph_wasd(
+    expected_aurion_revision: str | None,
+    expected_wasd_revision: str | None = None,
+    plan_receipt: dict[str, Any] | None = None,
+    wasd_source_ledger: dict[str, Any] | None = None,
+    wasd_run_id: str | None = None,
+    causal_owner: str = "unknown",
+) -> dict[str, Any]:
+    """Build an autonomous cross-repository evidence / repair choreography.
+
+    The function does not call GitHub itself. It emits exact bounded dispatch intents that an
+    authorized operator/agent can execute without inventing another protocol or owner prompt.
+    """
+    if causal_owner not in {"unknown", "wasd", "aurion", "shared"}:
+        raise ValueError("causal_owner must be unknown, wasd, aurion or shared")
+    if expected_aurion_revision and not SHA40_RE.fullmatch(expected_aurion_revision):
+        raise ValueError("expected Aurion revision must be 40 lowercase hex characters")
+    if expected_wasd_revision and not SHA40_RE.fullmatch(expected_wasd_revision):

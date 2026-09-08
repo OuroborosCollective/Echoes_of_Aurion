@@ -5,15 +5,17 @@ Dieses Verzeichnis ist ein **versioniertes Arbeitswissen-Archiv für zukünftige
 ## Einstieg
 
 1. Lies `skill-archive/aurion-runtime-knowledgebase/SKILL.md`.
-2. Lies je nach Aufgabe genau eine oder mehrere Dateien unter `skill-archive/aurion-runtime-knowledgebase/references/`.
-3. Prüfe danach den aktuellen Code, den Git-Status und relevante Ledger/Linear-/PR-Evidenz.
-4. Ergänze neue Erkenntnisse in der passenden Referenzdatei, nicht in verstreuten Sessionnotizen.
+2. Für Migration, Schema, Produktions-Reconciliation oder Aurion↔WASD-Evidence lies zusätzlich `skill-archive/aurion-migration-ops/SKILL.md`.
+3. Lies je nach Aufgabe genau eine oder mehrere Dateien unter `skill-archive/aurion-runtime-knowledgebase/references/`.
+4. Prüfe danach den aktuellen Code, den Git-Status und relevante Ledger/Linear-/PR-Evidenz.
+5. Ergänze neue Erkenntnisse in der passenden Referenzdatei, nicht in verstreuten Sessionnotizen.
 
 ## Archivkarte
 
 | Pfad | Zweck |
 |---|---|
 | `skill-archive/aurion-runtime-knowledgebase/SKILL.md` | Trigger, verbindlicher Agentenablauf und harte Leitplanken |
+| `skill-archive/aurion-migration-ops/SKILL.md` | Evidence-bound Migration Ops, autonome Rechecks/Resolver und Aurion↔WASD Cross-Repo-Choreografie |
 | `skill-archive/aurion-runtime-knowledgebase/references/world-and-content.md` | Seed, Chunks, Deltas, Serverautorität, Migration und Tower |
 | `skill-archive/aurion-runtime-knowledgebase/references/rendering-and-home.md` | Babylon, Mehrchunk-Streaming, Fog, Assets und Rückkehr zum Tower |
 | `skill-archive/aurion-runtime-knowledgebase/references/audio-system.md` | Busse, Ambient/Boss, SFX, Receipts, Fallbacks und Mixregeln |

@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+GUARD_PATH = ROOT / "scripts" / "aurion_guard.py"
+spec = importlib.util.spec_from_file_location("aurion_guard", GUARD_PATH)
+guard = importlib.util.module_from_spec(spec)
+assert spec and spec.loader
+spec.loader.exec_module(guard)
+
+
+def tag(prefix: int) -> str:
+    return f"{prefix:04d}_migration_{prefix:04d}"
+
+
+def make_wasd_source_ledger(revision: str = "c" * 40, file_suffix: str = "") -> dict:
+    unsigned = {
+        "schemaVersion": "wasd.aurion-source-ledger.v1",
+        "recordType": "wasd_aurion_source_ledger",
+        "source": {"repository": guard.WASD_REPOSITORY, "revision": revision},
+        "policy": {
+            "databaseConnectionsOpened": False,
+            "sourceCodeCopiedIntoAurion": False,
+            "prohibitedActions": ["database_write", "production_database_read", "production_deploy"],
+        },
+        "files": [
+            {
+                "path": f"server/src/domain{file_suffix}.ts",
+                "sha256": "d" * 64,
+                "domain": "server",
+            }
+        ],
+    }
+    return {**unsigned, "manifestSha256": guard.sha256_hex(guard.canonical_json_bytes(unsigned))}
+
+
+def create_repo(root: Path, journal_last: int = 34, contract_last: int = 34, omit_sql: int | None = None) -> str:
+    (root / "drizzle" / "meta").mkdir(parents=True)
+    (root / "scripts").mkdir(parents=True)
+    (root / ".github" / "workflows").mkdir(parents=True)
+    entries = []
+    for index, prefix in enumerate(range(21, journal_last + 1)):
+        migration = tag(prefix)
+        entries.append({"idx": index, "version": "5", "when": 1_800_000_000_000 + index, "tag": migration, "breakpoints": True})
+        if prefix != omit_sql:
+            (root / "drizzle" / f"{migration}.sql").write_text(f"CREATE TABLE t_{prefix} (id INT PRIMARY KEY);\n", encoding="utf-8")
+    (root / "drizzle" / "meta" / "_journal.json").write_text(json.dumps({"version": "7", "dialect": "mysql", "entries": entries}, indent=2) + "\n", encoding="utf-8")
+    contract_tags = [tag(prefix) for prefix in range(21, contract_last + 1)]
+    literal = ",\n".join(f'  "{value}"' for value in contract_tags)
+    builder = f"const tags = [\n{literal}\n];\n"
+    (root / "scripts" / "build-aurion-production-reconcile-artifact.mjs").write_text(builder, encoding="utf-8")
+    (root / "scripts" / "build-aurion-production-apply-artifact.mjs").write_text(builder, encoding="utf-8")
+    (root / "scripts" / "verify-drizzle-migration-chain.ts").write_text("console.log('{}');\n", encoding="utf-8")
+    (root / "package.json").write_text(json.dumps({"scripts": {"verify:migrations": "tsx scripts/verify-drizzle-migration-chain.ts"}}, indent=2) + "\n", encoding="utf-8")
+    for workflow in (
+        "aurion-production-schema-apply.yml",
+        "aurion-production-schema-readback.yml",
+        "deploy-aurion-zone-runtime.yml",
+    ):
+        (root / ".github" / "workflows" / workflow).write_text("name: test\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.email", "guard@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.name", "Aurion Guard Regression"], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "fixture"], check=True)
+    return subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+
+
+class GuardRepositoryTests(unittest.TestCase):
+    def test_detects_newer_journal_migrations_outside_production_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            revision = create_repo(repo, journal_last=41, contract_last=34)
+            receipt = guard.audit_repo(repo, revision, run_canonical=False)
+            by_name = {item["name"]: item for item in receipt["surfaces"]}
+            for name in ("production_reconcile_contract_coverage", "production_apply_contract_coverage"):
+                self.assertEqual(by_name[name]["status"], guard.OUT_OF_SYNC)
+                self.assertEqual(
+                    by_name[name]["evidence"]["newerJournalTagsOutsideContract"],
+                    [tag(prefix) for prefix in range(35, 42)],
+                )
+                self.assertFalse(by_name[name]["repair"]["autoAllowed"])
+            self.assertEqual(receipt["metrics"]["verdict"], guard.OUT_OF_SYNC)
+
+    def test_chain_missing_sql_is_out_of_sync(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            revision = create_repo(repo, journal_last=24, contract_last=24, omit_sql=23)
+            receipt = guard.audit_repo(repo, revision, run_canonical=False)
+            chain = next(item for item in receipt["surfaces"] if item["name"] == "sql_journal_integrity")
+            self.assertEqual(chain["status"], guard.OUT_OF_SYNC)
+            self.assertEqual(chain["evidence"]["missingSqlTags"], [tag(23)])
+
+    def test_exact_git_revision_is_read_from_real_git_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            revision = create_repo(repo, journal_last=22, contract_last=22)
+            receipt = guard.audit_repo(repo, revision, run_canonical=False)
+            revision_surface = next(item for item in receipt["surfaces"] if item["name"] == "repository_revision")
+            self.assertEqual(revision_surface["status"], guard.IN_SYNC)
+            self.assertEqual(revision_surface["evidence"]["observedRevision"], revision)
+
+
+class GuardProductionReceiptTests(unittest.TestCase):
+    REVISION = "a" * 40
+    PLAN = "b" * 64
+
+    def test_present_schema_match_is_in_sync(self):
+        receipt = {
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": self.REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "PRESENT_SCHEMA_MATCH",
+        }
+        classified = guard.classify_production_receipt(receipt, self.REVISION)
+        self.assertEqual(classified["status"], guard.IN_SYNC)
+        self.assertEqual(classified["nextAction"]["action"], "NONE")
+
+    def test_reconciliation_required_is_out_of_sync_not_green(self):
+        receipt = {
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": self.REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "RECONCILIATION_REQUIRED",
+        }
+        classified = guard.classify_production_receipt(receipt, self.REVISION)
+        self.assertEqual(classified["status"], guard.OUT_OF_SYNC)
+        self.assertFalse(classified["nextAction"]["autoAllowed"])
+
+    def test_schema_drift_is_blocked_and_forbids_raw_sql(self):
+        receipt = {
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": self.REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "PRESENT_SCHEMA_DRIFT",
+        }
+        classified = guard.classify_production_receipt(receipt, self.REVISION)
+        self.assertEqual(classified["status"], guard.BLOCKED)
+        self.assertIn("raw_sql_patch", classified["nextAction"]["forbidden"])
+
+    def test_unreadable_is_unverified_and_recheckable(self):
+        receipt = {
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": self.REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "UNREADABLE_FAIL_CLOSED",
+        }
+        classified = guard.classify_production_receipt(receipt, self.REVISION)
+        self.assertEqual(classified["status"], guard.UNVERIFIED)
+        self.assertTrue(classified["nextAction"]["autoAllowed"])
+
+    def test_apply_success_without_proven_postflight_does_not_become_green(self):
+        receipt = {
+            "recordType": "aurion_production_schema_apply",
+            "schemaVersion": 1,
+            "sourceRevision": self.REVISION,
+            "planSha256": self.PLAN,
+            "mode": "backup_recovery_apply",
+            "databaseCredentialReturned": False,
+            "overallState": "APPLY_SUCCEEDED",
+            "postflight": {"state": "RECONCILIATION_REQUIRED"},
+        }
+        classified = guard.classify_production_receipt(receipt, self.REVISION, self.PLAN)
+        self.assertEqual(classified["status"], guard.UNVERIFIED)
+
+    def test_identity_mismatch_blocks_receipt(self):
+        receipt = {
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": "c" * 40,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "PRESENT_SCHEMA_MATCH",
+        }
+        classified = guard.classify_production_receipt(receipt, self.REVISION)
+        self.assertEqual(classified["status"], guard.BLOCKED)
+
+
+class ResolverTests(unittest.TestCase):
+    REVISION = "a" * 40
+
+    def repo_receipt(self):
+        return guard.finalize_receipt({
+            "recordType": guard.RECORD_TYPE,
+            "schemaVersion": guard.SCHEMA_VERSION,
+            "scope": "repository",
+            "expectedRevision": self.REVISION,
+            "mutationPerformed": False,
+            "surfaces": [],
+            "metrics": {"verdict": guard.IN_SYNC},
+        })
+
+    def production_classification(self):
+        return guard.classify_production_receipt({
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,

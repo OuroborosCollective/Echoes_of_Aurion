@@ -1,0 +1,70 @@
+name: Aurion Migration Ops Skill
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-migration-ops-skill.yml"
+      - "AGENTS.md"
+      - "docs/agent-knowledgebase/INDEX.md"
+      - "docs/agent-knowledgebase/skill-archive/aurion-migration-ops/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-migration-ops-skill-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-ops-skill:
+    name: Manifest, choreography and resolver regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Verify skill manifest before regressions
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/verify_manifest.py
+
+      - name: Run migration guard regressions
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/run_regressions.py
+
+      - name: Verify deterministic package
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/check_package.py \
+            --output /tmp/aurion-migration-ops.skill
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('/tmp/aurion-migration-ops.skill') as archive:
+              assert archive.testzip() is None
+              assert all(info.date_time == (1980, 1, 1, 0, 0, 0) for info in archive.infolist())
+          PY
+
+      - name: Diff hygiene
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+          else
+            git diff --check HEAD^
+          fi

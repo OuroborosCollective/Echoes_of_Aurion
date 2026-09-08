@@ -1,0 +1,245 @@
+                action["revisionBound"] = bool(expected_revision and proof["planReceiptValid"] and plan_proof.get("targetRevision") == expected_revision)
+                action["ledgerRunBound"] = bool(ledger_run_id)
+                action["authorizationBoundary"] = "canonical_control_plane"
+                action["requiresPerActionOwnerPrompt"] = False
+                action["autoAllowed"] = bool(mode == "final" and action["planBound"] and action["revisionBound"] and action["ledgerRunBound"])
+                if mode == "diagnostic":
+                    action["blockedBy"] = "diagnostic_mode_never_dispatches_production_mutation"
+                    action["nextAutonomousAction"] = "ACQUIRE_FINAL_EVIDENCE_AND_REENTER_FINAL"
+                elif not action["autoAllowed"]:
+                    missing = [key for key in ("planBound", "revisionBound", "ledgerRunBound") if not action[key]]
+                    action["blockedBy"] = ",".join(missing)
+                    action["nextAutonomousAction"] = "ACQUIRE_MISSING_BINDINGS_AND_REENTER_FINAL"
+                else:
+                    action["action"] = "TRIGGER_CANONICAL_APPLY_WORKFLOW"
+                    action["workflow"] = CANONICAL_APPLY_WORKFLOW
+                    action["planSha256"] = effective_plan_sha
+                    action["ledgerRunId"] = ledger_run_id
+            actions.append(action)
+        elif not proof["productionClassificationValid"]:
+            actions.append({"priority": 31, "surface": "production_schema", "autoAllowed": True, "action": "RERUN_CANONICAL_PRODUCTION_READBACK_AND_RECLASSIFY"})
+
+    if runtime_receipt is None:
+        surfaces.append(surface("runtime", UNVERIFIED, {"reason": "receipt_missing"}))
+        actions.append({"priority": 40, "autoAllowed": True, "action": "RUN_REVISION_BOUND_RUNTIME_READBACK"})
+    else:
+        status, action = runtime_receipt_status(runtime_receipt, expected_revision)
+        observed = runtime_receipt.get("revision") or runtime_receipt.get("sourceRevision") or runtime_receipt.get("installedRevision")
+        proof["runtimeRevisionBound"] = bool(status == IN_SYNC and expected_revision and observed == expected_revision)
+        surfaces.append(surface("runtime", status, {
+            "observedRevision": observed,
+            "contentSha256": sha256_hex(canonical_json_bytes(runtime_receipt)),
+            "revisionBound": proof["runtimeRevisionBound"],
+        }))
+        if action.get("action") != "NONE":
+            actions.append({"priority": 40, "surface": "runtime", **action})
+
+    choreography = choreograph_wasd(
+        expected_revision,
+        expected_wasd_revision=expected_wasd_revision,
+        plan_receipt=plan_receipt,
+        wasd_source_ledger=wasd_source_ledger,
+        wasd_run_id=wasd_run_id,
+        causal_owner=causal_owner,
+    )
+    for peer_action in choreography.get("actions", []):
+        # Peer choreography is autonomous but never gets to bypass production mutation gates.
+        enriched = dict(peer_action)
+        enriched["priority"] = 50 + int(peer_action.get("priority", 0))
+        enriched["surface"] = f"peer:{peer_action.get('surface', 'unknown')}"
+        actions.append(enriched)
+
+    metrics = summarize_surfaces(surfaces)
+    repository_gate = surfaces[0]["status"] == IN_SYNC and proof["repositoryReceiptValid"]
+    for action in actions:
+        is_mutation_dispatch = action.get("action") in {"TRIGGER_CANONICAL_APPLY_WORKFLOW", "TRIGGER_CANONICAL_APPLY_WORKFLOW_IF_PLAN_AND_REVISION_ARE_VALID"}
+        if is_mutation_dispatch and not repository_gate:
+            action["autoAllowed"] = False
+            action["blockedBy"] = "repository_truth_not_in_sync"
+        if is_mutation_dispatch and mode == "diagnostic":
+            action["autoAllowed"] = False
+            action["blockedBy"] = "diagnostic_mode_never_dispatches_production_mutation"
+
+    if mode == "final" and any(not proof[key] for key in ("repositoryReceiptValid", "productionClassificationValid", "planReceiptValid", "runtimeRevisionBound")):
+        actions.append({
+            "priority": 5,
+            "surface": "final_gate",
+            "autoAllowed": True,
+            "action": "AUTONOMOUSLY_REACQUIRE_INVALID_OR_MISSING_FINAL_EVIDENCE",
+            "missingProofs": [key for key, value in proof.items() if not value],
+        })
+
+    actions = sorted(actions, key=lambda item: (item.get("priority", 999), item.get("surface", ""), item.get("action", "")))
+    receipt = {
+        "recordType": RECORD_TYPE,
+        "schemaVersion": SCHEMA_VERSION,
+        "scope": "resolver_plan",
+        "mode": mode,
+        "expectedRevision": expected_revision,
+        "planSha256": effective_plan_sha,
+        "ledgerRunId": ledger_run_id,
+        "legacyOwnerFlagObserved": bool(owner_authorized),
+        "ownerPromptRequired": False,
+        "authorizationBoundary": "canonical_control_plane",
+        "autonomyPolicy": AUTONOMY_POLICY,
+        "proof": proof,
+        "peerChoreography": choreography,
+        "mutationPerformed": False,
+        "surfaces": surfaces,
+        "metrics": metrics,
+        "actions": actions,
+        "invariants": {
+            "rawSqlExecutionAllowed": False,
+            "freeJournalRewriteAllowed": False,
+            "blindRetryAllowed": False,
+            "evidenceRewriteAllowed": False,
+            "diagnosticMayDispatchProductionMutation": False,
+            "productionMutationRequiresCanonicalControlPlane": True,
+            "productionGreenRequiresSyncPpm": 1_000_000,
+            "productionGreenRequiresUnverifiedCount": 0,
+            "productionGreenRequiresBlockedCount": 0,
+        },
+    }
+    return finalize_receipt(receipt)
+
+
+def parse_json_from_output(output: str) -> dict[str, Any] | None:
+    # Root runners emit a single JSON receipt; accept leading/trailing whitespace only.
+    text = output.strip()
+    if not text:
+        return None
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def bounded_readonly_recheck(expected_revision: str, cycles: int, delay_seconds: float, runner: str) -> dict[str, Any]:
+    if runner != CANONICAL_RECONCILE_RUNNER:
+        raise ValueError(f"runner must be exactly {CANONICAL_RECONCILE_RUNNER}")
+    if not SHA40_RE.fullmatch(expected_revision):
+        raise ValueError("expected revision must be 40 lowercase hex characters")
+    cycles = max(1, min(cycles, 5))
+    attempts: list[dict[str, Any]] = []
+    final_classification: dict[str, Any] | None = None
+    for index in range(cycles):
+        started = time.monotonic()
+        try:
+            proc = subprocess.run(
+                [runner, expected_revision],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            raw = parse_json_from_output(proc.stdout)
+            classification = classify_production_receipt(raw, expected_revision) if raw else None
+            attempts.append({
+                "attempt": index + 1,
+                "exitCode": proc.returncode,
+                "elapsedMs": elapsed_ms,
+                "stdoutSha256": sha256_hex(proc.stdout.encode()),
+                "stderrSha256": sha256_hex(proc.stderr.encode()),
+                "receiptParsed": raw is not None,
+                "classification": classification,
+            })
+            if classification is not None:
+                final_classification = classification
+                if classification["status"] in {IN_SYNC, OUT_OF_SYNC, BLOCKED}:
+                    break
+        except FileNotFoundError:
+            attempts.append({"attempt": index + 1, "error": "canonical_runner_absent"})
+            break
+        except subprocess.TimeoutExpired:
+            attempts.append({"attempt": index + 1, "error": "canonical_runner_timeout"})
+        if index + 1 < cycles:
+            time.sleep(max(0.0, min(delay_seconds, 30.0)))
+    status = final_classification["status"] if final_classification else UNVERIFIED
+    receipt = {
+        "recordType": RECORD_TYPE,
+        "schemaVersion": SCHEMA_VERSION,
+        "scope": "bounded_readonly_recheck",
+        "expectedRevision": expected_revision,
+        "runner": runner,
+        "cyclesRequested": cycles,
+        "attempts": attempts,
+        "status": status,
+        "mutationPerformed": False,
+        "productionTruthAsserted": status == IN_SYNC,
+    }
+    return finalize_receipt(receipt)
+
+
+def write_receipt(receipt: dict[str, Any], output: str | None) -> None:
+    text = json.dumps(receipt, indent=2, ensure_ascii=False) + "\n"
+    if output:
+        path = Path(output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    print(text, end="")
+
+
+def command_repo_audit(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    receipt = audit_repo(repo, args.expected_revision, args.run_canonical)
+    write_receipt(receipt, args.output)
+    return 0 if receipt["metrics"]["verdict"] == IN_SYNC else 1
+
+
+def command_classify(args: argparse.Namespace) -> int:
+    receipt = load_json(Path(args.receipt))
+    classified = classify_production_receipt(receipt, args.expected_revision, args.plan_sha256)
+    write_receipt(classified, args.output)
+    return 0 if classified["status"] == IN_SYNC else 1
+
+
+def command_plan(args: argparse.Namespace) -> int:
+    repo_receipt = load_json(Path(args.repo_receipt)) if args.repo_receipt else None
+    production = load_json(Path(args.production_classification)) if args.production_classification else None
+    runtime = load_json(Path(args.runtime_receipt)) if args.runtime_receipt else None
+    plan_receipt = load_json(Path(args.plan_receipt)) if args.plan_receipt else None
+    wasd_source_ledger = load_json(Path(args.wasd_source_ledger)) if args.wasd_source_ledger else None
+    plan = resolve_plan(
+        repo_receipt, production, runtime, args.expected_revision, args.plan_sha256,
+        args.owner_authorized, args.mode, plan_receipt=plan_receipt, ledger_run_id=args.ledger_run_id,
+        wasd_source_ledger=wasd_source_ledger, expected_wasd_revision=args.expected_wasd_revision,
+        wasd_run_id=args.wasd_run_id, causal_owner=args.causal_owner,
+    )
+    write_receipt(plan, args.output)
+    return 0 if plan["metrics"]["verdict"] == IN_SYNC else 1
+
+
+
+def command_choreograph(args: argparse.Namespace) -> int:
+    plan_receipt = load_json(Path(args.plan_receipt)) if args.plan_receipt else None
+    source_ledger = load_json(Path(args.wasd_source_ledger)) if args.wasd_source_ledger else None
+    receipt = choreograph_wasd(
+        args.expected_aurion_revision,
+        expected_wasd_revision=args.expected_wasd_revision,
+        plan_receipt=plan_receipt,
+        wasd_source_ledger=source_ledger,
+        wasd_run_id=args.wasd_run_id,
+        causal_owner=args.causal_owner,
+    )
+    write_receipt(receipt, args.output)
+    return 0 if receipt["metrics"]["verdict"] == IN_SYNC else 1
+
+
+def command_recheck(args: argparse.Namespace) -> int:
+    receipt = bounded_readonly_recheck(args.expected_revision, args.cycles, args.delay_seconds, args.runner)
+    write_receipt(receipt, args.output)
+    return 0 if receipt["status"] == IN_SYNC else 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Aurion migration evidence / resolver guard")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    repo = sub.add_parser("repo-audit", help="audit repository migration and production-contract surfaces")
+    repo.add_argument("--repo", required=True)
+    repo.add_argument("--expected-revision")
+    repo.add_argument("--run-canonical", action="store_true", help="also execute pnpm verify:migrations")
+    repo.add_argument("--output")
+    repo.set_defaults(func=command_repo_audit)

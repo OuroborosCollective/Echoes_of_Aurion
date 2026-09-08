@@ -1,0 +1,56 @@
+    classify = sub.add_parser("classify-production", help="classify a canonical production reconcile/apply receipt")
+    classify.add_argument("--receipt", required=True)
+    classify.add_argument("--expected-revision")
+    classify.add_argument("--plan-sha256")
+    classify.add_argument("--output")
+    classify.set_defaults(func=command_classify)
+
+    plan = sub.add_parser("resolve-plan", help="combine repo, production and runtime evidence into a bounded repair plan")
+    plan.add_argument("--repo-receipt")
+    plan.add_argument("--production-classification")
+    plan.add_argument("--runtime-receipt")
+    plan.add_argument("--expected-revision")
+    plan.add_argument("--plan-sha256", help="optional cross-check; prefer --plan-receipt")
+    plan.add_argument("--plan-receipt", help="canonical aurion_wasd_migration_ledger JSON used to recompute planSha256")
+    plan.add_argument("--ledger-run-id", help="canonical workflow run id; if absent the resolver emits an autonomous discovery action")
+    plan.add_argument("--wasd-source-ledger", help="optional direct WASD source-ledger JSON for peer choreography verification")
+    plan.add_argument("--expected-wasd-revision", help="optional exact WASD revision expected by the choreography guard")
+    plan.add_argument("--wasd-run-id", help="optional canonical WASD source-ledger workflow run id")
+    plan.add_argument("--causal-owner", choices=("unknown", "wasd", "aurion", "shared"), default="unknown")
+    plan.add_argument("--owner-authorized", action="store_true", help=argparse.SUPPRESS)
+    plan.add_argument("--mode", choices=("diagnostic", "final"), default="diagnostic", help="diagnostic may autonomously gather/repair evidence but never dispatch production mutation; final may dispatch only through the canonical control plane")
+    plan.add_argument("--output")
+    plan.set_defaults(func=command_plan)
+
+    dance = sub.add_parser("choreograph-wasd", help="autonomously coordinate revision-bound WASD evidence and Aurion re-ledger actions")
+    dance.add_argument("--expected-aurion-revision")
+    dance.add_argument("--expected-wasd-revision")
+    dance.add_argument("--plan-receipt")
+    dance.add_argument("--wasd-source-ledger")
+    dance.add_argument("--wasd-run-id")
+    dance.add_argument("--causal-owner", choices=("unknown", "wasd", "aurion", "shared"), default="unknown")
+    dance.add_argument("--output")
+    dance.set_defaults(func=command_choreograph)
+
+    recheck = sub.add_parser("recheck-production", help="bounded read-only recheck using only the canonical installed root runner")
+    recheck.add_argument("--expected-revision", required=True)
+    recheck.add_argument("--cycles", type=int, default=3)
+    recheck.add_argument("--delay-seconds", type=float, default=2.0)
+    recheck.add_argument("--runner", default=CANONICAL_RECONCILE_RUNNER)
+    recheck.add_argument("--output")
+    recheck.set_defaults(func=command_recheck)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        return int(args.func(args))
+    except (ValueError, OSError, json.JSONDecodeError) as exc:
+        print(json.dumps({"recordType": RECORD_TYPE, "schemaVersion": SCHEMA_VERSION, "status": BLOCKED, "errorClass": type(exc).__name__, "message": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

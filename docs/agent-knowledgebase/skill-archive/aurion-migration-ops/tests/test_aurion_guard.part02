@@ -1,0 +1,199 @@
+            "repositoryState": "PENDING_PRODUCTION_READBACK",
+            "plan": {
+                "productionWritesScheduled": False,
+                "prohibitedActions": ["database_write", "schema_apply", "data_backfill", "journal_repair", "production_deploy"],
+            },
+        }
+        return {**unsigned, "planSha256": guard.sha256_hex(guard.canonical_json_bytes(unsigned))}
+
+    def runtime_receipt(self):
+        return {"revision": self.REVISION, "healthy": True, "source": "runtime-regression-fixture"}
+
+    def test_resolver_never_enables_raw_sql_or_free_journal_rewrite(self):
+        plan = guard.resolve_plan(None, None, None, self.REVISION, None)
+        self.assertFalse(plan["invariants"]["rawSqlExecutionAllowed"])
+        self.assertFalse(plan["invariants"]["freeJournalRewriteAllowed"])
+        self.assertFalse(plan["invariants"]["blindRetryAllowed"])
+        self.assertFalse(plan["invariants"]["evidenceRewriteAllowed"])
+
+    def test_diagnostic_never_dispatches_apply_even_with_complete_evidence(self):
+        plan_receipt = self.plan_receipt()
+        plan = guard.resolve_plan(
+            self.repo_receipt(), self.production_classification(), self.runtime_receipt(),
+            self.REVISION, plan_receipt["planSha256"], mode="diagnostic",
+            plan_receipt=plan_receipt, ledger_run_id="123456",
+        )
+        action = next(item for item in plan["actions"] if item.get("surface") == "production_schema")
+        self.assertFalse(action["autoAllowed"])
+        self.assertEqual(action["blockedBy"], "diagnostic_mode_never_dispatches_production_mutation")
+        self.assertFalse(plan["ownerPromptRequired"])
+
+    def test_final_dispatches_canonical_apply_autonomously_without_per_action_owner_prompt(self):
+        plan_receipt = self.plan_receipt()
+        plan = guard.resolve_plan(
+            self.repo_receipt(), self.production_classification(), self.runtime_receipt(),
+            self.REVISION, plan_receipt["planSha256"], mode="final",
+            plan_receipt=plan_receipt, ledger_run_id="123456",
+        )
+        action = next(item for item in plan["actions"] if item.get("surface") == "production_schema")
+        self.assertEqual(action["action"], "TRIGGER_CANONICAL_APPLY_WORKFLOW")
+        self.assertTrue(action["autoAllowed"])
+        self.assertEqual(action["authorizationBoundary"], "canonical_control_plane")
+        self.assertFalse(action["requiresPerActionOwnerPrompt"])
+        self.assertFalse(plan["ownerPromptRequired"])
+        self.assertEqual(plan["autonomyPolicy"]["mode"], "AUTONOMOUS_UNTIL_REVOKED")
+
+    def test_final_autonomously_discovers_missing_ledger_run_id_instead_of_asking_owner(self):
+        plan_receipt = self.plan_receipt()
+        plan = guard.resolve_plan(
+            self.repo_receipt(), self.production_classification(), self.runtime_receipt(),
+            self.REVISION, plan_receipt["planSha256"], mode="final", plan_receipt=plan_receipt,
+        )
+        discover = next(item for item in plan["actions"] if item.get("action") == "DISCOVER_CANONICAL_LEDGER_RUN_ID_FOR_VERIFIED_PLAN")
+        self.assertTrue(discover["autoAllowed"])
+        apply = next(item for item in plan["actions"] if item.get("surface") == "production_schema")
+        self.assertFalse(apply["autoAllowed"])
+        self.assertIn("ledgerRunBound", apply["blockedBy"])
+        self.assertEqual(apply["nextAutonomousAction"], "ACQUIRE_MISSING_BINDINGS_AND_REENTER_FINAL")
+
+    def test_tampered_repository_receipt_is_rejected_and_reacquired(self):
+        repo = self.repo_receipt()
+        repo["metrics"]["verdict"] = guard.BLOCKED
+        plan_receipt = self.plan_receipt()
+        plan = guard.resolve_plan(
+            repo, self.production_classification(), self.runtime_receipt(), self.REVISION,
+            plan_receipt["planSha256"], mode="final", plan_receipt=plan_receipt, ledger_run_id="123456",
+        )
+        repository = next(item for item in plan["surfaces"] if item["name"] == "repository")
+        self.assertEqual(repository["status"], guard.BLOCKED)
+        self.assertFalse(repository["evidence"]["receiptHashValid"])
+        self.assertTrue(any(item["action"] == "REGENERATE_REPOSITORY_AUDIT_FROM_EXACT_REVISION" for item in plan["actions"]))
+
+    def test_tampered_plan_hash_is_blocked(self):
+        plan_receipt = self.plan_receipt()
+        plan_receipt["target"]["revision"] = "d" * 40
+        proof = guard.verify_plan_receipt(plan_receipt, self.REVISION)
+        self.assertFalse(proof["valid"])
+        self.assertIn("plan_target_revision_mismatch", proof["problems"])
+        self.assertIn("planSha256_mismatch", proof["problems"])
+
+    def test_receipt_hash_is_content_bound(self):
+        first = guard.finalize_receipt({"recordType": "x", "value": 1})
+        second = guard.finalize_receipt({"value": 1, "recordType": "x"})
+        changed = guard.finalize_receipt({"recordType": "x", "value": 2})
+        self.assertEqual(first["receiptSha256"], second["receiptSha256"])
+        self.assertNotEqual(first["receiptSha256"], changed["receiptSha256"])
+
+    def test_production_classification_binds_exact_source_receipt(self):
+        raw = {
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": self.REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "PRESENT_SCHEMA_MATCH",
+        }
+        classified = guard.classify_production_receipt(raw, self.REVISION)
+        self.assertEqual(classified["sourceReceiptSha256"], guard.sha256_hex(guard.canonical_json_bytes(raw)))
+
+
+
+class CrossRepoChoreographyTests(unittest.TestCase):
+    AURION_REVISION = "a" * 40
+    WASD_REVISION = "c" * 40
+
+    def plan_receipt(self, source_ledger: dict | None = None) -> dict:
+        source_ledger = source_ledger or make_wasd_source_ledger(self.WASD_REVISION)
+        unsigned = {
+            "schemaVersion": "aurion.wasd-migration-ledger.v1",
+            "recordType": "aurion_wasd_migration_ledger",
+            "source": {
+                "repository": guard.WASD_REPOSITORY,
+                "revision": source_ledger["source"]["revision"],
+                "manifestSha256": source_ledger["manifestSha256"],
+                "sourceFileCount": len(source_ledger["files"]),
+                "domainCounts": {"server": 1},
+            },
+            "target": {
+                "repository": guard.AURION_REPOSITORY,
+                "revision": self.AURION_REVISION,
+                "migrationJournal": {},
+            },
+            "repositoryState": "PENDING_PRODUCTION_READBACK",
+            "plan": {
+                "productionWritesScheduled": False,
+                "prohibitedActions": ["database_write", "schema_apply", "data_backfill", "journal_repair", "production_deploy"],
+            },
+        }
+        return {**unsigned, "planSha256": guard.sha256_hex(guard.canonical_json_bytes(unsigned))}
+
+    def test_missing_wasd_evidence_autonomously_invites_wasd_without_owner_prompt(self):
+        receipt = guard.choreograph_wasd(self.AURION_REVISION, expected_wasd_revision=self.WASD_REVISION)
+        request = next(item for item in receipt["actions"] if item["action"] == "REQUEST_EVIDENCE")
+        self.assertTrue(request["autoAllowed"])
+        self.assertFalse(request["ownerPromptRequired"])
+        self.assertEqual(request["targetRepository"], guard.WASD_REPOSITORY)
+        self.assertEqual(request["dispatchIntent"]["workflow"], guard.WASD_SOURCE_LEDGER_WORKFLOW)
+        self.assertEqual(request["dispatchIntent"]["inputs"]["source_ref"], self.WASD_REVISION)
+        self.assertFalse(receipt["ownerPromptRequired"])
+
+    def test_matching_wasd_ledger_and_aurion_plan_put_peers_in_step(self):
+        source = make_wasd_source_ledger(self.WASD_REVISION)
+        plan = self.plan_receipt(source)
+        receipt = guard.choreograph_wasd(
+            self.AURION_REVISION,
+            expected_wasd_revision=self.WASD_REVISION,
+            plan_receipt=plan,
+            wasd_source_ledger=source,
+            wasd_run_id="987654",
+        )
+        binding = next(item for item in receipt["surfaces"] if item["name"] == "cross_repo_binding")
+        self.assertEqual(binding["status"], guard.IN_SYNC)
+        verify = next(item for item in receipt["actions"] if item["action"] == "VERIFY_RESPONSE")
+        self.assertEqual(verify["result"], "PEERS_IN_STEP")
+        self.assertEqual(receipt["metrics"]["syncPpm"], 1_000_000)
+
+    def test_tampered_wasd_ledger_is_rejected_and_rechecked_not_rewritten(self):
+        source = make_wasd_source_ledger(self.WASD_REVISION)
+        source["files"][0]["domain"] = "tampered"
+        receipt = guard.choreograph_wasd(
+            self.AURION_REVISION,
+            expected_wasd_revision=self.WASD_REVISION,
+            plan_receipt=self.plan_receipt(),
+            wasd_source_ledger=source,
+        )
+        wasd = next(item for item in receipt["surfaces"] if item["name"] == "wasd_source_evidence")
+        self.assertEqual(wasd["status"], guard.OUT_OF_SYNC)
+        self.assertIn("wasd_manifestSha256_mismatch", wasd["evidence"]["problems"])
+        request = next(item for item in receipt["actions"] if item["action"] == "REQUEST_RECHECK")
+        self.assertTrue(request["autoAllowed"])
+        self.assertNotIn("rewrite", json.dumps(request).lower())
+
+    def test_valid_wasd_source_with_stale_aurion_plan_requests_reconciliation(self):
+        current = make_wasd_source_ledger(self.WASD_REVISION, file_suffix="-new")
+        old = make_wasd_source_ledger(self.WASD_REVISION, file_suffix="-old")
+        plan = self.plan_receipt(old)
+        receipt = guard.choreograph_wasd(
+            self.AURION_REVISION,
+            expected_wasd_revision=self.WASD_REVISION,
+            plan_receipt=plan,
+            wasd_source_ledger=current,
+        )
+        reconcile = next(item for item in receipt["actions"] if item["action"] == "REQUEST_RECONCILIATION")
+        self.assertTrue(reconcile["autoAllowed"])
+        self.assertEqual(reconcile["targetRepository"], guard.AURION_REPOSITORY)
+        self.assertEqual(reconcile["dispatchIntent"]["workflow"], guard.AURION_MIGRATION_LEDGER_WORKFLOW)
+        self.assertEqual(reconcile["dispatchIntent"]["inputs"]["source_ref"], self.WASD_REVISION)
+
+    def test_known_wasd_causal_owner_allows_only_draft_peer_patch_then_recheck(self):
+        current = make_wasd_source_ledger(self.WASD_REVISION, file_suffix="-new")
+        plan = self.plan_receipt(make_wasd_source_ledger(self.WASD_REVISION, file_suffix="-old"))
+        receipt = guard.choreograph_wasd(
+            self.AURION_REVISION,
+            plan_receipt=plan,
+            wasd_source_ledger=current,
+            causal_owner="wasd",
+        )
+        patch = next(item for item in receipt["actions"] if item["action"] == "REQUEST_PATCH")
+        self.assertTrue(patch["autoAllowed"])
+        self.assertEqual(patch["writeBoundary"], "isolated_workspace_to_draft_pr")

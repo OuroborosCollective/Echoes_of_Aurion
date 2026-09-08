@@ -1,0 +1,23 @@
+            "sourceRevision": self.REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "RECONCILIATION_REQUIRED",
+        }, self.REVISION)
+
+    def plan_receipt(self):
+        source_ledger = make_wasd_source_ledger()
+        unsigned = {
+            "schemaVersion": "aurion.wasd-migration-ledger.v1",
+            "recordType": "aurion_wasd_migration_ledger",
+            "source": {
+                "repository": guard.WASD_REPOSITORY,
+                "revision": source_ledger["source"]["revision"],
+                "manifestSha256": source_ledger["manifestSha256"],
+                "sourceFileCount": len(source_ledger["files"]),
+                "domainCounts": {"server": 1},
+            },
+            "target": {
+                "repository": "OuroborosCollective/Echoes_of_Aurion",
+                "revision": self.REVISION,
+                "migrationJournal": {},
+            },
