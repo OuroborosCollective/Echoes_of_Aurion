@@ -29,23 +29,25 @@ jobs:
           cat scripts/.classless-patch.part-* | base64 --decode | gzip -d > /tmp/aurion-classless.patch
           echo '38064651bf4e7263da6ad6c67f1619386955cb631d0d12c9f3860298ec3215a6  /tmp/aurion-classless.patch' | sha256sum -c -
           git apply --check /tmp/aurion-classless.patch
-      - name: Apply patch and remove bootstrap material
+      - name: Apply non-workflow patch and remove bootstrap payload
         shell: bash
         run: |
           set -euo pipefail
           git apply /tmp/aurion-classless.patch
           chmod +x scripts/bootstrap-aurion-local-test-pack.sh
-          rm -f scripts/.classless-patch.part-* .github/workflows/one-shot-aim227-classless-bootstrap.yml
+          rm -f scripts/.classless-patch.part-*
+          rm -f .github/workflows/aurion-local-test-pack.yml
           git add -A
           git diff --cached --check
-          test "$(git diff --cached --name-only --diff-filter=AM | wc -l)" -eq 15
-          test "$(git diff --cached --name-only --diff-filter=D | wc -l)" -eq 6
-          test "$(git diff --cached --name-only | wc -l)" -eq 21
-      - name: Commit exact AIM-227 fix
+          test "$(git diff --cached --name-only --diff-filter=AM | wc -l)" -eq 14
+          test "$(git diff --cached --name-only --diff-filter=D | wc -l)" -eq 5
+          test "$(git diff --cached --name-only | wc -l)" -eq 19
+          test "$(git diff --cached --name-only | grep -c '^.github/workflows/' || true)" -eq 0
+      - name: Commit exact AIM-227 non-workflow fix
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(progression): remove class authority and add exact local DB pack'
+          git commit -m 'fix(progression): remove class authority and add local DB tooling'
           git push origin "HEAD:${{ github.ref_name }}"
