@@ -32,7 +32,7 @@ export default function Home() {
     <main className="aurion-app min-h-screen bg-[#061317] text-slate-100">
       <header className="brand-bar">
         <div className="brand-lockup"><span role="img" aria-label="Aurion Siegel" className="brand-sigil"><i/><b/><i/></span><div><p className="brand-kicker">OUROBOROS COLLECTIVE // AURION PORTAL</p><h1>Echoes <span>of</span> Aurion</h1></div></div>
-        <nav className="flex items-center gap-4 text-xs"><Link href="/community">Community</Link>{isAuthenticated && <Link href="/account">Konto</Link>}<a href="/ops" className="text-cyan-100/75 hover:text-cyan-200">OPS</a></nav>
+        <nav className="flex items-center gap-4 text-xs"><Link href="/community" className="hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 rounded transition-colors px-1">Community</Link>{isAuthenticated && <Link href="/account" className="hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 rounded transition-colors px-1">Konto</Link>}<a href="/ops" className="text-cyan-100/75 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 rounded transition-colors px-1">OPS</a></nav>
       </header>
 
       <section className="mx-auto grid min-h-[66vh] max-w-6xl place-items-center px-5 py-14">
