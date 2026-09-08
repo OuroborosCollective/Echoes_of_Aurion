@@ -1,5 +1,5 @@
 import { cleanupQuestRegressionUser } from "./questRegressionFixture";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   acceptGameplayQuest,
@@ -11,6 +11,7 @@ import {
 } from "./db";
 import {
   gameplayDungeonKeys,
+  gameplayQuestProgress,
   progressionLedger,
 } from "../drizzle/schema";
 
@@ -108,7 +109,12 @@ describeWithDatabase("quest chain regression E2E", () => {
     const starfallBoss = await defeatQuestEncounter("starfall_crater");
     expect(starfallBoss.resolution).toMatchObject({ completed: true, completedQuest: "starfall_resonance", reward: { xp: 0, points: 0 } });
     const beforeStarfallTurnIn = await getGameplayProgress(QUEST_CHAIN_REGRESSION_USER_ID);
-    expect(beforeStarfallTurnIn.quests.find(quest => quest.key === "starfall_resonance")).toMatchObject({ state: "active", readyToTurnIn: true });
+    expect(beforeStarfallTurnIn.quests.find(quest => quest.key === "starfall_resonance")).toMatchObject({ state: "available", readyToTurnIn: true });
+    const starfallPersistence = (await db.select().from(gameplayQuestProgress).where(and(
+      eq(gameplayQuestProgress.userId, QUEST_CHAIN_REGRESSION_USER_ID),
+      eq(gameplayQuestProgress.questKey, "starfall_resonance"),
+    )).limit(1))[0];
+    expect(starfallPersistence).toMatchObject({ state: "ready_to_turn_in", completionSessionId: starfallBoss.encounter.session.id });
     expect(beforeStarfallTurnIn.profile).toMatchObject({ totalXp: 702, aurionPoints: 115, seasonPoints: 115, victories: 3 });
     await expect(completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance", giver: "Orun" })).rejects.toThrow("Dieser Questgeber kann den Auftrag nicht abschließen.");
     const completed = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance", giver: "Lyra" });
