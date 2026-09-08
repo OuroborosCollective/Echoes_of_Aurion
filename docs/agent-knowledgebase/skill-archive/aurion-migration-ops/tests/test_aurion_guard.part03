@@ -1,0 +1,71 @@
+        self.assertFalse(patch["directMainPushAllowed"])
+        self.assertEqual(patch["postcondition"], "REQUEST_RECHECK")
+
+    def test_unknown_causal_owner_root_causes_autonomously_before_any_semantic_escalation(self):
+        current = make_wasd_source_ledger(self.WASD_REVISION, file_suffix="-new")
+        plan = self.plan_receipt(make_wasd_source_ledger(self.WASD_REVISION, file_suffix="-old"))
+        receipt = guard.choreograph_wasd(
+            self.AURION_REVISION,
+            plan_receipt=plan,
+            wasd_source_ledger=current,
+            causal_owner="unknown",
+        )
+        action = next(item for item in receipt["actions"] if item["action"] == "ROOT_CAUSE_CROSS_REPO_CONTRACT_DRIFT")
+        self.assertTrue(action["autoAllowed"])
+        self.assertFalse(action["ownerPromptRequired"])
+        self.assertIn("multiple materially different valid product target states", action["escalateOnlyIf"])
+
+    def test_resolver_embeds_peer_choreography_and_keeps_autonomy(self):
+        source = make_wasd_source_ledger(self.WASD_REVISION)
+        plan_receipt = self.plan_receipt(source)
+        repo = guard.finalize_receipt({
+            "recordType": guard.RECORD_TYPE,
+            "schemaVersion": guard.SCHEMA_VERSION,
+            "scope": "repository",
+            "expectedRevision": self.AURION_REVISION,
+            "mutationPerformed": False,
+            "surfaces": [],
+            "metrics": {"verdict": guard.IN_SYNC},
+        })
+        production = guard.classify_production_receipt({
+            "recordType": "aurion_production_schema_reconciliation",
+            "schemaVersion": 1,
+            "sourceRevision": self.AURION_REVISION,
+            "readOnly": True,
+            "databaseCredentialReturned": False,
+            "overallState": "RECONCILIATION_REQUIRED",
+        }, self.AURION_REVISION)
+        runtime = {"revision": self.AURION_REVISION, "healthy": True}
+        result = guard.resolve_plan(
+            repo,
+            production,
+            runtime,
+            self.AURION_REVISION,
+            plan_receipt["planSha256"],
+            mode="final",
+            plan_receipt=plan_receipt,
+            ledger_run_id="123",
+            wasd_source_ledger=source,
+            expected_wasd_revision=self.WASD_REVISION,
+            wasd_run_id="456",
+        )
+        self.assertEqual(result["peerChoreography"]["metrics"]["verdict"], guard.IN_SYNC)
+        self.assertFalse(result["ownerPromptRequired"])
+        self.assertTrue(result["autonomyPolicy"]["autonomousCrossRepoChoreography"])
+
+
+class CompatibilityTests(unittest.TestCase):
+    def test_legacy_apply_path_is_a_hard_block(self):
+        proc = subprocess.run([sys.executable, str(ROOT / "scripts" / "apply_migration.py")], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 64)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "BLOCKED")
+        self.assertFalse(payload["mutationPerformed"])
+
+    def test_recheck_rejects_noncanonical_runner(self):
+        with self.assertRaises(ValueError):
+            guard.bounded_readonly_recheck("a" * 40, 1, 0, "/tmp/not-the-runner")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
