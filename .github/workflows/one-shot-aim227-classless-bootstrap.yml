@@ -1,0 +1,49 @@
+name: One-shot AIM-227 classless patch bootstrap
+
+on:
+  push:
+    branches:
+      - fix/aim-227-classless-progression-local-pack
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-aim-227-classless-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply-exact-patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+      - name: Reconstruct and verify exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat scripts/.classless-patch.part-* | base64 --decode | gzip -d > /tmp/aurion-classless.patch
+          echo '38064651bf4e7263da6ad6c67f1619386955cb631d0d12c9f3860298ec3215a6  /tmp/aurion-classless.patch' | sha256sum -c -
+          git apply --check /tmp/aurion-classless.patch
+      - name: Apply patch and remove bootstrap material
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply /tmp/aurion-classless.patch
+          chmod +x scripts/bootstrap-aurion-local-test-pack.sh
+          rm -f scripts/.classless-patch.part-* .github/workflows/one-shot-aim227-classless-bootstrap.yml
+          git add -A
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 15
+      - name: Commit exact AIM-227 fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(progression): remove class authority and add exact local DB pack'
+          git push origin "HEAD:${{ github.ref_name }}"
