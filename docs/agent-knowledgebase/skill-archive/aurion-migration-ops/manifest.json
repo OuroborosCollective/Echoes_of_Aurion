@@ -57,9 +57,9 @@
       "sha256": "e311755d6861cac3642c2afa14577373e2693184c31f859d6dca771acfb26546"
     },
     "scripts/aurion_guard.part05": {
-      "bytes": 11920,
+      "bytes": 11919,
       "mode": "0644",
-      "sha256": "05fb4939ea9a846934e9c7555e967cb0b2a7dc79372f3f10b1f768592c0ce3d0"
+      "sha256": "577d201e28800dc3cdf8c2f3a8f79955840ff4247c7e7a7edc0860ac5aa186ec"
     },
     "scripts/aurion_guard.part06": {
       "bytes": 3396,
