@@ -69,6 +69,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
       await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-ui-regression!");
       await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+      const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
+      await expect(launch).toBeVisible({ timeout: 30_000 });
 
       // Publish a real catalog-only player through the authenticated intake route.
       // The disposable account is admin only for this upload and is restored to
@@ -87,8 +89,6 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(publicBody).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { targetKey: null, status: "catalog" } });
       await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
 
-      const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
-      await expect(launch).toBeVisible({ timeout: 30_000 });
       await launch.click();
       await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
 
