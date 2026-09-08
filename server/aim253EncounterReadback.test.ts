@@ -12,6 +12,11 @@ describe("owned encounter recovery boundary", () => {
   it("keeps the shared readback choices exactly aligned with the canonical gameplay encounter catalog", () => {
     expect(aurionEncounters.map(encounter => encounter.key)).toEqual([...encounterKeys]);
   });
+  it("keeps every published encounter inside the deterministic session-identity contract", () => {
+    const identities = encounterKeys.map((key, index) => encounterSessionIdentity(7, index + 1, key));
+    expect(new Set(identities).size).toBe(encounterKeys.length);
+    expect(() => encounterSessionIdentity(7, 1, "not-an-encounter")).toThrow("INVALID_ENCOUNTER_IDENTITY_CONTEXT");
+  });
   it("projects only a valid owned server state", () => { expect(parseOwnedEncounterReadback(value(), 7).active?.nextSequence).toBe(2); expect(() => parseOwnedEncounterReadback(value(), 8)).toThrow(); });
   it.each([0, -1, NaN, Infinity, 1.5, 2_147_483_648])("rejects invalid sequence %s", nextSequence => { const data = value(); data.active.nextSequence = nextSequence; expect(() => parseOwnedEncounterReadback(data, 7)).toThrow(); });
   it("rejects fabricated HP, duplicate choices and incomplete responses", () => {
