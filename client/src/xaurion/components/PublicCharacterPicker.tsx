@@ -32,6 +32,7 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
     if (!Array.isArray(body.entries) || typeof body.revision !== "string") throw new Error("Ungültiger Charakterkatalog.");
     if (!signal?.aborted) {
       setCatalog(body);
+      // Only a server-returned immutable/public selection may release the Open World gate.
       if (body.selected) onSelectedRef.current?.(body.selected);
     }
   };
