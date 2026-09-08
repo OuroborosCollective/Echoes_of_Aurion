@@ -38,7 +38,9 @@ jobs:
           rm -f scripts/.classless-patch.part-* .github/workflows/one-shot-aim227-classless-bootstrap.yml
           git add -A
           git diff --cached --check
-          test "$(git diff --cached --name-only | wc -l)" -eq 15
+          test "$(git diff --cached --name-only --diff-filter=AM | wc -l)" -eq 15
+          test "$(git diff --cached --name-only --diff-filter=D | wc -l)" -eq 6
+          test "$(git diff --cached --name-only | wc -l)" -eq 21
       - name: Commit exact AIM-227 fix
         shell: bash
         run: |
