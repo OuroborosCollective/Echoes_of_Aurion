@@ -1,0 +1,213 @@
+        raise ValueError("plan sha256 must be 64 lowercase hex characters")
+    record_type = receipt.get("recordType")
+    identity_ok, identity_problems = validate_identity(receipt, expected_revision, plan_sha256)
+    status = UNVERIFIED
+    action: dict[str, Any] = {"autoAllowed": True, "action": "READONLY_RECHECK"}
+    reason = "unrecognized_receipt"
+
+    if record_type == "aurion_production_schema_reconciliation":
+        if receipt.get("schemaVersion") != 1 or receipt.get("readOnly") is not True:
+            identity_problems.append("reconciliation_contract_invalid")
+            identity_ok = False
+        state = receipt.get("overallState")
+        if not identity_ok:
+            status, reason = BLOCKED, "receipt_identity_invalid"
+            action = {"autoAllowed": False, "action": "REJECT_RECEIPT_AND_REESTABLISH_CANONICAL_READBACK_BOUNDARY"}
+        elif state == "PRESENT_SCHEMA_MATCH":
+            status, reason = IN_SYNC, "canonical_readback_match"
+            action = {"autoAllowed": True, "action": "NONE"}
+        elif state == "RECONCILIATION_REQUIRED":
+            status, reason = OUT_OF_SYNC, "canonical_readback_missing_expected_schema_without_reported_drift"
+            action = {
+                "autoAllowed": False,
+                "action": "TRIGGER_CANONICAL_APPLY_WORKFLOW_IF_PLAN_AND_REVISION_ARE_VALID",
+                "workflow": CANONICAL_APPLY_WORKFLOW,
+            }
+        elif state == "PRESENT_SCHEMA_DRIFT":
+            status, reason = BLOCKED, "live_schema_drift"
+            action = {
+                "autoAllowed": False,
+                "action": "ROOT_CAUSE_SCHEMA_DRIFT_AND_CREATE_TESTED_RECONCILIATION_CHANGESET",
+                "forbidden": ["raw_sql_patch", "journal_rewrite", "blind_retry"],
+            }
+        elif state == "UNREADABLE_FAIL_CLOSED":
+            status, reason = UNVERIFIED, "readback_unreadable_fail_closed"
+            action = {"autoAllowed": True, "action": "BOUNDED_READONLY_RECHECK"}
+        else:
+            status, reason = UNVERIFIED, "unknown_reconciliation_state"
+    elif record_type == "aurion_production_schema_apply":
+        if receipt.get("schemaVersion") != 1 or receipt.get("mode") != "backup_recovery_apply":
+            identity_problems.append("apply_contract_invalid")
+            identity_ok = False
+        state = receipt.get("overallState")
+        if not identity_ok:
+            status, reason = BLOCKED, "receipt_identity_invalid"
+            action = {"autoAllowed": False, "action": "REJECT_RECEIPT_AND_REESTABLISH_APPLY_BOUNDARY"}
+        elif state in {"APPLY_SUCCEEDED", "ALREADY_APPLIED"}:
+            postflight = receipt.get("postflight")
+            postflight_state = postflight.get("state") if isinstance(postflight, dict) else None
+            if postflight_state == "PRESENT_SCHEMA_MATCH":
+                status, reason = IN_SYNC, "apply_and_postflight_match"
+                action = {"autoAllowed": True, "action": "NONE"}
+            else:
+                status, reason = UNVERIFIED, "apply_state_success_without_proven_postflight_match"
+                action = {"autoAllowed": True, "action": "RUN_CANONICAL_READONLY_POSTFLIGHT"}
+        elif state == "APPLY_FAILED":
+            apply_detail = receipt.get("apply") if isinstance(receipt.get("apply"), dict) else {}
+            retryable = bool(apply_detail.get("retryable", False))
+            status = OUT_OF_SYNC if retryable else BLOCKED
+            reason = "apply_failed_retryable" if retryable else "apply_failed_nonretryable"
+            action = (
+                {"autoAllowed": True, "action": "READONLY_RECHECK_THEN_SAME_REVISION_SAME_PLAN_RETRY_IF_STILL_APPLYABLE"}
+                if retryable
+                else {"autoAllowed": False, "action": "ROOT_CAUSE_APPLY_FAILURE_BEFORE_ANY_RETRY"}
+            )
+        else:
+            status, reason = UNVERIFIED, "unknown_apply_state"
+    else:
+        identity_ok = False
+        identity_problems.append("recordType_unrecognized")
+
+    classified = {
+        "recordType": RECORD_TYPE,
+        "schemaVersion": SCHEMA_VERSION,
+        "scope": "production_receipt",
+        "sourceRecordType": record_type,
+        "sourceState": receipt.get("overallState"),
+        "sourceReceiptSha256": sha256_hex(canonical_json_bytes(receipt)),
+        "sourceRevisionObserved": receipt.get("sourceRevision"),
+        "sourcePlanSha256Observed": receipt.get("planSha256"),
+        "expectedRevision": expected_revision,
+        "expectedPlanSha256": plan_sha256,
+        "status": status,
+        "reason": reason,
+        "identityValid": identity_ok,
+        "identityProblems": identity_problems,
+        "nextAction": action,
+        "mutationPerformed": False,
+    }
+    return finalize_receipt(classified)
+
+
+def runtime_receipt_status(receipt: dict[str, Any], expected_revision: str | None) -> tuple[str, dict[str, Any]]:
+    observed = receipt.get("revision") or receipt.get("sourceRevision") or receipt.get("installedRevision")
+    healthy = receipt.get("healthy")
+    if healthy is None:
+        healthy = receipt.get("containerHealthy")
+    if expected_revision and observed != expected_revision:
+        return OUT_OF_SYNC, {
+            "autoAllowed": False,
+            "action": "IMMUTABLE_REDEPLOY_EXACT_REVISION_THEN_RUNTIME_READBACK",
+            "expectedRevision": expected_revision,
+            "observedRevision": observed,
+        }
+    if healthy is True and (not expected_revision or observed == expected_revision):
+        return IN_SYNC, {"autoAllowed": True, "action": "NONE", "observedRevision": observed}
+    if healthy is False:
+        return OUT_OF_SYNC, {"autoAllowed": False, "action": "DIAGNOSE_RUNTIME_CAUSE_THEN_REDEPLOY_OR_REPAIR_CANONICALLY"}
+    return UNVERIFIED, {"autoAllowed": True, "action": "RUNTIME_READBACK_RECHECK"}
+
+
+def resolve_plan(
+    repo_receipt: dict[str, Any] | None,
+    production_classification: dict[str, Any] | None,
+    runtime_receipt: dict[str, Any] | None,
+    expected_revision: str | None,
+    plan_sha256: str | None,
+    owner_authorized: bool | None = None,
+    mode: str = "diagnostic",
+    plan_receipt: dict[str, Any] | None = None,
+    ledger_run_id: str | None = None,
+    wasd_source_ledger: dict[str, Any] | None = None,
+    expected_wasd_revision: str | None = None,
+    wasd_run_id: str | None = None,
+    causal_owner: str = "unknown",
+) -> dict[str, Any]:
+    if mode not in {"diagnostic", "final"}:
+        raise ValueError("mode must be diagnostic or final")
+    if expected_revision and not SHA40_RE.fullmatch(expected_revision):
+        raise ValueError("expected revision must be 40 lowercase hex characters")
+    if plan_sha256 and not SHA256_RE.fullmatch(plan_sha256):
+        raise ValueError("plan sha256 must be 64 lowercase hex characters")
+
+    surfaces: list[dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
+    proof = {
+        "repositoryReceiptValid": False,
+        "productionClassificationValid": False,
+        "planReceiptValid": False,
+        "runtimeRevisionBound": False,
+    }
+
+    if repo_receipt is None:
+        surfaces.append(surface("repository", UNVERIFIED, {"reason": "receipt_missing"}))
+        actions.append({"priority": 10, "autoAllowed": True, "action": "RUN_REPOSITORY_AUDIT"})
+    else:
+        valid, problems = verify_finalized_receipt(repo_receipt, "repository")
+        revision_match = not expected_revision or repo_receipt.get("expectedRevision") in {None, expected_revision}
+        proof["repositoryReceiptValid"] = bool(valid and revision_match)
+        repo_status = (repo_receipt.get("metrics") or {}).get("verdict", UNVERIFIED) if proof["repositoryReceiptValid"] else BLOCKED
+        surfaces.append(surface("repository", repo_status, {
+            "receiptSha256": repo_receipt.get("receiptSha256"),
+            "receiptHashValid": valid,
+            "proofProblems": problems + ([] if revision_match else ["expectedRevision_mismatch"]),
+        }))
+        if proof["repositoryReceiptValid"]:
+            for candidate in repo_receipt.get("surfaces", []):
+                if candidate.get("status") in {OUT_OF_SYNC, BLOCKED, UNVERIFIED} and candidate.get("repair"):
+                    actions.append({"priority": 20, "surface": candidate.get("name"), **candidate["repair"]})
+        else:
+            actions.append({"priority": 11, "surface": "repository", "autoAllowed": True, "action": "REGENERATE_REPOSITORY_AUDIT_FROM_EXACT_REVISION"})
+
+    if plan_receipt is None:
+        surfaces.append(surface("migration_plan", UNVERIFIED, {"reason": "plan_receipt_missing"}))
+        actions.append({"priority": 24, "surface": "migration_plan", "autoAllowed": True, "action": "RUN_OR_DISCOVER_CANONICAL_MIGRATION_LEDGER"})
+        plan_proof = {"valid": False, "problems": ["plan_receipt_missing"], "planSha256": plan_sha256, "targetRevision": None}
+    else:
+        plan_proof = verify_plan_receipt(plan_receipt, expected_revision)
+        if plan_sha256 and plan_proof.get("planSha256") != plan_sha256:
+            plan_proof["valid"] = False
+            plan_proof["problems"] = [*plan_proof.get("problems", []), "cli_planSha256_mismatch"]
+        proof["planReceiptValid"] = bool(plan_proof.get("valid"))
+        surfaces.append(surface(
+            "migration_plan",
+            IN_SYNC if proof["planReceiptValid"] else BLOCKED,
+            {
+                "planSha256": plan_proof.get("planSha256"),
+                "targetRevision": plan_proof.get("targetRevision"),
+                "contentSha256": plan_proof.get("contentSha256"),
+                "proofProblems": plan_proof.get("problems", []),
+                "ledgerRunId": ledger_run_id,
+            },
+        ))
+        if proof["planReceiptValid"] and not ledger_run_id:
+            actions.append({
+                "priority": 25,
+                "surface": "migration_plan",
+                "autoAllowed": True,
+                "action": "DISCOVER_CANONICAL_LEDGER_RUN_ID_FOR_VERIFIED_PLAN",
+                "planSha256": plan_proof.get("planSha256"),
+            })
+
+    effective_plan_sha = plan_proof.get("planSha256") if proof["planReceiptValid"] else plan_sha256
+
+    if production_classification is None:
+        surfaces.append(surface("production_schema", UNVERIFIED, {"reason": "classification_missing"}))
+        actions.append({"priority": 30, "autoAllowed": True, "action": "RUN_CANONICAL_PRODUCTION_READBACK"})
+    else:
+        valid, problems = verify_finalized_receipt(production_classification, "production_receipt")
+        expected_ok = not expected_revision or production_classification.get("expectedRevision") == expected_revision
+        identity_ok = production_classification.get("identityValid") is True
+        proof["productionClassificationValid"] = bool(valid and expected_ok and identity_ok)
+        status = production_classification.get("status", UNVERIFIED) if proof["productionClassificationValid"] else BLOCKED
+        surfaces.append(surface("production_schema", status, {
+            "receiptSha256": production_classification.get("receiptSha256"),
+            "receiptHashValid": valid,
+            "proofProblems": problems + ([] if expected_ok else ["expectedRevision_mismatch"]) + ([] if identity_ok else ["source_identity_invalid"]),
+            "sourceReceiptSha256": production_classification.get("sourceReceiptSha256"),
+        }))
+        next_action = production_classification.get("nextAction") or {}
+        if proof["productionClassificationValid"] and next_action.get("action") != "NONE":
+            action = {"priority": 30, "surface": "production_schema", **next_action}
+            if action.get("action") == "TRIGGER_CANONICAL_APPLY_WORKFLOW_IF_PLAN_AND_REVISION_ARE_VALID":
+                action["planBound"] = bool(proof["planReceiptValid"] and effective_plan_sha and SHA256_RE.fullmatch(effective_plan_sha))
