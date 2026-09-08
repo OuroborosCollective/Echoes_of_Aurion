@@ -16,6 +16,8 @@ async function registerAndEnter(page: Page, handle: string, pool: Pool) {
   await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
   await dialog.getByLabel("Passwort", { exact: true }).fill(["Aurion", "collision", "e2e", "only!"].join("-"));
   await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+  const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
+  await expect(launch).toBeVisible({ timeout: 30_000 });
 
   const publicDisplayName = `${handle} public avatar`;
   await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
@@ -30,8 +32,6 @@ async function registerAndEnter(page: Page, handle: string, pool: Pool) {
   expect(await publicUpload.json()).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { targetKey: null, status: "catalog" } });
   await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
 
-  const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
-  await expect(launch).toBeVisible({ timeout: 30_000 });
   await launch.click();
   await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
   const runtime = page.getByTestId("xaurion-open-world-runtime");
