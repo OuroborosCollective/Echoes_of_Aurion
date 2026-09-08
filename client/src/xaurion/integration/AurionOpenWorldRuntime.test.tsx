@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
 import type { ZonePresenceSnapshot } from "@/lib/zoneMovement";
 
-const selectedUrl = `/api/assets/glb/${"a".repeat(64)}.glb`;
 const fixture = vi.hoisted(() => {
+  const selectedUrl = `/api/assets/glb/${"a".repeat(64)}.glb`;
   const makeEngine = () => ({
     player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
     landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
@@ -13,6 +13,7 @@ const fixture = vi.hoisted(() => {
   });
   type ZoneStatus = "connecting" | "connected" | "closed" | "rejected";
   return {
+    selectedUrl,
     engines: [] as ReturnType<typeof makeEngine>[], makeEngine,
     snapshots: [] as Array<(snapshot: ZonePresenceSnapshot) => void>,
     statuses: [] as Array<(status: ZoneStatus) => void>,
@@ -33,7 +34,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
     acceptQuest: { useMutation: () => ({}) },
   },
 } }));
-vi.mock("../components/PublicCharacterPicker", () => ({ PublicCharacterPicker: ({ onSelected }: { onSelected?: (selection: { assetId: string; displayName: string; storageUrl: string; visibility: "public" }) => void }) => <button type="button" onClick={() => onSelected?.({ assetId: "glb_standard_female", displayName: "Aurion Standard Female", storageUrl: selectedUrl, visibility: "public" })}>Standardfigur wählen</button> }));
+vi.mock("../components/PublicCharacterPicker", () => ({ PublicCharacterPicker: ({ onSelected }: { onSelected?: (selection: { assetId: string; displayName: string; storageUrl: string; visibility: "public" }) => void }) => <button type="button" onClick={() => onSelected?.({ assetId: "glb_standard_female", displayName: "Aurion Standard Female", storageUrl: fixture.selectedUrl, visibility: "public" })}>Standardfigur wählen</button> }));
 vi.mock("../core/MMOEngine", () => ({ MMOEngine: Object.assign(vi.fn(() => {
   const engine = fixture.makeEngine(); fixture.engines.push(engine); return engine;
 }), { checkWebGLSupport: () => ({ supported: true }) }) }));
@@ -65,7 +66,7 @@ const enter = () => fireEvent(window, new CustomEvent("aurion:load-open-world", 
 describe("open world session ownership", () => {
   beforeEach(() => {
     fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = [];
-    fixture.appearanceData = { assetId: "glb_standard_male", displayName: "Aurion Standard Male", storageUrl: selectedUrl, visibility: "public" };
+    fixture.appearanceData = { assetId: "glb_standard_male", displayName: "Aurion Standard Male", storageUrl: fixture.selectedUrl, visibility: "public" };
   });
 
   it("does not start the renderer or zone before a confirmed standard character and then loads exactly that GLB", () => {
@@ -76,7 +77,7 @@ describe("open world session ownership", () => {
     expect(screen.getByTestId("player-character-selection-gate")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Standardfigur wählen" }));
     expect(fixture.engines).toHaveLength(1);
-    expect(fixture.engines[0].player.equipGlbModel).toHaveBeenCalledWith(selectedUrl);
+    expect(fixture.engines[0].player.equipGlbModel).toHaveBeenCalledWith(fixture.selectedUrl);
     expect(fixture.tickets).toHaveLength(1);
   });
 
