@@ -10,6 +10,8 @@ The binding ownership is:
 - **AX1** = `/play`, renderer, HUD, input, animation and visual/content projection.
 - **WASD** = every gameplay rule and simulation decision.
 
+For migration, schema, reconciliation, production-readback, or Aurion↔WASD cross-repository evidence work, also read `docs/agent-knowledgebase/skill-archive/aurion-migration-ops/SKILL.md` and use its guard/receipt contracts instead of ad-hoc SQL, SSH, or unverifiable workflow shortcuts.
+
 Do not add, preserve as canonical, or test as desired behavior any Aurion-owned combat, quest, progression, loot, crafting, economy, group/dungeon, NPC/mob, world/chunk, housing or guild/kingdom rule.
 
 If legacy Aurion code currently implements such a rule, treat it as migration debt. On touch, move/bind the rule to WASD, keep AX1 as runtime/UI, and reduce Aurion to transport/persistence/readmodel.
