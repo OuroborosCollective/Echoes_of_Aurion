@@ -28,7 +28,10 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
     if (!response.ok) throw new Error("Öffentliche Charaktermodelle konnten nicht geladen werden.");
     const body = await response.json() as PublicCharacterCatalogResponse;
     if (!Array.isArray(body.entries) || typeof body.revision !== "string") throw new Error("Ungültiger Charakterkatalog.");
-    if (!signal?.aborted) setCatalog(body);
+    if (!signal?.aborted) {
+      setCatalog(body);
+      if (body.selected) onSelected?.(body.selected);
+    }
   };
 
   useEffect(() => {
