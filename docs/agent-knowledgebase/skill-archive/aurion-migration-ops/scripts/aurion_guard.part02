@@ -1,0 +1,279 @@
+        raise ValueError("expected WASD revision must be 40 lowercase hex characters")
+
+    plan_proof = verify_plan_receipt(plan_receipt, expected_aurion_revision) if plan_receipt else {
+        "valid": False,
+        "problems": ["plan_receipt_missing"],
+        "sourceRevision": None,
+        "sourceManifestSha256": None,
+        "targetRevision": None,
+        "planSha256": None,
+    }
+    desired_wasd_revision = expected_wasd_revision or plan_proof.get("sourceRevision")
+    source_proof = verify_wasd_source_ledger(wasd_source_ledger, desired_wasd_revision) if wasd_source_ledger else {
+        "valid": False,
+        "problems": ["wasd_source_ledger_missing"],
+        "sourceRevision": None,
+        "manifestSha256": None,
+        "contentSha256": None,
+        "directPeerReceiptObserved": False,
+    }
+
+    surfaces: list[dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
+    if source_proof["valid"]:
+        surfaces.append(surface("wasd_source_evidence", IN_SYNC, source_proof))
+    else:
+        source_status = OUT_OF_SYNC if wasd_source_ledger is not None else UNVERIFIED
+        surfaces.append(surface("wasd_source_evidence", source_status, source_proof))
+        source_ref = desired_wasd_revision or "main"
+        action_name = "REQUEST_RECHECK" if wasd_source_ledger is not None else "REQUEST_EVIDENCE"
+        actions.append({
+            "priority": 10,
+            "surface": "wasd_source_evidence",
+            "action": action_name,
+            "targetRepository": WASD_REPOSITORY,
+            "autoAllowed": True,
+            "ownerPromptRequired": False,
+            "boundedRetryMax": 3,
+            "dispatchIntent": workflow_dispatch_intent(
+                WASD_REPOSITORY,
+                WASD_SOURCE_LEDGER_WORKFLOW,
+                "main",
+                {"source_ref": source_ref},
+                "produce a fresh immutable WASD source ledger for Aurion",
+            ),
+            "postcondition": "verify source_sha + manifestSha256 and never accept workflow success alone",
+        })
+
+    if plan_proof["valid"]:
+        surfaces.append(surface("aurion_migration_plan", IN_SYNC, {
+            "planSha256": plan_proof.get("planSha256"),
+            "sourceRevision": plan_proof.get("sourceRevision"),
+            "sourceManifestSha256": plan_proof.get("sourceManifestSha256"),
+            "targetRevision": plan_proof.get("targetRevision"),
+            "wasdWorkflowRunId": wasd_run_id,
+        }))
+    else:
+        surfaces.append(surface("aurion_migration_plan", OUT_OF_SYNC if plan_receipt is not None else UNVERIFIED, {
+            "problems": plan_proof.get("problems", []),
+        }))
+
+    binding_ok = bool(
+        plan_proof.get("valid")
+        and source_proof.get("valid")
+        and plan_proof.get("sourceRevision") == source_proof.get("sourceRevision")
+        and plan_proof.get("sourceManifestSha256") == source_proof.get("manifestSha256")
+        and (not expected_aurion_revision or plan_proof.get("targetRevision") == expected_aurion_revision)
+    )
+    if binding_ok:
+        surfaces.append(surface("cross_repo_binding", IN_SYNC, {
+            "protocol": CHOREOGRAPHY_PROTOCOL,
+            "wasdRevision": source_proof.get("sourceRevision"),
+            "aurionRevision": plan_proof.get("targetRevision"),
+            "planSha256": plan_proof.get("planSha256"),
+            "sourceManifestSha256": source_proof.get("manifestSha256"),
+        }))
+        actions.append({
+            "priority": 90,
+            "surface": "cross_repo_binding",
+            "action": "VERIFY_RESPONSE",
+            "autoAllowed": True,
+            "ownerPromptRequired": False,
+            "result": "PEERS_IN_STEP",
+        })
+    else:
+        bind_reason: list[str] = []
+        if not plan_proof.get("valid"):
+            bind_reason.append("plan_invalid_or_missing")
+        if not source_proof.get("valid"):
+            bind_reason.append("source_evidence_invalid_or_missing")
+        if plan_proof.get("valid") and source_proof.get("valid"):
+            if plan_proof.get("sourceRevision") != source_proof.get("sourceRevision"):
+                bind_reason.append("wasd_revision_binding_mismatch")
+            if plan_proof.get("sourceManifestSha256") != source_proof.get("manifestSha256"):
+                bind_reason.append("wasd_manifest_binding_mismatch")
+        surfaces.append(surface("cross_repo_binding", OUT_OF_SYNC if plan_receipt and wasd_source_ledger else UNVERIFIED, {
+            "protocol": CHOREOGRAPHY_PROTOCOL,
+            "reasons": bind_reason,
+        }))
+        if source_proof.get("valid"):
+            actions.append({
+                "priority": 20,
+                "surface": "cross_repo_binding",
+                "action": "REQUEST_RECONCILIATION",
+                "targetRepository": AURION_REPOSITORY,
+                "autoAllowed": True,
+                "ownerPromptRequired": False,
+                "dispatchIntent": workflow_dispatch_intent(
+                    AURION_REPOSITORY,
+                    AURION_MIGRATION_LEDGER_WORKFLOW,
+                    "main",
+                    {"source_ref": source_proof["sourceRevision"]},
+                    "regenerate Aurion's cross-repository migration plan against the verified WASD source revision",
+                ),
+                "preconditions": {
+                    "aurionMainMustResolveBeforeDispatch": True,
+                    "expectedAurionRevision": expected_aurion_revision,
+                },
+                "postcondition": "returned target_sha/source_sha/planSha256 must be freshly verified",
+            })
+
+    # A source patch is an autonomous *draft* repair only after causal ownership is known.
+    if causal_owner in {"wasd", "shared"} and not binding_ok:
+        actions.append({
+            "priority": 40,
+            "surface": "peer_source_contract",
+            "action": "REQUEST_PATCH",
+            "targetRepository": WASD_REPOSITORY,
+            "autoAllowed": True,
+            "ownerPromptRequired": False,
+            "writeBoundary": "isolated_workspace_to_draft_pr",
+            "directMainPushAllowed": False,
+            "requiredRegressions": [
+                "WASD source-ledger builder tests",
+                "fresh source-ledger hash verification",
+                "Aurion consumer re-ledger against exact WASD revision",
+            ],
+            "postcondition": "REQUEST_RECHECK",
+        })
+    if causal_owner in {"aurion", "shared"} and not binding_ok:
+        actions.append({
+            "priority": 41,
+            "surface": "consumer_contract",
+            "action": "REQUEST_PATCH",
+            "targetRepository": AURION_REPOSITORY,
+            "autoAllowed": True,
+            "ownerPromptRequired": False,
+            "writeBoundary": "isolated_workspace_to_draft_pr",
+            "directMainPushAllowed": False,
+            "requiredRegressions": ["migration ledger tests", "migration guard regressions", "fresh cross-repo re-ledger"],
+            "postcondition": "REQUEST_RECONCILIATION",
+        })
+    if causal_owner == "unknown" and plan_receipt is not None and wasd_source_ledger is not None and not binding_ok:
+        actions.append({
+            "priority": 35,
+            "surface": "causal_ownership",
+            "action": "ROOT_CAUSE_CROSS_REPO_CONTRACT_DRIFT",
+            "autoAllowed": True,
+            "ownerPromptRequired": False,
+            "escalateOnlyIf": "multiple materially different valid product target states remain after fresh peer evidence and contract analysis",
+        })
+
+    metrics = summarize_surfaces(surfaces)
+    receipt = {
+        "recordType": RECORD_TYPE,
+        "schemaVersion": SCHEMA_VERSION,
+        "scope": "cross_repo_choreography",
+        "protocol": CHOREOGRAPHY_PROTOCOL,
+        "expectedAurionRevision": expected_aurion_revision,
+        "expectedWasdRevision": desired_wasd_revision,
+        "wasdWorkflowRunId": wasd_run_id,
+        "causalOwner": causal_owner,
+        "ownerPromptRequired": False,
+        "autonomyPolicy": AUTONOMY_POLICY,
+        "mutationPerformed": False,
+        "surfaces": surfaces,
+        "metrics": metrics,
+        "actions": sorted(actions, key=lambda item: (item.get("priority", 999), item.get("surface", ""), item.get("action", ""))),
+        "invariants": {
+            "workflowSuccessAloneIsEvidence": False,
+            "peerMaySelfAssertGreen": False,
+            "peerDirectMainPushAllowed": False,
+            "peerDraftRepairAllowedWhenCausalOwnerKnown": True,
+            "crossRepoGreenRequiresExactRevisionAndHashBinding": True,
+            "requiresPerActionOwnerPrompt": False,
+        },
+    }
+    return finalize_receipt(receipt)
+
+
+def load_json(path: Path) -> Any:
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def migration_prefix(tag: str) -> int | None:
+    match = MIGRATION_RE.match(tag)
+    return int(match.group(1)) if match else None
+
+
+def surface(name: str, status: str, evidence: dict[str, Any] | None = None, repair: dict[str, Any] | None = None) -> dict[str, Any]:
+    item: dict[str, Any] = {"name": name, "status": status, "evidence": evidence or {}}
+    if repair is not None:
+        item["repair"] = repair
+    return item
+
+
+def summarize_surfaces(surfaces: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(surfaces)
+    counts = Counter(item["status"] for item in surfaces)
+    verified = total - counts[UNVERIFIED]
+    in_sync = counts[IN_SYNC]
+    metrics = {
+        "surfaceCount": total,
+        "inSyncCount": in_sync,
+        "outOfSyncCount": counts[OUT_OF_SYNC],
+        "unverifiedCount": counts[UNVERIFIED],
+        "blockedCount": counts[BLOCKED],
+        "evidenceCoveragePpm": 0 if total == 0 else (verified * 1_000_000) // total,
+        "syncPpm": 0 if total == 0 else (in_sync * 1_000_000) // total,
+    }
+    if counts[BLOCKED]:
+        verdict = BLOCKED
+    elif counts[OUT_OF_SYNC]:
+        verdict = OUT_OF_SYNC
+    elif counts[UNVERIFIED]:
+        verdict = UNVERIFIED
+    else:
+        verdict = IN_SYNC
+    metrics["verdict"] = verdict
+    metrics["danceFloor"] = [item["name"] for item in surfaces if item["status"] == IN_SYNC]
+    metrics["exitLane"] = [item["name"] for item in surfaces if item["status"] in {OUT_OF_SYNC, BLOCKED}]
+    metrics["needsRecheck"] = [item["name"] for item in surfaces if item["status"] == UNVERIFIED]
+    return metrics
+
+
+def git_revision(repo: Path) -> tuple[str | None, str | None]:
+    if not (repo / ".git").exists():
+        return None, "git_metadata_absent"
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"git_read_failed:{type(exc).__name__}"
+    revision = result.stdout.strip().lower()
+    if result.returncode != 0 or not SHA40_RE.fullmatch(revision):
+        return None, "git_revision_unreadable"
+    return revision, None
+
+
+def extract_js_const_array_tags(source: str, variable: str = "tags") -> list[str]:
+    # Deliberately narrow: production artifact builders use a literal const array.
+    pattern = re.compile(rf"\bconst\s+{re.escape(variable)}\s*=\s*\[(.*?)\]\s*;", re.DOTALL)
+    match = pattern.search(source)
+    if not match:
+        return []
+    values = re.findall(r"[\"'](\d{4}_[A-Za-z0-9_]+)[\"']", match.group(1))
+    return values
+
+
+def read_tag_contract(path: Path) -> tuple[list[str], str | None]:
+    if not path.is_file():
+        return [], "contract_file_absent"
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [], f"contract_read_failed:{type(exc).__name__}"
+    tags = extract_js_const_array_tags(source, "tags")
+    if not tags:
+        return [], "literal_tags_contract_unreadable"
+    return tags, None
+
+
+def inventory_sql_tags(repo: Path) -> list[str]:
+    drizzle = repo / "drizzle"
