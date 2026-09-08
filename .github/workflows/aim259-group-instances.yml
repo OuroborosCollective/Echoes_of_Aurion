@@ -105,7 +105,6 @@ jobs:
       AURION_GROUP_E2E: "1"
       AURION_UI_E2E: "1"
       AURION_COLLISION_E2E: "1"
-      AURION_GLB_STORAGE_DIR: /tmp/aurion-group-browser-assets
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       JWT_SECRET: aurion-disposable-group-ci-signing-key-never-production
       VITE_APP_ID: aurion-group-isolated-regression

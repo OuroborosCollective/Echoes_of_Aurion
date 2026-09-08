@@ -1,14 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
+import { createPool, type RowDataPacket } from "mysql2/promise";
 import { readFileSync } from "node:fs";
-import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 
 const manifest = JSON.parse(readFileSync("shared/worldCollisionManifest.json", "utf8"));
 test.skip(process.env.AURION_COLLISION_E2E !== "1", "Isolated collision runtime required");
 
 type Presence = { userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
 
-async function registerAndEnter(page: Page, handle: string, pool: Pool) {
+async function registerAndEnter(page: Page, handle: string) {
   await page.goto("/");
   await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).click();
   const dialog = page.getByRole("dialog");
@@ -18,34 +17,9 @@ async function registerAndEnter(page: Page, handle: string, pool: Pool) {
   await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
   const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
   await expect(launch).toBeVisible({ timeout: 30_000 });
-
-  const publicDisplayName = `${handle} public avatar`;
-  await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
-  const publicBytes = testAnimatedPlayerGlb(`${handle}_Public_Player`);
-  const publicUpload = await page.request.post("/api/admin/glb-smart-upload", { data: {
-    displayName: publicDisplayName,
-    fileName: `${handle}-public-player.glb`,
-    purpose: "player-public",
-    contentBase64: publicBytes.toString("base64"),
-  } });
-  expect(publicUpload.status()).toBe(201);
-  expect(await publicUpload.json()).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { targetKey: null, status: "catalog" } });
-  await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
-
   await launch.click();
   await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
-  const runtime = page.getByTestId("xaurion-open-world-runtime");
-  await expect(runtime).toBeVisible();
-  const gate = page.getByTestId("player-character-selection-gate");
-  const publicAvatar = gate.getByRole("radio", { name: new RegExp(publicDisplayName) });
-  await expect(publicAvatar).toBeVisible({ timeout: 45_000 });
-  await publicAvatar.click();
-  const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
-  await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
-  const selected = await selectionReply;
-  expect(selected.status()).toBe(200);
-  expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
-  await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
 }
 
 test("real movement crosses a chunk, passes decoration, collides with a tree and agrees across browser plus MariaDB", async ({ browser, baseURL }, info) => {
@@ -100,9 +74,9 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
   };
 
   try {
-    await registerAndEnter(mover, "nature_collision_mover", pool);
+    await registerAndEnter(mover, "nature_collision_mover");
     await expect.poll(() => moverId).toBeGreaterThan(0);
-    await registerAndEnter(observer, "nature_collision_observer", pool);
+    await registerAndEnter(observer, "nature_collision_observer");
     await expect.poll(() => remote?.userId).toBe(moverId);
 
     await driveUntil("w", () => !!current && current.position.z <= -39780, 20_000);
@@ -164,7 +138,7 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
     await observer.screenshot({ path: info.outputPath("phone-shared-world.png") });
     expect(errors).toEqual([]);
     await info.attach("world-collision-readback", {
-      body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, moverId, crossed, passedDecoration, stopped, remote, obstacle, collisionHash: region.collisionHash, publicPlayerSelectedThroughAx1: true, launchRoute: "portal-confirmed-public-character-ax1-launch" }),
+      body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, moverId, crossed, passedDecoration, stopped, remote, obstacle, collisionHash: region.collisionHash, launchRoute: "portal-confirmed-ax1-single-action" }),
       contentType: "application/json",
     });
   } finally {

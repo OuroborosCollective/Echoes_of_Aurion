@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import type { GlbEquipmentSlot } from "@shared/glbImportContract";
-import { equipmentAnchorAliases, equipmentLocalScale } from "./EquipmentAttachmentSizing";
 
 export type GlbPose = "idle" | "walk" | "run" | "attack" | "jump" | "death" | "interact";
 const clipNames: Record<GlbPose, readonly string[]> = {
@@ -12,6 +11,17 @@ const clipNames: Record<GlbPose, readonly string[]> = {
   death: ["death", "die", "dying"],
   interact: ["shopinteract", "interact", "interaction", "use"],
 };
+const equipmentAnchors: Record<GlbEquipmentSlot, readonly string[]> = {
+  weapon: ["socketweaponr", "slotweaponr", "slothandr", "handr", "righthand"],
+  shield: ["socketweaponl", "slotoffhand", "slothandl", "handl", "lefthand"],
+  helmet: ["sockethead", "slothead", "head"],
+  chest: ["socketchest", "slotchest", "upperchest", "chest", "spine2", "spine"],
+  shoulders: ["socketshoulders", "slotshoulders", "upperchest", "spine2", "spine"],
+  arms: ["socketarms", "slotarms", "upperchest", "spine2", "spine"],
+  legs: ["socketlegs", "slotlegs", "pelvis", "hips"],
+  boots: ["socketboots", "slotboots", "pelvis", "hips"],
+};
+const equipmentTargetSize: Record<GlbEquipmentSlot, number> = { weapon: 1.35, shield: 1.0, helmet: 0.7, chest: 1.2, shoulders: 1.2, arms: 1.05, legs: 1.1, boots: 0.85 };
 
 export const GLB_RUN_THRESHOLD_METERS_PER_SECOND = 2.4;
 const LOCOMOTION_BLEND_SECONDS = 0.055;
@@ -64,8 +74,7 @@ export class AnimatedGlbActor {
       if (!(node as THREE.Bone).isBone) return;
       const bone = node as THREE.Bone;
       this.bones.push(bone);
-      const normalized = normalizeNodeName(bone.name);
-      if (normalized && !this.bonesByName.has(normalized)) this.bonesByName.set(normalized, bone);
+      if (bone.name) this.bonesByName.set(bone.name, bone);
     });
     for (const clip of animations) {
       const normalized = normalizeClipName(clip.name);
@@ -133,7 +142,7 @@ export class AnimatedGlbActor {
   }
 
   private attachmentAnchor(slot: GlbEquipmentSlot): THREE.Object3D | null {
-    for (const alias of equipmentAnchorAliases[slot]) {
+    for (const alias of equipmentAnchors[slot]) {
       const node = this.nodesByName.get(alias);
       if (node) return node;
     }
@@ -159,19 +168,16 @@ export class AnimatedGlbActor {
     const maxDimension = Math.max(size.x, size.y, size.z);
     if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return false;
 
-    this.group.updateMatrixWorld(true);
-    anchor.updateWorldMatrix(true, false);
-    const anchorScale = anchor.getWorldScale(new THREE.Vector3());
-    const anchorWorldScale = Math.max(Math.abs(anchorScale.x), Math.abs(anchorScale.y), Math.abs(anchorScale.z));
-    const scale = equipmentLocalScale(slot, maxDimension, this.heightMeters, anchorWorldScale);
-    if (scale === null) return false;
-
     this.detachEquipment(slot);
     const holder = new THREE.Group();
     holder.name = `aurion-confirmed-equipment:${slot}`;
     holder.userData.confirmedEquipmentSlot = slot;
+    const scale = THREE.MathUtils.clamp(equipmentTargetSize[slot] / maxDimension, 0.05, 8);
     const center = bounds.getCenter(new THREE.Vector3());
     visual.scale.setScalar(scale);
+    // Generic catalog assets have no gameplay-authored transform. Centering keeps
+    // them bounded around the confirmed attachment node; author-provided sockets
+    // on standardized rigs still carry the animated body transform.
     visual.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
     visual.traverse(node => {
       if (!(node as THREE.Mesh).isMesh) return;
@@ -189,7 +195,7 @@ export class AnimatedGlbActor {
   private relaxIdleArms(): void {
     if (this.oneShot || this.locomotion !== "idle" || !this.supportsPose("idle")) return;
     const localAxis = new THREE.Vector3(0, 1, 0);
-    for (const [name, side] of [["upperarml", 1], ["upperarmr", -1]] as const) {
+    for (const [name, side] of [["UpperArm_L", 1], ["UpperArm_R", -1]] as const) {
       const bone = this.bonesByName.get(name);
       if (!bone) continue;
       bone.updateWorldMatrix(true, false);

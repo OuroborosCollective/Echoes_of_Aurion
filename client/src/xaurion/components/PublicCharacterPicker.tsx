@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, LoaderCircle, ShieldCheck } from "lucide-react";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
 
@@ -17,13 +17,7 @@ type PublicCharacterCatalogResponse = Readonly<{
   immutable: boolean;
 }>;
 
-function confirmedPublicSelection(value: PublicCharacterSelection | null): value is PublicCharacterSelection {
-  return Boolean(value && value.visibility === "public" && /^\/api\/assets\/glb\/[a-f0-9]{64}\.glb$/.test(value.storageUrl));
-}
-
-export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (selection: PublicCharacterSelection) => void }> = {}) {
-  const onSelectedRef = useRef(onSelected);
-  onSelectedRef.current = onSelected;
+export function PublicCharacterPicker() {
   const [catalog, setCatalog] = useState<PublicCharacterCatalogResponse | null>(null);
   const [candidate, setCandidate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,11 +28,7 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
     if (!response.ok) throw new Error("Öffentliche Charaktermodelle konnten nicht geladen werden.");
     const body = await response.json() as PublicCharacterCatalogResponse;
     if (!Array.isArray(body.entries) || typeof body.revision !== "string") throw new Error("Ungültiger Charakterkatalog.");
-    if (!signal?.aborted) {
-      setCatalog(body);
-      // Only a server-returned public selection on the canonical GLB byte route may release the Open World gate.
-      if (confirmedPublicSelection(body.selected)) onSelectedRef.current?.(body.selected);
-    }
+    if (!signal?.aborted) setCatalog(body);
   };
 
   useEffect(() => {
@@ -64,10 +54,9 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
         if (response.status === 409 || body?.error === "CHARACTER_BINDING_IMMUTABLE") throw new Error("Dein öffentliches Charaktermodell wurde bereits dauerhaft gewählt.");
         throw new Error("Die Charakterwahl wurde vom Server nicht bestätigt.");
       }
-      if (!body || body.assetId !== selectedCandidate.assetId || !confirmedPublicSelection(body)) throw new Error("Der Server-Readback stimmt nicht mit der gewählten Figur überein.");
+      if (!body || body.assetId !== selectedCandidate.assetId || body.visibility !== "public") throw new Error("Der Server-Readback stimmt nicht mit der gewählten Figur überein.");
       setCatalog(current => current ? { ...current, selected: body, immutable: true } : current);
       setCandidate(null);
-      onSelectedRef.current?.(body);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Charakterwahl fehlgeschlagen.");
     } finally { setBusy(false); }

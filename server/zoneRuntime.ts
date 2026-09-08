@@ -92,8 +92,6 @@ export class AuthoritativeMovementZone {
   private combatSequence = 0;
   private inputAcknowledgementPending = false;
   private movedLastTick = false;
-  private sortedPeers: PresencePeer[] = [];
-  private sortedPeersDirty = false;
   constructor(readonly zoneId: ZoneId) {}
 
   join(values: {
@@ -130,7 +128,6 @@ export class AuthoritativeMovementZone {
       weaponBonus: profile.weaponBonus,
       lastCombatSequence: 0,
     });
-    this.sortedPeersDirty = true;
     const welcome: ZoneWelcome = {
       type: "welcome",
       protocolVersion: ZONE_PROTOCOL_VERSION,
@@ -148,7 +145,6 @@ export class AuthoritativeMovementZone {
   }
   leave(connectionId: string): void {
     if (!this.peers.delete(connectionId)) return;
-    this.sortedPeersDirty = true;
     this.broadcastSnapshot();
   }
   positionForConnection(connectionId: string): ZonePosition | undefined {
@@ -221,13 +217,9 @@ export class AuthoritativeMovementZone {
   tick(): boolean {
     this.tickNumber += 1;
     let changed = false;
-    if (this.sortedPeersDirty) {
-      this.sortedPeers = Array.from(this.peers.values()).sort((a, b) =>
-        compareBinary(a.connectionId, b.connectionId)
-      );
-      this.sortedPeersDirty = false;
-    }
-    for (const peer of this.sortedPeers) {
+    for (const peer of Array.from(this.peers.values()).sort((a, b) =>
+      compareBinary(a.connectionId, b.connectionId)
+    )) {
       if (peer.health > 0) peer.stamina = regenerateWasdStamina(peer.stamina);
       if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0)
         continue;
@@ -404,25 +396,16 @@ export class AuthoritativeMovementZone {
 
 export class ZoneRegistry {
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
-  private sortedZones: AuthoritativeMovementZone[] = [];
-  private sortedZonesDirty = false;
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
     if (existing) return existing;
     const zone = new AuthoritativeMovementZone(zoneId);
     this.zones.set(zoneId, zone);
-    this.sortedZonesDirty = true;
     return zone;
   }
   tick(): void {
-    if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries())
-        .sort(([left], [right]) => compareBinary(left, right))
-        .map(([, zone]) => zone);
-      this.sortedZonesDirty = false;
-    }
-    for (const zone of this.sortedZones) {
-      zone.tick();
-    }
+    Array.from(this.zones.entries())
+      .sort(([left], [right]) => compareBinary(left, right))
+      .forEach(([, zone]) => zone.tick());
   }
 }

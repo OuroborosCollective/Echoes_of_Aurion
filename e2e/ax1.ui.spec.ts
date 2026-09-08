@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
-import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated AX1 runtime required");
 
@@ -71,39 +70,10 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
       const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
       await expect(launch).toBeVisible({ timeout: 30_000 });
-
-      // Publish a real catalog-only player through the authenticated intake route.
-      // The disposable account is admin only for this upload and is restored to
-      // a normal player before gameplay begins.
-      const publicDisplayName = `AX1 UI public avatar ${viewport.name}`;
-      await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
-      const publicBytes = testAnimatedPlayerGlb(`AX1_UI_Public_Player_${viewport.name}`);
-      const publicUpload = await page.request.post("/api/admin/glb-smart-upload", { data: {
-        displayName: publicDisplayName,
-        fileName: `ax1-ui-public-player-${viewport.name}.glb`,
-        purpose: "player-public",
-        contentBase64: publicBytes.toString("base64"),
-      } });
-      expect(publicUpload.status()).toBe(201);
-      const publicBody = await publicUpload.json();
-      expect(publicBody).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { targetKey: null, status: "catalog" } });
-      await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
-
       await launch.click();
       await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
 
       const runtime = page.getByTestId("xaurion-open-world-runtime");
-      await expect(runtime).toBeVisible();
-      const gate = page.getByTestId("player-character-selection-gate");
-      const publicAvatar = gate.getByRole("radio", { name: new RegExp(publicDisplayName) });
-      await expect(publicAvatar).toBeVisible({ timeout: 45_000 });
-      await publicAvatar.click();
-      const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
-      await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
-      const selected = await selectionReply;
-      expect(selected.status()).toBe(200);
-      expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
-
       const hud = page.getByTestId("authoritative-world-hud");
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
@@ -269,8 +239,6 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
           revision: process.env.AURION_RELEASE_SHA,
           userId,
           viewport,
-          publicPlayerAssetSha256: publicBody.receipt.sha256,
-          publicPlayerSelectedThroughAx1: true,
           starter: persisted.items.find(item => item.id === starter!.id),
           qualification: group.qualification,
           incomingDamage: incoming,
@@ -280,7 +248,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
           animation,
           environment: environmentReadback,
           legacyArena: { sessions: Number(legacySessionsAfter[0].count), actionReceipts: Number(legacyReceiptsAfter[0].count) },
-          launchRoute: "portal-confirmed-public-character-ax1-launch",
+          launchRoute: "portal-confirmed-ax1-single-action",
         }),
         contentType: "application/json",
       });

@@ -4,7 +4,6 @@ import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
 import type { ZonePresenceSnapshot } from "@/lib/zoneMovement";
 
 const fixture = vi.hoisted(() => {
-  const selectedUrl = `/api/assets/glb/${"a".repeat(64)}.glb`;
   const makeEngine = () => ({
     player: { equipGlbModel: vi.fn(async () => true), equipment: {}, inventory: [], stats: {}, currentClassId: "knight" },
     landscape: { chunkManager: {} }, setVirtualMovement: vi.fn(), releaseControlInput: vi.fn(),
@@ -13,28 +12,25 @@ const fixture = vi.hoisted(() => {
   });
   type ZoneStatus = "connecting" | "connected" | "closed" | "rejected";
   return {
-    selectedUrl,
     engines: [] as ReturnType<typeof makeEngine>[], makeEngine,
     snapshots: [] as Array<(snapshot: ZonePresenceSnapshot) => void>,
     statuses: [] as Array<(status: ZoneStatus) => void>,
     rejects: [] as Array<(code: string) => void>,
     tickets: [] as Array<{ onSuccess: (value: { ticket: string }) => void; onError: () => void }>,
     connections: [] as Array<{ connect: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; sendMovement: ReturnType<typeof vi.fn> }>,
-    appearanceData: null as null | { assetId: string; displayName: string; storageUrl: string; visibility: "public" },
   };
 });
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: 1 }, isAuthenticated: true }) }));
 vi.mock("@/lib/trpc", () => ({ trpc: {
   useUtils: () => ({ worldAssets: { regionV2: { fetch: vi.fn() } } }),
   player: { ui: { useQuery: () => ({}) }, me: { useQuery: () => ({}) }, chooseClass: { useMutation: () => ({}) } },
-  assetSubmissions: { characterAppearance: { useQuery: () => ({ data: fixture.appearanceData, refetch: vi.fn() }) } },
+  assetSubmissions: { characterAppearance: { useQuery: () => ({}) } },
   gameplay: {
     openWorld: { useQuery: () => ({}) },
     issueZoneTicket: { useMutation: () => ({ mutate: (_: unknown, reply: typeof fixture.tickets[number]) => fixture.tickets.push(reply) }) },
     acceptQuest: { useMutation: () => ({}) },
   },
 } }));
-vi.mock("../components/PublicCharacterPicker", () => ({ PublicCharacterPicker: ({ onSelected }: { onSelected?: (selection: { assetId: string; displayName: string; storageUrl: string; visibility: "public" }) => void }) => <button type="button" onClick={() => onSelected?.({ assetId: "glb_standard_female", displayName: "Aurion Standard Female", storageUrl: fixture.selectedUrl, visibility: "public" })}>Standardfigur wählen</button> }));
 vi.mock("../core/MMOEngine", () => ({ MMOEngine: Object.assign(vi.fn(() => {
   const engine = fixture.makeEngine(); fixture.engines.push(engine); return engine;
 }), { checkWebGLSupport: () => ({ supported: true }) }) }));
@@ -64,23 +60,7 @@ vi.mock("../components/PartyModal", () => ({ PartyModal: () => null }));
 
 const enter = () => fireEvent(window, new CustomEvent("aurion:load-open-world", { detail: { displayName: "Aurion", globalWorld: { epoch: 0, worldSeed: "fixture" } } }));
 describe("open world session ownership", () => {
-  beforeEach(() => {
-    fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = [];
-    fixture.appearanceData = { assetId: "glb_standard_male", displayName: "Aurion Standard Male", storageUrl: fixture.selectedUrl, visibility: "public" };
-  });
-
-  it("does not start the renderer or zone before a confirmed standard character and then loads exactly that GLB", () => {
-    fixture.appearanceData = null;
-    render(<AurionOpenWorldRuntime />); enter();
-    expect(fixture.engines).toHaveLength(0);
-    expect(fixture.tickets).toHaveLength(0);
-    expect(screen.getByTestId("player-character-selection-gate")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Standardfigur wählen" }));
-    expect(fixture.engines).toHaveLength(1);
-    expect(fixture.engines[0].player.equipGlbModel).toHaveBeenCalledWith(fixture.selectedUrl);
-    expect(fixture.tickets).toHaveLength(1);
-  });
-
+  beforeEach(() => { fixture.engines = []; fixture.tickets = []; fixture.connections = []; fixture.snapshots = []; fixture.statuses = []; fixture.rejects = []; });
   it("forwards confirmed active-runtime positions to the shared stream and retires the callback on return", () => {
     const received: unknown[] = [];
     const listener = (event: Event) => received.push((event as CustomEvent).detail);

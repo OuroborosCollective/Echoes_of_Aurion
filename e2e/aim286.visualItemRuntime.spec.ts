@@ -112,21 +112,25 @@ for (const viewport of viewports) {
       const userId = Number(users[0]!.id);
       expect(userId).toBeGreaterThan(0);
 
-      // Publish the actual rig through the new player-public lane. The equipment
-      // test must render against a confirmed selectable avatar, not starter_player.
-      await pool.execute("UPDATE users SET role='admin' WHERE id=?", [userId]);
-      await page.goto("/ops/glb-upload");
-      await page.getByLabel("Kategorie / Verwendungszweck").selectOption("player-public");
-      await page.getByLabel("Anzeigename (optional bei Einzeldatei)").fill(`AIM286 public avatar ${viewport.name}`);
-      const bytes = await readFile("assets/characters/aurion-player-standard-animated.glb");
-      const input = page.locator("#smartGlbFile");
-      await expect(input).toBeEnabled();
-      const responsePromise = page.waitForResponse(response => response.url().endsWith("/api/admin/glb-smart-upload") && response.request().method() === "POST");
-      await input.setInputFiles({ name: `aim286-public-${viewport.name}.glb`, mimeType: "model/gltf-binary", buffer: bytes });
-      const response = await responsePromise;
-      expect(response.status()).toBe(201);
-      const playerReceipt = (await response.json()).receipt;
-      expect(playerReceipt).toMatchObject({ targetKey: null, status: "catalog", sha256: createHash("sha256").update(bytes).digest("hex") });
+      const [starterAssignments] = await pool.query<RowDataPacket[]>("SELECT a.assetId FROM glbAssignments a WHERE a.targetKey='starter_player' AND a.active=1");
+      if (!starterAssignments.length) {
+        await pool.execute("UPDATE users SET role='admin' WHERE id=?", [userId]);
+        await page.goto("/ops/glb-upload");
+        const bytes = await readFile("assets/characters/aurion-player-standard-animated.glb");
+        const input = page.locator("#smartGlbFile");
+        await expect(input).toBeEnabled();
+        const responsePromise = page.waitForResponse(response => response.url().endsWith("/api/admin/glb-smart-upload") && response.request().method() === "POST");
+        await input.setInputFiles({ name: "aim286-player.glb", mimeType: "model/gltf-binary", buffer: bytes });
+        const response = await responsePromise;
+        expect(response.status()).toBe(201);
+        const receipt = (await response.json()).receipt;
+        expect(receipt).toMatchObject({ targetKey: "starter_player", sha256: createHash("sha256").update(bytes).digest("hex") });
+        if (receipt.status === "conflict") {
+          const assignment = page.waitForResponse(value => value.url().endsWith("/api/admin/glb-import/assign") && value.request().method() === "POST");
+          await page.getByRole("button", { name: "Bisheriges Modell durch dieses ersetzen", exact: true }).click();
+          expect((await assignment).status()).toBe(200);
+        } else expect(receipt.status).toBe("assigned");
+      }
 
       const drop = await equipRealV2Item(userId, viewport.name);
       const readbackBefore = await page.request.get("/api/game/confirmed-equipment-visuals-v2");
@@ -153,15 +157,6 @@ for (const viewport of viewports) {
       await launch.click();
       await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
       const runtime = page.getByTestId("xaurion-open-world-runtime");
-      const gate = page.getByTestId("player-character-selection-gate");
-      await expect(gate).toBeVisible({ timeout: 15_000 });
-      await gate.getByRole("radio", { name: new RegExp(`AIM286 public avatar ${viewport.name}`) }).click();
-      const selectionReply = page.waitForResponse(value => value.url().endsWith("/api/game/public-player-characters/select") && value.request().method() === "POST");
-      await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
-      const selected = await selectionReply;
-      expect(selected.status()).toBe(200);
-      expect(await selected.json()).toMatchObject({ assetId: playerReceipt.assetId, storageUrl: playerReceipt.storageUrl, visibility: "public", immutable: true });
-
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
 
@@ -175,7 +170,7 @@ for (const viewport of viewports) {
         slots: [expect.objectContaining({ source: "visual-item-compiler", receiptId: drop.receipt.id })],
       });
       const runtimeEvidence = await page.evaluate(() => (window as typeof window & { __aim286EquipmentEvidence?: EquipmentEvidence | null }).__aim286EquipmentEvidence!);
-      expect(runtimeEvidence.avatar).toBe(playerReceipt.storageUrl);
+      expect(runtimeEvidence.avatar).toBeTruthy();
       expect(runtimeEvidence.pending).toBe(0);
       expect(runtimeEvidence.v2[0]!.identity).toContain(drop.receipt.id);
 
@@ -193,7 +188,7 @@ for (const viewport of viewports) {
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-v2-equipment-runtime.png`), animations: "disabled" });
       await testInfo.attach("aim286-v2-equipment-runtime-readback", {
         contentType: "application/json",
-        body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, viewport: viewport.name, userId, playerAssetId: playerReceipt.assetId, playerAssetSha256: playerReceipt.sha256, itemId: drop.item.id, receiptId: drop.receipt.id, runtimeEvidence, databaseMutation: false, publicSelectionReadback: true }),
+        body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, viewport: viewport.name, userId, itemId: drop.item.id, receiptId: drop.receipt.id, runtimeEvidence, databaseMutation: false }),
       });
     } finally {
       await page.close();

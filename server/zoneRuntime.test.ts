@@ -79,26 +79,12 @@ describe("WASD authoritative zone movement", () => {
     }
   });
 
-  it("replaces an authenticated user's old connection and invalidates the cached deterministic peer order", () => {
+  it("replaces an authenticated user's old connection without duplicating their entity", () => {
     const socket = () => ({ readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() });
     const first = socket(), second = socket(); const zone = new AuthoritativeMovementZone("observatory_threshold");
     const old = zone.join({ userId: 1, socket: first as unknown as WebSocket });
-    expect(zone.submitMovement(old.connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } })).toBe("accepted");
-    expect(zone.tick()).toBe(true);
-    expect(zone.positionForConnection(old.connectionId)).toEqual({ x: 340, z: 0 });
-
     const current = zone.join({ userId: 1, socket: second as unknown as WebSocket });
-    expect(first.close).toHaveBeenCalledTimes(1);
-    expect(current.presences).toHaveLength(1);
-    expect(zone.positionForConnection(old.connectionId)).toBeUndefined();
-    expect(zone.submitMovement(old.connectionId, { type: "move", clientSeq: 2, input: { x: 1, z: 0 } })).toBe("missing");
-    expect(zone.submitMovement(current.connectionId, { type: "move", clientSeq: 1, input: { x: -1, z: 0 } })).toBe("accepted");
-    expect(zone.tick()).toBe(true);
-    expect(zone.positionForConnection(current.connectionId)).toEqual({ x: -340, z: 0 });
-
-    zone.leave(old.connectionId);
-    expect(zone.positionForConnection(current.connectionId)).toEqual({ x: -340, z: 0 });
-    zone.leave(current.connectionId);
-    expect(zone.positionForConnection(current.connectionId)).toBeUndefined();
+    expect(first.close).toHaveBeenCalledTimes(1); expect(current.presences).toHaveLength(1); expect(zone.positionForConnection(old.connectionId)).toBeUndefined();
+    zone.leave(old.connectionId); expect(zone.positionForConnection(current.connectionId)).toEqual({ x: 0, z: 0 });
   });
 });

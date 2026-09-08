@@ -3,40 +3,11 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 
 const enabled = process.env.AURION_E2E_ISOLATED === "1";
 test.skip(!enabled, "Requires the dedicated isolated migration CI environment");
 
 type Presence = { userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
-
-async function ensurePublicAvatar(page: Page, handle: string): Promise<void> {
-  const pool = createPool(process.env.DATABASE_URL!);
-  try {
-    const [users] = await pool.query<RowDataPacket[]>("SELECT u.id FROM users u JOIN localCredentials c ON c.userId=u.id WHERE c.handle=?", [handle]);
-    expect(users).toHaveLength(1);
-    const userId = Number(users[0]!.id);
-    await pool.execute("UPDATE users SET role='admin' WHERE id=?", [userId]);
-    const bytes = testAnimatedPlayerGlb("AIM254_Public_Player");
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
-    const response = await page.request.post("/api/admin/glb-smart-upload", { data: {
-      displayName: "AIM254 public avatar",
-      fileName: "aim254-public-player.glb",
-      purpose: "player-public",
-      contentBase64: bytes.toString("base64"),
-    } });
-    expect(response.status()).toBe(201);
-    expect(await response.json()).toMatchObject({
-      accepted: true,
-      purpose: "player-public",
-      classification: { assetType: "character" },
-      receipt: { sha256, targetKey: null, status: "catalog" },
-    });
-  } finally {
-    await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
-    await pool.end();
-  }
-}
 
 async function register(page: Page, handle: string): Promise<void> {
   await page.goto("/");
@@ -47,7 +18,6 @@ async function register(page: Page, handle: string): Promise<void> {
   await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-regression-254!");
   await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
   await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
-  await ensurePublicAvatar(page, handle);
 }
 
 async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["getByTestId"]>; snapshot: any }> {
@@ -59,15 +29,6 @@ async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["getByTe
   const snapshot = (Array.isArray(body) ? body : [body]).map(value => value.result?.data?.json).find(Boolean);
   const runtime = page.getByTestId("xaurion-open-world-runtime");
   await expect(runtime).toBeVisible();
-  const gate = page.getByTestId("player-character-selection-gate");
-  if (await gate.isVisible().catch(() => false)) {
-    await gate.getByRole("radio", { name: /AIM254 public avatar/ }).click();
-    const selectionReply = page.waitForResponse(candidate => candidate.url().endsWith("/api/game/public-player-characters/select") && candidate.request().method() === "POST");
-    await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
-    const selected = await selectionReply;
-    expect(selected.status()).toBe(200);
-    expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
-  }
   await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
   await expect(page.locator("#three-viewport canvas")).toBeVisible();
   await expect(page.locator(".xaurion-runtime__error")).toHaveCount(0);
@@ -153,7 +114,7 @@ for (const viewport of [
       expect(Number(legacySessionsAfter[0].count)).toBe(0);
       expect(errors).toEqual([]);
       await testInfo.attach("migration-readback", {
-        body: JSON.stringify({ viewport: viewport.name, revision: process.env.AURION_RELEASE_SHA, authenticatedUserId: latestPresence!.userId, worldHash: first.snapshot?.globalWorld?.deterministicHash, persistedPresenceVerified: true, movementAccepted: true, returnedAndReentered: true, legacyGameplaySessions: 0, contextLossChecked: viewport.name === "desktop", launchRoute: "portal-confirmed-public-character-ax1" }),
+        body: JSON.stringify({ viewport: viewport.name, revision: process.env.AURION_RELEASE_SHA, authenticatedUserId: latestPresence!.userId, worldHash: first.snapshot?.globalWorld?.deterministicHash, persistedPresenceVerified: true, movementAccepted: true, returnedAndReentered: true, legacyGameplaySessions: 0, contextLossChecked: viewport.name === "desktop", launchRoute: "portal-confirmed-ax1-single-action" }),
         contentType: "application/json",
       });
     } finally { await page.close(); await pool.end(); }
@@ -222,7 +183,7 @@ test("two authenticated AX1 clients converge and departure removes the remote ac
       return Number(rows[0].active);
     }, { timeout: 15_000 }).toBe(0);
     expect(errors).toEqual([]);
-    await testInfo.attach("two-account-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, leftUserId, rightUserId, replicatedMovement: true, departedActorRemoved: true, databasePresenceReleased: true, launchRoute: "portal-confirmed-public-character-ax1" }), contentType: "application/json" });
+    await testInfo.attach("two-account-readback", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, leftUserId, rightUserId, replicatedMovement: true, departedActorRemoved: true, databasePresenceReleased: true, launchRoute: "portal-confirmed-ax1-single-action" }), contentType: "application/json" });
   } finally { await leftContext.close(); await rightContext.close(); await pool.end(); }
 });
 
@@ -295,6 +256,6 @@ test("explicit companion learning captures the visible AX1 world and stores a bo
     await expect(dialog).toHaveCount(0);
     await runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await expect(page.getByTestId("xaurion-open-world-runtime")).toHaveCount(0);
-    await testInfo.attach("visible-companion-readback", { body: JSON.stringify({ userId, sessionId, memoryHash: receipt!.memoryHash, featureCount: 16, unknownStateMasked: true, rendererCount: 1, launchRoute: "portal-confirmed-public-character-ax1" }), contentType: "application/json" });
+    await testInfo.attach("visible-companion-readback", { body: JSON.stringify({ userId, sessionId, memoryHash: receipt!.memoryHash, featureCount: 16, unknownStateMasked: true, rendererCount: 1, launchRoute: "portal-confirmed-ax1-single-action" }), contentType: "application/json" });
   } finally { await page.close(); await pool.end(); }
 });
