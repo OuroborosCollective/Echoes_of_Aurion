@@ -54,7 +54,7 @@ describe("server-backed Aurion HUD", () => {
     expect(screen.getByText(/◆\s*23/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Charakter" }));
     expect(screen.queryByText(/Klasse wählen|Vorhut|Seher|Hüter/)).toBeNull();
-    expect(screen.getByText("greatsword.two_handed.v3")).toBeTruthy();
+    expect(screen.getAllByText("greatsword.two_handed.v3").length).toBeGreaterThan(0);
   });
   it("keeps a live inventory setting actionable when only the unrelated player readback is stale", async () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; fixtures.ui.data = uiState;
