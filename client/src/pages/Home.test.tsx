@@ -6,10 +6,10 @@ import Home from "./Home";
 import { RealClientHarness } from "@/test/realClientHarness";
 
 describe("Home", () => {
-  it("prioritizes account/community and renders no gameplay for guests", () => {
+  it("prioritizes account/community and renders no gameplay for guests", async () => {
     window.history.replaceState({}, "", "/");
     render(<RealClientHarness><Home /></RealClientHarness>);
-    expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0));
     expect(screen.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /SPIEL BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
@@ -24,12 +24,12 @@ describe("Home", () => {
     window.addEventListener("aurion:open-local-auth", onOpen);
     try {
       render(<RealClientHarness><Home /></RealClientHarness>);
-      const accountButton = screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i })[0]! as HTMLButtonElement;
-      // The real client performs auth.me first. The CTA is deliberately disabled
-      // while that readback is pending, so the contract test must not race the
-      // network probe and mistake a disabled-button no-op for an auth failure.
-      await waitFor(() => expect(accountButton.disabled).toBe(false));
-      await user.click(accountButton);
+      let accountButton: HTMLButtonElement | null = null;
+      await waitFor(() => {
+        accountButton = screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i })[0]! as HTMLButtonElement;
+        expect(accountButton.disabled).toBe(false);
+      });
+      if (accountButton) await user.click(accountButton);
       expect(openRequests).toBe(1);
       expect(document.querySelector("canvas")).toBeNull();
     } finally {
