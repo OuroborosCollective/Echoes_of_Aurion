@@ -83,7 +83,7 @@ export class EquipmentCatalogProjection {
     anchor.updateWorldMatrix(true, false);
     const anchorScale = anchor.getWorldScale(new THREE.Vector3());
     const anchorWorldScale = Math.max(Math.abs(anchorScale.x), Math.abs(anchorScale.y), Math.abs(anchorScale.z));
-    const avatarHeightMeters = this.engine.player.glbPresentationEvidence()?.heightMeters ?? 2;
+    const avatarHeightMeters = this.engine.player.glbPresentationEvidence?.()?.heightMeters ?? 2;
     const scale = equipmentLocalScale(slot, maxDimension, avatarHeightMeters, anchorWorldScale);
     if (scale === null) return false;
 
