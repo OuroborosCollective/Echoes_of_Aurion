@@ -38,14 +38,23 @@ for (const viewport of [
         } catch { /* Invalid frames cannot satisfy movement evidence. */ }
       });
     });
+    const confirmMovementStep = async (axis: "x" | "z", key: "a" | "d" | "s" | "w") => {
+      await expect.poll(() => presence?.position[axis], { timeout: 15_000 }).toBeDefined();
+      const current = presence!.position[axis];
+      await page.keyboard.down(key);
+      try {
+        await expect.poll(() => presence!.position[axis], { timeout: 5_000, intervals: [25, 50, 100] }).not.toBe(current);
+      } finally {
+        await page.keyboard.up(key);
+      }
+    };
     const steerConfirmedAxis = async (axis: "x" | "z", targetMm: number, positiveKey: "d" | "s", negativeKey: "a" | "w", toleranceMm = 450) => {
       await expect.poll(() => presence?.position[axis], { timeout: 15_000 }).toBeDefined();
       for (let attempt = 0; attempt < 80; attempt += 1) {
         const current = presence!.position[axis];
         if (Math.abs(current - targetMm) <= toleranceMm) return;
         const key = current < targetMm ? positiveKey : negativeKey;
-        await page.keyboard.press(key, { delay: 120 });
-        await expect.poll(() => presence!.position[axis], { timeout: 3_000, intervals: [25, 50, 100] }).not.toBe(current);
+        await confirmMovementStep(axis, key);
       }
       throw new Error(`CONFIRMED_AXIS_TARGET_NOT_REACHED:${axis}:${presence!.position[axis]}:${targetMm}`);
     };
@@ -164,10 +173,10 @@ for (const viewport of [
       expect(Number(legacyActions[0].count)).toBe(0);
 
       const origin = { ...presence!.position };
-      await page.keyboard.press("d", { delay: 120 });
-      await expect.poll(() => presence!.position.x, { timeout: 3_000, intervals: [25, 50, 100] }).toBeGreaterThan(origin.x);
+      await confirmMovementStep("x", "d");
+      expect(presence!.position.x).toBeGreaterThan(origin.x);
       await steerConfirmedAxis("x", 3000, "d", "a");
-      await page.keyboard.press("w", { delay: 120 });
+      await confirmMovementStep("z", "w");
       await expect.poll(async () => (await pose(player))?.clip, { timeout: 3_000 }).toMatch(/^(Walk|Run|Idle)$/);
       await steerConfirmedAxis("z", -13000, "s", "w");
       await expect.poll(() => presence && Math.hypot(presence.position.x - 3000, presence.position.z + 14000), { timeout: 5_000 }).toBeLessThanOrEqual(5000);
