@@ -62,8 +62,6 @@ for (const viewport of [
       await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-disposable-actors-test-only!");
       await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
       await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
-      // Only the disposable fixture account receives upload permission. Every
-      // upload, replacement, catalog read and gameplay action uses the real API.
       await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
       await page.goto("/ops/glb-upload");
       const input = page.locator("#smartGlbFile");
@@ -74,33 +72,30 @@ for (const viewport of [
         await input.setInputFiles({ name: filename, mimeType: "model/gltf-binary", buffer: bytes });
         const result = await response;
         expect(result.status()).toBe(201);
-        const receipt = (await result.json()).receipt;
+        const body = await result.json();
+        const receipt = body.receipt;
         expect(receipt.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
         const stored = await page.request.get(receipt.storageUrl);
         expect(stored.status()).toBe(200); expect(await stored.body()).toEqual(bytes);
-        return receipt;
+        return { ...receipt, purpose: body.purpose };
       };
-      if (viewport.name === "phone") {
-        const original = await upload("test/fixtures/aurion-glb/aurion-player-standard.glb", "original.glb");
-        expect(original.targetKey).toBe("starter_player");
-      }
-      const playerReceipt = await upload("assets/characters/aurion-player-standard-animated.glb", "replacement.glb");
-      expect(playerReceipt.targetKey).toBe("starter_player");
-      if (viewport.name === "phone") {
-        expect(playerReceipt.status).toBe("conflict");
-        const assignment = page.waitForResponse(r => r.url().endsWith("/api/admin/glb-import/assign"));
-        await page.getByRole("button", { name: "Bisheriges Modell durch dieses ersetzen", exact: true }).click();
-        const response = await assignment;
-        expect(response.status()).toBe(200);
-        expect(await response.json()).toMatchObject({ assetId: playerReceipt.assetId, targetKey: "starter_player", active: 1 });
-      } else expect(playerReceipt.status).toBe("assigned");
+
+      // The real rig is now published through the canonical player-public lane;
+      // starter_player assignment coverage remains in the dedicated GLB import test.
+      await page.getByLabel("Kategorie / Verwendungszweck").selectOption("player-public");
+      await page.getByLabel("Anzeigename (optional bei Einzeldatei)").fill("AIM253 real public avatar");
+      const playerReceipt = await upload("assets/characters/aurion-player-standard-animated.glb", "real-public-player.glb");
+      expect(playerReceipt).toMatchObject({ purpose: "player-public", targetKey: null, status: "catalog" });
+
+      await page.getByLabel("Kategorie / Verwendungszweck").selectOption("auto");
+      await page.getByLabel("Anzeigename (optional bei Einzeldatei)").fill("");
       const smithReceipt = await upload("test/fixtures/aurion-glb/blacksmith-npc.glb", "another-asset.glb");
       expect(smithReceipt).toMatchObject({ status: "assigned", targetKey: "npc_blacksmith" });
       const [assignments] = await pool.query<RowDataPacket[]>("SELECT a.targetKey, a.assetId, g.sha256 FROM glbAssignments a JOIN glbAssets g ON g.id=a.assetId WHERE a.active=1 ORDER BY a.targetKey");
       expect(assignments).toEqual([
         expect.objectContaining({ targetKey: "npc_blacksmith", assetId: smithReceipt.assetId, sha256: smithReceipt.sha256 }),
-        expect.objectContaining({ targetKey: "starter_player", assetId: playerReceipt.assetId, sha256: playerReceipt.sha256 }),
       ]);
+
       const loaded = new Set<string>();
       page.on("response", response => {
         if (response.status() === 200 && [playerReceipt.storageUrl, smithReceipt.storageUrl].some(url => response.url().endsWith(url))) loaded.add(new URL(response.url()).pathname);
@@ -111,6 +106,15 @@ for (const viewport of [
       await launch.click();
       await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
       const runtime = page.getByTestId("xaurion-open-world-runtime");
+      const gate = page.getByTestId("player-character-selection-gate");
+      await expect(gate).toBeVisible({ timeout: 15_000 });
+      await gate.getByRole("radio", { name: /AIM253 real public avatar/ }).click();
+      const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
+      await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
+      const selected = await selectionReply;
+      expect(selected.status()).toBe(200);
+      expect(await selected.json()).toMatchObject({ assetId: playerReceipt.assetId, storageUrl: playerReceipt.storageUrl, visibility: "public", immutable: true });
+
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect(page.getByTestId("glb-model-status")).toHaveText("active", { timeout: 45_000 });
       const player = page.getByTestId("glb-presentation"), smith = page.getByTestId("smith-presentation");
@@ -148,7 +152,6 @@ for (const viewport of [
         await dialog.getByRole("button", { name: name === "Inventar" ? "Inventar schließen" : name === "Charakter" ? "Charakter schließen" : "Quest-Buch schließen", exact: true }).click();
       }
 
-      // Actor presentation must not depend on the removed Aurion quest/arena gameplay path.
       await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Bei Lyra (annehmen|abgeben)/ })).toHaveCount(0);
@@ -183,10 +186,11 @@ for (const viewport of [
       expect(errors).toEqual([]);
       await testInfo.attach("actual-glb-actor-readback", { contentType: "application/json", body: JSON.stringify({
         revision: process.env.AURION_RELEASE_SHA, viewport: viewport.name, assignments,
-        player: await pose(player), smith: await pose(smith), uploadedByteReadback: true,
+        playerPublicAsset: { assetId: playerReceipt.assetId, sha256: playerReceipt.sha256, storageUrl: playerReceipt.storageUrl },
+        player: await pose(player), smith: await pose(smith), uploadedByteReadback: true, publicSelectionReadback: true,
         idlePoseChanged: true, serverMovementObserved: true, confirmedSmithApproach: presence?.position,
         interactionObserved: "ShopInteract", profile, actions, movement,
-        legacyGameplaySessions: 0, legacyGameplayActions: 0, launchRoute: "portal-confirmed-ax1-single-action",
+        legacyGameplaySessions: 0, legacyGameplayActions: 0, launchRoute: "portal-confirmed-public-character-ax1",
       }) });
     } finally { await page.close(); await pool.end(); }
   });
