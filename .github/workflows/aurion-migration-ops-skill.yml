@@ -37,6 +37,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Verify skill manifest before regressions
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/verify_manifest.py
+
       - name: Run migration guard regressions
         env:
           PYTHONDONTWRITEBYTECODE: "1"
