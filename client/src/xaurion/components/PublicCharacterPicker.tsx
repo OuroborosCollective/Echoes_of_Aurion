@@ -17,7 +17,7 @@ type PublicCharacterCatalogResponse = Readonly<{
   immutable: boolean;
 }>;
 
-export function PublicCharacterPicker() {
+export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (selection: PublicCharacterSelection) => void }> = {}) {
   const [catalog, setCatalog] = useState<PublicCharacterCatalogResponse | null>(null);
   const [candidate, setCandidate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,6 +57,7 @@ export function PublicCharacterPicker() {
       if (!body || body.assetId !== selectedCandidate.assetId || body.visibility !== "public") throw new Error("Der Server-Readback stimmt nicht mit der gewählten Figur überein.");
       setCatalog(current => current ? { ...current, selected: body, immutable: true } : current);
       setCandidate(null);
+      onSelected?.(body);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Charakterwahl fehlgeschlagen.");
     } finally { setBusy(false); }
