@@ -22,7 +22,7 @@ def file_hashes(paths: list[Path]) -> str:
         digest.update(b"\0")
     return digest.hexdigest()
 
-test_files = [*root.glob("tests/**/*.py"), *root.glob("scripts/*.py")]
+test_files = [*(path for path in root.glob("tests/**/*") if path.is_file()), *(path for path in root.glob("scripts/*") if path.is_file())]
 test_definition_sha256 = file_hashes(test_files)
 proc = subprocess.run(
     [sys.executable, "-m", "unittest", "discover", "-s", str(root / "tests"), "-v"],
