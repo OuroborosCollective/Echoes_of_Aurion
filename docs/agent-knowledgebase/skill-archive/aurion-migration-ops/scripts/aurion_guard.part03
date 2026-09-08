@@ -1,0 +1,248 @@
+    if not drizzle.is_dir():
+        return []
+    return sorted(path.stem for path in drizzle.glob("[0-9][0-9][0-9][0-9]_*.sql") if path.is_file())
+
+
+def validate_journal(repo: Path) -> tuple[dict[str, Any] | None, str | None]:
+    path = repo / "drizzle" / "meta" / "_journal.json"
+    if not path.is_file():
+        return None, "journal_absent"
+    try:
+        journal = load_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, f"journal_unreadable:{type(exc).__name__}"
+    if journal.get("version") != "7" or journal.get("dialect") != "mysql" or not isinstance(journal.get("entries"), list):
+        return None, "journal_contract_invalid"
+    return journal, None
+
+
+def chain_surface(repo: Path) -> tuple[dict[str, Any], list[str]]:
+    journal, error = validate_journal(repo)
+    sql_tags = inventory_sql_tags(repo)
+    if error or journal is None:
+        return surface("sql_journal_integrity", UNVERIFIED, {"error": error, "sqlCount": len(sql_tags)}), []
+    entries = journal["entries"]
+    journal_tags = [entry.get("tag") for entry in entries if isinstance(entry, dict) and isinstance(entry.get("tag"), str)]
+    sql_set = set(sql_tags)
+    journal_set = set(journal_tags)
+    unjournaled = sorted(sql_set - journal_set)
+    missing_sql = sorted(journal_set - sql_set)
+    dup_tags = sorted(tag for tag, count in Counter(journal_tags).items() if count > 1)
+    prefixes = [str(migration_prefix(tag)).zfill(4) for tag in sql_tags if migration_prefix(tag) is not None]
+    dup_prefixes = sorted(prefix for prefix, count in Counter(prefixes).items() if count > 1)
+    sequential = all(isinstance(entry, dict) and entry.get("idx") == index for index, entry in enumerate(entries))
+    when_values = [entry.get("when") for entry in entries if isinstance(entry, dict)]
+    monotonic_when = len(when_values) == len(entries) and all(
+        isinstance(value, int) and (index == 0 or value > when_values[index - 1]) for index, value in enumerate(when_values)
+    )
+    ok = not unjournaled and not missing_sql and not dup_tags and not dup_prefixes and sequential and monotonic_when
+    evidence = {
+        "sqlCount": len(sql_tags),
+        "journalCount": len(journal_tags),
+        "unjournaledSqlTags": unjournaled,
+        "missingSqlTags": missing_sql,
+        "duplicateJournalTags": dup_tags,
+        "duplicateNumericPrefixes": dup_prefixes,
+        "journalIndicesSequential": sequential,
+        "journalTimestampsStrictlyIncreasing": monotonic_when,
+        "latestJournalTag": journal_tags[-1] if journal_tags else None,
+    }
+    repair = None if ok else {
+        "autoAllowed": False,
+        "action": "REPAIR_REPOSITORY_CHAIN_THEN_RUN_CANONICAL_VERIFIER",
+        "reason": "Repository SQL/journal disagreement is source truth drift and must be corrected before production actions.",
+    }
+    return surface("sql_journal_integrity", IN_SYNC if ok else OUT_OF_SYNC, evidence, repair), journal_tags
+
+
+def canonical_verifier_surface(repo: Path, run_canonical: bool) -> list[dict[str, Any]]:
+    package_path = repo / "package.json"
+    verifier_path = repo / "scripts" / "verify-drizzle-migration-chain.ts"
+    if not package_path.is_file() or not verifier_path.is_file():
+        return [surface(
+            "canonical_chain_verifier_contract",
+            UNVERIFIED,
+            {"packagePresent": package_path.is_file(), "verifierPresent": verifier_path.is_file()},
+        )]
+    try:
+        package = load_json(package_path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return [surface("canonical_chain_verifier_contract", UNVERIFIED, {"error": type(exc).__name__})]
+    command = (package.get("scripts") or {}).get("verify:migrations")
+    contract_ok = isinstance(command, str) and "verify-drizzle-migration-chain.ts" in command
+    result = [surface(
+        "canonical_chain_verifier_contract",
+        IN_SYNC if contract_ok else OUT_OF_SYNC,
+        {"command": command, "verifierPath": "scripts/verify-drizzle-migration-chain.ts"},
+        None if contract_ok else {"autoAllowed": True, "action": "RESTORE_CANONICAL_VERIFY_MIGRATIONS_SCRIPT_BINDING"},
+    )]
+    if not run_canonical:
+        result.append(surface(
+            "canonical_chain_verifier_execution",
+            UNVERIFIED,
+            {"reason": "not_requested", "command": "pnpm verify:migrations"},
+            {"autoAllowed": True, "action": "RUN_PNPM_VERIFY_MIGRATIONS"},
+        ))
+        return result
+    try:
+        proc = subprocess.run(
+            ["pnpm", "verify:migrations"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except FileNotFoundError:
+        result.append(surface(
+            "canonical_chain_verifier_execution",
+            UNVERIFIED,
+            {"reason": "pnpm_not_installed"},
+            {"autoAllowed": True, "action": "RUN_IN_REPOSITORY_CI_OR_PREPARED_NODE_ENVIRONMENT"},
+        ))
+        return result
+    except subprocess.TimeoutExpired:
+        result.append(surface("canonical_chain_verifier_execution", UNVERIFIED, {"reason": "timeout"}))
+        return result
+    evidence = {
+        "exitCode": proc.returncode,
+        "stdoutSha256": sha256_hex(proc.stdout.encode()),
+        "stderrSha256": sha256_hex(proc.stderr.encode()),
+        "stdoutBytes": len(proc.stdout.encode()),
+        "stderrBytes": len(proc.stderr.encode()),
+    }
+    result.append(surface(
+        "canonical_chain_verifier_execution",
+        IN_SYNC if proc.returncode == 0 else OUT_OF_SYNC,
+        evidence,
+        None if proc.returncode == 0 else {"autoAllowed": False, "action": "FIX_CAUSAL_VERIFIER_FAILURE_AND_RERUN"},
+    ))
+    return result
+
+
+def production_contract_surface(repo: Path, journal_tags: list[str], filename: str, name: str) -> tuple[dict[str, Any], list[str]]:
+    path = repo / "scripts" / filename
+    tags, error = read_tag_contract(path)
+    if error:
+        return surface(name, UNVERIFIED, {"path": str(path.relative_to(repo)), "error": error}), []
+    journal_set = set(journal_tags)
+    missing_from_journal = [tag for tag in tags if tag not in journal_set]
+    tag_prefixes = [migration_prefix(tag) for tag in tags]
+    tag_prefixes = [value for value in tag_prefixes if value is not None]
+    journal_prefixes = [(tag, migration_prefix(tag)) for tag in journal_tags]
+    max_contract_prefix = max(tag_prefixes) if tag_prefixes else -1
+    newer_journal = [tag for tag, prefix in journal_prefixes if prefix is not None and prefix > max_contract_prefix]
+    duplicate_tags = sorted(tag for tag, count in Counter(tags).items() if count > 1)
+    ok = not missing_from_journal and not newer_journal and not duplicate_tags
+    evidence = {
+        "path": str(path.relative_to(repo)),
+        "managedMigrationCount": len(tags),
+        "managedFirstTag": tags[0] if tags else None,
+        "managedLastTag": tags[-1] if tags else None,
+        "maxManagedPrefix": max_contract_prefix if max_contract_prefix >= 0 else None,
+        "missingContractTagsFromJournal": missing_from_journal,
+        "duplicateContractTags": duplicate_tags,
+        "newerJournalTagsOutsideContract": newer_journal,
+    }
+    repair = None
+    if not ok:
+        repair = {
+            "autoAllowed": False,
+            "action": "EXTEND_PRODUCTION_CONTRACT_AFTER_ADDITIVE_MIGRATION_ELIGIBILITY_AND_REGRESSION_PROOF",
+            "candidateTags": newer_journal,
+            "reason": "Do not add migration tags to a production apply/reconcile artifact until each migration is proven compatible with backup/recovery/apply and postflight readback.",
+        }
+    return surface(name, IN_SYNC if ok else OUT_OF_SYNC, evidence, repair), tags
+
+
+def workflow_surface(repo: Path) -> dict[str, Any]:
+    paths = [CANONICAL_APPLY_WORKFLOW, CANONICAL_READBACK_WORKFLOW, CANONICAL_DEPLOY_WORKFLOW]
+    present = {path: (repo / path).is_file() for path in paths}
+    ok = all(present.values())
+    return surface(
+        "canonical_production_workflows",
+        IN_SYNC if ok else UNVERIFIED,
+        {"present": present},
+        None if ok else {"autoAllowed": False, "action": "RESTORE_OR_LOCATE_CANONICAL_WORKFLOW_CONTRACTS"},
+    )
+
+
+def repo_revision_surface(repo: Path, expected_revision: str | None) -> dict[str, Any]:
+    revision, error = git_revision(repo)
+    if expected_revision and not SHA40_RE.fullmatch(expected_revision):
+        return surface("repository_revision", BLOCKED, {"error": "expected_revision_invalid"})
+    if revision is None:
+        return surface(
+            "repository_revision",
+            UNVERIFIED,
+            {"expectedRevision": expected_revision, "observedRevision": None, "reason": error},
+            {"autoAllowed": True, "action": "READ_EXACT_GIT_REVISION_IN_ISOLATED_WORKSPACE"},
+        )
+    if expected_revision and revision != expected_revision:
+        return surface(
+            "repository_revision",
+            OUT_OF_SYNC,
+            {"expectedRevision": expected_revision, "observedRevision": revision},
+            {"autoAllowed": True, "action": "RESYNC_ISOLATED_WORKSPACE_TO_EXPECTED_REVISION"},
+        )
+    return surface("repository_revision", IN_SYNC, {"expectedRevision": expected_revision, "observedRevision": revision})
+
+
+def audit_repo(repo: Path, expected_revision: str | None, run_canonical: bool) -> dict[str, Any]:
+    surfaces: list[dict[str, Any]] = [repo_revision_surface(repo, expected_revision)]
+    chain, journal_tags = chain_surface(repo)
+    surfaces.append(chain)
+    surfaces.extend(canonical_verifier_surface(repo, run_canonical))
+    reconcile, reconcile_tags = production_contract_surface(
+        repo,
+        journal_tags,
+        "build-aurion-production-reconcile-artifact.mjs",
+        "production_reconcile_contract_coverage",
+    )
+    apply, apply_tags = production_contract_surface(
+        repo,
+        journal_tags,
+        "build-aurion-production-apply-artifact.mjs",
+        "production_apply_contract_coverage",
+    )
+    surfaces.extend([reconcile, apply])
+    if reconcile_tags and apply_tags:
+        same = reconcile_tags == apply_tags
+        surfaces.append(surface(
+            "reconcile_apply_contract_alignment",
+            IN_SYNC if same else OUT_OF_SYNC,
+            {"reconcileTags": reconcile_tags, "applyTags": apply_tags},
+            None if same else {"autoAllowed": False, "action": "RECONCILE_PRODUCTION_ARTIFACT_TAG_CONTRACTS"},
+        ))
+    else:
+        surfaces.append(surface("reconcile_apply_contract_alignment", UNVERIFIED, {"reason": "one_or_both_contracts_unreadable"}))
+    surfaces.append(workflow_surface(repo))
+    metrics = summarize_surfaces(surfaces)
+    receipt = {
+        "recordType": RECORD_TYPE,
+        "schemaVersion": SCHEMA_VERSION,
+        "scope": "repository",
+        "repoPath": str(repo.resolve()),
+        "expectedRevision": expected_revision,
+        "mutationPerformed": False,
+        "productionTruthAsserted": False,
+        "surfaces": surfaces,
+        "metrics": metrics,
+    }
+    return finalize_receipt(receipt)
+
+
+def validate_identity(receipt: dict[str, Any], expected_revision: str | None, plan_sha256: str | None) -> tuple[bool, list[str]]:
+    problems: list[str] = []
+    if receipt.get("databaseCredentialReturned") is not False:
+        problems.append("databaseCredentialReturned_not_false")
+    if expected_revision and receipt.get("sourceRevision") != expected_revision:
+        problems.append("sourceRevision_mismatch")
+    if plan_sha256 and receipt.get("planSha256") != plan_sha256:
+        problems.append("planSha256_mismatch")
+    return not problems, problems
+
+
+def classify_production_receipt(receipt: dict[str, Any], expected_revision: str | None = None, plan_sha256: str | None = None) -> dict[str, Any]:
+    if expected_revision and not SHA40_RE.fullmatch(expected_revision):
+        raise ValueError("expected revision must be 40 lowercase hex characters")
+    if plan_sha256 and not SHA256_RE.fullmatch(plan_sha256):
