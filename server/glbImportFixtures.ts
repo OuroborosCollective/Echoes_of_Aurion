@@ -7,9 +7,10 @@ export function testGlb(name = "Aurion_Spear_Weapon", extra: Record<string, unkn
 }
 
 /** Renderable player fixture with real Idle and Attack animation clips.
- * The mesh remains deliberately tiny; the animation contract is what matters.
+ * Set includeLocomotion for player-public tests, whose production contract also
+ * requires Walk/Run. The mesh remains deliberately tiny; animation contract is what matters.
  */
-export function testAnimatedPlayerGlb(name = "Aurion_Player"): Buffer {
+export function testAnimatedPlayerGlb(name = "Aurion_Player", includeLocomotion = false): Buffer {
   const positions = Buffer.alloc(36);
   [0, 0, 0, 1, 0, 0, 0, 1, 0].forEach((value, index) => positions.writeFloatLE(value, index * 4));
   const times = Buffer.alloc(8);
@@ -18,6 +19,11 @@ export function testAnimatedPlayerGlb(name = "Aurion_Player"): Buffer {
   const attackTranslations = Buffer.alloc(24);
   [0, 0, 0, 0.15, 0, 0].forEach((value, index) => attackTranslations.writeFloatLE(value, index * 4));
   const binary = Buffer.concat([positions, times, idleTranslations, attackTranslations]);
+  const animations = [
+    { name: "Idle", samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] },
+    ...(includeLocomotion ? [{ name: "Walk", samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] }] : []),
+    { name: "Attack", samplers: [{ input: 1, output: 3, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] },
+  ];
   const source = {
     asset: { version: "2.0" },
     scene: 0,
@@ -38,10 +44,7 @@ export function testAnimatedPlayerGlb(name = "Aurion_Player"): Buffer {
       { bufferView: 2, componentType: 5126, count: 2, type: "VEC3" },
       { bufferView: 3, componentType: 5126, count: 2, type: "VEC3" },
     ],
-    animations: [
-      { name: "Idle", samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] },
-      { name: "Attack", samplers: [{ input: 1, output: 3, interpolation: "LINEAR" }], channels: [{ sampler: 0, target: { node: 1, path: "translation" } }] },
-    ],
+    animations,
   };
   return encodeGlb(source, binary);
 }
