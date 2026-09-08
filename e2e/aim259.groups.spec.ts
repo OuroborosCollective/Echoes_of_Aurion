@@ -89,11 +89,9 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     const health = await (await pages[0]!.request.get("/healthz")).json();
     expect(health).toMatchObject({ service: "echoes-of-aurion", status: "ok", revision: process.env.AURION_RELEASE_SHA });
 
-    const weaponTracks = ["blade", "spear", "staff", "focus", "blade"] as const;
     for (let i = 0; i < pages.length; i++) {
       await rpc(pages[i]!, "auth.registerLocal", { handle: `aim259_real_${i}`, password: "Aurion-disposable-group-regression-259!" });
       await rpc(pages[i]!, "player.me");
-      await rpc(pages[i]!, "player.setWeaponLoadout", { weaponTrack: weaponTracks[i] });
     }
 
     // Asset governance is exercised through the real authenticated upload route.
@@ -120,7 +118,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     await expect(dialog.getByLabel(/Heilendes Licht/)).toBeChecked();
     await expect(dialog.getByRole("radio", { name: "Heiler", exact: true })).toBeEnabled();
     await dialog.getByRole("radio", { name: "Heiler", exact: true }).check();
-    expect((await read(healerPage)).qualification.weaponTrack).toBe("spear");
+    expect((await read(healerPage)).qualification.roles).toContain("healer");
 
     const roles = ["tank", "healer", "dps", "dps", "dps"] as const;
     for (let i = 0; i < pages.length; i++) {
