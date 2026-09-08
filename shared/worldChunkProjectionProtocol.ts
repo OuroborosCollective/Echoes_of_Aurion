@@ -231,14 +231,14 @@ export function orderWorldChunkProjectionWorkerQueue(jobs: readonly WorldChunkPr
 }
 
 const allowedTransitions: Readonly<Record<WorldChunkProjectionState, ReadonlySet<WorldChunkProjectionState>>> = Object.freeze({
-  absent: new Set(["requested"]),
-  requested: new Set(["received", "absent"]),
-  received: new Set(["validated", "absent"]),
-  validated: new Set(["decoded", "absent"]),
-  decoded: new Set(["renderable", "absent"]),
-  renderable: new Set(["simulatable", "evictable"]),
-  simulatable: new Set(["evictable"]),
-  evictable: new Set(["absent"]),
+  absent: new Set<WorldChunkProjectionState>(["requested"]),
+  requested: new Set<WorldChunkProjectionState>(["received", "absent"]),
+  received: new Set<WorldChunkProjectionState>(["validated", "absent"]),
+  validated: new Set<WorldChunkProjectionState>(["decoded", "absent"]),
+  decoded: new Set<WorldChunkProjectionState>(["renderable", "absent"]),
+  renderable: new Set<WorldChunkProjectionState>(["simulatable", "evictable"]),
+  simulatable: new Set<WorldChunkProjectionState>(["evictable"]),
+  evictable: new Set<WorldChunkProjectionState>(["absent"]),
 });
 
 export function canTransitionWorldChunkProjectionState(current: WorldChunkProjectionState, next: WorldChunkProjectionState): boolean {
