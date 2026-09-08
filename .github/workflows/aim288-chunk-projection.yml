@@ -1,0 +1,61 @@
+name: AIM-288 Chunk Projection Contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aim288-chunk-projection.yml"
+      - "shared/worldChunkProjectionProtocol.ts"
+      - "shared/worldChunkStreamingProtocol.ts"
+      - "shared/worldChunkProtocol.ts"
+      - "server/worldChunkProjectionProtocol.test.ts"
+      - "server/worldChunkStreamingProtocol.test.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim-288-chunk-projection-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chunk-projection:
+    name: Manifest identity, stale jobs, state machine, typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Run chunk projection and streaming regressions
+        run: >-
+          pnpm exec vitest run
+          server/worldChunkProjectionProtocol.test.ts
+          server/worldChunkStreamingProtocol.test.ts
+
+      - name: TypeScript check
+        run: pnpm check
+
+      - name: Build production runtime
+        run: pnpm build
