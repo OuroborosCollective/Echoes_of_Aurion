@@ -8,6 +8,7 @@ import {
 import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
+import { equipmentAnchorAliases, equipmentLocalScale } from "../core/EquipmentAttachmentSizing";
 import { selectEquipmentCatalogAsset } from "../core/UploadedAssetRuntime";
 import { VisualItemAttachmentController, type VisualItemAttachmentTarget } from "../core/VisualItemAttachmentController";
 import { AurionVisualClock } from "../core/VisualItemMaterialCompiler";
@@ -15,21 +16,6 @@ import { AurionVisualClock } from "../core/VisualItemMaterialCompiler";
 export const EQUIPMENT_VISUAL_EVIDENCE_EVENT = "aurion:xaurion-equipment-visual-evidence" as const;
 
 type CompatAttachment = Readonly<{ identity: string; sha256: string; holder: THREE.Group }>;
-
-// These are exactly the existing Aurion AnimatedGlbActor attachment aliases.
-// This projection searches only inside the active actor mount; there is no generic
-// scene-root/head/hips fallback and no gameplay meaning is derived from an anchor.
-const anchorAliases: Readonly<Record<GlbEquipmentSlot, readonly string[]>> = Object.freeze({
-  weapon: ["socketweaponr", "slotweaponr", "slothandr", "handr", "righthand"],
-  shield: ["socketweaponl", "slotoffhand", "slothandl", "handl", "lefthand"],
-  helmet: ["sockethead", "slothead", "head"],
-  chest: ["socketchest", "slotchest", "upperchest", "chest", "spine2", "spine"],
-  shoulders: ["socketshoulders", "slotshoulders", "upperchest", "spine2", "spine"],
-  arms: ["socketarms", "slotarms", "upperchest", "spine2", "spine"],
-  legs: ["socketlegs", "slotlegs", "pelvis", "hips"],
-  boots: ["socketboots", "slotboots", "pelvis", "hips"],
-});
-const targetSize: Readonly<Record<GlbEquipmentSlot, number>> = Object.freeze({ weapon: 1.35, shield: 1.0, helmet: 0.7, chest: 1.2, shoulders: 1.2, arms: 1.05, legs: 1.1, boots: 0.85 });
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 const bindingIdentity = (binding: ConfirmedEquipmentVisual) => `${binding.version}:${binding.definition}:${binding.receiptId}:${binding.itemId}`;
 
@@ -67,7 +53,7 @@ export class EquipmentCatalogProjection {
   }
 
   private anchor(slot: GlbEquipmentSlot): THREE.Object3D | null {
-    const aliases = new Set(anchorAliases[slot]);
+    const aliases = new Set(equipmentAnchorAliases[slot]);
     let found: THREE.Object3D | null = null;
     this.engine.player.glbAvatarGroup.traverse(node => {
       if (!found && node.name && aliases.has(normalize(node.name))) found = node;
@@ -93,7 +79,14 @@ export class EquipmentCatalogProjection {
     const maxDimension = Math.max(size.x, size.y, size.z);
     if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return false;
 
-    const scale = THREE.MathUtils.clamp(targetSize[slot] / maxDimension, 0.05, 8);
+    this.engine.player.glbAvatarGroup.updateMatrixWorld(true);
+    anchor.updateWorldMatrix(true, false);
+    const anchorScale = anchor.getWorldScale(new THREE.Vector3());
+    const anchorWorldScale = Math.max(Math.abs(anchorScale.x), Math.abs(anchorScale.y), Math.abs(anchorScale.z));
+    const avatarHeightMeters = this.engine.player.glbPresentationEvidence?.()?.heightMeters ?? 2;
+    const scale = equipmentLocalScale(slot, maxDimension, avatarHeightMeters, anchorWorldScale);
+    if (scale === null) return false;
+
     const center = bounds.getCenter(new THREE.Vector3());
     visual.scale.setScalar(scale);
     visual.position.set(-center.x * scale, -center.y * scale, -center.z * scale);

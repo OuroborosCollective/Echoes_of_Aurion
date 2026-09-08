@@ -14,6 +14,7 @@ import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
 import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import { MMOEngine } from "../core/MMOEngine";
+import { PublicCharacterPicker, type PublicCharacterSelection } from "../components/PublicCharacterPicker";
 import { ConfirmedVisualEffects } from "./confirmedVisualEffects";
 import { RemotePresenceProjection } from "./RemotePresenceProjection";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
@@ -89,6 +90,7 @@ export default function AurionOpenWorldRuntime() {
   const [nearbySmith, setNearbySmith] = useState(false);
 
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
+  const [confirmedSelection, setConfirmedSelection] = useState<PublicCharacterSelection | null>(null);
   const catalog = useGlbCatalog(Boolean(activation));
   const [modelStatus, setModelStatus] = useState("procedural");
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -102,6 +104,7 @@ export default function AurionOpenWorldRuntime() {
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
+  const selectedCharacterUrl = characterAppearance.data?.storageUrl ?? confirmedSelection?.storageUrl ?? null;
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
   const controlsQuery = trpc.player.ui.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated, staleTime: 15_000, refetchInterval: 10_000 });
   const controlsRef = useRef<ControlSettings | null>(null);
@@ -157,7 +160,7 @@ export default function AurionOpenWorldRuntime() {
   }, []);
 
   useEffect(() => {
-    if (!activation || !containerRef.current) return;
+    if (!activation || !containerRef.current || !selectedCharacterUrl) return;
     const support = MMOEngine.checkWebGLSupport();
     if (!support.supported) {
       setWebglError(support.error ?? "WebGL ist nicht verfügbar.");
@@ -253,7 +256,7 @@ export default function AurionOpenWorldRuntime() {
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
     };
-  }, [activation, requestAuthoritativeAction, requestAuthoritativeMount]);
+  }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -268,19 +271,18 @@ export default function AurionOpenWorldRuntime() {
     if (Number.isSafeInteger(projection.profile.victories) && (projection.profile.victories ?? -1) >= 0) engine.player.stats.bossKills = projection.profile.victories!;
     engine.player.stats.activeWeaponType = weaponForAurion(projection.weaponLoadout?.weaponTrack);
     if (activation?.displayName) engine.player.stats.currentZone = activation.displayName;
-  }, [activation?.displayName, playerSnapshot.data]);
+  }, [activation?.displayName, selectedCharacterUrl, playerSnapshot.data]);
 
   useEffect(() => {
     const engine = engineRef.current;
-    const url = characterAppearance.data?.storageUrl ?? catalog?.entries.find(entry => entry.targetKey === "starter_player")?.storageUrl ?? null;
-    if (!engine) return;
+    if (!engine || !selectedCharacterUrl) return;
     let disposed = false;
-    setModelStatus(url ? "loading" : "procedural");
-    void engine.player.equipGlbModel(url).then(loaded => {
-      if (!disposed) setModelStatus(url ? loaded ? "active" : "failed" : "procedural");
+    setModelStatus("loading");
+    void engine.player.equipGlbModel(selectedCharacterUrl).then(loaded => {
+      if (!disposed) setModelStatus(loaded ? "active" : "failed");
     });
     return () => { disposed = true; void engine.player.equipGlbModel(null); };
-  }, [characterAppearance.data?.storageUrl, catalog?.revision, activation]);
+  }, [selectedCharacterUrl, activation]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -291,10 +293,10 @@ export default function AurionOpenWorldRuntime() {
     serviceNpcRef.current = npc;
     void npc.load(url).catch(() => { npc.dispose(); if (serviceNpcRef.current === npc) serviceNpcRef.current = null; });
     return () => { npc.dispose(); if (serviceNpcRef.current === npc) serviceNpcRef.current = null; setNearbySmith(false); };
-  }, [activation, catalog?.revision, worldSnapshot.data?.serviceNpcs]);
+  }, [activation, selectedCharacterUrl, catalog?.revision, worldSnapshot.data?.serviceNpcs]);
 
   useEffect(() => {
-    if (!activation || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
+    if (!activation || !selectedCharacterUrl || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
     let disposed = false;
     let client: ZoneMovementClient | undefined;
     let retryTimer: number | undefined;
@@ -369,7 +371,7 @@ export default function AurionOpenWorldRuntime() {
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
-  }, [activation, webglError, isAuthenticated, user?.id, zoneRetryEpoch]);
+  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch]);
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
@@ -494,6 +496,19 @@ export default function AurionOpenWorldRuntime() {
 
   const worldLabel = useMemo(() => activation?.displayName ?? "Aurion Open World", [activation?.displayName]);
   if (!activation) return null;
+
+  if (!selectedCharacterUrl) return (
+    <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Charakterwahl">
+      <div className="mx-auto flex min-h-full w-full max-w-3xl items-center justify-center p-5" data-testid="player-character-selection-gate">
+        <div className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/95 p-4 shadow-2xl">
+          <h2 className="text-lg font-semibold text-slate-100">Wähle deine Aurion-Figur</h2>
+          <p className="mt-2 text-sm text-slate-400">Die Open World startet erst mit einem serverbestätigten öffentlichen Spielermodell. Diese einmalige Wahl ersetzt den alten Starter-Avatar.</p>
+          <div className="mt-4"><PublicCharacterPicker onSelected={selection => { setConfirmedSelection(selection); void characterAppearance.refetch?.(); }} /></div>
+          <button className="mt-4 min-h-11 rounded-xl border border-slate-600 px-4 text-sm text-slate-200" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>Zur Sternwarte</button>
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Open World">
