@@ -40,16 +40,28 @@ async function launchAx1AndOpenGroups(page: Page) {
   await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
   const runtime = page.getByTestId("xaurion-open-world-runtime");
   await expect(runtime).toBeVisible();
+  const connected = runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true });
   const gate = page.getByTestId("player-character-selection-gate");
-  if (await gate.isVisible().catch(() => false)) {
-    await gate.getByRole("radio", { name: /AIM259 public avatar/ }).click();
+  const publicAvatar = gate.getByRole("radio", { name: /AIM259 public avatar/ });
+
+  // First entry requires the visible one-time picker. On re-entry the already
+  // persisted appearance may close a transient loading gate before radios render.
+  // Wait for one of the two proven terminal UI states instead of racing the gate.
+  await expect.poll(async () => {
+    if (await connected.isVisible().catch(() => false)) return "connected";
+    if (await publicAvatar.isVisible().catch(() => false)) return "select";
+    return "waiting";
+  }, { timeout: 45_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting");
+
+  if (await publicAvatar.isVisible().catch(() => false)) {
+    await publicAvatar.click();
     const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
     await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
     const selected = await selectionReply;
     expect(selected.status()).toBe(200);
     expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
   }
-  await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+  await expect(connected).toBeVisible({ timeout: 45_000 });
   const hud = page.getByTestId("authoritative-world-hud");
   await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
   await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
