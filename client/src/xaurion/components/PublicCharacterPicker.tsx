@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, LoaderCircle, ShieldCheck } from "lucide-react";
 import type { GlbCatalogEntry } from "@shared/glbImportContract";
 
@@ -18,6 +18,8 @@ type PublicCharacterCatalogResponse = Readonly<{
 }>;
 
 export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (selection: PublicCharacterSelection) => void }> = {}) {
+  const onSelectedRef = useRef(onSelected);
+  onSelectedRef.current = onSelected;
   const [catalog, setCatalog] = useState<PublicCharacterCatalogResponse | null>(null);
   const [candidate, setCandidate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,7 +32,7 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
     if (!Array.isArray(body.entries) || typeof body.revision !== "string") throw new Error("Ungültiger Charakterkatalog.");
     if (!signal?.aborted) {
       setCatalog(body);
-      if (body.selected) onSelected?.(body.selected);
+      if (body.selected) onSelectedRef.current?.(body.selected);
     }
   };
 
@@ -60,7 +62,7 @@ export function PublicCharacterPicker({ onSelected }: Readonly<{ onSelected?: (s
       if (!body || body.assetId !== selectedCandidate.assetId || body.visibility !== "public") throw new Error("Der Server-Readback stimmt nicht mit der gewählten Figur überein.");
       setCatalog(current => current ? { ...current, selected: body, immutable: true } : current);
       setCandidate(null);
-      onSelected?.(body);
+      onSelectedRef.current?.(body);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Charakterwahl fehlgeschlagen.");
     } finally { setBusy(false); }
