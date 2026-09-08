@@ -243,4 +243,3 @@ def build_parser() -> argparse.ArgumentParser:
     repo.add_argument("--run-canonical", action="store_true", help="also execute pnpm verify:migrations")
     repo.add_argument("--output")
     repo.set_defaults(func=command_repo_audit)
-
