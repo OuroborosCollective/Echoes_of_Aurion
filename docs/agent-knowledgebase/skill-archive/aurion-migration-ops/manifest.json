@@ -1,0 +1,92 @@
+{
+  "directSshSqlApplyEnabled": false,
+  "files": {
+    "SKILL.md": {
+      "bytes": 18272,
+      "mode": "0644",
+      "sha256": "e64813363fc6ea01ea5f1b1751e668c54a496413b664cbe745c92a5391780c37"
+    },
+    "references/audit-findings-2026-09-08.md": {
+      "bytes": 2976,
+      "mode": "0644",
+      "sha256": "7d79fd085081c37d7b27500af41884344c076f31c75923c2d45d5dddd7e21585"
+    },
+    "references/cli-and-receipt-schema.md": {
+      "bytes": 5387,
+      "mode": "0644",
+      "sha256": "0eac5c62f40bda4ff4d8df53ab5011c38d6bbe5a7927e88df94f8e4c2b1de222"
+    },
+    "references/cross-repo-choreography.md": {
+      "bytes": 5241,
+      "mode": "0644",
+      "sha256": "f2eddcd3da86292b4873798d71741652c9cb02e60b142f6eac873cde7471aebb"
+    },
+    "references/production-runbook.md": {
+      "bytes": 7393,
+      "mode": "0644",
+      "sha256": "0005a55f472d0d5f78686609ea12504ed1a627be27223dbd8331e1ac617d56c3"
+    },
+    "references/resolver-policy.md": {
+      "bytes": 6549,
+      "mode": "0644",
+      "sha256": "18a5e759bcc286b60ca8a1b2feedba92b85ff2accdc084f38132a8b9bfb29456"
+    },
+    "scripts/apply_migration.py": {
+      "bytes": 902,
+      "mode": "0644",
+      "sha256": "a8d4e7a05a8afa9faedaf8e98152933b6d74915217094925b9e080d38f8bb632"
+    },
+    "scripts/aurion_guard.py": {
+      "bytes": 63193,
+      "mode": "0644",
+      "sha256": "98b9b80ad099790deaff99b1533782ac144b41d392e10756d03c28491ce01c80"
+    },
+    "scripts/check_package.py": {
+      "bytes": 4277,
+      "mode": "0644",
+      "sha256": "823af6ffc6860861bbac0225d31b07e2b50d9882e121a9c68053a9b0e11951ee"
+    },
+    "scripts/endpoint_probe.py": {
+      "bytes": 2253,
+      "mode": "0644",
+      "sha256": "97786120700cdec287228b0e209142adcdf65928f471ba1e76b82c195ba91c4e"
+    },
+    "scripts/run_regressions.py": {
+      "bytes": 2147,
+      "mode": "0644",
+      "sha256": "1dd3624cb5f10a27f89a6295a4a908755b1da6f839a263f2f542490be5d112f2"
+    },
+    "scripts/server_status.py": {
+      "bytes": 2516,
+      "mode": "0644",
+      "sha256": "9bd26b09ba5f887dbd6860a384ba5500cdbb2b4ed79017d6068549fdad29df20"
+    },
+    "scripts/update_manifest.py": {
+      "bytes": 1579,
+      "mode": "0644",
+      "sha256": "fe887ab6f86352b9936e8439c526ced10bc68116c1ce2a5f8f626ecff025f4d8"
+    },
+    "scripts/verify_manifest.py": {
+      "bytes": 2480,
+      "mode": "0644",
+      "sha256": "6922548251cc814290abf281c32d2ff592aef4dd42a06c6c538d630191561a7c"
+    },
+    "tests/test_aurion_guard.py": {
+      "bytes": 25159,
+      "mode": "0644",
+      "sha256": "271352f04e061a2c28480d150a32c79335816d5d7b8ba7e30886ebefd45911ce"
+    },
+    "tests/test_skill_integrity.py": {
+      "bytes": 4808,
+      "mode": "0644",
+      "sha256": "64a500cf73f6179cb0e747802f9e1da094650e8475e42ac17777fa200fab8122"
+    }
+  },
+  "guardSchemaVersion": 4,
+  "productionMutationPath": "canonical-aurion-control-plane-only",
+  "autonomyMode": "AUTONOMOUS_UNTIL_REVOKED",
+  "requiresPerActionOwnerPrompt": false,
+  "recordType": "aurion_migration_ops_skill_manifest",
+  "schemaVersion": 2,
+  "skillVersion": "2.1.0"
+}
