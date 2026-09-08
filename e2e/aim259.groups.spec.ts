@@ -3,6 +3,7 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { groupReadmodelSchema, type GroupCommand, type GroupReadmodel } from "../shared/groupInstanceProtocol";
+import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
 
 test.skip(process.env.AURION_GROUP_E2E !== "1", "Requires the isolated group runtime workflow");
 
@@ -38,6 +39,16 @@ async function launchAx1AndOpenGroups(page: Page) {
   await entryResponse;
   await expect(page).toHaveURL(/\/play$/, { timeout: 30_000 });
   const runtime = page.getByTestId("xaurion-open-world-runtime");
+  await expect(runtime).toBeVisible();
+  const gate = page.getByTestId("player-character-selection-gate");
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.getByRole("radio", { name: /AIM259 public avatar/ }).click();
+    const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
+    await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
+    const selected = await selectionReply;
+    expect(selected.status()).toBe(200);
+    expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
+  }
   await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
   const hud = page.getByTestId("authoritative-world-hud");
   await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
@@ -57,11 +68,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
   const [database] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name");
   expect(database[0]!.name).toBe("aurion_group_test");
 
-  // Five independent browser contexts provide five real authenticated cookie
-  // sessions. Only the healer mounts WebGL; the four peers use the same public
-  // tRPC commands their UI would send. Rendering the same deterministic world
-  // five times is not part of the group-state invariant and is covered by the
-  // dedicated AX1 phone/tablet/desktop UI and collision specs in this workflow.
   const contexts = await Promise.all(Array.from({ length: 5 }, () => browser.newContext({ baseURL, viewport: { width: 412, height: 915 } })));
   const pages = await Promise.all(contexts.map(context => context.newPage()));
   const errors: string[] = [];
@@ -78,12 +84,25 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
       await rpc(pages[i]!, "player.setWeaponLoadout", { weaponTrack: weaponTracks[i] });
     }
 
+    // Asset governance is exercised through the real authenticated upload route.
+    // Only this disposable CI database promotes one fixture account to admin; the
+    // healer still performs the actual one-time player selection through AX1 UI.
+    await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='aim259_real_0'");
+    const publicBytes = testAnimatedPlayerGlb("AIM259_Public_Player");
+    const publicSha256 = createHash("sha256").update(publicBytes).digest("hex");
+    const publicUpload = await pages[0]!.request.post("/api/admin/glb-smart-upload", { data: {
+      displayName: "AIM259 public avatar",
+      fileName: "aim259-public-player.glb",
+      purpose: "player-public",
+      contentBase64: publicBytes.toString("base64"),
+    } });
+    expect(publicUpload.status()).toBe(201);
+    const publicBody = await publicUpload.json();
+    expect(publicBody).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { sha256: publicSha256, targetKey: null, status: "catalog" } });
+
     const healerPage = pages[1]!;
     const { runtime, dialog } = await launchAx1AndOpenGroups(healerPage);
 
-    // Role qualifications are real persisted commands. Tank is configured through
-    // its authenticated session; healer qualification is additionally exercised
-    // through the visible AX1 group UI.
     await command(pages[0]!, { kind: "equip", skills: ["guardian_stance"] });
     await dialog.getByLabel(/Heilendes Licht/).click();
     await expect(dialog.getByLabel(/Heilendes Licht/)).toBeChecked();
@@ -109,8 +128,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     const rosterHash = matched[0]!.party!.rosterHash;
     expect(matched[0]!.party!.roster.map(member => member.role).sort()).toEqual(["dps", "dps", "dps", "healer", "tank"]);
 
-    // Four peers ready through their own sessions; the healer uses the visible UI
-    // so the presentation-to-command bridge is covered by the same evidence.
     for (const index of [0, 2, 3, 4]) {
       await command(pages[index]!, { kind: "ready", partyId, rosterHash, ready: true });
     }
@@ -120,8 +137,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     expect(ticket.sourceRevision).toBe(health.revision);
     expect(ticket.roster).toHaveLength(5);
 
-    // Admit four peers by their real authenticated commands, then admit the healer
-    // through the AX1 UI. All five readmodels must converge to the same ticket.
     for (const index of [0, 2, 3, 4]) {
       await command(pages[index]!, { kind: "enter", ticketId: ticket.id, ticketHash: ticket.hash });
     }
@@ -134,8 +149,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     }
     await expect(dialog.getByRole("region", { name: "Gemeinsame Instanz", exact: true })).toHaveAttribute("data-ticket-id", ticket.id);
 
-    // A DPS strike mutates the shared persisted instance. The visible healer then
-    // heals the tank through AX1; neither operation touches legacy Aurion rewards.
     const dpsBefore = await read(pages[2]!);
     await command(pages[2]!, { kind: "strike", ticketId: ticket.id, expectedInstanceRevision: dpsBefore.party!.instanceRevision });
     const tankId = admitted[0]!.player.userId;
@@ -146,8 +159,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     await clickLiveGroupButton(dialog.getByRole("button", { name: `${tankName} heilen`, exact: true }));
     await expect.poll(async () => (await read(pages[0]!)).party!.health.find(entry => entry.userId === tankId)!.hp, { timeout: 15_000 }).toBeGreaterThan(damagedHp);
 
-    // Exit and portal re-entry must preserve membership and require a fresh AX1
-    // launch. The same UI command rejoins the immutable ticket.
     await clickLiveGroupButton(dialog.getByRole("button", { name: "Instanz verlassen, Platz behalten", exact: true }));
     await expect.poll(async () => (await read(healerPage)).player.status).toBe("formed");
     await healerPage.keyboard.press("Escape");
@@ -180,6 +191,8 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
       sourceRevision: health.revision,
       sessionUserIds: admitted.map(state => state.player.userId),
       renderedAx1UserId: finalReadback.player.userId,
+      publicPlayerAssetSha256: publicSha256,
+      publicPlayerSelectedThroughAx1: true,
       partyId,
       ticketId: ticket.id,
       ticketHash: ticket.hash,
@@ -189,7 +202,7 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
       sharedDamageConfirmed: true,
       sharedHealingConfirmed: true,
       rejoinConfirmed: true,
-      rejoinRoute: "portal-direct-ax1-launch",
+      rejoinRoute: "portal-confirmed-public-character-ax1-launch",
       legacyGameplaySessions: 0,
       legacyGameplayActions: 0,
       production: false,
@@ -199,8 +212,6 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     await info.attach("revision-bound-group-evidence", { body: evidenceJson, contentType: "application/json" });
     await info.attach("evidence-sha256", { body: createHash("sha256").update(evidenceJson).digest("hex"), contentType: "text/plain" });
 
-    // Cleanly abort through the leader's real authenticated command and prove all
-    // membership readmodels return to idle.
     await command(pages[0]!, { kind: "leave", partyId, rosterHash });
     await expect.poll(async () => (await read(healerPage)).player.status, { timeout: 15_000 }).toBe("idle");
     expect((await read(pages[4]!)).party).toBeNull();
