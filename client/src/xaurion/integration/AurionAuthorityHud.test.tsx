@@ -11,7 +11,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   gameplay: { npcSnapshots: { useQuery: () => ({}) }, relationshipStanding: { useQuery: () => fixtures.standing }, currentEncounter: { useQuery: () => fixtures.other }, startEncounter: { useMutation: () => ({}) }, progress: { useQuery: () => fixtures.other }, openWorld: { useQuery: () => fixtures.other }, acceptQuest: { useMutation: () => ({}) }, completeQuest: { useMutation: () => ({}) } },
 } }));
 vi.mock("../components/VirtualJoystick", () => ({ VirtualJoystick: () => null }));
-const confirmed = { profile: { userId: 7, level: 3, totalXp: 290, aurionPoints: 23, victories: 2, selectedClass: "unbound" }, progression: { characterId: "char-7", tracks: [{ trackKind: "weapon", trackId: "greatsword.two_handed.v3", characterId: "char-7", levelExact: "17", resultReceiptId: "result-00000001", sourceReceiptId: "source-00000001", receiptHash: "b".repeat(64) }] }, weaponMasteries: [], inventory: [] };
+const confirmed = { profile: { userId: 7, aurionPoints: 23, victories: 2, selectedClass: "unbound" }, progression: { characterId: "char-7", tracks: [{ trackKind: "weapon", trackId: "greatsword.two_handed.v3", characterId: "char-7", levelExact: "17", resultReceiptId: "result-00000001", sourceReceiptId: "source-00000001", receiptHash: "b".repeat(64) }] }, inventory: [] };
 const uiState = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, hotbar: ["1", "2", "3", "4", "5"] }, items: [], equipment: [] };
 const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onAction={fixtures.onAction} />);
 describe("server-backed Aurion HUD", () => {
@@ -48,10 +48,12 @@ describe("server-backed Aurion HUD", () => {
     fireEvent.keyDown(window, { key: "i" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
-  it("projects confirmed currency and never renders a class choice", () => {
+  it("projects confirmed receipt-backed progression and never renders a class choice", () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; mount();
-    expect(screen.getByText("290 EP · 2 Siege")).toBeTruthy();
+    expect(screen.getByText("1 bestätigte Progressionspfade · 2 Siege")).toBeTruthy();
+    expect(screen.queryByText(/290 EP/)).toBeNull();
     expect(screen.getByText(/◆\s*23/)).toBeTruthy();
+    expect(screen.getByText("Receipt verifiziert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Charakter" }));
     expect(screen.queryByText(/Klasse wählen|Vorhut|Seher|Hüter/)).toBeNull();
     expect(screen.getAllByText("greatsword.two_handed.v3").length).toBeGreaterThan(0);
