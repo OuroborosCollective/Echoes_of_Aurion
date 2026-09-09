@@ -13,7 +13,7 @@ import { readPlayerUi, savePlayerControls, collectPlayerLoot, equipPlayerItem, u
 import { groupCommandSchema } from "../shared/groupInstanceProtocol";
 import { commandGroupForUser, readGroupForUser } from "./groupInstancePersistence";
 import { createGatewaySessionId, createPairingToken, defaultGatewayCommands, digestPairingToken, normalizeAurionCommand, type AurionCommand } from "./gatewayProtocol";
-import { canChooseClass, CLASS_UNLOCK_LEVEL, isPlayerClass, isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
+import { isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
@@ -24,6 +24,7 @@ import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./world
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
+import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -130,19 +131,20 @@ export const appRouter = router({
     me: protectedProcedure.query(async ({ ctx }) => {
       const profile = await db.getOrCreatePlayerProfile(ctx.user.id);
       return {
-      profile,
-      capabilities: { canChooseClass: canChooseClass(profile.level, profile.selectedClass), classUnlockLevel: CLASS_UNLOCK_LEVEL },
-      weaponMasteries: await db.listWeaponMasteries(ctx.user.id),
-      weaponLoadout: await db.getWeaponLoadout(ctx.user.id),
-      guild: await db.getActiveGuildForUser(ctx.user.id),
-      inventory: await db.listInventoryForUser(ctx.user.id),
-      setBonuses: await db.listSetBonusesForUser(ctx.user.id),
-    }; }),
-    chooseClass: protectedProcedure.input(z.object({ playerClass: z.enum(["vanguard", "seer", "warden"]) })).mutation(async ({ ctx, input }) => {
-      if (!isPlayerClass(input.playerClass)) throw new Error("Unsupported class");
-      return db.choosePlayerClass(ctx.user.id, input.playerClass);
+        profile: {
+          userId: profile.userId,
+          aurionPoints: profile.aurionPoints,
+          victories: profile.victories,
+          // Legacy class/aggregate level/XP are not current gameplay authority.
+          // Until a canonical WASD aggregate snapshot is bound, fail closed by omission.
+          selectedClass: "unbound" as const,
+        },
+        progression: await readConfirmedProgressionTracks(ctx.user.id),
+        guild: await db.getActiveGuildForUser(ctx.user.id),
+        inventory: await db.listInventoryForUser(ctx.user.id),
+        setBonuses: await db.listSetBonusesForUser(ctx.user.id),
+      };
     }),
-    setWeaponLoadout: protectedProcedure.input(z.object({ weaponTrack: z.enum(["blade", "staff", "spear", "focus"]) })).mutation(({ ctx, input }) => db.setWeaponLoadout({ userId: ctx.user.id, weaponTrack: input.weaponTrack })),
   }),
   gameplay: router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),

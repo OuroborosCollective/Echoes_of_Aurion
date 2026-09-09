@@ -21,12 +21,7 @@ import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import "./ax1AuthorityHud.css";
 
 type Panel = "inventory" | "character" | "quests" | "map" | "crafting" | "controls" | null;
-const classes = {
-  unbound: { name: "Reisender", icon: "✦", color: "#fbbf24" },
-  vanguard: { name: "Vorhut", icon: "🛡", color: "#ef4444" },
-  seer: { name: "Seher", icon: "✧", color: "#a78bfa" },
-  warden: { name: "Hüter", icon: "➶", color: "#34d399" },
-} as const;
+const explorerView = { name: "Explorer", icon: "✦", color: "#fbbf24" } as const;
 const roleLabels = { tank: "Tank", healer: "Heiler", dps: "Schaden" } as const;
 const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c: "character", m: "map", j: "quests", q: "quests" };
 const community = (panel: "chat" | "market" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
@@ -74,8 +69,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const world = projectReadback(ax1WorldHudSchema, worldQuery);
   const ui = projectReadback(playerUiReadbackSchema.refine(v => v.userId === userId), uiQuery);
   const group = projectReadback(groupReadmodelSchema.refine(v => v.player.userId === userId), groupQuery);
-  const chooseClass = trpc.player.chooseClass.useMutation();
-  const setWeapon = trpc.player.setWeaponLoadout.useMutation();
   const saveControls = trpc.player.saveControls.useMutation();
   const collect = trpc.player.collectLoot.useMutation();
   const equip = trpc.player.equipItem.useMutation();
@@ -156,8 +149,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   }, [auto]);
 
   const profile = player.data?.profile;
-  const classView = profile ? classes[profile.selectedClass] : classes.unbound;
-  const mastery = player.data?.weaponMasteries.find(value => value.weaponTrack === player.data?.weaponLoadout?.weaponTrack) ?? player.data?.weaponMasteries[0];
+  const mastery = player.data?.progression.tracks.find(value => value.trackKind === "weapon");
   const party = group.data?.party ?? null;
   const partyMaxHp = group.data?.ticket?.playerMaxHp ?? null;
   const objectiveItems = world.data?.pointsOfInterest.filter(value => value.state === "available").slice(0, 3) ?? [];
@@ -167,14 +159,14 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   return <div className="aurion-authority-hud xaurion-game-hud ax1-authority-shell" data-testid="authoritative-world-hud">
     <div className="ax1-hud-top-left">
       <section className="aurion-authority-hud__profile ax1-player-frame" aria-label="Serverbestätigter Charakter" data-state={player.state}>
-        <button type="button" className="ax1-unit-portrait" aria-label="Charakter öffnen" onClick={() => openPanel("character")} style={{ borderColor: classView.color }}>
-          <span className="ax1-unit-icon" aria-hidden="true">{classView.icon}</span>{profile && <span>{profile.level}</span>}
+        <button type="button" className="ax1-unit-portrait" aria-label="Charakter öffnen" onClick={() => openPanel("character")} style={{ borderColor: explorerView.color }}>
+          <span className="ax1-unit-icon" aria-hidden="true">{explorerView.icon}</span>
         </button>
         <div className="ax1-unit-values">
           {profile ? <>
-            <div className="ax1-unit-heading"><b>{classView.name}</b><strong>◆ {profile.aurionPoints}</strong></div>
-            <div className="ax1-confirmed-bar" data-live={player.state === "live"}><i /><span>{profile.totalXp} EP · {profile.victories} Siege</span></div>
-            <div className="ax1-mastery-line">{mastery ? <><span>{mastery.weaponTrack}</span><b>Rang {mastery.level}</b><em>{mastery.xp} XP</em></> : <span>Waffenmastery wartet auf Serverdaten</span>}</div>
+            <div className="ax1-unit-heading"><b>{explorerView.name}</b><strong>◆ {profile.aurionPoints}</strong></div>
+            <div className="ax1-confirmed-bar" data-live={player.state === "live"}><i /><span>{player.data?.progression.tracks.length ?? 0} bestätigte Progressionspfade · {profile.victories} Siege</span></div>
+            <div className="ax1-mastery-line">{mastery ? <><span>{mastery.trackId}</span><b>Stufe {mastery.levelExact}</b><em>Receipt verifiziert</em></> : <span>Waffenpfad wartet auf verifizierte Receipts</span>}</div>
           </> : <b>Charakterdaten ausstehend</b>}
           <small role="status" className={player.state === "live" ? "sr-only" : undefined}>{readbackLabels[player.state]}</small>
           <span data-testid="confirmed-remote-player-count" className="sr-only">{connected ? remotePlayers.length + " andere Explorer verbunden" : "Mitspieler werden verbunden"}</span>
@@ -271,7 +263,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     {panel === null && message && <p className="aurion-ui-feedback" role="status">{message}</p>}
     {ui.state === "error" && <p className="aurion-ui-feedback" role="alert">Inventardaten sind nicht verfügbar.</p>}
     <InventoryModal isOpen={panel === "inventory"} onClose={() => openPanel(null)} readback={ui.data} points={profile?.aurionPoints} pending={!uiFresh} message={message || (ui.state !== "live" ? readbackLabels[ui.state] : "")} onEquip={item => { const previous = ui.data?.equipment.find(e => e.slot === item.slot); void act(() => equip.mutateAsync({ id: item.id, version: item.version, expectedItem: previous ? { id: previous.id, version: previous.version } : null }), uiFresh); }} onUnequip={item => { void act(() => unequip.mutateAsync({ id: item.id, version: item.version }), uiFresh); }} onCollect={item => { void act(() => collect.mutateAsync({ id: item.id, version: item.version }), uiFresh); }} onToggleAutoLoot={toggleLoot} onCraft={() => openPanel("crafting")} />
-    <CharacterModal isOpen={panel === "character"} onClose={() => openPanel(null)} player={player.data} settings={ui.data?.settings} playerPending={!fresh} uiPending={!uiFresh} groupPending={!groupFresh} message={message} group={group.state === "live" ? group.data : undefined} onBind={bind} onClass={playerClass => { void act(() => chooseClass.mutateAsync({ playerClass })); }} onWeapon={weaponTrack => { void act(() => setWeapon.mutateAsync({ weaponTrack })); }} onRoleSkill={(skill, equipped) => { const current = group.data?.player; if (current) void act(() => groupCommand.mutateAsync({ expectedRevision: current.revision, action: { kind: "equip", skills: equipped ? [...new Set([...current.skills, skill])] : current.skills.filter(s => s !== skill) } }), groupFresh); }} onInventory={() => openPanel("inventory")} />
+    <CharacterModal isOpen={panel === "character"} onClose={() => openPanel(null)} player={player.data} settings={ui.data?.settings} uiPending={!uiFresh} groupPending={!groupFresh} message={message} group={group.state === "live" ? group.data : undefined} onBind={bind} onRoleSkill={(skill, equipped) => { const current = group.data?.player; if (current) void act(() => groupCommand.mutateAsync({ expectedRevision: current.revision, action: { kind: "equip", skills: equipped ? [...new Set([...current.skills, skill])] : current.skills.filter(s => s !== skill) } }), groupFresh); }} onInventory={() => openPanel("inventory")} />
     {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} pending={false} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} />}
     <CraftingModal isOpen={panel === "crafting"} onClose={() => openPanel(null)} inventory={ui.data} readback={!craftingQuery.isError ? craftingQuery.data : undefined} pending={!fresh || craftingQuery.isFetching || craftingQuery.isError} message={message} onCraft={inputItemId => { void act(() => craft.mutateAsync({ recipeKey: "temper_aurion_spear", inputItemId })); }} onBonus={batch => { void act(() => bonus.mutateAsync({ receiptId: batch.receiptId, expectedOutputIndexExact: batch.nextOutputIndexExact, count: Math.min(10, Number(batch.remainingQuantityExact)) })); }} />
     <ControlsModal open={panel === "controls"} onClose={() => openPanel(null)} settings={ui.data?.settings} pending={!uiFresh} message={message} onBind={bind} onAutoLoot={toggleLoot} onAnalytics={() => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data!.settings, analyticsConsent: !ui.data!.settings.analyticsConsent }), uiFresh); }} onStartAuto={() => { openPanel(null); setStartAfterClose(true); }} />

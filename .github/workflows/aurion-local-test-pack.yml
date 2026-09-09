@@ -1,0 +1,131 @@
+name: Aurion Local Test Pack
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - "client/**"
+      - "shared/**"
+      - "drizzle/**"
+      - "scripts/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/aurion-local-test-pack.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "client/**"
+      - "shared/**"
+      - "drizzle/**"
+      - "scripts/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/aurion-local-test-pack.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurion-local-test-pack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-offline-pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-disposable-classless-test
+          MARIADB_DATABASE: aurion_classless_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-classless-test --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:aurion-disposable-classless-test@127.0.0.1:3306/aurion_classless_test
+      AURION_CLASSLESS_E2E: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-local-pack-signing-key-never-production
+      VITE_APP_ID: aurion-local-pack-isolated-regression
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install offline pack tooling
+        run: sudo apt-get update && sudo apt-get install -y zstd
+      - name: Bind exact source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify migration chain and apply schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
+          pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
+      - name: Typecheck and classless regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm check 2>&1 | tee .aurion-local-test-pack/evidence/typecheck.log
+          pnpm exec vitest run \
+            server/progressionReceiptPersistence.test.ts \
+            server/classlessProgressionMariaDb.test.ts \
+            server/aurionClasslessBoundary.test.ts \
+            client/src/xaurion/integration/authoritativeHudProjection.test.ts \
+            client/src/xaurion/integration/AurionAuthorityHud.test.tsx \
+            2>&1 | tee .aurion-local-test-pack/evidence/classless-regression.log
+      - name: Run repository regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The real MariaDB classless contracts ran above. The repository-wide pass
+          # intentionally clears DB opt-ins so unrelated E2E suites cannot share the
+          # disposable classless database or manufacture cross-suite timing/state.
+          env -u DATABASE_URL -u AURION_CLASSLESS_E2E pnpm test 2>&1 | tee .aurion-local-test-pack/evidence/full-vitest.log
+      - name: Build schema-only MariaDB working copy and offline dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK=.aurion-local-test-pack
+          DB_CONTAINER="$(docker ps --filter ancestor=mariadb:11.4 --format '{{.ID}}' | head -n1)"
+          test -n "$DB_CONTAINER"
+          docker exec "$DB_CONTAINER" mariadb-dump -uroot -paurion-disposable-classless-test \
+            --no-data --routines --triggers aurion_classless_test > "$PACK/schema.sql"
+          docker exec "$DB_CONTAINER" mariadb -uroot -paurion-disposable-classless-test -NBe \
+            "SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COALESCE(COLUMN_DEFAULT,'<NULL>') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='aurion_classless_test' ORDER BY TABLE_NAME,ORDINAL_POSITION" \
+            > "$PACK/schema-columns.tsv"
+          docker exec "$DB_CONTAINER" mariadb -uroot -paurion-disposable-classless-test -NBe "SELECT VERSION()" > "$PACK/mariadb-version.txt"
+          git archive HEAD | zstd -T0 -10 -o "$PACK/aurion-source.tar.zst"
+          tar --zstd -cf "$PACK/node_modules.tar.zst" node_modules
+          docker save mariadb:11.4 | zstd -T0 -10 -o "$PACK/mariadb-11.4-image.tar.zst"
+          cp scripts/bootstrap-aurion-local-test-pack.sh "$PACK/"
+          cp package.json pnpm-lock.yaml "$PACK/"
+          (cd "$PACK" && sha256sum schema.sql > schema.sha256)
+          LOCK_SHA="$(sha256sum pnpm-lock.yaml | cut -d' ' -f1)"
+          SCHEMA_SHA="$(sha256sum "$PACK/schema.sql" | cut -d' ' -f1)"
+          IMAGE_ID="$(docker image inspect mariadb:11.4 --format '{{.Id}}')"
+          MARIADB_VERSION="$(cat "$PACK/mariadb-version.txt")"
+          node -e 'const fs=require("fs"); const [sha,lock,schema,image,version]=process.argv.slice(1); fs.writeFileSync(".aurion-local-test-pack/manifest.json", JSON.stringify({recordType:"aurion_local_test_pack.v1",sourceRevision:sha,pnpmLockSha256:lock,schemaSha256:schema,mariaDbImage:"mariadb:11.4",mariaDbImageId:image,mariaDbVersion:version,productionDataIncluded:false},null,2)+"\n")' \
+            "$AURION_RELEASE_SHA" "$LOCK_SHA" "$SCHEMA_SHA" "$IMAGE_ID" "$MARIADB_VERSION"
+          (cd "$PACK" && sha256sum manifest.json aurion-source.tar.zst node_modules.tar.zst mariadb-11.4-image.tar.zst schema-columns.tsv mariadb-version.txt > artifact.sha256)
+      - name: Upload exact offline pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-local-test-pack-${{ env.AURION_RELEASE_SHA }}
+          path: .aurion-local-test-pack/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          include-hidden-files: true

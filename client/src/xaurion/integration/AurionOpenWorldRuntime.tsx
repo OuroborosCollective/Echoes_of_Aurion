@@ -33,25 +33,16 @@ type ActivationSnapshot = Readonly<{
 
 type AurionPlayerProjection = Readonly<{
   profile?: {
-    level?: number;
-    totalXp?: number;
     aurionPoints?: number;
     victories?: number;
-    selectedClass?: "unbound" | "vanguard" | "seer" | "warden";
+    selectedClass?: "unbound";
   };
-  weaponLoadout?: { weaponTrack?: "blade" | "staff" | "spear" | "focus" } | null;
 }>;
 
 const classForAurion = (value: "unbound" | "vanguard" | "seer" | "warden" | undefined): CharacterClassId => {
   if (value === "seer") return "mage";
   if (value === "warden") return "ranger";
   return "knight";
-};
-
-const weaponForAurion = (value: "blade" | "staff" | "spear" | "focus" | undefined) => {
-  if (value === "staff" || value === "focus") return "arcane" as const;
-  if (value === "spear") return "blade" as const;
-  return "blade" as const;
 };
 
 const ZONE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000] as const;
@@ -265,11 +256,10 @@ export default function AurionOpenWorldRuntime() {
     const nextClass = classForAurion(projection.profile.selectedClass);
     if (engine.player.currentClassId !== nextClass) engine.player.setClass(nextClass);
     setCurrentClassId(nextClass);
-    if (Number.isSafeInteger(projection.profile.level) && (projection.profile.level ?? 0) > 0) engine.player.stats.level = projection.profile.level!;
-    if (Number.isSafeInteger(projection.profile.totalXp) && (projection.profile.totalXp ?? -1) >= 0) engine.player.stats.xp = projection.profile.totalXp!;
+    // Never project legacy Aurion aggregate level/XP or fixed weapon-loadout rows into AX1.
+    // Those fields remain at AX1/WASD runtime defaults until canonical WASD truth is bound.
     if (Number.isSafeInteger(projection.profile.aurionPoints) && (projection.profile.aurionPoints ?? -1) >= 0) engine.player.stats.score = projection.profile.aurionPoints!;
     if (Number.isSafeInteger(projection.profile.victories) && (projection.profile.victories ?? -1) >= 0) engine.player.stats.bossKills = projection.profile.victories!;
-    engine.player.stats.activeWeaponType = weaponForAurion(projection.weaponLoadout?.weaponTrack);
     if (activation?.displayName) engine.player.stats.currentZone = activation.displayName;
   }, [activation?.displayName, selectedCharacterUrl, playerSnapshot.data]);
 

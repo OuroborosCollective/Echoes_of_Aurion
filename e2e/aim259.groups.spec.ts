@@ -89,16 +89,14 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     const health = await (await pages[0]!.request.get("/healthz")).json();
     expect(health).toMatchObject({ service: "echoes-of-aurion", status: "ok", revision: process.env.AURION_RELEASE_SHA });
 
-    const weaponTracks = ["blade", "spear", "staff", "focus", "blade"] as const;
     for (let i = 0; i < pages.length; i++) {
       await rpc(pages[i]!, "auth.registerLocal", { handle: `aim259_real_${i}`, password: "Aurion-disposable-group-regression-259!" });
       await rpc(pages[i]!, "player.me");
-      await rpc(pages[i]!, "player.setWeaponLoadout", { weaponTrack: weaponTracks[i] });
     }
 
     // Asset governance is exercised through the real authenticated upload route.
-    // Only this disposable CI database promotes one fixture account to admin; the
-    // healer still performs the actual one-time player selection through AX1 UI.
+    // Only this disposable CI database promotes one fixture account to admin; every
+    // participant still performs the actual one-time player selection through AX1 UI.
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='aim259_real_0'");
     const publicBytes = testAnimatedPlayerGlb("AIM259_Public_Player");
     const publicSha256 = createHash("sha256").update(publicBytes).digest("hex");
@@ -112,15 +110,23 @@ test("five authenticated sessions share one revision-bound group while AX1 prove
     const publicBody = await publicUpload.json();
     expect(publicBody).toMatchObject({ accepted: true, purpose: "player-public", classification: { assetType: "character" }, receipt: { sha256: publicSha256, targetKey: null, status: "catalog" } });
 
+    const launched = [];
+    for (const page of pages) launched.push(await launchAx1AndOpenGroups(page));
     const healerPage = pages[1]!;
-    const { runtime, dialog } = await launchAx1AndOpenGroups(healerPage);
+    const { runtime, dialog } = launched[1]!;
+
+    for (const page of pages) {
+      const state = await read(page);
+      expect(state.qualification.weaponTrack).toBe("blade");
+      expect(state.qualification.roles).toContain("dps");
+    }
 
     await command(pages[0]!, { kind: "equip", skills: ["guardian_stance"] });
     await dialog.getByLabel(/Heilendes Licht/).click();
     await expect(dialog.getByLabel(/Heilendes Licht/)).toBeChecked();
     await expect(dialog.getByRole("radio", { name: "Heiler", exact: true })).toBeEnabled();
     await dialog.getByRole("radio", { name: "Heiler", exact: true }).check();
-    expect((await read(healerPage)).qualification.weaponTrack).toBe("spear");
+    expect((await read(healerPage)).qualification.roles).toContain("healer");
 
     const roles = ["tank", "healer", "dps", "dps", "dps"] as const;
     for (let i = 0; i < pages.length; i++) {

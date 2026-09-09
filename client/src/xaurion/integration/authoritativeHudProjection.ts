@@ -2,13 +2,23 @@ import { z } from "zod";
 
 const natural = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const identity = z.string().min(1).max(128);
+const exact = z.string().regex(/^[0-9]+$/).max(128);
 export const playerReadbackSchema = z.object({
-  capabilities: z.object({ canChooseClass: z.boolean(), classUnlockLevel: natural.positive() }),
-  profile: z.object({ userId: natural.positive(), level: natural.positive(), totalXp: natural, aurionPoints: natural, victories: natural, selectedClass: z.enum(["unbound", "vanguard", "seer", "warden"]) }),
-  weaponLoadout: z.object({ weaponTrack: z.enum(["blade", "staff", "spear", "focus"]) }).nullish(),
-  weaponMasteries: z.array(z.object({ weaponTrack: z.string(), xp: natural, level: natural.positive() })),
-  inventory: z.array(z.object({ id: identity, ownerUserId: natural.positive(), baseItemKey: identity, quality: z.string(), itemLevel: natural.positive(), affixes: z.array(z.object({ key: identity, slot: z.enum(["prefix", "suffix"]), stats: z.record(z.string(), z.number().finite()) })) })).max(100),
-});
+  profile: z.object({ userId: natural.positive(), aurionPoints: natural, victories: natural, selectedClass: z.literal("unbound") }).strict(),
+  progression: z.object({
+    characterId: identity.nullable(),
+    tracks: z.array(z.object({
+      trackKind: z.enum(["weapon", "skill"]),
+      trackId: identity,
+      characterId: identity,
+      levelExact: exact,
+      resultReceiptId: identity,
+      sourceReceiptId: identity,
+      receiptHash: z.string().regex(/^[a-f0-9]{64}$/),
+    }).strict()).max(512),
+  }).strict(),
+  inventory: z.array(z.object({ id: identity, ownerUserId: natural.positive(), baseItemKey: identity, quality: z.string(), itemLevel: natural.positive(), affixes: z.array(z.object({ key: identity, slot: z.enum(["prefix", "suffix"]), stats: z.record(z.string(), z.number().finite()) }).strict()) }).strict()).max(100),
+}).strict();
 export const questReadbackSchema = z.object({ quests: z.array(z.object({
   key: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]), title: z.string(), objective: z.string(),
   requiredLevel: natural.positive(), state: z.enum(["locked", "available", "active", "completed"]), readyToTurnIn: z.boolean(),

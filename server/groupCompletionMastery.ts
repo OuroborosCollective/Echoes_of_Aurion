@@ -6,6 +6,7 @@ import { activityXpAwardExact } from "./aurionBalancingProtocol";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import { getDb } from "./db";
 import { groupHash } from "./groupInstanceRules";
+import { recordProgressionReceipt } from "./progressionReceiptPersistence";
 import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import {
   SCOPED_MASTERY_RULESET_VERSION,
@@ -233,10 +234,47 @@ async function commitGroupCompletionResults(tx: Transaction, party: GroupParty, 
 }
 
 /**
+ * Appends a receipt-backed classless combat-skill projection only after the
+ * accepted expedition result and exact scoped-mastery state exist in the same
+ * transaction. This is persistence/readmodel work: no XP or level is calculated
+ * here; both values are copied from the already-confirmed mastery evidence.
+ */
+async function commitGroupProgressionReadmodel(
+  tx: Transaction,
+  ticket: GroupTicket,
+  plan: readonly GroupCompletionMasteryPlan[],
+  confirmedStatesByUser: Readonly<Record<string, readonly ScopedMasteryState[]>>,
+) {
+  for (const member of plan) {
+    const combatEvent = member.events.find(event => event.key.scopeType === "combat");
+    const combatState = confirmedStatesByUser[String(member.userId)]?.find(state => state.key.scopeType === "combat");
+    if (!combatEvent || !combatState || !combatState.appliedReceiptIds.includes(ticket.id)) throw new Error("GROUP_COMPLETION_PROGRESSION_EVIDENCE_INCOMPLETE");
+    const resultIdempotencyKey = `group-result:${ticket.id}:${member.userId}`;
+    const scopeKey = canonicalScopedMasteryKey(combatEvent.key);
+    await recordProgressionReceipt({
+      userId: member.userId,
+      characterId: actorId(member.userId),
+      actionKind: "skill_use",
+      weaponTrack: "none",
+      skillId: "combat",
+      resultReceiptId: rewardReceiptIdentity("expres", member.userId, resultIdempotencyKey),
+      sourceReceiptId: ticket.id,
+      lootReceiptId: null,
+      masteryEventId: groupHash({ kind: "group_completion_mastery", userId: member.userId, ticketId: ticket.id, scopeKey }),
+      xpGrantedExact: combatEvent.amountExact,
+      levelExact: combatState.progression.levelExact,
+      ruleSetVersion: combatEvent.ruleSetVersion,
+      contentVersion: combatEvent.contentVersion,
+      idempotencyKey: `group-progression:${ticket.id}:${member.userId}:combat`,
+    }, tx);
+  }
+}
+
+/**
  * Appends exactly two scoped mastery events plus one accepted expedition-result
  * receipt per roster member in the caller's existing group-command transaction.
  * Any insert/readback failure therefore rolls back boss clear, party state,
- * player revision, mastery evidence and reward authority together.
+ * player revision, mastery evidence, progression projection and reward authority together.
  */
 export async function commitGroupCompletionMastery(tx: Transaction, party: GroupParty, ticket: GroupTicket) {
   const currentByUser: Record<string, readonly ScopedMasteryState[]> = {};
@@ -260,6 +298,7 @@ export async function commitGroupCompletionMastery(tx: Transaction, party: Group
   const receiptRows = await tx.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id));
   if (receiptRows.length !== plan.length * 2) throw new Error("GROUP_COMPLETION_MASTERY_EVIDENCE_INCOMPLETE");
 
+  const confirmedStatesByUser: Record<string, readonly ScopedMasteryState[]> = {};
   for (const member of plan) {
     const expectedScopes = new Set(member.keys.map(canonicalScopedMasteryKey));
     const memberReceiptRows = receiptRows.filter(row => row.userId === member.userId);
@@ -273,8 +312,10 @@ export async function commitGroupCompletionMastery(tx: Transaction, party: Group
     if (states.length !== member.keys.length || states.some(state => !state.appliedReceiptIds.includes(ticket.id))) {
       throw new Error("GROUP_COMPLETION_MASTERY_READBACK_FAILED");
     }
+    confirmedStatesByUser[String(member.userId)] = states;
   }
 
   const results = await commitGroupCompletionResults(tx, party, ticket);
+  await commitGroupProgressionReadmodel(tx, ticket, plan, confirmedStatesByUser);
   return Object.freeze({ receiptId: ticket.id, eventCount: receiptRows.length, resultReceiptCount: results.receiptCount, expeditionKey: results.expeditionKey });
 }
