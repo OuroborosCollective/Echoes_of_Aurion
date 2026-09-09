@@ -16,7 +16,7 @@ export function isAx1LocalGameplayMutationKey(key:string,code:string):boolean{re
 
 /**
  * AX1 remains the render/input/UI implementation. Local AX1 quest, mob, loot,
- * damage and progression mutators are disabled; confirmed WASD zone snapshots
+ * damage and progression mutators are disabled; confirmed server/WASD results
  * are projected back into the same AX1 objects instead.
  */
 export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{requestAction:(command:AurionGameplayCommand)=>void;requestMount:()=>void;},worldContext:AurionWorldContext):void{
@@ -26,22 +26,24 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
   engine.quests=[];
   engine.npcs=[];
   engine.nearbyNPC=null;
-  const reject={success:false,message:"WASD zone authority is required for this action."} as const;
+  const reject={success:false,message:"Server gameplay authority is required for this action."} as const;
   const worldCore=attachAurionWorldCore(engine,worldContext);
   const detachZoneProjection=attachAx1ZoneProjection(engine);
   const baseStop=engine.stop.bind(engine);let stopped=false;
   engine.stop=()=>{if(!stopped){stopped=true;detachZoneProjection();worldCore.stop();}baseStop();};
 
-  // A production-assigned GLB is only allowed to replace AX1's procedural player
-  // when the loaded asset itself proves real idle and attack clips. Missing clips
-  // fall back to AX1 instead of exposing bind/T-pose or fake recoil animation.
+  // A production-assigned GLB may replace AX1's procedural player only when it
+  // has a real rig and an actually moving attack clip. Idle/Walk/Run may use the
+  // presentation-only AnimatedGlbActor fallback when the imported named clips
+  // are static; clip names alone are never animation evidence.
   const equipGlbModel=player.equipGlbModel.bind(player);
   player.equipGlbModel=async modelId=>{
     const equipped=await equipGlbModel(modelId);
     if(!equipped||!modelId)return equipped;
     const evidence=player.glbPresentationEvidence();
     const supported=new Set(evidence?.supportedPoses??[]);
-    if(supported.has("idle")&&supported.has("attack"))return true;
+    const animated=new Set(evidence?.animatedPoses??[]);
+    if((evidence?.boneCount??0)>0&&supported.has("idle")&&animated.has("attack"))return true;
     await equipGlbModel(null);
     return false;
   };
@@ -52,7 +54,7 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
   engine.equipItem=()=>null;engine.unequipItem=()=>null;
 
   // These local AX1 methods cannot mint truth in the connected runtime. Incoming
-  // WASD snapshots update the projected fields directly through zoneCombatBridge.
+  // confirmed snapshots update projected fields directly through the bridges.
   player.takeDamage=()=>({damageTaken:0,isDead:false,dodged:false});
   player.heal=()=>{};player.restoreResource=()=>{};player.consumeResource=()=>false;player.gainXp=()=>false;player.useConsumable=()=>{};player.toggleMount=()=>player.stats.isMounted;player.equipItem=()=>null;player.unequipItem=()=>null;player.unequipSlot=()=>null;player.allocateStatPoint=()=>reject;player.unlockMilestoneSkill=()=>reject;player.equipSkillToHotbar=()=>{};
 }
