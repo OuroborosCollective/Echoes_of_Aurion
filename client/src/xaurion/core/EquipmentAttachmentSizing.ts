@@ -2,14 +2,22 @@ import type { GlbEquipmentSlot } from "@shared/glbImportContract";
 
 /** Canonical presentation-only anchor aliases. Names are normalized before lookup. */
 export const equipmentAnchorAliases: Readonly<Record<GlbEquipmentSlot, readonly string[]>> = Object.freeze({
-  weapon: ["aurionslotmainhand", "aurionslotweapon", "socketweaponr", "slotmainhand", "slotweaponr", "slothandr", "handr", "righthand"],
-  shield: ["aurionslotshield", "aurionslotoffhand", "socketweaponl", "slotshield", "slotoffhand", "slothandl", "handl", "lefthand"],
-  helmet: ["aurionslothead", "sockethead", "slothead", "head"],
-  chest: ["aurionslotchest", "socketchest", "slotchest", "upperchest", "chest", "spine2", "spine"],
-  shoulders: ["aurionslotshoulders", "socketshoulders", "slotshoulders", "upperchest", "spine2", "spine"],
-  arms: ["aurionslotarms", "socketarms", "slotarms", "upperchest", "spine2", "spine"],
-  legs: ["aurionslotlegs", "socketlegs", "slotlegs", "pelvis", "hips"],
-  boots: ["aurionslotboots", "socketboots", "slotboots", "pelvis", "hips"],
+  weapon: [
+    "aurionslotmainhand", "aurionslotweapon", "socketweaponr", "slotmainhand", "slotweaponr", "slothandr",
+    "handr", "righthand", "rightwrist", "wristr", "rightpalm", "palmr", "mixamorigrighthand",
+    "bip001rhand", "bip01rhand", "biprhand", "ccbaserhand", "jbiprhand",
+  ],
+  shield: [
+    "aurionslotshield", "aurionslotoffhand", "socketweaponl", "slotshield", "slotoffhand", "slothandl",
+    "handl", "lefthand", "leftwrist", "wristl", "leftpalm", "palml", "mixamoriglefthand",
+    "bip001lhand", "bip01lhand", "biplhand", "ccbaselhand", "jbiplhand",
+  ],
+  helmet: ["aurionslothead", "sockethead", "slothead", "head", "mixamorighead", "ccbasehead", "jbiphead"],
+  chest: ["aurionslotchest", "socketchest", "slotchest", "upperchest", "chest", "spine2", "spine", "mixamorigspine2", "ccbasespine02"],
+  shoulders: ["aurionslotshoulders", "socketshoulders", "slotshoulders", "upperchest", "spine2", "spine", "mixamorigspine2", "ccbasespine02"],
+  arms: ["aurionslotarms", "socketarms", "slotarms", "upperchest", "spine2", "spine", "mixamorigspine2", "ccbasespine02"],
+  legs: ["aurionslotlegs", "socketlegs", "slotlegs", "pelvis", "hips", "mixamorighips", "ccbasehip", "jbiphips"],
+  boots: ["aurionslotboots", "socketboots", "slotboots", "pelvis", "hips", "mixamorighips", "ccbasehip", "jbiphips"],
 });
 
 /** Maximum visual dimension as a fraction of the normalized avatar height. */
