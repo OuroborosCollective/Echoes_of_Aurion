@@ -12,7 +12,7 @@ The pack contains:
 - `schema.sql`: schema-only dump after all migrations executed successfully;
 - `schema-columns.tsv`: table/column/type/nullability inventory read from MariaDB;
 - migration/type/test logs and SHA-256 manifests;
-- `bootstrap-aurion-local-test-pack.sh`: restores the source/dependencies, loads MariaDB offline and imports the schema into `aurion_local_test`.
+- `bootstrap-aurion-local-test-pack.sh`: verifies the archived source, dependencies, manifest, MariaDB image and schema before restoring them, then imports the schema into `aurion_local_classless_test`.
 
 ## Restore
 
@@ -22,6 +22,6 @@ With Docker and `zstd` installed:
 ./bootstrap-aurion-local-test-pack.sh /path/to/unpacked-artifact /path/to/aurion-offline-worktree
 ```
 
-The script prints a `DATABASE_URL` using port `3307` by default. Override the port with `AURION_LOCAL_MARIADB_PORT`. The restored database is disposable and contains no production data.
+The target worktree must be absent or empty; the bootstrap refuses to mix a new exact-revision archive with stale files from an older restore. The script prints a `DATABASE_URL` using port `3307` by default. Override the port with `AURION_LOCAL_MARIADB_PORT`. The restored database name ends in `_classless_test`, matching the fail-closed MariaDB regression guard, and contains no production data.
 
-The artifact manifest binds source SHA, MariaDB version/image ID, dependency lock hash and schema hash so a later test can prove which repository/database state it exercised.
+`artifact.sha256` is checked before any source/dependency extraction or database-image load, and `schema.sha256` is checked before schema import. The manifest binds source SHA, MariaDB version/image ID, dependency lock hash and schema hash so a later test can prove which repository/database state it exercised.
