@@ -160,13 +160,13 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     <div className="ax1-hud-top-left">
       <section className="aurion-authority-hud__profile ax1-player-frame" aria-label="Serverbestätigter Charakter" data-state={player.state}>
         <button type="button" className="ax1-unit-portrait" aria-label="Charakter öffnen" onClick={() => openPanel("character")} style={{ borderColor: explorerView.color }}>
-          <span className="ax1-unit-icon" aria-hidden="true">{explorerView.icon}</span>{profile && <span>{profile.level}</span>}
+          <span className="ax1-unit-icon" aria-hidden="true">{explorerView.icon}</span>
         </button>
         <div className="ax1-unit-values">
           {profile ? <>
             <div className="ax1-unit-heading"><b>{explorerView.name}</b><strong>◆ {profile.aurionPoints}</strong></div>
-            <div className="ax1-confirmed-bar" data-live={player.state === "live"}><i /><span>{profile.totalXp} EP · {profile.victories} Siege</span></div>
-            <div className="ax1-mastery-line">{mastery ? <><span>{mastery.trackId}</span><b>Stufe {mastery.levelExact}</b><em>bestätigt</em></> : <span>Waffenpfad wartet auf bestätigte Receipts</span>}</div>
+            <div className="ax1-confirmed-bar" data-live={player.state === "live"}><i /><span>{player.data?.progression.tracks.length ?? 0} bestätigte Progressionspfade · {profile.victories} Siege</span></div>
+            <div className="ax1-mastery-line">{mastery ? <><span>{mastery.trackId}</span><b>Stufe {mastery.levelExact}</b><em>Receipt verifiziert</em></> : <span>Waffenpfad wartet auf verifizierte Receipts</span>}</div>
           </> : <b>Charakterdaten ausstehend</b>}
           <small role="status" className={player.state === "live" ? "sr-only" : undefined}>{readbackLabels[player.state]}</small>
           <span data-testid="confirmed-remote-player-count" className="sr-only">{connected ? remotePlayers.length + " andere Explorer verbunden" : "Mitspieler werden verbunden"}</span>

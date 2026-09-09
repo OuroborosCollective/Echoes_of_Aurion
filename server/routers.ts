@@ -133,17 +133,13 @@ export const appRouter = router({
       return {
         profile: {
           userId: profile.userId,
-          level: profile.level,
-          totalXp: profile.totalXp,
           aurionPoints: profile.aurionPoints,
           victories: profile.victories,
-          // Compatibility sentinel for AX1 clients still carrying the legacy field.
-          // It is deliberately constant and no longer reflects or authorizes a class.
+          // Legacy class/aggregate level/XP are not current gameplay authority.
+          // Until a canonical WASD aggregate snapshot is bound, fail closed by omission.
           selectedClass: "unbound" as const,
         },
         progression: await readConfirmedProgressionTracks(ctx.user.id),
-        weaponMasteries: await db.listWeaponMasteries(ctx.user.id),
-        weaponLoadout: await db.getWeaponLoadout(ctx.user.id),
         guild: await db.getActiveGuildForUser(ctx.user.id),
         inventory: await db.listInventoryForUser(ctx.user.id),
         setBonuses: await db.listSetBonusesForUser(ctx.user.id),
