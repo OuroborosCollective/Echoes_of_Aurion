@@ -337,10 +337,10 @@ export class AuthoritativeMovementZone {
   }
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
-    this.peers.forEach(peer => {
+    for (const peer of this.peers.values()) {
       if (peer.socket.readyState === peer.socket.OPEN)
         peer.socket.send(serialized);
-    });
+    }
   }
   private presences(): ZonePresence[] {
     const out: ZonePresence[] = [];
@@ -412,10 +412,10 @@ export class AuthoritativeMovementZone {
       combatants: this.combatants(),
     };
     const serialized = serialize(snapshot);
-    this.peers.forEach(peer => {
+    for (const peer of this.peers.values()) {
       if (peer.socket.readyState === peer.socket.OPEN)
         peer.socket.send(serialized);
-    });
+    }
   }
 }
 
