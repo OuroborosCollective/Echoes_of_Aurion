@@ -95,6 +95,14 @@ describe("VisualItemMaterialCompiler", () => {
     expect(() => clock.advance(Number.NaN)).toThrow(/finite/i);
     expect(() => clock.advance(-1)).toThrow(/non-negative/i);
     expect(clock.advance(0.5)).toBe(7.5);
+    const material = first.primary as THREE.MeshPhysicalMaterial;
+    expect(material.emissiveIntensity).toBeCloseTo(0.82 + 0.18 * Math.sin(7.5 * 2.4 + first.profile.visualPhase), 12);
+    expect(material.onBeforeCompile).toBe(THREE.Material.prototype.onBeforeCompile);
+    first.dispose();
+    const retiredIntensity = material.emissiveIntensity;
+    clock.advance(0.5);
+    expect(material.emissiveIntensity).toBe(retiredIntensity);
+
     first.dispose(); second.dispose();
   });
 

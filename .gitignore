@@ -128,3 +128,6 @@ test-results/
 client/public/world-assets/
 assets/world-source/
 deploy/__pycache__/
+
+# Renderer recovery browser evidence
+playwright-aim290-report/

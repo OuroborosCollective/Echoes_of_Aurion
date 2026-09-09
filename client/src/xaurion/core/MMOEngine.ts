@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { renderBudget } from './renderBudget';
+import { checkWebGL2Support, type RendererHandle, type RuntimeRenderer } from './RendererFactory';
 import confetti from 'canvas-confetti';
 import {
   CharacterAppearance,
@@ -59,7 +60,7 @@ export class MMOEngine {
   public container: HTMLElement;
   public scene: THREE.Scene;
   public camera: THREE.PerspectiveCamera;
-  public renderer: THREE.WebGLRenderer;
+  public renderer: RuntimeRenderer;
   private rendererName = "";
 
   // Game Subsystems
@@ -212,36 +213,14 @@ export class MMOEngine {
   }
 
   public static checkWebGLSupport(): { supported: boolean; version?: string; error?: string } {
-    try {
-      if (typeof window === 'undefined') {
-        return { supported: false, error: 'Window environment not available.' };
-      }
-      const canvas = document.createElement('canvas');
-      const gl2 = canvas.getContext('webgl2');
-      if (gl2) {
-        return { supported: true, version: 'WebGL 2.0' };
-      }
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (gl) {
-        return { supported: true, version: 'WebGL 1.0' };
-      }
-      return {
-        supported: false,
-        error: 'WebGL context initialization failed. Please ensure WebGL and Hardware Acceleration are enabled in your browser.',
-      };
-    } catch (e: any) {
-      return {
-        supported: false,
-        error: e?.message || 'WebGL check threw an unexpected exception.',
-      };
-    }
+    return checkWebGL2Support();
   }
 
   public static isWebGLAvailable(): boolean {
     return MMOEngine.checkWebGLSupport().supported;
   }
 
-  constructor(container: HTMLElement, startingClass: CharacterClassId, public readonly simulation: DeterministicSimulation) {
+  constructor(container: HTMLElement, startingClass: CharacterClassId, public readonly simulation: DeterministicSimulation, private readonly rendererHandle: RendererHandle) {
     this.container = container;
 
     // Clear any previous stale canvas or child elements from container
@@ -259,21 +238,8 @@ export class MMOEngine {
 
     this.camera = new THREE.PerspectiveCamera(55, isFinite(aspect) && aspect > 0 ? aspect : 16 / 9, 0.1, 800);
 
-    try {
-      this.renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        powerPreference: 'high-performance',
-        alpha: false,
-        failIfMajorPerformanceCaveat: false,
-      });
-    } catch (err: any) {
-      console.error('MMOEngine: Failed to create WebGLRenderer', err);
-      throw new Error(`WebGLRenderer initialization failed: ${err?.message || 'WebGL not supported'}`);
-    }
-
-    const gl = this.renderer.getContext();
-    const rendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
-    this.rendererName = rendererInfo ? String(gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
+    this.renderer = rendererHandle.renderer;
+    this.rendererName = rendererHandle.rendererName;
     const budget = renderBudget(width, height, window.devicePixelRatio || 1, this.rendererName);
     this.camera.far = budget.far;
     this.camera.updateProjectionMatrix();
@@ -282,7 +248,6 @@ export class MMOEngine {
     this.renderer.setClearColor(0x1e293b, 1.0);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.35;
-    this.renderer.shadowMap.enabled = false;
 
     // Explicit CSS to eliminate layout glitches, margins, or scrollbars
     const canvas = this.renderer.domElement;
@@ -330,7 +295,7 @@ export class MMOEngine {
     };
     this.genkitAdapter = new GenkitAdapter(simulation);
     const particleTier = this.container.clientWidth < 768 ? 'phone' : this.container.clientWidth < 1200 ? 'tablet' : 'desktop';
-    this.particleSystem = new ParticleSystem(this.scene, simulation, particleTier);
+    this.particleSystem = new ParticleSystem(this.scene, simulation, particleTier, rendererHandle.createParticles);
 
 
     // Register landscape steam vents and beacon points into ParticleSystem
@@ -576,7 +541,7 @@ export class MMOEngine {
 
     // WebGL Context Loss / Restore
     el.addEventListener('webglcontextlost', this.handleContextLost as EventListener, false);
-    el.addEventListener('webglcontextrestored', this.handleContextRestored as EventListener, false);
+    this.rendererHandle.onLoss(code => this.failRuntime(new Error(code)));
 
     // Resize
     window.addEventListener('resize', this.handleResize);
@@ -595,7 +560,7 @@ export class MMOEngine {
       el.removeEventListener('touchmove', this.handleTouchMove);
       el.removeEventListener('touchend', this.handleTouchEnd);
       el.removeEventListener('webglcontextlost', this.handleContextLost as EventListener);
-      el.removeEventListener('webglcontextrestored', this.handleContextRestored as EventListener);
+
     }
 
     window.removeEventListener('mousemove', this.handleMouseMove);
@@ -608,9 +573,7 @@ export class MMOEngine {
     this.failRuntime(new Error('WEBGL_CONTEXT_LOST'));
   };
 
-  private handleContextRestored = () => {
-    // Context loss disposes this engine; recovery must create a fresh instance.
-  };
+
 
   public releaseControlInput(): void {
     this.keysPressed = {};
@@ -1253,7 +1216,7 @@ export class MMOEngine {
         if (this.renderer.domElement && this.renderer.domElement.parentElement === this.container) {
           this.container.removeChild(this.renderer.domElement);
         }
-        this.renderer.dispose();
+        this.rendererHandle.dispose();
       }
     } catch (e) {
       console.warn('MMOEngine: Error during renderer disposal', e);

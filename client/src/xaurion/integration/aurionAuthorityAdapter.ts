@@ -1,6 +1,6 @@
 import type { MMOEngine } from "../core/MMOEngine";
 import type { CharacterClassId } from "../types";
-import { attachAurionWorldCore } from "./aurionWorldCore";
+import { attachAurionWorldCore, type AurionWorldContext } from "./aurionWorldCore";
 import { attachAx1ZoneProjection } from "./zoneCombatBridge";
 
 export type AurionPlayerClass="vanguard"|"seer"|"warden";
@@ -19,7 +19,7 @@ export function isAx1LocalGameplayMutationKey(key:string,code:string):boolean{re
  * damage and progression mutators are disabled; confirmed WASD zone snapshots
  * are projected back into the same AX1 objects instead.
  */
-export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{requestAction:(command:AurionGameplayCommand)=>void;requestMount:()=>void;}):void{
+export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{requestAction:(command:AurionGameplayCommand)=>void;requestMount:()=>void;},worldContext:AurionWorldContext):void{
   const player=engine.player;
   engine.simPlayers.dispose();
   engine.mobManager.enableServerAuthority();
@@ -27,7 +27,7 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
   engine.npcs=[];
   engine.nearbyNPC=null;
   const reject={success:false,message:"WASD zone authority is required for this action."} as const;
-  const worldCore=attachAurionWorldCore(engine);
+  const worldCore=attachAurionWorldCore(engine,worldContext);
   const detachZoneProjection=attachAx1ZoneProjection(engine);
   const baseStop=engine.stop.bind(engine);let stopped=false;
   engine.stop=()=>{if(!stopped){stopped=true;detachZoneProjection();worldCore.stop();}baseStop();};

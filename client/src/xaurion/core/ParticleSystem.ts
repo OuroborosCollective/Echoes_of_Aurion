@@ -1,5 +1,6 @@
 import { DeterministicSimulation, seededRandom } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
+import type { RendererHandle, ParticleView } from './RendererFactory';
 
 export interface Particle {
   position: THREE.Vector3;
@@ -47,9 +48,10 @@ export class ParticleSystem {
   private random() { return this.eventRandom ? this.eventRandom() : this.simulation.random('ax1-vfx:ambient'); }
   private particles: Particle[] = [];
   private geometry: THREE.BufferGeometry;
-  private material: THREE.ShaderMaterial;
+  private material: THREE.ShaderMaterial | null = null;
+  private view?: ParticleView;
   private texture: THREE.Texture;
-  private points: THREE.Points;
+  private points: THREE.Object3D;
 
   // Buffer attributes
   private positions: Float32Array;
@@ -61,7 +63,7 @@ export class ParticleSystem {
   private activeBeacons: { position: THREE.Vector3; color: THREE.Color; active: boolean; timer: number }[] = [];
   private steamVents: THREE.Vector3[] = [];
 
-  constructor(scene: THREE.Scene, private readonly simulation: DeterministicSimulation, public readonly budgetTier: 'phone' | 'tablet' | 'desktop' = 'desktop') {
+  constructor(scene: THREE.Scene, private readonly simulation: DeterministicSimulation, public readonly budgetTier: 'phone' | 'tablet' | 'desktop' = 'desktop', createView?: RendererHandle['createParticles']) {
     if (!['phone', 'tablet', 'desktop'].includes(budgetTier)) throw new Error('PARTICLE_BUDGET_INVALID');
     this.maxParticles = { phone: 600, tablet: 1200, desktop: 2400 }[budgetTier];
     this.scene = scene;
@@ -80,6 +82,12 @@ export class ParticleSystem {
 
     // Create radial soft particle texture programmatically
     this.texture = this.createParticleTexture();
+    if (createView) {
+      this.view = createView({ positions: this.positions, colors: this.colors, sizes: this.sizes, alphas: this.alphas }, this.texture);
+      this.points = this.view.object;
+      this.scene.add(this.points);
+      return;
+    }
     // Source effects use per-particle size/alpha, which PointsMaterial ignores.
     this.material = new THREE.ShaderMaterial({
       uniforms: { particleMap: { value: this.texture } },
@@ -775,6 +783,7 @@ export class ParticleSystem {
 
     this.particles.length = aliveCount;
     this.geometry.setDrawRange(0, aliveCount);
+    this.view?.update(aliveCount);
 
     // Zero out remaining buffer indices
     for (let i = aliveCount; i < this.maxParticles; i++) {
@@ -793,7 +802,8 @@ export class ParticleSystem {
     this.particles.length = this.pool.length = this.activeBeacons.length = this.steamVents.length = 0;
     this.texture.dispose();
     this.geometry.dispose();
-    this.material.dispose();
+    this.material?.dispose();
+    this.view?.dispose();
     this.scene.remove(this.points);
   }
 }

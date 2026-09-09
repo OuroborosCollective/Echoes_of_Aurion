@@ -84,16 +84,30 @@ const visualMaterialSet = new Set<string>(visualMaterialIds);
 
 export class AurionVisualClock {
   readonly uniform: THREE.IUniform<number> = { value: 0 };
+  private readonly pulses = new Map<THREE.MeshStandardMaterial, number>();
+
+  attach(material: THREE.MeshStandardMaterial, phase: number): void {
+    this.pulses.set(material, phase);
+    const detach = () => { this.pulses.delete(material); material.removeEventListener("dispose", detach); };
+    material.addEventListener("dispose", detach);
+    this.updatePulses();
+  }
+
+  private updatePulses(): void {
+    for (const [material, phase] of this.pulses) material.emissiveIntensity = 0.82 + 0.18 * Math.sin(this.uniform.value * 2.4 + phase);
+  }
 
   advance(deltaSeconds: number): number {
     if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) throw new Error("visual clock delta must be finite and non-negative");
     this.uniform.value += deltaSeconds;
+    this.updatePulses();
     return this.uniform.value;
   }
 
   reset(timeSeconds = 0): void {
     if (!Number.isFinite(timeSeconds) || timeSeconds < 0) throw new Error("visual clock time must be finite and non-negative");
     this.uniform.value = timeSeconds;
+    this.updatePulses();
   }
 }
 
@@ -144,17 +158,9 @@ function elementEmissive(element: VisualElementFamily | null, quality: VisualIte
 }
 
 function attachSinglePassPulse(material: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial, element: VisualElementFamily, clock: AurionVisualClock, phase: number): void {
-  const originalCacheKey = material.customProgramCacheKey.bind(material);
-  material.customProgramCacheKey = () => `${originalCacheKey()}|aurion-item-vfx-v1:${element}`;
-  material.onBeforeCompile = shader => {
-    shader.uniforms.uAurionVisualTime = clock.uniform;
-    shader.uniforms.uAurionVisualPhase = { value: phase };
-    shader.fragmentShader = `uniform float uAurionVisualTime;\nuniform float uAurionVisualPhase;\n${shader.fragmentShader}`;
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <emissivemap_fragment>",
-      "#include <emissivemap_fragment>\nfloat aurionVisualPulse = 0.82 + 0.18 * sin(uAurionVisualTime * 2.4 + uAurionVisualPhase);\ntotalEmissiveRadiance *= aurionVisualPulse;",
-    );
-  };
+  // Standard emissive intensity works on both backends. This external clock is
+  // presentation-only; material updates never mutate a WASD descriptor or receipt.
+  clock.attach(material, phase);
   material.userData.aurionAnimatedVfx = Object.freeze({ element, clockDriven: true, visualPhase: phase, maxDrawPassesPerMesh: 1 });
   material.needsUpdate = true;
 }

@@ -14,6 +14,7 @@
     * [AIM-267 — Final -ax1 Content Catalog](docs/migrations/AIM267_AX1_CONTENT_CATALOG.md)
     * [AIM-268 — WASD Guild/Kingdom Gameplay · Aurion Persistenz](docs/migrations/AIM268_GUILD_KINGDOM_AUTHORITY.md)
     * [AIM-269 — WASD Guild Bank/Economy · Aurion Custody/Ledger](docs/migrations/AIM269_GUILD_BANK_ECONOMY.md)
+    * [AIM-290 — Renderer und Recovery](docs/migrations/AIM290_RENDERER_RECOVERY.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)
