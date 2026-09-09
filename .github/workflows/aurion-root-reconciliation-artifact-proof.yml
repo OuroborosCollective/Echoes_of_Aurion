@@ -92,6 +92,9 @@ jobs:
             server/aurionProductionSchemaReconciliation.test.ts \
             server/aurionProductionSchemaReconcileDockerRunner.test.ts \
             server/aurionProductionReadbackChain.test.ts
+          python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit \
+            --repo "$GITHUB_WORKSPACE" --expected-revision "$GITHUB_SHA" \
+            --run-canonical --output repository-migration-evidence.json
           bash -n deploy/aurion-production-schema-reconcile
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
@@ -460,6 +463,14 @@ jobs:
           path: |
             aurion-production-reconcile-${{ github.sha }}.tgz
             aurion-production-reconcile-${{ github.sha }}.tgz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload exact revision repository migration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-migration-repository-evidence-${{ github.sha }}
+          path: repository-migration-evidence.json
           if-no-files-found: error
           retention-days: 30
 
