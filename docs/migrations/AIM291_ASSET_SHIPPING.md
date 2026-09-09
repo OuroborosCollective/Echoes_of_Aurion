@@ -12,9 +12,11 @@ Die Pipeline bindet Quellarchive, Katalog, jede Quell-LOD, getrennte Collider, W
 
 glTF Transform 4.5.0 und KTX Software 4.4.2 sind festgelegt. Das KTX-Archiv wird vor der Verwendung gegen SHA-256 geprüft. Vor der KTX2-Kompression werden alle Rasterformate explizit in PNG überführt: Der Optimierer überspringt sonst vorhandene WebP-Texturen, obwohl sein Prozess erfolgreich endet. Jede erzeugte KTX2-Datei wird deshalb anhand tatsächlicher eingebetteter Bilddaten geprüft.
 
+Der native KTX-Aufruf verwendet ausdrücklich vier Encoder-Threads. Ein lokaler Prozessadapter setzt diesen Parameter vor der Kompression, weil `gltf-transform optimize` ihn sonst aus der CPU-Anzahl ableitet. Aktives UASTC-RDO verwendet zusätzlich die deterministische Option `--uastc-rdo-m`. Die vorhandene Optimierungssequenz und ihre Qualitätswerte bleiben erhalten. Der Adapter reicht Ausgabe und Exitcode des echten Encoders durch; er verändert keine erzeugten Texturbytes. Das Manifest bindet Adapter, natives Encoder-Binary und Parameter per Hash. Der Auditor liest `KTXwriterScParams` aus jeder erzeugten KTX2-Textur zurück und verwirft abweichende Thread-/RDO-Parameter.
+
 `city-foundation-wood-03` und `nature-root-1` besitzen jeweils drei Meshopt/KTX2-LODs und drei separat geprüfte WebP-Alternativen. Zusammen mit dem unveränderten Collider ergeben sich 13 Dateien. Das Offline-Bundle und die Three.js-Basis-Decoder werden beim Build gegen ihre Hashes geprüft. Vor jedem Runtime-Decode werden Bytezahl und SHA-256 der empfangenen GLB geprüft. Nach dem Decode müssen alle referenzierten Materialtexturen tatsächlich vorhanden sein: Three.js kann einzelne Texturfehler abfangen und trotzdem ein Modell zurückgeben. Ein fehlender oder fehlerhafter Basis-Decoder führt deshalb erst nach dieser Vollständigkeitsprüfung zur geprüften Alternative derselben Quell-LOD.
 
-Die beiden unabhängigen lokalen Builds lieferten identische Bytes für alle 13 Dateien und das Manifest. Der CLI-Validator bestätigte alle Dateien. Manifest: `681142dbb6c00af536c926bb5bc2b99e575fae60b28edd8c28dbd1ca1b667636`; Bundle: `e03559d4bfd0c1dbeedcde43bc6633bd43cf3e1e2296b7e1f26ffa241eb7adc7`. Der CI-Lauf wiederholt diese Builds mit ausgewiesenen Node-/Python-Versionen und vergleicht die GLB-Bytes zusätzlich mit dem eingecheckten Bundle. Unterschiedliche Laufzeitversionen bleiben im jeweiligen Manifest sichtbar.
+Der CI-Lauf erzeugt zwei vollständige Ausgabesätze mit ausgewiesenen Node-/Python-Versionen und vergleicht alle 13 GLB-Dateien bytegleich miteinander und mit dem eingecheckten Bundle. Zusätzlich müssen Quellbindungen, Transformparameter, Encoderidentität und Skripthashes passen. Unterschiedliche Laufzeitversionen bleiben im jeweiligen Manifest sichtbar. Die aktuellen Manifest-/Bundle-Hashes stehen in `shared/worldAssetShipping.json` und den revisionsgebundenen CI-Artefakten.
 
 KTX2 spart bei diesen Quellen keine Netzbytes: Die Foundation-LOD1 benötigt 1.280.524 Bytes als KTX2 gegenüber 164.876 Bytes als WebP-Alternative. Der Vorteil komprimierter Texturen muss anhand des tatsächlich transkodierten Upload-Payloads beurteilt werden; er darf nicht aus der Dateiendung abgeleitet werden.
 
@@ -48,7 +50,7 @@ Der dedizierte Workflow `AIM-291 Asset Shipping` führt tatsächliche authentifi
 
 Die Nachweise enthalten Decodezeiten, tatsächlich empfangene Bytes, Resource-Timing-Netzwerte, transkodierte Mip-Payloads, Allokationsspitzen und alle Profilgrenzen. Alle 500 ms werden CDP-JavaScript-Heap und die Summe der RSS-Werte der Chromium-Prozesse erfasst. Die RSS-Summe zählt gemeinsam verwendete Seiten mehrfach; Sampling kann kurze Spitzen verpassen. Diese Zahlen und SwiftShader-Renderings zertifizieren weder native Mobilgeräte noch Treiber-VRAM oder authentifiziertes Produktionsspiel.
 
-Status beim Anlegen dieser Dokumentation: lokale Reproduzierbarkeit und gezielte Regressionen geprüft; exakte CI-Browserergebnisse, Review, Merge und Produktionsabschluss stehen noch aus. Die automatisierten Anforderungen sind keine Behauptung, dass der jeweilige Lauf bereits bestanden hat.
+Der ursprüngliche Lauf auf `2f139bd8ba594082da32398d695580519c0a4d4b` bestand alle drei Browserprofile, scheiterte aber beim Vergleich mit dem eingecheckten Bundle: Die lokalen KTX-Metadaten enthielten neun Threads, die CI-Ausgabe vier. Dieser Fehler begründet den expliziten Encodervertrag. Frühere Browserbelege gelten für ihren damaligen Head. Für die Korrektur werden vollständige Neugenerierung, neue Browserläufe und anschließend kanonische Produktions- und Schema-Readbacks verlangt; deren tatsächlicher Abschluss wird im PR dokumentiert.
 
 ## Primärquellen
 
@@ -56,3 +58,4 @@ Status beim Anlegen dieser Dokumentation: lokale Reproduzierbarkeit und gezielte
 - [Three.js KTX2Loader](https://threejs.org/docs/pages/KTX2Loader.html)
 - [KHR_texture_basisu](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_texture_basisu)
 - [KTX Software 4.4.2](https://github.com/KhronosGroup/KTX-Software/releases/tag/v4.4.2)
+- [KTX Encoderparameter](https://github.khronos.org/KTX-Software/ktxtools/ktx_create.html)

@@ -12,7 +12,7 @@ const {manifestSha256, ...committedPayload} = committed.manifest;
 if (manifestSha256 !== hash(canonical(committedPayload))) throw Error("SHIPPING_COMMITTED_MANIFEST_HASH");
 for (const key of ["version", "schema_version", "glTFVersion", "assets", "transforms", "sourceBinding", "lods"])
   if (canonical(manifest[key]) !== canonical(committed.manifest[key])) throw Error(`SHIPPING_SEMANTIC_DRIFT:${key}`);
-for (const key of ["gltfTransform", "ktxSoftware", "blender", "dependencyLockSha256", "scriptHashes"])
+for (const key of ["gltfTransform", "ktxSoftware", "ktxExecutableSha256", "blender", "dependencyLockSha256", "scriptHashes"])
   if (canonical(manifest.toolchain[key]) !== canonical(committed.manifest.toolchain[key])) throw Error(`SHIPPING_TOOLCHAIN_DRIFT:${key}`);
 const files = source => new Map(source.assets.flatMap(asset => [...asset.lods.flatMap(lod => [lod, lod.fallback]), ...(asset.collider ? [asset.collider] : [])]).map(file => [file.file, file]));
 const expected = files(committed.manifest), produced = files(manifest);

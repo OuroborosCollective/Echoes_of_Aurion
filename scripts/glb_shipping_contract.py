@@ -46,6 +46,24 @@ def image_dimensions(data: bytes, mime: str):
             offset += 2 + size
     raise ValueError('SHIPPING_IMAGE_FORMAT_UNSUPPORTED')
 
+def ktx_encoder_parameters(data: bytes):
+    if len(data) < 80 or data[:12] != b'\xabKTX 20\xbb\r\n\x1a\n': raise ValueError('KTX_HEADER')
+    offset, length = struct.unpack_from('<II', data, 56)
+    end = offset + length
+    if offset < 80 or end > len(data): raise ValueError('KTX_METADATA_BOUNDS')
+    entries = {}
+    while offset < end:
+        if offset + 4 > end: raise ValueError('KTX_METADATA_BOUNDS')
+        size = struct.unpack_from('<I', data, offset)[0]; offset += 4
+        if not size or offset + size > end: raise ValueError('KTX_METADATA_BOUNDS')
+        key, separator, value = data[offset:offset+size].partition(b'\0')
+        if not separator or key in entries: raise ValueError('KTX_METADATA_KEY')
+        entries[key] = value.rstrip(b'\0')
+        offset += (size + 3) & ~3
+        if offset > end: raise ValueError('KTX_METADATA_BOUNDS')
+    if b'KTXwriterScParams' not in entries: raise ValueError('KTX_ENCODER_PARAMETERS_REQUIRED')
+    return entries[b'KTXwriterScParams'].decode('ascii')
+
 def audit_glb(path: Path, ceiling: int):
     data, doc, binary = read_glb(path)
     views, accessors = doc.get('bufferViews', []), doc.get('accessors', [])
@@ -74,6 +92,7 @@ def audit_glb(path: Path, ceiling: int):
             if w == h == 1: break
             w, h = max(1, w//2), max(1, h//2)
         images.append({'sha256': sha(content), 'mimeType': image['mimeType'], 'bytes': length, 'width': width, 'height': height, 'decodedCeilingBytes': mip_bytes})
+        if image['mimeType'] == 'image/ktx2': images[-1]['encoderParameters'] = ktx_encoder_parameters(content)
     image_views = {image['bufferView'] for image in doc.get('images', [])}
     geometry_bytes = sum(view['byteLength'] for i, view in enumerate(views) if i not in image_views)
     basis = any(image['mimeType'] == 'image/ktx2' for image in images)

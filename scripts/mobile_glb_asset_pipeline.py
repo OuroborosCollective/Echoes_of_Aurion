@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Local LOD shipping. Prepared LODs preserve the separate confirmed collider."""
 from __future__ import annotations
-import argparse, json, platform, shutil, subprocess
+import argparse, json, os, platform, shutil, subprocess
 from pathlib import Path
 from glb_shipping_contract import VERSION, audit_glb, canonical, confined, sha
+from ktx_shipping_encoder import KTX_THREADS
 
 EXTENSIONS = {'.fbx', '.obj', '.glb', '.gltf'}
 LOD_LIMITS = {'LOD0': 1600, 'LOD1': 800, 'LOD2': 300}
@@ -35,15 +36,32 @@ def main():
     ktx_version = version(['toktx', '--version']) if a.texture_format == 'ktx2' else None
     if ktx_version and ktx_version != 'toktx v4.4.2': raise SystemExit('PINNED_KTX_SOFTWARE_REQUIRED')
     scripts = Path(__file__).parent
+    encoder_env = os.environ.copy()
+    native_ktx = None
+    if a.texture_format == 'ktx2':
+        native_ktx = Path(shutil.which('ktx') or '').resolve()
+        if not native_ktx.is_file() or version([str(native_ktx), '--version']) != 'ktx version: v4.4.2':
+            raise SystemExit('PINNED_NATIVE_KTX_REQUIRED')
+        # glTF-Transform optimize has no thread option. Keep its reviewed transform
+        # sequence and pin the native command through a task-local executable adapter.
+        encoder_bin = work / 'ktx-encoder-bin'
+        encoder_bin.mkdir(exist_ok=False)
+        adapter = encoder_bin / 'ktx'
+        shutil.copyfile(scripts / 'ktx_shipping_encoder.py', adapter)
+        adapter.chmod(0o755)
+        encoder_env['AURION_KTX_EXECUTABLE'] = str(native_ktx)
+        encoder_env['PATH'] = str(encoder_bin) + os.pathsep + encoder_env.get('PATH', '')
     lock = scripts / 'asset-shipping-toolchain/package-lock.json'
     toolchain = {'gltfTransform': cli_version, 'ktxSoftware': ktx_version,
+                 'ktxExecutableSha256': sha(native_ktx.read_bytes()) if native_ktx else None,
                  'blender': None if a.prepared_manifest else version([a.blender, '--version']),
                  'node': version(['node', '--version']), 'python': platform.python_version(),
                  'platform': platform.system() + '-' + platform.machine(), 'dependencyLockSha256': sha(lock.read_bytes()),
-                 'scriptHashes': {name: sha((scripts/name).read_bytes()) for name in ['mobile_glb_asset_pipeline.py', 'mobile_glb_blender_worker.py', 'glb_shipping_contract.py']}}
+                 'scriptHashes': {name: sha((scripts/name).read_bytes()) for name in ['mobile_glb_asset_pipeline.py', 'mobile_glb_blender_worker.py', 'glb_shipping_contract.py', 'ktx_shipping_encoder.py']}}
     manifest = {'schema_version': 2, 'version': VERSION, 'glTFVersion': '2.0', 'toolchain': toolchain,
                 'transforms': {'prune': True, 'dedup': True, 'simplify': 'blender-lods' if not a.prepared_manifest else 'existing-reviewed-lods',
                                'meshopt': 'high', 'textureFormat': a.texture_format, 'textureSize': a.texture_size,
+                               'ktxThreads': KTX_THREADS if native_ktx else None, 'ktxRdoMultithreading': False,
                                'flatten': False, 'join': False, 'instance': False, 'palette': False},
                 'lods': LOD_LIMITS, 'assets': []}
     if a.prepared_manifest:
@@ -91,10 +109,17 @@ def main():
                 png = work/f'{name}-{lod["name"]}.png.glb'
                 run([a.gltf_transform, 'png', raw, png, '--formats', '*'], stdout=subprocess.DEVNULL)
                 shipped = asset_out/f'{lod["name"]}.ktx2.glb'
-                run([a.gltf_transform, 'optimize', png, shipped, *options, '--texture-compress', 'ktx2'], stdout=subprocess.DEVNULL)
+                run([a.gltf_transform, 'optimize', png, shipped, *options, '--texture-compress', 'ktx2'], stdout=subprocess.DEVNULL, env=encoder_env)
                 png.unlink()
             report = audit_glb(shipped, ceiling)
             if shipped != fallback and (report['format'] != 'ktx2' or any(t['mimeType'] != 'image/ktx2' for t in report['textures'])): raise SystemExit('ACTUAL_KTX2_OUTPUT_REQUIRED')
+            for texture in report['textures']:
+                if texture['mimeType'] != 'image/ktx2': continue
+                parameters = texture['encoderParameters'].split()
+                if parameters.count('--threads') != 1 or parameters[parameters.index('--threads')+1:parameters.index('--threads')+2] != [str(KTX_THREADS)]:
+                    raise SystemExit('KTX_THREAD_READBACK_MISMATCH')
+                if '--uastc-rdo' in parameters and '--uastc-rdo-m' not in parameters:
+                    raise SystemExit('KTX_NONDETERMINISTIC_RDO')
             entry['lods'].append({'name': lod['name'], 'file': shipped.relative_to(out).as_posix(), 'sourceSha256': source_hash,
                                   'triangle_ceiling': ceiling, **report, 'fallback': {'file': fallback.relative_to(out).as_posix(), **fallback_report}})
         if item.get('collider'):

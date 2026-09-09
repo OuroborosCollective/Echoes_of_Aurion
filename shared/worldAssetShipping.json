@@ -6,15 +6,17 @@
     "toolchain": {
       "gltfTransform": "4.5.0",
       "ktxSoftware": "toktx v4.4.2",
+      "ktxExecutableSha256": "2028e023a18e827e66362a9e184052f40192566b10f92655a337e2eb8ea0829b",
       "blender": null,
       "node": "v24.19.0",
       "python": "3.12.14",
       "platform": "Linux-x86_64",
       "dependencyLockSha256": "e132c0ed95c890e5adfcbecf4c1e232e2b7031a85f8686c527b6de887e2c0fe3",
       "scriptHashes": {
-        "mobile_glb_asset_pipeline.py": "ccbd6187f7fe58afef46c1554fac3029d0bc7ccfefa3b02b218ee8791a0127f6",
+        "mobile_glb_asset_pipeline.py": "2a881540af987efea7df15a3dc8e45ef3df23110450eaa2133233ea0f2ed7e76",
         "mobile_glb_blender_worker.py": "1252c65e2f4d811a2b12d2a264ac3154511fe4ba1d88d541e8f34b56c9ecc645",
-        "glb_shipping_contract.py": "c90424b6e672f6d5dabb84909b59783936900543e92d22e7bfd55be0d0e3b655"
+        "glb_shipping_contract.py": "e24836eaa44ebb565e0d65e0bf54207aad543fe9453f3b60f9c10488230c94ea",
+        "ktx_shipping_encoder.py": "71480c9f31c0ce60a45f32a13b3e70721f4f8cb43e22cd9d11e3a03320316d71"
       }
     },
     "transforms": {
@@ -24,6 +26,8 @@
       "meshopt": "high",
       "textureFormat": "ktx2",
       "textureSize": 1024,
+      "ktxThreads": 4,
+      "ktxRdoMultithreading": false,
       "flatten": false,
       "join": false,
       "instance": false,
@@ -47,7 +51,7 @@
             "file": "city-foundation-wood-03/LOD0.ktx2.glb",
             "sourceSha256": "0b5225ce024c09c3878404f102ddc9f0d747bbd4b62afae554c1f1215dc8720b",
             "triangle_ceiling": 1600,
-            "sha256": "a625cab2fa370e021e0ed3379adc3325348f1b4afc0b6b2ca2da1fa34d3432ff",
+            "sha256": "39af6c8efa23fa69f8e144186640009a23f379853aa0bcd9606f16290432285c",
             "bytes": 1280524,
             "triangles": 692,
             "geometryBytes": 26972,
@@ -55,25 +59,27 @@
             "decodedCeilingBytes": 11211780,
             "textures": [
               {
-                "sha256": "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+                "sha256": "36d0dbc1a5079fb3c74708e2e667c79910a45a4a27f0fdab8501058b790d02dd",
                 "mimeType": "image/ktx2",
                 "bytes": 1116934,
                 "width": 1024,
                 "height": 1024,
-                "decodedCeilingBytes": 5592404
+                "decodedCeilingBytes": 5592404,
+                "encoderParameters": "--uastc-quality 4 --threads 4 --zstd 18"
               },
               {
-                "sha256": "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f",
+                "sha256": "9163f2868e89565a21d614d17a9a501b35ac84a731ff72d254d307807665f6c4",
                 "mimeType": "image/ktx2",
                 "bytes": 144032,
                 "width": 1024,
                 "height": 1024,
-                "decodedCeilingBytes": 5592404
+                "decodedCeilingBytes": 5592404,
+                "encoderParameters": "--qlevel 255 --threads 4"
               }
             ],
             "textureHashes": [
-              "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
-              "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f"
+              "36d0dbc1a5079fb3c74708e2e667c79910a45a4a27f0fdab8501058b790d02dd",
+              "9163f2868e89565a21d614d17a9a501b35ac84a731ff72d254d307807665f6c4"
             ],
             "animations": 0,
             "skins": 0,
@@ -120,7 +126,7 @@
             "file": "city-foundation-wood-03/LOD1.ktx2.glb",
             "sourceSha256": "2429a428edac07329d4e4eea847827f73cccc9e35e3177f745afad704adb7411",
             "triangle_ceiling": 800,
-            "sha256": "0f64fed390c4d809b76953913189bc0a0d254ac557449701f7c5bc25446e7027",
+            "sha256": "74817a75fbfd45ba8ab45fefc13608389ee3e2b64302c8d21b29aa4819eff0cf",
             "bytes": 1280524,
             "triangles": 692,
             "geometryBytes": 26972,
@@ -128,25 +134,27 @@
             "decodedCeilingBytes": 11211780,
             "textures": [
               {
-                "sha256": "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+                "sha256": "36d0dbc1a5079fb3c74708e2e667c79910a45a4a27f0fdab8501058b790d02dd",
                 "mimeType": "image/ktx2",
                 "bytes": 1116934,
                 "width": 1024,
                 "height": 1024,
-                "decodedCeilingBytes": 5592404
+                "decodedCeilingBytes": 5592404,
+                "encoderParameters": "--uastc-quality 4 --threads 4 --zstd 18"
               },
               {
-                "sha256": "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f",
+                "sha256": "9163f2868e89565a21d614d17a9a501b35ac84a731ff72d254d307807665f6c4",
                 "mimeType": "image/ktx2",
                 "bytes": 144032,
                 "width": 1024,
                 "height": 1024,
-                "decodedCeilingBytes": 5592404
+                "decodedCeilingBytes": 5592404,
+                "encoderParameters": "--qlevel 255 --threads 4"
               }
             ],
             "textureHashes": [
-              "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
-              "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f"
+              "36d0dbc1a5079fb3c74708e2e667c79910a45a4a27f0fdab8501058b790d02dd",
+              "9163f2868e89565a21d614d17a9a501b35ac84a731ff72d254d307807665f6c4"
             ],
             "animations": 0,
             "skins": 0,
@@ -193,7 +201,7 @@
             "file": "city-foundation-wood-03/LOD2.ktx2.glb",
             "sourceSha256": "449d671fcd85b2732075f11c26ce5fc78b6ec7c22ff60b9a26c3719860d3562b",
             "triangle_ceiling": 300,
-            "sha256": "7c04be4cf158c4db4cec9747299db1934263350fdf9d1f79ef93baf60cca2c43",
+            "sha256": "06f68f7e966d5e2a8719cf544ca0bda1b9330b360e23aa9aff67420e06be1c15",
             "bytes": 1273788,
             "triangles": 273,
             "geometryBytes": 13098,
@@ -201,25 +209,27 @@
             "decodedCeilingBytes": 11197906,
             "textures": [
               {
-                "sha256": "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+                "sha256": "36d0dbc1a5079fb3c74708e2e667c79910a45a4a27f0fdab8501058b790d02dd",
                 "mimeType": "image/ktx2",
                 "bytes": 1116934,
                 "width": 1024,
                 "height": 1024,
-                "decodedCeilingBytes": 5592404
+                "decodedCeilingBytes": 5592404,
+                "encoderParameters": "--uastc-quality 4 --threads 4 --zstd 18"
               },
               {
-                "sha256": "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f",
+                "sha256": "9163f2868e89565a21d614d17a9a501b35ac84a731ff72d254d307807665f6c4",
                 "mimeType": "image/ktx2",
                 "bytes": 144032,
                 "width": 1024,
                 "height": 1024,
-                "decodedCeilingBytes": 5592404
+                "decodedCeilingBytes": 5592404,
+                "encoderParameters": "--qlevel 255 --threads 4"
               }
             ],
             "textureHashes": [
-              "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
-              "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f"
+              "36d0dbc1a5079fb3c74708e2e667c79910a45a4a27f0fdab8501058b790d02dd",
+              "9163f2868e89565a21d614d17a9a501b35ac84a731ff72d254d307807665f6c4"
             ],
             "animations": 0,
             "skins": 0,
@@ -318,24 +328,25 @@
             "file": "nature-root-1/LOD0.ktx2.glb",
             "sourceSha256": "c66e70408a78d3568813918bad48f1aebdc268585d4a267bac4777d0007315fc",
             "triangle_ceiling": 1600,
-            "sha256": "6d259d906b30002c0fc0c1db91257d789e81e9464e3301bbc950ec8db48b40a9",
-            "bytes": 23136,
+            "sha256": "f1b4f8e2466ac4e89613b43e306bdd11857399481dc5f0d7e345254e3915784e",
+            "bytes": 23152,
             "triangles": 80,
             "geometryBytes": 1456,
-            "textureBytes": 19454,
+            "textureBytes": 19470,
             "decodedCeilingBytes": 350980,
             "textures": [
               {
-                "sha256": "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36",
+                "sha256": "881f7463d32c806f08420d1f87a87a3bc5830c9b715000e7b87338fcb3b40d98",
                 "mimeType": "image/ktx2",
-                "bytes": 19454,
+                "bytes": 19470,
                 "width": 256,
                 "height": 256,
-                "decodedCeilingBytes": 349524
+                "decodedCeilingBytes": 349524,
+                "encoderParameters": "--qlevel 255 --threads 4"
               }
             ],
             "textureHashes": [
-              "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36"
+              "881f7463d32c806f08420d1f87a87a3bc5830c9b715000e7b87338fcb3b40d98"
             ],
             "animations": 0,
             "skins": 0,
@@ -373,24 +384,25 @@
             "file": "nature-root-1/LOD1.ktx2.glb",
             "sourceSha256": "622e81af50ffcd63bb48a1aa621885f77cd5e45baab1c5c2f814a8c33b47aa73",
             "triangle_ceiling": 800,
-            "sha256": "799f7d86d75dcd538a0f5b57ed930f442a52bec3b3e12dccbd6f66bf0652084f",
-            "bytes": 23136,
+            "sha256": "84f4c79ea631ecb4a19f6b864e00213d4d4cce927aea8a56a8a3c784b778bb44",
+            "bytes": 23152,
             "triangles": 80,
             "geometryBytes": 1456,
-            "textureBytes": 19454,
+            "textureBytes": 19470,
             "decodedCeilingBytes": 350980,
             "textures": [
               {
-                "sha256": "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36",
+                "sha256": "881f7463d32c806f08420d1f87a87a3bc5830c9b715000e7b87338fcb3b40d98",
                 "mimeType": "image/ktx2",
-                "bytes": 19454,
+                "bytes": 19470,
                 "width": 256,
                 "height": 256,
-                "decodedCeilingBytes": 349524
+                "decodedCeilingBytes": 349524,
+                "encoderParameters": "--qlevel 255 --threads 4"
               }
             ],
             "textureHashes": [
-              "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36"
+              "881f7463d32c806f08420d1f87a87a3bc5830c9b715000e7b87338fcb3b40d98"
             ],
             "animations": 0,
             "skins": 0,
@@ -428,24 +440,25 @@
             "file": "nature-root-1/LOD2.ktx2.glb",
             "sourceSha256": "60f7f7b9ed47887ae04fe67d479f0a7b691cb823754706b3e44b64175410bfde",
             "triangle_ceiling": 300,
-            "sha256": "e5402b5212d4514ec423189d160314e0a9f66800ab208c2ba6567e15dddafd3a",
-            "bytes": 23136,
+            "sha256": "b70af52be9bdfecde7e40906a4e5025426e372c574e4007a83e2a929c911c240",
+            "bytes": 23152,
             "triangles": 80,
             "geometryBytes": 1456,
-            "textureBytes": 19454,
+            "textureBytes": 19470,
             "decodedCeilingBytes": 350980,
             "textures": [
               {
-                "sha256": "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36",
+                "sha256": "881f7463d32c806f08420d1f87a87a3bc5830c9b715000e7b87338fcb3b40d98",
                 "mimeType": "image/ktx2",
-                "bytes": 19454,
+                "bytes": 19470,
                 "width": 256,
                 "height": 256,
-                "decodedCeilingBytes": 349524
+                "decodedCeilingBytes": 349524,
+                "encoderParameters": "--qlevel 255 --threads 4"
               }
             ],
             "textureHashes": [
-              "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36"
+              "881f7463d32c806f08420d1f87a87a3bc5830c9b715000e7b87338fcb3b40d98"
             ],
             "animations": 0,
             "skins": 0,
@@ -509,9 +522,9 @@
         "nature": "87c6e6437ee728ae927ac55674a331eb653292de9e50b1872f9ecff3578cd25d"
       }
     },
-    "manifestSha256": "681142dbb6c00af536c926bb5bc2b99e575fae60b28edd8c28dbd1ca1b667636"
+    "manifestSha256": "fb1c661ef0c9c891573c28c068914e002b5dd2ea194be23668224355368632ed"
   },
-  "bundleSha256": "e03559d4bfd0c1dbeedcde43bc6633bd43cf3e1e2296b7e1f26ffa241eb7adc7",
+  "bundleSha256": "a5ed9f586e70876777e74c193057996d21a9775a77f0355779d9d4e3638c9294",
   "decoder": {
     "threeVersion": "0.185.1",
     "files": [

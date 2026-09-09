@@ -5,6 +5,7 @@ on:
       - "client/src/xaurion/**"
       - "scripts/*shipping*"
       - "scripts/*glb*"
+      - "scripts/*ktx*"
       - "scripts/asset-shipping-toolchain/**"
       - "assets/world/mobile-shipping.bundle.br"
       - "shared/worldAssetShipping.json"
@@ -20,6 +21,7 @@ on:
       - "client/src/xaurion/**"
       - "scripts/*shipping*"
       - "scripts/*glb*"
+      - "scripts/*ktx*"
       - "scripts/asset-shipping-toolchain/**"
       - "assets/world/mobile-shipping.bundle.br"
       - "shared/worldAssetShipping.json"
@@ -57,6 +59,7 @@ jobs:
           echo /tmp/aurion-ktx/KTX-Software-4.4.2-Linux-x86_64/bin >> "$GITHUB_PATH"
       - name: Prepare exact confirmed asset inputs
         run: |
+          python3 -m unittest discover -s scripts -p 'test_ktx_shipping_encoder.py' -v
           node scripts/prepare-world-assets.mjs
           node scripts/prepare-mobile-shipping-input.mjs /tmp/aim291-input.json city-foundation-wood-03 nature-root-1
       - name: Independently produce both output sets
