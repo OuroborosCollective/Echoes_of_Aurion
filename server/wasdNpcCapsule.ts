@@ -1,4 +1,4 @@
-import pin from "../config/wasd-npc-capsule.json";
+import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
 import { npcAuthority } from "../vendor/wasd-npc/index.js";
 
 // File/manifest verification runs before the production bundle is built.

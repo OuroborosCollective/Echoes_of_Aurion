@@ -283,7 +283,7 @@ jobs:
           set -e
           test "$host_resolution_status" -ne 0
 
-      - name: Prove fixed root runner sees all twenty-one migrations absent
+      - name: Prove fixed root runner sees all declared migrations absent
         run: |
           set -euo pipefail
           sudo /usr/local/sbin/aurion-production-schema-reconcile "$GITHUB_SHA" > root-absent.json
@@ -293,7 +293,7 @@ jobs:
           if(r.sourceRevision!==process.env.GITHUB_SHA||r.readOnly!==true||r.databaseCredentialReturned!==false) throw new Error("root receipt boundary mismatch");
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.rootFilesystemReadOnly!==true||r.execution.releaseMountedReadOnly!==true||r.execution.environmentMountedReadOnly!==true) throw new Error("root receipt Docker execution mismatch");
           if(r.overallState==="UNREADABLE_FAIL_CLOSED"||r.errorClass==="DATABASE_HOST_UNRESOLVABLE") throw new Error("root runner did not reach the private MariaDB network");
-          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==21) throw new Error("expected twenty-one absent late migrations");
+          if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("expected the complete declared late migration wave");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
 
@@ -369,7 +369,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("root-match.json","utf8"));
-          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==21) throw new Error("root match proof failed");
+          if(r.sourceRevision!==process.env.GITHUB_SHA||r.overallState!=="PRESENT_SCHEMA_MATCH"||r.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("root match proof failed");
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.containerExitStatus!==0) throw new Error("root match did not use the expected Docker executor");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary,drizzleJournal:r.drizzleJournal}));
           NODE

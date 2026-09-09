@@ -41,6 +41,8 @@ for(const profile of [{name:"phone",width:412,height:915},{name:"tablet",width:8
       await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual autonomous zone tick -> persisted WASD memory -> authenticated AX1 UI"}),contentType:"application/json"});
     }finally{await pool.end();}
     await page.screenshot({path:testInfo.outputPath("npc-memory-confirmed.png")});
+    await page.getByRole("button",{name:"Quest-Buch schließen",exact:true}).click();
+    await expect(page.getByRole("button",{name:"Quest-Buch schließen",exact:true})).toHaveCount(0);
     await runtime.getByRole("button",{name:"ZUR STERNWARTE",exact:true}).click();
     await expect(page).toHaveURL(baseURL+"/");
     await enterAx1(page);await runtime.getByRole("button",{name:"Aufträge & Kontakte",exact:true}).click();await page.getByRole("button",{name:"Kontakte",exact:true}).click();

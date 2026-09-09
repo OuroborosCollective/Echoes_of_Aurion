@@ -141,7 +141,7 @@ jobs:
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
 
-      - name: Prove all twenty-one late migrations classify absent on a 0020-only database
+      - name: Prove all declared late migrations classify absent on a 0020-only database
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts > absent.json
@@ -149,7 +149,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("absent.json","utf8"));
           if(receipt.overallState!=="RECONCILIATION_REQUIRED") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.absentCount!==21 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
+          if(receipt.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
@@ -182,7 +182,7 @@ jobs:
           console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
           NODE
 
-      - name: Prove all twenty-one late migrations match after isolated apply
+      - name: Prove all declared late migrations match after isolated apply
         run: |
           set -euo pipefail
           set +e
@@ -195,7 +195,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
           if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.matchCount!==21 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
+          if(receipt.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
           console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
 
