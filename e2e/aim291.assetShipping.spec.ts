@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readdir, readFile } from "node:fs/promises";
 import { register, enterAx1 } from "./helpers/aurionAuthenticated";
-import shipping from "../shared/worldAssetShipping.json";
+const shipping = JSON.parse(await readFile(new URL("../shared/worldAssetShipping.json", import.meta.url), "utf8"));
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable authenticated MariaDB");
 const assets = async (page: Page) => JSON.parse(await page.getByTestId("world-assets-evidence").getAttribute("data-presentation") ?? "null");

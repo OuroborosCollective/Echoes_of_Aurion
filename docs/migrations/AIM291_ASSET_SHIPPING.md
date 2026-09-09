@@ -20,7 +20,7 @@ KTX2 spart bei diesen Quellen keine Netzbytes: Die Foundation-LOD1 benötigt 1.2
 
 ## Grenzen pro Geräteprofil
 
-Alle Bytegrenzen verwenden MiB. Die gemeinsame Ressourcenverwaltung umfasst Weltmodelle sowie Charakter-, NPC- und Ausrüstungs-GLBs. Weltinstanzen besitzen zusätzlich eigene Grenzen. Reservierte Texturbytes verwenden konservativ RGBA8 einschließlich Mips, auch wenn Basis eine kleinere GPU-komprimierte Darstellung liefert.
+Alle Bytegrenzen verwenden MiB. Das gemeinsame Allokationsprofil wird beim Laden der Anwendung anhand der Fensterbreite festgelegt (Phone unter 768, Tablet unter 1200, sonst Desktop) und bleibt bis zum Neuladen stabil. Größenänderungen können die visuellen Weltziele weiter senken, setzen aber keine bereits vergebenen Allokationen rückwirkend unter eine kleinere Grenze. Die gemeinsame Ressourcenverwaltung umfasst Weltmodelle sowie Charakter-, NPC- und Ausrüstungs-GLBs. Weltinstanzen besitzen zusätzlich eigene Grenzen. Reservierte Texturbytes verwenden konservativ RGBA8 einschließlich Mips, auch wenn Basis eine kleinere GPU-komprimierte Darstellung liefert. Expandierte Accessor-Arrays einschließlich Sparse-Accessors werden vor dem Decode mitgezählt.
 
 | Grenze | Phone | Tablet | Desktop |
 | --- | ---: | ---: | ---: |

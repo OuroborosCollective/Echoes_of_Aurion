@@ -38,6 +38,7 @@ describe("bounded, verified GLB ownership", () => {
   it("rejects external dependencies before decode and hashes actual received bytes", async () => {
     vi.stubGlobal("crypto", webcrypto);
     expect(() => inspectGlbAllocation(buffer(testGlb("invalid", {images: [{uri: "https://example.invalid/texture.png"}]})))).toThrow("GLB_EMBEDDED_IMAGE_REQUIRED");
+    expect(() => inspectGlbAllocation(buffer(testGlb("oversized", {accessors: [{count: 1_000_000_000, componentType: 5126, type: "VEC3"}]})))).toThrow("GLB_RESOURCE_BOUNDS");
     const bytes = testGlb();
     vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes)));
     await expect(fetchVerifiedGlb({url: "/unit.glb", bytes: bytes.length, sha256: "0".repeat(64)}, new AbortController().signal)).rejects.toThrow("GLB_HASH");

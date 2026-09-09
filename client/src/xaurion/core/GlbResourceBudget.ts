@@ -48,8 +48,17 @@ export function inspectGlbAllocation(bytes: ArrayBuffer): { json: any; allocatio
     if (!width || !height || width>4096 || height>4096) throw Error("GLB_TEXTURE_DIMENSIONS");
     for(let w=width,h=height;;w=Math.max(1,Math.floor(w/2)),h=Math.max(1,Math.floor(h/2))) {textureBytes+=w*h*4;if(w===1&&h===1)break;}
   }
+  // Sparse accessors may allocate their declared count without a full buffer
+  // view. Count the expanded attribute arrays before the loader sees them.
+  const components:Record<string,number>={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MAT3:9,MAT4:16};
+  const accessorBytes=(json.accessors??[]).reduce((sum:number,a:any)=>{
+    if(!components[a.type]||![5120,5121,5122,5123,5125,5126].includes(a.componentType))throw Error("GLB_ACCESSOR_TYPE");
+    return integer(sum+integer(a.count)*components[a.type]!*4);
+  },0);
+  integer(json.nodes?.length??0,4096);
+  for(const skin of json.skins??[])integer(skin.joints?.length??0,256);
   const geometryBytes = (json.bufferViews ?? []).reduce((sum:number, v:any, i:number) => sum + (images.has(i)?0:integer(v.byteLength)), 0);
-  return {json, allocation:{decodedBytes:integer(geometryBytes*2+textureBytes),textureBytes:integer(textureBytes),animations:integer(json.animations?.length??0,64)}};
+  return {json, allocation:{decodedBytes:integer(geometryBytes*2+accessorBytes+textureBytes),textureBytes:integer(textureBytes),animations:integer(json.animations?.length??0,64)}};
 }
 
 export class GlbResourcePool {
@@ -60,7 +69,9 @@ export class GlbResourcePool {
   private peakDecoded=0; private peakNetwork=0; private peakJobs=0;
   private fetchedBytes=0; private decodedCount=0; private decodeMs=0; private maximumDecodeMs=0;
   private rejected=0;
-  get tier() {return assetTier(typeof window === "undefined" ? 412 : window.innerWidth);}
+  // Stable accounting profile for the loaded application. A resize must not
+  // retroactively lower the ceiling underneath resources already reserved.
+  constructor(readonly tier:AssetTier=assetTier(typeof window === "undefined" ? 412 : window.innerWidth)) {}
   get limits() {return assetBudgets[this.tier];}
   async job<T>(networkBytes:number, work:()=>Promise<T>):Promise<T> {
     integer(networkBytes);
