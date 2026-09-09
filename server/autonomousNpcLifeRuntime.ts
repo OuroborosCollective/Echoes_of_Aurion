@@ -1,6 +1,8 @@
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { resolveAndRecordAx1LivingWorld } from "./ax1LivingWorldRuntime";
 import { readConfirmedNpcState } from "./wasdAurionRuntime";
+import { readConfirmedNpcMultiMemory } from "./npcMultiMemoryPersistence";
+import { projectNpcMemoryV4 } from "./wasdNpcCapsule";
 
 export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = 600;
 export const AUTONOMOUS_NPC_LIFE_HOME_REGION = "observatory_threshold" as const;
@@ -24,6 +26,7 @@ export type AutonomousNpcLifeReadback = Readonly<{
   worldReactionHash: string | null;
   npcReceiptSource: "created" | "persisted" | null;
   worldReceiptSource: "created" | "persisted" | null;
+  multiMemory: ReturnType<typeof projectNpcMemoryV4> | null;
   failureCode: string | null;
 }>;
 
@@ -73,6 +76,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     worldReactionHash: null,
     npcReceiptSource: null,
     worldReceiptSource: null,
+    multiMemory: null,
     failureCode: null,
   });
 
@@ -94,6 +98,8 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
       if (confirmed.lifeState.stateHash !== result.npc.lifeState.stateHash || confirmed.lifeState.currentGoal !== confirmed.decision.goal) throw new Error("NPC_LIFE_STATE_READBACK_MISMATCH");
       const currentHubId = confirmed.lifeState.economy?.currentHubId;
       if (!currentHubId || currentHubId !== result.resolution.npc.currentHubId) throw new Error("NPC_LIFE_ECONOMY_READBACK_MISMATCH");
+      const memory = await readConfirmedNpcMultiMemory(AUTONOMOUS_NPC_LIFE_NPC_ID);
+      if (!memory || !result.npc.multiMemory || memory.lastResolutionIndex !== resolutionIndex || memory.memoryHash !== result.npc.multiMemory.memoryHash) throw new Error("NPC_LIFE_MULTI_MEMORY_READBACK_MISMATCH");
       state = frozenReadback({
         enabled,
         status: "confirmed",
@@ -112,6 +118,7 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         worldReactionHash: result.world.reaction.deterministicHash,
         npcReceiptSource: result.npc.source,
         worldReceiptSource: result.world.source,
+        multiMemory: projectNpcMemoryV4(memory),
         failureCode: null,
       });
     } catch (error) {

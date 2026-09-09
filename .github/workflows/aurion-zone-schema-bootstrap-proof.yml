@@ -46,6 +46,7 @@ on:
       - "drizzle/0039_aurion_world_epoch_materializations.sql"
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
+      - "drizzle/0042_aurion_npc_multi_memory.sql"
   push:
     branches: [main]
     paths:
@@ -92,6 +93,7 @@ on:
       - "drizzle/0039_aurion_world_epoch_materializations.sql"
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
+      - "drizzle/0042_aurion_npc_multi_memory.sql"
 
 permissions:
   contents: read

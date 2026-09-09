@@ -16,6 +16,7 @@
     * [AIM-269 — WASD Guild Bank/Economy · Aurion Custody/Ledger](docs/migrations/AIM269_GUILD_BANK_ECONOMY.md)
     * [AIM-290 — Renderer und Recovery](docs/migrations/AIM290_RENDERER_RECOVERY.md)
     * [AIM-291 — Mobile GLB-Auslieferung](docs/migrations/AIM291_ASSET_SHIPPING.md)
+    * [AIM-292 — Bestätigtes NPC-Gedächtnis](docs/migrations/AIM292_NPC_MULTI_MEMORY.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)

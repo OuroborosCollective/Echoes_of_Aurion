@@ -84,11 +84,11 @@ describe("Aurion production schema reconciliation", () => {
     const ledger = observed.get("aurionContentHashLedger")!;
     observed.set(ledger.name, { ...ledger, triggers: [] });
     const result = classifyMigrationContracts(contracts, observed);
-    expect(result.at(-1)).toMatchObject({ state: "PRESENT_SCHEMA_DRIFT", drift: [
+    expect(result.find(migration => migration.tag === "0041_aurion_content_hash_ledger")).toMatchObject({ state: "PRESENT_SCHEMA_DRIFT", drift: [
       "aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_delete",
       "aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_update",
     ] });
-    expect(result.slice(0, -1).every(migration => migration.state === "PRESENT_SCHEMA_MATCH")).toBe(true);
+    expect(result.filter(migration => migration.tag !== "0041_aurion_content_hash_ledger").every(migration => migration.state === "PRESENT_SCHEMA_MATCH")).toBe(true);
   });
 
   it("accepts every exact late prefix including both guild enum and crafting index evolution", async () => {

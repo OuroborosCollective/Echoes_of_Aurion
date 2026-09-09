@@ -13,6 +13,7 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
 
   async function cleanup() {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    await pool.query("TRUNCATE TABLE aurionNpcMemoryReceiptsV4");
     await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId=?",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     await pool.query("DELETE FROM aurionNpcStates WHERE npcId=?",[AUTONOMOUS_NPC_LIFE_NPC_ID]);
     await pool.query("DELETE FROM aurionWorldResolutions WHERE regionId IN (?,?,?,?) AND resolutionIndex BETWEEN 0 AND 20",hubs);

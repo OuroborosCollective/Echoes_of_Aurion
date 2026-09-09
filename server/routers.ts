@@ -1,3 +1,4 @@
+import { readConfirmedNpcMultiMemoryPacket } from "./npcMultiMemoryPersistence";
 import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
@@ -21,7 +22,7 @@ import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
-import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
+import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
 import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
@@ -149,6 +150,7 @@ export const appRouter = router({
   gameplay: router({
     progress: protectedProcedure.query(({ ctx }) => db.getGameplayProgress(ctx.user.id)),
     npcSnapshots: protectedProcedure.query(({ ctx }) => readConfirmedNpcPacket(ctx.user.id)),
+    npcMultiMemory: protectedProcedure.query(({ ctx }) => readConfirmedNpcMultiMemoryPacket(ctx.user.id)),
     relationshipStanding: protectedProcedure.query(({ ctx }) => db.getRelationshipStanding(ctx.user.id)),
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
@@ -294,14 +296,6 @@ export const appRouter = router({
           resolutionIndex: z.number().int().min(0),
         })).max(128),
       })).mutation(({ input }) => resolveAndRecordWorld(input)),
-      resolveNpc: adminProcedure.input(z.object({
-        npcId: z.enum(["lyra", "orun"]),
-        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault"]),
-        resolutionIndex: z.number().int().min(0),
-        needEvents: z.array(z.object({ id: z.string().trim().min(3).max(96), need: z.enum(["safety", "resources", "belonging", "status", "wealth", "power"]), delta: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
-        observationIds: z.array(z.string().trim().min(1).max(120)).max(128),
-        memory: z.array(z.string().trim().min(1).max(280)).max(24),
-      })).mutation(({ input }) => resolveAndRecordNpc(input)),
       resolvePolity: adminProcedure.input(z.object({
         polityId: z.string().trim().min(3).max(96),
         governmentType: z.enum(["monarchy", "council", "theocracy", "trade_republic", "warband"]),

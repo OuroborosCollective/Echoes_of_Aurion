@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { check, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -666,6 +666,30 @@ export const aurionNpcDecisionReceipts = mysqlTable("aurionNpcDecisionReceipts",
   uniqueIndex("aurionNpcDecisionReceipts_npc_index_uq").on(table.npcId, table.resolutionIndex),
   uniqueIndex("aurionNpcDecisionReceipts_hash_uq").on(table.decisionHash),
   index("aurionNpcDecisionReceipts_region_created_idx").on(table.regionId, table.createdAt),
+]);
+
+/** Append-only WASD-derived multi-memory; old decision and account-memory receipts retain their formats. */
+export const aurionNpcMemoryReceiptsV4 = mysqlTable("aurionNpcMemoryReceiptsV4", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  sourceDecisionSha256: varchar("sourceDecisionSha256", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  ruleSetVersion: varchar("ruleSetVersion", { length: 64 }).notNull(),
+  previousReceiptId: varchar("previousReceiptId", { length: 64 }),
+  previousMemoryHash: varchar("previousMemoryHash", { length: 64 }).notNull(),
+  memoryHash: varchar("memoryHash", { length: 64 }).notNull(),
+  memoryJson: mediumtext("memoryJson").notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  check("aurionNpcMemoryReceiptsV4_index_ck", sql`${table.resolutionIndex} >= 0`),
+  check("aurionNpcMemoryReceiptsV4_bytes_ck", sql`octet_length(${table.memoryJson}) <= 262144`),
+  uniqueIndex("aurionNpcMemoryReceiptsV4_npc_index_uq").on(table.npcId, table.resolutionIndex),
+  uniqueIndex("aurionNpcMemoryReceiptsV4_source_uq").on(table.sourceDecisionReceiptId),
+  uniqueIndex("aurionNpcMemoryReceiptsV4_hash_uq").on(table.receiptHash),
 ]);
 
 /** Account/character-bound NPC memory evidence. Gameplay truth is supplied by a confirmed result receipt. */
