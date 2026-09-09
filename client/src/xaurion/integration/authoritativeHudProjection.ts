@@ -4,7 +4,7 @@ const natural = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const identity = z.string().min(1).max(128);
 const exact = z.string().regex(/^[0-9]+$/).max(128);
 export const playerReadbackSchema = z.object({
-  profile: z.object({ userId: natural.positive(), level: natural.positive(), totalXp: natural, aurionPoints: natural, victories: natural, selectedClass: z.literal("unbound") }),
+  profile: z.object({ userId: natural.positive(), aurionPoints: natural, victories: natural, selectedClass: z.literal("unbound") }),
   progression: z.object({
     characterId: identity.nullable(),
     tracks: z.array(z.object({
@@ -17,8 +17,6 @@ export const playerReadbackSchema = z.object({
       receiptHash: z.string().regex(/^[a-f0-9]{64}$/),
     })).max(512),
   }),
-  weaponLoadout: z.object({ weaponTrack: z.enum(["blade", "staff", "spear", "focus"]) }).nullish(),
-  weaponMasteries: z.array(z.object({ weaponTrack: z.string(), xp: natural, level: natural.positive() })),
   inventory: z.array(z.object({ id: identity, ownerUserId: natural.positive(), baseItemKey: identity, quality: z.string(), itemLevel: natural.positive(), affixes: z.array(z.object({ key: identity, slot: z.enum(["prefix", "suffix"]), stats: z.record(z.string(), z.number().finite()) })) })).max(100),
 });
 export const questReadbackSchema = z.object({ quests: z.array(z.object({
