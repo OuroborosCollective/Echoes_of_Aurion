@@ -93,6 +93,7 @@ export class AuthoritativeMovementZone {
   private inputAcknowledgementPending = false;
   private movedLastTick = false;
   private sortedPeers: PresencePeer[] = [];
+  private sortedPeersByEntityId: PresencePeer[] = [];
   private sortedPeersDirty = false;
   constructor(readonly zoneId: ZoneId) {}
 
@@ -225,6 +226,9 @@ export class AuthoritativeMovementZone {
       this.sortedPeers = Array.from(this.peers.values()).sort((a, b) =>
         compareBinary(a.connectionId, b.connectionId)
       );
+      this.sortedPeersByEntityId = Array.from(this.peers.values()).sort(
+        (a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`)
+      );
       this.sortedPeersDirty = false;
     }
     for (const peer of this.sortedPeers) {
@@ -340,7 +344,7 @@ export class AuthoritativeMovementZone {
   }
   private presences(): ZonePresence[] {
     const out: ZonePresence[] = [];
-    for (const peer of this.peers.values()) {
+    for (const peer of this.sortedPeersByEntityId) {
       out.push({
         entityId: `player:${peer.userId}`,
         userId: peer.userId,
@@ -348,41 +352,54 @@ export class AuthoritativeMovementZone {
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
       });
     }
-    return out.sort((a, b) => compareBinary(a.entityId, b.entityId));
+    return out;
   }
   private combatants(): readonly ConfirmedZoneCombatant[] {
     const out: ConfirmedZoneCombatant[] = [];
-    for (const peer of this.peers.values()) {
-      out.push(
-        Object.freeze({
-          entityId: `player:${peer.userId}`,
-          health: peer.health,
-          maxHealth: peer.maxHealth,
-          stamina: peer.stamina,
-          maxStamina: ZONE_COMBAT_MAX_STAMINA,
-          alive: peer.health > 0,
-          combatLevel: peer.combatLevel,
-          lastCombatSequence: peer.lastCombatSequence,
-        })
-      );
+    let peerIndex = 0;
+    const mobs = this.mobRuntime.orderedStates();
+    let mobIndex = 0;
+
+    while (
+      peerIndex < this.sortedPeersByEntityId.length ||
+      mobIndex < mobs.length
+    ) {
+      const peer = this.sortedPeersByEntityId[peerIndex];
+      const mob = mobs[mobIndex];
+      const peerId = peer ? `player:${peer.userId}` : null;
+      const mobId = mob ? mob.definition.entityId : null;
+
+      if (peerId && (!mobId || compareBinary(peerId, mobId) < 0)) {
+        out.push(
+          Object.freeze({
+            entityId: peerId,
+            health: peer.health,
+            maxHealth: peer.maxHealth,
+            stamina: peer.stamina,
+            maxStamina: ZONE_COMBAT_MAX_STAMINA,
+            alive: peer.health > 0,
+            combatLevel: peer.combatLevel,
+            lastCombatSequence: peer.lastCombatSequence,
+          })
+        );
+        peerIndex++;
+      } else if (mobId) {
+        out.push(
+          Object.freeze({
+            entityId: mobId,
+            health: mob.health,
+            maxHealth: mob.maxHealth,
+            stamina: mob.stamina,
+            maxStamina: ZONE_COMBAT_MAX_STAMINA,
+            alive: mob.health > 0,
+            combatLevel: mob.definition.level,
+            lastCombatSequence: 0,
+          })
+        );
+        mobIndex++;
+      }
     }
-    for (const mob of this.mobRuntime.orderedStates()) {
-      out.push(
-        Object.freeze({
-          entityId: mob.definition.entityId,
-          health: mob.health,
-          maxHealth: mob.maxHealth,
-          stamina: mob.stamina,
-          maxStamina: ZONE_COMBAT_MAX_STAMINA,
-          alive: mob.health > 0,
-          combatLevel: mob.definition.level,
-          lastCombatSequence: 0,
-        })
-      );
-    }
-    return Object.freeze(
-      out.sort((a, b) => compareBinary(a.entityId, b.entityId))
-    );
+    return Object.freeze(out);
   }
   private broadcastSnapshot(): void {
     const snapshot: ZoneSnapshot = {
