@@ -66,12 +66,16 @@ jobs:
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile
       - name: Verify migration chain and apply schema
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p .aurion-local-test-pack/evidence
           pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
           pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
       - name: Typecheck and classless regressions
+        shell: bash
         run: |
+          set -euo pipefail
           pnpm check 2>&1 | tee .aurion-local-test-pack/evidence/typecheck.log
           pnpm exec vitest run \
             server/progressionReceiptPersistence.test.ts \
@@ -81,7 +85,13 @@ jobs:
             client/src/xaurion/integration/AurionAuthorityHud.test.tsx \
             2>&1 | tee .aurion-local-test-pack/evidence/classless-regression.log
       - name: Run repository regression suite
-        run: pnpm test 2>&1 | tee .aurion-local-test-pack/evidence/full-vitest.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The real MariaDB classless contracts ran above. The repository-wide pass
+          # intentionally clears DB opt-ins so unrelated E2E suites cannot share the
+          # disposable classless database or manufacture cross-suite timing/state.
+          env -u DATABASE_URL -u AURION_CLASSLESS_E2E pnpm test 2>&1 | tee .aurion-local-test-pack/evidence/full-vitest.log
       - name: Build schema-only MariaDB working copy and offline dependencies
         shell: bash
         run: |
@@ -116,3 +126,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+          include-hidden-files: true
