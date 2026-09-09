@@ -60,6 +60,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "locked", false],
       ["ember_key", "locked", false],
       ["starfall_resonance", "locked", false],
+      ["sunwatch_vanguard", "locked", false],
     ]);
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
@@ -86,6 +87,7 @@ describeWithDatabase("quest chain regression E2E", () => {
     expect(afterOrun.profile).toMatchObject({ totalXp: 342, aurionPoints: 55, seasonPoints: 55, victories: 2 });
     expect(afterOrun.quests.find(quest => quest.key === "ember_key")).toMatchObject({ state: "available", readyToTurnIn: false });
     expect(afterOrun.quests.find(quest => quest.key === "starfall_resonance")).toMatchObject({ state: "locked", readyToTurnIn: false });
+    expect(afterOrun.quests.find(quest => quest.key === "sunwatch_vanguard")).toMatchObject({ state: "locked", readyToTurnIn: false });
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "ember_key" });
     const thirdBoss = await defeatQuestEncounter("solarium");
@@ -101,6 +103,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "available", false],
+      ["sunwatch_vanguard", "locked", false],
     ]);
     expect(afterKey.keys).toEqual(["ember_key"]);
     expect(afterKey.canEnterDungeon).toBe(true);
@@ -124,6 +127,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "completed", false],
+      ["sunwatch_vanguard", "available", false],
     ]);
     expect(completed.keys).toEqual(["ember_key"]);
     expect(completed.canEnterDungeon).toBe(true);
