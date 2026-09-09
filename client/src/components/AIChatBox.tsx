@@ -316,12 +316,14 @@ export function AIChatBox({
           placeholder={placeholder}
           className="flex-1 max-h-32 resize-none min-h-9"
           rows={1}
+          aria-label={placeholder}
         />
         <Button
           type="submit"
           size="icon"
           disabled={!input.trim() || isLoading}
           className="shrink-0 h-[38px] w-[38px]"
+          aria-label="Send message"
         >
           {isLoading ? (
             <Loader2 className="size-4 animate-spin" />
