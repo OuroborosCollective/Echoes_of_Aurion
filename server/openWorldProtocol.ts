@@ -44,7 +44,7 @@ export type OpenWorldProfile = {
 export type OpenWorldSnapshot = {
   revision: 1;
   zoneId: OpenWorldZoneKey;
-  zoneTier: 0 | 1 | 2 | 3 | 4;
+  zoneTier: 0 | 1 | 2 | 3 | 4 | 5;
   displayName: string;
   entryNarrative: string;
   encounter: { activeCount: number; budget: number; maximumVisible: number };
