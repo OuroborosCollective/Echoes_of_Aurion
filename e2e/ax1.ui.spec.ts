@@ -148,8 +148,10 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await dialog.getByRole("button", { name: "Inventar schließen", exact: true }).click();
 
       await hud.getByRole("button", { name: "Charakter", exact: true }).click();
-      await expect(dialog.getByRole("button", { name: "Hüter", exact: true })).toBeDisabled();
-      await dialog.getByRole("button", { name: "Skills & Meisterschaft", exact: true }).click();
+      await expect(dialog.getByText("Dein klassenloser Weg durch Aurion", { exact: true })).toBeVisible();
+      await expect(dialog.getByRole("button", { name: /Vorhut|Seher|Hüter/ })).toHaveCount(0);
+      await expect(dialog.getByText("Bestätigte Waffenpfade", { exact: true })).toBeVisible();
+      await expect(dialog.getByText("Bestätigte Skills", { exact: true })).toBeVisible();
       await dialog.getByLabel("Heilendes Licht", { exact: true }).click();
       await confirmed();
       await expect(dialog.getByLabel("Heilendes Licht", { exact: true })).toBeChecked();
