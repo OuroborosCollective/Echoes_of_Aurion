@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { aurionGlobalWorldStates, expeditionResultReceipts, playerProfiles, users, weaponLoadouts } from "../drizzle/schema";
+import { aurionGlobalWorldStates, aurionProgressionReceipts, expeditionResultReceipts, playerProfiles, users, weaponLoadouts } from "../drizzle/schema";
 import { aurionGroupCoordinator, aurionGroupParties, aurionGroupPlayers, aurionGroupReceipts, aurionGroupTickets } from "../drizzle/groupInstanceSchema";
 import { aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import type { GroupCommand, GroupRole } from "../shared/groupInstanceProtocol";
@@ -9,6 +9,7 @@ import { getDb } from "./db";
 import { commandGroupForUser, readGroupForUser } from "./groupInstancePersistence";
 import { groupHash } from "./groupInstanceRules";
 import { buildGlobalWorldPlan } from "./globalWorldProtocol";
+import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
 
 const suite = process.env.AURION_GROUP_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const ids = Array.from({ length: 5 }, (_, index) => 9259501 + index);
@@ -21,6 +22,7 @@ suite("AIM-259 atomic group completion mastery", () => {
     if (!isolated) throw new Error("ISOLATED_GROUP_TEST_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS aim259_abort_group_mastery");
     await pool.query("DROP TRIGGER IF EXISTS aim259_abort_group_result");
+    await pool.query("DELETE FROM aurionProgressionReceipts WHERE userId IN (?)", [ids]);
     await pool.query("DELETE FROM aurionScopedMasteryEvents WHERE userId IN (?)", [ids]);
     await pool.query("DELETE FROM expeditionResultReceipts WHERE userId IN (?)", [ids]);
     for (const table of ["aurionGroupReceipts", "aurionGroupTickets", "aurionGroupParties", "aurionGroupPlayers", "aurionGroupCoordinator"]) {
@@ -108,7 +110,15 @@ suite("AIM-259 atomic group completion mastery", () => {
     return { ticket, actorUserId, request, staged };
   }
 
-  it("commits the final boss clear, ten mastery events and five accepted result receipts, with replay unchanged", async () => {
+  async function expectProgressionReceipts(ticketId: string, count: number) {
+    const db = (await getDb())!;
+    const rows = await db.select().from(aurionProgressionReceipts);
+    const selected = rows.filter(row => ids.includes(row.userId) && row.sourceReceiptId === ticketId);
+    expect(selected).toHaveLength(count);
+    return selected;
+  }
+
+  it("commits final clear, mastery, accepted results and five verified classless progression projections, with replay unchanged", async () => {
     const { ticket, actorUserId, request } = await stageFinalStrike();
     const first = await commandGroupForUser(actorUserId, request);
     expect(first.applied).toBe(true);
@@ -142,6 +152,16 @@ suite("AIM-259 atomic group completion mastery", () => {
       expect(row.confirmedByUserId).toBe(row.userId);
     });
 
+    const progressionRows = await expectProgressionReceipts(ticket.id, 5);
+    expect(progressionRows.map(row => row.userId).sort((a, b) => a - b)).toEqual([...ids].sort((a, b) => a - b));
+    for (const userId of ids) {
+      const projection = await readConfirmedProgressionTracks(userId);
+      expect(projection.characterId).toBe(`player:${userId}`);
+      expect(projection.tracks).toEqual([
+        expect.objectContaining({ trackKind: "skill", trackId: "combat", sourceReceiptId: ticket.id }),
+      ]);
+    }
+
     const [profiles] = await pool.query<RowDataPacket[]>("SELECT totalXp,aurionPoints FROM playerProfiles WHERE userId IN (?) ORDER BY userId", [ids]);
     expect(profiles.map(row => ({ totalXp: Number(row.totalXp), aurionPoints: Number(row.aurionPoints) }))).toEqual(Array(5).fill({ totalXp: 0, aurionPoints: 0 }));
 
@@ -150,9 +170,10 @@ suite("AIM-259 atomic group completion mastery", () => {
     expect(replay.result).toEqual(first.result);
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(10);
     expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(5);
+    await expectProgressionReceipts(ticket.id, 5);
   });
 
-  it("rolls back the boss clear, command receipt and all mastery evidence when MariaDB rejects the first mastery insert", async () => {
+  it("rolls back boss clear, command receipt, mastery, result and progression evidence when the first mastery insert fails", async () => {
     const { ticket, actorUserId, request, staged } = await stageFinalStrike();
     await pool.query("CREATE TRIGGER aim259_abort_group_mastery BEFORE INSERT ON aurionScopedMasteryEvents FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AIM259_FORCED_MASTERY_ROLLBACK'");
 
@@ -162,6 +183,7 @@ suite("AIM-259 atomic group completion mastery", () => {
     const db = (await getDb())!;
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(0);
     expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(0);
+    await expectProgressionReceipts(ticket.id, 0);
     const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGroupReceipts WHERE userId=? AND expectedRevision=?", [actorUserId, request.expectedRevision]);
     expect(Number(receipts[0]?.count ?? -1)).toBe(0);
 
@@ -170,9 +192,10 @@ suite("AIM-259 atomic group completion mastery", () => {
     expect(retry.result.party?.phase).toBe("cleared");
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(10);
     expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(5);
+    await expectProgressionReceipts(ticket.id, 5);
   });
 
-  it("rolls back the boss clear and all ten mastery events when MariaDB rejects the first result receipt", async () => {
+  it("rolls back boss clear, mastery and progression when the first accepted result receipt fails", async () => {
     const { ticket, actorUserId, request, staged } = await stageFinalStrike();
     await pool.query("CREATE TRIGGER aim259_abort_group_result BEFORE INSERT ON expeditionResultReceipts FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AIM259_FORCED_RESULT_ROLLBACK'");
 
@@ -182,6 +205,7 @@ suite("AIM-259 atomic group completion mastery", () => {
     const db = (await getDb())!;
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(0);
     expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(0);
+    await expectProgressionReceipts(ticket.id, 0);
     const [receipts] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM aurionGroupReceipts WHERE userId=? AND expectedRevision=?", [actorUserId, request.expectedRevision]);
     expect(Number(receipts[0]?.count ?? -1)).toBe(0);
 
@@ -190,5 +214,6 @@ suite("AIM-259 atomic group completion mastery", () => {
     expect(retry.result.party?.phase).toBe("cleared");
     expect(await db.select().from(aurionScopedMasteryEvents).where(eq(aurionScopedMasteryEvents.professionReceiptId, ticket.id))).toHaveLength(10);
     expect(await db.select().from(expeditionResultReceipts).where(eq(expeditionResultReceipts.expeditionKey, `group-dungeon:${ticket.id}`))).toHaveLength(5);
+    await expectProgressionReceipts(ticket.id, 5);
   });
 });
