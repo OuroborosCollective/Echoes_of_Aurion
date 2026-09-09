@@ -337,7 +337,13 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const r=JSON.parse(fs.readFileSync("root-redacted.json","utf8"));
-          if(r.overallState!=="UNREADABLE_FAIL_CLOSED"||r.failureStage!=="READ_SCHEMA_TRIGGERS"||r.errorClass!=="DATABASE_METADATA_ACCESS_DENIED"||r.readOnly!==true) throw new Error("redacted trigger definition was not fail-closed");
+          const ledger=r.migrations?.find(m=>m.tag==="0041_aurion_content_hash_ledger");
+          console.log(JSON.stringify({state:r.overallState,failureStage:r.failureStage,errorClass:r.errorClass,ledgerDrift:ledger?.drift}));
+          // Server versions can hide entire rows instead of returning NULL
+          // action definitions. Both must refuse a schema-match receipt.
+          const redacted=r.overallState==="UNREADABLE_FAIL_CLOSED"&&r.failureStage==="READ_SCHEMA_TRIGGERS"&&r.errorClass==="DATABASE_METADATA_ACCESS_DENIED";
+          const hidden=r.overallState==="PRESENT_SCHEMA_DRIFT"&&ledger?.state==="PRESENT_SCHEMA_DRIFT"&&["aurionContentHashLedger_no_update","aurionContentHashLedger_no_delete"].every(name=>ledger.drift.includes(`aurionContentHashLedger:missing_trigger:${name}`));
+          if(r.readOnly!==true||(!redacted&&!hidden)) throw new Error("invisible trigger definitions were not fail-closed");
           NODE
 
       - name: Use existing isolated database owner for complete read-only metadata visibility
