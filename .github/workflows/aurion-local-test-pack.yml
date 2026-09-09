@@ -5,6 +5,7 @@ on:
     paths:
       - "server/**"
       - "client/**"
+      - "shared/**"
       - "drizzle/**"
       - "scripts/**"
       - "package.json"
@@ -15,6 +16,7 @@ on:
     paths:
       - "server/**"
       - "client/**"
+      - "shared/**"
       - "drizzle/**"
       - "scripts/**"
       - "package.json"
