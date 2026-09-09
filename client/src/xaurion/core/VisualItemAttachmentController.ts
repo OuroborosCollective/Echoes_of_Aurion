@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "./GlbModelLease";
 import * as THREE from "three";
 import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
@@ -66,6 +67,7 @@ function hasFiniteRenderableBounds(scene: THREE.Object3D): boolean {
 
 function detachWithoutDisposingSharedGlb(visual: THREE.Group): void {
   visual.removeFromParent();
+  releaseGlbTree(visual);
   visual.clear();
 }
 

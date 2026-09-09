@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "./GlbModelLease";
 import * as THREE from "three";
 import type { GlbEquipmentSlot } from "@shared/glbImportContract";
 import { equipmentAnchorAliases, equipmentLocalScale } from "./EquipmentAttachmentSizing";
@@ -34,6 +35,8 @@ export class AnimatedGlbActor {
   private readonly nodesByName = new Map<string, THREE.Object3D>();
   private readonly attachments = new Map<GlbEquipmentSlot, THREE.Group>();
   private active: THREE.AnimationAction | null = null;
+  private fading: THREE.AnimationAction | null = null;
+  private fadeRemaining = 0;
   private locomotion: GlbPose = "idle";
   private oneShot = false;
   private disposed = false;
@@ -112,11 +115,17 @@ export class AnimatedGlbActor {
     const next = this.mixer.clipAction(clip);
     if (next === this.active && !once) return true;
     const previous = this.active;
+    this.fading?.stop();
+    this.fading = null;
     next.reset().setEffectiveTimeScale(this.playbackRate(pose, clip)).setEffectiveWeight(1);
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;
     next.play();
-    if (previous && previous !== next) previous.crossFadeTo(next, once ? ONESHOT_BLEND_SECONDS : LOCOMOTION_BLEND_SECONDS, false);
+    if (previous && previous !== next) {
+      this.fadeRemaining = once ? ONESHOT_BLEND_SECONDS : LOCOMOTION_BLEND_SECONDS;
+      previous.crossFadeTo(next, this.fadeRemaining, false);
+      this.fading = previous;
+    }
     this.active = next;
     return true;
   }
@@ -143,6 +152,7 @@ export class AnimatedGlbActor {
   detachEquipment(slot: GlbEquipmentSlot): void {
     const previous = this.attachments.get(slot);
     if (!previous) return;
+    releaseGlbTree(previous);
     previous.removeFromParent();
     this.attachments.delete(slot);
   }
@@ -209,6 +219,8 @@ export class AnimatedGlbActor {
   update(delta: number): void {
     if (this.disposed || !Number.isFinite(delta) || delta <= 0) return;
     this.mixer.update(Math.min(delta, 0.25));
+    this.fadeRemaining -= Math.min(delta, 0.25);
+    if (this.fading && this.fadeRemaining <= 0) { this.fading.stop(); this.fading = null; }
     this.relaxIdleArms();
     this.group.rotation.z = 0;
     if (this.active && !normalizeClipName(this.active.getClip().name).includes("jump")) {
@@ -227,6 +239,7 @@ export class AnimatedGlbActor {
     let pose = 2166136261;
     for (const bone of this.bones) for (const value of [...bone.quaternion.toArray(), ...bone.position.toArray()]) pose = Math.imul(pose ^ Math.round(value * 100_000), 16777619) >>> 0;
     return { heightMeters: this.heightMeters, renderedHeightMeters: measured.max.y - measured.min.y, feetY: measured.min.y,
+      activeAnimationActions: Number(Boolean(this.active)) + Number(Boolean(this.fading)),
       clip: this.active?.getClip().name ?? null, clipTime: this.active?.time ?? 0, boneCount: this.bones.length, bonePose: pose.toString(16),
       supportedPoses: (Object.keys(clipNames) as GlbPose[]).filter(candidate => this.supportsPose(candidate)),
       animationNames: [...this.clips.values()].map(clip => clip.name).sort(),
@@ -241,6 +254,7 @@ export class AnimatedGlbActor {
     this.mixer.removeEventListener("finished", this.finished);
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.model);
+    releaseGlbTree(this.model);
     this.group.removeFromParent();
   }
 }

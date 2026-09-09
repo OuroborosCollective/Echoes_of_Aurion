@@ -30,11 +30,18 @@ jobs:
       - name: Checkout selected revision
         uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Install Blender and GLB tooling
         run: |
           sudo apt-get update
           sudo apt-get install -y blender unzip zip jq python3
-          npm install --global @gltf-transform/cli@4.5.0
+          npm ci --prefix scripts/asset-shipping-toolchain --no-audit --no-fund
+          bash scripts/install-ktx-shipping.sh /tmp/aurion-ktx
+          echo /tmp/aurion-ktx/KTX-Software-4.4.2-Linux-x86_64/bin >> "$GITHUB_PATH"
+          echo "$PWD/scripts/asset-shipping-toolchain/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Resolve source directory
         id: source
@@ -84,5 +91,6 @@ jobs:
           path: |
             build/echoes-of-aurion-mobile-glb-assets.zip
             build/manifest.json
+            .asset-build/output/audit.json
           if-no-files-found: error
           retention-days: 30

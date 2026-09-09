@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import { glbRuntimeCatalogSchema, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { NPCCharacter } from "../types";
@@ -123,8 +124,10 @@ export class NpcFallbackProjection {
     if (!procedural) return;
 
     this.pending.add(npc.id);
+    let unowned: THREE.Group | undefined;
     try {
       const loaded = await glbManager.loadModel(selection.entry.storageUrl);
+      unowned = loaded.scene;
       if (this.disposed) return;
       const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc));
       if (!currentSelection || currentSelection.source !== "fallback" || currentSelection.entry.sha256 !== selection.entry.sha256) return;
@@ -149,9 +152,11 @@ export class NpcFallbackProjection {
         accumulatedAnimationDelta: 0,
         lod: band,
       });
+      unowned = undefined;
     } catch {
       // Fail visibly to the existing procedural NPC. No GLB success is claimed.
     } finally {
+      if (unowned) releaseGlbTree(unowned);
       this.pending.delete(npc.id);
     }
   }

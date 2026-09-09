@@ -1,0 +1,183 @@
+name: AIM-291 Asset Shipping
+on:
+  pull_request:
+    paths:
+      - "client/src/xaurion/**"
+      - "scripts/*shipping*"
+      - "scripts/*glb*"
+      - "scripts/*ktx*"
+      - "scripts/asset-shipping-toolchain/**"
+      - "assets/world/mobile-shipping.bundle.br"
+      - "shared/worldAssetShipping.json"
+      - "e2e/aim291.assetShipping.spec.ts"
+      - "e2e/helpers/aurionAuthenticated.ts"
+      - "playwright.aim291.config.ts"
+      - ".github/workflows/aim291-asset-shipping.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "client/src/xaurion/**"
+      - "scripts/*shipping*"
+      - "scripts/*glb*"
+      - "scripts/*ktx*"
+      - "scripts/asset-shipping-toolchain/**"
+      - "assets/world/mobile-shipping.bundle.br"
+      - "shared/worldAssetShipping.json"
+      - "e2e/aim291.assetShipping.spec.ts"
+      - "e2e/helpers/aurionAuthenticated.ts"
+      - "playwright.aim291.config.ts"
+      - ".github/workflows/aim291-asset-shipping.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aim291-renderer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  reproduce-shipping:
+    name: Reproduce and validate real shipping assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - name: Install frozen application and asset toolchains
+        run: |
+          pnpm install --frozen-lockfile
+          npm ci --prefix scripts/asset-shipping-toolchain --no-audit --no-fund
+          bash scripts/install-ktx-shipping.sh /tmp/aurion-ktx
+          echo /tmp/aurion-ktx/KTX-Software-4.4.2-Linux-x86_64/bin >> "$GITHUB_PATH"
+      - name: Prepare exact confirmed asset inputs
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_ktx_shipping_encoder.py' -v
+          node scripts/prepare-world-assets.mjs
+          node scripts/prepare-mobile-shipping-input.mjs /tmp/aim291-input.json city-foundation-wood-03 nature-root-1
+      - name: Independently produce both output sets
+        run: |
+          for build in a b; do
+            python3 scripts/mobile_glb_asset_pipeline.py --source client/public/world-assets --prepared-manifest /tmp/aim291-input.json --output ".asset-build/$build" --work ".asset-build/work-$build" --gltf-transform scripts/asset-shipping-toolchain/node_modules/.bin/gltf-transform
+            python3 scripts/validate_mobile_glb_assets.py --root ".asset-build/$build" --manifest ".asset-build/$build/manifest.json" --gltf-transform scripts/asset-shipping-toolchain/node_modules/.bin/gltf-transform
+          done
+      - name: Enforce byte-identical output, sealed metadata and unchanged collider
+        run: node scripts/verify-shipping-repro.mjs .asset-build/a .asset-build/b
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim291-reproducible-shipping-${{ github.event.pull_request.head.sha || github.sha }}
+          include-hidden-files: true
+          path: |
+            .asset-build/a/
+            .asset-build/b/
+            /tmp/aim291-input.json
+          retention-days: 14
+  renderer-browser:
+    name: Actual KTX2/fallback and resource evidence (${{ matrix.viewport }})
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [phone, tablet, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_browser_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
+      AURION_UI_E2E: '1'
+      AURION_E2E_ISOLATED: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-ci-aim291-browser-key-never-production
+      VITE_APP_ID: aurion-isolated-aim291-browser-test
+      AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-aim291-browser-assets
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+
+      - name: Apply complete migration journal to real browser MariaDB
+        run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+
+      - name: Renderer and authority regression gates
+        run: |
+          python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit --repo "$PWD" --expected-revision "$AURION_RELEASE_SHA" --run-canonical --output /tmp/aim291-repository-receipt.json
+          pnpm check
+          pnpm exec vitest run client/src/xaurion/core/GlbResourceBudget.test.ts client/src/xaurion/core/VisualItemAttachmentController.test.ts client/src/xaurion/integration/EquipmentCatalogProjection.test.ts client/src/xaurion/integration/NpcFallbackProjection.test.ts client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx
+
+      - name: Build exact production application
+        run: pnpm build
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start built application against isolated MariaDB
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-aim291-browser-server.log 2>&1 &
+          echo $! >/tmp/aurion-aim291-browser-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aurion-aim291-browser-server.log
+          exit 1
+
+      - name: Prove actual KTX2 decoding, verified fallback and measured resource costs
+        env:
+          AIM290_VIEWPORT: ${{ matrix.viewport }}
+        run: pnpm exec playwright test --config=playwright.aim291.config.ts --grep "on $AIM290_VIEWPORT$"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim291-renderer-recovery-${{ matrix.viewport }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-aim291-report/
+            /tmp/aurion-aim291-browser-server.log
+            /tmp/aim291-repository-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop isolated application
+        if: always()
+        run: |
+          if test -f /tmp/aurion-aim291-browser-server.pid; then
+            kill "$(cat /tmp/aurion-aim291-browser-server.pid)" 2>/dev/null || true
+          fi

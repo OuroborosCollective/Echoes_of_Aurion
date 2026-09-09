@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import type { WorldServiceNpc } from "@shared/worldServiceNpcs";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -16,9 +17,10 @@ export class ServiceNpcProjection {
   }
   async load(url: string): Promise<void> {
     const glb = await glbManager.loadModel(url);
-    if (this.retired) return;
+    if (this.retired) { releaseGlbTree(glb.scene); return; }
     this.actor?.dispose();
-    this.actor = new AnimatedGlbActor(glb.scene, glb.animations, this.definition.heightMeters);
+    try { this.actor = new AnimatedGlbActor(glb.scene, glb.animations, this.definition.heightMeters); }
+    catch (error) { releaseGlbTree(glb.scene); throw error; }
     this.group.add(this.actor.group);
   }
   update(delta: number): void {

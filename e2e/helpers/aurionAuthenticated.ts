@@ -53,15 +53,20 @@ export async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["
   const runtime = page.getByTestId("xaurion-open-world-runtime");
   await expect(runtime).toBeVisible();
   const gate = page.getByTestId("player-character-selection-gate");
-  if (await gate.isVisible().catch(() => false)) {
-    await gate.getByRole("radio", { name: /AIM254 public avatar/ }).click();
+  const avatar = gate.getByRole("radio", { name: /AIM254 public avatar/ });
+  const connected = runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true });
+  // The gate also renders while the persisted appearance query is loading.
+  // Wait for an actionable picker or the already selected character's session.
+  await expect(avatar.or(connected).first()).toBeVisible({ timeout: 45_000 });
+  if (await avatar.isVisible()) {
+    await avatar.click();
     const selectionReply = page.waitForResponse(candidate => candidate.url().endsWith("/api/game/public-player-characters/select") && candidate.request().method() === "POST");
     await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
     const selected = await selectionReply;
     expect(selected.status()).toBe(200);
     expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
   }
-  await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
+  await expect(connected).toBeVisible({ timeout: 45_000 });
   await expect(page.locator("#three-viewport canvas")).toBeVisible();
   await expect(page.locator(".xaurion-runtime__error")).toHaveCount(0);
   return { runtime, snapshot };

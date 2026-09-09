@@ -7,7 +7,7 @@
     {
       "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
       "sourceSha256": "6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e",
-      "targetSha256": "9a1541435640b8b837d63512bc84bd9affc44d19028a32b29d3b5d9a65f9ec78",
+      "targetSha256": "f840b88399bb9baa738735adda64fae505f1414e5025e7695ae0a036b891decf",
       "adaptations": [
         {
           "before": "",
@@ -64,6 +64,30 @@
           "before": "      return false;\n    }\n  }\n\n  // Equips a registered GLB model directly to its corresponding equipment slot (Weapon, Shield, Helmet, Chest, Avatar)\n  public async equipGlbAsEquipment(modelId: string, targetSlot?: any): Promise<boolean> {\n",
           "after": "      return false;\n    }\n  }\n\n  public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {\n    this.confirmedGlbSpeed = Number.isFinite(speedMetersPerSecond) ? Math.max(0, speedMetersPerSecond) : 0;\n  }\n\n  public playConfirmedGlbAttack(): void { this.glbActor?.playOnce(\"attack\"); }\n  public glbPresentationEvidence() { return this.glbActor?.evidence() ?? null; }\n\n  // Equips a registered GLB model directly to its corresponding equipment slot (Weapon, Shield, Helmet, Chest, Avatar)\n  public async equipGlbAsEquipment(modelId: string, targetSlot?: any): Promise<boolean> {\n",
           "occurrences": 1
+        },
+        {
+          "before": "import { DeterministicSimulation } from \"@shared/deterministicSimulation\";\nimport * as THREE from 'three';\nimport { collisionSystem } from '../world/WorldCollisionSystem';\n",
+          "after": "import { releaseGlbTree } from \"../core/GlbModelLease\";\nimport { DeterministicSimulation } from \"@shared/deterministicSimulation\";\nimport * as THREE from 'three';\nimport { collisionSystem } from '../world/WorldCollisionSystem';\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "      }\n    }\n    for (const child of toRemove) {\n      group.remove(child);\n      if ((child as THREE.Mesh).geometry) {\n        (child as THREE.Mesh).geometry.dispose();\n",
+          "after": "      }\n    }\n    for (const child of toRemove) {\n      releaseGlbTree(child);\n      group.remove(child);\n      if ((child as THREE.Mesh).geometry) {\n        (child as THREE.Mesh).geometry.dispose();\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "      return true;\n    }\n\n    try {\n      const { scene, animations } = await glbManager.loadModel(modelId);\n      if (request !== this.glbAvatarRequest) return false;\n      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      this.glbActor = new AnimatedGlbActor(scene, animations, 2);\n      this.glbAvatarGroup.add(this.glbActor.group);\n      return true;\n    } catch (err) {\n      if (request !== this.glbAvatarRequest) return false;\n",
+          "after": "      return true;\n    }\n\n    let unowned: THREE.Group | undefined;\n    try {\n      const { scene, animations } = await glbManager.loadModel(modelId);\n      unowned = scene;\n      if (request !== this.glbAvatarRequest) return false;\n      this.activeGlbModelId = modelId;\n      this.rootGroup.visible = false; // Hide procedural model while GLB skin is active\n\n      this.glbActor = new AnimatedGlbActor(scene, animations, 2);\n      this.glbAvatarGroup.add(this.glbActor.group);\n      unowned = undefined;\n      return true;\n    } catch (err) {\n      if (request !== this.glbAvatarRequest) return false;\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "      this.rootGroup.visible = true;\n      this.activeGlbModelId = null;\n      return false;\n    }\n  }\n\n  public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {\n",
+          "after": "      this.rootGroup.visible = true;\n      this.activeGlbModelId = null;\n      return false;\n    } finally { if (unowned) releaseGlbTree(unowned); }\n  }\n\n  public disposePresentation(): void {\n    this.proceduralVisuals.dispose();\n    void this.equipGlbModel(null);\n    releaseGlbTree(this.group);\n  }\n\n  public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
         }
       ]
     },
@@ -92,7 +116,7 @@
     {
       "path": "client/src/xaurion/core/ProceduralEquipmentVisuals.ts",
       "sourceSha256": "1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7",
-      "targetSha256": "9fddffcaf31ae701d61ab76eb1a98b27ab1544013d1e580484ad0dcc6973613d",
+      "targetSha256": "0ee7524a20436ab920f22a81c57a607edcbe0c44cdf97ed110e69b52cfa02536",
       "adaptations": [
         {
           "before": "",
@@ -108,6 +132,42 @@
           "before": "Math.random()",
           "after": "random()",
           "occurrences": 6
+        },
+        {
+          "before": "import { seededRandom } from \"@shared/deterministicSimulation\";\nimport * as THREE from 'three';\nimport { ItemRarity, ItemSlot, RPGItem, WeaponType } from '../types';\n",
+          "after": "import { releaseGlbTree } from \"./GlbModelLease\";\nimport { seededRandom } from \"@shared/deterministicSimulation\";\nimport * as THREE from 'three';\nimport { ItemRarity, ItemSlot, RPGItem, WeaponType } from '../types';\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "\nexport class ProceduralEquipmentVisuals {\n  public animatedNodes: AnimatedGearNode[] = [];\n  private activeSlotVersions: Map<string, number> = new Map();\n\n  public clearAnimatedNodes() {\n",
+          "after": "\nexport class ProceduralEquipmentVisuals {\n  public animatedNodes: AnimatedGearNode[] = [];\n  private retired = false;\n  dispose(): void { this.retired = true; this.animatedNodes.length = 0; }\n  private activeSlotVersions: Map<string, number> = new Map();\n\n  public clearAnimatedNodes() {\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "    glbManager\n      .loadModel(glbUrl)\n      .then(({ scene }) => {\n        if (this.activeSlotVersions.get(slot) !== nextVer) return;\n\n        const box = new THREE.Box3().setFromObject(scene);\n        const size = new THREE.Vector3();\n",
+          "after": "    glbManager\n      .loadModel(glbUrl)\n      .then(({ scene }) => {\n        if (this.retired || this.activeSlotVersions.get(slot) !== nextVer) { releaseGlbTree(scene); return; }\n\n        const box = new THREE.Box3().setFromObject(scene);\n        const size = new THREE.Vector3();\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "\n    glbManager\n      .loadModel(glbUrl)\n      .then(({ scene }) => {\n        if (this.activeSlotVersions.get(slot) !== nextVer) return;\n\n        const box = new THREE.Box3().setFromObject(scene);\n        const size = new THREE.Vector3();\n",
+          "after": "\n    glbManager\n      .loadModel(glbUrl)\n      .then(async ({ scene }) => {\n        if (this.retired || this.activeSlotVersions.get(slot) !== nextVer) { releaseGlbTree(scene); return; }\n\n        let rightScene: THREE.Group;\n        try { rightScene = (await glbManager.loadModel(glbUrl)).scene; }\n        catch (error) { releaseGlbTree(scene); throw error; }\n        if (this.retired || this.activeSlotVersions.get(slot) !== nextVer) { releaseGlbTree(scene); releaseGlbTree(rightScene); return; }\n\n        const box = new THREE.Box3().setFromObject(scene);\n        const size = new THREE.Vector3();\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "        const normScale = maxDim > 0 ? (1.0 / maxDim) * scaleVal : scaleVal;\n\n        // Left Instance\n        const leftScene = scene.clone(true);\n        leftScene.scale.set(normScale, normScale, normScale);\n        leftScene.position.set(st.position[0], st.position[1], st.position[2]);\n        leftScene.rotation.set(st.rotation[0], st.rotation[1], st.rotation[2]);\n",
+          "after": "        const normScale = maxDim > 0 ? (1.0 / maxDim) * scaleVal : scaleVal;\n\n        // Left Instance\n        const leftScene = scene;\n        leftScene.scale.set(normScale, normScale, normScale);\n        leftScene.position.set(st.position[0], st.position[1], st.position[2]);\n        leftScene.rotation.set(st.rotation[0], st.rotation[1], st.rotation[2]);\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
+        },
+        {
+          "before": "        leftFallback.visible = false;\n\n        // Right Instance (Mirrored X)\n        const rightScene = scene.clone(true);\n        rightScene.scale.set(-normScale, normScale, normScale);\n        rightScene.position.set(-st.position[0], st.position[1], st.position[2]);\n        rightScene.rotation.set(st.rotation[0], -st.rotation[1], -st.rotation[2]);\n",
+          "after": "        leftFallback.visible = false;\n\n        // Right Instance (Mirrored X)\n        rightScene.scale.set(-normScale, normScale, normScale);\n        rightScene.position.set(-st.position[0], st.position[1], st.position[2]);\n        rightScene.rotation.set(st.rotation[0], -st.rotation[1], -st.rotation[2]);\n",
+          "occurrences": 1,
+          "reason": "AIM-291: presentation resource leases, stale-load cleanup and bounded GLB clone ownership; original owner ZIP bytes remain reconstructable."
         }
       ]
     }

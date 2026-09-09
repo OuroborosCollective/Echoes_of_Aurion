@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import {
   confirmedEquipmentVisualReadbackSchema,
@@ -64,6 +65,7 @@ export class EquipmentCatalogProjection {
   private removeHolder(slot: GlbEquipmentSlot): void {
     const holder = this.holders.get(slot);
     if (!holder) return;
+    releaseGlbTree(holder);
     holder.removeFromParent();
     this.holders.delete(slot);
   }
@@ -124,8 +126,10 @@ export class EquipmentCatalogProjection {
     if (existing?.identity === identity && existing.sha256 === selected.sha256) return;
 
     this.pendingCompat.add(slot);
+    let unowned: THREE.Group | undefined;
     try {
       const loaded = await glbManager.loadModel(selected.storageUrl);
+      unowned = loaded.scene;
       if (this.disposed || !this.catalog?.entries.some(entry => entry.assetId === selected.assetId && entry.sha256 === selected.sha256 && entry.purpose === "equipment" && entry.equipmentSlot === slot)) return;
       const current = this.confirmed?.equipment.find(value => value.equipmentSlot === slot);
       if (!current || current.version === "aurion_v2" || bindingIdentity(current) !== identity) return;
@@ -144,9 +148,10 @@ export class EquipmentCatalogProjection {
       if (!holder) return;
       holder.userData.confirmedEquipment = Object.freeze({ slot, itemId: binding.itemId, version: binding.version, receiptId: binding.receiptId, assetId: selected.assetId, sha256: selected.sha256, compatibility: true });
       this.compat.set(slot, Object.freeze({ identity, sha256: selected.sha256, holder }));
+      unowned = undefined;
     } catch {
       // Compatibility visual failure never changes confirmed equipment truth.
-    } finally { this.pendingCompat.delete(slot); }
+    } finally { if (unowned) releaseGlbTree(unowned); this.pendingCompat.delete(slot); }
   }
 
   private async loadV2(binding: ConfirmedV2EquipmentVisual): Promise<void> {
