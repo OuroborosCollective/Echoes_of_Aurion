@@ -98,18 +98,20 @@ suite("AIM-227 classless progression on real MariaDB", () => {
     expect(await (await getDb())!.select().from(aurionProgressionReceipts).where(eq(aurionProgressionReceipts.userId, userId))).toHaveLength(1);
   });
 
-  it("fails closed if stored history resolves one account to more than one character", async () => {
+  it("fails closed if stored history resolves one account to more than one valid character", async () => {
     await recordProgressionReceipt(input());
-    await pool.query(
-      `INSERT INTO aurionProgressionReceipts
-        (id,userId,characterId,actionKind,weaponTrack,skillId,resultReceiptId,sourceReceiptId,lootReceiptId,masteryEventId,xpGrantedExact,levelExact,ruleSetVersion,contentVersion,receiptHash,idempotencyKey)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        "progression_" + "f".repeat(52), userId, "char-conflict", "skill_use", "none", "alchemy.transmutation.v2",
-        "classless-result-conflict-0001", "wasd-source-conflict-0001", null, null, "1", "2",
-        "wasd-classless-progression.v17", "aurion-content.v17", "e".repeat(64), "classless-progression:conflict:0001",
-      ],
-    );
+    await recordProgressionReceipt(input({
+      characterId: "char-conflict",
+      actionKind: "skill_use",
+      weaponTrack: "none",
+      skillId: "alchemy.transmutation.v2",
+      resultReceiptId: "classless-result-conflict-0001",
+      sourceReceiptId: "wasd-source-conflict-0001",
+      masteryEventId: "mastery-conflict-0001",
+      xpGrantedExact: "1",
+      levelExact: "2",
+      idempotencyKey: "classless-progression:conflict:0001",
+    }));
     await expect(readConfirmedProgressionTracks(userId)).rejects.toThrow("PROGRESSION_CHARACTER_CONFLICT");
   });
 });
