@@ -6,6 +6,7 @@ import type { RPGItem, WeaponType, ItemRarity } from '../types';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { fetchVerifiedGlb, glbResourcePool, inspectGlbAllocation } from './GlbResourceBudget';
 import { disposeGlbSource, registerGlbLease } from './GlbModelLease';
+import { requireDecodedMaterialTextures } from './GlbTextureEvidence';
 
 export interface GLBModelEntry {
   id: string;
@@ -156,12 +157,12 @@ export class GLBModelManager {
     return glbResourcePool.job(glbResourcePool.limits.assetBytes, async () => {
       const signal = AbortSignal.timeout(20_000);
       const bytes = await fetchVerifiedGlb({url, sha256}, signal);
-      const {allocation} = inspectGlbAllocation(bytes);
+      const {allocation, json} = inspectGlbAllocation(bytes);
       let release = glbResourcePool.reserve(allocation);
       if (!release) { this.trimIdle(); release = glbResourcePool.reserve(allocation); }
       if (!release) throw Error('GLB_DECODED_BUDGET');
       const started = performance.now();
-      let retired = false, abort: (() => void) | undefined;
+      let retired = false, abort: (() => void) | undefined, decoded: THREE.Group | undefined;
       const parse = this.loader.parseAsync(bytes, '').then(gltf => {
         if (retired || signal.aborted) { disposeGlbSource(gltf.scene); throw Error('GLB_DECODE_RETIRED'); }
         return gltf;
@@ -171,12 +172,14 @@ export class GLBModelManager {
         const gltf = await Promise.race([parse, new Promise<never>((_, reject) => {
           abort = () => reject(signal.reason); signal.addEventListener('abort', abort, {once: true});
         })]);
+        decoded = gltf.scene;
+        requireDecodedMaterialTextures(gltf, json);
         gltf.scene.traverse(node => { if ((node as THREE.Mesh).isMesh) { node.castShadow = true; node.receiveShadow = true; } });
         glbResourcePool.decodedModel(performance.now() - started);
         const entry = {scene: gltf.scene, animations: gltf.animations, users: 0, access: ++this.access, release};
         this.cache.set(url, entry);
         return entry;
-      } catch (error) { release(); throw error; }
+      } catch (error) { if (decoded) disposeGlbSource(decoded); release(); throw error; }
       finally { retired = true; if (abort) signal.removeEventListener('abort', abort); }
     });
   }

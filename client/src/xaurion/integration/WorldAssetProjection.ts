@@ -5,11 +5,12 @@ import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import shipping from "@shared/worldAssetShipping.json";
 import { assetBudgets, assetTier, fetchVerifiedGlb, glbResourcePool, inspectGlbAllocation } from "../core/GlbResourceBudget";
 import type { RuntimeRenderer } from "../core/RendererFactory";
+import { requireDecodedMaterialTextures } from "../core/GlbTextureEvidence";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import { worldAssetById, worldAssetLod, worldAssetRegionSchema, type WorldAssetPlacement, type WorldAssetRegion } from "@shared/worldAssetProtocol";
 
 type Selection = { placement: WorldAssetPlacement; key: string; lod: 0|1|2; distance: number };
-type Cached = { gltf: GLTF; access: number; textures: Set<string>; releaseBudget: ()=>void; format: string };
+type Cached = { gltf: GLTF; access: number; textures: Set<string>; releaseBudget: ()=>void; format: string; drawn: boolean };
 const shippingById = new Map(shipping.manifest.assets.map(asset=>[asset.asset,asset]));
 function disposeModel(gltf: GLTF, preserveTextures=false) {
  const geometry=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();
@@ -85,8 +86,9 @@ export class WorldAssetProjection {
       if(!releaseBudget){this.pressure=true;this.budgetDeferred.add(s.key);return;}
       const started=performance.now(),gltf=await decodeModel(this.loader,bytes,signal);parsed=gltf;glbResourcePool.decodedModel(performance.now()-started);
       if(this.disposed||signal.aborted){disposeModel(gltf);releaseBudget();return;}
+      requireDecodedMaterialTextures(gltf,json);
       gltf.scene.updateMatrixWorld(true);const textures=this.adoptTextures(gltf,json,spec.textureHashes);
-      this.cache.set(s.key,{gltf,access:++this.access,textures,releaseBudget,format:spec.format});
+      this.cache.set(s.key,{gltf,access:++this.access,textures,releaseBudget,format:spec.format,drawn:false});
       if(shipped&&spec.format!=="ktx2")this.fallbackCount++;
       return;
      }catch(error){
@@ -127,6 +129,7 @@ export class WorldAssetProjection {
    const matrices=entries.map(({placement:p})=>new THREE.Matrix4().compose(new THREE.Vector3(p.xMm/1000-originX,this.terrain(p.xMm/1000,p.zMm/1000),p.zMm/1000-originZ),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),p.rotation*Math.PI/2),new THREE.Vector3(asset.scale,asset.scale,asset.scale)).multiply(anchor));
    let meshCount=0;cached.gltf.scene.traverse(node=>{if(!(node as THREE.Mesh).isMesh)return;const source=node as THREE.Mesh;if((source as THREE.SkinnedMesh).isSkinnedMesh)throw Error("STATIC_WORLD_ASSET_REQUIRED");
     const mesh=new THREE.InstancedMesh(source.geometry,source.material,entries.length);mesh.name=`world:${key}:${meshCount++}`;mesh.castShadow=false;mesh.receiveShadow=true;
+    mesh.onAfterRender=()=>{cached.drawn=true;};
     entries.forEach((_,i)=>mesh.setMatrixAt(i,matrices[i]!.clone().multiply(source.matrixWorld)));mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();this.root.add(mesh);this.drawCalls+=Array.isArray(mesh.material)?mesh.material.length:1;
    });
    // Embedded emissive geometry is always retained. Only two nearby imported lights
@@ -145,6 +148,6 @@ export class WorldAssetProjection {
   }
   return {compressedTextures,transcodedMipPayloadBytes,rasterRgbaCeilingBytes,interpretation:"decoded texture upload payload and raster upper bound; not driver VRAM"};
  }
- evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth),resources:glbResourcePool.evidence()}};}
+ evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{drawnKtxModels:[...this.cache.values()].filter(c=>c.drawn&&c.format==="ktx2").length,drawnFallbackModels:[...this.cache.values()].filter(c=>c.drawn&&c.format!=="ktx2"&&c.format!=="legacy").length,textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth),resources:glbResourcePool.evidence()}};}
  dispose(){if(this.disposed)return;this.disposed=true;this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
 }

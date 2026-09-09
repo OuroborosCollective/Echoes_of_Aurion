@@ -42,9 +42,12 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
       expect(await health.json()).toMatchObject({status: "ok", revision: process.env.AURION_RELEASE_SHA});
       await register(page, `aim291_${profile.name}`);
       const compressed = await enterAx1(page);
+      await page.mouse.move(profile.width/2, profile.height/2);
+      await page.mouse.wheel(0, 1200);
       await expect.poll(async () => (await assets(page))?.shipping.ktxModels ?? 0, {timeout: 90_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.shipping.textures.transcodedMipPayloadBytes ?? 0, {timeout: 60_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.loading, {timeout: 60_000}).toBe(0);
+      await expect.poll(async () => (await assets(page))?.shipping.drawnKtxModels ?? 0, {timeout: 30_000}).toBeGreaterThan(0);
       const compressedEvidence = await assets(page);
       expect(compressedEvidence.shipping.manifestSha256).toBe(shipping.manifest.manifestSha256);
       expect(compressedEvidence.failed).toBe(0);
@@ -62,8 +65,11 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
       let decoderFailures = 0;
       await page.route("**/basis/basis_transcoder.wasm", async route => { decoderFailures++; await route.abort("failed"); });
       const fallback = await enterAx1(page);
+      await page.mouse.move(profile.width/2, profile.height/2);
+      await page.mouse.wheel(0, 1200);
       await expect.poll(async () => (await assets(page))?.shipping.fallbackCount ?? 0, {timeout: 90_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.loading, {timeout: 60_000}).toBe(0);
+      await expect.poll(async () => (await assets(page))?.shipping.drawnFallbackModels ?? 0, {timeout: 30_000}).toBeGreaterThan(0);
       const fallbackEvidence = await assets(page);
       expect(decoderFailures).toBeGreaterThan(0);
       expect(fallbackEvidence.shipping.ktxModels).toBe(0);

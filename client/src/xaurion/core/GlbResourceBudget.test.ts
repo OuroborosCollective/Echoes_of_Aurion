@@ -6,12 +6,24 @@ import { GlbResourcePool, fetchVerifiedGlb, inspectGlbAllocation } from "./GlbRe
 import { glbManager } from "./GLBModelManager";
 import { releaseGlbTree } from "./GlbModelLease";
 import { AnimatedGlbActor } from "./AnimatedGlbActor";
+import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
 import * as THREE from "three";
 
 afterEach(() => { glbManager.trimIdle(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const buffer = (bytes: Buffer) => Uint8Array.from(bytes).buffer;
 
 describe("bounded, verified GLB ownership", () => {
+  it("rejects a resolved GLTF with a silently missing material texture", () => {
+    const scene = new THREE.Group(), material = new THREE.MeshStandardMaterial();
+    scene.add(new THREE.Mesh(new THREE.BoxGeometry(), material));
+    const associations = new Map<object, any>([[material, {materials: 0}]]);
+    const gltf = {scene, parser: {associations}} as any;
+    const json = {materials: [{pbrMetallicRoughness: {baseColorTexture: {index: 0}}, normalTexture: {index: 1}}]};
+    material.map = new THREE.Texture(); associations.set(material.map, {textures: 0});
+    expect(() => requireDecodedMaterialTextures(gltf, json)).toThrow("GLB_TEXTURE_DECODE_INCOMPLETE");
+    material.normalMap = new THREE.Texture(); associations.set(material.normalMap, {textures: 1});
+    expect(() => requireDecodedMaterialTextures(gltf, json)).not.toThrow();
+  });
   it("never hands an occupied decode slot to two waiters", async () => {
     const pool = new GlbResourcePool(); let active = 0, peak = 0;
     const releases: Array<() => void> = [];
