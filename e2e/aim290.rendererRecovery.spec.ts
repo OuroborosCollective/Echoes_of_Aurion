@@ -64,11 +64,15 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toBe(originalAssets.catalogHash);
     expect((await assets(page)).collisionHash).toBe(originalAssets.collisionHash);
     await page.screenshot({ path: testInfo.outputPath("webgpu.png") });
-    await page.evaluate(() => {
+    const actualLoss = await page.evaluate(async () => {
       const devices = (globalThis as typeof globalThis & { __aim290Devices: GPUDevice[] }).__aim290Devices;
       if (!devices?.length) throw Error("ACTUAL_WEBGPU_DEVICE_REQUIRED");
-      devices.at(-1)!.destroy();
+      const device = devices.at(-1)!;
+      device.destroy();
+      const info = await device.lost;
+      return { reason: info.reason, message: info.message };
     });
+    expect(actualLoss.reason).toBe("destroyed");
     await expect.poll(async () => (await evidence(page))?.recoveryAttempt, { timeout: 45_000 }).toBe(1);
     await expect.poll(async () => (await evidence(page))?.status, { timeout: 45_000 }).toBe("rendering");
     expect(await evidence(page)).toMatchObject({ backend: "webgl2", recoveryCause: "WEBGPU_DEVICE_LOST" });
@@ -77,6 +81,6 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await expect(optional.runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("webgpu-recovered.png") });
     expect(errors).toEqual([]);
-    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: baseline.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true }) });
+    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: baseline.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
   });
 }
