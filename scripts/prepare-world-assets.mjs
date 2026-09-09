@@ -17,3 +17,4 @@ for(const file of index){const spec=expected.get(file.path);if(!/^(nature|city)\
  if(!process.argv.includes('--check')){const target=path.join('client/public/world-assets',file.path);await mkdir(path.dirname(target),{recursive:true});await writeFile(target,content);}}
 if(expected.size||offset!==data.length)throw Error('WORLD_ASSET_BUNDLE_INCOMPLETE');
 console.log(JSON.stringify({worldAssetFiles:index.length,bundleSha256:catalog.bundleSha256,verified:true}));
+if(!process.argv.includes('--check'))await import('./prepare-shipping-assets.mjs');

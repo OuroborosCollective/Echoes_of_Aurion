@@ -1,0 +1,530 @@
+{
+  "manifest": {
+    "schema_version": 2,
+    "version": "aurion-glb-shipping.v1",
+    "glTFVersion": "2.0",
+    "toolchain": {
+      "gltfTransform": "4.5.0",
+      "ktxSoftware": "toktx v4.4.2",
+      "blender": null,
+      "node": "v24.19.0",
+      "python": "3.12.14",
+      "platform": "Linux-x86_64",
+      "dependencyLockSha256": "e132c0ed95c890e5adfcbecf4c1e232e2b7031a85f8686c527b6de887e2c0fe3",
+      "scriptHashes": {
+        "mobile_glb_asset_pipeline.py": "ccbd6187f7fe58afef46c1554fac3029d0bc7ccfefa3b02b218ee8791a0127f6",
+        "mobile_glb_blender_worker.py": "1252c65e2f4d811a2b12d2a264ac3154511fe4ba1d88d541e8f34b56c9ecc645",
+        "glb_shipping_contract.py": "c90424b6e672f6d5dabb84909b59783936900543e92d22e7bfd55be0d0e3b655"
+      }
+    },
+    "transforms": {
+      "prune": true,
+      "dedup": true,
+      "simplify": "existing-reviewed-lods",
+      "meshopt": "high",
+      "textureFormat": "ktx2",
+      "textureSize": 1024,
+      "flatten": false,
+      "join": false,
+      "instance": false,
+      "palette": false
+    },
+    "lods": {
+      "LOD0": 1600,
+      "LOD1": 800,
+      "LOD2": 300
+    },
+    "assets": [
+      {
+        "asset": "city-foundation-wood-03",
+        "topology": {
+          "collisionManifestSha256": "ba350a340de4cac8a1326af7c9d02c8704bf4fff01b0d600347cf9b4c8bb2580",
+          "confirmedCollider": null
+        },
+        "lods": [
+          {
+            "name": "LOD0",
+            "file": "city-foundation-wood-03/LOD0.ktx2.glb",
+            "sourceSha256": "0b5225ce024c09c3878404f102ddc9f0d747bbd4b62afae554c1f1215dc8720b",
+            "triangle_ceiling": 1600,
+            "sha256": "a625cab2fa370e021e0ed3379adc3325348f1b4afc0b6b2ca2da1fa34d3432ff",
+            "bytes": 1280524,
+            "triangles": 692,
+            "geometryBytes": 26972,
+            "textureBytes": 1260966,
+            "decodedCeilingBytes": 11211780,
+            "textures": [
+              {
+                "sha256": "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+                "mimeType": "image/ktx2",
+                "bytes": 1116934,
+                "width": 1024,
+                "height": 1024,
+                "decodedCeilingBytes": 5592404
+              },
+              {
+                "sha256": "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f",
+                "mimeType": "image/ktx2",
+                "bytes": 144032,
+                "width": 1024,
+                "height": 1024,
+                "decodedCeilingBytes": 5592404
+              }
+            ],
+            "textureHashes": [
+              "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+              "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f"
+            ],
+            "animations": 0,
+            "skins": 0,
+            "format": "ktx2",
+            "glTFVersion": "2.0",
+            "fallback": {
+              "file": "city-foundation-wood-03/LOD0.fallback.glb",
+              "sha256": "429e22520f1c447cb187ea2715364fd33d44f46162eae7ffa8348a0b50b26da1",
+              "bytes": 164876,
+              "triangles": 692,
+              "geometryBytes": 26972,
+              "textureBytes": 145332,
+              "decodedCeilingBytes": 11211780,
+              "textures": [
+                {
+                  "sha256": "899d1e2dbbdb64e57925208a91a95b4bb7cb6fd285010293f827e5a8a8bd4291",
+                  "mimeType": "image/webp",
+                  "bytes": 108622,
+                  "width": 1024,
+                  "height": 1024,
+                  "decodedCeilingBytes": 5592404
+                },
+                {
+                  "sha256": "ff7ff13a142b20dc66fe74c67ebe46406e89ab801a5071fd92fbdb077f97c817",
+                  "mimeType": "image/webp",
+                  "bytes": 36710,
+                  "width": 1024,
+                  "height": 1024,
+                  "decodedCeilingBytes": 5592404
+                }
+              ],
+              "textureHashes": [
+                "899d1e2dbbdb64e57925208a91a95b4bb7cb6fd285010293f827e5a8a8bd4291",
+                "ff7ff13a142b20dc66fe74c67ebe46406e89ab801a5071fd92fbdb077f97c817"
+              ],
+              "animations": 0,
+              "skins": 0,
+              "format": "raster",
+              "glTFVersion": "2.0"
+            }
+          },
+          {
+            "name": "LOD1",
+            "file": "city-foundation-wood-03/LOD1.ktx2.glb",
+            "sourceSha256": "2429a428edac07329d4e4eea847827f73cccc9e35e3177f745afad704adb7411",
+            "triangle_ceiling": 800,
+            "sha256": "0f64fed390c4d809b76953913189bc0a0d254ac557449701f7c5bc25446e7027",
+            "bytes": 1280524,
+            "triangles": 692,
+            "geometryBytes": 26972,
+            "textureBytes": 1260966,
+            "decodedCeilingBytes": 11211780,
+            "textures": [
+              {
+                "sha256": "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+                "mimeType": "image/ktx2",
+                "bytes": 1116934,
+                "width": 1024,
+                "height": 1024,
+                "decodedCeilingBytes": 5592404
+              },
+              {
+                "sha256": "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f",
+                "mimeType": "image/ktx2",
+                "bytes": 144032,
+                "width": 1024,
+                "height": 1024,
+                "decodedCeilingBytes": 5592404
+              }
+            ],
+            "textureHashes": [
+              "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+              "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f"
+            ],
+            "animations": 0,
+            "skins": 0,
+            "format": "ktx2",
+            "glTFVersion": "2.0",
+            "fallback": {
+              "file": "city-foundation-wood-03/LOD1.fallback.glb",
+              "sha256": "4af94d91421b1270bba04c5491d79949b7f314585ae1119d4837c32ef5f77fc3",
+              "bytes": 164876,
+              "triangles": 692,
+              "geometryBytes": 26972,
+              "textureBytes": 145332,
+              "decodedCeilingBytes": 11211780,
+              "textures": [
+                {
+                  "sha256": "899d1e2dbbdb64e57925208a91a95b4bb7cb6fd285010293f827e5a8a8bd4291",
+                  "mimeType": "image/webp",
+                  "bytes": 108622,
+                  "width": 1024,
+                  "height": 1024,
+                  "decodedCeilingBytes": 5592404
+                },
+                {
+                  "sha256": "ff7ff13a142b20dc66fe74c67ebe46406e89ab801a5071fd92fbdb077f97c817",
+                  "mimeType": "image/webp",
+                  "bytes": 36710,
+                  "width": 1024,
+                  "height": 1024,
+                  "decodedCeilingBytes": 5592404
+                }
+              ],
+              "textureHashes": [
+                "899d1e2dbbdb64e57925208a91a95b4bb7cb6fd285010293f827e5a8a8bd4291",
+                "ff7ff13a142b20dc66fe74c67ebe46406e89ab801a5071fd92fbdb077f97c817"
+              ],
+              "animations": 0,
+              "skins": 0,
+              "format": "raster",
+              "glTFVersion": "2.0"
+            }
+          },
+          {
+            "name": "LOD2",
+            "file": "city-foundation-wood-03/LOD2.ktx2.glb",
+            "sourceSha256": "449d671fcd85b2732075f11c26ce5fc78b6ec7c22ff60b9a26c3719860d3562b",
+            "triangle_ceiling": 300,
+            "sha256": "7c04be4cf158c4db4cec9747299db1934263350fdf9d1f79ef93baf60cca2c43",
+            "bytes": 1273788,
+            "triangles": 273,
+            "geometryBytes": 13098,
+            "textureBytes": 1260966,
+            "decodedCeilingBytes": 11197906,
+            "textures": [
+              {
+                "sha256": "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+                "mimeType": "image/ktx2",
+                "bytes": 1116934,
+                "width": 1024,
+                "height": 1024,
+                "decodedCeilingBytes": 5592404
+              },
+              {
+                "sha256": "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f",
+                "mimeType": "image/ktx2",
+                "bytes": 144032,
+                "width": 1024,
+                "height": 1024,
+                "decodedCeilingBytes": 5592404
+              }
+            ],
+            "textureHashes": [
+              "517df40386e150e4f09298d4a0c21d004988ca43b2a73554c188c37c94b0751f",
+              "45c042a57a35ab8aa6e3cb1d35f09a66755b0fe3bbe61ace72712bca4823c30f"
+            ],
+            "animations": 0,
+            "skins": 0,
+            "format": "ktx2",
+            "glTFVersion": "2.0",
+            "fallback": {
+              "file": "city-foundation-wood-03/LOD2.fallback.glb",
+              "sha256": "8e183d1144735989dc8b536bb128d6061e756c860ce6cf3ff3149715ac023b17",
+              "bytes": 158140,
+              "triangles": 273,
+              "geometryBytes": 13098,
+              "textureBytes": 145332,
+              "decodedCeilingBytes": 11197906,
+              "textures": [
+                {
+                  "sha256": "899d1e2dbbdb64e57925208a91a95b4bb7cb6fd285010293f827e5a8a8bd4291",
+                  "mimeType": "image/webp",
+                  "bytes": 108622,
+                  "width": 1024,
+                  "height": 1024,
+                  "decodedCeilingBytes": 5592404
+                },
+                {
+                  "sha256": "ff7ff13a142b20dc66fe74c67ebe46406e89ab801a5071fd92fbdb077f97c817",
+                  "mimeType": "image/webp",
+                  "bytes": 36710,
+                  "width": 1024,
+                  "height": 1024,
+                  "decodedCeilingBytes": 5592404
+                }
+              ],
+              "textureHashes": [
+                "899d1e2dbbdb64e57925208a91a95b4bb7cb6fd285010293f827e5a8a8bd4291",
+                "ff7ff13a142b20dc66fe74c67ebe46406e89ab801a5071fd92fbdb077f97c817"
+              ],
+              "animations": 0,
+              "skins": 0,
+              "format": "raster",
+              "glTFVersion": "2.0"
+            }
+          }
+        ],
+        "lodFamilySha256": "1c38b231fff06d9014b074e3a791b26a8505a31f8365e2c78565c00eca547190"
+      },
+      {
+        "asset": "nature-root-1",
+        "topology": {
+          "collisionManifestSha256": "ba350a340de4cac8a1326af7c9d02c8704bf4fff01b0d600347cf9b4c8bb2580",
+          "confirmedCollider": {
+            "assetId": "nature-root-1",
+            "sourceSha256": "5cde7b6345bd6a3d75f7d864e47d21782dce22663e2c5c1b1e027448946f5289",
+            "blocksMovement": false,
+            "hullMm": [
+              [
+                -500,
+                -25
+              ],
+              [
+                -439,
+                -41
+              ],
+              [
+                91,
+                -69
+              ],
+              [
+                412,
+                -79
+              ],
+              [
+                480,
+                -61
+              ],
+              [
+                500,
+                -3
+              ],
+              [
+                472,
+                58
+              ],
+              [
+                418,
+                79
+              ],
+              [
+                -436,
+                -8
+              ]
+            ]
+          }
+        },
+        "lods": [
+          {
+            "name": "LOD0",
+            "file": "nature-root-1/LOD0.ktx2.glb",
+            "sourceSha256": "c66e70408a78d3568813918bad48f1aebdc268585d4a267bac4777d0007315fc",
+            "triangle_ceiling": 1600,
+            "sha256": "6d259d906b30002c0fc0c1db91257d789e81e9464e3301bbc950ec8db48b40a9",
+            "bytes": 23136,
+            "triangles": 80,
+            "geometryBytes": 1456,
+            "textureBytes": 19454,
+            "decodedCeilingBytes": 350980,
+            "textures": [
+              {
+                "sha256": "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36",
+                "mimeType": "image/ktx2",
+                "bytes": 19454,
+                "width": 256,
+                "height": 256,
+                "decodedCeilingBytes": 349524
+              }
+            ],
+            "textureHashes": [
+              "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36"
+            ],
+            "animations": 0,
+            "skins": 0,
+            "format": "ktx2",
+            "glTFVersion": "2.0",
+            "fallback": {
+              "file": "nature-root-1/LOD0.fallback.glb",
+              "sha256": "422537664748fe1eaebb8ff9d158766ed4d97d704ce633ae8671d80fd3da2505",
+              "bytes": 13956,
+              "triangles": 80,
+              "geometryBytes": 1456,
+              "textureBytes": 10280,
+              "decodedCeilingBytes": 350980,
+              "textures": [
+                {
+                  "sha256": "986b502ce40ca58ff8a876eacc7f4880276a0268f1988942b382b4ea34861a62",
+                  "mimeType": "image/webp",
+                  "bytes": 10280,
+                  "width": 256,
+                  "height": 256,
+                  "decodedCeilingBytes": 349524
+                }
+              ],
+              "textureHashes": [
+                "986b502ce40ca58ff8a876eacc7f4880276a0268f1988942b382b4ea34861a62"
+              ],
+              "animations": 0,
+              "skins": 0,
+              "format": "raster",
+              "glTFVersion": "2.0"
+            }
+          },
+          {
+            "name": "LOD1",
+            "file": "nature-root-1/LOD1.ktx2.glb",
+            "sourceSha256": "622e81af50ffcd63bb48a1aa621885f77cd5e45baab1c5c2f814a8c33b47aa73",
+            "triangle_ceiling": 800,
+            "sha256": "799f7d86d75dcd538a0f5b57ed930f442a52bec3b3e12dccbd6f66bf0652084f",
+            "bytes": 23136,
+            "triangles": 80,
+            "geometryBytes": 1456,
+            "textureBytes": 19454,
+            "decodedCeilingBytes": 350980,
+            "textures": [
+              {
+                "sha256": "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36",
+                "mimeType": "image/ktx2",
+                "bytes": 19454,
+                "width": 256,
+                "height": 256,
+                "decodedCeilingBytes": 349524
+              }
+            ],
+            "textureHashes": [
+              "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36"
+            ],
+            "animations": 0,
+            "skins": 0,
+            "format": "ktx2",
+            "glTFVersion": "2.0",
+            "fallback": {
+              "file": "nature-root-1/LOD1.fallback.glb",
+              "sha256": "5813ad0195e2ef24325ea645e2ebf3aeaadc8c81502c5237f1b3e2d7a01fa0a9",
+              "bytes": 13956,
+              "triangles": 80,
+              "geometryBytes": 1456,
+              "textureBytes": 10280,
+              "decodedCeilingBytes": 350980,
+              "textures": [
+                {
+                  "sha256": "986b502ce40ca58ff8a876eacc7f4880276a0268f1988942b382b4ea34861a62",
+                  "mimeType": "image/webp",
+                  "bytes": 10280,
+                  "width": 256,
+                  "height": 256,
+                  "decodedCeilingBytes": 349524
+                }
+              ],
+              "textureHashes": [
+                "986b502ce40ca58ff8a876eacc7f4880276a0268f1988942b382b4ea34861a62"
+              ],
+              "animations": 0,
+              "skins": 0,
+              "format": "raster",
+              "glTFVersion": "2.0"
+            }
+          },
+          {
+            "name": "LOD2",
+            "file": "nature-root-1/LOD2.ktx2.glb",
+            "sourceSha256": "60f7f7b9ed47887ae04fe67d479f0a7b691cb823754706b3e44b64175410bfde",
+            "triangle_ceiling": 300,
+            "sha256": "e5402b5212d4514ec423189d160314e0a9f66800ab208c2ba6567e15dddafd3a",
+            "bytes": 23136,
+            "triangles": 80,
+            "geometryBytes": 1456,
+            "textureBytes": 19454,
+            "decodedCeilingBytes": 350980,
+            "textures": [
+              {
+                "sha256": "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36",
+                "mimeType": "image/ktx2",
+                "bytes": 19454,
+                "width": 256,
+                "height": 256,
+                "decodedCeilingBytes": 349524
+              }
+            ],
+            "textureHashes": [
+              "aa69531cd24636949535cc5e1244bc0a89d7f3653cc5d02adc548b1bc5c41f36"
+            ],
+            "animations": 0,
+            "skins": 0,
+            "format": "ktx2",
+            "glTFVersion": "2.0",
+            "fallback": {
+              "file": "nature-root-1/LOD2.fallback.glb",
+              "sha256": "de8d4cc9468f7029787a43a0cd2acde9850826f1f265d51fd800297f9c6a9550",
+              "bytes": 13956,
+              "triangles": 80,
+              "geometryBytes": 1456,
+              "textureBytes": 10280,
+              "decodedCeilingBytes": 350980,
+              "textures": [
+                {
+                  "sha256": "986b502ce40ca58ff8a876eacc7f4880276a0268f1988942b382b4ea34861a62",
+                  "mimeType": "image/webp",
+                  "bytes": 10280,
+                  "width": 256,
+                  "height": 256,
+                  "decodedCeilingBytes": 349524
+                }
+              ],
+              "textureHashes": [
+                "986b502ce40ca58ff8a876eacc7f4880276a0268f1988942b382b4ea34861a62"
+              ],
+              "animations": 0,
+              "skins": 0,
+              "format": "raster",
+              "glTFVersion": "2.0"
+            }
+          }
+        ],
+        "collider": {
+          "file": "nature-root-1/collider.glb",
+          "sourceSha256": "5cde7b6345bd6a3d75f7d864e47d21782dce22663e2c5c1b1e027448946f5289",
+          "triangle_ceiling": 64,
+          "sha256": "5cde7b6345bd6a3d75f7d864e47d21782dce22663e2c5c1b1e027448946f5289",
+          "bytes": 1776,
+          "triangles": 52,
+          "geometryBytes": 536,
+          "textureBytes": 0,
+          "decodedCeilingBytes": 536,
+          "textures": [],
+          "textureHashes": [],
+          "animations": 0,
+          "skins": 0,
+          "format": "raster",
+          "glTFVersion": "2.0"
+        },
+        "lodFamilySha256": "fde83c7eeb18743b4c5bd56b77b55ec4b0786c738cccc66e1d316ce862d321cc"
+      }
+    ],
+    "sourceBinding": {
+      "catalogHash": "94de6cf4ff05f0ccc93c9471f077972b09def8e21c42e3720215017ab7939c4f",
+      "catalogFileSha256": "b4bdca2d10e446a7bf8f918f9a67f0f7ff273564d6c09b4907715b5806bd5dda",
+      "collisionHash": "ba350a340de4cac8a1326af7c9d02c8704bf4fff01b0d600347cf9b4c8bb2580",
+      "collisionFileSha256": "37a67ea60859f7c68db0b4731862c26456c1f4956f69a4999ccc078450fb4b2c",
+      "sourceArchives": {
+        "city": "8ffc2d39d4a80ebff7848b1a10757cabe3a731154f0de399f4eb10a7e314c3a1",
+        "nature": "87c6e6437ee728ae927ac55674a331eb653292de9e50b1872f9ecff3578cd25d"
+      }
+    },
+    "manifestSha256": "681142dbb6c00af536c926bb5bc2b99e575fae60b28edd8c28dbd1ca1b667636"
+  },
+  "bundleSha256": "e03559d4bfd0c1dbeedcde43bc6633bd43cf3e1e2296b7e1f26ffa241eb7adc7",
+  "decoder": {
+    "threeVersion": "0.185.1",
+    "files": [
+      {
+        "name": "basis_transcoder.js",
+        "bytes": 57529,
+        "sha256": "8478b5b6d6b74e7d3082b89f6417321d8d1dc0307f2b30d4484bb11b441696a1"
+      },
+      {
+        "name": "basis_transcoder.wasm",
+        "bytes": 527333,
+        "sha256": "6cf17dc889352c42e9acf8897107978d127005fe3386c36a0e3845e27967630a"
+      }
+    ]
+  }
+}

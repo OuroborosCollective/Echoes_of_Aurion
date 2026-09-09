@@ -1,50 +1,30 @@
 #!/usr/bin/env python3
+"""Read-only verification of the sealed shipping manifest and all alternatives."""
 from __future__ import annotations
-import argparse, json, struct, subprocess
+import argparse, json, subprocess
 from pathlib import Path
-
-def glb_json(path: Path):
-    b=path.read_bytes()
-    if b[:4]!=b'glTF': raise ValueError('invalid GLB magic')
-    version,total=struct.unpack_from('<II',b,4); chunk_len,chunk_type=struct.unpack_from('<II',b,12)
-    if version!=2 or total!=len(b) or chunk_type!=0x4E4F534A: raise ValueError('invalid GLB header')
-    return json.loads(b[20:20+chunk_len].decode().rstrip(' \t\r\n\x00'))
-
-def triangles(doc):
-    acc=doc.get('accessors',[]); total=0
-    for mesh in doc.get('meshes',[]):
-        for p in mesh.get('primitives',[]):
-            if p.get('mode',4)!=4: continue
-            i=p.get('indices'); count=acc[i]['count'] if i is not None else acc[p['attributes']['POSITION']]['count']
-            total+=count//3
-    return total
+from glb_shipping_contract import VERSION, audit_glb, canonical, confined, sha
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--root',type=Path,required=True);ap.add_argument('--manifest',type=Path,required=True);a=ap.parse_args()
-    m=json.loads(a.manifest.read_text()); errors=[]; files=[]
-    for asset in m['assets']:
-        for lod in asset['lods']:
-            p=a.root/lod['file']; files.append(p)
-            try:
-                d=glb_json(p); n=triangles(d)
-                if not d.get('meshes'): errors.append(f'{p}: no meshes')
-                if n>lod['triangle_ceiling']: errors.append(f'{p}: {n}>{lod["triangle_ceiling"]}')
-                ex=set(d.get('extensionsUsed',[]))
-                if 'EXT_meshopt_compression' not in ex: errors.append(f'{p}: meshopt missing')
-                lod['audited_triangles']=n;lod['delivery_bytes']=p.stat().st_size;lod['valid_glb']=True
-            except Exception as e: errors.append(f'{p}: {e}')
-        c=asset.get('collider')
-        if c:
-            p=a.root/c['file']; files.append(p)
-            try:
-                d=glb_json(p); n=triangles(d)
-                if n==0 or n>c['triangle_ceiling']: errors.append(f'{p}: collider triangles {n}')
-                if 'EXT_meshopt_compression' not in set(d.get('extensionsUsed',[])): errors.append(f'{p}: meshopt missing')
-                c['audited_triangles']=n;c['delivery_bytes']=p.stat().st_size;c['valid_glb']=True
-            except Exception as e: errors.append(f'{p}: {e}')
-    m['audit_errors']=errors;a.manifest.write_text(json.dumps(m,indent=2)+'\n')
-    print(json.dumps({'files':len(files),'errors':errors,'max_triangles':max((x.get('audited_triangles',0) for asset in m['assets'] for x in asset['lods']),default=0)},indent=2))
-    if errors: raise SystemExit(1)
-    for p in files:
-        subprocess.run(['python3','/home/ubuntu/skills/mmorpg-glb-generator/scripts/validate_glb.py',str(p)],check=True,stdout=subprocess.DEVNULL)
-if __name__=='__main__':main()
+    p = argparse.ArgumentParser(); p.add_argument('--root', type=Path, required=True); p.add_argument('--manifest', type=Path, required=True)
+    p.add_argument('--gltf-transform', default='gltf-transform'); a = p.parse_args()
+    root = a.root.resolve(); manifest = json.loads(a.manifest.read_text())
+    identity = manifest.get('manifestSha256')
+    if manifest.get('version') != VERSION or identity != sha(canonical({k:v for k,v in manifest.items() if k != 'manifestSha256'})): raise SystemExit('SHIPPING_MANIFEST_HASH')
+    reports = {}
+    for asset in manifest['assets']:
+        expected_family = sha(canonical([{'name': l['name'], 'sourceSha256': l['sourceSha256']} for l in asset['lods']]))
+        if asset['lodFamilySha256'] != expected_family: raise SystemExit('SHIPPING_LOD_FAMILY_HASH')
+        for lod in [*asset['lods'], *([asset['collider']] if asset.get('collider') else [])]:
+            for variant in [lod, *([lod['fallback']] if lod.get('fallback') else [])]:
+                path = confined(root, variant['file']); report = audit_glb(path, lod['triangle_ceiling'])
+                if any(variant.get(k) != v for k, v in report.items()): raise SystemExit(f'SHIPPING_OUTPUT_DRIFT:{variant["file"]}')
+                if variant['file'] not in reports:
+                    subprocess.run([a.gltf_transform, 'validate', str(path)], check=True, stdout=subprocess.DEVNULL)
+                    reports[variant['file']] = report
+    receipt = {'version': VERSION, 'manifestSha256': identity, 'files': reports, 'status': 'VERIFIED'}
+    receipt['receiptSha256'] = sha(canonical(receipt))
+    (root/'audit.json').write_text(json.dumps(receipt, indent=2)+'\n')
+    print(json.dumps({'files': len(reports), 'receiptSha256': receipt['receiptSha256'], 'status': 'VERIFIED'}))
+
+if __name__ == '__main__': main()

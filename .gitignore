@@ -131,3 +131,7 @@ deploy/__pycache__/
 
 # Renderer recovery browser evidence
 playwright-aim290-report/
+client/public/world-shipping/
+client/public/basis/
+playwright-aim291-report/
+scripts/__pycache__/
