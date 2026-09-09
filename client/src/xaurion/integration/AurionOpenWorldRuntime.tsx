@@ -14,6 +14,7 @@ import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
 import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import { MMOEngine } from "../core/MMOEngine";
+import { createRuntimeRenderer, type RendererHandle, type RendererEvidence } from "../core/RendererFactory";
 import { PublicCharacterPicker, type PublicCharacterSelection } from "../components/PublicCharacterPicker";
 import { ConfirmedVisualEffects } from "./confirmedVisualEffects";
 import { RemotePresenceProjection } from "./RemotePresenceProjection";
@@ -67,6 +68,12 @@ export default function AurionOpenWorldRuntime() {
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
+  const rendererGeneration = useRef(0);
+  const recoveryAttempts = useRef(0);
+  const recoveryCause = useRef<string | null>(null);
+  const [recoveryEpoch, setRecoveryEpoch] = useState(0);
+  const [readyGeneration, setReadyGeneration] = useState<number | null>(null);
+  const [rendererEvidence, setRendererEvidence] = useState<(RendererEvidence & { generation: number; recoveryAttempt: number; recoveryCause: string | null; status: "awaiting_snapshot" | "rendering"; worldSeed: string; epoch: number }) | null>(null);
   const motionRef = useRef<ConfirmedPlayerMotion | null>(null);
   const zoneClientRef = useRef<ZoneMovementClient | null>(null);
   const zoneConnectedRef = useRef(false);
@@ -133,6 +140,9 @@ export default function AurionOpenWorldRuntime() {
     const onLoad = (event: Event) => {
       zoneReconnectAttemptsRef.current = 0;
       setZoneRetryEpoch(0);
+      recoveryAttempts.current = 0;
+      recoveryCause.current = null;
+      setRecoveryEpoch(0);
       setWebglError(null);
       setConfirmedPosition(undefined);
       setRemotePlayers([]);
@@ -159,6 +169,11 @@ export default function AurionOpenWorldRuntime() {
     }
 
     let disposed = false;
+    const generation = ++rendererGeneration.current;
+    const abort = new AbortController();
+    let rendererHandle: RendererHandle | undefined;
+    setReadyGeneration(null);
+    setRendererEvidence(null);
     let engine: MMOEngine | undefined;
     let remotePresence: RemotePresenceProjection | undefined;
     let capture: VisibleCanvasCapture | undefined;
@@ -176,6 +191,15 @@ export default function AurionOpenWorldRuntime() {
     };
     const fail = (error: unknown) => {
       if (disposed) return;
+      disposed = true;
+      abort.abort();
+      window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
+      engineRef.current = null;
+      setReadyGeneration(null);
+      motionRef.current?.stop();
+      motionRef.current = null;
+      serviceNpcRef.current?.dispose();
+      serviceNpcRef.current = null;
       worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
@@ -189,12 +213,31 @@ export default function AurionOpenWorldRuntime() {
       virtualInputRef.current = { forward: 0, right: 0 };
       zoneConnectedRef.current = false;
       setZoneStatus("closed");
-      setWebglError(runtimeIssueCode(error));
+      const recoverable = error instanceof Error && ["WEBGL_CONTEXT_LOST", "WEBGPU_DEVICE_LOST", "WEBGPU_RENDER_ERROR"].includes(error.message);
+      if (recoverable && recoveryAttempts.current < 2) {
+        recoveryAttempts.current++;
+        recoveryCause.current = (error as Error).message;
+        setConfirmedPosition(undefined);
+        setRendererEvidence(null);
+        setRecoveryEpoch(value => value + 1);
+      } else setWebglError(runtimeIssueCode(error));
     };
-    try {
-      const world = activation.globalWorld;
+    void (async () => { try {
+      // A replacement generation obtains the current authenticated world context;
+      // it never advances the previous local projection to invent a recovery state.
+      const world = recoveryEpoch > 0
+        ? (await rpcUtils.gameplay.openWorld.fetch(undefined, { staleTime: 0 })).globalWorld
+        : activation.globalWorld;
+      if (disposed) return;
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
-      engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch));
+      let preference = new URLSearchParams(window.location.search).get("renderer");
+      if (!preference) { try { preference = sessionStorage.getItem("aurion:renderer"); } catch { /* Default WebGL2 remains available. */ } }
+      const requested = recoveryEpoch > 0 ? "webgl2" : preference === "webgpu" ? "webgpu" : "webgl2";
+      const initialized = await createRuntimeRenderer(requested, abort.signal);
+      rendererHandle = initialized.handle;
+      if (disposed || !containerRef.current || rendererGeneration.current !== generation) { rendererHandle.dispose(); return; }
+      engine = new MMOEngine(containerRef.current, currentClassId, new DeterministicSimulation(world.worldSeed, world.epoch), rendererHandle);
+      setRendererEvidence({ ...initialized.evidence, generation, recoveryAttempt: recoveryAttempts.current, recoveryCause: recoveryCause.current, status: "awaiting_snapshot", worldSeed: world.worldSeed, epoch: world.epoch });
       engineRef.current = engine;
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
@@ -209,11 +252,10 @@ export default function AurionOpenWorldRuntime() {
       bindAurionAuthorityProjection(engine, {
         requestAction: requestHotbarAction,
         requestMount: requestAuthoritativeMount,
-      });
+      }, { worldSeed: world.worldSeed, epoch: world.epoch });
       motionRef.current = new ConfirmedPlayerMotion(engine.player, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       remotePresenceRef.current = remotePresence;
-      engine.start();
       capture = new VisibleCanvasCapture(() => {
         if (!engine || disposed || engineRef.current !== engine) throw new Error("RETIRED_RENDERER");
         return engine.renderer.domElement;
@@ -221,7 +263,8 @@ export default function AurionOpenWorldRuntime() {
       let evidenceFrames = 0;
       engine.onFrameRendered = () => {
         capture?.onRenderedFrame();
-        if (++evidenceFrames % 3 !== 0 || !engine) return;
+        if (++evidenceFrames === 1) setRendererEvidence(value => value?.generation === generation ? { ...value, status: "rendering" } : value);
+        if (evidenceFrames % 3 !== 0 || !engine) return;
         const evidence = engine.player.glbPresentationEvidence();
         if (modelEvidenceRef.current) {
           modelEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
@@ -232,27 +275,31 @@ export default function AurionOpenWorldRuntime() {
         setNearbySmith(Boolean(serviceNpcRef.current?.isNearby(engine.player.position)));
       };
       window.addEventListener("aurion:authoritative-action", onConfirmedAction);
+      setReadyGeneration(generation);
     } catch (error) {
+      rendererHandle?.dispose();
       fail(error);
-    }
+    } })();
     return () => {
       disposed = true;
+      abort.abort();
       window.removeEventListener("aurion:authoritative-action", onConfirmedAction);
       worldAssets?.dispose();
       capture?.dispose();
       remotePresence?.dispose();
       if (remotePresenceRef.current === remotePresence) remotePresenceRef.current = null;
       engine?.stop();
+      rendererHandle?.dispose();
       if (engineRef.current === engine) engineRef.current = null;
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
     };
-  }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount]);
+  }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch]);
 
   useEffect(() => {
     const engine = engineRef.current;
     const projection = playerSnapshot.data as AurionPlayerProjection | undefined;
-    if (!engine || !projection?.profile) return;
+    if (!readyGeneration || !engine || !projection?.profile) return;
     const nextClass = classForAurion(projection.profile.selectedClass);
     if (engine.player.currentClassId !== nextClass) engine.player.setClass(nextClass);
     setCurrentClassId(nextClass);
@@ -261,39 +308,41 @@ export default function AurionOpenWorldRuntime() {
     if (Number.isSafeInteger(projection.profile.aurionPoints) && (projection.profile.aurionPoints ?? -1) >= 0) engine.player.stats.score = projection.profile.aurionPoints!;
     if (Number.isSafeInteger(projection.profile.victories) && (projection.profile.victories ?? -1) >= 0) engine.player.stats.bossKills = projection.profile.victories!;
     if (activation?.displayName) engine.player.stats.currentZone = activation.displayName;
-  }, [activation?.displayName, selectedCharacterUrl, playerSnapshot.data]);
+  }, [activation?.displayName, selectedCharacterUrl, playerSnapshot.data, readyGeneration]);
 
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || !selectedCharacterUrl) return;
+    if (!readyGeneration || !engine || !selectedCharacterUrl) return;
     let disposed = false;
     setModelStatus("loading");
     void engine.player.equipGlbModel(selectedCharacterUrl).then(loaded => {
       if (!disposed) setModelStatus(loaded ? "active" : "failed");
     });
     return () => { disposed = true; void engine.player.equipGlbModel(null); };
-  }, [selectedCharacterUrl, activation]);
+  }, [selectedCharacterUrl, activation, readyGeneration]);
 
   useEffect(() => {
     const engine = engineRef.current;
     const definition = worldSnapshot.data?.serviceNpcs?.find(npc => npc.id === "observatory_blacksmith");
     const url = catalog?.entries.find(entry => entry.targetKey === definition?.targetKey)?.storageUrl;
-    if (!engine || !definition || !url) return;
+    if (!readyGeneration || !engine || !definition || !url) return;
     const npc = new ServiceNpcProjection(definition, engine.scene, (x, z) => engine.landscape.chunkManager.getElevationAt(x, z));
     serviceNpcRef.current = npc;
     void npc.load(url).catch(() => { npc.dispose(); if (serviceNpcRef.current === npc) serviceNpcRef.current = null; });
     return () => { npc.dispose(); if (serviceNpcRef.current === npc) serviceNpcRef.current = null; setNearbySmith(false); };
-  }, [activation, selectedCharacterUrl, catalog?.revision, worldSnapshot.data?.serviceNpcs]);
+  }, [activation, selectedCharacterUrl, catalog?.revision, worldSnapshot.data?.serviceNpcs, readyGeneration]);
 
   useEffect(() => {
-    if (!activation || !selectedCharacterUrl || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
+    if (!readyGeneration || !activation || !selectedCharacterUrl || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
+    const boundEngine = engineRef.current;
     let disposed = false;
+    const current = () => !disposed && engineRef.current === boundEngine;
     let client: ZoneMovementClient | undefined;
     let retryTimer: number | undefined;
     let fatalReject = false;
 
     const scheduleReconnect = () => {
-      if (disposed || fatalReject || retryTimer !== undefined) return;
+      if (!current() || fatalReject || retryTimer !== undefined) return;
       if (zoneReconnectAttemptsRef.current >= ZONE_MAX_RECONNECT_ATTEMPTS) {
         setZoneStatus("rejected");
         return;
@@ -303,17 +352,17 @@ export default function AurionOpenWorldRuntime() {
       setZoneStatus("connecting");
       retryTimer = window.setTimeout(() => {
         retryTimer = undefined;
-        if (!disposed) setZoneRetryEpoch(value => value + 1);
+        if (current()) setZoneRetryEpoch(value => value + 1);
       }, delay);
     };
 
     setZoneStatus("connecting");
     issueZoneTicket.mutate({ zoneId: "observatory_threshold", clientBuild: "xaurion-open-world-v1" }, {
       onSuccess: ({ ticket }) => {
-        if (disposed || !engineRef.current) return;
+        if (!current() || !engineRef.current) return;
         client = new ZoneMovementClient({
           onStatus: status => {
-            if (disposed) return;
+            if (!current()) return;
             zoneConnectedRef.current = status === "connected";
             if (status === "connected") {
               zoneReconnectAttemptsRef.current = 0;
@@ -329,12 +378,12 @@ export default function AurionOpenWorldRuntime() {
             else setZoneStatus(status);
           },
           onReject: code => {
-            if (disposed) return;
+            if (!current()) return;
             fatalReject = FATAL_ZONE_REJECT_CODES.has(code);
             if (fatalReject) setZoneStatus("rejected");
           },
           onSnapshot: snapshot => {
-            if (disposed) return;
+            if (!current()) return;
             const self = snapshot.presences.find(presence => presence.userId === user.id);
             const engine = engineRef.current;
             if (!self || !engine) return;
@@ -344,6 +393,7 @@ export default function AurionOpenWorldRuntime() {
             } catch (error) { engine.onRuntimeError?.(error); return; }
             setConfirmedPosition({ ...self.position });
             motionRef.current?.project(self.position, snapshot.tick);
+            boundEngine.start();
             window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
           },
         });
@@ -351,7 +401,7 @@ export default function AurionOpenWorldRuntime() {
         zoneClientRef.current = client;
         client.connect(ticket);
       },
-      onError: () => { if (!disposed) scheduleReconnect(); },
+      onError: () => { if (current()) scheduleReconnect(); },
     });
     return () => {
       disposed = true;
@@ -361,7 +411,7 @@ export default function AurionOpenWorldRuntime() {
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
-  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch]);
+  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch, readyGeneration]);
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
@@ -502,6 +552,7 @@ export default function AurionOpenWorldRuntime() {
 
   return (
     <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Open World">
+      <output data-testid="renderer-evidence" hidden>{JSON.stringify(rendererEvidence)}</output>
       <output data-testid="glb-model-status" aria-label="Charaktermodell" className="sr-only">{modelStatus}</output>
       <output ref={modelEvidenceRef} data-testid="glb-presentation" className="sr-only" />
       <output ref={npcEvidenceRef} data-testid="smith-presentation" className="sr-only" />

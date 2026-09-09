@@ -59,7 +59,7 @@ describe("AIM-243 deterministic xaurion world core", () => {
     expect(core).toContain("class OcclusionCullingSystem");
     expect(core).toContain("renderer.info.render.calls");
     expect(core).toContain("aurion:xaurion-world-core-metrics");
-    expect(adapter).toContain("attachAurionWorldCore(engine)");
+    expect(adapter).toContain("attachAurionWorldCore(engine,worldContext)");
     expect(landscape).toContain("buildSanctumHub");
     expect(landscape).toContain("buildClockworkWoods");
     expect(landscape).toContain("buildScorchedQuarry");

@@ -18,19 +18,6 @@ type WorldCoreMetrics = Readonly<{
   particles: Readonly<{ tier: string; budget: number; active: number; pooled: number; reused: number; droppedBursts: number; tickRate: number }> | null;
 }>;
 
-let latestWorldContext: AurionWorldContext = Object.freeze({ epoch: 0, worldSeed: "echoes-of-aurion-global" });
-
-if (typeof window !== "undefined") {
-  window.addEventListener("aurion:load-open-world", event => {
-    const detail = (event as CustomEvent<{ globalWorld?: { epoch?: unknown; worldSeed?: unknown } }>).detail;
-    const epoch = detail?.globalWorld?.epoch;
-    const worldSeed = detail?.globalWorld?.worldSeed;
-    if (Number.isSafeInteger(epoch) && typeof worldSeed === "string" && worldSeed.trim()) {
-      latestWorldContext = Object.freeze({ epoch: epoch as number, worldSeed: worldSeed.trim() });
-    }
-  });
-}
-
 /** -ax1 FixedTimestepLoop adapted to the normative WASD 10 Hz logical tick. */
 export class FixedTimestepLoop {
   public readonly targetTickRate: number;
@@ -293,7 +280,7 @@ export class AurionWorldCore {
         fixedTick: tick,
         tickRate: this.loop.targetTickRate,
         weatherPhase: this.weatherPhase,
-        drawCalls: this.engine.renderer.info.render.calls,
+        drawCalls: this.engine.renderer.info.render.drawCalls ?? this.engine.renderer.info.render.calls,
         triangles: this.engine.renderer.info.render.triangles,
         vegetationInstances: this.vegetation.instanceCount,
         npcFallbacks: this.npcFallbacks.evidence().length,
@@ -317,8 +304,8 @@ export class AurionWorldCore {
   }
 }
 
-export function attachAurionWorldCore(engine: MMOEngine): AurionWorldCore {
-  const core = new AurionWorldCore(engine, latestWorldContext);
+export function attachAurionWorldCore(engine: MMOEngine, context: AurionWorldContext): AurionWorldCore {
+  const core = new AurionWorldCore(engine, context);
   core.start();
   return core;
 }

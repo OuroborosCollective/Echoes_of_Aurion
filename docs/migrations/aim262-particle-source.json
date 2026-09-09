@@ -4,7 +4,7 @@
   "sourcePath": "src/core/ParticleSystem.ts",
   "sourceSha256": "ed83e776a077388da2062eb056a212aaaf9335af834f5c683c6cefbd1348409b",
   "targetPath": "client/src/xaurion/core/ParticleSystem.ts",
-  "targetSha256": "55bb7e1407e2e8eb78efc05261016f90833e38e529c93261b37ca2e2fd521773",
+  "targetSha256": "a3b1bba6d3fa61d3dabaa56e6847408a09d35ca44befd1bfde7c6a30b527fb66",
   "effectGenerators": {
     "emitCombatHit": "5968ad7439423977c4785a6a9a19db7a0cf323633796a3d64cf004b174cf8538",
     "emitCombatCrit": "6a2c77040e5e85cf4b03e12e9c90a258ba26da091cff1ef7bc6b4b98e93305b8",
@@ -28,5 +28,6 @@
   "generatorAdaptations": [
     "Math.random() -> this.random()",
     "this.particles.push({ -> this.enqueueParticle({"
-  ]
+  ],
+  "rendererAdaptation": "AIM-290: optional instanced TSL particle view; all 18 source generators unchanged"
 }

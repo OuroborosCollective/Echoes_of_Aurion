@@ -3,76 +3,12 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { WORLD_PRESENCE_REFRESH_MS } from "../server/worldPresenceProtocol";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
+import { register, enterAx1 } from "./helpers/aurionAuthenticated";
 
 const enabled = process.env.AURION_E2E_ISOLATED === "1";
 test.skip(!enabled, "Requires the dedicated isolated migration CI environment");
 
 type Presence = { userId: number; position: { x: number; z: number }; lastAcceptedClientSeq: number };
-
-async function ensurePublicAvatar(page: Page, handle: string): Promise<void> {
-  const pool = createPool(process.env.DATABASE_URL!);
-  try {
-    const [users] = await pool.query<RowDataPacket[]>("SELECT u.id FROM users u JOIN localCredentials c ON c.userId=u.id WHERE c.handle=?", [handle]);
-    expect(users).toHaveLength(1);
-    const userId = Number(users[0]!.id);
-    await pool.execute("UPDATE users SET role='admin' WHERE id=?", [userId]);
-    const bytes = testAnimatedPlayerGlb("AIM254_Public_Player");
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
-    const response = await page.request.post("/api/admin/glb-smart-upload", { data: {
-      displayName: "AIM254 public avatar",
-      fileName: "aim254-public-player.glb",
-      purpose: "player-public",
-      contentBase64: bytes.toString("base64"),
-    } });
-    expect(response.status()).toBe(201);
-    expect(await response.json()).toMatchObject({
-      accepted: true,
-      purpose: "player-public",
-      classification: { assetType: "character" },
-      receipt: { sha256, targetKey: null, status: "catalog" },
-    });
-  } finally {
-    await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
-    await pool.end();
-  }
-}
-
-async function register(page: Page, handle: string): Promise<void> {
-  await page.goto("/");
-  await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("tab", { name: "Konto anlegen", exact: true }).click();
-  await dialog.getByLabel("Rufname", { exact: true }).fill(handle);
-  await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-regression-254!");
-  await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-  await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
-  await ensurePublicAvatar(page, handle);
-}
-
-async function enterAx1(page: Page): Promise<{ runtime: ReturnType<Page["getByTestId"]>; snapshot: any }> {
-  const launch = page.getByRole("button", { name: "SPIEL BETRETEN", exact: true });
-  await expect(launch).toBeVisible({ timeout: 30_000 });
-  const response = page.waitForResponse(candidate => candidate.url().includes("gameplay.enterOpenWorld") && candidate.status() === 200);
-  await launch.click();
-  const body = await (await response).json();
-  const snapshot = (Array.isArray(body) ? body : [body]).map(value => value.result?.data?.json).find(Boolean);
-  const runtime = page.getByTestId("xaurion-open-world-runtime");
-  await expect(runtime).toBeVisible();
-  const gate = page.getByTestId("player-character-selection-gate");
-  if (await gate.isVisible().catch(() => false)) {
-    await gate.getByRole("radio", { name: /AIM254 public avatar/ }).click();
-    const selectionReply = page.waitForResponse(candidate => candidate.url().endsWith("/api/game/public-player-characters/select") && candidate.request().method() === "POST");
-    await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
-    const selected = await selectionReply;
-    expect(selected.status()).toBe(200);
-    expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
-  }
-  await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
-  await expect(page.locator("#three-viewport canvas")).toBeVisible();
-  await expect(page.locator(".xaurion-runtime__error")).toHaveCount(0);
-  return { runtime, snapshot };
-}
 
 for (const viewport of [
   { name: "phone", width: 412, height: 915 },
@@ -134,7 +70,11 @@ for (const viewport of [
           if (!extension) throw new Error("CONTEXT_LOSS_TEST_EXTENSION_REQUIRED");
           extension.loseContext();
         });
-        await expect(first.runtime.getByText("OPEN WORLD ANGEHALTEN", { exact: true })).toBeVisible();
+        await expect.poll(async () => JSON.parse(await page.getByTestId("renderer-evidence").textContent() ?? "null")?.recoveryAttempt, { timeout: 45_000 }).toBe(1);
+        await expect.poll(async () => JSON.parse(await page.getByTestId("renderer-evidence").textContent() ?? "null")?.status, { timeout: 45_000 }).toBe("rendering");
+        await expect(first.runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible();
+        await expect(page.locator("#three-viewport canvas")).toHaveCount(1);
+        await expect(first.runtime.getByText("OPEN WORLD ANGEHALTEN", { exact: true })).toHaveCount(0);
       }
 
       await first.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
