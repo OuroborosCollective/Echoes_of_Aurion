@@ -14,6 +14,8 @@ Eine Generation besitzt Renderer, Abbruchsignal, Frame-Loops, GLB-/NPC-Projektio
 
 Context-/Device-Loss beendet die alte Generation einschließlich Inputs, Verbindungen und Projektionen. Recovery liest einen frischen authentifizierten Weltkontext, verwendet WebGL2, erstellt eine neue Engine und baut Asset-/Manifest-Projektionen erneut aus den bestätigten Quellen auf. Alte Tickets, Snapshots und verspätete Initialisierungen dürfen diese Generation nicht ersetzen. Pro Weltbesuch sind höchstens zwei automatische Wiederherstellungen erlaubt; weitere Fehler halten die Welt sichtbar an.
 
+Das tatsächliche `GPUDevice.lost`-Promise wird zusätzlich zum Three.js-Callback beobachtet. Three.js 0.185.1 unterdrückt dort den Grund `destroyed`; für eine noch aktive AX1-Generation ist auch dieser Verlust ein Wiederherstellungsgrund. Reguläres Aufräumen markiert die Generation zuerst als beendet und löst keinen Neustart aus.
+
 Die Material-Emission nutzt denselben externen Präsentationstakt und denselben Puls wie zuvor, über `emissiveIntensity` statt GLSL-`onBeforeCompile`. WebGPU-Partikel verwenden instanzierte TSL-Sprites mit den bestehenden Positions-, Farb-, Größen- und Alpha-Puffern. Die 18 Quellgeneratoren bleiben unverändert. Renderzeit, Materialintensität und Backend bestimmen keinen WASD-Tick und keinen Welt-/NPC-/Gameplayhash.
 
 ## Nachweise

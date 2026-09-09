@@ -184,6 +184,17 @@ describe("open world session ownership", () => {
     act(() => oldSnapshot({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 2, tick: 95, presences: [{ entityId: "player:1", userId: 1, position: { x: 0, z: -32300 }, lastAcceptedClientSeq: 1 }], mobs: [], combatants: [] }));
     expect(fixture.engines[1].start).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).toBeNull();
+    act(() => fixture.tickets[1].onSuccess({ ticket: "after-loss" }));
+    act(() => fixture.snapshots[1]({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 3, tick: 96, presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: -32300 }, lastAcceptedClientSeq: 2 }], mobs: [], combatants: [] }));
+    expect(fixture.engines[1].start).toHaveBeenCalledOnce();
+    await act(async () => fixture.engines[1].onRuntimeError?.(new Error("WEBGPU_DEVICE_LOST")));
+    expect(fixture.engines).toHaveLength(3);
+    expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ recoveryAttempt: 2, status: "awaiting_snapshot" });
+    await act(async () => fixture.engines[2].onRuntimeError?.(new Error("WEBGL_CONTEXT_LOST")));
+    expect(fixture.engines).toHaveLength(3);
+    expect(fixture.engines[2].stop).toHaveBeenCalled();
+    expect(screen.queryByText("World controls")).toBeNull();
+    expect(screen.getByRole("alert")).toBeTruthy();
   });
 
 });

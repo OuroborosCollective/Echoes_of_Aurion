@@ -80,6 +80,7 @@ jobs:
 
       - name: Renderer and authority regression gates
         run: |
+          python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit --repo "$PWD" --expected-revision "$AURION_RELEASE_SHA" --run-canonical --output /tmp/aim290-repository-receipt.json
           pnpm check
           pnpm exec vitest run client/src/xaurion/core/RendererFactory.test.ts client/src/xaurion/core/RuntimeFrameLoop.test.ts client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx client/src/xaurion/core/VisualItemMaterialCompiler.test.ts server/aim262VisualEffects.test.ts server/aim243WorldCore.test.ts
 
@@ -114,6 +115,7 @@ jobs:
             test-results/
             playwright-aim290-report/
             /tmp/aurion-aim290-browser-server.log
+            /tmp/aim290-repository-receipt.json
           if-no-files-found: warn
           retention-days: 14
 
