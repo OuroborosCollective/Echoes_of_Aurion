@@ -1,0 +1,171 @@
+name: AIM-292 Confirmed NPC Multi-Memory
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - "shared/npc*"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+      - "scripts/*wasd-npc*"
+      - "scripts/vendor/verify-wasd-npc-capsule.mjs"
+      - "client/src/xaurion/integration/NpcDecisionPanel*"
+      - "drizzle/**"
+      - "e2e/aim292.npcMemory.spec.ts"
+      - "playwright.aim292.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/aim292-npc-multi-memory.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "shared/npc*"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+      - "scripts/*wasd-npc*"
+      - "scripts/vendor/verify-wasd-npc-capsule.mjs"
+      - "client/src/xaurion/integration/NpcDecisionPanel*"
+      - "drizzle/**"
+      - "e2e/aim292.npcMemory.spec.ts"
+      - "playwright.aim292.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/aim292-npc-multi-memory.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aim292-npc-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-reproduction:
+    name: Rebuild the exact merged WASD capsule
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate reviewed capsule and source pin before execution
+        id: pin
+        run: |
+          node scripts/verify-wasd-npc.mjs
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import fs from 'node:fs';
+          const pin=JSON.parse(fs.readFileSync('config/wasd-npc-capsule.json','utf8'));
+          if(!/^[a-f0-9]{40}$/.test(pin.sourceRevision))throw Error('SOURCE_REVISION_REQUIRED');
+          console.log(`source_revision=${pin.sourceRevision}`);
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/Wasd
+          ref: ${{ steps.pin.outputs.source_revision }}
+          path: wasd-source
+          persist-credentials: false
+          sparse-checkout: |
+            server
+            packages
+            scripts
+            patches
+      - name: Install exact WASD validation/compiler dependencies
+        working-directory: wasd-source
+        run: npm exec --yes --package=pnpm@11.8.0 -- pnpm install --frozen-lockfile --filter @wasd/server...
+      - name: Rebuild, compare every byte and run the actual compiled source tests
+        run: |
+          test "$(git -C wasd-source rev-parse HEAD)" = "${{ steps.pin.outputs.source_revision }}"
+          node wasd-source/scripts/build-aurion-npc-capsule.mjs /tmp/aim292-rebuilt
+          diff --recursive vendor/wasd-npc /tmp/aim292-rebuilt
+          cmp scripts/vendor/verify-wasd-npc-capsule.mjs wasd-source/scripts/verify-aurion-npc-capsule.mjs
+          WASD_NPC_CAPSULE_DIR=/tmp/aim292-rebuilt node --test wasd-source/scripts/__tests__/aurion-npc-capsule.test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aim292-wasd-capsule-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/aim292-rebuilt
+          if-no-files-found: error
+          retention-days: 14
+
+  persistence-and-browser:
+    name: Real MariaDB receipts, restart and AX1 projection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_browser_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
+      AURION_NPC_E2E: '1'
+      AURION_UI_E2E: '1'
+      AURION_E2E_ISOLATED: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-ci-aim292-browser-key-never-production
+      VITE_APP_ID: aurion-isolated-aim292-browser-test
+      AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
+      AURION_GLB_STORAGE_DIR: /tmp/aurion-aim292-browser-assets
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prove exact source and apply the complete journal to actual MariaDB
+        run: |
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          node scripts/verify-wasd-npc.mjs
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Prove same-transaction persistence, rollback, replay and fresh-process readback
+        run: |
+          pnpm check
+          pnpm exec vitest run --no-file-parallelism server/aim263NpcMariaDb.test.ts server/aim263NpcSnapshotMariaDb.test.ts server/autonomousNpcLifeMariaDb.test.ts server/aim292NpcMultiMemoryMariaDb.test.ts
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+          python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit --repo "$PWD" --expected-revision "$AURION_RELEASE_SHA" --run-canonical --output /tmp/aim292-repository-receipt.json
+      - name: Build production application and install Chromium
+        run: |
+          pnpm build
+          pnpm exec playwright install --with-deps chromium
+      - name: Start actual application and autonomous zone tick
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-aim292-server.log 2>&1 &
+          echo $! >/tmp/aurion-aim292-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aurion-aim292-server.log
+          exit 1
+      - name: Prove actual authenticated memory projection on three screen sizes
+        run: pnpm exec playwright test --config=playwright.aim292.config.ts
+      - name: Read back the actual autonomous decision and memory receipts
+        run: node scripts/verify-autonomous-npc-life-runtime.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim292-mariadb-ax1-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-aim292-report/
+            /tmp/aurion-aim292-server.log
+            /tmp/aim292-repository-receipt.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stop isolated application
+        if: always()
+        run: |
+          if test -f /tmp/aurion-aim292-server.pid; then kill "$(cat /tmp/aurion-aim292-server.pid)" 2>/dev/null || true; fi

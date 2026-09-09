@@ -30,6 +30,7 @@ on:
       - "drizzle/0039_aurion_world_epoch_materializations.sql"
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
+      - "drizzle/0042_aurion_npc_multi_memory.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -64,6 +65,7 @@ on:
       - "drizzle/0039_aurion_world_epoch_materializations.sql"
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
+      - "drizzle/0042_aurion_npc_multi_memory.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -139,7 +141,7 @@ jobs:
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
 
-      - name: Prove all twenty-one late migrations classify absent on a 0020-only database
+      - name: Prove all declared late migrations classify absent on a 0020-only database
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts > absent.json
@@ -147,12 +149,12 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("absent.json","utf8"));
           if(receipt.overallState!=="RECONCILIATION_REQUIRED") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.absentCount!==21 || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
+          if(receipt.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.matchCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration absence classification mismatch");
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
 
-      - name: Apply 0021 through 0041 only inside this isolated proof database
+      - name: Apply 0021 through 0042 only inside this isolated proof database
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -167,7 +169,7 @@ jobs:
             "0026_aurion_faction_questline_state",
             "0027_aurion_faction_questline_rewards",
             "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
-            "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger",
+            "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory",
           ];
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try {
@@ -180,7 +182,7 @@ jobs:
           console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
           NODE
 
-      - name: Prove all twenty-one late migrations match after isolated apply
+      - name: Prove all declared late migrations match after isolated apply
         run: |
           set -euo pipefail
           set +e
@@ -193,7 +195,7 @@ jobs:
           import fs from "node:fs";
           const receipt=JSON.parse(fs.readFileSync("matched.json","utf8"));
           if(receipt.overallState!=="PRESENT_SCHEMA_MATCH") throw new Error(`unexpected overall state ${receipt.overallState}`);
-          if(receipt.summary.matchCount!==21 || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
+          if(receipt.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
           console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
 

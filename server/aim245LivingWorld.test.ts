@@ -55,11 +55,10 @@ describe("AIM-245/AIM-263 living world migration", () => {
   it("reads confirmed NPC continuity, fixes satisfaction signs and refreshes only newly observed memory", () => {
     const runtime = read("server/ax1LivingWorldRuntime.ts");
     expect(runtime).toContain("readConfirmedNpcState");
-    expect(runtime).toContain("resolution.caravan.ambushed ? -0.18");
-    expect(runtime).toContain('resolution.action === "produce" ? 0.07');
-    expect(runtime).toContain("newestMemory");
-    expect(runtime).toContain("opportunities: lifeOpportunities");
-    expect(runtime).toContain("economy:");
+    expect(runtime).toContain("prepareMerchantNpcDecision");
+    expect(runtime).toContain('from "./wasdNpcCapsule"');
+    expect(runtime).not.toContain("const baseMarkets");
+    expect(runtime).not.toContain("function lifeOpportunities");
     expect(runtime).toContain("resolveAndRecordNpc");
     expect(runtime).toContain("resolveAndRecordPolity");
     expect(runtime).toContain("resolveAndRecordWorld");

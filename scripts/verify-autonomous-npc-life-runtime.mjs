@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { mkdir } from "node:fs/promises";
 import mysql from "mysql2/promise";
+import { npcHash, npcMemoryReceiptIds, parseNpcMemoryV4, projectNpcMemoryV4, verifyConfirmedNpcDecision, verifyNpcMemoryEvidence } from "../vendor/wasd-npc/index.js";
+const npcPin = JSON.parse(fs.readFileSync("config/wasd-npc-capsule.json","utf8"));
 
 const expectedRevision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase();
 if (!expectedRevision || !/^[a-f0-9]{40}$/.test(expectedRevision)) throw new Error("AURION_RELEASE_SHA_REQUIRED");
@@ -37,6 +39,14 @@ try {
   const [worldRows] = await pool.query("SELECT regionId,resolutionIndex,reactionHash FROM aurionWorldResolutions WHERE regionId=? AND resolutionIndex=?", [life.worldRegionId, life.lastResolutionIndex]);
   if (worldRows.length !== 1 || worldRows[0].regionId !== life.worldRegionId || worldRows[0].resolutionIndex !== life.lastResolutionIndex || worldRows[0].reactionHash !== life.worldReactionHash) throw new Error("NPC_LIFE_WORLD_RECEIPT_MISMATCH");
 
+  const [memoryRows] = await pool.query("SELECT * FROM aurionNpcMemoryReceiptsV4 WHERE npcId=? AND resolutionIndex=?",[life.npcId,life.lastResolutionIndex]);
+  if (memoryRows.length!==1) throw new Error("NPC_MULTI_MEMORY_RECEIPT_REQUIRED");
+  const memoryRow=memoryRows[0], memory=parseNpcMemoryV4(memoryRow.memoryJson), ids=npcMemoryReceiptIds(memory);
+  if (memoryRow.memoryHash!==memory.memoryHash || memoryRow.sourceRevision!==npcPin.sourceRevision || memoryRow.sourceSha256!==npcPin.sourceSha256 || memory.lastReceiptId!==memoryRow.sourceDecisionReceiptId) throw new Error("NPC_MULTI_MEMORY_ROW_MISMATCH");
+  const [sourceRows]=await pool.query(`SELECT * FROM aurionNpcDecisionReceipts WHERE npcId=? AND id IN (${ids.map(()=>"?").join(",")})`,[life.npcId,...ids]);
+  verifyNpcMemoryEvidence(memory,sourceRows.map(row=>verifyConfirmedNpcDecision(row.observationIdsJson,{...row,receiptId:row.id})));
+  if (npcHash(projectNpcMemoryV4(memory))!==npcHash(life.multiMemory)) throw new Error("NPC_MULTI_MEMORY_RUNTIME_PROJECTION_MISMATCH");
+
   console.log(JSON.stringify({
     recordType: "aurion_autonomous_npc_life_runtime_readback",
     sourceRevision: expectedRevision,
@@ -55,6 +65,7 @@ try {
     npcReceiptSource: life.npcReceiptSource,
     worldReceiptSource: life.worldReceiptSource,
     receiptBound: true,
+    multiMemory: { memoryHash:memory.memoryHash, receiptHash:memoryRow.receiptHash, sourceRevision:memoryRow.sourceRevision, sourceSha256:memoryRow.sourceSha256, counts:life.multiMemory.counts, retainedSourcesVerified:ids.length },
   }));
 } finally {
   await pool.end();

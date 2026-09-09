@@ -5,7 +5,8 @@ import {decodeOwnedNpcPacket} from "@shared/npcSnapshotProtocol";
 const suite=process.env.AURION_NPC_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 suite("AIM-263 NPC packet from actual receipt storage",()=>{
  let pool:Pool,isolated=false;
- async function cleanup(){if(!isolated)throw Error("ISOLATED_TEST_DATABASE_REQUIRED");await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId IN ('lyra','orun')");await pool.query("DELETE FROM aurionNpcStates WHERE npcId IN ('lyra','orun')");}
+ async function cleanup(){if(!isolated)throw Error("ISOLATED_TEST_DATABASE_REQUIRED");await pool.query("TRUNCATE TABLE aurionNpcMemoryReceiptsV4");
+    await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId IN ('lyra','orun')");await pool.query("DELETE FROM aurionNpcStates WHERE npcId IN ('lyra','orun')");}
  beforeAll(async()=>{const url=new URL(process.env.DATABASE_URL!);if(url.hostname!=="127.0.0.1"||!url.pathname.endsWith("_test"))throw Error("ISOLATED_TEST_DATABASE_REQUIRED");pool=createPool(process.env.DATABASE_URL!);const [rows]=await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name");if(rows[0]?.name!==url.pathname.slice(1))throw Error("ISOLATED_TEST_DATABASE_REQUIRED");isolated=true;});
  beforeEach(cleanup);afterAll(async()=>{if(pool){if(isolated)await cleanup();await pool.end();}});
  const resolve=(npcId:string,resolutionIndex:number)=>resolveAndRecordNpc({npcId,regionId:"observatory_threshold",resolutionIndex,needEvents:[],observationIds:["private-observation-text"],memory:["private-memory-text"]});

@@ -10,6 +10,7 @@ suite("AIM-263 exact NPC receipts in isolated MariaDB", () => {
   async function cleanup() {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS aim263_abort_npc_receipt");
+    await pool.query("TRUNCATE TABLE aurionNpcMemoryReceiptsV4");
     await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId=?", [npcId]);
     await pool.query("DELETE FROM aurionNpcStates WHERE npcId=?", [npcId]);
   }
