@@ -16,6 +16,7 @@ on:
       - "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"
       - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/aurionProductionTriggerReadback.ts"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "server/aurionZoneRuntimeSchemaBootstrap.test.ts"
@@ -38,6 +39,13 @@ on:
       - "drizzle/0032_aurion_group_instances.sql"
       - "drizzle/0033_aurion_ax1_ui_controls.sql"
       - "drizzle/0034_ax1_starter_equipment_receipts.sql"
+      - "drizzle/0035_aurion_npc_memory_quest_offers.sql"
+      - "drizzle/0036_aurion_faction_warfront_receipts.sql"
+      - "drizzle/0037_aurion_trade_crafting_receipts.sql"
+      - "drizzle/0038_aurion_world_chunk_delta_conflicts.sql"
+      - "drizzle/0039_aurion_world_epoch_materializations.sql"
+      - "drizzle/0040_aurion_progression_receipts.sql"
+      - "drizzle/0041_aurion_content_hash_ledger.sql"
   push:
     branches: [main]
     paths:
@@ -48,6 +56,7 @@ on:
       - "deploy/promote-aurion-zone-runtime.sh"
       - "scripts/aurionProductionReadbackErrors.ts"
       - "scripts/aurionProductionSchemaReconciliation.ts"
+      - "scripts/aurionProductionTriggerReadback.ts"
       - "scripts/build-aurion-production-reconcile-artifact.mjs"
       - "scripts/reconcile-aurion-production-schema.ts"
       - "deploy/aurion-production-schema-reconcile"
@@ -76,6 +85,13 @@ on:
       - "drizzle/0032_aurion_group_instances.sql"
       - "drizzle/0033_aurion_ax1_ui_controls.sql"
       - "drizzle/0034_ax1_starter_equipment_receipts.sql"
+      - "drizzle/0035_aurion_npc_memory_quest_offers.sql"
+      - "drizzle/0036_aurion_faction_warfront_receipts.sql"
+      - "drizzle/0037_aurion_trade_crafting_receipts.sql"
+      - "drizzle/0038_aurion_world_chunk_delta_conflicts.sql"
+      - "drizzle/0039_aurion_world_epoch_materializations.sql"
+      - "drizzle/0040_aurion_progression_receipts.sql"
+      - "drizzle/0041_aurion_content_hash_ledger.sql"
 
 permissions:
   contents: read

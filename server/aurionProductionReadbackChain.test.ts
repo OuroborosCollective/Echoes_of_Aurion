@@ -18,9 +18,8 @@ describe("Aurion post-deploy production schema readback", () => {
     const wave=JSON.parse(read("config/aurion-migration-wave-manifest.json"));
     expect(wave).toMatchObject({schemaVersion:"aurion.migration-wave-manifest.v2",recordType:"aurion_migration_wave_manifest",policy:{futureTagsRequireNewManifest:true}});
     const tags=wave.migrations.map((entry:{tag:string})=>entry.tag);
-    expect(tags).toContain("0034_ax1_starter_equipment_receipts");
-    expect(journalTags.slice(0,tags.length)).toEqual(tags);
-    expect(journalTags.length).toBeGreaterThanOrEqual(tags.length);
+    expect(tags).toContain("0041_aurion_content_hash_ledger");
+    expect(journalTags).toEqual(tags);
     const migrationCount=tags.length;
     expect(migrationCount).toBeGreaterThan(0);
     const sourceRevision="a".repeat(40),imageDigest="sha256:"+"b".repeat(64);

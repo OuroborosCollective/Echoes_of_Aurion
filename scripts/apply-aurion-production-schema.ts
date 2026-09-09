@@ -1,4 +1,5 @@
 import { readProductionSchemaContracts } from "./aurionProductionSchemaContracts";
+import { readProductionTriggers } from "./aurionProductionTriggerReadback";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -160,7 +161,8 @@ async function observeMigrations(connection: Connection, expected: readonly Expe
       `SELECT TABLE_NAME,CONSTRAINT_NAME,CHECK_CLAUSE FROM information_schema.check_constraints WHERE constraint_schema=DATABASE() AND TABLE_NAME IN (${placeholders(expectedTableNames.length)}) ORDER BY TABLE_NAME,CONSTRAINT_NAME`,
       expectedTableNames,
     );
-    const tableNamesPresent = new Set(columnRows.map(row => row.TABLE_NAME));
+  const triggers = await readProductionTriggers(connection, expectedTableNames);
+  const tableNamesPresent = new Set(columnRows.map(row => row.TABLE_NAME));
   const observedTables = new Map<string, ObservedTable>();
   for (const tableName of tableNamesPresent) {
     const columns = columnRows
@@ -177,7 +179,7 @@ async function observeMigrations(connection: Connection, expected: readonly Expe
       unique: index.unique,
       columns: index.columns.sort((left, right) => left.sequence - right.sequence).map(column => column.name),
     }));
-    observedTables.set(tableName, { name: tableName, columns, indexes, checks: checkRows.filter(row => row.TABLE_NAME === tableName).map(row => ({ name: row.CONSTRAINT_NAME, expression: row.CHECK_CLAUSE })) });
+    observedTables.set(tableName, { name: tableName, columns, indexes, triggers: triggers.get(tableName) ?? [], checks: checkRows.filter(row => row.TABLE_NAME === tableName).map(row => ({ name: row.CONSTRAINT_NAME, expression: row.CHECK_CLAUSE })) });
   }
   return classifyMigrationContracts(expected, observedTables);
 }

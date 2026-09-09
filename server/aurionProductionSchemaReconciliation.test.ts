@@ -21,6 +21,7 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
   return {
     name: table.name,
     checks: table.checks,
+    triggers: table.triggers,
     columns: table.columns.map(column => ({
       name: column.name,
       columnType: column.sqlType === "int" ? "int(11)" : column.sqlType,
@@ -35,12 +36,59 @@ function observedFromExpected(table: Awaited<ReturnType<typeof parse>>["tables"]
 }
 
 describe("Aurion production schema reconciliation", () => {
+  it("covers every journaled migration through the canonical wave manifest", async () => {
+    const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8"));
+    const manifest = JSON.parse(await readFile("config/aurion-migration-wave-manifest.json", "utf8"));
+    const tags = journal.entries.filter((entry: { idx: number }) => entry.idx >= 21).map((entry: { tag: string }) => entry.tag);
+    expect([...lateAurionMigrationTags]).toEqual(tags);
+    expect(manifest.migrations.map((migration: { tag: string }) => migration.tag)).toEqual(tags);
+  });
+
+  it("requires both exact append-only triggers and rejects weakened or extra trigger bodies", async () => {
+    const migration = await parse("0041_aurion_content_hash_ledger");
+    const expected = migration.tables.find(table => table.name === "aurionContentHashLedger")!;
+    expect(expected.triggers?.map(trigger => trigger.name)).toEqual([
+      "aurionContentHashLedger_no_update", "aurionContentHashLedger_no_delete",
+    ]);
+    const observed = observedFromExpected(expected);
+    expect(compareTableContract(expected, observed)).toEqual([]);
+    expect(compareTableContract(expected, { ...observed, triggers: observed.triggers!.slice(1) }))
+      .toContain("aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_update");
+    for (const change of [
+      { statement: "SET NEW.id = OLD.id" },
+      { statement: "SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'AURION_CONTENT_HASH_LEDGER_APPEND_ONLY'" },
+      { timing: "AFTER" }, { event: "INSERT" },
+    ]) {
+      const triggers = observed.triggers!.map((trigger, index) => index === 0 ? { ...trigger, ...change } : trigger);
+      expect(compareTableContract(expected, { ...observed, triggers }))
+        .toContain("aurionContentHashLedger:trigger_contract:aurionContentHashLedger_no_update");
+    }
+    expect(compareTableContract(expected, { ...observed, triggers: [...observed.triggers!, { ...observed.triggers![0], name: "shadow_trigger" }] }))
+      .toContain("aurionContentHashLedger:unexpected_trigger:shadow_trigger");
+    expect(() => parseLateMigrationSql("0041_aurion_content_hash_ledger", "CREATE TABLE `items` (`id` int NOT NULL); CREATE TRIGGER `unsafe` BEFORE UPDATE ON `items` FOR EACH ROW SET NEW.id = OLD.id;"))
+      .toThrow("unsupported TRIGGER");
+  });
+
   it("compares CHECK boolean structure without discarding grouping or string literals", () => {
     const normalize = (value: string) => canonicalCheckExpression(value, "items");
     expect(normalize("((`items`.`kind` = 'craft' AND `a` IS NULL) OR (`kind` = 'loot' AND `b` IS NOT NULL))")).toBe(normalize("`kind` = 'craft' and `a` is null or `kind` = 'loot' and `b` is not null"));
     expect(normalize("(a = 1 OR b = 2) AND c = 3")).not.toBe(normalize("a = 1 OR b = 2 AND c = 3"));
     expect(normalize("quantity REGEXP '^[1-9][0-9]*$'")).not.toBe(normalize("quantity REGEXP '^[0-9]*$'"));
     expect(() => normalize("a = 1 || b = 2")).toThrow("Unsupported CHECK");
+  });
+
+  it("reports invisible triggers on existing tables instead of selecting an earlier migration prefix", async () => {
+    const contracts = await readProductionSchemaContracts(process.cwd());
+    const observed = new Map<string, ObservedTable>();
+    for (const migration of contracts) for (const table of migration.tables) observed.set(table.name, observedFromExpected(table));
+    const ledger = observed.get("aurionContentHashLedger")!;
+    observed.set(ledger.name, { ...ledger, triggers: [] });
+    const result = classifyMigrationContracts(contracts, observed);
+    expect(result.at(-1)).toMatchObject({ state: "PRESENT_SCHEMA_DRIFT", drift: [
+      "aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_delete",
+      "aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_update",
+    ] });
+    expect(result.slice(0, -1).every(migration => migration.state === "PRESENT_SCHEMA_MATCH")).toBe(true);
   });
 
   it("accepts every exact late prefix including both guild enum and crafting index evolution", async () => {

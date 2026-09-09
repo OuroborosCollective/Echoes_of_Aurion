@@ -27,6 +27,13 @@ test("future waves, PR callers and stale main fail before any dispatch", async (
     assert.equal(api.writes.length, 0);
   }
 });
+test("a stale 0034 plan cannot dispatch the current 0041 apply contract", async () => {
+  const api = harness();
+  await assert.rejects(dispatchSchemaPlan({ ...input, manifest: {
+    ...input.manifest, migrations: input.manifest.migrations.slice(0, 14),
+  } }, api), /SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED/);
+  assert.equal(api.writes.length, 0);
+});
 test("failed, mismatched and unfinished apply runs never count as successful", async () => {
   for (const run of [{ conclusion: "failure" }, { head_sha: "c".repeat(40) }, { status: "in_progress" }]) {
     const api = harness({ run });

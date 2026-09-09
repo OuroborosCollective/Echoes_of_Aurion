@@ -11,6 +11,7 @@ export const lateAurionMigrationTags = [
   "0030_aurion_guild_bank_economy",
   "0031_aurion_profession_crafting_persistence",
   "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
+  "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
@@ -32,11 +33,19 @@ export type ExpectedIndex = Readonly<{
   columns: readonly string[];
 }>;
 
+export type SchemaTrigger = Readonly<{
+  name: string;
+  timing: string;
+  event: string;
+  statement: string;
+}>;
+
 export type ExpectedTable = Readonly<{
   name: string;
   columns: readonly ExpectedColumn[];
   indexes: readonly ExpectedIndex[];
   checks?: readonly { name: string; expression: string }[];
+  triggers?: readonly SchemaTrigger[];
 }>;
 
 export type ExpectedMigration = Readonly<{
@@ -64,6 +73,7 @@ export type ObservedTable = Readonly<{
   columns: readonly ObservedColumn[];
   indexes: readonly ObservedIndex[];
   checks?: readonly { name: string; expression: string }[];
+  triggers?: readonly SchemaTrigger[];
 }>;
 
 export type MigrationClassification = Readonly<{
@@ -275,7 +285,7 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
     tables.push(parseCreateTable(match[1], body));
     createPattern.lastIndex = end;
   }
-  const tableMap = new Map(tables.map(table => [table.name, { ...table, columns: [...table.columns], indexes: [...table.indexes], checks: [...(table.checks ?? [])] }]));
+  const tableMap = new Map(tables.map(table => [table.name, { ...table, columns: [...table.columns], indexes: [...table.indexes], checks: [...(table.checks ?? [])], triggers: [...(table.triggers ?? [])] }]));
   const priorTables = new Map<string, ExpectedTable>();
   const alterPattern = /ALTER\s+TABLE\s+`([^`]+)`\s+([^;]+);/gi;
   while ((match = alterPattern.exec(sql))) {
@@ -284,7 +294,7 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
       const before = existing.get(name);
       if (!before) throw new Error(`${tag}: ALTER references unknown table ${name}`);
       priorTables.set(name, before);
-      tableMap.set(name, { ...before, columns: [...before.columns], indexes: [...before.indexes], checks: [...(before.checks ?? [])] });
+      tableMap.set(name, { ...before, columns: [...before.columns], indexes: [...before.indexes], checks: [...(before.checks ?? [])], triggers: [...(before.triggers ?? [])] });
     }
     const table = tableMap.get(name)!;
     const clause = match[2].trim();
@@ -333,6 +343,17 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
     if (!table || !table.indexes.some(index => index.name === match![1])) throw new Error(`${tag}: missing standalone DROP index ${match[1]}`);
     table.indexes = table.indexes.filter(index => index.name !== match![1]);
   }
+  // Only the explicit append-only SIGNAL contract is supported. Other trigger
+  // programs require a reviewed parser extension, never silent certification.
+  const triggerPattern = /CREATE\s+TRIGGER\s+`([^`]+)`\s+(BEFORE|AFTER)\s+(INSERT|UPDATE|DELETE)\s+ON\s+`([^`]+)`\s+FOR\s+EACH\s+ROW\s+(SIGNAL\s+SQLSTATE\s+'45000'\s+SET\s+MESSAGE_TEXT\s*=\s*'(?:''|[^'])*')\s*;/gi;
+  let parsedTriggers = 0;
+  while ((match = triggerPattern.exec(sql))) {
+    const table = tableMap.get(match[4]);
+    if (!table || table.triggers.some(trigger => trigger.name === match![1])) throw new Error(`${tag}: invalid trigger target or duplicate`);
+    table.triggers.push({ name: match[1], timing: match[2].toUpperCase(), event: match[3].toUpperCase(), statement: match[5] });
+    parsedTriggers++;
+  }
+  if ((sql.match(/CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\b/gi) ?? []).length !== parsedTriggers) throw new Error(`${tag}: unsupported TRIGGER`);
   return { tag, tables: Array.from(tableMap.values()), priorTables: [...priorTables.values()], createdTableNames: tables.map(table => table.name) };
 }
 
@@ -356,7 +377,14 @@ export function classifyMigrationContracts(expected: readonly ExpectedMigration[
     if (!table) return actual ? [`${name}:unexpected_table_before_migration`] : [];
     return actual ? compareTableContract(table, actual) : [`${name}:missing_table`];
   }).sort() }));
-  const closest = candidates.reduce((left, right) => right.drift.length < left.drift.length ? right : left);
+  // Existing tables establish migration progress before indexes/checks/triggers
+  // are compared. Missing protection must not make existing tables look like a
+  // future migration merely because an older prefix has fewer drift messages.
+  const tablePresenceDrift = (candidate: typeof candidates[number]) => candidate.drift.filter(reason => /:(?:missing_table|unexpected_table_before_migration)$/.test(reason)).length;
+  const closest = candidates.reduce((left, right) => {
+    const presenceDelta = tablePresenceDrift(right) - tablePresenceDrift(left);
+    return presenceDelta < 0 || (presenceDelta === 0 && right.drift.length < left.drift.length) ? right : left;
+  });
   return expected.map((migration, index) => {
     const names = migration.tables.map(table => table.name).sort();
     const drift = closest.drift.filter(message => names.some(name => message.startsWith(`${name}:`)));
@@ -412,6 +440,11 @@ export function canonicalCheckExpression(expression: string, table: string): str
   return JSON.stringify(normalize(values));
 }
 
+function canonicalSignalStatement(statement: string): string | null {
+  const match = statement.match(/^\s*SIGNAL\s+SQLSTATE\s+('(?:''|[^'])*')\s+SET\s+MESSAGE_TEXT\s*=\s*('(?:''|[^'])*')\s*;?\s*$/i);
+  return match ? JSON.stringify([match[1], match[2]]) : null;
+}
+
 export function compareTableContract(expected: ExpectedTable, observed: ObservedTable): string[] {
   const drift: string[] = [];
   const expectedColumns = new Map(expected.columns.map(column => [column.name, column]));
@@ -452,6 +485,17 @@ export function compareTableContract(expected: ExpectedTable, observed: Observed
     else if (canonicalCheckExpression(check.expression, expected.name) !== canonicalCheckExpression(actual, expected.name)) drift.push(`${expected.name}:check_expression:${check.name}`);
   }
   for (const name of actualChecks.keys()) if (!(expected.checks ?? []).some(check => check.name === name)) drift.push(`${expected.name}:unexpected_check:${name}`);
+  const actualTriggers = new Map((observed.triggers ?? []).map(trigger => [trigger.name, trigger]));
+  for (const trigger of expected.triggers ?? []) {
+    const actual = actualTriggers.get(trigger.name);
+    if (!actual) drift.push(`${expected.name}:missing_trigger:${trigger.name}`);
+    else if (actual.timing.toUpperCase() !== trigger.timing || actual.event.toUpperCase() !== trigger.event
+      || canonicalSignalStatement(actual.statement) === null
+      || canonicalSignalStatement(actual.statement) !== canonicalSignalStatement(trigger.statement)) {
+      drift.push(`${expected.name}:trigger_contract:${trigger.name}`);
+    }
+  }
+  for (const name of actualTriggers.keys()) if (!(expected.triggers ?? []).some(trigger => trigger.name === name)) drift.push(`${expected.name}:unexpected_trigger:${name}`);
   return drift.sort();
 }
 

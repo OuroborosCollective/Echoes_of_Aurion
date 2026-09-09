@@ -149,6 +149,16 @@ async function targetMigrationInventory(root, manifest) {
     if (!journalTags.has(tag)) throw new Error(`AURION_MIGRATION_UNJOURNALED_TAG:${tag}`);
     migrations.push({ tag, path, sha256: sha256(source), journalPresent: true });
   }
+  // The apply gate consumes the entire reviewed late journal. A shorter plan
+  // must fail here, before a release can be promoted with incomplete coverage.
+  const lateEntries = journal.entries.filter(entry => Number.isSafeInteger(entry?.idx) && entry.idx >= 21).sort((a, b) => a.idx - b.idx);
+  const waveTags = manifest.migrations.map(migration => migration.tag);
+  if (!lateEntries.length || lateEntries.some((entry, index) => entry.idx !== 21 + index)
+    || new Set(lateEntries.map(entry => entry.tag)).size !== lateEntries.length
+    || lateEntries.length !== waveTags.length
+    || lateEntries.some((entry, index) => entry.tag !== waveTags[index])) {
+    throw new Error("AURION_MIGRATION_WAVE_JOURNAL_COVERAGE_MISMATCH");
+  }
   return {
     dialect: journal.dialect,
     journalSha256: sha256(Buffer.from(journalSource, "utf8")),
