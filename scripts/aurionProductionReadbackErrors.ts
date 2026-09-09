@@ -6,6 +6,7 @@ export type ReconciliationFailureStage =
   | "READ_SCHEMA_COLUMNS"
   | "READ_SCHEMA_INDEXES"
   | "READ_SCHEMA_CHECKS"
+  | "READ_SCHEMA_TRIGGERS"
   | "READ_DRIZZLE_JOURNAL"
   | "CLOSE_DATABASE";
 

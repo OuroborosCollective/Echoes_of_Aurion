@@ -3,11 +3,11 @@ import { pathToFileURL } from "node:url";
 
 const repository = "OuroborosCollective/Echoes_of_Aurion";
 const workflow = "aurion-production-schema-apply.yml";
-const tags = ["0021_aurion_global_world_state", "0022_aurion_world_chunk_deltas", "0023_aurion_world_presence_epochs", "0024_aurion_world_epoch_reactions", "0025_aurion_loot_mastery_ethos", "0026_aurion_faction_questline_state", "0027_aurion_faction_questline_rewards", "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts"];
+const tags = ["0021_aurion_global_world_state", "0022_aurion_world_chunk_deltas", "0023_aurion_world_presence_epochs", "0024_aurion_world_epoch_reactions", "0025_aurion_loot_mastery_ethos", "0026_aurion_faction_questline_state", "0027_aurion_faction_questline_rewards", "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts", "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger"];
 
 export function validateSchemaDispatchPlan({ manifest, expectedSha, planSha256, ledgerRunId }) {
   if (!/^[a-f0-9]{40}$/.test(expectedSha ?? "") || !/^[a-f0-9]{64}$/.test(planSha256 ?? "") || !/^[1-9][0-9]*$/.test(ledgerRunId ?? "")) throw new Error("SCHEMA_DISPATCH_IDENTITY_INVALID");
-  if (manifest?.waveId !== "aurion-production-0021-0034" || manifest.schemaVersion !== "aurion.migration-wave-manifest.v2" || manifest.policy?.ownerApprovalRequired !== true || manifest.policy?.productionWritesScheduled !== false || manifest.migrations?.map(entry => entry.tag).join(",") !== tags.join(",")) throw new Error("SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED");
+  if (manifest?.waveId !== "aurion-production-0021-0041" || manifest.schemaVersion !== "aurion.migration-wave-manifest.v2" || manifest.policy?.ownerApprovalRequired !== true || manifest.policy?.productionWritesScheduled !== false || manifest.migrations?.map(entry => entry.tag).join(",") !== tags.join(",")) throw new Error("SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED");
 }
 
 export async function dispatchSchemaPlan(input, { request, pause, attempts = 260 }) {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0034",
+  "waveId": "aurion-production-0021-0041",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -57,6 +57,34 @@
     },
     {
       "tag": "0034_ax1_starter_equipment_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0035_aurion_npc_memory_quest_offers",
+      "source": "aurion"
+    },
+    {
+      "tag": "0036_aurion_faction_warfront_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0037_aurion_trade_crafting_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0038_aurion_world_chunk_delta_conflicts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0039_aurion_world_epoch_materializations",
+      "source": "aurion"
+    },
+    {
+      "tag": "0040_aurion_progression_receipts",
+      "source": "aurion"
+    },
+    {
+      "tag": "0041_aurion_content_hash_ledger",
       "source": "aurion"
     }
   ],

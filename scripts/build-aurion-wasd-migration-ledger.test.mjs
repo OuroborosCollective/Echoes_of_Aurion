@@ -66,7 +66,7 @@ async function createFixture() {
 
   await mkdir(join(aurionRoot, "config"), { recursive: true });
   await writeFile(join(aurionRoot, "config", "aurion-migration-wave-manifest.json"), `${JSON.stringify({ schemaVersion: "aurion.migration-wave-manifest.v2", recordType: "aurion_migration_wave_manifest", waveId: "fixture-wave", migrations: FIXTURE_MIGRATION_TAGS.map(tag => ({ tag, source: "aurion" })), policy: { productionWritesScheduled: false, ownerApprovalRequired: true } }, null, 2)}\n`);
-  const journalEntries = FIXTURE_MIGRATION_TAGS.map((tag, index) => ({ idx: index, tag, version: "5", when: index + 1, breakpoints: true }));
+  const journalEntries = FIXTURE_MIGRATION_TAGS.map((tag, index) => ({ idx: 21 + index, tag, version: "5", when: index + 1, breakpoints: true }));
   await writeFile(join(aurionRoot, "drizzle", "meta", "_journal.json"), `${JSON.stringify({ version: "7", dialect: "mysql", entries: journalEntries }, null, 2)}\n`);
   for (const tag of FIXTURE_MIGRATION_TAGS) {
     await writeFile(join(aurionRoot, "drizzle", `${tag}.sql`), `-- ${tag}\nCREATE TABLE \`${tag}\` (\`id\` int NOT NULL);\n`);
@@ -137,6 +137,36 @@ async function rewriteWaveManifest(fixture, patch) {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   await writeFile(manifestPath, `${JSON.stringify(patch(manifest), null, 2)}\n`);
 }
+
+test("wave manifest cannot omit a journaled tail and emit a partial apply plan", async testContext => {
+  const fixture = await createFixture();
+  testContext.after(() => Promise.all([
+    rm(fixture.aurionRoot, { recursive: true, force: true }),
+    rm(fixture.wasdRoot, { recursive: true, force: true }),
+  ]));
+  await rewriteWaveManifest(fixture, manifest => ({ ...manifest, migrations: manifest.migrations.slice(0, -1) }));
+  await assert.rejects(() => buildAurionWasdMigrationLedger({
+    root: fixture.aurionRoot, wasdRoot: fixture.wasdRoot,
+    sourceLedgerPath: fixture.sourceLedgerPath, out: ".ledger",
+  }), /AURION_MIGRATION_WAVE_JOURNAL_COVERAGE_MISMATCH/);
+  await assert.rejects(() => readFile(join(fixture.aurionRoot, ".ledger", "migration-ledger.json")), { code: "ENOENT" });
+});
+
+test("wave coverage rejects noncontiguous canonical journal indexes", async testContext => {
+  const fixture = await createFixture();
+  testContext.after(() => Promise.all([
+    rm(fixture.aurionRoot, { recursive: true, force: true }),
+    rm(fixture.wasdRoot, { recursive: true, force: true }),
+  ]));
+  const file = join(fixture.aurionRoot, "drizzle", "meta", "_journal.json");
+  const journal = JSON.parse(await readFile(file, "utf8"));
+  journal.entries.at(-1).idx += 1;
+  await writeFile(file, JSON.stringify(journal));
+  await assert.rejects(() => buildAurionWasdMigrationLedger({
+    root: fixture.aurionRoot, wasdRoot: fixture.wasdRoot,
+    sourceLedgerPath: fixture.sourceLedgerPath, out: ".ledger",
+  }), /AURION_MIGRATION_WAVE_JOURNAL_COVERAGE_MISMATCH/);
+});
 
 test("wave manifest rejects duplicate and unordered tags", async testContext => {
   const fixture = await createFixture();
