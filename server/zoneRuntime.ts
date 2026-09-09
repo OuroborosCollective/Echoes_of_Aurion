@@ -107,9 +107,14 @@ export class AuthoritativeMovementZone {
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
     if (!validWasdZoneCombatProfile(profile))
       throw new Error("ZONE_COMBAT_PROFILE_INVALID");
-    const previous = [...this.peers.values()].find(
-      peer => peer.userId === values.userId
-    );
+    // Optimization: Avoid spread syntax and dynamic array allocation in high-frequency path
+    let previous: PresencePeer | undefined;
+    for (const peer of this.peers.values()) {
+      if (peer.userId === values.userId) {
+        previous = peer;
+        break;
+      }
+    }
     if (!previous && this.peers.size >= ZONE_MAX_PRESENCES)
       throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
@@ -337,10 +342,11 @@ export class AuthoritativeMovementZone {
   }
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
-    this.peers.forEach(peer => {
+    // Optimization: Use iterative loop to avoid GC latency in high-frequency path
+    for (const peer of this.peers.values()) {
       if (peer.socket.readyState === peer.socket.OPEN)
         peer.socket.send(serialized);
-    });
+    }
   }
   private presences(): ZonePresence[] {
     const out: ZonePresence[] = [];
@@ -412,10 +418,11 @@ export class AuthoritativeMovementZone {
       combatants: this.combatants(),
     };
     const serialized = serialize(snapshot);
-    this.peers.forEach(peer => {
+    // Optimization: Use iterative loop to avoid GC latency in high-frequency path
+    for (const peer of this.peers.values()) {
       if (peer.socket.readyState === peer.socket.OPEN)
         peer.socket.send(serialized);
-    });
+    }
   }
 }
 
