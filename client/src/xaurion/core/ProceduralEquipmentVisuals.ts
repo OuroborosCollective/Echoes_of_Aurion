@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "./GlbModelLease";
 import { seededRandom } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import { ItemRarity, ItemSlot, RPGItem, WeaponType } from '../types';
@@ -209,6 +210,8 @@ export function deriveProceduralTheme(item: RPGItem | null, defaultSlot: ItemSlo
 
 export class ProceduralEquipmentVisuals {
   public animatedNodes: AnimatedGearNode[] = [];
+  private retired = false;
+  dispose(): void { this.retired = true; this.animatedNodes.length = 0; }
   private activeSlotVersions: Map<string, number> = new Map();
 
   public clearAnimatedNodes() {
@@ -274,7 +277,7 @@ export class ProceduralEquipmentVisuals {
     glbManager
       .loadModel(glbUrl)
       .then(({ scene }) => {
-        if (this.activeSlotVersions.get(slot) !== nextVer) return;
+        if (this.retired || this.activeSlotVersions.get(slot) !== nextVer) { releaseGlbTree(scene); return; }
 
         const box = new THREE.Box3().setFromObject(scene);
         const size = new THREE.Vector3();
@@ -370,8 +373,13 @@ export class ProceduralEquipmentVisuals {
 
     glbManager
       .loadModel(glbUrl)
-      .then(({ scene }) => {
-        if (this.activeSlotVersions.get(slot) !== nextVer) return;
+      .then(async ({ scene }) => {
+        if (this.retired || this.activeSlotVersions.get(slot) !== nextVer) { releaseGlbTree(scene); return; }
+
+        let rightScene: THREE.Group;
+        try { rightScene = (await glbManager.loadModel(glbUrl)).scene; }
+        catch (error) { releaseGlbTree(scene); throw error; }
+        if (this.retired || this.activeSlotVersions.get(slot) !== nextVer) { releaseGlbTree(scene); releaseGlbTree(rightScene); return; }
 
         const box = new THREE.Box3().setFromObject(scene);
         const size = new THREE.Vector3();
@@ -383,7 +391,7 @@ export class ProceduralEquipmentVisuals {
         const normScale = maxDim > 0 ? (1.0 / maxDim) * scaleVal : scaleVal;
 
         // Left Instance
-        const leftScene = scene.clone(true);
+        const leftScene = scene;
         leftScene.scale.set(normScale, normScale, normScale);
         leftScene.position.set(st.position[0], st.position[1], st.position[2]);
         leftScene.rotation.set(st.rotation[0], st.rotation[1], st.rotation[2]);
@@ -391,7 +399,6 @@ export class ProceduralEquipmentVisuals {
         leftFallback.visible = false;
 
         // Right Instance (Mirrored X)
-        const rightScene = scene.clone(true);
         rightScene.scale.set(-normScale, normScale, normScale);
         rightScene.position.set(-st.position[0], st.position[1], st.position[2]);
         rightScene.rotation.set(st.rotation[0], -st.rotation[1], -st.rotation[2]);

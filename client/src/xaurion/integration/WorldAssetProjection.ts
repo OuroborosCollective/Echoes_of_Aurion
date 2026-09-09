@@ -74,7 +74,7 @@ export class WorldAssetProjection {
    const variants=shipped?[...(this.ktxEnabled?[convert(shipped)]:[]),{...shipped.fallback,url:`/world-shipping/${shipped.fallback.file}`}]:[{...baseline,format:"legacy"}];
    const request=new AbortController();this.requests.add(request);
    const signal=AbortSignal.any([request.signal,AbortSignal.timeout(20_000)]);
-   void glbResourcePool.job(variants.reduce((n,spec)=>n+spec.bytes,0),async()=>{
+   void glbResourcePool.job(Math.max(...variants.map(spec=>spec.bytes)),async()=>{
     for(const [index,spec] of variants.entries()){
      signal.throwIfAborted();if(this.disposed)return;
      let releaseBudget:(()=>void)|null=null;let parsed:GLTF|undefined;
@@ -137,6 +137,14 @@ export class WorldAssetProjection {
   this.report(this.evidence());
  }
  private trim(limit:number){const active=new Set(this.selected.map(s=>s.key));for(const [key,value] of [...this.cache].sort((a,b)=>a[1].access-b[1].access)){if(this.cache.size<=limit)break;if(active.has(key))continue;this.release(value);this.cache.delete(key);}}
- evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth),resources:glbResourcePool.evidence()}};}
+ private textureEvidence(){
+  let compressedTextures=0,transcodedMipPayloadBytes=0,rasterRgbaCeilingBytes=0;
+  for(const {texture} of this.sharedTextures.values()){
+   if((texture as THREE.CompressedTexture).isCompressedTexture){compressedTextures++;for(const mip of texture.mipmaps)transcodedMipPayloadBytes+=((mip as unknown as {data?:ArrayBufferView}).data?.byteLength??0);}
+   else {const image=texture.image as {width?:number;height?:number};let w=image?.width??0,h=image?.height??0;if(w&&h)for(;;){rasterRgbaCeilingBytes+=w*h*4;if(w===1&&h===1)break;w=Math.max(1,Math.floor(w/2));h=Math.max(1,Math.floor(h/2));}}
+  }
+  return {compressedTextures,transcodedMipPayloadBytes,rasterRgbaCeilingBytes,interpretation:"decoded texture upload payload and raster upper bound; not driver VRAM"};
+ }
+ evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth),resources:glbResourcePool.evidence()}};}
  dispose(){if(this.disposed)return;this.disposed=true;this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
 }

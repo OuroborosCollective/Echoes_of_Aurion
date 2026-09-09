@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
@@ -71,6 +72,7 @@ export class UploadedWorldCatalogProjection {
   private remove(id: string): void {
     const current = this.rendered.get(id);
     if (!current) return;
+    releaseGlbTree(current.root);
     current.root.removeFromParent();
     this.rendered.delete(id);
   }
@@ -80,8 +82,10 @@ export class UploadedWorldCatalogProjection {
     const current = this.rendered.get(placement.id);
     if (current?.sha256 === placement.asset.sha256) return;
     this.pending.add(placement.id);
+    let unowned: THREE.Group | undefined;
     try {
       const loaded = await glbManager.loadModel(placement.asset.storageUrl);
+      unowned = loaded.scene;
       if (this.disposed || !staticRenderable(loaded.scene)) return;
       const stillAllowed = this.catalog?.entries.some(entry => entry.assetId === placement.asset.assetId && entry.sha256 === placement.asset.sha256 && entry.purpose === placement.asset.purpose);
       if (!stillAllowed) return;
@@ -116,9 +120,11 @@ export class UploadedWorldCatalogProjection {
       this.remove(placement.id);
       this.root.add(holder);
       this.rendered.set(placement.id, Object.freeze({ sha256: placement.asset.sha256, root: holder }));
+      unowned = undefined;
     } catch {
       // Existing world visuals remain authoritative when an uploaded render fails.
     } finally {
+      if (unowned) releaseGlbTree(unowned);
       this.pending.delete(placement.id);
     }
   }

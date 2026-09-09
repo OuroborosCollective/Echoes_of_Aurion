@@ -1,8 +1,8 @@
 /** Presentation allocations only. No receipt, entity or simulation input enters this pool. */
 export const assetBudgets = {
-  phone: { worldModels: 18, worldInstances: 48, worldCache: 24, actors: 12, animations: 8, decoderJobs: 2, ktxWorkers: 1, cacheModels: 40, textureBytes: 48*1024*1024, decodedBytes: 64*1024*1024, assetBytes: 8*1024*1024, networkBytes: 16*1024*1024 },
-  tablet: { worldModels: 24, worldInstances: 64, worldCache: 32, actors: 20, animations: 12, decoderJobs: 2, ktxWorkers: 1, cacheModels: 56, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetBytes: 12*1024*1024, networkBytes: 24*1024*1024 },
-  desktop: { worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20, decoderJobs: 2, ktxWorkers: 2, cacheModels: 80, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
+  phone: { worldModels: 18, worldInstances: 48, worldCache: 24, actors: 12, animations: 8, decoderJobs: 2, ktxWorkers: 1, cacheModels: 40, textureBytes: 48*1024*1024, decodedBytes: 64*1024*1024, assetWorkingSetBytes: 96*1024*1024, assetBytes: 8*1024*1024, networkBytes: 16*1024*1024 },
+  tablet: { worldModels: 24, worldInstances: 64, worldCache: 32, actors: 20, animations: 12, decoderJobs: 2, ktxWorkers: 1, cacheModels: 56, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetWorkingSetBytes: 192*1024*1024, assetBytes: 12*1024*1024, networkBytes: 24*1024*1024 },
+  desktop: { worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20, decoderJobs: 2, ktxWorkers: 2, cacheModels: 80, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
 } as const;
 export type AssetTier = keyof typeof assetBudgets;
 export const assetTier = (width: number): AssetTier => width < 768 ? "phone" : width < 1200 ? "tablet" : "desktop";
@@ -56,6 +56,7 @@ export class GlbResourcePool {
   private activeJobs=0; private pending:Array<()=>void>=[];
   private models=0; private decoded=0; private textures=0; private network=0;
   private actors=0; private animations=0;
+  private peakWorkingSet=0;
   private peakDecoded=0; private peakNetwork=0; private peakJobs=0;
   private fetchedBytes=0; private decodedCount=0; private decodeMs=0; private maximumDecodeMs=0;
   private rejected=0;
@@ -68,24 +69,27 @@ export class GlbResourcePool {
     else this.activeJobs++;
     const releaseJob=()=>{const next=this.pending.shift();if(next)next();else this.activeJobs--;};
     this.peakJobs=Math.max(this.peakJobs,this.activeJobs);
-    if(this.network+networkBytes>this.limits.networkBytes) {releaseJob();this.rejected++;throw Error("GLB_NETWORK_BUDGET");}
-    this.network+=networkBytes;this.peakNetwork=Math.max(this.peakNetwork,this.network);
+    if(this.network+networkBytes>this.limits.networkBytes||this.decoded+2*(this.network+networkBytes)>this.limits.assetWorkingSetBytes) {releaseJob();this.rejected++;throw Error("GLB_NETWORK_BUDGET");}
+    this.network+=networkBytes;this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);this.peakNetwork=Math.max(this.peakNetwork,this.network);
     try{return await work();}finally{this.network-=networkBytes;releaseJob();}
   }
   reserve(allocation:GlbAllocation):(()=>void)|null {
+    integer(allocation.decodedBytes);integer(allocation.textureBytes);
     const l=this.limits;
-    if(this.models>=l.cacheModels||this.decoded+allocation.decodedBytes>l.decodedBytes||this.textures+allocation.textureBytes>l.textureBytes){this.rejected++;return null;}
-    this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);
+    if(this.models>=l.cacheModels||this.decoded+allocation.decodedBytes>l.decodedBytes||this.textures+allocation.textureBytes>l.textureBytes||this.decoded+allocation.decodedBytes+2*this.network>l.assetWorkingSetBytes){this.rejected++;return null;}
+    this.models++;this.decoded+=allocation.decodedBytes;this.textures+=allocation.textureBytes;this.peakDecoded=Math.max(this.peakDecoded,this.decoded);this.peakWorkingSet=Math.max(this.peakWorkingSet,this.decoded+2*this.network);
     let released=false;return()=>{if(released)return;released=true;this.models--;this.decoded-=allocation.decodedBytes;this.textures-=allocation.textureBytes;};
   }
-  actor(animated:boolean):(()=>void)|null {
-    if(this.actors>=this.limits.actors||(animated&&this.animations>=this.limits.animations)){this.rejected++;return null;}
-    this.actors++;if(animated)this.animations++;let released=false;
-    return()=>{if(released)return;released=true;this.actors--;if(animated)this.animations--;};
+  actor(animationActions:number):(()=>void)|null {
+    integer(animationActions, 2);
+    if(this.actors>=this.limits.actors||this.animations+animationActions>this.limits.animations){this.rejected++;return null;}
+    this.actors++;this.animations+=animationActions;let released=false;
+    return()=>{if(released)return;released=true;this.actors--;this.animations-=animationActions;};
   }
   fetched(bytes:number){this.fetchedBytes+=integer(bytes);}
   decodedModel(milliseconds:number){this.decodedCount++;this.decodeMs+=milliseconds;this.maximumDecodeMs=Math.max(this.maximumDecodeMs,milliseconds);}
   evidence(){return{tier:this.tier,limits:this.limits,models:this.models,actors:this.actors,animations:this.animations,decoderJobs:this.activeJobs,pending:this.pending.length,
+    assetWorkingSetCeilingBytes:this.decoded+2*this.network,peakAssetWorkingSetCeilingBytes:this.peakWorkingSet,
     reservedDecodedBytes:this.decoded,reservedTextureBytes:this.textures,networkInFlightBytes:this.network,peakReservedDecodedBytes:this.peakDecoded,peakNetworkInFlightBytes:this.peakNetwork,
     peakDecoderJobs:this.peakJobs,fetchedBytes:this.fetchedBytes,decodedCount:this.decodedCount,totalDecodeMs:this.decodeMs,maxDecodeMs:this.maximumDecodeMs,rejected:this.rejected};}
 }

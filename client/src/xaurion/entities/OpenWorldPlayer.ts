@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "../core/GlbModelLease";
 import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import { collisionSystem } from '../world/WorldCollisionSystem';
@@ -713,6 +714,7 @@ export class OpenWorldPlayer {
       }
     }
     for (const child of toRemove) {
+      releaseGlbTree(child);
       group.remove(child);
       if ((child as THREE.Mesh).geometry) {
         (child as THREE.Mesh).geometry.dispose();
@@ -1421,14 +1423,17 @@ export class OpenWorldPlayer {
       return true;
     }
 
+    let unowned: THREE.Group | undefined;
     try {
       const { scene, animations } = await glbManager.loadModel(modelId);
+      unowned = scene;
       if (request !== this.glbAvatarRequest) return false;
       this.activeGlbModelId = modelId;
       this.rootGroup.visible = false; // Hide procedural model while GLB skin is active
 
       this.glbActor = new AnimatedGlbActor(scene, animations, 2);
       this.glbAvatarGroup.add(this.glbActor.group);
+      unowned = undefined;
       return true;
     } catch (err) {
       if (request !== this.glbAvatarRequest) return false;
@@ -1436,7 +1441,13 @@ export class OpenWorldPlayer {
       this.rootGroup.visible = true;
       this.activeGlbModelId = null;
       return false;
-    }
+    } finally { if (unowned) releaseGlbTree(unowned); }
+  }
+
+  public disposePresentation(): void {
+    this.proceduralVisuals.dispose();
+    void this.equipGlbModel(null);
+    releaseGlbTree(this.group);
   }
 
   public setConfirmedGlbSpeed(speedMetersPerSecond: number): void {

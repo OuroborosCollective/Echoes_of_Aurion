@@ -1,3 +1,4 @@
+import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import type { MMOEngine } from "../core/MMOEngine";
@@ -81,8 +82,10 @@ export class RemotePublicAppearanceProjection {
     const existing = this.actors.get(appearance.userId);
     if (existing?.appearance.storageUrl === appearance.storageUrl) return;
     this.pending.add(appearance.userId);
+    let unowned: THREE.Group | undefined;
     try {
       const loaded = await glbManager.loadModel(appearance.storageUrl);
+      unowned = loaded.scene;
       if (this.disposed || !this.presences.some(presence => presence.userId === appearance.userId)) return;
       if (!loaded.animations.some(clip => /idle/i.test(clip.name))) return;
       const latest = this.appearances.get(appearance.userId);
@@ -94,9 +97,11 @@ export class RemotePublicAppearanceProjection {
       actor.group.visible = false;
       this.root.add(actor.group);
       this.actors.set(appearance.userId, { appearance, actor, lastPosition: null, accumulatedAnimationDelta: 0, lod: "very_far" });
+      unowned = undefined;
     } catch {
       // Capsule fallback stays visible until the GLB is proven renderable.
     } finally {
+      if (unowned) releaseGlbTree(unowned);
       this.pending.delete(appearance.userId);
     }
   }

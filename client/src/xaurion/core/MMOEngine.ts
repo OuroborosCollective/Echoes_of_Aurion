@@ -1,3 +1,5 @@
+import { releaseGlbTree } from "./GlbModelLease";
+import { glbManager } from "./GLBModelManager";
 import * as THREE from 'three';
 import { renderBudget } from './renderBudget';
 import { checkWebGL2Support, type RendererHandle, type RuntimeRenderer } from './RendererFactory';
@@ -1210,6 +1212,9 @@ export class MMOEngine {
     }
     this.unbindEvents();
     this.particleSystem?.dispose();
+    this.player?.disposePresentation();
+    releaseGlbTree(this.scene);
+    glbManager.trimIdle();
 
     try {
       if (this.renderer) {
