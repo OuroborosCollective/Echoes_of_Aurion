@@ -1,9 +1,9 @@
 import { ax1DamageForAction } from "./ax1CombatAuthority";
 
-export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance";
+export type QuestKey = "astral_call" | "archive_of_echoes" | "ember_key" | "starfall_resonance" | "sunwatch_vanguard";
 export type QuestState = "locked" | "available" | "active" | "completed";
 export type McpAction = "run" | "attack" | "interact" | "skill_1" | "skill_2" | "skill_3" | "skill_4" | "skill_5" | "skill_6" | "skill_7" | "skill_8" | "skill_9";
-export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater";
+export type EncounterKey = "asterion" | "archive" | "solarium" | "cinder_vault" | "starfall_crater" | "sunwatch_bastion";
 
 export type QuestDefinition = {
   key: QuestKey;
@@ -52,6 +52,15 @@ export const aurionQuestline: readonly QuestDefinition[] = [
     requires: "ember_key",
     reward: { xp: 500, points: 75 },
   },
+  {
+    key: "sunwatch_vanguard",
+    giver: "Orun",
+    title: "Vorhut der Sonnenwacht",
+    objective: "Errichte einen Vorposten in der Sonnenwacht-Bastion und sichere das Gebiet.",
+    requiredLevel: 5,
+    requires: "starfall_resonance",
+    reward: { xp: 650, points: 100 },
+  },
 ] as const;
 
 export const dungeonDefinition = {
@@ -82,6 +91,7 @@ export const aurionEncounters: readonly {
   { key: "solarium", name: "Solarium der letzten Flamme", enemyName: "Solar-Sentinel", maxBossHp: 198, questKey: "ember_key" },
   { key: "cinder_vault", name: "Aschengewölbe", enemyName: "Glutwächter", maxBossHp: 258, questKey: null, requiresDungeonKey: "ember_key" },
   { key: "starfall_crater", name: "Sternenfall-Krater", enemyName: "Sternenfall-Wächter", maxBossHp: 320, questKey: "starfall_resonance" },
+  { key: "sunwatch_bastion", name: "Sonnenwacht-Bastion", enemyName: "Sonnenwacht-Kommandant", maxBossHp: 400, questKey: "sunwatch_vanguard" },
 ] as const;
 
 export function getQuest(key: QuestKey): QuestDefinition {

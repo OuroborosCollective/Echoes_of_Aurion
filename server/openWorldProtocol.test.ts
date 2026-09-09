@@ -74,7 +74,7 @@ describe("open-world protocol", () => {
     expect(lyra?.autonomy.goal).toBe("expand_influence");
     expect(lyra?.autonomy.decisionHash).toHaveLength(64);
     expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
-    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "starfall_crater", "windhollow"]);
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "starfall_crater", "sunwatch_bastion", "windhollow"]);
     expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 
