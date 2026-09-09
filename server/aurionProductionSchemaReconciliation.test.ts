@@ -77,6 +77,20 @@ describe("Aurion production schema reconciliation", () => {
     expect(() => normalize("a = 1 || b = 2")).toThrow("Unsupported CHECK");
   });
 
+  it("reports invisible triggers on existing tables instead of selecting an earlier migration prefix", async () => {
+    const contracts = await readProductionSchemaContracts(process.cwd());
+    const observed = new Map<string, ObservedTable>();
+    for (const migration of contracts) for (const table of migration.tables) observed.set(table.name, observedFromExpected(table));
+    const ledger = observed.get("aurionContentHashLedger")!;
+    observed.set(ledger.name, { ...ledger, triggers: [] });
+    const result = classifyMigrationContracts(contracts, observed);
+    expect(result.at(-1)).toMatchObject({ state: "PRESENT_SCHEMA_DRIFT", drift: [
+      "aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_delete",
+      "aurionContentHashLedger:missing_trigger:aurionContentHashLedger_no_update",
+    ] });
+    expect(result.slice(0, -1).every(migration => migration.state === "PRESENT_SCHEMA_MATCH")).toBe(true);
+  });
+
   it("accepts every exact late prefix including both guild enum and crafting index evolution", async () => {
     const contracts = await readProductionSchemaContracts(process.cwd());
     const created = new Set(contracts.flatMap(migration => migration.createdTableNames ?? []));

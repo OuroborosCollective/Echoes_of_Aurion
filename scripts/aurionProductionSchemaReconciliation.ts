@@ -377,7 +377,14 @@ export function classifyMigrationContracts(expected: readonly ExpectedMigration[
     if (!table) return actual ? [`${name}:unexpected_table_before_migration`] : [];
     return actual ? compareTableContract(table, actual) : [`${name}:missing_table`];
   }).sort() }));
-  const closest = candidates.reduce((left, right) => right.drift.length < left.drift.length ? right : left);
+  // Existing tables establish migration progress before indexes/checks/triggers
+  // are compared. Missing protection must not make existing tables look like a
+  // future migration merely because an older prefix has fewer drift messages.
+  const tablePresenceDrift = (candidate: typeof candidates[number]) => candidate.drift.filter(reason => /:(?:missing_table|unexpected_table_before_migration)$/.test(reason)).length;
+  const closest = candidates.reduce((left, right) => {
+    const presenceDelta = tablePresenceDrift(right) - tablePresenceDrift(left);
+    return presenceDelta < 0 || (presenceDelta === 0 && right.drift.length < left.drift.length) ? right : left;
+  });
   return expected.map((migration, index) => {
     const names = migration.tables.map(table => table.name).sort();
     const drift = closest.drift.filter(message => names.some(name => message.startsWith(`${name}:`)));
