@@ -6,21 +6,29 @@ TARGET_DIR="${2:-$(pwd)/aurion-offline-worktree}"
 DB_CONTAINER="${AURION_LOCAL_MARIADB_CONTAINER:-aurion-local-mariadb}"
 DB_PORT="${AURION_LOCAL_MARIADB_PORT:-3307}"
 DB_PASSWORD="${AURION_LOCAL_MARIADB_PASSWORD:-aurion-local-test}"
-DB_NAME="aurion_local_test"
+DB_NAME="aurion_local_classless_test"
 
-for required in manifest.json aurion-source.tar.zst node_modules.tar.zst mariadb-11.4-image.tar.zst schema.sql schema.sha256; do
+for required in manifest.json artifact.sha256 aurion-source.tar.zst node_modules.tar.zst mariadb-11.4-image.tar.zst schema.sql schema.sha256 schema-columns.tsv mariadb-version.txt; do
   test -f "$PACK_DIR/$required" || { echo "missing pack file: $required" >&2; exit 1; }
 done
 command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
 command -v zstd >/dev/null || { echo "zstd is required" >&2; exit 1; }
 
+# Verify every byte that will be restored or used as exact-revision evidence before
+# extracting source/dependencies or loading the bundled database image.
+(
+  cd "$PACK_DIR"
+  sha256sum -c artifact.sha256
+  sha256sum -c schema.sha256
+)
+
+if [ -e "$TARGET_DIR" ] && [ -n "$(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+  echo "offline worktree must be absent or empty: $TARGET_DIR" >&2
+  exit 1
+fi
 mkdir -p "$TARGET_DIR"
 tar --zstd -xf "$PACK_DIR/aurion-source.tar.zst" -C "$TARGET_DIR"
 tar --zstd -xf "$PACK_DIR/node_modules.tar.zst" -C "$TARGET_DIR"
-(
-  cd "$PACK_DIR"
-  sha256sum -c schema.sha256
-)
 
 zstd -dc "$PACK_DIR/mariadb-11.4-image.tar.zst" | docker load >/dev/null
 docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
