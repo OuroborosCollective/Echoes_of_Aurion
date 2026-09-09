@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeProgressionReceipt, projectConfirmedProgressionTracks } from "./progressionReceiptPersistence";
+import { normalizeProgressionReceipt, projectConfirmedProgressionTracks, type ProgressionReceiptInput } from "./progressionReceiptPersistence";
 
-const base = {
+const base: ProgressionReceiptInput = {
   userId: 41,
   characterId: "char-41",
-  actionKind: "weapon_use" as const,
+  actionKind: "weapon_use",
   weaponTrack: "spear",
   skillId: "combat",
   resultReceiptId: "expedition-result-0001",
@@ -17,6 +17,11 @@ const base = {
   contentVersion: "aurion-content.v12",
   idempotencyKey: "progression-e2e:0001",
 };
+
+function stored(overrides: Partial<ProgressionReceiptInput> = {}) {
+  const normalized = normalizeProgressionReceipt({ ...base, ...overrides });
+  return { id: `progression_${normalized.receiptHash.slice(0, 52)}`, ...normalized };
+}
 
 describe("AIM-236 canonical progression receipts", () => {
   it("binds account, character, action, result, mastery, XP and level deterministically", () => {
@@ -51,11 +56,10 @@ describe("AIM-236 canonical progression receipts", () => {
   });
 
   it("projects out-of-order dynamic tracks by the greatest confirmed exact level", () => {
-    const common = { id: "stored", characterId: "char-41", resultReceiptId: "result", sourceReceiptId: "source", receiptHash: "a".repeat(64) };
     const projected = projectConfirmedProgressionTracks([
-      { ...common, id: "late-low", actionKind: "weapon_use", weaponTrack: "greatsword.two_handed.v3", skillId: "none", levelExact: "9", receiptHash: "f".repeat(64) },
-      { ...common, id: "early-high", actionKind: "weapon_use", weaponTrack: "greatsword.two_handed.v3", skillId: "none", levelExact: "9007199254740993", receiptHash: "b".repeat(64) },
-      { ...common, id: "skill", actionKind: "skill_use", weaponTrack: "none", skillId: "chronomancy.temporal_anchor.v17", levelExact: "17", receiptHash: "c".repeat(64) },
+      stored({ weaponTrack: "greatsword.two_handed.v3", skillId: "none", levelExact: "9", idempotencyKey: "projection:weapon:low" }),
+      stored({ weaponTrack: "greatsword.two_handed.v3", skillId: "none", levelExact: "9007199254740993", idempotencyKey: "projection:weapon:high" }),
+      stored({ actionKind: "skill_use", weaponTrack: "none", skillId: "chronomancy.temporal_anchor.v17", levelExact: "17", idempotencyKey: "projection:skill:17" }),
     ]);
     expect(projected.characterId).toBe("char-41");
     expect(projected.tracks).toEqual([
@@ -64,9 +68,15 @@ describe("AIM-236 canonical progression receipts", () => {
     ]);
   });
 
-  it("fails closed when one account resolves to multiple progression characters", () => {
-    const row = { id: "one", actionKind: "skill_use" as const, weaponTrack: "none", skillId: "combat", levelExact: "2", resultReceiptId: "result", sourceReceiptId: "source", receiptHash: "d".repeat(64) };
-    expect(() => projectConfirmedProgressionTracks([{ ...row, characterId: "char-a" }, { ...row, id: "two", characterId: "char-b", receiptHash: "e".repeat(64) }])).toThrow("PROGRESSION_CHARACTER_CONFLICT");
+  it("rejects a stored row whose hashed bytes were modified after persistence", () => {
+    const valid = stored({ actionKind: "skill_use", weaponTrack: "none", skillId: "combat", idempotencyKey: "projection:tamper" });
+    expect(() => projectConfirmedProgressionTracks([{ ...valid, levelExact: "43" }])).toThrow("PROGRESSION_RECEIPT_CORRUPT");
   });
 
+  it("fails closed when one account resolves to multiple valid progression characters", () => {
+    expect(() => projectConfirmedProgressionTracks([
+      stored({ characterId: "char-a", actionKind: "skill_use", weaponTrack: "none", skillId: "combat", idempotencyKey: "projection:char:a" }),
+      stored({ characterId: "char-b", actionKind: "skill_use", weaponTrack: "none", skillId: "combat", idempotencyKey: "projection:char:b" }),
+    ])).toThrow("PROGRESSION_CHARACTER_CONFLICT");
+  });
 });
