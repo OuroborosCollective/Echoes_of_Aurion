@@ -133,6 +133,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
       if (active instanceof HTMLElement && (active.isContentEditable || active.closest('input, textarea, select, [contenteditable="true"]'))) return;
       if (groupOpen || (panel === null && document.querySelector(WORLD_PANEL_SELECTOR))) return;
+      if (event.key === "Escape" && panel !== null) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openPanel(null);
+        return;
+      }
       const next = panelHotkeys[event.key.toLowerCase()];
       if (!next) return;
       event.preventDefault();
