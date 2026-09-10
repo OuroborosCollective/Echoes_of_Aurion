@@ -28,6 +28,16 @@ describe("starter GLB runtime wiring", () => {
     expect(creatures).toContain('SceneLoader.ImportMeshAsync("", "", source.storageUrl, scene)');
   });
 
+  it("keeps AX1 skill animation confirmation-only", () => {
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
+    const rawHandler = scene.slice(scene.indexOf("const onHumanAction"), scene.indexOf("const onAuthoritativeAction"));
+    const confirmedHandler = scene.slice(scene.indexOf("const onAuthoritativeAction"), scene.indexOf('window.addEventListener("aurion:mission-state"'));
+    expect(rawHandler).toContain('command === "F"');
+    expect(rawHandler).not.toContain('command === "1"');
+    expect(confirmedHandler).toContain('detail?.command === "F" || detail?.command === "1"');
+    expect(confirmedHandler).toContain('(detail.source ?? "gateway") === "human"');
+  });
+
   it("removes the broken repository payload materialization build dependency", () => {
     const packageJson = read("package.json");
     const scene = read("client/src/game/sceneWithStarterCharacters.ts");
