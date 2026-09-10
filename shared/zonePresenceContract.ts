@@ -1,6 +1,6 @@
 export const ZONE_MAX_PRESENCES = 128;
-/** v4 adds quest-independent WASD combat intents/results on top of v3 server-confirmed mob projection. */
-export const ZONE_PROTOCOL_VERSION = 4 as const;
+/** v5 adds server-confirmed AX1 resource-node snapshots on top of v4 confirmed combat. */
+export const ZONE_PROTOCOL_VERSION = 5 as const;
 import { WORLD_CHUNK_COORDINATE_LIMIT, WORLD_CHUNK_SIZE_MM } from "./worldChunkProtocol";
 export const ZONE_POSITION_MIN = -WORLD_CHUNK_COORDINATE_LIMIT * WORLD_CHUNK_SIZE_MM - WORLD_CHUNK_SIZE_MM / 2;
 export const ZONE_POSITION_LIMIT = WORLD_CHUNK_COORDINATE_LIMIT * WORLD_CHUNK_SIZE_MM + WORLD_CHUNK_SIZE_MM / 2 - 1;
