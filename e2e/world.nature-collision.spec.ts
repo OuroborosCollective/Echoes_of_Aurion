@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { readFileSync } from "node:fs";
+import { tsImport } from "tsx/esm/api";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
-import { WorldNatureCollision } from "../server/worldNatureCollision";
 import { WASD_ZONE_CARDINAL_STEP_FIXED as STEP } from "../server/wasdZoneMovementProtocol";
 
 const manifest = JSON.parse(readFileSync("shared/worldCollisionManifest.json", "utf8"));
@@ -56,13 +56,17 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
   const url = new URL(process.env.DATABASE_URL!);
   expect(url.hostname).toBe("127.0.0.1");
   expect(url.pathname).toBe("/aurion_group_test");
+  // Scope TypeScript/JSON loading to the real server oracle. Playwright's native
+  // ESM loader does not implement the JSON imports used by the bundled runtime.
+  // No global loader registration, duplicated collision law or stand-in geometry.
+  const { WorldNatureCollision } = await tsImport("../server/worldNatureCollision.ts", import.meta.url) as typeof import("../server/worldNatureCollision");
+  const sourceCollision = new WorldNatureCollision();
   const pool = createPool(process.env.DATABASE_URL!);
   const desktop = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1000 } });
   const phone = await browser.newContext({ baseURL, viewport: { width: 412, height: 915 } });
   const mover = await desktop.newPage();
   const observer = await phone.newPage();
   const errors: string[] = [];
-  const sourceCollision = new WorldNatureCollision();
   const samples: Array<{ tick: number; snapshotSeq: number; presence: Presence; alive: boolean | undefined }> = [];
   let phase = "entry";
   let moverId = 0;
