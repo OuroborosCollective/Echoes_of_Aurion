@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -34,6 +35,7 @@ async function startServer(){
   const autonomousNpcLife=createAutonomousNpcLifeRuntime();
   const app=express();
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 2000, message: { error: "Too many requests from this IP, please try again later." } }));
   if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
   app.use((req,res,next)=>{const origin=allowedCorsOrigin(req.headers.origin);if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Access-Control-Allow-Credentials","true");res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization, X-Requested-With");res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");res.setHeader("Vary","Origin");}if(req.method==="OPTIONS"){if(!origin)return res.status(403).end();return res.status(204).end();}next();});
   app.use(express.json({limit:"50mb"}));app.use(express.urlencoded({limit:"50mb",extended:true}));
