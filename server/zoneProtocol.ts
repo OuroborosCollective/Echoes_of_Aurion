@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import type { ConfirmedZoneMob } from "@shared/zoneMobContract";
 import type { ConfirmedZoneCombatant, ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
+import type { ConfirmedZoneResourceSnapshot } from "@shared/zoneResourceContract";
 import { isAx1BladeSkillId, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 
 export const zoneIdSchema=z.literal("observatory_threshold");
@@ -19,8 +20,8 @@ export const zoneSkillSchema=z.object({type:z.literal("skill"),clientSeq:z.numbe
 export type ZoneSkill=Readonly<{type:"skill";clientSeq:number;skillId:Ax1BladeSkillId;targetEntityId:string}>;
 export type ZonePosition={x:number;z:number};
 export type ZonePresence={entityId:string;userId:number;position:ZonePosition;lastAcceptedClientSeq:number};
-export type ZoneWelcome={type:"welcome";protocolVersion:typeof ZONE_PROTOCOL_VERSION;connectionId:string;selfEntityId:string;zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[]};
-export type ZoneSnapshot={type:"snapshot";zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[]};
+export type ZoneWelcome={type:"welcome";protocolVersion:typeof ZONE_PROTOCOL_VERSION;connectionId:string;selfEntityId:string;zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[];resources:ConfirmedZoneResourceSnapshot};
+export type ZoneSnapshot={type:"snapshot";zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[];resources:ConfirmedZoneResourceSnapshot};
 export type ZoneReject={type:"reject";code:"INVALID_MESSAGE"|"STALE_CLIENT_SEQUENCE"|"UNSUPPORTED_ZONE_COMMAND"|"PROTOCOL_VERSION_UNSUPPORTED"|"INVALID_COMBAT_TARGET"|"COMBAT_TARGET_OUT_OF_RANGE"|"COMBATANT_DEAD"|"INVALID_COMBAT_SKILL"|"COMBAT_SKILL_COOLDOWN"};
 export type ZoneServerMessage=ZoneWelcome|ZoneSnapshot|ZoneReject|ConfirmedZoneCombatEvent;
 export function createZoneTicket():string{return `aurion_zone_${randomBytes(32).toString("base64url")}`;}
