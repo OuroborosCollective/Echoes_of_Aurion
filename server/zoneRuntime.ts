@@ -159,7 +159,8 @@ export class AuthoritativeMovementZone {
   }
   positionForConnection(connectionId: string): ZonePosition | undefined {
     const position = this.peers.get(connectionId)?.position;
-    return position ? { ...position } : undefined;
+    // Explicit property copy reduces garbage collection pressure compared to spread syntax
+    return position ? { x: position.x, z: position.z } : undefined;
   }
   mobSnapshot() {
     return this.mobRuntime.snapshot();

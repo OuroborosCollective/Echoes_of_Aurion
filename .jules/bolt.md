@@ -9,3 +9,4 @@
 ## 2026-09-09 - [High-Frequency Server Ticks and Garbage Collection]
 **Learning:** Using dynamic array allocations (e.g., `Array.from()`), spread syntax, and `.sort()` on every server tick causes massive garbage collection latency, significantly harming performance in high-frequency game loops like `server/zoneRuntime.ts` and `server/zoneMobRuntime.ts`.
 **Action:** Always cache sorted arrays and use dirty flags to recalculate sorting only when items are added or removed. Use iterative `for...of` loops and pre-allocated arrays where possible, avoiding inline allocations on hot code paths.
+Avoid spread syntax (e.g. { ...obj }) in high-frequency game loops. Explicit property copying (e.g. { x: obj.x, y: obj.y }) is significantly faster and reduces garbage collection pressure.
