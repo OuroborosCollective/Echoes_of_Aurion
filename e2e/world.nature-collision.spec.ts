@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { readFileSync } from "node:fs";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
+import { WorldNatureCollision } from "../server/worldNatureCollision";
+import { WASD_ZONE_CARDINAL_STEP_FIXED as STEP } from "../server/wasdZoneMovementProtocol";
 
 const manifest = JSON.parse(readFileSync("shared/worldCollisionManifest.json", "utf8"));
 test.skip(process.env.AURION_COLLISION_E2E !== "1", "Isolated collision runtime required");
@@ -60,10 +62,17 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
   const mover = await desktop.newPage();
   const observer = await phone.newPage();
   const errors: string[] = [];
+  const sourceCollision = new WorldNatureCollision();
+  const samples: Array<{ tick: number; snapshotSeq: number; presence: Presence; alive: boolean | undefined }> = [];
+  let phase = "entry";
   let moverId = 0;
   let current: Presence | undefined;
   let remote: Presence | undefined;
+  let currentTick = -1;
+  let currentSnapshotSeq = -1;
+  let moverAlive: boolean | undefined;
   let stopSeq = 0;
+  let lastSentMove: { clientSeq: number; input: { x: number; z: number } } | undefined;
 
   const observe = (page: Page, moverSide: boolean) => {
     page.on("pageerror", error => errors.push(error.message));
@@ -72,17 +81,29 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
       socket.on("framesent", frame => {
         try {
           const value = JSON.parse(String(frame.payload));
-          if (moverSide && value.type === "move" && !value.input.x && !value.input.z) stopSeq = value.clientSeq;
+          if (moverSide && value.type === "move") {
+            lastSentMove = value;
+            if (!value.input.x && !value.input.z) stopSeq = value.clientSeq;
+          }
         } catch {}
       });
       socket.on("framereceived", frame => {
         try {
           const value = JSON.parse(String(frame.payload));
           if (!["welcome", "snapshot"].includes(value.type) || !Array.isArray(value.presences)) return;
-          if (moverSide && !moverId && value.presences.length === 1) moverId = value.presences[0].userId;
+          // Identity comes from this authenticated welcome, never the number/order of peers.
+          if (moverSide && value.type === "welcome" && /^player:[1-9][0-9]*$/.test(value.selfEntityId)) moverId = Number(value.selfEntityId.slice(7));
           const found = value.presences.find((entry: Presence) => entry.userId === moverId);
-          if (moverSide) current = found;
-          else remote = found;
+          if (moverSide) {
+            current = found;
+            currentTick = value.tick;
+            currentSnapshotSeq = value.snapshotSeq;
+            moverAlive = value.combatants?.find((entry: { entityId: string }) => entry.entityId === `player:${moverId}`)?.alive;
+            if (found) {
+              samples.push({ tick: currentTick, snapshotSeq: currentSnapshotSeq, presence: structuredClone(found), alive: moverAlive });
+              if (samples.length > 160) samples.shift();
+            }
+          } else remote = found;
         } catch {}
       });
     });
@@ -90,13 +111,30 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
   observe(mover, true);
   observe(observer, false);
 
+  const waitForStop = async (beforeStop: number) => {
+    await expect.poll(() => stopSeq, { timeout: 10_000 }).toBeGreaterThan(beforeStop);
+    const expectedStop = stopSeq;
+    await expect.poll(() => current?.lastAcceptedClientSeq, { timeout: 10_000 }).toBeGreaterThanOrEqual(expectedStop);
+  };
   const driveUntil = async (key: string, predicate: () => boolean, timeout = 15_000) => {
     const beforeStop = stopSeq;
     await mover.keyboard.down(key);
     try { await expect.poll(predicate, { intervals: [25], timeout }).toBe(true); }
     finally { await mover.keyboard.up(key); }
-    await expect.poll(() => stopSeq, { timeout: 10_000 }).toBeGreaterThan(beforeStop);
-    await expect.poll(() => current?.lastAcceptedClientSeq, { timeout: 10_000 }).toBe(stopSeq);
+    await waitForStop(beforeStop);
+  };
+  const alignRow = async (targetZ: number) => {
+    // A coarse key-up can arrive several ticks after a sampled waypoint. Use
+    // bounded real key presses plus stop acknowledgements; never edit position.
+    for (let attempt = 0; attempt < 24; attempt++) {
+      if (current && Math.abs(current.position.z - targetZ) <= STEP) return;
+      expect(current).toBeDefined();
+      expect(moverAlive).toBe(true);
+      const beforeStop = stopSeq;
+      await mover.keyboard.press(current!.position.z > targetZ ? "w" : "s", { delay: 150 + (attempt % 4) * 25 });
+      await waitForStop(beforeStop);
+    }
+    throw new Error(`COLLISION_APPROACH_ROW_NOT_REACHED:${JSON.stringify({ targetZ, current })}`);
   };
 
   try {
@@ -105,15 +143,17 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
     await registerAndEnter(observer, "nature_collision_observer", pool);
     await expect.poll(() => remote?.userId).toBe(moverId);
 
+    phase = "cross-chunk";
     await driveUntil("w", () => !!current && current.position.z <= -39780, 20_000);
     const crossed = structuredClone(current!);
     expect(crossed.position.x).toBe(0);
-    expect(Math.abs(crossed.position.z) % 340).toBe(0);
+    expect(Math.abs(crossed.position.z) % STEP).toBe(0);
     await expect.poll(async () => {
       const [rows] = await pool.query<RowDataPacket[]>("SELECT chunkX,chunkZ,positionX,positionZ FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL", [moverId]);
       return rows.some(row => row.chunkX === 0 && row.chunkZ === -1 && row.positionX === crossed.position.x && row.positionZ === crossed.position.z + 64000);
     }, { timeout: 10_000 }).toBe(true);
 
+    phase = "pass-decoration";
     await driveUntil("d", () => !!current && current.position.x >= 10200);
     const passedDecoration = structuredClone(current!);
     expect(passedDecoration.position.x).toBeGreaterThan(9000);
@@ -130,26 +170,47 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
     expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-tree-oak-6").blocksMovement).toBe(true);
     expect(manifest.colliders.find((entry: { assetId: string }) => entry.assetId === "nature-stump-3").blocksMovement).toBe(false);
 
+    phase = "align-tree-approach";
+    const targetZ = Math.round(obstacle.zMm / STEP) * STEP;
+    await alignRow(targetZ);
+    const aligned = structuredClone(current!);
+    expect(Math.abs(aligned.position.z - targetZ)).toBeLessThanOrEqual(STEP);
     await driveUntil("a", () => !!current && current.position.x <= -18000);
     const beforeBlock = structuredClone(current!);
+    const blockingNextStep = () => current ? sourceCollision.blockingObstacle(current.position, { x: current.position.x - STEP, z: current.position.z }) : undefined;
+
+    phase = "held-input-tree-contact";
+    const beforeStop = stopSeq;
     await mover.keyboard.down("a");
+    let heldProof: { first: Presence; second: Presence; firstTick: number; secondTick: number; firstSnapshotSeq: number; secondSnapshotSeq: number } | undefined;
     try {
-      await mover.waitForTimeout(1_200);
+      await expect.poll(() => lastSentMove?.input, { timeout: 10_000 }).toEqual({ x: -1, z: 0 });
+      await expect.poll(() => blockingNextStep()?.id, { timeout: 15_000 }).toBe(obstacle.id);
       const first = structuredClone(current!);
-      await mover.waitForTimeout(600);
+      const firstTick = currentTick;
+      const firstSnapshotSeq = currentSnapshotSeq;
+      expect(moverAlive).toBe(true);
+      expect(sourceCollision.blockingObstacle(first.position, first.position)).toBeUndefined();
+      await expect.poll(() => currentTick, { timeout: 10_000 }).toBeGreaterThanOrEqual(firstTick + 8);
+      expect(currentSnapshotSeq).toBeGreaterThan(firstSnapshotSeq);
       const second = structuredClone(current!);
       expect(second.position).toEqual(first.position);
+      expect(blockingNextStep()?.id).toBe(obstacle.id);
+      expect(moverAlive).toBe(true);
+      expect(lastSentMove?.input).toEqual({ x: -1, z: 0 });
+      heldProof = { first, second, firstTick, secondTick: currentTick, firstSnapshotSeq, secondSnapshotSeq: currentSnapshotSeq };
     } finally { await mover.keyboard.up("a"); }
 
-    // Releasing input can leave already-sent movement frames in flight. The
-    // collision invariant is the confirmed position, not a pre-release client
-    // sequence number. Wait for those frames to drain and prove that the player
-    // remains at the same blocked position across consecutive server snapshots.
-    await mover.waitForTimeout(600);
+    phase = "released-input-readback";
+    await waitForStop(beforeStop);
     const released = structuredClone(current!);
-    await mover.waitForTimeout(600);
+    const releasedTick = currentTick;
+    const releasedSnapshotSeq = currentSnapshotSeq;
+    await expect.poll(() => currentTick, { timeout: 10_000 }).toBeGreaterThanOrEqual(releasedTick + 4);
+    expect(currentSnapshotSeq).toBeGreaterThan(releasedSnapshotSeq);
     const settled = structuredClone(current!);
     expect(settled.position).toEqual(released.position);
+    expect(settled.position).toEqual(heldProof!.second.position);
     expect(settled.lastAcceptedClientSeq).toBeGreaterThanOrEqual(released.lastAcceptedClientSeq);
 
     const stopped = settled;
@@ -163,11 +224,13 @@ test("real movement crosses a chunk, passes decoration, collides with a tree and
     await mover.screenshot({ path: info.outputPath("desktop-nature-collision.png") });
     await observer.screenshot({ path: info.outputPath("phone-shared-world.png") });
     expect(errors).toEqual([]);
+    phase = "complete";
     await info.attach("world-collision-readback", {
-      body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, moverId, crossed, passedDecoration, stopped, remote, obstacle, collisionHash: region.collisionHash, publicPlayerSelectedThroughAx1: true, launchRoute: "portal-confirmed-public-character-ax1-launch" }),
+      body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, moverId, crossed, passedDecoration, aligned, heldProof, stopped, remote, obstacle, collisionHash: region.collisionHash, publicPlayerSelectedThroughAx1: true, launchRoute: "portal-confirmed-public-character-ax1-launch" }),
       contentType: "application/json",
     });
   } finally {
+    await info.attach("world-collision-diagnostics", { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, phase, moverId, current, remote, currentTick, currentSnapshotSeq, stopSeq, lastSentMove, samples, errors }), contentType: "application/json" });
     await desktop.close();
     await phone.close();
     await pool.end();
