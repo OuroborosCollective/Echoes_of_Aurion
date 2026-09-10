@@ -42,7 +42,7 @@ function assertSafeIdentifier(value: string, maximumLength: number, errorCode: s
   }
 }
 
-function canonicalIngredients(ingredients: readonly Ax1CraftingIngredient[]): readonly [string, number][] {
+function canonicalIngredients(ingredients: readonly Ax1CraftingIngredient[]): readonly (readonly [string, number])[] {
   return Object.freeze(
     ingredients
       .map(ingredient => [ingredient.itemId, ingredient.quantity] as const)
