@@ -267,3 +267,13 @@ Evidence: Exact code `8aedab614add5582358d3672a9408f5f47720ba7`; 12/12 workflows
 Learned: Real player.me envelopes are wider than HUD DTOs; the old collision approach overshot the oak; reload needs a fresh one-shot portal launch.
 Open: Atomic multi-input crafting, full Cleave/remaining skills, VPS/PatchMon and native-device proof.
 Next safe step: Extend the existing crafting transaction with real concurrency/replay tests. Remain Draft; no merge or deployment.
+
+### 2026-09-10 — AX1-first checkpoint merge
+Status: VERIFIED repository checkpoint; production completeness not claimed.
+Task: Close the current #295 integration block for handoff.
+Decisions: Merge the tested AX1-first slice as an incremental checkpoint; keep remaining UI, skill and production-readback work open.
+Touched surfaces: AX1 presentation/crafting/combat bridge, MariaDB crafting persistence and regressions.
+Evidence: Exact pre-memory head `adcf8d4ff6535acbe110b6264b0f490e9e079d7f`; branch 0 behind `main`; 12/12 PR workflows succeeded, including AIM-251 real MariaDB crafting, Aurion Local Test Pack, Android, AIM-291 reproducibility and phone/tablet/desktop browser runtime jobs.
+Learned: AX1-first can preserve visible game behavior while proven mutation paths move into confirmed Aurion/WASD contracts; multi-input crafting can stay atomic and replay-safe without deleting AX1 content.
+Open: Full AX1 menu depth, complete skill 1–9 semantics/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain separate work.
+Next safe step: Continue those items from merged `main` in a fresh branch; do not claim production completeness from this checkpoint.
