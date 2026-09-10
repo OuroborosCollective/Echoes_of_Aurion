@@ -1,4 +1,6 @@
-export const ZONE_COMBAT_CONTRACT_VERSION = "wasd-zone-combat.v1" as const;
+import { AX1_BLADE_SKILL_SOURCE_REVISION, isAx1BladeSkillId, type Ax1BladeSkillId } from "./ax1BladeSkillProtocol";
+
+export const ZONE_COMBAT_CONTRACT_VERSION = "wasd-zone-combat.v2" as const;
 export const ZONE_COMBAT_MAX_STAMINA = 100 as const;
 export const ZONE_MAX_COMBATANTS = 160 as const;
 
@@ -19,6 +21,8 @@ export type ConfirmedZoneCombatEvent = Readonly<{
   tick: number;
   sequence: number;
   action: "melee";
+  skillId: Ax1BladeSkillId | null;
+  skillSourceRevision: typeof AX1_BLADE_SKILL_SOURCE_REVISION | null;
   attackerEntityId: string;
   defenderEntityId: string;
   hit: boolean;
@@ -53,7 +57,10 @@ export function validConfirmedZoneCombatants(value: unknown): value is Confirmed
 export function validConfirmedZoneCombatEvent(value: unknown): value is ConfirmedZoneCombatEvent {
   if (!value || typeof value !== "object") return false;
   const event = value as ConfirmedZoneCombatEvent;
-  return event.type === "combat" && event.contractVersion === ZONE_COMBAT_CONTRACT_VERSION && event.action === "melee"
+  const skillIdentityValid = event.skillId === null
+    ? event.skillSourceRevision === null
+    : isAx1BladeSkillId(event.skillId) && event.skillSourceRevision === AX1_BLADE_SKILL_SOURCE_REVISION;
+  return event.type === "combat" && event.contractVersion === ZONE_COMBAT_CONTRACT_VERSION && event.action === "melee" && skillIdentityValid
     && Number.isSafeInteger(event.tick) && event.tick >= 0 && Number.isSafeInteger(event.sequence) && event.sequence >= 1
     && validEntityId(event.attackerEntityId) && validEntityId(event.defenderEntityId) && event.attackerEntityId !== event.defenderEntityId
     && typeof event.hit === "boolean" && Number.isSafeInteger(event.damage) && event.damage >= 0 && typeof event.crit === "boolean" && typeof event.killed === "boolean"
