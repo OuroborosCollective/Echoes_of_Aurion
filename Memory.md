@@ -257,3 +257,10 @@ Next safe step: Bind AIM-293 consumer work to exact merged WASD source and prove
 ## Backfill boundary
 
 This bootstrap captures retrievable integration history that materially affects current Aurion architecture. It is not a transcript. Recover older blocks by appending `Historical recovery` entries; do not rewrite existing history.
+
+### 2026-09-10 — PR consolidation and immediate peer readback
+Status: VERIFIED isolated regression; production not claimed.
+Change: Consolidated Community navigation and the overlapping #290/#293/#297 loop changes in #294; repaired immediate join/leave/reconnect projections by refreshing membership caches before readback.
+Learned: A dirty cache must be refreshed at every read boundary, not only on the next tick. The current owner direction is AX1-first, with Aurion infrastructure and selectively proven WASD rules; earlier blanket repo-priority wording is historical, not a reason to discard functioning AX1 systems.
+Evidence: Code `ec08084725fe55f966cacd4d4667eacdaca306cd`; 7/7 triggered workflows succeeded. Local Pack run `34511177038`: 823 passed, 106 explicit opt-in skips; separate 24-test pass includes 3 real MariaDB tests; 43/43 migrations applied. New regressions: 5 peer/readback and 4 Community navigation tests. Isolated browser/runtime run `34511177032` succeeded.
+Open: Final-head checks and merge readback remain mandatory. Security rework, Sunwatch content and unfinished #295 migration stay tracked in Linear with branches retained; no performance gain, VPS/PatchMon or native-device success is claimed.
