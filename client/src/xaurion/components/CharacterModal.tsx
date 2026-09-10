@@ -1,6 +1,7 @@
 /** AX1 character readback: classless, receipt-backed tracks and control bindings.
  * Aurion displays confirmed persistence only; it does not choose classes, weapon rules, aggregate level or XP. */
 import { X, User, BookOpen, Trophy, Sparkles } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import type { z } from "zod";
 import type { playerReadbackSchema } from "../integration/authoritativeHudProjection";
 import type { ControlSettings, SkillCommand } from "@shared/playerUiProtocol";
@@ -14,17 +15,21 @@ export function CharacterModal({ isOpen, onClose, player, appearance, settings, 
   uiPending: boolean; groupPending: boolean; message?: string;
   group?: GroupReadmodel; onBind: (slot: number, command: SkillCommand) => void; onRoleSkill: (skill: "mending_light" | "guardian_stance", equipped: boolean) => void; onInventory: () => void;
 }) {
+  const appearanceQuery = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: isOpen, staleTime: 15_000 });
+  const confirmedAppearance = appearance ?? appearanceQuery.data ?? null;
+  const appearancePending = isOpen && appearance === undefined && appearanceQuery.isFetching && !appearanceQuery.data;
+  const appearanceError = isOpen && appearance === undefined && appearanceQuery.isError;
   const profile = player?.profile;
   const weaponTracks = player?.progression.tracks.filter(track => track.trackKind === "weapon") ?? [];
   const skillTracks = player?.progression.tracks.filter(track => track.trackKind === "skill") ?? [];
   const trackCount = weaponTracks.length + skillTracks.length;
   return <Ax1Modal open={isOpen} onClose={onClose} id="character" title="Charakter & Skills"><section id="character-dialog" className="ax1-window w-full max-w-4xl bg-[#11141a] border border-[#b8860b]/40 rounded-2xl p-5 sm:p-6 text-gray-200 shadow-[0_0_40px_rgba(184,134,11,0.2)] flex flex-col max-h-[90dvh] overflow-hidden">
-    <header className="ax1-window-header flex items-center justify-between border-b border-gray-800 pb-4 gap-3"><div className="flex items-center gap-3"><div className="ax1-crest"><User /></div><div><h3 className="text-lg font-serif font-bold text-white">{appearance?.displayName ?? "Explorer · Aurion"}</h3><p className="text-xs text-[#b8860b] font-mono">{player ? `${trackCount} bestätigte Progressionspfade · ${profile?.aurionPoints ?? 0} AURION` : "—"}</p></div></div><button onClick={onClose} aria-label="Charakter schließen" className="ax1-close"><X size={18} /></button></header>
+    <header className="ax1-window-header flex items-center justify-between border-b border-gray-800 pb-4 gap-3"><div className="flex items-center gap-3"><div className="ax1-crest"><User /></div><div><h3 className="text-lg font-serif font-bold text-white">{confirmedAppearance?.displayName ?? "Explorer · Aurion"}</h3><p className="text-xs text-[#b8860b] font-mono">{player ? `${trackCount} bestätigte Progressionspfade · ${profile?.aurionPoints ?? 0} AURION` : "—"}</p></div></div><button onClick={onClose} aria-label="Charakter schließen" className="ax1-close"><X size={18} /></button></header>
     {message && <p className="ax1-notice" role="status">{message}</p>}
     <div className="flex-1 overflow-y-auto min-h-0 py-3 space-y-4 custom-scrollbar">
       <section className="grid gap-4 md:grid-cols-[minmax(240px,280px)_1fr]">
-        <Ax1CharacterPreview open={isOpen} appearance={appearance} />
-        <div className="bg-black/60 rounded-xl border border-gray-800 p-4"><h4 className="font-serif text-amber-300 text-sm mb-3">Dein klassenloser Weg durch Aurion</h4><dl className="grid grid-cols-2 gap-3">{[["Progressionspfade", trackCount], ["Waffenpfade", weaponTracks.length], ["Skills", skillTracks.length], ["Siege", profile?.victories]].map(([key, value]) => <div key={key} className="p-3 rounded-xl border border-gray-800 bg-black/60"><dt className="text-[10px] uppercase text-gray-400">{key}</dt><dd className="font-mono text-lg text-white">{value ?? "—"}</dd></div>)}</dl><p className="mt-3 text-xs text-gray-400">Es existiert keine Klassenwahl. Ein aggregiertes Charakterlevel oder Gesamt-EP werden erst angezeigt, wenn ein kanonischer WASD-Snapshot dafür gebunden ist.</p>{appearance && <p className="mt-3 text-[11px] text-cyan-300">Charaktermodell serverbestätigt · {appearance.visibility}</p>}</div>
+        {appearancePending ? <div className="min-h-64 rounded-2xl border border-cyan-500/30 bg-black/50 grid place-items-center p-5 text-center" role="status">Bestätigtes Charaktermodell wird geladen …</div> : <Ax1CharacterPreview open={isOpen} appearance={confirmedAppearance} />}
+        <div className="bg-black/60 rounded-xl border border-gray-800 p-4"><h4 className="font-serif text-amber-300 text-sm mb-3">Dein klassenloser Weg durch Aurion</h4><dl className="grid grid-cols-2 gap-3">{[["Progressionspfade", trackCount], ["Waffenpfade", weaponTracks.length], ["Skills", skillTracks.length], ["Siege", profile?.victories]].map(([key, value]) => <div key={key} className="p-3 rounded-xl border border-gray-800 bg-black/60"><dt className="text-[10px] uppercase text-gray-400">{key}</dt><dd className="font-mono text-lg text-white">{value ?? "—"}</dd></div>)}</dl><p className="mt-3 text-xs text-gray-400">Es existiert keine Klassenwahl. Ein aggregiertes Charakterlevel oder Gesamt-EP werden erst angezeigt, wenn ein kanonischer WASD-Snapshot dafür gebunden ist.</p>{confirmedAppearance && <p className="mt-3 text-[11px] text-cyan-300">Charaktermodell serverbestätigt · {confirmedAppearance.visibility}</p>}{appearanceError && <p className="mt-3 text-[11px] text-red-300" role="alert">Bestätigte Charakterzuordnung ist derzeit nicht verfügbar.</p>}</div>
       </section>
       <button className="ax1-primary" onClick={onInventory}>Paperdoll & Ausrüstung öffnen</button>
       <section className="bg-black/70 rounded-xl border border-gray-800 p-4"><h4 className="font-serif text-amber-300 flex gap-2 items-center"><Trophy size={16} /> Bestätigte Waffenpfade</h4><div className="mt-3 grid gap-2 sm:grid-cols-2">{weaponTracks.map(track => <div key={track.trackId} className="rounded-lg border border-gray-800 p-3"><b>{track.trackId}</b><p className="text-xs text-gray-400">Stufe {track.levelExact} · Receipt {track.receiptHash.slice(0, 10)}…</p></div>)}{!weaponTracks.length && <p className="text-xs text-gray-400">Noch kein bestätigter Waffenpfad.</p>}</div></section>
