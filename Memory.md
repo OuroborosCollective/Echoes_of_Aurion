@@ -258,9 +258,22 @@ Next safe step: Bind AIM-293 consumer work to exact merged WASD source and prove
 
 This bootstrap captures retrievable integration history that materially affects current Aurion architecture. It is not a transcript. Recover older blocks by appending `Historical recovery` entries; do not rewrite existing history.
 
-### 2026-09-10 — PR consolidation and immediate peer readback
-Status: VERIFIED isolated regression; production not claimed.
-Change: Consolidated Community navigation and the overlapping #290/#293/#297 loop changes in #294; repaired immediate join/leave/reconnect projections by refreshing membership caches before readback.
-Learned: A dirty cache must be refreshed at every read boundary, not only on the next tick. The current owner direction is AX1-first, with Aurion infrastructure and selectively proven WASD rules; earlier blanket repo-priority wording is historical, not a reason to discard functioning AX1 systems.
-Evidence: Code `ec08084725fe55f966cacd4d4667eacdaca306cd`; 7/7 triggered workflows succeeded. Local Pack run `34511177038`: 823 passed, 106 explicit opt-in skips; separate 24-test pass includes 3 real MariaDB tests; 43/43 migrations applied. New regressions: 5 peer/readback and 4 Community navigation tests. Isolated browser/runtime run `34511177032` succeeded.
-Open: Final-head checks and merge readback remain mandatory. Security rework, Sunwatch content and unfinished #295 migration stay tracked in Linear with branches retained; no performance gain, VPS/PatchMon or native-device success is claimed.
+### 2026-09-10 — AX1-first HUD wire and causal collision regression
+Status: PARTIAL — isolated runtime/regressions verified; overall integration and production remain open.
+Task: Continue Draft PR #295; align AIM-239/244/251/253/254 in Linear.
+Decisions: AX1 is the main game, Aurion infrastructure/persistence, WASD selective verified rules; this supersedes historical repo-wide precedence without relaxing owner/receipt validation.
+Touched surfaces: HUD wire adapter/tests, portal rehydrate and collision E2E, checksum-bound workspace export.
+Evidence: Exact code `8aedab614add5582358d3672a9408f5f47720ba7`; 12/12 workflows succeeded. Run `34435587103`: TypeScript, 43/43 migration chain, 28 focused tests (including 3 real MariaDB), 836 wide-suite passed / 106 opt-in skipped, including 2 new geometry regressions. Run `34435587095`, job `102739851450`: 92 focused, 29 real MariaDB and 5 browser tests passed; artifact `10136180293`. CI logs read; downloaded artifact bytes/screenshots not independently expanded because local tools were unavailable.
+Learned: Real player.me envelopes are wider than HUD DTOs; the old collision approach overshot the oak; reload needs a fresh one-shot portal launch.
+Open: Atomic multi-input crafting, full Cleave/remaining skills, VPS/PatchMon and native-device proof.
+Next safe step: Extend the existing crafting transaction with real concurrency/replay tests. Remain Draft; no merge or deployment.
+
+### 2026-09-10 — AX1-first checkpoint merge
+Status: VERIFIED repository checkpoint; production completeness not claimed.
+Task: Close the current #295 integration block for handoff.
+Decisions: Merge the tested AX1-first slice as an incremental checkpoint; keep remaining UI, skill and production-readback work open.
+Touched surfaces: AX1 presentation/crafting/combat bridge, MariaDB crafting persistence and regressions.
+Evidence: Exact pre-memory head `adcf8d4ff6535acbe110b6264b0f490e9e079d7f`; branch 0 behind `main`; 12/12 PR workflows succeeded, including AIM-251 real MariaDB crafting, Aurion Local Test Pack, Android, AIM-291 reproducibility and phone/tablet/desktop browser runtime jobs.
+Learned: AX1-first can preserve visible game behavior while proven mutation paths move into confirmed Aurion/WASD contracts; multi-input crafting can stay atomic and replay-safe without deleting AX1 content.
+Open: Full AX1 menu depth, complete skill 1–9 semantics/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain separate work.
+Next safe step: Continue those items from merged `main` in a fresh branch; do not claim production completeness from this checkpoint.

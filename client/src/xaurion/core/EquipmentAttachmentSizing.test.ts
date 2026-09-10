@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { AnimatedGlbActor } from "./AnimatedGlbActor";
+import { AnimatedGlbActor, animationClipHasMotion } from "./AnimatedGlbActor";
 import { equipmentAnchorAliases, equipmentLocalScale, equipmentTargetHeightFraction } from "./EquipmentAttachmentSizing";
 
 describe("Aurion standard player equipment sizing", () => {
@@ -22,11 +22,30 @@ describe("Aurion standard player equipment sizing", () => {
     expect(equipmentLocalScale("helmet", 1, 2, 0)).toBeNull();
   });
 
-  it("prefers canonical Aurion equipment anchors while retaining legacy aliases", () => {
+  it("prefers canonical Aurion equipment anchors while retaining common imported rig aliases", () => {
     expect(equipmentAnchorAliases.weapon[0]).toBe("aurionslotmainhand");
     expect(equipmentAnchorAliases.shield[0]).toBe("aurionslotshield");
     expect(equipmentAnchorAliases.helmet[0]).toBe("aurionslothead");
     expect(equipmentAnchorAliases.weapon).toContain("socketweaponr");
+    expect(equipmentAnchorAliases.weapon).toContain("mixamorigrighthand");
+    expect(equipmentAnchorAliases.weapon).toContain("rightwrist");
+    expect(equipmentAnchorAliases.weapon).toContain("ccbaserhand");
+    expect(equipmentAnchorAliases.shield).toContain("mixamoriglefthand");
+  });
+
+  it("distinguishes real keyframe motion from clip-name-only animation", () => {
+    const staticTrack = new THREE.QuaternionKeyframeTrack(
+      "upperarm_l.quaternion",
+      [0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1],
+    );
+    const movingTrack = new THREE.QuaternionKeyframeTrack(
+      "upperarm_l.quaternion",
+      [0, 1],
+      [0, 0, 0, 1, 0.258819, 0, 0, 0.965926],
+    );
+    expect(animationClipHasMotion(new THREE.AnimationClip("Idle", 1, [staticTrack]))).toBe(false);
+    expect(animationClipHasMotion(new THREE.AnimationClip("Idle", 1, [movingTrack]))).toBe(true);
   });
 
   it("relaxes lowercase upperarm bones used by the supplied male/female rigs", () => {
@@ -47,6 +66,32 @@ describe("Aurion standard player equipment sizing", () => {
     const localAxis = new THREE.Vector3(0, 1, 0);
     expect(localAxis.clone().applyQuaternion(left.getWorldQuaternion(new THREE.Quaternion())).normalize().y).toBeLessThan(0);
     expect(localAxis.clone().applyQuaternion(right.getWorldQuaternion(new THREE.Quaternion())).normalize().y).toBeLessThan(0);
+    expect(actor.evidence().fallbackPoses).toContain("idle");
+    actor.dispose();
+  });
+
+  it("uses presentation-only locomotion when a rig advertises a static Walk clip", () => {
+    const model = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2, 0.35), new THREE.MeshBasicMaterial());
+    body.position.y = 1;
+    model.add(body);
+    for (const [name, x, y] of [
+      ["upperarm_l", -0.4, 1.65], ["upperarm_r", 0.4, 1.65],
+      ["thigh_l", -0.2, 0.95], ["thigh_r", 0.2, 0.95],
+      ["shin_l", -0.2, 0.5], ["shin_r", 0.2, 0.5],
+    ] as const) {
+      const bone = new THREE.Bone(); bone.name = name; bone.position.set(x, y, 0); model.add(bone);
+    }
+    const actor = new AnimatedGlbActor(model, [new THREE.AnimationClip("Idle", 1, []), new THREE.AnimationClip("Walk", 1, [])], 2);
+    actor.setLocomotion(1.5);
+    const before = actor.evidence().bonePose;
+    actor.update(0.12);
+    const first = actor.evidence().bonePose;
+    actor.update(0.12);
+    expect(first).not.toBe(before);
+    expect(actor.evidence().bonePose).not.toBe(first);
+    expect(actor.evidence().fallbackPoses).toContain("walk");
+    expect(actor.evidence().animatedPoses).not.toContain("walk");
     actor.dispose();
   });
 });

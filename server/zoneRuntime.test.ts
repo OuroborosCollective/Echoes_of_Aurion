@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { ZONE_POSITION_LIMIT, ZONE_POSITION_MIN } from "../shared/zonePresenceContract";
+import { AX1_BLADE_SKILL_SOURCE_REVISION } from "../shared/ax1BladeSkillProtocol";
+import { ZONE_COMBAT_CONTRACT_VERSION } from "../shared/zoneCombatContract";
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
 import { WASD_MOB_COLLISION_SUBSTEP_MAX_MM, mobCollisionSubsteps } from "./wasdMobCollisionProtocol";
@@ -100,5 +102,49 @@ describe("WASD authoritative zone movement", () => {
     expect(zone.positionForConnection(current.connectionId)).toEqual({ x: -340, z: 0 });
     zone.leave(current.connectionId);
     expect(zone.positionForConnection(current.connectionId)).toBeUndefined();
+  });
+
+  it("binds k_strike to the confirmed blade track, AX1 range and server cooldown", () => {
+    const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
+    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const { connectionId } = zone.join({ userId: 7, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 15, weaponTrack: "blade" } });
+
+    expect(zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } })).toBe("accepted");
+    for (let tick = 0; tick < 5; tick += 1) zone.tick();
+    expect(zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: 0, z: 0 } })).toBe("accepted");
+
+    const before = zone.mobSnapshot().find(mob => mob.entityId === "mob_12")!.health;
+    expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 3, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("accepted");
+    const combatEvents = socket.send.mock.calls.map(([payload]) => JSON.parse(payload)).filter(message => message.type === "combat" && message.attackerEntityId === "player:7");
+    expect(combatEvents.at(-1)).toMatchObject({
+      contractVersion: ZONE_COMBAT_CONTRACT_VERSION,
+      action: "melee",
+      skillId: "k_strike",
+      skillSourceRevision: AX1_BLADE_SKILL_SOURCE_REVISION,
+      defenderEntityId: "mob_12",
+    });
+    expect(zone.mobSnapshot().find(mob => mob.entityId === "mob_12")!.health).toBeLessThanOrEqual(before);
+    expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 4, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("cooldown");
+    for (let tick = 0; tick < 8; tick += 1) zone.tick();
+    expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 5, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("accepted");
+  });
+
+  it("rejects AX1 blade skills on the wrong weapon track before any combat mutation", () => {
+    const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
+    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const { connectionId } = zone.join({ userId: 8, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 0, weaponTrack: "staff" } });
+    const before = zone.mobSnapshot().find(mob => mob.entityId === "mob_12")!.health;
+    expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("invalid_skill");
+    expect(zone.mobSnapshot().find(mob => mob.entityId === "mob_12")!.health).toBe(before);
+    expect(socket.send.mock.calls.map(([payload]) => JSON.parse(payload)).some(message => message.type === "combat" && message.skillId === "k_strike")).toBe(false);
+  });
+
+  it("rejects an out-of-range k_strike without mutating the target", () => {
+    const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
+    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const { connectionId } = zone.join({ userId: 9, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 15, weaponTrack: "blade" } });
+    const before = zone.mobSnapshot().find(mob => mob.entityId === "mob_1")!.health;
+    expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_1" })).toBe("out_of_range");
+    expect(zone.mobSnapshot().find(mob => mob.entityId === "mob_1")!.health).toBe(before);
   });
 });

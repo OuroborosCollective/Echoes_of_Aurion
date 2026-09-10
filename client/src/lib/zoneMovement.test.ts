@@ -1,4 +1,6 @@
 import { ZONE_POSITION_LIMIT, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
+import { AX1_BLADE_SKILL_SOURCE_REVISION } from "@shared/ax1BladeSkillProtocol";
+import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ZoneMovementClient, zoneWebSocketUrl } from "./zoneMovement";
 
@@ -14,6 +16,7 @@ class TestSocket extends EventTarget {
 }
 
 const emptyAuthority = { mobs: [] as const, combatants: [] as const };
+const welcome = { type: "welcome" as const, protocolVersion: ZONE_PROTOCOL_VERSION, connectionId: "zone_peer_fixture", selfEntityId: "player:1", zoneId: "observatory_threshold" as const, snapshotSeq: 0, tick: 0, presences: [], ...emptyAuthority };
 
 describe("zone movement browser transport", () => {
   afterEach(() => { vi.unstubAllGlobals(); TestSocket.instances = []; });
@@ -82,6 +85,31 @@ describe("zone movement browser transport", () => {
     for (const invalid of [snapshot, { ...snapshot, snapshotSeq: 9 }, { ...snapshot, snapshotSeq: 11, tick: 9 }, { ...snapshot, snapshotSeq: 11, presences: [...snapshot.presences, ...snapshot.presences] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], entityId: "player:2" }] }, { ...snapshot, snapshotSeq: 11, presences: [{ ...snapshot.presences[0], position: { x: ZONE_POSITION_LIMIT + 1, z: 0 } }] }, { ...snapshot, snapshotSeq: 11, presences: new Array(129).fill(snapshot.presences[0]) }, { ...snapshot, snapshotSeq: 11, extra: "x".repeat(65537) }]) socket.receive(invalid);
     expect(options.onSnapshot).not.toHaveBeenCalled();
     socket.receive({ ...snapshot, snapshotSeq: 11, tick: 11 }); expect(options.onSnapshot).toHaveBeenCalledTimes(1);
+    client.close();
+  });
+
+  it("sends k_strike as a dedicated authenticated skill command after the zone welcome", () => {
+    vi.stubGlobal("WebSocket", TestSocket);
+    const options = { onStatus: vi.fn(), onSnapshot: vi.fn(), onReject: vi.fn() };
+    const client = new ZoneMovementClient(options); client.connect("fixture-ticket");
+    const socket = TestSocket.instances[0]; socket.readyState = TestSocket.OPEN; socket.dispatchEvent(new Event("open")); socket.receive(welcome);
+    expect(client.sendSkill("k_strike", "mob_12")).toBe(true);
+    expect(JSON.parse(socket.send.mock.calls.at(-1)![0])).toEqual({ type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_12" });
+    expect(client.sendSkill("k_strike", "not-a-mob")).toBe(false);
+    client.close();
+  });
+
+  it("accepts only combat-v2 events with the exact AX1 skill provenance", () => {
+    vi.stubGlobal("WebSocket", TestSocket);
+    const options = { onStatus: vi.fn(), onSnapshot: vi.fn(), onReject: vi.fn(), onCombat: vi.fn() };
+    const client = new ZoneMovementClient(options); client.connect("fixture-ticket");
+    const socket = TestSocket.instances[0]; socket.readyState = TestSocket.OPEN; socket.dispatchEvent(new Event("open")); socket.receive(welcome);
+    const event = { type: "combat", contractVersion: ZONE_COMBAT_CONTRACT_VERSION, tick: 1, sequence: 1, action: "melee", skillId: "k_strike", skillSourceRevision: AX1_BLADE_SKILL_SOURCE_REVISION, attackerEntityId: "player:1", defenderEntityId: "mob_12", hit: true, damage: 11, crit: false, killed: false, defenderHealth: 89, attackerStamina: 92, gameplaySourceRevision: "a".repeat(40) };
+    socket.receive(event);
+    expect(options.onCombat).toHaveBeenCalledTimes(1);
+    expect(options.onCombat).toHaveBeenCalledWith(event);
+    socket.receive({ ...event, sequence: 2, skillSourceRevision: "b".repeat(40) });
+    expect(options.onCombat).toHaveBeenCalledTimes(1);
     client.close();
   });
 });

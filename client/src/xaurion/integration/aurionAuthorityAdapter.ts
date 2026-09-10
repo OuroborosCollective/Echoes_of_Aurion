@@ -15,44 +15,60 @@ export function aurionCommandForAx1Key(key:string,code:string):AurionGameplayCom
 export function isAx1LocalGameplayMutationKey(key:string,code:string):boolean{return aurionCommandForAx1Key(key,code)!==null||key==="z";}
 
 /**
- * AX1 remains the render/input/UI implementation. Local AX1 quest, mob, loot,
- * damage and progression mutators are disabled; confirmed WASD zone snapshots
- * are projected back into the same AX1 objects instead.
+ * AX1-first composition boundary.
+ *
+ * AX1 remains the game, world, render/input/UI/content scaffold. Aurion adds
+ * authenticated hosting/persistence/readbacks and selected server rules; WASD
+ * reducers may replace individual gameplay transitions when they are proven.
+ * The integration must never empty AX1 merely to reconstruct the same world
+ * from a secondary system. Instead, truth-writing methods are disabled or
+ * redirected individually while AX1 presentation/content stays available.
  */
 export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{requestAction:(command:AurionGameplayCommand)=>void;requestMount:()=>void;},worldContext:AurionWorldContext):void{
   const player=engine.player;
+
+  // Synthetic realm players are not live users, so they are retired. In contrast,
+  // AX1 NPCs, quests, terrain and mob presentation remain the baseline game world.
   engine.simPlayers.dispose();
   engine.mobManager.enableServerAuthority();
-  engine.quests=[];
-  engine.npcs=[];
-  engine.nearbyNPC=null;
-  const reject={success:false,message:"WASD zone authority is required for this action."} as const;
+
+  const reject={success:false,message:"Server gameplay authority is required for this action."} as const;
   const worldCore=attachAurionWorldCore(engine,worldContext);
   const detachZoneProjection=attachAx1ZoneProjection(engine);
   const baseStop=engine.stop.bind(engine);let stopped=false;
   engine.stop=()=>{if(!stopped){stopped=true;detachZoneProjection();worldCore.stop();}baseStop();};
 
-  // A production-assigned GLB is only allowed to replace AX1's procedural player
-  // when the loaded asset itself proves real idle and attack clips. Missing clips
-  // fall back to AX1 instead of exposing bind/T-pose or fake recoil animation.
+  // A production-assigned GLB may replace AX1's procedural player only when it
+  // has a real rig and an actually moving attack clip. Idle/Walk/Run may use the
+  // presentation-only AnimatedGlbActor fallback when imported named clips are
+  // static; clip names alone are never animation evidence.
   const equipGlbModel=player.equipGlbModel.bind(player);
   player.equipGlbModel=async modelId=>{
     const equipped=await equipGlbModel(modelId);
     if(!equipped||!modelId)return equipped;
     const evidence=player.glbPresentationEvidence();
     const supported=new Set(evidence?.supportedPoses??[]);
-    if(supported.has("idle")&&supported.has("attack"))return true;
+    const animated=new Set(evidence?.animatedPoses??[]);
+    if((evidence?.boneCount??0)>0&&supported.has("idle")&&animated.has("attack"))return true;
     await equipGlbModel(null);
     return false;
   };
 
+  // Keep AX1 controls and interaction flow, but route truth-changing actions to
+  // the confirmed action corridor. NPC interaction itself is presentation-only:
+  // opening the AX1 dialog never accepts/completes a quest or changes inventory.
   engine.castClassSkill=index=>{if(index>=0&&index<5)handlers.requestAction(String(index+1) as AurionGameplayCommand);};
   engine.toggleMount=()=>handlers.requestMount();
-  engine.interactNearby=()=>{if(engine.nearbyLoot)handlers.requestAction("E");return{};};
+  engine.interactNearby=()=>{
+    if(engine.nearbyLoot){handlers.requestAction("E");return{};}
+    if(engine.nearbyNPC)return{npcOpened:engine.nearbyNPC};
+    return{};
+  };
   engine.equipItem=()=>null;engine.unequipItem=()=>null;
 
-  // These local AX1 methods cannot mint truth in the connected runtime. Incoming
-  // WASD snapshots update the projected fields directly through zoneCombatBridge.
+  // Local AX1 truth writers stay disabled in connected play. Incoming confirmed
+  // snapshots update projected fields through the integration bridges; AX1 still
+  // owns how those states look, animate and are navigated by the player.
   player.takeDamage=()=>({damageTaken:0,isDead:false,dodged:false});
   player.heal=()=>{};player.restoreResource=()=>{};player.consumeResource=()=>false;player.gainXp=()=>false;player.useConsumable=()=>{};player.toggleMount=()=>player.stats.isMounted;player.equipItem=()=>null;player.unequipItem=()=>null;player.unequipSlot=()=>null;player.allocateStatPoint=()=>reject;player.unlockMilestoneSkill=()=>reject;player.equipSkillToHotbar=()=>{};
 }

@@ -149,7 +149,7 @@ export async function createGameScene(
   };
   const onAuthoritativeAction = (event: Event): void => {
     const detail = (event as CustomEvent<AuthoritativeActionDetail>).detail;
-    if (detail?.command === "F" && (detail.source ?? "gateway") === "human") playerAttackUntil = performance.now() + 420;
+    if ((detail?.command === "F" || detail?.command === "1") && (detail.source ?? "gateway") === "human") playerAttackUntil = performance.now() + 420;
   };
   window.addEventListener("aurion:mission-state", onMissionState);
   window.addEventListener("aurion:game-event", onGameEvent);

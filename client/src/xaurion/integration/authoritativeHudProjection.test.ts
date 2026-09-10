@@ -19,4 +19,39 @@ describe("authoritative HUD readback", () => {
     expect(projectReadback(worldReadbackSchema, { data: { globalWorld: { epoch: 1, worldSeed: "world" } } })).toEqual({ state: "error" });
     expect(projectReadback(worldReadbackSchema, { data: { globalWorld: { epoch: 1, worldSeed: "world", deterministicHash: "fnv1a-1234abcd" } } }).data?.globalWorld.deterministicHash).toBe("fnv1a-1234abcd");
   });
+
+  it("projects the real player.me envelope instead of rejecting unrelated server fields", () => {
+    const response = { ...confirmedPlayer, guild: null, setBonuses: [] };
+    // The internal DTO stays strict; only the explicit wire adapter accepts the envelope.
+    expect(playerReadbackSchema.safeParse(response).success).toBe(false);
+    expect(projectPlayerReadback({ data: response }, 7)).toEqual({ state: "live", data: confirmedPlayer });
+    expect(projectPlayerReadback({ data: response, isStale: true }, 7)).toEqual({ state: "stale", data: confirmedPlayer });
+    expect(projectPlayerReadback({ data: response, isError: true }, 7)).toEqual({ state: "stale", data: confirmedPlayer });
+  });
+
+  it("strips inventory database metadata without changing any HUD value or input object", () => {
+    const item = { id: "owned-item-1", ownerUserId: 7, baseItemKey: "aurion_spear", quality: "magic", itemLevel: 1, affixes: [{ key: "keen", slot: "prefix", stats: { attack: 3 } }] };
+    const storedItem = { ...item, sourceKind: "loot", status: "owned", lootReceiptId: "drop-1", craftingReceiptId: null, affixesJson: JSON.stringify(item.affixes), createdAt: new Date("2026-09-10T00:00:00Z") };
+    const response = { ...confirmedPlayer, inventory: [storedItem], guild: { id: "guild-1" }, setBonuses: [] };
+    const readback = projectPlayerReadback({ data: response }, 7);
+    expect(readback).toEqual({ state: "live", data: { ...confirmedPlayer, inventory: [item] } });
+    expect(playerReadbackSchema.safeParse(readback.data).success).toBe(true);
+    expect(readback.data).not.toHaveProperty("guild");
+    expect(readback.data?.inventory[0]).not.toHaveProperty("affixesJson");
+    expect(response.inventory[0]).toBe(storedItem);
+    expect(response.inventory[0].sourceKind).toBe("loot");
+  });
+
+  it("never lets wider response metadata relax owner, receipt, profile or numeric validation", () => {
+    const response = { ...confirmedPlayer, guild: null, setBonuses: [] };
+    const item = { id: "foreign-item", ownerUserId: 8, baseItemKey: "aurion_spear", quality: "normal", itemLevel: 1, affixes: [], status: "owned" };
+    expect(projectPlayerReadback({ data: response }, 8)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { ...response, inventory: [item] } }, 7)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { ...response, profile: { ...response.profile, level: 99 } } }, 7)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { ...response, progression: { ...response.progression, tracks: [{ ...response.progression.tracks[0], receiptHash: "invalid" }] } } }, 7)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { ...response, inventory: [{ ...item, ownerUserId: 7, itemLevel: NaN }] } }, 7)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { ...response, inventory: [{ ...item, ownerUserId: 7, affixes: [{ key: "keen", slot: "prefix", stats: { attack: Infinity } }] }] } }, 7)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { ...response, health: 999 } }, 7)).toEqual({ state: "error" });
+    expect(projectPlayerReadback({ data: { guild: null, setBonuses: [] } }, 7)).toEqual({ state: "error" });
+  });
 });

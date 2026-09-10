@@ -7,6 +7,7 @@ import { DeterministicSimulation, seededRandom } from "../shared/deterministicSi
 import { MobManager } from "../client/src/xaurion/entities/MobManager";
 import { LootDropManager } from "../client/src/xaurion/entities/LootDropManager";
 import { GenkitAdapter } from "../client/src/xaurion/adapters/GenkitAdapter";
+import type { ConfirmedZoneMob } from "../shared/zoneMobContract";
 
 describe("AIM-239 seeded projection and explicit logical time", () => {
   it("isolates random streams so visual changes cannot move combat or loot draws", () => {
@@ -49,6 +50,55 @@ describe("AIM-239 seeded projection and explicit logical time", () => {
     expect(slow.time).toBe(1000);
     expect(slow.drops).toHaveLength(1);
     expect(slow.drops[0].spawnTime).toBe(300);
+  });
+
+  it("keeps AX1 mob presentation visible while waiting for confirmed server truth", () => {
+    const clock = new DeterministicSimulation("world:ax1-first", 4);
+    const scene = new THREE.Scene();
+    const loot = new LootDropManager(scene, clock);
+    const mobs = new MobManager(scene, loot, clock);
+    const baselineGroups = mobs.mobs.map(mob => mob.group);
+    const baselineCount = mobs.mobs.length;
+
+    expect(baselineCount).toBe(16);
+    mobs.enableServerAuthority();
+
+    expect(mobs.mobs).toHaveLength(baselineCount);
+    expect(baselineGroups.every(group => group.parent === scene && group.visible)).toBe(true);
+    expect(mobs.presentationEvidence()).toEqual({ serverAuthority: true, confirmedSnapshot: false, visible: 16, confirmed: 0, awaiting: 16 });
+    expect(mobs.authoritativeEvidence()).toEqual([]);
+    expect(mobs.nearest(18, -18, 100)).toBeNull();
+    expect(mobs.damageMob("mob_1", 9999)).toEqual({ mob: null, isKilled: false });
+  });
+
+  it("promotes the existing AX1 mob visuals only after a valid confirmed snapshot", () => {
+    const clock = new DeterministicSimulation("world:ax1-confirmed", 5);
+    const scene = new THREE.Scene();
+    const loot = new LootDropManager(scene, clock);
+    const mobs = new MobManager(scene, loot, clock);
+    const original = mobs.mobs.find(mob => mob.data.id === "mob_1")!;
+    const originalGroup = original.group;
+    mobs.enableServerAuthority();
+
+    const snapshot: ConfirmedZoneMob[] = [{
+      entityId: "mob_1",
+      archetype: "clockwork_stalker",
+      level: 3,
+      state: "combat",
+      position: { x: 21_000, z: -17_000 },
+      targetEntityId: "player:1",
+      isBoss: false,
+      isElite: false,
+      health: 88,
+      maxHealth: 120,
+    }];
+    mobs.applyAuthoritativeSnapshot(snapshot);
+
+    expect(mobs.mobs).toHaveLength(1);
+    expect(mobs.mobs[0].group).toBe(originalGroup);
+    expect(mobs.presentationEvidence()).toEqual({ serverAuthority: true, confirmedSnapshot: true, visible: 1, confirmed: 1, awaiting: 0 });
+    expect(mobs.authoritativeEvidence()).toEqual([{ entityId: "mob_1", state: "combat", targetEntityId: "player:1", x: 21, z: -17, health: 88, maxHealth: 120 }]);
+    expect(mobs.nearest(21, -17, 1)?.id).toBe("mob_1");
   });
 
   it("rejects missing world identity and invalid projection time", () => {
