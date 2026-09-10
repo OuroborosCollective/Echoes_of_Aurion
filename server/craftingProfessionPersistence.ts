@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { aurionProfessionOutputBatches, aurionProfessionReceipts, aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import type { getDb } from "./db";
-import type { CraftingAffix, CraftingPlan } from "./craftingProtocol";
+import type { CraftingAffix, CraftingItemQuality, CraftingPlan } from "./craftingProtocol";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import { canonicalScopedMasteryKey, masteryKeys, resolveCoupledMasteries, type ScopedMasteryEvent, type ScopedMasteryKey } from "./scopedMasteryProtocol";
-import { professionMasteryKeys, professionOutputOriginAt, resolveProfessionMasteryOperation, type ProfessionOperationEnvelope } from "./professionMasteryProtocol";
+import { professionMasteryKeys, professionOutputOriginAt, resolveProfessionMasteryOperation, type AurionProfessionId, type ProfessionOperationEnvelope } from "./professionMasteryProtocol";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Reader = Pick<Database, "select">;
@@ -14,6 +14,31 @@ const digest = (value: unknown) => createHash("sha256").update(stableCatalogStri
 const actor = (userId: number) => `player:${userId}`;
 
 export type CraftingOutputTemplate = { baseItemKey: string; quality: "normal" | "magic" | "rare" | "set" | "unique"; itemLevel: number; affixes: CraftingAffix[] };
+export type CraftingProfessionInputItem = Readonly<{ id: string; baseItemKey: string; itemLevel: number }>;
+export type CraftingProfessionPlan = Readonly<{
+  professionId: AurionProfessionId;
+  activityId: string;
+  outputItemId: string;
+  baseOutputQuantityExact: string;
+  xpExact: string;
+  quality: CraftingItemQuality;
+  affixes: readonly CraftingAffix[];
+  outputItemLevel: number;
+  inputItems: readonly CraftingProfessionInputItem[];
+}>;
+
+type CraftingPreparationInput = Readonly<{
+  userId: number;
+  receiptId: string;
+  receiptDigest: string;
+  resolutionIndex: number;
+  serverSeed: string;
+  /** Legacy single-item caller retained until the AX1 menu cutover is complete. */
+  plan?: CraftingPlan;
+  inputItem?: CraftingProfessionInputItem;
+  /** Canonical path for AX1 and every future multi-material recipe. */
+  canonicalPlan?: CraftingProfessionPlan;
+}>;
 
 function eventFromRow(row: typeof aurionScopedMasteryEvents.$inferSelect): ScopedMasteryEvent {
   const event = JSON.parse(row.eventJson) as ScopedMasteryEvent;
@@ -26,12 +51,35 @@ async function masteryReadback(reader: Reader, userId: number, keys: readonly Sc
   return resolveCoupledMasteries({ actorId: actor(userId), keys, events: rows.map(eventFromRow) });
 }
 
-/** Called only inside craftItemForUser's locked transaction, before consuming the input. */
-export async function prepareCraftingProfession(tx: Reader, input: {
-  userId: number; plan: CraftingPlan; receiptId: string; receiptDigest: string;
-  resolutionIndex: number; inputItem: { id: string; baseItemKey: string; itemLevel: number }; serverSeed: string;
-}) {
-  const identity = { professionId: "blacksmith" as const, activityKind: "craft" as const, activityId: input.plan.recipe.key, outputItemId: input.plan.output.baseItemKey };
+function normalizeCraftingProfessionPlan(input: CraftingPreparationInput): CraftingProfessionPlan {
+  if (input.canonicalPlan) {
+    if (input.plan || input.inputItem) throw new Error("CRAFTING_PROFESSION_PLAN_AMBIGUOUS");
+    if (!Number.isSafeInteger(input.canonicalPlan.outputItemLevel) || input.canonicalPlan.outputItemLevel < 1) throw new Error("CRAFTING_OUTPUT_ITEM_LEVEL_INVALID");
+    if (input.canonicalPlan.inputItems.length < 1 || input.canonicalPlan.inputItems.length > 64) throw new Error("CRAFTING_INPUT_COUNT_INVALID");
+    return input.canonicalPlan;
+  }
+  if (!input.plan || !input.inputItem) throw new Error("CRAFTING_PROFESSION_PLAN_REQUIRED");
+  return Object.freeze({
+    professionId: "blacksmith",
+    activityId: input.plan.recipe.key,
+    outputItemId: input.plan.output.baseItemKey,
+    baseOutputQuantityExact: "1",
+    xpExact: input.plan.recipe.craftingXpExact,
+    quality: input.plan.output.quality,
+    affixes: input.plan.output.affixes,
+    outputItemLevel: input.inputItem.itemLevel,
+    inputItems: Object.freeze([input.inputItem]),
+  });
+}
+
+/**
+ * Called only inside craftItemForUser's locked MariaDB transaction before input consumption.
+ * The legacy one-item plan and AX1 multi-material plans both normalize into this one profession
+ * operation. No second crafting service or database authority is created.
+ */
+export async function prepareCraftingProfession(tx: Reader, input: CraftingPreparationInput) {
+  const plan = normalizeCraftingProfessionPlan(input);
+  const identity = { professionId: plan.professionId, activityKind: "craft" as const, activityId: plan.activityId, outputItemId: plan.outputItemId };
   const keys = professionMasteryKeys(identity);
   const current = await masteryReadback(tx, input.userId, keys);
   const item = current.find(state => state.key.scopeType === "item")!;
@@ -40,19 +88,19 @@ export async function prepareCraftingProfession(tx: Reader, input: {
       ...identity, operationId: `craft_${input.receiptDigest}`, actorId: actor(input.userId),
       sourceReceiptId: input.receiptId, sourceEvidenceDigest: input.receiptDigest,
       serverSeed: input.serverSeed, resolutionIndex: input.resolutionIndex,
-      baseOutputQuantityExact: "1", masteryLevelExact: item.progression.levelExact,
+      baseOutputQuantityExact: plan.baseOutputQuantityExact, masteryLevelExact: item.progression.levelExact,
       qualityScoreExact: item.qualityScoreExact,
-      // A confirmed craft consumes a previously unused origin in one server resolution.
       activeDurationTicks: 1, repetitionStreak: 0, distinctContextCount: 1,
-      resources: [{ originId: input.inputItem.id, itemId: input.inputItem.baseItemKey, quantityExact: "1" }],
+      resources: plan.inputItems.map(resource => ({ originId: resource.id, itemId: resource.baseItemKey, quantityExact: "1" })),
     },
-    xp: { professionXpExact: input.plan.recipe.craftingXpExact, activityXpExact: input.plan.recipe.craftingXpExact, itemXpExact: input.plan.recipe.craftingXpExact, qualityGainExact: "1" },
+    xp: { professionXpExact: plan.xpExact, activityXpExact: plan.xpExact, itemXpExact: plan.xpExact, qualityGainExact: "1" },
     currentByKey: Object.fromEntries(current.map(state => [canonicalScopedMasteryKey(state.key), state])),
   });
   const template: CraftingOutputTemplate = {
-    baseItemKey: input.plan.output.baseItemKey, quality: input.plan.output.quality,
-    itemLevel: input.inputItem.itemLevel,
-    affixes: input.plan.output.affixes.map(affix => ({ ...affix, stats: Object.fromEntries(Object.entries(affix.stats).map(([key, value]) => [key, Math.floor(value * resolved.envelope.modifiers.qualityPowerBps / 10_000)])) })),
+    baseItemKey: plan.outputItemId,
+    quality: plan.quality,
+    itemLevel: plan.outputItemLevel,
+    affixes: plan.affixes.map(affix => ({ ...affix, stats: Object.fromEntries(Object.entries(affix.stats).map(([key, value]) => [key, Math.floor(value * resolved.envelope.modifiers.qualityPowerBps / 10_000)])) })),
   };
   return { ...resolved, template, outputId: professionOutputOriginAt(resolved.envelope, "0") };
 }
@@ -106,6 +154,6 @@ export async function readPendingCraftingOutputs(reader: Reader, userId: number)
   });
 }
 
-export async function readCraftingMastery(reader: Reader, userId: number) {
-  return masteryReadback(reader, userId, [masteryKeys.profession("blacksmith"), masteryKeys.recipe("temper_aurion_spear"), masteryKeys.item("aurion_spear")]);
+export async function readCraftingMastery(reader: Reader, userId: number, identity: Readonly<{ professionId: AurionProfessionId; activityId: string; outputItemId: string }> = { professionId: "blacksmith", activityId: "temper_aurion_spear", outputItemId: "aurion_spear" }) {
+  return masteryReadback(reader, userId, [masteryKeys.profession(identity.professionId), masteryKeys.recipe(identity.activityId), masteryKeys.item(identity.outputItemId)]);
 }
