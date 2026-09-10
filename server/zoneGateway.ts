@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { isAllowedZoneOrigin, parseZoneAttack, parseZoneHello, parseZoneMove, ZONE_TICK_MS, type ZoneReject } from "./zoneProtocol";
+import { isAllowedZoneOrigin, parseZoneAttack, parseZoneHello, parseZoneMove, parseZoneSkill, ZONE_TICK_MS, type ZoneReject } from "./zoneProtocol";
 import { WORLD_PRESENCE_REFRESH_MS } from "./worldPresenceProtocol";
 import { ZoneRegistry, type ZoneCombatProfile } from "./zoneRuntime";
 import { ZonePresenceLifecycle } from "./zonePresenceLifecycle";
@@ -31,7 +31,8 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=new 
       socket.on("message",(nextData,nextBinary)=>{if(nextBinary)return rejectZoneInput(socket,"INVALID_MESSAGE");let nextRaw:unknown;try{nextRaw=parseMessage(nextData);}catch{return rejectZoneInput(socket,"INVALID_MESSAGE");}
         const move=parseZoneMove(nextRaw);if(move){const result=zone.submitMovement(welcome.connectionId,move);if(result==="stale")return rejectZoneInput(socket,"STALE_CLIENT_SEQUENCE");if(result==="missing")closePolicyViolation(socket);return;}
         const attack=parseZoneAttack(nextRaw);if(attack){const result=zone.submitAttack(welcome.connectionId,attack);if(result==="stale")return rejectZoneInput(socket,"STALE_CLIENT_SEQUENCE");if(result==="missing")return closePolicyViolation(socket);if(result==="invalid_target")return rejectZoneInput(socket,"INVALID_COMBAT_TARGET");if(result==="out_of_range")return rejectZoneInput(socket,"COMBAT_TARGET_OUT_OF_RANGE");if(result==="dead")return rejectZoneInput(socket,"COMBATANT_DEAD");return;}
-        rejectZoneInput(socket,typeof nextRaw==="object"&&nextRaw!==null&&["move","attack"].includes(String((nextRaw as {type?:unknown}).type))?"INVALID_MESSAGE":"UNSUPPORTED_ZONE_COMMAND");
+        const skill=parseZoneSkill(nextRaw);if(skill){const result=zone.submitSkill(welcome.connectionId,skill);if(result==="stale")return rejectZoneInput(socket,"STALE_CLIENT_SEQUENCE");if(result==="missing")return closePolicyViolation(socket);if(result==="invalid_skill")return rejectZoneInput(socket,"INVALID_COMBAT_SKILL");if(result==="cooldown")return rejectZoneInput(socket,"COMBAT_SKILL_COOLDOWN");if(result==="invalid_target")return rejectZoneInput(socket,"INVALID_COMBAT_TARGET");if(result==="out_of_range")return rejectZoneInput(socket,"COMBAT_TARGET_OUT_OF_RANGE");if(result==="dead")return rejectZoneInput(socket,"COMBATANT_DEAD");return;}
+        rejectZoneInput(socket,typeof nextRaw==="object"&&nextRaw!==null&&["move","attack","skill"].includes(String((nextRaw as {type?:unknown}).type))?"INVALID_MESSAGE":"UNSUPPORTED_ZONE_COMMAND");
       });
       refreshTimer=presence?setInterval(()=>{const position=zone.positionForConnection(welcome.connectionId);if(!position)return;void presence.refresh(position).catch(error=>{console.error("[Aurion Zone] Presence lease refresh failed",error);closePolicyViolation(socket);});},WORLD_PRESENCE_REFRESH_MS):undefined;
     }catch(error){console.error("[Aurion Zone] Ticket handshake failed",error);closePolicyViolation(socket);}
