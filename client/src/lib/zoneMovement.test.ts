@@ -1,6 +1,8 @@
 import { ZONE_POSITION_LIMIT, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { AX1_BLADE_SKILL_SOURCE_REVISION } from "@shared/ax1BladeSkillProtocol";
+import { AX1_ECOLOGY_SOURCE_REVISION } from "@shared/ax1ResourceEcologyProtocol";
 import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
+import { ZONE_RESOURCE_CONTRACT_VERSION } from "@shared/zoneResourceContract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ZoneMovementClient, zoneWebSocketUrl } from "./zoneMovement";
 
@@ -15,7 +17,19 @@ class TestSocket extends EventTarget {
   receive(data: unknown) { this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(data) })); }
 }
 
-const emptyAuthority = { mobs: [] as const, combatants: [] as const };
+const confirmedResources = {
+  contractVersion: ZONE_RESOURCE_CONTRACT_VERSION,
+  contentSourceRevision: AX1_ECOLOGY_SOURCE_REVISION,
+  revision: 1,
+  nodes: [
+    { nodeId: "node_beast_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_copper_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_cotton_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_iron_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_steel_1", remaining: 5, depleted: false, respawnAtTick: null },
+  ],
+} as const;
+const emptyAuthority = { mobs: [] as const, combatants: [] as const, resources: confirmedResources };
 const welcome = { type: "welcome" as const, protocolVersion: ZONE_PROTOCOL_VERSION, connectionId: "zone_peer_fixture", selfEntityId: "player:1", zoneId: "observatory_threshold" as const, snapshotSeq: 0, tick: 0, presences: [], ...emptyAuthority };
 
 describe("zone movement browser transport", () => {
@@ -44,7 +58,7 @@ describe("zone movement browser transport", () => {
     client.close();
   });
 
-  it("projects only structurally valid integer v4 snapshots", () => {
+  it("projects only structurally valid integer v5 snapshots with confirmed resources", () => {
     vi.stubGlobal("WebSocket", TestSocket);
     const options = { onStatus: vi.fn(), onSnapshot: vi.fn(), onReject: vi.fn() };
     const client = new ZoneMovementClient(options);
@@ -53,14 +67,30 @@ describe("zone movement browser transport", () => {
     const snapshot = { type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 1, tick: 10, presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: -2000 }, lastAcceptedClientSeq: 0 }], ...emptyAuthority };
     socket.receive({ ...snapshot, type: "welcome", protocolVersion: ZONE_PROTOCOL_VERSION, connectionId: "zone_peer_fixture", selfEntityId: "player:1", snapshotSeq: 0 });
     options.onSnapshot.mockClear();
-    for (const invalid of [null, {}, { ...snapshot, tick: -1 }, { ...snapshot, presences: [{}] }, { ...snapshot, presences: [{ ...snapshot.presences[0], position: { x: 0.5, z: 0 } }] }, { ...snapshot, mobs: null }, { ...snapshot, combatants: null }]) socket.receive(invalid);
+    const reversedResources = { ...confirmedResources, nodes: [...confirmedResources.nodes].reverse() };
+    const wrongSourceResources = { ...confirmedResources, contentSourceRevision: "wrong" };
+    const negativeResources = { ...confirmedResources, nodes: [{ ...confirmedResources.nodes[0], remaining: -1 }, ...confirmedResources.nodes.slice(1)] };
+    for (const invalid of [
+      null,
+      {},
+      { ...snapshot, tick: -1 },
+      { ...snapshot, presences: [{}] },
+      { ...snapshot, presences: [{ ...snapshot.presences[0], position: { x: 0.5, z: 0 } }] },
+      { ...snapshot, mobs: null },
+      { ...snapshot, combatants: null },
+      { ...snapshot, resources: null },
+      { ...snapshot, resources: wrongSourceResources },
+      { ...snapshot, resources: reversedResources },
+      { ...snapshot, resources: negativeResources },
+    ]) socket.receive(invalid);
     expect(options.onSnapshot).not.toHaveBeenCalled();
     socket.receive(snapshot);
     expect(options.onSnapshot).toHaveBeenCalledTimes(1);
     expect(options.onSnapshot).toHaveBeenCalledWith(snapshot);
     client.close();
   });
-  it("negotiates v4 and explicitly rejects a legacy server welcome", () => {
+
+  it("negotiates v5 and explicitly rejects a legacy server welcome", () => {
     vi.stubGlobal("WebSocket", TestSocket);
     const options={onStatus:vi.fn(),onSnapshot:vi.fn(),onReject:vi.fn()};
     const client=new ZoneMovementClient(options);client.connect("fixture-ticket");
