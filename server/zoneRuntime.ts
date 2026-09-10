@@ -28,6 +28,7 @@ import {
   type ZoneWelcome,
 } from "./zoneProtocol";
 import { ZoneMobRuntime } from "./zoneMobRuntime";
+import { ZoneResourceRuntime } from "./zoneResourceRuntime";
 import { worldNatureCollision } from "./worldNatureCollision";
 import { AX1_PLAYER_BASIC_MELEE_RANGE_FIXED } from "./ax1CombatProjection";
 import { mobDistance } from "./wasdMobFsmProtocol";
@@ -45,8 +46,7 @@ import {
 } from "./wasdCombatProfileProtocol";
 
 export type ZoneCombatProfile = WasdZoneCombatProfile;
-export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile =
-  WASD_DEFAULT_ZONE_COMBAT_PROFILE;
+export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile = WASD_DEFAULT_ZONE_COMBAT_PROFILE;
 
 type PresencePeer = {
   connectionId: string;
@@ -64,6 +64,7 @@ type PresencePeer = {
   skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
 };
+
 type AttackResult =
   | "accepted"
   | "stale"
@@ -73,9 +74,11 @@ type AttackResult =
   | "cooldown"
   | "out_of_range"
   | "dead";
+
 function serialize(payload: ZoneServerMessage) {
   return JSON.stringify(payload);
 }
+
 function compareBinary(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -98,6 +101,7 @@ export function integrateZoneMovement(
 export class AuthoritativeMovementZone {
   private readonly peers = new Map<string, PresencePeer>();
   private readonly mobRuntime = new ZoneMobRuntime();
+  private readonly resourceRuntime = new ZoneResourceRuntime();
   private snapshotSeq = 0;
   private tickNumber = 0;
   private combatSequence = 0;
@@ -106,6 +110,7 @@ export class AuthoritativeMovementZone {
   private sortedPeers: PresencePeer[] = [];
   private sortedPeersByEntityId: PresencePeer[] = [];
   private sortedPeersDirty = false;
+
   constructor(readonly zoneId: ZoneId) {}
 
   join(values: {
@@ -118,7 +123,6 @@ export class AuthoritativeMovementZone {
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
     if (!validWasdZoneCombatProfile(profile))
       throw new Error("ZONE_COMBAT_PROFILE_INVALID");
-    // One authenticated peer per user; no intermediate array for this lookup.
     let previous: PresencePeer | undefined;
     for (const peer of this.peers.values()) {
       if (peer.userId === values.userId) {
@@ -161,24 +165,33 @@ export class AuthoritativeMovementZone {
       presences: this.presences(),
       mobs: this.mobRuntime.snapshot(),
       combatants: this.combatants(),
+      resources: this.resourceRuntime.snapshot(this.tickNumber),
     };
     this.broadcastSnapshot();
     return welcome;
   }
+
   leave(connectionId: string): void {
     if (!this.peers.delete(connectionId)) return;
     this.sortedPeersDirty = true;
     this.broadcastSnapshot();
   }
+
   positionForConnection(connectionId: string): ZonePosition | undefined {
     const position = this.peers.get(connectionId)?.position;
     return position ? { ...position } : undefined;
   }
+
   mobSnapshot() {
     return this.mobRuntime.snapshot();
   }
+
   combatSnapshot() {
     return this.combatants();
+  }
+
+  resourceSnapshot() {
+    return this.resourceRuntime.snapshot(this.tickNumber);
   }
 
   submitMovement(
@@ -233,8 +246,7 @@ export class AuthoritativeMovementZone {
     if (result === "accepted")
       peer.skillCooldownUntilTick.set(
         skill.skillId,
-        this.tickNumber +
-          Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
+        this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
       );
     return result;
   }
@@ -292,10 +304,12 @@ export class AuthoritativeMovementZone {
       peer.position = next;
       changed = true;
     }
+    const resourcesChanged = this.resourceRuntime.tick(this.tickNumber);
     const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
     const combatChanged = this.resolveMobAttacks();
     if (
       changed ||
+      resourcesChanged ||
       mobsChanged ||
       combatChanged ||
       this.movedLastTick ||
@@ -304,7 +318,7 @@ export class AuthoritativeMovementZone {
       this.broadcastSnapshot();
     this.movedLastTick = changed;
     this.inputAcknowledgementPending = false;
-    return changed || mobsChanged || combatChanged;
+    return changed || resourcesChanged || mobsChanged || combatChanged;
   }
 
   private resolveMobAttacks(): boolean {
@@ -328,8 +342,7 @@ export class AuthoritativeMovementZone {
 
       if (!peer || peer.health <= 0) continue;
       if (
-        mobDistance(mob.position, peer.position) >
-        mob.definition.attackRangeFixed
+        mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed
       )
         continue;
       const sequence = ++this.combatSequence,
@@ -390,6 +403,7 @@ export class AuthoritativeMovementZone {
       gameplaySourceRevision: WASD_GAMEPLAY_SOURCE_REVISION,
     });
   }
+
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
     for (const peer of this.peers.values()) {
@@ -424,6 +438,7 @@ export class AuthoritativeMovementZone {
     }
     return out;
   }
+
   private combatants(): readonly ConfirmedZoneCombatant[] {
     this.refreshPeerOrder();
     const out: ConfirmedZoneCombatant[] = [];
@@ -472,6 +487,7 @@ export class AuthoritativeMovementZone {
     }
     return Object.freeze(out);
   }
+
   private broadcastSnapshot(): void {
     const snapshot: ZoneSnapshot = {
       type: "snapshot",
@@ -481,6 +497,7 @@ export class AuthoritativeMovementZone {
       presences: this.presences(),
       mobs: this.mobRuntime.snapshot(),
       combatants: this.combatants(),
+      resources: this.resourceRuntime.snapshot(this.tickNumber),
     };
     const serialized = serialize(snapshot);
     for (const peer of this.peers.values()) {
@@ -494,6 +511,7 @@ export class ZoneRegistry {
   private readonly zones = new Map<ZoneId, AuthoritativeMovementZone>();
   private sortedZones: AuthoritativeMovementZone[] = [];
   private sortedZonesDirty = false;
+
   get(zoneId: ZoneId): AuthoritativeMovementZone {
     const existing = this.zones.get(zoneId);
     if (existing) return existing;
@@ -502,6 +520,7 @@ export class ZoneRegistry {
     this.sortedZonesDirty = true;
     return zone;
   }
+
   tick(): void {
     if (this.sortedZonesDirty) {
       this.sortedZones = Array.from(this.zones.entries())
