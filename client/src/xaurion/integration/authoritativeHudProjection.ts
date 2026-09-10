@@ -19,6 +19,20 @@ export const playerReadbackSchema = z.object({
   }).strict(),
   inventory: z.array(z.object({ id: identity, ownerUserId: natural.positive(), baseItemKey: identity, quality: z.string(), itemLevel: natural.positive(), affixes: z.array(z.object({ key: identity, slot: z.enum(["prefix", "suffix"]), stats: z.record(z.string(), z.number().finite()) }).strict()) }).strict()).max(100),
 }).strict();
+
+/**
+ * player.me is a wider server response, not the HUD DTO: it also carries guild,
+ * setBonuses and inventory persistence metadata. Discard only those non-HUD
+ * surfaces before validating the strict projection. Never discard profile or
+ * progression fields, invent absent data, or carry raw database fields into UI.
+ */
+const playerResponseSchema = playerReadbackSchema.extend({
+  inventory: z.array(playerReadbackSchema.shape.inventory.element.strip()).max(100),
+  guild: z.unknown().optional(),
+  setBonuses: z.unknown().optional(),
+}).transform(({ profile, progression, inventory }) => ({ profile, progression, inventory }))
+  .pipe(playerReadbackSchema);
+
 export const questReadbackSchema = z.object({ quests: z.array(z.object({
   key: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]), title: z.string(), objective: z.string(),
   requiredLevel: natural.positive(), state: z.enum(["locked", "available", "active", "completed"]), readyToTurnIn: z.boolean(),
@@ -35,6 +49,6 @@ export function projectReadback<T>(schema: z.ZodType<T>, query: { data?: unknown
   return { state: empty(parsed.data) ? "empty" : "live", data: parsed.data };
 }
 export function projectPlayerReadback(query: Parameters<typeof projectReadback>[1], userId: number) {
-  return projectReadback(playerReadbackSchema.refine(value => value.profile.userId === userId && value.inventory.every(item => item.ownerUserId === userId)), query);
+  return projectReadback(playerResponseSchema.refine(value => value.profile.userId === userId && value.inventory.every(item => item.ownerUserId === userId)), query);
 }
 export const readbackLabels = { waiting: "Wird geladen", live: "Serverbestätigt", empty: "Keine Einträge", stale: "Veraltet · Aktualisierung ausstehend", error: "Daten nicht verfügbar" } as const;

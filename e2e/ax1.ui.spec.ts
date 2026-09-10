@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import type { PlayerUiReadback } from "../shared/playerUiProtocol";
 import { testAnimatedPlayerGlb } from "../server/glbImportFixtures";
+import { projectPlayerReadback } from "../client/src/xaurion/integration/authoritativeHudProjection";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated AX1 runtime required");
 
@@ -119,6 +120,15 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       const initial = await rpc<PlayerUiReadback>(page, "player.ui");
       const userId = initial.userId;
+      // Exercise the actual authenticated wire response, not a hand-shaped HUD fixture.
+      const playerResponse = await rpc<unknown>(page, "player.me");
+      expect(playerResponse).toHaveProperty("setBonuses");
+      const playerReadback = projectPlayerReadback({ data: playerResponse }, userId);
+      expect(playerReadback.state).toBe("live");
+      expect(playerReadback.data?.profile.userId).toBe(userId);
+      const playerSummary = `${playerReadback.data!.progression.tracks.length} bestätigte Progressionspfade · ${playerReadback.data!.profile.victories} Siege`;
+      await expect(hud.getByText(playerSummary, { exact: true })).toBeVisible();
+      await expect(hud.getByText("Charakterdaten ausstehend", { exact: true })).toHaveCount(0);
       const starter = initial.items.find(item => item.version === "ax1_starter");
       expect(starter).toMatchObject({
         definition: "item_sword_starter",
@@ -264,6 +274,12 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(persisted.settings.autoLoot).toBe(false);
       expect(persisted.items.find(item => item.id === starter!.id)?.status).toBe("equipped");
       expect(persisted.equipment).toContainEqual({ id: starter!.id, version: "ax1_starter", slot: "main_hand" });
+      const persistedPlayerReadback = projectPlayerReadback({ data: await rpc<unknown>(page, "player.me") }, userId);
+      expect(persistedPlayerReadback.state).toBe("live");
+      expect(persistedPlayerReadback.data?.profile.userId).toBe(userId);
+      const persistedSummary = `${persistedPlayerReadback.data!.progression.tracks.length} bestätigte Progressionspfade · ${persistedPlayerReadback.data!.profile.victories} Siege`;
+      await expect(hud.getByText(persistedSummary, { exact: true })).toBeVisible({ timeout: 45_000 });
+      await expect(hud.getByText("Charakterdaten ausstehend", { exact: true })).toHaveCount(0);
       expect(errors).toEqual([]);
 
       await info.attach("ax1-wasd-live-readback", {
@@ -271,6 +287,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
           revision: process.env.AURION_RELEASE_SHA,
           userId,
           viewport,
+          playerReadback: { initial: playerReadback, rehydrated: persistedPlayerReadback },
           publicPlayerAssetSha256: publicBody.receipt.sha256,
           publicPlayerSelectedThroughAx1: true,
           starter: persisted.items.find(item => item.id === starter!.id),
