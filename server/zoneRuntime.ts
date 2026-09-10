@@ -10,13 +10,20 @@ import {
   type ConfirmedZoneCombatEvent,
 } from "@shared/zoneCombatContract";
 import {
+  AX1_BLADE_SKILL_SOURCE_REVISION,
+  ax1BladeSkillById,
+  type Ax1BladeSkillId,
+} from "@shared/ax1BladeSkillProtocol";
+import {
   makeZoneConnectionId,
+  ZONE_TICK_MS,
   type ZoneAttack,
   type ZoneId,
   type ZoneMove,
   type ZonePosition,
   type ZonePresence,
   type ZoneServerMessage,
+  type ZoneSkill,
   type ZoneSnapshot,
   type ZoneWelcome,
 } from "./zoneProtocol";
@@ -53,6 +60,8 @@ type PresencePeer = {
   maxHealth: number;
   stamina: number;
   weaponBonus: number;
+  weaponTrack: WasdZoneCombatProfile["weaponTrack"];
+  skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
 };
 type AttackResult =
@@ -60,6 +69,8 @@ type AttackResult =
   | "stale"
   | "missing"
   | "invalid_target"
+  | "invalid_skill"
+  | "cooldown"
   | "out_of_range"
   | "dead";
 function serialize(payload: ZoneServerMessage) {
@@ -129,6 +140,8 @@ export class AuthoritativeMovementZone {
       maxHealth: profile.maxHealth,
       stamina: WASD_MAX_STAMINA,
       weaponBonus: profile.weaponBonus,
+      weaponTrack: profile.weaponTrack,
+      skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
     });
     this.sortedPeersDirty = true;
@@ -182,14 +195,29 @@ export class AuthoritativeMovementZone {
     if (attack.clientSeq <= peer.lastAcceptedClientSeq) return "stale";
     peer.lastAcceptedClientSeq = attack.clientSeq;
     this.inputAcknowledgementPending = true;
+    return this.resolvePlayerMelee(peer, attack.targetEntityId, null, AX1_PLAYER_BASIC_MELEE_RANGE_FIXED);
+  }
+
+  submitSkill(connectionId: string, skill: ZoneSkill): AttackResult {
+    const peer = this.peers.get(connectionId);
+    if (!peer) return "missing";
+    if (skill.clientSeq <= peer.lastAcceptedClientSeq) return "stale";
+    peer.lastAcceptedClientSeq = skill.clientSeq;
+    this.inputAcknowledgementPending = true;
+    const definition = ax1BladeSkillById(skill.skillId);
+    if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
+    const readyAt = peer.skillCooldownUntilTick.get(skill.skillId) ?? 0;
+    if (this.tickNumber < readyAt) return "cooldown";
+    const result = this.resolvePlayerMelee(peer, skill.targetEntityId, skill.skillId, definition.rangeFixed);
+    if (result === "accepted") peer.skillCooldownUntilTick.set(skill.skillId, this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS)));
+    return result;
+  }
+
+  private resolvePlayerMelee(peer: PresencePeer, targetEntityId: string, skillId: Ax1BladeSkillId | null, rangeFixed: number): AttackResult {
     if (peer.health <= 0) return "dead";
-    const mob = this.mobRuntime.stateFor(attack.targetEntityId);
+    const mob = this.mobRuntime.stateFor(targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
-    if (
-      mobDistance(peer.position, mob.position) >
-      AX1_PLAYER_BASIC_MELEE_RANGE_FIXED
-    )
-      return "out_of_range";
+    if (mobDistance(peer.position, mob.position) > rangeFixed) return "out_of_range";
     const sequence = ++this.combatSequence;
     const attacker = {
       id: `player:${peer.userId}`,
@@ -213,7 +241,7 @@ export class AuthoritativeMovementZone {
       health: patch.defender.health,
     });
     this.broadcastCombat(
-      this.combatEvent(delta, peer.stamina, patch.defender.health)
+      this.combatEvent(delta, peer.stamina, patch.defender.health, skillId)
     );
     this.broadcastSnapshot();
     return "accepted";
@@ -306,7 +334,7 @@ export class AuthoritativeMovementZone {
       peer.lastCombatSequence = sequence;
       if (peer.health === 0) peer.input = { x: 0, z: 0 };
       this.broadcastCombat(
-        this.combatEvent(delta, patch.attacker.stamina, peer.health)
+        this.combatEvent(delta, patch.attacker.stamina, peer.health, null)
       );
       changed = true;
     }
@@ -316,7 +344,8 @@ export class AuthoritativeMovementZone {
   private combatEvent(
     delta: ReturnType<typeof resolveCombatDelta>,
     attackerStamina: number,
-    defenderHealth: number
+    defenderHealth: number,
+    skillId: Ax1BladeSkillId | null
   ): ConfirmedZoneCombatEvent {
     return Object.freeze({
       type: "combat",
@@ -324,6 +353,8 @@ export class AuthoritativeMovementZone {
       tick: delta.tick,
       sequence: delta.sequence,
       action: "melee",
+      skillId,
+      skillSourceRevision: skillId ? AX1_BLADE_SKILL_SOURCE_REVISION : null,
       attackerEntityId: delta.attackerId,
       defenderEntityId: delta.defenderId,
       hit: delta.result.hit,
