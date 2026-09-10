@@ -118,9 +118,14 @@ export class AuthoritativeMovementZone {
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
     if (!validWasdZoneCombatProfile(profile))
       throw new Error("ZONE_COMBAT_PROFILE_INVALID");
-    const previous = [...this.peers.values()].find(
-      peer => peer.userId === values.userId
-    );
+    // One authenticated peer per user; no intermediate array for this lookup.
+    let previous: PresencePeer | undefined;
+    for (const peer of this.peers.values()) {
+      if (peer.userId === values.userId) {
+        previous = peer;
+        break;
+      }
+    }
     if (!previous && this.peers.size >= ZONE_MAX_PRESENCES)
       throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
@@ -195,7 +200,12 @@ export class AuthoritativeMovementZone {
     if (attack.clientSeq <= peer.lastAcceptedClientSeq) return "stale";
     peer.lastAcceptedClientSeq = attack.clientSeq;
     this.inputAcknowledgementPending = true;
-    return this.resolvePlayerMelee(peer, attack.targetEntityId, null, AX1_PLAYER_BASIC_MELEE_RANGE_FIXED);
+    return this.resolvePlayerMelee(
+      peer,
+      attack.targetEntityId,
+      null,
+      AX1_PLAYER_BASIC_MELEE_RANGE_FIXED
+    );
   }
 
   submitSkill(connectionId: string, skill: ZoneSkill): AttackResult {
@@ -205,19 +215,41 @@ export class AuthoritativeMovementZone {
     peer.lastAcceptedClientSeq = skill.clientSeq;
     this.inputAcknowledgementPending = true;
     const definition = ax1BladeSkillById(skill.skillId);
-    if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
+    if (
+      peer.weaponTrack !== "blade" ||
+      !definition ||
+      definition.skillId !== "k_strike" ||
+      definition.kind !== "melee"
+    )
+      return "invalid_skill";
     const readyAt = peer.skillCooldownUntilTick.get(skill.skillId) ?? 0;
     if (this.tickNumber < readyAt) return "cooldown";
-    const result = this.resolvePlayerMelee(peer, skill.targetEntityId, skill.skillId, definition.rangeFixed);
-    if (result === "accepted") peer.skillCooldownUntilTick.set(skill.skillId, this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS)));
+    const result = this.resolvePlayerMelee(
+      peer,
+      skill.targetEntityId,
+      skill.skillId,
+      definition.rangeFixed
+    );
+    if (result === "accepted")
+      peer.skillCooldownUntilTick.set(
+        skill.skillId,
+        this.tickNumber +
+          Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
+      );
     return result;
   }
 
-  private resolvePlayerMelee(peer: PresencePeer, targetEntityId: string, skillId: Ax1BladeSkillId | null, rangeFixed: number): AttackResult {
+  private resolvePlayerMelee(
+    peer: PresencePeer,
+    targetEntityId: string,
+    skillId: Ax1BladeSkillId | null,
+    rangeFixed: number
+  ): AttackResult {
     if (peer.health <= 0) return "dead";
     const mob = this.mobRuntime.stateFor(targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
-    if (mobDistance(peer.position, mob.position) > rangeFixed) return "out_of_range";
+    if (mobDistance(peer.position, mob.position) > rangeFixed)
+      return "out_of_range";
     const sequence = ++this.combatSequence;
     const attacker = {
       id: `player:${peer.userId}`,
@@ -250,15 +282,7 @@ export class AuthoritativeMovementZone {
   tick(): boolean {
     this.tickNumber += 1;
     let changed = false;
-    if (this.sortedPeersDirty) {
-      this.sortedPeers = Array.from(this.peers.values()).sort((a, b) =>
-        compareBinary(a.connectionId, b.connectionId)
-      );
-      this.sortedPeersByEntityId = Array.from(this.peers.values()).sort(
-        (a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`)
-      );
-      this.sortedPeersDirty = false;
-    }
+    this.refreshPeerOrder();
     for (const peer of this.sortedPeers) {
       if (peer.health > 0) peer.stamina = regenerateWasdStamina(peer.stamina);
       if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0)
@@ -368,12 +392,27 @@ export class AuthoritativeMovementZone {
   }
   private broadcastCombat(event: ConfirmedZoneCombatEvent): void {
     const serialized = serialize(event);
-    this.peers.forEach(peer => {
+    for (const peer of this.peers.values()) {
       if (peer.socket.readyState === peer.socket.OPEN)
         peer.socket.send(serialized);
-    });
+    }
   }
+
+  /** Refresh on membership changes before any readback, not just the next tick. */
+  private refreshPeerOrder(): void {
+    if (this.sortedPeersDirty) {
+      this.sortedPeers = Array.from(this.peers.values()).sort((a, b) =>
+        compareBinary(a.connectionId, b.connectionId)
+      );
+      this.sortedPeersByEntityId = Array.from(this.peers.values()).sort(
+        (a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`)
+      );
+      this.sortedPeersDirty = false;
+    }
+  }
+
   private presences(): ZonePresence[] {
+    this.refreshPeerOrder();
     const out: ZonePresence[] = [];
     for (const peer of this.sortedPeersByEntityId) {
       out.push({
@@ -386,6 +425,7 @@ export class AuthoritativeMovementZone {
     return out;
   }
   private combatants(): readonly ConfirmedZoneCombatant[] {
+    this.refreshPeerOrder();
     const out: ConfirmedZoneCombatant[] = [];
     let peerIndex = 0;
     const mobs = this.mobRuntime.orderedStates();
@@ -443,10 +483,10 @@ export class AuthoritativeMovementZone {
       combatants: this.combatants(),
     };
     const serialized = serialize(snapshot);
-    this.peers.forEach(peer => {
+    for (const peer of this.peers.values()) {
       if (peer.socket.readyState === peer.socket.OPEN)
         peer.socket.send(serialized);
-    });
+    }
   }
 }
 
