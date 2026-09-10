@@ -1,5 +1,5 @@
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
-import { requestZoneBasicAttack, zoneCombatAvailable } from "./zoneCombatBridge";
+import { requestZoneBasicAttack, requestZoneSkill, zoneCombatAvailable } from "./zoneCombatBridge";
 
 export const WORLD_PANEL_SELECTOR='[data-aurion-panel="open"], [role="dialog"][data-state="open"], .community-overlay[data-opened-from-world="true"]';
 export type ActionOutcome={confirmed:boolean;completed:boolean;message:string};
@@ -12,6 +12,7 @@ export type ActionCompletion=(outcome:ActionOutcome)=>void;
 export function requestConfirmedAction(command:AurionGameplayCommand):Promise<ActionOutcome>{
   if(!zoneCombatAvailable())return Promise.resolve({confirmed:false,completed:false,message:"WASD-Zonenvertrag nicht verbunden; kein Aurion-Gameplay-Fallback."});
   if(command==="F")return requestZoneBasicAttack();
+  if(command==="1")return requestZoneSkill("k_strike");
   return Promise.resolve({confirmed:false,completed:false,message:`${command} ist im WASD-Zonenvertrag noch nicht freigeschaltet.`});
 }
 
