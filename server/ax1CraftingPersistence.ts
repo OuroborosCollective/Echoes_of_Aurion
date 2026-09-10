@@ -44,6 +44,9 @@ import {
 const inputIdPattern = /^[A-Za-z0-9:_-]{1,64}$/;
 const AX1_CRAFTING_INPUT_LIMIT = 32;
 
+type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+type Reader = Pick<Database, "select">;
+
 export const AX1_TO_AURION_PROFESSION: Readonly<Record<Ax1CraftingProfessionId, AurionProfessionId>> = Object.freeze({
   carpenter: "carpentry",
   blacksmith: "blacksmith",
@@ -76,7 +79,7 @@ function canonicalInputIds(inputItemIds: readonly string[]): readonly string[] {
   return Object.freeze(ids.slice().sort());
 }
 
-async function confirmedCharacterId(tx: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number): Promise<string> {
+async function confirmedCharacterId(tx: Reader, userId: number): Promise<string> {
   const rows = await tx.select({
     id: aurionProgressionReceipts.id,
     userId: aurionProgressionReceipts.userId,
@@ -151,7 +154,7 @@ function verifyStoredReceipt(row: typeof aurionTradeCraftingReceipts.$inferSelec
   return normalized;
 }
 
-async function replayReadback(tx: NonNullable<Awaited<ReturnType<typeof getDb>>>, row: typeof aurionTradeCraftingReceipts.$inferSelect, values: { userId: number; characterId: string; recipeId: string; inputItemIds: readonly string[] }) {
+async function replayReadback(tx: Reader, row: typeof aurionTradeCraftingReceipts.$inferSelect, values: { userId: number; characterId: string; recipeId: string; inputItemIds: readonly string[] }) {
   const normalized = verifyStoredReceipt(row, values);
   const professionRow = (await tx.select({ id: aurionProfessionReceipts.id }).from(aurionProfessionReceipts).where(and(eq(aurionProfessionReceipts.userId, values.userId), eq(aurionProfessionReceipts.sourceCraftingReceiptId, row.id))).limit(1))[0];
   if (!professionRow) throw new Error("AX1_CRAFTING_PROFESSION_RECEIPT_MISSING");
@@ -182,12 +185,12 @@ export async function craftAx1RecipeForUser(values: { userId: number; recipeId: 
     // bundles without weakening the per-item FOR UPDATE ownership locks below.
     const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).for("update").limit(1))[0];
     if (!profile) throw new Error("AX1_CRAFTING_PLAYER_PROFILE_REQUIRED");
-    const characterId = await confirmedCharacterId(tx as NonNullable<Awaited<ReturnType<typeof getDb>>>, values.userId);
+    const characterId = await confirmedCharacterId(tx, values.userId);
     const requestHash = sha256(stableCatalogStringify({ version: "ax1-crafting-request.v1", userId: values.userId, characterId, recipeId: recipe.id, inputItemIds }));
     const idempotencyKey = `ax1_craft_${requestHash.slice(0, 48)}`;
 
     const prior = (await tx.select().from(aurionTradeCraftingReceipts).where(eq(aurionTradeCraftingReceipts.idempotencyKey, idempotencyKey)).limit(1))[0];
-    if (prior) return replayReadback(tx as NonNullable<Awaited<ReturnType<typeof getDb>>>, prior, { userId: values.userId, characterId, recipeId: recipe.id, inputItemIds });
+    if (prior) return replayReadback(tx, prior, { userId: values.userId, characterId, recipeId: recipe.id, inputItemIds });
 
     const lockedInputs = await tx.select({ id: itemInstances.id, ownerUserId: itemInstances.ownerUserId, status: itemInstances.status, baseItemKey: itemInstances.baseItemKey, itemLevel: itemInstances.itemLevel }).from(itemInstances).where(and(inArray(itemInstances.id, inputItemIds), eq(itemInstances.ownerUserId, values.userId), eq(itemInstances.status, "owned"))).for("update");
     lockedInputs.sort((left, right) => left.id.localeCompare(right.id));
