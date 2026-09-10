@@ -129,3 +129,25 @@ jobs:
           retention-days: 14
           compression-level: 0
           include-hidden-files: true
+      - name: Hash executable workspace subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .aurion-local-test-pack
+          sha256sum manifest.json aurion-source.tar.zst node_modules.tar.zst package.json pnpm-lock.yaml > workspace.sha256
+          sha256sum --check workspace.sha256
+      - name: Upload executable workspace subset
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-local-workspace-${{ env.AURION_RELEASE_SHA }}
+          path: |
+            .aurion-local-test-pack/manifest.json
+            .aurion-local-test-pack/workspace.sha256
+            .aurion-local-test-pack/aurion-source.tar.zst
+            .aurion-local-test-pack/node_modules.tar.zst
+            .aurion-local-test-pack/package.json
+            .aurion-local-test-pack/pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+          include-hidden-files: true
