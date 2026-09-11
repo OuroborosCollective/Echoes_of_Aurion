@@ -1,11 +1,13 @@
 import { AX1_ECOLOGY_SOURCE_REVISION } from "./ax1ResourceEcologyProtocol";
-import { validWorldPosition, type ConfirmedWorldPosition } from "./zonePresenceContract";
+import { validWorldPosition } from "./zonePresenceContract";
 
 export const ZONE_TELEGRAPH_CONTRACT_VERSION = "aurion-zone-telegraph.v1" as const;
 export const ZONE_TELEGRAPH_VISUAL_SOURCE_REVISION = AX1_ECOLOGY_SOURCE_REVISION;
 export const ZONE_TELEGRAPH_VISUAL_SOURCE_PATH = "src/engine/combat/TelegraphVisualizer.ts" as const;
 export const ZONE_TELEGRAPH_AUTHORITY_RULESET = "aurion-ax1-mob-windup.v1" as const;
 export const ZONE_TELEGRAPH_MAX_WINDUP_TICKS = 50 as const;
+
+export type ConfirmedZoneTelegraphPosition = Readonly<{ x: number; z: number }>;
 
 export type ConfirmedZoneTelegraphEvent = Readonly<{
   type: "telegraph";
@@ -17,8 +19,8 @@ export type ConfirmedZoneTelegraphEvent = Readonly<{
   attackerEntityId: string;
   targetEntityId: string;
   kind: "line";
-  origin: ConfirmedWorldPosition;
-  target: ConfirmedWorldPosition;
+  origin: ConfirmedZoneTelegraphPosition;
+  target: ConfirmedZoneTelegraphPosition;
   widthFixed: number;
   color: "#ef4444";
   visualSourceRevision: typeof ZONE_TELEGRAPH_VISUAL_SOURCE_REVISION;
