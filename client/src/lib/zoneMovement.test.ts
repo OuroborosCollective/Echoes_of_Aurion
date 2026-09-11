@@ -5,6 +5,7 @@ import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
 import { ZONE_RESOURCE_CONTRACT_VERSION } from "@shared/zoneResourceContract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ZoneMovementClient, zoneWebSocketUrl } from "./zoneMovement";
+import { ZONE_RESOURCE_READBACK_EVENT, type ConfirmedZoneResourceReadback } from "./zoneResourceReadback";
 
 class TestSocket extends EventTarget {
   static CONNECTING = 0;
@@ -88,6 +89,35 @@ describe("zone movement browser transport", () => {
     expect(options.onSnapshot).toHaveBeenCalledTimes(1);
     expect(options.onSnapshot).toHaveBeenCalledWith(snapshot);
     client.close();
+  });
+
+  it("emits resource readbacks only after valid zone v5 messages", () => {
+    vi.stubGlobal("WebSocket", TestSocket);
+    const readbacks: ConfirmedZoneResourceReadback[] = [];
+    const listener = (event: Event) => readbacks.push((event as CustomEvent<ConfirmedZoneResourceReadback>).detail);
+    window.addEventListener(ZONE_RESOURCE_READBACK_EVENT, listener);
+    const options = { onStatus: vi.fn(), onSnapshot: vi.fn(), onReject: vi.fn() };
+    const client = new ZoneMovementClient(options);
+    try {
+      client.connect("fixture-ticket");
+      const socket = TestSocket.instances[0];
+      socket.receive(welcome);
+      expect(readbacks).toEqual([{ tick: 0, resources: confirmedResources }]);
+
+      const invalidResources = { ...confirmedResources, contentSourceRevision: "0".repeat(40) };
+      socket.receive({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 1, tick: 1, presences: [], mobs: [], combatants: [], resources: invalidResources });
+      expect(readbacks).toHaveLength(1);
+
+      const nextResources = { ...confirmedResources, revision: 2 };
+      socket.receive({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 1, tick: 1, presences: [], mobs: [], combatants: [], resources: nextResources });
+      expect(readbacks).toEqual([
+        { tick: 0, resources: confirmedResources },
+        { tick: 1, resources: nextResources },
+      ]);
+    } finally {
+      client.close();
+      window.removeEventListener(ZONE_RESOURCE_READBACK_EVENT, listener);
+    }
   });
 
   it("negotiates v5 and explicitly rejects a legacy server welcome", () => {
