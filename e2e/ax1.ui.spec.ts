@@ -160,16 +160,17 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       // Character is now the original AX1 stats/mastery surface. It must not
       // grow old Aurion role-skill or hotbar controls back into this boundary.
       await hud.getByRole("button", { name: "Charakter", exact: true }).click();
-      await expect(dialog).toHaveAttribute("aria-label", "Charakter & Skills");
-      await expect(dialog.getByRole("button", { name: "Stats", exact: true })).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "Mastery", exact: true })).toBeVisible();
-      await expect(dialog.getByRole("button", { name: /Vorhut|Seher|Hüter/ })).toHaveCount(0);
-      await expect(dialog.getByText("Attribute warten auf einen bestätigten Aurion-Readback.", { exact: true })).toBeVisible();
-      await expect(dialog.getByLabel(/Heilendes Licht/)).toHaveCount(0);
-      await expect(dialog.getByLabel("Skillplatz 1", { exact: true })).toHaveCount(0);
-      await dialog.getByRole("button", { name: "Mastery", exact: true }).click();
+      const characterDialog = page.getByRole("dialog", { name: "Charakter & Skills", exact: true });
+      await expect(characterDialog).toBeVisible();
+      await expect(characterDialog.getByRole("button", { name: "Stats", exact: true })).toBeVisible();
+      await expect(characterDialog.getByRole("button", { name: "Mastery", exact: true })).toBeVisible();
+      await expect(characterDialog.getByRole("button", { name: /Vorhut|Seher|Hüter/ })).toHaveCount(0);
+      await expect(characterDialog.getByText("Attribute warten auf einen bestätigten Aurion-Readback.", { exact: true })).toBeVisible();
+      await expect(characterDialog.getByLabel(/Heilendes Licht/)).toHaveCount(0);
+      await expect(characterDialog.getByLabel("Skillplatz 1", { exact: true })).toHaveCount(0);
+      await characterDialog.getByRole("button", { name: "Mastery", exact: true }).click();
       await page.screenshot({ path: info.outputPath(`${viewport.name}-character-mastery.png`) });
-      await dialog.getByRole("button", { name: "Charakter schließen", exact: true }).click();
+      await characterDialog.getByRole("button", { name: "Charakter schließen", exact: true }).click();
 
       // Healer qualification remains server-authoritative, but belongs to the
       // dedicated group surface rather than the AX1 character/mastery menu.
