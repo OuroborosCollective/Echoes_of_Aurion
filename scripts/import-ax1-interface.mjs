@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 
-// Authoring only: no upstream execution, no engine replacement, no main writes.
+// Authoring only. Upstream code is read, not executed. No host engine or DB replacement.
 const REVISION = '286c575d3d0050ffa77b794d5b7a7e24858acee8';
 const sourceRoot = resolve(process.argv[2] ?? '');
 const hostRoot = resolve(process.argv[3] ?? '.');
@@ -19,17 +19,22 @@ const tracked = git('ls-tree', '-r', '--name-only', REVISION, 'src').split('\n')
 const components = tracked.filter(p => p.startsWith('src/components/') && p.endsWith('.tsx')).sort();
 assert.equal(components.length, 19, 'AX1_COMPONENT_SET_CHANGED');
 const referenceOnly = new Map([
-  ['src/components/DeterminismDebugOverlay.tsx', 'Synthetic server mirror, fallback entities and invented benchmark measurements must not execute in the product. Preserve source for a future real-readback adapter.'],
-  ['src/components/MariaDbAndGlbConsole.tsx', 'Operator connection/credential surface is not a player menu; retain original as non-executable reference until the host capability boundary is adapted.'],
+  ['src/components/DeterminismDebugOverlay.tsx', 'Synthetic server mirror, fallback entities and invented benchmarks are non-executable reference, not live diagnosis.'],
+  ['src/components/MariaDbAndGlbConsole.tsx', 'Operator/credential surface is not a player menu; requires the existing host capability boundary before execution.'],
 ]);
-const files = new Map();
-const boundaryImports = new Map();
-const metadata = [];
+const files = new Map(), boundaryImports = new Map(), metadata = [];
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const blob = value => createHash('sha1').update(`blob ${Buffer.byteLength(value)}\0`).update(value).digest('hex');
 function replaceExactly(text, old, replacement) {
   assert.equal(text.split(old).length - 1, 1, `AMBIGUOUS_SOURCE_ANCHOR: ${old.slice(0, 80)}`);
   return text.replace(old, replacement);
+}
+function replaceRange(text, start, end, replacement) {
+  assert.equal(text.split(start).length - 1, 1, `AMBIGUOUS_START: ${start}`);
+  assert.equal(text.split(end).length - 1, 1, `AMBIGUOUS_END: ${end}`);
+  const a = text.indexOf(start), b = text.indexOf(end, a + start.length);
+  assert(b > a, 'INVALID_SOURCE_RANGE');
+  return text.slice(0, a) + replacement + text.slice(b);
 }
 function replaceInitializer(text, variable, initializer) {
   const tree = ts.createSourceFile('view.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -40,22 +45,25 @@ function replaceInitializer(text, variable, initializer) {
   };
   visit(tree);
   assert.equal(found.length, 1, `AX1_HANDLER_NOT_UNIQUE: ${variable}`);
-  const node = found[0];
-  return text.slice(0, node.getStart(tree)) + initializer + text.slice(node.end);
+  return text.slice(0, found[0].getStart(tree)) + initializer + text.slice(found[0].end);
+}
+function addProps(text, definitions, destructured) {
+  text = replaceExactly(text, '  isOpen: boolean;', '  isOpen: boolean;\n' + definitions);
+  return replaceExactly(text, '  isOpen,', '  isOpen,\n' + destructured);
 }
 function sanitize(path, input) {
   let text = input;
   const adaptations = [];
   if (path === 'src/components/CraftingModal.tsx') {
-    text = replaceExactly(text, '  isOpen: boolean;', '  isOpen: boolean;\n  onCraftRequest?: (recipeId: string) => Promise<{ confirmed: boolean; message: string }>;\n  onGatherRequest?: (professionId: GatheringProfessionId) => Promise<{ confirmed: boolean; message: string }>;');
-    text = replaceExactly(text, '  isOpen,', '  isOpen,\n  onCraftRequest,\n  onGatherRequest,');
+    text = addProps(text,
+      '  onCraftRequest?: (recipeId: string) => Promise<{ confirmed: boolean; message: string }>;\n  onGatherRequest?: (professionId: GatheringProfessionId) => Promise<{ confirmed: boolean; message: string }>; ',
+      '  onCraftRequest,\n  onGatherRequest,');
     text = replaceInitializer(text, 'handleStartCraft', `async () => {
     if (!canCraft || isCrafting || !onCraftRequest) return;
     setIsCrafting(true); setCraftProgress(0); setFeedbackNotice(null);
     try {
       const result = await onCraftRequest(selectedRecipe.id);
-      setCraftProgress(result.confirmed ? 100 : 0);
-      setFeedbackNotice(result.message);
+      setCraftProgress(result.confirmed ? 100 : 0); setFeedbackNotice(result.message);
     } catch { setFeedbackNotice('Herstellung nicht bestätigt.'); }
     finally { setIsCrafting(false); }
   }`);
@@ -64,12 +72,11 @@ function sanitize(path, input) {
     setActiveGatheringId(professionId); setGatherProgress(0); setFeedbackNotice(null);
     try {
       const result = await onGatherRequest(professionId);
-      setGatherProgress(result.confirmed ? 100 : 0);
-      setFeedbackNotice(result.message);
+      setGatherProgress(result.confirmed ? 100 : 0); setFeedbackNotice(result.message);
     } catch { setFeedbackNotice('Sammeln nicht bestätigt.'); }
     finally { setActiveGatheringId(null); }
   }`);
-    adaptations.push('Only handler bodies and request props changed: no client XP/reward/depletion/clock/RNG. JSX is unchanged.');
+    adaptations.push('Only request props/handlers changed: no local crafting XP, reward, depletion, clock or RNG; original JSX retained.');
   }
   if (path === 'src/components/CharacterModal.tsx') {
     text = replaceExactly(text, '  onEquipSkill?: (slotIndex: number, skill: ClassSkill) => void;', '  onEquipSkill?: (slotIndex: number, skill: ClassSkill) => Promise<{ success: boolean; message: string }>;');
@@ -80,20 +87,72 @@ function sanitize(path, input) {
       setFeedbackMessage({ text: result.message, isError: !result.success });
     } catch { setFeedbackMessage({ text: 'Skill-Zuweisung nicht bestätigt.', isError: true }); }
   }`);
-    for (const attr of ['strength', 'agility', 'intelligence', 'defense']) {
-      text = replaceExactly(text, `stats.attributes?.${attr} || 10`, `stats.attributes?.${attr} ?? '—'`);
-    }
-    adaptations.push('Await actual hotbar result; replace fabricated attribute=10 fallbacks. Structure/styles unchanged.');
+    for (const attr of ['strength', 'agility', 'intelligence', 'defense']) text = replaceExactly(text, `stats.attributes?.${attr} || 10`, `stats.attributes?.${attr} ?? '—'`);
+    adaptations.push('Await actual skill assignment; remove fabricated attribute=10 fallbacks. Original layout/styles retained.');
   }
-  assert(!/\bMath\s*\.\s*random\s*\(|\bDate\s*\.\s*now\s*\(/.test(text), `AMBIENT_RANDOM_OR_CLOCK: ${path}`);
+  if (path === 'src/components/DungeonFinderModal.tsx') {
+    text = addProps(text,
+      "  confirmedQueue?: DungeonQueueState;\n  onQueueRequest?: (dungeonId: string, role: 'tank' | 'healer' | 'dps') => Promise<void>;\n  onLeaveQueueRequest?: () => Promise<void>;\n  onRequestError?: (message: string) => void;",
+      '  confirmedQueue,\n  onQueueRequest,\n  onLeaveQueueRequest,\n  onRequestError,');
+    text = replaceExactly(text, '  onEnterDungeon: (dungeon: DungeonDefinition, rewardXP: number, rewardGold: number) => void;', '  onEnterDungeon: (dungeon: DungeonDefinition) => Promise<boolean>;');
+    text = replaceRange(text, '  const [queueState, setQueueState] =', '  if (!isOpen) return null;', `  // Queue membership and elapsed time come only from the confirmed group readback.
+  const queueState: DungeonQueueState = confirmedQueue ?? {
+    dungeonId: null, selectedRole: 'dps', status: 'idle', queueStartTime: null,
+    elapsedSeconds: 0, matchedParty: { tank: null, healer: null, dps: [] },
+  };
+
+`);
+    text = replaceInitializer(text, 'handleStartQueue', `async () => {
+    if (levelTooLow || !confirmedQueue || !onQueueRequest) return;
+    try { await onQueueRequest(selectedDungeon.id, selectedRole); }
+    catch { onRequestError?.('Gruppensuche nicht bestätigt.'); }
+  }`);
+    text = replaceInitializer(text, 'handleLeaveQueue', `async () => {
+    if (!onLeaveQueueRequest) return;
+    try { await onLeaveQueueRequest(); }
+    catch { onRequestError?.('Verlassen der Gruppensuche nicht bestätigt.'); }
+  }`);
+    text = replaceInitializer(text, 'handleAcceptDungeon', `async () => {
+    try { if (await onEnterDungeon(selectedDungeon)) onClose(); }
+    catch { onRequestError?.('Dungeon-Eintritt nicht bestätigt.'); }
+  }`);
+    text = replaceExactly(text, 'disabled={levelTooLow}', 'disabled={levelTooLow || !confirmedQueue || !onQueueRequest}');
+    text = replaceExactly(text, ' (Durchschnitt: 00:08)', '');
+    adaptations.push('Original dungeon UI; remove fabricated timed party matching/rewards and average wait; controlled server queue + confirmed entry callbacks.');
+  }
+  if (path === 'src/components/WorldMapModal.tsx') {
+    text = addProps(text, '  logicalNowMs?: number;', '  logicalNowMs,');
+    text = replaceExactly(text, '  worldBosses = INITIAL_WORLD_BOSSES,', '  worldBosses = [],');
+    text = replaceExactly(text, '  const [now, setNow] = useState<number>(Date.now());', '  const now = logicalNowMs ?? 0;');
+    text = replaceRange(text, '  // Ticker for live boss countdown timers', '  useEffect(() => {\n    if (!isOpen) return;\n    if (chunkManager)', '');
+    text = replaceExactly(text, "    if (!timestamp) return 'Noch nicht bezwungen';", "    if (logicalNowMs === undefined) return 'Zeit nicht bestätigt';\n    if (!timestamp) return 'Noch nicht bezwungen';");
+    adaptations.push('Original atlas; external logical time only, no local boss countdown timer or assumed initial boss state.');
+  }
+  if (path === 'src/components/NPCEconomyModal.tsx') {
+    text = addProps(text,
+      "  onMarketRequest?: (request: { kind: 'sell-item' | 'buyback' | 'buy' | 'sell'; hubId: string; itemId?: string; recordId?: string; commodityId?: number; quantity?: number }) => Promise<{ confirmed: boolean; message: string }>;",
+      '  onMarketRequest,');
+    for (const [name, params, body] of [
+      ['handleSellInventoryItem', 'itemToSell: RPGItem', "kind: 'sell-item', itemId: itemToSell.id"],
+      ['handleBuybackItem', 'record: SoldBuybackItem', "kind: 'buyback', recordId: record.id"],
+      ['handleBuy', 'commodityId: number', "kind: 'buy', commodityId, quantity: tradeQuantity"],
+      ['handleSell', 'commodityId: number', "kind: 'sell', commodityId, quantity: tradeQuantity"],
+    ]) text = replaceInitializer(text, name, `async (${params}) => {
+    if (!onMarketRequest) { onShowMessage('Marktaktion benötigt eine bestätigte Serververbindung.'); return; }
+    try { const result = await onMarketRequest({ hubId: selectedHubId, ${body} }); onShowMessage(result.message); }
+    catch { onShowMessage('Marktaktion nicht bestätigt.'); }
+  }`);
+    text = replaceRange(text, '  // Force re-render periodically while open to reflect live economy ticks', '  if (!isOpen || !economy) return null;', '  // Parent re-renders from confirmed economy readbacks; no local tick timer.\n\n');
+    adaptations.push('Original market UI; trade/buyback requests replace local inventory/gold/receipt writes; readback-driven updates.');
+  }
+  const forbidden = /\bMath\s*\.\s*random\s*\(|\bDate\s*\.\s*now\s*\(/;
+  assert(!forbidden.test(text), `AMBIENT_RANDOM_OR_CLOCK: ${path}`);
   return { text, adaptations };
 }
 function findFile(root, stem) {
   for (const suffix of ['', '.ts', '.tsx', '.js', '.mjs', '/index.ts', '/index.tsx']) {
     const p = resolve(root, stem + suffix);
-    if (existsSync(p)) {
-      try { readFileSync(p); return p; } catch {}
-    }
+    if (existsSync(p)) { try { readFileSync(p); return p; } catch {} }
   }
   return null;
 }
@@ -106,16 +165,14 @@ function stage(sourcePath) {
   const { text, adaptations } = sanitize(sourcePath, input);
   files.set(sourcePath, text);
   metadata.push({ sourcePath, sourceBlob: blob(input), sourceSha256: sha256(input), importedSha256: sha256(text), adaptations });
-  const info = ts.preProcessFile(text, true, true);
-  for (const { fileName } of info.importedFiles) {
+  for (const { fileName } of ts.preProcessFile(text, true, true).importedFiles) {
     if (!fileName.startsWith('.')) continue;
     const upstreamFile = findFile(dirname(resolve(sourceRoot, sourcePath)), fileName);
     assert(upstreamFile, `UPSTREAM_IMPORT_MISSING: ${sourcePath} -> ${fileName}`);
     const repoPath = relative(sourceRoot, upstreamFile).split(sep).join('/');
     assert(!repoPath.startsWith('..'), 'SOURCE_PATH_ESCAPE');
-    if (repoPath.startsWith('src/components/') || repoPath.startsWith('src/data/') || repoPath.startsWith('src/types/') || repoPath === 'src/types.ts') {
-      stage(repoPath);
-    } else {
+    if (repoPath.startsWith('src/components/') || repoPath.startsWith('src/data/') || repoPath.startsWith('src/types/') || repoPath === 'src/types.ts') stage(repoPath);
+    else {
       const hostPath = resolve(hostEngineRoot, repoPath.slice(4));
       assert(existsSync(hostPath), `HOST_BOUNDARY_MODULE_MISSING: ${repoPath}`);
       const shimPath = resolve(destination, repoPath.slice(4));
@@ -125,20 +182,25 @@ function stage(sourcePath) {
     }
   }
 }
+// Bounded source audit is diagnostic, not product evidence.
+for (const path of components.filter(p => !referenceOnly.has(p))) {
+  const text = readFileSync(resolve(sourceRoot, path), 'utf8');
+  const lines = text.split('\n');
+  const candidates = lines.flatMap((line, i) => /Math\.random|Date\.now|setInterval|setTimeout|executePlayer|acceptQuest|completeQuest|onPlayerGoldChange\(/.test(line) ? [{ line: i + 1, text: line.trim() }] : []);
+  if (candidates.length) console.log('AX1_SOURCE_BOUNDARY_AUDIT', JSON.stringify({ path, candidates }));
+}
 for (const component of components) if (!referenceOnly.has(component)) stage(component);
 for (const [path, text] of [...files, ...boundaryImports]) {
   const output = resolve(destination, path.slice(4));
   assert(output.startsWith(destination + sep), 'DESTINATION_PATH_ESCAPE');
-  mkdirSync(dirname(output), { recursive: true });
-  writeFileSync(output, text);
+  mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, text);
 }
 const opsReferences = [];
 for (const [path, reason] of referenceOnly) {
   const input = readFileSync(resolve(sourceRoot, path), 'utf8');
   assert.equal(blob(input), git('rev-parse', `${REVISION}:${path}`));
   const output = resolve(destination, 'reference-only', path.slice(4) + '.txt');
-  mkdirSync(dirname(output), { recursive: true });
-  writeFileSync(output, input);
+  mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, input);
   opsReferences.push({ sourcePath: path, sourceBlob: blob(input), sourceSha256: sha256(input), reason, executable: false });
 }
 metadata.sort((a, b) => a.sourcePath < b.sourcePath ? -1 : a.sourcePath > b.sourcePath ? 1 : 0);
