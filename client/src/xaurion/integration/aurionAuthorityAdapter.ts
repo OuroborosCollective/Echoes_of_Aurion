@@ -1,6 +1,8 @@
 import type { MMOEngine } from "../core/MMOEngine";
 import type { CharacterClassId } from "../types";
+import { ZONE_RESOURCE_READBACK_EVENT, type ConfirmedZoneResourceReadback } from "@/lib/zoneResourceReadback";
 import { attachAurionWorldCore, type AurionWorldContext } from "./aurionWorldCore";
+import { ResourceNodeProjection } from "./ResourceNodeProjection";
 import { attachAx1ZoneProjection } from "./zoneCombatBridge";
 
 export type AurionPlayerClass="vanguard"|"seer"|"warden";
@@ -35,8 +37,18 @@ export function bindAurionAuthorityProjection(engine:MMOEngine,handlers:{request
   const reject={success:false,message:"Server gameplay authority is required for this action."} as const;
   const worldCore=attachAurionWorldCore(engine,worldContext);
   const detachZoneProjection=attachAx1ZoneProjection(engine);
+  const resourceNodes=new ResourceNodeProjection(engine.scene,(x,z)=>engine.landscape.chunkManager.getElevationAt(x,z));
+  const onResourceReadback=(event:Event)=>{
+    try{
+      const detail=(event as CustomEvent<ConfirmedZoneResourceReadback>).detail;
+      resourceNodes.apply(detail.resources,detail.tick);
+    }catch(error){
+      engine.onRuntimeError?.(error);
+    }
+  };
+  window.addEventListener(ZONE_RESOURCE_READBACK_EVENT,onResourceReadback);
   const baseStop=engine.stop.bind(engine);let stopped=false;
-  engine.stop=()=>{if(!stopped){stopped=true;detachZoneProjection();worldCore.stop();}baseStop();};
+  engine.stop=()=>{if(!stopped){stopped=true;window.removeEventListener(ZONE_RESOURCE_READBACK_EVENT,onResourceReadback);resourceNodes.dispose();detachZoneProjection();worldCore.stop();}baseStop();};
 
   // A production-assigned GLB may replace AX1's procedural player only when it
   // has a real rig and an actually moving attack clip. Idle/Walk/Run may use the
