@@ -4,6 +4,7 @@ import { ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import type { ConfirmedZoneMob } from "@shared/zoneMobContract";
 import type { ConfirmedZoneCombatant, ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import type { ConfirmedZoneResourceSnapshot } from "@shared/zoneResourceContract";
+import type { ConfirmedZoneTelegraphEvent } from "@shared/zoneTelegraphContract";
 import { isAx1BladeSkillId, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 
 export const zoneIdSchema=z.literal("observatory_threshold");
@@ -23,7 +24,7 @@ export type ZonePresence={entityId:string;userId:number;position:ZonePosition;la
 export type ZoneWelcome={type:"welcome";protocolVersion:typeof ZONE_PROTOCOL_VERSION;connectionId:string;selfEntityId:string;zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[];resources:ConfirmedZoneResourceSnapshot};
 export type ZoneSnapshot={type:"snapshot";zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[];resources:ConfirmedZoneResourceSnapshot};
 export type ZoneReject={type:"reject";code:"INVALID_MESSAGE"|"STALE_CLIENT_SEQUENCE"|"UNSUPPORTED_ZONE_COMMAND"|"PROTOCOL_VERSION_UNSUPPORTED"|"INVALID_COMBAT_TARGET"|"COMBAT_TARGET_OUT_OF_RANGE"|"COMBATANT_DEAD"|"INVALID_COMBAT_SKILL"|"COMBAT_SKILL_COOLDOWN"};
-export type ZoneServerMessage=ZoneWelcome|ZoneSnapshot|ZoneReject|ConfirmedZoneCombatEvent;
+export type ZoneServerMessage=ZoneWelcome|ZoneSnapshot|ZoneReject|ConfirmedZoneCombatEvent|ConfirmedZoneTelegraphEvent;
 export function createZoneTicket():string{return `aurion_zone_${randomBytes(32).toString("base64url")}`;}
 export function digestZoneTicket(ticket:string):string{return createHash("sha256").update(ticket).digest("hex");}
 export function parseZoneHello(value:unknown):ZoneHello|null{const parsed=zoneHelloSchema.safeParse(value);return parsed.success?parsed.data:null;}
