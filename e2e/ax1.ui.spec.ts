@@ -157,28 +157,49 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await page.screenshot({ path: info.outputPath(`${viewport.name}-starter-paperdoll.png`) });
       await dialog.getByRole("button", { name: "Inventar schließen", exact: true }).click();
 
+      // Character is now the original AX1 stats/mastery surface. It must not
+      // grow old Aurion role-skill or hotbar controls back into this boundary.
       await hud.getByRole("button", { name: "Charakter", exact: true }).click();
-      await expect(dialog.getByText("Dein klassenloser Weg durch Aurion", { exact: true })).toBeVisible();
+      await expect(dialog).toHaveAttribute("aria-label", "Charakter & Skills");
+      await expect(dialog.getByRole("button", { name: "Stats", exact: true })).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Mastery", exact: true })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Vorhut|Seher|Hüter/ })).toHaveCount(0);
-      await expect(dialog.getByText("Bestätigte Waffenpfade", { exact: true })).toBeVisible();
-      await expect(dialog.getByText("Bestätigte Skills", { exact: true })).toBeVisible();
-      await dialog.getByLabel("Heilendes Licht", { exact: true }).click();
-      await confirmed();
-      await expect(dialog.getByLabel("Heilendes Licht", { exact: true })).toBeChecked();
+      await expect(dialog.getByText("Attribute warten auf einen bestätigten Aurion-Readback.", { exact: true })).toBeVisible();
+      await expect(dialog.getByLabel(/Heilendes Licht/)).toHaveCount(0);
+      await expect(dialog.getByLabel("Skillplatz 1", { exact: true })).toHaveCount(0);
+      await dialog.getByRole("button", { name: "Mastery", exact: true }).click();
+      await page.screenshot({ path: info.outputPath(`${viewport.name}-character-mastery.png`) });
+      await dialog.getByRole("button", { name: "Charakter schließen", exact: true }).click();
+
+      // Healer qualification remains server-authoritative, but belongs to the
+      // dedicated group surface rather than the AX1 character/mastery menu.
+      await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
+      await expect(dialog.getByRole("heading", { name: "Gruppenexpedition", exact: true })).toBeVisible({ timeout: 15_000 });
+      const healingSkill = dialog.getByLabel(/Heilendes Licht/);
+      await healingSkill.click();
+      await expect(healingSkill).toBeChecked({ timeout: 15_000 });
       const group = await rpc<any>(page, "groups.read");
       expect(group.player.skills).toContain("mending_light");
       expect(group.qualification.roles).toContain("healer");
+      await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible({ timeout: 15_000 });
+
       const [profile] = await pool.query<RowDataPacket[]>("SELECT selectedClass FROM playerProfiles WHERE userId=?", [userId]);
       const [legacyEquipment] = await pool.query<RowDataPacket[]>("SELECT * FROM aurionEquipmentSlots WHERE userId=?", [userId]);
       const [starterState] = await pool.query<RowDataPacket[]>("SELECT status FROM aurionAx1StarterEquipmentStates WHERE userId=?", [userId]);
       expect(profile[0].selectedClass).toBe("unbound");
       expect(legacyEquipment).toHaveLength(0);
       expect(starterState[0].status).toBe("equipped");
+
+      // Hotbar mutation is still server-confirmed, but now exercised through
+      // the dedicated AX1 controls/skill-book surface.
+      await hud.locator(".ax1-utility-actions").getByRole("button", { name: "Steuerung & Skills", exact: true }).click();
+      await expect(dialog.getByRole("heading", { name: "Steuerung, Skills & Automatik", exact: true })).toBeVisible();
       await dialog.getByLabel("Skillplatz 1", { exact: true }).selectOption("9");
       await confirmed();
       await expect(dialog.getByLabel("Skillplatz 1", { exact: true })).toHaveValue("9");
       await page.screenshot({ path: info.outputPath(`${viewport.name}-skills.png`) });
-      await dialog.getByRole("button", { name: "Charakter schließen", exact: true }).click();
+      await dialog.getByRole("button", { name: "Steuerung schließen", exact: true }).click();
 
       await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
