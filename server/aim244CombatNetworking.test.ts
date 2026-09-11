@@ -67,18 +67,19 @@ describe("AIM-244 server-authoritative -ax1 combat/networking", () => {
     expect(next.position.y).toBeCloseTo(1.9019, 4);
   });
 
-  it("keeps legacy encounter compatibility isolated while zone v4 combat stays server-bound and non-predictive", () => {
+  it("keeps legacy encounter compatibility isolated while zone v5 combat and resource state stay server-bound and non-predictive", () => {
     expect(damageForMcpAction("attack")).toBe(17);
     expect(damageForMcpAction("skill_9")).toBe(43);
     const gameplay = read("server/gameplayProtocol.ts");
     const zone = read("client/src/lib/zoneMovement.ts");
     const routers = read("server/routers.ts");
     expect(gameplay).toContain('import { ax1DamageForAction } from "./ax1CombatAuthority"');
-    expect(zone).toContain("no HP, position, loot or quest outcome is predicted locally");
+    expect(zone).toContain("no HP, position, loot, resource depletion or quest outcome is predicted locally");
     expect(zone).toContain('type:"attack"');
     expect(zone).toContain("targetEntityId");
     expect(zone).toContain("ConfirmedZoneCombatEvent");
     expect(zone).toContain("combatants");
+    expect(zone).toContain("resources");
     expect(routers).toContain("ctx.user.id");
     expect(routers).toContain("issueZoneConnectionTicket");
     expect(routers).not.toContain("query.playerId");
