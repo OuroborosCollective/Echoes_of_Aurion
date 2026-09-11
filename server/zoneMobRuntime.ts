@@ -17,6 +17,7 @@ import { worldNatureCollision } from "./worldNatureCollision";
 
 export const MOB_COLLISION_SUBSTEP_MAX_MM = WASD_MOB_COLLISION_SUBSTEP_MAX_MM;
 export { mobCollisionSubsteps };
+const NO_FROZEN_MOBS: ReadonlySet<string> = new Set<string>();
 
 function sameMob(left: ConfirmedZoneMob, right: ConfirmedZoneMob): boolean {
   return (
@@ -54,17 +55,23 @@ export class ZoneMobRuntime {
     this.orderedEntityIds = Array.from(this.states.keys()).sort();
   }
 
-  tick(presences: readonly ConfirmedZonePresence[], tick: number): boolean {
+  tick(
+    presences: readonly ConfirmedZonePresence[],
+    tick: number,
+    frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS
+  ): boolean {
     let changed = false;
     for (const entityId of this.orderedEntityIds) {
       const current = this.states.get(entityId)!,
         before = publicMobSnapshot(current);
-      const next = resolveMobFsmTick({
-        current,
-        presences,
-        tick,
-        resolveMovement: resolveMobCollisionMovement,
-      });
+      const next = frozenEntityIds.has(entityId)
+        ? current
+        : resolveMobFsmTick({
+            current,
+            presences,
+            tick,
+            resolveMovement: resolveMobCollisionMovement,
+          });
       this.states.set(entityId, next);
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }

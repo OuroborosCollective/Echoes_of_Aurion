@@ -277,3 +277,13 @@ Evidence: Exact pre-memory head `adcf8d4ff6535acbe110b6264b0f490e9e079d7f`; bran
 Learned: AX1-first can preserve visible game behavior while proven mutation paths move into confirmed Aurion/WASD contracts; multi-input crafting can stay atomic and replay-safe without deleting AX1 content.
 Open: Full AX1 menu depth, complete skill 1–9 semantics/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain separate work.
 Next safe step: Continue those items from merged `main` in a fresh branch; do not claim production completeness from this checkpoint.
+
+### 2026-09-11 — AX1 286c575 ecology/resource/telegraph checkpoint
+Status: VERIFIED repository checkpoint; production completeness not claimed.
+Task: Selectively integrate AX1 revision `286c575d3d0050ffa77b794d5b7a7e24858acee8` while preserving AX1-first presentation/content and Aurion-confirmed gameplay truth.
+Decisions: Import deterministic biome/resource content, resource-node/tool metadata, armor-mastery identities and AX1 telegraph presentation; reject source-side `Math.random()`, `Date.now()`, local depletion/respawn/reward/mastery writes and the unchecked 1.45x mastery curve. Zone v5 resources/readbacks are server-confirmed; telegraph rendering is tick-bound and presentation-only.
+Touched surfaces: AX1 ecology/armor/telegraph contracts, Zone v5 resource runtime/readback, ResourceNodeProjection, tick-bound telegraph presenter/transport and deterministic mob telegraph policy.
+Evidence: Exact pre-memory head `5afeab94ea7f9962c16af642813643ccbf783d38`; branch 0 behind `main`; 8/8 exact-head workflows succeeded including Aurion Local Test Pack, AIM-262, Android, AIM-291, AIM-290, AIM-259, AIM-240 and AIM-292; no reviews or unresolved threads.
+Learned: AX1 content/presentation can become richer without restoring client authority when state is source-revision-bound and driven only by confirmed logical ticks/readbacks.
+Open: Server mob attacks are still impact-only; elite/boss pre-cast windup is not wired. Persisted gathering rewards, armor-mastery progression, full AX1 menu depth, complete skills 1–9/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain open.
+Next safe step: Merge this checkpoint, then continue the remaining product corridors on a fresh branch without claiming full AX1 integration completeness.

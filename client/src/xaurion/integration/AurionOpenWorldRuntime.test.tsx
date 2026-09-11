@@ -3,6 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
 import type { ZonePresenceSnapshot } from "@/lib/zoneMovement";
 
+const confirmedResources = {
+  contractVersion: 1,
+  contentSourceRevision: "286c575d3d0050ffa77b794d5b7a7e24858acee8",
+  revision: 1,
+  nodes: [
+    { nodeId: "node_beast_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_copper_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_cotton_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_iron_1", remaining: 5, depleted: false, respawnAtTick: null },
+    { nodeId: "node_steel_1", remaining: 5, depleted: false, respawnAtTick: null },
+  ],
+} as const;
+
 const fixture = vi.hoisted(() => {
   const selectedUrl = `/api/assets/glb/${"a".repeat(64)}.glb`;
   const makeEngine = () => ({
@@ -95,7 +108,7 @@ describe("open world session ownership", () => {
     try {
       render(<AurionOpenWorldRuntime />); await enter();
       act(() => fixture.tickets[0].onSuccess({ticket:"current-fixture"}));
-      const snapshot: ZonePresenceSnapshot={type:"snapshot",zoneId:"observatory_threshold",snapshotSeq:2,tick:95,presences:[{entityId:"player:1",userId:1,position:{x:0,z:-32300},lastAcceptedClientSeq:1}],mobs:[],combatants:[]};
+      const snapshot: ZonePresenceSnapshot={type:"snapshot",zoneId:"observatory_threshold",snapshotSeq:2,tick:95,presences:[{entityId:"player:1",userId:1,position:{x:0,z:-32300},lastAcceptedClientSeq:1}],mobs:[],combatants:[],resources:confirmedResources};
       act(() => fixture.snapshots[0](snapshot));
       expect(received).toEqual([{userId:1,position:{x:0,z:-32300}}]);
       expect(fixture.connections).toHaveLength(1);
@@ -124,8 +137,6 @@ describe("open world session ownership", () => {
       act(() => fixture.tickets[0].onSuccess({ ticket: "first-fixture" }));
       expect(fixture.connections).toHaveLength(1);
 
-      // A server-side handshake failure closes the socket with 1008 before welcome;
-      // ZoneMovementClient reports that transport state as rejected without a reject code.
       act(() => fixture.statuses[0]("rejected"));
       act(() => { vi.advanceTimersByTime(10_000); });
 
@@ -181,11 +192,11 @@ describe("open world session ownership", () => {
     expect(fixture.engines).toHaveLength(2);
     expect(fixture.tickets).toHaveLength(2);
     expect(JSON.parse(screen.getByTestId("renderer-evidence").textContent!)).toMatchObject({ worldSeed: "refreshed-world", epoch: 7, recoveryAttempt: 1, status: "awaiting_snapshot" });
-    act(() => oldSnapshot({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 2, tick: 95, presences: [{ entityId: "player:1", userId: 1, position: { x: 0, z: -32300 }, lastAcceptedClientSeq: 1 }], mobs: [], combatants: [] }));
+    act(() => oldSnapshot({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 2, tick: 95, presences: [{ entityId: "player:1", userId: 1, position: { x: 0, z: -32300 }, lastAcceptedClientSeq: 1 }], mobs: [], combatants: [], resources: confirmedResources }));
     expect(fixture.engines[1].start).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).toBeNull();
     act(() => fixture.tickets[1].onSuccess({ ticket: "after-loss" }));
-    act(() => fixture.snapshots[1]({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 3, tick: 96, presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: -32300 }, lastAcceptedClientSeq: 2 }], mobs: [], combatants: [] }));
+    act(() => fixture.snapshots[1]({ type: "snapshot", zoneId: "observatory_threshold", snapshotSeq: 3, tick: 96, presences: [{ entityId: "player:1", userId: 1, position: { x: 1000, z: -32300 }, lastAcceptedClientSeq: 2 }], mobs: [], combatants: [], resources: confirmedResources }));
     expect(fixture.engines[1].start).toHaveBeenCalledOnce();
     await act(async () => fixture.engines[1].onRuntimeError?.(new Error("WEBGPU_DEVICE_LOST")));
     expect(fixture.engines).toHaveLength(3);
