@@ -89,7 +89,7 @@ export function projectConfirmedAx1Character(player?: z.infer<typeof playerReadb
 }
 
 /** Thin authority adapter. The rendered surface itself is AX1. */
-export function CharacterModal({ isOpen, onClose, player, appearance: _appearance, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
+export function CharacterModal({ isOpen, onClose, player, appearance, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
   isOpen: boolean;
   onClose: () => void;
   player?: z.infer<typeof playerReadbackSchema>;
@@ -108,5 +108,6 @@ export function CharacterModal({ isOpen, onClose, player, appearance: _appearanc
     onClose={onClose}
     stats={projectConfirmedAx1Character(player)}
     currentClassId="knight"
+    appearance={appearance}
   />;
 }
