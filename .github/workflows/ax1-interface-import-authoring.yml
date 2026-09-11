@@ -1,0 +1,55 @@
+name: AX1 original interface authoring
+on:
+  push:
+    branches: [feat/ax1-original-interface-20260911]
+    paths:
+      - scripts/import-ax1-interface.mjs
+      - .github/workflows/ax1-interface-import-authoring.yml
+permissions:
+  contents: write
+jobs:
+  import-original-views:
+    if: github.repository == 'OuroborosCollective/Echoes_of_Aurion'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/-ax1
+          ref: 286c575d3d0050ffa77b794d5b7a7e24858acee8
+          path: .ax1-upstream-readonly
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Read project memory and bind authoring revision
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          cat Memory.md
+      - run: pnpm install --frozen-lockfile
+      - name: Import exact source views without upstream runtime writers
+        run: node scripts/import-ax1-interface.mjs .ax1-upstream-readonly .
+      - name: Publish only the original-view candidate to its isolated branch
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: |
+          set -eu
+          git add -- client/src/xaurion/ax1Interface
+          git diff --cached --name-only | while IFS= read -r path; do
+            case "$path" in client/src/xaurion/ax1Interface/*) ;; *) exit 1 ;; esac
+          done
+          if git diff --cached --quiet; then exit 0; fi
+          git fetch origin feat/ax1-original-interface-20260911
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+          git -c user.name='AX1 Source Import' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'feat(ax1): import complete original interface source with explicit authority adapters'
+          git push origin HEAD:refs/heads/feat/ax1-original-interface-20260911
+      - name: Authoring is not product acceptance
+        run: echo 'Imported source is a candidate only. No merge, deployment or runtime-green is performed here. PR typechecks, integration tests and actual browser parity remain required.'
