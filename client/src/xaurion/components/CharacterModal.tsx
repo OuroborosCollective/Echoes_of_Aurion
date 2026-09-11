@@ -5,7 +5,6 @@ import type { GroupReadmodel } from "@shared/groupInstanceProtocol";
 import { DEFAULT_WEAPON_MASTERIES } from "../data/mmorpgData";
 import type { PlayerStats, WeaponMastery, WeaponType } from "../types";
 import { Ax1CharacterModal, type Ax1VisiblePlayerStats } from "./Ax1CharacterModal";
-import type { ConfirmedCharacterAppearance } from "./Ax1CharacterPreview";
 
 const knownWeaponTypes = new Set<WeaponType>(Object.keys(DEFAULT_WEAPON_MASTERIES) as WeaponType[]);
 
@@ -89,11 +88,10 @@ export function projectConfirmedAx1Character(player?: z.infer<typeof playerReadb
 }
 
 /** Thin authority adapter. The rendered surface itself is AX1. */
-export function CharacterModal({ isOpen, onClose, player, appearance, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
+export function CharacterModal({ isOpen, onClose, player, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
   isOpen: boolean;
   onClose: () => void;
   player?: z.infer<typeof playerReadbackSchema>;
-  appearance?: ConfirmedCharacterAppearance | null;
   settings?: ControlSettings;
   uiPending: boolean;
   groupPending: boolean;
@@ -108,6 +106,5 @@ export function CharacterModal({ isOpen, onClose, player, appearance, settings: 
     onClose={onClose}
     stats={projectConfirmedAx1Character(player)}
     currentClassId="knight"
-    appearance={appearance}
   />;
 }
