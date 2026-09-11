@@ -46,7 +46,8 @@ import {
 } from "./wasdCombatProfileProtocol";
 
 export type ZoneCombatProfile = WasdZoneCombatProfile;
-export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile = WASD_DEFAULT_ZONE_COMBAT_PROFILE;
+export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile =
+  WASD_DEFAULT_ZONE_COMBAT_PROFILE;
 
 type PresencePeer = {
   connectionId: string;
@@ -100,6 +101,7 @@ export function integrateZoneMovement(
  */
 export class AuthoritativeMovementZone {
   private readonly peers = new Map<string, PresencePeer>();
+  private readonly peersByEntityId = new Map<string, PresencePeer>();
   private readonly mobRuntime = new ZoneMobRuntime();
   private readonly resourceRuntime = new ZoneResourceRuntime();
   private snapshotSeq = 0;
@@ -134,10 +136,11 @@ export class AuthoritativeMovementZone {
       throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
       this.peers.delete(previous.connectionId);
+      this.peersByEntityId.delete(`player:${previous.userId}`);
       previous.socket.close(1000, "superseded by authenticated reconnect");
     }
     const connectionId = makeZoneConnectionId();
-    this.peers.set(connectionId, {
+    const peer: PresencePeer = {
       connectionId,
       userId: values.userId,
       socket: values.socket,
@@ -152,7 +155,9 @@ export class AuthoritativeMovementZone {
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
-    });
+    };
+    this.peers.set(connectionId, peer);
+    this.peersByEntityId.set(`player:${values.userId}`, peer);
     this.sortedPeersDirty = true;
     const welcome: ZoneWelcome = {
       type: "welcome",
@@ -172,7 +177,10 @@ export class AuthoritativeMovementZone {
   }
 
   leave(connectionId: string): void {
-    if (!this.peers.delete(connectionId)) return;
+    const peer = this.peers.get(connectionId);
+    if (!peer) return;
+    this.peers.delete(connectionId);
+    this.peersByEntityId.delete(`player:${peer.userId}`);
     this.sortedPeersDirty = true;
     this.broadcastSnapshot();
   }
@@ -246,7 +254,8 @@ export class AuthoritativeMovementZone {
     if (result === "accepted")
       peer.skillCooldownUntilTick.set(
         skill.skillId,
-        this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
+        this.tickNumber +
+          Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
       );
     return result;
   }
@@ -332,17 +341,12 @@ export class AuthoritativeMovementZone {
       )
         continue;
 
-      let peer: PresencePeer | undefined = undefined;
-      for (const candidate of this.peers.values()) {
-        if (`player:${candidate.userId}` === mob.targetEntityId) {
-          peer = candidate;
-          break;
-        }
-      }
+      const peer = this.peersByEntityId.get(mob.targetEntityId);
 
       if (!peer || peer.health <= 0) continue;
       if (
-        mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed
+        mobDistance(mob.position, peer.position) >
+        mob.definition.attackRangeFixed
       )
         continue;
       const sequence = ++this.combatSequence,
