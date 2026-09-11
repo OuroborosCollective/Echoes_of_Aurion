@@ -5,8 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 
-// Authoring tool only. Never run upstream scripts, install upstream packages,
-// copy its engine, or publish to main. The output is reviewed and tested in a PR.
+// Authoring only: no upstream execution, no engine replacement, no main writes.
 const REVISION = '286c575d3d0050ffa77b794d5b7a7e24858acee8';
 const sourceRoot = resolve(process.argv[2] ?? '');
 const hostRoot = resolve(process.argv[3] ?? '.');
@@ -19,6 +18,10 @@ assert.equal(git('status', '--porcelain'), '', 'AX1_SOURCE_DIRTY');
 const tracked = git('ls-tree', '-r', '--name-only', REVISION, 'src').split('\n');
 const components = tracked.filter(p => p.startsWith('src/components/') && p.endsWith('.tsx')).sort();
 assert.equal(components.length, 19, 'AX1_COMPONENT_SET_CHANGED');
+const referenceOnly = new Map([
+  ['src/components/DeterminismDebugOverlay.tsx', 'Synthetic server mirror, fallback entities and invented benchmark measurements must not execute in the product. Preserve source for a future real-readback adapter.'],
+  ['src/components/MariaDbAndGlbConsole.tsx', 'Operator connection/credential surface is not a player menu; retain original as non-executable reference until the host capability boundary is adapted.'],
+]);
 const files = new Map();
 const boundaryImports = new Map();
 const metadata = [];
@@ -88,8 +91,8 @@ function sanitize(path, input) {
 function findFile(root, stem) {
   for (const suffix of ['', '.ts', '.tsx', '.js', '.mjs', '/index.ts', '/index.tsx']) {
     const p = resolve(root, stem + suffix);
-    if (existsSync(p) && !p.endsWith(sep)) {
-      try { if (readFileSync(p).length >= 0) return p; } catch {}
+    if (existsSync(p)) {
+      try { readFileSync(p); return p; } catch {}
     }
   }
   return null;
@@ -97,6 +100,7 @@ function findFile(root, stem) {
 function stage(sourcePath) {
   if (files.has(sourcePath)) return;
   assert(tracked.includes(sourcePath), `UNTRACKED_SOURCE: ${sourcePath}`);
+  assert(!referenceOnly.has(sourcePath), `PLAYER_IMPORTS_UNADAPTED_OPS_VIEW: ${sourcePath}`);
   const input = readFileSync(resolve(sourceRoot, sourcePath), 'utf8');
   assert.equal(blob(input), git('rev-parse', `${REVISION}:${sourcePath}`), 'AX1_BLOB_MISMATCH');
   const { text, adaptations } = sanitize(sourcePath, input);
@@ -105,8 +109,6 @@ function stage(sourcePath) {
   const info = ts.preProcessFile(text, true, true);
   for (const { fileName } of info.importedFiles) {
     if (!fileName.startsWith('.')) continue;
-    const imported = findFile(sourceRoot, resolve(dirname(sourcePath), fileName));
-    // Resolve against the absolute upstream directory, not process cwd.
     const upstreamFile = findFile(dirname(resolve(sourceRoot, sourcePath)), fileName);
     assert(upstreamFile, `UPSTREAM_IMPORT_MISSING: ${sourcePath} -> ${fileName}`);
     const repoPath = relative(sourceRoot, upstreamFile).split(sep).join('/');
@@ -123,13 +125,22 @@ function stage(sourcePath) {
     }
   }
 }
-for (const component of components) stage(component);
+for (const component of components) if (!referenceOnly.has(component)) stage(component);
 for (const [path, text] of [...files, ...boundaryImports]) {
   const output = resolve(destination, path.slice(4));
   assert(output.startsWith(destination + sep), 'DESTINATION_PATH_ESCAPE');
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, text);
 }
-metadata.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath, 'en'));
-writeFileSync(resolve(destination, 'SOURCE_MANIFEST.json'), JSON.stringify({ schemaVersion: 1, repository: 'OuroborosCollective/-ax1', sourceRevision: REVISION, sourceComponents: components, files: metadata, hostBoundaryReexports: [...boundaryImports.keys()].sort(), productParityProven: false }, null, 2) + '\n');
-console.log(JSON.stringify({ importedComponents: components.length, importedSourceFiles: files.size, hostBoundaryReexports: [...boundaryImports.keys()], manifestSha256: sha256(readFileSync(resolve(destination, 'SOURCE_MANIFEST.json'))), productParityProven: false }, null, 2));
+const opsReferences = [];
+for (const [path, reason] of referenceOnly) {
+  const input = readFileSync(resolve(sourceRoot, path), 'utf8');
+  assert.equal(blob(input), git('rev-parse', `${REVISION}:${path}`));
+  const output = resolve(destination, 'reference-only', path.slice(4) + '.txt');
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, input);
+  opsReferences.push({ sourcePath: path, sourceBlob: blob(input), sourceSha256: sha256(input), reason, executable: false });
+}
+metadata.sort((a, b) => a.sourcePath < b.sourcePath ? -1 : a.sourcePath > b.sourcePath ? 1 : 0);
+writeFileSync(resolve(destination, 'SOURCE_MANIFEST.json'), JSON.stringify({ schemaVersion: 1, repository: 'OuroborosCollective/-ax1', sourceRevision: REVISION, sourceComponents: components, files: metadata, hostBoundaryReexports: [...boundaryImports.keys()].sort(), opsReferences, productParityProven: false }, null, 2) + '\n');
+console.log(JSON.stringify({ originalPlayerComponents: components.length - referenceOnly.size, quarantinedOpsReferences: referenceOnly.size, importedSourceFiles: files.size, hostBoundaryReexports: [...boundaryImports.keys()], manifestSha256: sha256(readFileSync(resolve(destination, 'SOURCE_MANIFEST.json'))), productParityProven: false }, null, 2));
