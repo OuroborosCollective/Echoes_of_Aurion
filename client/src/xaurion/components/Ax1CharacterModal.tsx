@@ -3,12 +3,14 @@ import { X } from 'lucide-react';
 import type { CharacterAttributes, CharacterClassId, ClassSkill, MilestoneWeaponSkill, PlayerStats, WeaponMastery, WeaponType } from '../types';
 
 export type Ax1VisiblePlayerStats = PlayerStats & { prestigeTitle?: string };
+export type Ax1ConfirmedAppearanceEvidence = Readonly<{ displayName?: string; visibility?: string }>;
 
 interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   stats: Ax1VisiblePlayerStats;
   currentClassId: CharacterClassId;
+  appearance?: Ax1ConfirmedAppearanceEvidence | null;
   onAllocateStatPoint?: (attribute: keyof CharacterAttributes) => { success: boolean; message: string };
   onUnlockMilestoneSkill?: (skillId: string) => { success: boolean; message: string; skill?: MilestoneWeaponSkill };
   onEquipSkill?: (slotIndex: number, skill: ClassSkill) => void;
@@ -26,6 +28,7 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
   onClose,
   stats,
   currentClassId: _currentClassId,
+  appearance,
   onAllocateStatPoint,
   onUnlockMilestoneSkill,
   onEquipSkill,
@@ -59,7 +62,8 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
-      <div className="w-full max-w-3xl bg-[#11141a] border border-[#b8860b]/40 rounded-2xl p-5 sm:p-6 text-gray-200 shadow-[0_0_40px_rgba(184,134,11,0.2)] flex flex-col max-h-[90vh] overflow-hidden">
+      <div role="dialog" aria-label="Charakter & Skills" className="w-full max-w-3xl bg-[#11141a] border border-[#b8860b]/40 rounded-2xl p-5 sm:p-6 text-gray-200 shadow-[0_0_40px_rgba(184,134,11,0.2)] flex flex-col max-h-[90vh] overflow-hidden">
+        {appearance?.displayName && <div className="sr-only"><span data-testid="character-preview">{appearance.displayName}</span><span>Charaktermodell serverbestätigt · {appearance.visibility ?? 'confirmed'}</span></div>}
         <div className="flex items-center justify-between border-b border-gray-800 pb-4">
           <div>
             <h2 className="text-2xl font-bold text-[#fbbf24] uppercase tracking-wider">{stats.prestigeTitle || 'Aspirant'}</h2>
