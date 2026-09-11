@@ -12,7 +12,8 @@ export type Ax1ConfirmedTelegraphSpec = Readonly<{
   y: number;
   z: number;
   color: string;
-  castDurationMs: number;
+  startTick: number;
+  impactTick: number;
   angleRadians?: number;
   radius?: number;
   arcRadians?: number;
@@ -22,7 +23,6 @@ export type Ax1ConfirmedTelegraphSpec = Readonly<{
 
 type ActiveTelegraph = {
   spec: Ax1ConfirmedTelegraphSpec;
-  elapsedMs: number;
   outerMesh: THREE.Mesh;
   innerMesh: THREE.Mesh;
 };
@@ -31,17 +31,19 @@ type ActiveTelegraph = {
  * Presentation-only AX1 telegraph renderer.
  *
  * The caller must provide a server-confirmed identity/spec. This presenter never
- * decides damage, hit results, target state, timing authority or rewards. Local
- * frame delta is used only to animate already-confirmed presentation geometry.
+ * decides damage, hit results, target state, timing authority or rewards. Fill
+ * progress and expiry advance only from confirmed logical Zone ticks.
  */
 export class Ax1CombatTelegraphPresenter {
   private readonly active = new Map<string, ActiveTelegraph>();
+  private lastConfirmedTick = -1;
 
   public constructor(private readonly scene: THREE.Scene) {}
 
   public addConfirmed(spec: Ax1ConfirmedTelegraphSpec): void {
     if (this.active.has(spec.id)) return;
-    if (!Number.isFinite(spec.castDurationMs) || spec.castDurationMs <= 0) return;
+    if (!Number.isSafeInteger(spec.startTick) || spec.startTick < 0) return;
+    if (!Number.isSafeInteger(spec.impactTick) || spec.impactTick <= spec.startTick) return;
 
     const baseColor = new THREE.Color(spec.color);
     let outerGeometry: THREE.BufferGeometry;
@@ -94,19 +96,30 @@ export class Ax1CombatTelegraphPresenter {
     innerMesh.scale.set(0.02, 1, 0.02);
     this.scene.add(outerMesh);
     this.scene.add(innerMesh);
-    this.active.set(spec.id, { spec, elapsedMs: 0, outerMesh, innerMesh });
+    this.active.set(spec.id, { spec, outerMesh, innerMesh });
+
+    if (this.lastConfirmedTick >= 0) this.projectConfirmedTick(spec.id, this.lastConfirmedTick);
   }
 
-  public updatePresentation(deltaMs: number): void {
-    if (!Number.isFinite(deltaMs) || deltaMs <= 0) return;
+  public updateConfirmedTick(tick: number): void {
+    if (!Number.isSafeInteger(tick) || tick < 0) return;
+    if (tick < this.lastConfirmedTick) return;
+    this.lastConfirmedTick = tick;
+    for (const id of [...this.active.keys()]) this.projectConfirmedTick(id, tick);
+  }
 
-    for (const [id, entry] of this.active) {
-      entry.elapsedMs = Math.min(entry.spec.castDurationMs, entry.elapsedMs + deltaMs);
-      const progress = entry.elapsedMs / entry.spec.castDurationMs;
-      entry.innerMesh.scale.set(Math.max(0.02, progress), 1, Math.max(0.02, progress));
-      (entry.innerMesh.material as THREE.MeshBasicMaterial).opacity = 0.2 + 0.35 * progress;
-      if (entry.elapsedMs >= entry.spec.castDurationMs) this.remove(id);
+  private projectConfirmedTick(id: string, tick: number): void {
+    const entry = this.active.get(id);
+    if (!entry) return;
+    if (tick >= entry.spec.impactTick) {
+      this.remove(id);
+      return;
     }
+    const totalTicks = entry.spec.impactTick - entry.spec.startTick;
+    const elapsedTicks = Math.max(0, Math.min(totalTicks, tick - entry.spec.startTick));
+    const progress = elapsedTicks / totalTicks;
+    entry.innerMesh.scale.set(Math.max(0.02, progress), 1, Math.max(0.02, progress));
+    (entry.innerMesh.material as THREE.MeshBasicMaterial).opacity = 0.2 + 0.35 * progress;
   }
 
   public remove(id: string): void {
