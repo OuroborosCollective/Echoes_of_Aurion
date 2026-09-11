@@ -19,6 +19,7 @@ const guardedProductionPaths = [
   "shared/ax1ResourceEcologyProtocol.ts",
   "shared/ax1ArmorMasteryProtocol.ts",
   "client/src/xaurion/core/Ax1CombatTelegraphPresenter.ts",
+  "client/src/xaurion/integration/ResourceNodeProjection.ts",
 ] as const;
 
 function forbiddenImplicitCalls(path: string): string[] {
@@ -101,5 +102,20 @@ describe("AX1 286c575 selective integration contract", () => {
     ];
     expect(forbiddenTruthWriters.filter(token => source.includes(token))).toEqual([]);
     expect(source).toContain("Presentation-only AX1 telegraph renderer");
+  });
+
+  it("keeps confirmed resource-node rendering presentation-only", () => {
+    const source = readFileSync("client/src/xaurion/integration/ResourceNodeProjection.ts", "utf8");
+    const forbiddenTruthWriters = [
+      "applyConfirmedConsumption(",
+      ".inventory.push(",
+      "gainArmorMasteryXp(",
+      "gainWeaponMasteryXp(",
+      "rewardGold",
+      "rewardXp",
+      "respawnTimeSeconds",
+    ];
+    expect(forbiddenTruthWriters.filter(token => source.includes(token))).toEqual([]);
+    expect(source).toContain("Presentation-only projection of the confirmed Zone v5 resource readback");
   });
 });
