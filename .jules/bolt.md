@@ -9,3 +9,6 @@
 ## 2026-09-09 - [High-Frequency Server Ticks and Garbage Collection]
 **Learning:** Using dynamic array allocations (e.g., `Array.from()`), spread syntax, and `.sort()` on every server tick causes massive garbage collection latency, significantly harming performance in high-frequency game loops like `server/zoneRuntime.ts` and `server/zoneMobRuntime.ts`.
 **Action:** Always cache sorted arrays and use dirty flags to recalculate sorting only when items are added or removed. Use iterative `for...of` loops and pre-allocated arrays where possible, avoiding inline allocations on hot code paths.
+## 2026-09-11 - [O(N) to O(1) Map Lookups in High-Frequency Loops]
+**Learning:** Found that (N)$ linear entity lookups using `peers.values()` inside high-frequency zone tick loops (like `resolveMobAttacks()`) create unnecessary iteration overhead on every tick.
+**Action:** Replaced linear iterations with (1)$ Map lookups populated dynamically during `join()` and `leave()` lifecycle events, which completely bypasses the need for filtering over all peers on every combat tick.

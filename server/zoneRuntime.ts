@@ -100,6 +100,7 @@ export function integrateZoneMovement(
  */
 export class AuthoritativeMovementZone {
   private readonly peers = new Map<string, PresencePeer>();
+  private readonly peersByEntityId = new Map<string, PresencePeer>();
   private readonly mobRuntime = new ZoneMobRuntime();
   private readonly resourceRuntime = new ZoneResourceRuntime();
   private snapshotSeq = 0;
@@ -108,7 +109,7 @@ export class AuthoritativeMovementZone {
   private inputAcknowledgementPending = false;
   private movedLastTick = false;
   private sortedPeers: PresencePeer[] = [];
-  private sortedPeersByEntityId: PresencePeer[] = [];
+  private sortedPeersByEntityIdArray: PresencePeer[] = [];
   private sortedPeersDirty = false;
 
   constructor(readonly zoneId: ZoneId) {}
@@ -123,21 +124,16 @@ export class AuthoritativeMovementZone {
     const profile = values.combatProfile ?? DEFAULT_ZONE_COMBAT_PROFILE;
     if (!validWasdZoneCombatProfile(profile))
       throw new Error("ZONE_COMBAT_PROFILE_INVALID");
-    let previous: PresencePeer | undefined;
-    for (const peer of this.peers.values()) {
-      if (peer.userId === values.userId) {
-        previous = peer;
-        break;
-      }
-    }
+    const previous = this.peersByEntityId.get(`player:${values.userId}`);
     if (!previous && this.peers.size >= ZONE_MAX_PRESENCES)
       throw new Error("ZONE_CAPACITY_REACHED");
     if (previous) {
       this.peers.delete(previous.connectionId);
+      this.peersByEntityId.delete(`player:${previous.userId}`);
       previous.socket.close(1000, "superseded by authenticated reconnect");
     }
     const connectionId = makeZoneConnectionId();
-    this.peers.set(connectionId, {
+    const newPeer: PresencePeer = {
       connectionId,
       userId: values.userId,
       socket: values.socket,
@@ -152,7 +148,9 @@ export class AuthoritativeMovementZone {
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
-    });
+    };
+    this.peers.set(connectionId, newPeer);
+    this.peersByEntityId.set(`player:${values.userId}`, newPeer);
     this.sortedPeersDirty = true;
     const welcome: ZoneWelcome = {
       type: "welcome",
@@ -172,7 +170,10 @@ export class AuthoritativeMovementZone {
   }
 
   leave(connectionId: string): void {
-    if (!this.peers.delete(connectionId)) return;
+    const peer = this.peers.get(connectionId);
+    if (!peer) return;
+    this.peers.delete(connectionId);
+    this.peersByEntityId.delete(`player:${peer.userId}`);
     this.sortedPeersDirty = true;
     this.broadcastSnapshot();
   }
@@ -332,13 +333,7 @@ export class AuthoritativeMovementZone {
       )
         continue;
 
-      let peer: PresencePeer | undefined = undefined;
-      for (const candidate of this.peers.values()) {
-        if (`player:${candidate.userId}` === mob.targetEntityId) {
-          peer = candidate;
-          break;
-        }
-      }
+      const peer = this.peersByEntityId.get(mob.targetEntityId);
 
       if (!peer || peer.health <= 0) continue;
       if (
@@ -418,7 +413,7 @@ export class AuthoritativeMovementZone {
       this.sortedPeers = Array.from(this.peers.values()).sort((a, b) =>
         compareBinary(a.connectionId, b.connectionId)
       );
-      this.sortedPeersByEntityId = Array.from(this.peers.values()).sort(
+      this.sortedPeersByEntityIdArray = Array.from(this.peers.values()).sort(
         (a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`)
       );
       this.sortedPeersDirty = false;
@@ -428,7 +423,7 @@ export class AuthoritativeMovementZone {
   private presences(): ZonePresence[] {
     this.refreshPeerOrder();
     const out: ZonePresence[] = [];
-    for (const peer of this.sortedPeersByEntityId) {
+    for (const peer of this.sortedPeersByEntityIdArray) {
       out.push({
         entityId: `player:${peer.userId}`,
         userId: peer.userId,
@@ -447,10 +442,10 @@ export class AuthoritativeMovementZone {
     let mobIndex = 0;
 
     while (
-      peerIndex < this.sortedPeersByEntityId.length ||
+      peerIndex < this.sortedPeersByEntityIdArray.length ||
       mobIndex < mobs.length
     ) {
-      const peer = this.sortedPeersByEntityId[peerIndex];
+      const peer = this.sortedPeersByEntityIdArray[peerIndex];
       const mob = mobs[mobIndex];
       const peerId = peer ? `player:${peer.userId}` : null;
       const mobId = mob ? mob.definition.entityId : null;
