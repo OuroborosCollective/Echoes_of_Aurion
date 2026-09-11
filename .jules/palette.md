@@ -1,1 +1,4 @@
 # UX Learning: Disabled States\n\n- Added `disabled:cursor-not-allowed` (Tailwind) to disabled buttons (like in `Home.tsx` and `Community.tsx`) to provide better visual affordance that an action is currently unavailable.\n- Added `title` attributes on community buttons when they are disabled to give screen readers and hover states contextual explanations (e.g. 'Nur für angemeldete Explorer verfügbar').\n- Kept changes small and utilized existing Tailwind CSS classes, without adding new dependencies or custom CSS.
+## 2024-05-24 - Tactile Feedback Optimization
+**Learning:** Interactive elements on the Aurion Portal (like the Community grid and action buttons) benefit from tactile feedback using Tailwind classes.
+**Action:** Applied `group hover:-translate-y-0.5 active:scale-95 transition-all` to buttons and links, and `transition-transform group-hover:scale-110` to inner icons to improve UX.
