@@ -20,6 +20,7 @@ const guardedProductionPaths = [
   "shared/ax1ArmorMasteryProtocol.ts",
   "client/src/xaurion/core/Ax1CombatTelegraphPresenter.ts",
   "client/src/xaurion/integration/ResourceNodeProjection.ts",
+  "client/src/lib/zoneResourceReadback.ts",
 ] as const;
 
 function forbiddenImplicitCalls(path: string): string[] {
@@ -117,5 +118,17 @@ describe("AX1 286c575 selective integration contract", () => {
     ];
     expect(forbiddenTruthWriters.filter(token => source.includes(token))).toEqual([]);
     expect(source).toContain("Presentation-only projection of the confirmed Zone v5 resource readback");
+  });
+
+  it("wires only validated zone v5 resources into the AX1 presentation lifecycle", () => {
+    const transport = readFileSync("client/src/lib/zoneMovement.ts", "utf8");
+    const adapter = readFileSync("client/src/xaurion/integration/aurionAuthorityAdapter.ts", "utf8");
+    expect(transport).toContain("validConfirmedZoneResourceSnapshot(message.resources,message.tick as number)");
+    expect(transport).toContain("emitConfirmedZoneResourceReadback(message.resources,message.tick)");
+    expect(adapter).toContain("new ResourceNodeProjection(engine.scene");
+    expect(adapter).toContain("window.addEventListener(ZONE_RESOURCE_READBACK_EVENT,onResourceReadback)");
+    expect(adapter).toContain("window.removeEventListener(ZONE_RESOURCE_READBACK_EVENT,onResourceReadback)");
+    expect(adapter).toContain("resourceNodes.dispose()");
+    expect(adapter).not.toContain("applyConfirmedConsumption(");
   });
 });
