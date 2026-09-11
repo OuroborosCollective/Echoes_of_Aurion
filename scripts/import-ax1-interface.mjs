@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 
-// Authoring only. Upstream code is read, not executed. No host engine or DB replacement.
+// Authoring only: source views are copied, never source engines, DBs or scripts.
 const REVISION = '286c575d3d0050ffa77b794d5b7a7e24858acee8';
 const sourceRoot = resolve(process.argv[2] ?? '');
 const hostRoot = resolve(process.argv[3] ?? '.');
@@ -20,7 +20,7 @@ const components = tracked.filter(p => p.startsWith('src/components/') && p.ends
 assert.equal(components.length, 19, 'AX1_COMPONENT_SET_CHANGED');
 const referenceOnly = new Map([
   ['src/components/DeterminismDebugOverlay.tsx', 'Synthetic server mirror, fallback entities and invented benchmarks are non-executable reference, not live diagnosis.'],
-  ['src/components/MariaDbAndGlbConsole.tsx', 'Operator/credential surface is not a player menu; requires the existing host capability boundary before execution.'],
+  ['src/components/MariaDbAndGlbConsole.tsx', 'Operator/credential surface requires the existing host capability boundary before execution.'],
 ]);
 const files = new Map(), boundaryImports = new Map(), metadata = [];
 const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -37,8 +37,7 @@ function replaceRange(text, start, end, replacement) {
   return text.slice(0, a) + replacement + text.slice(b);
 }
 function replaceInitializer(text, variable, initializer) {
-  const tree = ts.createSourceFile('view.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const found = [];
+  const tree = ts.createSourceFile('view.tsx', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX), found = [];
   const visit = node => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === variable && node.initializer) found.push(node.initializer);
     ts.forEachChild(node, visit);
@@ -55,70 +54,69 @@ function sanitize(path, input) {
   let text = input;
   const adaptations = [];
   if (path === 'src/components/CraftingModal.tsx') {
-    text = addProps(text,
-      '  onCraftRequest?: (recipeId: string) => Promise<{ confirmed: boolean; message: string }>;\n  onGatherRequest?: (professionId: GatheringProfessionId) => Promise<{ confirmed: boolean; message: string }>; ',
-      '  onCraftRequest,\n  onGatherRequest,');
+    text = addProps(text, '  onCraftRequest?: (recipeId: string) => Promise<{ confirmed: boolean; message: string }>;\n  onGatherRequest?: (professionId: GatheringProfessionId) => Promise<{ confirmed: boolean; message: string }>;', '  onCraftRequest,\n  onGatherRequest,');
     text = replaceInitializer(text, 'handleStartCraft', `async () => {
     if (!canCraft || isCrafting || !onCraftRequest) return;
     setIsCrafting(true); setCraftProgress(0); setFeedbackNotice(null);
-    try {
-      const result = await onCraftRequest(selectedRecipe.id);
-      setCraftProgress(result.confirmed ? 100 : 0); setFeedbackNotice(result.message);
-    } catch { setFeedbackNotice('Herstellung nicht bestätigt.'); }
+    try { const r = await onCraftRequest(selectedRecipe.id); setCraftProgress(r.confirmed ? 100 : 0); setFeedbackNotice(r.message); }
+    catch { setFeedbackNotice('Herstellung nicht bestätigt.'); }
     finally { setIsCrafting(false); }
   }`);
     text = replaceInitializer(text, 'handleStartGathering', `async (professionId: GatheringProfessionId) => {
     if (activeGatheringId || !onGatherRequest) return;
     setActiveGatheringId(professionId); setGatherProgress(0); setFeedbackNotice(null);
-    try {
-      const result = await onGatherRequest(professionId);
-      setGatherProgress(result.confirmed ? 100 : 0); setFeedbackNotice(result.message);
-    } catch { setFeedbackNotice('Sammeln nicht bestätigt.'); }
+    try { const r = await onGatherRequest(professionId); setGatherProgress(r.confirmed ? 100 : 0); setFeedbackNotice(r.message); }
+    catch { setFeedbackNotice('Sammeln nicht bestätigt.'); }
     finally { setActiveGatheringId(null); }
   }`);
-    adaptations.push('Only request props/handlers changed: no local crafting XP, reward, depletion, clock or RNG; original JSX retained.');
+    adaptations.push('Request handlers replace client crafting/gathering XP, yield, clock and RNG. Original JSX retained.');
   }
   if (path === 'src/components/CharacterModal.tsx') {
     text = replaceExactly(text, '  onEquipSkill?: (slotIndex: number, skill: ClassSkill) => void;', '  onEquipSkill?: (slotIndex: number, skill: ClassSkill) => Promise<{ success: boolean; message: string }>;');
     text = replaceInitializer(text, 'handleEquipToHotbar', `async (skill: ClassSkill) => {
     if (!onEquipSkill) return;
-    try {
-      const result = await onEquipSkill(0, skill);
-      setFeedbackMessage({ text: result.message, isError: !result.success });
-    } catch { setFeedbackMessage({ text: 'Skill-Zuweisung nicht bestätigt.', isError: true }); }
+    try { const r = await onEquipSkill(0, skill); setFeedbackMessage({ text: r.message, isError: !r.success }); }
+    catch { setFeedbackMessage({ text: 'Skill-Zuweisung nicht bestätigt.', isError: true }); }
   }`);
     for (const attr of ['strength', 'agility', 'intelligence', 'defense']) text = replaceExactly(text, `stats.attributes?.${attr} || 10`, `stats.attributes?.${attr} ?? '—'`);
-    adaptations.push('Await actual skill assignment; remove fabricated attribute=10 fallbacks. Original layout/styles retained.');
+    adaptations.push('Await actual skill assignment; no fabricated attributes. Original layout/styles retained.');
   }
   if (path === 'src/components/DungeonFinderModal.tsx') {
-    text = addProps(text,
-      "  confirmedQueue?: DungeonQueueState;\n  onQueueRequest?: (dungeonId: string, role: 'tank' | 'healer' | 'dps') => Promise<void>;\n  onLeaveQueueRequest?: () => Promise<void>;\n  onRequestError?: (message: string) => void;",
-      '  confirmedQueue,\n  onQueueRequest,\n  onLeaveQueueRequest,\n  onRequestError,');
+    text = addProps(text, "  confirmedQueue?: DungeonQueueState;\n  onQueueRequest?: (dungeonId: string, role: 'tank' | 'healer' | 'dps') => Promise<void>;\n  onLeaveQueueRequest?: () => Promise<void>;\n  onRequestError?: (message: string) => void;", '  confirmedQueue,\n  onQueueRequest,\n  onLeaveQueueRequest,\n  onRequestError,');
     text = replaceExactly(text, '  onEnterDungeon: (dungeon: DungeonDefinition, rewardXP: number, rewardGold: number) => void;', '  onEnterDungeon: (dungeon: DungeonDefinition) => Promise<boolean>;');
-    text = replaceRange(text, '  const [queueState, setQueueState] =', '  if (!isOpen) return null;', `  // Queue membership and elapsed time come only from the confirmed group readback.
-  const queueState: DungeonQueueState = confirmedQueue ?? {
-    dungeonId: null, selectedRole: 'dps', status: 'idle', queueStartTime: null,
-    elapsedSeconds: 0, matchedParty: { tank: null, healer: null, dps: [] },
-  };
-
-`);
-    text = replaceInitializer(text, 'handleStartQueue', `async () => {
-    if (levelTooLow || !confirmedQueue || !onQueueRequest) return;
-    try { await onQueueRequest(selectedDungeon.id, selectedRole); }
-    catch { onRequestError?.('Gruppensuche nicht bestätigt.'); }
-  }`);
-    text = replaceInitializer(text, 'handleLeaveQueue', `async () => {
-    if (!onLeaveQueueRequest) return;
-    try { await onLeaveQueueRequest(); }
-    catch { onRequestError?.('Verlassen der Gruppensuche nicht bestätigt.'); }
-  }`);
-    text = replaceInitializer(text, 'handleAcceptDungeon', `async () => {
-    try { if (await onEnterDungeon(selectedDungeon)) onClose(); }
-    catch { onRequestError?.('Dungeon-Eintritt nicht bestätigt.'); }
-  }`);
+    text = replaceRange(text, '  const [queueState, setQueueState] =', '  if (!isOpen) return null;', "  const queueState: DungeonQueueState = confirmedQueue ?? { dungeonId: null, selectedRole: 'dps', status: 'idle', queueStartTime: null, elapsedSeconds: 0, matchedParty: { tank: null, healer: null, dps: [] } };\n\n");
+    text = replaceInitializer(text, 'handleStartQueue', "async () => { if (levelTooLow || !confirmedQueue || !onQueueRequest) return; try { await onQueueRequest(selectedDungeon.id, selectedRole); } catch { onRequestError?.('Gruppensuche nicht bestätigt.'); } }");
+    text = replaceInitializer(text, 'handleLeaveQueue', "async () => { if (!onLeaveQueueRequest) return; try { await onLeaveQueueRequest(); } catch { onRequestError?.('Verlassen der Gruppensuche nicht bestätigt.'); } }");
+    text = replaceInitializer(text, 'handleAcceptDungeon', "async () => { try { if (await onEnterDungeon(selectedDungeon)) onClose(); } catch { onRequestError?.('Dungeon-Eintritt nicht bestätigt.'); } }");
     text = replaceExactly(text, 'disabled={levelTooLow}', 'disabled={levelTooLow || !confirmedQueue || !onQueueRequest}');
     text = replaceExactly(text, ' (Durchschnitt: 00:08)', '');
-    adaptations.push('Original dungeon UI; remove fabricated timed party matching/rewards and average wait; controlled server queue + confirmed entry callbacks.');
+    adaptations.push('Original finder with controlled server queue/entry; no fake timed party, reward or average wait.');
+  }
+  if (path === 'src/components/GuildManagementModal.tsx') {
+    text = addProps(text, "  confirmedGuild?: GuildData | null;\n  controlledLands?: ControlledTerritorySummary[];\n  onGuildRequest?: (request: { kind: 'deposit-gold' | 'withdraw-gold' | 'deposit-item' | 'withdraw-item' | 'consolidate-kingdom' | 'upgrade-building' | 'donate-resources'; amount?: number; itemId?: string; buildingId?: string; kingdomName?: string; chunkKeys?: string[]; capitalChunkKey?: string; resources?: Record<string, number> }) => Promise<{ confirmed: boolean; message: string }>;", '  confirmedGuild,\n  controlledLands = [],\n  onGuildRequest,');
+    text = replaceExactly(text, '  const [guild, setGuild] = useState<GuildData>(() => createDefaultGuildData());', '  const guild = confirmedGuild;');
+    text = replaceExactly(text, '  const [loading, setLoading] = useState(false);', '  const loading = confirmedGuild === undefined;');
+    text = replaceRange(text, '  // Load guild data on open', '  // Auto-select first 6', '  // Ownership/territories are supplied by the confirmed host readback.\n  const availableControlledLands = controlledLands;\n\n');
+    const actions = [
+      ['handleDepositGold', 'amountToDeposit: number', "kind: 'deposit-gold', amount: amountToDeposit", 'if (!Number.isSafeInteger(amountToDeposit) || amountToDeposit <= 0) return;'],
+      ['handleWithdrawGold', 'amountToWithdraw: number', "kind: 'withdraw-gold', amount: amountToWithdraw", 'if (!Number.isSafeInteger(amountToWithdraw) || amountToWithdraw <= 0) return;'],
+      ['handleDepositItem', '', "kind: 'deposit-item', itemId: selectedInventoryItem.id", 'if (!selectedInventoryItem) return;'],
+      ['handleWithdrawItem', 'bankItem: GuildBankItem', "kind: 'withdraw-item', itemId: bankItem.id", ''],
+      ['handleConsolidateKingdom', '', "kind: 'consolidate-kingdom', kingdomName: customKingdomName.trim(), chunkKeys: Array.from(selectedChunkKeys).sort(), capitalChunkKey: capitalKey", ''],
+      ['handleUpgradeBuilding', 'buildingId: string', "kind: 'upgrade-building', buildingId", ''],
+      ['handleDonateResources', '', "kind: 'donate-resources', resources: { wood: 100, stone: 80, aether: 50, crops: 60 }", ''],
+    ];
+    for (const [name, params, payload, guard] of actions) text = replaceInitializer(text, name, `async (${params}) => {
+    ${guard}
+    if (!onGuildRequest || !guild) { setActionNotice('Gildenaktion benötigt einen bestätigten Serverpfad.'); return; }
+    if (isConsolidating) return;
+    setIsConsolidating(true);
+    try { const r = await onGuildRequest({ ${payload} }); setActionNotice(r.message); }
+    catch { setActionNotice('Gildenaktion nicht bestätigt.'); }
+    finally { setIsConsolidating(false); }
+  }`);
+    text = replaceExactly(text, '  if (!isOpen) return null;', '  if (!isOpen || !guild) return null;');
+    adaptations.push('Original guild UI; controlled actual membership/territories, request-only mutations. No default guild, fabricated Hero, local fallback treasury/inventory or clock IDs.');
   }
   if (path === 'src/components/WorldMapModal.tsx') {
     text = addProps(text, '  logicalNowMs?: number;', '  logicalNowMs,');
@@ -126,12 +124,10 @@ function sanitize(path, input) {
     text = replaceExactly(text, '  const [now, setNow] = useState<number>(Date.now());', '  const now = logicalNowMs ?? 0;');
     text = replaceRange(text, '  // Ticker for live boss countdown timers', '  useEffect(() => {\n    if (!isOpen) return;\n    if (chunkManager)', '');
     text = replaceExactly(text, "    if (!timestamp) return 'Noch nicht bezwungen';", "    if (logicalNowMs === undefined) return 'Zeit nicht bestätigt';\n    if (!timestamp) return 'Noch nicht bezwungen';");
-    adaptations.push('Original atlas; external logical time only, no local boss countdown timer or assumed initial boss state.');
+    adaptations.push('Original atlas; externally supplied logical time and boss state, not client clock/timer.');
   }
   if (path === 'src/components/NPCEconomyModal.tsx') {
-    text = addProps(text,
-      "  onMarketRequest?: (request: { kind: 'sell-item' | 'buyback' | 'buy' | 'sell'; hubId: string; itemId?: string; recordId?: string; commodityId?: number; quantity?: number }) => Promise<{ confirmed: boolean; message: string }>;",
-      '  onMarketRequest,');
+    text = addProps(text, "  logicalNowMs?: number;\n  onMarketRequest?: (request: { kind: 'sell-item' | 'buyback' | 'buy' | 'sell' | 'fulfill-quest'; hubId: string; itemId?: string; recordId?: string; commodityId?: number; quantity?: number; questId?: string }) => Promise<{ confirmed: boolean; message: string }>;", '  logicalNowMs,\n  onMarketRequest,');
     for (const [name, params, body] of [
       ['handleSellInventoryItem', 'itemToSell: RPGItem', "kind: 'sell-item', itemId: itemToSell.id"],
       ['handleBuybackItem', 'record: SoldBuybackItem', "kind: 'buyback', recordId: record.id"],
@@ -139,14 +135,19 @@ function sanitize(path, input) {
       ['handleSell', 'commodityId: number', "kind: 'sell', commodityId, quantity: tradeQuantity"],
     ]) text = replaceInitializer(text, name, `async (${params}) => {
     if (!onMarketRequest) { onShowMessage('Marktaktion benötigt eine bestätigte Serververbindung.'); return; }
-    try { const result = await onMarketRequest({ hubId: selectedHubId, ${body} }); onShowMessage(result.message); }
+    try { const r = await onMarketRequest({ hubId: selectedHubId, ${body} }); onShowMessage(r.message); }
     catch { onShowMessage('Marktaktion nicht bestätigt.'); }
   }`);
-    text = replaceRange(text, '  // Force re-render periodically while open to reflect live economy ticks', '  if (!isOpen || !economy) return null;', '  // Parent re-renders from confirmed economy readbacks; no local tick timer.\n\n');
-    adaptations.push('Original market UI; trade/buyback requests replace local inventory/gold/receipt writes; readback-driven updates.');
+    text = replaceRange(text, '  // Force re-render periodically while open to reflect live economy ticks', '  if (!isOpen || !economy) return null;', '  // Render only from the externally confirmed economy readback.\n\n');
+    text = replaceExactly(text, 'const timeAgoMin = Math.max(0, Math.floor((Date.now() - record.soldAtTimestamp) / 60000));', "const timeAgoMin = logicalNowMs === undefined ? '—' : Math.max(0, Math.floor((logicalNowMs - record.soldAtTimestamp) / 60000));");
+    text = replaceRange(text, 'onClick={() => {\n                              // Fulfill procurement quest', '                            }}', `onClick={async () => {
+                              if (!onMarketRequest) { onShowMessage('Lieferung benötigt eine bestätigte Serververbindung.'); return; }
+                              try { const r = await onMarketRequest({ kind: 'fulfill-quest', hubId: selectedHubId, questId: quest.id }); onShowMessage(r.message); }
+                              catch { onShowMessage('Lieferung nicht bestätigt.'); }
+`);
+    adaptations.push('Original market UI; request-only trades/buyback/quest fulfillment, external clock; no client stock/gold/receipt/quest mutation.');
   }
-  const forbidden = /\bMath\s*\.\s*random\s*\(|\bDate\s*\.\s*now\s*\(/;
-  assert(!forbidden.test(text), `AMBIENT_RANDOM_OR_CLOCK: ${path}`);
+  assert(!/\bMath\s*\.\s*random\s*\(|\bDate\s*\.\s*now\s*\(/.test(text), `AMBIENT_RANDOM_OR_CLOCK: ${path}`);
   return { text, adaptations };
 }
 function findFile(root, stem) {
@@ -182,11 +183,8 @@ function stage(sourcePath) {
     }
   }
 }
-// Bounded source audit is diagnostic, not product evidence.
 for (const path of components.filter(p => !referenceOnly.has(p))) {
-  const text = readFileSync(resolve(sourceRoot, path), 'utf8');
-  const lines = text.split('\n');
-  const candidates = lines.flatMap((line, i) => /Math\.random|Date\.now|setInterval|setTimeout|executePlayer|acceptQuest|completeQuest|onPlayerGoldChange\(/.test(line) ? [{ line: i + 1, text: line.trim() }] : []);
+  const candidates = readFileSync(resolve(sourceRoot, path), 'utf8').split('\n').flatMap((line, i) => /Math\.random|Date\.now|setInterval|setTimeout|executePlayer|acceptQuest|completeQuest|onPlayerGoldChange\(/.test(line) ? [{ line: i + 1, text: line.trim() }] : []);
   if (candidates.length) console.log('AX1_SOURCE_BOUNDARY_AUDIT', JSON.stringify({ path, candidates }));
 }
 for (const component of components) if (!referenceOnly.has(component)) stage(component);
