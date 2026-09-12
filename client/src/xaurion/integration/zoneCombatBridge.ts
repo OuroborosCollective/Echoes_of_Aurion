@@ -2,6 +2,7 @@ import type { ConfirmedZoneCombatEvent, ConfirmedZoneCombatant } from "@shared/z
 import type { ConfirmedZoneMob } from "@shared/zoneMobContract";
 import { ax1BladeSkillById, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
+import { CONFIRMED_COMBAT_PRESENTATION_EVENT, projectConfirmedCombatPresentation } from "./combatPresentation";
 
 export type ZoneActionOutcome={confirmed:boolean;completed:boolean;message:string};
 type PendingAttack={expectedSkillId:Ax1BladeSkillId|null;resolve:(value:ZoneActionOutcome)=>void;timer:number};
@@ -36,6 +37,8 @@ export function acceptConfirmedZoneCombat(event:ConfirmedZoneCombatEvent):void{
   if(!selfEntityId)return;
   const ownAttack=event.attackerEntityId===selfEntityId;
   const ownHit=event.defenderEntityId===selfEntityId;
+  const presentation=projectConfirmedCombatPresentation(event,selfEntityId);
+  if(presentation)window.dispatchEvent(new CustomEvent(CONFIRMED_COMBAT_PRESENTATION_EVENT,{detail:presentation}));
   if(engine){
     if(ownAttack){
       if(event.damage>0)engine.addFloatingText(`${event.crit?"CRIT ":""}-${event.damage}`,engine.targetMob?.x??engine.player.position.x,engine.player.position.y+1.8,event.crit?"#facc15":"#f8fafc","lg");
@@ -80,7 +83,7 @@ export function requestZoneSkill(skillId:Ax1BladeSkillId):Promise<ZoneActionOutc
   const target=currentTarget();
   if(!target)return Promise.resolve({confirmed:false,completed:false,message:"Kein angreifbares Ziel in der Nähe."});
   return new Promise(resolve=>{
-    const timer=window.setTimeout(()=>{if(pending?.resolve===resolve)clearPending({confirmed:false,completed:false,message:"Keine Skill-Bestätigung erhalten; Zustand wird nicht geraten."});},3_000);
+    const timer=window.setTimeout(()=>{if(pending?.resolve===resolve)clearPending({confirmed:false,completed:false,message:"Keine Kampfbestätigung erhalten; Zustand wird nicht geraten."});},3_000);
     pending={expectedSkillId:skillId,resolve,timer};
     if(!transport!.skill(skillId,target.id))clearPending({confirmed:false,completed:false,message:"Skill konnte nicht an die Zone gesendet werden."});
   });
