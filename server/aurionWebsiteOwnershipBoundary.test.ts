@@ -77,11 +77,12 @@ describe("Aurion website ownership boundary", () => {
     }
   });
 
-  it("ships the canonical ownership contract with WASD as sole gameplay owner", () => {
+  it("ships AX1 as the canonical game with WASD execution and Aurion custody", () => {
     const contract = source("ARCHITECTURE_OWNERSHIP.md");
     expect(contract).toContain("Aurion = Host + Website + Account + Community + DB + Evidence");
-    expect(contract).toContain("AX1    = Spielruntime + UI + Renderer + Input");
-    expect(contract).toContain("WASD   = Gameplayregeln + deterministische Simulation");
+    expect(contract).toContain("AX1    = kanonisches Hauptspiel + Gameplayvertrag + Content + Runtime/UI");
+    expect(contract).toContain("WASD   = ausführende Gameplaylogik + deterministische Simulation");
+    expect(contract).toContain("WASD ist die ausführende Logik- und Simulationsschicht des AX1-Hauptspiels");
     expect(contract).toContain("Aurion Website, Admin UI, Admin MCP, Datenbankhelper, Worker oder Service Cells dürfen nicht");
   });
 });
