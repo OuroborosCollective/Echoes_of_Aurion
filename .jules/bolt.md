@@ -9,3 +9,7 @@
 ## 2026-09-09 - [High-Frequency Server Ticks and Garbage Collection]
 **Learning:** Using dynamic array allocations (e.g., `Array.from()`), spread syntax, and `.sort()` on every server tick causes massive garbage collection latency, significantly harming performance in high-frequency game loops like `server/zoneRuntime.ts` and `server/zoneMobRuntime.ts`.
 **Action:** Always cache sorted arrays and use dirty flags to recalculate sorting only when items are added or removed. Use iterative `for...of` loops and pre-allocated arrays where possible, avoiding inline allocations on hot code paths.
+
+## 2024-05-18 - Transition from O(N) iterative lookups to O(1) Map lookups for resolving entities in high-frequency loops
+**Learning:** High-frequency game loops experience performance degradation and garbage collection latency when using O(N) array iterations to locate entities on every tick.
+**Action:** Implemented O(1) Map lookups (`peersByEntityId`) populated dynamically during lifecycle events (join/leave) instead of searching via array iteration, particularly beneficial in `AuthoritativeMovementZone.resolveMobAttacks()` and `AuthoritativeMovementZone.join()`.
