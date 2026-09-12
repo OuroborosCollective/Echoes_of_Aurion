@@ -141,6 +141,25 @@ describe("server-backed Aurion HUD", () => {
     finally { window.removeEventListener("aurion:open-community", handler); }
   });
 
+  it("exposes the complete AX1 menu family and preserves the research lane", () => {
+    fixtures.player.data = confirmed; fixtures.ui.data = uiState;
+    const companion = vi.fn(); window.addEventListener("aurion:open-companion", companion);
+    try {
+      mount();
+      fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
+      for (const [button, dialog] of [["Disziplinen & Pfade", "Disziplinen & Pfade"], ["Gilde öffnen", "Gildenverwaltung"], ["Ökonomie", "Lebendige Ökonomie"], ["NPC-Dialoge", "Dialoge & Beziehungen"], ["Territorium", "Territorium & Politik"], ["Homestead", "Homestead Builder"], ["Determinismus & Evidence", "Determinismus & Evidence"]] as const) {
+        fireEvent.click(screen.getByRole("button", { name: button }));
+        expect(screen.getByRole("dialog", { name: dialog })).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: `${dialog} schließen` }));
+        fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
+      }
+      fireEvent.click(screen.getByRole("button", { name: "Research & Learning" }));
+      expect(screen.getByRole("dialog", { name: "Research & Learning" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Companion-Lane öffnen" }));
+      expect(companion).toHaveBeenCalledTimes(1);
+    } finally { window.removeEventListener("aurion:open-companion", companion); }
+  });
+
   it("keeps equip blocked through mutation and the subsequent server readback", async () => {
     const item = { id: "fixture_item", version: "legacy", name: "Aurionspeer", definition: "aurion_spear", levelExact: "1", quality: "normal", slot: "main_hand", status: "owned", stats: {}, receiptId: "fixture_receipt" };
     fixtures.player.data = confirmed;
