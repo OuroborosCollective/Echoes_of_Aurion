@@ -175,7 +175,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       // Healer qualification remains server-authoritative, but belongs to the
       // dedicated group surface rather than the AX1 character/mastery menu.
       await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
-      await expect(dialog.getByRole("heading", { name: "Gruppenexpedition", exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(dialog.getByRole("heading", { name: "Party & Adventuring Squad", exact: true })).toBeVisible({ timeout: 15_000 });
       const healingSkill = dialog.getByLabel(/Heilendes Licht/);
       await healingSkill.click();
       await expect(healingSkill).toBeChecked({ timeout: 15_000 });
