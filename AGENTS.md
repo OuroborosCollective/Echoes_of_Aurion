@@ -7,14 +7,14 @@ Before editing gameplay, UI, persistence, routes, tests, issues or documentation
 The binding ownership is:
 
 - **Aurion** = website, auth/account, community, forum, community events, asset/ops governance, MariaDB persistence, transport, receipts and read-only readmodels.
-- **AX1** = `/play`, renderer, HUD, input, animation and visual/content projection.
-- **WASD** = every gameplay rule and simulation decision.
+- **AX1** = das kanonische Hauptspiel: Gameplay-Identität und -Verträge, `/play`, Welt-/Contentstruktur, Renderer, HUD, Input und Animation.
+- **WASD** = die ausführende deterministische Logik- und Simulationsschicht für AX1.
 
 For migration, schema, reconciliation, production-readback, or Aurion↔WASD cross-repository evidence work, also read `docs/agent-knowledgebase/skill-archive/aurion-migration-ops/SKILL.md` and use its guard/receipt contracts instead of ad-hoc SQL, SSH, or unverifiable workflow shortcuts.
 
-Do not add, preserve as canonical, or test as desired behavior any Aurion-owned combat, quest, progression, loot, crafting, economy, group/dungeon, NPC/mob, world/chunk, housing or guild/kingdom rule.
+Do not add, preserve as canonical, or test as desired behavior any Aurion-owned combat, quest, progression, loot, crafting, economy, group/dungeon, NPC/mob, world/chunk, housing or guild/kingdom rule. Those domains belong to the AX1 game contract and are executed by WASD logic.
 
-If legacy Aurion code currently implements such a rule, treat it as migration debt. On touch, move/bind the rule to WASD, keep AX1 as runtime/UI, and reduce Aurion to transport/persistence/readmodel.
+If legacy Aurion code currently implements such a rule, treat it as migration debt. On touch, bind the feature to AX1's game contract and WASD execution, and reduce Aurion to transport/persistence/readmodel.
 
 Aurion website/Admin/MCP must never mutate gameplay truth. Gameplay data shown on account/community pages is read-only.
 
