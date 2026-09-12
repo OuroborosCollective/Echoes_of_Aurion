@@ -43,7 +43,7 @@ export function acceptConfirmedZoneCombat(event:ConfirmedZoneCombatEvent):void{
     if(ownAttack){
       if(event.damage>0)engine.addFloatingText(`${event.crit?"CRIT ":""}-${event.damage}`,engine.targetMob?.x??engine.player.position.x,engine.player.position.y+1.8,event.crit?"#facc15":"#f8fafc","lg");
       const command=event.skillId?ax1BladeSkillById(event.skillId)?.command??"F":"F";
-      window.dispatchEvent(new CustomEvent("aurion:authoritative-action",{detail:{sessionId:`zone:${selfEntityId}`,sequence:event.sequence,command,skillId:event.skillId,skillSourceRevision:event.skillSourceRevision,source:"human",damage:event.damage,bossHp:event.defenderHealth,completed:event.killed}}));
+      window.dispatchEvent(new CustomEvent("aurion:authoritative-action",{detail:{sessionId:`zone:${selfEntityId}`,sequence:event.sequence,command,skillId:event.skillId,skillSourceRevision:event.skillSourceRevision,source:"human",damage:event.damage,crit:event.crit,bossHp:event.defenderHealth,completed:event.killed}}));
     }
     if(ownHit&&event.damage>0)engine.addFloatingText(`-${event.damage}`,engine.player.position.x,engine.player.position.y+1.9,"#ef4444","lg");
   }
