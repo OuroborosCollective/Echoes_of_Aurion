@@ -287,3 +287,13 @@ Evidence: Exact pre-memory head `5afeab94ea7f9962c16af642813643ccbf783d38`; bran
 Learned: AX1 content/presentation can become richer without restoring client authority when state is source-revision-bound and driven only by confirmed logical ticks/readbacks.
 Open: Server mob attacks are still impact-only; elite/boss pre-cast windup is not wired. Persisted gathering rewards, armor-mastery progression, full AX1 menu depth, complete skills 1–9/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain open.
 Next safe step: Merge this checkpoint, then continue the remaining product corridors on a fresh branch without claiming full AX1 integration completeness.
+
+### 2026-09-12 — Motion-safe community feedback
+Status: VERIFIED repository candidate
+Task: Consolidate duplicate Community tactile-feedback PRs without moving disabled controls or overriding reduced-motion preferences.
+Decisions: Keep the canonical #311 surface; gate transforms behind `motion-safe`; retain existing authentication and navigation authority.
+Touched surfaces: Community cards and focused navigation regressions.
+Evidence: Exact pre-memory head `7bd61138824b4fed15be180664de7afe0233bb92`; 5/5 focused tests, TypeScript, diff-check, Local Test Pack and Android Build succeeded.
+Learned: Tactile feedback is safe only when accessibility preferences and disabled semantics remain authoritative.
+Open: Production deployment is not implied.
+Next safe step: Re-run exact-head checks after this append before merge.
