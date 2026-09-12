@@ -45,4 +45,10 @@ describe("AX1 full visible cutover contract", () => {
     expect(runtime).toContain("resolveAndRecordAx1LivingWorld");
     expect(runtime).toContain("createAutonomousNpcLifeRuntime");
   });
+
+  it("keeps confirmed HUD projections from covering AX1 menu controls", () => {
+    const styles = readFileSync(join(process.cwd(), "client/src/xaurion/integration/ax1AuthorityHud.css"), "utf8");
+    expect(styles).toContain(".ax1-confirmed-minimap{position:relative;top:auto;right:auto}");
+    expect(styles).toContain("@media(min-width:1001px){.ax1-combat-metrics{top:70px}}");
+  });
 });
