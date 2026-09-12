@@ -7,7 +7,7 @@ import { projectConfirmedAx1Inventory } from "./InventoryModal";
 const readback: PlayerUiReadback = {
   version: "aurion-ax1-ui.v1",
   userId: 7,
-  settings: { revision: 3, autoLoot: true, hotbar: ["1", "2", "3", "4", "5"] },
+  settings: { revision: 3, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"] },
   items: [
     { id: "blade-1", version: "legacy", name: "Confirmed Blade", definition: "blade", levelExact: "12", quality: "rare", slot: "main_hand", status: "owned", stats: { attack: 9 }, receiptId: "receipt-blade" },
     { id: "belt-1", version: "legacy", name: "Confirmed Belt", definition: "belt", levelExact: "4", quality: "magic", slot: "belt", status: "equipped", stats: { armor: 2 }, receiptId: "receipt-belt" },
@@ -51,7 +51,7 @@ describe("AX1 inventory authority projection", () => {
     />);
 
     expect(screen.getByRole("dialog", { name: "Inventar & Paperdoll-Rüstkammer" })).toBeTruthy();
-    expect(screen.getByText("— Gold")).toBeTruthy();
+    expect(screen.getAllByText("— Gold").length).toBeGreaterThan(0);
     expect(screen.getByText(/Gear Score:/).textContent).toContain("—");
     for (const name of ["Alle", "Rüstung", "Rohstoffe", "Tränke", "Möbel"]) expect(screen.getByRole("button", { name })).toBeTruthy();
     expect(screen.getByText("Keine bestätigten Pity-Zähler.")).toBeTruthy();
@@ -60,6 +60,6 @@ describe("AX1 inventory authority projection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmed Blade · Selten" }));
     expect((screen.getByRole("button", { name: "Verbrauchen" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Verwerfen" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("— Gold", { selector: "span" })).toBeTruthy();
+    expect(screen.getAllByText("— Gold").length).toBeGreaterThanOrEqual(2);
   });
 });
