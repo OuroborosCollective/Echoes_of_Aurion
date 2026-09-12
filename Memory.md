@@ -287,3 +287,14 @@ Evidence: Exact pre-memory head `5afeab94ea7f9962c16af642813643ccbf783d38`; bran
 Learned: AX1 content/presentation can become richer without restoring client authority when state is source-revision-bound and driven only by confirmed logical ticks/readbacks.
 Open: Server mob attacks are still impact-only; elite/boss pre-cast windup is not wired. Persisted gathering rewards, armor-mastery progression, full AX1 menu depth, complete skills 1–9/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain open.
 Next safe step: Merge this checkpoint, then continue the remaining product corridors on a fresh branch without claiming full AX1 integration completeness.
+
+
+### 2026-09-12 — Indexed zone peer lookup
+Status: VERIFIED candidate; merge and production performance are not claimed.
+Task: Replace repeated high-frequency peer scans with a lifecycle-bound entity index.
+Decisions: Keep the connection map canonical and maintain a secondary `peersByEntityId` index atomically across join, reconnect and leave; do not alter AX1 gameplay contracts or WASD combat decisions.
+Touched surfaces: `server/zoneRuntime.ts` and focused lifecycle/combat regressions.
+Evidence: Exact pre-memory head `1fb563f88d4aababa148ecc78b708fb91affa078`; TypeScript and diff checks passed; 15/15 focused tests passed; Aurion Local Test Pack, AIM-292 and AIM-259 workflows succeeded.
+Learned: O(1) target resolution is safe only when reconnect replacement and disconnect cleanup are covered as part of the same index lifecycle.
+Open: Production latency/throughput improvement has not been measured.
+Next safe step: Re-run exact-head CI after this entry, then merge only with fresh exact-revision approval.
