@@ -203,7 +203,7 @@ export function Ax1InventoryModal({
           </div>
 
           <div className="grid grid-cols-5 gap-1.5 content-start pt-3">{filtered.map(item => <button type="button" key={item.key} aria-label={`${item.name} · ${QUALITY_LABEL[item.quality]}${item.status === "pending_pickup" ? " · Einsammeln" : ""}`} aria-pressed={selectedKey === item.key} data-testid={`bag-${item.id}`} className={`relative aspect-square rounded-lg border bg-black/65 flex flex-col items-center justify-center ax1-quality-${item.quality}`} onClick={() => setSelectedKey(item.key)}><span className="text-lg">{item.icon}</span><small className="absolute bottom-0.5 right-1 text-[7px] text-gray-400">{item.levelExact}</small>{item.status === "pending_pickup" && <b className="absolute top-0 right-1 text-amber-300">!</b>}</button>)}{Array.from({ length: emptySlots }, (_, index) => <div key={`empty-${index}`} className="aspect-square rounded-lg border border-gray-900 bg-black/25" aria-hidden="true" />)}</div>
-          {filtered.length === 0 && <p className="text-xs text-gray-500 py-4">Keine bestätigten Gegenstände in dieser Ansicht.</p>}
+          {filtered.length === 0 && <p className="text-xs text-gray-500 py-4">Keine Gegenstände in dieser Ansicht.</p>}
 
           <div className="mt-auto pt-3 space-y-2">
             <button type="button" className="w-full px-2 py-1.5 rounded-lg border border-emerald-500/40 text-emerald-300 flex items-center justify-center gap-1.5 text-xs" aria-pressed={projection?.autoLoot ?? false} disabled={pending || !projection} onClick={onToggleAutoLoot}><Sparkles className="w-3.5 h-3.5" /> Auto-Loot {projection?.autoLoot ? "AN" : "AUS"}</button>
