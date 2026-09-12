@@ -80,12 +80,14 @@ export function InventoryModal({
   isOpen: boolean;
   onClose: () => void;
   readback?: PlayerUiReadback;
+  points?: number;
   pending: boolean;
   message?: string;
   onEquip: (item: UiItem) => void;
   onUnequip: (item: UiItem) => void;
   onCollect: (item: UiItem) => void;
   onToggleAutoLoot: () => void;
+  onCraft?: () => void;
 }) {
   const projection = useMemo(() => projectConfirmedAx1Inventory(readback), [readback]);
   const itemByKey = useMemo(() => new Map((readback?.items ?? []).map(item => [itemKey(item), item])), [readback]);
