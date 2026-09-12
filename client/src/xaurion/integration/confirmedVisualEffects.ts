@@ -10,6 +10,7 @@ export class ConfirmedVisualEffects {
     if (typeof value.sessionId !== "string" || !/^[A-Za-z0-9_.:-]{8,64}$/.test(value.sessionId)
       || !Number.isSafeInteger(value.sequence) || (value.sequence as number) < 1
       || !Number.isSafeInteger(value.damage) || (value.damage as number) < 0
+      || (value.crit !== undefined && typeof value.crit !== "boolean")
       || !Number.isSafeInteger(value.bossHp) || (value.bossHp as number) < 0
       || typeof value.completed !== "boolean" || value.completed !== (value.bossHp === 0)
       || typeof value.command !== "string" || !/^[WASDEF1-9]$/.test(value.command.toUpperCase())) return null;
@@ -18,6 +19,6 @@ export class ConfirmedVisualEffects {
     if (!this.sequences.has(value.sessionId) && this.sequences.size >= 32) this.sequences.delete(this.sequences.keys().next().value!);
     this.sequences.set(value.sessionId, value.sequence as number);
     if (value.damage === 0) return null;
-    return { kind: value.completed ? "explosion" : "combat_hit", receiptKey: `${value.sessionId}:${value.sequence}` };
+    return { kind: value.completed ? "explosion" : value.crit === true ? "combat_crit" : "combat_hit", receiptKey: `${value.sessionId}:${value.sequence}` };
   }
 }
