@@ -30,8 +30,19 @@ describe("productive community navigation", () => {
       const button = screen.getByRole("button", { name }) as HTMLButtonElement;
       expect(button.disabled).toBe(true);
       expect(button.getAttribute("aria-describedby")).toBe(explanation.id);
+      expect(button.className).toContain("disabled:motion-safe:hover:translate-y-0");
+      expect(button.className).toContain("disabled:motion-safe:active:scale-100");
       expect(openPanel(name)).toEqual([]);
     }
+  });
+
+  it("gates tactile transforms behind the user's reduced-motion preference", () => {
+    render(<Community />);
+    const forum = screen.getByRole("button", { name: /^Forum/ });
+    expect(forum.className).toContain("motion-safe:hover:-translate-y-0.5");
+    expect(forum.className).toContain("motion-safe:active:scale-95");
+    expect(forum.className).not.toContain(" hover:-translate-y-0.5");
+    expect(forum.className).not.toContain(" active:scale-95");
   });
 
   it("opens authenticated chat and read-only guild panels exactly once", () => {
