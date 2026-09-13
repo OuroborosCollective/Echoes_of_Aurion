@@ -6,7 +6,7 @@ import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { uploadedWorldVisualsForChunk, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 
-type Rendered = Readonly<{ sha256: string; root: THREE.Group }>;
+type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
 const MAX_RENDERED = 18;
 
 function targetSizeMeters(subcategory: string | null): number {
@@ -33,6 +33,7 @@ function staticRenderable(scene: THREE.Group): boolean {
  * Presentation-only overlay for admin-approved uploaded environment/nature GLBs.
  * Placement is deterministic from the confirmed catalog + chunk identity. This
  * class never registers colliders, teleports, interactions or gameplay objects.
+ * Logical catalog assets may contain up to four hash-bound physical LOD GLBs.
  */
 export class UploadedWorldCatalogProjection {
   readonly root = new THREE.Group();
@@ -84,13 +85,15 @@ export class UploadedWorldCatalogProjection {
     this.pending.add(placement.id);
     let unowned: THREE.Group | undefined;
     try {
-      const loaded = await glbManager.loadModel(placement.asset.storageUrl);
+      const loaded = await glbManager.loadStaticLodFamily(placement.asset);
       unowned = loaded.scene;
       if (this.disposed || !staticRenderable(loaded.scene)) return;
       const stillAllowed = this.catalog?.entries.some(entry => entry.assetId === placement.asset.assetId && entry.sha256 === placement.asset.sha256 && entry.purpose === placement.asset.purpose);
       if (!stillAllowed) return;
 
       loaded.scene.updateMatrixWorld(true);
+      // Bounds include every LOD level. Family members are expected to share the
+      // same authored origin/scale; we normalize the logical root exactly once.
       const bounds = new THREE.Box3().setFromObject(loaded.scene, true);
       if (bounds.isEmpty()) return;
       const size = bounds.getSize(new THREE.Vector3());
@@ -105,7 +108,7 @@ export class UploadedWorldCatalogProjection {
 
       const holder = new THREE.Group();
       holder.name = `uploaded-world:${placement.id}`;
-      holder.userData.uploadedWorldCatalog = Object.freeze({ assetId: placement.asset.assetId, sha256: placement.asset.sha256, purpose: placement.asset.purpose });
+      holder.userData.uploadedWorldCatalog = Object.freeze({ assetId: placement.asset.assetId, sha256: placement.asset.sha256, purpose: placement.asset.purpose, lodLevels: loaded.lodLevels });
       holder.position.set(worldX - originX, terrainY, worldZ - originZ);
       holder.rotation.y = placement.rotationQuarterTurns * Math.PI / 2;
       loaded.scene.scale.setScalar(scale);
@@ -119,7 +122,7 @@ export class UploadedWorldCatalogProjection {
       holder.add(loaded.scene);
       this.remove(placement.id);
       this.root.add(holder);
-      this.rendered.set(placement.id, Object.freeze({ sha256: placement.asset.sha256, root: holder }));
+      this.rendered.set(placement.id, Object.freeze({ sha256: placement.asset.sha256, root: holder, lodLevels: loaded.lodLevels }));
       unowned = undefined;
     } catch {
       // Existing world visuals remain authoritative when an uploaded render fails.
@@ -134,7 +137,7 @@ export class UploadedWorldCatalogProjection {
     const { center, placements } = this.desired(position);
     const originX = center.x * 64;
     const originZ = center.z * 64;
-    const nextSignature = `${this.catalog?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}`).join("|")}`;
+    const nextSignature = `${this.catalog?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${value.asset.lods.map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
     if (nextSignature === this.signature) return;
     this.signature = nextSignature;
     this.root.position.set(originX, 0, originZ);
@@ -145,7 +148,7 @@ export class UploadedWorldCatalogProjection {
 
   evidence() {
     return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED,
-      assets: Object.freeze([...this.rendered.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, value]) => Object.freeze({ id, sha256: value.sha256 }))) });
+      assets: Object.freeze([...this.rendered.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, value]) => Object.freeze({ id, sha256: value.sha256, lodLevels: value.lodLevels }))) });
   }
 
   dispose(): void {
