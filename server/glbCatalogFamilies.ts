@@ -31,7 +31,7 @@ function physical(row: PhysicalGlbCatalogRow): Physical {
     purpose: glbPurposeFromDisplayName(row.displayName),
     subcategory: glbSubcategoryFromDisplayName(row.displayName),
     equipmentSlot: glbEquipmentSlotFromDisplayName(row.displayName),
-    lods: Object.freeze([]),
+    lods: [],
     bytes: row.bytes,
     explicitLod: descriptor.lodLevel,
     baseDisplayName: descriptor.baseDisplayName,
@@ -84,7 +84,7 @@ export function groupGlbCatalogRows(rows: readonly PhysicalGlbCatalogRow[]): rea
 
     const sorted = members.slice().sort((left, right) => left.explicitLod! - right.explicitLod! || left.sha256.localeCompare(right.sha256));
     const primary = sorted.find(member => member.explicitLod === 0) ?? sorted[0]!;
-    const lods: GlbCatalogLodVariant[] = sorted.map(member => Object.freeze({
+    const lods: GlbCatalogLodVariant[] = sorted.map(member => ({
       level: member.explicitLod! as 0 | 1 | 2 | 3,
       assetId: member.assetId,
       sha256: member.sha256,
@@ -102,7 +102,7 @@ export function groupGlbCatalogRows(rows: readonly PhysicalGlbCatalogRow[]): rea
       purpose: primary.purpose,
       subcategory: primary.subcategory,
       equipmentSlot: primary.equipmentSlot,
-      lods: Object.freeze(lods),
+      lods,
     }));
   }
 
