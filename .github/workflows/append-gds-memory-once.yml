@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   append:
-    if: github.event.head_commit.message == 'chore(tooling): append GDS memory entry trigger'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
