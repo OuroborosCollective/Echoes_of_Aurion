@@ -104,6 +104,28 @@ describe("WASD authoritative zone movement", () => {
     expect(zone.positionForConnection(current.connectionId)).toBeUndefined();
   });
 
+  it("resolves hot-path combat targets through the lifecycle-bound entity index", () => {
+    const zoneSource = readFileSync("server/zoneRuntime.ts", "utf8");
+    const resolveMobAttacks = zoneSource.slice(
+      zoneSource.indexOf("private resolveMobAttacks"),
+      zoneSource.indexOf("private combatEvent"),
+    );
+
+    expect(zoneSource).toContain(
+      "private readonly peersByEntityId = new Map<string, PresencePeer>()",
+    );
+    expect(zoneSource).toContain(
+      "this.peersByEntityId.set(entityId, newPeer)",
+    );
+    expect(zoneSource).toContain(
+      "this.peersByEntityId.delete(`player:${peer.userId}`)",
+    );
+    expect(resolveMobAttacks).toContain(
+      "this.peersByEntityId.get(mob.targetEntityId)",
+    );
+    expect(resolveMobAttacks).not.toContain("this.peers.values()");
+  });
+
   it("binds k_strike to the confirmed blade track, AX1 range and server cooldown", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
     const zone = new AuthoritativeMovementZone("observatory_threshold");
