@@ -70,13 +70,13 @@ jobs:
       AURION_APPLY_TEST_ROOT_PASSWORD: aurionapplyroot
       AURION_APPLY_TEST_PLAN: 7c7c5cf96f3c32fd5700f5af091bc3afc145d35a9c7db9c2210b7bcbd0b82fee
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -151,7 +151,7 @@ jobs:
 
       - name: Download caller-verified schema apply artifact
         if: ${{ inputs.use_uploaded_artifact }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: .
