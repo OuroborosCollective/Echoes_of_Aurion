@@ -11,6 +11,12 @@ let engine:MMOEngine|null=null;
 let transport:ZoneCombatTransport|null=null;
 let selfEntityId:string|null=null;
 let pending:PendingAttack|null=null;
+const mobPresentationListeners = new Set<(event: ConfirmedZoneCombatEvent) => void>();
+/** Observe server-confirmed mob impacts for animation only. */
+export function subscribeConfirmedMobCombat(listener: (event: ConfirmedZoneCombatEvent) => void): () => void {
+  mobPresentationListeners.add(listener);
+  return () => { mobPresentationListeners.delete(listener); };
+}
 
 function clearPending(value:ZoneActionOutcome):void{const current=pending;if(!current)return;pending=null;window.clearTimeout(current.timer);current.resolve(value);}
 
@@ -35,6 +41,7 @@ export function projectConfirmedZoneSnapshot(values:{selfEntityId:string;mobs:re
 
 export function acceptConfirmedZoneCombat(event:ConfirmedZoneCombatEvent):void{
   if(!selfEntityId)return;
+  if(event.attackerEntityId.startsWith("mob_")) for(const listener of mobPresentationListeners) listener(event);
   const ownAttack=event.attackerEntityId===selfEntityId;
   const ownHit=event.defenderEntityId===selfEntityId;
   const presentation=projectConfirmedCombatPresentation(event,selfEntityId);

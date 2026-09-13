@@ -1,0 +1,20 @@
+{
+  "status": "LIVE_CATALOG_VERIFIED_RUNTIME_CANDIDATE",
+  "sha256": "94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a",
+  "bytes": 1250676,
+  "purpose": "auto",
+  "assetType": "enemy",
+  "targetKey": null,
+  "catalogCountBefore": 41,
+  "catalogCountAfter": 42,
+  "publicDownloadSha256Matches": true,
+  "storageUrl": "https://arelogic.space/api/assets/glb/94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a.glb",
+  "displayName": "Aurion Clockwork Stalker \u00b7 Fantasy 1600 v1",
+  "runtimeArchetype": "clockwork_stalker",
+  "worldRenderVerified": false,
+  "notes": [
+    "Existing starter_beast_lod0 assignment remains unchanged; newly approved monster is catalog-only until the explicit presentation consumer is deployed.",
+    "Nine skinned clips independently verified in Blender; current mob contract supplies idle, locomotion, attack and death states only.",
+    "No subsequent model produced before live integration."
+  ]
+}
