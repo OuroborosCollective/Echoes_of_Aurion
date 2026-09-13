@@ -1,0 +1,44 @@
+name: Lyra Game Development Studio Source Preflight
+
+on:
+  pull_request:
+    paths:
+      - "scripts/game-dev-lyra-source-readback.mjs"
+      - "assets/policies/lyra-first-quest-npc.game-dev.json"
+      - ".github/workflows/lyra-game-dev-source-preflight.yml"
+      - "scripts/install-game-development-studio.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-lyra-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      TRIPO_API_KEY: ${{ secrets.TRIPO_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+      - name: Install pinned Game Development Studio
+        run: node scripts/install-game-development-studio.mjs
+      - name: Confirm provider configuration without exposing credentials
+        run: game-dev credentials status --json
+      - name: Bind uploaded Lyra GLB to its original Tripo task
+        run: node scripts/game-dev-lyra-source-readback.mjs
+      - name: Inspect source GLB with Game Development Studio
+        run: game-dev asset inspect .game-dev/workspace/lyra-source.glb --json | tee .game-dev/workspace/lyra-inspection.json
+      - name: Validate source against Aurion NPC policy
+        run: game-dev asset validate .game-dev/workspace/lyra-source.glb --request assets/policies/lyra-first-quest-npc.game-dev.json --json | tee .game-dev/workspace/lyra-validation.json
+      - name: Upload read-only preflight evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: lyra-game-dev-source-preflight
+          path: |
+            .game-dev/workspace/lyra-inspection.json
+            .game-dev/workspace/lyra-validation.json
+          if-no-files-found: error
+          retention-days: 7
