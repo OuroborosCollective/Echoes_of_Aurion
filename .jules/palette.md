@@ -3,3 +3,6 @@
 ## 2026-09-12 - Tactile Feedback in Aurion Portal Interactive Elements
 **Learning:** The Aurion Portal needs to provide cohesive tactile feedback on action buttons for better interactivity and visual clarity for users.
 **Action:** Applied Tailwind classes `group`, `hover:-translate-y-0.5`, `active:scale-95`, and `transition-all` on action buttons and applied `transition-transform group-hover:scale-110` for internal icons within these buttons in `client/src/pages/Community.tsx`.
+## 2024-09-13 - LocalAuthPanel button title
+**Learning:** Added `title` attribute for disabled buttons to give context, plus styling `disabled:cursor-not-allowed` for better affordance.
+**Action:** Apply this to other forms when adding UX enhancements.
