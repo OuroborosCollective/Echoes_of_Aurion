@@ -52,7 +52,7 @@ export function npcFallbackDescriptor(entry: NpcGlbCatalogEntry): Readonly<{ var
 }
 
 function physicalFamilyEntries(entry: NpcGlbCatalogEntry): readonly Readonly<{ entry: NpcGlbCatalogEntry; lod: number | null }>[] {
-  if (!entry.lods.length) return Object.freeze([{ entry, lod: npcFallbackDescriptor(entry).lod }]);
+  if (!entry.lods?.length) return Object.freeze([{ entry, lod: npcFallbackDescriptor(entry).lod }]);
   return Object.freeze(entry.lods
     .slice()
     .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256))
