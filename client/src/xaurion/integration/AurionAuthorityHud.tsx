@@ -141,7 +141,9 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     void act(() => saveControls.mutateAsync({ ...settings, hotbar }), uiFresh);
   };
   const toggleLoot = () => {
-    if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data.settings, autoLoot: !ui.data.settings.autoLoot }), uiFresh);
+    const settings = ui.data?.settings;
+    if (!settings) return;
+    void act(() => saveControls.mutateAsync({ ...settings, autoLoot: !settings.autoLoot }), uiFresh);
   };
   useEffect(() => {
     if (!permitted.current) auto.stop();
@@ -372,7 +374,11 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       message={message}
       onBind={bind}
       onAutoLoot={toggleLoot}
-      onAnalytics={() => { if (ui.data) void act(() => saveControls.mutateAsync({ ...ui.data.settings, analyticsConsent: !ui.data.settings.analyticsConsent }), uiFresh); }}
+      onAnalytics={() => {
+        const settings = ui.data?.settings;
+        if (!settings) return;
+        void act(() => saveControls.mutateAsync({ ...settings, analyticsConsent: !settings.analyticsConsent }), uiFresh);
+      }}
       onStartAuto={() => { openPanel(null); setStartAfterClose(true); }}
     />
     <WorldMapModal open={panel === "map"} onClose={() => openPanel(null)} world={worldProjection} position={position} remotePlayers={remotePlayers} state={world.state} />
