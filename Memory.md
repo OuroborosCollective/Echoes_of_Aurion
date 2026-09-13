@@ -348,3 +348,13 @@ Evidence: Nine focused atlas/tree regressions, TypeScript, full production build
 Learned: Catalog uploads alone do not texture existing terrain. The existing world materials must consume shipped texture bytes; tile extraction isolates mipmaps and shared ownership prevents per-chunk image downloads.
 Open: Exact-head CI, merge and canonical Traefik production readback; character GLBs remain separate unfinished work.
 Next safe step: Automatically merge this authorized release after exact-head checks, verify production revision and delivered atlas SHA, then continue the supplied models.
+
+### 2026-09-13 — Authored Ranger equipment attachment origins
+Status: VERIFIED repository candidate; live Ranger draw remains pending production readback.
+Task: Preserve authored Ranger equipment grip/body origins instead of forcing every GLB to its bounding-box center.
+Decisions: Prefer explicit Aurion attachment-origin nodes; preserve legacy bounds-centering when absent; keep scale normalization, inventory, stats and WASD gameplay authority unchanged.
+Touched surfaces: `EquipmentAttachmentSizing`, `AnimatedGlbActor`, focused attachment regressions.
+Evidence: Exact pre-memory head `1e62c6b340de35e18fd928c26f9f547d833c55fb`; all 8 PR workflows succeeded, including AIM-285 exact-head attachment/authority regressions, TypeScript and production build. Live catalog revision `65d5b9b7eba7d4d7f7f47ac2a697e98ac9d81e571ac3e60627eb2af48ef94b2b` contains the classless Ranger v3 and its v3 equipment set.
+Learned: A correct actor socket is insufficient if runtime recenters the attached asset and discards its authored grip/body origin.
+Open: Binary node inspection and production/native-device visual confirmation of Ranger v3 remain separate.
+Next safe step: Re-run exact-head CI after this append; merge #316 only if green, then deploy/read back the immutable revision before claiming live placement fixed.

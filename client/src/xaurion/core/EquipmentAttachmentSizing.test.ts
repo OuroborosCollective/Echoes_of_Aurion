@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { AnimatedGlbActor, animationClipHasMotion } from "./AnimatedGlbActor";
-import { equipmentAnchorAliases, equipmentLocalScale, equipmentTargetHeightFraction } from "./EquipmentAttachmentSizing";
+import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale, equipmentTargetHeightFraction } from "./EquipmentAttachmentSizing";
 
 describe("Aurion standard player equipment sizing", () => {
   it("keeps helmet and armor sizing relative to the normalized avatar instead of source GLB units", () => {
@@ -31,6 +31,73 @@ describe("Aurion standard player equipment sizing", () => {
     expect(equipmentAnchorAliases.weapon).toContain("rightwrist");
     expect(equipmentAnchorAliases.weapon).toContain("ccbaserhand");
     expect(equipmentAnchorAliases.shield).toContain("mixamoriglefthand");
+  });
+
+  it("uses an authored attachment origin before the legacy bounds center", () => {
+    const visual = new THREE.Group();
+    const geometry = new THREE.BoxGeometry(2, 1, 1);
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(4, 0, 0);
+    visual.add(mesh);
+    const origin = new THREE.Object3D();
+    origin.name = "AurionAttachmentOrigin";
+    origin.position.set(1, 0.25, -0.5);
+    visual.add(origin);
+    visual.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(visual, true);
+    const authoredOffset = equipmentAttachmentOffset("weapon", visual, bounds, 0.5);
+    expect(authoredOffset?.toArray()).toEqual([-0.5, -0.125, 0.25]);
+
+    origin.removeFromParent();
+    visual.updateMatrixWorld(true);
+    const legacyBounds = new THREE.Box3().setFromObject(visual, true);
+    const legacyOffset = equipmentAttachmentOffset("weapon", visual, legacyBounds, 0.5);
+    expect(legacyOffset?.x).toBeCloseTo(-2, 6);
+    expect(legacyOffset?.y).toBeCloseTo(0, 6);
+    expect(legacyOffset?.z).toBeCloseTo(0, 6);
+    geometry.dispose();
+    material.dispose();
+  });
+
+  it("lands an authored equipment origin exactly on the live actor socket", () => {
+    const model = new THREE.Group();
+    const bodyGeometry = new THREE.BoxGeometry(0.7, 2, 0.35);
+    const bodyMaterial = new THREE.MeshBasicMaterial();
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 1;
+    model.add(body);
+    const socket = new THREE.Object3D();
+    socket.name = "AurionSlotMainHand";
+    socket.position.set(0.45, 1.25, 0.1);
+    model.add(socket);
+    const actor = new AnimatedGlbActor(model, [], 2);
+
+    const visual = new THREE.Group();
+    const equipmentGeometry = new THREE.BoxGeometry(0.2, 1.2, 0.1);
+    const equipmentMaterial = new THREE.MeshBasicMaterial();
+    const equipmentMesh = new THREE.Mesh(equipmentGeometry, equipmentMaterial);
+    equipmentMesh.position.y = 0.6;
+    visual.add(equipmentMesh);
+    const origin = new THREE.Object3D();
+    origin.name = "AurionAttachmentOrigin";
+    origin.position.set(0, 0.1, 0);
+    visual.add(origin);
+
+    expect(actor.attachEquipment("weapon", visual)).toBe(true);
+    actor.group.updateMatrixWorld(true);
+    socket.updateWorldMatrix(true, true);
+    origin.updateWorldMatrix(true, false);
+    const socketWorld = socket.getWorldPosition(new THREE.Vector3());
+    const originWorld = origin.getWorldPosition(new THREE.Vector3());
+    expect(originWorld.distanceTo(socketWorld)).toBeLessThan(1e-6);
+    expect(actor.evidence().equipmentSlots).toContain("weapon");
+
+    actor.dispose();
+    bodyGeometry.dispose();
+    bodyMaterial.dispose();
+    equipmentGeometry.dispose();
+    equipmentMaterial.dispose();
   });
 
   it("distinguishes real keyframe motion from clip-name-only animation", () => {
