@@ -342,6 +342,9 @@ export class OpenWorldLandscape {
 
       const tree = new THREE.Group();
       const trunkHeight = 4 + (i % 3);
+      tree.name = `woods-tree-visual-${i}`;
+      tree.userData.aurionVisualKind = "tree";
+      tree.userData.aurionTreeHeightMeters = trunkHeight + 4.25;
       const trunkGeo = new THREE.CylinderGeometry(0.3, 0.6, trunkHeight, 6);
       const trunk = new THREE.Mesh(trunkGeo, woodMat);
       trunk.position.y = trunkHeight / 2;

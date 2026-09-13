@@ -505,6 +505,9 @@ export class WorldChunkManager {
 
         // Trunk
         const trunkH = obs.height || 7.0;
+        treeGroup.name = `chunk-tree-visual:${chunk.chunkKey}:${obs.x}:${obs.z}`;
+        treeGroup.userData.aurionVisualKind = "tree";
+        treeGroup.userData.aurionTreeHeightMeters = trunkH * 0.65 + 5.6;
         const trunkGeo = new THREE.CylinderGeometry(obs.radius * 0.6, obs.radius, trunkH, 7);
         const trunk = new THREE.Mesh(trunkGeo, woodTrunkMat);
         trunk.position.y = trunkH / 2;
