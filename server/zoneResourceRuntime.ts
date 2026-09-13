@@ -13,6 +13,7 @@ export const AX1_RESOURCE_RESPAWN_TICKS = 600 as const;
 type MutableResourceState = {
   nodeId: string;
   remaining: number;
+  capacity: number;
   depleted: boolean;
   respawnAtTick: number | null;
 };
@@ -36,23 +37,29 @@ function compareBinary(left: string, right: string): number {
  */
 export class ZoneResourceRuntime {
   private readonly states = new Map<string, MutableResourceState>();
+  private readonly orderedStates: MutableResourceState[] = [];
   private revision = 1;
 
   public constructor() {
     for (const definition of AX1_INITIAL_RESOURCE_NODES) {
-      this.states.set(definition.id, {
+      const state: MutableResourceState = {
         nodeId: definition.id,
         remaining: definition.capacity,
+        capacity: definition.capacity,
         depleted: false,
         respawnAtTick: null,
-      });
+      };
+      this.states.set(definition.id, state);
+      this.orderedStates.push(state);
     }
+    this.orderedStates.sort((left, right) => compareBinary(left.nodeId, right.nodeId));
   }
 
   public snapshot(currentTick: number): ConfirmedZoneResourceSnapshot {
-    const nodes = [...this.states.values()]
-      .sort((left, right) => compareBinary(left.nodeId, right.nodeId))
-      .map((state): ConfirmedZoneResourceNode =>
+    // Optimization: iterate over pre-sorted orderedStates to avoid array allocations, sort(), and map() on every tick
+    const nodes: ConfirmedZoneResourceNode[] = [];
+    for (const state of this.orderedStates) {
+      nodes.push(
         Object.freeze({
           nodeId: state.nodeId,
           remaining: state.remaining,
@@ -60,6 +67,7 @@ export class ZoneResourceRuntime {
           respawnAtTick: state.respawnAtTick,
         })
       );
+    }
 
     const snapshot = Object.freeze({
       contractVersion: ZONE_RESOURCE_CONTRACT_VERSION,
@@ -106,10 +114,9 @@ export class ZoneResourceRuntime {
       throw new Error("ZONE_RESOURCE_TICK_INVALID");
     }
     let changed = false;
-    for (const definition of AX1_INITIAL_RESOURCE_NODES) {
-      const state = this.states.get(definition.id);
-      if (!state?.depleted || state.respawnAtTick === null || currentTick < state.respawnAtTick) continue;
-      state.remaining = definition.capacity;
+    for (const state of this.orderedStates) {
+      if (!state.depleted || state.respawnAtTick === null || currentTick < state.respawnAtTick) continue;
+      state.remaining = state.capacity;
       state.depleted = false;
       state.respawnAtTick = null;
       changed = true;

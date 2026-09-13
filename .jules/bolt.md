@@ -13,3 +13,6 @@
 ## 2026-09-12 - Transition from O(N) iterative lookups to O(1) Map lookups for resolving entities in high-frequency loops
 **Learning:** High-frequency game loops experience performance degradation and garbage collection latency when using O(N) array iterations to locate entities on every tick.
 **Action:** Implemented O(1) Map lookups (`peersByEntityId`) populated dynamically during lifecycle events (join/leave) instead of searching via array iteration, particularly beneficial in `AuthoritativeMovementZone.resolveMobAttacks()` and `AuthoritativeMovementZone.join()`.
+## 2025-02-14 - Optimize ZoneResourceRuntime loop overhead
+**Learning:** Avoid dynamic array allocations, higher-order array methods, and O(1) Map lookups in high-frequency loops.
+**Action:** Cached an ordered array of states in the constructor and replaced Map lookups in tick/snapshot with for...of loops over the cached array.
