@@ -108,7 +108,7 @@ jobs:
             -e MARIADB_ROOT_PASSWORD="$AURION_APPLY_TEST_ROOT_PASSWORD" \
             -e MARIADB_ROOT_HOST=% \
             -e MARIADB_DATABASE="$AURION_APPLY_TEST_DATABASE" \
-            mariadb:11.4
+            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
           ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
@@ -143,7 +143,7 @@ jobs:
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
             --workdir /workspace \
             --env DATABASE_URL="$root_url" \
-            node:22.13.0-bookworm-slim \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             ./node_modules/.bin/drizzle-kit migrate
           restore_journal
           trap - EXIT
@@ -274,7 +274,7 @@ jobs:
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
             --workdir /workspace \
             --env DATABASE_URL="mysql://root:${AURION_APPLY_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_APPLY_TEST_DATABASE}" \
-            node:22.13.0-bookworm-slim node --input-type=module <<'NODE'
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 node --input-type=module <<'NODE'
           import assert from "node:assert/strict";
           import mysql from "mysql2/promise";
           const db=await mysql.createConnection(process.env.DATABASE_URL);
