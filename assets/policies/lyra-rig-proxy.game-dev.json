@@ -1,0 +1,11 @@
+{
+  "requireUVs": false,
+  "requireNormals": false,
+  "requireTangentsWithNormalMap": false,
+  "requireBaseColorTexture": false,
+  "maxTriangles": 5600,
+  "maxMaterials": 4,
+  "requirePowerOfTwoTextures": false,
+  "maxDimensionMeters": 3,
+  "minDimensionMeters": 0.05
+}

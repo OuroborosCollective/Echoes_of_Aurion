@@ -25,6 +25,12 @@ export function npcVisualIdentityHash(identity: string): number {
   return hash >>> 0;
 }
 
+/** Canonical presentation target for a named NPC. Gameplay identity remains the
+ * existing server-owned npc id; this string only selects approved visual bytes. */
+export function npcVisualTargetKey(npcIdentity: string): string {
+  return `npc_${npcIdentity}`;
+}
+
 export function isNpcFallbackCatalogEntry(entry: NpcGlbCatalogEntry): boolean {
   return entry.assetType === "character"
     && entry.targetKey === null
@@ -51,12 +57,30 @@ export function npcFallbackDescriptor(entry: NpcGlbCatalogEntry): Readonly<{ var
   return Object.freeze({ variantKey: variantKey || raw.toLowerCase(), lod });
 }
 
+function physicalFamilyEntries(entry: NpcGlbCatalogEntry): readonly Readonly<{ entry: NpcGlbCatalogEntry; lod: number | null }>[] {
+  if (!entry.lods?.length) return Object.freeze([{ entry, lod: npcFallbackDescriptor(entry).lod }]);
+  return Object.freeze(entry.lods
+    .slice()
+    .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256))
+    .map(lod => Object.freeze({
+      lod: lod.level,
+      entry: Object.freeze({
+        ...entry,
+        assetId: lod.assetId,
+        sha256: lod.sha256,
+        storageUrl: lod.storageUrl,
+        targetKey: lod.targetKey,
+        lods: [],
+      }),
+    })));
+}
+
 export function npcFallbackVariants(catalog: GlbRuntimeCatalog | null | undefined): readonly NpcFallbackVariant[] {
   const grouped = new Map<string, Array<{ entry: NpcGlbCatalogEntry; lod: number | null }>>();
   for (const entry of npcFallbackPool(catalog)) {
     const descriptor = npcFallbackDescriptor(entry);
     const current = grouped.get(descriptor.variantKey) ?? [];
-    current.push({ entry, lod: descriptor.lod });
+    current.push(...physicalFamilyEntries(entry));
     grouped.set(descriptor.variantKey, current);
   }
   return Object.freeze([...grouped.entries()]
@@ -74,18 +98,22 @@ export function selectNpcGlb(
   preferredLod: number | null = null,
 ): NpcGlbSelection | null {
   if (!catalog || !npcIdentity) return null;
-  if (preferredTargetKey) {
-    const assigned = catalog.entries.find(entry => entry.assetType === "character" && entry.targetKey === preferredTargetKey);
-    if (assigned) {
-      const descriptor = assigned.displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? npcFallbackDescriptor(assigned) : { variantKey: null, lod: null };
-      return Object.freeze({ entry: assigned, source: "assigned", fallbackIndex: null, variantKey: descriptor.variantKey, lod: descriptor.lod });
-    }
+  const exactTargetKey = preferredTargetKey ?? npcVisualTargetKey(npcIdentity);
+  const assigned = catalog.entries.find(entry => entry.assetType === "character" && entry.targetKey === exactTargetKey);
+  if (assigned) {
+    const descriptor = assigned.displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? npcFallbackDescriptor(assigned) : { variantKey: null, lod: null };
+    return Object.freeze({ entry: assigned, source: "assigned", fallbackIndex: null, variantKey: descriptor.variantKey, lod: descriptor.lod });
   }
   const variants = npcFallbackVariants(catalog);
   if (!variants.length) return null;
   const fallbackIndex = npcVisualIdentityHash(npcIdentity) % variants.length;
   const variant = variants[fallbackIndex]!;
   const preferred = preferredLod === null ? undefined : variant.entries.find(candidate => candidate.lod === preferredLod);
-  const candidate = preferred ?? variant.entries.find(candidate => candidate.lod === 0) ?? variant.entries.find(candidate => candidate.lod === 1) ?? variant.entries[0]!;
+  const candidate = preferred
+    ?? variant.entries.find(candidate => candidate.lod === 0)
+    ?? variant.entries.find(candidate => candidate.lod === 1)
+    ?? variant.entries.find(candidate => candidate.lod === 2)
+    ?? variant.entries.find(candidate => candidate.lod === 3)
+    ?? variant.entries[0]!;
   return Object.freeze({ entry: candidate.entry, source: "fallback", fallbackIndex, variantKey: variant.key, lod: candidate.lod });
 }

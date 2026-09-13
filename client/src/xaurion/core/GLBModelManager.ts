@@ -1,12 +1,13 @@
-import { glbRuntimeCatalogSchema, type GlbEquipmentSlot, type GlbImportPurpose } from "@shared/glbImportContract";
+import { glbCatalogLods, glbRuntimeCatalogSchema, type GlbCatalogEntry, type GlbCatalogLodVariant, type GlbEquipmentSlot, type GlbImportPurpose } from "@shared/glbImportContract";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { RPGItem, WeaponType, ItemRarity } from '../types';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { fetchVerifiedGlb, glbResourcePool, inspectGlbAllocation } from './GlbResourceBudget';
-import { disposeGlbSource, registerGlbLease } from './GlbModelLease';
+import { disposeGlbSource, registerGlbLease, releaseGlbTree } from './GlbModelLease';
 import { requireDecodedMaterialTextures } from './GlbTextureEvidence';
+import { ACTOR_LOD_FAR_MAX_METERS, ACTOR_LOD_MID_MAX_METERS, ACTOR_LOD_NEAR_MAX_METERS } from './actorLod';
 
 export interface GLBModelEntry {
   id: string;
@@ -32,6 +33,7 @@ export interface GLBModelEntry {
   purpose?: GlbImportPurpose;
   subcategory?: string | null;
   equipmentSlot?: GlbEquipmentSlot | null;
+  lods?: readonly GlbCatalogLodVariant[];
   equipSlot?: string;
   weaponType?: WeaponType;
   rarity?: ItemRarity;
@@ -90,6 +92,14 @@ function runtimeCategory(entry: ReturnType<typeof glbRuntimeCatalogSchema.parse>
   return 'prop';
 }
 
+const CATALOG_LOD_DISTANCE: Readonly<Record<0 | 1 | 2 | 3, number>> = Object.freeze({
+  0: 0,
+  1: ACTOR_LOD_NEAR_MAX_METERS,
+  2: ACTOR_LOD_MID_MAX_METERS,
+  3: ACTOR_LOD_FAR_MAX_METERS,
+});
+const CATALOG_LOD_HYSTERESIS = 0.1;
+
 type CachedModel = { scene: THREE.Group; animations: THREE.AnimationClip[]; users: number; access: number; release: () => void };
 
 export class GLBModelManager {
@@ -123,6 +133,7 @@ export class GLBModelManager {
       purpose: entry.purpose,
       subcategory: entry.subcategory,
       equipmentSlot: entry.equipmentSlot,
+      lods: entry.lods,
       equipSlot: entry.equipmentSlot ?? undefined,
       status: 'approved',
       animations: [],
@@ -208,6 +219,35 @@ export class GLBModelManager {
     const borrowed = entry;
     registerGlbLease(scene, () => { releaseActor(); borrowed.users--; });
     return {scene, animations: entry.animations};
+  }
+
+  /** Builds one presentation-only Three.js LOD node from one logical catalog model.
+   * Physical variants stay hash-verified and share the normal decoded-model cache. */
+  public async loadStaticLodFamily(entry: GlbCatalogEntry): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[]; lodLevels: readonly number[] }> {
+    const variants = glbCatalogLods(entry).slice().sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256));
+    if (variants.length === 1) {
+      const loaded = await this.loadModel(variants[0]!.storageUrl);
+      return { ...loaded, lodLevels: Object.freeze([variants[0]!.level]) };
+    }
+    const root = new THREE.Group();
+    root.name = `aurion-glb-lod-family:${entry.assetId}`;
+    const lod = new THREE.LOD();
+    lod.name = `aurion-glb-lod:${entry.assetId}`;
+    const borrowed: THREE.Group[] = [];
+    try {
+      for (const variant of variants) {
+        const loaded = await this.loadModel(variant.storageUrl);
+        borrowed.push(loaded.scene);
+        if (loaded.animations.length) throw Error('GLB_STATIC_LOD_ANIMATIONS_FORBIDDEN');
+        lod.addLevel(loaded.scene, CATALOG_LOD_DISTANCE[variant.level], CATALOG_LOD_HYSTERESIS);
+      }
+      root.add(lod);
+      root.userData.aurionCatalogLod = Object.freeze({ assetId: entry.assetId, levels: Object.freeze(variants.map(variant => variant.level)), hysteresis: CATALOG_LOD_HYSTERESIS });
+      return { scene: root, animations: [], lodLevels: Object.freeze(variants.map(variant => variant.level)) };
+    } catch (error) {
+      for (const scene of borrowed) releaseGlbTree(scene);
+      throw error;
+    }
   }
 
   public async loadEquipmentMesh(modelIdOrUrl: string, slot: string): Promise<THREE.Group | null> {

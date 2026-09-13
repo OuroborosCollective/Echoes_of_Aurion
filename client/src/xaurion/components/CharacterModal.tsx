@@ -105,6 +105,5 @@ export function CharacterModal({ isOpen, onClose, player, settings: _settings, u
     isOpen={isOpen}
     onClose={onClose}
     stats={projectConfirmedAx1Character(player)}
-    currentClassId="knight"
   />;
 }

@@ -1,0 +1,21 @@
+{
+  "schema": "aurion.lyra.rig-proxy.v1",
+  "source": {
+    "fileName": "carackter_robe_myst.glb",
+    "sha256": "54b163ba60f74f1fb2355bceb537626076db6918cf699e5a21ae1bf37b148b24",
+    "bytes": 1691648,
+    "vertices": 3491,
+    "triangles": 4218
+  },
+  "proxy": {
+    "sha256": "86f24722ca77f1822f67187f043c11cb1245c091f826c235a4c294e9a62a687e",
+    "bytes": 68092,
+    "xzSha256": "014a9140a5260153651762cee235293fb12057728f72debff0e3780b14d3eea1",
+    "xzBytes": 39016,
+    "base64Chunks": 14,
+    "preserved": ["node transform", "POSITION accessor bytes", "index accessor bytes", "triangle topology"],
+    "removedForTransport": ["embedded textures", "material texture bindings", "NORMAL", "TEXCOORD_0"]
+  },
+  "purpose": "Tripo upload and rig-check/rig transport only",
+  "shippingRule": "Never ship the proxy. Transfer rig/skin/animation to the original textured source only after exact vertex/index topology parity is re-proven."
+}

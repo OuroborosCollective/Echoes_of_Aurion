@@ -377,3 +377,13 @@ Evidence: Exact pre-memory head `f041a2efc4a3bcee7c8e6912fcb138c76ec2a6e4`; GLB 
 Learned: Verified asset bytes still require a current-base rebind and exact-head evidence; stale PR history is not integration proof.
 Open: Production deployment, visible in-world confirmation and native-device performance remain separate.
 Next safe step: Re-run all merge gates on this post-memory head; merge #325 only if exact-head green, then close #314 as superseded and read back main.
+
+### 2026-09-13 — Aurion authority and immutable release hardening
+Status: PARTIAL — implementation complete; final exact-head rerun required before merge.
+Task: Consolidate the current Aurion engineering hardening into PR #327 without reintroducing WASD as active gameplay/world authority.
+Decisions: Aurion is the active gameplay/world authority; freeze historical WASD provenance to `eb20a85b305612eaf01c560ad0c89af96ed03295`; skip production for docs/GDS-only main pushes; keep production cache read-only; record workflow provenance; pin Node `22.23.2`, MariaDB `11.4.13`, and Aurion-owned GitHub Actions to reviewed immutable identities.
+Touched surfaces: Canonical GDS authority docs/guard, historical migration ledger, Traefik runtime/promoter/bootstrap, root reconciliation/apply proofs, deployment workflow and Action-pin regression.
+Evidence: First exact-head `7651a2f881506419cb10724e59334bbfeadb0e91` passed all eight workflow suites: deploy `34784500588`, Android `34784500014`, Local Test Pack `34784500022`, NPC Multi-Memory `34784500051`, GLB regression `34784500074`, zone schema bootstrap `34784500067`, root schema apply `34784500049`, root reconciliation `34784500092`. Root proofs exercised immutable Node/MariaDB images, backup/recovery/apply/retry/fail-closed paths; the historical provenance run reproduced WASD source manifest `92bb04235b5fcfe2ca3ad252b500410f6588fbc8def586b02f12770f0bd1c08d` with read-only cache.
+Learned: Historical migration receipts can prove lineage but must not become moving runtime authority; release evidence must bind source, workflow, immutable Actions/runtime/database inputs and independent readback.
+Open: This append and the immutable Action pins create a new final PR head; no merge or live claim is valid until that exact head is green and production is read back after merge. Branch protection remains an external repository-admin control, not inferred from CI discipline.
+Next safe step: Run every exact-head PR gate again, merge #327 only if fresh and green, then require revision-identical production promotion, schema receipt and public health readback.

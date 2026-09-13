@@ -221,7 +221,7 @@ docker network inspect "$traefik_network" >/dev/null
 docker network inspect "$database_network" >/dev/null
 
 base_image="$pinned_image"
-[[ "$base_image" == "node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff" ]]
+[[ "$base_image" == "node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5" ]]
 
 runtime_image="echoes-of-aurion:${expected_sha}"
 phase=runtime-image-build
