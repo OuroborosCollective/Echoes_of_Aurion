@@ -6,6 +6,15 @@ import { MobCatalogProjection, CLOCKWORK_STALKER_GLB_SHA as sha } from "./MobCat
 import { acceptConfirmedZoneCombat, projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
 
 const catalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "b".repeat(64), entries: [{ assetId: `glb_${sha.slice(0,48)}`, sha256: sha, displayName: "Clockwork Stalker", purpose: "auto", assetType: "enemy", subcategory: null, targetKey: null, equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` }] };
+const lod1Sha = "1".repeat(64), lod2Sha = "2".repeat(64);
+const lodCatalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "c".repeat(64), entries: [{
+  ...catalog.entries[0]!,
+  lods: [
+    { level: 0, assetId: `glb_${sha.slice(0,48)}`, sha256: sha, bytes: 1200, storageUrl: `/api/assets/glb/${sha}.glb`, targetKey: null },
+    { level: 1, assetId: "glb_clockwork_stalker_lod1", sha256: lod1Sha, bytes: 800, storageUrl: `/api/assets/glb/${lod1Sha}.glb`, targetKey: null },
+    { level: 2, assetId: "glb_clockwork_stalker_lod2", sha256: lod2Sha, bytes: 400, storageUrl: `/api/assets/glb/${lod2Sha}.glb`, targetKey: null },
+  ],
+}] };
 function loaded() {
   const scene = new THREE.Group(), bone = new THREE.Bone(); bone.name = "Spine";
   const geometry = new THREE.BoxGeometry(1, 2, 1); geometry.translate(0, 1, 0);
@@ -39,6 +48,22 @@ describe("approved confirmed mob GLB presentation", () => {
     const actor=s.scene.getObjectByName("aurion-confirmed-mob-glb:mob_1")!;
     expect(actor.position.y).toBe(2);expect(actor.scale.y).toBeCloseTo(.825);
     p.dispose();expect(s.mobs.every(m=>m.body.visible)).toBe(true);
+  });
+  it("switches only the physical GLB member when confirmed distance crosses the existing actor LOD bands", async()=>{
+    const s=setup();
+    const load=vi.fn(async()=>loaded());
+    const p=new MobCatalogProjection(s.engine as never,load);p.setCatalog(lodCatalog);await step(p);
+    expect(load).toHaveBeenCalledWith(`/api/assets/glb/${sha}.glb`);
+    expect(p.evidence().physicalLods[0]).toMatchObject({level:0,sha256:sha});
+    s.engine.player.position.x=30;
+    await step(p);await step(p);
+    expect(load).toHaveBeenCalledWith(`/api/assets/glb/${lod1Sha}.glb`);
+    expect(p.evidence().physicalLods[0]).toMatchObject({level:1,sha256:lod1Sha});
+    s.engine.player.position.x=60;
+    await step(p);await step(p);
+    expect(load).toHaveBeenCalledWith(`/api/assets/glb/${lod2Sha}.glb`);
+    expect(p.evidence().physicalLods[0]).toMatchObject({level:2,sha256:lod2Sha});
+    p.dispose();
   });
   it("follows confirmed coordinates and plays a bounded corpse without editing health or targetability", async()=>{
     const s=setup(),p=new MobCatalogProjection(s.engine as never,async()=>loaded());p.setCatalog(catalog);await step(p);
