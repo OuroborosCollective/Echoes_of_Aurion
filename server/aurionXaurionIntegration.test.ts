@@ -8,14 +8,28 @@ const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptati
   files: Array<{ path: string; sourceSha256: string; targetSha256: string; adaptations: Array<{ before: string; after: string; occurrences: number }> }>;
 };
 const treeVisualAdaptations = JSON.parse(read("docs/migrations/fantasy-tree-visual-adaptations.json")) as typeof adaptations;
+const surfaceAtlasAdaptations = JSON.parse(read("docs/migrations/ax1-surface-atlas-adaptations.json")) as typeof adaptations;
+
+function beforeSurfaceAtlas(path: string): string {
+  let source = read(path);
+  const entry = surfaceAtlasAdaptations.files.find(file => file.path === path);
+  if (!entry) return source;
+  expect(sha256(path)).toBe(entry.targetSha256);
+  for (const change of [...entry.adaptations].reverse()) {
+    expect(source.split(change.after).length - 1).toBe(change.occurrences);
+    source = source.replaceAll(change.after, change.before);
+  }
+  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.sourceSha256);
+  return source;
+}
 
 /** Verify the complete changed file, then reconstruct the exact pre-presentation
  * bytes before applying the existing owner-ZIP provenance checks below. */
 function beforeTreeVisualTags(path: string): string {
-  let source = read(path);
+  let source = beforeSurfaceAtlas(path);
   const entry = treeVisualAdaptations.files.find(file => file.path === path);
   if (!entry) return source;
-  expect(sha256(path)).toBe(entry.targetSha256);
+  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.targetSha256);
   for (const change of [...entry.adaptations].reverse()) {
     expect(source.split(change.after).length - 1).toBe(change.occurrences);
     source = source.replaceAll(change.after, change.before);

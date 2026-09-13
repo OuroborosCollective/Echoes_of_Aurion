@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "reason": "Owner-authorized AX1 presentation atlas; reversible changes preserve the earlier owner ZIP and tree visual provenance chain.",
+  "sourceRevision": "a2cf9e61504570fd72092cf6463d24249d504769",
+  "files": [
+    {
+      "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
+      "sourceSha256": "88fbc75e243d5b527cd7ff01734fe2f3f33e2f4525f295eca8d00a6ea8a26e03",
+      "targetSha256": "84c300b90f50645c851ff4f2f6f67dfa297348d1d6701cf6e64e2ae34c3eefb5",
+      "adaptations": [
+        {
+          "before": "import * as THREE from 'three';\nimport { collisionSystem } from './WorldCollisionSystem';\nimport { WorldChunkManager } from './WorldChunkManager';\n\nexport class OpenWorldLandscape {\n  public scene: THREE.Scene;\n",
+          "after": "import * as THREE from 'three';\nimport { collisionSystem } from './WorldCollisionSystem';\nimport { WorldChunkManager } from './WorldChunkManager';\nimport { worldSurfaceMaterial, mapWorldGround, addSanctumSurfaceDetails } from './WorldSurfaceAtlas';\n\nexport class OpenWorldLandscape {\n  public scene: THREE.Scene;\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n    // 6. Ambient Environment Lighting & Skybox Stars\n    this.buildEnvironmentProps();\n  }\n\n  private createOpenWorldTerrain(): THREE.Mesh {\n",
+          "after": "\n    // 6. Ambient Environment Lighting & Skybox Stars\n    this.buildEnvironmentProps();\n    addSanctumSurfaceDetails(this.scene, this.group);\n  }\n\n  private createOpenWorldTerrain(): THREE.Mesh {\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    geo.computeVertexNormals();\n    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));\n\n    const mat = new THREE.MeshStandardMaterial({\n      vertexColors: true,\n      roughness: 0.75,\n      metalness: 0.2,\n      flatShading: true,\n    });\n\n    const mesh = new THREE.Mesh(geo, mat);\n    mesh.receiveShadow = true;\n    return mesh;\n  }\n",
+          "after": "    geo.computeVertexNormals();\n    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));\n\n    mapWorldGround(geo);\n    const materials = ['paving', 'forest', 'rock'].map(kind => worldSurfaceMaterial(this.scene, kind as 'paving' | 'forest' | 'rock'));\n    const indices = geo.index!;\n    geo.clearGroups();\n    // Group adjacent triangles by their visual biome, preserving the original terrain exactly.\n    let groupStart = 0, previous = -1;\n    for (let i = 0; i < indices.count; i += 3) {\n      const ids = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)];\n      const x = ids.reduce((sum, id) => sum + posAttr.getX(id), 0) / 3;\n      const z = ids.reduce((sum, id) => sum + posAttr.getZ(id), 0) / 3;\n      const kind = Math.hypot(x, z) < 34 ? 0 : x > 15 && z < 20 ? 1 : 2;\n      if (kind !== previous) {\n        if (previous >= 0) geo.addGroup(groupStart, i - groupStart, previous);\n        groupStart = i; previous = kind;\n      }\n    }\n    geo.addGroup(groupStart, indices.count - groupStart, previous);\n    const grouped = [[], [], []] as number[][];\n    for (const group of geo.groups) for (let i = group.start; i < group.start + group.count; i++) grouped[group.materialIndex ?? 0].push(indices.getX(i));\n    geo.setIndex(grouped.flat());\n    geo.clearGroups();\n    let offset = 0;\n    grouped.forEach((items, kind) => { if (items.length) geo.addGroup(offset, items.length, kind); offset += items.length; });\n    const mesh = new THREE.Mesh(geo, materials);\n    mesh.receiveShadow = true;\n    return mesh;\n  }\n",
+          "occurrences": 1
+        },
+        {
+          "before": "\n    // 1. Central Aethelgard Aetherium Fountain & Levitating Core\n    const brassTrimMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.85, roughness: 0.25 });\n    const marbleMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });\n    const waterMat = new THREE.MeshStandardMaterial({\n      color: 0x06b6d4,\n      emissive: 0x0891b2,\n",
+          "after": "\n    // 1. Central Aethelgard Aetherium Fountain & Levitating Core\n    const brassTrimMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.85, roughness: 0.25 });\n    const marbleMat = worldSurfaceMaterial(this.scene, 'paving');\n    const waterMat = new THREE.MeshStandardMaterial({\n      color: 0x06b6d4,\n      emissive: 0x0891b2,\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      { x: 26, z: 26 },\n    ];\n\n    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.9 });\n\n    towerPositions.forEach((pos, idx) => {\n      const tower = new THREE.Group();\n",
+          "after": "      { x: 26, z: 26 },\n    ];\n\n    const stoneMat = worldSurfaceMaterial(this.scene, 'rock');\n\n    towerPositions.forEach((pos, idx) => {\n      const tower = new THREE.Group();\n",
+          "occurrences": 1
+        },
+        {
+          "before": "  private buildClockworkWoods() {\n    const woodsGroup = new THREE.Group();\n\n    const woodMat = new THREE.MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.9 });\n    const leafMat = new THREE.MeshStandardMaterial({\n      color: 0x10b981,\n      emissive: 0x064e3b,\n      emissiveIntensity: 0.3,\n      roughness: 0.6,\n",
+          "after": "  private buildClockworkWoods() {\n    const woodsGroup = new THREE.Group();\n\n    const woodMat = worldSurfaceMaterial(this.scene, 'wood');\n    const leafMat = new THREE.MeshStandardMaterial({\n      color: 0x526444,\n      emissive: 0x064e3b,\n      emissiveIntensity: 0.3,\n      roughness: 0.6,\n",
+          "occurrences": 1
+        },
+        {
+          "before": "  private buildScorchedQuarry() {\n    const quarryGroup = new THREE.Group();\n\n    const rockMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.95 });\n    const lavaMat = new THREE.MeshStandardMaterial({\n      color: 0xef4444,\n      emissive: 0xf97316,\n",
+          "after": "  private buildScorchedQuarry() {\n    const quarryGroup = new THREE.Group();\n\n    const rockMat = worldSurfaceMaterial(this.scene, 'rock');\n    const lavaMat = new THREE.MeshStandardMaterial({\n      color: 0xef4444,\n      emissive: 0xf97316,\n",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "client/src/xaurion/world/WorldChunkManager.ts",
+      "sourceSha256": "fff15bb9dba605b743c803960214a25d98e66f66c2af40892717416f687c031b",
+      "targetSha256": "ef3236b70ff3ec392aa218f3a67fe08d75a8a36a8b82a4d0c9f216eefc256b6b",
+      "adaptations": [
+        {
+          "before": "import * as THREE from 'three';\nimport { BiomeType, LandmarkType, SolidObstacle, WorldChunkData, WorldExpansionStats } from '../types';\nimport { collisionSystem } from './WorldCollisionSystem';\n\n",
+          "after": "import * as THREE from 'three';\nimport { worldSurfaceMaterial, mapWorldGround } from './WorldSurfaceAtlas';\nimport { BiomeType, LandmarkType, SolidObstacle, WorldChunkData, WorldExpansionStats } from '../types';\nimport { collisionSystem } from './WorldCollisionSystem';\n\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    const terrainGeo = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize, segs, segs);\n    terrainGeo.rotateX(-Math.PI / 2);\n\n    // Biome color\n    let terrainColor = 0x22c55e;\n    if (chunk.materialTheme === 'flower_meadow') terrainColor = 0x10b981;\n    else if (chunk.materialTheme === 'earth') terrainColor = 0x78350f;\n    else if (chunk.materialTheme === 'farmland') terrainColor = 0xca8a04;\n    else if (chunk.materialTheme === 'starpath' || chunk.materialTheme === 'starpath_crossing') terrainColor = 0x475569;\n\n    const terrainMat = new THREE.MeshStandardMaterial({\n      color: terrainColor,\n      roughness: 0.85,\n      metalness: 0.15,\n      flatShading: true,\n    });\n\n    // Add subtle procedural undulating elevation\n    const pos = terrainGeo.attributes.position;\n",
+          "after": "    const terrainGeo = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize, segs, segs);\n    terrainGeo.rotateX(-Math.PI / 2);\n\n    const paved = chunk.materialTheme === 'starpath' || chunk.materialTheme === 'starpath_crossing';\n    const terrainMat = worldSurfaceMaterial(this.scene, paved ? 'paving' : 'forest');\n    mapWorldGround(terrainGeo, chunk.centerX, chunk.centerZ);\n\n    // Add subtle procedural undulating elevation\n    const pos = terrainGeo.attributes.position;\n",
+          "occurrences": 1
+        },
+        {
+          "before": "    group.add(terrainMesh);\n\n    // Materials Palette matching Art Direction (Honey-stone, Brushed Bronze, Midnight-Petrol, Aurion-Turquoise)\n    const honeyStoneMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.85 });\n    const bronzeMat = new THREE.MeshStandardMaterial({ color: 0xcd7f32, metalness: 0.85, roughness: 0.3 });\n    const woodTrunkMat = new THREE.MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.9 });\n    const leafMat = new THREE.MeshStandardMaterial({\n      color: 0x059669,\n      emissive: 0x047857,\n      emissiveIntensity: 0.25,\n      roughness: 0.6,\n    });\n    const turquoiseGlowMat = new THREE.MeshStandardMaterial({\n",
+          "after": "    group.add(terrainMesh);\n\n    // Materials Palette matching Art Direction (Honey-stone, Brushed Bronze, Midnight-Petrol, Aurion-Turquoise)\n    const honeyStoneMat = worldSurfaceMaterial(this.scene, 'paving');\n    const bronzeMat = new THREE.MeshStandardMaterial({ color: 0xcd7f32, metalness: 0.85, roughness: 0.3 });\n    const woodTrunkMat = worldSurfaceMaterial(this.scene, 'wood');\n    const leafMat = new THREE.MeshStandardMaterial({\n      color: 0x526444,\n      emissive: 0x047857,\n      emissiveIntensity: 0.02,\n      roughness: 0.6,\n    });\n    const turquoiseGlowMat = new THREE.MeshStandardMaterial({\n",
+          "occurrences": 1
+        },
+        {
+          "before": "      emissiveIntensity: 1.4,\n      roughness: 0.2,\n    });\n    const stoneWallMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });\n    const bannerMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.5, side: THREE.DoubleSide });\n\n    // 2. Render 3D Objects for each Solid Obstacle\n",
+          "after": "      emissiveIntensity: 1.4,\n      roughness: 0.2,\n    });\n    const stoneWallMat = worldSurfaceMaterial(this.scene, 'rock');\n    const bannerMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.5, side: THREE.DoubleSide });\n\n    // 2. Render 3D Objects for each Solid Obstacle\n",
+          "occurrences": 1
+        }
+      ]
+    }
+  ]
+}
