@@ -5,12 +5,13 @@ import type { ConfirmedZoneMob } from "@shared/zoneMobContract";
 import type { ConfirmedZoneCombatant, ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import type { ConfirmedZoneResourceSnapshot } from "@shared/zoneResourceContract";
 import type { ConfirmedZoneTelegraphEvent } from "@shared/zoneTelegraphContract";
+import { ZONE_TICK_MS } from "@shared/zoneTimingContract";
 import { isAx1BladeSkillId, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 
+export { ZONE_TICK_MS };
 export const zoneIdSchema=z.literal("observatory_threshold");
 export type ZoneId=z.infer<typeof zoneIdSchema>;
 export const ZONE_FIXED_POINT_SCALE=1_000;
-export const ZONE_TICK_MS=100;
 export const zoneHelloSchema=z.object({type:z.literal("hello"),ticket:z.string().min(24).max(160),zoneId:zoneIdSchema,protocolVersion:z.literal(ZONE_PROTOCOL_VERSION)});
 export type ZoneHello=z.infer<typeof zoneHelloSchema>;
 export const zoneMoveSchema=z.object({type:z.literal("move"),clientSeq:z.number().int().min(1).max(2_147_483_647),input:z.object({x:z.number().int().min(-1).max(1),z:z.number().int().min(-1).max(1)})});

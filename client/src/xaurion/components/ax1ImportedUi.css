@@ -11,6 +11,24 @@
 .ax1-tab[aria-pressed=true],.ax1-tab[aria-selected=true] { color:var(--ax1-gold); border-color:var(--ax1-gold); background:#fbbf2420; }
 .ax1-primary { display:inline-flex; justify-content:center; gap:7px; border-radius:11px; padding:10px 13px; color:#17100a; background:linear-gradient(100deg,#f59e0b,#fde047); font-weight:700; font-size:12px; }
 .ax1-notice { padding:9px 12px; margin-top:8px; background:#002b38; color:#a5f3fc; border:1px solid #155e75; border-radius:10px; font-size:12px; }
+.ax1-projection-state { display:flex; align-items:center; gap:7px; margin-top:10px; padding:8px 11px; border:1px solid #155e75; border-radius:10px; background:#002b38; color:#a5f3fc; font-size:11px; }
+.ax1-projection-state--stale,.ax1-projection-state--unavailable { border-color:#92400e; background:#451a033f; color:#fde68a; }
+.ax1-projection-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+.ax1-projection-card { min-width:0; padding:13px; border:1px solid #334155; border-radius:13px; background:#02061799; }
+.ax1-projection-card h4 { color:#fde68a; font:700 12px ui-serif,serif; letter-spacing:.04em; }
+.ax1-projection-card p { margin-top:6px; color:#94a3b8; font-size:11px; line-height:1.5; }
+.ax1-unknown-value { color:#67e8f9; font:700 13px ui-monospace,monospace; }
+.ax1-confirmed-minimap { position:absolute; top:58px; right:16px; width:178px; height:126px; overflow:hidden; border:1px solid #f59e0b66; border-radius:50% 50% 14px 14px; background:radial-gradient(circle,#164e63 0,#071521 62%,#020617 100%); color:#e2e8f0; pointer-events:auto; box-shadow:0 10px 30px #000b; }
+.ax1-minimap-grid { position:absolute; inset:0; opacity:.22; background-image:linear-gradient(#67e8f955 1px,transparent 1px),linear-gradient(90deg,#67e8f955 1px,transparent 1px); background-size:24px 24px; }
+.ax1-minimap-player,.ax1-minimap-poi { position:absolute; width:8px; height:8px; border-radius:999px; transform:translate(-50%,-50%); box-shadow:0 0 9px currentColor; }
+.ax1-minimap-player { left:50%; top:49%; width:11px; height:11px; color:#fff; background:#22d3ee; border:2px solid white; }
+.ax1-minimap-poi { color:#fbbf24; background:#fbbf24; }.ax1-minimap-poi--npc{color:#34d399;background:#34d399}.ax1-minimap-poi--encounter{color:#fb7185;background:#fb7185}
+.ax1-minimap-label { position:absolute; left:8px; right:8px; bottom:17px; display:flex; justify-content:center; gap:4px; font-size:9px; font-weight:700; }.ax1-confirmed-minimap small{position:absolute;bottom:5px;left:0;right:0;font-size:8px;color:#94a3b8}
+.ax1-world-map-canvas { position:relative; min-height:300px; margin-bottom:12px; overflow:hidden; border:1px solid #155e75; border-radius:18px; background:radial-gradient(circle at center,#155e75 0,#082f49 28%,#020617 72%); }
+.ax1-world-map-canvas:before { content:""; position:absolute; inset:0; opacity:.18; background-image:linear-gradient(#67e8f955 1px,transparent 1px),linear-gradient(90deg,#67e8f955 1px,transparent 1px); background-size:48px 48px; }
+.ax1-world-map-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:grid; place-items:center; gap:4px; color:#67e8f9; }.ax1-world-map-center span{font-size:10px}
+.ax1-world-map-poi { position:absolute; transform:translate(-50%,-50%); display:grid; grid-template-columns:auto 1fr; gap:2px 5px; max-width:150px; padding:7px; border:1px solid #f59e0b66; border-radius:9px; background:#020617dd; font-size:9px; }.ax1-world-map-poi small{grid-column:2;color:#94a3b8}
+@media(max-width:700px){.ax1-confirmed-minimap{top:70px;right:8px;width:128px;height:94px}.ax1-world-map-canvas{min-height:360px}.ax1-world-map-poi{max-width:100px}.ax1-world-map-poi span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .ax1-bag-item,.ax1-bag-empty { position:relative; aspect-ratio:1; min-width:0; border:1px solid #374151; border-radius:9px; background:#0006; display:grid; place-items:center; }
 .ax1-bag-item>span { font-size:25px; }.ax1-bag-item>small { position:absolute; bottom:1px; right:3px; font-size:8px; max-width:95%; overflow:hidden; }
 .ax1-bag-item[aria-pressed=true] { outline:2px solid var(--ax1-gold); outline-offset:1px; }.ax1-loot-dot { position:absolute; top:0; right:3px; color:var(--ax1-gold); }

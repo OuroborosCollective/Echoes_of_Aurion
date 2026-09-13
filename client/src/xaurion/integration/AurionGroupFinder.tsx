@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { groupReadmodelSchema, groupRoles, groupVariants, type GroupCommand, type GroupReadmodel, type GroupRole } from "@shared/groupInstanceProtocol";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Castle, Users, X } from "lucide-react";
+import { Ax1Modal } from "../components/Ax1Modal";
 import "./aurionGroupFinder.css";
 
 const roleNames = { tank: "Tank", healer: "Heiler", dps: "Schaden" };
@@ -31,7 +32,7 @@ export function ConfirmedGroupInstance({ data }: { data: GroupReadmodel }) {
   </section>;
 }
 
-export function AurionGroupFinder({ open, onClose }: { open: boolean; onClose?: () => void }) {
+export function AurionGroupFinder({ open, onClose, mode = "party" }: { open: boolean; onClose?: () => void; mode?: "party" | "dungeon" }) {
   const { user, isAuthenticated } = useAuth();
   const query = trpc.groups.read.useQuery(undefined, { enabled: open && isAuthenticated, refetchInterval: open ? 2_000 : false, staleTime: 3_000 });
   const mutation = trpc.groups.command.useMutation();
@@ -100,7 +101,11 @@ export function AurionGroupFinder({ open, onClose }: { open: boolean; onClose?: 
     {message && <p role="status">{message}</p>}
   </div>;
   if (!onClose) return <main className="aurion-groups-page"><a href="/">Zur Sternwarte</a><h1>Gruppenexpedition</h1>{content}</main>;
-  return <Dialog open={open} onOpenChange={value => { if (!value) { setConfirmLeave(false); onClose(); } }}><DialogContent className="aurion-authority-hud__dialog" overlayClassName="aurion-authority-hud__backdrop"><DialogTitle>Gruppenexpedition</DialogTitle><DialogDescription>Echte Mitspieler, bestätigte Rollen und eine gemeinsame Instanz. Das Schließen beendet die Gruppe nicht.</DialogDescription>{content}</DialogContent></Dialog>;
+  const title = mode === "dungeon" ? "Dungeon Finder" : "Party & Adventuring Squad";
+  return <Ax1Modal open={open} onClose={() => { setConfirmLeave(false); onClose(); }} id={mode} title={title}><section className="ax1-window w-full max-w-5xl bg-[#081a2e] border-2 border-amber-500/50 rounded-2xl p-4 sm:p-5 text-gray-200 flex flex-col max-h-[92dvh] overflow-hidden">
+    <header className="ax1-window-header flex items-center justify-between gap-3 border-b border-gray-800 pb-3"><div className="flex items-center gap-3"><div className="ax1-crest">{mode === "dungeon" ? <Castle /> : <Users />}</div><div><p className="text-[10px] uppercase tracking-[.18em] text-cyan-300">AX1 Group Runtime</p><h3 className="font-serif font-bold text-white">{title}</h3><p className="text-[11px] text-gray-400">Echte Mitspieler, bestätigte Rollen und gemeinsame Instanz-Receipts.</p></div></div><button type="button" className="ax1-close" aria-label={`${title} schließen`} onClick={() => { setConfirmLeave(false); onClose(); }}><X size={18} /></button></header>
+    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar py-3">{content}</div>
+  </section></Ax1Modal>;
 }
 
 export default function AurionGroupsPage() { return <AurionGroupFinder open />; }

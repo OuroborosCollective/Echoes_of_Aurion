@@ -86,10 +86,10 @@ describe("server-backed Aurion HUD", () => {
     expect(screen.getByText("Receipt verifiziert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Charakter" }));
     expect(screen.queryByText(/Klasse wählen|Vorhut|Seher|Hüter/)).toBeNull();
-    expect(screen.getAllByText("greatsword.two_handed.v3").length).toBeGreaterThan(0);
+    expect(screen.getByRole("dialog", { name: "Charakter & Skills" })).toBeTruthy();
   });
 
-  it("projects the confirmed character appearance into the AX1 character menu", () => {
+  it("keeps the AX1 character/mastery menu independent from the old Aurion preview widget", () => {
     fixtures.player.data = confirmed;
     fixtures.ui.data = uiState;
     fixtures.appearance.data = {
@@ -101,8 +101,9 @@ describe("server-backed Aurion HUD", () => {
     };
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Charakter" }));
-    expect(screen.getByTestId("character-preview").textContent).toBe("Aethelgard Explorer");
-    expect(screen.getByText("Charaktermodell serverbestätigt · player-public")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Charakter & Skills" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mastery" })).toBeTruthy();
+    expect(screen.queryByTestId("character-preview")).toBeNull();
   });
 
   it("keeps a live inventory setting actionable when only the unrelated player readback is stale", async () => {
@@ -138,6 +139,25 @@ describe("server-backed Aurion HUD", () => {
     const handler = vi.fn(); window.addEventListener("aurion:open-community", handler);
     try { mount(); fireEvent.click(screen.getByRole("button", { name: "Handwerk" })); expect(screen.getByRole("dialog", { name: "Handwerk & Berufe" })).toBeTruthy(); expect(handler).not.toHaveBeenCalled(); }
     finally { window.removeEventListener("aurion:open-community", handler); }
+  });
+
+  it("exposes the complete AX1 menu family and preserves the research lane", () => {
+    fixtures.player.data = confirmed; fixtures.ui.data = uiState;
+    const companion = vi.fn(); window.addEventListener("aurion:open-companion", companion);
+    try {
+      mount();
+      fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
+      for (const [button, dialog] of [["Disziplinen & Pfade", "Disziplinen & Pfade"], ["Gilde öffnen", "Gildenverwaltung"], ["Ökonomie", "Lebendige Ökonomie"], ["NPC-Dialoge", "Dialoge & Beziehungen"], ["Territorium", "Territorium & Politik"], ["Homestead", "Homestead Builder"], ["Determinismus & Evidence", "Determinismus & Evidence"]] as const) {
+        fireEvent.click(screen.getByRole("button", { name: button }));
+        expect(screen.getByRole("dialog", { name: dialog })).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: `${dialog} schließen` }));
+        fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
+      }
+      fireEvent.click(screen.getByRole("button", { name: "Research & Learning" }));
+      expect(screen.getByRole("dialog", { name: "Research & Learning" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Companion-Lane öffnen" }));
+      expect(companion).toHaveBeenCalledTimes(1);
+    } finally { window.removeEventListener("aurion:open-companion", companion); }
   });
 
   it("keeps equip blocked through mutation and the subsequent server readback", async () => {

@@ -1,41 +1,110 @@
-/** AX1 character readback: classless, receipt-backed tracks and control bindings.
- * Aurion displays confirmed persistence only; it does not choose classes, weapon rules, aggregate level or XP. */
-import { X, User, BookOpen, Trophy, Sparkles } from "lucide-react";
-import { trpc } from "@/lib/trpc";
 import type { z } from "zod";
 import type { playerReadbackSchema } from "../integration/authoritativeHudProjection";
 import type { ControlSettings, SkillCommand } from "@shared/playerUiProtocol";
 import type { GroupReadmodel } from "@shared/groupInstanceProtocol";
-import { Ax1Modal } from "./Ax1Modal";
-import { Ax1SkillBook } from "./Ax1SkillBook";
-import { Ax1CharacterPreview, type ConfirmedCharacterAppearance } from "./Ax1CharacterPreview";
+import { DEFAULT_WEAPON_MASTERIES } from "../data/mmorpgData";
+import type { PlayerStats, WeaponMastery, WeaponType } from "../types";
+import { Ax1CharacterModal, type Ax1VisiblePlayerStats } from "./Ax1CharacterModal";
 
-export function CharacterModal({ isOpen, onClose, player, appearance, settings, uiPending, groupPending, message, group, onBind, onRoleSkill, onInventory }: {
-  isOpen: boolean; onClose: () => void; player?: z.infer<typeof playerReadbackSchema>; appearance?: ConfirmedCharacterAppearance | null; settings?: ControlSettings;
-  uiPending: boolean; groupPending: boolean; message?: string;
-  group?: GroupReadmodel; onBind: (slot: number, command: SkillCommand) => void; onRoleSkill: (skill: "mending_light" | "guardian_stance", equipped: boolean) => void; onInventory: () => void;
+const knownWeaponTypes = new Set<WeaponType>(Object.keys(DEFAULT_WEAPON_MASTERIES) as WeaponType[]);
+
+function exactLevel(value: string): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+/**
+ * Converts only receipt-confirmed Aurion progression into the data shape expected
+ * by the visible AX1 character/mastery surface. Missing gameplay values stay
+ * explicitly unconfirmed (NaN/0 sentinels) and are rendered as dashes by AX1.
+ */
+export function projectConfirmedAx1Character(player?: z.infer<typeof playerReadbackSchema>): Ax1VisiblePlayerStats {
+  const weaponMasteries: Partial<Record<WeaponType, WeaponMastery>> = {};
+  const unlockedSkills: string[] = [];
+  let activeWeaponType: WeaponType = "blade";
+
+  for (const track of player?.progression.tracks ?? []) {
+    if (track.trackKind === "skill") {
+      unlockedSkills.push(track.trackId);
+      continue;
+    }
+    if (!knownWeaponTypes.has(track.trackId as WeaponType)) continue;
+    const type = track.trackId as WeaponType;
+    const source = DEFAULT_WEAPON_MASTERIES[type];
+    if (!source) continue;
+    const level = exactLevel(track.levelExact);
+    weaponMasteries[type] = {
+      ...source,
+      level,
+      xp: 0,
+      maxXp: 0,
+      bonusStats: { ...source.bonusStats },
+      skills: [...source.skills],
+      milestoneSkills: source.milestoneSkills ? [...source.milestoneSkills] : [],
+    };
+    if (Object.keys(weaponMasteries).length === 1) activeWeaponType = type;
+  }
+
+  const unknown = Number.NaN;
+  const stats: PlayerStats = {
+    hp: unknown,
+    maxHp: unknown,
+    resource: unknown,
+    maxResource: unknown,
+    resourceName: "—",
+    resourceColor: "#6b7280",
+    level: 0,
+    xp: 0,
+    maxXp: 0,
+    xpToNextLevel: 0,
+    gold: 0,
+    politicsLevel: 0,
+    politicsXp: 0,
+    attackPower: unknown,
+    spellPower: unknown,
+    armor: unknown,
+    critChance: unknown,
+    dodgeChance: unknown,
+    moveSpeed: unknown,
+    moveSpeedMultiplier: 1,
+    isMounted: false,
+    activeMountName: "",
+    score: 0,
+    kills: 0,
+    bossKills: player?.profile.victories ?? 0,
+    currentZone: "",
+    x: 0,
+    y: 0,
+    z: 0,
+    statPoints: 0,
+    attributes: { strength: unknown, agility: unknown, intelligence: unknown, defense: unknown },
+    activeWeaponType,
+    weaponMasteries: weaponMasteries as Record<WeaponType, WeaponMastery>,
+    equippedSkills: [],
+    unlockedMilestoneSkills: [...new Set(unlockedSkills)].sort(),
+    totalMasteryLevel: Object.values(weaponMasteries).reduce((sum, mastery) => sum + (mastery?.level ?? 0), 0),
+  };
+  return Object.assign(stats, { prestigeTitle: undefined });
+}
+
+/** Thin authority adapter. The rendered surface itself is AX1. */
+export function CharacterModal({ isOpen, onClose, player, settings: _settings, uiPending: _uiPending, groupPending: _groupPending, message: _message, group: _group, onBind: _onBind, onRoleSkill: _onRoleSkill, onInventory: _onInventory }: {
+  isOpen: boolean;
+  onClose: () => void;
+  player?: z.infer<typeof playerReadbackSchema>;
+  settings?: ControlSettings;
+  uiPending: boolean;
+  groupPending: boolean;
+  message?: string;
+  group?: GroupReadmodel;
+  onBind: (slot: number, command: SkillCommand) => void;
+  onRoleSkill: (skill: "mending_light" | "guardian_stance", equipped: boolean) => void;
+  onInventory: () => void;
 }) {
-  const appearanceQuery = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: isOpen, staleTime: 15_000 });
-  const confirmedAppearance = appearance ?? appearanceQuery.data ?? null;
-  const appearancePending = isOpen && appearance === undefined && appearanceQuery.isFetching && !appearanceQuery.data;
-  const appearanceError = isOpen && appearance === undefined && appearanceQuery.isError;
-  const profile = player?.profile;
-  const weaponTracks = player?.progression.tracks.filter(track => track.trackKind === "weapon") ?? [];
-  const skillTracks = player?.progression.tracks.filter(track => track.trackKind === "skill") ?? [];
-  const trackCount = weaponTracks.length + skillTracks.length;
-  return <Ax1Modal open={isOpen} onClose={onClose} id="character" title="Charakter & Skills"><section id="character-dialog" className="ax1-window w-full max-w-4xl bg-[#11141a] border border-[#b8860b]/40 rounded-2xl p-5 sm:p-6 text-gray-200 shadow-[0_0_40px_rgba(184,134,11,0.2)] flex flex-col max-h-[90dvh] overflow-hidden">
-    <header className="ax1-window-header flex items-center justify-between border-b border-gray-800 pb-4 gap-3"><div className="flex items-center gap-3"><div className="ax1-crest"><User /></div><div><h3 className="text-lg font-serif font-bold text-white">{confirmedAppearance?.displayName ?? "Explorer · Aurion"}</h3><p className="text-xs text-[#b8860b] font-mono">{player ? `${trackCount} bestätigte Progressionspfade · ${profile?.aurionPoints ?? 0} AURION` : "—"}</p></div></div><button onClick={onClose} aria-label="Charakter schließen" className="ax1-close"><X size={18} /></button></header>
-    {message && <p className="ax1-notice" role="status">{message}</p>}
-    <div className="flex-1 overflow-y-auto min-h-0 py-3 space-y-4 custom-scrollbar">
-      <section className="grid gap-4 md:grid-cols-[minmax(240px,280px)_1fr]">
-        {appearancePending ? <div className="min-h-64 rounded-2xl border border-cyan-500/30 bg-black/50 grid place-items-center p-5 text-center" role="status">Bestätigtes Charaktermodell wird geladen …</div> : <Ax1CharacterPreview open={isOpen} appearance={confirmedAppearance} />}
-        <div className="bg-black/60 rounded-xl border border-gray-800 p-4"><h4 className="font-serif text-amber-300 text-sm mb-3">Dein klassenloser Weg durch Aurion</h4><dl className="grid grid-cols-2 gap-3">{[["Progressionspfade", trackCount], ["Waffenpfade", weaponTracks.length], ["Skills", skillTracks.length], ["Siege", profile?.victories]].map(([key, value]) => <div key={key} className="p-3 rounded-xl border border-gray-800 bg-black/60"><dt className="text-[10px] uppercase text-gray-400">{key}</dt><dd className="font-mono text-lg text-white">{value ?? "—"}</dd></div>)}</dl><p className="mt-3 text-xs text-gray-400">Es existiert keine Klassenwahl. Ein aggregiertes Charakterlevel oder Gesamt-EP werden erst angezeigt, wenn ein kanonischer WASD-Snapshot dafür gebunden ist.</p>{confirmedAppearance && <p className="mt-3 text-[11px] text-cyan-300">Charaktermodell serverbestätigt · {confirmedAppearance.visibility}</p>}{appearanceError && <p className="mt-3 text-[11px] text-red-300" role="alert">Bestätigte Charakterzuordnung ist derzeit nicht verfügbar.</p>}</div>
-      </section>
-      <button className="ax1-primary" onClick={onInventory}>Paperdoll & Ausrüstung öffnen</button>
-      <section className="bg-black/70 rounded-xl border border-gray-800 p-4"><h4 className="font-serif text-amber-300 flex gap-2 items-center"><Trophy size={16} /> Bestätigte Waffenpfade</h4><div className="mt-3 grid gap-2 sm:grid-cols-2">{weaponTracks.map(track => <div key={track.trackId} className="rounded-lg border border-gray-800 p-3"><b>{track.trackId}</b><p className="text-xs text-gray-400">Stufe {track.levelExact} · Receipt {track.receiptHash.slice(0, 10)}…</p></div>)}{!weaponTracks.length && <p className="text-xs text-gray-400">Noch kein bestätigter Waffenpfad.</p>}</div></section>
-      <section className="bg-black/70 rounded-xl border border-gray-800 p-4"><h4 className="font-serif text-amber-300 flex gap-2 items-center"><BookOpen size={16} /> Bestätigte Skills</h4><div className="mt-3 grid gap-2 sm:grid-cols-2">{skillTracks.map(track => <div key={track.trackId} className="rounded-lg border border-gray-800 p-3"><b>{track.trackId}</b><p className="text-xs text-gray-400">Stufe {track.levelExact} · Receipt {track.receiptHash.slice(0, 10)}…</p></div>)}{!skillTracks.length && <p className="text-xs text-gray-400">Noch kein bestätigter Skillstand.</p>}</div></section>
-      <Ax1SkillBook settings={settings} pending={uiPending} onBind={onBind} />
-      <fieldset className="bg-black/70 rounded-xl border border-cyan-800 p-4 space-y-3" disabled={groupPending || !group || group.player.status !== "idle"}><legend className="text-cyan-300 text-xs px-2"><Sparkles size={14} className="inline" /> Gruppen-Skills</legend>{([['mending_light', 'Heilendes Licht'], ['guardian_stance', 'Wächterhaltung']] as const).map(([skill, name]) => <label key={skill} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={group?.player.skills.includes(skill) ?? false} onChange={e => onRoleSkill(skill, e.target.checked)} />{name}</label>)}<p className="text-xs text-gray-400">Rollenqualifikation folgt bestätigten Skills und niemals einer Klasse.</p>{group && group.player.status !== "idle" && <p className="text-xs text-amber-300">Skillwechsel nach dem Verlassen der Warteschlange oder Gruppe.</p>}</fieldset>
-    </div>
-  </section></Ax1Modal>;
+  return <Ax1CharacterModal
+    isOpen={isOpen}
+    onClose={onClose}
+    stats={projectConfirmedAx1Character(player)}
+    currentClassId="knight"
+  />;
 }

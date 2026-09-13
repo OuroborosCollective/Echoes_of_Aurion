@@ -289,6 +289,16 @@ Open: Server mob attacks are still impact-only; elite/boss pre-cast windup is no
 Next safe step: Merge this checkpoint, then continue the remaining product corridors on a fresh branch without claiming full AX1 integration completeness.
 
 
+### 2026-09-12 — AX1 f24 main-game cutover
+Status: VERIFIED candidate; repository merge and production deployment/readback are not claimed.
+Task: Complete the visible AX1 cutover while retaining Aurion research and the deeper autonomous NPC decision/multi-memory system.
+Decisions: AX1 revision `f24e3bbb452bd6991c8365fc7827ce6dbcc16d95` defines the main game and gameplay contracts; WASD executes deterministic logic; Aurion supplies community/auth/host/MariaDB/transport/receipts/readmodels. Unsafe AX1-local truth was excluded, confirmed effects are tick/receipt-bound, and the unchanged NPC/Lingua base `cf9cd7a9e197a110724d4f517655a63168ed63e0` was merged with Aurion's autonomous Needs/Living-World/Multi-Memory chain rather than replacing it.
+Touched surfaces: AX1 HUD and full menu family, inventory/character/crafting/quest/group/map/world/community projections, combat metrics/log/effects, Research/Companion/Wolfram evidence, NPC dialogue/decision readbacks, ownership and source provenance.
+Evidence: Exact pre-memory head `3f7e0459365b245d0838edd6b009a0cdc738fee7`; 9/9 workflows succeeded, including real MariaDB group/browser evidence, NPC Multi-Memory, renderer recovery, deterministic visuals, Android, migration guard and byte-identical asset shipping. Local TypeScript, production build, source/568-asset/112-collider verification and 886 executed tests passed; 111 environment-gated tests were explicitly skipped. Focused HUD-overlap guard passed 5/5.
+Learned: AX1's source manifest was stale for five visible files, so actual f24 hashes are pinned. The NPC engine had no cf9-to-f24 source delta; preserving the richer confirmed Aurion NPC chain is therefore both source-faithful and required. Browser evidence also exposed real Minimap/Combat-Metrics pointer collisions, fixed in layout rather than bypassed in tests.
+Open: Production deployment/readback and native-device performance are not implied. Guild/economy/territory/homestead mutations remain fail-closed until executable AX1 contracts and WASD execution paths exist.
+Next safe step: Re-run exact-head CI after this entry, synchronize Linear/GitBook, obtain exact-revision merge approval, merge, then verify main and zero open PRs.
+
 ### 2026-09-12 — Indexed zone peer lookup
 Status: VERIFIED candidate; merge and production performance are not claimed.
 Task: Replace repeated high-frequency peer scans with a lifecycle-bound entity index.

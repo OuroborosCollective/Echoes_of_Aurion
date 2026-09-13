@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const PLAYER_UI_VERSION = "aurion-ax1-ui.v1" as const;
-export const AX1_UI_SOURCE = "d356881538dae23c3aa97364a5596d48b6ac3079" as const;
+export const AX1_UI_SOURCE = "f24e3bbb452bd6991c8365fc7827ce6dbcc16d95" as const;
 export const skillCommandSchema = z.enum(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 export type SkillCommand = z.infer<typeof skillCommandSchema>;
 export const hotbarSchema = z.array(skillCommandSchema).length(5).refine(v => new Set(v).size === 5, "Doppelte Skillbelegung");
