@@ -367,3 +367,13 @@ Evidence: exact pre-entry head `93805eddb69897593f9efd2aadcc68e43e9d2f39`; Game 
 Learned: Current GDS v1.0.2 is the supported CLI+Skills boundary; the retired historical MCP path must not be reintroduced.
 Open: This memory append creates a new head, so all merge gates must be rerun on that exact revision before merge.
 Next safe step: Require exact-head green checks, then merge PR #318; runtime game/deploy claims remain separate.
+
+### 2026-09-13 — Clockwork Stalker reconcile on current GDS main
+Status: VERIFIED repository candidate; production and in-world visual draw not claimed.
+Task: Rebind the already-verified Clockwork Stalker from stale PR #314 onto the current Game Development Studio main without stale history.
+Decisions: Preserve the 14 non-Memory files and original GLB/evidence bytes; keep the mob consumer presentation-only; synchronize intervening GitBook docs before final evidence.
+Touched surfaces: Stalker asset/evidence/build scripts, fantasy manifest, `MobCatalogProjection`, current docs ancestry.
+Evidence: Exact pre-memory head `f041a2efc4a3bcee7c8e6912fcb138c76ec2a6e4`; GLB SHA `94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a`; all 6 workflows succeeded, including AIM-291 Asset Shipping run `34780250976` with phone/tablet/desktop runtime jobs and reproducible shipping validation.
+Learned: Verified asset bytes still require a current-base rebind and exact-head evidence; stale PR history is not integration proof.
+Open: Production deployment, visible in-world confirmation and native-device performance remain separate.
+Next safe step: Re-run all merge gates on this post-memory head; merge #325 only if exact-head green, then close #314 as superseded and read back main.
