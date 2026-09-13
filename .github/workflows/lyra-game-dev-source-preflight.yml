@@ -3,8 +3,10 @@ name: Lyra Game Development Studio Source Preflight
 on:
   pull_request:
     paths:
-      - "scripts/game-dev-lyra-source-readback.mjs"
-      - "assets/policies/lyra-first-quest-npc.game-dev.json"
+      - "scripts/reconstruct-lyra-rig-proxy.mjs"
+      - "scripts/tripo-lyra-rig-check.mjs"
+      - "tools/game-dev/lyra-rig-proxy/**"
+      - "assets/policies/lyra-rig-proxy.game-dev.json"
       - ".github/workflows/lyra-game-dev-source-preflight.yml"
       - "scripts/install-game-development-studio.mjs"
   workflow_dispatch:
@@ -27,18 +29,23 @@ jobs:
         run: node scripts/install-game-development-studio.mjs
       - name: Confirm provider configuration without exposing credentials
         run: game-dev credentials status --json
-      - name: Bind uploaded Lyra GLB to its original Tripo task
-        run: node scripts/game-dev-lyra-source-readback.mjs
-      - name: Inspect source GLB with Game Development Studio
-        run: game-dev asset inspect .game-dev/workspace/lyra-source.glb --json | tee .game-dev/workspace/lyra-inspection.json
-      - name: Validate source against Aurion NPC policy
-        run: game-dev asset validate .game-dev/workspace/lyra-source.glb --request assets/policies/lyra-first-quest-npc.game-dev.json --json | tee .game-dev/workspace/lyra-validation.json
+      - name: Reconstruct verified Lyra rig proxy
+        run: node scripts/reconstruct-lyra-rig-proxy.mjs | tee .game-dev/workspace/lyra-proxy-reconstruction.json
+      - name: Inspect verified geometry proxy with Game Development Studio
+        run: game-dev asset inspect .game-dev/workspace/lyra-rig-proxy.glb --json | tee .game-dev/workspace/lyra-proxy-inspection.json
+      - name: Validate proxy against rig-transport policy
+        run: game-dev asset validate .game-dev/workspace/lyra-rig-proxy.glb --request assets/policies/lyra-rig-proxy.game-dev.json --json | tee .game-dev/workspace/lyra-proxy-validation.json
+      - name: Upload proxy and run free Tripo rig-check
+        run: node scripts/tripo-lyra-rig-check.mjs
       - name: Upload read-only preflight evidence
         uses: actions/upload-artifact@v4
         with:
           name: lyra-game-dev-source-preflight
           path: |
-            .game-dev/workspace/lyra-inspection.json
-            .game-dev/workspace/lyra-validation.json
+            tools/game-dev/lyra-rig-proxy/manifest.json
+            .game-dev/workspace/lyra-proxy-reconstruction.json
+            .game-dev/workspace/lyra-proxy-inspection.json
+            .game-dev/workspace/lyra-proxy-validation.json
+            .game-dev/workspace/lyra-rig-check.json
           if-no-files-found: error
           retention-days: 7
