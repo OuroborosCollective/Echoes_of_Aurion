@@ -338,3 +338,13 @@ Evidence: Public health and promotion readback bind revision `6803dabc1d23c48a99
 Learned: A successful catalog upload does not prove that existing cone trees were replaced; the owner also reports no visible oak yet. Both source paths now expose visual tags for a bounded replacement consumer.
 Open: Replacement exact-head CI, merge, immutable deployment and visible in-game confirmation remain outstanding. Cloud browser WebGL 2 is unavailable; no native mobile performance claim. The unavailable trailer still blocks the separate legacy static fallback.
 Next safe step: Read exact-head CI for PR #313, integrate through the canonical deployment path, and confirm visible trees before proceeding to another asset.
+
+### 2026-09-13 — Owner-directed environment atlas release
+Status: VERIFIED repository candidate; production and native-device visuals pending exact revision readback.
+Task: Prioritize the owner's requested environment textures/details for immediate deployment before continuing the two supplied character templates.
+Decisions: Owner explicitly authorizes automatic merge after checks. Add an original four-surface 1024px WebP atlas, isolated 512px sRGB mipmapped tiles shared per scene, world-aligned ground UVs, three hub-terrain material batches, weathered wood/stone structures and 48 instanced edge stones (960 triangles). Keep existing vertex positions, obstacles, collision and WASD gameplay authority unchanged. Release textures/materials/detail buffers with the engine; ignore late image completion after disposal.
+Touched surfaces: AX1 WorldSurfaceAtlas, OpenWorldLandscape, WorldChunkManager, MMOEngine and the source atlas.
+Evidence: Nine focused atlas/tree regressions, TypeScript, full production build and diff-check passed on the candidate files based on main a2cf9e61504570fd72092cf6463d24249d504769. Shipping atlas SHA and byte count are recorded alongside the image. The local browser preview URL is blocked by the browser environment; no GPU/native-device rendering or frame-rate claim is made.
+Learned: Catalog uploads alone do not texture existing terrain. The existing world materials must consume shipped texture bytes; tile extraction isolates mipmaps and shared ownership prevents per-chunk image downloads.
+Open: Exact-head CI, merge and canonical Traefik production readback; character GLBs remain separate unfinished work.
+Next safe step: Automatically merge this authorized release after exact-head checks, verify production revision and delivered atlas SHA, then continue the supplied models.

@@ -1,3 +1,4 @@
+import { disposeWorldSurfaceAtlas } from '../world/WorldSurfaceAtlas';
 import { releaseGlbTree } from "./GlbModelLease";
 import { glbManager } from "./GLBModelManager";
 import * as THREE from 'three';
@@ -1214,6 +1215,7 @@ export class MMOEngine {
     this.particleSystem?.dispose();
     this.player?.disposePresentation();
     releaseGlbTree(this.scene);
+    disposeWorldSurfaceAtlas(this.scene);
     glbManager.trimIdle();
 
     try {
