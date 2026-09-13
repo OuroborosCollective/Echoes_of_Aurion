@@ -318,3 +318,13 @@ Evidence: Exact pre-memory head `7bd61138824b4fed15be180664de7afe0233bb92`; 5/5 
 Learned: Tactile feedback is safe only when accessibility preferences and disabled semantics remain authoritative.
 Open: Production deployment is not implied.
 Next safe step: Re-run exact-head checks after this append before merge.
+
+### 2026-09-13 — First fantasy oak, sequential live asset intake
+Status: PARTIAL — live catalog and delivered bytes verified; in-world rendering unverified.
+Task: Begin the requested mobile fantasy overhaul, integrating each completed model before producing the next (at most ten small assets per batch).
+Decisions: Start with one original oak in the existing world-nature/tree visual catalog. Keep the 1,600-triangle ceiling, shared PBR atlas and existing gameplay/collision authority.
+Touched surfaces: `scripts/fantasy_assets/`, `assets/fantasy-v1/`, approved live GLB catalog.
+Evidence: GLB `f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872`; 1,466 triangles independently reimported in Blender; one mesh/material, three 512px textures; second build byte-identical. Live intake increased approved catalog entries 40→41, confirmed world-nature/tree purpose, and public download SHA matched. Existing classification/plan/placement regressions passed 14/14 against source `6803dabc1d23c48a99352a025f035202b89f6083`.
+Learned: Uploaded nature is a visual overlay, not a replacement for all procedural trees. Current MobManager renders capsules without a GLB consumer; avatar controller lacks cast/fall/block states. These require distinct AX1 presentation work.
+Open: Cloud browser reports WebGL 2 unavailable, so no live-world draw or native-device performance is claimed. Deployment recovery and the remaining models, nine animations and full equipment anchors remain open.
+Next safe step: Recover the canonical Traefik deployment, verify this oak in the live world, then continue the next model. No automatic merge.

@@ -1,0 +1,27 @@
+{
+  "version": "aurion.glb-import.v1",
+  "purpose": "world-nature",
+  "sha256": "f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872",
+  "bytes": 1116224,
+  "assetType": "arena",
+  "subcategory": "tree",
+  "equipmentSlot": null,
+  "worldFamily": "nature",
+  "targetKey": null,
+  "classification": {
+    "assetType": "arena",
+    "subcategory": "tree",
+    "confidence": "medium",
+    "animationNames": [],
+    "nodeNames": [
+      "aurion_oak_tree"
+    ],
+    "skinCount": 0,
+    "socketCount": 0,
+    "lod": null,
+    "equipmentSlot": null,
+    "worldFamily": "nature"
+  },
+  "assetId": "glb_f8448061b64b860ac2c605d9a90de37c85c1c4acba697727",
+  "planSha256": "8bdb73e5a178712fcc431976632eebac1b34c27a951cde2f2ab7674148556460"
+}

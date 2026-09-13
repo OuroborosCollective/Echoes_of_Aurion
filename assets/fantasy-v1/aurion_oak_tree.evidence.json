@@ -1,0 +1,19 @@
+{
+  "file": "aurion_oak_tree.glb",
+  "sha256": "f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872",
+  "reimportTriangles": 1466,
+  "meshObjects": 1,
+  "boundsBlenderZUp": {
+    "min": [
+      -1.8506420850753784,
+      -2.2674875259399414,
+      -0.007838070392608643
+    ],
+    "max": [
+      2.163764476776123,
+      1.6427216529846191,
+      4.718776226043701
+    ]
+  },
+  "verified": "Blender GLB independent reimport; not live browser evidence"
+}
