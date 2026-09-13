@@ -10,9 +10,9 @@ description: >-
 
 `game-dev` ist die feste Visual-Production- und Evidence-Lane für **Echoes of Aurion**. Es ersetzt weder Gameplay-Authority noch die Engine.
 
-* **WASD** besitzt Gameplay-/Simulationsregeln, Questwirkungen, Progression, Collision und World-Truth.
-* **AX1** besitzt sichtbare Welt, Renderer, UI, Kamera, Animation, VFX, LOD/HLOD und Presentation Content.
-* **Aurion** besitzt Host, Auth, Asset-Katalog, MariaDB, Persistenz, Receipts, Readbacks und Ops/Evidence.
+* **Aurion** besitzt Gameplay-/Simulationsregeln, Questwirkungen, Progression, Collision, World-Truth, Host, Auth, Asset-Katalog, MariaDB, Persistenz, Receipts, Readbacks und Ops/Evidence.
+* **AX1** besitzt sichtbare Welt, Renderer, UI, Kamera, Animation, VFX, LOD/HLOD und Presentation Content. AX1 projiziert Aurion-Wahrheit, erzeugt aber keine eigene Gameplay-Authority.
+* **WASD** ist ausschließlich historische Migrations-/Provenienzquelle. Bestehende revisionsgebundene WASD-Receipts dürfen Migrationen belegen, aber keine neue Aurion-Runtime-Wahrheit autorisieren.
 * **Game Development Studio** besitzt die lokale Werkzeugkette für Asset-Produktion, GLB/PBR/Blender-Prüfung, Packaging/Vendoring, reproduzierbare Captures, Visual-Diffs und begrenzte Performance-Evidence.
 
 {% hint style="warning" %}
@@ -31,7 +31,7 @@ Der Owner beschreibt Stimmung, Ort, Silhouette, Funktion und gewünschte Spieler
 {% step %}
 ### Makro-Geometrie und Spielraum
 
-AX1/WASD definieren die revisionsgebundene Weltprojektion: Höhenprofil, Fluss-/Straßen-Splines, Landmarken, Chunk-/LOD-Grenzen und gameplayrelevante Collision-/Traversal-Verträge. Game Development Studio darf diese Grenze visualisieren und prüfen, aber nicht autorisieren.
+Aurion definiert die revisionsgebundene autoritative Weltprojektion: Höhenprofil, Fluss-/Straßen-Splines, Landmarken, Chunk-/LOD-Grenzen und gameplayrelevante Collision-/Traversal-Verträge. AX1 konsumiert diese Verträge für die sichtbare Projektion. Game Development Studio darf diese Grenze visualisieren und prüfen, aber nicht autorisieren.
 {% endstep %}
 
 {% step %}
@@ -87,7 +87,7 @@ Die sichtbare Qualität zählt; Triangle-Budgets sind Grenzwerte, keine Zielwert
 
 ## Quests
 
-Questlogik und Belohnungen bleiben WASD-owned. Game Development Studio inszeniert die Quest:
+Questlogik und Belohnungen bleiben Aurion-owned. Game Development Studio inszeniert die Quest:
 
 * Ort und Landmarke,
 * Props und Questgegenstände,
@@ -100,7 +100,7 @@ Damit wird aus `Text + Marker + Reward` ein räumlich inszenierter Quest-Ort, oh
 
 ## Forschung und Mathematik
 
-Wolfram/Research dürfen Formeln und Candidate-Geometrie für Höhenfelder, Flussnetze, Sampling, Abstände, Dichte, LOD-Budgets und Vergleichsmetriken liefern. Die Ergebnisse werden erst durch revisionsgebundene AX1/WASD-/Aurion-Verträge produktiv.
+Wolfram/Research dürfen Formeln und Candidate-Geometrie für Höhenfelder, Flussnetze, Sampling, Abstände, Dichte, LOD-Budgets und Vergleichsmetriken liefern. Die Ergebnisse werden erst durch revisionsgebundene Aurion-Authority- und AX1-Presentation-Verträge produktiv. Historische WASD-Belege bleiben dabei ausschließlich Provenienz.
 
 ## Installationsvertrag
 
