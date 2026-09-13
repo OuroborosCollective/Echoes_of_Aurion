@@ -80,7 +80,7 @@ export const glbCatalogLodVariantSchema = z.object({
   level: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
   assetId: z.string().min(8).max(64),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  bytes: z.number().int().positive().max(24 * 1024 * 1024),
+  bytes: z.number().int().positive().max(24 * 1024 * 1024).nullable(),
   storageUrl: z.string().regex(/^\/api\/assets\/glb\/[a-f0-9]{64}\.glb$/),
   targetKey: z.string().max(120).nullable(),
 }).strict();
@@ -109,7 +109,7 @@ export function glbCatalogLods(entry: GlbCatalogEntry): readonly GlbCatalogLodVa
     level: 0 as const,
     assetId: entry.assetId,
     sha256: entry.sha256,
-    bytes: 1,
+    bytes: null,
     storageUrl: entry.storageUrl,
     targetKey: entry.targetKey,
   })]);
