@@ -1,0 +1,24 @@
+name: Game Development Studio Smoke
+
+on:
+  pull_request:
+    paths:
+      - "scripts/install-game-development-studio.mjs"
+      - ".github/workflows/game-development-studio-smoke.yml"
+      - ".gitignore"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-game-dev:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+      - name: Install and verify pinned Game Development Studio
+        run: node scripts/install-game-development-studio.mjs

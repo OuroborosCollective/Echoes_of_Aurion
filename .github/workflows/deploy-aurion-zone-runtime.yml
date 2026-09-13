@@ -3,6 +3,17 @@ name: Deploy Aurion Traefik runtime
 on:
   push:
     branches: [main]
+    # Documentation and local visual-tooling changes are non-runtime surfaces.
+    # Mixed commits still deploy because paths-ignore applies only when every
+    # changed path matches one of these patterns.
+    paths-ignore:
+      - "docs/**"
+      - "SUMMARY.md"
+      - "Memory.md"
+      - ".game-dev/**"
+      - ".gitignore"
+      - ".github/workflows/game-development-studio-smoke.yml"
+      - "scripts/install-game-development-studio.mjs"
   pull_request:
     paths:
       - ".github/workflows/deploy-aurion-zone-runtime.yml"
@@ -36,13 +47,17 @@ permissions:
   contents: read
   actions: read
 
+# Production verification may restore trusted caches but never publishes cache
+# entries. Reusable workflows inherit a boundary no more permissive than this.
+cache-mode: read
+
 jobs:
   migration-ledger:
-    name: Bind WASD source and Aurion migration ledger
+    name: Bind historical WASD provenance to Aurion
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/aurion-wasd-migration-ledger.yml
     with:
-      source_ref: main
+      source_ref: eb20a85b305612eaf01c560ad0c89af96ed03295
       target_ref: ${{ github.sha }}
 
   verify-and-build:
@@ -71,7 +86,7 @@ jobs:
           esac
 
       - name: Check out exact revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -79,7 +94,7 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -93,6 +108,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "${{ needs.migration-ledger.outputs.target_sha }}" = "$GITHUB_SHA"
           [[ "${{ needs.migration-ledger.outputs.source_sha }}" =~ ^[a-f0-9]{40}$ ]]
+          test "${{ needs.migration-ledger.outputs.source_sha }}" = "eb20a85b305612eaf01c560ad0c89af96ed03295"
           [[ "${{ needs.migration-ledger.outputs.plan_sha256 }}" =~ ^[a-f0-9]{64}$ ]]
           pnpm check
           pnpm test
@@ -114,6 +130,39 @@ jobs:
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           sudo visudo -cf deploy/aurion-production-schema-apply.sudoers
           git diff --check
+
+      - name: Record workflow provenance
+        env:
+          AURION_JOB_WORKFLOW_REF: ${{ job.workflow_ref || github.workflow_ref }}
+          AURION_JOB_WORKFLOW_SHA: ${{ job.workflow_sha || github.workflow_sha }}
+          AURION_JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository || github.repository }}
+          AURION_JOB_WORKFLOW_FILE_PATH: ${{ job.workflow_file_path || '.github/workflows/deploy-aurion-zone-runtime.yml' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt = {
+            schemaVersion: 1,
+            recordType: "aurion_workflow_provenance",
+            revision: process.env.GITHUB_SHA,
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            workflowRef: process.env.AURION_JOB_WORKFLOW_REF,
+            workflowSha: process.env.AURION_JOB_WORKFLOW_SHA,
+            workflowRepository: process.env.AURION_JOB_WORKFLOW_REPOSITORY,
+            workflowFilePath: process.env.AURION_JOB_WORKFLOW_FILE_PATH,
+            runner: {
+              name: process.env.RUNNER_NAME,
+              os: process.env.RUNNER_OS,
+              arch: process.env.RUNNER_ARCH,
+            },
+            cacheMode: "read",
+          };
+          if (!/^[a-f0-9]{40}$/.test(receipt.revision ?? "")) throw new Error("workflow provenance revision missing");
+          if (!/^[a-f0-9]{40}$/.test(receipt.workflowSha ?? "")) throw new Error("workflow provenance SHA missing");
+          if (receipt.workflowRepository !== "OuroborosCollective/Echoes_of_Aurion") throw new Error("workflow provenance repository mismatch");
+          if (receipt.workflowFilePath !== ".github/workflows/deploy-aurion-zone-runtime.yml") throw new Error("workflow provenance path mismatch");
+          fs.writeFileSync("aurion-workflow-provenance.json", `${JSON.stringify(receipt, null, 2)}\n`);
+          NODE
 
       - name: Build revision-bound Traefik runtime and compatibility bootstrap
         env:
@@ -156,7 +205,7 @@ jobs:
             -e MARIADB_DATABASE=aurion_runtime \
             -e MARIADB_USER=aurion_runtime \
             -e MARIADB_PASSWORD="${runtime_verify_db_password}" \
-            mariadb:11.4 >/dev/null
+            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1 >/dev/null
           runtime_verify_db_ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="${runtime_verify_db_password}" "${runtime_verify_db_container}" \
@@ -245,8 +294,6 @@ jobs:
             echo "aurion-runtime-database-verify failed category=authenticated_select_failed" >&2
             exit 1
           fi
-          # Prove that bytes outlive the writer process and are readable by a fresh
-          # unprivileged container using the same named volume.
           docker exec "${runtime_verify_container}" node -e 'require("node:fs").writeFileSync("/var/lib/aurion/glb/.ci-persistence-proof", process.env.AURION_RELEASE_SHA)'
           docker run --rm --network none \
             --mount "type=volume,source=${runtime_verify_glb_volume},destination=/var/lib/aurion/glb" \
@@ -256,10 +303,6 @@ jobs:
           tar -C dist-traefik-runtime -czf aurion-traefik-runtime-release.tgz .
           sha256sum aurion-traefik-runtime-release.tgz > aurion-traefik-runtime-release.tgz.sha256
 
-          # Keep this one compatibility payload for the first invocation on the
-          # existing root entrypoint. That invocation installs the Traefik
-          # promoter; the second, byte-checked invocation below performs the
-          # actual container promotion.
           pnpm build:zone-runtime
           node scripts/build-aurion-production-reconcile-artifact.mjs
           node scripts/build-aurion-production-apply-artifact.mjs
@@ -296,10 +339,6 @@ jobs:
           tar -C dist-zone -czf aurion-zone-runtime-release.tgz .
           sha256sum aurion-zone-runtime-release.tgz > aurion-zone-runtime-release.tgz.sha256
 
-          # Assemble the same closed file set that the self-hosted job receives,
-          # then derive a one-time amd64 image-contract variant. That variant is
-          # used only when the host still has the pre-Traefik promoter and lets
-          # it install the canonical promoter before the real promotion begins.
           mkdir -p runtime-artifact/deploy
           cp -a \
             aurion-zone-runtime-release.tgz \
@@ -323,8 +362,8 @@ jobs:
           const canonical=JSON.parse(fs.readFileSync("runtime-artifact/dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf","utf8"));
           const bootstrap=JSON.parse(fs.readFileSync("runtime-bootstrap-artifact/dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf","utf8"));
           const identity=JSON.parse(fs.readFileSync("runtime-bootstrap-artifact/bootstrap-identity.json","utf8"));
-          if(canonical.imageDigest!=="sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff") throw new Error("unexpected canonical bootstrap input");
-          if(bootstrap.imageDigest!=="sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f") throw new Error("unexpected amd64 bootstrap image");
+          if(canonical.imageDigest!=="sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5") throw new Error("unexpected canonical bootstrap input");
+          if(bootstrap.imageDigest!=="sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96") throw new Error("unexpected amd64 bootstrap image");
           if(identity.schemaVersion!==1||identity.recordType!=="aurion_legacy_promoter_bootstrap_identity"||identity.sourceRevision!==process.env.GITHUB_SHA||!/^([a-f0-9]{40})$/.test(identity.bootstrapRevision)||identity.bootstrapRevision===process.env.GITHUB_SHA||identity.mode!=="bootstrap_only") throw new Error("unexpected bootstrap identity");
           NODE
           bootstrap_runtime_entries="$(tar -tzf runtime-bootstrap-artifact/aurion-traefik-runtime-release.tgz)"
@@ -343,13 +382,13 @@ jobs:
           ' runtime-bootstrap-artifact/bootstrap-identity.json "$GITHUB_SHA")"
           (cd runtime-bootstrap-artifact/dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           node runtime-bootstrap-artifact/dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs runtime-bootstrap-artifact/dist-production-reconcile "$bootstrap_revision"
-          bootstrap_image="node:22.13.0-bookworm-slim@sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f"
+          bootstrap_image="node:22.23.2-bookworm-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96"
           docker pull "$bootstrap_image"
           bootstrap_image_id="$(docker image inspect --format '{{.Id}}' "$bootstrap_image")"
           [[ "$bootstrap_image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
 
       - name: Publish immutable runtime artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: |
@@ -366,11 +405,12 @@ jobs:
             deploy/promote-aurion-zone-runtime.sh
             dist-production-reconcile
             dist-production-apply
+            aurion-workflow-provenance.json
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish one-time promoter bootstrap artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-zone-runtime-bootstrap-${{ github.sha }}
           path: runtime-bootstrap-artifact
@@ -415,7 +455,7 @@ jobs:
         run: rm -rf runtime-artifact runtime-bootstrap-artifact
 
       - name: Download verified runtime artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: runtime-artifact
@@ -423,7 +463,7 @@ jobs:
           run-id: ${{ github.run_id }}
 
       - name: Download one-time promoter bootstrap artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: aurion-zone-runtime-bootstrap-${{ github.sha }}
           path: runtime-bootstrap-artifact
@@ -459,12 +499,6 @@ jobs:
             process.stdout.write(identity.bootstrapRevision);
           ' "${bootstrap_artifact}/bootstrap-identity.json" "${EXPECTED_SHA}")"
 
-          # A legacy fixed entrypoint cannot safely replace itself before it
-          # validates a Docker image. Use the separately verified, one-time
-          # amd64 bootstrap artifact only while that byte comparison differs.
-          # Its distinct identity and legacy-safe path permit only the old
-          # promoter's self-install; the canonical artifact is then promoted
-          # with its own immutable source revision and release directory.
           installed=/usr/local/sbin/promote-aurion-zone-runtime
           legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad
           promoter_needs_readback_replay=0
@@ -558,11 +592,11 @@ jobs:
       contents: read
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
       - name: Dispatch and wait for the exact reviewed schema plan

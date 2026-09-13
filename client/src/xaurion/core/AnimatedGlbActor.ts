@@ -1,7 +1,7 @@
 import { releaseGlbTree } from "./GlbModelLease";
 import * as THREE from "three";
 import type { GlbEquipmentSlot } from "@shared/glbImportContract";
-import { equipmentAnchorAliases, equipmentLocalScale } from "./EquipmentAttachmentSizing";
+import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale } from "./EquipmentAttachmentSizing";
 
 export type GlbPose = "idle" | "walk" | "run" | "attack" | "jump" | "death" | "interact";
 const clipNames: Record<GlbPose, readonly string[]> = {
@@ -202,14 +202,15 @@ export class AnimatedGlbActor {
     const anchorWorldScale = Math.max(Math.abs(anchorScale.x), Math.abs(anchorScale.y), Math.abs(anchorScale.z));
     const scale = equipmentLocalScale(slot, maxDimension, this.heightMeters, anchorWorldScale);
     if (scale === null) return false;
+    const offset = equipmentAttachmentOffset(slot, visual, bounds, scale);
+    if (offset === null) return false;
 
     this.detachEquipment(slot);
     const holder = new THREE.Group();
     holder.name = `aurion-confirmed-equipment:${slot}`;
     holder.userData.confirmedEquipmentSlot = slot;
-    const center = bounds.getCenter(new THREE.Vector3());
     visual.scale.setScalar(scale);
-    visual.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+    visual.position.copy(offset);
     visual.traverse(node => {
       if (!(node as THREE.Mesh).isMesh) return;
       const mesh = node as THREE.Mesh;

@@ -277,7 +277,6 @@ Evidence: Exact pre-memory head `adcf8d4ff6535acbe110b6264b0f490e9e079d7f`; bran
 Learned: AX1-first can preserve visible game behavior while proven mutation paths move into confirmed Aurion/WASD contracts; multi-input crafting can stay atomic and replay-safe without deleting AX1 content.
 Open: Full AX1 menu depth, complete skill 1–9 semantics/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain separate work.
 Next safe step: Continue those items from merged `main` in a fresh branch; do not claim production completeness from this checkpoint.
-
 ### 2026-09-11 — AX1 286c575 ecology/resource/telegraph checkpoint
 Status: VERIFIED repository checkpoint; production completeness not claimed.
 Task: Selectively integrate AX1 revision `286c575d3d0050ffa77b794d5b7a7e24858acee8` while preserving AX1-first presentation/content and Aurion-confirmed gameplay truth.
@@ -339,12 +338,52 @@ Learned: A successful catalog upload does not prove that existing cone trees wer
 Open: Replacement exact-head CI, merge, immutable deployment and visible in-game confirmation remain outstanding. Cloud browser WebGL 2 is unavailable; no native mobile performance claim. The unavailable trailer still blocks the separate legacy static fallback.
 Next safe step: Read exact-head CI for PR #313, integrate through the canonical deployment path, and confirm visible trees before proceeding to another asset.
 
-### 2026-09-13 — First rigged Clockwork Stalker and confirmed mob projection
-Status: VERIFIED live asset intake and repository candidate; monster in-world deployment is not claimed.
-Task: After the owner confirmed the oak visible in-game, deliver one frequent enemy with original fantasy geometry, textures and actual skinned animation before starting another model.
-Decisions: Build a four-legged plated Clockwork Stalker; bind its immutable approved catalog SHA only to confirmed clockwork_stalker visuals. Use existing GLB leases, 8 near phone actors / 12 otherwise, two concurrent loads and bounded retries. Drive movement from confirmed coordinates, deduplicated attack animation from server combat events, and a bounded corpse from confirmed zero HP. Keep the occupied starter-beast assignment and all gameplay/collision authority intact.
-Touched surfaces: Stalker Blender generator and independent animation verifier, fantasy asset/evidence files, MobCatalogProjection, existing NpcFallbackProjection lifecycle and a presentation-only combat subscriber.
-Evidence: GLB `94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a`; 1,300 independently reimported triangles, one mesh/material, three 512px textures, 22 bones, nine clips with measured skinned-vertex movement; final death bounds grounded. Live catalog 41→42, enemy/catalog-only readback, public bytes SHA matched. 25/25 focused projection/authority/classifier/import tests, TypeScript and production build passed. Oak PR #313 merged as `a2cf9e61504570fd72092cf6463d24249d504769` after all seven exact-head workflows; main and zero open PRs read back before this candidate.
-Learned: Blender adds hidden bone-display geometry during import; measure/render the actual exported mesh, not glTF_not_exported helpers. Packed texture bytes must be explicitly refreshed after editing a packed atlas. The current mob contract has no cast/jump/fall/block states, so those verified asset clips do not imply new gameplay actions.
-Open: Exact-head CI, canonical immutable deployment, visible Stalker verification and real mobile performance remain open. Player/NPC rig corrections, nine humanoid action bindings, equipment anchors, buildings and further assets remain subsequent work.
-Next safe step: Integrate this single Stalker live, verify its existing enemy path, then continue player/NPC models; do not start another asset before that integration.
+### 2026-09-13 — Owner-directed environment atlas release
+Status: VERIFIED repository candidate; production and native-device visuals pending exact revision readback.
+Task: Prioritize the owner's requested environment textures/details for immediate deployment before continuing the two supplied character templates.
+Decisions: Owner explicitly authorizes automatic merge after checks. Add an original four-surface 1024px WebP atlas, isolated 512px sRGB mipmapped tiles shared per scene, world-aligned ground UVs, three hub-terrain material batches, weathered wood/stone structures and 48 instanced edge stones (960 triangles). Keep existing vertex positions, obstacles, collision and WASD gameplay authority unchanged. Release textures/materials/detail buffers with the engine; ignore late image completion after disposal.
+Touched surfaces: AX1 WorldSurfaceAtlas, OpenWorldLandscape, WorldChunkManager, MMOEngine and the source atlas.
+Evidence: Nine focused atlas/tree regressions, TypeScript, full production build and diff-check passed on the candidate files based on main a2cf9e61504570fd72092cf6463d24249d504769. Shipping atlas SHA and byte count are recorded alongside the image. Full CI identified two provenance-hash checks; a separate reversible atlas adaptation manifest preserves the original ZIP/tree evidence rather than changing historical hashes. The local browser preview URL is blocked by the browser environment; no GPU/native-device rendering or frame-rate claim is made.
+Learned: Catalog uploads alone do not texture existing terrain. The existing world materials must consume shipped texture bytes; tile extraction isolates mipmaps and shared ownership prevents per-chunk image downloads.
+Open: Exact-head CI, merge and canonical Traefik production readback; character GLBs remain separate unfinished work.
+Next safe step: Automatically merge this authorized release after exact-head checks, verify production revision and delivered atlas SHA, then continue the supplied models.
+
+### 2026-09-13 — Authored Ranger equipment attachment origins
+Status: VERIFIED repository candidate; live Ranger draw remains pending production readback.
+Task: Preserve authored Ranger equipment grip/body origins instead of forcing every GLB to its bounding-box center.
+Decisions: Prefer explicit Aurion attachment-origin nodes; preserve legacy bounds-centering when absent; keep scale normalization, inventory, stats and WASD gameplay authority unchanged.
+Touched surfaces: `EquipmentAttachmentSizing`, `AnimatedGlbActor`, focused attachment regressions.
+Evidence: Exact pre-memory head `1e62c6b340de35e18fd928c26f9f547d833c55fb`; all 8 PR workflows succeeded, including AIM-285 exact-head attachment/authority regressions, TypeScript and production build. Live catalog revision `65d5b9b7eba7d4d7f7f47ac2a697e98ac9d81e571ac3e60627eb2af48ef94b2b` contains the classless Ranger v3 and its v3 equipment set.
+Learned: A correct actor socket is insufficient if runtime recenters the attached asset and discards its authored grip/body origin.
+Open: Binary node inspection and production/native-device visual confirmation of Ranger v3 remain separate.
+Next safe step: Re-run exact-head CI after this append; merge #316 only if green, then deploy/read back the immutable revision before claiming live placement fixed.
+
+### 2026-09-13 — Game Development Studio CLI v1.0.2
+Status: VERIFIED pre-merge
+Task: Pin the supported Game Development Studio CLI for Aurion asset production, validation and vendoring.
+Decisions: Pin `@theisegoria/game-development-studio@1.0.2` to source revision `96a0b4f34b979279ab983e9547af43133e85f310`, require Node.js >=22.5, keep provider-free smoke checks and isolate local outputs under `.game-dev/workspace/`.
+Touched surfaces: `scripts/install-game-development-studio.mjs`, `.github/workflows/game-development-studio-smoke.yml`, `.gitignore`.
+Evidence: exact pre-entry head `93805eddb69897593f9efd2aadcc68e43e9d2f39`; Game Development Studio Smoke run `34767286407` success; Aurion Local Test Pack run `34767286404` success; Build Android APK run `34767286430` success.
+Learned: Current GDS v1.0.2 is the supported CLI+Skills boundary; the retired historical MCP path must not be reintroduced.
+Open: This memory append creates a new head, so all merge gates must be rerun on that exact revision before merge.
+Next safe step: Require exact-head green checks, then merge PR #318; runtime game/deploy claims remain separate.
+
+### 2026-09-13 — Clockwork Stalker reconcile on current GDS main
+Status: VERIFIED repository candidate; production and in-world visual draw not claimed.
+Task: Rebind the already-verified Clockwork Stalker from stale PR #314 onto the current Game Development Studio main without stale history.
+Decisions: Preserve the 14 non-Memory files and original GLB/evidence bytes; keep the mob consumer presentation-only; synchronize intervening GitBook docs before final evidence.
+Touched surfaces: Stalker asset/evidence/build scripts, fantasy manifest, `MobCatalogProjection`, current docs ancestry.
+Evidence: Exact pre-memory head `f041a2efc4a3bcee7c8e6912fcb138c76ec2a6e4`; GLB SHA `94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a`; all 6 workflows succeeded, including AIM-291 Asset Shipping run `34780250976` with phone/tablet/desktop runtime jobs and reproducible shipping validation.
+Learned: Verified asset bytes still require a current-base rebind and exact-head evidence; stale PR history is not integration proof.
+Open: Production deployment, visible in-world confirmation and native-device performance remain separate.
+Next safe step: Re-run all merge gates on this post-memory head; merge #325 only if exact-head green, then close #314 as superseded and read back main.
+
+### 2026-09-13 — Aurion authority and immutable release hardening
+Status: PARTIAL — implementation complete; final exact-head rerun required before merge.
+Task: Consolidate the current Aurion engineering hardening into PR #327 without reintroducing WASD as active gameplay/world authority.
+Decisions: Aurion is the active gameplay/world authority; freeze historical WASD provenance to `eb20a85b305612eaf01c560ad0c89af96ed03295`; skip production for docs/GDS-only main pushes; keep production cache read-only; record workflow provenance; pin Node `22.23.2`, MariaDB `11.4.13`, and Aurion-owned GitHub Actions to reviewed immutable identities.
+Touched surfaces: Canonical GDS authority docs/guard, historical migration ledger, Traefik runtime/promoter/bootstrap, root reconciliation/apply proofs, deployment workflow and Action-pin regression.
+Evidence: First exact-head `7651a2f881506419cb10724e59334bbfeadb0e91` passed all eight workflow suites: deploy `34784500588`, Android `34784500014`, Local Test Pack `34784500022`, NPC Multi-Memory `34784500051`, GLB regression `34784500074`, zone schema bootstrap `34784500067`, root schema apply `34784500049`, root reconciliation `34784500092`. Root proofs exercised immutable Node/MariaDB images, backup/recovery/apply/retry/fail-closed paths; the historical provenance run reproduced WASD source manifest `92bb04235b5fcfe2ca3ad252b500410f6588fbc8def586b02f12770f0bd1c08d` with read-only cache.
+Learned: Historical migration receipts can prove lineage but must not become moving runtime authority; release evidence must bind source, workflow, immutable Actions/runtime/database inputs and independent readback.
+Open: This append and the immutable Action pins create a new final PR head; no merge or live claim is valid until that exact head is green and production is read back after merge. Branch protection remains an external repository-admin control, not inferred from CI discipline.
+Next safe step: Run every exact-head PR gate again, merge #327 only if fresh and green, then require revision-identical production promotion, schema receipt and public health readback.

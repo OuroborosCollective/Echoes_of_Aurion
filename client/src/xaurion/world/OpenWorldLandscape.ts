@@ -2,6 +2,7 @@ import { DeterministicSimulation } from "@shared/deterministicSimulation";
 import * as THREE from 'three';
 import { collisionSystem } from './WorldCollisionSystem';
 import { WorldChunkManager } from './WorldChunkManager';
+import { worldSurfaceMaterial, mapWorldGround, addSanctumSurfaceDetails } from './WorldSurfaceAtlas';
 
 export class OpenWorldLandscape {
   public scene: THREE.Scene;
@@ -37,6 +38,7 @@ export class OpenWorldLandscape {
 
     // 6. Ambient Environment Lighting & Skybox Stars
     this.buildEnvironmentProps();
+    addSanctumSurfaceDetails(this.scene, this.group);
   }
 
   private createOpenWorldTerrain(): THREE.Mesh {
@@ -101,14 +103,30 @@ export class OpenWorldLandscape {
     geo.computeVertexNormals();
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.75,
-      metalness: 0.2,
-      flatShading: true,
-    });
-
-    const mesh = new THREE.Mesh(geo, mat);
+    mapWorldGround(geo);
+    const materials = ['paving', 'forest', 'rock'].map(kind => worldSurfaceMaterial(this.scene, kind as 'paving' | 'forest' | 'rock'));
+    const indices = geo.index!;
+    geo.clearGroups();
+    // Group adjacent triangles by their visual biome, preserving the original terrain exactly.
+    let groupStart = 0, previous = -1;
+    for (let i = 0; i < indices.count; i += 3) {
+      const ids = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)];
+      const x = ids.reduce((sum, id) => sum + posAttr.getX(id), 0) / 3;
+      const z = ids.reduce((sum, id) => sum + posAttr.getZ(id), 0) / 3;
+      const kind = Math.hypot(x, z) < 34 ? 0 : x > 15 && z < 20 ? 1 : 2;
+      if (kind !== previous) {
+        if (previous >= 0) geo.addGroup(groupStart, i - groupStart, previous);
+        groupStart = i; previous = kind;
+      }
+    }
+    geo.addGroup(groupStart, indices.count - groupStart, previous);
+    const grouped = [[], [], []] as number[][];
+    for (const group of geo.groups) for (let i = group.start; i < group.start + group.count; i++) grouped[group.materialIndex ?? 0].push(indices.getX(i));
+    geo.setIndex(grouped.flat());
+    geo.clearGroups();
+    let offset = 0;
+    grouped.forEach((items, kind) => { if (items.length) geo.addGroup(offset, items.length, kind); offset += items.length; });
+    const mesh = new THREE.Mesh(geo, materials);
     mesh.receiveShadow = true;
     return mesh;
   }
@@ -118,7 +136,7 @@ export class OpenWorldLandscape {
 
     // 1. Central Aethelgard Aetherium Fountain & Levitating Core
     const brassTrimMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.85, roughness: 0.25 });
-    const marbleMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+    const marbleMat = worldSurfaceMaterial(this.scene, 'paving');
     const waterMat = new THREE.MeshStandardMaterial({
       color: 0x06b6d4,
       emissive: 0x0891b2,
@@ -196,7 +214,7 @@ export class OpenWorldLandscape {
       { x: 26, z: 26 },
     ];
 
-    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.9 });
+    const stoneMat = worldSurfaceMaterial(this.scene, 'rock');
 
     towerPositions.forEach((pos, idx) => {
       const tower = new THREE.Group();
@@ -322,9 +340,9 @@ export class OpenWorldLandscape {
   private buildClockworkWoods() {
     const woodsGroup = new THREE.Group();
 
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.9 });
+    const woodMat = worldSurfaceMaterial(this.scene, 'wood');
     const leafMat = new THREE.MeshStandardMaterial({
-      color: 0x10b981,
+      color: 0x526444,
       emissive: 0x064e3b,
       emissiveIntensity: 0.3,
       roughness: 0.6,
@@ -424,7 +442,7 @@ export class OpenWorldLandscape {
   private buildScorchedQuarry() {
     const quarryGroup = new THREE.Group();
 
-    const rockMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.95 });
+    const rockMat = worldSurfaceMaterial(this.scene, 'rock');
     const lavaMat = new THREE.MeshStandardMaterial({
       color: 0xef4444,
       emissive: 0xf97316,
