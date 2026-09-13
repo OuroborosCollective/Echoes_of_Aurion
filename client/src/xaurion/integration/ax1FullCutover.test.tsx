@@ -1,0 +1,54 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { AX1_NPC_ENGINE_SOURCE_REVISION, AX1_PARTICLE_EFFECTS_SHA256, AX1_VISIBLE_SOURCE_MANIFEST, AX1_VISIBLE_SOURCE_REVISION } from "./ax1SourceManifest";
+import { ConfirmedVisualEffects } from "./confirmedVisualEffects";
+
+describe("AX1 full visible cutover contract", () => {
+  it("binds every required AX1 surface to the exact completed source revision", () => {
+    expect(AX1_VISIBLE_SOURCE_REVISION).toBe("f24e3bbb452bd6991c8365fc7827ce6dbcc16d95");
+    expect(AX1_NPC_ENGINE_SOURCE_REVISION).toBe("cf9cd7a9e197a110724d4f517655a63168ed63e0");
+    expect(AX1_PARTICLE_EFFECTS_SHA256).toBe("ed63e2c94bea0ff7c472a4c4224ec1aa4b997cf98d795740528bb89ba483faac");
+    expect(AX1_VISIBLE_SOURCE_MANIFEST).toHaveLength(19);
+    expect(new Set(AX1_VISIBLE_SOURCE_MANIFEST.map(entry => entry.component)).size).toBe(19);
+    expect(AX1_VISIBLE_SOURCE_MANIFEST.every(entry => /^[a-f0-9]{64}$/.test(entry.sha256))).toBe(true);
+    expect(AX1_VISIBLE_SOURCE_MANIFEST.find(entry => entry.component === "MariaDbAndGlbConsole")?.decision).toBe("excluded");
+    for (const component of ["GameHUD", "InventoryModal", "CharacterModal", "ClassSelectModal", "CraftingModal", "QuestLogModal", "PartyModal", "WorldMapModal", "MiniMap", "DungeonFinderModal", "GuildManagementModal", "NPCEconomyModal", "NPCDialogueModal", "TerritoryPoliticsModal", "HomesteadBuilderModal", "VirtualJoystick"]) {
+      expect(AX1_VISIBLE_SOURCE_MANIFEST.find(entry => entry.component === component)?.decision).not.toBe("excluded");
+    }
+  });
+
+  it("keeps new AX1 world surfaces projection-only and free of local authority shortcuts", () => {
+    const source = readFileSync(join(process.cwd(), "client/src/xaurion/components/Ax1WorldSurfaces.tsx"), "utf8");
+    for (const forbidden of ["Math.random", "Date.now", "performance.now", "crypto.randomUUID", "hero_player_1", "localStorage", "sessionStorage"]) expect(source).not.toContain(forbidden);
+    expect(source).toContain("Bestätigter Readback ausstehend");
+    expect(source).toContain("Research beobachtet bestätigte Spielzustände");
+  });
+
+  it("selects the new critical effect only from a confirmed sequenced event", () => {
+    const effects = new ConfirmedVisualEffects();
+    expect(effects.accept({ sessionId: "zone:player:7", sequence: 1, command: "F", damage: 9, crit: true, bossHp: 20, completed: false })).toEqual({ kind: "combat_crit", receiptKey: "zone:player:7:1" });
+    expect(effects.accept({ sessionId: "zone:player:7", sequence: 1, command: "F", damage: 9, crit: true, bossHp: 20, completed: false })).toBeNull();
+    expect(effects.accept({ sessionId: "zone:player:7", sequence: 2, command: "F", damage: 9, crit: "yes", bossHp: 20, completed: false })).toBeNull();
+  });
+
+  it("keeps the autonomous NPC brain, multi-memory and decision readbacks inside AX1", () => {
+    const hud = readFileSync(join(process.cwd(), "client/src/xaurion/integration/AurionAuthorityHud.tsx"), "utf8");
+    const panel = readFileSync(join(process.cwd(), "client/src/xaurion/integration/NpcDecisionPanel.tsx"), "utf8");
+    const runtime = readFileSync(join(process.cwd(), "server/autonomousNpcLifeRuntime.ts"), "utf8");
+    expect(hud).toContain("<NPCDialogueModal");
+    expect(hud).toContain("<NpcDecisionPanel userId={userId}");
+    expect(panel).toContain("gameplay.npcSnapshots");
+    expect(panel).toContain("gameplay.npcMultiMemory");
+    expect(panel).toContain("decodeOwnedNpcMultiMemory");
+    expect(runtime).toContain("readConfirmedNpcMultiMemory");
+    expect(runtime).toContain("resolveAndRecordAx1LivingWorld");
+    expect(runtime).toContain("createAutonomousNpcLifeRuntime");
+  });
+
+  it("keeps confirmed HUD projections from covering AX1 menu controls", () => {
+    const styles = readFileSync(join(process.cwd(), "client/src/xaurion/integration/ax1AuthorityHud.css"), "utf8");
+    expect(styles).toContain(".ax1-confirmed-minimap{position:relative;top:auto;right:auto}");
+    expect(styles).toContain("@media(min-width:1001px){.ax1-combat-metrics{top:70px}}");
+  });
+});
