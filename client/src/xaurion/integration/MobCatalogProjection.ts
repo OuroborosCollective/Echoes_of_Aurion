@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { selectGlbCatalogLod, type GlbCatalogLodVariant, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { selectGlbCatalogLod, type GlbCatalogLodVariant, type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { validConfirmedZoneCombatEvent, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -10,7 +10,7 @@ import { subscribeConfirmedMobCombat } from "./zoneCombatBridge";
 
 type MobVisual = MMOEngine["mobManager"]["mobs"][number];
 type Loaded = Awaited<ReturnType<typeof glbManager.loadModel>>;
-type Projected = { visual: MobVisual; actor: AnimatedGlbActor; sha256: string; lodLevel: 0 | 1 | 2; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number };
+type Projected = { visual: MobVisual; actor: AnimatedGlbActor; sha256: string; lodLevel: GlbLodLevel; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number };
 /** Exact authored presentation binding. Catalog approval/revocation remains
  * mandatory; a filename or a legacy occupied starter target cannot claim it. */
 export const CLOCKWORK_STALKER_GLB_SHA = "94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a";
@@ -75,7 +75,7 @@ export class MobCatalogProjection {
       actor.group.userData.catalogLod = Object.freeze({ assetId: entry.assetId, physicalSha256: variant.sha256, level: variant.level });
       actor.group.position.copy(visual.group.position);
       this.engine.scene.add(actor.group);
-      this.projected.set(id, { visual, actor, sha256: variant.sha256, lodLevel: variant.level > 2 ? 2 : variant.level, oldBodyVisible: visual.body.visible, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
+      this.projected.set(id, { visual, actor, sha256: variant.sha256, lodLevel: variant.level, oldBodyVisible: visual.body.visible, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
       visual.body.visible = false; actor = null;
     } catch {
       this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 5 });
