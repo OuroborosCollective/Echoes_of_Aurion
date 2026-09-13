@@ -64,7 +64,7 @@ function physicalFamilyEntries(entry: NpcGlbCatalogEntry): readonly Readonly<{ e
         sha256: lod.sha256,
         storageUrl: lod.storageUrl,
         targetKey: lod.targetKey,
-        lods: Object.freeze([]),
+        lods: [],
       }),
     })));
 }
