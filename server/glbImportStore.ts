@@ -9,6 +9,7 @@ import {
   WORLD_ENVIRONMENT_DISPLAY_PREFIX,
   WORLD_NATURE_DISPLAY_PREFIX,
   glbImportReceiptSchema,
+  glbLodDescriptor,
   glbPurposeFromDisplayName,
   glbRuntimeCatalogSchema,
   type GlbImportPurpose,
@@ -152,6 +153,27 @@ export class GlbImportStore {
       targetKey: row.targetKey === null || row.targetKey === undefined ? null : String(row.targetKey),
     })));
     return glbRuntimeCatalogSchema.parse({ version: GLB_IMPORT_VERSION, revision: createHash("sha256").update(JSON.stringify(entries)).digest("hex"), entries });
+  }
+
+  /** Marks one existing approved physical GLB as the immutable LOD0 member of a
+   * logical family. Bytes, SHA, assignment and asset identity stay untouched. */
+  async enableLodFamily(actorUserId: number, assetId: string) {
+    return this.locked(actorUserId, async connection => {
+      const [rows] = await connection.query<RowDataPacket[]>("SELECT id, displayName, status, storageKey, sha256 FROM glbAssets WHERE id = ? FOR UPDATE", [assetId]);
+      const asset = rows[0];
+      if (!asset || asset.status !== "approved" || !String(asset.storageKey).startsWith("local-glb/")) throw new Error("GLB_APPROVED_LOCAL_ASSET_REQUIRED");
+      const descriptor = glbLodDescriptor(String(asset.displayName));
+      if (descriptor.lodLevel !== null) {
+        if (descriptor.lodLevel !== 0) throw new Error("GLB_LOD0_REQUIRED");
+        return Object.freeze({ assetId: String(asset.id), sha256: String(asset.sha256), displayName: String(asset.displayName), lodLevel: 0 as const, changed: false });
+      }
+      const displayName = `${String(asset.displayName)} LOD0`;
+      if (displayName.length > 120) throw new Error("GLB_LOD_FAMILY_NAME_TOO_LONG");
+      await connection.execute("UPDATE glbAssets SET displayName = ? WHERE id = ?", [displayName, assetId]);
+      const [readback] = await connection.query<RowDataPacket[]>("SELECT id, displayName, sha256 FROM glbAssets WHERE id = ?", [assetId]);
+      if (readback[0]?.displayName !== displayName || readback[0]?.sha256 !== asset.sha256) throw new Error("GLB_LOD_FAMILY_READBACK_FAILED");
+      return Object.freeze({ assetId: String(asset.id), sha256: String(asset.sha256), displayName, lodLevel: 0 as const, changed: true });
+    });
   }
 
   async assign(actorUserId: number, input: { assetId: string; targetType: string; targetKey: string; expectedActiveAssetId: string | null }) {
