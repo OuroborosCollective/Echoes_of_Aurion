@@ -137,7 +137,7 @@ export class UploadedWorldCatalogProjection {
     const { center, placements } = this.desired(position);
     const originX = center.x * 64;
     const originZ = center.z * 64;
-    const nextSignature = `${this.catalog?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${value.asset.lods.map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
+    const nextSignature = `${this.catalog?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${(value.asset.lods ?? []).map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
     if (nextSignature === this.signature) return;
     this.signature = nextSignature;
     this.root.position.set(originX, 0, originZ);
