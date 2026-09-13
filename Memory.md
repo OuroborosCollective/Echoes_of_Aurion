@@ -214,7 +214,7 @@ Touched surfaces: AX1 renderer factory/recovery, TSL particle compatibility and 
 Evidence: PR #284 merged; head `6e1c19a7368efa1c88e726954ae3f8ce4c288692`. Later AIM-291 evidence records AIM-290 merged at `36376f56db2d523a654d7e3e3c858e44c34e718e` and production run `34308421574` plus separate schema readback succeeded.
 Learned: Renderer recovery must reacquire confirmed state rather than resurrect stale local snapshots.
 Open: Software SwiftShader evidence is not hardware performance proof.
-Next safe step: Keep device/native performance evidence and gameplay/UI completeness as separate acceptance lanes.
+Next safe step: Keep device/native performance claims separate from functional renderer recovery.
 
 ### 2026-09-09 — Verified mobile GLB shipping and bounded resources (AIM-291)
 Status: VERIFIED merge and production completion
