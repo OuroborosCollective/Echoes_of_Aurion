@@ -29,7 +29,10 @@ const PURPOSE_PREFIXES = [
 ] as const;
 
 const MAX_LOGICAL_CATALOG_MODELS = 500;
-const MAX_PHYSICAL_CATALOG_GLBS = MAX_LOGICAL_CATALOG_MODELS * 4;
+// Keep the existing admission ceiling until a separate quota migration is
+// explicitly designed. LOD families reduce visible catalog rows without
+// silently expanding how many approved physical GLBs production accepts.
+const MAX_PHYSICAL_CATALOG_GLBS = MAX_LOGICAL_CATALOG_MODELS;
 
 function stripPurposePrefix(displayName: string): string {
   const trimmed = displayName.trim();
