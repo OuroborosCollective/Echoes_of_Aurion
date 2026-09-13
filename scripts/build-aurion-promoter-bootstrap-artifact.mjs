@@ -28,9 +28,9 @@ const output = path.resolve(
   process.argv[3] ?? "runtime-bootstrap-artifact"
 );
 const canonicalIndexDigest =
-  "sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff";
+  "sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5";
 const linuxAmd64ManifestDigest =
-  "sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f";
+  "sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96";
 const schemaRelative = "dist-production-reconcile";
 const imageContractRelative = "deploy/aurion-reconcile-runtime-image.conf";
 const runtimeArchiveRelative = "aurion-traefik-runtime-release.tgz";
@@ -314,7 +314,7 @@ if (
   sourceImageContract.recordType !==
     "aurion_reconcile_runtime_image_contract" ||
   sourceImageContract.nodeMajorVersion !== 22 ||
-  sourceImageContract.imageTag !== "node:22.13.0-bookworm-slim" ||
+  sourceImageContract.imageTag !== "node:22.23.2-bookworm-slim" ||
   sourceImageContract.imageDigest !== canonicalIndexDigest
 ) {
   throw new Error(
