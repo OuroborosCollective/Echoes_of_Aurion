@@ -7,6 +7,7 @@ const EXPECTED_SHA256 = "54b163ba60f74f1fb2355bceb537626076db6918cf699e5a21ae1bf
 const EXPECTED_BYTES = 1691648;
 const OUTPUT = path.resolve(".game-dev/workspace/lyra-source.glb");
 const apiKey = process.env.TRIPO_API_KEY?.trim();
+const TRIPO_BASE_URL = "https://api.tripo3d.ai/v2/openapi";
 
 if (!apiKey) throw new Error("TRIPO_API_KEY_MISSING");
 
@@ -25,7 +26,7 @@ async function jsonResponse(url) {
   return payload.data;
 }
 
-const task = await jsonResponse(`https://openapi.tripo3d.ai/v3/tasks/${encodeURIComponent(TASK_ID)}`);
+const task = await jsonResponse(`${TRIPO_BASE_URL}/task/${encodeURIComponent(TASK_ID)}`);
 if (task.task_id !== TASK_ID) throw new Error("TRIPO_TASK_ID_MISMATCH");
 if (task.status !== "success") throw new Error(`TRIPO_SOURCE_NOT_SUCCESS_${String(task.status).toUpperCase()}`);
 
@@ -49,6 +50,7 @@ console.log(JSON.stringify({
   ok: true,
   taskId: TASK_ID,
   providerStatus: task.status,
+  providerApi: "tripo-v2-openapi",
   sha256,
   bytes: bytes.length,
   output: ".game-dev/workspace/lyra-source.glb",
