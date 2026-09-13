@@ -45,7 +45,7 @@ describe("server-backed Aurion HUD", () => {
 
   it("shows no fabricated gold, hit points or class before a confirmed readback", () => {
     mount();
-    expect(screen.getByText("Charakterdaten ausstehend")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Serverbestätigter Charakter" }).getAttribute("data-state")).toBe("waiting");
     expect(screen.queryByText(/LV |🪙|100\/100|Sir_Galahad/)).toBeNull();
   });
 
@@ -61,7 +61,7 @@ describe("server-backed Aurion HUD", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     }
     expect(fixtures.onAction).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Weltatlas" }).getAttribute("aria-keyshortcuts")).toBe("M");
+    expect(screen.getByRole("button", { name: "Weltatlas" }).getAttribute("title")).toBe("Weltatlas [M]");
   });
 
   it("leaves typing, browser shortcuts and other dialogs in control of their keys", () => {
@@ -80,7 +80,7 @@ describe("server-backed Aurion HUD", () => {
 
   it("projects confirmed receipt-backed progression and never renders a class choice", () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; mount();
-    expect(screen.getByText("1 bestätigte Progressionspfade · 2 Siege")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Serverbestätigter Charakter" }).textContent).toContain("1 bestätigte Pfade · 2 Siege");
     expect(screen.queryByText(/290 EP/)).toBeNull();
     expect(screen.getByText(/◆\s*23/)).toBeTruthy();
     expect(screen.getByText("Receipt verifiziert")).toBeTruthy();
@@ -120,7 +120,7 @@ describe("server-backed Aurion HUD", () => {
 
   it("shows confirmed NPC standing and labels stale relationship data", () => {
     fixtures.standing.data = { userId: 7, social: [], entries: [{ kind: "npc_relation", id: "lyra", score: 5, tier: "NEUTRAL", sourceCount: 1, xpExact: "4", levelExact: "1" }] };
-    fixtures.standing.isStale = true; mount(); fireEvent.click(screen.getByRole("button", { name: "Aufträge & Kontakte" }));
+    fixtures.standing.isStale = true; mount(); fireEvent.click(screen.getByRole("button", { name: "Aufträge" }));
     fireEvent.click(screen.getByRole("button", { name: "Kontakte" }));
     expect(screen.getByTestId("npc-standing-panel").dataset.state).toBe("stale");
     expect(screen.getByText("Neutral · Ansehen 5")).toBeTruthy();
@@ -129,7 +129,7 @@ describe("server-backed Aurion HUD", () => {
 
   it("rejects a relationship response belonging to another player", () => {
     fixtures.standing.data = { userId: 8, social: [], entries: [{ kind: "npc_relation", id: "lyra", score: 80, tier: "EXALTED", sourceCount: 1, xpExact: "4", levelExact: "1" }] };
-    mount(); fireEvent.click(screen.getByRole("button", { name: "Aufträge & Kontakte" }));
+    mount(); fireEvent.click(screen.getByRole("button", { name: "Aufträge" }));
     fireEvent.click(screen.getByRole("button", { name: "Kontakte" }));
     expect(screen.getByTestId("npc-standing-panel").dataset.state).toBe("error");
     expect(screen.queryByText(/Erhaben/)).toBeNull();
@@ -147,13 +147,13 @@ describe("server-backed Aurion HUD", () => {
     try {
       mount();
       fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
-      for (const [button, dialog] of [["Disziplinen & Pfade", "Disziplinen & Pfade"], ["Gilde öffnen", "Gildenverwaltung"], ["Ökonomie", "Lebendige Ökonomie"], ["NPC-Dialoge", "Dialoge & Beziehungen"], ["Territorium", "Territorium & Politik"], ["Homestead", "Homestead Builder"], ["Determinismus & Evidence", "Determinismus & Evidence"]] as const) {
+      for (const [button, dialog] of [["Disziplinen", "Disziplinen & Pfade"], ["Gilde", "Gildenverwaltung"], ["Ökonomie", "Lebendige Ökonomie"], ["NPC", "Dialoge & Beziehungen"], ["Territorium", "Territorium & Politik"], ["Homestead", "Homestead Builder"], ["Evidence", "Determinismus & Evidence"]] as const) {
         fireEvent.click(screen.getByRole("button", { name: button }));
         expect(screen.getByRole("dialog", { name: dialog })).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: `${dialog} schließen` }));
         fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
       }
-      fireEvent.click(screen.getByRole("button", { name: "Research & Learning" }));
+      fireEvent.click(screen.getByRole("button", { name: "Research" }));
       expect(screen.getByRole("dialog", { name: "Research & Learning" })).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Companion-Lane öffnen" }));
       expect(companion).toHaveBeenCalledTimes(1);
