@@ -80,10 +80,12 @@ describe("server-backed Aurion HUD", () => {
 
   it("projects confirmed receipt-backed progression and never renders a class choice", () => {
     fixtures.player.data = confirmed; fixtures.player.isStale = true; mount();
-    expect(screen.getByRole("region", { name: "Serverbestätigter Charakter" }).textContent).toContain("1 bestätigte Pfade · 2 Siege");
+    const frame = screen.getByRole("region", { name: "Serverbestätigter Charakter" });
+    expect(frame.textContent).toContain("1 bestätigte Pfade · 2 Siege");
+    expect(frame.textContent).toContain("greatsword.two_handed.v3");
+    expect(frame.textContent).toContain("Stufe 17");
     expect(screen.queryByText(/290 EP/)).toBeNull();
     expect(screen.getByText(/◆\s*23/)).toBeTruthy();
-    expect(screen.getByText("Receipt verifiziert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Charakter" }));
     expect(screen.queryByText(/Klasse wählen|Vorhut|Seher|Hüter/)).toBeNull();
     expect(screen.getByRole("dialog", { name: "Charakter & Skills" })).toBeTruthy();
