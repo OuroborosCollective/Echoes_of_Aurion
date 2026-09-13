@@ -1,0 +1,50 @@
+name: Local GDS Bootstrap
+
+on:
+  push:
+    branches:
+      - tooling/gds-local-bootstrap-20260913
+    paths:
+      - .github/workflows/local-gds-bootstrap.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+      - name: Build pinned Game Development Studio
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/theisegoria/game-development-studio.git gds
+          git -C gds checkout --detach 96a0b4f34b979279ab983e9547af43133e85f310
+          node -e 'const p=require("./gds/package.json"); if(p.name!=="@theisegoria/game-development-studio"||p.version!=="1.0.2") process.exit(1)'
+          npm ci --prefix gds --no-audit --no-fund
+          npm run --prefix gds build
+          cd gds
+          npm pack --ignore-scripts --json > ../pack.json
+          cd ..
+          tgz=$(node -e 'const p=require("./pack.json"); process.stdout.write(p[0].filename)')
+          cp "gds/$tgz" ./game-development-studio-1.0.2.tgz
+          sha256sum game-development-studio-1.0.2.tgz > game-development-studio-1.0.2.sha256
+          npm install --global --ignore-scripts ./game-development-studio-1.0.2.tgz --no-audit --no-fund
+          game-dev --version
+          game-dev capabilities --json > capabilities.json
+          game-dev doctor --json > doctor.json
+      - name: Upload verified portable CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-development-studio-1.0.2-verified
+          path: |
+            game-development-studio-1.0.2.tgz
+            game-development-studio-1.0.2.sha256
+            capabilities.json
+            doctor.json
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
