@@ -1,6 +1,6 @@
 import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
-import { selectGlbCatalogLod, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { selectGlbCatalogLod, type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -13,7 +13,7 @@ type ActorRecord = {
   appearance: PublicAppearance;
   actor: AnimatedGlbActor;
   physicalStorageUrl: string;
-  physicalLod: 0 | 1 | null;
+  physicalLod: GlbLodLevel | null;
   lastPosition: { x: number; z: number } | null;
   accumulatedAnimationDelta: number;
   lod: ActorLodBand;
@@ -85,13 +85,13 @@ export class RemotePublicAppearanceProjection {
     this.announceActive();
   }
 
-  private physicalAppearance(appearance: PublicAppearance, band: ActorLodBand): Readonly<{ storageUrl: string; lod: 0 | 1 | null }> {
+  private physicalAppearance(appearance: PublicAppearance, band: ActorLodBand): Readonly<{ storageUrl: string; lod: GlbLodLevel | null }> {
     if (!actorUsesSkinnedVisual(band)) return Object.freeze({ storageUrl: appearance.storageUrl, lod: null });
     const entry = this.catalog?.entries.find(candidate => candidate.assetId === appearance.assetId && candidate.purpose === "player-public" && candidate.assetType === "character");
     if (!entry?.lods?.length) return Object.freeze({ storageUrl: appearance.storageUrl, lod: null });
     const preferred = band === "near" ? 0 : 1;
     const variant = selectGlbCatalogLod(entry, preferred);
-    return Object.freeze({ storageUrl: variant.storageUrl, lod: variant.level === 0 || variant.level === 1 ? variant.level : preferred });
+    return Object.freeze({ storageUrl: variant.storageUrl, lod: variant.level });
   }
 
   private async ensureActor(appearance: PublicAppearance, band: ActorLodBand): Promise<void> {
