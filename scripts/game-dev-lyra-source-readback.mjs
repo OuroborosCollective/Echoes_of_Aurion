@@ -7,11 +7,14 @@ const EXPECTED_SHA256 = "54b163ba60f74f1fb2355bceb537626076db6918cf699e5a21ae1bf
 const EXPECTED_BYTES = 1691648;
 const OUTPUT = path.resolve(".game-dev/workspace/lyra-source.glb");
 const apiKey = process.env.TRIPO_API_KEY?.trim();
-const TRIPO_BASE_URL = "https://api.tripo3d.ai/v2/openapi";
+const TRIPO_V3_BASE_URL = "https://openapi.tripo3d.ai/v3";
 
 if (!apiKey) throw new Error("TRIPO_API_KEY_MISSING");
+if (/^Bearer\s+/i.test(apiKey)) throw new Error("TRIPO_SECRET_MUST_BE_RAW_API_KEY_WITHOUT_BEARER_PREFIX");
+if (apiKey.startsWith("tcli_")) throw new Error("TRIPO_CLIENT_ID_IS_NOT_API_KEY");
+if (!apiKey.startsWith("tsk_")) throw new Error("TRIPO_API_KEY_PREFIX_INVALID_EXPECTED_TSK");
 
-async function jsonResponse(url) {
+async function jsonResponse(url, context) {
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}` },
     redirect: "error",
@@ -19,14 +22,15 @@ async function jsonResponse(url) {
   const text = await response.text();
   let payload;
   try { payload = JSON.parse(text); }
-  catch { throw new Error(`TRIPO_TASK_NON_JSON_${response.status}`); }
+  catch { throw new Error(`TRIPO_${context}_NON_JSON_${response.status}`); }
   if (!response.ok || payload?.code !== 0 || !payload?.data) {
-    throw new Error(`TRIPO_TASK_READBACK_FAILED_${response.status}_${payload?.code ?? "unknown"}`);
+    throw new Error(`TRIPO_${context}_FAILED_${response.status}_${payload?.code ?? "unknown"}`);
   }
   return payload.data;
 }
 
-const task = await jsonResponse(`${TRIPO_BASE_URL}/task/${encodeURIComponent(TASK_ID)}`);
+await jsonResponse(`${TRIPO_V3_BASE_URL}/account/balance`, "AUTH_READBACK");
+const task = await jsonResponse(`${TRIPO_V3_BASE_URL}/tasks/${encodeURIComponent(TASK_ID)}`, "TASK_READBACK");
 if (task.task_id !== TASK_ID) throw new Error("TRIPO_TASK_ID_MISMATCH");
 if (task.status !== "success") throw new Error(`TRIPO_SOURCE_NOT_SUCCESS_${String(task.status).toUpperCase()}`);
 
@@ -46,11 +50,12 @@ if (bytes.subarray(0, 4).toString("ascii") !== "glTF") throw new Error("LYRA_SOU
 await mkdir(path.dirname(OUTPUT), { recursive: true });
 await writeFile(OUTPUT, bytes, { flag: "wx", mode: 0o600 });
 console.log(JSON.stringify({
-  recordType: "aurion.lyra.tripo-source-readback.v1",
+  recordType: "aurion.lyra.tripo-source-readback.v2",
   ok: true,
+  authentication: "verified",
   taskId: TASK_ID,
   providerStatus: task.status,
-  providerApi: "tripo-v2-openapi",
+  providerApi: "tripo-v3",
   sha256,
   bytes: bytes.length,
   output: ".game-dev/workspace/lyra-source.glb",
