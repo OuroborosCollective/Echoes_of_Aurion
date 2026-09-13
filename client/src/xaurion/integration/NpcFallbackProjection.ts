@@ -93,6 +93,7 @@ export class NpcFallbackProjection {
       if (!this.disposed) {
         this.catalog = catalog;
         this.uploadedWorld.setCatalog(catalog);
+        this.remotePublic.setCatalog(catalog);
         this.equipment.setCatalog(catalog);
         this.trees.setCatalog(catalog);
         this.mobs.setCatalog(catalog);
@@ -152,8 +153,6 @@ export class NpcFallbackProjection {
       const band = actorLodBand(this.distanceToCamera(npc));
       const veryFar = band === "very_far";
       actor.group.visible = !veryFar;
-      // Keep the old cheap body visible until the next update has actually
-      // placed this NPC into the shared instanced proxy. No actor vanishes.
       currentVisual.body.forEach(mesh => { mesh.visible = veryFar; });
       this.projected.set(npc.id, {
         sha256: selection.entry.sha256,
@@ -223,7 +222,6 @@ export class NpcFallbackProjection {
       projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
       projected.actor.group.visible = true;
       if (!actorUsesSkinnedVisual(band)) {
-        // Far keeps the catalog-selected LOD2 GLB as a static idle visual.
         projected.accumulatedAnimationDelta = 0;
         continue;
       }
