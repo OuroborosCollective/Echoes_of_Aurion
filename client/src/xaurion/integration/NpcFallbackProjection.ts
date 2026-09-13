@@ -21,7 +21,6 @@ type ProjectedNpc = {
   lod: ActorLodBand;
 };
 
-const NPC_FALLBACK_LOW_LOD_DISTANCE_METERS = 42;
 const NPC_VERY_FAR_PROXY_CAPACITY = 256;
 function near(left: number, right: number): boolean { return Math.abs(left - right) <= 0.01; }
 
@@ -118,8 +117,11 @@ export class NpcFallbackProjection {
     return Math.hypot(npc.x - this.engine.camera.position.x, npc.z - this.engine.camera.position.z);
   }
 
-  private preferredLod(npc: NPCCharacter): 0 | 1 {
-    return this.distanceToCamera(npc) >= NPC_FALLBACK_LOW_LOD_DISTANCE_METERS ? 1 : 0;
+  /** Reuse the shared actor bands as the physical GLB preference. Very-far NPCs
+   * use the existing bounded instanced proxy and therefore never need LOD3. */
+  private preferredLod(npc: NPCCharacter): 0 | 1 | 2 {
+    const band = actorLodBand(this.distanceToCamera(npc));
+    return band === "near" ? 0 : band === "mid" ? 1 : 2;
   }
 
   private async project(npc: NPCCharacter): Promise<void> {
@@ -221,7 +223,7 @@ export class NpcFallbackProjection {
       projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
       projected.actor.group.visible = true;
       if (!actorUsesSkinnedVisual(band)) {
-        // Far keeps the already-selected low-LOD GLB as a static idle visual.
+        // Far keeps the catalog-selected LOD2 GLB as a static idle visual.
         projected.accumulatedAnimationDelta = 0;
         continue;
       }
