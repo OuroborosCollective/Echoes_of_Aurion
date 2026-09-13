@@ -8,17 +8,17 @@ import {
   PUBLIC_PLAYER_DISPLAY_PREFIX,
   WORLD_ENVIRONMENT_DISPLAY_PREFIX,
   WORLD_NATURE_DISPLAY_PREFIX,
-  glbEquipmentSlotFromDisplayName,
   glbImportReceiptSchema,
+  glbLodDescriptor,
   glbPurposeFromDisplayName,
   glbRuntimeCatalogSchema,
-  glbSubcategoryFromDisplayName,
   type GlbImportPurpose,
   type GlbImportReceipt,
 } from "../shared/glbImportContract";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { persistGlbBytes, readStoredGlb } from "./glbFileStore";
 import type { GlbAssetClassification } from "./glbAssetClassifier";
+import { groupGlbCatalogRows } from "./glbCatalogFamilies";
 
 const PURPOSE_PREFIXES = [
   NPC_FALLBACK_DISPLAY_PREFIX,
@@ -27,6 +27,12 @@ const PURPOSE_PREFIXES = [
   PUBLIC_PLAYER_DISPLAY_PREFIX,
   EQUIPMENT_DISPLAY_PREFIX,
 ] as const;
+
+const MAX_LOGICAL_CATALOG_MODELS = 500;
+// Keep the existing admission ceiling until a separate quota migration is
+// explicitly designed. LOD families reduce visible catalog rows without
+// silently expanding how many approved physical GLBs production accepts.
+const MAX_PHYSICAL_CATALOG_GLBS = MAX_LOGICAL_CATALOG_MODELS;
 
 function stripPurposePrefix(displayName: string): string {
   const trimmed = displayName.trim();
@@ -102,7 +108,7 @@ export class GlbImportStore {
       const assetId = existing[0]?.id ?? plan.assetId;
       if (!existing.length) {
         const [count] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM glbAssets WHERE storageKey LIKE 'local-glb/%' AND status = 'approved'");
-        if (Number(count[0]?.count) >= 500) throw new Error("GLB_CATALOG_LIMIT");
+        if (Number(count[0]?.count) >= MAX_PHYSICAL_CATALOG_GLBS) throw new Error("GLB_CATALOG_LIMIT");
         await persistGlbBytes(Buffer.from(input.contentBase64, "base64"), plan.sha256, this.storageRoot);
         await connection.execute("INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId, reviewedByUserId, reviewedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)", [assetId, displayName, plan.assetType, stored.key, stored.url, plan.sha256, plan.bytes, actorUserId, actorUserId, operationalDate()]);
       } else {
@@ -133,19 +139,44 @@ export class GlbImportStore {
   }
 
   async catalog() {
-    const [rows] = await this.pool.query<RowDataPacket[]>("SELECT g.id AS assetId, g.sha256, g.displayName, g.assetType, g.storageUrl, a.targetKey FROM glbAssets g LEFT JOIN glbAssignments a ON a.assetId = g.id AND a.active = 1 WHERE g.status = 'approved' AND g.storageKey LIKE 'local-glb/%' ORDER BY g.sha256, a.targetKey LIMIT 501");
-    const entries = rows.map(row => ({
-      assetId: row.assetId,
-      sha256: row.sha256,
-      displayName: row.displayName,
+    const [rows] = await this.pool.query<RowDataPacket[]>(`SELECT g.id AS assetId, g.sha256, g.bytes, g.displayName, g.assetType, g.storageUrl, a.targetKey
+      FROM glbAssets g
+      LEFT JOIN glbAssignments a ON a.assetId = g.id AND a.active = 1
+      WHERE g.status = 'approved' AND g.storageKey LIKE 'local-glb/%'
+      ORDER BY g.sha256, a.targetKey
+      LIMIT ${MAX_PHYSICAL_CATALOG_GLBS + 1}`);
+    if (rows.length > MAX_PHYSICAL_CATALOG_GLBS) throw new Error("GLB_CATALOG_LIMIT");
+    const entries = groupGlbCatalogRows(rows.map(row => ({
+      assetId: String(row.assetId),
+      sha256: String(row.sha256),
+      bytes: Number(row.bytes),
+      displayName: String(row.displayName),
       assetType: row.assetType,
-      storageUrl: row.storageUrl,
-      targetKey: row.targetKey ?? null,
-      purpose: glbPurposeFromDisplayName(String(row.displayName)),
-      subcategory: glbSubcategoryFromDisplayName(String(row.displayName)),
-      equipmentSlot: glbEquipmentSlotFromDisplayName(String(row.displayName)),
-    }));
+      storageUrl: String(row.storageUrl),
+      targetKey: row.targetKey === null || row.targetKey === undefined ? null : String(row.targetKey),
+    })));
     return glbRuntimeCatalogSchema.parse({ version: GLB_IMPORT_VERSION, revision: createHash("sha256").update(JSON.stringify(entries)).digest("hex"), entries });
+  }
+
+  /** Marks one existing approved physical GLB as the immutable LOD0 member of a
+   * logical family. Bytes, SHA, assignment and asset identity stay untouched. */
+  async enableLodFamily(actorUserId: number, assetId: string) {
+    return this.locked(actorUserId, async connection => {
+      const [rows] = await connection.query<RowDataPacket[]>("SELECT id, displayName, status, storageKey, sha256 FROM glbAssets WHERE id = ? FOR UPDATE", [assetId]);
+      const asset = rows[0];
+      if (!asset || asset.status !== "approved" || !String(asset.storageKey).startsWith("local-glb/")) throw new Error("GLB_APPROVED_LOCAL_ASSET_REQUIRED");
+      const descriptor = glbLodDescriptor(String(asset.displayName));
+      if (descriptor.lodLevel !== null) {
+        if (descriptor.lodLevel !== 0) throw new Error("GLB_LOD0_REQUIRED");
+        return Object.freeze({ assetId: String(asset.id), sha256: String(asset.sha256), displayName: String(asset.displayName), lodLevel: 0 as const, changed: false });
+      }
+      const displayName = `${String(asset.displayName)} LOD0`;
+      if (displayName.length > 120) throw new Error("GLB_LOD_FAMILY_NAME_TOO_LONG");
+      await connection.execute("UPDATE glbAssets SET displayName = ? WHERE id = ?", [displayName, assetId]);
+      const [readback] = await connection.query<RowDataPacket[]>("SELECT id, displayName, sha256 FROM glbAssets WHERE id = ?", [assetId]);
+      if (readback[0]?.displayName !== displayName || readback[0]?.sha256 !== asset.sha256) throw new Error("GLB_LOD_FAMILY_READBACK_FAILED");
+      return Object.freeze({ assetId: String(asset.id), sha256: String(asset.sha256), displayName, lodLevel: 0 as const, changed: true });
+    });
   }
 
   async assign(actorUserId: number, input: { assetId: string; targetType: string; targetKey: string; expectedActiveAssetId: string | null }) {
@@ -179,7 +210,7 @@ export class GlbImportStore {
         await readStoredGlb(assets[0].sha256, this.storageRoot);
         if (assets[0].status !== "approved") {
           const [count] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM glbAssets WHERE storageKey LIKE 'local-glb/%' AND status = 'approved'");
-          if (Number(count[0]?.count) >= 500) throw new Error("GLB_CATALOG_LIMIT");
+          if (Number(count[0]?.count) >= MAX_PHYSICAL_CATALOG_GLBS) throw new Error("GLB_CATALOG_LIMIT");
         }
       }
       await connection.execute("UPDATE glbAssets SET status = ?, reviewedByUserId = ?, reviewedAt = ? WHERE id = ?", [input.status, actorUserId, operationalDate(), input.assetId]);

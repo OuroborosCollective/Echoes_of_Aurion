@@ -1,4 +1,4 @@
-import { glbRuntimeCatalogSchema, type GlbCatalogEntry, type GlbEquipmentSlot, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { glbRuntimeCatalogSchema, selectGlbCatalogLod, type GlbCatalogEntry, type GlbEquipmentSlot, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
 import { compileVisualItemGeometry, type GeneratedVisualItemGeometry, type UnsupportedVisualItemGeometry, type VisualItemLod } from "./VisualItemGeometryCompiler";
 
@@ -25,7 +25,7 @@ export type VisualItemGlbSource = Readonly<{
     sha256: string;
     storageUrl: string;
     measuredTriangles: null;
-    measuredLod: null;
+    measuredLod: VisualItemLod | null;
   }>;
 }>;
 
@@ -76,8 +76,10 @@ function fallback(descriptor: VisualItemDescriptor, lod: VisualItemLod, reason: 
 
 /**
  * Resolves an item visual against Aurion's existing server-authored GLB catalog.
- * Only an explicit canonical glbAssetId may select a GLB. Slot-pool hashing,
- * display-name inference and arbitrary URLs are intentionally excluded here.
+ * Only an explicit canonical glbAssetId may select a logical GLB family. The
+ * requested presentation LOD may choose a physical member of that family, but
+ * inventory identity, ownership and gameplay stats remain bound to the same
+ * canonical item descriptor and logical asset id.
  */
 export function resolveVisualItemRenderSource(
   descriptor: VisualItemDescriptor,
@@ -102,9 +104,11 @@ export function resolveVisualItemRenderSource(
   if (entry.targetKey !== null) return fallback(descriptor, lod, "ASSET_TARGET_KEY_FORBIDDEN");
   if (entry.equipmentSlot !== slot) return fallback(descriptor, lod, "ASSET_SLOT_MISMATCH");
   if (entry.assetType !== expectedAssetType(slot)) return fallback(descriptor, lod, "ASSET_TYPE_MISMATCH");
-  if (entry.storageUrl !== `/api/assets/glb/${entry.sha256}.glb`) return fallback(descriptor, lod, "ASSET_STORAGE_MISMATCH");
 
-  const safeEntry = Object.freeze({ ...entry });
+  const variant = selectGlbCatalogLod(entry, lod);
+  if (variant.targetKey !== null || variant.storageUrl !== `/api/assets/glb/${variant.sha256}.glb`) return fallback(descriptor, lod, "ASSET_STORAGE_MISMATCH");
+
+  const safeEntry = Object.freeze({ ...entry, sha256: variant.sha256, storageUrl: variant.storageUrl });
   return Object.freeze({
     kind: "glb",
     lod,
@@ -112,11 +116,11 @@ export function resolveVisualItemRenderSource(
     catalogRevision: parsedCatalog.data.revision,
     entry: safeEntry,
     evidence: Object.freeze({
-      assetId: safeEntry.assetId,
-      sha256: safeEntry.sha256,
-      storageUrl: safeEntry.storageUrl,
+      assetId: entry.assetId,
+      sha256: variant.sha256,
+      storageUrl: variant.storageUrl,
       measuredTriangles: null,
-      measuredLod: null,
+      measuredLod: entry.lods?.length ? variant.level as VisualItemLod : null,
     }),
   });
 }

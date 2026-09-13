@@ -1,5 +1,6 @@
 import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
+import { selectGlbCatalogLod, type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -11,6 +12,8 @@ type PublicAppearance = Readonly<{ userId: number; assetId: string; displayName:
 type ActorRecord = {
   appearance: PublicAppearance;
   actor: AnimatedGlbActor;
+  physicalStorageUrl: string;
+  physicalLod: GlbLodLevel | null;
   lastPosition: { x: number; z: number } | null;
   accumulatedAnimationDelta: number;
   lod: ActorLodBand;
@@ -20,6 +23,7 @@ type ActorRecord = {
 export class RemotePublicAppearanceProjection {
   readonly root = new THREE.Group();
   private presences: readonly ConfirmedZonePresence[] = Object.freeze([]);
+  private catalog: GlbRuntimeCatalog | null = null;
   private readonly appearances = new Map<number, PublicAppearance>();
   private readonly actors = new Map<number, ActorRecord>();
   private readonly pending = new Set<number>();
@@ -36,6 +40,10 @@ export class RemotePublicAppearanceProjection {
     this.root.name = "aurion-remote-public-glb-appearances";
     engine.scene.add(this.root);
     if (typeof window !== "undefined") window.addEventListener(CONFIRMED_REMOTE_PRESENCES_EVENT, this.onPresences as EventListener);
+  }
+
+  setCatalog(catalog: GlbRuntimeCatalog): void {
+    this.catalog = catalog;
   }
 
   private onPresences = (event: Event) => {
@@ -77,26 +85,36 @@ export class RemotePublicAppearanceProjection {
     this.announceActive();
   }
 
-  private async ensureActor(appearance: PublicAppearance): Promise<void> {
-    if (this.disposed || this.pending.has(appearance.userId)) return;
+  private physicalAppearance(appearance: PublicAppearance, band: ActorLodBand): Readonly<{ storageUrl: string; lod: GlbLodLevel | null }> {
+    if (!actorUsesSkinnedVisual(band)) return Object.freeze({ storageUrl: appearance.storageUrl, lod: null });
+    const entry = this.catalog?.entries.find(candidate => candidate.assetId === appearance.assetId && candidate.purpose === "player-public" && candidate.assetType === "character");
+    if (!entry?.lods?.length) return Object.freeze({ storageUrl: appearance.storageUrl, lod: null });
+    const preferred = band === "near" ? 0 : 1;
+    const variant = selectGlbCatalogLod(entry, preferred);
+    return Object.freeze({ storageUrl: variant.storageUrl, lod: variant.level });
+  }
+
+  private async ensureActor(appearance: PublicAppearance, band: ActorLodBand): Promise<void> {
+    if (this.disposed || this.pending.has(appearance.userId) || !actorUsesSkinnedVisual(band)) return;
+    const physical = this.physicalAppearance(appearance, band);
     const existing = this.actors.get(appearance.userId);
-    if (existing?.appearance.storageUrl === appearance.storageUrl) return;
+    if (existing?.appearance.assetId === appearance.assetId && existing.physicalStorageUrl === physical.storageUrl) return;
     this.pending.add(appearance.userId);
     let unowned: THREE.Group | undefined;
     try {
-      const loaded = await glbManager.loadModel(appearance.storageUrl);
+      const loaded = await glbManager.loadModel(physical.storageUrl);
       unowned = loaded.scene;
       if (this.disposed || !this.presences.some(presence => presence.userId === appearance.userId)) return;
       if (!loaded.animations.some(clip => /idle/i.test(clip.name))) return;
       const latest = this.appearances.get(appearance.userId);
-      if (!latest || latest.storageUrl !== appearance.storageUrl) return;
+      if (!latest || latest.assetId !== appearance.assetId || this.physicalAppearance(latest, band).storageUrl !== physical.storageUrl) return;
       this.remove(appearance.userId);
       const actor = new AnimatedGlbActor(loaded.scene, loaded.animations, 2);
       actor.group.name = `aurion-remote-public-player:${appearance.userId}`;
-      actor.group.userData.publicAppearance = Object.freeze({ userId: appearance.userId, assetId: appearance.assetId, storageUrl: appearance.storageUrl });
+      actor.group.userData.publicAppearance = Object.freeze({ userId: appearance.userId, assetId: appearance.assetId, storageUrl: physical.storageUrl, lod: physical.lod });
       actor.group.visible = false;
       this.root.add(actor.group);
-      this.actors.set(appearance.userId, { appearance, actor, lastPosition: null, accumulatedAnimationDelta: 0, lod: "very_far" });
+      this.actors.set(appearance.userId, { appearance, actor, physicalStorageUrl: physical.storageUrl, physicalLod: physical.lod, lastPosition: null, accumulatedAnimationDelta: 0, lod: "very_far" });
       unowned = undefined;
     } catch {
       // Capsule fallback stays visible until the GLB is proven renderable.
@@ -148,13 +166,14 @@ export class RemotePublicAppearanceProjection {
       const band = actorLodBand(Math.hypot(worldX - selfPosition.x, worldZ - selfPosition.z));
       counts[band] += 1;
       const appearance = this.appearances.get(presence.userId);
-      if (actorUsesSkinnedVisual(band) && appearance) void this.ensureActor(appearance);
+      if (actorUsesSkinnedVisual(band) && appearance) void this.ensureActor(appearance, band);
 
       const record = this.actors.get(presence.userId);
       if (!record) continue;
-      if (appearance && record.appearance.storageUrl !== appearance.storageUrl) {
+      const desired = appearance ? this.physicalAppearance(appearance, band) : null;
+      if (appearance && desired && record.physicalStorageUrl !== desired.storageUrl) {
         record.actor.group.visible = false;
-        void this.ensureActor(appearance);
+        void this.ensureActor(appearance, band);
         continue;
       }
 
@@ -195,7 +214,7 @@ export class RemotePublicAppearanceProjection {
       mixerUpdatesLastFrame: this.mixerUpdatesLastFrame,
       mixerUpdatesTotal: this.mixerUpdatesTotal,
       pending: this.pending.size,
-      users: Object.freeze([...this.actors.keys()].sort((a, b) => a - b)),
+      users: Object.freeze([...this.actors.entries()].sort(([a], [b]) => a - b).map(([userId, record]) => Object.freeze({ userId, physicalLod: record.physicalLod, physicalStorageUrl: record.physicalStorageUrl }))),
     });
   }
 
