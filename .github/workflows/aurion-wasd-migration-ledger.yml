@@ -29,7 +29,7 @@ on:
         value: ${{ jobs.aurion-migration-ledger.outputs.plan_sha256 }}
       source_sha:
         description: Resolved immutable historical WASD source revision.
-        value: ${{ jobs.aurion-migration-ledger.outputs.source_sha }}
+        value: ${{ jobs.wasd-source-evidence.outputs.source_sha }}
       target_sha:
         description: Resolved immutable Aurion target revision.
         value: ${{ jobs.aurion-migration-ledger.outputs.target_sha }}
@@ -59,14 +59,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout the exact Aurion revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.target_ref || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Checkout the resolved historical WASD source revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: OuroborosCollective/Wasd
           ref: ${{ needs.wasd-source-evidence.outputs.source_sha }}
@@ -78,7 +78,7 @@ jobs:
       # inventoried. The toolchain is independently pinned to the reviewed
       # source-ledger revision, while the historical source tree remains data-only.
       - name: Checkout the pinned WASD ledger toolchain
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: OuroborosCollective/Wasd
           ref: e39ee9b6c085a1a02e5feb898532ad0e3085c30a
@@ -134,7 +134,7 @@ jobs:
           NODE
 
       - name: Upload historical migration-provenance evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-wasd-migration-ledger-${{ steps.ledger.outputs.plan_sha256 }}
           path: .aurion-evidence/wasd-migration-ledger
