@@ -16,7 +16,7 @@ describe("smart GLB upload integration contract", () => {
     expect(index).toContain('import { registerGlbSmartUpload } from "../glbSmartUpload"');
   });
 
-  it("keeps classification server-authoritative while binding safe filename evidence", () => {
+  it("keeps classification server-authoritative while binding safe normal and LOD filename evidence", () => {
     const runtime = read("server/glbSmartUpload.ts");
     const page = read("client/src/pages/GlbUpload.tsx");
     expect(runtime).toContain("classification = classifyGlbBase64(contentBase64, fileName)");
@@ -24,14 +24,22 @@ describe("smart GLB upload integration contract", () => {
     expect(runtime).toContain("assetType: classification.assetType");
     expect(page).toContain('fetch("/api/admin/glb-smart-upload"');
 
+    // Ordinary uploads retain the browser-selected basename by default. LOD
+    // family uploads may replace only that filename evidence with the locally
+    // constructed LOD0…LOD3 classifier name; neither client path supplies
+    // assetType or other classification authority.
+    expect(page).toContain("fileName = file.name");
+    expect(page).toContain("lodClassifyingFileName(file.name, level)");
+    expect(page).toContain('return `${base || "aurion_model"}_LOD${level}.glb`');
+
     const bodyStart = page.indexOf("body: JSON.stringify({");
     expect(bodyStart).toBeGreaterThan(-1);
     const bodyEnd = page.indexOf("}),", bodyStart);
     expect(bodyEnd).toBeGreaterThan(bodyStart);
     const requestBodySource = page.slice(bodyStart, bodyEnd);
     expect(requestBodySource).toContain("displayName: chosenName");
-    expect(requestBodySource).toContain("fileName: file.name");
-    expect(requestBodySource).toContain("contentBase64: await readFileAsBase64(file)");
+    expect(requestBodySource).toContain("fileName");
+    expect(requestBodySource).toContain("contentBase64: contentBase64 ?? await readFileAsBase64(file)");
     expect(requestBodySource).not.toContain("assetType");
   });
 
