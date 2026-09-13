@@ -13,7 +13,7 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -32,17 +32,20 @@ jobs:
           tgz=$(node -e 'const p=require("./pack.json"); process.stdout.write(p[0].filename)')
           cp "gds/$tgz" ./game-development-studio-1.0.2.tgz
           sha256sum game-development-studio-1.0.2.tgz > game-development-studio-1.0.2.sha256
-          npm install --global --ignore-scripts ./game-development-studio-1.0.2.tgz --no-audit --no-fund
-          game-dev --version
-          game-dev capabilities --json > capabilities.json
-          game-dev doctor --json > doctor.json
+          mkdir portable
+          npm install --prefix ./portable --ignore-scripts ./game-development-studio-1.0.2.tgz --no-audit --no-fund
+          ./portable/node_modules/.bin/game-dev --version
+          ./portable/node_modules/.bin/game-dev capabilities --json > capabilities.json
+          ./portable/node_modules/.bin/game-dev doctor --json > doctor.json
+          tar -C portable -czf game-development-studio-1.0.2-portable.tgz .
+          sha256sum game-development-studio-1.0.2-portable.tgz > game-development-studio-1.0.2-portable.sha256
       - name: Upload verified portable CLI
         uses: actions/upload-artifact@v4
         with:
-          name: game-development-studio-1.0.2-verified
+          name: game-development-studio-1.0.2-portable
           path: |
-            game-development-studio-1.0.2.tgz
-            game-development-studio-1.0.2.sha256
+            game-development-studio-1.0.2-portable.tgz
+            game-development-studio-1.0.2-portable.sha256
             capabilities.json
             doctor.json
           compression-level: 0
