@@ -25,6 +25,12 @@ export function npcVisualIdentityHash(identity: string): number {
   return hash >>> 0;
 }
 
+/** Canonical presentation target for a named NPC. Gameplay identity remains the
+ * existing server-owned npc id; this string only selects approved visual bytes. */
+export function npcVisualTargetKey(npcIdentity: string): string {
+  return `npc_${npcIdentity}`;
+}
+
 export function isNpcFallbackCatalogEntry(entry: NpcGlbCatalogEntry): boolean {
   return entry.assetType === "character"
     && entry.targetKey === null
@@ -74,12 +80,11 @@ export function selectNpcGlb(
   preferredLod: number | null = null,
 ): NpcGlbSelection | null {
   if (!catalog || !npcIdentity) return null;
-  if (preferredTargetKey) {
-    const assigned = catalog.entries.find(entry => entry.assetType === "character" && entry.targetKey === preferredTargetKey);
-    if (assigned) {
-      const descriptor = assigned.displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? npcFallbackDescriptor(assigned) : { variantKey: null, lod: null };
-      return Object.freeze({ entry: assigned, source: "assigned", fallbackIndex: null, variantKey: descriptor.variantKey, lod: descriptor.lod });
-    }
+  const exactTargetKey = preferredTargetKey ?? npcVisualTargetKey(npcIdentity);
+  const assigned = catalog.entries.find(entry => entry.assetType === "character" && entry.targetKey === exactTargetKey);
+  if (assigned) {
+    const descriptor = assigned.displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? npcFallbackDescriptor(assigned) : { variantKey: null, lod: null };
+    return Object.freeze({ entry: assigned, source: "assigned", fallbackIndex: null, variantKey: descriptor.variantKey, lod: descriptor.lod });
   }
   const variants = npcFallbackVariants(catalog);
   if (!variants.length) return null;

@@ -16,6 +16,38 @@
       "rig": { "status": "success", "taskId": "2dca58ed-7984-41b9-b150-5b09824d7b76", "creditsConsumed": 25 },
       "retarget": { "status": "success", "taskId": "a7a6cf20-9f28-4902-84e6-794f37d7a6b8", "animations": ["idle", "walk", "run"], "creditsConsumed": 30 },
       "validation": { "status": "success", "bytes": 2237768, "triangles": 4955, "materials": 1, "skins": 1, "animations": 3, "assetPath": "/manus-storage/aurion-veilguard-animated_d6b28a5b.glb" }
+    },
+    "lyra-first-quest-npc": {
+      "requestKey": "lyra-first-quest-npc-20260913-v1",
+      "source": {
+        "status": "local_upload_verified",
+        "fileName": "carackter_robe_myst.glb",
+        "sha256": "54b163ba60f74f1fb2355bceb537626076db6918cf699e5a21ae1bf37b148b24",
+        "bytes": 1691648,
+        "triangles": 4218,
+        "vertices": 3491,
+        "materials": 1,
+        "skins": 0,
+        "animations": 0,
+        "embeddedTripoTaskCandidate": "60ce5ff4-ab86-440d-8fc7-dc25b7da6b25"
+      },
+      "providerReadback": { "status": "blocked_credentials", "creditsConsumed": 0 },
+      "rigCheck": { "status": "not_submitted", "creditsConsumed": 0 },
+      "rig": { "status": "not_submitted", "model": "v1.0-20240301", "rigType": "biped", "spec": "mixamo", "outFormat": "glb", "creditsConsumed": 0 },
+      "retarget": {
+        "status": "not_submitted",
+        "phase1": ["preset:idle", "preset:walk", "preset:run", "preset:slash"],
+        "phase2": ["death_or_hurt_after_library_readback", "interaction_gesture_after_library_readback"],
+        "animateInPlace": true,
+        "creditsConsumed": 0
+      },
+      "aurion": {
+        "npcId": "lyra",
+        "questKey": "astral_call",
+        "presentationOnly": true,
+        "equipmentSlots": ["weapon", "shield", "helmet", "chest", "shoulders", "arms", "legs", "boots"]
+      },
+      "validation": { "status": "not_run_with_game_dev", "maxTriangles": 5600 }
     }
   }
 }

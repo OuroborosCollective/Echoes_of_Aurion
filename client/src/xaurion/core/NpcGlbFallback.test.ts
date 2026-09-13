@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { NPC_FALLBACK_DISPLAY_PREFIX } from "@shared/glbImportContract";
-import { isNpcFallbackCatalogEntry, npcFallbackPool, npcFallbackVariants, npcVisualIdentityHash, selectNpcGlb } from "./NpcGlbFallback";
+import { isNpcFallbackCatalogEntry, npcFallbackPool, npcFallbackVariants, npcVisualIdentityHash, npcVisualTargetKey, selectNpcGlb } from "./NpcGlbFallback";
 
 const entry = (assetId: string, sha: string, displayName: string, targetKey: string | null = null) => ({
   assetId,
@@ -24,6 +24,17 @@ describe("deterministic NPC GLB fallback selection", () => {
     const fallback = entry("glb_fallback", "b", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Buns`);
     const selected = selectNpcGlb(catalog([fallback, assigned]), "observatory_blacksmith", "npc_blacksmith");
     expect(selected).toMatchObject({ entry: assigned, source: "assigned", fallbackIndex: null });
+  });
+
+  it("derives the canonical exact assignment from the NPC id before considering fallback", () => {
+    const lyra = entry("glb_lyra", "a", "Lyra · Keeper of the Observatory", "npc_lyra");
+    const fallback = entry("glb_fallback", "b", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Buns`);
+    expect(npcVisualTargetKey("lyra")).toBe("npc_lyra");
+    expect(selectNpcGlb(catalog([fallback, lyra]), "lyra")).toMatchObject({
+      entry: lyra,
+      source: "assigned",
+      fallbackIndex: null,
+    });
   });
 
   it("admits only explicitly marked, unassigned character assets into the fallback pool", () => {
