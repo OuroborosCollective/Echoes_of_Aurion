@@ -27,7 +27,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       ...workflow.matchAll(/node --input-type=module -e '\n([\s\S]*?)\n\s*'/g),
     ].map(match => match[1]);
 
-    expect(embeddedNodeScripts.length).toBeGreaterThanOrEqual(8);
+    expect(embeddedNodeScripts.length).toBeGreaterThanOrEqual(9);
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-workflow-node-"));
     try {
       embeddedNodeScripts.forEach((script, index) => {
@@ -44,7 +44,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   });
 
   it("binds the public health response and image metadata to one source revision", () => {
-    expect(dockerfile).toContain("node:22.13.0-bookworm-slim@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
+    expect(dockerfile).toContain("node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
     expect(dockerfile).toContain("AURION_RELEASE_SHA=${AURION_RELEASE_SHA}");
     expect(dockerfile).toContain("org.opencontainers.image.revision=${AURION_RELEASE_SHA}");
     expect(dockerfile).not.toContain("pnpm install");
@@ -59,13 +59,17 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(runtimeBuilder).toContain('"deploy/verify-aurion-runtime-database.mjs"');
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("needs: migration-ledger");
-    expect(workflow).toContain("Bind WASD source and Aurion migration ledger");
+    expect(workflow).toContain("Bind historical WASD provenance to Aurion");
+    expect(workflow).toContain('source_ref: eb20a85b305612eaf01c560ad0c89af96ed03295');
+    expect(workflow).not.toContain('source_ref: main');
     expect(workflow).toContain('target_ref: ${{ github.sha }}');
     expect(workflow).toContain('needs.migration-ledger.outputs.plan_sha256');
     expect(migrationLedger).toContain("workflow_call:");
     expect(migrationLedger).toContain("target_ref:");
     expect(migrationLedger).toContain("target_sha:");
     expect(migrationLedger).toContain("productionWritesScheduled !== false");
+    expect(migrationLedger).not.toContain('cron:');
+    expect(migrationLedger).toContain("eb20a85b305612eaf01c560ad0c89af96ed03295");
     expect(workflow).toContain('"runtime-node_modules.tgz"');
     expect(workflow).toContain("docker build --pull=false");
     expect(workflow).toContain('--build-arg "AURION_RELEASE_SHA=${GITHUB_SHA}"');
@@ -98,7 +102,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("node --check deploy/verify-aurion-runtime-database.mjs");
   });
 
-  it("keeps every main revision in one serialized proof and promotion chain", () => {
+  it("keeps runtime-affecting main revisions serialized while excluding docs-only deployment noise", () => {
     const triggerBlock = workflow.slice(0, workflow.indexOf("\nconcurrency:"));
     const pushBlock = triggerBlock.match(/  push:\n[\s\S]*?(?=\n  pull_request:)/)?.[0];
     const trustedMainCondition =
@@ -106,7 +110,18 @@ describe("Aurion labelled Traefik runtime deployment", () => {
 
     expect(pushBlock).toBeDefined();
     expect(pushBlock).toContain("branches: [main]");
-    expect(pushBlock).not.toContain("paths:");
+    expect(pushBlock).toContain("paths-ignore:");
+    for (const ignored of [
+      '"docs/**"',
+      '"SUMMARY.md"',
+      '"Memory.md"',
+      '".game-dev/**"',
+      '".gitignore"',
+      '".github/workflows/game-development-studio-smoke.yml"',
+      '"scripts/install-game-development-studio.mjs"',
+    ]) {
+      expect(pushBlock).toContain(ignored);
+    }
     expect(triggerBlock).toContain("workflow_dispatch:");
     expect(workflow.split(trustedMainCondition)).toHaveLength(5);
     const dispatchJob = workflow.split("\n  apply-reviewed-schema-plan:")[1]?.split("\n  production-schema-readback:")[0];
@@ -120,6 +135,25 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     );
     expect(workflow).toContain("needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]");
     expect(workflow).toContain("needs: [promote-zone-runtime, apply-reviewed-schema-plan]");
+  });
+
+  it("keeps production cache read-only and records workflow provenance", () => {
+    expect(workflow).toContain("cache-mode: read");
+    expect(workflow).toContain("Record workflow provenance");
+    expect(workflow).toContain("job.workflow_ref || github.workflow_ref");
+    expect(workflow).toContain("job.workflow_sha || github.workflow_sha");
+    expect(workflow).toContain("job.workflow_repository || github.repository");
+    expect(workflow).toContain("aurion_workflow_provenance");
+    expect(workflow).toContain("aurion-workflow-provenance.json");
+    expect(workflow).toContain('cacheMode: "read"');
+  });
+
+  it("pins release proof databases and Node runtime identities", () => {
+    expect(workflow).toContain("mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1");
+    expect(workflow).toContain("sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
+    expect(workflow).toContain("sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
+    expect(workflow).toContain("node:22.23.2-bookworm-slim@sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
+    expect(promoter).toContain("node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
   });
 
   it("uses Traefik labels and a root-managed secret environment file", () => {
