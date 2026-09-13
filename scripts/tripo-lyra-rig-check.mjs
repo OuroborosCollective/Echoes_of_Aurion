@@ -41,7 +41,7 @@ const submitted = await envelope(await fetch(`${BASE}/animations/rig-check`, {
   redirect: "error",
   signal: AbortSignal.timeout(30_000)
 }), "RIG_CHECK_SUBMIT");
-if (typeof submitted.task_id !== "string" || !submitted.task_id.startsWith("task_")) {
+if (typeof submitted.task_id !== "string" || !/^[A-Za-z0-9_-]{8,160}$/.test(submitted.task_id)) {
   throw new Error("TRIPO_RIG_CHECK_TASK_ID_INVALID");
 }
 
