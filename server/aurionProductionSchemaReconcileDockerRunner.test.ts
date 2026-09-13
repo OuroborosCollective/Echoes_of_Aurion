@@ -221,7 +221,6 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(runner).not.toMatch(/docker run[\s\S]*?\bnode:22\b(?![.@])/);
   });
 
-
   it("derives a closed, one-time amd64 bootstrap artifact without mutating the canonical contract", () => {
     const sourceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-promoter-bootstrap-source-"));
     const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-promoter-bootstrap-output-"));
@@ -248,8 +247,8 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
         path.join(outputRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"),
         "utf8",
       ));
-      expect(canonical.imageDigest).toBe("sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff");
-      expect(bootstrap.imageDigest).toBe("sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f");
+      expect(canonical.imageDigest).toBe("sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
+      expect(bootstrap.imageDigest).toBe("sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
       const bootstrapIdentity = JSON.parse(
         fs.readFileSync(
           path.join(outputRoot, "bootstrap-identity.json"),
