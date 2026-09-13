@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { worldSurfaceMaterial, mapWorldGround } from './WorldSurfaceAtlas';
 import { BiomeType, LandmarkType, SolidObstacle, WorldChunkData, WorldExpansionStats } from '../types';
 import { collisionSystem } from './WorldCollisionSystem';
 
@@ -447,19 +448,9 @@ export class WorldChunkManager {
     const terrainGeo = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize, segs, segs);
     terrainGeo.rotateX(-Math.PI / 2);
 
-    // Biome color
-    let terrainColor = 0x22c55e;
-    if (chunk.materialTheme === 'flower_meadow') terrainColor = 0x10b981;
-    else if (chunk.materialTheme === 'earth') terrainColor = 0x78350f;
-    else if (chunk.materialTheme === 'farmland') terrainColor = 0xca8a04;
-    else if (chunk.materialTheme === 'starpath' || chunk.materialTheme === 'starpath_crossing') terrainColor = 0x475569;
-
-    const terrainMat = new THREE.MeshStandardMaterial({
-      color: terrainColor,
-      roughness: 0.85,
-      metalness: 0.15,
-      flatShading: true,
-    });
+    const paved = chunk.materialTheme === 'starpath' || chunk.materialTheme === 'starpath_crossing';
+    const terrainMat = worldSurfaceMaterial(this.scene, paved ? 'paving' : 'forest');
+    mapWorldGround(terrainGeo, chunk.centerX, chunk.centerZ);
 
     // Add subtle procedural undulating elevation
     const pos = terrainGeo.attributes.position;
@@ -476,13 +467,13 @@ export class WorldChunkManager {
     group.add(terrainMesh);
 
     // Materials Palette matching Art Direction (Honey-stone, Brushed Bronze, Midnight-Petrol, Aurion-Turquoise)
-    const honeyStoneMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.85 });
+    const honeyStoneMat = worldSurfaceMaterial(this.scene, 'paving');
     const bronzeMat = new THREE.MeshStandardMaterial({ color: 0xcd7f32, metalness: 0.85, roughness: 0.3 });
-    const woodTrunkMat = new THREE.MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.9 });
+    const woodTrunkMat = worldSurfaceMaterial(this.scene, 'wood');
     const leafMat = new THREE.MeshStandardMaterial({
-      color: 0x059669,
+      color: 0x526444,
       emissive: 0x047857,
-      emissiveIntensity: 0.25,
+      emissiveIntensity: 0.02,
       roughness: 0.6,
     });
     const turquoiseGlowMat = new THREE.MeshStandardMaterial({
@@ -491,7 +482,7 @@ export class WorldChunkManager {
       emissiveIntensity: 1.4,
       roughness: 0.2,
     });
-    const stoneWallMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 });
+    const stoneWallMat = worldSurfaceMaterial(this.scene, 'rock');
     const bannerMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.5, side: THREE.DoubleSide });
 
     // 2. Render 3D Objects for each Solid Obstacle
