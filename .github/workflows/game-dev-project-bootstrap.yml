@@ -1,0 +1,66 @@
+name: Game Dev Project Bootstrap
+
+on:
+  push:
+    branches:
+      - tooling/game-dev-project-install-20260913
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: ${{ !contains(github.event.head_commit.message, '[game-dev bootstrap]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+          run_install: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: pnpm
+
+      - name: Install frozen project dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Add pinned Game Development Studio CLI
+        run: pnpm add --save-dev --save-exact @theisegoria/game-development-studio@1.0.2
+
+      - name: Add project commands
+        run: |
+          npm pkg set 'scripts.game-dev:version=game-dev --version'
+          npm pkg set 'scripts.game-dev:capabilities=game-dev capabilities --output-dir .aurion-evidence/game-dev --json'
+          npm pkg set 'scripts.game-dev:doctor=game-dev doctor --output-dir .aurion-evidence/game-dev --json'
+          npm pkg set 'scripts.game-dev:adapter-templates=game-dev adapter templates --json'
+
+      - name: Verify installed CLI version
+        run: |
+          test "$(pnpm exec game-dev --version)" = "1.0.2"
+          pnpm game-dev:capabilities
+          pnpm game-dev:doctor
+          pnpm game-dev:adapter-templates
+
+      - name: Verify lockfile is frozen after install
+        run: pnpm install --frozen-lockfile
+
+      - name: Commit project-local installation
+        run: |
+          if git diff --quiet -- package.json pnpm-lock.yaml; then
+            echo 'No package changes produced.'
+            exit 1
+          fi
+          git config user.name 'aurion-tooling-bot'
+          git config user.email 'aurion-tooling-bot@users.noreply.github.com'
+          git add package.json pnpm-lock.yaml
+          git commit -m 'build(tooling): pin game-development-studio 1.0.2 [game-dev bootstrap]'
+          git push origin HEAD:tooling/game-dev-project-install-20260913
