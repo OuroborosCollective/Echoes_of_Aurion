@@ -1,0 +1,36 @@
+{
+  "status": "LIVE_CATALOG_VERIFIED_WORLD_RENDER_UNVERIFIED",
+  "displayName": "World Nature \u00b7 tree \u00b7 Aurion Eiche \u00b7 Fantasy 1600 v1",
+  "purpose": "world-nature",
+  "subcategory": "tree",
+  "sha256": "f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872",
+  "assetId": "glb_f8448061b64b860ac2c605d9a90de37c85c1c4acba697727",
+  "bytes": 1116224,
+  "catalogCountBefore": 40,
+  "catalogCountAfter": 41,
+  "storageUrl": "https://arelogic.space/api/assets/glb/f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872.glb",
+  "publicDownloadSha256Matches": true,
+  "ui": "https://arelogic.space/ops/glb-upload",
+  "renderedLive": false,
+  "limitations": [
+    "Cloud browser reported WebGL 2 unavailable in live world.",
+    "Direct browser navigation to game catalog API was blocked by client; no API readback claimed.",
+    "Existing upload projection adds purpose-scoped scenery; it does not replace every procedural tree."
+  ],
+  "sourceContractRevision": "6803dabc1d23c48a99352a025f035202b89f6083",
+  "sourceContract": [
+    "client/src/xaurion/core/UploadedAssetRuntime.ts",
+    "client/src/xaurion/integration/UploadedWorldCatalogProjection.ts",
+    "client/src/xaurion/integration/NpcFallbackProjection.ts"
+  ],
+  "sourceExpectedMaxDimensionMeters": 7,
+  "tests": {
+    "passed": 14,
+    "files": [
+      "server/glbAssetClassifier.test.ts",
+      "server/glbImportPlan.test.ts",
+      "client/src/xaurion/core/UploadedAssetRuntime.test.ts"
+    ]
+  },
+  "reproducibleSecondBuild": true
+}

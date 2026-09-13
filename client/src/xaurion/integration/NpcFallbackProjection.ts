@@ -10,6 +10,7 @@ import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
 import { EquipmentCatalogProjection } from "./EquipmentCatalogProjection";
+import { TreeCatalogReplacement } from "./TreeCatalogReplacement";
 
 type ProjectedNpc = {
   sha256: string;
@@ -52,6 +53,7 @@ export class NpcFallbackProjection {
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
   private readonly equipment: EquipmentCatalogProjection;
+  private readonly trees: TreeCatalogReplacement;
   readonly farProxyMesh: THREE.InstancedMesh;
   private readonly farProxyGeometry = new THREE.CapsuleGeometry(.28, 1, 2, 4);
   private readonly farProxyMaterial = new THREE.MeshStandardMaterial({ color: 0xb7a56b, roughness: .82 });
@@ -70,6 +72,7 @@ export class NpcFallbackProjection {
     this.uploadedWorld = new UploadedWorldCatalogProjection(engine);
     this.remotePublic = new RemotePublicAppearanceProjection(engine);
     this.equipment = new EquipmentCatalogProjection(engine);
+    this.trees = new TreeCatalogReplacement(engine);
     this.farProxyMesh = new THREE.InstancedMesh(this.farProxyGeometry, this.farProxyMaterial, NPC_VERY_FAR_PROXY_CAPACITY);
     this.farProxyMesh.name = "aurion-npc-very-far-proxies";
     this.farProxyMesh.count = 0;
@@ -89,6 +92,7 @@ export class NpcFallbackProjection {
         this.catalog = catalog;
         this.uploadedWorld.setCatalog(catalog);
         this.equipment.setCatalog(catalog);
+        this.trees.setCatalog(catalog);
       }
     } catch {
       // Keep the last confirmed catalog through transient transport failures.
@@ -230,6 +234,7 @@ export class NpcFallbackProjection {
     this.mixerUpdatesLastFrame = mixerUpdates;
     this.mixerUpdatesTotal += mixerUpdates;
     this.uploadedWorld.update();
+    this.trees.update(delta);
     this.remotePublic.update(delta, logicalTick);
     this.equipment.update(delta, logicalTick);
     if (logicalTick - this.lastRefreshTick >= 150) {
@@ -263,7 +268,7 @@ export class NpcFallbackProjection {
     });
   }
 
-  uploadedWorldEvidence() { return this.uploadedWorld.evidence(); }
+  uploadedWorldEvidence() { return { ...this.uploadedWorld.evidence(), treeReplacements: this.trees.evidence() }; }
   remotePublicEvidence() { return this.remotePublic.evidence(); }
   equipmentEvidence() { return this.equipment.evidence(); }
 
@@ -273,6 +278,7 @@ export class NpcFallbackProjection {
     this.equipment.dispose();
     this.remotePublic.dispose();
     this.uploadedWorld.dispose();
+    this.trees.dispose();
     for (const npcId of [...this.projected.keys()]) this.restoreNpc(npcId);
     this.pending.clear();
     this.engine.scene.remove(this.farProxyMesh);

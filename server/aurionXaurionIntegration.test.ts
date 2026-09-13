@@ -7,12 +7,28 @@ const sha256 = (path: string) => createHash("sha256").update(readFileSync(path))
 const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptations.json")) as {
   files: Array<{ path: string; sourceSha256: string; targetSha256: string; adaptations: Array<{ before: string; after: string; occurrences: number }> }>;
 };
+const treeVisualAdaptations = JSON.parse(read("docs/migrations/fantasy-tree-visual-adaptations.json")) as typeof adaptations;
+
+/** Verify the complete changed file, then reconstruct the exact pre-presentation
+ * bytes before applying the existing owner-ZIP provenance checks below. */
+function beforeTreeVisualTags(path: string): string {
+  let source = read(path);
+  const entry = treeVisualAdaptations.files.find(file => file.path === path);
+  if (!entry) return source;
+  expect(sha256(path)).toBe(entry.targetSha256);
+  for (const change of [...entry.adaptations].reverse()) {
+    expect(source.split(change.after).length - 1).toBe(change.occurrences);
+    source = source.replaceAll(change.after, change.before);
+  }
+  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.sourceSha256);
+  return source;
+}
 
 function sourceHashBeforeDeterminism(path: string): string {
   const entry = adaptations.files.find(file => file.path === path);
   if (!entry) throw new Error(`Missing deterministic adaptation evidence: ${path}`);
-  expect(sha256(path)).toBe(entry.targetSha256);
-  let source = read(path);
+  let source = beforeTreeVisualTags(path);
+  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.targetSha256);
   for (const change of [...entry.adaptations].reverse()) {
     expect(source.split(change.after).length - 1).toBe(change.occurrences);
     source = source.replaceAll(change.after, change.before);
@@ -107,7 +123,7 @@ describe("AIM-239 xaurion integration boundary", () => {
   it("pins the owner ZIP chunk and collision wave while keeping Aurion persistence authoritative", () => {
     const chunks = read("client/src/xaurion/world/WorldChunkManager.ts");
     const collision = read("client/src/xaurion/world/WorldCollisionSystem.ts");
-    expect(sha256("client/src/xaurion/world/WorldChunkManager.ts")).toBe("e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1");
+    expect(createHash("sha256").update(beforeTreeVisualTags("client/src/xaurion/world/WorldChunkManager.ts")).digest("hex")).toBe("e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1");
     expect(sha256("client/src/xaurion/world/WorldCollisionSystem.ts")).toBe("edbef31c708319d91ac66d98400a84c3009adda4b2e578e50bf5b3fbd4e63883");
     expect(chunks).toContain("Grenzmark Frostkrone");
     expect(chunks).toContain("Schmelzkern-Verlies");

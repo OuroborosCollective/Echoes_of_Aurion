@@ -1,0 +1,20 @@
+{
+  "version": "aurion.fantasy-assets.v1",
+  "generator": "4.5.13 LTS",
+  "sourceRevision": "6803dabc1d23c48a99352a025f035202b89f6083",
+  "triangleCeiling": 1600,
+  "units": "metres",
+  "assets": [
+    {
+      "file": "aurion_oak_tree.glb",
+      "purpose": "world-nature",
+      "sha256": "f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872",
+      "bytes": 1116224,
+      "triangles": 1466,
+      "materials": 1,
+      "textures": 3,
+      "bones": 0,
+      "animations": []
+    }
+  ]
+}

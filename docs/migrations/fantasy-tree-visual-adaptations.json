@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Owner-requested approved fantasy tree visual replacement; tags only, preserve original AX1 world/collision bytes under exact reversible reconstruction",
+  "files": [
+    {
+      "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
+      "sourceRevision": "6803dabc1d23c48a99352a025f035202b89f6083",
+      "sourceSha256": "c00e7d2a3b417e250a77b19e961294c3de3c85a26e650bd20361e5e7feeca3b5",
+      "targetSha256": "88fbc75e243d5b527cd7ff01734fe2f3f33e2f4525f295eca8d00a6ea8a26e03",
+      "adaptations": [
+        {
+          "before": "      const trunkHeight = 4 + (i % 3);",
+          "after": "      const trunkHeight = 4 + (i % 3);\n      tree.name = `woods-tree-visual-${i}`;\n      tree.userData.aurionVisualKind = \"tree\";\n      tree.userData.aurionTreeHeightMeters = trunkHeight + 4.25;",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "path": "client/src/xaurion/world/WorldChunkManager.ts",
+      "sourceRevision": "6803dabc1d23c48a99352a025f035202b89f6083",
+      "sourceSha256": "e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1",
+      "targetSha256": "fff15bb9dba605b743c803960214a25d98e66f66c2af40892717416f687c031b",
+      "adaptations": [
+        {
+          "before": "        const trunkH = obs.height || 7.0;",
+          "after": "        const trunkH = obs.height || 7.0;\n        treeGroup.name = `chunk-tree-visual:${chunk.chunkKey}:${obs.x}:${obs.z}`;\n        treeGroup.userData.aurionVisualKind = \"tree\";\n        treeGroup.userData.aurionTreeHeightMeters = trunkH * 0.65 + 5.6;",
+          "occurrences": 1
+        }
+      ]
+    }
+  ]
+}

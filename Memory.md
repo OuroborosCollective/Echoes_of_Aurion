@@ -318,3 +318,23 @@ Evidence: Exact pre-memory head `7bd61138824b4fed15be180664de7afe0233bb92`; 5/5 
 Learned: Tactile feedback is safe only when accessibility preferences and disabled semantics remain authoritative.
 Open: Production deployment is not implied.
 Next safe step: Re-run exact-head checks after this append before merge.
+
+### 2026-09-13 — First fantasy oak, sequential live asset intake
+Status: PARTIAL — live catalog and delivered bytes verified; in-world rendering unverified.
+Task: Begin the requested mobile fantasy overhaul, integrating each completed model before producing the next (at most ten small assets per batch).
+Decisions: Start with one original oak in the existing world-nature/tree visual catalog. Keep the 1,600-triangle ceiling, shared PBR atlas and existing gameplay/collision authority.
+Touched surfaces: `scripts/fantasy_assets/`, `assets/fantasy-v1/`, approved live GLB catalog.
+Evidence: GLB `f8448061b64b860ac2c605d9a90de37c85c1c4acba697727d3571140ee2ee872`; 1,466 triangles independently reimported in Blender; one mesh/material, three 512px textures; second build byte-identical. Live intake increased approved catalog entries 40→41, confirmed world-nature/tree purpose, and public download SHA matched. Existing classification/plan/placement regressions passed 14/14 against source `6803dabc1d23c48a99352a025f035202b89f6083`.
+Learned: Uploaded nature is a visual overlay, not a replacement for all procedural trees. Current MobManager renders capsules without a GLB consumer; avatar controller lacks cast/fall/block states. These require distinct AX1 presentation work.
+Open: Cloud browser reports WebGL 2 unavailable, so no live-world draw or native-device performance is claimed. Deployment recovery and the remaining models, nine animations and full equipment anchors remain open.
+Next safe step: Recover the canonical Traefik deployment, verify this oak in the live world, then continue the next model. No automatic merge.
+
+### 2026-09-13 — Canonical runtime recovery and oak replacement candidate
+Status: VERIFIED production recovery; VERIFIED repository candidate for tree replacement, not yet deployed or visually confirmed.
+Task: Recover the current live revision and connect the first uploaded oak to existing AX1 tree visuals before producing another model.
+Decisions: The linked static fallback run 34735499891 failed on an unavailable integrity-pinned trailer; it is not the canonical game deployment. Fresh main/source and logs identified a transient Docker Hub connection reset in canonical run 34727230845. One failed-job retry completed the existing production gates without weakening integrity or schema checks. Tree replacement is presentation-only, catalog-approved, capped at 16 nearby phone instances / 32 otherwise, sharing one mesh/material; procedural visuals remain until loading succeeds and return on revocation/failure/disposal. No gameplay/collision mutation.
+Touched surfaces: Existing deployment workflow execution; TreeCatalogReplacement and its NpcFallbackProjection lifecycle; visual tags in OpenWorldLandscape and WorldChunkManager.
+Evidence: Public health and promotion readback bind revision `6803dabc1d23c48a99352a025f035202b89f6083`; image `sha256:e0a4014a503050ed22959e64f4dbdcff99e7662f2c0b15fcbcab2382bdc3f39b`; container `28a32af17f5d033896d4d770620ce289d9f848ec0aeb0c8ff9d8f865672cc4fc`, independently healthy in PatchMon. Production schema receipt reports PRESENT_SCHEMA_MATCH, 22/22 matching migrations, 0 absent/drift. Replacement checks: 10/10 focused tests, TypeScript and production build passed. Oak remains 1,466 triangles; no next model created.
+Learned: A successful catalog upload does not prove that existing cone trees were replaced; the owner also reports no visible oak yet. Both source paths now expose visual tags for a bounded replacement consumer.
+Open: Replacement exact-head CI, merge, immutable deployment and visible in-game confirmation remain outstanding. Cloud browser WebGL 2 is unavailable; no native mobile performance claim. The unavailable trailer still blocks the separate legacy static fallback.
+Next safe step: Read exact-head CI for PR #313, integrate through the canonical deployment path, and confirm visible trees before proceeding to another asset.
