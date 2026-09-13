@@ -71,13 +71,13 @@ jobs:
       AURION_RECONCILE_TEST_READ_USER: aurion_readback
       AURION_RECONCILE_TEST_READ_PASSWORD: aurionreadbacktest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -165,7 +165,7 @@ jobs:
 
       - name: Download caller-verified reconciliation artifact
         if: ${{ inputs.use_uploaded_artifact }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: .
@@ -228,9 +228,6 @@ jobs:
           ' "$image_contract")"
           image_digest="${pinned_image##*@}"
           docker pull "$pinned_image"
-          # Pull validates the requested manifest digest. Docker may expose the
-          # platform manifest rather than that multi-platform index in
-          # RepoDigests, so validate the exact reference resolves to an image.
           image_id="$(docker image inspect --format '{{.Id}}' "$pinned_image")"
           [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
 
@@ -454,7 +451,7 @@ jobs:
           sha256sum "aurion-production-reconcile-${GITHUB_SHA}.tgz" > "aurion-production-reconcile-${GITHUB_SHA}.tgz.sha256"
 
       - name: Upload reconciliation artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-production-reconcile-${{ github.sha }}
           path: |
@@ -464,7 +461,7 @@ jobs:
           retention-days: 30
 
       - name: Upload exact revision repository migration evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-migration-repository-evidence-${{ github.sha }}
           path: repository-migration-evidence.json
