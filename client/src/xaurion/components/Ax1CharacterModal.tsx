@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import type { CharacterAttributes, CharacterClassId, ClassSkill, MilestoneWeaponSkill, PlayerStats, WeaponMastery, WeaponType } from '../types';
+import type { CharacterAttributes, ClassSkill, MilestoneWeaponSkill, PlayerStats, WeaponMastery, WeaponType } from '../types';
 import { Ax1Modal } from './Ax1Modal';
 
 export type Ax1VisiblePlayerStats = PlayerStats & { prestigeTitle?: string };
@@ -9,7 +9,6 @@ interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   stats: Ax1VisiblePlayerStats;
-  currentClassId: CharacterClassId;
   onAllocateStatPoint?: (attribute: keyof CharacterAttributes) => { success: boolean; message: string };
   onUnlockMilestoneSkill?: (skillId: string) => { success: boolean; message: string; skill?: MilestoneWeaponSkill };
   onEquipSkill?: (slotIndex: number, skill: ClassSkill) => void;
@@ -26,7 +25,6 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
   isOpen,
   onClose,
   stats,
-  currentClassId: _currentClassId,
   onAllocateStatPoint,
   onUnlockMilestoneSkill,
   onEquipSkill,

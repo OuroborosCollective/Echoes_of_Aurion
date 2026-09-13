@@ -19,7 +19,7 @@ export type Ax1SourceEntry = Readonly<{
  * files changed after that manifest was generated.
  */
 export const AX1_VISIBLE_SOURCE_MANIFEST = Object.freeze(Object.freeze([
-  ["GameHUD", "efd3bf694fd8c1a8e182d81730c34051855067b4c30fba4ee86c142c1f649248", "adapted", "aurion-readback", "Visible shell; values come only from confirmed readbacks and zone events."],
+  ["GameHUD", "efd3bf694fd8c1a8e182d81730c34051855067b4c30fba4ee86c142c1f649248", "adapted", "aurion-readback", "Canonical visible AX1 shell; legacy local simulation inputs are replaced only by confirmed Aurion/WASD projections and actions."],
   ["CharacterModal", "90f2e7f34926b0534c415eac72f5a8e5235161fd4e37665557ec768f9243425b", "projected", "aurion-readback", "Mastery identities are projected from confirmed progression receipts."],
   ["InventoryModal", "48dfffbb7a213aee3d34e420ba0302b8803ded3a2acb96f23f0e5168b7b5ee4f", "projected", "aurion-readback", "Paperdoll and bag project server-confirmed inventory; mutations require readback."],
   ["CraftingModal", "f6338c3e5a8da602ccaabc596cc99a77b19feca169af84a2bf6e03354d6ccc36", "projected", "aurion-readback", "Local rolls and rewards excluded; committed crafting receipts are displayed."],
