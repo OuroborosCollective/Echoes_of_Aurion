@@ -16,6 +16,26 @@ describe("AX1 full visible cutover contract", () => {
     for (const component of ["GameHUD", "InventoryModal", "CharacterModal", "ClassSelectModal", "CraftingModal", "QuestLogModal", "PartyModal", "WorldMapModal", "MiniMap", "DungeonFinderModal", "GuildManagementModal", "NPCEconomyModal", "NPCDialogueModal", "TerritoryPoliticsModal", "HomesteadBuilderModal", "VirtualJoystick"]) {
       expect(AX1_VISIBLE_SOURCE_MANIFEST.find(entry => entry.component === component)?.decision).not.toBe("excluded");
     }
+    expect(AX1_VISIBLE_SOURCE_MANIFEST.find(entry => entry.component === "GameHUD")?.note).toContain("Canonical visible AX1 shell");
+  });
+
+  it("mounts GameHUD as the visible shell while keeping AurionAuthorityHud as the confirmed adapter", () => {
+    const shell = readFileSync(join(process.cwd(), "client/src/xaurion/components/GameHUD.tsx"), "utf8");
+    const adapter = readFileSync(join(process.cwd(), "client/src/xaurion/integration/AurionAuthorityHud.tsx"), "utf8");
+    expect(adapter).toContain('import { GameHUD } from "../components/GameHUD"');
+    expect(adapter).toContain("<GameHUD");
+    expect(adapter).toContain("projectPlayerReadback");
+    expect(adapter).toContain("projectReadback");
+    expect(adapter).not.toContain("ax1-hud-top-left");
+    expect(adapter).not.toContain("ax1-micro-menu");
+    expect(shell).toContain('id="game-hud-root"');
+    expect(shell).toContain('id="player-unit-frame"');
+    expect(shell).toContain('data-source="ax1-f24-visible-shell"');
+    expect(shell).toContain("Realm Chat");
+    expect(shell).toContain("BESTÄTIGTE COMBAT METRICS");
+    for (const forbidden of ["MMORPG_CLASSES", "soundSynth", "Math.random", "Date.now", "performance.now", "crypto.randomUUID", "localStorage", "sessionStorage", "playerStats.hp", "playerStats.gold"]) {
+      expect(shell).not.toContain(forbidden);
+    }
   });
 
   it("keeps new AX1 world surfaces projection-only and free of local authority shortcuts", () => {
