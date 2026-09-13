@@ -112,7 +112,7 @@ jobs:
             -e MARIADB_ROOT_PASSWORD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" \
             -e MARIADB_ROOT_HOST=% \
             -e MARIADB_DATABASE="$AURION_RECONCILE_TEST_DATABASE" \
-            mariadb:11.4
+            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
           ready=0
           for _attempt in $(seq 1 30); do
             if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
@@ -157,7 +157,7 @@ jobs:
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
             --workdir /workspace \
             --env DATABASE_URL="$root_database_url" \
-            node:22.13.0-bookworm-slim \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             ./node_modules/.bin/drizzle-kit migrate
           restore_journal
           trap - EXIT
@@ -306,7 +306,7 @@ jobs:
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
             --workdir /workspace \
             --env DATABASE_URL="$root_database_url" \
-            node:22.13.0-bookworm-slim \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
@@ -343,8 +343,6 @@ jobs:
           const r=JSON.parse(fs.readFileSync("root-redacted.json","utf8"));
           const ledger=r.migrations?.find(m=>m.tag==="0041_aurion_content_hash_ledger");
           console.log(JSON.stringify({state:r.overallState,failureStage:r.failureStage,errorClass:r.errorClass,ledgerDrift:ledger?.drift}));
-          // Server versions can hide entire rows instead of returning NULL
-          // action definitions. Both must refuse a schema-match receipt.
           const redacted=r.overallState==="UNREADABLE_FAIL_CLOSED"&&r.failureStage==="READ_SCHEMA_TRIGGERS"&&r.errorClass==="DATABASE_METADATA_ACCESS_DENIED";
           const hidden=r.overallState==="PRESENT_SCHEMA_DRIFT"&&ledger?.state==="PRESENT_SCHEMA_DRIFT"&&["aurionContentHashLedger_no_update","aurionContentHashLedger_no_delete"].every(name=>ledger.drift.includes(`aurionContentHashLedger:missing_trigger:${name}`));
           if(r.readOnly!==true||(!redacted&&!hidden)) throw new Error("invisible trigger definitions were not fail-closed");
@@ -353,8 +351,6 @@ jobs:
       - name: Use existing isolated database owner for complete read-only metadata visibility
         run: |
           set -euo pipefail
-          # No grants change. The reader identity above remains SELECT/SHOW VIEW
-          # only; the existing fixture owner can see trigger action definitions.
           umask 077
           printf 'DATABASE_URL=mysql://root:%s@mariadb:3306/%s\n' \
             "$AURION_RECONCILE_TEST_ROOT_PASSWORD" \
@@ -398,9 +394,9 @@ jobs:
           case "\${1:-}" in
             image)
               if [[ "\${2:-}" == "inspect" ]]; then
-                printf '%s\\n' 'sha256:87608ec5109795be954baa2f5b0b6da1911423d8b44b58fecda31f81d28bfc0f'
+                printf '%s\\n' 'sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96'
               else
-                printf '%s\\n' 'docker.io/library/node@sha256:f5a0871ab03b035c58bdb3007c3d177b001c2145c18e81817b71624dcf7d8bff'
+                printf '%s\\n' 'docker.io/library/node@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5'
               fi
               ;;
             network) exit 0 ;;
