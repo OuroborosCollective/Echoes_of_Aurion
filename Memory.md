@@ -277,7 +277,6 @@ Evidence: Exact pre-memory head `adcf8d4ff6535acbe110b6264b0f490e9e079d7f`; bran
 Learned: AX1-first can preserve visible game behavior while proven mutation paths move into confirmed Aurion/WASD contracts; multi-input crafting can stay atomic and replay-safe without deleting AX1 content.
 Open: Full AX1 menu depth, complete skill 1–9 semantics/VFX, monster/nature GLB production readback, native-device proof and deploy/PatchMon remain separate work.
 Next safe step: Continue those items from merged `main` in a fresh branch; do not claim production completeness from this checkpoint.
-
 ### 2026-09-11 — AX1 286c575 ecology/resource/telegraph checkpoint
 Status: VERIFIED repository checkpoint; production completeness not claimed.
 Task: Selectively integrate AX1 revision `286c575d3d0050ffa77b794d5b7a7e24858acee8` while preserving AX1-first presentation/content and Aurion-confirmed gameplay truth.
@@ -358,3 +357,13 @@ Evidence: Exact pre-memory head `1e62c6b340de35e18fd928c26f9f547d833c55fb`; all 
 Learned: A correct actor socket is insufficient if runtime recenters the attached asset and discards its authored grip/body origin.
 Open: Binary node inspection and production/native-device visual confirmation of Ranger v3 remain separate.
 Next safe step: Re-run exact-head CI after this append; merge #316 only if green, then deploy/read back the immutable revision before claiming live placement fixed.
+
+### 2026-09-13 — Game Development Studio CLI v1.0.2
+Status: VERIFIED pre-merge
+Task: Pin the supported Game Development Studio CLI for Aurion asset production, validation and vendoring.
+Decisions: Pin `@theisegoria/game-development-studio@1.0.2` to source revision `96a0b4f34b979279ab983e9547af43133e85f310`, require Node.js >=22.5, keep provider-free smoke checks and isolate local outputs under `.game-dev/workspace/`.
+Touched surfaces: `scripts/install-game-development-studio.mjs`, `.github/workflows/game-development-studio-smoke.yml`, `.gitignore`.
+Evidence: exact pre-entry head `93805eddb69897593f9efd2aadcc68e43e9d2f39`; Game Development Studio Smoke run `34767286407` success; Aurion Local Test Pack run `34767286404` success; Build Android APK run `34767286430` success.
+Learned: Current GDS v1.0.2 is the supported CLI+Skills boundary; the retired historical MCP path must not be reintroduced.
+Open: This memory append creates a new head, so all merge gates must be rerun on that exact revision before merge.
+Next safe step: Require exact-head green checks, then merge PR #318; runtime game/deploy claims remain separate.
