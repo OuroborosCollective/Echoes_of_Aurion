@@ -15,6 +15,27 @@
       "textures": 3,
       "bones": 0,
       "animations": []
+    },
+    {
+      "file": "aurion_clockwork_stalker_monster_lod0.glb",
+      "purpose": "auto",
+      "sha256": "94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a",
+      "bytes": 1250676,
+      "triangles": 1300,
+      "materials": 1,
+      "textures": 3,
+      "bones": 22,
+      "animations": [
+        "Idle",
+        "Walk",
+        "Run",
+        "Attack",
+        "Death",
+        "CastSpell",
+        "Jump",
+        "Fall",
+        "Block"
+      ]
     }
   ]
 }

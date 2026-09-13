@@ -6,7 +6,10 @@ from mathutils import Vector
 path=Path(sys.argv[-1]).resolve()
 bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
 bpy.ops.import_scene.gltf(filepath=str(path))
-objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
+bpy.context.view_layer.update()
+# The Blender importer creates hidden bone-display shapes in glTF_not_exported;
+# those editor helpers are not meshes in the GLB and do not render in the game.
+objects=[o for o in bpy.context.scene.objects if o.type=='MESH' and not o.hide_render and any(not c.hide_render for c in o.users_collection)]
 points=[o.matrix_world@Vector(corner) for o in objects for corner in o.bound_box]
 lo=Vector([min(p[i] for p in points) for i in range(3)])
 hi=Vector([max(p[i] for p in points) for i in range(3)])

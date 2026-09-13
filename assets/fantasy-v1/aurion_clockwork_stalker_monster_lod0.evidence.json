@@ -1,0 +1,19 @@
+{
+  "file": "aurion_clockwork_stalker_monster_lod0.glb",
+  "sha256": "94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a",
+  "reimportTriangles": 1300,
+  "meshObjects": 1,
+  "boundsBlenderZUp": {
+    "min": [
+      -0.40500009059906006,
+      -1.2279062271118164,
+      0.014148612506687641
+    ],
+    "max": [
+      0.4050000011920929,
+      1.3790713548660278,
+      1.7796329259872437
+    ]
+  },
+  "verified": "Blender GLB independent reimport; not live browser evidence"
+}
