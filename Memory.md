@@ -308,3 +308,13 @@ Evidence: Exact pre-memory head `1fb563f88d4aababa148ecc78b708fb91affa078`; Type
 Learned: O(1) target resolution is safe only when reconnect replacement and disconnect cleanup are covered as part of the same index lifecycle.
 Open: Production latency/throughput improvement has not been measured.
 Next safe step: Re-run exact-head CI after this entry, then merge only with fresh exact-revision approval.
+
+### 2026-09-12 — Motion-safe community feedback
+Status: VERIFIED repository candidate
+Task: Consolidate duplicate Community tactile-feedback PRs without moving disabled controls or overriding reduced-motion preferences.
+Decisions: Keep the canonical #311 surface; gate transforms behind `motion-safe`; retain existing authentication and navigation authority.
+Touched surfaces: Community cards and focused navigation regressions.
+Evidence: Exact pre-memory head `7bd61138824b4fed15be180664de7afe0233bb92`; 5/5 focused tests, TypeScript, diff-check, Local Test Pack and Android Build succeeded.
+Learned: Tactile feedback is safe only when accessibility preferences and disabled semantics remain authoritative.
+Open: Production deployment is not implied.
+Next safe step: Re-run exact-head checks after this append before merge.
