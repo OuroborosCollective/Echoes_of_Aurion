@@ -51,12 +51,30 @@ export function npcFallbackDescriptor(entry: NpcGlbCatalogEntry): Readonly<{ var
   return Object.freeze({ variantKey: variantKey || raw.toLowerCase(), lod });
 }
 
+function physicalFamilyEntries(entry: NpcGlbCatalogEntry): readonly Readonly<{ entry: NpcGlbCatalogEntry; lod: number | null }>[] {
+  if (!entry.lods.length) return Object.freeze([{ entry, lod: npcFallbackDescriptor(entry).lod }]);
+  return Object.freeze(entry.lods
+    .slice()
+    .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256))
+    .map(lod => Object.freeze({
+      lod: lod.level,
+      entry: Object.freeze({
+        ...entry,
+        assetId: lod.assetId,
+        sha256: lod.sha256,
+        storageUrl: lod.storageUrl,
+        targetKey: lod.targetKey,
+        lods: Object.freeze([]),
+      }),
+    })));
+}
+
 export function npcFallbackVariants(catalog: GlbRuntimeCatalog | null | undefined): readonly NpcFallbackVariant[] {
   const grouped = new Map<string, Array<{ entry: NpcGlbCatalogEntry; lod: number | null }>>();
   for (const entry of npcFallbackPool(catalog)) {
     const descriptor = npcFallbackDescriptor(entry);
     const current = grouped.get(descriptor.variantKey) ?? [];
-    current.push({ entry, lod: descriptor.lod });
+    current.push(...physicalFamilyEntries(entry));
     grouped.set(descriptor.variantKey, current);
   }
   return Object.freeze([...grouped.entries()]
@@ -86,6 +104,11 @@ export function selectNpcGlb(
   const fallbackIndex = npcVisualIdentityHash(npcIdentity) % variants.length;
   const variant = variants[fallbackIndex]!;
   const preferred = preferredLod === null ? undefined : variant.entries.find(candidate => candidate.lod === preferredLod);
-  const candidate = preferred ?? variant.entries.find(candidate => candidate.lod === 0) ?? variant.entries.find(candidate => candidate.lod === 1) ?? variant.entries[0]!;
+  const candidate = preferred
+    ?? variant.entries.find(candidate => candidate.lod === 0)
+    ?? variant.entries.find(candidate => candidate.lod === 1)
+    ?? variant.entries.find(candidate => candidate.lod === 2)
+    ?? variant.entries.find(candidate => candidate.lod === 3)
+    ?? variant.entries[0]!;
   return Object.freeze({ entry: candidate.entry, source: "fallback", fallbackIndex, variantKey: variant.key, lod: candidate.lod });
 }
