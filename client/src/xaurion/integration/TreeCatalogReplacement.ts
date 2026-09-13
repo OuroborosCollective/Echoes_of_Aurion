@@ -102,7 +102,7 @@ export class TreeCatalogReplacement {
         const center = bounds.getCenter(new THREE.Vector3());
         const anchor = new THREE.Matrix4().makeTranslation(-center.x, -bounds.min.y, -center.z).multiply(mesh.matrixWorld);
         const instances = new THREE.InstancedMesh(mesh.geometry, mesh.material, CAPACITY);
-        instances.name = `aurion-catalog-tree-replacements-lod${variant.level}`;
+        instances.name = variant.level === 0 ? "aurion-catalog-tree-replacements" : `aurion-catalog-tree-replacements-lod${variant.level}`;
         instances.castShadow = false;
         instances.receiveShadow = true;
         instances.count = 0;
@@ -182,7 +182,8 @@ export class TreeCatalogReplacement {
 
   evidence() {
     const lods = [...this.sources.values()].sort((a, b) => a.level - b.level).map(source => Object.freeze({ level: source.level, trianglesPerModel: source.triangles, replaced: source.instances.count }));
-    return { sha256: this.sha, replaced: lods.reduce((sum, lod) => sum + lod.replaced, 0), drawCalls: lods.filter(lod => lod.replaced > 0).length, capacity: CAPACITY, pending: this.pending, failures: this.failures, lods: Object.freeze(lods) };
+    const primary = this.sources.get(0) ?? [...this.sources.values()].sort((a, b) => a.level - b.level)[0];
+    return { sha256: this.sha, replaced: lods.reduce((sum, lod) => sum + lod.replaced, 0), trianglesPerModel: primary?.triangles ?? 0, drawCalls: lods.filter(lod => lod.replaced > 0).length, capacity: CAPACITY, pending: this.pending, failures: this.failures, lods: Object.freeze(lods) };
   }
 
   private clear(): void {
