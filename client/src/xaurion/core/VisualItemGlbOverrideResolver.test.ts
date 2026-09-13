@@ -81,6 +81,28 @@ describe("VisualItemGlbOverrideResolver", () => {
     expect(result.evidence).toEqual({ assetId: exact.assetId, sha256: exact.sha256, storageUrl: exact.storageUrl, measuredTriangles: null, measuredLod: null });
   });
 
+  it("keeps the logical equipment id stable while selecting the requested physical family LOD", () => {
+    const lod0 = sha("1"), lod1 = sha("2"), lod2 = sha("3");
+    const family = entry({
+      sha256: lod0,
+      storageUrl: `/api/assets/glb/${lod0}.glb`,
+      lods: [
+        { level: 0, assetId: "glb_exact_weapon", sha256: lod0, bytes: 2300, storageUrl: `/api/assets/glb/${lod0}.glb`, targetKey: null },
+        { level: 1, assetId: "glb_exact_weapon_lod1", sha256: lod1, bytes: 1400, storageUrl: `/api/assets/glb/${lod1}.glb`, targetKey: null },
+        { level: 2, assetId: "glb_exact_weapon_lod2", sha256: lod2, bytes: 700, storageUrl: `/api/assets/glb/${lod2}.glb`, targetKey: null },
+      ],
+    });
+    for (const lod of [0, 1, 2] as const) {
+      const result = resolveVisualItemRenderSource(descriptor(), lod, catalog([family]));
+      expect(result.kind).toBe("glb");
+      if (result.kind !== "glb") continue;
+      expect(result.entry.assetId).toBe("glb_exact_weapon");
+      expect(result.entry.sha256).toBe([lod0, lod1, lod2][lod]);
+      expect(result.evidence.assetId).toBe("glb_exact_weapon");
+      expect(result.evidence.measuredLod).toBe(lod);
+    }
+  });
+
   it("does not reinterpret the existing slot pool as an exact item binding", () => {
     const input = descriptor({ visual: { itemDefinitionId: "weapon-spear-v2", materialId: "star_iron", appearanceId: null, materialVariant: null, variantTheme: null, glbAssetId: null } });
     const result = expectProcedural(resolveVisualItemRenderSource(input, 1, catalog([
