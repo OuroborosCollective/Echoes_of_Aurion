@@ -3,10 +3,10 @@
 .xaurion-runtime{position:fixed;inset:0;z-index:90;background:#07110f;color:#f4f0df;overflow:hidden;font:14px/1.4 system-ui,sans-serif}
 .xaurion-runtime__viewport{position:absolute;inset:0}
 .xaurion-runtime__viewport canvas{display:block;width:100%!important;height:100%!important;touch-action:none}
-.xaurion-runtime__bridge-status{position:absolute;z-index:30;top:101px;left:16px;display:flex;align-items:center;gap:6px;max-width:260px;padding:4px 8px;border:1px solid #37415199;border-radius:8px;background:#000b;font-size:10px;pointer-events:none}
+.xaurion-runtime__bridge-status{position:absolute;z-index:30;top:105px;left:68px;display:flex;align-items:center;gap:6px;max-width:260px;padding:4px 8px;border:1px solid #37415199;border-radius:8px;background:#000b;font-size:10px;pointer-events:none}
 .xaurion-connection-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0}
 .xaurion-connection-dot[data-connected=true]{background:#67e8f9}
-.xaurion-runtime__return{position:absolute;z-index:40;top:16px;right:16px;width:44px;height:44px;display:grid;place-items:center;border:1px solid #b8860b80;border-radius:12px;background:#000c;color:#fbbf24;cursor:pointer}
+.xaurion-runtime__return{position:absolute;z-index:40;top:96px;left:16px;right:auto;width:44px;height:44px;display:grid;place-items:center;border:1px solid #b8860b80;border-radius:12px;background:#000c;color:#fbbf24;cursor:pointer}
 .aurion-authority-hud{position:absolute;inset:0;pointer-events:none;color:#e5e7eb;user-select:none}
 .aurion-authority-hud__profile{position:absolute;left:16px;top:16px;display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #b8860b80;border-radius:16px;background:#000d;backdrop-filter:blur(12px);box-shadow:0 4px 20px #0009;pointer-events:auto;max-width:300px}
 .ax1-unit-portrait{position:relative;display:grid;place-items:center;flex-shrink:0;width:50px;height:50px;border:2px solid #b8860b;border-radius:12px;background:#0009;color:#fbbf24}
@@ -28,7 +28,7 @@
 .aurion-authority-hud__actions button{width:48px;height:48px}
 .aurion-authority-hud__actions .ax1-action-primary{border-color:#fbbf24;background:linear-gradient(135deg,#d977064d,#000);box-shadow:0 0 12px #f59e0b33}
 .aurion-authority-hud__actions kbd{position:absolute;left:-4px;top:-4px;display:grid;place-items:center;width:16px;height:16px;border:1px solid #374151;border-radius:4px;background:#050505;color:#fbbf24;font:700 9px/1 monospace}
-.aurion-encounter{position:absolute;left:16px;top:136px;max-width:220px;pointer-events:auto;font-size:12px}
+.aurion-encounter{position:absolute;left:16px;top:154px;max-width:220px;pointer-events:auto;font-size:12px}
 .aurion-encounter[data-active=true]{display:grid;gap:5px;padding:10px;background:#000e;border:1px solid #ef444480;border-radius:16px}
 .aurion-encounter[data-active=false]>span:not([role=status]){display:none}
 .aurion-encounter button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:6px 9px;border:1px solid #7f1d1d;border-radius:12px;background:#000d;color:#fca5a5;cursor:pointer;font-size:11px}
@@ -81,10 +81,10 @@
 @media(max-width:720px){
  .aurion-authority-hud__profile{top:12px;left:12px;gap:8px;padding:8px;max-width:calc(100vw - 80px)}
  .ax1-unit-portrait{width:40px;height:40px}.ax1-unit-values{font-size:10px}.ax1-unit-values>b{font-size:12px}.ax1-unit-values .ax1-unit-detail{font-size:9px}
- .xaurion-runtime__bridge-status{top:87px;left:12px;max-width:calc(100vw - 128px);font-size:9px}
- .xaurion-runtime__return{top:12px;right:12px}
+ .xaurion-runtime__bridge-status{top:89px;left:64px;max-width:calc(100vw - 76px);font-size:9px}
+ .xaurion-runtime__return{top:80px;left:12px;right:auto}
  .aurion-authority-hud__menu{top:65px;right:12px}
- .aurion-encounter{left:12px;top:118px;max-width:170px}
+ .aurion-encounter{left:12px;top:138px;max-width:170px}
  .aurion-encounter[data-active=false] button{width:44px;padding:0}
  .aurion-encounter[data-active=false] button>span{display:none}
  .aurion-authority-hud__move{left:12px;bottom:max(18px,env(safe-area-inset-bottom))}
@@ -98,7 +98,7 @@
 @media(max-height:500px) and (orientation:landscape){
  .aurion-authority-hud__menu{top:64px;grid-template-columns:repeat(5,44px)}
  .aurion-authority-hud__actions{display:flex}.aurion-authority-hud__move>div{width:88px;height:88px}
- .xaurion-runtime__bridge-status{top:91px}.aurion-encounter{top:121px}
+ .xaurion-runtime__return{top:91px;left:16px;right:auto}.xaurion-runtime__bridge-status{top:100px;left:68px}.aurion-encounter{top:145px}
  .ax1-npc-prompt{bottom:106px}.aurion-authority-hud__dialog{max-height:calc(100dvh - 16px);padding:16px}
 }
 .aurion-ui-feedback{position:absolute;left:50%;bottom:160px;transform:translateX(-50%);max-width:min(90vw,430px);padding:8px 12px;border-radius:10px;background:#041322ed;color:#bae6fd;border:1px solid #155e75;font-size:12px;pointer-events:none}
