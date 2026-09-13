@@ -93,18 +93,18 @@ export const glbCatalogEntrySchema = z.object({
   assetType: z.enum(glbTargetTypes),
   storageUrl: z.string().regex(/^\/api\/assets\/glb\/[a-f0-9]{64}\.glb$/),
   targetKey: z.string().max(120).nullable(),
-  // Defaults preserve rolling compatibility with an older server during deploy.
+  // Defaults below preserve rolling compatibility with an older server during deploy.
   purpose: z.enum(glbImportPurposes).default("auto"),
   subcategory: z.string().max(64).nullable().default(null),
   equipmentSlot: z.enum(glbEquipmentSlots).nullable().default(null),
-  // One logical catalog model may contain up to four immutable physical GLBs.
-  // Existing servers/entries omit this field and are treated as one LOD0 asset.
-  lods: z.array(glbCatalogLodVariantSchema).max(4).default([]),
+  // Optional on the wire so old cached/tests/server responses remain valid.
+  // New catalog responses supply the array when a physical LOD family exists.
+  lods: z.array(glbCatalogLodVariantSchema).max(4).optional(),
 });
 export type GlbCatalogEntry = z.infer<typeof glbCatalogEntrySchema>;
 
 export function glbCatalogLods(entry: GlbCatalogEntry): readonly GlbCatalogLodVariant[] {
-  if (entry.lods.length) return entry.lods;
+  if (entry.lods?.length) return entry.lods;
   return Object.freeze([Object.freeze({
     level: 0 as const,
     assetId: entry.assetId,
