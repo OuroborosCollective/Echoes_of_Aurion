@@ -70,13 +70,13 @@ jobs:
       AURION_APPLY_TEST_ROOT_PASSWORD: aurionapplyroot
       AURION_APPLY_TEST_PLAN: 7c7c5cf96f3c32fd5700f5af091bc3afc145d35a9c7db9c2210b7bcbd0b82fee
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -108,7 +108,7 @@ jobs:
             -e MARIADB_ROOT_PASSWORD="$AURION_APPLY_TEST_ROOT_PASSWORD" \
             -e MARIADB_ROOT_HOST=% \
             -e MARIADB_DATABASE="$AURION_APPLY_TEST_DATABASE" \
-            mariadb:11.4
+            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
           ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
@@ -143,7 +143,7 @@ jobs:
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
             --workdir /workspace \
             --env DATABASE_URL="$root_url" \
-            node:22.13.0-bookworm-slim \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             ./node_modules/.bin/drizzle-kit migrate
           restore_journal
           trap - EXIT
@@ -151,7 +151,7 @@ jobs:
 
       - name: Download caller-verified schema apply artifact
         if: ${{ inputs.use_uploaded_artifact }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: aurion-zone-runtime-${{ github.sha }}
           path: .
@@ -274,7 +274,7 @@ jobs:
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
             --workdir /workspace \
             --env DATABASE_URL="mysql://root:${AURION_APPLY_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_APPLY_TEST_DATABASE}" \
-            node:22.13.0-bookworm-slim node --input-type=module <<'NODE'
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 node --input-type=module <<'NODE'
           import assert from "node:assert/strict";
           import mysql from "mysql2/promise";
           const db=await mysql.createConnection(process.env.DATABASE_URL);
