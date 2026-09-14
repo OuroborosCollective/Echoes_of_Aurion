@@ -19,6 +19,7 @@ import { registerStarterGlbRuntimeAssets } from "../starterGlbRuntimeAssets";
 import { registerZoneGateway } from "../zoneGateway";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
 import { registerGuildBankRoutes } from "../guildBankRoutes";
+import { registerGameDevelopmentStudioRuntime, resolveGameDevelopmentStudioRuntimeReadback } from "../gameDevelopmentStudioRuntime";
 import { recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 import { consumeZoneTicketWithCombatProfile } from "../zoneCombatPersistence";
 import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
@@ -33,6 +34,8 @@ function allowedCorsOrigin(origin:string|undefined):string|null{if(!origin)retur
 async function startServer(){
   const releaseRevision=process.env.AURION_RELEASE_SHA?.trim().toLowerCase();if(releaseRevision&&!/^[a-f0-9]{40}$/.test(releaseRevision))throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");
   let wolframCag=initialWolframCagRuntimeReadback();if(wolframCag.configured)void resolveWolframCagRuntimeReadback().then(readback=>{wolframCag=readback;});
+  const gameDevelopmentStudio=await resolveGameDevelopmentStudioRuntimeReadback();
+  if(gameDevelopmentStudio.required&&!gameDevelopmentStudio.available)throw new Error(gameDevelopmentStudio.error??"GAME_DEV_REQUIRED_UNAVAILABLE");
   const autonomousNpcLife=createAutonomousNpcLifeRuntime();
   const app=express();
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -47,8 +50,8 @@ async function startServer(){
   }));
 
   app.use(express.json({limit:"50mb"}));app.use(express.urlencoded({limit:"50mb",extended:true}));
-  app.get("/healthz",(_req,res)=>res.status(200).json({status:"ok",service:"echoes-of-aurion",...(releaseRevision?{revision:releaseRevision}:{}),wolframCag,npcLife:autonomousNpcLife.readback()}));
-  registerGlbSmartUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
+  app.get("/healthz",(_req,res)=>res.status(200).json({status:"ok",service:"echoes-of-aurion",...(releaseRevision?{revision:releaseRevision}:{}),gameDevelopmentStudio,wolframCag,npcLife:autonomousNpcLife.readback()}));
+  registerGameDevelopmentStudioRuntime(app,gameDevelopmentStudio);registerGlbSmartUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
   registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
   app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);
   const preferredPort=parseInt(process.env.PORT||"3000",10),strictPort=process.env.STRICT_PORT==="true",port=strictPort?preferredPort:await findAvailablePort(preferredPort),host=process.env.HOST||"0.0.0.0";if(port!==preferredPort)console.log(`Port ${preferredPort} is busy, using port ${port} instead`);server.listen(port,host,()=>console.log(`Server running on http://${host}:${port}/`));
