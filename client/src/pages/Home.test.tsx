@@ -51,4 +51,18 @@ describe("Home", () => {
       window.removeEventListener("aurion:return-to-tower", returned);
     }
   });
+
+  it("gates tactile transforms behind the user's reduced-motion preference", async () => {
+    render(<RealClientHarness><Home /></RealClientHarness>);
+    await waitFor(() => {
+      const accountButton = screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i })[0];
+      expect(accountButton).toBeTruthy();
+      if (accountButton) {
+        expect(accountButton.className).toContain("motion-safe:hover:-translate-y-0.5");
+        expect(accountButton.className).toContain("motion-safe:active:scale-95");
+        expect(accountButton.className).not.toContain(" hover:-translate-y-0.5");
+        expect(accountButton.className).not.toContain(" active:scale-95");
+      }
+    });
+  });
 });
