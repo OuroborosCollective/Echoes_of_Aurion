@@ -85,7 +85,9 @@ for (const viewport of [
         const receipt = body.receipt;
         expect(receipt.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
         const stored = await page.request.get(receipt.storageUrl);
-        expect(stored.status()).toBe(200); expect(await stored.body()).toEqual(bytes);
+        expect(stored.status()).toBe(200);
+        expect(stored.headers()["content-type"]).toContain("model/gltf-binary");
+        expect(await stored.body()).toEqual(bytes);
         return { ...receipt, purpose: body.purpose };
       };
 
@@ -142,14 +144,13 @@ for (const viewport of [
       expect([...loaded].sort()).toEqual([playerReceipt.storageUrl, smithReceipt.storageUrl].sort());
 
       const hud = page.getByTestId("authoritative-world-hud");
-      const profile = (await hud.locator(".aurion-authority-hud__profile").boundingBox())!;
-      expect(profile.height).toBeLessThan(100);
-      const actions = (await hud.locator(".aurion-authority-hud__actions").boundingBox())!;
-      const movement = (await hud.locator(".aurion-authority-hud__move").boundingBox())!;
-      expect(actions.height).toBeLessThan(130);
-      expect(movement.x + movement.width).toBeLessThan(actions.x);
+      const profile = (await hud.locator("#player-unit-frame").boundingBox())!;
+      expect(profile.height).toBeLessThan(120);
+      const actions = (await hud.getByTitle("Angriff [R]").locator("..").boundingBox())!;
+      const movement = (await hud.getByTestId("ax1-movement-control").boundingBox())!;
+      expect(actions.x).toBeGreaterThan(movement.x + movement.width);
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-world-hud.png`) });
-      for (const name of ["Inventar", "Charakter", "Aufträge & Kontakte"]) {
+      for (const name of ["Inventar", "Charakter", "Aufträge"]) {
         await hud.getByRole("button", { name, exact: true }).click();
         await expect(dialog).toHaveCSS("opacity", "1");
         const box = (await dialog.boundingBox())!;
@@ -161,7 +162,7 @@ for (const viewport of [
         await dialog.getByRole("button", { name: name === "Inventar" ? "Inventar schließen" : name === "Charakter" ? "Charakter schließen" : "Quest-Buch schließen", exact: true }).click();
       }
 
-      await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
+      await hud.getByRole("button", { name: "Aufträge", exact: true }).click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Bei Lyra (annehmen|abgeben)/ })).toHaveCount(0);
       await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();

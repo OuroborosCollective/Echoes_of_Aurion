@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -9,6 +9,8 @@ const SOURCE_REVISION = "96a0b4f34b979279ab983e9547af43133e85f310";
 const EXPECTED_PACKAGE = "@theisegoria/game-development-studio";
 const EXPECTED_VERSION = "1.0.2";
 const OUTPUT_DIR = resolve(process.cwd(), ".game-dev/workspace");
+const RUNTIME_DIR = resolve(process.cwd(), ".game-dev/runtime");
+const RUNTIME_RECEIPT = resolve(process.cwd(), ".game-dev/runtime-receipt.json");
 
 function fail(message) {
   console.error(`[game-dev setup] ${message}`);
@@ -48,6 +50,8 @@ function parseJson(name, output) {
 
 assertNodeVersion();
 mkdirSync(OUTPUT_DIR, { recursive: true });
+rmSync(RUNTIME_DIR, { recursive: true, force: true });
+mkdirSync(RUNTIME_DIR, { recursive: true });
 const tempRoot = mkdtempSync(join(tmpdir(), "aurion-game-dev-"));
 const sourceDir = join(tempRoot, "source");
 
@@ -72,29 +76,39 @@ try {
   if (typeof tarballName !== "string" || !tarballName.endsWith(".tgz")) {
     fail(`npm pack did not return a tarball filename: ${JSON.stringify(packed)}`);
   }
+  const tarball = join(sourceDir, tarballName);
 
-  run("npm", ["install", "--global", "--ignore-scripts", join(sourceDir, tarballName), "--no-audit", "--no-fund"]);
+  // Keep the developer-facing global CLI for CI/local workflows, while also
+  // materializing an isolated production runtime tree that can be sealed into
+  // Aurion's immutable image without resolving packages on the VPS.
+  run("npm", ["install", "--global", "--ignore-scripts", tarball, "--no-audit", "--no-fund"]);
+  run("npm", ["install", "--prefix", RUNTIME_DIR, "--ignore-scripts", "--omit=dev", tarball, "--no-audit", "--no-fund"]);
 
-  const versionOutput = run("game-dev", ["--version"], { capture: true });
+  const localGameDev = join(RUNTIME_DIR, "node_modules", ".bin", process.platform === "win32" ? "game-dev.cmd" : "game-dev");
+  const versionOutput = run(localGameDev, ["--version"], { capture: true });
   if (!versionOutput.includes(EXPECTED_VERSION)) {
-    fail(`expected game-dev ${EXPECTED_VERSION}; got ${JSON.stringify(versionOutput)}`);
+    fail(`expected staged game-dev ${EXPECTED_VERSION}; got ${JSON.stringify(versionOutput)}`);
   }
 
-  const capabilities = parseJson("capabilities", run("game-dev", ["capabilities", "--output-dir", OUTPUT_DIR, "--json"], { capture: true }));
-  const doctor = parseJson("doctor", run("game-dev", ["doctor", "--output-dir", OUTPUT_DIR, "--json"], { capture: true }));
-
-  console.log(JSON.stringify({
-    recordType: "aurion_game_development_studio_setup",
+  const capabilities = parseJson("capabilities", run(localGameDev, ["capabilities", "--output-dir", OUTPUT_DIR, "--json"], { capture: true }));
+  const doctor = parseJson("doctor", run(localGameDev, ["doctor", "--output-dir", OUTPUT_DIR, "--json"], { capture: true }));
+  const receipt = {
+    schemaVersion: 1,
+    recordType: "aurion_game_development_studio_runtime",
     ok: true,
     package: EXPECTED_PACKAGE,
+    sourceRepository: SOURCE_REPOSITORY,
     sourceRevision: SOURCE_REVISION,
     version: EXPECTED_VERSION,
     node: process.versions.node,
-    outputDir: ".game-dev/workspace",
+    runtimeDirectory: ".game-dev/runtime",
+    outputDirectory: ".game-dev/workspace",
     capabilitiesSchema: capabilities?.schema ?? capabilities?.recordType ?? null,
     doctorSchema: doctor?.schema ?? doctor?.recordType ?? null,
     providerCalls: false,
-  }, null, 2));
+  };
+  writeFileSync(RUNTIME_RECEIPT, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify(receipt, null, 2));
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }
