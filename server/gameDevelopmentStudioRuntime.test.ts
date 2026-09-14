@@ -7,7 +7,7 @@ import { issueGlbAgentSession } from "./glbAgentSession";
 import {
   GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION,
   GAME_DEVELOPMENT_STUDIO_VERSION,
-  authenticateGameDevelopmentStudioAdminRequest,
+  authenticateGameDevelopmentStudioBearer,
   buildGameDevAssetArgs,
   resolveGameDevelopmentStudioRuntimeReadback,
 } from "./gameDevelopmentStudioRuntime";
@@ -58,7 +58,7 @@ describe("live Game Development Studio runtime boundary", () => {
       header: (name: string) => name.toLowerCase() === "authorization" ? `Bearer ${session.token}` : undefined,
     } as any;
 
-    await expect(authenticateGameDevelopmentStudioAdminRequest(request)).resolves.toEqual({ id: 1210 });
+    await expect(authenticateGameDevelopmentStudioBearer(request)).resolves.toEqual({ id: 1210 });
   });
 
   it("fails closed when a bounded GLB agent session no longer maps to an admin", async () => {
@@ -70,7 +70,7 @@ describe("live Game Development Studio runtime boundary", () => {
       header: (name: string) => name.toLowerCase() === "authorization" ? `Bearer ${session.token}` : undefined,
     } as any;
 
-    await expect(authenticateGameDevelopmentStudioAdminRequest(request)).resolves.toBeNull();
+    await expect(authenticateGameDevelopmentStudioBearer(request)).resolves.toBeNull();
   });
 
   it("proves the pinned runtime can report ready without inheriting provider credentials", async () => {
