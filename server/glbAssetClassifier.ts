@@ -1,5 +1,10 @@
 import { decodeValidatedGlbBase64 } from "./adminProtocol";
 import type { GlbEquipmentSlot } from "../shared/glbImportContract";
+import {
+  SHARED_HUMANOID_RIG_VERSION,
+  matchesSharedHumanoidRigJointNames,
+  type SharedHumanoidRigVersion,
+} from "../shared/sharedHumanoidRigContract";
 
 export type GlbAssetType = "character" | "enemy" | "weapon" | "armor" | "arena";
 export type GlbWorldFamily = "environment" | "nature" | null;
@@ -15,6 +20,7 @@ export type GlbAssetClassification = Readonly<{
   lod: number | null;
   equipmentSlot: GlbEquipmentSlot | null;
   worldFamily: GlbWorldFamily;
+  rigContract: SharedHumanoidRigVersion | null;
 }>;
 
 const JSON_CHUNK_TYPE = 0x4e4f534a;
@@ -27,7 +33,7 @@ const EQUIPMENT_SLOT_RULES: readonly [GlbEquipmentSlot, readonly string[]][] = [
   ["shoulders", ["shoulder", "pauldron", "pauldrons", "mantle", "shoulderguard"]],
   ["arms", ["gauntlet", "gauntlets", "bracer", "bracers", "glove", "gloves", "vambrace", "arms"]],
   ["legs", ["greave", "greaves", "leggings", "pants", "trousers", "legarmor", "legs"]],
-  ["boots", ["boot", "boots", "shoe", "shoes", "sabatons", "footwear"]],
+  ["boots", ["boot", "boots", "shoe", "shoes", "sabatons", "footwear", "feet"]],
 ];
 const NATURE_RULES = [
   ["tree", ["tree", "oak", "pine", "spruce", "birch", "willow", "trunk", "stump"]],
@@ -72,6 +78,22 @@ function namedEntries(value: unknown): string[] {
   return value.flatMap(entry => entry && typeof entry === "object" && typeof (entry as { name?: unknown }).name === "string" ? [(entry as { name: string }).name] : []);
 }
 
+function sharedRigJointNames(json: Record<string, unknown>): readonly string[] | null {
+  const nodes = Array.isArray(json.nodes) ? json.nodes : [];
+  const skins = Array.isArray(json.skins) ? json.skins : [];
+  if (skins.length !== 1 || !skins[0] || typeof skins[0] !== "object" || Array.isArray(skins[0])) return null;
+  const joints = (skins[0] as { joints?: unknown }).joints;
+  if (!Array.isArray(joints)) return null;
+  const names: string[] = [];
+  for (const joint of joints) {
+    if (!Number.isSafeInteger(joint) || Number(joint) < 0 || Number(joint) >= nodes.length) return null;
+    const node = nodes[Number(joint)];
+    if (!node || typeof node !== "object" || Array.isArray(node) || typeof (node as { name?: unknown }).name !== "string") return null;
+    names.push((node as { name: string }).name);
+  }
+  return Object.freeze(names);
+}
+
 function hasKeyword(haystack: string, keywords: readonly string[]): boolean {
   return keywords.some(keyword => haystack.includes(keyword));
 }
@@ -106,7 +128,9 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
   const animationSet = new Set(animationNames.map(name => name.toLowerCase()));
   const normalizedAnimationSet = new Set(animationNames.map(normalizeAnimationName));
   const lod = detectLod(allNames);
-  const base = { animationNames: Object.freeze(animationNames), nodeNames: Object.freeze(nodeNames), skinCount, socketCount, lod } as const;
+  const rigJointNames = sharedRigJointNames(json);
+  const rigContract = rigJointNames && matchesSharedHumanoidRigJointNames(rigJointNames) ? SHARED_HUMANOID_RIG_VERSION : null;
+  const base = { animationNames: Object.freeze(animationNames), nodeNames: Object.freeze(nodeNames), skinCount, socketCount, lod, rigContract } as const;
 
   if (skinCount > 0 && hasKeyword(searchable, ["blacksmith", "schmied"]) && animationSet.has("idle") && animationSet.has("shopinteract")) {
     return Object.freeze({ assetType: "character", subcategory: "blacksmith-npc", confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
@@ -117,6 +141,18 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
   if (skinCount > 0 && combatSet && explicitMonster) {
     const spiderSignals = searchable.includes("spider") || nodeNames.filter(name => /^leg_[lr][1-4]_/i.test(name)).length >= 8;
     return Object.freeze({ assetType: "enemy", subcategory: spiderSignals ? "spider" : lod === null ? "rigged-monster" : `rigged-monster-lod${lod}`, confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
+  }
+
+  const equipmentSlot = detectRule(searchable, EQUIPMENT_SLOT_RULES);
+  if (skinCount === 1 && rigContract === SHARED_HUMANOID_RIG_VERSION && animationNames.length === 0 && equipmentSlot) {
+    return Object.freeze({
+      assetType: "armor",
+      subcategory: `shared-rig-${equipmentSlot}`,
+      confidence: "high",
+      ...base,
+      equipmentSlot,
+      worldFamily: null,
+    });
   }
 
   const humanoidBoneSignals = ["head", "hand_l", "hand_r", "upperarm_l", "upperarm_r", "thigh_l", "thigh_r"]
@@ -142,7 +178,6 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
     if (hasKeyword(searchable, WEAPON_KEYWORDS)) {
       return Object.freeze({ assetType: "weapon", subcategory: "equipment-weapon", confidence: "medium", ...base, equipmentSlot: "weapon", worldFamily: null });
     }
-    const equipmentSlot = detectRule(searchable, EQUIPMENT_SLOT_RULES);
     if (equipmentSlot) {
       return Object.freeze({ assetType: "armor", subcategory: `equipment-${equipmentSlot}`, confidence: "medium", ...base, equipmentSlot, worldFamily: null });
     }

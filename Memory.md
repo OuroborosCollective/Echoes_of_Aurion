@@ -396,3 +396,13 @@ Evidence: Code head `5a26df4cb9b219d2e3bb8333bcf677a11e31f91e`; prior exact-head
 Learned: A CI-only CLI is not an ingame dependency; live tooling needs immutable packaging, startup readback and a narrow server-owned asset boundary.
 Open: Post-merge immutable deployment and public/PatchMon readback must establish the live revision before claiming production-green.
 Next safe step: Merge #330 under owner authorization, then read back main and the deployed gameDevelopmentStudio health identity.
+
+### 2026-09-14 — Quaternius shared-skeleton asset family draft
+Status: PARTIAL — repository/runtime contract verified; owner GLBs not admitted live.
+Task: Prepare the CC0 Quaternius base/outfit packs for classless Aurion NPC/equipment presentation.
+Decisions: Bind rigged equipment only to exact ordered `quaternius-universal-65-v1`; preserve receipt/gameplay authority; treat a newer autonomous NPC mutable row as valid only when monotone and bound to its own immutable decision receipt.
+Touched surfaces: Shared rig/classifier/import plan, equipment projection, owner-asset provenance and AIM-292 readback contract.
+Evidence: Exact pre-memory head `008b246d3538730e5217e31561bcc14a495bdac5`; 42/42 prepared GLBs self-contained and below 24 MiB; AIM-292 run `34795972970` passed 5/5 new contract tests, 15 MariaDB tests, 3 browser profiles and final receipt readback; Local Test Pack, AIM-240, AIM-259, AIM-262, AIM-284, AIM-286, AIM-290 and Android also green. Main `46bf4fc603cc7485bff208f152ee1d5511e1b34f` production health confirms required `game-dev 1.0.2` available.
+Learned: Mutable latest-state equality is not a valid cross-read invariant under autonomous progress; monotone advancement must be proven by immutable receipts.
+Open: Live catalog admission/Game-Dev inspect+validate of these owner GLBs, Blender/native visual evidence and appearance slots remain separate.
+Next safe step: Re-run exact-head gates after this append; keep #331 Draft and do not merge or admit owner assets until explicitly authorized.
