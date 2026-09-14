@@ -426,3 +426,13 @@ Evidence: Exact pre-memory head `604097b3202ea2ceb18f2aec583786027729d5b9`; 9/9 
 Learned: Batch convenience is safe only when archive structure is treated as untrusted input and every GLB still passes the same server-authoritative plan/classification boundary; UI examples and receipt rows may intentionally repeat names, so assertions must target semantics rather than accidental uniqueness.
 Open: Post-merge immutable deployment/readback and the actual owner Quaternius batch upload remain separate. Appearance-only head/hair/brow/beard GLBs still need their own honest catalog lane and are not to be misclassified as equipment.
 Next safe step: Re-run exact-head gates after this append; merge #334 only if fresh green, deploy/read back the exact revision, then upload only the prepared NPC-fallback and equipment assets through the new ZIP path.
+
+### 2026-09-14 — Open-PR cleanup and auth focus hardening
+Status: VERIFIED pre-merge
+Task: Reduce open PRs to one mergeable good change while rejecting regressions and legacy expansion.
+Decisions: Close #336 (unmeasured duplicate mutable mob cache) and #337 (legacy quest/encounter mutation expansion); retain #335 only after replacing native OIDC disabled with focus-preserving `aria-disabled` plus duplicate guard and regression.
+Touched surfaces: LocalAuthPanel, browser navigation boundary/test and PR triage.
+Evidence: Exact pre-memory head `dabefc16e3b5d2fb0e912fe490173345ee93610e`; Local Test Pack run `34880890964` success; Android run `34880891012` success; #336/#337 closed unmerged.
+Learned: Green CI cannot justify unmeasured state duplication or widening legacy gameplay authority; accessibility loading state must preserve keyboard focus.
+Open: Post-memory exact-head rerun, merge and production/public/PatchMon readback remain.
+Next safe step: Require fresh exact-head checks after this append; merge #335 only if green, then verify main/runtime and zero open PRs.
