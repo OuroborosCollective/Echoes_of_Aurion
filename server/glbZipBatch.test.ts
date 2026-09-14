@@ -70,8 +70,8 @@ function zip(entries: readonly Readonly<{ name: string; bytes: Buffer; method?: 
 
 describe("GLB ZIP batch", () => {
   it("routes purpose folders, verifies deflate+CRC and keeps LOD siblings in one family", () => {
-    const lod0 = testAnimatedPlayerGlb("Female_Ranger_LOD0");
-    const lod1 = testAnimatedPlayerGlb("Female_Ranger_LOD1");
+    const lod0 = testAnimatedPlayerGlb("Character_Female_Ranger_LOD0");
+    const lod1 = testAnimatedPlayerGlb("Character_Female_Ranger_LOD1");
     const archive = zip([
       { name: "npc-fallback/Female_Ranger_LOD0.glb", bytes: lod0 },
       { name: "npc-fallback/Female_Ranger_LOD1.glb", bytes: lod1 },
@@ -89,7 +89,7 @@ describe("GLB ZIP batch", () => {
   });
 
   it("uses the explicit fallback purpose for flat ZIPs", () => {
-    const archive = zip([{ name: "Universal_Female.glb", bytes: testAnimatedPlayerGlb("Universal_Female") }]);
+    const archive = zip([{ name: "Universal_Female.glb", bytes: testAnimatedPlayerGlb("Universal_Character_Female") }]);
     const prepared = prepareGlbZipBatch(archive, "npc-fallback");
     expect(prepared.entries[0]).toMatchObject({ purpose: "npc-fallback", displayName: "Universal Female" });
   });
@@ -100,7 +100,7 @@ describe("GLB ZIP batch", () => {
   });
 
   it("rejects duplicate LOD levels that would make catalog grouping ambiguous", () => {
-    const bytes = testAnimatedPlayerGlb("Female_Ranger");
+    const bytes = testAnimatedPlayerGlb("Character_Female_Ranger");
     const archive = zip([
       { name: "npc-fallback/Female_Ranger_LOD0.glb", bytes },
       { name: "npc-fallback/Female-Ranger-LOD0.glb", bytes },
