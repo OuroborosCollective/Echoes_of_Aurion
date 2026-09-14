@@ -1,0 +1,6 @@
+{
+  "name": "Echoes of Aurion",
+  "description": "Echoes of Aurion — ein sichtbares Koop-Abenteuer mit deinem LLM-Partner.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
