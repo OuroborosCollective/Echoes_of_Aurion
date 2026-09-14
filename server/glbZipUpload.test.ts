@@ -99,8 +99,8 @@ describe("GLB ZIP upload HTTP boundary", () => {
     const { dependencies, ingest } = successfulDependencies();
     const baseUrl = await withApp(dependencies);
     const archive = zip([
-      { name: "npc-fallback/Female_Ranger_LOD0.glb", bytes: testAnimatedPlayerGlb("Female_Ranger_LOD0") },
-      { name: "npc-fallback/Female_Ranger_LOD1.glb", bytes: testAnimatedPlayerGlb("Female_Ranger_LOD1") },
+      { name: "npc-fallback/Female_Ranger_LOD0.glb", bytes: testAnimatedPlayerGlb("Character_Female_Ranger_LOD0") },
+      { name: "npc-fallback/Female_Ranger_LOD1.glb", bytes: testAnimatedPlayerGlb("Character_Female_Ranger_LOD1") },
     ]);
     const response = await fetch(`${baseUrl}/api/admin/glb-zip-upload?purpose=auto`, {
       method: "POST",
@@ -119,7 +119,7 @@ describe("GLB ZIP upload HTTP boundary", () => {
     const { dependencies, ingest } = successfulDependencies();
     const baseUrl = await withApp(dependencies);
     const archive = zip([
-      { name: "npc-fallback/Valid_LOD0.glb", bytes: testAnimatedPlayerGlb("Valid_LOD0") },
+      { name: "npc-fallback/Valid_LOD0.glb", bytes: testAnimatedPlayerGlb("Character_Valid_LOD0") },
       { name: "npc-fallback/Broken_LOD1.glb", bytes: Buffer.alloc(16, 0x41) },
     ]);
     const response = await fetch(`${baseUrl}/api/admin/glb-zip-upload`, {
