@@ -87,4 +87,26 @@ describe("SharedHumanoidRig", () => {
     expect(rebindSharedHumanoidRigVisual(target.root, source.root)).toBeNull();
     expect(source.mesh.skeleton.bones[0]).toBe(source.ordered[0]);
   });
+
+  it("fails closed when source inverse-bind pose drifts despite matching joint names", () => {
+    const target = host();
+    const source = visual();
+    const originalSkeleton = source.mesh.skeleton;
+    source.mesh.skeleton.boneInverses[10]!.elements[12] += 0.1;
+
+    expect(rebindSharedHumanoidRigVisual(target.root, source.root)).toBeNull();
+    expect(source.mesh.skeleton).toBe(originalSkeleton);
+    expect(source.mesh.skeleton.bones[0]).toBe(source.ordered[0]);
+  });
+
+  it("fails closed when host meshes share bones but disagree on inverse-bind pose", () => {
+    const target = host();
+    const secondHostMesh = skinnedMesh("shared-rig-host-secondary", target.ordered);
+    secondHostMesh.skeleton.boneInverses[12]!.elements[13] += 0.1;
+    target.root.add(secondHostMesh);
+    const source = visual();
+
+    expect(rebindSharedHumanoidRigVisual(target.root, source.root)).toBeNull();
+    expect(source.mesh.skeleton.bones[0]).toBe(source.ordered[0]);
+  });
 });

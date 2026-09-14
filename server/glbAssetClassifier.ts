@@ -103,6 +103,15 @@ function detectRule<T extends string>(haystack: string, rules: readonly (readonl
   return null;
 }
 
+function detectUniqueEquipmentSlot(names: readonly string[]): GlbEquipmentSlot | null {
+  const matched = new Set<GlbEquipmentSlot>();
+  for (const name of names) {
+    const searchable = name.toLowerCase().replace(/[_-]+/g, " ");
+    for (const [slot, keywords] of EQUIPMENT_SLOT_RULES) if (hasKeyword(searchable, keywords)) matched.add(slot);
+  }
+  return matched.size === 1 ? [...matched][0]! : null;
+}
+
 function detectLod(names: readonly string[]): number | null {
   for (const name of names) {
     const match = name.match(/(?:^|[_ -])lod[_ -]?([0-9]+)(?:$|[_ -])/i) ?? name.match(/lod([0-9]+)/i);
@@ -143,14 +152,14 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
     return Object.freeze({ assetType: "enemy", subcategory: spiderSignals ? "spider" : lod === null ? "rigged-monster" : `rigged-monster-lod${lod}`, confidence: "high", ...base, equipmentSlot: null, worldFamily: null });
   }
 
-  const equipmentSlot = detectRule(searchable, EQUIPMENT_SLOT_RULES);
-  if (skinCount === 1 && rigContract === SHARED_HUMANOID_RIG_VERSION && animationNames.length === 0 && equipmentSlot) {
+  const riggedEquipmentSlot = detectUniqueEquipmentSlot([...meshNames, sourceName]);
+  if (skinCount === 1 && rigContract === SHARED_HUMANOID_RIG_VERSION && animationNames.length === 0 && riggedEquipmentSlot) {
     return Object.freeze({
       assetType: "armor",
-      subcategory: `shared-rig-${equipmentSlot}`,
+      subcategory: `shared-rig-${riggedEquipmentSlot}`,
       confidence: "high",
       ...base,
-      equipmentSlot,
+      equipmentSlot: riggedEquipmentSlot,
       worldFamily: null,
     });
   }
@@ -178,6 +187,7 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
     if (hasKeyword(searchable, WEAPON_KEYWORDS)) {
       return Object.freeze({ assetType: "weapon", subcategory: "equipment-weapon", confidence: "medium", ...base, equipmentSlot: "weapon", worldFamily: null });
     }
+    const equipmentSlot = detectRule(searchable, EQUIPMENT_SLOT_RULES);
     if (equipmentSlot) {
       return Object.freeze({ assetType: "armor", subcategory: `equipment-${equipmentSlot}`, confidence: "medium", ...base, equipmentSlot, worldFamily: null });
     }
