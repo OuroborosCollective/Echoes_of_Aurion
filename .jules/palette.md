@@ -10,3 +10,7 @@
 ## 2024-09-14 - LocalAuthPanel Interactive States & Tactile Feedback
 **Learning:** The LocalAuthPanel's OIDC login button lacked a loading state when clicked, leaving users without feedback during navigation. Native `disabled` would remove the active redirect control from keyboard focus while that state is being announced.
 **Action:** Added `oidcLoading`, `aria-busy` and focus-preserving `aria-disabled` with an idempotent click guard. Applied tactile feedback and `focus-visible:ring-2` while retaining the existing Aurion auth surface.
+
+## 2024-09-14 - Tactile UI feedback respect for a11y (reduced motion)
+**Learning:** Animations like scaling or translating elements on hover can cause dizziness or discomfort for users who have requested reduced motion at the OS level.
+**Action:** When adding tactile feedback such as `hover:-translate-y-0.5`, `active:scale-95` or `group-hover:scale-110`, always prefix them with Tailwind's `motion-safe:` utility (e.g. `motion-safe:hover:-translate-y-0.5`). When clearing these on disabled elements, use `disabled:motion-safe:hover:translate-y-0` and `disabled:motion-safe:active:scale-100`. Apply `group-disabled:motion-safe:group-hover:scale-100` on internal icons. I updated `client/src/pages/Home.tsx` and its test file to verify this.
