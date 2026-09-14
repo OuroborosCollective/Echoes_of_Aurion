@@ -193,8 +193,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(starterState[0].status).toBe("equipped");
 
       // Hotbar mutation is still server-confirmed, but now exercised through
-      // the dedicated AX1 controls/skill-book surface.
-      await hud.locator(".ax1-utility-actions").getByRole("button", { name: "Steuerung & Skills", exact: true }).click();
+      // the dedicated canonical GameHUD controls surface.
+      await hud.getByTitle("Steuerung", { exact: true }).click();
       await expect(dialog.getByRole("heading", { name: "Steuerung, Skills & Automatik", exact: true })).toBeVisible();
       await dialog.getByLabel("Skillplatz 1", { exact: true }).selectOption("9");
       await confirmed();
@@ -227,8 +227,8 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       const damagedPlayer = latestCombatants.find(entry => entry.entityId === selfEntityId)!;
       expect(damagedPlayer.alive).toBe(true);
 
-      const attack = hud.getByRole("button", { name: "Angriff", exact: true });
-      const auto = hud.getByRole("button", { name: "Auto-Angriff", exact: true });
+      const attack = hud.getByTitle("Angriff [R]", { exact: true });
+      const auto = hud.getByTitle("Auto-Angriff", { exact: true });
       await page.getByTestId("glb-presentation").evaluate(element => {
         const samples: unknown[] = []; (window as any).__ax1AttackSamples = samples;
         const record = () => {
@@ -265,7 +265,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await auto.click();
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
       await hud.getByRole("button", { name: "Inventar", exact: true }).click();
-      await expect(hud.locator('button[aria-label="Auto-Angriff"]')).toHaveAttribute("aria-pressed", "false");
+      await expect(hud.getByTitle("Auto-Angriff", { exact: true })).toHaveAttribute("aria-pressed", "false");
       const stoppedAt = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
       await page.waitForTimeout(1_400);
       expect(combatEvents.filter(event => event.attackerEntityId === selfEntityId).length).toBe(stoppedAt);
