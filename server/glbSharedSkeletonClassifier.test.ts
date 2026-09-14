@@ -21,20 +21,20 @@ function glbBase64(json: Record<string, unknown>): string {
   return bytes.toString("base64");
 }
 
-function sharedRig(meshName: string, jointNames: readonly string[] = SHARED_HUMANOID_RIG_JOINTS) {
+function sharedRig(meshNames: readonly string[], jointNames: readonly string[] = SHARED_HUMANOID_RIG_JOINTS) {
   const nodes = jointNames.map(name => ({ name }));
   return glbBase64({
     asset: { version: "2.0" },
     scenes: [{ name: "Scene", nodes: [0] }],
     nodes,
-    meshes: [{ name: meshName, primitives: [] }],
+    meshes: meshNames.map(name => ({ name, primitives: [] })),
     skins: [{ name: "Armature", joints: jointNames.map((_, index) => index) }],
   });
 }
 
 describe("Quaternius shared skeleton classifier", () => {
-  it("accepts skinned modular armor only for the exact ordered 65-joint contract", () => {
-    const result = classifyGlbBase64(sharedRig("Female_Ranger_Arms"), "Aurion_Equipment_arms_Female_Ranger_Arms_LOD0.glb");
+  it("accepts skinned modular armor only for one unambiguous equipment slot", () => {
+    const result = classifyGlbBase64(sharedRig(["Female_Ranger_Arms"]), "Aurion_Equipment_arms_Female_Ranger_Arms_LOD0.glb");
     expect(result).toMatchObject({
       assetType: "armor",
       subcategory: "shared-rig-arms",
@@ -49,17 +49,28 @@ describe("Quaternius shared skeleton classifier", () => {
     const drifted = [...SHARED_HUMANOID_RIG_JOINTS];
     [drifted[8], drifted[9]] = [drifted[9]!, drifted[8]!];
     expect(() => classifyGlbBase64(
-      sharedRig("Female_Ranger_Arms", drifted),
+      sharedRig(["Female_Ranger_Arms"], drifted),
       "Aurion_Equipment_arms_Female_Ranger_Arms_LOD0.glb",
     )).toThrow("could not be classified safely");
   });
 
   it("keeps a complete shared-rig Character export on the character lane", () => {
-    const result = classifyGlbBase64(sharedRig("Female_Peasant_Body"), "Aurion_Character_Female_Peasant_LOD0.glb");
+    const result = classifyGlbBase64(
+      sharedRig(["Female_Peasant_Body", "Female_Peasant_Arms", "Female_Peasant_Legs", "Female_Peasant_Boots"]),
+      "Aurion_Character_Female_Peasant_LOD0.glb",
+    );
     expect(result).toMatchObject({
       assetType: "character",
       subcategory: "rigged-character",
+      equipmentSlot: null,
       rigContract: SHARED_HUMANOID_RIG_VERSION,
     });
+  });
+
+  it("fails closed when a shared-rig equipment identity names multiple slots", () => {
+    expect(() => classifyGlbBase64(
+      sharedRig(["Female_Ranger_Arms", "Female_Ranger_Legs"]),
+      "Aurion_Equipment_Female_Ranger_LOD0.glb",
+    )).toThrow("could not be classified safely");
   });
 });
