@@ -6,3 +6,7 @@
 ## 2024-09-13 - LocalAuthPanel button title
 **Learning:** Added `title` attribute for disabled buttons to give context, plus styling `disabled:cursor-not-allowed` for better affordance.
 **Action:** Apply this to other forms when adding UX enhancements.
+
+## 2024-09-14 - LocalAuthPanel Interactive States & Tactile Feedback
+**Learning:** The LocalAuthPanel's OIDC login button lacked a loading state when clicked, leaving users without feedback during navigation. Additionally, buttons in this panel lacked keyboard focus rings and tactile feedback which are standard across the portal.
+**Action:** Added `oidcLoading` state to provide immediate visual feedback during redirect. Applied tactile feedback classes (`hover:-translate-y-0.5`, `active:scale-95`), `focus-visible:ring-2`, and standard disabled classes to ensure the auth panel feels cohesive with the rest of the Aurion portal.
