@@ -8,5 +8,5 @@
 **Action:** Apply this to other forms when adding UX enhancements.
 
 ## 2024-09-14 - LocalAuthPanel Interactive States & Tactile Feedback
-**Learning:** The LocalAuthPanel's OIDC login button lacked a loading state when clicked, leaving users without feedback during navigation. Additionally, buttons in this panel lacked keyboard focus rings and tactile feedback which are standard across the portal.
-**Action:** Added `oidcLoading` state to provide immediate visual feedback during redirect. Applied tactile feedback classes (`hover:-translate-y-0.5`, `active:scale-95`), `focus-visible:ring-2`, and standard disabled classes to ensure the auth panel feels cohesive with the rest of the Aurion portal.
+**Learning:** The LocalAuthPanel's OIDC login button lacked a loading state when clicked, leaving users without feedback during navigation. Native `disabled` would remove the active redirect control from keyboard focus while that state is being announced.
+**Action:** Added `oidcLoading`, `aria-busy` and focus-preserving `aria-disabled` with an idempotent click guard. Applied tactile feedback and `focus-visible:ring-2` while retaining the existing Aurion auth surface.
