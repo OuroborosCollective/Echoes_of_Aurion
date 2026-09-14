@@ -126,7 +126,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       const playerReadback = projectPlayerReadback({ data: playerResponse }, userId);
       expect(playerReadback.state).toBe("live");
       expect(playerReadback.data?.profile.userId).toBe(userId);
-      const playerSummary = `${playerReadback.data!.progression.tracks.length} bestätigte Progressionspfade · ${playerReadback.data!.profile.victories} Siege`;
+      const playerSummary = `${playerReadback.data!.progression.tracks.length} bestätigte Pfade · ${playerReadback.data!.profile.victories} Siege`;
       await expect(hud.getByText(playerSummary, { exact: true })).toBeVisible();
       await expect(hud.getByText("Charakterdaten ausstehend", { exact: true })).toHaveCount(0);
       const starter = initial.items.find(item => item.version === "ax1_starter");
@@ -202,7 +202,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await page.screenshot({ path: info.outputPath(`${viewport.name}-skills.png`) });
       await dialog.getByRole("button", { name: "Steuerung schließen", exact: true }).click();
 
-      await hud.getByRole("button", { name: "Aufträge & Kontakte", exact: true }).click();
+      await hud.getByRole("button", { name: "Aufträge", exact: true }).click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByText("Keine WASD-bestätigten Aufträge in dieser Ansicht.", { exact: true })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Bei Lyra (annehmen|abgeben)/ })).toHaveCount(0);
@@ -312,7 +312,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toBe(`player:${userId}`);
       await expect(gate).toHaveCount(0);
-      const persistedSummary = `${persistedPlayerReadback.data!.progression.tracks.length} bestätigte Progressionspfade · ${persistedPlayerReadback.data!.profile.victories} Siege`;
+      const persistedSummary = `${persistedPlayerReadback.data!.progression.tracks.length} bestätigte Pfade · ${persistedPlayerReadback.data!.profile.victories} Siege`;
       await expect(hud.getByText(persistedSummary, { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect(hud.getByText("Charakterdaten ausstehend", { exact: true })).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`${viewport.name}-rehydrated-hud.png`) });
