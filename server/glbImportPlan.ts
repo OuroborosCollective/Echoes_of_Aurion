@@ -161,6 +161,7 @@ export function buildGlbImportPlan(contentBase64: string, purpose: GlbImportPurp
     subcategory: classification.subcategory,
     equipmentSlot: classification.equipmentSlot,
     worldFamily: classification.worldFamily,
+    rigContract: classification.rigContract,
     targetKey,
   };
   return { ...identity, classification, assetId: `glb_${payload.sha256.slice(0, 48)}`, planSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };

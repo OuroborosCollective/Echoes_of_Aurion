@@ -10,6 +10,7 @@ import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContr
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { equipmentAnchorAliases, equipmentLocalScale } from "../core/EquipmentAttachmentSizing";
+import { rebindSharedHumanoidRigVisual } from "../core/SharedHumanoidRig";
 import { selectEquipmentCatalogAsset } from "../core/UploadedAssetRuntime";
 import { VisualItemAttachmentController, type VisualItemAttachmentTarget } from "../core/VisualItemAttachmentController";
 import { AurionVisualClock } from "../core/VisualItemMaterialCompiler";
@@ -108,6 +109,23 @@ export class EquipmentCatalogProjection {
     return true;
   }
 
+  /** Shared-skeleton clothing remains in authored avatar/model space. Unlike a
+   * sword or static helmet it is not centered/scaled onto one bone socket. */
+  private attachSharedRigToActiveActor(slot: GlbEquipmentSlot, visual: THREE.Group) {
+    if (this.disposed || !this.engine.player.activeGlbModelId) return null;
+    const evidence = rebindSharedHumanoidRigVisual(this.engine.player.glbAvatarGroup, visual);
+    if (!evidence) return null;
+    const holder = new THREE.Group();
+    holder.name = `aurion-confirmed-equipment:${slot}`;
+    holder.userData.confirmedEquipmentSlot = slot;
+    holder.userData.sharedRig = evidence;
+    holder.add(visual);
+    this.removeHolder(slot);
+    this.engine.player.glbAvatarGroup.add(holder);
+    this.holders.set(slot, holder);
+    return evidence;
+  }
+
   private removeCompat(slot: GlbEquipmentSlot): void { this.compat.delete(slot); }
 
   private clear(): void {
@@ -135,14 +153,34 @@ export class EquipmentCatalogProjection {
       if (!current || current.version === "aurion_v2" || bindingIdentity(current) !== identity) return;
       let skinned = false;
       loaded.scene.traverse(node => { if ((node as THREE.SkinnedMesh).isSkinnedMesh || (node as THREE.Bone).isBone) skinned = true; });
-      if (skinned) return;
+
+      this.v2Controller.detach(slot);
+      if (skinned) {
+        const rig = this.attachSharedRigToActiveActor(slot, loaded.scene);
+        if (!rig) return;
+        const holder = this.holders.get(slot);
+        if (!holder) return;
+        holder.userData.confirmedEquipment = Object.freeze({
+          slot,
+          itemId: binding.itemId,
+          version: binding.version,
+          receiptId: binding.receiptId,
+          assetId: selected.assetId,
+          sha256: selected.sha256,
+          compatibility: true,
+          rigContract: rig.rigContract,
+        });
+        this.compat.set(slot, Object.freeze({ identity, sha256: selected.sha256, holder }));
+        unowned = undefined;
+        return;
+      }
+
       loaded.scene.updateMatrixWorld(true);
       const bounds = new THREE.Box3().setFromObject(loaded.scene, true);
       if (bounds.isEmpty()) return;
       const size = bounds.getSize(new THREE.Vector3());
       if (!Number.isFinite(Math.max(size.x, size.y, size.z))) return;
 
-      this.v2Controller.detach(slot);
       if (!this.attachToActiveActor(slot, loaded.scene)) return;
       const holder = this.holders.get(slot);
       if (!holder) return;
