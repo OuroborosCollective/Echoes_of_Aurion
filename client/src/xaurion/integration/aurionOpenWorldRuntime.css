@@ -68,10 +68,7 @@
 .community-overlay[data-opened-from-world=true] .community-section-heading{font-size:11px;color:#e8c56b}
 .community-overlay[data-opened-from-world=true] .community-section-heading i{background:linear-gradient(90deg,#b8860b66,transparent)}
 .community-overlay[data-opened-from-world=true] p,.community-overlay[data-opened-from-world=true] button{font-size:14px;line-height:1.5}
-.xaurion-runtime__error{position:absolute;z-index:60;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;gap:8px;width:min(560px,calc(100vw - 40px));padding:24px;border:1px solid #ef444480;border-radius:16px;background:#140707f5;text-align:center}
-.xaurion-runtime__celebration{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.xaurion-runtime__celebration span{position:absolute;left:calc((var(--i) * 5.6%) + 1%);top:-5%;animation:xaurion-fall 1.4s ease-in forwards;animation-delay:calc(var(--i) * 24ms);font-size:18px}
-@keyframes xaurion-fall{to{transform:translateY(108vh) rotate(360deg);opacity:0}}
+@media(max-width:639px){#game-hud-root div:has(>button[title="Angriff [R]"]){gap:2px}}
 @media(max-width:1000px){
  .aurion-authority-hud__menu{top:68px;right:16px;display:grid;grid-template-columns:repeat(2,44px)}
  .aurion-authority-hud__menu .ax1-menu-more{display:flex}
