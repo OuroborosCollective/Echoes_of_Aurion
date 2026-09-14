@@ -297,7 +297,6 @@ Evidence: Exact pre-memory head `3f7e0459365b245d0838edd6b009a0cdc738fee7`; 9/9 
 Learned: AX1's source manifest was stale for five visible files, so actual f24 hashes are pinned. The NPC engine had no cf9-to-f24 source delta; preserving the richer confirmed Aurion NPC chain is therefore both source-faithful and required. Browser evidence also exposed real Minimap/Combat-Metrics pointer collisions, fixed in layout rather than bypassed in tests.
 Open: Production deployment/readback and native-device performance are not implied. Guild/economy/territory/homestead mutations remain fail-closed until executable AX1 contracts and WASD execution paths exist.
 Next safe step: Re-run exact-head CI after this entry, synchronize Linear/GitBook, obtain exact-revision merge approval, merge, then verify main and zero open PRs.
-
 ### 2026-09-12 — Indexed zone peer lookup
 Status: VERIFIED candidate; merge and production performance are not claimed.
 Task: Replace repeated high-frequency peer scans with a lifecycle-bound entity index.
@@ -387,3 +386,13 @@ Evidence: First exact-head `7651a2f881506419cb10724e59334bbfeadb0e91` passed all
 Learned: Historical migration receipts can prove lineage but must not become moving runtime authority; release evidence must bind source, workflow, immutable Actions/runtime/database inputs and independent readback.
 Open: This append and the immutable Action pins create a new final PR head; no merge or live claim is valid until that exact head is green and production is read back after merge. Branch protection remains an external repository-admin control, not inferred from CI discipline.
 Next safe step: Run every exact-head PR gate again, merge #327 only if fresh and green, then require revision-identical production promotion, schema receipt and public health readback.
+
+### 2026-09-14 — PR330 HUD/GLB repair and live game-dev bridge
+Status: VERIFIED candidate; production readback follows merge.
+Task: Repair the AX1 HUD/GLB regressions and make pinned Game Development Studio v1.0.2 usable from the live SMED asset path.
+Decisions: Serve only approved SHA-bound GLB bytes; fix pointer collisions in layout; stage and seal `game-dev@1.0.2` revision `96a0b4f34b979279ab983e9547af43133e85f310` into the immutable image; expose only admin-authenticated inspect/validate against approved catalog asset IDs, with provider credentials excluded.
+Touched surfaces: GLB delivery, GameHUD geometry/tests, immutable Traefik artifact/image, `gameDevelopmentStudioRuntime` SMED bridge.
+Evidence: Code head `5a26df4cb9b219d2e3bb8333bcf677a11e31f91e`; prior exact-head AIM-262 all four jobs and AIM-259 full MariaDB/Phone/Tablet/Desktop path succeeded after causal fixes; final deploy/GDS workflows were queued/running at entry time, with WASD provenance first stage successful.
+Learned: A CI-only CLI is not an ingame dependency; live tooling needs immutable packaging, startup readback and a narrow server-owned asset boundary.
+Open: Post-merge immutable deployment and public/PatchMon readback must establish the live revision before claiming production-green.
+Next safe step: Merge #330 under owner authorization, then read back main and the deployed gameDevelopmentStudio health identity.
