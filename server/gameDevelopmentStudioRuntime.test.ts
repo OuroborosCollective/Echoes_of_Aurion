@@ -1,10 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as db from "./db";
+import { issueGlbAgentSession } from "./glbAgentSession";
 import {
   GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION,
   GAME_DEVELOPMENT_STUDIO_VERSION,
+  authenticateGameDevelopmentStudioAdminRequest,
   buildGameDevAssetArgs,
   resolveGameDevelopmentStudioRuntimeReadback,
 } from "./gameDevelopmentStudioRuntime";
@@ -16,9 +19,11 @@ const original = {
   workspace: process.env.AURION_GAME_DEV_WORKSPACE,
   tripo: process.env.TRIPO_API_KEY,
   leonardo: process.env.LEONARDO_API_KEY,
+  jwt: process.env.JWT_SECRET,
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const [key, value] of Object.entries({
     AURION_GAME_DEV_BIN: original.bin,
     AURION_GAME_DEV_REQUIRED: original.required,
@@ -26,6 +31,7 @@ afterEach(() => {
     AURION_GAME_DEV_WORKSPACE: original.workspace,
     TRIPO_API_KEY: original.tripo,
     LEONARDO_API_KEY: original.leonardo,
+    JWT_SECRET: original.jwt,
   })) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -41,6 +47,30 @@ describe("live Game Development Studio runtime boundary", () => {
       "asset", "validate", "/tmp/model.glb", "--output-dir", "/tmp/result", "--json",
     ]);
     expect(() => buildGameDevAssetArgs("inspect", "relative.glb", "/tmp/result")).toThrow("GAME_DEV_ABSOLUTE_PATH_REQUIRED");
+  });
+
+  it("accepts the same bounded one-hour GLB agent session for approved-asset validation", async () => {
+    const secret = "aurion-game-dev-test-secret-000000000000000000000000";
+    process.env.JWT_SECRET = secret;
+    vi.spyOn(db, "getUserById").mockResolvedValue({ id: 1210, role: "admin" } as Awaited<ReturnType<typeof db.getUserById>>);
+    const session = await issueGlbAgentSession(1210, secret);
+    const request = {
+      header: (name: string) => name.toLowerCase() === "authorization" ? `Bearer ${session.token}` : undefined,
+    } as any;
+
+    await expect(authenticateGameDevelopmentStudioAdminRequest(request)).resolves.toEqual({ id: 1210 });
+  });
+
+  it("fails closed when a bounded GLB agent session no longer maps to an admin", async () => {
+    const secret = "aurion-game-dev-test-secret-111111111111111111111111";
+    process.env.JWT_SECRET = secret;
+    vi.spyOn(db, "getUserById").mockResolvedValue({ id: 1210, role: "user" } as Awaited<ReturnType<typeof db.getUserById>>);
+    const session = await issueGlbAgentSession(1210, secret);
+    const request = {
+      header: (name: string) => name.toLowerCase() === "authorization" ? `Bearer ${session.token}` : undefined,
+    } as any;
+
+    await expect(authenticateGameDevelopmentStudioAdminRequest(request)).resolves.toBeNull();
   });
 
   it("proves the pinned runtime can report ready without inheriting provider credentials", async () => {
