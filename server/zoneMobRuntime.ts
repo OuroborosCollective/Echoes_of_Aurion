@@ -44,7 +44,10 @@ export function resolveMobCollisionMovement(
 /** Server orchestration: AX1 content + WASD state transitions + persisted world geometry. */
 export class ZoneMobRuntime {
   private readonly states = new Map<string, MobRuntimeState>();
-  private readonly orderedEntityIds: string[] = [];
+  // Performance optimization: cache the sorted array of states for static mobs to avoid O(N) array allocation
+  // and O(1) Map `.get()` lookups inside the high-frequency game loop `tick()`.
+  private readonly cachedOrderedStates: MobRuntimeState[] = [];
+
   constructor() {
     observatoryMobDefinitions.forEach(definition =>
       this.states.set(
@@ -52,7 +55,10 @@ export class ZoneMobRuntime {
         initialMobRuntimeState(definition, 0)
       )
     );
-    this.orderedEntityIds = Array.from(this.states.keys()).sort();
+    const orderedEntityIds = Array.from(this.states.keys()).sort();
+    for (const entityId of orderedEntityIds) {
+      this.cachedOrderedStates.push(this.states.get(entityId)!);
+    }
   }
 
   tick(
@@ -61,10 +67,11 @@ export class ZoneMobRuntime {
     frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS
   ): boolean {
     let changed = false;
-    for (const entityId of this.orderedEntityIds) {
-      const current = this.states.get(entityId)!,
-        before = publicMobSnapshot(current);
-      const next = frozenEntityIds.has(entityId)
+    // Iterate over the cached array, updating both the Map and the cache in place
+    for (let i = 0; i < this.cachedOrderedStates.length; i++) {
+      const current = this.cachedOrderedStates[i]!;
+      const before = publicMobSnapshot(current);
+      const next = frozenEntityIds.has(current.definition.entityId)
         ? current
         : resolveMobFsmTick({
             current,
@@ -72,7 +79,12 @@ export class ZoneMobRuntime {
             tick,
             resolveMovement: resolveMobCollisionMovement,
           });
-      this.states.set(entityId, next);
+
+      if (current !== next) {
+        this.states.set(current.definition.entityId, next);
+        this.cachedOrderedStates[i] = next;
+      }
+
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }
     return changed;
@@ -86,13 +98,22 @@ export class ZoneMobRuntime {
     if (!current) return undefined;
     const next = applyMobCombatState(current, values);
     this.states.set(entityId, next);
+
+    // Update the cache by searching for the element, which is acceptable for single events.
+    for (let i = 0; i < this.cachedOrderedStates.length; i++) {
+       if (this.cachedOrderedStates[i]!.definition.entityId === entityId) {
+         this.cachedOrderedStates[i] = next;
+         break;
+       }
+    }
+
     return next;
   }
 
   snapshot(): readonly ConfirmedZoneMob[] {
     const out: ConfirmedZoneMob[] = [];
-    for (const entityId of this.orderedEntityIds) {
-      out.push(publicMobSnapshot(this.states.get(entityId)!));
+    for (const state of this.cachedOrderedStates) {
+      out.push(publicMobSnapshot(state));
     }
     return Object.freeze(out);
   }
@@ -100,10 +121,6 @@ export class ZoneMobRuntime {
     return this.states.get(entityId);
   }
   orderedStates(): readonly MobRuntimeState[] {
-    const out: MobRuntimeState[] = [];
-    for (const entityId of this.orderedEntityIds) {
-      out.push(this.states.get(entityId)!);
-    }
-    return Object.freeze(out);
+    return Object.freeze([...this.cachedOrderedStates]);
   }
 }
