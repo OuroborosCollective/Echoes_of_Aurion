@@ -25,8 +25,11 @@ export class OpenWorldErrorBoundary extends Component<{ children: ReactNode }, {
           <b>OPEN WORLD ANGEHALTEN</b>
           <span>Die Spieloberfläche konnte nicht weiter angezeigt werden. Kehre zur Sternwarte zurück, um die Welt erneut zu öffnen.</span>
           <code>VORGANG {runtimeIssueCode(this.state.error)}</code>
+          <div className="xaurion-runtime__error-actions">
+            <button className="xaurion-runtime__report" type="button" onClick={() => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel: "issues", title: `Runtime Error: ${runtimeIssueCode(this.state.error)}`, body: `Der Spielclient ist mit folgendem Fehler angehalten: ${this.state.error?.message || "Unbekannter Fehler"}\n\nStack:\n${this.state.error?.stack || "Kein Stack verfügbar"}` } }))}>FEHLER MELDEN</button>
+            <button className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>ZUR STERNWARTE</button>
+          </div>
         </div>
-        <button className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>ZUR STERNWARTE</button>
       </section>
     );
   }

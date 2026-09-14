@@ -21,6 +21,10 @@ import { RemotePresenceProjection } from "./RemotePresenceProjection";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import { AurionAuthorityHud } from "./AurionAuthorityHud";
 import { ServiceNpcProjection } from "./ServiceNpcProjection";
+import { AdminGlbMenu } from "../components/AdminGlbMenu";
+import { useAdminStore } from "../core/AdminService";
+import { soundSynth } from "../audio/SoundSynthesizer";
+import { aurionAssets } from "@/lib/aurionAssets";
 import { ax1MovementToAurionIntent, bindAurionAuthorityProjection, type AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import type { CharacterClassId } from "../types";
 import "./aurionOpenWorldRuntime.css";
@@ -99,6 +103,37 @@ export default function AurionOpenWorldRuntime() {
   const [remotePlayers, setRemotePlayers] = useState<readonly ConfirmedZonePresence[]>([]);
   const [celebration, setCelebration] = useState(0);
 
+  const { setIsAdmin, inspectionMode, setCurrentTarget } = useAdminStore();
+
+  useEffect(() => {
+    setIsAdmin(user?.role === "admin");
+  }, [user?.role, setIsAdmin]);
+
+  useEffect(() => {
+    if (!inspectionMode || !containerRef.current || !engineRef.current) return;
+    
+    const handleClick = (e: MouseEvent) => {
+      if (!engineRef.current) return;
+      const result = engineRef.current.performAdminRaycast(e.clientX, e.clientY);
+      if (result) {
+        const { entityData, point } = result;
+        setCurrentTarget({
+          type: entityData?.assetType === "arena" ? "model" : entityData?.entityId ? "entity" : "terrain",
+          id: entityData?.entityId || entityData?.placementId || "unknown",
+          name: entityData?.displayName || entityData?.name || "Unbekanntes Objekt",
+          assetId: entityData?.assetId,
+          targetKey: entityData?.targetKey,
+          targetType: entityData?.targetType || entityData?.assetType,
+          position: point,
+        });
+      }
+    };
+
+    const container = containerRef.current;
+    container.addEventListener("click", handleClick);
+    return () => container.removeEventListener("click", handleClick);
+  }, [inspectionMode, setCurrentTarget]);
+
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
@@ -148,8 +183,14 @@ export default function AurionOpenWorldRuntime() {
       setRemotePlayers([]);
       setActivation(validActivation((event as CustomEvent<unknown>).detail));
     };
-    const onReturn = () => setActivation(null);
-    const onCelebrate = () => setCelebration(value => value + 1);
+    const onReturn = () => {
+      soundSynth.stopAmbient();
+      setActivation(null);
+    };
+    const onCelebrate = () => {
+      soundSynth.playUiSuccess();
+      setCelebration(value => value + 1);
+    };
     window.addEventListener("aurion:load-open-world", onLoad);
     window.addEventListener("aurion:return-to-tower", onReturn);
     window.addEventListener("aurion:xaurion-celebrate", onCelebrate);
@@ -367,6 +408,8 @@ export default function AurionOpenWorldRuntime() {
             if (status === "connected") {
               zoneReconnectAttemptsRef.current = 0;
               setZoneStatus("connected");
+              soundSynth.changeAmbient(aurionAssets.audio.plains, 0.4);
+              window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "ui-success" } }));
               void playerSnapshot.refetch?.();
               void controlsQuery.refetch?.();
               return;
@@ -379,6 +422,7 @@ export default function AurionOpenWorldRuntime() {
           },
           onReject: code => {
             if (!current()) return;
+            window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "ui-error" } }));
             fatalReject = FATAL_ZONE_REJECT_CODES.has(code);
             if (fatalReject) setZoneStatus("rejected");
           },
@@ -395,6 +439,19 @@ export default function AurionOpenWorldRuntime() {
             motionRef.current?.project(self.position, snapshot.tick);
             boundEngine.start();
             window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
+          },
+          onCombat: event => {
+            if (!current()) return;
+            if (event.attackerEntityId === `player:${user.id}`) {
+              window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "combat-swing" } }));
+              if (event.hit) {
+                window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "combat-hit" } }));
+              }
+            } else if (event.defenderEntityId === `player:${user.id}`) {
+              if (event.damage > 0) {
+                window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "ui-error" } }));
+              }
+            }
           },
         });
         zoneClientRef.current?.close();
@@ -556,7 +613,7 @@ export default function AurionOpenWorldRuntime() {
       <output data-testid="glb-model-status" aria-label="Charaktermodell" className="sr-only">{modelStatus}</output>
       <output ref={modelEvidenceRef} data-testid="glb-presentation" className="sr-only" />
       <output ref={npcEvidenceRef} data-testid="smith-presentation" className="sr-only" />
-      <div ref={containerRef} className="xaurion-runtime__viewport" id="three-viewport" />
+      <div ref={containerRef} className="xaurion-runtime__viewport" id="three-viewport" data-inspection-mode={inspectionMode} />
       <div className="xaurion-runtime__bridge-status" aria-live="polite">
         <span className="xaurion-connection-dot" data-connected={zoneStatus === "connected"} />
         <span>{webglError ? "Angehalten" : zoneStatus === "connected" ? worldLabel : zoneStatus === "connecting" ? "Verbindung wird hergestellt" : "Verbindung unterbrochen"}</span>
@@ -573,6 +630,7 @@ export default function AurionOpenWorldRuntime() {
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
+      <AdminGlbMenu />
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { check, float, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1192,7 +1192,7 @@ export const expeditionTeamSignals = mysqlTable("expeditionTeamSignals", {
 /** Community forum threads include staff notices and player-created general questions. */
 export const forumThreads = mysqlTable("forumThreads", {
   id: varchar("id", { length: 64 }).primaryKey(),
-  category: mysqlEnum("category", ["announcements", "patch_notes", "events", "general"]).notNull(),
+  category: mysqlEnum("category", ["announcements", "patch_notes", "events", "general", "issues"]).notNull(),
   authorUserId: int("authorUserId").notNull(),
   title: varchar("title", { length: 160 }).notNull(),
   body: text("body").notNull(),
@@ -1210,6 +1210,67 @@ export const forumReplies = mysqlTable("forumReplies", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("forumReplies_thread_created_idx").on(table.threadId, table.createdAt)]);
 
+export const aurionCivilizationHistoryEvents = mysqlTable("aurionCivilizationHistoryEvents", {
+  eventId: varchar("eventId", { length: 64 }).primaryKey(),
+  civilizationId: varchar("civilizationId", { length: 64 }).notNull(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  worldEpoch: int("worldEpoch").notNull(),
+  eventType: varchar("eventType", { length: 64 }).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 64 }).notNull(),
+  eventPayloadHash: varchar("eventPayloadHash", { length: 64 }).notNull(),
+  occurredSequence: int("occurredSequence").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("historySequenceIdx").on(table.worldId, table.civilizationId, table.occurredSequence)]);
+
+export const aurionActiveCivilizations = mysqlTable("aurionActiveCivilizations", {
+  civilizationId: varchar("civilizationId", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  worldEpoch: int("worldEpoch").notNull(),
+  population: int("population").notNull(),
+  stability: float("stability").notNull(),
+  hazardIndex: float("hazardIndex").notNull(),
+  scarcitySeverity: float("scarcitySeverity").notNull(),
+  lastResolutionIndex: int("lastResolutionIndex").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const aurionRuinOrigins = mysqlTable("aurionRuinOrigins", {
+  ruinId: varchar("ruinId", { length: 64 }).primaryKey(),
+  originCivilizationId: varchar("originCivilizationId", { length: 64 }).notNull(),
+  collapseEventId: varchar("collapseEventId", { length: 64 }).notNull(),
+  locationIdentity: varchar("locationIdentity", { length: 255 }).notNull(),
+  worldEpoch: int("worldEpoch").notNull(),
+  historyDigest: varchar("historyDigest", { length: 64 }).notNull(),
+  rulesetVersion: varchar("rulesetVersion", { length: 32 }).notNull(),
+  generationSeedDigest: varchar("generationSeedDigest", { length: 64 }).notNull(),
+  state: mysqlEnum("state", ["ELIGIBLE", "MATERIALIZED", "DISCOVERED", "ACTIVE", "CLEARED", "HISTORICAL"]).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const aurionDungeonInstanceReceipts = mysqlTable("aurionDungeonInstanceReceipts", {
+  instanceId: varchar("instanceId", { length: 64 }).primaryKey(),
+  ruinId: varchar("ruinId", { length: 64 }).notNull(),
+  entryReceipt: varchar("entryReceipt", { length: 64 }).notNull(),
+  rulesetVersion: varchar("rulesetVersion", { length: 32 }).notNull(),
+  contextIdentity: varchar("contextIdentity", { length: 64 }).notNull(),
+  completionReceipt: varchar("completionReceipt", { length: 64 }),
+  lootReceiptSetDigest: varchar("lootReceiptSetDigest", { length: 64 }),
+  resultHash: varchar("resultHash", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const aurionSettlementRebirthCandidates = mysqlTable("aurionSettlementRebirthCandidates", {
+  candidateId: varchar("candidateId", { length: 64 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  locationIdentity: varchar("locationIdentity", { length: 255 }).notNull(),
+  ruinId: varchar("ruinId", { length: 64 }),
+  eligibilityReceipt: varchar("eligibilityReceipt", { length: 64 }).notNull(),
+  candidateSeedDigest: varchar("candidateSeedDigest", { length: 64 }).notNull(),
+  state: mysqlEnum("state", ["INELIGIBLE", "ELIGIBLE", "MATERIALIZED", "REJECTED"]).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type PlayerProfile = typeof playerProfiles.$inferSelect;
 export type Season = typeof seasons.$inferSelect;
 export type Guild = typeof guilds.$inferSelect;
@@ -1226,3 +1287,4 @@ export type ExpeditionTeamMember = typeof expeditionTeamMembers.$inferSelect;
 export type ExpeditionTeamSignal = typeof expeditionTeamSignals.$inferSelect;
 export type ForumThread = typeof forumThreads.$inferSelect;
 export type ForumReply = typeof forumReplies.$inferSelect;
+export type ActiveCivilization = typeof aurionActiveCivilizations.$inferSelect;

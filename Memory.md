@@ -436,3 +436,46 @@ Evidence: Exact pre-memory head `dabefc16e3b5d2fb0e912fe490173345ee93610e`; Loca
 Learned: Green CI cannot justify unmeasured state duplication or widening legacy gameplay authority; accessibility loading state must preserve keyboard focus.
 Open: Post-memory exact-head rerun, merge and production/public/PatchMon readback remain.
 Next safe step: Require fresh exact-head checks after this append; merge #335 only if green, then verify main/runtime and zero open PRs.
+
+### 2026-09-14 — Phase A Historical Contracts (Issue 323)
+Status: VERIFIED repository candidate
+Task: Implement Phase A of the Living History Loop (Issue 323) completely deterministically.
+Decisions: Bind civilization collapse qualification to deterministic thresholds (`population < 100`, `stability < 0.2`, `hazardIndex > 0.8`, `scarcitySeverity > 8`) with sha256 receipt hashes, omitting `Math.random` and `Date.now`; declare readmodels `aurionCivilizationHistoryEvents`, `aurionRuinOrigins`, `aurionDungeonInstanceReceipts`, and `aurionSettlementRebirthCandidates`; enforce idempotency and hash-based replay guards on civilization history events.
+Touched surfaces: `drizzle/schema.ts`, `server/wasdAurionCivilizationProtocol.ts`, `server/wasdAurionCivilizationProtocol.test.ts`, `server/aurionCivilizationHistoryPersistence.ts`, `server/aurionCivilizationHistoryPersistence.test.ts`.
+Evidence: Unit tests `server/wasdAurionCivilizationProtocol.test.ts` (8/8) and `server/aurionCivilizationHistoryPersistence.test.ts` (2/2) passed; deterministic collapse qualification and idempotency conflict checks verified.
+Learned: Living history contracts can be modeled as deterministic replayable receipts without introducing unconfirmed wall-clock timestamps or RNG state mutations.
+Open: Drizzle migrations and end-to-end event production across runtime epochs remain separate slices.
+Next safe step: Run full compilation and lint check before staging.
+
+### 2026-09-14 — Phase B Epoch Progression & Rebirth Lifecycle (Issue 323)
+Status: VERIFIED repository candidate
+Task: Implement Phase B of Living History Loop with deterministic Ruin Transformations and Epoch Advances.
+Decisions: Implement `resolveRuinTransformation` and `advanceCivilizationEpoch` in `server/wasdAurionCivilizationProtocol.ts` with pure SHA-256 seed digests and receipt hashes; preserve strict determinism without wall-clock timestamps or RNG; generate deterministic rebirth candidate IDs bound to world epoch and ruin origin.
+Touched surfaces: `server/wasdAurionCivilizationProtocol.ts`, `server/wasdAurionCivilizationProtocol.test.ts`.
+Evidence: Unit tests `server/wasdAurionCivilizationProtocol.test.ts` (10/10) and `server/aurionCivilizationHistoryPersistence.test.ts` (2/2) passed; 12/12 test assertions green.
+Learned: Epoch transitions and ruin lifecycles are purely functional state transformations with immutable receipts.
+Open: Runtime orchestration across active game loops.
+Next safe step: Run full production compilation check.
+
+### 2026-09-14 — Phase C Ruin & Dungeon Persistence Readmodels (Issue 323)
+Status: VERIFIED repository candidate
+Task: Implement persistent storage and idempotency guards for Ruin Origins and Dungeon Instance Receipts.
+Decisions: Implement `recordRuinOrigin` and `recordDungeonInstanceReceipt` in `server/aurionCivilizationHistoryPersistence.ts` strictly following readmodel and idempotency contract; reject schema conflicts with explicit error codes; keep presentation/gameplay authority intact without client-side truth generation.
+Touched surfaces: `server/aurionCivilizationHistoryPersistence.ts`, `server/aurionCivilizationHistoryPersistence.test.ts`.
+Evidence: Unit tests `server/wasdAurionCivilizationProtocol.test.ts` (10/10) and `server/aurionCivilizationHistoryPersistence.test.ts` (4/4) passed; 14/14 test assertions green.
+Learned: Idempotent receipt stores in Aurion preserve historical immutability without bypassing authority boundaries.
+Open: Drizzle schema migration script execution on live databases.
+Next safe step: Run compile_applet build verification.
+
+### 2026-09-14 — Phase D Settlement Rebirth Persistence Readmodel (Issue 323)
+Status: VERIFIED repository candidate
+Task: Complete Living History persistence layer with idempotent Settlement Rebirth Candidates storage.
+Decisions: Implement `recordSettlementRebirthCandidate` in `server/aurionCivilizationHistoryPersistence.ts` with strict Zod parsing and conflict detection; enforce stable seed digests without dynamic mutations or client-side authority.
+Touched surfaces: `server/aurionCivilizationHistoryPersistence.ts`, `server/aurionCivilizationHistoryPersistence.test.ts`.
+Evidence: Unit tests `server/wasdAurionCivilizationProtocol.test.ts` (10/10) and `server/aurionCivilizationHistoryPersistence.test.ts` (5/5) passed; 15/15 test assertions green.
+Learned: Complete lifecycle from epoch advance to rebirth candidacies is now fully bound to verified MariaDB readmodels.
+Open: Full deployment pipeline readback.
+Next safe step: Run applet compilation check.
+
+
+

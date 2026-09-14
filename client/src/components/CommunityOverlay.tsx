@@ -2,9 +2,10 @@ import { createPortal } from "react-dom";
 import { BellRing, Box, CalendarDays, FileText, Menu, MessageCircle, Send, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { soundSynth } from "../xaurion/audio/SoundSynthesizer";
 
-type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | null;
-type ForumCategory = "announcements" | "patch_notes" | "events" | "general";
+type CommunityPanel = "chat" | "forum" | "events" | "assets" | "guild" | "issues" | null;
+type ForumCategory = "announcements" | "patch_notes" | "events" | "general" | "issues";
 
 function participantName(name: string | null, userId: number): string {
   return name?.trim() || `Explorer ${userId}`;
@@ -32,7 +33,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
       const requested = (event as CustomEvent<unknown>).detail;
       if (!requested || typeof requested !== "object" || !("panel" in requested)) return;
       const value = String(requested.panel);
-      const mapped: CommunityPanel = value === "events" ? "events" : value === "chat" || value === "forum" || value === "assets" || value === "guild" ? value : null;
+      const mapped: CommunityPanel = value === "events" ? "events" : value === "chat" || value === "forum" || value === "assets" || value === "guild" || value === "issues" ? value : null;
       if (!mapped) {
         setMessage("Diese Funktion gehört nicht zur Aurion-Communityfläche und wird hier nicht ausgeführt.");
         return;
@@ -42,6 +43,13 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
       setMobileMenuOpen(false);
       setSelectedThreadId(null);
       if (mapped === "events") setForumCategory("events");
+      if (mapped === "issues") setForumCategory("issues");
+      
+      // Auto-fill issue from event detail
+      if (mapped === "issues" && requested && typeof requested === "object" && "title" in requested && "body" in requested) {
+        setQuestionTitle(String(requested.title));
+        setQuestionBody(String(requested.body));
+      }
     };
     const reset = () => { setOpenedFromWorld(false); setPanel(null); };
     window.addEventListener("aurion:open-community", open);
@@ -58,19 +66,43 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
 
   const sendChat = trpc.community.chat.send.useMutation({ onSuccess: async () => { setChatBody(""); await utils.community.chat.list.invalidate(); }, onError: () => setMessage("Der Funkspruch konnte nicht bestätigt gespeichert werden.") });
   const createQuestion = trpc.community.forum.createQuestion.useMutation({ onSuccess: async result => { setQuestionTitle(""); setQuestionBody(""); setSelectedThreadId(result.id); setForumCategory("general"); await utils.community.forum.list.invalidate({ category: "general" }); }, onError: () => setMessage("Die Forumsfrage konnte nicht bestätigt gespeichert werden.") });
+  const createIssue = trpc.community.forum.createIssue.useMutation({ onSuccess: async result => { setQuestionTitle(""); setQuestionBody(""); setSelectedThreadId(result.id); setForumCategory("issues"); await utils.community.forum.list.invalidate({ category: "issues" }); setMessage("Fehlerbericht wurde erfolgreich übermittelt."); }, onError: () => setMessage("Der Fehlerbericht konnte nicht bestätigt gespeichert werden.") });
   const reply = trpc.community.forum.reply.useMutation({ onSuccess: async () => { setReplyBody(""); if (selectedThreadId) await utils.community.forum.get.invalidate({ threadId: selectedThreadId }); }, onError: () => setMessage("Die Antwort konnte nicht bestätigt gespeichert werden.") });
 
-  const categories = useMemo(() => [["announcements", "Ankündigungen"], ["patch_notes", "Patch Notes"], ["events", "Events"], ["general", "Fragen"]] as const, []);
-  const close = () => { setPanel(null); setOpenedFromWorld(false); setSelectedThreadId(null); setMessage(""); };
+  const categories = useMemo(() => [["announcements", "Ankündigungen"], ["patch_notes", "Patch Notes"], ["events", "Events"], ["general", "Fragen"], ["issues", "Fehlerberichte"]] as const, []);
+  const close = () => { 
+    soundSynth.playUiClose();
+    setPanel(null); 
+    setOpenedFromWorld(false); 
+    setSelectedThreadId(null); 
+    setMessage(""); 
+  };
 
   const overlay = <aside className="community-overlay" aria-label="Aurion Gemeinschaft" data-mobile-menu-open={mobileMenuOpen} data-opened-from-world={openedFromWorld && panel !== null}>
     <button type="button" className="community-mobile-toggle" onClick={() => setMobileMenuOpen(open => !open)} aria-expanded={mobileMenuOpen} aria-controls="aurion-community-dock"><Menu size={18}/><span>{mobileMenuOpen ? "MENÜ SCHLIESSEN" : "GEMEINSCHAFT"}</span></button>
     <div id="aurion-community-dock" className="community-dock">
-      <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => isAuthenticated ? setPanel("chat") : setMessage("Bitte anmelden, um den Signalraum zu verwenden.")} aria-label="Expeditionschat öffnen"><MessageCircle size={16}/><span>CHAT</span></button>
-      <button type="button" className={panel === "forum" ? "community-dock-button active" : "community-dock-button"} onClick={() => { setPanel("forum"); setForumCategory("announcements"); }} aria-label="Forum öffnen"><FileText size={16}/><span>FORUM</span></button>
-      <button type="button" className={panel === "events" ? "community-dock-button active" : "community-dock-button"} onClick={() => { setPanel("events"); setForumCategory("events"); }} aria-label="Community-Events öffnen"><CalendarDays size={16}/><span>EVENTS</span></button>
-      <button type="button" className={panel === "guild" ? "community-dock-button active" : "community-dock-button"} onClick={() => isAuthenticated ? setPanel("guild") : setMessage("Bitte anmelden, um deine Gildenzugehörigkeit zu lesen.")} aria-label="Gildenzugehörigkeit öffnen"><UsersRound size={16}/><span>GILDE</span></button>
-      <button type="button" className={panel === "assets" ? "community-dock-button active" : "community-dock-button"} onClick={() => setPanel("assets")} aria-label="Asset-Katalog öffnen"><Box size={16}/><span>ASSETS</span></button>
+      <button type="button" className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
+        soundSynth.playUiClick();
+        isAuthenticated ? setPanel("chat") : setMessage("Bitte anmelden, um den Signalraum zu verwenden.");
+      }} aria-label="Expeditionschat öffnen"><MessageCircle size={16}/><span>CHAT</span></button>
+      <button type="button" className={panel === "forum" ? "community-dock-button active" : "community-dock-button"} onClick={() => { 
+        soundSynth.playUiClick();
+        setPanel("forum"); 
+        setForumCategory("announcements"); 
+      }} aria-label="Forum öffnen"><FileText size={16}/><span>FORUM</span></button>
+      <button type="button" className={panel === "events" ? "community-dock-button active" : "community-dock-button"} onClick={() => { 
+        soundSynth.playUiClick();
+        setPanel("events"); 
+        setForumCategory("events"); 
+      }} aria-label="Community-Events öffnen"><CalendarDays size={16}/><span>EVENTS</span></button>
+      <button type="button" className={panel === "guild" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
+        soundSynth.playUiClick();
+        isAuthenticated ? setPanel("guild") : setMessage("Bitte anmelden, um deine Gildenzugehörigkeit zu lesen.");
+      }} aria-label="Gildenzugehörigkeit öffnen"><UsersRound size={16}/><span>GILDE</span></button>
+      <button type="button" className={panel === "assets" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
+        soundSynth.playUiClick();
+        setPanel("assets");
+      }} aria-label="Asset-Katalog öffnen"><Box size={16}/><span>ASSETS</span></button>
     </div>
 
     {message && !panel && <p className="community-feedback"><BellRing size={13}/>{message}</p>}
@@ -80,7 +112,7 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
 
       {panel === "chat" && <div className="community-chat"><div className="community-feed">{chat.data?.map(entry => <article key={entry.id} className={entry.userId === currentUserId ? "community-message own" : "community-message"}><header><b>{participantName(entry.authorName, entry.userId)}</b><time>{localTime(entry.createdAt)}</time></header><p>{entry.body}</p></article>)}{!chat.data?.length && <p className="community-empty">Noch keine Funksprüche.</p>}</div><form className="community-compose" onSubmit={event => { event.preventDefault(); if (chatBody.trim()) sendChat.mutate({ body: chatBody }); }}><input value={chatBody} maxLength={500} onChange={event => setChatBody(event.target.value)} placeholder="Kurzer Funkspruch…"/><button type="submit" disabled={!chatBody.trim() || sendChat.isPending} aria-busy={sendChat.isPending} aria-label="Chatnachricht senden"><Send size={16}/></button></form></div>}
 
-      {forumMode && <div className="community-forum"><nav className="forum-categories" aria-label="Forumskategorien">{categories.map(([id, label]) => <button type="button" key={id} aria-pressed={forumCategory === id} onClick={() => { setForumCategory(id); setSelectedThreadId(null); }}>{label}</button>)}</nav>{selectedThreadId && thread.data ? <article className="forum-thread-detail"><button type="button" onClick={() => setSelectedThreadId(null)}>← Zur Übersicht</button><h3>{thread.data.title}</h3><p>{thread.data.body}</p><small>{participantName(thread.data.authorName, thread.data.authorUserId)}</small><div className="forum-replies">{thread.data.replies.map(item => <div key={item.id}><b>{participantName(item.authorName, item.authorUserId)}</b><p>{item.body}</p></div>)}</div>{isAuthenticated && <form onSubmit={event => { event.preventDefault(); if (replyBody.trim()) reply.mutate({ threadId: thread.data!.id, body: replyBody }); }}><textarea value={replyBody} maxLength={4000} onChange={event => setReplyBody(event.target.value)} placeholder="Antwort…"/><button type="submit" disabled={!replyBody.trim() || reply.isPending} aria-busy={reply.isPending}>{reply.isPending ? "Sende..." : "Antwort senden"}</button></form>}</article> : <><div className="forum-thread-list">{threads.data?.map(item => <button type="button" key={item.id} onClick={() => setSelectedThreadId(item.id)}><b>{item.title}</b><span>{participantName(item.authorName, item.authorUserId)}</span></button>)}{!threads.data?.length && <p className="community-empty">In dieser Kategorie gibt es noch keine Einträge.</p>}</div>{isAuthenticated && forumCategory === "general" && <form className="forum-question-form" onSubmit={event => { event.preventDefault(); if (questionTitle.trim() && questionBody.trim()) createQuestion.mutate({ title: questionTitle, body: questionBody }); }}><h3>Frage stellen</h3><input value={questionTitle} maxLength={160} onChange={event => setQuestionTitle(event.target.value)} placeholder="Titel"/><textarea value={questionBody} maxLength={8000} onChange={event => setQuestionBody(event.target.value)} placeholder="Frage…"/><button type="submit" disabled={!questionTitle.trim() || !questionBody.trim() || createQuestion.isPending} aria-busy={createQuestion.isPending}>{createQuestion.isPending ? "Wird veröffentlicht..." : "Veröffentlichen"}</button></form>}</>}</div>}
+      {forumMode && <div className="community-forum"><nav className="forum-categories" aria-label="Forumskategorien">{categories.map(([id, label]) => <button type="button" key={id} aria-pressed={forumCategory === id} onClick={() => { setForumCategory(id); setSelectedThreadId(null); }}>{label}</button>)}</nav>{selectedThreadId && thread.data ? <article className="forum-thread-detail"><button type="button" onClick={() => setSelectedThreadId(null)}>← Zur Übersicht</button><h3>{thread.data.title}</h3><p>{thread.data.body}</p><small>{participantName(thread.data.authorName, thread.data.authorUserId)}</small><div className="forum-replies">{thread.data.replies.map(item => <div key={item.id}><b>{participantName(item.authorName, item.authorUserId)}</b><p>{item.body}</p></div>)}</div>{isAuthenticated && <form onSubmit={event => { event.preventDefault(); if (replyBody.trim()) reply.mutate({ threadId: thread.data!.id, body: replyBody }); }}><textarea value={replyBody} maxLength={4000} onChange={event => setReplyBody(event.target.value)} placeholder="Antwort…"/><button type="submit" disabled={!replyBody.trim() || reply.isPending} aria-busy={reply.isPending}>{reply.isPending ? "Sende..." : "Antwort senden"}</button></form>}</article> : <><div className="forum-thread-list">{threads.data?.map(item => <button type="button" key={item.id} onClick={() => setSelectedThreadId(item.id)}><b>{item.title}</b><span>{participantName(item.authorName, item.authorUserId)}</span></button>)}{!threads.data?.length && <p className="community-empty">In dieser Kategorie gibt es noch keine Einträge.</p>}</div>{isAuthenticated && (forumCategory === "general" || forumCategory === "issues") && <form className="forum-question-form" onSubmit={event => { event.preventDefault(); if (questionTitle.trim() && questionBody.trim()) { if (forumCategory === "issues") createIssue.mutate({ title: questionTitle, body: questionBody }); else createQuestion.mutate({ title: questionTitle, body: questionBody }); } }}><h3>{forumCategory === "issues" ? "Fehler melden" : "Frage stellen"}</h3><input value={questionTitle} maxLength={160} onChange={event => setQuestionTitle(event.target.value)} placeholder="Titel"/><textarea value={questionBody} maxLength={8000} onChange={event => setQuestionBody(event.target.value)} placeholder={forumCategory === "issues" ? "Fehlerbeschreibung..." : "Frage…"} /><button type="submit" disabled={!questionTitle.trim() || !questionBody.trim() || createQuestion.isPending || createIssue.isPending} aria-busy={createQuestion.isPending || createIssue.isPending}>{createQuestion.isPending || createIssue.isPending ? "Wird veröffentlicht..." : "Veröffentlichen"}</button></form>}</>}</div>}
 
       {panel === "guild" && <div className="community-partners">{guild.data ? <div className="community-team-card"><p><UsersRound size={16}/> READ-ONLY GILDE</p><strong>{guild.data.guild.name} [{guild.data.guild.tag}]</strong><span>Rolle: {guild.data.membership.role}</span><span>Keine Gründung, Bank, Gebäude, Governance oder Gameplay-Mutation auf dieser Aurion-Fläche.</span></div> : <p className="community-empty">Keine bestätigte aktive Gildenzugehörigkeit.</p>}</div>}
 

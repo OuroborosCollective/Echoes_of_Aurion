@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import Operations from "./pages/Operations";
 import AurionPlayRoute from "./xaurion/integration/AurionPlayRoute";
 import Ax1PlayNavigationBridge from "./xaurion/integration/Ax1PlayNavigationBridge";
+import { SoundManager } from "./xaurion/audio/SoundManager";
 
 function App() {
   const [location] = useLocation();
@@ -22,6 +23,7 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
+          <SoundManager />
           <LocalAuthPanel />
           {websiteSurface && <AurionCommunityHost />}
           <Ax1PlayNavigationBridge />

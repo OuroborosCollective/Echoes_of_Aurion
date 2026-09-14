@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Ax1HpMeter } from "./Ax1HpMeter";
 import {
   Activity,
   Award,
@@ -206,7 +207,13 @@ export function GameHUD(props: GameHUDProps) {
                   const hpPct = member.hp !== undefined && member.maxHp ? Math.max(0, Math.min(100, member.hp / member.maxHp * 100)) : null;
                   return <button type="button" key={member.id} onClick={props.onOpenParty} className="block w-full rounded-lg border border-gray-800/80 bg-black/60 p-1 text-left hover:border-sky-500/50">
                     <div className="flex items-center justify-between gap-1 text-[8px] font-mono"><b className="truncate text-gray-200">{member.name}</b><span className="shrink-0 text-gray-400">{member.role}{member.ready ? " · bereit" : ""}</span></div>
-                    {hpPct !== null ? <div className="relative mt-1 h-2 overflow-hidden rounded border border-emerald-950 bg-black/90"><div className="h-full bg-gradient-to-r from-emerald-700 to-green-400" style={{ width: `${hpPct}%` }} /><span className="absolute inset-0 grid place-items-center text-[6px] font-mono">{member.hp}/{member.maxHp}</span></div> : <small className="text-[7px] text-gray-500">{member.weaponTrack ?? "Bestätigte Werte ausstehend"}</small>}
+                    {member.hp !== undefined && member.maxHp !== undefined ? (
+                      <Ax1HpMeter hp={member.hp} maxHp={member.maxHp} className="mt-1" />
+                    ) : (
+                      <small className="text-[7px] text-gray-500">
+                        {member.weaponTrack ?? "Bestätigte Werte ausstehend"}
+                      </small>
+                    )}
                   </button>;
                 })}
               </div>}

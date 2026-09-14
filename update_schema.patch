@@ -1,0 +1,48 @@
+--- drizzle/schema.ts
++++ drizzle/schema.ts
+@@ -1214,2 +1214,48 @@
+   createdAt: timestamp("createdAt").defaultNow().notNull(),
+ });
++
++export const aurionCivilizationHistoryEvents = mysqlTable("aurionCivilizationHistoryEvents", {
++  eventId: varchar("eventId", { length: 64 }).primaryKey(),
++  civilizationId: varchar("civilizationId", { length: 64 }).notNull(),
++  worldId: varchar("worldId", { length: 64 }).notNull(),
++  worldEpoch: int("worldEpoch").notNull(),
++  eventType: varchar("eventType", { length: 64 }).notNull(),
++  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
++  sourceRevision: varchar("sourceRevision", { length: 64 }).notNull(),
++  eventPayloadHash: varchar("eventPayloadHash", { length: 64 }).notNull(),
++  occurredSequence: int("occurredSequence").notNull(),
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++}, (table) => {
++  return {
++    historySequenceIdx: uniqueIndex("historySequenceIdx").on(table.worldId, table.civilizationId, table.occurredSequence),
++  };
++});
++
++export const aurionRuinOrigins = mysqlTable("aurionRuinOrigins", {
++  ruinId: varchar("ruinId", { length: 64 }).primaryKey(),
++  originCivilizationId: varchar("originCivilizationId", { length: 64 }).notNull(),
++  collapseEventId: varchar("collapseEventId", { length: 64 }).notNull(),
++  locationIdentity: varchar("locationIdentity", { length: 255 }).notNull(),
++  worldEpoch: int("worldEpoch").notNull(),
++  historyDigest: varchar("historyDigest", { length: 64 }).notNull(),
++  rulesetVersion: varchar("rulesetVersion", { length: 32 }).notNull(),
++  generationSeedDigest: varchar("generationSeedDigest", { length: 64 }).notNull(),
++  state: mysqlEnum("state", ["ELIGIBLE", "MATERIALIZED", "DISCOVERED", "ACTIVE", "CLEARED", "HISTORICAL"]).notNull(),
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++});
++
++export const aurionDungeonInstanceReceipts = mysqlTable("aurionDungeonInstanceReceipts", {
++  instanceId: varchar("instanceId", { length: 64 }).primaryKey(),
++  ruinId: varchar("ruinId", { length: 64 }).notNull(),
++  entryReceipt: varchar("entryReceipt", { length: 64 }).notNull(),
++  rulesetVersion: varchar("rulesetVersion", { length: 32 }).notNull(),
++  contextIdentity: varchar("contextIdentity", { length: 64 }).notNull(),
++  completionReceipt: varchar("completionReceipt", { length: 64 }),
++  lootReceiptSetDigest: varchar("lootReceiptSetDigest", { length: 64 }),
++  resultHash: varchar("resultHash", { length: 64 }),
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++});
++

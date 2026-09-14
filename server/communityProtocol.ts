@@ -1,4 +1,4 @@
-export const forumCategories = ["announcements", "patch_notes", "events", "general"] as const;
+export const forumCategories = ["announcements", "patch_notes", "events", "general", "issues"] as const;
 export type ForumCategory = (typeof forumCategories)[number];
 
 export function normalizeCommunityText(value: string, maximumLength: number, fieldName: string): string {
@@ -24,5 +24,5 @@ export function assertDistinctTeammates(requesterUserId: number, responderUserId
 }
 
 export function mayPublishForumCategory(role: "user" | "admin", category: ForumCategory): boolean {
-  return role === "admin" || category === "general";
+  return role === "admin" || category === "general" || category === "issues";
 }

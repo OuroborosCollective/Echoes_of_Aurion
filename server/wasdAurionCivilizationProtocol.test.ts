@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTerritoryChunkKey, resolveAggressionHazard, resolveCaravanMissions, resolveCraft, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { advanceCivilizationEpoch, getTerritoryChunkKey, resolveAggressionHazard, resolveCaravanMissions, resolveCollapseQualification, resolveCraft, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveRuinTransformation, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
 
 describe("wasdAurionCivilizationProtocol", () => {
   it("binds settlements to stable identity and resolution rather than wall time", () => {
@@ -55,4 +55,66 @@ describe("wasdAurionCivilizationProtocol", () => {
     const effect = resolveGuildTerritoryEffect({ npcGuildId: "starwardens", x: 127, y: 65, territoryOwners: { [chunk]: "starwardens" } });
     expect(effect).toMatchObject({ faithDelta: 0.05, aggressionDelta: -0.02 });
   });
+
+  it("resolves collapse qualification deterministically and triggers on thresholds", () => {
+    const safe = resolveCollapseQualification({ civilizationId: "civ-1", worldId: "world-1", worldEpoch: 1, population: 500, stability: 0.9, hazardIndex: 0.1, scarcitySeverity: 1, receiptId: "collapse-receipt-1" });
+    expect(safe.isEligible).toBe(false);
+    expect(safe.reason).toBe("none");
+
+    const collapse = resolveCollapseQualification({ civilizationId: "civ-2", worldId: "world-1", worldEpoch: 1, population: 50, stability: 0.1, hazardIndex: 0.9, scarcitySeverity: 9, receiptId: "collapse-receipt-2" });
+    expect(collapse.isEligible).toBe(true);
+    expect(collapse.reason).toBe("instability");
+    expect(collapse.receiptHash).toHaveLength(64);
+  });
+
+  it("transforms collapsed civilizations into ruins deterministically", () => {
+    const ruinA = resolveRuinTransformation({
+      civilizationId: "civ-lost-vales",
+      worldId: "world-aurion-prime",
+      locationIdentity: "chunk:12:34",
+      worldEpoch: 1,
+      collapseReceiptHash: "hash-collapse-123",
+      rulesetVersion: "wasd-v1.0.0",
+      generationSeed: "seed-vales-epoch-1",
+    });
+    const ruinB = resolveRuinTransformation({
+      civilizationId: "civ-lost-vales",
+      worldId: "world-aurion-prime",
+      locationIdentity: "chunk:12:34",
+      worldEpoch: 1,
+      collapseReceiptHash: "hash-collapse-123",
+      rulesetVersion: "wasd-v1.0.0",
+      generationSeed: "seed-vales-epoch-1",
+    });
+    expect(ruinA).toEqual(ruinB);
+    expect(ruinA.state).toBe("ELIGIBLE");
+    expect(ruinA.ruinId).toMatch(/^ruin-[a-f0-9]{16}$/);
+  });
+
+  it("advances world epoch and calculates rebirth candidates deterministically", () => {
+    const ruin = resolveRuinTransformation({
+      civilizationId: "civ-lost-vales",
+      worldId: "world-aurion-prime",
+      locationIdentity: "chunk:12:34",
+      worldEpoch: 1,
+      collapseReceiptHash: "hash-collapse-123",
+      rulesetVersion: "wasd-v1.0.0",
+      generationSeed: "seed-vales-epoch-1",
+    });
+
+    const epochResult = advanceCivilizationEpoch({
+      worldId: "world-aurion-prime",
+      currentEpoch: 1,
+      transitionReason: "epoch_cycle_transition",
+      ruinTransformations: [ruin],
+      receiptId: "receipt-epoch-transition-1",
+    });
+
+    expect(epochResult.fromEpoch).toBe(1);
+    expect(epochResult.toEpoch).toBe(2);
+    expect(epochResult.rebirthCandidates).toHaveLength(1);
+    expect(epochResult.rebirthCandidates[0]?.ruinId).toBe(ruin.ruinId);
+    expect(epochResult.receiptHash).toHaveLength(64);
+  });
 });
+

@@ -450,145 +450,170 @@
   // Fetch Interception
   // ==========================================================================
 
-  var originalFetch = window.fetch.bind(window);
+  var fetchTarget = (typeof window !== "undefined" && window.fetch) ? window : ((typeof globalThis !== "undefined" && globalThis.fetch) ? globalThis : null);
 
-  window.fetch = function (input, init) {
-    init = init || {};
-    var startTime = Date.now();
-    // Handle string, Request object, or URL object
-    var url = typeof input === "string"
-      ? input
-      : (input && (input.url || input.href || String(input))) || "";
-    var method = init.method || (input && input.method) || "GET";
+  if (fetchTarget && typeof fetchTarget.fetch === "function") {
+    var originalFetch = fetchTarget.fetch.bind(fetchTarget);
 
-    // Don't intercept internal requests
-    if (url.indexOf("/__manus__/") === 0) {
-      return originalFetch(input, init);
-    }
+    var customFetch = function (input, init) {
+      init = init || {};
+      var startTime = Date.now();
+      // Handle string, Request object, or URL object
+      var url = typeof input === "string"
+        ? input
+        : (input && (input.url || input.href || String(input))) || "";
+      var method = init.method || (input && input.method) || "GET";
 
-    // Safely parse headers (avoid breaking if headers format is invalid)
-    var requestHeaders = {};
-    try {
-      if (init.headers) {
-        requestHeaders = Object.fromEntries(new Headers(init.headers).entries());
+      // Don't intercept internal requests
+      if (url.indexOf("/__manus__/") === 0) {
+        return originalFetch(input, init);
       }
-    } catch (e) {
-      requestHeaders = { _parseError: true };
-    }
 
-    var entry = {
-      timestamp: startTime,
-      type: "fetch",
-      method: method.toUpperCase(),
-      url: url,
-      request: {
-        headers: requestHeaders,
-        body: init.body ? sanitizeValue(tryParseJson(init.body)) : null,
-      },
-      response: null,
-      duration: null,
-      error: null,
-    };
+      // Safely parse headers (avoid breaking if headers format is invalid)
+      var requestHeaders = {};
+      try {
+        if (init.headers) {
+          requestHeaders = Object.fromEntries(new Headers(init.headers).entries());
+        }
+      } catch (e) {
+        requestHeaders = { _parseError: true };
+      }
 
-    return originalFetch(input, init)
-      .then(function (response) {
-        entry.duration = Date.now() - startTime;
+      var entry = {
+        timestamp: startTime,
+        type: "fetch",
+        method: method.toUpperCase(),
+        url: url,
+        request: {
+          headers: requestHeaders,
+          body: init.body ? sanitizeValue(tryParseJson(init.body)) : null,
+        },
+        response: null,
+        duration: null,
+        error: null,
+      };
 
-        var contentType = (response.headers.get("content-type") || "").toLowerCase();
-        var contentLength = response.headers.get("content-length");
+      return originalFetch(input, init)
+        .then(function (response) {
+          entry.duration = Date.now() - startTime;
 
-        entry.response = {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: null,
-        };
+          var contentType = (response.headers.get("content-type") || "").toLowerCase();
+          var contentLength = response.headers.get("content-length");
 
-        // Semantic network hint for agents on failures (sync, no need to wait for body)
-        if (response.status >= 400) {
+          entry.response = {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            body: null,
+          };
+
+          // Semantic network hint for agents on failures (sync, no need to wait for body)
+          if (response.status >= 400) {
+            logUiEvent("network_error", {
+              kind: "fetch",
+              method: entry.method,
+              url: entry.url,
+              status: response.status,
+              statusText: response.statusText,
+            });
+          }
+
+          // Skip body capture for streaming responses (SSE, etc.) to avoid memory leaks
+          var isStreaming = contentType.indexOf("text/event-stream") !== -1 ||
+                            contentType.indexOf("application/stream") !== -1 ||
+                            contentType.indexOf("application/x-ndjson") !== -1;
+          if (isStreaming) {
+            entry.response.body = "[Streaming response - not captured]";
+            store.networkRequests.push(entry);
+            pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
+            return response;
+          }
+
+          // Skip body capture for large responses to avoid memory issues
+          if (contentLength && parseInt(contentLength, 10) > CONFIG.maxBodyLength) {
+            entry.response.body = "[Response too large: " + contentLength + " bytes]";
+            store.networkRequests.push(entry);
+            pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
+            return response;
+          }
+
+          // Skip body capture for binary content types
+          var isBinary = contentType.indexOf("image/") !== -1 ||
+                         contentType.indexOf("video/") !== -1 ||
+                         contentType.indexOf("audio/") !== -1 ||
+                         contentType.indexOf("application/octet-stream") !== -1 ||
+                         contentType.indexOf("application/pdf") !== -1 ||
+                         contentType.indexOf("application/zip") !== -1;
+          if (isBinary) {
+            entry.response.body = "[Binary content: " + contentType + "]";
+            store.networkRequests.push(entry);
+            pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
+            return response;
+          }
+
+          // For text responses, clone and read body in background
+          var clonedResponse = response.clone();
+
+          // Async: read body in background, don't block the response
+          clonedResponse
+            .text()
+            .then(function (text) {
+              if (text.length <= CONFIG.maxBodyLength) {
+                entry.response.body = sanitizeValue(tryParseJson(text));
+              } else {
+                entry.response.body = text.slice(0, CONFIG.maxBodyLength) + "...[truncated]";
+              }
+            })
+            .catch(function () {
+              entry.response.body = "[Unable to read body]";
+            })
+            .finally(function () {
+              store.networkRequests.push(entry);
+              pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
+            });
+
+          // Return response immediately, don't wait for body reading
+          return response;
+        })
+        .catch(function (error) {
+          entry.duration = Date.now() - startTime;
+          entry.error = { message: error.message, stack: error.stack };
+
+          store.networkRequests.push(entry);
+          pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
+
           logUiEvent("network_error", {
             kind: "fetch",
             method: entry.method,
             url: entry.url,
-            status: response.status,
-            statusText: response.statusText,
-          });
-        }
-
-        // Skip body capture for streaming responses (SSE, etc.) to avoid memory leaks
-        var isStreaming = contentType.indexOf("text/event-stream") !== -1 ||
-                          contentType.indexOf("application/stream") !== -1 ||
-                          contentType.indexOf("application/x-ndjson") !== -1;
-        if (isStreaming) {
-          entry.response.body = "[Streaming response - not captured]";
-          store.networkRequests.push(entry);
-          pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
-          return response;
-        }
-
-        // Skip body capture for large responses to avoid memory issues
-        if (contentLength && parseInt(contentLength, 10) > CONFIG.maxBodyLength) {
-          entry.response.body = "[Response too large: " + contentLength + " bytes]";
-          store.networkRequests.push(entry);
-          pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
-          return response;
-        }
-
-        // Skip body capture for binary content types
-        var isBinary = contentType.indexOf("image/") !== -1 ||
-                       contentType.indexOf("video/") !== -1 ||
-                       contentType.indexOf("audio/") !== -1 ||
-                       contentType.indexOf("application/octet-stream") !== -1 ||
-                       contentType.indexOf("application/pdf") !== -1 ||
-                       contentType.indexOf("application/zip") !== -1;
-        if (isBinary) {
-          entry.response.body = "[Binary content: " + contentType + "]";
-          store.networkRequests.push(entry);
-          pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
-          return response;
-        }
-
-        // For text responses, clone and read body in background
-        var clonedResponse = response.clone();
-
-        // Async: read body in background, don't block the response
-        clonedResponse
-          .text()
-          .then(function (text) {
-            if (text.length <= CONFIG.maxBodyLength) {
-              entry.response.body = sanitizeValue(tryParseJson(text));
-            } else {
-              entry.response.body = text.slice(0, CONFIG.maxBodyLength) + "...[truncated]";
-            }
-          })
-          .catch(function () {
-            entry.response.body = "[Unable to read body]";
-          })
-          .finally(function () {
-            store.networkRequests.push(entry);
-            pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
+            message: error.message,
           });
 
-        // Return response immediately, don't wait for body reading
-        return response;
-      })
-      .catch(function (error) {
-        entry.duration = Date.now() - startTime;
-        entry.error = { message: error.message, stack: error.stack };
-
-        store.networkRequests.push(entry);
-        pruneBuffer(store.networkRequests, CONFIG.bufferSize.network);
-
-        logUiEvent("network_error", {
-          kind: "fetch",
-          method: entry.method,
-          url: entry.url,
-          message: error.message,
+          throw error;
         });
+    };
 
-        throw error;
+    try {
+      Object.defineProperty(window, "fetch", {
+        value: customFetch,
+        writable: true,
+        configurable: true,
+        enumerable: true,
       });
-  };
+    } catch (defErr) {
+      try {
+        window.fetch = customFetch;
+      } catch (assignErr) {
+        try {
+          if (typeof globalThis !== "undefined") {
+            globalThis.fetch = customFetch;
+          }
+        } catch (gErr) {
+          // fetch could not be overridden in this environment
+        }
+      }
+    }
+  }
 
   // ==========================================================================
   // XHR Interception

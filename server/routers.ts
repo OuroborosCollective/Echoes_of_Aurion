@@ -26,6 +26,7 @@ import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPol
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
 import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
+import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -268,12 +269,14 @@ export const appRouter = router({
       list: publicProcedure.input(z.object({ category: z.enum(forumCategories).optional() }).optional()).query(({ input }) => db.listForumThreads(input?.category)),
       get: publicProcedure.input(z.object({ threadId: z.string().min(8).max(64) })).query(({ input }) => db.getForumThread(input.threadId)),
       createQuestion: protectedProcedure.input(z.object({ title: z.string().max(160), body: z.string().max(8000) })).mutation(({ ctx, input }) => db.createForumThread({ authorUserId: ctx.user.id, category: "general", title: normalizeCommunityText(input.title, 160, "Der Fragentitel"), body: normalizeCommunityBody(input.body, 8000, "Der Fragetext") })),
+      createIssue: protectedProcedure.input(z.object({ title: z.string().max(160), body: z.string().max(8000) })).mutation(({ ctx, input }) => db.createForumThread({ authorUserId: ctx.user.id, category: "issues", title: normalizeCommunityText(input.title, 160, "Der Fehlertitel"), body: normalizeCommunityBody(input.body, 8000, "Der Fehlerbericht") })),
       reply: protectedProcedure.input(z.object({ threadId: z.string().min(8).max(64), body: z.string().max(4000) })).mutation(({ ctx, input }) => db.createForumReply({ threadId: input.threadId, authorUserId: ctx.user.id, body: normalizeCommunityBody(input.body, 4000, "Die Antwort") })),
     }),
   }),
   leaderboard: router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
   }),
+  history: civilizationHistoryRouter,
   admin: router({
     world: router({
       presence: adminProcedure.query(async () => {

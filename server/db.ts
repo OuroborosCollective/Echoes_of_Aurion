@@ -34,6 +34,7 @@ import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, t
 import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldChunkAction, type WorldChunkActionIntent } from "./worldChunkActionProtocol";
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "../shared/worldChunkStreamingProtocol";
 import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpochReactionProtocol";
+import { orchestrateCivilizationLoop } from "./wasdAurionCivilizationService";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";
@@ -304,6 +305,10 @@ export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserI
         await tx.insert(aurionGlobalWorldEpochReceipts).values({ id: newCommunityId("worldepoch"), worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson });
         await tx.insert(aurionWorldEpochReactions).values({ receiptId: reaction.receiptId, worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, ruleSetVersion: reaction.ruleSetVersion, contentVersion: reaction.contentVersion, snapshotHash: plan.deterministicHash, reactionHash: reaction.deterministicHash, reactionJson: JSON.stringify(reaction) });
         await tx.insert(aurionWorldEpochRequests).values({ idempotencyKey, worldId: GLOBAL_WORLD_ID, requestedByUserId: input.requestedByUserId, ruleSetVersion: AURION_WORLD_EPOCH_RULESET_VERSION, epoch: plan.epoch, snapshotHash: plan.deterministicHash, snapshotJson });
+        
+        // Orchestrate Living History Loop (Issue #323)
+        await orchestrateCivilizationLoop(GLOBAL_WORLD_ID, plan.epoch, reaction.receiptId);
+
         return { plan, source: "created" as const };
       });
       return { ...result, activePresenceCount };

@@ -17,6 +17,7 @@ import { DEFAULT_WEAPON_MASTERIES, MMORPG_CLASSES, RPG_ITEMS_DATABASE } from '..
 import { glbManager, GLBModelEntry } from '../core/GLBModelManager';
 import { AnimatedGlbActor } from '../core/AnimatedGlbActor';
 import { ProceduralEquipmentVisuals } from '../core/ProceduralEquipmentVisuals';
+import { soundSynth } from '../audio/SoundSynthesizer';
 
 export class OpenWorldPlayer {
   public scene: THREE.Scene;
@@ -1163,7 +1164,13 @@ export class OpenWorldPlayer {
       // --- Feet & Leg Walking / Running Gait Kinematics ---
       if (!this.stats.isMounted) {
         const gaitSpeed = 10.5 * (speed / this.baseMoveSpeed);
+        const prevPhase = this.walkCyclePhase;
         this.walkCyclePhase += delta * gaitSpeed;
+
+        // Trigger footstep sound when foot plants (sin crosses zero)
+        if (Math.floor(this.walkCyclePhase / Math.PI) > Math.floor(prevPhase / Math.PI)) {
+          soundSynth.playNavigationStep();
+        }
 
         const strideExtent = 0.65;
         const leftLegCycle = Math.sin(this.walkCyclePhase);

@@ -731,6 +731,45 @@ export class MMOEngine {
     );
   }
 
+  public performAdminRaycast(screenX: number, screenY: number): any {
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    
+    // Convert screen coordinates to normalized device coordinates (-1 to +1)
+    const rect = this.container.getBoundingClientRect();
+    mouse.x = ((screenX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((screenY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, this.camera);
+    
+    // We want to intersect almost everything in the scene
+    const intersects = raycaster.intersectObjects(this.scene.children, true);
+    
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      let object: THREE.Object3D | null = hit.object;
+      
+      // Try to find a parent that represents an entity or world asset
+      let entityData: any = null;
+      
+      while (object) {
+        if (object.userData && (object.userData.entityId || object.userData.placementId || object.userData.assetId)) {
+          entityData = { ...object.userData };
+          break;
+        }
+        object = object.parent;
+      }
+      
+      return {
+        hit,
+        entityData,
+        point: hit.point
+      };
+    }
+    
+    return null;
+  }
+
   public interactNearby(): { npcOpened?: NPCCharacter; lootCollected?: RPGItem } {
     // 1. Check Loot
     if (this.nearbyLoot) {

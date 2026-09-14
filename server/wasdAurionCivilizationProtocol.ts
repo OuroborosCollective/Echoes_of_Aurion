@@ -135,3 +135,154 @@ export function resolveGuildTerritoryEffect(input: { npcGuildId: string; x: numb
   const aggressionDelta = owned ? -0.02 : 0;
   return { chunkKey, ownerGuildId, faithDelta, aggressionDelta, receiptHash: hash(["wasd:guild-territory:v1", input.npcGuildId, chunkKey, ownerGuildId ?? "none", String(faithDelta), String(aggressionDelta)]) };
 }
+
+export type CollapseQualification = {
+  civilizationId: string;
+  worldId: string;
+  worldEpoch: number;
+  isEligible: boolean;
+  reason: string;
+  receiptHash: string;
+};
+
+export function resolveCollapseQualification(input: {
+  civilizationId: string;
+  worldId: string;
+  worldEpoch: number;
+  population: number;
+  stability: number;
+  hazardIndex: number;
+  scarcitySeverity: number;
+  receiptId: string;
+}): CollapseQualification {
+  const isEligible = input.population < 100 && (input.stability < 0.2 || input.hazardIndex > 0.8 || input.scarcitySeverity > 8);
+  let reason = "none";
+  if (isEligible) {
+    if (input.population < 100 && input.stability < 0.2) reason = "instability";
+    else if (input.hazardIndex > 0.8) reason = "hazard";
+    else if (input.scarcitySeverity > 8) reason = "famine";
+    else reason = "depopulation";
+  }
+  const receiptHash = hash(["wasd:collapse:v1", input.receiptId, input.civilizationId, input.worldId, String(input.worldEpoch), String(isEligible), reason]);
+  return {
+    civilizationId: input.civilizationId,
+    worldId: input.worldId,
+    worldEpoch: input.worldEpoch,
+    isEligible,
+    reason,
+    receiptHash,
+  };
+}
+
+export type RuinTransformation = {
+  ruinId: string;
+  sourceCivilizationId: string;
+  worldId: string;
+  locationIdentity: string;
+  worldEpoch: number;
+  historyDigest: string;
+  rulesetVersion: string;
+  generationSeedDigest: string;
+  state: "ELIGIBLE" | "MATERIALIZED" | "DISCOVERED" | "ACTIVE" | "CLEARED" | "HISTORICAL";
+  receiptHash: string;
+};
+
+export function resolveRuinTransformation(input: {
+  civilizationId: string;
+  worldId: string;
+  locationIdentity: string;
+  worldEpoch: number;
+  collapseReceiptHash: string;
+  rulesetVersion: string;
+  generationSeed: string;
+}): RuinTransformation {
+  if (!input.civilizationId || !input.worldId || !input.locationIdentity || !input.rulesetVersion) {
+    throw new Error("Ruin transformation requires explicit identities and ruleset version");
+  }
+  const generationSeedDigest = hash(["wasd:seed:v1", input.generationSeed]);
+  const historyDigest = hash(["wasd:history:v1", input.civilizationId, String(input.worldEpoch), input.collapseReceiptHash]);
+  const ruinId = `ruin-${hash(["wasd:ruin-id:v1", input.worldId, input.locationIdentity, String(input.worldEpoch), generationSeedDigest]).slice(0, 16)}`;
+  const receiptHash = hash([
+    "wasd:ruin-transformation:v1",
+    ruinId,
+    input.civilizationId,
+    input.worldId,
+    input.locationIdentity,
+    String(input.worldEpoch),
+    historyDigest,
+    input.rulesetVersion,
+    generationSeedDigest,
+  ]);
+
+  return {
+    ruinId,
+    sourceCivilizationId: input.civilizationId,
+    worldId: input.worldId,
+    locationIdentity: input.locationIdentity,
+    worldEpoch: input.worldEpoch,
+    historyDigest,
+    rulesetVersion: input.rulesetVersion,
+    generationSeedDigest,
+    state: "ELIGIBLE",
+    receiptHash,
+  };
+}
+
+export type EpochAdvanceResult = {
+  worldId: string;
+  fromEpoch: number;
+  toEpoch: number;
+  transitionReason: string;
+  rebirthCandidates: readonly {
+    candidateId: string;
+    locationIdentity: string;
+    ruinId?: string;
+    candidateSeedDigest: string;
+  }[];
+  receiptHash: string;
+};
+
+export function advanceCivilizationEpoch(input: {
+  worldId: string;
+  currentEpoch: number;
+  transitionReason: string;
+  ruinTransformations: readonly RuinTransformation[];
+  receiptId: string;
+}): EpochAdvanceResult {
+  if (!input.worldId || !Number.isSafeInteger(input.currentEpoch) || input.currentEpoch < 1) {
+    throw new Error("Epoch advancement requires valid world ID and positive epoch number");
+  }
+  const toEpoch = input.currentEpoch + 1;
+  const sortedRuins = input.ruinTransformations.slice().sort((a, b) => compare(a.ruinId, b.ruinId));
+  const rebirthCandidates = sortedRuins.map(ruin => {
+    const candidateSeedDigest = hash(["wasd:rebirth-seed:v1", ruin.ruinId, String(toEpoch), ruin.generationSeedDigest]);
+    const candidateId = `rebirth-${hash(["wasd:rebirth-candidate:v1", input.worldId, ruin.locationIdentity, String(toEpoch)]).slice(0, 16)}`;
+    return {
+      candidateId,
+      locationIdentity: ruin.locationIdentity,
+      ruinId: ruin.ruinId,
+      candidateSeedDigest,
+    };
+  });
+
+  const candidateParts = rebirthCandidates.flatMap(c => [c.candidateId, c.locationIdentity, c.ruinId ?? "none", c.candidateSeedDigest]);
+  const receiptHash = hash([
+    "wasd:epoch-advance:v1",
+    input.receiptId,
+    input.worldId,
+    String(input.currentEpoch),
+    String(toEpoch),
+    input.transitionReason,
+    ...candidateParts,
+  ]);
+
+  return {
+    worldId: input.worldId,
+    fromEpoch: input.currentEpoch,
+    toEpoch,
+    transitionReason: input.transitionReason,
+    rebirthCandidates,
+    receiptHash,
+  };
+}
+

@@ -3,6 +3,8 @@
 .xaurion-runtime{position:fixed;inset:0;z-index:90;background:#07110f;color:#f4f0df;overflow:hidden;font:14px/1.4 system-ui,sans-serif}
 .xaurion-runtime__viewport{position:absolute;inset:0}
 .xaurion-runtime__viewport canvas{display:block;width:100%!important;height:100%!important;touch-action:none}
+.xaurion-runtime__viewport[data-inspection-mode=true] canvas{cursor:crosshair}
+.xaurion-runtime__viewport[data-inspection-mode=true]::after{content:"INSPEKTIONS-MODUS AKTIV";position:absolute;top:20px;left:50%;transform:translateX(-50%);padding:4px 12px;background:#ef4444;color:white;font:bold 10px sans-serif;border-radius:4px;pointer-events:none;z-index:100;letter-spacing:1px}
 .xaurion-runtime__bridge-status{position:absolute;z-index:30;top:105px;left:68px;display:flex;align-items:center;gap:6px;max-width:260px;padding:4px 8px;border:1px solid #37415199;border-radius:8px;background:#000b;font-size:10px;pointer-events:none}
 .xaurion-connection-dot{width:6px;height:6px;border-radius:50%;background:#f59e0b;flex-shrink:0}
 .xaurion-connection-dot[data-connected=true]{background:#67e8f9}
