@@ -63,8 +63,8 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     await page.goto("/ops/glb-upload");
     const input = page.locator("#glbZipFile");
     await expect(input).toBeEnabled();
-    const lod0 = testAnimatedPlayerGlb("Zip_Female_Ranger_LOD0");
-    const lod1 = testAnimatedPlayerGlb("Zip_Female_Ranger_LOD1");
+    const lod0 = testAnimatedPlayerGlb("Zip_Character_Female_Ranger_LOD0");
+    const lod1 = testAnimatedPlayerGlb("Zip_Character_Female_Ranger_LOD1");
     expect(lod0.equals(lod1)).toBe(false);
     const archive = zip([
       { name: "npc-fallback/Female_Ranger_LOD0.glb", bytes: lod0 },
@@ -73,8 +73,8 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     const responsePromise = page.waitForResponse(response => response.url().includes("/api/admin/glb-zip-upload?purpose=auto") && response.request().method() === "POST");
     await input.setInputFiles({ name: "browser-npc-lods.zip", mimeType: "application/zip", buffer: archive });
     const response = await responsePromise;
-    expect(response.status()).toBe(201);
     const body = await response.json();
+    expect(response.status(), JSON.stringify(body)).toBe(201);
     expect(body).toMatchObject({ accepted: true, fileCount: 2, familyCount: 1 });
     expect(body.entries.map((entry: any) => entry.lodLevel)).toEqual([0, 1]);
     expect(body.entries.every((entry: any) => entry.purpose === "npc-fallback")).toBe(true);
