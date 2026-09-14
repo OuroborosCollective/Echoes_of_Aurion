@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { aurionApiUrl } from "@/lib/runtimeConfig";
+import { navigateBrowser } from "@/lib/browserNavigation";
 import { KeyRound, ShieldCheck, UserRoundPlus, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
@@ -41,7 +42,7 @@ export default function LocalAuthPanel() {
     // The backend owns issuer, client ID, PKCE verifier, state, nonce and all
     // exchange secrets. The browser only initiates a same-origin navigation.
     setOidcLoading(true);
-    window.location.assign(aurionApiUrl("/api/oauth/start"));
+    navigateBrowser(aurionApiUrl("/api/oauth/start"));
   }
 
   if (!open) return null;
