@@ -406,3 +406,13 @@ Evidence: Exact pre-memory head `008b246d3538730e5217e31561bcc14a495bdac5`; 42/4
 Learned: Mutable latest-state equality is not a valid cross-read invariant under autonomous progress; monotone advancement must be proven by immutable receipts.
 Open: Live catalog admission/Game-Dev inspect+validate of these owner GLBs, Blender/native visual evidence and appearance slots remain separate.
 Next safe step: Re-run exact-head gates after this append; keep #331 Draft and do not merge or admit owner assets until explicitly authorized.
+
+### 2026-09-14 — Quaternius live-admission hardening
+Status: PARTIAL — repository/runtime admission boundary verified; owner GLB live upload still external.
+Task: Close the remaining pre-live safety gaps for the CC0 Quaternius shared-skeleton family and make approved-asset Game Development Studio validation usable by the bounded GLB agent session.
+Decisions: Require shared-rig inverse-bind parity in addition to ordered 65-joint names; accept rigged equipment only for one unambiguous source/mesh slot; preserve browser admin 401/403 semantics; let the one-hour GLB agent session or existing OAuth asset-write bearer authenticate approved-catalog game-dev status/inspect/validate.
+Touched surfaces: SharedHumanoidRig, GLB classifier, Game Development Studio runtime bearer bridge and focused regressions.
+Evidence: Exact pre-memory head `fd91f5b6a84f0c0f1633648226d829827e251a1a`; AIM-240 `34798862464`, AIM-262 `34798862457`, AIM-284 `34798862392`, AIM-290 `34798862463`, Android `34798862458`, Local Test Pack `34798862417`, AIM-292 `34798862400` and AIM-291 `34798862405` all succeeded. Local Test Pack passed the full repository suite; AIM-240 passed authenticated GLB upload/render proof; AIM-291 passed phone/tablet/desktop resource evidence plus independent double-build byte identity.
+Learned: Joint-name/order parity is insufficient for safe skin reuse; inverse-bind pose is part of the render contract. Rigged slot classification must use explicit asset identity, not skeleton/internal-node keywords.
+Open: The 42 prepared owner GLBs are not yet live-admitted because this chat runtime has no working local/device binary transport; no live catalog/Game-Dev receipts for those specific owner assets are claimed.
+Next safe step: Re-run exact-head gates after this append, merge #332 when green, then perform owner GLB plan/apply plus game-dev inspect/validate through a connected binary-capable Aurion admin execution path.
