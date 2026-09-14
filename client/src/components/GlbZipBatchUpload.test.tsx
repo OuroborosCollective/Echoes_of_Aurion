@@ -62,7 +62,7 @@ describe("GLB ZIP batch upload UI", () => {
     expect(url).toBe("/api/admin/glb-zip-upload?purpose=world-nature");
     expect(init).toMatchObject({ method: "POST", credentials: "include", headers: { "Content-Type": "application/zip" }, body: archive });
     await waitFor(() => expect(screen.getByText("2 GLBs · 1 logische Familien aufgenommen")).toBeTruthy());
-    expect(screen.getByText("npc-fallback/Female_Ranger_LOD0.glb")).toBeTruthy();
+    expect(screen.getAllByText("npc-fallback/Female_Ranger_LOD0.glb")).toHaveLength(2);
     expect(screen.getByText("npc-fallback/Female_Ranger_LOD1.glb")).toBeTruthy();
     expect(screen.getByText("bereits vorhanden", { exact: false })).toBeTruthy();
     expect(onComplete).toHaveBeenCalledTimes(1);
