@@ -29,6 +29,13 @@ const filesToCopy = [
 ];
 const directoriesToCopy = ["dist", "patches"];
 
+// The release artifact owns staging of the pinned game-dev dependency. This is
+// intentionally performed on the hosted runner, never on the VPS image build.
+execFileSync(process.execPath, ["scripts/install-game-development-studio.mjs"], {
+  cwd: root,
+  stdio: "inherit",
+});
+
 const gameDevReceipt = JSON.parse(await readFile(gameDevReceiptPath, "utf8"));
 if (
   gameDevReceipt?.recordType !== "aurion_game_development_studio_runtime" ||
