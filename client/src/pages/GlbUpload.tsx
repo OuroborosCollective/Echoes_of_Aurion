@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import GlbZipBatchUpload from "@/components/GlbZipBatchUpload";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -261,6 +262,8 @@ export default function GlbUpload() {
         <label htmlFor="smartGlbFile" className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-cyan-300/30 bg-cyan-400/[.035] p-6 text-center transition-colors hover:bg-cyan-400/[.06]" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void uploadFiles(Array.from(event.dataTransfer.files)); }}><FileBox className="h-8 w-8 text-cyan-300" /><div><p className="font-medium text-amber-50">GLBs hier ablegen oder gemeinsam auswählen</p><p className="mt-1 text-xs text-slate-400">Dateiname und GLB-Inhalt werden gemeinsam klassifiziert; der Server bestätigt jeden Zweck separat.</p></div><Input id="smartGlbFile" type="file" multiple accept=".glb,model/gltf-binary" disabled={busy || lodBusy || !catalog || Boolean(storageError)} className="max-w-sm" onChange={event => { void uploadFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} /></label>
         {busy && <p className="text-sm text-cyan-100">GLBs werden nacheinander gelesen, geprüft, klassifiziert und gespeichert…</p>}{error && <p role="alert" className="rounded-lg border border-red-300/20 bg-red-400/[.06] p-3 text-sm text-red-200">{error}</p>}
       </CardContent></Card>
+
+      <GlbZipBatchUpload fallbackPurpose={purpose} disabled={busy || lodBusy || !catalog || Boolean(storageError)} onComplete={() => refreshCatalog()} />
 
       <Card className="border-violet-300/20 bg-slate-950/75"><CardHeader><CardTitle className="flex items-center gap-2 text-violet-100"><Layers3 className="h-5 w-5" />LOD-Familie · bis zu 4 Stufen</CardTitle><CardDescription>LOD0–LOD3 werden physisch einzeln geprüft, im Katalog aber als ein Modell angezeigt. Im Spiel bleiben sie reine Rendering-/Performance-Stufen.</CardDescription></CardHeader><CardContent className="space-y-4">
         <div className="space-y-2"><Label htmlFor="lodExisting">Vorhandenes Modell erweitern (optional)</Label><select id="lodExisting" value={lodExistingAssetId} disabled={lodBusy} onChange={event => { setLodExistingAssetId(event.target.value); setLodFiles({}); }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"><option value="">Neue LOD-Familie</option>{catalog?.entries.map(entry => <option key={entry.assetId} value={entry.assetId}>{entry.displayName} · {lodLevels(entry).map(level => `LOD${level}`).join("/")}</option>)}</select></div>
