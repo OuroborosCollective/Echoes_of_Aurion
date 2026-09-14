@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { mkdir } from "node:fs/promises";
 import mysql from "mysql2/promise";
 import { npcHash, npcMemoryReceiptIds, parseNpcMemoryV4, projectNpcMemoryV4, verifyConfirmedNpcDecision, verifyNpcMemoryEvidence } from "../vendor/wasd-npc/index.js";
+import { verifyAutonomousNpcStateReadback } from "./autonomous-npc-life-readback-contract.mjs";
 const npcPin = JSON.parse(fs.readFileSync("config/wasd-npc-capsule.json","utf8"));
 
 const expectedRevision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase();
@@ -29,7 +30,16 @@ if (life.worldReceiptSource !== "created" && life.worldReceiptSource !== "persis
 const pool = mysql.createPool(process.env.DATABASE_URL);
 try {
   const [stateRows] = await pool.query("SELECT npcId,regionId,lastResolutionIndex FROM aurionNpcStates WHERE npcId=?", [life.npcId]);
-  if (stateRows.length !== 1 || stateRows[0].npcId !== life.npcId || stateRows[0].regionId !== life.currentHubId || stateRows[0].lastResolutionIndex !== life.lastResolutionIndex) throw new Error("NPC_LIFE_STATE_ROW_MISMATCH");
+  if (stateRows.length !== 1) throw new Error("NPC_LIFE_STATE_ROW_MISMATCH");
+  const stateRow = stateRows[0];
+  const observedLatestIndex = Number(stateRow.lastResolutionIndex);
+  let latestDecisionReceipt = null;
+  if (Number.isSafeInteger(observedLatestIndex) && observedLatestIndex > life.lastResolutionIndex) {
+    const [latestReceiptRows] = await pool.query("SELECT npcId,regionId,resolutionIndex,decisionHash,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? AND resolutionIndex=?", [life.npcId, observedLatestIndex]);
+    if (latestReceiptRows.length !== 1) throw new Error("NPC_LIFE_STATE_ADVANCE_RECEIPT_REQUIRED");
+    latestDecisionReceipt = latestReceiptRows[0];
+  }
+  const stateReadback = verifyAutonomousNpcStateReadback({ snapshot: life, stateRow, latestDecisionReceipt });
 
   const [receiptRows] = await pool.query("SELECT regionId,goal,decisionHash,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? AND resolutionIndex=?", [life.npcId, life.lastResolutionIndex]);
   if (receiptRows.length !== 1 || receiptRows[0].regionId !== life.currentHubId || receiptRows[0].goal !== life.goal || receiptRows[0].decisionHash !== life.decisionHash) throw new Error("NPC_LIFE_DECISION_RECEIPT_MISMATCH");
@@ -56,6 +66,7 @@ try {
     worldRegionId: life.worldRegionId,
     lastGatewayTick: life.lastGatewayTick,
     lastResolutionIndex: life.lastResolutionIndex,
+    stateReadback,
     action: life.action,
     goal: life.goal,
     longTermGoal: life.longTermGoal,

@@ -7,6 +7,8 @@ on:
       - "vendor/wasd-npc/**"
       - "config/wasd-npc-capsule.json"
       - "scripts/*wasd-npc*"
+      - "scripts/autonomous-npc-life-readback-contract*"
+      - "scripts/verify-autonomous-npc-life-runtime.mjs"
       - "scripts/vendor/verify-wasd-npc-capsule.mjs"
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "drizzle/**"
@@ -23,6 +25,8 @@ on:
       - "vendor/wasd-npc/**"
       - "config/wasd-npc-capsule.json"
       - "scripts/*wasd-npc*"
+      - "scripts/autonomous-npc-life-readback-contract*"
+      - "scripts/verify-autonomous-npc-life-runtime.mjs"
       - "scripts/vendor/verify-wasd-npc-capsule.mjs"
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "drizzle/**"
@@ -131,6 +135,7 @@ jobs:
           pnpm exec drizzle-kit migrate
       - name: Prove same-transaction persistence, rollback, replay and fresh-process readback
         run: |
+          node --test scripts/autonomous-npc-life-readback-contract.test.mjs
           pnpm check
           pnpm exec vitest run --no-file-parallelism server/aim263NpcMariaDb.test.ts server/aim263NpcSnapshotMariaDb.test.ts server/autonomousNpcLifeMariaDb.test.ts server/aim292NpcMultiMemoryMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
