@@ -7,6 +7,9 @@ import { promisify } from "node:util";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { sdk } from "./_core/sdk";
+import * as db from "./db";
+import { authenticateAdminGlbBearer } from "./adminMcp";
+import { verifyGlbAgentSession } from "./glbAgentSession";
 import { glbImportStore } from "./glbImportStore";
 
 const execFileAsync = promisify(execFile);
@@ -112,13 +115,38 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
   }
 }
 
+export async function authenticateGameDevelopmentStudioAdminRequest(request: Request): Promise<Readonly<{ id: number }> | null> {
+  const authorization = request.header("authorization");
+  if (authorization) {
+    const token = authorization.match(/^Bearer (\S+)$/)?.[1];
+    if (!token) return null;
+    try {
+      const id = await verifyGlbAgentSession(token, process.env.JWT_SECRET ?? "");
+      const user = await db.getUserById(id);
+      if (user?.role === "admin") return Object.freeze({ id: user.id });
+      return null;
+    } catch {
+      try {
+        const user = await authenticateAdminGlbBearer(request);
+        return Object.freeze({ id: user.id });
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  try {
+    const user = await sdk.authenticateRequest(request);
+    return user?.role === "admin" ? Object.freeze({ id: user.id }) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function requireAdmin(request: Request, response: Response): Promise<Readonly<{ id: number }> | null> {
-  let user: Awaited<ReturnType<typeof sdk.authenticateRequest>>;
-  try { user = await sdk.authenticateRequest(request); }
-  catch { response.status(401).json({ error: "GAME_DEV_AUTHENTICATION_REQUIRED" }); return null; }
+  const user = await authenticateGameDevelopmentStudioAdminRequest(request);
   if (!user) { response.status(401).json({ error: "GAME_DEV_AUTHENTICATION_REQUIRED" }); return null; }
-  if (user.role !== "admin") { response.status(403).json({ error: "GAME_DEV_ADMIN_REQUIRED" }); return null; }
-  return Object.freeze({ id: user.id });
+  return user;
 }
 
 async function inspectApprovedAsset(operation: "inspect" | "validate", assetId: string): Promise<Readonly<Record<string, unknown>>> {
