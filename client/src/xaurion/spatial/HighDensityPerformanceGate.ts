@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import { renderBudget } from '../core/renderBudget';
-import { NatureLodSystem } from '../world/NatureLodSystem';
-import { TerrainSplatting } from '../world/TerrainSplatting';
 import { TextureAtlasPipeline } from '../world/TextureAtlasPipeline';
 import { RenderEcsPilot } from './RenderEcsPilot';
 import { ProceduralLowPolyWorld } from '../world/ProceduralLowPolyWorld';

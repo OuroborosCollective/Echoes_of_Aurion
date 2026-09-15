@@ -14,11 +14,12 @@ export type Ax1WorldPoi = Readonly<{
   z: number;
   unlocked: boolean;
 }>;
+export type Ax1ConfirmedWorldPoi = Pick<Ax1WorldPoi, "id" | "kind" | "state" | "label">;
 export type Ax1ConfirmedWorld = Readonly<{
   displayName: string;
   epoch: number;
   deterministicHash: string;
-  pointsOfInterest: readonly Ax1WorldPoi[];
+  pointsOfInterest: readonly Ax1ConfirmedWorldPoi[];
   primaryEncounter: Readonly<{ id: string; label: string; narrative: string }> | null;
 }>;
 
