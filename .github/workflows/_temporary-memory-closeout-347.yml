@@ -1,0 +1,39 @@
+name: Temporary Memory closeout 347
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/_temporary-memory-closeout-347.yml"
+permissions:
+  contents: write
+jobs:
+  append-memory:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Append exactly one verified integration entry
+        run: |
+          set -euo pipefail
+          cat >> Memory.md <<'EOF'
+
+### 2026-09-15 — Migration/semantic recovery
+Status: VERIFIED repository integration; production readback pending merge
+Änderung: Production-Wave, Apply/Reconcile/Readback durch 0046 synchronisiert, gelöschte Deploy-Verifier wiederhergestellt und Semantic-History-, Lockfile- sowie Android-Folgefehler kausal repariert.
+Erkenntnis: Stabile Fact-IDs brauchen receipt-scoped Semantic-History; isolierte Tests müssen ihre append-only Semantic-Sidecars selbst räumen statt Conflict-Gates abzuschwächen.
+Evidence: exact source head be18a8a9358b93213f1e6a444596b96cbbca55a7; 47/47 Journal; root apply 34987812678; root reconcile 34987812722; schema reconcile 34987812775; watermark 34987812674; AIM-251 34987812489; Android 34987812520; AIM-292 34987812481 same-transaction/replay/readback green.
+EOF
+          git diff --check
+      - name: Commit Memory closeout
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Memory.md
+          git commit -m 'docs(memory): close migration semantic recovery'
+          git push origin "HEAD:${HEAD_BRANCH}"
