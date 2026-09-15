@@ -44,7 +44,6 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes("preload-helper")) return "vendor-core";
           if (!id.includes("node_modules")) return;
-          if (id.includes("@babylonjs")) return "vendor-babylon";
           return "vendor-core";
         },
       },

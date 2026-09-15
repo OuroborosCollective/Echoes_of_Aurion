@@ -16,7 +16,7 @@ const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
 const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
 
-type LogSource = "browserConsole" | "networkRequests" | "sessionReplay";
+type LogSource = "browserConsole" | "networkRequests" | "sessionReplay" | "performance";
 
 function ensureLogDir() {
   if (!fs.existsSync(LOG_DIR)) {
@@ -115,6 +115,9 @@ function vitePluginManusDebugCollector(): Plugin {
           if (payload.sessionEvents?.length > 0) {
             writeToLogFile("sessionReplay", payload.sessionEvents);
           }
+          if (payload.performanceLogs?.length > 0) {
+            writeToLogFile("performance", payload.performanceLogs);
+          }
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true }));
@@ -172,19 +175,6 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          // Babylon ist von React und den UI-/Datenabhängigkeiten unabhängig und
-          // kann sicher separat geladen werden. Alle übrigen Abhängigkeiten lässt
-          // Rollup in einer zusammenhängenden Modulgruppe, damit keine zyklischen
-          // Vendor-Imports den React-Start vor createRoot unterbrechen.
-          if (id.includes("node_modules") && id.includes("@babylonjs")) {
-            return "vendor-babylon";
-          }
-        },
-      },
-    },
   },
   server: {
     host: true,

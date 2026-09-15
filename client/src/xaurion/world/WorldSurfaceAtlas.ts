@@ -6,7 +6,7 @@ const kinds: WorldSurface[] = ['paving', 'forest', 'wood', 'rock'];
 const atlases = new WeakMap<THREE.Scene, { textures: THREE.Texture[]; materials: Set<THREE.Material>; details: THREE.InstancedMesh[]; disposed: boolean }>();
 
 /** One fetched atlas, four isolated 512px tiles: independent mipmaps prevent quadrant bleed. */
-function texturesFor(scene: THREE.Scene): THREE.Texture[] {
+export function texturesFor(scene: THREE.Scene): THREE.Texture[] {
   const existing = atlases.get(scene);
   if (existing) return existing.textures;
   const textures = kinds.map(() => {

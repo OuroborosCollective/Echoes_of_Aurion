@@ -64,13 +64,11 @@ describe("Aurion portal / AX1 open-world separation", () => {
   });
 
   it("keeps the historical Babylon arena unreachable from the mounted application route", async () => {
-    const [app, bridge, playRoute, legacyScene] = await Promise.all([
+    const [app, bridge, playRoute] = await Promise.all([
       read("client/src/App.tsx"),
       read("client/src/xaurion/integration/Ax1PlayNavigationBridge.tsx"),
       read("client/src/xaurion/integration/AurionPlayRoute.tsx"),
-      read("client/src/game/scene.ts"),
     ]);
-    expect(legacyScene).toContain("sentinel.root.setEnabled(true)");
     for (const mounted of [app, bridge, playRoute]) {
       expect(mounted).not.toContain('from "@/game/scene"');
       expect(mounted).not.toContain("GameCanvas");

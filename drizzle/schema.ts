@@ -1288,3 +1288,136 @@ export type ExpeditionTeamSignal = typeof expeditionTeamSignals.$inferSelect;
 export type ForumThread = typeof forumThreads.$inferSelect;
 export type ForumReply = typeof forumReplies.$inferSelect;
 export type ActiveCivilization = typeof aurionActiveCivilizations.$inferSelect;
+
+export const aurionSemanticMemoryReceipts = mysqlTable("aurionSemanticMemoryReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  graphVersion: varchar("graphVersion", { length: 64 }).notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  sourceDecisionSha256: varchar("sourceDecisionSha256", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  previousReceiptId: varchar("previousReceiptId", { length: 64 }),
+  previousGraphHash: varchar("previousGraphHash", { length: 64 }).notNull(),
+  graphHash: varchar("graphHash", { length: 64 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  check("aurionSemanticMemoryReceipts_index_ck", sql`${table.resolutionIndex} >= 0`),
+  uniqueIndex("aurionSemanticMemoryReceipts_npc_index_uq").on(table.npcId, table.resolutionIndex),
+  uniqueIndex("aurionSemanticMemoryReceipts_source_uq").on(table.sourceDecisionReceiptId),
+  uniqueIndex("aurionSemanticMemoryReceipts_hash_uq").on(table.receiptHash),
+]);
+
+export const aurionSemanticNodes = mysqlTable("aurionSemanticNodes", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  subjectId: varchar("subjectId", { length: 96 }).notNull(),
+  predicate: varchar("predicate", { length: 64 }).notNull(),
+  value: varchar("value", { length: 255 }).notNull(),
+  factVersion: varchar("factVersion", { length: 64 }).notNull(),
+  validFromIndex: int("validFromIndex").notNull(),
+  validUntilIndex: int("validUntilIndex").notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  conflictsWithJson: text("conflictsWithJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionSemanticNodes_graph_idx").on(table.graphReceiptId),
+  index("aurionSemanticNodes_npc_idx").on(table.npcId),
+  index("aurionSemanticNodes_subject_predicate_idx").on(table.subjectId, table.predicate),
+]);
+
+export const aurionSemanticProvenance = mysqlTable("aurionSemanticProvenance", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  factId: varchar("factId", { length: 64 }).notNull(),
+  receiptId: varchar("receiptId", { length: 64 }).notNull(),
+  receiptSha256: varchar("receiptSha256", { length: 64 }).notNull(),
+  decisionHash: varchar("decisionHash", { length: 64 }).notNull(),
+  logicalIndex: int("logicalIndex").notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionSemanticProvenance_fact_idx").on(table.factId),
+]);
+
+export const aurionSemanticRetrievalIndex = mysqlTable("aurionSemanticRetrievalIndex", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  subjectId: varchar("subjectId", { length: 96 }).notNull(),
+  predicate: varchar("predicate", { length: 64 }).notNull(),
+  value: varchar("value", { length: 255 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  validFromIndex: int("validFromIndex").notNull(),
+  validUntilIndex: int("validUntilIndex").notNull(),
+  score: int("score").notNull().default(0),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("aurionSemanticRetrievalIndex_npc_idx").on(table.npcId),
+  index("aurionSemanticRetrievalIndex_subject_idx").on(table.subjectId),
+  index("aurionSemanticRetrievalIndex_query_idx").on(table.npcId, table.subjectId, table.predicate),
+]);
+
+export const aurionNpcPolicyVersions = mysqlTable("aurionNpcPolicyVersions", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  version: int("version").notNull(),
+  policyHash: varchar("policyHash", { length: 64 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionNpcPolicyVersions_npc_idx").on(table.npcId),
+  uniqueIndex("aurionNpcPolicyVersions_npc_ver_uq").on(table.npcId, table.version),
+  uniqueIndex("aurionNpcPolicyVersions_npc_hash_uq").on(table.npcId, table.policyHash),
+]);
+
+export const aurionNpcPolicyActivePointers = mysqlTable("aurionNpcPolicyActivePointers", {
+  npcId: varchar("npcId", { length: 96 }).primaryKey(),
+  activeVersionId: varchar("activeVersionId", { length: 128 }).notNull(),
+  activePolicyHash: varchar("activePolicyHash", { length: 64 }).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const aurionNpcPolicyMutationReceipts = mysqlTable("aurionNpcPolicyMutationReceipts", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  previousVersionId: varchar("previousVersionId", { length: 128 }),
+  previousPolicyHash: varchar("previousPolicyHash", { length: 64 }),
+  nextVersionId: varchar("nextVersionId", { length: 128 }),
+  nextPolicyHash: varchar("nextPolicyHash", { length: 64 }),
+  rejectedCandidateHash: varchar("rejectedCandidateHash", { length: 64 }),
+  verdict: varchar("verdict", { length: 32 }).notNull(), // "accepted", "rejected"
+  reason: varchar("reason", { length: 255 }).notNull(),
+  provenanceDigest: varchar("provenanceDigest", { length: 255 }).notNull(),
+  evidenceWindowJson: text("evidenceWindowJson").notNull(),
+  fitnessContractVersion: varchar("fitnessContractVersion", { length: 64 }).notNull(),
+  fitnessResultDigest: varchar("fitnessResultDigest", { length: 64 }).notNull(),
+  mutationRuleVersion: varchar("mutationRuleVersion", { length: 64 }).notNull(),
+  envelopeHash: varchar("envelopeHash", { length: 64 }).notNull(),
+  rollbackTargetVersion: int("rollbackTargetVersion"),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionNpcPolicyMutationReceipts_npc_idx").on(table.npcId),
+]);
+
+export const aurionNpcPolicyRollbackReceipts = mysqlTable("aurionNpcPolicyRollbackReceipts", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  mutationReceiptId: varchar("mutationReceiptId", { length: 128 }).notNull(),
+  requestedVersionId: varchar("requestedVersionId", { length: 128 }).notNull(),
+  requestedPolicyHash: varchar("requestedPolicyHash", { length: 64 }).notNull(),
+  reason: varchar("reason", { length: 255 }).notNull(),
+  adminUserId: varchar("adminUserId", { length: 128 }).notNull(),
+  wasdVerifiedReceiptId: varchar("wasdVerifiedReceiptId", { length: 128 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionNpcPolicyRollbackReceipts_npc_idx").on(table.npcId),
+]);
+

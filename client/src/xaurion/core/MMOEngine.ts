@@ -2,6 +2,8 @@ import { disposeWorldSurfaceAtlas } from '../world/WorldSurfaceAtlas';
 import { releaseGlbTree } from "./GlbModelLease";
 import { glbManager } from "./GLBModelManager";
 import * as THREE from 'three';
+import { initBVH, raycastFirst, BVHHelper } from '../spatial/bvhInit';
+import { attachMeshBVHToGroup, computeBoundsTreeAsync } from '../spatial/bvhWorkerHelper';
 import { renderBudget } from './renderBudget';
 import { checkWebGL2Support, type RendererHandle, type RuntimeRenderer } from './RendererFactory';
 import confetti from 'canvas-confetti';
@@ -171,6 +173,60 @@ export class MMOEngine {
   public collisionDebugGroup: THREE.Group | null = null;
   private _enableCollisionVisualizer: boolean = false;
 
+  private bvhDebugGroup: THREE.Group | null = null;
+  private bvhVisualizers: Map<THREE.Mesh, BVHHelper> = new Map();
+  private _bvhDebugEnabled: boolean = false;
+
+  public isBvhDebugEnabled(): boolean {
+    return this._bvhDebugEnabled;
+  }
+
+  public setBvhDebugVisualizerEnabled(enabled: boolean): boolean {
+    this._bvhDebugEnabled = enabled;
+    this.updateBvhDebugHelpers();
+    return this._bvhDebugEnabled;
+  }
+
+  public toggleBvhDebugVisualizer(): boolean {
+    return this.setBvhDebugVisualizerEnabled(!this._bvhDebugEnabled);
+  }
+
+  public updateBvhDebugHelpers(): void {
+    if (!this.bvhDebugGroup) {
+      this.bvhDebugGroup = new THREE.Group();
+      this.bvhDebugGroup.name = 'bvh-debug-overlay-group';
+      this.scene.add(this.bvhDebugGroup);
+    }
+
+    // Clear existing BVH visualizer helpers
+    this.bvhVisualizers.forEach(helper => {
+      if (helper.parent) helper.parent.remove(helper);
+    });
+    this.bvhVisualizers.clear();
+    while (this.bvhDebugGroup.children.length > 0) {
+      this.bvhDebugGroup.remove(this.bvhDebugGroup.children[0]);
+    }
+
+    this.bvhDebugGroup.visible = this._bvhDebugEnabled;
+
+    if (this._bvhDebugEnabled) {
+      this.scene.traverse((node) => {
+        if ((node as THREE.Mesh).isMesh) {
+          const mesh = node as THREE.Mesh;
+          if (mesh.geometry && (mesh.geometry as any).boundsTree) {
+            try {
+              const helper = new BVHHelper(mesh);
+              this.bvhVisualizers.set(mesh, helper);
+              this.bvhDebugGroup!.add(helper);
+            } catch (_err) {
+              // ignore invalid meshes
+            }
+          }
+        }
+      });
+    }
+  }
+
   public get enableCollisionVisualizer(): boolean { return this._enableCollisionVisualizer; }
   public set enableCollisionVisualizer(val: boolean) {
     this._enableCollisionVisualizer = val;
@@ -288,6 +344,15 @@ export class MMOEngine {
 
     // 3. Initialize Subsystems
     this.landscape = new OpenWorldLandscape(this.scene, simulation);
+
+    // Initialize spatial three-mesh-bvh acceleration for terrain and environment meshes
+    initBVH();
+    if (this.landscape?.groundMesh?.geometry) {
+      void computeBoundsTreeAsync(this.landscape.groundMesh.geometry);
+    }
+    if (this.landscape?.group) {
+      void attachMeshBVHToGroup(this.landscape.group);
+    }
     this.lootManager = new LootDropManager(this.scene, simulation);
     this.player = new OpenWorldPlayer(this.scene, startingClass, simulation);
     this.mobManager = new MobManager(this.scene, this.lootManager, simulation);
@@ -742,11 +807,10 @@ export class MMOEngine {
     
     raycaster.setFromCamera(mouse, this.camera);
     
-    // We want to intersect almost everything in the scene
-    const intersects = raycaster.intersectObjects(this.scene.children, true);
+    // Accelerated raycasting via three-mesh-bvh raycastFirst
+    const hit = raycastFirst(raycaster, this.scene.children, true);
     
-    if (intersects.length > 0) {
-      const hit = intersects[0];
+    if (hit) {
       let object: THREE.Object3D | null = hit.object;
       
       // Try to find a parent that represents an entity or world asset

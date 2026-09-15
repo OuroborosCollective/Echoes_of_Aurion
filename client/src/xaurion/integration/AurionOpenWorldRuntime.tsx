@@ -7,7 +7,7 @@ import { WORLD_DEMONSTRATION_EVENT } from "@/lib/companionWorldInputs";
 import { VisibleCanvasCapture } from "@/lib/visibleCanvasCapture";
 import { loadCompanionSession } from "@/lib/companionLearning";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Hammer } from "lucide-react";
+import { ArrowLeft, Eye, Hammer } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
@@ -90,6 +90,14 @@ export default function AurionOpenWorldRuntime() {
   const modelEvidenceRef = useRef<HTMLOutputElement>(null);
   const npcEvidenceRef = useRef<HTMLOutputElement>(null);
   const [nearbySmith, setNearbySmith] = useState(false);
+  const [bvhDebugActive, setBvhDebugActive] = useState(false);
+
+  const toggleBvhDebug = useCallback(() => {
+    if (engineRef.current) {
+      const nextState = engineRef.current.toggleBvhDebugVisualizer();
+      setBvhDebugActive(nextState);
+    }
+  }, []);
 
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
   const [confirmedSelection, setConfirmedSelection] = useState<PublicCharacterSelection | null>(null);
@@ -103,11 +111,17 @@ export default function AurionOpenWorldRuntime() {
   const [remotePlayers, setRemotePlayers] = useState<readonly ConfirmedZonePresence[]>([]);
   const [celebration, setCelebration] = useState(0);
 
-  const { setIsAdmin, inspectionMode, setCurrentTarget } = useAdminStore();
+  const { setIsAdmin, inspectionMode, bvhDebugMode, setCurrentTarget } = useAdminStore();
 
   useEffect(() => {
     setIsAdmin(user?.role === "admin");
   }, [user?.role, setIsAdmin]);
+
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setBvhDebugVisualizerEnabled(bvhDebugMode);
+    }
+  }, [bvhDebugMode]);
 
   useEffect(() => {
     if (!inspectionMode || !containerRef.current || !engineRef.current) return;
@@ -621,6 +635,23 @@ export default function AurionOpenWorldRuntime() {
       </div>
       <button className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>
         <ArrowLeft size={18} /><span className="sr-only">ZUR STERNWARTE</span>
+      </button>
+
+      {/* three-mesh-bvh Debug Overlay Toggle */}
+      <button
+        type="button"
+        data-testid="bvh-debug-toggle"
+        className={`absolute top-4 right-16 z-50 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition-all ${
+          bvhDebugActive
+            ? "border-emerald-400/60 bg-emerald-950/80 text-emerald-300 shadow-lg shadow-emerald-900/30"
+            : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-slate-500 hover:text-white"
+        }`}
+        onClick={toggleBvhDebug}
+        title="three-mesh-bvh Collider Visualizer"
+        aria-label="BVH Debug Visualizer"
+      >
+        <Eye className="h-3.5 w-3.5" />
+        <span>BVH Debug {bvhDebugActive ? "AN" : "AUS"}</span>
       </button>
       {celebration > 0 && <div className="xaurion-runtime__celebration" key={celebration} aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <span key={index} style={{ "--i": index } as React.CSSProperties}>✦</span>)}</div>}
       {webglError && <div className="xaurion-runtime__error" role="alert"><b>OPEN WORLD ANGEHALTEN</b><span>Bitte kehre zur Sternwarte zurück und öffne die Welt erneut. Vorgang {webglError}</span></div>}

@@ -3,7 +3,7 @@ import {
   advanceCivilizationEpoch,
   resolveCollapseQualification,
   resolveRuinTransformation,
-  resolveSettlementRebirth,
+  type RuinTransformation,
 } from "./wasdAurionCivilizationProtocol";
 import {
   getActiveCivilization,
@@ -24,20 +24,25 @@ export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: n
     // Phase A & B: Historical Contracts & Epoch Progression
     const qualification = resolveCollapseQualification({
       civilizationId: activeCiv.civilizationId,
-      epoch: activeCiv.worldEpoch,
+      worldId,
+      worldEpoch: activeCiv.worldEpoch,
       population: activeCiv.population,
       stability: activeCiv.stability,
       hazardIndex: activeCiv.hazardIndex,
       scarcitySeverity: activeCiv.scarcitySeverity,
+      receiptId: sourceReceiptId,
     });
 
-    if (qualification.shouldCollapse) {
+    if (qualification.isEligible) {
       // Phase C: Ruin Transformation
       const ruinTransformation = resolveRuinTransformation({
         civilizationId: activeCiv.civilizationId,
-        epoch: activeCiv.worldEpoch,
-        collapseReason: "STABILITY_THRESHOLD",
-        stabilityAtCollapse: activeCiv.stability,
+        worldId,
+        locationIdentity: "world_heart",
+        worldEpoch,
+        collapseReceiptHash: qualification.receiptHash,
+        rulesetVersion: "wasd:civ:v1",
+        generationSeed: `seed-${activeCiv.civilizationId}-${worldEpoch}`,
       });
 
       await recordCivilizationCollapse({
@@ -47,27 +52,41 @@ export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: n
         sourceReceiptId,
         sourceRevision: "wasd:civ:v1",
         worldEpoch,
-        locationIdentity: "world_heart", // Simplified for Alpha
-        historyDigest: hash(["history", activeCiv.civilizationId]),
-        rulesetVersion: "wasd:civ:v1",
-        generationSeedDigest: hash(["seed", activeCiv.civilizationId]),
+        locationIdentity: ruinTransformation.locationIdentity,
+        historyDigest: ruinTransformation.historyDigest,
+        rulesetVersion: ruinTransformation.rulesetVersion,
+        generationSeedDigest: ruinTransformation.generationSeedDigest,
         occurredSequence: worldEpoch,
       });
 
       return { action: "COLLAPSED", ruinId: ruinTransformation.ruinId };
     } else {
-      const nextCiv = advanceCivilizationEpoch(activeCiv);
-      await upsertActiveCivilization({
-        ...nextCiv,
+      const epochAdvance = advanceCivilizationEpoch({
         worldId,
-        lastResolutionIndex: worldEpoch,
+        currentEpoch: Math.max(1, activeCiv.worldEpoch),
+        transitionReason: "epoch_advance",
+        ruinTransformations: [],
+        receiptId: sourceReceiptId,
       });
+
+      const nextCiv = {
+        civilizationId: activeCiv.civilizationId,
+        worldId,
+        worldEpoch: epochAdvance.toEpoch,
+        population: Math.max(10, activeCiv.population + 5),
+        stability: Math.min(1.0, activeCiv.stability + 0.05),
+        hazardIndex: Math.max(0.0, activeCiv.hazardIndex - 0.02),
+        scarcitySeverity: Math.max(0.0, activeCiv.scarcitySeverity - 0.02),
+        lastResolutionIndex: worldEpoch,
+      };
+
+      await upsertActiveCivilization(nextCiv);
       
       await recordCivilizationHistoryEvent({
         eventId: hash(["advance", activeCiv.civilizationId, String(worldEpoch)]),
         civilizationId: activeCiv.civilizationId,
         worldId,
-        worldEpoch,
+        worldEpoch: nextCiv.worldEpoch,
         eventType: "EPOCH_ADVANCE",
         sourceReceiptId,
         sourceRevision: "wasd:civ:v1",
@@ -81,40 +100,54 @@ export async function orchestrateCivilizationLoop(worldId: string, worldEpoch: n
     // Phase D: Settlement Rebirth
     const ruins = await listVisibleRuins(worldId);
     if (ruins.length > 0) {
-       // Pick a ruin to rebirth from
-       const ruin = ruins[0];
-       const rebirth = resolveSettlementRebirth({
-         ruinId: ruin.ruinId,
-         worldEpoch,
-         rebirthSeed: hash(["rebirth-seed", ruin.ruinId, String(worldEpoch)]),
-       });
+      const ruinTransformations: RuinTransformation[] = ruins.map(ruin => ({
+        ruinId: ruin.ruinId,
+        sourceCivilizationId: ruin.originCivilizationId,
+        worldId: worldId,
+        locationIdentity: ruin.locationIdentity,
+        worldEpoch: ruin.worldEpoch,
+        historyDigest: ruin.historyDigest,
+        rulesetVersion: ruin.rulesetVersion,
+        generationSeedDigest: ruin.generationSeedDigest,
+        state: ruin.state as RuinTransformation["state"],
+        receiptHash: hash(["ruin-record", ruin.ruinId]),
+      }));
 
-       if (rebirth.isEligible) {
-         await recordSettlementRebirthCandidate({
-           candidateId: hash(["candidate", rebirth.rebirthCandidateId, String(worldEpoch)]),
-           worldId,
-           locationIdentity: ruin.locationIdentity,
-           ruinId: ruin.ruinId,
-           eligibilityReceipt: hash(["eligibility", rebirth.rebirthCandidateId]),
-           candidateSeedDigest: hash(["seed", rebirth.rebirthCandidateId]),
-           state: "ELIGIBLE",
-         });
-         return { action: "REBIRTH_CANDIDATE_CREATED", candidateId: rebirth.rebirthCandidateId };
-       }
+      const epochAdvance = advanceCivilizationEpoch({
+        worldId,
+        currentEpoch: Math.max(1, worldEpoch),
+        transitionReason: "settlement_rebirth",
+        ruinTransformations,
+        receiptId: sourceReceiptId,
+      });
+
+      if (epochAdvance.rebirthCandidates.length > 0) {
+        const candidate = epochAdvance.rebirthCandidates[0]!;
+        await recordSettlementRebirthCandidate({
+          candidateId: candidate.candidateId,
+          worldId,
+          locationIdentity: candidate.locationIdentity,
+          ruinId: candidate.ruinId,
+          eligibilityReceipt: epochAdvance.receiptHash,
+          candidateSeedDigest: candidate.candidateSeedDigest,
+          state: "ELIGIBLE",
+        });
+        return { action: "REBIRTH_CANDIDATE_CREATED", candidateId: candidate.candidateId };
+      }
     } else {
-       // Seed initial civilization if none exists and no ruins
-       const initialCivId = `civ_initial_${worldId}`;
-       await upsertActiveCivilization({
-         civilizationId: initialCivId,
-         worldId,
-         worldEpoch: 0,
-         population: 100,
-         stability: 1.0,
-         hazardIndex: 0.0,
-         scarcitySeverity: 0.0,
-         lastResolutionIndex: worldEpoch,
-       });
-       return { action: "INITIAL_CIV_SEEDED", civilizationId: initialCivId };
+      // Seed initial civilization if none exists and no ruins
+      const initialCivId = `civ_initial_${worldId}`;
+      await upsertActiveCivilization({
+        civilizationId: initialCivId,
+        worldId,
+        worldEpoch: 1,
+        population: 100,
+        stability: 1.0,
+        hazardIndex: 0.0,
+        scarcitySeverity: 0.0,
+        lastResolutionIndex: worldEpoch,
+      });
+      return { action: "INITIAL_CIV_SEEDED", civilizationId: initialCivId };
     }
   }
 

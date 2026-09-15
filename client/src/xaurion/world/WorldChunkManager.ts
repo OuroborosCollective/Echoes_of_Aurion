@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { worldSurfaceMaterial, mapWorldGround } from './WorldSurfaceAtlas';
 import { BiomeType, LandmarkType, SolidObstacle, WorldChunkData, WorldExpansionStats } from '../types';
 import { collisionSystem } from './WorldCollisionSystem';
+import { attachMeshBVHToGroup } from '../spatial/bvhWorkerHelper';
+import { calculateSplatWeights, createTerrainSplatMaterial } from './TerrainSplatting';
+import { renderBudget } from '../core/renderBudget';
 
 export class WorldChunkManager {
   public scene: THREE.Scene;
@@ -11,6 +14,15 @@ export class WorldChunkManager {
   private chunkMeshes: Map<string, THREE.Group> = new Map();
   private isGenerating: boolean = false;
   private lastCheckedChunkKey: string = '';
+  private splatMaterial?: THREE.Material;
+
+  private getSplatMaterial(): THREE.Material {
+    if (!this.splatMaterial) {
+      const budget = renderBudget(window.innerWidth || 1024, window.innerHeight || 768, window.devicePixelRatio || 1, 'webgl');
+      this.splatMaterial = createTerrainSplatMaterial(this.scene, budget.tier);
+    }
+    return this.splatMaterial;
+  }
 
   // Kingdom Definitions & Lore
   public readonly KINGDOMS = [
@@ -448,21 +460,30 @@ export class WorldChunkManager {
     const terrainGeo = new THREE.PlaneGeometry(this.chunkSize, this.chunkSize, segs, segs);
     terrainGeo.rotateX(-Math.PI / 2);
 
-    const paved = chunk.materialTheme === 'starpath' || chunk.materialTheme === 'starpath_crossing';
-    const terrainMat = worldSurfaceMaterial(this.scene, paved ? 'paving' : 'forest');
     mapWorldGround(terrainGeo, chunk.centerX, chunk.centerZ);
 
-    // Add subtle procedural undulating elevation
+    // Add subtle procedural undulating elevation and splat mapping
     const pos = terrainGeo.attributes.position;
+    const splats = new Float32Array(pos.count * 4);
     for (let i = 0; i < pos.count; i++) {
       const lx = pos.getX(i);
       const lz = pos.getZ(i);
-      const elev = Math.sin((chunk.centerX + lx) * 0.08) * Math.cos((chunk.centerZ + lz) * 0.08) * 1.8 + chunk.elevationBase * 0.5;
+      const worldX = chunk.centerX + lx;
+      const worldZ = chunk.centerZ + lz;
+
+      const weights = calculateSplatWeights(worldX, worldZ, chunk);
+      splats[i * 4 + 0] = weights[0];
+      splats[i * 4 + 1] = weights[1];
+      splats[i * 4 + 2] = weights[2];
+      splats[i * 4 + 3] = weights[3];
+
+      const elev = Math.sin((worldX) * 0.08) * Math.cos((worldZ) * 0.08) * 1.8 + chunk.elevationBase * 0.5;
       pos.setY(i, elev);
     }
+    terrainGeo.setAttribute('splatWeight', new THREE.BufferAttribute(splats, 4));
     terrainGeo.computeVertexNormals();
 
-    const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+    const terrainMesh = new THREE.Mesh(terrainGeo, this.getSplatMaterial());
     terrainMesh.receiveShadow = true;
     group.add(terrainMesh);
 
@@ -631,6 +652,9 @@ export class WorldChunkManager {
     this.chunkMeshes.set(chunk.chunkKey, group);
     this.group.add(group);
     
+    // Attach three-mesh-bvh acceleration trees asynchronously via WebWorker
+    void attachMeshBVHToGroup(group, { useWorker: true });
+
     // Notify engine that a chunk (new or loaded) is fully rendered in the 3D world
     this.onChunkLoaded?.(chunk);
   }

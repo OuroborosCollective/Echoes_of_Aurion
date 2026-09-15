@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { collisionSystem } from './WorldCollisionSystem';
 import { WorldChunkManager } from './WorldChunkManager';
 import { worldSurfaceMaterial, mapWorldGround, addSanctumSurfaceDetails } from './WorldSurfaceAtlas';
+import { attachMeshBVHToGroup } from '../spatial/bvhWorkerHelper';
 
 export class OpenWorldLandscape {
   public scene: THREE.Scene;
@@ -39,6 +40,9 @@ export class OpenWorldLandscape {
     // 6. Ambient Environment Lighting & Skybox Stars
     this.buildEnvironmentProps();
     addSanctumSurfaceDetails(this.scene, this.group);
+
+    // 7. Accelerate scene-wide spatial queries with WebWorker BVH generation
+    void attachMeshBVHToGroup(this.group, { useWorker: true });
   }
 
   private createOpenWorldTerrain(): THREE.Mesh {

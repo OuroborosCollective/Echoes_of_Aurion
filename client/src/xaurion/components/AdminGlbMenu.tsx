@@ -23,9 +23,11 @@ export const AdminGlbMenu: React.FC = () => {
   const { 
     isAdmin, 
     inspectionMode, 
+    bvhDebugMode,
     activeModelId, 
     currentTarget,
     setInspectionMode, 
+    setBvhDebugMode,
     setActiveModelId,
     setCurrentTarget
   } = useAdminStore();
@@ -37,9 +39,9 @@ export const AdminGlbMenu: React.FC = () => {
   const [displayName, setDisplayName] = useState("");
   const [assetType, setAssetType] = useState<"character" | "enemy" | "weapon" | "armor" | "arena">("character");
 
-  const catalogQuery = trpc.assetSubmissions.publicCatalog.useQuery();
-  const assignMutation = trpc.admin.assets.assign.useMutation();
-  const uploadMutation = trpc.admin.assets.upload.useMutation();
+  const catalogQuery = trpc.assetSubmissions?.publicCatalog?.useQuery ? trpc.assetSubmissions.publicCatalog.useQuery(undefined, { enabled: isAdmin }) : { data: [] };
+  const assignMutation = trpc.admin?.assets?.assign?.useMutation ? trpc.admin.assets.assign.useMutation() : { mutateAsync: async () => {} };
+  const uploadMutation = trpc.admin?.assets?.upload?.useMutation ? trpc.admin.assets.upload.useMutation() : { mutateAsync: async () => {} };
 
   if (!isAdmin) return null;
 
@@ -63,7 +65,7 @@ export const AdminGlbMenu: React.FC = () => {
         });
         soundSynth.playUiSuccess();
         setTab("catalog");
-        catalogQuery.refetch();
+        (catalogQuery as any).refetch?.();
         setUploadFile(null);
         setDisplayName("");
       } catch (err) {
@@ -166,7 +168,7 @@ export const AdminGlbMenu: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    {catalogQuery.isLoading ? (
+                    {(catalogQuery as any).isLoading ? (
                       <div className="py-8 text-center text-gray-600 text-[10px] uppercase tracking-widest animate-pulse">Lade Katalog...</div>
                     ) : filteredCatalog?.length === 0 ? (
                       <div className="py-8 text-center text-gray-600 text-[10px] uppercase tracking-widest">Keine Modelle gefunden</div>
@@ -241,10 +243,10 @@ export const AdminGlbMenu: React.FC = () => {
                   </div>
 
                   <button 
-                    disabled={!uploadFile || !displayName || uploadMutation.isPending}
+                    disabled={!uploadFile || !displayName || (uploadMutation as any).isPending}
                     className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
                   >
-                    {uploadMutation.isPending ? "Lade hoch..." : <>Speichern & Katalogisieren <ChevronRight size={16} /></>}
+                    {(uploadMutation as any).isPending ? "Lade hoch..." : <>Speichern & Katalogisieren <ChevronRight size={16} /></>}
                   </button>
                 </form>
               )}
@@ -267,6 +269,26 @@ export const AdminGlbMenu: React.FC = () => {
                       className={`w-full py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-tighter transition-all ${inspectionMode ? "bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]" : "bg-sky-600 text-white hover:bg-sky-500"}`}
                     >
                       {inspectionMode ? "Inspektion Beenden" : "Cursor Aktivieren"}
+                    </button>
+                  </div>
+
+                  {/* three-mesh-bvh Collision Debug Visualizer Toggle */}
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <Box size={18} />
+                      <span className="text-[10px] uppercase tracking-widest font-bold">three-mesh-bvh Visualizer</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                      Visualisiert das räumliche BVH-Beschleunigungsgitter für Umgebungskollisionen und Raycasting in Echtzeit.
+                    </p>
+                    <button 
+                      onClick={() => {
+                        soundSynth.playUiClick();
+                        setBvhDebugMode(!bvhDebugMode);
+                      }}
+                      className={`w-full py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-tighter transition-all ${bvhDebugMode ? "bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]" : "bg-emerald-700/80 text-white hover:bg-emerald-600"}`}
+                    >
+                      {bvhDebugMode ? "BVH Debug-Grid Ausblenden" : "BVH Debug-Grid Einblenden"}
                     </button>
                   </div>
 

@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Archive, BadgeDollarSign, Boxes, CheckCircle2, Crown, ExternalLink, Link2, Save, Search, Shield, Sparkles, Trophy, Upload, Users, XCircle } from "lucide-react";
+import { Archive, BadgeDollarSign, Boxes, CheckCircle2, Crown, ExternalLink, Link2, Save, Search, Shield, Sparkles, Trophy, Upload, Users, XCircle, Landmark, MapPin, AlertTriangle, RefreshCw, Hourglass, History } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 
@@ -66,6 +66,8 @@ export default function Operations() {
   const [nextSeasonKey, setNextSeasonKey] = useState("");
   const [nextSeasonDisplayName, setNextSeasonDisplayName] = useState("");
   const [selectedSeasonId, setSelectedSeasonId] = useState("");
+  const [targetEpochInput, setTargetEpochInput] = useState<number>(1);
+  const currentWorldId = "echoes-of-aurion-global";
   const adminPlayerInput = useMemo(() => ({ limit: 25, ...(submittedPlayerSearch ? { query: submittedPlayerSearch } : {}) }), [submittedPlayerSearch]);
 
   const profile = trpc.player.me.useQuery();
@@ -85,6 +87,41 @@ export default function Operations() {
   const selectedSeasonSnapshots = trpc.admin.rankings.snapshots.useQuery({ seasonId: selectedSeasonId, limit: 50 }, { enabled: user?.role === "admin" && Boolean(selectedSeasonId) });
   const seasonStart = trpc.admin.rankings.startSeason.useMutation({ onSuccess: () => { void utils.admin.rankings.seasons.invalidate(); setSeasonKey(""); setSeasonDisplayName(""); } });
   const seasonRotation = trpc.admin.rankings.rotateSeason.useMutation({ onSuccess: () => { void utils.admin.rankings.seasons.invalidate(); void utils.admin.rankings.live.invalidate(); setRotationConfirmation(""); setNextSeasonKey(""); setNextSeasonDisplayName(""); } });
+
+  const civHistory = trpc.history.getHistory.useQuery({ worldId: currentWorldId });
+  const civActive = trpc.history.getActiveCivilization.useQuery({ worldId: currentWorldId });
+  const civRuins = trpc.history.getVisibleRuins.useQuery({ worldId: currentWorldId });
+  const civRebirth = trpc.history.getRebirthCandidates.useQuery({ worldId: currentWorldId });
+  const civOrchestrate = trpc.history.triggerOrchestration.useMutation({
+    onSuccess: () => {
+      void utils.history.getHistory.invalidate();
+      void utils.history.getActiveCivilization.invalidate();
+      void utils.history.getVisibleRuins.invalidate();
+      void utils.history.getRebirthCandidates.invalidate();
+    }
+  });
+
+  const [selectedNpc, setSelectedNpc] = useState<"lyra" | "orun">("lyra");
+  const [rollbackVersion, setRollbackVersion] = useState<number | "">("");
+  const [rollbackReason, setRollbackReason] = useState("");
+  const [rollbackError, setRollbackError] = useState<string | null>(null);
+
+  const confirmedPolicy = trpc.npcPolicy.getConfirmed.useQuery({ npcId: selectedNpc }, { enabled: user?.role === "admin" });
+  const policyHistory = trpc.npcPolicy.getHistory.useQuery({ npcId: selectedNpc }, { enabled: user?.role === "admin" });
+
+  const rollbackMutation = trpc.admin.npcPolicy.rollback.useMutation({
+    onSuccess: () => {
+      void utils.npcPolicy.getConfirmed.invalidate({ npcId: selectedNpc });
+      void utils.npcPolicy.getHistory.invalidate({ npcId: selectedNpc });
+      setRollbackVersion("");
+      setRollbackReason("");
+      setRollbackError(null);
+    },
+    onError: (err) => {
+      setRollbackError(err.message);
+    }
+  });
+
   const state = profile.data;
   const activeSeason = managedSeasons.data?.find(season => season.status === "active");
 
@@ -122,7 +159,7 @@ export default function Operations() {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="PROGRESSIONS-TRACKS" value={state.progression.tracks.length} icon={Sparkles} /><Stat label="AURION-PUNKTE" value={state.profile.aurionPoints} icon={Trophy} /><Stat label="SIEGE" value={state.profile.victories} icon={Crown} /><Stat label="WAFFENPFAD" value={state.progression.tracks.filter(track => track.trackKind === "weapon").length} icon={Shield} /></section>
 
-      <Tabs defaultValue="profile" className="w-full"><TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0"><TabsTrigger value="profile">Profil & Gilde</TabsTrigger><TabsTrigger value="endgame">Endgame</TabsTrigger><TabsTrigger value="ranking">Ranglisten</TabsTrigger>{user?.role === "admin" && <TabsTrigger value="admin">Admin</TabsTrigger>}</TabsList>
+      <Tabs defaultValue="profile" className="w-full"><TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0"><TabsTrigger value="profile">Profil & Gilde</TabsTrigger><TabsTrigger value="endgame">Endgame</TabsTrigger><TabsTrigger value="ranking">Ranglisten</TabsTrigger><TabsTrigger value="civilization">Zivilisation</TabsTrigger>{user?.role === "admin" && <TabsTrigger value="admin">Admin</TabsTrigger>}</TabsList>
         <TabsContent value="profile" className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><Card className="border-amber-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Resonanzprofil</CardTitle><CardDescription>Freischaltungen folgen nur bestätigtem serverseitigem Fortschritt.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2"><Badge variant="outline">klassenlos</Badge><Badge variant="outline">Aggregate Level/XP: WASD-Snapshot ausstehend</Badge>{state.progression.tracks.map(track => <Badge key={`${track.trackKind}:${track.trackId}`} className="bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/10">{track.trackKind === "weapon" ? "Waffe" : "Skill"}: {track.trackId} · L{track.levelExact}</Badge>)}</div><div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.035] p-4"><p className="text-xs tracking-[.14em] text-cyan-200/60">GILDENSTATUS</p>{state.guild ? <div className="mt-2 flex items-center gap-3"><Users className="h-5 w-5 text-cyan-300" /><div><p className="font-medium">[{state.guild.guild.tag}] {state.guild.guild.name}</p><p className="text-sm text-slate-400">Rolle: {state.guild.membership.role} · Saisonpunkte: {state.guild.guild.seasonPoints}</p></div></div> : <p className="mt-2 text-sm text-slate-300">Noch keinem Sternwartenpakt beigetreten.</p>}</div></CardContent></Card>
           <Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Sternwartenpakt gründen</CardTitle><CardDescription>Eine aktive Mitgliedschaft pro Spieler. Rollen und Beiträge werden serverseitig geprüft.</CardDescription></CardHeader><CardContent><form className="space-y-4" onSubmit={event => { event.preventDefault(); guildCreate.mutate({ name: guildName, tag: guildTag }); }}><div className="space-y-2"><Label htmlFor="guildName">Gildenname</Label><Input id="guildName" value={guildName} maxLength={48} onChange={event => setGuildName(event.target.value)} placeholder="Pakt der Sternenruinen" disabled={Boolean(state.guild)} /></div><div className="space-y-2"><Label htmlFor="guildTag">Tag</Label><Input id="guildTag" value={guildTag} maxLength={8} onChange={event => setGuildTag(event.target.value.toUpperCase())} placeholder="AURION" disabled={Boolean(state.guild)} /></div>{guildCreate.error && <p className="text-sm text-red-300">{guildCreate.error.message}</p>}<Button type="submit" disabled={!guildName || guildTag.length < 2 || guildCreate.isPending || Boolean(state.guild)} className="w-full bg-cyan-500 text-slate-950 hover:bg-cyan-300">{guildCreate.isPending ? "Pakt wird geprüft…" : "Gilde serverseitig gründen"}</Button></form></CardContent></Card></TabsContent>
         <TabsContent value="endgame" className="mt-5 space-y-5">
@@ -134,6 +171,202 @@ export default function Operations() {
           <section className="grid gap-5 md:grid-cols-2"><Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Dynamische Progression</CardTitle><CardDescription>Read-only Projektion der bestätigten Skill- und Waffenstände; Aurion berechnet keine Levelkurve.</CardDescription></CardHeader><CardContent className="space-y-2">{state.progression.tracks.map(track => <div key={`${track.trackKind}:${track.trackId}`} className="flex items-center justify-between rounded-lg border border-cyan-200/10 p-3"><span className="font-medium">{track.trackKind === "weapon" ? "Waffe" : "Skill"} · {track.trackId}</span><span className="text-sm text-cyan-100">Stufe {track.levelExact}</span></div>)}{!state.progression.tracks.length && <p className="text-sm text-slate-400">Noch keine bestätigte dynamische Progression.</p>}</CardContent></Card><Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Langzeitmotiv</CardTitle><CardDescription>Gildenfortschritt, Set-Resonanz und Waffenmeisterschaft verbinden einzelne Expeditionen mit saisonalen Zielen.</CardDescription></CardHeader><CardContent className="space-y-2 text-sm text-slate-300">{state.guild ? <><p className="font-medium text-cyan-100">[{state.guild.guild.tag}] {state.guild.guild.name}</p><p>Gildenstufe {state.guild.guild.level} · Saisonpunkte {state.guild.guild.seasonPoints}</p><p className="text-xs text-slate-400">Rolle: {state.guild.membership.role}. Beiträge bleiben nur mit serverseitigen Receipts gültig.</p></> : <p>Gründe oder finde einen Sternwartenpakt, um gemeinsame saisonale Ziele freizuschalten.</p>}</CardContent></Card></section>
         </TabsContent>
         <TabsContent value="ranking" className="mt-5"><Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Saison-Rangliste</CardTitle><CardDescription>Sortiert nach bestätigten Saisonpunkten, Siegen und Stufe.</CardDescription></CardHeader><CardContent><div className="divide-y divide-cyan-200/10">{leaderboard.data?.map((entry, index) => <div key={entry.userId} className="flex items-center gap-4 py-3"><span className="w-7 text-center text-sm text-cyan-200">{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.name || `Explorer ${entry.userId}`}</p><p className="text-xs text-slate-400">Stufe {entry.level}</p></div><div className="text-right text-sm"><p className="text-amber-100">{entry.seasonPoints} SP</p><p className="text-slate-400">{entry.victories} Siege</p></div></div>)}{!leaderboard.data?.length && <p className="py-8 text-sm text-slate-400">Noch keine bestätigten Expeditionswerte.</p>}</div></CardContent></Card></TabsContent>
+
+        <TabsContent value="civilization" className="mt-5 space-y-5">
+          <section className="grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
+            <Card className="border-amber-200/15 bg-slate-950/70">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-100">
+                  <Landmark className="h-5 w-5" /> Aktive Zivilisationsdynamik
+                </CardTitle>
+                <CardDescription>
+                  Werte des aktuellen Zeitalters. Die Berechnungen basieren auf deterministischen WASD-Spielverträgen.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {civActive.data ? (
+                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                    <div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
+                      <p className="text-xs tracking-[.14em] text-cyan-200/60">EPOCHE</p>
+                      <p className="mt-2 text-xl font-bold text-amber-100">Epoche {civActive.data.worldEpoch}</p>
+                      <p className="text-xs text-slate-400 mt-1">ID: {civActive.data.civilizationId.slice(0, 16)}…</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
+                      <p className="text-xs tracking-[.14em] text-cyan-200/60">POPULATION</p>
+                      <p className="mt-2 text-xl font-bold text-amber-100">{civActive.data.population.toLocaleString()}</p>
+                      <p className="text-xs text-slate-400 mt-1">Überlebende Bürger</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
+                      <p className="text-xs tracking-[.14em] text-cyan-200/60">STABILITÄT</p>
+                      <p className="mt-2 text-xl font-bold text-amber-100">{(civActive.data.stability * 100).toFixed(0)}%</p>
+                      <p className="text-xs text-slate-400 mt-1">Gefahr des Verfalls</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
+                      <p className="text-xs tracking-[.14em] text-cyan-200/60">GEFAHRENINDEX</p>
+                      <p className="mt-2 text-xl font-bold text-amber-100">{(civActive.data.hazardIndex * 100).toFixed(0)}%</p>
+                      <p className="text-xs text-slate-400 mt-1">Umweltbelastung</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
+                      <p className="text-xs tracking-[.14em] text-cyan-200/60">KNAPPHEITSSCHWERE</p>
+                      <p className="mt-2 text-xl font-bold text-amber-100">{(civActive.data.scarcitySeverity * 100).toFixed(0)}%</p>
+                      <p className="text-xs text-slate-400 mt-1">Ressourcenmangel</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.03] p-4">
+                      <p className="text-xs tracking-[.14em] text-cyan-200/60">LETZTE RESOLUTION</p>
+                      <p className="mt-2 text-xl font-bold text-amber-100">Epoch-Index {civActive.data.lastResolutionIndex}</p>
+                      <p className="text-xs text-slate-400 mt-1">Zuletzt aktualisiert</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-red-500/25 bg-red-500/[.03] p-6 text-center space-y-3">
+                    <AlertTriangle className="mx-auto h-8 w-8 text-red-400" />
+                    <p className="font-semibold text-red-200">Kollaps-Phase aktiv</p>
+                    <p className="text-sm text-slate-300 max-w-md mx-auto">
+                      Die aktive Zivilisation dieses Weltbereichs ist untergegangen. Die entstandenen Ruinen warten auf Entdeckung, Erforschung und die schlussendliche Wiedergeburt einer neuen Ansiedlung.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-5">
+              {user?.role === "admin" && (
+                <Card className="border-cyan-300/20 bg-slate-950/70">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-amber-100">
+                      <RefreshCw className="h-5 w-5" /> Loop-Orchestrierung
+                    </CardTitle>
+                    <CardDescription>
+                      Zivilisationsschleife für diese Epoche manuell berechnen und fortschreiben.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="targetEpoch">Epoche für Berechnungs-Eingabe</Label>
+                      <Input
+                        id="targetEpoch"
+                        type="number"
+                        min={1}
+                        value={targetEpochInput}
+                        className="bg-slate-950 border-cyan-200/20 text-cyan-100"
+                        onChange={(e) => setTargetEpochInput(parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    <Button
+                      className="w-full bg-cyan-500 text-slate-950 hover:bg-cyan-300"
+                      disabled={civOrchestrate.isPending}
+                      onClick={() => {
+                        civOrchestrate.mutate({
+                          worldId: currentWorldId,
+                          epoch: targetEpochInput,
+                        });
+                      }}
+                    >
+                      {civOrchestrate.isPending ? "Schleife wird berechnet…" : "Loop-Schleife triggern"}
+                    </Button>
+                    {civOrchestrate.data && (
+                      <div className="p-3 rounded border border-emerald-500/25 bg-emerald-500/[.05] text-xs text-emerald-200">
+                        Ergebnis: <strong>{civOrchestrate.data.action}</strong>
+                        {civOrchestrate.data.ruinId && <span> (Ruin-ID: {civOrchestrate.data.ruinId})</span>}
+                        {civOrchestrate.data.civilizationId && <span> (Civ-ID: {civOrchestrate.data.civilizationId})</span>}
+                        {civOrchestrate.data.candidateId && <span> (Kandidat-ID: {civOrchestrate.data.candidateId})</span>}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              
+              <Card className="border-cyan-200/15 bg-slate-950/70">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-amber-100">
+                    <Hourglass className="h-5 w-5" /> Wiedergeburtskandidaten
+                  </CardTitle>
+                  <CardDescription>
+                    Mögliche Orte für die Neuentstehung einer Siedlung.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {civRebirth.data?.map(candidate => (
+                    <div key={candidate.candidateId} className="rounded-lg border border-cyan-200/10 p-3 text-sm bg-slate-950/40">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-amber-5 flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5 text-cyan-300" /> {candidate.locationIdentity}
+                        </span>
+                        <Badge variant="outline" className="border-amber-300/30 text-amber-100">{candidate.state}</Badge>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">ID: {candidate.candidateId.slice(0, 16)}…</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Seed-Digest: {candidate.candidateSeedDigest.slice(0, 16)}…</p>
+                    </div>
+                  ))}
+                  {!civRebirth.data?.length && (
+                    <p className="text-sm text-slate-400 py-4 text-center">Keine aktiven Wiedergeburtskandidaten erfasst.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          <section className="grid gap-5 md:grid-cols-2">
+            <Card className="border-cyan-200/15 bg-slate-950/70">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-100">
+                  <History className="h-5 w-5" /> Weltgeschichte & Chronik
+                </CardTitle>
+                <CardDescription>
+                  Die historisch unveränderliche Zeitleiste dieses Reiches.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="max-h-[400px] overflow-auto divide-y divide-cyan-200/10">
+                {civHistory.data?.map(event => (
+                  <div key={event.eventId} className="py-3 text-sm space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-200">Epoche {event.worldEpoch}</span>
+                      <Badge className={event.eventType === "CIVILIZATION_COLLAPSE" ? "bg-red-500/10 text-red-200 hover:bg-red-500/10" : "bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/10"}>
+                        {event.eventType}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Sequenz: {event.occurredSequence} · Revision: {event.sourceRevision}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">
+                      Receipt-ID: {event.sourceReceiptId}
+                    </p>
+                  </div>
+                ))}
+                {!civHistory.data?.length && (
+                  <p className="text-sm text-slate-400 py-8 text-center">Die Chronik dieser Welt ist noch leer.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-cyan-200/15 bg-slate-950/70">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-100">
+                  <Boxes className="h-5 w-5" /> Entdeckte Ruinen
+                </CardTitle>
+                <CardDescription>
+                  Überbleibsel früherer Zeitalter, die von Spielern erforscht werden können.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {civRuins.data?.map(ruin => (
+                  <div key={ruin.ruinId} className="rounded-lg border border-cyan-200/10 p-3 text-sm bg-slate-950/40">
+                    <div className="flex items-center justify-between">
+                      <b className="text-amber-50">{ruin.locationIdentity}</b>
+                      <Badge variant="outline" className="border-cyan-300/30 text-cyan-100">{ruin.state}</Badge>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">Urahn: {ruin.originCivilizationId.slice(0, 16)}…</p>
+                    <p className="text-xs text-slate-400">Collapse-Epoche: {ruin.worldEpoch}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Ruleset: {ruin.rulesetVersion}</p>
+                  </div>
+                ))}
+                {!civRuins.data?.length && (
+                  <p className="text-sm text-slate-400 py-8 text-center">Aktuell sind keine historischen Ruinen freigelegt.</p>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+        </TabsContent>
         {user?.role === "admin" && <TabsContent value="admin" className="mt-5 space-y-5">
           <ForumAdminComposer />
           <ForumAdminEditor />
@@ -173,7 +406,207 @@ export default function Operations() {
             </Card>
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-2"><Card className="border-amber-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Saisonarchiv</CardTitle><CardDescription>Geschlossene Saisons enthalten serverseitig aufgenommene Ranglistensnapshots.</CardDescription></CardHeader><CardContent className="space-y-2">{managedSeasons.data?.map(season => <button type="button" key={season.id} onClick={() => setSelectedSeasonId(season.id)} className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${selectedSeasonId === season.id ? "border-cyan-300/60 bg-cyan-400/10" : "border-cyan-200/10 hover:bg-cyan-400/[.04]"}`}><span className="font-medium">{season.displayName}</span><span className="ml-2 text-xs text-cyan-100/60">{season.status}</span><p className="mt-1 text-xs text-slate-400">{season.seasonKey} · Start {new Date(season.startsAt).toLocaleDateString()}</p></button>)}{!managedSeasons.data?.length && <p className="py-8 text-sm text-slate-400">Noch keine Saison wurde serverseitig gestartet.</p>}</CardContent></Card><Card className="border-amber-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Archivierte Standings</CardTitle><CardDescription>{selectedSeasonId ? "Sortiert nach gesicherten Saisonpunkten, Siegen und Stufe." : "Wähle links eine geschlossene Saison aus."}</CardDescription></CardHeader><CardContent className="divide-y divide-cyan-200/10">{selectedSeasonSnapshots.data?.map((entry, index) => <div key={entry.userId} className="flex items-center gap-3 py-3 text-sm"><span className="w-6 text-cyan-200">{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.name || `Explorer ${entry.userId}`}</p><p className="text-xs text-slate-400">L{entry.level}</p></div><p className="text-right text-xs text-amber-100">{entry.seasonPoints} SP<br /><span className="text-slate-400">{entry.victories} Siege</span></p></div>)}{selectedSeasonId && !selectedSeasonSnapshots.data?.length && <p className="py-8 text-sm text-slate-400">Für diese Saison wurden keine Standings archiviert.</p>}</CardContent></Card></section>
+          <section className="grid gap-5 xl:grid-cols-2"><Card className="border-amber-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Saisonarchiv</CardTitle><CardDescription>Geschlossene Saisons contain server-recorded leaderboard snapshots.</CardDescription></CardHeader><CardContent className="space-y-2">{managedSeasons.data?.map(season => <button type="button" key={season.id} onClick={() => setSelectedSeasonId(season.id)} className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${selectedSeasonId === season.id ? "border-cyan-300/60 bg-cyan-400/10" : "border-cyan-200/10 hover:bg-cyan-400/[.04]"}`}><span className="font-medium">{season.displayName}</span><span className="ml-2 text-xs text-cyan-100/60">{season.status}</span><p className="mt-1 text-xs text-slate-400">{season.seasonKey} · Start {new Date(season.startsAt).toLocaleDateString()}</p></button>)}{!managedSeasons.data?.length && <p className="py-8 text-sm text-slate-400">Noch keine Saison wurde serverseitig gestartet.</p>}</CardContent></Card><Card className="border-amber-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Archivierte Standings</CardTitle><CardDescription>{selectedSeasonId ? "Sortiert nach gesicherten Saisonpunkten, Siegen und Stufe." : "Wähle links eine geschlossene Saison aus."}</CardDescription></CardHeader><CardContent className="divide-y divide-cyan-200/10">{selectedSeasonSnapshots.data?.map((entry, index) => <div key={entry.userId} className="flex items-center gap-3 py-3 text-sm"><span className="w-6 text-cyan-200">{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.name || `Explorer ${entry.userId}`}</p><p className="text-xs text-slate-400">L{entry.level}</p></div><p className="text-right text-xs text-amber-100">{entry.seasonPoints} SP<br /><span className="text-slate-400">{entry.victories} Siege</span></p></div>)}{selectedSeasonId && !selectedSeasonSnapshots.data?.length && <p className="py-8 text-sm text-slate-400">Für diese Saison wurden keine Standings archiviert.</p>}</CardContent></Card></section>
+
+          {/* NPC Policy Self-Evolution (AIM-295) */}
+          <section className="grid gap-5 xl:grid-cols-2">
+            <Card className="border-amber-200/15 bg-slate-950/70">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-100">
+                  <Shield className="h-5 w-5 text-amber-300" /> NPC Policy Custody & Self-Evolution
+                </CardTitle>
+                <CardDescription>
+                  Revisionsgebundene NPC-Policy-Verwaltung mit WASD-Provenance.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>NPC-Auswahl</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={selectedNpc === "lyra" ? "default" : "outline"}
+                      onClick={() => setSelectedNpc("lyra")}
+                      className={selectedNpc === "lyra" ? "bg-cyan-500 text-slate-950" : "border-cyan-300/30"}
+                    >
+                      Lyra
+                    </Button>
+                    <Button
+                      variant={selectedNpc === "orun" ? "default" : "outline"}
+                      onClick={() => setSelectedNpc("orun")}
+                      className={selectedNpc === "orun" ? "bg-cyan-500 text-slate-950" : "border-cyan-300/30"}
+                    >
+                      Orun
+                    </Button>
+                  </div>
+                </div>
+
+                {confirmedPolicy.isLoading ? (
+                  <p className="text-sm text-slate-400">Lade aktuelle Policy...</p>
+                ) : confirmedPolicy.data ? (
+                  <div className="space-y-3 rounded-lg border border-cyan-200/10 bg-cyan-400/[0.02] p-4 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-amber-100">Confirmed Version</span>
+                      <Badge className="bg-cyan-500/20 text-cyan-200">v{confirmedPolicy.data.version}</Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs text-cyan-200/60 block">Active Hash</span>
+                      <code className="text-xs font-mono bg-slate-900 px-2 py-1 rounded select-all block truncate">
+                        {confirmedPolicy.data.activeHash}
+                      </code>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs border-t border-cyan-200/10 pt-2">
+                      <div>
+                        <span className="text-cyan-200/60 block">WASD Capsule SHA</span>
+                        <span className="font-mono text-slate-300 truncate block">
+                          {confirmedPolicy.data.provenance.verifiedCapsuleHash.slice(0, 16)}...
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-cyan-200/60 block">Trigger Event</span>
+                        <span className="text-slate-300 capitalize truncate block">
+                          {confirmedPolicy.data.provenance.triggerEvent.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="border-t border-cyan-200/10 pt-2 text-xs">
+                      <span className="text-cyan-200/60 block mb-1">Rules Snapshot (Skills & Preferences)</span>
+                      <pre className="text-[11px] max-h-36 overflow-auto bg-slate-900 p-2 rounded font-mono text-cyan-100">
+                        {JSON.stringify(confirmedPolicy.data.rules, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-yellow-200/10 bg-yellow-400/[0.02] p-4 text-sm text-yellow-200">
+                    Keine bestätigte Policy für {selectedNpc} gefunden. (Verwende WASD-Integration, um eine erste Policy zu pushen).
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-amber-200/15 bg-slate-950/70">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-100">
+                  <History className="h-5 w-5 text-amber-300" /> Administrative Rollback (AIM-295)
+                </CardTitle>
+                <CardDescription>
+                  Erstellt ein signiertes Rollback-Receipt. Der Versionszähler wird deterministisch inkrementiert.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <form
+                  className="space-y-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!rollbackVersion) return;
+                    rollbackMutation.mutate({
+                      npcId: selectedNpc,
+                      targetVersion: Number(rollbackVersion),
+                      reason: rollbackReason,
+                    });
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="rollbackVersion">Ziel-Version (Candidate Targets)</Label>
+                    <select
+                      id="rollbackVersion"
+                      value={rollbackVersion}
+                      onChange={(e) => setRollbackVersion(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="flex h-10 w-full rounded-md border border-cyan-200/20 bg-slate-950 px-3 text-sm text-slate-100"
+                    >
+                      <option value="">Wähle ein Rollback-Ziel aus...</option>
+                      {policyHistory.data
+                        ?.filter((h) => h.version !== confirmedPolicy.data?.version)
+                        .map((h) => (
+                          <option key={h.version} value={h.version}>
+                            Version {h.version} (Event: {h.provenance.triggerEvent})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="rollbackReason">Begründung (Reason / Evidence)</Label>
+                    <Input
+                      id="rollbackReason"
+                      value={rollbackReason}
+                      onChange={(e) => setRollbackReason(e.target.value)}
+                      placeholder="z.B. Drift-Korrektur oder ungeeignete Selektion"
+                      maxLength={150}
+                      required
+                    />
+                  </div>
+
+                  {rollbackError && (
+                    <div className="rounded border border-red-300/20 bg-red-400/5 p-3 text-xs text-red-300 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>{rollbackError}</span>
+                    </div>
+                  )}
+
+                  {rollbackMutation.isSuccess && (
+                    <div className="rounded border border-emerald-300/20 bg-emerald-400/5 p-3 text-xs text-emerald-200 flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <div>
+                        <b>Rollback erfolgreich!</b>
+                        <p className="mt-1 text-[11px] text-slate-300">
+                          Neue Version: v{rollbackMutation.data?.version} (Wiederhergestellt von v{rollbackVersion}).
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={!rollbackVersion || !rollbackReason || rollbackMutation.isPending}
+                    className="w-full bg-cyan-500 text-slate-950 hover:bg-cyan-300"
+                  >
+                    {rollbackMutation.isPending ? "Führe Rollback aus..." : "Rollback anfordern"}
+                  </Button>
+                </form>
+
+                <div className="border-t border-cyan-200/10 pt-3">
+                  <span className="text-xs font-semibold text-cyan-200/80 block mb-2">Immutable History (Audit Log)</span>
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                    {policyHistory.isLoading ? (
+                      <p className="text-xs text-slate-500">Lade Verlauf...</p>
+                    ) : policyHistory.data?.length ? (
+                      policyHistory.data.map((h) => (
+                        <div
+                          key={h.version}
+                          className={`rounded border p-2 text-xs space-y-1 ${
+                            h.version === confirmedPolicy.data?.version
+                              ? "border-cyan-300/30 bg-cyan-400/5"
+                              : "border-cyan-200/5 bg-slate-900/40"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-200">Version {h.version}</span>
+                            {h.version === confirmedPolicy.data?.version && (
+                              <Badge className="bg-emerald-500/20 text-emerald-200 text-[9px] px-1.5 py-0 h-4">Aktiv</Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-mono truncate">{h.activeHash}</p>
+                          <p className="text-[11px] text-slate-300">
+                            <b>Event:</b> {h.provenance.triggerEvent}
+                          </p>
+                          {h.provenance.rollbackReason && (
+                            <p className="text-[11px] text-amber-200/90 italic">
+                              <b>Rollback-Grund:</b> {h.provenance.rollbackReason}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-slate-500">
+                            {new Date(h.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-500">Keine historischen Einträge vorhanden.</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
         </TabsContent>}
       </Tabs>
     </div>

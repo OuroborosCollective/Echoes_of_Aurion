@@ -14,10 +14,12 @@ export type AdminInspectionTarget = {
 interface AdminState {
   isAdmin: boolean;
   inspectionMode: boolean;
+  bvhDebugMode: boolean;
   activeModelId: string | null;
   currentTarget: AdminInspectionTarget | null;
   setIsAdmin: (isAdmin: boolean) => void;
   setInspectionMode: (mode: boolean) => void;
+  setBvhDebugMode: (mode: boolean) => void;
   setActiveModelId: (id: string | null) => void;
   setCurrentTarget: (target: AdminInspectionTarget | null) => void;
 }
@@ -25,10 +27,12 @@ interface AdminState {
 export const useAdminStore = create<AdminState>((set) => ({
   isAdmin: false,
   inspectionMode: false,
+  bvhDebugMode: false,
   activeModelId: null,
   currentTarget: null,
   setIsAdmin: (isAdmin) => set({ isAdmin }),
   setInspectionMode: (inspectionMode) => set({ inspectionMode, currentTarget: inspectionMode ? null : null }),
+  setBvhDebugMode: (bvhDebugMode) => set({ bvhDebugMode }),
   setActiveModelId: (activeModelId) => set({ activeModelId }),
   setCurrentTarget: (currentTarget) => set({ currentTarget }),
 }));

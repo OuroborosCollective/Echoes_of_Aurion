@@ -27,6 +27,15 @@ import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
 import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
+import { desc, eq } from "drizzle-orm";
+import { 
+  getConfirmedNpcPolicy, 
+  requestNpcPolicyRollback 
+} from "./wasdNpcEvolutionPersistence";
+import { 
+  aurionNpcPolicyVersions 
+} from "../drizzle/schema";
+
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -277,7 +286,42 @@ export const appRouter = router({
     list: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25) }).optional()).query(({ input }) => db.listLeaderboard(input?.limit ?? 25)),
   }),
   history: civilizationHistoryRouter,
+  npcPolicy: router({
+    getConfirmed: publicProcedure
+      .input(z.object({ npcId: z.string().trim() }))
+      .query(async ({ input }) => {
+        return getConfirmedNpcPolicy(input.npcId);
+      }),
+    getHistory: publicProcedure
+      .input(z.object({ npcId: z.string().trim() }))
+      .query(async ({ input }) => {
+        const database = await db.getDb();
+        if (!database) return [];
+        return database.select().from(aurionNpcPolicyVersions)
+          .where(eq(aurionNpcPolicyVersions.npcId, input.npcId))
+          .orderBy(desc(aurionNpcPolicyVersions.version));
+      }),
+  }),
+
   admin: router({
+    npcPolicy: router({
+      rollback: adminProcedure
+        .input(z.object({
+          npcId: z.string().trim(),
+          targetVersion: z.number().int().positive(),
+          reason: z.string().trim().min(3).max(255),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const database = await db.getDb();
+          if (!database) throw new Error("DATABASE_UNINITIALIZED");
+
+          await database.transaction(async (tx) => {
+            await requestNpcPolicyRollback(tx, input.npcId, input.targetVersion, input.reason, String(ctx.user.id));
+          });
+
+          return getConfirmedNpcPolicy(input.npcId);
+        }),
+    }),
     world: router({
       presence: adminProcedure.query(async () => {
         const presences = await db.listActiveWorldPresence();

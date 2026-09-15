@@ -44,6 +44,8 @@
     { "idx": 39, "version": "5", "when": 1788696000000, "tag": "0039_aurion_world_epoch_materializations", "breakpoints": true },
     { "idx": 40, "version": "5", "when": 1788699600000, "tag": "0040_aurion_progression_receipts", "breakpoints": true },
     { "idx": 41, "version": "5", "when": 1788703200000, "tag": "0041_aurion_content_hash_ledger", "breakpoints": true },
-    { "idx": 42, "version": "5", "when": 1788930000000, "tag": "0042_aurion_npc_multi_memory", "breakpoints": true }
+    { "idx": 42, "version": "5", "when": 1788930000000, "tag": "0042_aurion_npc_multi_memory", "breakpoints": true },
+    { "idx": 43, "version": "5", "when": 1788931000000, "tag": "0043_aurion_civilization_history", "breakpoints": true },
+    { "idx": 44, "version": "5", "when": 1788932000000, "tag": "0044_aurion_semantic_memory_graph", "breakpoints": true }
   ]
 }
