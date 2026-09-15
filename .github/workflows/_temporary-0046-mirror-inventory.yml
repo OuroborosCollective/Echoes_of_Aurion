@@ -1,0 +1,19 @@
+name: Temporary 0046 mirror inventory
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/_temporary-0046-mirror-inventory.yml"
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Print terminal migration mirrors
+        run: |
+          set -euo pipefail
+          git grep -n -E '0045_aurion_deterministic_quest_compiler|0021-0045|through 0045|rowCount.*46|rows.*46|eq 46|46 journal|43.*46' -- \
+            config deploy scripts server drizzle .github/workflows || true
