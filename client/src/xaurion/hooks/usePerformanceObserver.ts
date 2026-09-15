@@ -61,7 +61,22 @@ export function usePerformanceObserver(options: UsePerformanceObserverOptions = 
     const stats: PercentileResult = calculatePercentiles(samples);
     const memory = getMemoryHeapUsage();
     const avgFps = stats.avg > 0 ? Number((1000 / stats.avg).toFixed(1)) : 0;
-    const timestamp = timestampProvider?.() ?? null;
+    const sampleTimestamp = typeof performance !== 'undefined' && Number.isFinite(performance.timeOrigin)
+      ? performance.timeOrigin + performance.now()
+      : 0;
+    const nowIso = new Date(sampleTimestamp).toISOString();
+
+    const payload: PerformanceMetricsPayload = {
+      timestamp: nowIso,
+      type: 'performance_metrics',
+      deviceTier,
+      frameTimeP50: stats.p50,
+      frameTimeP95: stats.p95,
+      avgFps,
+      memoryHeapUsedMb: memory.usedMb,
+      memoryHeapTotalMb: memory.totalMb,
+      samplesCount: stats.count,
+    };
 
     const nextState: PerformanceState = {
       p50: stats.p50,

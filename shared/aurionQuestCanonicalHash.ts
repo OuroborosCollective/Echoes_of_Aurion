@@ -13,7 +13,9 @@ export type HashDomain =
   | 'aurion.quest.event.v1'
   | 'aurion.quest.replay.v1'
   | 'aurion.world.fact.v1'
-  | 'aurion.world.event.v1';
+  | 'aurion.world.event.v1'
+  | 'aurion.quest.proposal.identity.v1'
+  | 'aurion.quest.receipt.identity.v1';
 
 /**
  * Deterministically serializes any JS object or primitive into a stable canonical JSON string

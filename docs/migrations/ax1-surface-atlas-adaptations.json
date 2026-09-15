@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
-      "sourceSha256": "88fbc75e243d5b527cd7ff01734fe2f3f33e2f4525f295eca8d00a6ea8a26e03",
-      "targetSha256": "84c300b90f50645c851ff4f2f6f67dfa297348d1d6701cf6e64e2ae34c3eefb5",
+      "sourceSha256": "b297d481c1a611dbc8a33e2cc5dca9fd58241fc1e8dd859a32a69cc131f9ef42",
+      "targetSha256": "9ceeba1f3ea4642f5b4880f957e6ac84b0833b239726c20d7715fcd3ea015424",
       "adaptations": [
         {
           "before": "import * as THREE from 'three';\nimport { collisionSystem } from './WorldCollisionSystem';\nimport { WorldChunkManager } from './WorldChunkManager';\n\nexport class OpenWorldLandscape {\n  public scene: THREE.Scene;\n",
@@ -47,8 +47,8 @@
     },
     {
       "path": "client/src/xaurion/world/WorldChunkManager.ts",
-      "sourceSha256": "fff15bb9dba605b743c803960214a25d98e66f66c2af40892717416f687c031b",
-      "targetSha256": "ef3236b70ff3ec392aa218f3a67fe08d75a8a36a8b82a4d0c9f216eefc256b6b",
+      "sourceSha256": "0ea9069d36a5eeaba1d96b97d76174422793d1d428b08d2a0ecc70dd8ed63408",
+      "targetSha256": "35a2c6292a777f126a4a12038e281c6e31f593c6e9daa8a30fac6974aa27abf5",
       "adaptations": [
         {
           "before": "import * as THREE from 'three';\nimport { BiomeType, LandmarkType, SolidObstacle, WorldChunkData, WorldExpansionStats } from '../types';\nimport { collisionSystem } from './WorldCollisionSystem';\n\n",

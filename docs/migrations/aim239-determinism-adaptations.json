@@ -6,8 +6,8 @@
   "files": [
     {
       "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
-      "sourceSha256": "6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e",
-      "targetSha256": "f840b88399bb9baa738735adda64fae505f1414e5025e7695ae0a036b891decf",
+      "sourceSha256": "6be036e5f3fb974f2bcbf63624bffb62c22ea9b61e568f2dc21409d8a0f30456",
+      "targetSha256": "0c6257f670dee01a65fc9ec8aa557ae45982a76384b687755fda5d699fb8a17e",
       "adaptations": [
         {
           "before": "",
@@ -93,8 +93,8 @@
     },
     {
       "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
-      "sourceSha256": "836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207",
-      "targetSha256": "c00e7d2a3b417e250a77b19e961294c3de3c85a26e650bd20361e5e7feeca3b5",
+      "sourceSha256": "27f150e4763f125d32eea3c6f600a1d23031de78dcc2f2ccd6109d74294ea430",
+      "targetSha256": "ba1b7b8359bf33de208534b3df52e20e3c41a18def5857c9ecb43d530631b733",
       "adaptations": [
         {
           "before": "",

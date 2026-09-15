@@ -6,11 +6,7 @@ import {
   WorldEvent,
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
-import {
-  OperationalClock,
-  hostOperationalClock,
-  operationalDate,
-} from '../../shared/operationalClock';
+import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
 import { WorldFactEngine } from './worldFacts';
 import { QuestTemplateRegistry } from './templateRegistry';
 import { CandidateResolver } from './candidateResolver';
@@ -32,7 +28,7 @@ export class QuestRuntimeEngine {
   constructor(
     private worldFactEngine: WorldFactEngine,
     private templateRegistry: QuestTemplateRegistry,
-    private readonly clock: OperationalClock = hostOperationalClock
+    private clock: OperationalClock = hostOperationalClock
   ) {}
 
   private nowIso(): string {
@@ -46,6 +42,7 @@ export class QuestRuntimeEngine {
     triggerEventId: string;
     compilerVersion?: string;
   }): { instance: QuestInstance; plan: QuestPlan } {
+    const occurredAt = operationalDate(this.clock).toISOString();
     const compilerVersion = params.compilerVersion || '1.0.0';
     const facts = this.worldFactEngine.getFacts();
     const worldStateRev = this.worldFactEngine.getLatestSequence();
@@ -97,7 +94,6 @@ export class QuestRuntimeEngine {
     // 7. Create offered QuestInstance. Operational time is metadata only and is
     // deliberately excluded from the canonical state hash used by receipts.
     const instanceId = `qi_${params.playerUserId}_${winningTemplate.templateId}_${seedDigest.slice(0, 8)}`;
-    const nowIso = this.nowIso();
 
     const startNode = plan.nodes.find(n => n.type === 'start') || plan.nodes[0]!;
 
@@ -116,8 +112,8 @@ export class QuestRuntimeEngine {
       boundRoles,
       state: 'offered',
       objectiveProgress: {},
-      createdAt: nowIso,
-      updatedAt: nowIso,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
     };
 
     return { instance, plan };
@@ -128,12 +124,12 @@ export class QuestRuntimeEngine {
       throw new Error(`CANNOT_ACCEPT_QUEST_IN_STATE:${instance.state}`);
     }
 
-    const nowIso = this.nowIso();
-    const previousStateHash = hashQuestState(instance);
+    const occurredAt = operationalDate(this.clock).toISOString();
+    const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const updatedInstance: QuestInstance = {
       ...instance,
       state: 'active',
-      updatedAt: nowIso,
+      updatedAt: occurredAt,
     };
 
     const resultStateHash = hashQuestState(updatedInstance);
@@ -148,7 +144,7 @@ export class QuestRuntimeEngine {
       resultStateHash,
       idempotencyKey: `accept:${instance.id}`,
       receiptHash: computeCanonicalHash('aurion.quest.event.v1', { previousStateHash, resultStateHash }),
-      createdAt: nowIso,
+      createdAt: occurredAt,
     };
 
     return { updatedInstance, receipt };
@@ -164,8 +160,8 @@ export class QuestRuntimeEngine {
       throw new Error(`CANNOT_PROGRESS_INACTIVE_QUEST:${instance.state}`);
     }
 
-    const nowIso = this.nowIso();
-    const previousStateHash = hashQuestState(instance);
+    const occurredAt = operationalDate(this.clock).toISOString();
+    const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const currentProgress = (instance.objectiveProgress[objectiveKey] as number) || 0;
     const newProgress = currentProgress + amount;
 
@@ -194,22 +190,26 @@ export class QuestRuntimeEngine {
         ...instance.objectiveProgress,
         [objectiveKey]: newProgress,
       },
-      updatedAt: nowIso,
+      updatedAt: occurredAt,
     };
 
-    const resultStateHash = hashQuestState(updatedInstance);
+    const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
     const eventSequence = instance.completedNodeIds.length + 2;
-    const receiptIdentity = computeCanonicalHash('aurion.quest.event.v1', {
-      instanceId: instance.id,
-      eventSequence,
-      objectiveKey,
-      newProgress,
-      previousStateHash,
-      resultStateHash,
-    });
+
+    const receiptIdentity = computeCanonicalHash(
+      'aurion.quest.receipt.identity.v1',
+      {
+        instanceId: instance.id,
+        objectiveKey,
+        newProgress,
+        eventSequence,
+        previousStateHash,
+        resultStateHash,
+      }
+    );
 
     const receipt: QuestReceipt = {
-      id: `rcpt_${instance.id}_progress_${receiptIdentity.slice(0, 16)}`,
+      id: `rcpt_${receiptIdentity.slice(0, 24)}`,
       instanceId: instance.id,
       eventSequence,
       planHash: instance.planHash,
@@ -218,7 +218,7 @@ export class QuestRuntimeEngine {
       resultStateHash,
       idempotencyKey: `progress:${instance.id}:${objectiveKey}:${newProgress}`,
       receiptHash: computeCanonicalHash('aurion.quest.event.v1', { previousStateHash, resultStateHash }),
-      createdAt: nowIso,
+      createdAt: occurredAt,
     };
 
     return { updatedInstance, completedNode, receipt };
@@ -232,12 +232,12 @@ export class QuestRuntimeEngine {
       throw new Error(`CANNOT_COMPLETE_QUEST_IN_STATE:${instance.state}`);
     }
 
-    const nowIso = this.nowIso();
-    const previousStateHash = hashQuestState(instance);
+    const occurredAt = operationalDate(this.clock).toISOString();
+    const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const updatedInstance: QuestInstance = {
       ...instance,
       state: 'completed',
-      updatedAt: nowIso,
+      updatedAt: occurredAt,
     };
 
     const resultStateHash = hashQuestState(updatedInstance);
@@ -266,7 +266,7 @@ export class QuestRuntimeEngine {
       resultStateHash,
       idempotencyKey: `complete:${instance.id}`,
       receiptHash: computeCanonicalHash('aurion.quest.event.v1', { previousStateHash, resultStateHash }),
-      createdAt: nowIso,
+      createdAt: occurredAt,
     };
 
     return { updatedInstance, receipt, emittedWorldEvent: event };

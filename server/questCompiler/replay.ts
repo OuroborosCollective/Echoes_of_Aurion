@@ -1,10 +1,6 @@
 import { QuestInstance, QuestPlan, QuestReplayReceipt, WorldFact } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash } from '../../shared/aurionQuestCanonicalHash';
-import {
-  OperationalClock,
-  hostOperationalClock,
-  operationalDate,
-} from '../../shared/operationalClock';
+import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
 import { CandidateResolver } from './candidateResolver';
 import { RoleResolver } from './roleResolver';
 import { QuestComposer } from './composer';
@@ -18,12 +14,8 @@ import { QuestTemplateRegistry } from './templateRegistry';
 export class QuestReplayEngine {
   constructor(
     private templateRegistry: QuestTemplateRegistry,
-    private readonly clock: OperationalClock = hostOperationalClock
+    private clock: OperationalClock = hostOperationalClock
   ) {}
-
-  private nowIso(): string {
-    return operationalDate(this.clock).toISOString();
-  }
 
   public replayInstance(
     instance: QuestInstance,
@@ -31,6 +23,7 @@ export class QuestReplayEngine {
     facts: WorldFact[],
     expectedPlanHash: string
   ): QuestReplayReceipt {
+    const timestamp = operationalDate(this.clock).toISOString();
     const activeTemplates = this.templateRegistry.getActiveTemplates();
     const templateSetHash = this.templateRegistry.getTemplateSetHash();
     const timestamp = this.nowIso();

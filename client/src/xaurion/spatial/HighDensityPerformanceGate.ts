@@ -32,7 +32,8 @@ export class HighDensityPerformanceGate {
   public static runGateEvaluation(
     profile: 'phone' | 'tablet' | 'desktop' = 'desktop',
     confirmedActorsCount = 150,
-    terrainChunksCount = 9
+    terrainChunksCount = 9,
+    timestamp: string = new Date(0).toISOString()
   ): HighDensityMetricsReport {
     const dims = profile === 'phone' ? { w: 375, h: 667 } : profile === 'tablet' ? { w: 768, h: 1024 } : { w: 1920, h: 1080 };
     const budgetStats = renderBudget(dims.w, dims.h, 2, 'GPU');
@@ -63,6 +64,7 @@ export class HighDensityPerformanceGate {
       postFxConfig.maxParticlePoolSize >= 600;
 
     return {
+      timestamp,
       profile,
       confirmedActorsCount,
       visibleActorsCount,
