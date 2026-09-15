@@ -3,7 +3,6 @@ import {
   addEntity,
   addComponent,
   query,
-  IWorld,
 } from 'bitecs';
 
 /**
@@ -30,7 +29,7 @@ export const InstanceRef = {
 };
 
 export class RenderEcsPilot {
-  public world: IWorld;
+  public world: ReturnType<typeof createWorld>;
 
   constructor() {
     this.world = createWorld();

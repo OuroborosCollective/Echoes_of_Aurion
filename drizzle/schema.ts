@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1311,7 +1311,7 @@ export const aurionSemanticMemoryReceipts = mysqlTable("aurionSemanticMemoryRece
 ]);
 
 export const aurionSemanticNodes = mysqlTable("aurionSemanticNodes", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+  id: varchar("id", { length: 64 }).notNull(),
   graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
   npcId: varchar("npcId", { length: 96 }).notNull(),
   subjectId: varchar("subjectId", { length: 96 }).notNull(),
@@ -1324,6 +1324,7 @@ export const aurionSemanticNodes = mysqlTable("aurionSemanticNodes", {
   conflictsWithJson: text("conflictsWithJson").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
+  primaryKey({ name: "aurionSemanticNodes_id_graphReceiptId_pk", columns: [table.id, table.graphReceiptId] }),
   index("aurionSemanticNodes_graph_idx").on(table.graphReceiptId),
   index("aurionSemanticNodes_npc_idx").on(table.npcId),
   index("aurionSemanticNodes_subject_predicate_idx").on(table.subjectId, table.predicate),

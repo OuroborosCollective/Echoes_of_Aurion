@@ -51,6 +51,10 @@ on:
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
       - "drizzle/0042_aurion_npc_multi_memory.sql"
+      - "drizzle/0043_aurion_civilization_history.sql"
+      - "drizzle/0044_aurion_semantic_memory_graph.sql"
+      - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
+      - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -74,17 +78,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Verify source and shell contracts
         run: |
           set -euo pipefail
@@ -100,7 +100,6 @@ jobs:
           bash -n deploy/install-aurion-production-schema-reconcile
           sudo visudo -cf deploy/aurion-production-schema-reconcile.sudoers
           git diff --check
-
       - name: Start isolated private Docker proof database
         run: |
           set -euo pipefail
@@ -115,14 +114,10 @@ jobs:
             mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
           ready=0
           for _attempt in $(seq 1 30); do
-            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
+            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then ready=1; break; fi
             sleep 1
           done
           test "$ready" -eq 1
-
       - name: Establish read-only reconciliation database identity
         run: |
           set -euo pipefail
@@ -131,16 +126,12 @@ jobs:
           GRANT SELECT, SHOW VIEW ON \`${AURION_RECONCILE_TEST_DATABASE}\`.* TO '${AURION_RECONCILE_TEST_READ_USER}'@'%';
           FLUSH PRIVILEGES;
           SQL
-
       - name: Establish canonical database through journaled 0020 only
         run: |
           set -euo pipefail
           backup="$(mktemp)"
           cp drizzle/meta/_journal.json "$backup"
-          restore_journal() {
-            cp "$backup" drizzle/meta/_journal.json
-            rm -f "$backup"
-          }
+          restore_journal() { cp "$backup" drizzle/meta/_journal.json; rm -f "$backup"; }
           trap restore_journal EXIT
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -152,17 +143,10 @@ jobs:
           fs.writeFileSync(path, `${JSON.stringify(journal,null,2)}\n`);
           NODE
           root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
-          docker run --rm \
-            --network "$AURION_RECONCILE_TEST_NETWORK" \
-            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
-            --workdir /workspace \
-            --env DATABASE_URL="$root_database_url" \
-            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
-            ./node_modules/.bin/drizzle-kit migrate
+          docker run --rm --network "$AURION_RECONCILE_TEST_NETWORK" --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" --workdir /workspace --env DATABASE_URL="$root_database_url" node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 ./node_modules/.bin/drizzle-kit migrate
           restore_journal
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
-
       - name: Download caller-verified reconciliation artifact
         if: ${{ inputs.use_uploaded_artifact }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -171,7 +155,6 @@ jobs:
           path: .
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
-
       - name: Build standalone revision-bound reconciliation artifact
         if: ${{ !inputs.use_uploaded_artifact }}
         env:
@@ -184,16 +167,10 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
           if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("artifact revision/mode mismatch");
           if(!manifest.files?.["bin/reconcile.cjs"]) throw new Error("bundled reconciler is not manifest-bound");
-          for(const file of [
-            "deploy/aurion-production-schema-reconcile",
-            "deploy/aurion-reconcile-runtime-image.conf",
-            "deploy/aurion-reconcile-runtime-network.conf",
-            "deploy/verify-aurion-production-schema-reconcile-artifact.mjs",
-          ]) if(!manifest.files?.[file]) throw new Error(`missing artifact contract: ${file}`);
+          for(const file of ["deploy/aurion-production-schema-reconcile","deploy/aurion-reconcile-runtime-image.conf","deploy/aurion-reconcile-runtime-network.conf","deploy/verify-aurion-production-schema-reconcile-artifact.mjs"]) if(!manifest.files?.[file]) throw new Error(`missing artifact contract: ${file}`);
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
-
       - name: Verify exact revision-bound reconciliation artifact
         run: |
           set -euo pipefail
@@ -203,17 +180,10 @@ jobs:
           import fs from "node:fs";
           const manifest=JSON.parse(fs.readFileSync("dist-production-reconcile/manifest.json","utf8"));
           if(manifest.revision!==process.env.GITHUB_SHA||manifest.mode!=="read_only"||manifest.moduleFormat!=="commonjs") throw new Error("artifact revision/mode mismatch");
-          for(const file of [
-            "bin/reconcile.cjs",
-            "deploy/aurion-production-schema-reconcile",
-            "deploy/aurion-reconcile-runtime-image.conf",
-            "deploy/aurion-reconcile-runtime-network.conf",
-            "deploy/verify-aurion-production-schema-reconcile-artifact.mjs",
-          ]) if(!manifest.files?.[file]) throw new Error(`missing artifact contract: ${file}`);
+          for(const file of ["bin/reconcile.cjs","deploy/aurion-production-schema-reconcile","deploy/aurion-reconcile-runtime-image.conf","deploy/aurion-reconcile-runtime-network.conf","deploy/verify-aurion-production-schema-reconcile-artifact.mjs"]) if(!manifest.files?.[file]) throw new Error(`missing artifact contract: ${file}`);
           NODE
           (cd dist-production-reconcile && sha256sum --strict -c checksums.sha256)
           node dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs dist-production-reconcile "$GITHUB_SHA"
-
       - name: Pull and verify exact Docker reconciliation image
         run: |
           set -euo pipefail
@@ -226,24 +196,18 @@ jobs:
             if(typeof c.imageDigest!=="string"||!/^sha256:[a-f0-9]{64}$/.test(c.imageDigest)) process.exit(2);
             process.stdout.write(`${c.imageTag}@${c.imageDigest}`);
           ' "$image_contract")"
-          image_digest="${pinned_image##*@}"
           docker pull "$pinned_image"
           image_id="$(docker image inspect --format '{{.Id}}' "$pinned_image")"
           [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
-
       - name: Create root-protected test production environment
         run: |
           set -euo pipefail
           umask 077
-          printf 'DATABASE_URL=mysql://%s:%s@mariadb:3306/%s\n' \
-            "$AURION_RECONCILE_TEST_READ_USER" \
-            "$AURION_RECONCILE_TEST_READ_PASSWORD" \
-            "$AURION_RECONCILE_TEST_DATABASE" > test-production.env
+          printf 'DATABASE_URL=mysql://%s:%s@mariadb:3306/%s\n' "$AURION_RECONCILE_TEST_READ_USER" "$AURION_RECONCILE_TEST_READ_PASSWORD" "$AURION_RECONCILE_TEST_DATABASE" > test-production.env
           sudo install -d -o root -g root -m 0755 /opt/echoes-of-aurion
           sudo install -o root -g root -m 0600 test-production.env /opt/echoes-of-aurion/.env.production
           rm -f test-production.env
           test "$(sudo stat -c '%U:%G:%a' /opt/echoes-of-aurion/.env.production)" = "root:root:600"
-
       - name: Install immutable reconciliation release as root
         run: |
           set -euo pipefail
@@ -254,7 +218,6 @@ jobs:
           sudo cmp -s dist-production-reconcile/deploy/aurion-production-schema-reconcile /usr/local/sbin/aurion-production-schema-reconcile
           test "$(sudo stat -c '%U:%G:%a' /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs)" = "root:root:755"
           sudo cmp -s dist-production-reconcile/deploy/verify-aurion-production-schema-reconcile-artifact.mjs /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
-
       - name: Verify installed tools from a deployment user with restricted sbin traversal
         run: |
           set -euo pipefail
@@ -262,15 +225,11 @@ jobs:
           original_mode="$(stat -c '%a' /usr/local/sbin)"
           trap 'sudo chmod "$original_mode" /usr/local/sbin' EXIT
           sudo chmod 0700 /usr/local/sbin
-          if sudo -u aurion-deploy test -x /usr/local/sbin/aurion-production-schema-reconcile; then
-            echo 'restricted traversal fixture did not apply' >&2
-            exit 1
-          fi
+          if sudo -u aurion-deploy test -x /usr/local/sbin/aurion-production-schema-reconcile; then echo 'restricted traversal fixture did not apply' >&2; exit 1; fi
           sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-reconcile/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-reconcile/current/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
           sudo -u aurion-deploy bash "/opt/echoes-of-aurion-schema-reconcile/current/deploy/verify-aurion-installed-schema-tool" "/opt/echoes-of-aurion-schema-reconcile/current/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" /usr/local/lib/echoes-of-aurion/verify-aurion-production-schema-reconcile-artifact.mjs
           sudo chmod "$original_mode" /usr/local/sbin
           trap - EXIT
-
       - name: Prove MariaDB DNS is reachable only through the private Docker network
         run: |
           set -euo pipefail
@@ -279,7 +238,6 @@ jobs:
           host_resolution_status=$?
           set -e
           test "$host_resolution_status" -ne 0
-
       - name: Prove fixed root runner sees all declared migrations absent
         run: |
           set -euo pipefail
@@ -293,30 +251,16 @@ jobs:
           if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("expected the complete declared late migration wave");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
-
-      - name: Apply 0021 through 0042 only inside ephemeral proof database
+      - name: Apply 0021 through 0046 only inside ephemeral proof database
         run: |
           set -euo pipefail
           root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
-          docker run --rm -i \
-            --network "$AURION_RECONCILE_TEST_NETWORK" \
-            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
-            --workdir /workspace \
-            --env DATABASE_URL="$root_database_url" \
-            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
-            node --input-type=module <<'NODE'
+          docker run --rm -i --network "$AURION_RECONCILE_TEST_NETWORK" --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" --workdir /workspace --env DATABASE_URL="$root_database_url" node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const tags=[
-            "0021_aurion_global_world_state",
-            "0022_aurion_world_chunk_deltas",
-            "0023_aurion_world_presence_epochs",
-            "0024_aurion_world_epoch_reactions",
-            "0025_aurion_loot_mastery_ethos",
-            "0026_aurion_faction_questline_state",
-            "0027_aurion_faction_questline_rewards",
-            "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
-            "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory",
+            "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
+            "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
           ];
           const db=await mysql.createConnection(process.env.DATABASE_URL);
           try {
@@ -326,7 +270,6 @@ jobs:
             }
           } finally { await db.end(); }
           NODE
-
       - name: Prove redacted trigger metadata cannot certify the schema
         run: |
           set -euo pipefail
@@ -344,17 +287,13 @@ jobs:
           const hidden=r.overallState==="PRESENT_SCHEMA_DRIFT"&&ledger?.state==="PRESENT_SCHEMA_DRIFT"&&["aurionContentHashLedger_no_update","aurionContentHashLedger_no_delete"].every(name=>ledger.drift.includes(`aurionContentHashLedger:missing_trigger:${name}`));
           if(r.readOnly!==true||(!redacted&&!hidden)) throw new Error("invisible trigger definitions were not fail-closed");
           NODE
-
       - name: Use existing isolated database owner for complete read-only metadata visibility
         run: |
           set -euo pipefail
           umask 077
-          printf 'DATABASE_URL=mysql://root:%s@mariadb:3306/%s\n' \
-            "$AURION_RECONCILE_TEST_ROOT_PASSWORD" \
-            "$AURION_RECONCILE_TEST_DATABASE" > test-production.env
+          printf 'DATABASE_URL=mysql://root:%s@mariadb:3306/%s\n' "$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DATABASE" > test-production.env
           sudo install -o root -g root -m 0600 test-production.env /opt/echoes-of-aurion/.env.production
           rm -f test-production.env
-
       - name: Prove fixed root runner sees exact schema match including trigger bodies
         run: |
           set -euo pipefail
@@ -366,20 +305,16 @@ jobs:
           if(r.execution?.mode!=="docker"||r.execution.network!=="echoes-of-aurion-internal"||r.execution.containerExitStatus!==0) throw new Error("root match did not use the expected Docker executor");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary,drizzleJournal:r.drizzleJournal}));
           NODE
-
       - name: Prove reconciliation receipts are append-only and root-only
         run: |
           set -euo pipefail
           state_dir=/var/lib/echoes-of-aurion/schema-reconciliation
           mapfile -t receipts < <(sudo find "$state_dir" -maxdepth 1 -type f -name "${GITHUB_SHA}-*.json.*" -print)
           test "${#receipts[@]}" -eq 3
-          for receipt in "${receipts[@]}"; do
-            test "$(sudo stat -c '%U:%G:%a' "$receipt")" = "root:root:600"
-          done
+          for receipt in "${receipts[@]}"; do test "$(sudo stat -c '%U:%G:%a' "$receipt")" = "root:root:600"; done
           latest="$(sudo readlink -f "$state_dir/latest.json")"
           sudo test -f "$latest"
           printf '%s\n' "${receipts[@]}" | grep -Fx "$latest" >/dev/null
-
       - name: Prove Docker start failures are sanitized and do not persist credentials
         run: |
           set -euo pipefail
@@ -389,19 +324,9 @@ jobs:
           fs.writeFileSync("fake-docker-bin/docker", `#!/usr/bin/env bash
           set -euo pipefail
           case "\${1:-}" in
-            image)
-              if [[ "\${2:-}" == "inspect" ]]; then
-                printf '%s\\n' 'sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96'
-              else
-                printf '%s\\n' 'docker.io/library/node@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5'
-              fi
-              ;;
+            image) if [[ "\${2:-}" == "inspect" ]]; then printf '%s\\n' 'sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96'; else printf '%s\\n' 'docker.io/library/node@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5'; fi ;;
             network) exit 0 ;;
-            run)
-              printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion'
-              printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion' >&2
-              exit 42
-              ;;
+            run) printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion'; printf '%s\\n' 'mysql://must-not-leak:synthetic-password@mariadb:3306/aurion' >&2; exit 42 ;;
             *) exit 64 ;;
           esac
           `, { mode: 0o755 });
@@ -424,7 +349,6 @@ jobs:
           persisted_secret=$?
           set -e
           test "$persisted_secret" -ne 0
-
       - name: Prove runner cannot execute caller-supplied code path
         run: |
           set -euo pipefail
@@ -433,7 +357,6 @@ jobs:
           status=$?
           set -e
           test "$status" -eq 64
-
       - name: Prove installed artifact tampering fails before reconciliation
         run: |
           set -euo pipefail
@@ -444,12 +367,10 @@ jobs:
           set -e
           test "$status" -ne 0
           test ! -s /tmp/tampered.out
-
       - name: Package root-installable artifact
         run: |
           tar -C dist-production-reconcile -czf "aurion-production-reconcile-${GITHUB_SHA}.tgz" .
           sha256sum "aurion-production-reconcile-${GITHUB_SHA}.tgz" > "aurion-production-reconcile-${GITHUB_SHA}.tgz.sha256"
-
       - name: Upload reconciliation artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -459,7 +380,6 @@ jobs:
             aurion-production-reconcile-${{ github.sha }}.tgz.sha256
           if-no-files-found: error
           retention-days: 30
-
       - name: Upload exact revision repository migration evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -467,7 +387,6 @@ jobs:
           path: repository-migration-evidence.json
           if-no-files-found: error
           retention-days: 30
-
       - name: Remove isolated Docker proof database
         if: always()
         run: |

@@ -11,7 +11,7 @@ export const lateAurionMigrationTags = [
   "0030_aurion_guild_bank_economy",
   "0031_aurion_profession_crafting_persistence",
   "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
-  "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory",
+  "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
@@ -323,6 +323,11 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
       table.indexes = table.indexes.filter(entry => entry.name !== drop[1]);
       continue;
     }
+    if (/^DROP\s+PRIMARY\s+KEY$/i.test(clause)) {
+      if (!table.indexes.some(entry => entry.name === "PRIMARY")) throw new Error(`${tag}: missing DROP primary key`);
+      table.indexes = table.indexes.filter(entry => entry.name !== "PRIMARY");
+      continue;
+    }
     const check = clause.match(/^ADD\s+CONSTRAINT\s+`([^`]+)`\s+CHECK\s*\(([\s\S]+)\)$/i);
     if (check) {
       table.checks.push({ name: check[1], expression: check[2] });
@@ -397,7 +402,10 @@ export function classifyMigrationContracts(expected: readonly ExpectedMigration[
 }
 
 function normalizeType(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, "").replace(/int\(\d+\)/g, "int");
+  const normalized = value.toLowerCase().replace(/\s+/g, "").replace(/int\(\d+\)/g, "int");
+  // MariaDB BOOLEAN is a schema alias for TINYINT(1); INFORMATION_SCHEMA reports
+  // the physical type. Normalize only that exact alias and keep other integer drift visible.
+  return normalized === "boolean" ? "tinyint" : normalized;
 }
 
 function expectedIndexName(index: ExpectedIndex): string {

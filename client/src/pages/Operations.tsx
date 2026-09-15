@@ -449,29 +449,29 @@ export default function Operations() {
                       <Badge className="bg-cyan-500/20 text-cyan-200">v{confirmedPolicy.data.version}</Badge>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs text-cyan-200/60 block">Active Hash</span>
+                      <span className="text-xs text-cyan-200/60 block">Policy Hash</span>
                       <code className="text-xs font-mono bg-slate-900 px-2 py-1 rounded select-all block truncate">
-                        {confirmedPolicy.data.activeHash}
+                        {confirmedPolicy.data.policyHash}
                       </code>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs border-t border-cyan-200/10 pt-2">
                       <div>
-                        <span className="text-cyan-200/60 block">WASD Capsule SHA</span>
+                        <span className="text-cyan-200/60 block">Source SHA-256</span>
                         <span className="font-mono text-slate-300 truncate block">
-                          {confirmedPolicy.data.provenance.verifiedCapsuleHash.slice(0, 16)}...
+                          {confirmedPolicy.data.sourceSha256.slice(0, 16)}...
                         </span>
                       </div>
                       <div>
-                        <span className="text-cyan-200/60 block">Trigger Event</span>
+                        <span className="text-cyan-200/60 block">Source Revision</span>
                         <span className="text-slate-300 capitalize truncate block">
-                          {confirmedPolicy.data.provenance.triggerEvent.replace(/_/g, " ")}
+                          {confirmedPolicy.data.sourceRevision}
                         </span>
                       </div>
                     </div>
                     <div className="border-t border-cyan-200/10 pt-2 text-xs">
-                      <span className="text-cyan-200/60 block mb-1">Rules Snapshot (Skills & Preferences)</span>
+                      <span className="text-cyan-200/60 block mb-1">Policy Payload</span>
                       <pre className="text-[11px] max-h-36 overflow-auto bg-slate-900 p-2 rounded font-mono text-cyan-100">
-                        {JSON.stringify(confirmedPolicy.data.rules, null, 2)}
+                        {JSON.stringify(confirmedPolicy.data.payload, null, 2)}
                       </pre>
                     </div>
                   </div>
@@ -518,7 +518,7 @@ export default function Operations() {
                         ?.filter((h) => h.version !== confirmedPolicy.data?.version)
                         .map((h) => (
                           <option key={h.version} value={h.version}>
-                            Version {h.version} (Event: {h.provenance.triggerEvent})
+                            Version {h.version} (Source: {h.sourceRevision.slice(0, 8)}…)
                           </option>
                         ))}
                     </select>
@@ -585,15 +585,13 @@ export default function Operations() {
                               <Badge className="bg-emerald-500/20 text-emerald-200 text-[9px] px-1.5 py-0 h-4">Aktiv</Badge>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-400 font-mono truncate">{h.activeHash}</p>
+                          <p className="text-[11px] text-slate-400 font-mono truncate">{h.policyHash}</p>
                           <p className="text-[11px] text-slate-300">
-                            <b>Event:</b> {h.provenance.triggerEvent}
+                            <b>Source revision:</b> {h.sourceRevision}
                           </p>
-                          {h.provenance.rollbackReason && (
-                            <p className="text-[11px] text-amber-200/90 italic">
-                              <b>Rollback-Grund:</b> {h.provenance.rollbackReason}
-                            </p>
-                          )}
+                          <p className="text-[11px] text-slate-400 font-mono truncate">
+                            <b>Source SHA-256:</b> {h.sourceSha256}
+                          </p>
                           <p className="text-[10px] text-slate-500">
                             {new Date(h.createdAt).toLocaleString()}
                           </p>

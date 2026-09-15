@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS `aurionQuestTemplateVersions` (
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	INDEX `aurionQuestTemplateVersions_tpl_idx` (`templateId`, `version`)
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `aurionQuestPlans` (
 	`planHash` varchar(64) NOT NULL,
 	`templateId` varchar(96) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS `aurionQuestPlans` (
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
 	PRIMARY KEY (`planHash`)
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `aurionQuestInstances` (
 	`id` varchar(128) NOT NULL,
 	`worldId` varchar(96) NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `aurionQuestInstances` (
 	PRIMARY KEY (`id`),
 	INDEX `aurionQuestInstances_player_idx` (`playerUserId`)
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `aurionQuestReceipts` (
 	`id` varchar(128) NOT NULL,
 	`instanceId` varchar(128) NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS `aurionQuestReceipts` (
 	PRIMARY KEY (`id`),
 	INDEX `aurionQuestReceipts_inst_idx` (`instanceId`)
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS `aurionQuestAdminProposals` (
 	`id` varchar(128) NOT NULL,
 	`proposalType` varchar(64) NOT NULL,

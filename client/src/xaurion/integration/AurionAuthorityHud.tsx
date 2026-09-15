@@ -381,28 +381,13 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       }}
       onStartAuto={() => { openPanel(null); setStartAfterClose(true); }}
     />
-    <WorldMapModal 
-        isOpen={panel === "map"} 
-        onClose={() => openPanel(null)} 
-        playerStats={{
-            x: position?.x ?? 0,
-            z: position?.z ?? 0,
-            hp: player.data?.stats.hp ?? 0,
-            maxHp: player.data?.stats.maxHp ?? 100,
-        } as any}
-        npcs={[]}
-        pois={world.data?.pointsOfInterest.map(poi => ({
-            id: poi.id,
-            kind: poi.kind as any,
-            state: poi.state,
-            label: poi.label,
-            x: 0,
-            z: 0,
-            unlocked: poi.state !== "locked"
-        })) ?? []}
-        onTeleport={async (poiId) => {
-            await onAction("T");
-        }}
+    <WorldMapModal
+      open={panel === "map"}
+      onClose={() => openPanel(null)}
+      world={worldProjection}
+      position={position}
+      remotePlayers={remotePlayers}
+      state={world.state}
     />
     <GuildManagementModal open={panel === "guild"} onClose={() => openPanel(null)} />
     <NPCEconomyModal open={panel === "economy"} onClose={() => openPanel(null)} />
