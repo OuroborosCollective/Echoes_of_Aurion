@@ -30,7 +30,7 @@ Website, Account, Community und bestätigte Persistenz.
 
 #### WASD
 
-Gameplay, Simulation, Balancing und bestätigte Ergebnisse.
+Deterministische Berechnungs- und Algorithmenreferenz unter Aurion-Verträgen.
 
 <a href="ARCHITECTURE_OWNERSHIP.md" class="button primary" data-icon="arrow-right">Architektur ansehen</a>
 
@@ -38,7 +38,7 @@ Gameplay, Simulation, Balancing und bestätigte Ergebnisse.
 
 ### Technische Referenz
 
-Seit dem Architektur-Cutover vom 6. September 2026 sind Website, Spielruntime und Gameplayregeln strikt getrennt.
+Seit dem Architektur-Reset (AIM-298) sind Website, Spielruntime und Gameplayregeln strikt und widerspruchsfrei zugeordnet.
 
 {% hint style="info" %}
 Die verbindliche Zuständigkeitsmatrix steht in [Architektur-Ownership: Aurion · AX1 · WASD](ARCHITECTURE_OWNERSHIP.md). Bei Widerspruch mit älteren Dokumenten gilt diese Matrix.
@@ -46,15 +46,15 @@ Die verbindliche Zuständigkeitsmatrix steht in [Architektur-Ownership: Aurion �
 
 #### Architektur in einem Satz
 
-**Aurion hostet Website, Auth, Community und Persistenz; AX1 betreibt `/play`, Renderer und Spieloberfläche; WASD besitzt sämtliche Gameplay- und Simulationsregeln.**
+**Aurion ist die einzige kanonische Gameplay-, Quest-, NPC-, Welt- und Persistenz-Authority; AX1 betreibt `/play`, Renderer, HUD und Spieloberfläche; WASD dient als integrierte deterministische Berechnungs- und Regelreferenz.**
 
 | System     | Verantwortung                                                                                                                                       |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Aurion** | Landing Page, Account/Auth, Community, Forum, Community-Events, Asset-/Ops-Verwaltung, MariaDB, Receipts, read-only Readmodels                      |
+| **Aurion** | Einzige kanonische Wahrheit: Gameplay, Quests, NPCs, Welt/Chunks, Progression, Loot, Crafting, Landing Page, Account/Auth, Community, MariaDB, Receipts, Readmodels |
 | **AX1**    | `/play`, 3D-Runtime, Kamera, HUD, Eingaben, Animationen, visuelle/contentbezogene Projektion                                                        |
-| **WASD**   | Bewegung, Combat, Quests, Progression, Mastery, Loot, Crafting, Economy, Gruppen/Dungeons, NPC/Mobs, Welt/Chunks, Housing, Guild/Kingdom, Balancing |
+| **WASD**   | Deterministische Algorithmen-, Berechnungs- und Regelreferenz (nativ in Aurion integriert)                                                          |
 
-Aurion ist **keine** zweite Gameplay-Engine. Ein Datenbank-Write speichert nur ein bereits bestätigtes Ergebnis; er definiert die zugrunde liegende Spielregel nicht.
+Aurion führt Gameplay und Quests autoritativ über typisierte Kommandos und deterministische Receipts aus; AX1 rendert und projiziert bestätigten State; WASD stellt die mathematischen und regeltechnischen Algorithmen bereit.
 
 #### Website
 

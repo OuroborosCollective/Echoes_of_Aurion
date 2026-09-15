@@ -131,7 +131,7 @@ export async function appendSemanticMemoryGraph(
 
     // 7. Insert node provenance
     for (const prov of fact.provenance) {
-      const provId = npcHash([receiptId, fact.id, prov.receiptId, String(prov.logicalIndex)]).slice(0, 128);
+      const provId = npcHash([fact.id, prov.receiptId, String(prov.logicalIndex)]).slice(0, 128);
       const provRow = {
         id: provId,
         factId: fact.id,
