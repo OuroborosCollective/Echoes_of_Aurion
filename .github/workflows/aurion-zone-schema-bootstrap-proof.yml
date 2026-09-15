@@ -47,6 +47,9 @@ on:
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
       - "drizzle/0042_aurion_npc_multi_memory.sql"
+      - "drizzle/0043_aurion_civilization_history.sql"
+      - "drizzle/0044_aurion_semantic_memory_graph.sql"
+      - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
   push:
     branches: [main]
     paths:
@@ -94,6 +97,9 @@ on:
       - "drizzle/0040_aurion_progression_receipts.sql"
       - "drizzle/0041_aurion_content_hash_ledger.sql"
       - "drizzle/0042_aurion_npc_multi_memory.sql"
+      - "drizzle/0043_aurion_civilization_history.sql"
+      - "drizzle/0044_aurion_semantic_memory_graph.sql"
+      - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
 
 permissions:
   contents: read
