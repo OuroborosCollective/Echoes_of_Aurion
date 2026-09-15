@@ -229,4 +229,54 @@ suite("AIM-294 transactional semantic memory graph persistence & query", () => {
     expect(page3.nodes).toHaveLength(1);
     expect(page3.nodes[0].score).toBe(0); // conflicted has lowest score
   });
+
+  it("preserves stable fact ID across two distinct immutable graph receipts without primary key conflict", async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not initialized");
+
+    const decision1Id = `dec_${npcHash(["stable-fact-dec-1", npcId]).slice(0, 56)}`;
+    const decision1Row = makeDecisionRow(decision1Id, 40, npcHash(["dec-hash-s1"]));
+    await db.insert(aurionNpcDecisionReceipts).values(decision1Row);
+
+    const decision2Id = `dec_${npcHash(["stable-fact-dec-2", npcId]).slice(0, 56)}`;
+    const decision2Row = makeDecisionRow(decision2Id, 41, npcHash(["dec-hash-s2"]));
+    await db.insert(aurionNpcDecisionReceipts).values(decision2Row);
+
+    const memory = createNpcMemoryV4(npcId);
+    const stableFactId = `${npcId}:stable-identity-fact`;
+    // Fact created in decision 1
+    const factV1 = makeSemanticFact(stableFactId, "selected_goal", "seek_safety", decision1Id, 40);
+
+    // Persist graph receipt 1
+    const memory1 = {
+      ...memory,
+      semantic: [factV1],
+      memoryHash: npcHash(["memory-state-s1"])
+    };
+    const res1 = await db.transaction(async (tx) => {
+      return appendSemanticMemoryGraph(tx, decision1Row, memory1, null, GENESIS_HASH);
+    });
+    expect(res1.receipt.id).toBeDefined();
+
+    // Now decision 2 carries forward the exact same stable fact with identical provenance
+    const memory2 = {
+      ...memory,
+      semantic: [factV1], // same stable fact & provenance
+      memoryHash: npcHash(["memory-state-s2"])
+    };
+    const res2 = await db.transaction(async (tx) => {
+      return appendSemanticMemoryGraph(tx, decision2Row, memory2, res1.receipt.id, res1.receipt.graphHash);
+    });
+    expect(res2.receipt.id).toBeDefined();
+    expect(res2.receipt.id).not.toBe(res1.receipt.id);
+
+    // Verify both nodes exist with same fact.id under different graph receipts
+    const persistedNodes = await db.select().from(aurionSemanticNodes).where(eq(aurionSemanticNodes.id, stableFactId));
+    expect(persistedNodes).toHaveLength(2);
+    expect(persistedNodes.map(n => n.graphReceiptId)).toEqual(expect.arrayContaining([res1.receipt.id, res2.receipt.id]));
+
+    // Verify provenance rows were created without primary key conflict
+    const provRows = await db.select().from(aurionSemanticProvenance).where(eq(aurionSemanticProvenance.factId, stableFactId));
+    expect(provRows).toHaveLength(2);
+  });
 });

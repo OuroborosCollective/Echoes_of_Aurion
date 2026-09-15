@@ -41,6 +41,8 @@ export async function verifySemanticGraphProvenance(tx: NpcTransaction, npcId: s
   }
 }
 
+export const validateDecisionProvenance = verifySemanticGraphProvenance;
+
 /**
  * Persists the semantic graph state during an atomic NPC memory update.
  * Enforces transactional consistency: if any insert fails, the entire transaction is rolled back.
@@ -131,7 +133,7 @@ export async function appendSemanticMemoryGraph(
 
     // 7. Insert node provenance
     for (const prov of fact.provenance) {
-      const provId = npcHash([fact.id, prov.receiptId, String(prov.logicalIndex)]).slice(0, 128);
+      const provId = npcHash([receiptId, fact.id, prov.receiptId, String(prov.logicalIndex)]).slice(0, 128);
       const provRow = {
         id: provId,
         factId: fact.id,
