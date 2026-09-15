@@ -5,8 +5,8 @@
     {
       "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
       "sourceRevision": "6803dabc1d23c48a99352a025f035202b89f6083",
-      "sourceSha256": "c00e7d2a3b417e250a77b19e961294c3de3c85a26e650bd20361e5e7feeca3b5",
-      "targetSha256": "88fbc75e243d5b527cd7ff01734fe2f3f33e2f4525f295eca8d00a6ea8a26e03",
+      "sourceSha256": "ba1b7b8359bf33de208534b3df52e20e3c41a18def5857c9ecb43d530631b733",
+      "targetSha256": "b297d481c1a611dbc8a33e2cc5dca9fd58241fc1e8dd859a32a69cc131f9ef42",
       "adaptations": [
         {
           "before": "      const trunkHeight = 4 + (i % 3);",
@@ -18,8 +18,8 @@
     {
       "path": "client/src/xaurion/world/WorldChunkManager.ts",
       "sourceRevision": "6803dabc1d23c48a99352a025f035202b89f6083",
-      "sourceSha256": "e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1",
-      "targetSha256": "fff15bb9dba605b743c803960214a25d98e66f66c2af40892717416f687c031b",
+      "sourceSha256": "73f9cad5f5e3453f7cb719101b84e3cb6472bd28e720c450c480ade3888db57f",
+      "targetSha256": "0ea9069d36a5eeaba1d96b97d76174422793d1d428b08d2a0ecc70dd8ed63408",
       "adaptations": [
         {
           "before": "        const trunkH = obs.height || 7.0;",
