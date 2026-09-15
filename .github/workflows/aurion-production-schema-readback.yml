@@ -121,6 +121,10 @@ jobs:
           set -e
 
           if [[ -s "$raw" ]]; then
+            # The fixed root runner persists a private root-owned receipt before
+            # emitting this sanitized JSON. Do not broaden sudo merely to read
+            # that private path: immutable runner/artifact verification above and
+            # controlled stdout keep this workflow inside its read-only boundary.
             RAW_PATH="$raw" RESULT_PATH="$result" RUNNER_STATUS="$runner_status" EXPECTED_SHA="$EXPECTED_SHA" node -e '
               const fs=require("node:fs");
               const receipt=JSON.parse(fs.readFileSync(process.env.RAW_PATH,"utf8"));
