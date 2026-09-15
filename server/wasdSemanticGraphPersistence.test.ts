@@ -135,6 +135,44 @@ suite("AIM-294 transactional semantic memory graph persistence & query", () => {
     expect(queryResult.nodes.find(n => n.predicate === "current_hub")?.score).toBe(100);
   });
 
+  it("retains the same stable WASD fact id across consecutive immutable graph receipts", async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not initialized");
+
+    const stableFactId = `${npcId}:stable-current-hub`;
+    const firstDecisionId = `dec_${npcHash(["stable-fact-1", npcId]).slice(0, 56)}`;
+    const secondDecisionId = `dec_${npcHash(["stable-fact-2", npcId]).slice(0, 56)}`;
+    const firstDecision = makeDecisionRow(firstDecisionId, 40, npcHash(["stable-fact-decision-1"]));
+    const secondDecision = makeDecisionRow(secondDecisionId, 41, npcHash(["stable-fact-decision-2"]));
+    await db.insert(aurionNpcDecisionReceipts).values([firstDecision, secondDecision]);
+
+    const base = createNpcMemoryV4(npcId);
+    const first = await db.transaction(async tx => appendSemanticMemoryGraph(
+      tx,
+      firstDecision,
+      { ...base, semantic: [makeSemanticFact(stableFactId, "current_hub", "observatory_threshold", firstDecisionId, 40)] },
+      null,
+      GENESIS_HASH,
+    ));
+    const second = await db.transaction(async tx => appendSemanticMemoryGraph(
+      tx,
+      secondDecision,
+      { ...base, semantic: [makeSemanticFact(stableFactId, "current_hub", "observatory_threshold", secondDecisionId, 41)] },
+      first.receipt.id,
+      first.receipt.graphHash,
+    ));
+
+    expect(first.receipt.id).not.toBe(second.receipt.id);
+    const nodes = await db.select().from(aurionSemanticNodes).where(eq(aurionSemanticNodes.id, stableFactId));
+    expect(nodes).toHaveLength(2);
+    expect(new Set(nodes.map(node => node.graphReceiptId))).toEqual(new Set([first.receipt.id, second.receipt.id]));
+    const provenance = await db.select().from(aurionSemanticProvenance).where(eq(aurionSemanticProvenance.factId, stableFactId));
+    expect(provenance).toHaveLength(2);
+    const projected = await querySemanticGraph({ npcId, predicate: "current_hub", limit: 10 });
+    expect(projected.nodes).toHaveLength(1);
+    expect(projected.nodes[0].id).toBe(stableFactId);
+  });
+
   it("strictly fails validation (AIM-293 causality) if semantic facts refer to unverified/missing provenance receipts", async () => {
     const db = await getDb();
     if (!db) throw new Error("Database not initialized");
