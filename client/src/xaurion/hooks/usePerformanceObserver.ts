@@ -65,6 +65,7 @@ export function usePerformanceObserver(options: UsePerformanceObserverOptions = 
       ? performance.timeOrigin + performance.now()
       : 0;
     const nowIso = new Date(sampleTimestamp).toISOString();
+    const timestamp = timestampProvider ? timestampProvider() : nowIso;
 
     const payload: PerformanceMetricsPayload = {
       timestamp: nowIso,

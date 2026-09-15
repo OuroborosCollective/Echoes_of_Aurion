@@ -14,12 +14,6 @@ import { RoleResolver } from './roleResolver';
 import { QuestComposer } from './composer';
 import { QuestValidator } from './validator';
 
-/** Operational timestamps are persisted metadata, never canonical gameplay state. */
-function hashQuestState(instance: QuestInstance): string {
-  const { createdAt: _createdAt, updatedAt: _updatedAt, ...canonicalState } = instance;
-  return computeCanonicalHash('aurion.quest.instance.v1', canonicalState);
-}
-
 /**
  * AIM-298: Aurion Authoritative Quest Runtime Engine.
  * Executes quest creation, objective progress, choices, completion, and atomic receipt generation.
@@ -31,10 +25,6 @@ export class QuestRuntimeEngine {
     private clock: OperationalClock = hostOperationalClock
   ) {}
 
-  private nowIso(): string {
-    return operationalDate(this.clock).toISOString();
-  }
-
   public compileAndOfferQuest(params: {
     worldId: string;
     playerUserId: number;
@@ -45,6 +35,7 @@ export class QuestRuntimeEngine {
     const occurredAt = operationalDate(this.clock).toISOString();
     const compilerVersion = params.compilerVersion || '1.0.0';
     const facts = this.worldFactEngine.getFacts();
+    const factsHash = this.worldFactEngine.getFactsHash();
     const worldStateRev = this.worldFactEngine.getLatestSequence();
 
     const activeTemplates = this.templateRegistry.getActiveTemplates();
@@ -91,8 +82,7 @@ export class QuestRuntimeEngine {
       throw new Error(`QUEST_PLAN_VALIDATION_FAILED:${JSON.stringify(validation.diagnostics)}`);
     }
 
-    // 7. Create offered QuestInstance. Operational time is metadata only and is
-    // deliberately excluded from the canonical state hash used by receipts.
+    // 7. Create offered QuestInstance
     const instanceId = `qi_${params.playerUserId}_${winningTemplate.templateId}_${seedDigest.slice(0, 8)}`;
 
     const startNode = plan.nodes.find(n => n.type === 'start') || plan.nodes[0]!;
@@ -132,7 +122,7 @@ export class QuestRuntimeEngine {
       updatedAt: occurredAt,
     };
 
-    const resultStateHash = hashQuestState(updatedInstance);
+    const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
 
     const receipt: QuestReceipt = {
       id: `rcpt_${instance.id}_accept`,
@@ -240,7 +230,7 @@ export class QuestRuntimeEngine {
       updatedAt: occurredAt,
     };
 
-    const resultStateHash = hashQuestState(updatedInstance);
+    const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
 
     // Apply outcomes & emit canonical WorldEvent
     const primaryOutcome = plan.outcomes[0];

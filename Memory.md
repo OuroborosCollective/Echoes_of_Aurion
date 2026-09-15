@@ -624,3 +624,9 @@ Status: VERIFIED repository candidate
 Änderung: Resolved hash mismatches in the deterministic adaptation pipeline (AIM-239) for `OpenWorldPlayer.ts`, `OpenWorldLandscape.ts`, and `WorldChunkManager.ts`. Added missing `HashDomain` entries (`aurion.quest.proposal.identity.v1`, `aurion.quest.receipt.identity.v1`) to `shared/aurionQuestCanonicalHash.ts` to fix `tsc` failures.
 Erkenntnis: The source files had evolved naturally (e.g. `attachMeshBVHToGroup` from AIM-271) causing strict adaptation text replacements to fail. The determinism JSONs (`targetSha256`, `sourceSha256`) and test replacement logic were updated to correctly bypass `change.after` text when it no longer exists in the file, while keeping the test structurally intact. 
 Evidence: `vitest run` passes for all suites, including `server/aurionXaurionIntegration.test.ts`. `npm run check` compiles cleanly with zero TS errors.
+
+### 2026-09-15 — VPS Database Architecture Documentation
+Status: VERIFIED repository integration
+Änderung: `PRODUCTION_DATABASE_CONNECTION.md` hinzugefügt und in `SUMMARY.md` registriert.
+Erkenntnis: Die Architektur der Produktionsdatenbank, die restriktiven Docker-Netzwerke (`echoes-of-aurion-internal`) und die strengen Runtime-Verifier-Vorgaben für `DATABASE_URL` auf dem VPS (46.202.154.25) wurden entsprechend der bereitgestellten Systemvorgaben als GitBook-Dokumentation fixiert.
+Evidence: Die Dokumentation deckt die Vorgaben des Runtime-Verifiers exakt ab.

@@ -22,6 +22,7 @@
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)
+  * [Produktions-DB](PRODUCTION_DATABASE_CONNECTION.md)
   * [Android APK Build](ANDROID_BUILD.md)
 * [Presentation & Side-Channels](AURION_AUDIO_SYSTEM.md)
   * [Companion Memory VPS Setup](COMPANION_MEMORY_VPS_SETUP.md)

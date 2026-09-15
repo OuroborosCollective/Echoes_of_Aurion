@@ -17,6 +17,7 @@ export interface HighDensityMetricsReport {
   bitEcsPilotEntities: number;
   postFxConfig: ReturnType<typeof ProceduralLowPolyWorld.getGovernedPostFxConfig>;
   overallGatePassed: boolean;
+  timestamp: string;
 }
 
 /**

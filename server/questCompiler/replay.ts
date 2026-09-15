@@ -23,10 +23,9 @@ export class QuestReplayEngine {
     facts: WorldFact[],
     expectedPlanHash: string
   ): QuestReplayReceipt {
-    const timestamp = operationalDate(this.clock).toISOString();
+    const replayTimestamp = operationalDate(this.clock).toISOString();
     const activeTemplates = this.templateRegistry.getActiveTemplates();
     const templateSetHash = this.templateRegistry.getTemplateSetHash();
-    const timestamp = this.nowIso();
 
     // 1. Re-evaluate candidate resolution
     const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
@@ -49,7 +48,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: 'N/A',
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `CandidateSetHash divergence: expected ${plan.candidateSetHash}, got ${candidateSetHash}`,
-        timestamp,
+        timestamp: replayTimestamp,
       };
     }
 
@@ -74,7 +73,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: 'N/A',
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `Winning template divergence: expected ${instance.templateId}, got ${winningTemplate?.templateId}`,
-        timestamp,
+        timestamp: replayTimestamp,
       };
     }
 
@@ -99,7 +98,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: 'N/A',
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `RoleBindingHash divergence: expected ${plan.roleBindingHash}, got ${roleBindingHash}`,
-        timestamp,
+        timestamp: replayTimestamp,
       };
     }
 
@@ -132,7 +131,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: computeCanonicalHash('aurion.quest.replay.v1', replayedPlan.outcomes),
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `PlanHash divergence: expected ${expectedPlanHash}, got ${replayedPlan.planHash}`,
-        timestamp,
+        timestamp: replayTimestamp,
       };
     }
 
@@ -155,7 +154,7 @@ export class QuestReplayEngine {
       replayedGraphHash: replayedPlan.graphHash,
       replayedOutcomeHash: outcomeHash,
       verdict: 'MATCH',
-      timestamp,
+      timestamp: replayTimestamp,
     };
   }
 }

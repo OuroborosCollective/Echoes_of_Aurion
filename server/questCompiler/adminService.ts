@@ -140,25 +140,20 @@ export class AdminQuestStudioService {
       proposedDataJson: params.proposedDataJson,
       sequence: proposalSeq,
     });
-    const id = `prop_${params.templateId}_v${params.templateVersion}_${proposalIdentity.slice(0, 16)}`;
+    const proposalId = `prop_${params.templateId}_v${params.templateVersion}_${proposalIdentity.slice(0, 16)}`;
     const expectedTemplateSetHash = this.templateRegistry.getTemplateSetHash();
-    const identityPayload = {
+
+    const receiptHash = computeCanonicalHash('aurion.quest.template.v1', {
+      id: proposalId,
       authorUserId: params.authorUserId,
       templateId: params.templateId,
       templateVersion: params.templateVersion,
       expectedTemplateSetHash,
       proposedDataJson: params.proposedDataJson,
-    };
-    const identityDigest = computeCanonicalHash('aurion.quest.template.v1', identityPayload);
-    const id = `prop_${params.templateId}_v${params.templateVersion}_${identityDigest.slice(0, 16)}`;
-
-    const receiptHash = computeCanonicalHash('aurion.quest.template.v1', {
-      id,
-      ...identityPayload,
     });
 
     const proposal: QuestAdminProposal = {
-      id,
+      id: proposalId,
       proposalType: 'create_template_draft',
       authorUserId: params.authorUserId,
       templateId: params.templateId,
@@ -170,7 +165,7 @@ export class AdminQuestStudioService {
       createdAt: operationalDate(this.clock).toISOString(),
     };
 
-    this.proposals.set(id, proposal);
+    this.proposals.set(proposalId, proposal);
     return proposal;
   }
 }
