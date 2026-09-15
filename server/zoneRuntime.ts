@@ -528,7 +528,6 @@ export class ZoneRegistry {
         this.sortedZones.push(zone);
       }
       this.sortedZones.sort((left, right) => compareBinary(left.zoneId, right.zoneId));
-
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) {
