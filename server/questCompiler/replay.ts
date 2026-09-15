@@ -1,5 +1,6 @@
 import { QuestInstance, QuestPlan, QuestReplayReceipt, WorldFact } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash } from '../../shared/aurionQuestCanonicalHash';
+import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
 import { CandidateResolver } from './candidateResolver';
 import { RoleResolver } from './roleResolver';
 import { QuestComposer } from './composer';
@@ -11,7 +12,10 @@ import { QuestTemplateRegistry } from './templateRegistry';
  * Returns MATCH, FIRST_DIVERGENCE, or UNPROVABLE.
  */
 export class QuestReplayEngine {
-  constructor(private templateRegistry: QuestTemplateRegistry) {}
+  constructor(
+    private templateRegistry: QuestTemplateRegistry,
+    private clock: OperationalClock = hostOperationalClock
+  ) {}
 
   public replayInstance(
     instance: QuestInstance,
@@ -19,6 +23,7 @@ export class QuestReplayEngine {
     facts: WorldFact[],
     expectedPlanHash: string
   ): QuestReplayReceipt {
+    const timestamp = operationalDate(this.clock).toISOString();
     const activeTemplates = this.templateRegistry.getActiveTemplates();
     const templateSetHash = this.templateRegistry.getTemplateSetHash();
 
@@ -43,7 +48,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: 'N/A',
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `CandidateSetHash divergence: expected ${plan.candidateSetHash}, got ${candidateSetHash}`,
-        timestamp: new Date().toISOString(),
+        timestamp,
       };
     }
 
@@ -68,7 +73,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: 'N/A',
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `Winning template divergence: expected ${instance.templateId}, got ${winningTemplate?.templateId}`,
-        timestamp: new Date().toISOString(),
+        timestamp,
       };
     }
 
@@ -93,7 +98,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: 'N/A',
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `RoleBindingHash divergence: expected ${plan.roleBindingHash}, got ${roleBindingHash}`,
-        timestamp: new Date().toISOString(),
+        timestamp,
       };
     }
 
@@ -126,7 +131,7 @@ export class QuestReplayEngine {
         replayedOutcomeHash: computeCanonicalHash('aurion.quest.replay.v1', replayedPlan.outcomes),
         verdict: 'FIRST_DIVERGENCE',
         firstDivergenceDetails: `PlanHash divergence: expected ${expectedPlanHash}, got ${replayedPlan.planHash}`,
-        timestamp: new Date().toISOString(),
+        timestamp,
       };
     }
 
@@ -149,7 +154,7 @@ export class QuestReplayEngine {
       replayedGraphHash: replayedPlan.graphHash,
       replayedOutcomeHash: outcomeHash,
       verdict: 'MATCH',
-      timestamp: new Date().toISOString(),
+      timestamp,
     };
   }
 }

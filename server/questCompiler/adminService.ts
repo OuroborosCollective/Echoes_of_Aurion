@@ -7,6 +7,7 @@ import {
   WorldFact,
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash } from '../../shared/aurionQuestCanonicalHash';
+import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
 import { WorldFactEngine } from './worldFacts';
 import { QuestTemplateRegistry } from './templateRegistry';
 import { QuestRuntimeEngine } from './runtime';
@@ -44,12 +45,12 @@ export class AdminQuestStudioService {
   private replayEngine: QuestReplayEngine;
   private proposals: Map<string, QuestAdminProposal> = new Map();
 
-  constructor() {
+  constructor(private clock: OperationalClock = hostOperationalClock) {
     this.worldFactEngine = new WorldFactEngine();
     this.templateRegistry = new QuestTemplateRegistry();
-    this.runtimeEngine = new QuestRuntimeEngine(this.worldFactEngine, this.templateRegistry);
+    this.runtimeEngine = new QuestRuntimeEngine(this.worldFactEngine, this.templateRegistry, this.clock);
     this.persistenceEngine = new QuestPersistenceEngine();
-    this.replayEngine = new QuestReplayEngine(this.templateRegistry);
+    this.replayEngine = new QuestReplayEngine(this.templateRegistry, this.clock);
 
     // Initial seed run for demonstration & testing
     this.seedInitialRun();
@@ -131,7 +132,15 @@ export class AdminQuestStudioService {
     templateVersion: number;
     proposedDataJson: string;
   }): QuestAdminProposal {
-    const id = `prop_${params.templateId}_v${params.templateVersion}_${Date.now()}`;
+    const proposalSeq = this.proposals.size + 1;
+    const proposalIdentity = computeCanonicalHash('aurion.quest.proposal.identity.v1', {
+      authorUserId: params.authorUserId,
+      templateId: params.templateId,
+      templateVersion: params.templateVersion,
+      proposedDataJson: params.proposedDataJson,
+      sequence: proposalSeq,
+    });
+    const id = `prop_${params.templateId}_v${params.templateVersion}_${proposalIdentity.slice(0, 16)}`;
     const expectedTemplateSetHash = this.templateRegistry.getTemplateSetHash();
 
     const receiptHash = computeCanonicalHash('aurion.quest.template.v1', {
@@ -153,7 +162,7 @@ export class AdminQuestStudioService {
       proposedDataJson: params.proposedDataJson,
       status: 'draft',
       receiptHash,
-      createdAt: new Date().toISOString(),
+      createdAt: operationalDate(this.clock).toISOString(),
     };
 
     this.proposals.set(id, proposal);

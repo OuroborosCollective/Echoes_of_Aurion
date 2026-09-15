@@ -58,7 +58,10 @@ export function usePerformanceObserver(options: UsePerformanceObserverOptions = 
     const stats: PercentileResult = calculatePercentiles(samples);
     const memory = getMemoryHeapUsage();
     const avgFps = stats.avg > 0 ? Number((1000 / stats.avg).toFixed(1)) : 0;
-    const nowIso = new Date().toISOString();
+    const sampleTimestamp = typeof performance !== 'undefined' && Number.isFinite(performance.timeOrigin)
+      ? performance.timeOrigin + performance.now()
+      : 0;
+    const nowIso = new Date(sampleTimestamp).toISOString();
 
     const payload: PerformanceMetricsPayload = {
       timestamp: nowIso,
