@@ -159,7 +159,7 @@ jobs:
                 if(receipt.overallState==="PRESENT_SCHEMA_DRIFT"&&counts.driftCount<1) throw new Error("production drift receipt is inconsistent");
                 if(["PRESENT_SCHEMA_MATCH","RECONCILIATION_REQUIRED"].includes(receipt.overallState)&&(Number(process.env.RUNNER_STATUS)!==0||execution.containerExitStatus!==0)) throw new Error("readable production receipt has non-zero execution status");
               }
-              fs.writeFileSync(process.env.RESULT_PATH, JSON.stringify({schemaVersion:1,recordType:"aurion_production_schema_readback_ci",sourceRevision:receipt.sourceRevision,readOnly:true,databaseCredentialReturned:false,state:receipt.overallState,runnerStatus:Number(process.env.RUNNER_STATUS),failureStage,errorClass,retryable,execution:{mode:execution.mode,network:execution.network,imageDigest:execution.imageDigest,rootFilesystemReadOnly:execution.rootFilesystemReadOnly,releaseMountedReadOnly:execution.releaseMountedReadOnly,environmentMountedReadOnly:execution.environmentMountedReadOnly,containerExitStatus:execution.containerExitStatus},summary:receipt.summary??null,migrations,drizzleJournalTables:Array.isArray(receipt.drizzleJournal)?receipt.drizzleJournal.map(({tableName,rowCount,rowReadback})=>({tableName,rowCount:rowCount??null,rowReadback:rowReadback??null})):[]}, null, 2)+"\n");
+              fs.writeFileSync(process.env.RESULT_PATH, JSON.stringify({schemaVersion:1,recordType:"aurion_production_schema_readback_ci",sourceRevision:receipt.sourceRevision,readOnly:true,databaseCredentialReturned: false,state:receipt.overallState,runnerStatus:Number(process.env.RUNNER_STATUS),failureStage,errorClass,retryable,execution:{mode:execution.mode,network:execution.network,imageDigest:execution.imageDigest,rootFilesystemReadOnly:execution.rootFilesystemReadOnly,releaseMountedReadOnly:execution.releaseMountedReadOnly,environmentMountedReadOnly:execution.environmentMountedReadOnly,containerExitStatus:execution.containerExitStatus},summary:receipt.summary??null,migrations,drizzleJournalTables:Array.isArray(receipt.drizzleJournal)?receipt.drizzleJournal.map(({tableName,rowCount,rowReadback})=>({tableName,rowCount:rowCount??null,rowReadback:rowReadback??null})):[]}, null, 2)+"\n");
             '
           else
             case "$runner_status" in
@@ -170,7 +170,7 @@ jobs:
               *) state=ROOT_READBACK_FAILED ;;
             esac
             RESULT_STATE="$state" RUNNER_STATUS="$runner_status" RESULT_PATH="$result" EXPECTED_SHA="$EXPECTED_SHA" node -e '
-              const fs=require("node:fs");fs.writeFileSync(process.env.RESULT_PATH,JSON.stringify({schemaVersion:1,recordType:"aurion_production_schema_readback_ci",sourceRevision:process.env.EXPECTED_SHA,readOnly:true,databaseCredentialReturned:false,state:process.env.RESULT_STATE,runnerStatus:Number(process.env.RUNNER_STATUS),failureStage:null,errorClass:null,retryable:null},null,2)+"\n");
+              const fs=require("node:fs");fs.writeFileSync(process.env.RESULT_PATH,JSON.stringify({schemaVersion:1,recordType:"aurion_production_schema_readback_ci",sourceRevision:process.env.EXPECTED_SHA,readOnly:true,databaseCredentialReturned: false,state:process.env.RESULT_STATE,runnerStatus:Number(process.env.RUNNER_STATUS),failureStage:null,errorClass:null,retryable:null},null,2)+"\n");
             '
           fi
           cat "$result"
