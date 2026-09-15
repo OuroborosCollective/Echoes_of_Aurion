@@ -19,14 +19,13 @@ suite("AIM-292 actual transactional multi-memory in isolated MariaDB",()=>{
   async function cleanup(){
     if(!isolated)throw Error("ISOLATED_TEST_DATABASE_REQUIRED");
     await pool.query("DROP TRIGGER IF EXISTS aim292_abort_memory");
-    // This suite reuses deterministic decision IDs between tests. Clear every derived
-    // semantic sidecar before clearing its source receipts so each case starts from
-    // an actually empty isolated history rather than colliding with an earlier case.
-    await pool.query("DELETE FROM aurionSemanticRetrievalIndex WHERE npcId IN (?,?)",[npcId,"lyra"]);
-    await pool.query("DELETE FROM aurionSemanticProvenance");
-    await pool.query("DELETE FROM aurionSemanticNodes WHERE npcId IN (?,?)",[npcId,"lyra"]);
-    await pool.query("DELETE FROM aurionSemanticMemoryReceipts WHERE npcId IN (?,?)",[npcId,"lyra"]);
-    // Test files run serially. DDL cleanup preserves both append-only triggers.
+    // This database is created solely for the isolated CI proof and the files run
+    // serially. Reset derived semantic fixtures with DDL so production append-only
+    // UPDATE/DELETE triggers remain installed and are still exercised by the runtime.
+    await pool.query("TRUNCATE TABLE aurionSemanticRetrievalIndex");
+    await pool.query("TRUNCATE TABLE aurionSemanticProvenance");
+    await pool.query("TRUNCATE TABLE aurionSemanticNodes");
+    await pool.query("TRUNCATE TABLE aurionSemanticMemoryReceipts");
     await pool.query("TRUNCATE TABLE aurionNpcMemoryReceiptsV4");
     await pool.query("DELETE FROM aurionNpcDecisionReceipts WHERE npcId IN (?,?)",[npcId,"lyra"]);
     await pool.query("DELETE FROM aurionNpcStates WHERE npcId IN (?,?)",[npcId,"lyra"]);
