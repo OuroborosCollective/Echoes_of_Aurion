@@ -34,6 +34,7 @@ on:
       - "drizzle/0043_aurion_civilization_history.sql"
       - "drizzle/0044_aurion_semantic_memory_graph.sql"
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
+      - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -72,6 +73,7 @@ on:
       - "drizzle/0043_aurion_civilization_history.sql"
       - "drizzle/0044_aurion_semantic_memory_graph.sql"
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
+      - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -103,42 +105,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Typecheck and reconciliation unit tests
         run: |
           set -euo pipefail
           pnpm check
           pnpm vitest run server/aurionProductionSchemaReconciliation.test.ts
           git diff --check
-
       - name: Establish canonical database through journaled 0020 only
         run: |
           set -euo pipefail
           backup="$(mktemp)"
           cp drizzle/meta/_journal.json "$backup"
-          restore_journal() {
-            cp "$backup" drizzle/meta/_journal.json
-            rm -f "$backup"
-          }
+          restore_journal() { cp "$backup" drizzle/meta/_journal.json; rm -f "$backup"; }
           trap restore_journal EXIT
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const path="drizzle/meta/_journal.json";
           const journal=JSON.parse(fs.readFileSync(path,"utf8"));
           const cutoff=journal.entries.filter(entry=>Number(entry.idx)<=20);
-          if(cutoff.length!==21 || cutoff.at(-1)?.tag!=="0020_wasd_aurion_dialogue_quest_intents") {
-            throw new Error("unable to construct exact 0020 journal cutoff");
-          }
+          if(cutoff.length!==21 || cutoff.at(-1)?.tag!=="0020_wasd_aurion_dialogue_quest_intents") throw new Error("unable to construct exact 0020 journal cutoff");
           journal.entries=cutoff;
           fs.writeFileSync(path, `${JSON.stringify(journal,null,2)}\n`);
           NODE
@@ -146,7 +138,6 @@ jobs:
           restore_journal
           trap - EXIT
           git diff --exit-code -- drizzle/meta/_journal.json
-
       - name: Prove all declared late migrations classify absent on a 0020-only database
         run: |
           set -euo pipefail
@@ -159,23 +150,15 @@ jobs:
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
-
-      - name: Apply 0021 through 0045 only inside this isolated proof database
+      - name: Apply 0021 through 0046 only inside this isolated proof database
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const tags=[
-            "0021_aurion_global_world_state",
-            "0022_aurion_world_chunk_deltas",
-            "0023_aurion_world_presence_epochs",
-            "0024_aurion_world_epoch_reactions",
-            "0025_aurion_loot_mastery_ethos",
-            "0026_aurion_faction_questline_state",
-            "0027_aurion_faction_questline_rewards",
-            "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
-            "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler",
+            "0021_aurion_global_world_state","0022_aurion_world_chunk_deltas","0023_aurion_world_presence_epochs","0024_aurion_world_epoch_reactions","0025_aurion_loot_mastery_ethos","0026_aurion_faction_questline_state","0027_aurion_faction_questline_rewards","0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
+            "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
           ];
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try {
@@ -187,7 +170,6 @@ jobs:
           } finally { await connection.end(); }
           console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
           NODE
-
       - name: Prove all declared late migrations match after isolated apply
         run: |
           set -euo pipefail
@@ -204,7 +186,6 @@ jobs:
           if(receipt.summary.matchCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length || receipt.summary.absentCount!==0 || receipt.summary.driftCount!==0) throw new Error("late-migration match classification mismatch");
           console.log(JSON.stringify({phase:"full-match",summary:receipt.summary,drizzleJournal:receipt.drizzleJournal}));
           NODE
-
       - name: Prove structural drift fails closed
         run: |
           set -euo pipefail
@@ -214,8 +195,7 @@ jobs:
           try {
             await connection.query("DROP INDEX `aurionFactionQuestlineRewardReceipts_digest_uq` ON `aurionFactionQuestlineRewardReceipts`");
             await connection.query("DROP TRIGGER `aurionContentHashLedger_no_update`");
-          }
-          finally { await connection.end(); }
+          } finally { await connection.end(); }
           NODE
           set +e
           pnpm exec tsx scripts/reconcile-aurion-production-schema.ts --require-match > drift.json
