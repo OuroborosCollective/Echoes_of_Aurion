@@ -43,16 +43,25 @@ export function resolveMobCollisionMovement(
 
 /** Server orchestration: AX1 content + WASD state transitions + persisted world geometry. */
 export class ZoneMobRuntime {
-  private readonly states = new Map<string, MobRuntimeState>();
   private readonly orderedEntityIds: string[] = [];
+  private readonly cachedStates: MobRuntimeState[] = [];
+  private readonly entityIdToIndex = new Map<string, number>();
+
   constructor() {
+    const initialStates = new Map<string, MobRuntimeState>();
     observatoryMobDefinitions.forEach(definition =>
-      this.states.set(
+      initialStates.set(
         definition.entityId,
         initialMobRuntimeState(definition, 0)
       )
     );
-    this.orderedEntityIds = Array.from(this.states.keys()).sort();
+    this.orderedEntityIds = Array.from(initialStates.keys()).sort();
+
+    for (let i = 0; i < this.orderedEntityIds.length; i++) {
+      const entityId = this.orderedEntityIds[i];
+      this.cachedStates.push(initialStates.get(entityId)!);
+      this.entityIdToIndex.set(entityId, i);
+    }
   }
 
   tick(
@@ -61,9 +70,10 @@ export class ZoneMobRuntime {
     frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS
   ): boolean {
     let changed = false;
-    for (const entityId of this.orderedEntityIds) {
-      const current = this.states.get(entityId)!,
-        before = publicMobSnapshot(current);
+    for (let i = 0; i < this.orderedEntityIds.length; i++) {
+      const entityId = this.orderedEntityIds[i];
+      const current = this.cachedStates[i];
+      const before = publicMobSnapshot(current);
       const next = frozenEntityIds.has(entityId)
         ? current
         : resolveMobFsmTick({
@@ -72,7 +82,7 @@ export class ZoneMobRuntime {
             tick,
             resolveMovement: resolveMobCollisionMovement,
           });
-      this.states.set(entityId, next);
+      this.cachedStates[i] = next;
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }
     return changed;
@@ -82,28 +92,29 @@ export class ZoneMobRuntime {
     entityId: string,
     values: { health: number; stamina?: number; nextAttackTick?: number }
   ): MobRuntimeState | undefined {
-    const current = this.states.get(entityId);
-    if (!current) return undefined;
+    const index = this.entityIdToIndex.get(entityId);
+    if (index === undefined) return undefined;
+    const current = this.cachedStates[index];
     const next = applyMobCombatState(current, values);
-    this.states.set(entityId, next);
+    this.cachedStates[index] = next;
     return next;
   }
 
   snapshot(): readonly ConfirmedZoneMob[] {
     const out: ConfirmedZoneMob[] = [];
-    for (const entityId of this.orderedEntityIds) {
-      out.push(publicMobSnapshot(this.states.get(entityId)!));
+    for (let i = 0; i < this.cachedStates.length; i++) {
+      out.push(publicMobSnapshot(this.cachedStates[i]));
     }
     return Object.freeze(out);
   }
+
   stateFor(entityId: string): MobRuntimeState | undefined {
-    return this.states.get(entityId);
+    const index = this.entityIdToIndex.get(entityId);
+    if (index === undefined) return undefined;
+    return this.cachedStates[index];
   }
+
   orderedStates(): readonly MobRuntimeState[] {
-    const out: MobRuntimeState[] = [];
-    for (const entityId of this.orderedEntityIds) {
-      out.push(this.states.get(entityId)!);
-    }
-    return Object.freeze(out);
+    return Object.freeze([...this.cachedStates]);
   }
 }
