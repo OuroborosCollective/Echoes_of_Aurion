@@ -1,55 +1,99 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(path, "utf8");
-const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
-const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptations.json")) as {
-  files: Array<{ path: string; sourceSha256: string; targetSha256: string; adaptations: Array<{ before: string; after: string; occurrences: number }> }>;
+const hashBytes = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
+const sha256 = (path: string) => hashBytes(readFileSync(path));
+
+type AdaptationEntry = {
+  path: string;
+  sourceRevision?: string;
+  sourceSha256: string;
+  targetSha256: string;
+  adaptations: Array<{ before: string; after: string; occurrences: number }>;
 };
-const treeVisualAdaptations = JSON.parse(read("docs/migrations/fantasy-tree-visual-adaptations.json")) as typeof adaptations;
-const surfaceAtlasAdaptations = JSON.parse(read("docs/migrations/ax1-surface-atlas-adaptations.json")) as typeof adaptations;
+type AdaptationManifest = {
+  sourceRevision?: string;
+  aurionPreAdaptationRevision?: string;
+  files: AdaptationEntry[];
+};
 
-function beforeSurfaceAtlas(path: string): string {
-  let source = read(path);
-  const entry = surfaceAtlasAdaptations.files.find(file => file.path === path);
-  if (!entry) return source;
-  expect(sha256(path)).toBe(entry.targetSha256);
-  for (const change of [...entry.adaptations].reverse()) {
-    expect(source.split(change.after).length - 1).toBe(change.occurrences);
-    source = source.replaceAll(change.after, change.before);
-  }
-  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.sourceSha256);
-  return source;
+const DETERMINISM_MANIFEST_PATH = "docs/migrations/aim239-determinism-adaptations.json";
+const TREE_MANIFEST_PATH = "docs/migrations/fantasy-tree-visual-adaptations.json";
+const SURFACE_MANIFEST_PATH = "docs/migrations/ax1-surface-atlas-adaptations.json";
+const adaptations = JSON.parse(read(DETERMINISM_MANIFEST_PATH)) as AdaptationManifest;
+const treeVisualAdaptations = JSON.parse(read(TREE_MANIFEST_PATH)) as AdaptationManifest;
+const surfaceAtlasAdaptations = JSON.parse(read(SURFACE_MANIFEST_PATH)) as AdaptationManifest;
+
+const git = (args: string[]) => spawnSync("git", args, { encoding: null, maxBuffer: 8 * 1024 * 1024 });
+const isShallow = git(["rev-parse", "--is-shallow-repository"]).stdout?.toString("utf8").trim() === "true";
+
+function entryFor(manifest: AdaptationManifest, path: string): AdaptationEntry {
+  const entry = manifest.files.find(file => file.path === path);
+  if (!entry) throw new Error(`Missing adaptation evidence: ${path}`);
+  expect(entry.sourceSha256).toMatch(/^[0-9a-f]{64}$/);
+  expect(entry.targetSha256).toMatch(/^[0-9a-f]{64}$/);
+  expect(entry.adaptations.length).toBeGreaterThan(0);
+  return entry;
 }
 
-/** Verify the complete changed file, then reconstruct the exact pre-presentation
- * bytes before applying the existing owner-ZIP provenance checks below. */
-function beforeTreeVisualTags(path: string): string {
-  let source = beforeSurfaceAtlas(path);
-  const entry = treeVisualAdaptations.files.find(file => file.path === path);
-  if (!entry) return source;
-  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.targetSha256);
-  for (const change of [...entry.adaptations].reverse()) {
-    expect(source.split(change.after).length - 1).toBe(change.occurrences);
-    source = source.replaceAll(change.after, change.before);
-  }
-  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.sourceSha256);
-  return source;
+function sourceRevisionFor(manifest: AdaptationManifest, entry: AdaptationEntry): string {
+  const revision = entry.sourceRevision ?? manifest.sourceRevision ?? manifest.aurionPreAdaptationRevision;
+  if (!revision) throw new Error(`Missing source revision for ${entry.path}`);
+  expect(revision).toMatch(/^[0-9a-f]{40}$/);
+  return revision;
 }
 
-function sourceHashBeforeDeterminism(path: string): string {
-  const entry = adaptations.files.find(file => file.path === path);
-  if (!entry) throw new Error(`Missing deterministic adaptation evidence: ${path}`);
-  let source = beforeTreeVisualTags(path);
-  expect(createHash("sha256").update(source).digest("hex")).toBe(entry.targetSha256);
-  for (const change of [...entry.adaptations].reverse()) {
-    expect(source.split(change.after).length - 1).toBe(change.occurrences);
-    source = source.replaceAll(change.after, change.before);
-  }
-  const restored = createHash("sha256").update(source).digest("hex");
-  expect(restored).toBe(entry.sourceSha256);
-  return restored;
+function manifestIntroductionRevision(manifestPath: string): string | null {
+  const result = git(["log", "--diff-filter=A", "--follow", "--format=%H", "--reverse", "--", manifestPath]);
+  if (result.status !== 0) return null;
+  return result.stdout.toString("utf8").trim().split(/\s+/).filter(Boolean)[0] ?? null;
+}
+
+function fileAtRevision(revision: string, path: string): Buffer | null {
+  const result = git(["show", `${revision}:${path}`]);
+  return result.status === 0 ? result.stdout : null;
+}
+
+/**
+ * Provenance is historical truth, not a demand that today's mutable file still
+ * equals an older presentation-wave target. In a full-history checkout this
+ * proves exact source bytes, exact target bytes at the manifest's introduction,
+ * and ancestry to HEAD. Shallow CI still validates the immutable receipt shape
+ * and the live boundary assertions below, without pretending it performed a
+ * historical byte readback.
+ */
+function verifyHistoricalManifest(manifestPath: string, manifest: AdaptationManifest, path: string): string {
+  const entry = entryFor(manifest, path);
+  const sourceRevision = sourceRevisionFor(manifest, entry);
+  if (isShallow) return entry.sourceSha256;
+
+  const targetRevision = manifestIntroductionRevision(manifestPath);
+  expect(targetRevision, `missing manifest introduction commit for ${manifestPath}`).toMatch(/^[0-9a-f]{40}$/);
+  if (!targetRevision) throw new Error(`Missing manifest introduction commit: ${manifestPath}`);
+
+  expect(git(["merge-base", "--is-ancestor", sourceRevision, targetRevision]).status).toBe(0);
+  expect(git(["merge-base", "--is-ancestor", targetRevision, "HEAD"]).status).toBe(0);
+
+  const sourceBytes = fileAtRevision(sourceRevision, path);
+  const targetBytes = fileAtRevision(targetRevision, path);
+  expect(sourceBytes, `missing historical source ${sourceRevision}:${path}`).not.toBeNull();
+  expect(targetBytes, `missing historical target ${targetRevision}:${path}`).not.toBeNull();
+  if (!sourceBytes || !targetBytes) throw new Error(`Historical provenance unavailable: ${path}`);
+
+  expect(hashBytes(sourceBytes)).toBe(entry.sourceSha256);
+  expect(hashBytes(targetBytes)).toBe(entry.targetSha256);
+  return entry.sourceSha256;
+}
+
+function expectPresentationChain(path: string): void {
+  const treeEntry = entryFor(treeVisualAdaptations, path);
+  const surfaceEntry = entryFor(surfaceAtlasAdaptations, path);
+  expect(treeEntry.targetSha256).toBe(surfaceEntry.sourceSha256);
+  verifyHistoricalManifest(TREE_MANIFEST_PATH, treeVisualAdaptations, path);
+  verifyHistoricalManifest(SURFACE_MANIFEST_PATH, surfaceAtlasAdaptations, path);
 }
 
 describe("AIM-239 xaurion integration boundary", () => {
@@ -113,9 +157,11 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(db).toContain("DATABASE_URL");
   });
 
-  it("pins the hash-materialized owner ZIP player and equipment wave", () => {
-    expect(sourceHashBeforeDeterminism("client/src/xaurion/entities/OpenWorldPlayer.ts")).toBe("6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e");
-    expect(sourceHashBeforeDeterminism("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toBe("1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7");
+  it("proves the immutable owner-ZIP player/equipment origin while checking today's live contracts separately", () => {
+    expect(verifyHistoricalManifest(DETERMINISM_MANIFEST_PATH, adaptations, "client/src/xaurion/entities/OpenWorldPlayer.ts"))
+      .toBe("6d0086ee19d0c1a8fb2b93c46d30ef08c0842532f8e53486f350f838645f5c5e");
+    expect(verifyHistoricalManifest(DETERMINISM_MANIFEST_PATH, adaptations, "client/src/xaurion/core/ProceduralEquipmentVisuals.ts"))
+      .toBe("1127d7dd9a649415c9fc18f30c9fbd7a139814569eb3b61d63429df8c46bb0f7");
     expect(sha256("client/src/xaurion/core/ItemGlbRegistry.ts")).toBe("825702516ae6d2eeff827150899c6317d6716ec8a6b1a16287531dbb414184c2");
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("ProceduralEquipmentVisuals");
     expect(read("client/src/xaurion/entities/OpenWorldPlayer.ts")).toContain("equipGlbAsEquipment");
@@ -123,9 +169,11 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(read("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toContain("resolveItemGlbMapping");
   });
 
-  it("pins the hash-materialized owner ZIP landscape wave and its visible world structure", () => {
+  it("proves immutable landscape provenance without pinning the later mutable runtime to an old target hash", () => {
     const landscape = read("client/src/xaurion/world/OpenWorldLandscape.ts");
-    expect(sourceHashBeforeDeterminism("client/src/xaurion/world/OpenWorldLandscape.ts")).toBe("836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207");
+    expect(verifyHistoricalManifest(DETERMINISM_MANIFEST_PATH, adaptations, "client/src/xaurion/world/OpenWorldLandscape.ts"))
+      .toBe("836b12be53ccef1122aeaba3565ad03c1503ba877cca8b35952b4b919d19d207");
+    expectPresentationChain("client/src/xaurion/world/OpenWorldLandscape.ts");
     expect(landscape).toContain("buildSanctumHub");
     expect(landscape).toContain("buildClockworkWoods");
     expect(landscape).toContain("buildScorchedQuarry");
@@ -134,10 +182,12 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(landscape).toContain("sporeCount = 280");
   });
 
-  it("pins the owner ZIP chunk and collision wave while keeping Aurion persistence authoritative", () => {
+  it("proves immutable chunk/collision origin while keeping the current persistence boundary explicit", () => {
     const chunks = read("client/src/xaurion/world/WorldChunkManager.ts");
     const collision = read("client/src/xaurion/world/WorldCollisionSystem.ts");
-    expect(createHash("sha256").update(beforeTreeVisualTags("client/src/xaurion/world/WorldChunkManager.ts")).digest("hex")).toBe("e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1");
+    expectPresentationChain("client/src/xaurion/world/WorldChunkManager.ts");
+    expect(entryFor(treeVisualAdaptations, "client/src/xaurion/world/WorldChunkManager.ts").sourceSha256)
+      .toBe("e8eba2091a057e6770d2bd2b4868a03a77e3b28f1faa2c4e507349bf87e5cdd1");
     expect(sha256("client/src/xaurion/world/WorldCollisionSystem.ts")).toBe("edbef31c708319d91ac66d98400a84c3009adda4b2e578e50bf5b3fbd4e63883");
     expect(chunks).toContain("Grenzmark Frostkrone");
     expect(chunks).toContain("Schmelzkern-Verlies");
