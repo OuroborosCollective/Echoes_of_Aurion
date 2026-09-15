@@ -142,7 +142,7 @@ export async function appendSemanticMemoryGraph(
         sourceRevision: prov.authority.sourceRevision,
         sourceSha256: prov.authority.sourceSha256
       };
-      await tx.insert(aurionSemanticProvenance).values(provRow);
+      await tx.insert(aurionSemanticProvenance).ignore().values(provRow);
     }
   }
 
