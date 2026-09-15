@@ -42,11 +42,20 @@ export class WorldAssetProjection {
  private disposed=false;private elapsed=1;private lastCenter="";private readGeneration=0;private access=0;private readFailed=false;
  private previousLod=new Map<string,0|1|2>();
  private rendered=0;private drawCalls=0;private triangles=0;private activeLights=0;
- constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,renderer?:RuntimeRenderer){
+ private readonly onConfirmedZoneSnapshot=(event:Event)=>{
+  const detail=(event as CustomEvent<{position?:{x?:unknown;z?:unknown}}>).detail;
+  const x=detail?.position?.x,z=detail?.position?.z;
+  if(typeof x!=="number"||!Number.isFinite(x)||typeof z!=="number"||!Number.isFinite(z))return;
+  // The first asset read is causally bound to a server-confirmed zone position,
+  // not to whether a particular renderer backend has already produced a frame.
+  this.update(1,{x,z},this.renderer?.domElement.clientWidth||this.viewportWidth);
+ };
+ constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
   // The factory supplies an initialized Three renderer; RuntimeRenderer exposes
   // only the methods used by the engine, while the loader also reads capabilities.
-  if(renderer){try{this.ktx.detectSupport(renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.loader.setKTX2Loader(this.ktx);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
+  if(this.renderer){try{this.ktx.detectSupport(this.renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.loader.setKTX2Loader(this.ktx);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
+  if(typeof window!=="undefined")window.addEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);
  }
  update(delta:number,position:{x:number;z:number},viewportWidth:number){
   if(this.disposed)return;this.elapsed+=delta;if(this.elapsed<0.5)return;this.elapsed=0;
@@ -149,5 +158,5 @@ export class WorldAssetProjection {
   return {compressedTextures,transcodedMipPayloadBytes,rasterRgbaCeilingBytes,interpretation:"decoded texture upload payload and raster upper bound; not driver VRAM"};
  }
  evidence(){return {version:this.region?.version??null,catalogHash:this.region?.catalogHash??null,collisionHash:this.region?.collisionHash??null,center:this.region?.center??null,origin:{x:this.root.position.x,z:this.root.position.z},planned:this.region?.placements.length??0,rendered:this.rendered,models:this.cache.size,textures:this.sharedTextures.size,loading:this.loading.size,failed:this.failed.size+(this.readFailed?1:0),drawCalls:this.drawCalls,triangles:this.triangles,lights:this.activeLights,selected:this.selected.map(s=>({id:s.placement.assetId,lod:s.lod})),shipping:{drawnKtxModels:[...this.cache.values()].filter(c=>c.drawn&&c.format==="ktx2").length,drawnFallbackModels:[...this.cache.values()].filter(c=>c.drawn&&c.format!=="ktx2"&&c.format!=="legacy").length,textures:this.textureEvidence(),manifestSha256:shipping.manifest.manifestSha256,ktxModels:[...this.cache.values()].filter(c=>c.format==="ktx2").length,fallbackCount:this.fallbackCount,pressure:this.pressure,deferred:this.budgetDeferred.size,tier:assetTier(this.viewportWidth),resources:glbResourcePool.evidence()}};}
- dispose(){if(this.disposed)return;this.disposed=true;this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
+ dispose(){if(this.disposed)return;this.disposed=true;if(typeof window!=="undefined")window.removeEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);this.readGeneration++;for(const request of this.requests)request.abort();this.ktx.dispose();this.clearInstances();this.root.removeFromParent();for(const entry of this.cache.values())this.release(entry);this.cache.clear();this.previousLod.clear();}
 }
