@@ -29,22 +29,22 @@ Mensch / Input
     ↓
 AX1 Input + Presentation
     ↓ intent only
-WASD-Ausführung des AX1-Vertrags / deterministische Regel / logischer Tick
+Aurion-Ausführung unter Aurion-Verträgen (mit nativ integrierten WASD-Berechnungsalgorithmen)
     ↓
 confirmed gameplay result + receipt
     ↓
-Aurion transport + persistence
+Aurion transport + MariaDB-Persistenz
     ↓
 read-only projection
-    ├── AX1 im Spiel
+    ├── AX1 im Spiel (/play)
     └── Aurion auf Konto/Community-Seiten
 ```
 
-Es gibt keinen erlaubten Rückweg, bei dem eine Aurion-Website-, Admin-, MCP- oder DB-Regel selbst eine fachliche WASD-Entscheidung erzeugt.
+Aurion Website, Admin UI, Admin MCP oder Ad-Hoc SQL dürfen niemals unbestätigte oder unvalidierte Mutationen an den typisierten Aurion-Compilern und Receipt-Ketten vorbei erzeugen.
 
 ## Was Aurion schreiben darf
 
-Aurion darf ausschließlich Zustände verändern, die Aurion selbst gehören:
+Aurion darf alle autoritativen Zustände verändern, die der Aurion-Plattform und -Governance gehören:
 
 * Registrierung, Anmeldung, Session- und Accountdaten;
 * Community-Chat und Partner-/Community-Metadaten;
@@ -53,39 +53,31 @@ Aurion darf ausschließlich Zustände verändern, die Aurion selbst gehören:
 * GLB-/Asset-Upload, Quarantäne, Review, Sichtbarkeit und **rein visuelle** Asset-Zuweisung;
 * Betriebs-, Security-, Audit- und Deploymentmetadaten;
 * Schema-/Migrationen über revisionsgebundene Ops-Gates;
-* bestätigte WASD-/AX1-Receipts und daraus abgeleitete read-only Projektionen.
+* Quests, NPC-Entscheidungen, World-State, Chunks, Progression, Loot, Crafting und Encounter-Zustände autoritativ über typisierte Aurion-Kommandos und deterministische Receipts;
+* bestätigte Receipts und daraus abgeleitete read-only Projektionen.
 
-Ein Persistenz-Write ist nur Speicherung. Er macht Aurion nicht zum Eigentümer der fachlichen Regel, die den gespeicherten Wert erzeugt hat.
+Ein Persistenz-Write in MariaDB speichert bestätigte Aurion-Wahrheit. Sämtliche Gameplay-, Quest-, NPC- und World-Truth wird autoritativ von Aurion unter Verwendung deterministischer, typisierter Receipts kompiliert, validiert und persistiert.
 
-## Was Aurion niemals schreiben oder entscheiden darf
+## Was Aurion niemals schreiben oder entscheiden darf (Unzulässige Ad-Hoc Pfade & Historische Abgrenzung)
 
 Aurion Website, Admin UI, Admin MCP, Datenbankhelper, Worker oder Service Cells dürfen nicht:
 
-* Angriffe freigeben, Schaden, Treffer, Crit, HP oder Stamina berechnen;
-* Questannahme, Questziel, Questfortschritt, Abschluss oder Belohnung bestimmen;
-* XP, Level, Mastery, Skillfortschritt oder Klassen-/Archetypregeln berechnen;
-* Loot, Drop, Pity, Itemstats, Equipmentwirkung oder Auto-Loot bestimmen;
-* Crafting-Ergebnis, Yield, Qualität, Ressourcenverbrauch oder Berufswirkung entscheiden;
-* Gameplay-Economy, Preise, Gold-/Materialwirkung, Markt- oder Buyback-Regeln bestimmen;
-* Party-/Dungeon-Matching, Rollenwirkung, Boss-/Instanzzustand oder Rewards simulieren;
-* NPC-Memory, Standing, Zielwahl, Mob-FSM, Threat oder Pathfinding entscheiden;
-* Welt-, Chunk-, Spawn-, Collision-, Straßen-, Stadt-, Ressourcen- oder Eventregeln bestimmen;
-* Housing-, Blueprint-, Bau-, Plot- oder Platzierungsregeln bestimmen;
-* Guild-/Alliance-/Territory-/Kingdom-/Treasury-Gameplay bestimmen;
-* aus GLB-/Assetmetadaten oder Telemetrie Gameplaysemantik ableiten;
+* unvalidierte oder unbestätigte Mutationen an den typisierten Aurion-Compilern und Receipt-Ketten vorbei ausführen;
+* nicht-deterministische Zufallsentscheidungen (`Math.random()`) oder Wall-Clock-Drifts in kanonischen Authority-Pfaden treffen;
+* aus unvalidierten GLB-/Assetmetadaten oder Telemetrie unbewiesene Gameplaysemantik ableiten;
 * generische SQL-/Shell-/Admin-Kommandos als Gameplay-Abkürzung anbieten.
 
-Wenn eine solche Funktion im Aurion-Code existiert, ist sie **Legacy-Migrationsschuld** oder ein Adapter, der noch auf WASD zurückgeführt werden muss. Datei- oder Testexistenz macht sie nicht kanonisch.
+*(Historischer Hinweis nach AIM-298)*: Frühere Vor-Reset-Formulierungen, nach denen „Aurion niemals Questannahme, NPC-Memory, Weltregeln oder Loot entscheiden darf“ oder „WASD ein separates Server-Authority-Sidecar bildet“, sind **historisch überholt**. Nach AIM-298 ist Aurion der alleinige kanonische Eigentümer von Gameplay, Quests, NPCs, Welt und Persistenz. WASD fungiert als nativ integrierte deterministische Regel- und Berechnungsreferenz, nicht als separate Gameplay-Authority.
 
 ## AX1-Grenze
 
-AX1 ist das kanonische Hauptspiel. Es besitzt Gameplay-Identität und -Verträge, sichtbare Welt-/Contentstruktur, Spieloberfläche und Runtime. Die deterministische Ausführung dieser Verträge delegiert AX1 an WASD; bestätigte persistente Ergebnisse werden über Aurion transportiert und gespeichert.
+AX1 ist das kanonische Hauptspiel. Es besitzt Gameplay-Identität und -Verträge, sichtbare Welt-/Contentstruktur, Spieloberfläche, 3D-Runtime, Renderer, HUD, Eingaben und Animationen. AX1 projiziert die autoritative Aurion-Wahrheit und erfasst Spieler-Intents.
 
 AX1 darf:
 
-* Eingaben erfassen;
+* Eingaben erfassen und als Intent an Aurion übermitteln;
 * Renderer, Kamera, HUD, Animationen und visuelle Effekte betreiben;
-* bestätigte WASD-Snapshots/Events darstellen;
+* bestätigte Aurion-Snapshots/Events/Receipts darstellen;
 * Content-/Asset-Kataloge für Darstellung verwenden;
 * lokale Prediction ausschließlich zur Latenzmaskierung verwenden.
 
@@ -93,13 +85,13 @@ AX1 darf nicht:
 
 * lokale `damageMob`, Quest-, Loot-, XP- oder Inventarmutationen als Wahrheit behandeln;
 * `Math.random()`/Wall-Clock für kanonische Gameplayentscheidungen verwenden;
-* fehlende Server-/WASD-Daten mit einem scheinbar erfolgreichen Gameplay-Fallback ersetzen.
+* fehlende Server-Daten mit einem scheinbar erfolgreichen Client-Fallback ersetzen.
 
 ## WASD-Grenze
 
-WASD ist die ausführende Logik- und Simulationsschicht des AX1-Hauptspiels. Es implementiert deterministische Regeln und erzeugt bestätigte Ergebnisse, ohne ein zweites konkurrierendes Spielprodukt oder eine sichtbare Ersatzoberfläche zu bilden.
+WASD ist die integrierte deterministische Regel-, Berechnungs- und Simulationsreferenz unter Aurion-Verträgen. WASD ist kein separater Gameplay-Owner und besitzt keine eigene Server-Wahrheit. Seine Algorithmen und mathematischen Modelle sind nativ in Aurion eingebunden.
 
-Neue Gameplaymechaniken werden zuerst im AX1-Spielvertrag und der Contentstruktur definiert, dann als WASD-Regel implementiert und anschließend an AX1-Darstellung sowie Aurion-Persistenz angebunden. Ein fehlender ausführbarer WASD-Vertrag führt **fail-closed** zu „nicht verfügbar/unbewiesen“, nicht zu einer Aurion-Ersatzregel.
+Neue Gameplaymechaniken werden in den kanonischen Aurion-Verträgen definiert, nutzen WASD-Algorithmen als Berechnungsreferenz und werden über AX1 projiziert sowie in MariaDB persistiert. Ein fehlender ausführbarer Vertrag führt **fail-closed** zu „nicht verfügbar/unbewiesen“.
 
 Wolfram/CAG darf WASD-Formeln analysieren, falsifizieren und parametrisieren. Wolfram ist niemals Runtime- oder Gameplay-Authority.
 
