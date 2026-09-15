@@ -14,3 +14,6 @@
 ## 2024-09-14 - Tactile UI feedback respect for a11y (reduced motion)
 **Learning:** Animations like scaling or translating elements on hover can cause dizziness or discomfort for users who have requested reduced motion at the OS level.
 **Action:** When adding tactile feedback such as `hover:-translate-y-0.5`, `active:scale-95` or `group-hover:scale-110`, always prefix them with Tailwind's `motion-safe:` utility (e.g. `motion-safe:hover:-translate-y-0.5`). When clearing these on disabled elements, use `disabled:motion-safe:hover:translate-y-0` and `disabled:motion-safe:active:scale-100`. Apply `group-disabled:motion-safe:group-hover:scale-100` on internal icons. I updated `client/src/pages/Home.tsx` and its test file to verify this.
+## 2026-09-15 - Escape Key to Close Active Panel
+**Learning:** Adding hotkey support for closing panels (like 'Escape') improves UX significantly. It should consider input fields, active states, and use `preventDefault()` + `stopImmediatePropagation()` when handling to avoid unintended behaviors like triggering a global game pause menu.
+**Action:** Next time when implementing panel or modal overlays, ensure hotkeys like Escape are handled gracefully, checking if input fields have focus to avoid interrupting typing.
