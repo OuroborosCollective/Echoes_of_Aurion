@@ -9,10 +9,12 @@ import {
 import { DeviceConfigService, DeviceCategory } from '../services/DeviceConfigService';
 
 export interface UsePerformanceObserverOptions {
-  sampleIntervalMs?: number; // How often to compute percentiles & log (default: 3000ms)
-  autoLogToManusLogs?: boolean; // Whether to send logs to .manus-logs automatically (default: true)
+  sampleIntervalMs?: number;
+  autoLogToManusLogs?: boolean;
   deviceTier?: DeviceCategory;
   enabled?: boolean;
+  /** Operational time must be supplied by the caller; xaurion presentation never owns host wall-clock access. */
+  timestampProvider?: () => string;
 }
 
 export interface PerformanceState {
@@ -26,8 +28,8 @@ export interface PerformanceState {
 }
 
 /**
- * PerformanceObserver hook to capture and log p50/p95 frame times and memory heap usage to .manus-logs.
- * Supports device-aware frame time comparison for AIM-273 Quality Governor.
+ * PerformanceObserver hook to capture p50/p95 frame times and memory heap usage.
+ * Frame timing uses requestAnimationFrame's monotonic timestamp. Operational timestamps are injected.
  */
 export function usePerformanceObserver(options: UsePerformanceObserverOptions = {}) {
   const {
@@ -35,6 +37,7 @@ export function usePerformanceObserver(options: UsePerformanceObserverOptions = 
     autoLogToManusLogs = true,
     deviceTier = DeviceConfigService.detectDeviceCategory(),
     enabled = true,
+    timestampProvider,
   } = options;
 
   const [metrics, setMetrics] = useState<PerformanceState>({
@@ -58,19 +61,7 @@ export function usePerformanceObserver(options: UsePerformanceObserverOptions = 
     const stats: PercentileResult = calculatePercentiles(samples);
     const memory = getMemoryHeapUsage();
     const avgFps = stats.avg > 0 ? Number((1000 / stats.avg).toFixed(1)) : 0;
-    const nowIso = new Date().toISOString();
-
-    const payload: PerformanceMetricsPayload = {
-      timestamp: nowIso,
-      type: 'performance_metrics',
-      deviceTier,
-      frameTimeP50: stats.p50,
-      frameTimeP95: stats.p95,
-      avgFps,
-      memoryHeapUsedMb: memory.usedMb,
-      memoryHeapTotalMb: memory.totalMb,
-      samplesCount: stats.count,
-    };
+    const timestamp = timestampProvider?.() ?? null;
 
     const nextState: PerformanceState = {
       p50: stats.p50,
@@ -79,19 +70,29 @@ export function usePerformanceObserver(options: UsePerformanceObserverOptions = 
       memoryHeapUsedMb: memory.usedMb,
       memoryHeapTotalMb: memory.totalMb,
       samplesCount: stats.count,
-      lastLoggedAt: nowIso,
+      lastLoggedAt: timestamp,
     };
 
     setMetrics(nextState);
 
-    if (autoLogToManusLogs) {
+    if (autoLogToManusLogs && timestamp) {
+      const payload: PerformanceMetricsPayload = {
+        timestamp,
+        type: 'performance_metrics',
+        deviceTier,
+        frameTimeP50: stats.p50,
+        frameTimeP95: stats.p95,
+        avgFps,
+        memoryHeapUsedMb: memory.usedMb,
+        memoryHeapTotalMb: memory.totalMb,
+        samplesCount: stats.count,
+      };
       PerformanceLoggerService.logMetrics(payload);
     }
 
-    // Reset frame samples array
     frameSamplesRef.current = [];
     return nextState;
-  }, [autoLogToManusLogs, deviceTier, metrics]);
+  }, [autoLogToManusLogs, deviceTier, metrics, timestampProvider]);
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
