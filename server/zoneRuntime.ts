@@ -523,9 +523,11 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries())
-        .sort(([left], [right]) => compareBinary(left, right))
-        .map(([, zone]) => zone);
+      // Optimization: Sorting values directly avoids intermediate array allocations
+      // from .entries() and the subsequent .map() iteration.
+      this.sortedZones = Array.from(this.zones.values()).sort((left, right) =>
+        compareBinary(left.zoneId, right.zoneId)
+      );
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) {
