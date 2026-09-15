@@ -397,7 +397,10 @@ export function classifyMigrationContracts(expected: readonly ExpectedMigration[
 }
 
 function normalizeType(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, "").replace(/int\(\d+\)/g, "int");
+  const normalized = value.toLowerCase().replace(/\s+/g, "").replace(/int\(\d+\)/g, "int");
+  // MariaDB BOOLEAN is a schema alias for TINYINT(1); INFORMATION_SCHEMA reports
+  // the physical type. Normalize only that exact alias and keep other integer drift visible.
+  return normalized === "boolean" ? "tinyint" : normalized;
 }
 
 function expectedIndexName(index: ExpectedIndex): string {

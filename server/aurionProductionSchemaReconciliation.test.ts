@@ -184,6 +184,23 @@ describe("Aurion production schema reconciliation", () => {
     expect(result.drift).toEqual([]);
   });
 
+  it("accepts MariaDB BOOLEAN as physical TINYINT without masking other type drift", async () => {
+    const migration = await parse("0045_aurion_deterministic_quest_compiler");
+    const expected = migration.tables.find(table => table.name === "aurionQuestTemplateVersions")!;
+    const observed = observedFromExpected(expected);
+    const mariadbObserved: ObservedTable = {
+      ...observed,
+      columns: observed.columns.map(column =>
+        ["active", "quarantined"].includes(column.name) ? { ...column, columnType: "tinyint(1)" } : column,
+      ),
+    };
+    expect(compareTableContract(expected, mariadbObserved)).toEqual([]);
+    expect(compareTableContract(expected, {
+      ...mariadbObserved,
+      columns: mariadbObserved.columns.map(column => column.name === "version" ? { ...column, columnType: "bigint(20)" } : column),
+    }).some(item => item.includes("type:version"))).toBe(true);
+  });
+
   it("classifies a partial or structurally changed schema as PRESENT_SCHEMA_DRIFT", async () => {
     const migration = await parse("0027_aurion_faction_questline_rewards");
     const expected = migration.tables[0];
