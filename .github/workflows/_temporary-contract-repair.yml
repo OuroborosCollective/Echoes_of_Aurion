@@ -1,4 +1,4 @@
-name: Temporary exact contract repair
+name: Temporary exact source contract repair
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - name: Apply exact contract repairs
+      - name: Apply exact source contract repairs
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -76,23 +76,9 @@ jobs:
           ecs = "client/src/xaurion/spatial/RenderEcsPilot.ts"
           replace_exact(ecs, "  IWorld,\n", "")
           replace_exact(ecs, "  public world: IWorld;", "  public world: ReturnType<typeof createWorld>;")
-
-          root_apply = ".github/workflows/aurion-root-schema-apply-artifact-proof.yml"
-          replace_exact(
-              root_apply,
-              '      - "drizzle/0042_aurion_npc_multi_memory.sql"\n',
-              '      - "drizzle/0042_aurion_npc_multi_memory.sql"\n      - "drizzle/0043_aurion_civilization_history.sql"\n      - "drizzle/0044_aurion_semantic_memory_graph.sql"\n      - "drizzle/0045_aurion_deterministic_quest_compiler.sql"\n',
-          )
-          replace_exact(root_apply, "applies exactly 0021 through 0042", "applies exactly 0021 through 0045")
-          replace_exact(
-              root_apply,
-              '"0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory"];',
-              '"0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler"];',
-          )
-          replace_exact(root_apply, 'test "$rows" -eq 43', 'test "$rows" -eq 46')
           PY
           git diff --check
-      - name: Commit repaired contracts to this PR branch
+      - name: Commit repaired source contracts to this PR branch
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
@@ -105,7 +91,6 @@ jobs:
             client/src/xaurion/components/Ax1WorldSurfaces.tsx \
             client/src/xaurion/integration/AurionAuthorityHud.tsx \
             client/src/xaurion/spatial/HighDensityPerformanceGate.ts \
-            client/src/xaurion/spatial/RenderEcsPilot.ts \
-            .github/workflows/aurion-root-schema-apply-artifact-proof.yml
+            client/src/xaurion/spatial/RenderEcsPilot.ts
           git commit -m 'fix(runtime): reconcile merged contract drift'
           git push origin "HEAD:${HEAD_BRANCH}"
