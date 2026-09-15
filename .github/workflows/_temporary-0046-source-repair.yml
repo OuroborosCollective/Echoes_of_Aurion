@@ -1,0 +1,171 @@
+name: Temporary 0046 source repair
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/_temporary-0046-source-repair.yml"
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Apply 0046 stable semantic node identity repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          TAG45 = '0045_aurion_deterministic_quest_compiler'
+          TAG46 = '0046_aurion_semantic_node_history_key'
+
+          def replace_exact(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} matches, found {actual}: {old[:120]!r}")
+              p.write_text(text.replace(old, new))
+
+          # Additive migration: preserve WASD stable fact IDs while allowing the same fact
+          # to appear in multiple immutable graph receipts.
+          migration = Path(f'drizzle/{TAG46}.sql')
+          if migration.exists():
+              raise SystemExit(f'{migration}: already exists')
+          migration.write_text('''ALTER TABLE `aurionSemanticNodes` DROP PRIMARY KEY;\n--> statement-breakpoint\nALTER TABLE `aurionSemanticNodes` ADD PRIMARY KEY (`id`,`graphReceiptId`);\n''')
+
+          # Canonical journal append.
+          journal_path = Path('drizzle/meta/_journal.json')
+          journal = json.loads(journal_path.read_text())
+          if journal['entries'][-1]['tag'] != TAG45 or journal['entries'][-1]['idx'] != 45:
+              raise SystemExit('journal terminal migration is not canonical 0045')
+          journal['entries'].append({
+              'idx': 46, 'version': '5', 'when': 1788934000000,
+              'tag': TAG46, 'breakpoints': True,
+          })
+          journal_path.write_text(json.dumps(journal, indent=2) + '\n')
+
+          # Authorized wave manifest remains fail-closed and now names the corrective migration.
+          manifest_path = Path('config/aurion-migration-wave-manifest.json')
+          manifest = json.loads(manifest_path.read_text())
+          if manifest.get('waveId') != 'aurion-production-0021-0045' or manifest['migrations'][-1]['tag'] != TAG45:
+              raise SystemExit('migration wave manifest terminal state mismatch')
+          manifest['waveId'] = 'aurion-production-0021-0046'
+          manifest['migrations'].append({'tag': TAG46, 'source': 'aurion'})
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+
+          # Drizzle runtime schema: stable source fact id + graph receipt form the storage key.
+          schema = 'drizzle/schema.ts'
+          replace_exact(
+              schema,
+              'import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";',
+              'import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";',
+          )
+          replace_exact(
+              schema,
+              'export const aurionSemanticNodes = mysqlTable("aurionSemanticNodes", {\n  id: varchar("id", { length: 64 }).primaryKey(),\n  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),',
+              'export const aurionSemanticNodes = mysqlTable("aurionSemanticNodes", {\n  id: varchar("id", { length: 64 }).notNull(),\n  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),',
+          )
+          replace_exact(
+              schema,
+              '}, table => [\n  index("aurionSemanticNodes_graph_idx").on(table.graphReceiptId),\n  index("aurionSemanticNodes_npc_idx").on(table.npcId),\n  index("aurionSemanticNodes_subject_predicate_idx").on(table.subjectId, table.predicate),\n]);',
+              '}, table => [\n  primaryKey({ name: "aurionSemanticNodes_id_graphReceiptId_pk", columns: [table.id, table.graphReceiptId] }),\n  index("aurionSemanticNodes_graph_idx").on(table.graphReceiptId),\n  index("aurionSemanticNodes_npc_idx").on(table.npcId),\n  index("aurionSemanticNodes_subject_predicate_idx").on(table.subjectId, table.predicate),\n]);',
+          )
+
+          # Reconciliation parser learns the explicit DROP PRIMARY KEY evolution.
+          reconcile = 'scripts/aurionProductionSchemaReconciliation.ts'
+          p = Path(reconcile)
+          text = p.read_text()
+          tag_old = f'"{TAG45}",\n] as const;'
+          tag_new = f'"{TAG45}", "{TAG46}",\n] as const;'
+          if text.count(tag_old) != 1:
+              raise SystemExit('reconciler terminal tag match mismatch')
+          text = text.replace(tag_old, tag_new)
+          parser_old = '''    const drop = clause.match(/^DROP\\s+INDEX\\s+`([^`]+)`$/i);\n    if (drop) {\n      if (!table.indexes.some(entry => entry.name === drop[1])) throw new Error(`${tag}: missing DROP index ${drop[1]}`);\n      table.indexes = table.indexes.filter(entry => entry.name !== drop[1]);\n      continue;\n    }'''
+          parser_new = '''    const drop = clause.match(/^DROP\\s+INDEX\\s+`([^`]+)`$/i);\n    if (drop) {\n      if (!table.indexes.some(entry => entry.name === drop[1])) throw new Error(`${tag}: missing DROP index ${drop[1]}`);\n      table.indexes = table.indexes.filter(entry => entry.name !== drop[1]);\n      continue;\n    }\n    if (/^DROP\\s+PRIMARY\\s+KEY$/i.test(clause)) {\n      if (!table.indexes.some(entry => entry.name === "PRIMARY")) throw new Error(`${tag}: missing DROP primary key`);\n      table.indexes = table.indexes.filter(entry => entry.name !== "PRIMARY");\n      continue;\n    }'''
+          if text.count(parser_old) != 1:
+              raise SystemExit('DROP INDEX parser match mismatch')
+          p.write_text(text.replace(parser_old, parser_new))
+
+          # Snapshot provenance IDs must also be receipt-scoped; factId remains the stable WASD id.
+          persistence = 'server/wasdSemanticGraphPersistence.ts'
+          replace_exact(
+              persistence,
+              'const provId = npcHash([fact.id, prov.receiptId, String(prov.logicalIndex)]).slice(0, 128);',
+              'const provId = npcHash([receiptId, fact.id, prov.receiptId, String(prov.logicalIndex)]).slice(0, 128);',
+          )
+
+          # Targeted regression: same stable fact id must coexist in consecutive immutable graph receipts.
+          test_path = Path('server/wasdSemanticGraphPersistence.test.ts')
+          text = test_path.read_text()
+          marker = '''  it("strictly fails validation (AIM-293 causality) if semantic facts refer to unverified/missing provenance receipts", async () => {'''
+          addition = '''  it("retains the same stable WASD fact id across consecutive immutable graph receipts", async () => {\n    const db = await getDb();\n    if (!db) throw new Error("Database not initialized");\n\n    const stableFactId = `${npcId}:stable-current-hub`;\n    const firstDecisionId = `dec_${npcHash(["stable-fact-1", npcId]).slice(0, 56)}`;\n    const secondDecisionId = `dec_${npcHash(["stable-fact-2", npcId]).slice(0, 56)}`;\n    const firstDecision = makeDecisionRow(firstDecisionId, 40, npcHash(["stable-fact-decision-1"]));\n    const secondDecision = makeDecisionRow(secondDecisionId, 41, npcHash(["stable-fact-decision-2"]));\n    await db.insert(aurionNpcDecisionReceipts).values([firstDecision, secondDecision]);\n\n    const base = createNpcMemoryV4(npcId);\n    const first = await db.transaction(async tx => appendSemanticMemoryGraph(\n      tx,\n      firstDecision,\n      { ...base, semantic: [makeSemanticFact(stableFactId, "current_hub", "observatory_threshold", firstDecisionId, 40)] },\n      null,\n      GENESIS_HASH,\n    ));\n    const second = await db.transaction(async tx => appendSemanticMemoryGraph(\n      tx,\n      secondDecision,\n      { ...base, semantic: [makeSemanticFact(stableFactId, "current_hub", "observatory_threshold", secondDecisionId, 41)] },\n      first.receipt.id,\n      first.receipt.graphHash,\n    ));\n\n    expect(first.receipt.id).not.toBe(second.receipt.id);\n    const nodes = await db.select().from(aurionSemanticNodes).where(eq(aurionSemanticNodes.id, stableFactId));\n    expect(nodes).toHaveLength(2);\n    expect(new Set(nodes.map(node => node.graphReceiptId))).toEqual(new Set([first.receipt.id, second.receipt.id]));\n    const provenance = await db.select().from(aurionSemanticProvenance).where(eq(aurionSemanticProvenance.factId, stableFactId));\n    expect(provenance).toHaveLength(2);\n    const projected = await querySemanticGraph({ npcId, predicate: "current_hub", limit: 10 });\n    expect(projected.nodes).toHaveLength(1);\n    expect(projected.nodes[0].id).toBe(stableFactId);\n  });\n\n'''
+          if text.count(marker) != 1:
+              raise SystemExit('semantic graph test marker mismatch')
+          test_path.write_text(text.replace(marker, addition + marker))
+
+          # Existing revision-bound non-workflow mirrors: append the new terminal tag.
+          comma_files = [
+              'deploy/aurion-production-schema-apply-core',
+              'deploy/verify-aurion-production-schema-apply-artifact.mjs',
+              'deploy/verify-aurion-production-schema-reconcile-artifact.mjs',
+              'scripts/build-aurion-production-apply-artifact.mjs',
+              'scripts/build-aurion-production-reconcile-artifact.mjs',
+              'server/aurionProductionSchemaReconcileDockerRunner.test.ts',
+          ]
+          for filename in comma_files:
+              p = Path(filename)
+              text = p.read_text()
+              old = f'"{TAG45}",'
+              count = text.count(old)
+              if count < 1:
+                  raise SystemExit(f'{filename}: no terminal tag mirror found')
+              p.write_text(text.replace(old, f'"{TAG45}", "{TAG46}",'))
+
+          # The apply core and dispatch plan also contain closed-array terminal mirrors.
+          p = Path('deploy/aurion-production-schema-apply-core')
+          text = p.read_text()
+          old = f'"{TAG45}"];'
+          if text.count(old) != 1:
+              raise SystemExit(f'apply core closed terminal count={text.count(old)}')
+          p.write_text(text.replace(old, f'"{TAG45}", "{TAG46}"];'))
+
+          dispatch = Path('scripts/dispatch-aurion-schema-plan.mjs')
+          text = dispatch.read_text()
+          old = f'"{TAG45}"];'
+          if text.count(old) != 1:
+              raise SystemExit(f'dispatch terminal count={text.count(old)}')
+          text = text.replace(old, f'"{TAG45}", "{TAG46}"];')
+          if text.count('aurion-production-0021-0045') != 1:
+              raise SystemExit('dispatch wave id mismatch')
+          dispatch.write_text(text.replace('aurion-production-0021-0045', 'aurion-production-0021-0046'))
+          PY
+          git diff --check
+      - name: Commit 0046 source repair to PR branch
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            drizzle/0046_aurion_semantic_node_history_key.sql \
+            drizzle/meta/_journal.json drizzle/schema.ts \
+            config/aurion-migration-wave-manifest.json \
+            scripts/aurionProductionSchemaReconciliation.ts \
+            scripts/build-aurion-production-apply-artifact.mjs \
+            scripts/build-aurion-production-reconcile-artifact.mjs \
+            scripts/dispatch-aurion-schema-plan.mjs \
+            deploy/aurion-production-schema-apply-core \
+            deploy/verify-aurion-production-schema-apply-artifact.mjs \
+            deploy/verify-aurion-production-schema-reconcile-artifact.mjs \
+            server/aurionProductionSchemaReconcileDockerRunner.test.ts \
+            server/wasdSemanticGraphPersistence.ts \
+            server/wasdSemanticGraphPersistence.test.ts
+          git commit -m 'fix(memory): preserve semantic fact ids across graph history'
+          git push origin "HEAD:${HEAD_BRANCH}"
