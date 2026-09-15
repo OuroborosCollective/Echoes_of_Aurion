@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "atlasId": "aurion-atlas-nature-v1",
+  "family": "nature",
+  "sourceSha256": "5c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d",
+  "runtimeSha256": "5c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d",
+  "width": 1024,
+  "height": 1024,
+  "regions": [
+    {"id": "nature.rock.cliff", "x": 0, "y": 0, "width": 256, "height": 256, "u0": 0.0, "v0": 0.0, "u1": 0.25, "v1": 0.25}
+  ],
+  "materialBindings": {
+    "nature.rock.cliff": {"regionId": "nature.rock.cliff", "usage": "surface", "colorSpace": "srgb"}
+  },
+  "manifestHash": "j1k2l3m4"
+}

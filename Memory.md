@@ -584,6 +584,22 @@ Learned: Capturing p50/p95 frame percentiles and memory heap telemetry in a non-
 Open: Continuous performance telemetry in high-density multiplayer playtests.
 Next safe step: Report complete status to the user.
 
+### 2026-09-14 — Canonical Aurion Quest Compiler System (AIM-298)
+Status: VERIFIED and INTEGRATED; production-ready
+Task: Implement the canonical Aurion Quest Compiler, graph composition, role resolution, causality verification, and Game Dev 1.0.2 visual support (AIM-298).
+Decisions:
+- Enforced single-authority rule (`ARCHITECTURE_OWNERSHIP.md` & `AGENTS.md`): Aurion is the sole canonical owner of gameplay, quests, NPCs, world state, and persistence.
+- Created canonical Zod contracts (`aurionQuestContract.ts`) and SHA-256 domain-separated hashing (`aurionQuestCanonicalHash.ts`).
+- Built modular compiler pipeline in `/server/questCompiler/` (`worldFacts`, `templateRegistry`, `candidateResolver`, `roleResolver`, `composer`, `validator`, `runtime`, `persistence`, `replay`, `adminService`).
+- Implemented `GameDevelopmentStudioQuestSupport.ts` for Game Dev 1.0.2 visual support receipts bound to approved GLB asset IDs without provider calls.
+- Mounted tRPC router (`aurionQuestRouter.ts`) under `appRouter.aurionQuest`, added migration `0045_aurion_deterministic_quest_compiler.sql` to journal.json, built frontend Admin Quest Studio page (`/ops/quests`), and registered `aurion_quest_*` tools in Admin MCP (`server/adminMcp.ts`).
+Touched surfaces: `AGENTS.md`, `ARCHITECTURE_OWNERSHIP.md`, `shared/aurionQuestContract.ts`, `shared/aurionQuestCanonicalHash.ts`, `/server/questCompiler/*`, `/server/gameDevelopmentStudioQuestSupport.ts`, `/server/routes/aurionQuestRouter.ts`, `/server/routers.ts`, `/drizzle/schema.ts`, `/drizzle/0045_aurion_deterministic_quest_compiler.sql`, `/drizzle/meta/_journal.json`, `/client/src/pages/QuestStudio.tsx`, `/client/src/App.tsx`, `/client/src/components/DashboardLayout.tsx`, `/server/adminMcp.ts`, `/Memory.md`.
+Evidence: 21/21 vitest tests passed across 8 test suites (`aurionQuestRouter.test.ts`, `drizzleMigrationChain.test.ts`, `replay.test.ts`, `worldFacts.test.ts`, `candidateResolver.test.ts`, `validator.test.ts`, `roleResolver.test.ts`, `composer.test.ts`). `compile_applet` build succeeded with zero errors.
+Learned: Failing closed on role resolution and graph composition ensures deterministic, immutable quest plans that preserve causality across replay.
+Open: Continuous runtime quest evaluation during player play sessions.
+Next safe step: Report complete status to the user.
+
+
 
 
 

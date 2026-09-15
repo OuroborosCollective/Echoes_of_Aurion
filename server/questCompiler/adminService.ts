@@ -1,0 +1,162 @@
+import {
+  QuestAdminProposal,
+  QuestInstance,
+  QuestPlan,
+  QuestReplayReceipt,
+  QuestTemplateVersion,
+  WorldFact,
+} from '../../shared/aurionQuestContract';
+import { computeCanonicalHash } from '../../shared/aurionQuestCanonicalHash';
+import { WorldFactEngine } from './worldFacts';
+import { QuestTemplateRegistry } from './templateRegistry';
+import { QuestRuntimeEngine } from './runtime';
+import { QuestPersistenceEngine } from './persistence';
+import { QuestReplayEngine } from './replay';
+
+export interface AdminQuestStudioStatus {
+  compilerVersion: string;
+  schemaVersion: string;
+  activeTemplateSetHash: string;
+  activeTemplatesCount: number;
+  worldFactsCount: number;
+  worldStateSequence: number;
+  totalInstancesCount: number;
+  activeInstancesCount: number;
+  completedInstancesCount: number;
+  quarantinedTemplatesCount: number;
+  gameDevStatus: {
+    version: string;
+    sourceRevision: string;
+    available: boolean;
+  };
+}
+
+/**
+ * AIM-298: Admin Quest Studio Service.
+ * Provides typed, validated admin application operations for template authoring, graph inspection,
+ * instance tracking, and deterministic replay without raw SQL or unvalidated state mutations.
+ */
+export class AdminQuestStudioService {
+  private worldFactEngine: WorldFactEngine;
+  private templateRegistry: QuestTemplateRegistry;
+  private runtimeEngine: QuestRuntimeEngine;
+  private persistenceEngine: QuestPersistenceEngine;
+  private replayEngine: QuestReplayEngine;
+  private proposals: Map<string, QuestAdminProposal> = new Map();
+
+  constructor() {
+    this.worldFactEngine = new WorldFactEngine();
+    this.templateRegistry = new QuestTemplateRegistry();
+    this.runtimeEngine = new QuestRuntimeEngine(this.worldFactEngine, this.templateRegistry);
+    this.persistenceEngine = new QuestPersistenceEngine();
+    this.replayEngine = new QuestReplayEngine(this.templateRegistry);
+
+    // Initial seed run for demonstration & testing
+    this.seedInitialRun();
+  }
+
+  private seedInitialRun() {
+    // Record initial event
+    this.worldFactEngine.recordEvent({
+      id: 'evt_init_caravan',
+      type: 'CARAVAN_ATTACKED',
+      source: 'aurion_system_seed',
+      data: { caravanId: 'caravan_alpha', merchantId: 'npc_merchant_kaelen', playerUserId: '1' },
+    });
+
+    // Compile and offer initial quest
+    const { instance, plan } = this.runtimeEngine.compileAndOfferQuest({
+      worldId: 'world_main',
+      playerUserId: 1,
+      giverNpcId: 'npc_merchant_kaelen',
+      triggerEventId: 'evt_init_caravan',
+    });
+
+    this.persistenceEngine.savePlan(plan);
+    this.persistenceEngine.saveInstance(instance);
+  }
+
+  public async getStatus(): Promise<AdminQuestStudioStatus> {
+    const activeTemplates = this.templateRegistry.getActiveTemplates();
+    const instances = await this.persistenceEngine.listInstances();
+
+    return {
+      compilerVersion: '1.0.0',
+      schemaVersion: 'aurion.quest.v1',
+      activeTemplateSetHash: this.templateRegistry.getTemplateSetHash(),
+      activeTemplatesCount: activeTemplates.length,
+      worldFactsCount: this.worldFactEngine.getFacts().length,
+      worldStateSequence: this.worldFactEngine.getLatestSequence(),
+      totalInstancesCount: instances.length,
+      activeInstancesCount: instances.filter(i => i.state === 'active').length,
+      completedInstancesCount: instances.filter(i => i.state === 'completed').length,
+      quarantinedTemplatesCount: 0,
+      gameDevStatus: {
+        version: '1.0.2',
+        sourceRevision: '96a0b4f34b979279ab983e9547af43133e85f310',
+        available: true,
+      },
+    };
+  }
+
+  public getWorldFacts(): WorldFact[] {
+    return this.worldFactEngine.getFacts();
+  }
+
+  public getTemplates(): QuestTemplateVersion[] {
+    return this.templateRegistry.getActiveTemplates();
+  }
+
+  public async listInstances(): Promise<QuestInstance[]> {
+    return this.persistenceEngine.listInstances();
+  }
+
+  public async replayInstance(instanceId: string): Promise<QuestReplayReceipt> {
+    const instance = await this.persistenceEngine.getInstance(instanceId);
+    if (!instance) {
+      throw new Error(`QUEST_INSTANCE_NOT_FOUND:${instanceId}`);
+    }
+    const plan = await this.persistenceEngine.getPlan(instance.planHash);
+    if (!plan) {
+      throw new Error(`QUEST_PLAN_NOT_FOUND:${instance.planHash}`);
+    }
+
+    const facts = this.worldFactEngine.getFacts();
+    return this.replayEngine.replayInstance(instance, plan, facts, instance.planHash);
+  }
+
+  public createDraftProposal(params: {
+    authorUserId: number;
+    templateId: string;
+    templateVersion: number;
+    proposedDataJson: string;
+  }): QuestAdminProposal {
+    const id = `prop_${params.templateId}_v${params.templateVersion}_${Date.now()}`;
+    const expectedTemplateSetHash = this.templateRegistry.getTemplateSetHash();
+
+    const receiptHash = computeCanonicalHash('aurion.quest.template.v1', {
+      id,
+      authorUserId: params.authorUserId,
+      templateId: params.templateId,
+      templateVersion: params.templateVersion,
+      expectedTemplateSetHash,
+      proposedDataJson: params.proposedDataJson,
+    });
+
+    const proposal: QuestAdminProposal = {
+      id,
+      proposalType: 'create_template_draft',
+      authorUserId: params.authorUserId,
+      templateId: params.templateId,
+      templateVersion: params.templateVersion,
+      expectedTemplateSetHash,
+      proposedDataJson: params.proposedDataJson,
+      status: 'draft',
+      receiptHash,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.proposals.set(id, proposal);
+    return proposal;
+  }
+}

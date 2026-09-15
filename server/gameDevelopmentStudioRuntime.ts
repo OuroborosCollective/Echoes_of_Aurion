@@ -149,7 +149,7 @@ async function requireAdmin(request: Request, response: Response): Promise<Reado
   return Object.freeze({ id: user.id });
 }
 
-async function inspectApprovedAsset(operation: "inspect" | "validate", assetId: string): Promise<Readonly<Record<string, unknown>>> {
+export async function inspectApprovedAsset(operation: "inspect" | "validate", assetId: string): Promise<Readonly<Record<string, unknown>>> {
   const catalog = await glbImportStore().catalog();
   const asset = catalog.entries.find(entry => entry.assetId === assetId);
   if (!asset) throw new Error("GAME_DEV_APPROVED_ASSET_REQUIRED");

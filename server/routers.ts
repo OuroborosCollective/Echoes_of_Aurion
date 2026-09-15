@@ -32,10 +32,8 @@ import {
   getConfirmedNpcPolicy, 
   requestNpcPolicyRollback 
 } from "./wasdNpcEvolutionPersistence";
-import { 
-  aurionNpcPolicyVersions 
-} from "../drizzle/schema";
-
+import { aurionNpcPolicyVersions } from "../drizzle/schema";
+import { aurionQuestRouter } from "./routes/aurionQuestRouter";
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -49,6 +47,7 @@ const companionMemory = new CompanionMemoryStore();
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  aurionQuest: aurionQuestRouter,
   worldAssets: router({
     region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => legacyWorldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
     regionV2: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),

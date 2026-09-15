@@ -126,6 +126,27 @@ kbd { min-width: 27px; height: 27px; display: inline-grid; place-items: center; 
 .mission-ui { position: relative; z-index: 4; min-height: 100dvh; pointer-events: none; }
 .mission-ui button, .mission-ui input { pointer-events: auto; }
 .mission-objective { position: fixed; top: 94px; left: 50%; transform: translateX(-50%); width: min(360px, calc(100vw - 190px)); text-align: center; padding: 10px 15px 8px; background: linear-gradient(90deg, transparent, rgb(3 24 29 / 84%) 17%, rgb(3 24 29 / 84%) 83%, transparent); }
+.pulse-highlight {
+  animation: pulse-objective 1.5s ease-in-out;
+}
+.shake-highlight {
+  animation: shake-objective 0.5s ease-in-out;
+}
+@keyframes pulse-objective {
+  0%, 100% {
+    transform: scale(1);
+    background: rgba(45, 226, 207, 0.1);
+  }
+  50% {
+    transform: scale(1.02);
+    background: rgba(45, 226, 207, 0.4);
+  }
+}
+@keyframes shake-objective {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
 .mission-objective span { display: block; color: #80b0a4; font-size: 8px; font-weight: 900; letter-spacing: .17em; }
 .mission-objective b { display: block; margin-top: 4px; color: #f6dfad; font-family: "Cinzel", serif; font-size: 11px; }
 .objective-meter { margin-top: 8px; height: 3px; background: rgb(190 224 207 / 16%); }

@@ -5,6 +5,13 @@ import { validConfirmedPresences, ZONE_MAX_PRESENCES, type ConfirmedZonePresence
 export const CONFIRMED_REMOTE_PRESENCES_EVENT = "aurion:confirmed-remote-presences" as const;
 export const REMOTE_PUBLIC_APPEARANCE_ACTIVE_EVENT = "aurion:remote-public-appearance-active" as const;
 
+const REMOTE_PRESENCE_COLORS = [
+    parseInt('66bbcc', 16), 
+    parseInt('e3c578', 16), 
+    parseInt('a4d090', 16), 
+    parseInt('c3a1df', 16)
+];
+
 /** Only authenticated zone actors enter this bounded, read-only render projection. */
 export class RemotePresenceProjection {
   readonly mesh: THREE.InstancedMesh;
@@ -39,7 +46,7 @@ export class RemotePresenceProjection {
       const matrix = new THREE.Matrix4().makeTranslation(x - this.originX, y + .85, z - this.originZ);
       if (this.hiddenUsers.has(presence.userId)) matrix.scale(zero);
       this.mesh.setMatrixAt(index, matrix);
-      this.mesh.setColorAt(index, new THREE.Color([0x66bbcc, 0xe3c578, 0xa4d090, 0xc3a1df][presence.userId % 4]));
+      this.mesh.setColorAt(index, new THREE.Color(REMOTE_PRESENCE_COLORS[presence.userId % 4]!));
     });
     this.mesh.position.set(this.originX, 0, this.originZ);
     this.mesh.count = this.current.length;

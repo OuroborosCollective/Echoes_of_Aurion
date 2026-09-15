@@ -216,6 +216,90 @@ function createAdminMcpServer(actor: AdminActor) {
     server.registerTool("aurion_admin_glb_catalog", { description: "Read the actual approved GLB catalog and visual target assignments.", inputSchema: z.object({}) }, async () => content(await glbImportStore().catalog()));
     server.registerTool("aurion_admin_glb_assign", { description: "Replace a deterministic visual target with an approved asset, bound to the exact current active asset ID.", inputSchema: z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }) }, async input => content(await glbImportStore().assign(actor.userId, input)));
   }
+
+  // AIM-298 Quest Compiler MCP Tools
+  const questService = new (require("./questCompiler/adminService").AdminQuestStudioService)();
+
+  server.registerTool("aurion_quest_status", {
+    title: "Aurion Quest Compiler Status",
+    description: "Returns version, schema, active template set hash, world state sequence, and instance metrics for the Aurion Quest Compiler.",
+    inputSchema: z.object({}),
+  }, async () => content(await questService.getStatus()));
+
+  server.registerTool("aurion_quest_template_list", {
+    title: "List Quest Templates",
+    description: "Lists all active canonical quest templates in the compiler registry.",
+    inputSchema: z.object({}),
+  }, async () => content(await questService.getTemplates()));
+
+  server.registerTool("aurion_quest_template_get", {
+    title: "Get Quest Template",
+    description: "Retrieves a specific quest template by ID and optional version.",
+    inputSchema: z.object({
+      templateId: z.string(),
+      version: z.number().int().optional(),
+    }),
+  }, async input => {
+    const tpls = await questService.getTemplates();
+    const match = tpls.find((t: any) => t.templateId === input.templateId && (!input.version || t.version === input.version));
+    if (!match) throw new Error(`Template ${input.templateId} not found`);
+    return content(match);
+  });
+
+  server.registerTool("aurion_quest_validate", {
+    title: "Validate Quest Template",
+    description: "Validates a candidate template schema and fail-closed integrity rules without storing it.",
+    inputSchema: z.object({
+      templateJson: z.string(),
+    }),
+  }, async input => {
+    const parsed = JSON.parse(input.templateJson);
+    const { AurionQuestTemplateSchema } = require("../shared/aurionQuestContract");
+    const { validateQuestGraph } = require("./questCompiler/validator");
+    const validation = AurionQuestTemplateSchema.safeParse(parsed);
+    if (!validation.success) {
+      return content({ valid: false, errors: validation.error.format() });
+    }
+    const graphResult = validateQuestGraph(validation.data);
+    return content(graphResult);
+  });
+
+  server.registerTool("aurion_quest_instance_explain", {
+    title: "Explain Quest Instance",
+    description: "Explains current step, bound roles, objective progress, and hash chain for a live quest instance.",
+    inputSchema: z.object({
+      instanceId: z.string(),
+    }),
+  }, async input => {
+    const instances = await questService.listInstances();
+    const inst = instances.find((i: any) => i.id === input.instanceId);
+    if (!inst) throw new Error(`Instance ${input.instanceId} not found`);
+    return content(inst);
+  });
+
+  server.registerTool("aurion_quest_replay", {
+    title: "Replay Quest Causality",
+    description: "Re-evaluates seed digest, candidate resolution, and graph composition for a quest instance to verify hash equality.",
+    inputSchema: z.object({
+      instanceId: z.string(),
+    }),
+  }, async input => content(await questService.replayInstance(input.instanceId)));
+
+  server.registerTool("aurion_quest_draft_propose", {
+    title: "Propose Quest Draft",
+    description: "Proposes a template draft proposal bound to the expected template set hash without direct mutation.",
+    inputSchema: z.object({
+      templateId: z.string(),
+      templateVersion: z.number().int().positive(),
+      proposedDataJson: z.string(),
+    }),
+  }, async input => content(await questService.createDraftProposal({
+    authorUserId: actor.userId,
+    templateId: input.templateId,
+    templateVersion: input.templateVersion,
+    proposedDataJson: input.proposedDataJson,
+  })));
+
   return server;
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { Ax1HpMeter } from "./Ax1HpMeter";
 import {
   Activity,
@@ -25,6 +26,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export type Ax1HudPartyMember = Readonly<{
   id: string;
@@ -41,6 +43,10 @@ export type Ax1HudObjective = Readonly<{
   label: string;
   detail: string;
   kind: "primary" | "npc" | "encounter" | "portal" | "landmark";
+  progress?: number;
+  subtasks?: string[];
+  lore?: string;
+  completed?: boolean;
 }>;
 
 export type Ax1HudSkill = Readonly<{
@@ -125,6 +131,43 @@ export function GameHUD(props: GameHUDProps) {
   const [partyCollapsed, setPartyCollapsed] = useState(false);
   const [objectivesCollapsed, setObjectivesCollapsed] = useState(false);
   const [combatOpen, setCombatOpen] = useState(false);
+  const prevObjectivesRef = useRef<readonly Ax1HudObjective[]>([]);
+  const [activeEffects, setActiveEffects] = useState<Map<string, 'shake' | 'pulse'>>(new Map());
+  const [completedLedger, setCompletedLedger] = useState<Ax1HudObjective[]>([]);
+
+  useEffect(() => {
+    const nextEffects = new Map<string, 'shake' | 'pulse'>();
+    const newlyCompleted: Ax1HudObjective[] = [];
+
+    props.objectives.forEach(obj => {
+      const prev = prevObjectivesRef.current.find(p => p.id === obj.id);
+      
+      // Sound trigger
+      if (obj.completed && (!prev || !prev.completed)) {
+        window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { cue: "progression.quest_complete", category: "progression" } }));
+        newlyCompleted.push(obj);
+      }
+
+      if (!prev) {
+        nextEffects.set(obj.id, 'shake'); // NEW - SHAKE
+        if (obj.kind === "primary") toast.success(`Neues Hauptziel: ${obj.label}`);
+      } else if (prev.label !== obj.label || prev.detail !== obj.detail) {
+        nextEffects.set(obj.id, 'pulse'); // UPDATED - PULSE
+        if (obj.kind === "primary") toast.success(`Hauptziel aktualisiert: ${obj.label}`);
+      }
+    });
+
+    if (newlyCompleted.length > 0) {
+        setCompletedLedger(prev => [...newlyCompleted, ...prev].slice(0, 5));
+    }
+
+    if (nextEffects.size > 0) {
+      setActiveEffects(nextEffects);
+      const timer = setTimeout(() => setActiveEffects(new Map()), 1500);
+      return () => clearTimeout(timer);
+    }
+    prevObjectivesRef.current = props.objectives;
+  }, [props.objectives]);
 
   useEffect(() => {
     props.onMenuOpenChange?.(menuExpanded);
@@ -256,12 +299,49 @@ export function GameHUD(props: GameHUDProps) {
               <span className="flex items-center gap-1"><Award className="h-3 w-3 text-[#fbbf24]" /> Ziele ({props.objectives.length})</span>
               {objectivesCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
             </button>
-            {!objectivesCollapsed && <div className="max-h-40 space-y-1 overflow-y-auto pt-1.5">
-              {props.objectives.length ? props.objectives.map(objective => <button type="button" key={objective.id} onClick={objective.kind === "npc" ? props.onOpenContacts : objective.kind === "primary" ? props.onOpenQuests : props.onOpenMap} className={`block w-full rounded-lg border p-1.5 text-left transition-all ${objective.kind === "primary" ? "border-purple-500/40 bg-purple-950/20" : "border-gray-800/80 bg-black/60 hover:border-amber-500/40"}`}>
-                <b className="block truncate text-[10px] text-gray-100">{objective.label}</b>
-                <span className="block line-clamp-2 text-[8px] text-gray-400">{objective.detail}</span>
-              </button>) : <p className="p-1 text-[10px] italic text-gray-500">{props.worldState === "live" ? "Keine bestätigten aktiven Ziele." : props.worldStateLabel}</p>}
+            {!objectivesCollapsed && <div className="max-h-60 space-y-1 overflow-y-auto pt-1.5">
+              {props.objectives.length ? props.objectives.map(objective => {
+                const effectClass = activeEffects.get(objective.id) === 'shake' ? 'shake-highlight' : activeEffects.get(objective.id) === 'pulse' ? 'pulse-highlight' : '';
+                return (
+                <Collapsible key={objective.id}>
+                  <CollapsibleTrigger asChild>
+                    <button type="button" className={`block w-full rounded-lg border p-1.5 text-left transition-all ${objective.kind === "primary" ? "border-purple-500/40 bg-purple-950/20" : "border-gray-800/80 bg-black/60 hover:border-amber-500/40"} ${effectClass}`}>
+                      <b className="block truncate text-[10px] text-gray-100">{objective.label}</b>
+                      <span className="block line-clamp-2 text-[8px] text-gray-400">{objective.detail}</span>
+                      {objective.progress !== undefined && (
+                          <div className="mt-1.5 flex items-center gap-2">
+                             <div className="h-1.5 flex-1 rounded-full bg-stone-900">
+                                <div className="h-full rounded-full bg-amber-500 transition-all duration-500 ease-out" style={{ width: `${objective.progress * 100}%` }} />
+                             </div>
+                             <span className="text-[8px] text-amber-500 font-mono">{Math.round(objective.progress * 100)}%</span>
+                          </div>
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-1.5 py-1 text-[9px] text-gray-300">
+                    {objective.subtasks && objective.subtasks.length > 0 && (
+                        <ul className="list-disc pl-3">
+                            {objective.subtasks.map((task, i) => <li key={i}>{task}</li>)}
+                        </ul>
+                    )}
+                    {objective.lore && <p className="italic text-gray-400 mt-1">{objective.lore}</p>}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}) : <p className="p-1 text-[10px] italic text-gray-500">{props.worldState === "live" ? "Keine bestätigten aktiven Ziele." : props.worldStateLabel}</p>}
             </div>}
+            
+            {completedLedger.length > 0 && (
+                <div className="mt-2 border-t border-gray-800 pt-2">
+                    <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Zuletzt bestätigt:</p>
+                    <div className="max-h-20 overflow-y-auto space-y-1">
+                        {completedLedger.map(obj => (
+                            <div key={obj.id} className="text-[8px] text-emerald-500 flex items-center gap-1">
+                                <ShieldCheck className="h-3 w-3" /> {obj.label}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
           </section>
         </div>
       </div>

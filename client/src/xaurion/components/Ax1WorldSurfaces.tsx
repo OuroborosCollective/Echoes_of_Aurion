@@ -5,7 +5,15 @@ import type { ConfirmedCombatMetrics } from "../integration/combatPresentation";
 import { AX1_VISIBLE_SOURCE_REVISION } from "../integration/ax1SourceManifest";
 import { Ax1ProjectionModal, type Ax1ProjectionState, UnknownValue } from "./Ax1ProjectionModal";
 
-export type Ax1WorldPoi = Readonly<{ id: string; kind: "portal" | "npc" | "encounter" | "landmark"; state: "locked" | "available" | "completed"; label: string }>;
+export type Ax1WorldPoi = Readonly<{ 
+  id: string; 
+  kind: "portal" | "npc" | "encounter" | "landmark" | "house" | "spawn"; 
+  state: "locked" | "available" | "completed"; 
+  label: string;
+  x: number;
+  z: number;
+  unlocked: boolean;
+}>;
 export type Ax1ConfirmedWorld = Readonly<{
   displayName: string;
   epoch: number;

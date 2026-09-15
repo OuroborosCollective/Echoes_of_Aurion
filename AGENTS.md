@@ -4,21 +4,21 @@
 
 Before editing gameplay, UI, persistence, routes, tests, issues or documentation, read [ARCHITECTURE_OWNERSHIP.md](ARCHITECTURE_OWNERSHIP.md).
 
-The binding ownership is:
+The binding ownership reset (AIM-298) is:
 
-- **Aurion** = website, auth/account, community, forum, community events, asset/ops governance, MariaDB persistence, transport, receipts and read-only readmodels.
+- **Aurion** = single canonical gameplay, quest, NPC, world, website, auth/account, community, asset/ops governance, MariaDB persistence, transport, receipts, and readmodels.
 - **AX1** = das kanonische Hauptspiel: Gameplay-Identität und -Verträge, `/play`, Welt-/Contentstruktur, Renderer, HUD, Input und Animation.
-- **WASD** = die ausführende deterministische Logik- und Simulationsschicht für AX1.
+- **WASD** = ausführende Logik-, Berechnungs- und Integrationsreferenz unter Aurion-Verträgen. WASD ist kein separater Gameplay-Owner und besitzt keine eigene Server-Wahrheit.
 
-For migration, schema, reconciliation, production-readback, or Aurion↔WASD cross-repository evidence work, also read `docs/agent-knowledgebase/skill-archive/aurion-migration-ops/SKILL.md` and use its guard/receipt contracts instead of ad-hoc SQL, SSH, or unverifiable workflow shortcuts.
+For migration, schema, reconciliation, production-readback, or Aurion cross-repository evidence work, also read `docs/agent-knowledgebase/skill-archive/aurion-migration-ops/SKILL.md` and use its guard/receipt contracts instead of ad-hoc SQL, SSH, or unverifiable workflow shortcuts.
 
-Do not add, preserve as canonical, or test as desired behavior any Aurion-owned combat, quest, progression, loot, crafting, economy, group/dungeon, NPC/mob, world/chunk, housing or guild/kingdom rule. Those domains belong to the AX1 game contract and are executed by WASD logic.
+All quest, world event, NPC memory, progression, loot, crafting, economy, group/dungeon, mob, world/chunk, housing, and guild/kingdom rules are authoritatively compiled, validated, persisted, and executed by **Aurion**.
 
-If legacy Aurion code currently implements such a rule, treat it as migration debt. On touch, bind the feature to AX1's game contract and WASD execution, and reduce Aurion to transport/persistence/readmodel.
+Aurion is the single source of truth. AX1 renders and interacts with Aurion state, while WASD algorithms are integrated natively inside Aurion rather than running as a secondary authority sidecar.
 
-Aurion website/Admin/MCP must never mutate gameplay truth. Gameplay data shown on account/community pages is read-only.
+Aurion website/Admin/MCP must perform effectful mutations through typed, validated Aurion commands and receipts.
 
-A test that requires old Aurion gameplay authority is stale and should be rewritten rather than preserving the wrong architecture.
+A test that requires a second non-Aurion gameplay authority is stale and should be updated to target canonical Aurion contracts.
 
 ## Evidence and merge discipline
 

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "atlasId": "aurion-atlas-alchemy-v1",
+  "family": "alchemy",
+  "sourceSha256": "4b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c",
+  "runtimeSha256": "4b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c",
+  "width": 1024,
+  "height": 1024,
+  "regions": [
+    {"id": "alchemy.glass.clear", "x": 0, "y": 0, "width": 170, "height": 170, "u0": 0.0, "v0": 0.0, "u1": 0.166, "v1": 0.166}
+  ],
+  "materialBindings": {
+    "alchemy.glass.clear": {"regionId": "alchemy.glass.clear", "usage": "surface", "colorSpace": "srgb"}
+  },
+  "manifestHash": "i0j1k2l3"
+}

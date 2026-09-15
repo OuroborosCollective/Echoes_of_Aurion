@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Gamepad2, LayoutDashboard, LogOut, PanelLeft, Upload } from "lucide-react";
+import { Compass, Gamepad2, LayoutDashboard, LogOut, PanelLeft, Upload } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -29,6 +29,7 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Operationen", path: "/ops" },
+  { icon: Compass, label: "Quest Studio", path: "/ops/quests" },
   { icon: Gamepad2, label: "Expedition", path: "/" },
 ];
 const adminMenuItem = { icon: Upload, label: "GLB Upload", path: "/ops/glb-upload" };

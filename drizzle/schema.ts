@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, float, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1420,4 +1420,79 @@ export const aurionNpcPolicyRollbackReceipts = mysqlTable("aurionNpcPolicyRollba
 }, table => [
   index("aurionNpcPolicyRollbackReceipts_npc_idx").on(table.npcId),
 ]);
+
+export const aurionQuestTemplateVersions = mysqlTable("aurionQuestTemplateVersions", {
+  templateId: varchar("templateId", { length: 96 }).notNull(),
+  version: int("version").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  templateJson: text("templateJson").notNull(),
+  templateHash: varchar("templateHash", { length: 64 }).notNull(),
+  active: boolean("active").default(true).notNull(),
+  quarantined: boolean("quarantined").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionQuestTemplateVersions_tpl_idx").on(table.templateId, table.version),
+]);
+
+export const aurionQuestPlans = mysqlTable("aurionQuestPlans", {
+  planHash: varchar("planHash", { length: 64 }).primaryKey(),
+  templateId: varchar("templateId", { length: 96 }).notNull(),
+  templateVersion: int("templateVersion").notNull(),
+  templateSetHash: varchar("templateSetHash", { length: 64 }).notNull(),
+  candidateSetHash: varchar("candidateSetHash", { length: 64 }).notNull(),
+  seedDigest: varchar("seedDigest", { length: 64 }).notNull(),
+  roleBindingHash: varchar("roleBindingHash", { length: 64 }).notNull(),
+  graphHash: varchar("graphHash", { length: 64 }).notNull(),
+  planJson: text("planJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const aurionQuestInstances = mysqlTable("aurionQuestInstances", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  playerUserId: int("playerUserId").notNull(),
+  giverNpcId: varchar("giverNpcId", { length: 96 }).notNull(),
+  templateId: varchar("templateId", { length: 96 }).notNull(),
+  templateVersion: int("templateVersion").notNull(),
+  seedDigest: varchar("seedDigest", { length: 64 }).notNull(),
+  planHash: varchar("planHash", { length: 64 }).notNull(),
+  graphHash: varchar("graphHash", { length: 64 }).notNull(),
+  currentNodeId: varchar("currentNodeId", { length: 96 }).notNull(),
+  state: varchar("state", { length: 32 }).notNull(),
+  instanceJson: text("instanceJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("aurionQuestInstances_player_idx").on(table.playerUserId),
+]);
+
+export const aurionQuestReceipts = mysqlTable("aurionQuestReceipts", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  instanceId: varchar("instanceId", { length: 128 }).notNull(),
+  eventSequence: int("eventSequence").notNull(),
+  planHash: varchar("planHash", { length: 64 }).notNull(),
+  graphHash: varchar("graphHash", { length: 64 }).notNull(),
+  previousStateHash: varchar("previousStateHash", { length: 64 }).notNull(),
+  resultStateHash: varchar("resultStateHash", { length: 64 }).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionQuestReceipts_inst_idx").on(table.instanceId),
+]);
+
+export const aurionQuestAdminProposals = mysqlTable("aurionQuestAdminProposals", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  proposalType: varchar("proposalType", { length: 64 }).notNull(),
+  authorUserId: int("authorUserId").notNull(),
+  templateId: varchar("templateId", { length: 96 }).notNull(),
+  templateVersion: int("templateVersion").notNull(),
+  expectedTemplateSetHash: varchar("expectedTemplateSetHash", { length: 64 }).notNull(),
+  proposedDataJson: text("proposedDataJson").notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "atlasId": "aurion-atlas-wilderness-props-v1",
+  "family": "wilderness-props",
+  "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "runtimeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "width": 1024,
+  "height": 1024,
+  "regions": [],
+  "materialBindings": {},
+  "manifestHash": "d4e5f6g7"
+}

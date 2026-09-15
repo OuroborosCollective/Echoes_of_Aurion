@@ -10,7 +10,7 @@ import { Ax1CombatTelegraphPresenter } from "../core/Ax1CombatTelegraphPresenter
 
 export type AurionPlayerClass="vanguard"|"seer"|"warden";
 export type AurionQuestKey="astral_call"|"archive_of_echoes"|"ember_key";
-export type AurionGameplayCommand="1"|"2"|"3"|"4"|"5"|"6"|"7"|"8"|"9"|"E"|"F";
+export type AurionGameplayCommand="1"|"2"|"3"|"4"|"5"|"6"|"7"|"8"|"9"|"E"|"F"|"T";
 export type AurionZoneMovementInput={x:-1|0|1;z:-1|0|1};
 const ZONE_FIXED_POINT_SCALE=1_000;
 const quantizeAxis=(value:number):-1|0|1=>value>0.15?1:value<-0.15?-1:0;

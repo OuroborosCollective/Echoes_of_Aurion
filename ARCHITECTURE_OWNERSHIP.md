@@ -4,25 +4,22 @@ description: Kanonische Zuständigkeits- und Truth-Boundary für Echoes of Aurio
 
 # Architektur-Ownership: Aurion · AX1 · WASD
 
-> **Kanonischer Vertrag seit 6. September 2026.** Dieses Dokument ersetzt jede ältere Repository-, GitBook-, Linear- oder Issue-Formulierung, die Echoes of Aurion selbst Gameplay-Regeln oder Gameplay-Mutationsauthority zuschreibt.
+> **Kanonischer Vertrag nach AIM-298 Owner-Reset (September 2026).** Dieses Dokument legt fest, dass **Aurion** die einzige kanonische Gameplay-, Quest-, NPC-, Welt- und Persistenz-Authority für Echoes of Aurion ist. WASD dient als Integrations- und Referenzmaterial.
 
-Die Architektur wurde im Live-Gameplay-Kohärenzschnitt aus PR #234 auf `main` getrennt. Der dabei gemergte Basispunkt ist `5d0ba3808968c39e15e2b34cd3b32a8e5d28a598`. Spätere Revisionen dürfen diese Grenze nur enger machen, nicht wieder aufweichen.
+Die drei Eigentümer:
 
-## Die drei Eigentümer
-
-| Fläche                                                                                                                                                                                 | Kanonischer Eigentümer | Verantwortung                                                       |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------- |
-| Website, Landing Page, Auth, Konto, Community, Forum, Community-Events, Asset-/Ops-Verwaltung                                                                                          | **Aurion**             | Produktportal und soziale/operative Daten                           |
-| MariaDB, Transport, Receipts, Readmodels                                                                                                                                               | **Aurion**             | bestätigte Evidence speichern und lesen; keine Gameplayentscheidung |
-| Hauptspiel, Gameplay-Identität/-Verträge, `/play`, Welt-/Contentstruktur, 3D-Runtime, Renderer, HUD, Eingaben, Animation/VFX                                                           | **AX1**                | kanonisches Spielprodukt und fachlicher Rahmen                      |
-| Deterministische Ausführung von Bewegung, Combat, Quests, Progression, Mastery, Loot, Crafting, Economy, Gruppen/Dungeons, NPC/Mobs, Welt/Chunks, Housing, Guild/Kingdom und Balancing | **WASD**               | Logik- und Simulationsschicht unter dem AX1-Spielvertrag            |
+| Fläche | Kanonischer Eigentümer | Verantwortung |
+| --- | --- | --- |
+| Website, Landing Page, Auth, Konto, Community, Forum, Asset-/Ops-Verwaltung, MariaDB, Chunks, Quests, NPCs, WorldState, Receipts | **Aurion** | Einzige kanonische Wahrheit, Persistenz und Ausführungsautorität |
+| Hauptspiel, Gameplay-Identität/-Verträge, `/play`, Welt-/Contentstruktur, 3D-Runtime, Renderer, HUD, Eingaben, Animation/VFX | **AX1** | Kanonisches Spielprodukt, Präsentation und Interaktion |
+| Deterministische Regel-, Berechnungs- und Simulationsalgorithmen | **WASD** | Quell- und Integrationsreferenz (nativ in Aurion eingebettet) |
 
 Kurzform:
 
 ```
-Aurion = Host + Website + Account + Community + DB + Evidence
-AX1    = kanonisches Hauptspiel + Gameplayvertrag + Content + Runtime/UI
-WASD   = ausführende Gameplaylogik + deterministische Simulation
+Aurion = Sole Gameplay + Quest + World + Persistence + Host + Auth Authority
+AX1    = kanonisches Hauptspiel + Content + Runtime/UI Presentation
+WASD   = integrierte deterministische Regel- und Berechnungsreferenz
 ```
 
 ## Kanonische Kausalkette
