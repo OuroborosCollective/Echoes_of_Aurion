@@ -29,7 +29,7 @@ export const WorldEventSchema = z.object({
   type: z.string(),
   payloadHash: z.string(),
   source: z.string(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
   timestamp: z.string().optional(),
 });
 
@@ -178,7 +178,7 @@ export const QuestInstanceSchema = z.object({
   completedNodeIds: z.array(z.string()).default([]),
   boundRoles: z.array(BoundRoleSchema),
   state: z.enum(['offered', 'active', 'completed', 'failed', 'quarantined']),
-  objectiveProgress: z.record(z.union([z.number(), z.string(), z.boolean()])).default({}),
+  objectiveProgress: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -193,7 +193,7 @@ export const QuestRuntimeEventSchema = z.object({
   actorId: z.string(),
   nodeId: z.string(),
   choiceEdgeId: z.string().optional(),
-  payload: z.record(z.unknown()).default({}),
+  payload: z.record(z.string(), z.unknown()).default({}),
   previousStateHash: z.string(),
   resultingStateHash: z.string(),
   timestamp: z.string(),
