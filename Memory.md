@@ -606,3 +606,9 @@ Next safe step: Report complete status to the user.
 
 
 
+
+### 2026-09-15 — Migration/semantic recovery
+Status: VERIFIED repository integration; production readback pending merge
+Änderung: Production-Wave, Apply/Reconcile/Readback durch 0046 synchronisiert, gelöschte Deploy-Verifier wiederhergestellt und Semantic-History-, Lockfile- sowie Android-Folgefehler kausal repariert.
+Erkenntnis: Stabile Fact-IDs brauchen receipt-scoped Semantic-History; isolierte Tests müssen ihre append-only Semantic-Sidecars selbst räumen statt Conflict-Gates abzuschwächen.
+Evidence: exact source head be18a8a9358b93213f1e6a444596b96cbbca55a7; 47/47 Journal; root apply 34987812678; root reconcile 34987812722; schema reconcile 34987812775; watermark 34987812674; AIM-251 34987812489; Android 34987812520; AIM-292 34987812481 same-transaction/replay/readback green.
