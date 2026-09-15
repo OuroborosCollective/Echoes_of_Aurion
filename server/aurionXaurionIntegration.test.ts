@@ -1,11 +1,23 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(path, "utf8");
-const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
-const adaptations = JSON.parse(read("docs/migrations/aim239-determinism-adaptations.json")) as {
-  files: Array<{ path: string; sourceSha256: string; targetSha256: string; adaptations: Array<{ before: string; after: string; occurrences: number }> }>;
+const hashBytes = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
+const sha256 = (path: string) => hashBytes(readFileSync(path));
+
+type AdaptationEntry = {
+  path: string;
+  sourceRevision?: string;
+  sourceSha256: string;
+  targetSha256: string;
+  adaptations: Array<{ before: string; after: string; occurrences: number }>;
+};
+type AdaptationManifest = {
+  sourceRevision?: string;
+  aurionPreAdaptationRevision?: string;
+  files: AdaptationEntry[];
 };
 const treeVisualAdaptations = JSON.parse(read("docs/migrations/fantasy-tree-visual-adaptations.json")) as typeof adaptations;
 const surfaceAtlasAdaptations = JSON.parse(read("docs/migrations/ax1-surface-atlas-adaptations.json")) as typeof adaptations;
@@ -123,7 +135,7 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(read("client/src/xaurion/core/ProceduralEquipmentVisuals.ts")).toContain("resolveItemGlbMapping");
   });
 
-  it("pins the hash-materialized owner ZIP landscape wave and its visible world structure", () => {
+  it("proves immutable landscape provenance without pinning the later mutable runtime to an old target hash", () => {
     const landscape = read("client/src/xaurion/world/OpenWorldLandscape.ts");
     expect(sourceHashBeforeDeterminism("client/src/xaurion/world/OpenWorldLandscape.ts")).toBe("27f150e4763f125d32eea3c6f600a1d23031de78dcc2f2ccd6109d74294ea430");
     expect(landscape).toContain("buildSanctumHub");
@@ -134,7 +146,7 @@ describe("AIM-239 xaurion integration boundary", () => {
     expect(landscape).toContain("sporeCount = 280");
   });
 
-  it("pins the owner ZIP chunk and collision wave while keeping Aurion persistence authoritative", () => {
+  it("proves immutable chunk/collision origin while keeping the current persistence boundary explicit", () => {
     const chunks = read("client/src/xaurion/world/WorldChunkManager.ts");
     const collision = read("client/src/xaurion/world/WorldCollisionSystem.ts");
     expect(createHash("sha256").update(beforeTreeVisualTags("client/src/xaurion/world/WorldChunkManager.ts")).digest("hex")).toBe("73f9cad5f5e3453f7cb719101b84e3cb6472bd28e720c450c480ade3888db57f");

@@ -8,47 +8,6 @@ export interface BVHWorkerOptions {
   verbose?: boolean;
 }
 
-/**
- * Inline WebWorker source code for three-mesh-bvh tree generation.
- * Offloads BVH tree building from the main UI thread during environment asset loading.
- */
-const WORKER_SCRIPT = `
-importScripts('https://unpkg.com/three@0.185.1/build/three.min.js');
-importScripts('https://unpkg.com/three-mesh-bvh@0.9.15/build/index.umd.cjs');
-
-self.onmessage = function(e) {
-  var data = e.data;
-  var id = data.id;
-  var positions = data.positions;
-  var index = data.index;
-  var options = data.options || {};
-
-  try {
-    var geo = new self.THREE.BufferGeometry();
-    geo.setAttribute('position', new self.THREE.BufferAttribute(positions, 3));
-    if (index) {
-      geo.setIndex(new self.THREE.BufferAttribute(index, 1));
-    }
-
-    var bvh = new self.MeshBVH.MeshBVH(geo, options);
-    var serialized = self.MeshBVH.MeshBVH.serialize(bvh);
-
-    var transferables = [];
-    if (serialized.roots) {
-      for (var i = 0; i < serialized.roots.length; i++) {
-        if (serialized.roots[i]) transferables.push(serialized.roots[i]);
-      }
-    }
-    if (serialized.index) transferables.push(serialized.index);
-    if (serialized.indirectBuffer) transferables.push(serialized.indirectBuffer);
-
-    self.postMessage({ id: id, success: true, serialized: serialized }, transferables);
-  } catch (err) {
-    self.postMessage({ id: id, success: false, error: err ? err.message : String(err) });
-  }
-};
-`;
-
 class BVHWorkerPool {
   private static instance: BVHWorkerPool | null = null;
   private worker: Worker | null = null;
@@ -69,36 +28,49 @@ class BVHWorkerPool {
     return BVHWorkerPool.instance;
   }
 
+  private failWorker(message: string): void {
+    const error = new Error(message);
+    for (const callback of this.pendingCallbacks.values()) callback.reject(error);
+    this.pendingCallbacks.clear();
+    this.worker?.terminate();
+    this.worker = null;
+  }
+
   private initWorker(): void {
     if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-      return; // SSR or environment without Worker support
+      return;
     }
 
     try {
-      // Create inline blob worker
-      const blob = new Blob([WORKER_SCRIPT], { type: 'application/javascript' });
-      const workerUrl = URL.createObjectURL(blob);
-      this.worker = new Worker(workerUrl);
+      this.worker = new Worker(new URL('./bvhBuildWorker.ts', import.meta.url), {
+        type: 'module',
+        name: 'aurion-bvh-builder',
+      });
 
-      this.worker.onmessage = (e: MessageEvent) => {
-        const { id, success, serialized, error } = e.data || {};
+      this.worker.onmessage = (event: MessageEvent) => {
+        const { id, success, serialized, error } = event.data || {};
         const callback = this.pendingCallbacks.get(id);
-        if (callback) {
-          this.pendingCallbacks.delete(id);
-          if (success) {
-            callback.resolve(serialized);
-          } else {
-            callback.reject(new Error(error || 'Worker BVH generation failed'));
-          }
-        }
+        if (!callback) return;
+
+        this.pendingCallbacks.delete(id);
+        if (success) callback.resolve(serialized);
+        else callback.reject(new Error(error || 'Worker BVH generation failed'));
       };
 
-      this.worker.onerror = (err) => {
-        console.warn('[BVHWorker] Worker error, falling back to main thread:', err.message);
+      this.worker.onerror = event => {
+        const message = event.message || 'BVH worker runtime failure';
+        console.warn('[BVHWorker] Worker error, falling back to main thread:', message);
+        this.failWorker(message);
       };
-    } catch (err) {
-      console.warn('[BVHWorker] Unable to initialize WebWorker for BVH, using main thread fallback.');
-      this.worker = null;
+
+      this.worker.onmessageerror = () => {
+        const message = 'BVH worker message decoding failed';
+        console.warn('[BVHWorker] Message error, falling back to main thread.');
+        this.failWorker(message);
+      };
+    } catch (error) {
+      console.warn('[BVHWorker] Unable to initialize local module worker, using main thread fallback.');
+      this.failWorker(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -117,19 +89,11 @@ class BVHWorkerPool {
 
       const posBuffer = positions.slice(0);
       const idxBuffer = index ? index.slice(0) : null;
-
       const transferables: Transferable[] = [posBuffer.buffer];
-      if (idxBuffer) {
-        transferables.push(idxBuffer.buffer);
-      }
+      if (idxBuffer) transferables.push(idxBuffer.buffer);
 
       this.worker!.postMessage(
-        {
-          id,
-          positions: posBuffer,
-          index: idxBuffer,
-          options,
-        },
+        { id, positions: posBuffer, index: idxBuffer, options },
         transferables
       );
     });
@@ -137,9 +101,9 @@ class BVHWorkerPool {
 }
 
 /**
- * Offloads three-mesh-bvh tree generation to a WebWorker.
+ * Offloads three-mesh-bvh tree generation to a locally bundled module worker.
  * Deserializes the output and attaches `boundsTree` to the geometry on completion.
- * Falls back to main thread synchronous computation if Worker is unavailable or fails.
+ * Falls back to main-thread computation if Worker is unavailable or fails.
  */
 export async function computeBoundsTreeAsync(
   geometry: THREE.BufferGeometry,
@@ -159,43 +123,34 @@ export async function computeBoundsTreeAsync(
     const pool = BVHWorkerPool.getInstance();
     const serialized = await pool.generateBVH(posArray, indexArray, options);
 
-    if (serialized && serialized.index) {
+    if (serialized?.index) {
       const IndexTypedArray = posAttr.count > 65535 ? Uint32Array : Uint16Array;
-      geometry.setIndex(new THREE.BufferAttribute(new IndexTypedArray(serialized.index), 1));
+      const source = serialized.index as ArrayLike<number>;
+      geometry.setIndex(new THREE.BufferAttribute(new IndexTypedArray(source), 1));
     }
 
     const boundsTree = MeshBVH.deserialize(serialized, geometry);
     (geometry as any).boundsTree = boundsTree;
     return boundsTree;
   } catch (_workerError) {
-    // Graceful fallback to main-thread computeBoundsTree
     (geometry as any).computeBoundsTree(options);
     return (geometry as any).boundsTree as MeshBVH;
   }
 }
 
-/**
- * Helper to compute and attach BVH to a single Mesh's geometry.
- */
 export async function attachMeshBVH(
   mesh: THREE.Mesh,
   options?: BVHWorkerOptions & { useWorker?: boolean }
 ): Promise<MeshBVH | null> {
   if (!mesh || !mesh.isMesh || !mesh.geometry) return null;
 
-  const useWorker = options?.useWorker !== false;
-  if (useWorker) {
-    return computeBoundsTreeAsync(mesh.geometry, options);
-  } else {
-    initBVH();
-    (mesh.geometry as any).computeBoundsTree(options);
-    return (mesh.geometry as any).boundsTree as MeshBVH;
-  }
+  if (options?.useWorker !== false) return computeBoundsTreeAsync(mesh.geometry, options);
+
+  initBVH();
+  (mesh.geometry as any).computeBoundsTree(options);
+  return (mesh.geometry as any).boundsTree as MeshBVH;
 }
 
-/**
- * Helper to traverse a group/scene and compute BVH for all descendant meshes.
- */
 export async function attachMeshBVHToGroup(
   root: THREE.Object3D,
   options?: BVHWorkerOptions & { useWorker?: boolean }
@@ -203,7 +158,7 @@ export async function attachMeshBVHToGroup(
   let count = 0;
   const promises: Promise<any>[] = [];
 
-  root.traverse((child) => {
+  root.traverse(child => {
     const mesh = child as THREE.Mesh;
     if (mesh.isMesh && mesh.geometry && mesh.geometry.attributes.position) {
       count++;

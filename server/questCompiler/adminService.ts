@@ -142,14 +142,19 @@ export class AdminQuestStudioService {
     });
     const id = `prop_${params.templateId}_v${params.templateVersion}_${proposalIdentity.slice(0, 16)}`;
     const expectedTemplateSetHash = this.templateRegistry.getTemplateSetHash();
-
-    const receiptHash = computeCanonicalHash('aurion.quest.template.v1', {
-      id,
+    const identityPayload = {
       authorUserId: params.authorUserId,
       templateId: params.templateId,
       templateVersion: params.templateVersion,
       expectedTemplateSetHash,
       proposedDataJson: params.proposedDataJson,
+    };
+    const identityDigest = computeCanonicalHash('aurion.quest.template.v1', identityPayload);
+    const id = `prop_${params.templateId}_v${params.templateVersion}_${identityDigest.slice(0, 16)}`;
+
+    const receiptHash = computeCanonicalHash('aurion.quest.template.v1', {
+      id,
+      ...identityPayload,
     });
 
     const proposal: QuestAdminProposal = {

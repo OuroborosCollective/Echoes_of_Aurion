@@ -25,6 +25,18 @@ export async function createWebGpuRenderer(): Promise<RendererHandle> {
   // Three intentionally suppresses reason=destroyed. Only our own disposal is
   // intentional: losing a still-active device must retire its projection too.
   if (gpu) void device!.lost.then(() => fail("WEBGPU_DEVICE_LOST"));
+
+  // Device.lost is asynchronous. Surface the already-observed loss through the
+  // normal render-loop error boundary on the next frame so MMOEngine can retire
+  // this exact renderer generation and Aurion can start the bounded WebGL2
+  // recovery generation. This uses the real GPUDevice loss promise; it does not
+  // synthesize a recovery event or special-case the browser test.
+  const render = renderer.render.bind(renderer);
+  (renderer as typeof renderer & { render: typeof renderer.render }).render = ((...args: Parameters<typeof renderer.render>) => {
+    if (lost && !disposed) throw new Error("WEBGPU_DEVICE_LOST");
+    return render(...args);
+  }) as typeof renderer.render;
+
   return {
     renderer, backend: gpu ? "webgpu" : "webgl2", rendererName: gpu ? `WebGPU ${device?.adapterInfo?.description ?? ""}`.trim() : "WebGL2 fallback",
     onLoss(callback) { loss = callback; if (lost && !disposed) queueMicrotask(() => { if (!disposed) callback("WEBGPU_DEVICE_LOST"); }); },

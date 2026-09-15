@@ -3,13 +3,15 @@ import fs from 'fs';
 import path from 'path';
 
 describe('Atlas Manifest Regression', () => {
-    const manifestDir = path.resolve(__dirname, '../../../assets/textures/aurion/manifests');
+    const manifestDir = path.resolve(__dirname, '../../../../assets/textures/aurion/manifests');
+    expect(fs.existsSync(manifestDir)).toBe(true);
     const files = fs.readdirSync(manifestDir).filter(f => f.endsWith('.json'));
+    expect(files.length).toBeGreaterThan(0);
 
     files.forEach(file => {
         it(`should have valid UV bounds and structure for ${file}`, () => {
             const content = JSON.parse(fs.readFileSync(path.join(manifestDir, file), 'utf-8'));
-            
+
             // Validate UV Bounds
             content.regions.forEach((region: any) => {
                 expect(region.u0).toBeGreaterThanOrEqual(0);

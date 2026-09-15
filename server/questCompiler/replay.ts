@@ -26,6 +26,7 @@ export class QuestReplayEngine {
     const timestamp = operationalDate(this.clock).toISOString();
     const activeTemplates = this.templateRegistry.getActiveTemplates();
     const templateSetHash = this.templateRegistry.getTemplateSetHash();
+    const timestamp = this.nowIso();
 
     // 1. Re-evaluate candidate resolution
     const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
