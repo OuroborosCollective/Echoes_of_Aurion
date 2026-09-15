@@ -8,7 +8,7 @@ on:
       - "pnpm-lock.yaml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   refresh-lock:
@@ -18,7 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -27,10 +28,17 @@ jobs:
         run: pnpm install --lockfile-only --no-frozen-lockfile
       - name: Prove regenerated lock is frozen-install compatible
         run: pnpm install --frozen-lockfile --lockfile-only
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: regenerated-pnpm-lock-${{ github.sha }}
-          path: pnpm-lock.yaml
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit exact generated lock to this PR branch
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git diff --check -- pnpm-lock.yaml
+          if git diff --quiet -- pnpm-lock.yaml; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add pnpm-lock.yaml
+          git commit -m 'fix(deps): synchronize pnpm lockfile'
+          git push origin "HEAD:${HEAD_BRANCH}"
