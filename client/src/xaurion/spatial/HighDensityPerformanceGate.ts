@@ -5,7 +5,6 @@ import { RenderEcsPilot } from './RenderEcsPilot';
 import { ProceduralLowPolyWorld } from '../world/ProceduralLowPolyWorld';
 
 export interface HighDensityMetricsReport {
-  timestamp: string;
   profile: 'phone' | 'tablet' | 'desktop';
   confirmedActorsCount: number;
   visibleActorsCount: number;
@@ -27,7 +26,8 @@ export interface HighDensityMetricsReport {
  */
 export class HighDensityPerformanceGate {
   /**
-   * Executes a simulated high-density scenario run for a specific device profile and returns an immutable metrics report.
+   * Executes a deterministic simulated high-density scenario for a specific device profile.
+   * The report intentionally carries no ambient wall-clock timestamp; runtime evidence must bind time externally.
    */
   public static runGateEvaluation(
     profile: 'phone' | 'tablet' | 'desktop' = 'desktop',
@@ -38,7 +38,6 @@ export class HighDensityPerformanceGate {
     const budgetStats = renderBudget(dims.w, dims.h, 2, 'GPU');
     const postFxConfig = ProceduralLowPolyWorld.getGovernedPostFxConfig(profile);
 
-    // Initialize bitECS presentation pilot
     const bitEcs = new RenderEcsPilot();
     for (let i = 0; i < confirmedActorsCount; i++) {
       const angle = (i / confirmedActorsCount) * Math.PI * 2;
@@ -47,11 +46,9 @@ export class HighDensityPerformanceGate {
     }
     bitEcs.updateLods(0, 0, 0);
 
-    // Ensure zero actor elimination: all confirmed actors must be represented in presentation
     const visibleActorsCount = confirmedActorsCount;
     const actorEliminationDetected = visibleActorsCount !== confirmedActorsCount;
 
-    // Verify Texture Atlas pipeline descriptor registration
     const atlas = TextureAtlasPipeline.registerAtlas(
       'aurion-gate-atlas',
       2,
@@ -66,7 +63,6 @@ export class HighDensityPerformanceGate {
       postFxConfig.maxParticlePoolSize >= 600;
 
     return {
-      timestamp: new Date().toISOString(),
       profile,
       confirmedActorsCount,
       visibleActorsCount,
