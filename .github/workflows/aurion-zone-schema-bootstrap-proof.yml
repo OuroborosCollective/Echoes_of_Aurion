@@ -50,6 +50,7 @@ on:
       - "drizzle/0043_aurion_civilization_history.sql"
       - "drizzle/0044_aurion_semantic_memory_graph.sql"
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
+      - "drizzle/0046_aurion_semantic_node_history_key.sql"
   push:
     branches: [main]
     paths:
@@ -100,6 +101,7 @@ on:
       - "drizzle/0043_aurion_civilization_history.sql"
       - "drizzle/0044_aurion_semantic_memory_graph.sql"
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
+      - "drizzle/0046_aurion_semantic_node_history_key.sql"
 
 permissions:
   contents: read
@@ -148,46 +150,15 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import fs from "node:fs";
-
           const script = fs.readFileSync("scripts/reconcile-aurion-production-schema.ts", "utf8");
           const classifier = fs.readFileSync("scripts/aurionProductionReadbackErrors.ts", "utf8");
           const classifierTest = fs.readFileSync("server/aurionProductionReadbackErrors.test.ts", "utf8");
           const workflow = fs.readFileSync(".github/workflows/aurion-production-schema-readback.yml", "utf8");
-
-          for (const token of [
-            "classifyReconciliationFailure(error, failureStage)",
-            "...safeFailure",
-            "databaseCredentialReturned: false",
-          ]) {
-            if (!script.includes(token)) throw new Error(`missing receipt-builder disclosure contract: ${token}`);
-          }
-          for (const token of [
-            "failureStage",
-            "errorClass",
-            "retryable",
-            "const mapped:",
-            "UNCLASSIFIED_READ_FAILURE",
-          ]) {
-            if (!classifier.includes(token)) throw new Error(`missing classifier disclosure contract: ${token}`);
-          }
-          for (const token of [
-            'expect(serialized).not.toContain("secret")',
-            'expect(serialized).not.toContain("private-host")',
-            'expect(serialized).not.toContain("mysql://")',
-          ]) {
-            if (!classifierTest.includes(token)) throw new Error(`missing non-disclosure regression: ${token}`);
-          }
-          for (const forbidden of ["error.message", "error.stack", "String(error)"]) {
-            if (script.includes(forbidden)) throw new Error(`raw error disclosure forbidden in receipt builder: ${forbidden}`);
-          }
-          for (const token of [
-            "allowedStages",
-            "allowedClasses",
-            "databaseCredentialReturned: false",
-            "unsafe or incomplete failure classification",
-          ]) {
-            if (!workflow.includes(token)) throw new Error(`missing workflow disclosure contract: ${token}`);
-          }
+          for (const token of ["classifyReconciliationFailure(error, failureStage)","...safeFailure","databaseCredentialReturned: false"]) if (!script.includes(token)) throw new Error(`missing receipt-builder disclosure contract: ${token}`);
+          for (const token of ["failureStage","errorClass","retryable","const mapped:","UNCLASSIFIED_READ_FAILURE"]) if (!classifier.includes(token)) throw new Error(`missing classifier disclosure contract: ${token}`);
+          for (const token of ['expect(serialized).not.toContain("secret")','expect(serialized).not.toContain("private-host")','expect(serialized).not.toContain("mysql://")']) if (!classifierTest.includes(token)) throw new Error(`missing non-disclosure regression: ${token}`);
+          for (const forbidden of ["error.message", "error.stack", "String(error)"]) if (script.includes(forbidden)) throw new Error(`raw error disclosure forbidden in receipt builder: ${forbidden}`);
+          for (const token of ["allowedStages","allowedClasses","databaseCredentialReturned: false","unsafe or incomplete failure classification"]) if (!workflow.includes(token)) throw new Error(`missing workflow disclosure contract: ${token}`);
           if (workflow.includes("drizzle-kit migrate")) throw new Error("readback workflow must remain non-mutating");
           NODE
 
