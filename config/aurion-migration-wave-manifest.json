@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0042",
+  "waveId": "aurion-production-0021-0045",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -89,6 +89,18 @@
     },
     {
       "tag": "0042_aurion_npc_multi_memory",
+      "source": "aurion"
+    },
+    {
+      "tag": "0043_aurion_civilization_history",
+      "source": "aurion"
+    },
+    {
+      "tag": "0044_aurion_semantic_memory_graph",
+      "source": "aurion"
+    },
+    {
+      "tag": "0045_aurion_deterministic_quest_compiler",
       "source": "aurion"
     }
   ],
