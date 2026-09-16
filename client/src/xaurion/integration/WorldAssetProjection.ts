@@ -65,8 +65,11 @@ export class WorldAssetProjection {
  }
  private select(position:{x:number;z:number},width:number){
   if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width)],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
-  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!;const distance=Math.hypot(placement.xMm/1000-this.camera.position.x,placement.zMm/1000-this.camera.position.z,this.camera.position.y-this.terrain(placement.xMm/1000,placement.zMm/1000));const height=(asset.bounds.max[1]!-asset.bounds.min[1]!)*asset.scale;
-   let lod=this.pressure?2 as const:worldAssetLod(height,distance,this.camera.fov,phone);const previous=this.previousLod.get(placement.id);if(!this.pressure&&previous!==undefined&&previous!==lod){const stable=worldAssetLod(height,distance*(lod>previous?0.9:1.1),this.camera.fov,phone);if(stable!==lod)lod=previous;}this.previousLod.set(placement.id,lod);return {placement,lod,distance,key:`${placement.assetId}:${lod}`};})
+  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!;const distance=Math.hypot(placement.xMm/1000-this.camera.position.x,placement.zMm/1000-this.camera.position.z,this.camera.position.y-this.terrain(placement.xMm/1000,placement.zMm/1000));const height=(asset.bounds.max[1]!-asset.bounds.min[1]!)*asset.scale;const previous=this.previousLod.get(placement.id);
+   let lod:0|1|2;
+   if(this.pressure){const residentPrevious=previous!==undefined&&this.cache.has(`${placement.assetId}:${previous}`);lod=residentPrevious?previous:2;}
+   else {lod=worldAssetLod(height,distance,this.camera.fov,phone);if(previous!==undefined&&previous!==lod){const stable=worldAssetLod(height,distance*(lod>previous?0.9:1.1),this.camera.fov,phone);if(stable!==lod)lod=previous;}}
+   this.previousLod.set(placement.id,lod);return {placement,lod,distance,key:`${placement.assetId}:${lod}`};})
    .filter(s=>s.distance<this.camera.far*0.9).sort((a,b)=>a.distance-b.distance||a.placement.id.localeCompare(b.placement.id));
   const keys=new Set<string>();this.selected=[];
   for(const entry of selection){if(!keys.has(entry.key)&&keys.size>=limit)continue;keys.add(entry.key);this.selected.push(entry);if(this.selected.length>=Math.floor(budget.worldInstances/(this.pressure?2:1)))break;}

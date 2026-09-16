@@ -102,3 +102,5 @@
 }
 .aurion-ui-feedback{position:absolute;left:50%;bottom:160px;transform:translateX(-50%);max-width:min(90vw,430px);padding:8px 12px;border-radius:10px;background:#041322ed;color:#bae6fd;border:1px solid #155e75;font-size:12px;pointer-events:none}
 .aurion-authority-hud__actions button[aria-pressed=true]{border-color:#34d399;color:#6ee7b7;background:#064e3bcc}
+/* The authoritative BVH switch lives in AdminGlbMenu; keep the redundant floating debug control off the player HUD. */
+.xaurion-runtime [data-testid="bvh-debug-toggle"]{display:none!important}
