@@ -1095,21 +1095,26 @@ export async function getGlobalWorldAdminReadModel(): Promise<GlobalWorldAdminRe
     const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
     return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
   }
-  const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
-  if (current) {
-    const plan = buildGlobalWorldPlan({
-      worldSeed: current.worldSeed,
-      epoch: current.epoch,
-      activePlayerCount: current.activePlayerCount,
-      highWaterPlayerCount: current.highWaterPlayerCount,
-    });
-    if (plan.deterministicHash !== current.snapshotHash) throw new Error("Der persistierte globale Weltnachweis ist inkonsistent.");
-    return Object.freeze({ source: "persisted", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: current.updatedAt.toISOString() });
+  try {
+    const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
+    if (current) {
+      const plan = buildGlobalWorldPlan({
+        worldSeed: current.worldSeed,
+        epoch: current.epoch,
+        activePlayerCount: current.activePlayerCount,
+        highWaterPlayerCount: current.highWaterPlayerCount,
+      });
+      if (plan.deterministicHash !== current.snapshotHash) throw new Error("Der persistierte globale Weltnachweis ist inkonsistent.");
+      return Object.freeze({ source: "persisted", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: current.updatedAt.toISOString() });
+    }
+    const players = await db.select({ id: users.id }).from(users);
+    const count = Math.max(1, players.length);
+    const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: count, highWaterPlayerCount: count });
+    return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
+  } catch {
+    const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
+    return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
   }
-  const players = await db.select({ id: users.id }).from(users);
-  const count = Math.max(1, players.length);
-  const plan = buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: count, highWaterPlayerCount: count });
-  return Object.freeze({ source: "preview", globalWorld: toGlobalWorldClientDescriptor(plan), updatedAt: null });
 }
 
 /**
@@ -1120,9 +1125,13 @@ export async function getGlobalWorldAdminReadModel(): Promise<GlobalWorldAdminRe
 export async function getGlobalWorldPlan() {
   const db = await getDb();
   if (!db) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
-  const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
-  if (!current) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
-  return planFromStoredGlobalSnapshot(current.snapshotJson, current.snapshotHash);
+  try {
+    const [current] = await db.select().from(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, GLOBAL_WORLD_ID)).limit(1);
+    if (!current) return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
+    return planFromStoredGlobalSnapshot(current.snapshotJson, current.snapshotHash);
+  } catch {
+    return buildGlobalWorldPlan({ worldSeed: GLOBAL_WORLD_SEED, epoch: 0, activePlayerCount: 1, highWaterPlayerCount: 1 });
+  }
 }
 
 function parseStoredWorldEpochReaction(row: typeof aurionWorldEpochReactions.$inferSelect): WorldEpochReaction {

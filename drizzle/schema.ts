@@ -1496,4 +1496,102 @@ export const aurionQuestAdminProposals = mysqlTable("aurionQuestAdminProposals",
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** AIM-299: Aurion World Context Capsules - Structured Episodes */
+export const aurionWorldContextEpisodes = mysqlTable("aurionWorldContextEpisodes", {
+  id: varchar("id", { length: 160 }).primaryKey(),
+  schemaVersion: varchar("schemaVersion", { length: 64 }).notNull(),
+  kind: varchar("kind", { length: 96 }).notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  sourceSequenceMin: int("sourceSequenceMin").notNull(),
+  sourceSequenceMax: int("sourceSequenceMax").notNull(),
+  actorIdsJson: text("actorIdsJson").notNull(),
+  outcomesJson: text("outcomesJson").notNull(),
+  relationshipEffectsJson: text("relationshipEffectsJson").notNull(),
+  tagsJson: text("tagsJson").notNull(),
+  canonicalSummary: text("canonicalSummary").notNull(),
+  sourceRootHash: varchar("sourceRootHash", { length: 64 }).notNull(),
+  episodeHash: varchar("episodeHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWcEpisodes_world_seq_idx").on(table.worldId, table.sourceSequenceMin, table.sourceSequenceMax),
+  index("aurionWcEpisodes_hash_idx").on(table.episodeHash),
+]);
+
+/** AIM-299: Episode Source Linkage with hash-bound provenance */
+export const aurionWorldContextEpisodeSources = mysqlTable("aurionWorldContextEpisodeSources", {
+  id: varchar("id", { length: 192 }).primaryKey(),
+  episodeId: varchar("episodeId", { length: 160 }).notNull(),
+  sourceId: varchar("sourceId", { length: 160 }).notNull(),
+  sourceHash: varchar("sourceHash", { length: 64 }).notNull(),
+  kind: varchar("kind", { length: 64 }).notNull(),
+  evidenceClass: varchar("evidenceClass", { length: 32 }).notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  logicalSequence: int("logicalSequence").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWcEpisodeSources_ep_idx").on(table.episodeId),
+  index("aurionWcEpisodeSources_src_idx").on(table.sourceId),
+]);
+
+/** AIM-299: Immutable World Context Capsule Receipts */
+export const aurionWorldContextCapsuleReceipts = mysqlTable("aurionWorldContextCapsuleReceipts", {
+  id: varchar("id", { length: 160 }).primaryKey(),
+  schemaVersion: varchar("schemaVersion", { length: 64 }).notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  worldRevision: varchar("worldRevision", { length: 160 }).notNull(),
+  logicalTick: int("logicalTick").notNull(),
+  actorId: varchar("actorId", { length: 96 }).notNull(),
+  purpose: varchar("purpose", { length: 64 }).notNull(),
+  queryHash: varchar("queryHash", { length: 64 }).notNull(),
+  policyVersion: varchar("policyVersion", { length: 64 }).notNull(),
+  tokenizerId: varchar("tokenizerId", { length: 96 }).notNull(),
+  maxEstimatedTokens: int("maxEstimatedTokens").notNull(),
+  maxUtf8Bytes: int("maxUtf8Bytes").notNull(),
+  selectedSourceCount: int("selectedSourceCount").notNull(),
+  omittedSourceCount: int("omittedSourceCount").notNull(),
+  sourceRootHash: varchar("sourceRootHash", { length: 64 }).notNull(),
+  selectedSourceRootHash: varchar("selectedSourceRootHash", { length: 64 }).notNull(),
+  omittedSourceRootHash: varchar("omittedSourceRootHash", { length: 64 }).notNull(),
+  capsuleHash: varchar("capsuleHash", { length: 64 }).notNull(),
+  estimatedInputTokens: int("estimatedInputTokens").notNull(),
+  utf8Bytes: int("utf8Bytes").notNull(),
+  capsuleJson: text("capsuleJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWcCapsules_world_actor_idx").on(table.worldId, table.actorId),
+  index("aurionWcCapsules_hash_idx").on(table.capsuleHash),
+  index("aurionWcCapsules_query_idx").on(table.queryHash),
+]);
+
+/** AIM-299: Capsule Source Audit linkage (selected and omitted) */
+export const aurionWorldContextCapsuleSources = mysqlTable("aurionWorldContextCapsuleSources", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  capsuleId: varchar("capsuleId", { length: 160 }).notNull(),
+  sourceId: varchar("sourceId", { length: 160 }).notNull(),
+  sourceHash: varchar("sourceHash", { length: 64 }).notNull(),
+  kind: varchar("kind", { length: 64 }).notNull(),
+  evidenceClass: varchar("evidenceClass", { length: 32 }).notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  logicalSequence: int("logicalSequence").notNull(),
+  selected: boolean("selected").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWcCapsuleSources_capsule_idx").on(table.capsuleId),
+  index("aurionWcCapsuleSources_src_idx").on(table.sourceId),
+]);
+
+/** AIM-299: Context Capsule Operational Evaluation Runs */
+export const aurionWorldContextEvalRuns = mysqlTable("aurionWorldContextEvalRuns", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  evalSuite: varchar("evalSuite", { length: 96 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 64 }).notNull(),
+  criticalFactRecall: int("criticalFactRecall").notNull(),
+  scopeViolationCount: int("scopeViolationCount").notNull(),
+  replayMatchRate: int("replayMatchRate").notNull(),
+  metricsJson: text("metricsJson").notNull(),
+  passed: boolean("passed").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+
 

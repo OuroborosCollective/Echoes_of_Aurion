@@ -330,6 +330,13 @@
       "when": 1788934000000,
       "tag": "0046_aurion_semantic_node_history_key",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1788935000000,
+      "tag": "0047_aurion_world_context_capsules",
+      "breakpoints": true
     }
   ]
 }

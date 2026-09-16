@@ -30,6 +30,7 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: LayoutDashboard, label: "Operationen", path: "/ops" },
   { icon: Compass, label: "Quest Studio", path: "/ops/quests" },
+  { icon: Compass, label: "Context Studio", path: "/ops/context" },
   { icon: Gamepad2, label: "Expedition", path: "/" },
 ];
 const adminMenuItem = { icon: Upload, label: "GLB Upload", path: "/ops/glb-upload" };

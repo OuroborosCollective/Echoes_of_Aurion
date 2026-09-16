@@ -12,6 +12,7 @@ import GlbUpload from "./pages/GlbUpload";
 import Home from "./pages/Home";
 import Operations from "./pages/Operations";
 import QuestStudio from "./pages/QuestStudio";
+import ContextStudio from "./pages/ContextStudio";
 import AurionPlayRoute from "./xaurion/integration/AurionPlayRoute";
 import Ax1PlayNavigationBridge from "./xaurion/integration/Ax1PlayNavigationBridge";
 import { SoundManager } from "./xaurion/audio/SoundManager";
@@ -35,6 +36,7 @@ function App() {
             <Route path="/play" component={AurionPlayRoute} />
             <Route path="/ops" component={Operations} />
             <Route path="/ops/quests" component={QuestStudio} />
+            <Route path="/ops/context" component={ContextStudio} />
             <Route path="/ops/glb-upload" component={GlbUpload} />
             <Route component={Home} />
           </Switch>

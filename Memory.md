@@ -644,3 +644,18 @@ Evidence: 5/5 unit tests in `server/databaseUrlGuard.test.ts` passed; `npm run c
 Learned: Background zone sinks must probe reachability at initialization to gracefully degrade to idle/disabled state rather than entering an unhandled timeout error loop in environments lacking internal container network links.
 Open: Continuous readback under live MariaDB traffic on VPS.
 Next safe step: Report status to user.
+
+### 2026-09-15 — InventoryPreview Component & AIM-265 Balancing Replay Hash Sync
+Status: VERIFIED and INTEGRATED; production-ready
+Task: Create an `InventoryPreview` component displaying gameplay items with rarity color-coded backgrounds, sync AIM-265 balancing candidate SHA-256 hashes, and safely handle database unreachability in global world admin readmodels.
+Decisions:
+- **InventoryPreview Component**: Implemented `client/src/components/InventoryPreview.tsx` featuring rarity-based color-coded badges/backgrounds (Common, Uncommon, Rare, Epic, Legendary, Mythic), category filters, dynamic event listening on `aurion:item-acquired`, and item detail inspection modal.
+- **Showcase Integration**: Added `InventoryPreview` showcase card to `client/src/pages/ComponentShowcase.tsx` and mounted route `/showcase` in `client/src/App.tsx`.
+- **AIM-265 Balancing Candidate Hash Sync**: Updated `docs/balancing/aim265-candidate.json` SHA-256 hashes for `server/aurionRegionProgressionProtocol.ts` and `server/aurionRegionCatalog.ts` to match deterministic candidate recomputation.
+- **Admin MCP / Readmodel Safety**: Wrapped `getGlobalWorldAdminReadModel` and `getGlobalWorldPlan` in `server/db.ts` to catch database connection/resolution errors and fall back gracefully to the deterministic preview plan.
+Touched surfaces: `client/src/components/InventoryPreview.tsx`, `client/src/components/InventoryPreview.test.tsx`, `client/src/pages/ComponentShowcase.tsx`, `client/src/App.tsx`, `docs/balancing/aim265-candidate.json`, `server/db.ts`, `Memory.md`.
+Evidence: Unit tests passed 100% (`client/src/components/InventoryPreview.test.tsx` 6/6 tests); balancing verification passed 100% (`replay-aim265.mjs`, `verify-aim265.py`, 6/6 unittest oracle tests); Vitest suite passed 100% (47/47 tests across 8 suites including `adminMcp.test.ts`, `aim249BalancingModel.test.ts`, `aim250RegionProgression.test.ts`, `aim265SpatialCalculation.test.ts`); `npm run check` (`tsc --noEmit`) succeeded with 0 errors.
+Learned: Both balancing candidate digests and admin readmodels must remain strictly deterministic and fail-safe when evaluated in headless CI or offline preview environments.
+Open: Continuous runtime readback during live gameplay sessions.
+Next safe step: Report status to user.
+

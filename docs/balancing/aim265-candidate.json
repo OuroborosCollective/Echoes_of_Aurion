@@ -36,11 +36,11 @@
       },
       {
         "path": "server/aurionRegionProgressionProtocol.ts",
-        "sha256": "79507628f4dcc0599d99b779d26a75ce9c63bc706b62f666da5ba420c62b8141"
+        "sha256": "09b58a606289e7abfa0ab11c0c668be5853b7690b609a8ba8a1403223c76873f"
       },
       {
         "path": "server/aurionRegionCatalog.ts",
-        "sha256": "f9bbb4b29bef322fa2e7b1bc098ae46a1a4560cfbb4e2fb613fe533ed45fc3ab"
+        "sha256": "63932fe24249b9852b2251fa13f4282ac56264ade4918f7bb597b4f3aa3b5021"
       },
       {
         "path": "server/aurionChunkPerformanceProtocol.ts",

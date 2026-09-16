@@ -173,6 +173,7 @@ import {
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
+import { InventoryPreview } from "@/components/InventoryPreview";
 
 export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
@@ -1422,6 +1423,26 @@ export default function ComponentsShowcase() {
                     ]}
                   />
                 </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Gameplay HUD / Inventory Preview */}
+          <section className="space-y-4">
+            <h2 className="text-2xl font-bold tracking-tight">Gameplay & Inventory Preview</h2>
+            <Card>
+              <CardHeader>
+                <CardTitle>InventoryPreview Component</CardTitle>
+                <CardDescription>
+                  Zeigt im Spiel erbeutete Gegenstände mit farbcodierten Hintergründen je nach Seltenheitsstufe (Gewöhnlich, Ungewöhnlich, Selten, Episch, Legendär, Mythisch).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <InventoryPreview
+                  title="Erbeutete Gegenstände (Live Preview)"
+                  subtitle="Dynamische Beuteanzeige mit Seltenheits-Farbcodierung und Detail-Inspektion"
+                  enableFilter
+                />
               </CardContent>
             </Card>
           </section>

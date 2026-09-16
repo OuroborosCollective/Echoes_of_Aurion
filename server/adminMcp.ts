@@ -300,6 +300,68 @@ function createAdminMcpServer(actor: AdminActor) {
     proposedDataJson: input.proposedDataJson,
   })));
 
+  /* AIM-299 Context Capsule MCP Tools */
+  server.registerTool("aurion_context_inspect_capsule", {
+    title: "Inspect Context Capsule",
+    description: "Inspects an immutable world context capsule receipt, selected/omitted source roots, and token budget.",
+    inputSchema: z.object({
+      capsuleId: z.string(),
+    }),
+  }, async input => {
+    const { aurionWorldContextService } = require("./worldContext/service");
+    const capsule = await aurionWorldContextService.getCapsule(input.capsuleId);
+    if (!capsule) throw new Error(`Capsule ${input.capsuleId} not found`);
+    return content(capsule);
+  });
+
+  server.registerTool("aurion_context_replay_capsule", {
+    title: "Replay Context Capsule",
+    description: "Re-executes the deterministic context capsule assembly pipeline and pinpoints first divergence.",
+    inputSchema: z.object({
+      capsuleId: z.string(),
+    }),
+  }, async input => {
+    const { aurionWorldContextService } = require("./worldContext/service");
+    const capsule = await aurionWorldContextService.getCapsule(input.capsuleId);
+    if (!capsule) throw new Error(`Capsule ${input.capsuleId} not found`);
+    return content(await aurionWorldContextService.replayCapsule({ capsule, sources: [] }));
+  });
+
+  server.registerTool("aurion_context_expand_sources", {
+    title: "Expand Context Sources",
+    description: "Reversibly expands requested canonical sources from an audited context capsule receipt.",
+    inputSchema: z.object({
+      capsuleId: z.string(),
+      requestedSourceIds: z.array(z.string()),
+      expectedCapsuleHash: z.string(),
+    }),
+  }, async input => {
+    const { aurionWorldContextService } = require("./worldContext/service");
+    return content(await aurionWorldContextService.expandSources(input));
+  });
+
+  server.registerTool("aurion_context_get_episode", {
+    title: "Get Structured Episode",
+    description: "Retrieves an immutable structured historical episode with source root and outcome records.",
+    inputSchema: z.object({
+      episodeId: z.string(),
+    }),
+  }, async input => {
+    const { aurionWorldContextService } = require("./worldContext/service");
+    const ep = await aurionWorldContextService.getEpisode(input.episodeId);
+    if (!ep) throw new Error(`Episode ${input.episodeId} not found`);
+    return content(ep);
+  });
+
+  server.registerTool("aurion_context_eval_summary", {
+    title: "World Context Evaluation Summary",
+    description: "Runs and reads back the standard AIM-299 operational context evaluation benchmark suite.",
+    inputSchema: z.object({}),
+  }, async () => {
+    const { aurionWorldContextService } = require("./worldContext/service");
+    return content(await aurionWorldContextService.getEvaluationSummary());
+  });
+
   return server;
 }
 
