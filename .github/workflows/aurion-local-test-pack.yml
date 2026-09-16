@@ -37,14 +37,14 @@ jobs:
     timeout-minutes: 50
     services:
       mariadb:
-        image: mariadb:11.4
+        image: mariadb:11.4.13
         env:
           MARIADB_ROOT_PASSWORD: aurion-disposable-classless-test
           MARIADB_DATABASE: aurion_classless_test
         ports: ["3306:3306"]
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-disposable-classless-test --silent"
-          --health-interval=5s --health-timeout=3s --health-retries=20
+          --health-interval=5s --health-timeout=3s --health-retries=30
     env:
       DATABASE_URL: mysql://root:aurion-disposable-classless-test@127.0.0.1:3306/aurion_classless_test
       AURION_CLASSLESS_E2E: "1"
@@ -56,6 +56,21 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
+      - name: Guard repository scope
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
+          case "${GITHUB_EVENT_NAME}" in
+            push|workflow_dispatch)
+              test "${GITHUB_REF_NAME}" = "main"
+              ;;
+            pull_request)
+              ;;
+            *)
+              echo "unsupported event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -99,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           PACK=.aurion-local-test-pack
-          DB_CONTAINER="$(docker ps --filter ancestor=mariadb:11.4 --format '{{.ID}}' | head -n1)"
+          DB_CONTAINER="$(docker ps --filter ancestor=mariadb:11.4.13 --format '{{.ID}}' | head -n1)"
           test -n "$DB_CONTAINER"
           docker exec "$DB_CONTAINER" mariadb-dump -uroot -paurion-disposable-classless-test \
             --no-data --routines --triggers aurion_classless_test > "$PACK/schema.sql"
@@ -109,15 +124,15 @@ jobs:
           docker exec "$DB_CONTAINER" mariadb -uroot -paurion-disposable-classless-test -NBe "SELECT VERSION()" > "$PACK/mariadb-version.txt"
           git archive HEAD | zstd -T0 -10 -o "$PACK/aurion-source.tar.zst"
           tar --zstd -cf "$PACK/node_modules.tar.zst" node_modules
-          docker save mariadb:11.4 | zstd -T0 -10 -o "$PACK/mariadb-11.4-image.tar.zst"
+          docker save mariadb:11.4.13 | zstd -T0 -10 -o "$PACK/mariadb-11.4-image.tar.zst"
           cp scripts/bootstrap-aurion-local-test-pack.sh "$PACK/"
           cp package.json pnpm-lock.yaml "$PACK/"
           (cd "$PACK" && sha256sum schema.sql > schema.sha256)
           LOCK_SHA="$(sha256sum pnpm-lock.yaml | cut -d' ' -f1)"
           SCHEMA_SHA="$(sha256sum "$PACK/schema.sql" | cut -d' ' -f1)"
-          IMAGE_ID="$(docker image inspect mariadb:11.4 --format '{{.Id}}')"
+          IMAGE_ID="$(docker image inspect mariadb:11.4.13 --format '{{.Id}}')"
           MARIADB_VERSION="$(cat "$PACK/mariadb-version.txt")"
-          node -e 'const fs=require("fs"); const [sha,lock,schema,image,version]=process.argv.slice(1); fs.writeFileSync(".aurion-local-test-pack/manifest.json", JSON.stringify({recordType:"aurion_local_test_pack.v1",sourceRevision:sha,pnpmLockSha256:lock,schemaSha256:schema,mariaDbImage:"mariadb:11.4",mariaDbImageId:image,mariaDbVersion:version,productionDataIncluded:false},null,2)+"\n")' \
+          node -e 'const fs=require("fs"); const [sha,lock,schema,image,version]=process.argv.slice(1); fs.writeFileSync(".aurion-local-test-pack/manifest.json", JSON.stringify({recordType:"aurion_local_test_pack.v1",sourceRevision:sha,pnpmLockSha256:lock,schemaSha256:schema,mariaDbImage:"mariadb:11.4.13",mariaDbImageId:image,mariaDbVersion:version,productionDataIncluded:false},null,2)+"\n")' \
             "$AURION_RELEASE_SHA" "$LOCK_SHA" "$SCHEMA_SHA" "$IMAGE_ID" "$MARIADB_VERSION"
           (cd "$PACK" && sha256sum manifest.json aurion-source.tar.zst node_modules.tar.zst mariadb-11.4-image.tar.zst schema-columns.tsv mariadb-version.txt > artifact.sha256)
       - name: Upload exact offline pack

@@ -89,7 +89,7 @@ export const canonicalContextSourceSchema = z.object({
   logicalSequenceMax: z.number().int().nonnegative().optional(),
   canonicalText: z.string().min(1).max(32_000),
   nonDroppable: z.boolean().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 }).strict();
 export type CanonicalContextSource = z.infer<typeof canonicalContextSourceSchema>;
 
@@ -102,6 +102,7 @@ export const worldContextEntrySchema = z.object({
   logicalSequenceMax: z.number().int().nonnegative(),
   importance: contextImportanceScoreSchema,
   nonDroppable: z.boolean(),
+  estimatedTokens: z.number().int().nonnegative(),
   entryHash: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 export type WorldContextEntry = z.infer<typeof worldContextEntrySchema>;

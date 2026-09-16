@@ -40,7 +40,7 @@ export async function buildWorldContextCapsule(
   });
 
   // 4. Assemble final frozen capsule
-  const capsule: WorldContextCapsule = Object.freeze({
+  const capsule = Object.freeze({
     schemaVersion: "aurion.world-context-capsule.v1",
     worldId: query.worldId,
     worldRevision: query.worldRevision,
@@ -63,7 +63,7 @@ export async function buildWorldContextCapsule(
     estimatedInputTokens: selectionResult.estimatedInputTokens,
     utf8Bytes: selectionResult.utf8Bytes,
     reversible: true,
-  });
+  }) as unknown as WorldContextCapsule;
 
   return { capsule, selectionResult };
 }

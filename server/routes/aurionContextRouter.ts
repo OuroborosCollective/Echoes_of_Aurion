@@ -57,15 +57,15 @@ export const aurionContextRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const capsule = await aurionWorldContextService.getCapsule(input.capsuleId);
-      if (!capsule) {
+      const data = await aurionWorldContextService.getCapsule(input.capsuleId);
+      if (!data) {
         return {
           status: "UNPROVABLE" as const,
           reason: `Capsule ${input.capsuleId} not found`,
         };
       }
       return aurionWorldContextService.replayCapsule({
-        capsule,
+        capsule: data.capsule,
         sources: input.sources || [],
       });
     }),

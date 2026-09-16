@@ -16,7 +16,7 @@ export interface EpisodeCompactionInput {
   actorIds: readonly string[];
   sources: readonly CanonicalContextSource[];
   outcomes: readonly string[];
-  relationshipEffects?: readonly Array<{
+  relationshipEffects?: ReadonlyArray<{
     from: string;
     to: string;
     relation: string;

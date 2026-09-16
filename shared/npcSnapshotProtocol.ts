@@ -9,7 +9,7 @@ const HEADER = 24, MAGIC = 0x41555253;
 function invalid(): never { throw new Error("NPC_SNAPSHOT_INVALID"); }
 const identity = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(value);
 function validRow(row: PublicNpcSnapshot) {
-  if (!row || !identity(row.npcId) || !identity(row.regionId) || !Number.isSafeInteger(row.resolutionIndex) || row.resolutionIndex < 0 || row.resolutionIndex > 2147483647 || !npcSnapshotGoals.includes(row.goal) || !Number.isInteger(row.memoryCount) || row.memoryCount < 0 || row.memoryCount > 24 || !/^[a-f0-9]{64}$/.test(row.decisionHash) || !row.needs || npcSnapshotNeeds.some(key => !Number.isFinite(row.needs[key]) || row.needs[key] < 0 || row.needs[key] > 1)) invalid();
+  if (!row || !identity(row.npcId) || !identity(row.regionId) || !Number.isSafeInteger(row.resolutionIndex) || row.resolutionIndex < 0 || row.resolutionIndex > 2147483647 || !npcSnapshotGoals.includes(row.goal) || !Number.isInteger(row.memoryCount) || row.memoryCount < 0 || row.memoryCount > 128 || !/^[a-f0-9]{64}$/.test(row.decisionHash) || !row.needs || npcSnapshotNeeds.some(key => !Number.isFinite(row.needs[key]) || row.needs[key] < 0 || row.needs[key] > 1)) invalid();
 }
 /** Corruption checksum, not an authentication mechanism. Authentication remains at the HTTP/session boundary. */
 function checksum(bytes: Uint8Array): number {

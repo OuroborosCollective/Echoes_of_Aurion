@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, Database, RefreshCw, Eye, Code2 } from 'lucide-react';
 import { toast } from "sonner";
 import { format } from "date-fns";
+import type { WorldContextEntry } from '../../../shared/aurionWorldContextContract';
 
 export default function ContextStudio() {
   const [selectedCapsuleId, setSelectedCapsuleId] = useState<string>('');
@@ -27,10 +28,14 @@ export default function ContextStudio() {
       { capsuleId },
       {
         onSuccess: (result) => {
-          if (result.status === 'PROVED') {
+          if (result.status === 'MATCH') {
             toast.success('Context capsule hash verified perfectly.');
-          } else {
+          } else if (result.status === 'UNPROVABLE') {
             toast.error(`Replay failed: ${result.reason}`);
+          } else if (result.status === 'FIRST_DIVERGENCE') {
+            toast.error(`Replay failed at stage: ${result.stage}`);
+          } else {
+            toast.error('Replay mismatch detected.');
           }
         },
         onError: (err) => {
@@ -81,7 +86,7 @@ export default function ContextStudio() {
                       >
                         <div className="flex justify-between items-start mb-1">
                           <span className="font-mono text-xs">{capsule.id.split('_').pop()?.substring(0, 8)}...</span>
-                          <Badge variant="outline">{capsule.purpose.type}</Badge>
+                          <Badge variant="outline">{capsule.purpose}</Badge>
                         </div>
                         <div className="text-xs text-muted-foreground flex justify-between">
                           <span>{capsule.actorId}</span>
@@ -114,8 +119,8 @@ export default function ContextStudio() {
                           <div className="font-mono text-sm">{capsuleQuery.data.id}</div>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-muted-foreground text-xs">Assembly Hash</Label>
-                          <div className="font-mono text-sm">{capsuleQuery.data.assemblyHash}</div>
+                          <Label className="text-muted-foreground text-xs">Capsule Hash</Label>
+                          <div className="font-mono text-sm">{capsuleQuery.data.capsuleHash}</div>
                         </div>
                         <div className="space-y-1">
                           <Label className="text-muted-foreground text-xs">World ID & Tick</Label>
@@ -130,20 +135,20 @@ export default function ContextStudio() {
                       <div className="space-y-2">
                         <Label>Purpose</Label>
                         <div className="p-3 bg-muted rounded-md text-sm font-mono whitespace-pre-wrap">
-                          {JSON.stringify(capsuleQuery.data.purpose, null, 2)}
+                          {JSON.stringify(capsuleQuery.data.capsule.purpose, null, 2)}
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Selected Sources ({capsuleQuery.data.selectedSources.length})</Label>
+                        <Label>Selected Entries ({capsuleQuery.data.capsule.selected.length})</Label>
                         <div className="space-y-2">
-                          {capsuleQuery.data.selectedSources.map((source, idx) => (
+                          {capsuleQuery.data.capsule.selected.map((entry: WorldContextEntry, idx: number) => (
                             <div key={idx} className="flex justify-between items-center p-2 border rounded text-sm bg-accent/20">
                               <div className="flex gap-2 items-center">
-                                <Badge variant="secondary">{source.type}</Badge>
-                                <span>{source.id}</span>
+                                <Badge variant="secondary">{entry.entryKind}</Badge>
+                                <span className="font-mono text-xs">{entry.entryId}</span>
                               </div>
-                              <span className="text-xs text-muted-foreground">{source.tokens} tokens</span>
+                              <span className="text-xs text-muted-foreground">{entry.estimatedTokens} tokens</span>
                             </div>
                           ))}
                         </div>
@@ -151,8 +156,8 @@ export default function ContextStudio() {
                       
                       <div className="flex justify-end pt-4 border-t">
                         <Button 
-                          onClick={() => handleReplay(capsuleQuery.data.id)}
-                          disabled={replayMutation.isPending}
+                          onClick={() => capsuleQuery.data && handleReplay(capsuleQuery.data.id)}
+                          disabled={replayMutation.isPending || !capsuleQuery.data}
                         >
                           <RefreshCw className={`w-4 h-4 mr-2 ${replayMutation.isPending ? 'animate-spin' : ''}`} />
                           Verify Replay

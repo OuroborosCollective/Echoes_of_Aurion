@@ -293,9 +293,10 @@ export async function readConfirmedNpcPacket(userId: number) {
   if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("NPC_PACKET_OWNER_INVALID");
   const db = await getDb(); if(!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
-    const states = await tx.select().from(aurionNpcStates).where(inArray(aurionNpcStates.npcId,["lyra","orun"])).limit(3);
-    if(states.length>2) throw new Error("NPC_PACKET_COUNT_INVALID");
-    const projection: PublicNpcSnapshot[]=[];
+    const visibleNpcs = ["lyra", "orun", "ax1_merchant_observatory_threshold", "ax1_merchant_windhollow", "ax1_merchant_emberfall", "ax1_merchant_cinder_vault"];
+    const states = await tx.select().from(aurionNpcStates).where(inArray(aurionNpcStates.npcId, visibleNpcs)).limit(16);
+    if (states.length > 12) throw new Error("NPC_PACKET_COUNT_INVALID");
+    const projection: PublicNpcSnapshot[] = [];
     for(const state of states) {
       if(state.lastResolutionIndex<0) continue;
       const receipt=(await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.npcId,state.npcId),eq(aurionNpcDecisionReceipts.resolutionIndex,state.lastResolutionIndex))).limit(1))[0];

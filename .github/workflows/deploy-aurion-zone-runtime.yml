@@ -72,10 +72,10 @@ jobs:
       - name: Guard repository scope
         run: |
           set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
+          test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
           case "${GITHUB_EVENT_NAME}" in
             push|workflow_dispatch)
-              test "${GITHUB_REF}" = "refs/heads/main"
+              test "${GITHUB_REF_NAME}" = "main"
               ;;
             pull_request)
               ;;
@@ -159,7 +159,7 @@ jobs:
           };
           if (!/^[a-f0-9]{40}$/.test(receipt.revision ?? "")) throw new Error("workflow provenance revision missing");
           if (!/^[a-f0-9]{40}$/.test(receipt.workflowSha ?? "")) throw new Error("workflow provenance SHA missing");
-          if (receipt.workflowRepository !== "OuroborosCollective/Echoes_of_Aurion") throw new Error("workflow provenance repository mismatch");
+          if (receipt.workflowRepository !== process.env.GITHUB_REPOSITORY) throw new Error("workflow provenance repository mismatch");
           if (receipt.workflowFilePath !== ".github/workflows/deploy-aurion-zone-runtime.yml") throw new Error("workflow provenance path mismatch");
           fs.writeFileSync("aurion-workflow-provenance.json", `${JSON.stringify(receipt, null, 2)}\n`);
           NODE
@@ -447,8 +447,8 @@ jobs:
       - name: Guard repository scope
         run: |
           set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "OuroborosCollective/Echoes_of_Aurion"
-          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
+          test "${GITHUB_REF_NAME}" = "main"
           test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
 
       - name: Reset workflow-owned artifact directories

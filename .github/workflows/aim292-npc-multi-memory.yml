@@ -51,6 +51,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Guard repository scope
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -98,14 +102,14 @@ jobs:
     timeout-minutes: 30
     services:
       mariadb:
-        image: mariadb:11.4
+        image: mariadb:11.4.13
         env:
           MARIADB_ROOT_PASSWORD: auriontest
           MARIADB_DATABASE: aurion_browser_test
         ports: ['3306:3306']
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
-          --health-interval=5s --health-timeout=3s --health-retries=20
+          --health-interval=5s --health-timeout=3s --health-retries=30
     env:
       DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
       AURION_NPC_E2E: '1'
@@ -121,6 +125,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Guard repository scope
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

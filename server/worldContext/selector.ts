@@ -103,6 +103,7 @@ export function selectContextEntries(
       logicalSequenceMax: item.source.logicalSequenceMax ?? item.source.logicalSequence,
       importance: item.importance,
       nonDroppable: true,
+      estimatedTokens: item.tokens,
     };
 
     selectedEntries.push(
@@ -144,6 +145,7 @@ export function selectContextEntries(
         logicalSequenceMax: item.source.logicalSequenceMax ?? item.source.logicalSequence,
         importance: item.importance,
         nonDroppable: false,
+        estimatedTokens: item.tokens,
       };
 
       selectedEntries.push(

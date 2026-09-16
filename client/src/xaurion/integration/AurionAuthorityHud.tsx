@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AX1TouchDirector } from "../components/TouchController";
 import { trpc } from "@/lib/trpc";
 import { z } from "zod";
 import { playerUiReadbackSchema, aurionControlSkills, type SkillCommand } from "@shared/playerUiProtocol";
@@ -206,6 +207,11 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     };
   }, [auto]);
 
+  const handleOpenPanel = useCallback((p: "inventory" | "map" | "character" | "quests") => {
+    if (p === "quests") setQuestTab("quests");
+    setPanel(p);
+  }, []);
+
   const profile = player.data?.profile;
   const mastery = player.data?.progression.tracks.find(value => value.trackKind === "weapon");
   const party = group.data?.party ?? null;
@@ -260,6 +266,11 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   });
 
   return <div className="aurion-authority-hud ax1-authority-shell" data-testid="authoritative-world-hud">
+    <AX1TouchDirector 
+      onMove={onMove}
+      onOpenPanel={handleOpenPanel}
+      enabled={panel === null && !groupOpen && !pending}
+    />
     <GameHUD
       playerName={explorerView.name}
       playerIcon={explorerView.icon}

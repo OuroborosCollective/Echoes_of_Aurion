@@ -183,7 +183,7 @@ export function GameHUD(props: GameHUDProps) {
       id="game-hud-root"
       data-testid="ax1-game-hud"
       data-source="ax1-f24-visible-shell"
-      className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white"
+      className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
     >
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
         <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
@@ -191,32 +191,32 @@ export function GameHUD(props: GameHUDProps) {
             id="player-unit-frame"
             aria-label="Serverbestätigter Charakter"
             data-state={props.playerState}
-            className="flex max-w-[72vw] items-center gap-2 sm:gap-3 rounded-2xl border border-[#b8860b]/50 bg-black/85 p-1.5 sm:p-2.5 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.6)]"
+            className="flex max-w-[85vw] sm:max-w-[72vw] items-center gap-1.5 sm:gap-3 rounded-2xl border border-[#b8860b]/50 bg-black/85 p-1 sm:p-2.5 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.6)]"
           >
             <button
               type="button"
               onClick={props.onOpenCharacter}
               aria-label="Charakter öffnen"
-              className="relative h-10 w-10 sm:h-14 sm:w-14 shrink-0 rounded-xl border-2 bg-black/60 text-xl sm:text-3xl shadow-inner"
+              className="relative h-9 w-9 sm:h-14 sm:w-14 shrink-0 rounded-xl border-2 bg-black/60 text-lg sm:text-3xl shadow-inner"
               style={{ borderColor: props.playerColor }}
             >
               {props.playerIcon}
             </button>
-            <div className="w-36 sm:w-52 min-w-0 space-y-1">
-              <div className="flex items-center justify-between gap-2 text-[11px] sm:text-sm">
+            <div className="w-32 sm:w-52 min-w-0 space-y-0.5 sm:space-y-1">
+              <div className="flex items-center justify-between gap-2 text-[10px] sm:text-sm">
                 <b className="truncate font-serif">{props.playerName}</b>
-                <strong className="shrink-0 text-[9px] sm:text-[10px] font-mono text-[#fbbf24]">◆ {props.points ?? "—"}</strong>
+                <strong className="shrink-0 text-[8px] sm:text-[10px] font-mono text-[#fbbf24]">◆ {props.points ?? "—"}</strong>
               </div>
-              <div className="relative h-3.5 sm:h-4 overflow-hidden rounded-md border border-emerald-950 bg-black/80 p-0.5">
+              <div className="relative h-2.5 sm:h-4 overflow-hidden rounded-md border border-emerald-950 bg-black/80 p-0.5">
                 <div className="h-full rounded bg-gradient-to-r from-emerald-800 via-emerald-600 to-emerald-300" style={{ width: props.playerState === "live" ? "100%" : "12%" }} />
-                <span className="absolute inset-0 grid place-items-center text-[7px] sm:text-[9px] font-mono font-bold">
-                  {props.progressionCount ?? "—"} bestätigte Pfade · {props.victories ?? "—"} Siege
+                <span className="absolute inset-0 grid place-items-center text-[6px] sm:text-[9px] font-mono font-bold">
+                  {props.progressionCount ?? "—"} <span className="hidden sm:inline">bestätigte Pfade</span><span className="sm:hidden">Pfade</span> · {props.victories ?? "—"} <span className="hidden sm:inline">Siege</span><span className="sm:hidden">W</span>
                 </span>
               </div>
-              <div className="relative h-3 overflow-hidden rounded-md border border-amber-900/60 bg-black/90">
-                <span className="absolute inset-0 flex items-center justify-between gap-2 px-1 text-[6px] sm:text-[8px] font-mono font-bold text-amber-200">
+              <div className="relative h-2.5 sm:h-3 overflow-hidden rounded-md border border-amber-900/60 bg-black/90">
+                <span className="absolute inset-0 flex items-center justify-between gap-2 px-1 text-[5px] sm:text-[8px] font-mono font-bold text-amber-200">
                   <span className="truncate">{props.mastery?.name ?? "Waffenpfad ausstehend"}</span>
-                  <span className="shrink-0">{props.mastery ? `Stufe ${props.mastery.level}` : props.playerStateLabel}</span>
+                  <span className="shrink-0">{props.mastery ? `Lvl ${props.mastery.level}` : props.playerStateLabel}</span>
                 </span>
               </div>
               <span data-testid="confirmed-remote-player-count" className="sr-only">
@@ -226,9 +226,9 @@ export function GameHUD(props: GameHUDProps) {
           </section>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className="flex w-fit items-center gap-1.5 rounded-lg border border-gray-800 bg-black/70 px-2.5 py-0.5 text-[10px] font-mono text-gray-300 backdrop-blur-sm">
-              <Compass className="h-3 w-3 text-[#b8860b]" />
-              <b className="max-w-[150px] truncate font-serif text-[#fbbf24]">{props.zoneName}</b>
+            <div className="flex w-fit items-center gap-1 sm:gap-1.5 rounded-lg border border-gray-800 bg-black/70 px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-mono text-gray-300 backdrop-blur-sm">
+              <Compass className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-[#b8860b]" />
+              <b className="max-w-[100px] sm:max-w-[150px] truncate font-serif text-[#fbbf24]">{props.zoneName}</b>
               <span className="text-gray-500">·</span>
               <span>{props.coordinates ?? props.worldStateLabel}</span>
             </div>
@@ -266,17 +266,27 @@ export function GameHUD(props: GameHUDProps) {
 
         <div className="pointer-events-auto flex max-w-[64vw] flex-col items-end gap-1.5">
           <div className="flex max-w-full flex-wrap justify-end gap-1">
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter"><UserRound className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar"><Package className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk"><Hammer className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenQuests)} title="Aufträge [J]" aria-label="Aufträge"><ScrollText className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas"><MapIcon className="h-4 w-4" /></button>
-            <button type="button" className={`${iconButton} ${menuExpanded ? "border-cyan-400 text-cyan-300" : ""}`} onClick={() => setMenuExpanded(value => !value)} aria-expanded={menuExpanded} aria-label="Weitere Menüs"><Menu className="h-4 w-4" /></button>
+            <div className="hidden sm:flex gap-1">
+              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter"><UserRound className="h-4 w-4" /></button>
+              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar"><Package className="h-4 w-4" /></button>
+              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk"><Hammer className="h-4 w-4" /></button>
+              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenQuests)} title="Aufträge [J]" aria-label="Aufträge"><ScrollText className="h-4 w-4" /></button>
+              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
+              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas"><MapIcon className="h-4 w-4" /></button>
+            </div>
+            <button type="button" className={`${iconButton} ${menuExpanded ? "border-cyan-400 text-cyan-300" : ""}`} onClick={() => setMenuExpanded(value => !value)} aria-expanded={menuExpanded} aria-label="Menü öffnen"><Menu className="h-4 w-4" /></button>
           </div>
 
           {menuExpanded && (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-1 rounded-xl border border-cyan-500/30 bg-black/90 p-1.5 backdrop-blur-xl shadow-2xl">
+              <div className="sm:hidden col-span-4 grid grid-cols-4 gap-1 mb-1 pb-1 border-b border-gray-800">
+                <MenuButton title="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></MenuButton>
+                <MenuButton title="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></MenuButton>
+                <MenuButton title="Crafting" onClick={() => closeMenu(props.onOpenCrafting)}><Hammer /></MenuButton>
+                <MenuButton title="Quests" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></MenuButton>
+                <MenuButton title="Gruppe" onClick={() => closeMenu(props.onOpenParty)}><Users /></MenuButton>
+                <MenuButton title="Weltkarte" onClick={() => closeMenu(props.onOpenMap)}><MapIcon /></MenuButton>
+              </div>
               <MenuButton title="Steuerung" onClick={() => closeMenu(props.onOpenControls)}><Gamepad2 /></MenuButton>
               <MenuButton title="Disziplinen" onClick={() => closeMenu(props.onOpenDisciplines)}><Swords /></MenuButton>
               <MenuButton title="Dungeons" onClick={() => closeMenu(props.onOpenDungeonFinder)}><ShieldCheck /></MenuButton>
@@ -292,9 +302,9 @@ export function GameHUD(props: GameHUDProps) {
             </div>
           )}
 
-          <div className="origin-top-right scale-[.82] sm:scale-100">{props.miniMap}</div>
+          <div className="origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
 
-          <section className="w-44 sm:w-64 rounded-xl border border-[#b8860b]/40 bg-black/85 p-1.5 sm:p-2 backdrop-blur-md shadow-2xl">
+          <section className="w-36 sm:w-64 rounded-xl border border-[#b8860b]/40 bg-black/85 p-1.5 sm:p-2 backdrop-blur-md shadow-2xl">
             <button type="button" onClick={() => setObjectivesCollapsed(value => !value)} className="flex w-full items-center justify-between border-b border-gray-800/80 pb-1 text-[10px] font-serif font-bold uppercase tracking-wider text-[#b8860b]">
               <span className="flex items-center gap-1"><Award className="h-3 w-3 text-[#fbbf24]" /> Ziele ({props.objectives.length})</span>
               {objectivesCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}

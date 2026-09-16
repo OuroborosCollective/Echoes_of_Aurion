@@ -22,7 +22,16 @@ export function QuestLogModal({ isOpen, onClose, quests, keys = [], pending, mes
   const selected = filtered.find(q => q.key === selectedKey) ?? filtered[0];
   const chapter = LORE_CHAPTERS.find(c => c.id === chapterId)!;
   return <Ax1Modal open={isOpen} onClose={onClose} id="questlog" title="Quest-Buch & Lore-Chroniken"><section id="questlog-dialog" className="ax1-window w-full max-w-5xl bg-[#081a2e] border-2 border-amber-500/50 rounded-2xl p-4 sm:p-5 text-gray-200 shadow-[0_0_50px_rgba(0,240,255,0.2)] flex flex-col max-h-[92dvh] overflow-hidden">
-    <header className="ax1-window-header flex items-center justify-between border-b border-gray-800 pb-3 gap-3"><div className="flex gap-3 items-center"><div className="ax1-crest"><Scroll /></div><div><h3 className="font-serif font-bold text-white">QUEST-BUCH & LORE-CHRONIKEN</h3><p className="text-[11px] text-gray-400">AX1 Oberfläche · WASD Fortschrittslogik</p></div></div><button className="ax1-close" aria-label="Quest-Buch schließen" onClick={onClose}><X size={18} /></button></header>
+    <header className="ax1-window-header flex items-center justify-between border-b border-gray-800 pb-2 sm:pb-3 gap-3">
+      <div className="flex gap-2 sm:gap-3 items-center">
+        <div className="ax1-crest hidden sm:flex"><Scroll /></div>
+        <div>
+          <h3 className="font-serif font-bold text-white text-sm sm:text-base uppercase">QUESTS & LORE</h3>
+          <p className="text-[10px] text-gray-400 hidden sm:block">AX1 Oberfläche · WASD Fortschrittslogik</p>
+        </div>
+      </div>
+      <button className="ax1-close" aria-label="Quest-Buch schließen" onClick={onClose}><X size={18} /></button>
+    </header>
     <nav className="flex flex-wrap gap-2 py-3" aria-label="Quest-Buch Ansichten">{([['quests', 'Quests'], ['history', 'History'], ['chronicle', 'Lore-Chronik'], ['contacts', 'Kontakte']] as const).map(([key, name]) => <button key={key} className="ax1-tab" aria-pressed={tab === key} onClick={() => setTab(key)}>{key === "chronicle" ? <BookOpen size={14} /> : <Award size={14} />}{name}</button>)}</nav>
     {liveAx1Route && (tab === "quests" || tab === "history") && <p role="status" className="ax1-notice">Legacy-Aurion-Aufträge sind im Spiel deaktiviert. Eine Quest wird erst wieder angezeigt, wenn Ziel, NPC/Ort und Fortschritt aus dem WASD-Vertrag bestätigt sind.</p>}
     {message && <p role="status" className="ax1-notice">{message}</p>}

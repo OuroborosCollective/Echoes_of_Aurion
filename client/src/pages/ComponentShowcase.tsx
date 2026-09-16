@@ -173,7 +173,7 @@ import {
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
-import { InventoryPreview } from "@/components/InventoryPreview";
+// import { InventoryPreview } from "@/components/InventoryPreview";
 
 export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
@@ -1438,11 +1438,16 @@ export default function ComponentsShowcase() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="p-8 border border-dashed rounded-lg text-center text-muted-foreground">
+                  InventoryPreview component is temporarily disabled or missing.
+                </div>
+                {/* 
                 <InventoryPreview
                   title="Erbeutete Gegenstände (Live Preview)"
                   subtitle="Dynamische Beuteanzeige mit Seltenheits-Farbcodierung und Detail-Inspektion"
                   enableFilter
                 />
+                */}
               </CardContent>
             </Card>
           </section>

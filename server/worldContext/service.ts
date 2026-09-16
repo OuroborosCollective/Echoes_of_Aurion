@@ -1,3 +1,9 @@
+import { eq } from "drizzle-orm";
+import {
+  aurionWorldContextCapsuleReceipts,
+  aurionWorldContextEpisodes,
+} from "../../drizzle/schema";
+import { getDb } from "../db";
 import type {
   CanonicalContextSource,
   StructuredEpisode,
@@ -22,9 +28,6 @@ import { replayWorldContextCapsule, type WorldContextReplayVerdict } from "./rep
 import { compactStructuredEpisode, type EpisodeCompactionInput } from "./episodeCompactor";
 import { runWorldContextEvaluationSuite, type ContextEvaluationMetrics } from "./evaluation";
 import { IMPORTANCE_POLICY_VERSION } from "./importancePolicy";
-import { getDb } from "../db";
-import { aurionWorldContextEpisodes } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
 
 export class AurionWorldContextService {
   /**
@@ -79,10 +82,25 @@ export class AurionWorldContextService {
   }
 
   /**
-   * Reads a persisted capsule by ID.
+   * Reads a persisted capsule and its receipt by ID.
    */
-  public async getCapsule(capsuleId: string): Promise<WorldContextCapsule | null> {
-    return readWorldContextCapsule(capsuleId);
+  public async getCapsule(capsuleId: string) {
+    const db = await getDb();
+    if (!db) return null;
+
+    const [row] = await db
+      .select()
+      .from(aurionWorldContextCapsuleReceipts)
+      .where(eq(aurionWorldContextCapsuleReceipts.id, capsuleId))
+      .limit(1);
+
+    if (!row) return null;
+
+    const capsule = JSON.parse(row.capsuleJson) as WorldContextCapsule;
+    return {
+      ...row,
+      capsule,
+    };
   }
 
   /**
