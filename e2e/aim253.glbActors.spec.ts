@@ -150,8 +150,8 @@ for (const viewport of [
       const movement = (await hud.getByTestId("ax1-movement-control").boundingBox())!;
       expect(actions.x).toBeGreaterThan(movement.x + movement.width);
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-world-hud.png`) });
-      for (const name of ["Inventar", "Charakter", "Aufträge"]) {
-        await hud.getByRole("button", { name, exact: true }).click();
+      for (const testId of ["gamehud-inventory-button", "gamehud-character-button", "gamehud-quests-button"]) {
+        await hud.getByTestId(testId).click();
         await expect(dialog).toHaveCSS("opacity", "1");
         const box = (await dialog.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0); expect(box.y).toBeGreaterThanOrEqual(0);
@@ -162,7 +162,7 @@ for (const viewport of [
         await dialog.getByRole("button", { name: name === "Inventar" ? "Inventar schließen" : name === "Charakter" ? "Charakter schließen" : "Quest-Buch schließen", exact: true }).click();
       }
 
-      await hud.getByRole("button", { name: "Aufträge", exact: true }).click();
+      await hud.getByTestId("gamehud-quests-button").click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Bei Lyra (annehmen|abgeben)/ })).toHaveCount(0);
       await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();

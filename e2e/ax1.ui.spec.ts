@@ -202,7 +202,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       await page.screenshot({ path: info.outputPath(`${viewport.name}-skills.png`) });
       await dialog.getByRole("button", { name: "Steuerung schließen", exact: true }).click();
 
-      await hud.getByRole("button", { name: "Aufträge", exact: true }).click();
+      await hud.getByTestId("gamehud-quests-button").click();
       await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByText("Keine WASD-bestätigten Aufträge in dieser Ansicht.", { exact: true })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Bei Lyra (annehmen|abgeben)/ })).toHaveCount(0);

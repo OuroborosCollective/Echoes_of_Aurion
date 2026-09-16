@@ -29,3 +29,6 @@
 ## 2024-05-25 - Playwright GameHUD Overlay Click Fix
 **Learning:** Found a CI failure where Playwright timed out waiting for `page.getByRole("button",{name:"Inventar",exact:true})` and `page.getByRole("button",{name:"Charakter",exact:true})` because the absolute positioned `bvh-debug-toggle` button overlaid the entire region on certain resolutions and intercepted clicks.
 **Action:** Always replace `getByRole` for GameHUD action buttons with their explicit `data-testid` (e.g., `getByTestId("gamehud-inventory-button")`, `getByTestId("gamehud-character-button")`) to allow the runner to reliably find the underlying element without visual clipping issues.
+## 2024-05-25 - Dynamic Playwright Button Testing Iteration Fix
+**Learning:** After replacing `getByRole` with `getByTestId` inside a `for...of` loop over an array of element strings, I failed to update the array elements themselves from readable text ("Aufträge") to the new test IDs (`"gamehud-quests-button"`). This caused tests to fail when trying to iterate and fetch IDs that were actually raw strings.
+**Action:** When refactoring element lookup patterns (e.g. `getByRole` to `getByTestId`) within iterative data-driven tests, carefully ensure that both the lookup function and the underlying array constants are updated symmetrically to hold the matching selector types.
