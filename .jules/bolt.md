@@ -32,3 +32,6 @@
 ## 2024-05-25 - Dynamic Playwright Button Testing Iteration Fix
 **Learning:** After replacing `getByRole` with `getByTestId` inside a `for...of` loop over an array of element strings, I failed to update the array elements themselves from readable text ("Aufträge") to the new test IDs (`"gamehud-quests-button"`). This caused tests to fail when trying to iterate and fetch IDs that were actually raw strings.
 **Action:** When refactoring element lookup patterns (e.g. `getByRole` to `getByTestId`) within iterative data-driven tests, carefully ensure that both the lookup function and the underlying array constants are updated symmetrically to hold the matching selector types.
+## 2024-05-25 - Safe WebGL Parameterization on Mobile
+**Learning:** Hard-coded variables combined with missing array iterations generated WebGL errors. Specifically, `vSplat` variables used as `vSplat.x`, `vSplat.y`, `vSplat.z` instead of `vSplat.r`, `vSplat.g`, `vSplat.b` can cause compilation errors depending on the driver's strictness with `vec4` accessor logic inside injected strings.
+**Action:** When working with shader template strings, prefer standard RGBA accessors for `vec4` types when they represent colors/splat maps, as standard GLSL enforces `.rgba` for colors.

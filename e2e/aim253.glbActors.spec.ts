@@ -151,6 +151,7 @@ for (const viewport of [
       expect(actions.x).toBeGreaterThan(movement.x + movement.width);
       await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-world-hud.png`) });
       for (const testId of ["gamehud-inventory-button", "gamehud-character-button", "gamehud-quests-button"]) {
+        const name = testId === "gamehud-inventory-button" ? "Inventar" : testId === "gamehud-character-button" ? "Charakter" : "Aufträge";
         await hud.getByTestId(testId).click();
         await expect(dialog).toHaveCSS("opacity", "1");
         const box = (await dialog.boundingBox())!;
