@@ -42,7 +42,7 @@ export function useSwipeGesture({
       touchStart.current = {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY,
-        time: Date.now(),
+        time: performance.now(),
       };
     };
 
@@ -52,7 +52,7 @@ export function useSwipeGesture({
       const touchEnd = {
         x: e.changedTouches[0].clientX,
         y: e.changedTouches[0].clientY,
-        time: Date.now(),
+        time: performance.now(),
       };
 
       const dx = touchEnd.x - touchStart.current.x;

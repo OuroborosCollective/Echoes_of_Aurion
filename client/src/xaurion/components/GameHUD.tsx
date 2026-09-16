@@ -209,14 +209,14 @@ export function GameHUD(props: GameHUDProps) {
               </div>
               <div className="relative h-2.5 sm:h-4 overflow-hidden rounded-md border border-emerald-950 bg-black/80 p-0.5">
                 <div className="h-full rounded bg-gradient-to-r from-emerald-800 via-emerald-600 to-emerald-300" style={{ width: props.playerState === "live" ? "100%" : "12%" }} />
-                <span className="absolute inset-0 grid place-items-center text-[6px] sm:text-[9px] font-mono font-bold">
-                  {props.progressionCount ?? "—"} <span className="hidden sm:inline">bestätigte Pfade</span><span className="sm:hidden">Pfade</span> · {props.victories ?? "—"} <span className="hidden sm:inline">Siege</span><span className="sm:hidden">W</span>
+                <span className="absolute inset-0 grid place-items-center text-[7px] sm:text-[9px] font-mono font-bold">
+                  {props.progressionCount ?? "—"} bestätigte Pfade · {props.victories ?? "—"} Siege
                 </span>
               </div>
               <div className="relative h-2.5 sm:h-3 overflow-hidden rounded-md border border-amber-900/60 bg-black/90">
                 <span className="absolute inset-0 flex items-center justify-between gap-2 px-1 text-[5px] sm:text-[8px] font-mono font-bold text-amber-200">
                   <span className="truncate">{props.mastery?.name ?? "Waffenpfad ausstehend"}</span>
-                  <span className="shrink-0">{props.mastery ? `Lvl ${props.mastery.level}` : props.playerStateLabel}</span>
+                  <span className="shrink-0">{props.mastery ? `Stufe ${props.mastery.level}` : props.playerStateLabel}</span>
                 </span>
               </div>
               <span data-testid="confirmed-remote-player-count" className="sr-only">
@@ -266,27 +266,17 @@ export function GameHUD(props: GameHUDProps) {
 
         <div className="pointer-events-auto flex max-w-[64vw] flex-col items-end gap-1.5">
           <div className="flex max-w-full flex-wrap justify-end gap-1">
-            <div className="hidden sm:flex gap-1">
-              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter"><UserRound className="h-4 w-4" /></button>
-              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar"><Package className="h-4 w-4" /></button>
-              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk"><Hammer className="h-4 w-4" /></button>
-              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenQuests)} title="Aufträge [J]" aria-label="Aufträge"><ScrollText className="h-4 w-4" /></button>
-              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
-              <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas"><MapIcon className="h-4 w-4" /></button>
-            </div>
-            <button type="button" className={`${iconButton} ${menuExpanded ? "border-cyan-400 text-cyan-300" : ""}`} onClick={() => setMenuExpanded(value => !value)} aria-expanded={menuExpanded} aria-label="Menü öffnen"><Menu className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter"><UserRound className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar"><Package className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk"><Hammer className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenQuests)} title="Aufträge [J]" aria-label="Aufträge"><ScrollText className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas"><MapIcon className="h-4 w-4" /></button>
+            <button type="button" className={`${iconButton} ${menuExpanded ? "border-cyan-400 text-cyan-300" : ""}`} onClick={() => setMenuExpanded(value => !value)} aria-expanded={menuExpanded} aria-label="Weitere Menüs"><Menu className="h-4 w-4" /></button>
           </div>
 
           {menuExpanded && (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-1 rounded-xl border border-cyan-500/30 bg-black/90 p-1.5 backdrop-blur-xl shadow-2xl">
-              <div className="sm:hidden col-span-4 grid grid-cols-4 gap-1 mb-1 pb-1 border-b border-gray-800">
-                <MenuButton title="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></MenuButton>
-                <MenuButton title="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></MenuButton>
-                <MenuButton title="Crafting" onClick={() => closeMenu(props.onOpenCrafting)}><Hammer /></MenuButton>
-                <MenuButton title="Quests" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></MenuButton>
-                <MenuButton title="Gruppe" onClick={() => closeMenu(props.onOpenParty)}><Users /></MenuButton>
-                <MenuButton title="Weltkarte" onClick={() => closeMenu(props.onOpenMap)}><MapIcon /></MenuButton>
-              </div>
               <MenuButton title="Steuerung" onClick={() => closeMenu(props.onOpenControls)}><Gamepad2 /></MenuButton>
               <MenuButton title="Disziplinen" onClick={() => closeMenu(props.onOpenDisciplines)}><Swords /></MenuButton>
               <MenuButton title="Dungeons" onClick={() => closeMenu(props.onOpenDungeonFinder)}><ShieldCheck /></MenuButton>

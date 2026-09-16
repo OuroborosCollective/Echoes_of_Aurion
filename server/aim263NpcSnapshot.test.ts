@@ -22,7 +22,7 @@ describe("AURS v2 bounded NPC transport",()=>{
  });
  it("rejects invalid enums, nonfinite/out-of-range needs, aliases and inconsistent counts even with valid checksum",()=>{
   const bytes=encodeNpcSnapshot([npc]),fixed=24+1+npc.npcId.length+1+npc.regionId.length;
-  for(const corrupt of [(()=>{const b=bytes.slice();b[fixed+4]=255;return b;})(),(()=>{const b=bytes.slice();b[fixed+5]=25;return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setFloat64(fixed+6,NaN);return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setFloat64(fixed+6,1.1);return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setUint16(6,0);return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setUint32(8,13);return b;})()])expect(()=>decodeNpcSnapshot(resign(corrupt))).toThrow();
+  for(const corrupt of [(()=>{const b=bytes.slice();b[fixed+4]=255;return b;})(),(()=>{const b=bytes.slice();b[fixed+5]=129;return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setFloat64(fixed+6,NaN);return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setFloat64(fixed+6,1.1);return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setUint16(6,0);return b;})(),(()=>{const b=bytes.slice();new DataView(b.buffer).setUint32(8,13);return b;})()])expect(()=>decodeNpcSnapshot(resign(corrupt))).toThrow();
   expect(()=>encodeNpcSnapshot([npc,npc])).toThrow();expect(()=>encodeNpcSnapshot([{...npc,npcId:"lyra😀"}])).toThrow();expect(()=>encodeNpcSnapshot(Array.from({length:129},(_,i)=>({...npc,npcId:`npc_${i}`})))).toThrow();
   expect(decodeNpcSnapshot(encodeNpcSnapshot([]))).toEqual({resolutionIndex:0,npcs:[]});
   expect(()=>decodeOwnedNpcPacket({userId:1,format:"aurion-public-npc.v2",data:"A".repeat(90000)},1)).toThrow();
