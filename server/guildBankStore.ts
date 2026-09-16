@@ -1,5 +1,6 @@
 import { deadlineAfter, hostOperationalClock, operationalNow, type OperationalClock } from "../shared/operationalClock";
 import type { GuildBankView } from "@shared/guildBankView";
+import { isConfiguredDatabaseUrl } from "./db";
 import { createPool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import {
   AURION_GUILD_BANK_CONTENT_VERSION,
@@ -206,7 +207,7 @@ export class GuildBankStore {
   constructor(private readonly pool: Pool, private readonly clock: OperationalClock = hostOperationalClock) {}
 
   static fromDatabaseUrl(databaseUrl = process.env.DATABASE_URL, clock: OperationalClock = hostOperationalClock): GuildBankStore {
-    if (!databaseUrl) throw new Error("DATABASE_URL is required for guild bank");
+    if (!databaseUrl || !isConfiguredDatabaseUrl(databaseUrl)) throw new Error("DATABASE_URL is required for guild bank");
     return new GuildBankStore(createPool(databaseUrl), clock);
   }
 

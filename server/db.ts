@@ -43,12 +43,47 @@ import { aurionLootCatalogV2 } from "./aurionLootCatalog";
 import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aurionLootProtocol";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 
+export function isConfiguredDatabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return (parsed.protocol === "mysql:" || parsed.protocol === "mariadb:") && parsed.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function canConnectToDatabase(timeoutMs = 1000): Promise<boolean> {
+  if (!process.env.DATABASE_URL || !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
+    return false;
+  }
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    await Promise.race([
+      db.execute(sql`SELECT 1`),
+      new Promise((_, reject) => {
+        const timer = setTimeout(() => reject(new Error("DB_TIMEOUT")), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let _db: ReturnType<typeof drizzle> | null = null;
 type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
+    if (!isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
+      return null;
+    }
     try {
       _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {

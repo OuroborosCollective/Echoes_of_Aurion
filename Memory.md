@@ -630,3 +630,17 @@ Status: VERIFIED repository integration
 Änderung: `PRODUCTION_DATABASE_CONNECTION.md` hinzugefügt und in `SUMMARY.md` registriert.
 Erkenntnis: Die Architektur der Produktionsdatenbank, die restriktiven Docker-Netzwerke (`echoes-of-aurion-internal`) und die strengen Runtime-Verifier-Vorgaben für `DATABASE_URL` auf dem VPS (46.202.154.25) wurden entsprechend der bereitgestellten Systemvorgaben als GitBook-Dokumentation fixiert.
 Evidence: Die Dokumentation deckt die Vorgaben des Runtime-Verifiers exakt ab.
+
+### 2026-09-15 — Database URL Protocol Validation & Reachability Guard
+Status: VERIFIED and INTEGRATED; production-ready
+Task: Resolve `PoolConnection._handleTimeoutError` (`connect ETIMEDOUT`) and fixed-tick sink failures when running with invalid database URLs or in environments where the MariaDB host is unreachable.
+Decisions:
+- Implemented `isConfiguredDatabaseUrl` in `server/db.ts` to strictly validate database URL protocol (`mysql:` or `mariadb:`) and non-empty hostname, preventing attempts to initialize connection pools on invalid schemes (e.g. `http://...`).
+- Implemented `canConnectToDatabase(timeoutMs)` with a bounded probe timeout to determine whether the configured MariaDB service is actually reachable before enabling background fixed-tick work.
+- In `server/_core/index.ts`, sanitized `process.env.DATABASE_URL` to drop invalid schemes at boot and bound `autonomousNpcLifeRuntime` activation to verified database reachability.
+- Guarded `glbImportStore`, `guildGovernanceStore`, and `guildBankStore` against invalid connection strings.
+Touched surfaces: `server/db.ts`, `server/_core/index.ts`, `server/autonomousNpcLifeRuntime.ts`, `server/glbImportStore.ts`, `server/guildGovernanceStore.ts`, `server/guildBankStore.ts`, `server/databaseUrlGuard.test.ts`, `Memory.md`.
+Evidence: 5/5 unit tests in `server/databaseUrlGuard.test.ts` passed; `npm run check` (`tsc --noEmit`) succeeded with 0 errors; `compile_applet` build succeeded; `/healthz` verified responsive with `status: "ok"`.
+Learned: Background zone sinks must probe reachability at initialization to gracefully degrade to idle/disabled state rather than entering an unhandled timeout error loop in environments lacking internal container network links.
+Open: Continuous readback under live MariaDB traffic on VPS.
+Next safe step: Report status to user.

@@ -21,7 +21,7 @@ import { registerZoneGateway } from "../zoneGateway";
 import { registerGuildGovernanceRoutes } from "../guildGovernanceRoutes";
 import { registerGuildBankRoutes } from "../guildBankRoutes";
 import { registerGameDevelopmentStudioRuntime, resolveGameDevelopmentStudioRuntimeReadback } from "../gameDevelopmentStudioRuntime";
-import { recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
+import { canConnectToDatabase, isConfiguredDatabaseUrl, recordWorldPresenceLease, releaseWorldPresenceLease } from "../db";
 import { consumeZoneTicketWithCombatProfile } from "../zoneCombatPersistence";
 import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
 import { createAutonomousNpcLifeRuntime } from "../autonomousNpcLifeRuntime";
@@ -33,11 +33,16 @@ const CONFIGURED_ORIGINS = (process.env.AURION_ALLOWED_ORIGINS??"https://arelogi
 function allowedCorsOrigin(origin:string|undefined):string|null{if(!origin)return null;if(CONFIGURED_ORIGINS.includes(origin))return origin;try{const parsed=new URL(origin);if(parsed.protocol==="https:"&&(parsed.hostname.endsWith(".itch.io")||parsed.hostname.endsWith(".itch.zone")))return origin;}catch{return null;}return null;}
 
 async function startServer(){
+  if (process.env.DATABASE_URL && !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
+    console.warn(`[Database] Ignored invalid DATABASE_URL "${process.env.DATABASE_URL}". Protocol must be "mysql:" or "mariadb:".`);
+    delete process.env.DATABASE_URL;
+  }
   const releaseRevision=process.env.AURION_RELEASE_SHA?.trim().toLowerCase();if(releaseRevision&&!/^[a-f0-9]{40}$/.test(releaseRevision))throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");
   let wolframCag=initialWolframCagRuntimeReadback();if(wolframCag.configured)void resolveWolframCagRuntimeReadback().then(readback=>{wolframCag=readback;});
   const gameDevelopmentStudio=await resolveGameDevelopmentStudioRuntimeReadback();
   if(gameDevelopmentStudio.required&&!gameDevelopmentStudio.available)throw new Error(gameDevelopmentStudio.error??"GAME_DEV_REQUIRED_UNAVAILABLE");
-  const autonomousNpcLife=createAutonomousNpcLifeRuntime();
+  const databaseConnected = await canConnectToDatabase(1000);
+  const autonomousNpcLife = createAutonomousNpcLifeRuntime({ enabled: databaseConnected });
   const app=express();
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
   if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);

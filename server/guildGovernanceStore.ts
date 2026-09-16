@@ -1,5 +1,6 @@
 import { operationalNow, deadlineAfter, hostOperationalClock, type OperationalClock } from "../shared/operationalClock";
 import { ownedGuildGovernance } from "../shared/guildGovernanceView";
+import { isConfiguredDatabaseUrl } from "./db";
 import { createPool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import {
   AURION_GUILD_GOVERNANCE_CONTENT_VERSION,
@@ -149,7 +150,7 @@ export class GuildGovernanceStore {
   constructor(private readonly pool: Pool, private readonly clock: OperationalClock = hostOperationalClock) {}
 
   static fromDatabaseUrl(databaseUrl = process.env.DATABASE_URL, clock: OperationalClock = hostOperationalClock): GuildGovernanceStore {
-    if (!databaseUrl) throw new Error("DATABASE_URL is required for guild governance");
+    if (!databaseUrl || !isConfiguredDatabaseUrl(databaseUrl)) throw new Error("DATABASE_URL is required for guild governance");
     return new GuildGovernanceStore(createPool(databaseUrl), clock);
   }
 

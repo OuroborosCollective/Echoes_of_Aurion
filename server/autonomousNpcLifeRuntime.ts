@@ -3,6 +3,7 @@ import { resolveAndRecordAx1LivingWorld } from "./ax1LivingWorldRuntime";
 import { readConfirmedNpcState } from "./wasdAurionRuntime";
 import { readConfirmedNpcMultiMemory } from "./npcMultiMemoryPersistence";
 import { projectNpcMemoryV4 } from "./wasdNpcCapsule";
+import { isConfiguredDatabaseUrl } from "./db";
 
 export const AUTONOMOUS_NPC_LIFE_INTERVAL_TICKS = 600;
 export const AUTONOMOUS_NPC_LIFE_HOME_REGION = "observatory_threshold" as const;
@@ -55,7 +56,7 @@ function frozenReadback(value: AutonomousNpcLifeReadback): AutonomousNpcLifeRead
  * authoritative websocket currently exposes one live zone (`observatory_threshold`).
  */
 export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boolean }> = {}): AutonomousNpcLifeRuntime {
-  const enabled = options.enabled ?? Boolean(process.env.DATABASE_URL);
+  const enabled = options.enabled ?? isConfiguredDatabaseUrl(process.env.DATABASE_URL);
   let lastQueuedGatewayTick = 0;
   let chain: Promise<void> = Promise.resolve();
   let state: AutonomousNpcLifeReadback = frozenReadback({

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createPool, type Pool, type PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { operationalDate } from "../shared/operationalClock";
+import { isConfiguredDatabaseUrl } from "./db";
 import {
   EQUIPMENT_DISPLAY_PREFIX,
   GLB_IMPORT_VERSION,
@@ -230,6 +231,6 @@ export class GlbImportStore {
 
 let singleton: GlbImportStore | undefined;
 export function glbImportStore(): GlbImportStore {
-  if (!process.env.DATABASE_URL) throw new Error("GLB_DATABASE_UNAVAILABLE");
+  if (!process.env.DATABASE_URL || !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) throw new Error("GLB_DATABASE_UNAVAILABLE");
   return singleton ??= new GlbImportStore(process.env.DATABASE_URL);
 }
