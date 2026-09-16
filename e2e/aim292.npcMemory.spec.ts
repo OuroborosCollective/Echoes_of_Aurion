@@ -14,7 +14,7 @@ for(const profile of [{name:"phone",width:412,height:915},{name:"tablet",width:8
     await register(page,`aim292_${profile.name}`);
     const {runtime}=await enterAx1(page);
     await expect.poll(async()=>{const r=await page.request.get("/healthz");return (await r.json()).npcLife?.multiMemory?.sourceRevision;},{timeout:100_000}).toBe(pin.sourceRevision);
-    await runtime.getByRole("button",{name:"Aufträge",exact:true}).click();
+    await runtime.getByTestId("gamehud-quests-button").click();
     await page.getByRole("button",{name:"Kontakte",exact:true}).click();
     const panel=page.getByTestId("npc-multi-memory-panel");
     const merchant=panel.locator('[data-npc-id="ax1_merchant_observatory_threshold"]');
@@ -45,7 +45,7 @@ for(const profile of [{name:"phone",width:412,height:915},{name:"tablet",width:8
     await expect(page.getByRole("button",{name:"Quest-Buch schließen",exact:true})).toHaveCount(0);
     await runtime.getByRole("button",{name:"ZUR STERNWARTE",exact:true}).click();
     await expect(page).toHaveURL(baseURL+"/");
-    await enterAx1(page);await runtime.getByRole("button",{name:"Aufträge",exact:true}).click();await page.getByRole("button",{name:"Kontakte",exact:true}).click();
+    await enterAx1(page);await runtime.getByTestId("gamehud-quests-button").click();await page.getByRole("button",{name:"Kontakte",exact:true}).click();
     await expect(merchant).toBeVisible({timeout:30_000});expect(Number(await merchant.getAttribute("data-resolution-index"))).toBeGreaterThanOrEqual(index);
     expect(errors).toEqual([]);
   });
