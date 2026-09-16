@@ -184,14 +184,14 @@ export function createTerrainSplatMaterial(
     shader.fragmentShader = shader.fragmentShader.replace(
       'vec4 diffuseColor = vec4( diffuse, opacity );',
       `
-      \${mixLogic}
+      ${mixLogic}
       diffuseColor.a = opacity;
       `
     );
   };
 
   // Necessary to prevent Three.js from optimizing away custom attributes
-  mat.customProgramCacheKey = () => `TerrainSplat_\${tier}`;
+  mat.customProgramCacheKey = () => `TerrainSplat_${tier}`;
 
   return mat;
 }
