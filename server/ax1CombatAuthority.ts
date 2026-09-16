@@ -191,13 +191,21 @@ export class NavGrid {
   private valid(point: GridPoint): boolean { return point.x >= 0 && point.z >= 0 && point.x < this.width && point.z < this.height && !this.blocked.has(gridKey(point)); }
   findPath(start: GridPoint, goal: GridPoint): readonly GridPoint[] {
     if (!this.valid(start) || !this.valid(goal)) return [];
-    const open = new Map<string, { point: GridPoint; g: number; f: number }>([[gridKey(start), { point: start, g: 0, f: Math.abs(goal.x - start.x) + Math.abs(goal.z - start.z) }]]);
+    const startKey = gridKey(start);
+    // Optimization: Pre-cache map keys inside value objects and use a linear scan over open set
+    // to find minimum f instead of Array.from().sort() to prevent GC latency in high-frequency game loops.
+    const open = new Map<string, { point: GridPoint; g: number; f: number; key: string }>([[startKey, { point: start, g: 0, f: Math.abs(goal.x - start.x) + Math.abs(goal.z - start.z), key: startKey }]]);
     const cameFrom = new Map<string, string>();
-    const points = new Map<string, GridPoint>([[gridKey(start), start]]);
+    const points = new Map<string, GridPoint>([[startKey, start]]);
     const closed = new Set<string>();
     while (open.size) {
-      const current = Array.from(open.values()).sort((a, b) => a.f - b.f || a.g - b.g || gridKey(a.point).localeCompare(gridKey(b.point)))[0]!;
-      const currentKey = gridKey(current.point);
+      let current: { point: GridPoint; g: number; f: number; key: string } | undefined;
+      for (const node of open.values()) {
+        if (!current || node.f < current.f || (node.f === current.f && (node.g < current.g || (node.g === current.g && node.key < current.key)))) {
+          current = node;
+        }
+      }
+      const currentKey = current!.key;
       open.delete(currentKey);
       if (currentKey === gridKey(goal)) {
         const path: GridPoint[] = [goal];
@@ -215,7 +223,7 @@ export class NavGrid {
         const existing = open.get(key);
         if (existing && existing.g <= g) continue;
         cameFrom.set(key, currentKey); points.set(key, Object.freeze({ ...neighbour }));
-        open.set(key, { point: neighbour, g, f: g + Math.abs(goal.x - neighbour.x) + Math.abs(goal.z - neighbour.z) });
+        open.set(key, { point: neighbour, g, f: g + Math.abs(goal.x - neighbour.x) + Math.abs(goal.z - neighbour.z), key });
       }
     }
     return [];
