@@ -149,7 +149,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(starterRows[0].contentSha256).toMatch(/^[a-f0-9]{64}$/);
 
       const confirmed = () => expect(dialog.getByText("Änderung vom Server bestätigt.", { exact: true })).toBeVisible();
-      await hud.getByRole("button", { name: "Inventar", exact: true }).click();
+      await hud.getByTestId("gamehud-inventory-button").click();
       await expect(dialog.getByRole("button", { name: "Haupthand-Waffe: Apprentice Steel Blade", exact: true })).toBeVisible();
       await expect(dialog.getByText("Keine Gegenstände in dieser Ansicht.", { exact: true })).toBeVisible();
       await dialog.getByRole("button", { name: "Auto-Loot AN", exact: true }).click();
@@ -159,7 +159,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
 
       // Character is now the original AX1 stats/mastery surface. It must not
       // grow old Aurion role-skill or hotbar controls back into this boundary.
-      await hud.getByRole("button", { name: "Charakter", exact: true }).click();
+      await hud.getByTestId("gamehud-character-button").click();
       const characterDialog = page.getByRole("dialog", { name: "Charakter & Skills", exact: true });
       await expect(characterDialog).toBeVisible();
       await expect(characterDialog.getByRole("button", { name: "Stats", exact: true })).toBeVisible();
@@ -264,7 +264,7 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       const ownCount = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
       await auto.click();
       await expect.poll(() => combatEvents.filter(event => event.attackerEntityId === selfEntityId).length, { timeout: 8_000 }).toBeGreaterThan(ownCount);
-      await hud.getByRole("button", { name: "Inventar", exact: true }).click();
+      await hud.getByTestId("gamehud-inventory-button").click();
       await expect(hud.getByTitle("Auto-Angriff", { exact: true })).toHaveAttribute("aria-pressed", "false");
       const stoppedAt = combatEvents.filter(event => event.attackerEntityId === selfEntityId).length;
       await page.waitForTimeout(1_400);

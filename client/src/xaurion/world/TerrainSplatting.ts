@@ -184,7 +184,7 @@ export function createTerrainSplatMaterial(
     shader.fragmentShader = shader.fragmentShader.replace(
       'vec4 diffuseColor = vec4( diffuse, opacity );',
       `
-      \${mixLogic}
+      ${mixLogic}
       diffuseColor.a = opacity;
       `
     );

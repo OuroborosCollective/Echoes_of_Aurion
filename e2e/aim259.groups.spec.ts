@@ -64,7 +64,7 @@ async function launchAx1AndOpenGroups(page: Page) {
   await expect(connected).toBeVisible({ timeout: 45_000 });
   const hud = page.getByTestId("authoritative-world-hud");
   await hud.getByRole("button", { name: "Weitere Menüs", exact: true }).click();
-  await hud.getByRole("button", { name: "Gruppe", exact: true }).click();
+  await hud.getByTestId("gamehud-party-button").click();
   const dialog = page.getByRole("dialog", { name: "Party & Adventuring Squad", exact: true });
   await expect(dialog).toBeVisible({ timeout: 15_000 });
   return { runtime, hud, dialog };

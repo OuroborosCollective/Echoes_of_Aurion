@@ -266,12 +266,12 @@ export function GameHUD(props: GameHUDProps) {
 
         <div className="pointer-events-auto flex max-w-[64vw] flex-col items-end gap-1.5">
           <div className="flex max-w-full flex-wrap justify-end gap-1">
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter"><UserRound className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar"><Package className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk"><Hammer className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter" data-testid="gamehud-character-button"><UserRound className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar" data-testid="gamehud-inventory-button"><Package className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk" data-testid="gamehud-crafting-button"><Hammer className="h-4 w-4" /></button>
             <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenQuests)} title="Aufträge [J]" aria-label="Aufträge" data-testid="gamehud-quests-button"><ScrollText className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas"><MapIcon className="h-4 w-4" /></button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe" data-testid="gamehud-party-button"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
+            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas" data-testid="gamehud-map-button"><MapIcon className="h-4 w-4" /></button>
             <button type="button" className={`${iconButton} ${menuExpanded ? "border-cyan-400 text-cyan-300" : ""}`} onClick={() => setMenuExpanded(value => !value)} aria-expanded={menuExpanded} aria-label="Weitere Menüs"><Menu className="h-4 w-4" /></button>
           </div>
 
