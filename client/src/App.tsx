@@ -22,7 +22,7 @@ function App() {
   const websiteSurface = location !== "/play";
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="dark" switchable={true}>
         <TooltipProvider>
           <Toaster />
           <SoundManager />

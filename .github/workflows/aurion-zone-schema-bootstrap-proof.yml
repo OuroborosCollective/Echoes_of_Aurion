@@ -51,6 +51,7 @@ on:
       - "drizzle/0044_aurion_semantic_memory_graph.sql"
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
       - "drizzle/0046_aurion_semantic_node_history_key.sql"
+      - "drizzle/0047_aurion_world_context_capsules.sql"
   push:
     branches: [main]
     paths:
@@ -102,6 +103,7 @@ on:
       - "drizzle/0044_aurion_semantic_memory_graph.sql"
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
       - "drizzle/0046_aurion_semantic_node_history_key.sql"
+      - "drizzle/0047_aurion_world_context_capsules.sql"
 
 permissions:
   contents: read

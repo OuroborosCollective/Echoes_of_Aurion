@@ -70,7 +70,7 @@ export interface GameHUDProps {
   points?: number;
   victories?: number;
   progressionCount?: number;
-  mastery?: Readonly<{ name: string; level: number | string }>;
+  mastery?: Readonly<{ name: string; level: number | string; xpPercent?: number }>;
   playerState: string;
   playerStateLabel: string;
   connected: boolean;
@@ -321,7 +321,7 @@ export function GameHUD(props: GameHUDProps) {
                       {objective.progress !== undefined && (
                           <div className="mt-1.5 flex items-center gap-2">
                              <div className="h-1.5 flex-1 rounded-full bg-stone-900">
-                                <div className="h-full rounded-full bg-amber-500 transition-all duration-500 ease-out" style={{ width: `${objective.progress * 100}%` }} />
+                                <div className={`h-full rounded-full bg-amber-500 transition-all duration-500 ease-out ${activeEffects.get(objective.id) === 'pulse' ? 'flash-meter' : ''}`} style={{ width: `${objective.progress * 100}%` }} />
                              </div>
                              <span className="text-[8px] text-amber-500 font-mono">{Math.round(objective.progress * 100)}%</span>
                           </div>
@@ -378,7 +378,7 @@ export function GameHUD(props: GameHUDProps) {
             <span className="text-lg sm:text-xl" style={{ color: skill.color }}>{skill.icon}</span><kbd className="absolute -left-1 -top-1 rounded bg-black px-1 text-[8px] text-[#fbbf24]">{index + 1}</kbd><small className="sr-only">{skill.name}</small>
           </button>)}
         </div>
-        <div className="h-1 w-full max-w-xs overflow-hidden rounded-full border border-gray-800 bg-black/90"><div className={`h-full ${props.connected ? "bg-gradient-to-r from-amber-600 to-yellow-400" : "bg-gray-700"}`} style={{ width: props.connected ? "100%" : "15%" }} /></div>
+        <div className="h-1 w-full max-w-xs overflow-hidden rounded-full border border-gray-800 bg-black/90"><div className={`h-full ${props.connected ? "bg-gradient-to-r from-amber-600 to-yellow-400" : "bg-gray-700"}`} style={{ width: typeof props.mastery?.xpPercent === "number" ? `${props.mastery.xpPercent * 100}%` : (props.connected ? "100%" : "15%") }} /></div>
       </div>
 
       <button type="button" onClick={() => setCombatOpen(value => !value)} className="pointer-events-auto absolute right-2 top-[46%] sm:right-4 rounded-xl border border-amber-500/40 bg-black/85 px-2.5 py-2 text-[9px] font-mono text-amber-300 backdrop-blur-md shadow-xl" aria-expanded={combatOpen}>

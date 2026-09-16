@@ -676,4 +676,16 @@ Learned: Protocol packet constraints must be scaled proportionally with autonomo
 Open: Continuous readback under live MariaDB traffic during high-concurrency player sessions.
 Next safe step: Report status to user.
 
+### 2026-09-16 — Migration 0047 Production Artifact & Workflow Proof Synchronization
+Status: VERIFIED and INTEGRATED; production-ready
+Task: Resolve CI/CD pipeline failures caused by contract coverage mismatch and workflow assertion drift following addition of migration `0047_aurion_world_context_capsules`.
+Decisions:
+- **Contract & Artifact Alignment**: Added `0047_aurion_world_context_capsules` to `lateAurionMigrationTags` in `scripts/aurionProductionSchemaReconciliation.ts`, updated `config/aurion-migration-wave-manifest.json` waveId to `aurion-production-0021-0047`, and synchronized `scripts/dispatch-aurion-schema-plan.mjs`, `scripts/build-aurion-production-reconcile-artifact.mjs`, `scripts/build-aurion-production-apply-artifact.mjs`, `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`, `deploy/verify-aurion-production-schema-apply-artifact.mjs`, and `deploy/aurion-production-schema-apply-core`.
+- **Workflow Proof Verification**: Updated path triggers, expected migration tag lists, and journal row count assertions (47 -> 48) across `.github/workflows/aurion-journal-watermark-regression.yml`, `.github/workflows/aurion-zone-schema-bootstrap-proof.yml`, `.github/workflows/aurion-schema-reconciliation-proof.yml`, `.github/workflows/aurion-production-schema-readback.yml`, `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`, and `.github/workflows/aurion-root-reconciliation-artifact-proof.yml`.
+Touched surfaces: `scripts/aurionProductionSchemaReconciliation.ts`, `config/aurion-migration-wave-manifest.json`, `scripts/dispatch-aurion-schema-plan.mjs`, `scripts/build-aurion-production-reconcile-artifact.mjs`, `scripts/build-aurion-production-apply-artifact.mjs`, `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`, `deploy/verify-aurion-production-schema-apply-artifact.mjs`, `deploy/aurion-production-schema-apply-core`, `.github/workflows/*`, `Memory.md`.
+Evidence: `python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit --repo .` returned `outOfSyncCount: 0`; `npm run verify:migrations` returned 48/48 verified; `npm run verify:wasd-npc` verified; `npm run verify:release-assets` verified; `npm run check` (`tsc --noEmit`) completed with 0 errors; production reconcile & apply artifact builds and artifact verification scripts succeeded cleanly with valid SHA256 checksums.
+Learned: Any newly journaled migration requires synchronous declaration across manifest, artifact builders, deployment verifiers, and CI proof workflow assertions to maintain invariant coverage and prevent fail-closed schema gates.
+Open: Continuous readback under live MariaDB traffic during automated promotion.
+Next safe step: Report status to user.
+
 

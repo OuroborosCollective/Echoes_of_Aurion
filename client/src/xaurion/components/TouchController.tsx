@@ -75,7 +75,7 @@ export const AX1TouchDirector: React.FC<AX1TouchDirectorProps> = ({
     const touch = e.touches[0];
     const pos = { x: touch.clientX, y: touch.clientY };
     
-    touchStart.current = { ...pos, time: Date.now() };
+    touchStart.current = { ...pos, time: performance.now() };
     setTouchPos(pos);
     setMode("idle");
     setDwellProgress(0);
@@ -84,9 +84,9 @@ export const AX1TouchDirector: React.FC<AX1TouchDirectorProps> = ({
     // Start dwell sequence
     dwellTimer.current = setTimeout(() => {
       setMode("dwelling");
-      const startTime = Date.now();
+      const startTime = performance.now();
       const interval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
+        const elapsed = performance.now() - startTime;
         const progress = Math.min(1, elapsed / DWELL_DURATION);
         setDwellProgress(progress);
         

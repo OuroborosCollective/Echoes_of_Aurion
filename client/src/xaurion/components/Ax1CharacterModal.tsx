@@ -97,6 +97,11 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
 
             {selectedMastery && <div className="bg-black/70 rounded-xl p-4">
               <div className="flex justify-between mb-2"><span className="font-bold">{selectedMastery.name} (Rank {selectedMastery.level})</span><span>{selectedMastery.maxXp > 0 ? `${selectedMastery.xp} / ${selectedMastery.maxXp} XP` : 'Receipt verified'}</span></div>
+              {selectedMastery.maxXp > 0 && (
+                <div className="h-2 w-full overflow-hidden rounded-full bg-black/80 mb-3 border border-gray-800">
+                  <div className="h-full bg-gradient-to-r from-amber-600 to-yellow-400" style={{ width: `${Math.min(100, Math.max(0, (selectedMastery.xp / selectedMastery.maxXp) * 100))}%` }} />
+                </div>
+              )}
               <div className="text-xs text-gray-400">{selectedMastery.description}</div>
               <div className="mt-4 space-y-2">{selectedMastery.milestoneSkills?.map(skill => <div key={skill.id} className="p-3 border border-gray-800 rounded flex justify-between items-center">
                 <div><div className="font-bold">{skill.name}</div><div className="text-xs text-gray-500">Req Rank {skill.requiredMasteryLevel}</div></div>

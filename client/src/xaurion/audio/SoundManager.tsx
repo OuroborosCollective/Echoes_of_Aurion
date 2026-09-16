@@ -8,13 +8,29 @@ import { motion, AnimatePresence } from "framer-motion";
 export const SoundManager: React.FC = () => {
   const soundscapeRef = useRef<AurionSoundscape | null>(null);
   const { isAdmin } = useAdminStore();
-  const [isMuted, setIsMuted] = useState(false);
-  const [masterVolume, setMasterVolume] = useState(0.78);
+  const [isMuted, setIsMuted] = useState(() => {
+    const saved = localStorage.getItem("aurion:audio:isMuted");
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [masterVolume, setMasterVolume] = useState(() => {
+    const saved = localStorage.getItem("aurion:audio:masterVolume");
+    return saved ? parseFloat(saved) : 0.78;
+  });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [activeAmbient, setActiveAmbient] = useState<string | null>(null);
   const ambientVolumeRef = useRef(0.4);
   const activeAmbientRef = useRef<string | null>(null);
   const duckingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+
+  useEffect(() => {
+    localStorage.setItem("aurion:audio:isMuted", JSON.stringify(isMuted));
+  }, [isMuted]);
+
+  useEffect(() => {
+    localStorage.setItem("aurion:audio:masterVolume", masterVolume.toString());
+  }, [masterVolume]);
+
 
   useEffect(() => {
     // Initialize soundscape with asset mapping

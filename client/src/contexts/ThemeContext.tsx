@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 type Theme = "light" | "dark";
 
@@ -44,7 +45,24 @@ export function ThemeProvider({
 
   const toggleTheme = switchable
     ? () => {
-        setTheme(prev => (prev === "light" ? "dark" : "light"));
+        if (!document.startViewTransition) {
+          setTheme(prev => (prev === "light" ? "dark" : "light"));
+          return;
+        }
+        document.startViewTransition(() => {
+          flushSync(() => {
+            setTheme(prev => {
+              const next = prev === "light" ? "dark" : "light";
+              const root = document.documentElement;
+              if (next === "dark") {
+                root.classList.add("dark");
+              } else {
+                root.classList.remove("dark");
+              }
+              return next;
+            });
+          });
+        });
       }
     : undefined;
 
