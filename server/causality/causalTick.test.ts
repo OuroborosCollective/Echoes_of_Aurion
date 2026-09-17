@@ -1,147 +1,148 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import type WebSocket from "ws";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
-import { orderCanonicalZoneIntents, hashCanonicalIntents, type AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
+import {
+  hashCanonicalIntents,
+  orderCanonicalZoneIntents,
+  type AurionZoneIntent,
+} from "../../shared/aurionZoneIntentContract";
 import { canonicalJson, canonicalSha256 } from "../../shared/aurionCanonicalHash";
-import { hashCanonicalZoneState } from "./zoneCanonicalState";
-import { globalTickRecorder } from "./tickRecorder";
+import { AurionTickRecorder, globalTickRecorder } from "./tickRecorder";
 import { replayZoneTick } from "./replayZoneTick";
 import { activeProvenance } from "../aurionProvenance";
+import { resolveAddressableRandomU32 } from "../determinism/aurionAddressableRandom";
+import { resolveCombatDelta } from "../wasdCombatDeltaProtocol";
 
-describe("C-Aurion Causal Tick & Determinism Engine", () => {
-  it("enforces canonical intent ordering with deterministic tie-breaking", () => {
-    const rawIntents: AurionZoneIntent[] = [
-      { type: "attack", connectionId: "c2", entityId: "player:2", clientSeq: 5, arrivalSeq: 10, targetEntityId: "mob_1" },
-      { type: "move", connectionId: "c1", entityId: "player:1", clientSeq: 2, arrivalSeq: 3, input: { x: 1, z: 0 } },
-      { type: "skill", connectionId: "c1", entityId: "player:1", clientSeq: 4, arrivalSeq: 8, skillId: "k_strike", targetEntityId: "mob_1" },
-      { type: "move", connectionId: "c2", entityId: "player:2", clientSeq: 1, arrivalSeq: 2, input: { x: 0, z: -1 } },
+const socket = () => ({ readyState: 1, OPEN: 1, send: () => {}, close: () => {} }) as unknown as WebSocket;
+
+function replayOnlyZone(userId: number) {
+  const zone = new AuthoritativeMovementZone("observatory_threshold");
+  zone.isReplay = true;
+  const joined = zone.join({
+    userId,
+    socket: socket(),
+    combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
+  });
+  return { zone, connectionId: joined.connectionId };
+}
+
+describe("C-Aurion causal truth boundary", () => {
+  it("orders logical intents independently of network arrival scheduling", () => {
+    const firstArrival: AurionZoneIntent[] = [
+      { type: "attack", connectionId: "net-b", entityId: "player:2", clientSeq: 5, arrivalSeq: 1, targetEntityId: "mob_1" },
+      { type: "move", connectionId: "net-a", entityId: "player:1", clientSeq: 2, arrivalSeq: 2, input: { x: 1, z: 0 } },
+      { type: "skill", connectionId: "net-a", entityId: "player:1", clientSeq: 4, arrivalSeq: 3, skillId: "k_strike", targetEntityId: "mob_1" },
+      { type: "move", connectionId: "net-b", entityId: "player:2", clientSeq: 1, arrivalSeq: 4, input: { x: 0, z: -1 } },
+    ];
+    const differentArrival: AurionZoneIntent[] = [
+      { ...firstArrival[3], connectionId: "other-b", arrivalSeq: 100 },
+      { ...firstArrival[2], connectionId: "other-a", arrivalSeq: 5 },
+      { ...firstArrival[1], connectionId: "other-a", arrivalSeq: 99 },
+      { ...firstArrival[0], connectionId: "other-b", arrivalSeq: 7 },
     ];
 
-    const ordered = orderCanonicalZoneIntents(rawIntents);
-    expect(ordered[0].type).toBe("move");
-    expect(ordered[0].entityId).toBe("player:2");
-    expect(ordered[1].type).toBe("move");
-    expect(ordered[1].entityId).toBe("player:1");
-    expect(ordered[2].type).toBe("skill");
-    expect(ordered[3].type).toBe("attack");
-
-    // Repeat ordering - must produce identical hash
-    const orderedAgain = orderCanonicalZoneIntents([...rawIntents].reverse());
-    expect(hashCanonicalIntents(ordered)).toBe(hashCanonicalIntents(orderedAgain));
+    const ordered = orderCanonicalZoneIntents(firstArrival);
+    expect(ordered.map(intent => `${intent.entityId}:${intent.clientSeq}:${intent.type}`)).toEqual([
+      "player:1:2:move",
+      "player:1:4:skill",
+      "player:2:1:move",
+      "player:2:5:attack",
+    ]);
+    expect(hashCanonicalIntents(firstArrival)).toBe(hashCanonicalIntents(differentArrival));
   });
 
-  it("rounds IEEE 754 floating point numbers to 4 decimal places in canonical JSON", () => {
-    const objA = { x: 12.3456789, z: -0.00001 };
-    const objB = { x: 12.3457, z: 0 };
-    expect(canonicalJson(objA)).toBe(canonicalJson(objB));
-    expect(canonicalSha256(objA)).toBe(canonicalSha256(objB));
+  it("does not collapse distinct finite floats and rejects non-finite hash inputs", () => {
+    const precise = { x: 12.3456789, z: -0.00001 };
+    const rounded = { x: 12.3457, z: 0 };
+    expect(canonicalJson(precise)).not.toBe(canonicalJson(rounded));
+    expect(canonicalSha256(precise)).not.toBe(canonicalSha256(rounded));
+    expect(() => canonicalJson({ x: Number.NaN })).toThrow("CANONICAL_NUMBER_NON_FINITE");
+    expect(() => canonicalSha256({ x: Number.POSITIVE_INFINITY })).toThrow("CANONICAL_NUMBER_NON_FINITE");
   });
 
-  it("produces a valid cryptographic receipt chain across zone ticks", () => {
-    const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
-    const { connectionId } = zone.join({
-      userId: 101,
-      socket: socket as unknown as WebSocket,
-      combatProfile: { combatLevel: 5, maxHealth: 500, weaponBonus: 10, weaponTrack: "blade" }
+  it("keeps addressable draws independent of unrelated RNG calls", () => {
+    const context = {
+      worldSeedDigest: "sha256:" + "1".repeat(64),
+      rulesetVersion: "aurion.zone.rules.v1",
+      tick: 42,
+      entityId: "player:7",
+      actionSequence: 9,
+      purpose: "combat.hit",
+    };
+    const first = resolveAddressableRandomU32(context);
+    resolveAddressableRandomU32({ ...context, purpose: "unrelated.cosmetic", actionSequence: 999 });
+    expect(resolveAddressableRandomU32(context)).toBe(first);
+  });
+
+  it("actually consumes explicit addressable combat entropy", () => {
+    const attacker = { id: "player:1", stamina: 100, skills: { combat: { level: 10 } } };
+    const defender = { id: "mob_1", health: 100, skills: { combat: { level: 10 } } };
+    const guaranteedHit = resolveCombatDelta("melee", attacker, defender, {
+      tick: 1,
+      sequence: 1,
+      entropy: { hitU32: 0, critU32: 0xffff_ffff, damageU32: 0 },
     });
+    const guaranteedMiss = resolveCombatDelta("melee", attacker, defender, {
+      tick: 1,
+      sequence: 1,
+      entropy: { hitU32: 0xffff_ffff, critU32: 0, damageU32: 3 },
+    });
+    expect(guaranteedHit.result.hit).toBe(true);
+    expect(guaranteedMiss.result.hit).toBe(false);
+  });
 
+  it("produces a cryptographically linked receipt chain without persistence side effects", () => {
+    const { zone, connectionId } = replayOnlyZone(101);
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
     zone.tick();
-    const r1 = zone.getLatestReceipt();
-    expect(r1).toBeDefined();
-    expect(r1!.tick).toBe(1);
-    expect(r1!.previousReceiptHash).toBeNull();
-    expect(r1!.receiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-
+    const first = zone.getLatestReceipt()!;
     zone.submitMovement(connectionId, { type: "move", clientSeq: 2, input: { x: 0, z: -1 } });
     zone.tick();
-    const r2 = zone.getLatestReceipt();
-    expect(r2).toBeDefined();
-    expect(r2!.tick).toBe(2);
-    expect(r2!.previousReceiptHash).toBe(r1!.receiptHash);
+    const second = zone.getLatestReceipt()!;
 
-    // Verify chain integrity in global recorder
-    const receipts = globalTickRecorder.getReceipts();
-    const chainVerification = globalTickRecorder.verifyReceiptChain();
-    expect(chainVerification.valid).toBe(true);
-    expect(receipts.length).toBeGreaterThanOrEqual(2);
+    expect(first.receiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(second.previousReceiptHash).toBe(first.receiptHash);
+    expect(AurionTickRecorder.verifyReceiptChain([first, second])).toEqual({ valid: true });
   });
 
-  it("successfully replays a recorded zone tick through all 8 verification stages", () => {
-    const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
-    const { connectionId } = zone.join({
-      userId: 202,
-      socket: socket as unknown as WebSocket,
-      combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" }
-    });
-
+  it("replays only the four stages actually observable in receipt v1", () => {
+    const { zone, connectionId } = replayOnlyZone(202);
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
+    const preState = zone.getCanonicalZoneState();
+    const intents = [...zone.getPendingIntents()];
     zone.tick();
     const receipt = zone.getLatestReceipt()!;
-    const entry = globalTickRecorder.getEntry("observatory_threshold", receipt.tick)!;
-    expect(entry).toBeDefined();
 
-    const verdict = replayZoneTick({
-      preState: entry.preState!,
-      intents: entry.intents!,
-      expectedReceipt: entry.receipt,
-    });
+    const recorderCountBefore = globalTickRecorder.getReceipts().length;
+    const verdict = replayZoneTick({ preState, intents, expectedReceipt: receipt });
+    const recorderCountAfter = globalTickRecorder.getReceipts().length;
 
     expect(verdict.verdict).toBe("MATCH");
-    if (verdict.verdict === "MATCH") {
-      expect(verdict.stagesVerified).toBe(8);
-      expect(verdict.receiptHash).toBe(receipt.receiptHash);
-    }
+    if (verdict.verdict === "MATCH") expect(verdict.stagesVerified).toBe(4);
+    expect(recorderCountAfter).toBe(recorderCountBefore);
   });
 
-  it("detects divergence when intents or states are tampered", () => {
-    const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
-    const { connectionId } = zone.join({
-      userId: 303,
-      socket: socket as unknown as WebSocket,
-      combatProfile: { combatLevel: 5, maxHealth: 500, weaponBonus: 10, weaponTrack: "blade" }
-    });
-
+  it("reports first divergence when a canonical intent is tampered", () => {
+    const { zone, connectionId } = replayOnlyZone(303);
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
+    const preState = zone.getCanonicalZoneState();
+    const intents = [...zone.getPendingIntents()];
     zone.tick();
     const receipt = zone.getLatestReceipt()!;
-    const entry = globalTickRecorder.getEntry("observatory_threshold", receipt.tick)!;
-
-    // Tamper with intent input
-    const tamperedIntents: AurionZoneIntent[] = [
-      { ...entry.intents![0], input: { x: -1, z: 0 } }
-    ];
-
-    const verdict = replayZoneTick({
-      preState: entry.preState!,
-      intents: tamperedIntents,
-      expectedReceipt: entry.receipt,
-    });
-
+    const tampered = [{ ...intents[0], input: { x: -1, z: 0 } }] as AurionZoneIntent[];
+    const verdict = replayZoneTick({ preState, intents: tampered, expectedReceipt: receipt });
     expect(verdict.verdict).toBe("FIRST_DIVERGENCE");
+    if (verdict.verdict === "FIRST_DIVERGENCE") expect(verdict.stage).toBe("INPUT_ORDER");
   });
 
-  it("embeds build and runtime provenance into receipts and active server state", () => {
-    expect(activeProvenance).toBeDefined();
-    expect(activeProvenance.commit).toBeTruthy();
-    expect(typeof activeProvenance.dirty).toBe("boolean");
+  it("keeps missing release provenance explicitly unverified instead of synthesizing identity", () => {
     expect(activeProvenance.runtimeHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(activeProvenance.rulesets.movement).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(activeProvenance.rulesets.combat).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(activeProvenance.rulesets.bladeSkills).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(["OBSERVED", "UNVERIFIED"]).toContain(activeProvenance.observation.sourceRevision);
+    expect(["OBSERVED", "UNVERIFIED"]).toContain(activeProvenance.observation.artifactDigest);
+    expect(activeProvenance.rulesets.movement).toMatch(/^(sha256:[a-f0-9]{64}|UNOBSERVABLE)$/);
 
-    const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
-    zone.join({
-      userId: 404,
-      socket: socket as unknown as WebSocket,
-      combatProfile: { combatLevel: 5, maxHealth: 500, weaponBonus: 10, weaponTrack: "blade" }
-    });
+    const { zone } = replayOnlyZone(404);
     zone.tick();
-    const receipt = zone.getLatestReceipt()!;
-    expect(receipt.sourceRevision).toBe(activeProvenance.commit);
+    expect(zone.getLatestReceipt()!.sourceRevision).toBe(activeProvenance.sourceRevision);
   });
 });
