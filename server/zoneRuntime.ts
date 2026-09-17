@@ -76,6 +76,7 @@ import {
   validWasdZoneCombatProfile,
   type WasdZoneCombatProfile,
 } from "./wasdCombatProfileProtocol";
+import { resolveReturnStoneRevival } from "./returnStoneRevival";
 
 export type ZoneCombatProfile = WasdZoneCombatProfile;
 export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile = WASD_DEFAULT_ZONE_COMBAT_PROFILE;
@@ -188,7 +189,7 @@ export class AuthoritativeMovementZone {
         maxHealth: peer.maxHealth,
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
-        weaponBonus: peer.weaponBonus, entropy,
+        weaponBonus: peer.weaponBonus,
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,
@@ -496,11 +497,11 @@ export class AuthoritativeMovementZone {
       purpose: skillId ? `combat.skill.${skillId}` : "combat.melee",
     });
 
-      const delta = resolveCombatDelta("melee", attacker, defender, {
+    const delta = resolveCombatDelta("melee", attacker, defender, {
       tick: this.tickNumber,
       sequence,
-      weaponBonus: peer.weaponBonus, entropy,
-      // Note: resolveCombatDelta should ideally be updated to take the entropy float directly
+      weaponBonus: peer.weaponBonus,
+      entropy,
     });
 
     const patch = reduceCombatDelta(attacker, defender, delta);
@@ -526,10 +527,30 @@ export class AuthoritativeMovementZone {
     this.refreshPeerOrder();
     const rngEvents: RngEventRecord[] = [];
     const combatEvents: ConfirmedZoneCombatEvent[] = [];
+    const revivedEntityIds: string[] = [];
     let changed = false;
     let actionIndex = 0;
 
-    // Phase 01: Membership already handled via refreshPeerOrder
+    // Phase 01: Membership already handled via refreshPeerOrder.
+    // Phase 01.5: deterministic return-stone revival. This depends only on
+    // canonical combat/tick state and never on visual asset availability.
+    for (const peer of this.sortedPeersByEntityId) {
+      const revival = resolveReturnStoneRevival({
+        zoneId: this.zoneId,
+        tick: this.tickNumber,
+        health: peer.health,
+        maxHealth: peer.maxHealth,
+        stamina: peer.stamina,
+        lastCombatSequence: peer.lastCombatSequence,
+      });
+      if (!revival) continue;
+      peer.health = revival.health;
+      peer.stamina = revival.stamina;
+      peer.position = { x: revival.position.x, z: revival.position.z };
+      peer.input = { x: 0, z: 0 };
+      revivedEntityIds.push(`player:${peer.userId}`);
+      changed = true;
+    }
 
     // Phase 02: Movement Intents
     for (const intent of intentsToProcess) {
@@ -668,6 +689,7 @@ export class AuthoritativeMovementZone {
       changed: changed || resourcesChanged || mobsChanged,
       intentsCount: intentsToProcess.length,
       combatSequence: this.combatSequence,
+      revivedEntityIds,
     };
     const transitionHash = canonicalSha256(transitionSummary);
     const rngRootHash = computeRngRootHash(rngEvents);
@@ -755,7 +777,8 @@ export class AuthoritativeMovementZone {
       const delta = resolveCombatDelta("melee", attacker, defender, {
         tick: this.tickNumber,
         sequence,
-        weaponBonus: 0, entropy,
+        weaponBonus: 0,
+        entropy,
       });
       const patch = reduceCombatDelta(attacker, defender, delta);
       this.mobRuntime.applyCombatState(mob.definition.entityId, {
@@ -766,7 +789,7 @@ export class AuthoritativeMovementZone {
       peer.health = patch.defender.health;
       peer.lastCombatSequence = sequence;
       if (peer.health === 0) peer.input = { x: 0, z: 0 };
-      
+
       events.push(this.combatEvent(delta, patch.attacker.stamina, peer.health, null));
       changed = true;
     }
