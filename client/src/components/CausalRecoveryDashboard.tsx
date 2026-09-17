@@ -1,84 +1,86 @@
-import { useState } from "react";
+import { AlertTriangle, CheckCircle2, History, ShieldAlert } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { AlertTriangle, Wrench, ShieldAlert, CheckCircle2, History } from "lucide-react";
-import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function CausalRecoveryDashboard() {
   const zoneId = "observatory_threshold";
   const statusQuery = trpc.causality.getReadbackStatus.useQuery();
-  const triggerRollback = trpc.causality.triggerAutomaticRollback.useMutation({
-    onSuccess: (success) => {
-      if (success) {
-        toast.success("The zone was successfully repaired from the last known good checkpoint.");
-        statusQuery.refetch();
-      } else {
-        toast.error("Could not find a valid reconciled checkpoint to rollback to.");
-      }
-    }
-  });
+  const planQuery = trpc.causality.planRecovery.useQuery({ zoneId });
+  const plan = planQuery.data;
 
   return (
     <div className="space-y-6">
-      <Card className="border-red-500/20 bg-slate-950/70">
+      <Card className="border-amber-500/20 bg-slate-950/70">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-red-200">
-            <AlertTriangle className="h-5 w-5 text-red-500" /> Causal Recovery & World Repair
+          <CardTitle className="flex items-center gap-2 text-amber-100">
+            <ShieldAlert className="h-5 w-5 text-amber-400" /> Causal Recovery Planning
           </CardTitle>
           <CardDescription>
-            Automatic rollback and manual determinism divergence repair tools (Step 20).
+            Read-only recovery evidence. This surface cannot roll back live gameplay or delete causal history.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 rounded-xl border border-red-500/20 bg-red-950/20 flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <ShieldAlert className="h-8 w-8 text-red-400" />
-              <div>
-                <h4 className="text-sm font-semibold text-red-200">Zone Determinism Status</h4>
-                <p className="text-xs text-red-300/70">Monitors the causal timeline for logical divergence.</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex gap-4">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-medium">TOTAL DIVERGENCES</span>
-                  <span className="text-xl font-bold text-slate-200">{statusQuery.data?.divergences || 0}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-medium">VERIFIED TICKS</span>
-                  <span className="text-xl font-bold text-emerald-400">{statusQuery.data?.verifiedTicks || 0}</span>
-                </div>
-              </div>
-
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                className="gap-2"
-                disabled={triggerRollback.isPending}
-                onClick={() => triggerRollback.mutate({ zoneId })}
-              >
-                <Wrench className="h-4 w-4" />
-                Trigger Safe Revert
-              </Button>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Metric label="OBSERVED" value={statusQuery.data?.observedTicks ?? 0} />
+            <Metric label="VERIFIED" value={statusQuery.data?.verifiedTicks ?? 0} good />
+            <Metric label="DIVERGENCES" value={statusQuery.data?.divergences ?? 0} warn />
+            <Metric label="UNPROVABLE" value={statusQuery.data?.unprovable ?? 0} warn />
           </div>
 
-          <div className="text-xs text-slate-400 leading-relaxed p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-            <h4 className="font-semibold text-slate-300 mb-2 flex items-center gap-2">
-              <History className="h-4 w-4" /> Recovery Protocol
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="font-semibold">Latest recovery candidate</span>
+              <Badge variant={plan?.status === "AVAILABLE" ? "default" : "secondary"}>
+                {plan?.status ?? "LOADING"}
+              </Badge>
+            </div>
+            {plan?.status === "AVAILABLE" ? (
+              <dl className="grid gap-2 sm:grid-cols-2">
+                <Row label="Checkpoint" value={plan.checkpointId ?? "—"} />
+                <Row label="Tick" value={String(plan.checkpointTick ?? "—")} />
+                <Row label="Snapshot hash" value={plan.snapshotHash ?? "—"} />
+                <Row label="Mutation authority" value={plan.mutationAuthority} />
+              </dl>
+            ) : (
+              <div className="flex items-start gap-2 text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{plan?.reason ?? "No recovery evidence available yet."}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-xs leading-relaxed text-slate-400">
+            <h4 className="mb-2 flex items-center gap-2 font-semibold text-slate-300">
+              <History className="h-4 w-4" /> Recovery contract
             </h4>
-            <ul className="list-disc pl-4 space-y-1">
-              <li>When a <b>Determinism Divergence</b> is detected during readback, the system automatically flags the epoch.</li>
-              <li>A <b>Safe Revert</b> finds the last known <i>reconciled</i> checkpoint for the affected zone.</li>
-              <li>The world state is restored to this checkpoint, and all subsequent divergent causal receipts are pruned.</li>
-              <li>Clients automatically re-sync with the restored readmodel on their next heartbeat.</li>
-            </ul>
+            <p>
+              A reconciled checkpoint may be proposed as a recovery candidate, but verification never executes a restore.
+              A future restore requires a separate typed control-plane action, explicit human approval and a compensating or branch receipt.
+            </p>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function Metric({ label, value, good, warn }: { label: string; value: number; good?: boolean; warn?: boolean }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="text-[10px] font-medium text-slate-500">{label}</div>
+      <div className={`text-xl font-bold ${good ? "text-emerald-400" : warn && value > 0 ? "text-amber-300" : "text-slate-200"}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="break-all font-mono text-slate-200">{value}</dd>
     </div>
   );
 }
