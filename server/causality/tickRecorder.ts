@@ -1,7 +1,4 @@
-import {
-  type AurionCausalTickReceipt,
-  computeReceiptHash,
-} from "../../shared/aurionCausalTickContract";
+import { type AurionCausalTickReceipt, computeReceiptHash } from "../../shared/aurionCausalTickContract";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 
@@ -34,163 +31,133 @@ export interface CausalPersistenceAdapter {
   getDivergentCheckpoints(zoneId: string, limit: number): Promise<any[]>;
   updateCheckpointReconciliation(id: string, status: number): Promise<void>;
   getTicksInRange(zoneId: string, fromTick: number, toTick: number): Promise<RecordedTickEntry[]>;
-  repairZone(zoneId: string, checkpointId: string): Promise<void>;
   archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string } | null>;
   getArchiveStats(zoneId: string): Promise<{ totalArchives: number; totalArchivedReceipts: number }>;
 }
 
+export type PersistenceQueueStatus = Readonly<{
+  pending: number;
+  failures: number;
+  lastError: string | null;
+}>;
+
 export class AurionTickRecorder {
-  private readonly maxEntries: number;
   private readonly receiptsByZone = new Map<string, RecordedTickEntry[]>();
   private readonly receiptsByZoneAndTick = new Map<string, Map<number, RecordedTickEntry>>();
   private persistenceAdapter?: CausalPersistenceAdapter;
+  private persistenceChain: Promise<void> = Promise.resolve();
+  private pendingPersistence = 0;
+  private persistenceFailures = 0;
+  private lastPersistenceError: string | null = null;
 
-  constructor(maxEntries = 1000, persistenceAdapter?: CausalPersistenceAdapter) {
-    this.maxEntries = maxEntries;
+  constructor(private readonly maxEntries = 1000, persistenceAdapter?: CausalPersistenceAdapter) {
     this.persistenceAdapter = persistenceAdapter;
   }
 
-  public setPersistenceAdapter(adapter: CausalPersistenceAdapter): void {
-    this.persistenceAdapter = adapter;
+  setPersistenceAdapter(adapter: CausalPersistenceAdapter): void { this.persistenceAdapter = adapter; }
+
+  /**
+   * Authority-safe entry point: journal synchronously in memory, then serialize
+   * durable writes through one observational queue. Database latency never stalls
+   * or skips the fixed simulation tick.
+   */
+  enqueueTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[]): void {
+    this.record({ receipt, postState, preState, intents });
+    const adapter = this.persistenceAdapter;
+    if (!adapter) return;
+    this.pendingPersistence += 1;
+    this.persistenceChain = this.persistenceChain
+      .then(async () => {
+        await adapter.saveReceipt(receipt, intents);
+        if (receipt.tick === 1 && preState) {
+          await adapter.saveCheckpoint(receipt.zoneId, 0, receipt.preStateHash, preState);
+        }
+        if (postState && receipt.tick % 100 === 0) {
+          await adapter.saveCheckpoint(receipt.zoneId, receipt.tick, receipt.postStateHash, postState);
+        }
+      })
+      .catch(error => {
+        this.persistenceFailures += 1;
+        this.lastPersistenceError = error instanceof Error ? error.message : String(error);
+        console.error("[C-Aurion] Evidence persistence failed", error);
+      })
+      .finally(() => { this.pendingPersistence = Math.max(0, this.pendingPersistence - 1); });
   }
 
-  public async recordTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[]): Promise<void> {
-    this.record({ receipt, postState, preState, intents });
-    if (this.persistenceAdapter) {
-      await this.persistenceAdapter.saveReceipt(receipt, intents);
-      if (postState && receipt.tick % 100 === 0) {
-        await this.persistenceAdapter.saveCheckpoint(
-          receipt.zoneId,
-          receipt.tick,
-          receipt.postStateHash,
-          postState
-        );
-      }
-    }
+  /** Explicit async helper for tests/operators that need durable completion. */
+  async recordTick(receipt: AurionCausalTickReceipt, postState?: CanonicalZoneState, preState?: CanonicalZoneState, intents?: AurionZoneIntent[]): Promise<void> {
+    this.enqueueTick(receipt, postState, preState, intents);
+    await this.persistenceChain;
+  }
+
+  async flushPersistence(): Promise<void> { await this.persistenceChain; }
+
+  getPersistenceStatus(): PersistenceQueueStatus {
+    return Object.freeze({ pending: this.pendingPersistence, failures: this.persistenceFailures, lastError: this.lastPersistenceError });
   }
 
   record(entry: RecordedTickEntry): void {
     const zoneId = entry.receipt.zoneId;
     let list = this.receiptsByZone.get(zoneId);
-    if (!list) {
-      list = [];
-      this.receiptsByZone.set(zoneId, list);
-    }
+    if (!list) { list = []; this.receiptsByZone.set(zoneId, list); }
     let map = this.receiptsByZoneAndTick.get(zoneId);
-    if (!map) {
-      map = new Map<number, RecordedTickEntry>();
-      this.receiptsByZoneAndTick.set(zoneId, map);
+    if (!map) { map = new Map(); this.receiptsByZoneAndTick.set(zoneId, map); }
+
+    const previous = map.get(entry.receipt.tick);
+    if (previous) {
+      if (previous.receipt.receiptHash !== entry.receipt.receiptHash)
+        throw new Error(`CAUSAL_TICK_CONFLICT:${zoneId}:${entry.receipt.tick}`);
+      return;
     }
 
     list.push(entry);
     map.set(entry.receipt.tick, entry);
-
     if (list.length > this.maxEntries) {
       const removed = list.shift();
-      if (removed) {
-        map.delete(removed.receipt.tick);
-      }
+      if (removed) map.delete(removed.receipt.tick);
     }
   }
 
-  getEntry(zoneId: string, tick: number): RecordedTickEntry | undefined {
-    return this.receiptsByZoneAndTick.get(zoneId)?.get(tick);
-  }
-
-  getReceipt(zoneId: string, tick: number): AurionCausalTickReceipt | undefined {
-    return this.getEntry(zoneId, tick)?.receipt;
-  }
-
-  getLatestReceipt(zoneId: string): AurionCausalTickReceipt | undefined {
-    const list = this.receiptsByZone.get(zoneId);
-    if (!list || list.length === 0) return undefined;
-    return list[list.length - 1].receipt;
-  }
+  getEntry(zoneId: string, tick: number): RecordedTickEntry | undefined { return this.receiptsByZoneAndTick.get(zoneId)?.get(tick); }
+  getReceipt(zoneId: string, tick: number): AurionCausalTickReceipt | undefined { return this.getEntry(zoneId, tick)?.receipt; }
+  getLatestReceipt(zoneId: string): AurionCausalTickReceipt | undefined { const list = this.receiptsByZone.get(zoneId); return list?.[list.length - 1]?.receipt; }
 
   getReceiptChain(zoneId: string, fromTick: number, toTick: number): AurionCausalTickReceipt[] {
     const map = this.receiptsByZoneAndTick.get(zoneId);
     if (!map) return [];
     const chain: AurionCausalTickReceipt[] = [];
-    for (let t = fromTick; t <= toTick; t++) {
-      const entry = map.get(t);
-      if (entry) {
-        chain.push(entry.receipt);
-      }
+    for (let tick = fromTick; tick <= toTick; tick += 1) {
+      const entry = map.get(tick);
+      if (entry) chain.push(entry.receipt);
     }
     return chain;
   }
 
-  getChainLength(zoneId: string): number {
-    return this.receiptsByZone.get(zoneId)?.length ?? 0;
-  }
-
+  getChainLength(zoneId: string): number { return this.receiptsByZone.get(zoneId)?.length ?? 0; }
   getReceipts(zoneId?: string): AurionCausalTickReceipt[] {
-    if (zoneId) {
-      return (this.receiptsByZone.get(zoneId) ?? []).map(e => e.receipt);
-    }
-    const all: AurionCausalTickReceipt[] = [];
-    for (const list of this.receiptsByZone.values()) {
-      for (const entry of list) {
-        all.push(entry.receipt);
-      }
-    }
-    return all;
+    if (zoneId) return (this.receiptsByZone.get(zoneId) ?? []).map(entry => entry.receipt);
+    return Array.from(this.receiptsByZone.values()).flatMap(list => list.map(entry => entry.receipt));
   }
 
-  verifyReceiptChain(zoneId?: string): {
-    valid: boolean;
-    brokenAtTick?: number;
-    error?: string;
-  } {
-    if (zoneId) {
-      const chain = (this.receiptsByZone.get(zoneId) ?? []).map(e => e.receipt);
-      return AurionTickRecorder.verifyReceiptChain(chain);
-    }
+  verifyReceiptChain(zoneId?: string): { valid: boolean; brokenAtTick?: number; error?: string } {
+    if (zoneId) return AurionTickRecorder.verifyReceiptChain((this.receiptsByZone.get(zoneId) ?? []).map(entry => entry.receipt));
     for (const list of this.receiptsByZone.values()) {
-      const chain = list.map(e => e.receipt);
-      const res = AurionTickRecorder.verifyReceiptChain(chain);
-      if (!res.valid) return res;
+      const result = AurionTickRecorder.verifyReceiptChain(list.map(entry => entry.receipt));
+      if (!result.valid) return result;
     }
     return { valid: true };
   }
 
-  static verifyReceiptChain(chain: readonly AurionCausalTickReceipt[]): {
-    valid: boolean;
-    brokenAtTick?: number;
-    error?: string;
-  } {
-    if (chain.length === 0) return { valid: true };
-
-    for (let i = 0; i < chain.length; i++) {
-      const receipt = chain[i];
+  static verifyReceiptChain(chain: readonly AurionCausalTickReceipt[]): { valid: boolean; brokenAtTick?: number; error?: string } {
+    for (let index = 0; index < chain.length; index += 1) {
+      const receipt = chain[index];
       const expectedHash = computeReceiptHash(receipt);
-      if (receipt.receiptHash !== expectedHash) {
-        return {
-          valid: false,
-          brokenAtTick: receipt.tick,
-          error: `RECEIPT_HASH_MISMATCH: expected ${expectedHash}, got ${receipt.receiptHash}`,
-        };
-      }
-
-      if (i > 0) {
-        const prev = chain[i - 1];
-        if (receipt.previousReceiptHash !== prev.receiptHash) {
-          return {
-            valid: false,
-            brokenAtTick: receipt.tick,
-            error: `PREVIOUS_RECEIPT_HASH_MISMATCH at tick ${receipt.tick}: expected ${prev.receiptHash}, got ${receipt.previousReceiptHash}`,
-          };
-        }
-        if (receipt.tick !== prev.tick + 1) {
-          return {
-            valid: false,
-            brokenAtTick: receipt.tick,
-            error: `TICK_SEQUENCE_DISCONTINUITY: previous ${prev.tick}, current ${receipt.tick}`,
-          };
-        }
-      }
+      if (receipt.receiptHash !== expectedHash) return { valid: false, brokenAtTick: receipt.tick, error: `RECEIPT_HASH_MISMATCH: expected ${expectedHash}, got ${receipt.receiptHash}` };
+      if (index === 0) continue;
+      const previous = chain[index - 1];
+      if (receipt.previousReceiptHash !== previous.receiptHash) return { valid: false, brokenAtTick: receipt.tick, error: `PREVIOUS_RECEIPT_HASH_MISMATCH at tick ${receipt.tick}: expected ${previous.receiptHash}, got ${receipt.previousReceiptHash}` };
+      if (receipt.tick !== previous.tick + 1) return { valid: false, brokenAtTick: receipt.tick, error: `TICK_SEQUENCE_DISCONTINUITY: previous ${previous.tick}, current ${receipt.tick}` };
     }
-
     return { valid: true };
   }
 }
