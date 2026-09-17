@@ -14,8 +14,12 @@ export const AURION_RETURN_STONE_ASSET_ID =
 export const AURION_RETURN_STONE_LIVE_ZONE = "observatory_threshold" as const;
 export const AURION_RETURN_STONE_POI_ID = "return-stone" as const;
 
-/** Fixed-point millimetres used by the authoritative zone runtime. */
-export const AURION_RETURN_STONE_POSITION = Object.freeze({ x: 0, z: 0 });
+/**
+ * Fixed-point millimetres used by the authoritative zone runtime. This preserves
+ * the established open-city hub plaza at client metres (0, 8) while moving the
+ * actual revive truth into the server tick.
+ */
+export const AURION_RETURN_STONE_POSITION = Object.freeze({ x: 0, z: 8_000 });
 
 /** 10-Hz zone runtime: 30 ticks = 3 seconds of confirmed defeated state. */
 export const AURION_RETURN_STONE_REVIVE_DELAY_TICKS = 30;
