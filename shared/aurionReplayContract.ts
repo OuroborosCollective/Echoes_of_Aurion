@@ -1,5 +1,3 @@
-import type { CanonicalZoneState } from "../server/causality/zoneCanonicalState";
-
 export type ReplayStage =
   | "PRE_STATE"
   | "INPUT_ORDER"
@@ -20,7 +18,7 @@ export type ReplayVerdict =
       preStateHash?: string;
       postStateHash?: string;
       receiptHash?: string;
-      postState?: CanonicalZoneState;
+      postState?: unknown;
     }
   | {
       status: "FIRST_DIVERGENCE";
