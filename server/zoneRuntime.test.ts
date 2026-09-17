@@ -35,6 +35,7 @@ describe("WASD authoritative zone movement", () => {
     expect(WASD_ZONE_CARDINAL_STEP_FIXED).toBe(340);
     expect(WASD_ZONE_DIAGONAL_STEP_FIXED).toBe(240);
     expect(integrateZoneMovement({ x: 0, z: 0 }, { x: 1, z: 0 })).toEqual({ x: 340, z: 0 });
+    expect(integrateZoneMovement({ x: 0, z: 0 }, { x: 1, z: -1 })).toEqual({ x: 240, z: -240 });
     expect(integrateZoneMovement({ x: 340, z: -340 }, { x: 0, z: 0 })).toEqual({ x: 340, z: -340 });
     const zoneSource = readFileSync("server/zoneRuntime.ts", "utf8");
     expect(zoneSource).not.toContain("CARDINAL_STEP_FIXED=340");
