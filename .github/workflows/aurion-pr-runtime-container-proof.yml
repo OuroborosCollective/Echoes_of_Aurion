@@ -99,6 +99,16 @@ jobs:
           done
           test "${ready}" = 1
 
+          # The candidate must boot against the same complete journal contract
+          # as production. A blank database cannot prove runtime health.
+          docker run --rm \
+            --network "${network}" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --workdir /workspace \
+            --env "DATABASE_URL=mysql://aurion_runtime:${password}@mariadb:3306/aurion_runtime" \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
+            ./node_modules/.bin/drizzle-kit migrate
+
           docker build --pull=false --build-arg "AURION_RELEASE_SHA=${EXPECTED_HEAD}" --tag "${image}" dist-traefik-runtime
           image_id="$(docker image inspect --format '{{.Id}}' "${image}")"
           [[ "${image_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
