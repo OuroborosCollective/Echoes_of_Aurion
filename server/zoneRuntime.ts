@@ -188,7 +188,7 @@ export class AuthoritativeMovementZone {
         maxHealth: peer.maxHealth,
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
-        weaponBonus: peer.weaponBonus, entropy,
+        weaponBonus: peer.weaponBonus,
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,

@@ -72,6 +72,11 @@ export const causalityRouter = router({
       return await globalCausalPersistence.getDivergentCheckpoints(input.zoneId, input.limit);
     }),
 
+  getReadbackStatus: adminProcedure
+    .query(async () => {
+      return { divergences: 0, verifiedTicks: 0 };
+    }),
+
   repairZone: adminProcedure
     .input(z.object({ zoneId: z.string(), checkpointId: z.string() }))
     .mutation(async ({ input }) => {
