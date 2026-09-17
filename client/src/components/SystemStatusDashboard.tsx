@@ -22,7 +22,7 @@ export default function SystemStatusDashboard() {
       <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-6 text-center text-red-200">
         <XCircle className="mx-auto mb-2 h-8 w-8 text-red-400" />
         <p className="font-medium">Failed to retrieve system status dashboard</p>
-        <button onClick={() => refetch()} className="mt-4 text-xs underline hover:text-red-100">
+        <button onClick={() => refetch()} aria-label="Retry Connection" className="mt-4 text-xs underline hover:text-red-100">
           Retry Connection
         </button>
       </div>
@@ -34,7 +34,8 @@ export default function SystemStatusDashboard() {
       <div className="flex items-center justify-between">
         <p className="text-xs text-cyan-200/60">Auto-refreshing every 30 seconds</p>
         <button 
-          onClick={() => refetch()} 
+          onClick={() => refetch()}
+          aria-label="Force Refresh"
           className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Force Refresh

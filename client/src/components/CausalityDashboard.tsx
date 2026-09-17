@@ -253,7 +253,7 @@ export default function CausalityDashboard() {
               <Button 
                 variant="outline" 
                 size="sm"
-                className="w-full border-blue-400/30 text-blue-100 hover:bg-blue-400/10"
+                className="w-full border-blue-400/30 text-blue-100 hover:bg-blue-400/10 disabled:cursor-not-allowed"
                 onClick={() => {
                   triggerBackup.mutate({ zoneId }, {
                     onSuccess: () => {
@@ -265,6 +265,9 @@ export default function CausalityDashboard() {
                   });
                 }}
                 disabled={triggerBackup.isPending}
+                aria-disabled={triggerBackup.isPending}
+                aria-busy={triggerBackup.isPending}
+                title={triggerBackup.isPending ? "Backup läuft..." : undefined}
               >
                 {triggerBackup.isPending ? <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
                 Backup erzwingen
