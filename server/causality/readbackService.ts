@@ -1,4 +1,5 @@
 import { type ReplayVerdict, isReplayMatch } from "../../shared/aurionReplayContract";
+import { operationalDate } from "../../shared/operationalClock";
 import { replayZoneTick } from "./replayZoneTick";
 import { globalTickRecorder, type RecordedTickEntry, type CausalPersistenceAdapter } from "./tickRecorder";
 import { globalCausalPersistence } from "./persistence";
@@ -59,7 +60,7 @@ export class AurionCausalReadbackService {
       verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
     }
 
-    this.recordVerification({ zoneId, tick: nextTick, verdict, verifiedAt: new Date() });
+    this.recordVerification({ zoneId, tick: nextTick, verdict, verifiedAt: operationalDate() });
     this.lastObservedTickByZone.set(zoneId, nextTick);
 
     if (entry && this.persistenceAdapter) {
