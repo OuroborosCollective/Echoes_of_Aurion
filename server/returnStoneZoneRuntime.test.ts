@@ -37,7 +37,15 @@ describe("return stone in the authoritative zone tick", () => {
         stamina: 0,
         lastCombatSequence: deathTick * 1000 + 4,
       }],
-      mobs: joined.mobs.map(mob => ({ ...mob, health: 0 })),
+      // Keep the fixture itself canonical while removing unrelated mob pressure.
+      // A zero-health mob must be represented as dead rather than manufacturing
+      // a contradictory health=0/idle state that the replay boundary should reject.
+      mobs: joined.mobs.map(mob => ({
+        ...mob,
+        health: 0,
+        state: "dead",
+        targetEntityId: null,
+      })),
     });
 
     for (let index = 0; index < AURION_RETURN_STONE_REVIVE_DELAY_TICKS - 1; index += 1) zone.tick();
