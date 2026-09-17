@@ -339,15 +339,30 @@ export class AuthoritativeMovementZone {
     return "accepted";
   }
 
-  private combatEntropy(entityId: string, sequence: number): { entropy: CombatEntropy; events: RngEventRecord[] } {
-    const draw = (purpose: string) => resolveAddressableRandomU32({ worldSeedDigest: WORLD_SEED_DIGEST, rulesetVersion: AURION_ZONE_RULESET_VERSION, tick: this.tickNumber, entityId, actionSequence: sequence, purpose });
-    const entropy: CombatEntropy = { hitU32: draw("combat.hit"), critU32: draw("combat.crit"), damageU32: draw("combat.damage") };
+  private combatEntropy(entityId: string, targetEntityId: string, sequence: number): { entropy: CombatEntropy; events: RngEventRecord[] } {
+    const systemId = "aurion.zone.combat";
+    const eventId = `${this.zoneId}:${entityId}->${targetEntityId}:seq:${sequence}`;
+    const address = (purpose: string, drawIndex: number) => ({
+      worldSeedDigest: WORLD_SEED_DIGEST,
+      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      tick: this.tickNumber,
+      systemId,
+      entityId,
+      eventId,
+      purpose,
+      drawIndex,
+    });
+    const entropy: CombatEntropy = {
+      hitU32: resolveAddressableRandomU32(address("combat.hit", 0)),
+      critU32: resolveAddressableRandomU32(address("combat.crit", 1)),
+      damageU32: resolveAddressableRandomU32(address("combat.damage", 2)),
+    };
     return {
       entropy,
       events: [
-        { entityId, actionSequence: sequence, purpose: "combat.hit", u32: entropy.hitU32 },
-        { entityId, actionSequence: sequence, purpose: "combat.crit", u32: entropy.critU32 },
-        { entityId, actionSequence: sequence, purpose: "combat.damage", u32: entropy.damageU32 },
+        { systemId, entityId, eventId, purpose: "combat.hit", drawIndex: 0, u32: entropy.hitU32 },
+        { systemId, entityId, eventId, purpose: "combat.crit", drawIndex: 1, u32: entropy.critU32 },
+        { systemId, entityId, eventId, purpose: "combat.damage", drawIndex: 2, u32: entropy.damageU32 },
       ],
     };
   }
@@ -361,7 +376,7 @@ export class AuthoritativeMovementZone {
     this.combatSequence = Math.max(this.combatSequence, sequence);
     const attacker = { id: `player:${peer.userId}`, stamina: peer.stamina, skills: { combat: { level: peer.combatLevel } } };
     const defender = { id: mob.definition.entityId, health: mob.health, skills: { combat: { level: mob.definition.level } } };
-    const entropyBundle = this.combatEntropy(attacker.id, sequence);
+    const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
     const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: peer.weaponBonus, entropy: entropyBundle.entropy });
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
@@ -533,7 +548,7 @@ export class AuthoritativeMovementZone {
       this.combatSequence = Math.max(this.combatSequence, sequence);
       const attacker = { id: mob.definition.entityId, stamina: mob.stamina, skills: { combat: { level: mob.definition.level } } };
       const defender = { id: `player:${peer.userId}`, health: peer.health, skills: { combat: { level: peer.combatLevel } } };
-      const entropyBundle = this.combatEntropy(attacker.id, sequence);
+      const entropyBundle = this.combatEntropy(attacker.id, defender.id, sequence);
       const delta = resolveCombatDelta("melee", attacker, defender, { tick: this.tickNumber, sequence, weaponBonus: 0, entropy: entropyBundle.entropy });
       const patch = reduceCombatDelta(attacker, defender, delta);
       this.mobRuntime.applyCombatState(mob.definition.entityId, { health: mob.health, stamina: patch.attacker.stamina, nextAttackTick: this.tickNumber + mob.definition.attackCooldownTicks });
