@@ -1,8 +1,9 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { aurionCrossZoneTransfers } from "../../drizzle/aurionCausalitySchema";
 import { CanonicalTransferPayload } from "./zoneCanonicalState";
 import { createHash } from "node:crypto";
+import { operationalDate } from "../../shared/operationalClock";
 
 export interface CrossZoneTransferRecord {
   id: string;
@@ -88,37 +89,25 @@ export class AurionCrossZoneSynchronizationService {
   }
 
   /**
-   * Marks transfers as consumed by a specific target tick.
-   * Ensures the causal link between the source transfer and target consumption is recorded.
+   * Marks only the explicitly supplied transfers as consumed by a target tick.
+   * The operational timestamp is side-channel evidence and never gameplay time.
    */
   async consumeTransfers(transferIds: string[], targetTick: number): Promise<void> {
     if (transferIds.length === 0) return;
     const db = await getDb();
     if (!db) return;
 
+    const consumedAt = operationalDate();
     await db.update(aurionCrossZoneTransfers)
       .set({
         status: "CONSUMED",
         targetTick,
-        consumedAt: new Date()
+        consumedAt,
       })
       .where(and(
         isNull(aurionCrossZoneTransfers.consumedAt),
-        // Use inArray or multiple eq
-        // For simplicity with drizzle's current state in this project:
-        // we'll loop or use a raw query if needed, but drizzle supports inArray
+        inArray(aurionCrossZoneTransfers.id, transferIds)
       ));
-      
-    // Actually using a loop to ensure each is updated correctly if they were already consumed
-    for (const id of transferIds) {
-      await db.update(aurionCrossZoneTransfers)
-        .set({
-          status: "CONSUMED",
-          targetTick,
-          consumedAt: new Date()
-        })
-        .where(eq(aurionCrossZoneTransfers.id, id));
-    }
   }
 }
 
