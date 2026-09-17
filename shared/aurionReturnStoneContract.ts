@@ -17,6 +17,9 @@ export const AURION_RETURN_STONE_POI_ID = "return-stone" as const;
 /** Fixed-point millimetres used by the authoritative zone runtime. */
 export const AURION_RETURN_STONE_POSITION = Object.freeze({ x: 0, z: 0 });
 
+/** 10-Hz zone runtime: 30 ticks = 3 seconds of confirmed defeated state. */
+export const AURION_RETURN_STONE_REVIVE_DELAY_TICKS = 30;
+
 /** Presentation target only; the renderer may scale the immutable GLB to this size. */
 export const AURION_RETURN_STONE_TARGET_SIZE_METERS = 3.2;
 
