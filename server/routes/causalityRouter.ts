@@ -4,10 +4,13 @@ import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { globalCausalPersistence } from "../causality/persistence";
 import { globalCausalArchivingService } from "../causality/archivingService";
 import { globalCrossZoneSyncService } from "../causality/crossZoneSynchronizationService";
+import { globalReadbackService } from "../causality/readbackService";
 import { replayZoneTick } from "../causality/replayZoneTick";
 import { isReplayMatch } from "../../shared/aurionReplayContract";
 
 export const causalityRouter = router({
+  getReadbackStatus: adminProcedure.query(() => globalReadbackService.getStatus()),
+
   getLatestReceipts: adminProcedure
     .input(z.object({ zoneId: z.string().optional() }).optional())
     .query(async ({ input }) => {
@@ -53,11 +56,11 @@ export const causalityRouter = router({
   getCheckpoints: adminProcedure
     .input(z.object({ zoneId: z.string(), limit: z.number().int().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
-      const db = await getDb(); // Hack for now or make it public
+      const db = await getDb();
       if (!db) return [];
       
       const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
-      const { eq, desc, and } = await import("drizzle-orm");
+      const { eq, desc } = await import("drizzle-orm");
 
       return await db.select()
         .from(aurionCausalCheckpoints)
