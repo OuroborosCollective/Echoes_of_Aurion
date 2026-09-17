@@ -1,9 +1,7 @@
 import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
-/**
- * Append-only causal tick receipts.
- * This provides the primary evidence chain for world development.
- */
+const HASH_LENGTH = 96;
+
 export const aurionCausalTickReceipts = mysqlTable("aurionCausalTickReceipts", {
   id: varchar("id", { length: 64 }).primaryKey(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
@@ -11,14 +9,14 @@ export const aurionCausalTickReceipts = mysqlTable("aurionCausalTickReceipts", {
   tick: int("tick").notNull(),
   revision: varchar("revision", { length: 64 }).notNull(),
   rulesetVersion: varchar("rulesetVersion", { length: 64 }).notNull(),
-  preStateHash: varchar("preStateHash", { length: 64 }).notNull(),
-  inputHash: varchar("inputHash", { length: 64 }).notNull(),
+  preStateHash: varchar("preStateHash", { length: HASH_LENGTH }).notNull(),
+  inputHash: varchar("inputHash", { length: HASH_LENGTH }).notNull(),
   inputJson: text("inputJson"),
-  transitionHash: varchar("transitionHash", { length: 64 }).notNull(),
-  rngRootHash: varchar("rngRootHash", { length: 64 }).notNull(),
-  postStateHash: varchar("postStateHash", { length: 64 }).notNull(),
-  previousReceiptHash: varchar("previousReceiptHash", { length: 64 }),
-  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  transitionHash: varchar("transitionHash", { length: HASH_LENGTH }).notNull(),
+  rngRootHash: varchar("rngRootHash", { length: HASH_LENGTH }).notNull(),
+  postStateHash: varchar("postStateHash", { length: HASH_LENGTH }).notNull(),
+  previousReceiptHash: varchar("previousReceiptHash", { length: HASH_LENGTH }),
+  receiptHash: varchar("receiptHash", { length: HASH_LENGTH }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionCausalTickReceipts_world_zone_tick_uq").on(table.worldId, table.zoneId, table.tick),
@@ -26,18 +24,14 @@ export const aurionCausalTickReceipts = mysqlTable("aurionCausalTickReceipts", {
   index("aurionCausalTickReceipts_world_zone_created_idx").on(table.worldId, table.zoneId, table.createdAt),
 ]);
 
-/**
- * Sparse snapshots of the canonical world state.
- * Checkpoints allow the replay engine to start from a recent state instead of tick 0.
- */
 export const aurionCausalCheckpoints = mysqlTable("aurionCausalCheckpoints", {
   id: varchar("id", { length: 64 }).primaryKey(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
   zoneId: varchar("zoneId", { length: 64 }).notNull(),
   tick: int("tick").notNull(),
-  snapshotHash: varchar("snapshotHash", { length: 64 }).notNull(),
+  snapshotHash: varchar("snapshotHash", { length: HASH_LENGTH }).notNull(),
   snapshotJson: text("snapshotJson").notNull(),
-  reconciled: int("reconciled").default(0).notNull(), // 0 = no, 1 = success, -1 = divergent
+  reconciled: int("reconciled").default(0).notNull(),
   reconciledAt: timestamp("reconciledAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
@@ -45,12 +39,8 @@ export const aurionCausalCheckpoints = mysqlTable("aurionCausalCheckpoints", {
   index("aurionCausalCheckpoints_world_zone_created_idx").on(table.worldId, table.zoneId, table.createdAt),
 ]);
 
-/**
- * Records of replay verification runs.
- * This table documents the status of independent verifications.
- */
 export const aurionReplayRuns = mysqlTable("aurionReplayRuns", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+  id: varchar("id", { length: 96 }).primaryKey(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
   zoneId: varchar("zoneId", { length: 64 }).notNull(),
   fromTick: int("fromTick").notNull(),
@@ -59,46 +49,36 @@ export const aurionReplayRuns = mysqlTable("aurionReplayRuns", {
   runtimeRuleset: varchar("runtimeRuleset", { length: 64 }).notNull(),
   status: mysqlEnum("status", ["MATCH", "FIRST_DIVERGENCE", "UNPROVABLE"]).notNull(),
   firstDivergentStage: varchar("firstDivergentStage", { length: 64 }),
-  expectedHash: varchar("expectedHash", { length: 64 }),
-  observedHash: varchar("observedHash", { length: 64 }),
+  expectedHash: varchar("expectedHash", { length: HASH_LENGTH }),
+  observedHash: varchar("observedHash", { length: HASH_LENGTH }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [
-  index("aurionReplayRuns_world_zone_created_idx").on(table.worldId, table.zoneId, table.createdAt),
-]);
+}, table => [index("aurionReplayRuns_world_zone_created_idx").on(table.worldId, table.zoneId, table.createdAt)]);
 
-/**
- * Cold storage for verified causal chains.
- * Batches of receipts are moved here to keep the hot receipts table lean.
- */
 export const aurionCausalArchive = mysqlTable("aurionCausalArchive", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+  id: varchar("id", { length: 96 }).primaryKey(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
   zoneId: varchar("zoneId", { length: 64 }).notNull(),
   startTick: int("startTick").notNull(),
   endTick: int("endTick").notNull(),
   receiptCount: int("receiptCount").notNull(),
-  archiveHash: varchar("archiveHash", { length: 64 }).notNull(),
-  payloadJson: text("payloadJson").notNull(), // Batch of summarized receipts
+  archiveHash: varchar("archiveHash", { length: HASH_LENGTH }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionCausalArchive_world_zone_start_uq").on(table.worldId, table.zoneId, table.startTick),
   index("aurionCausalArchive_world_zone_created_idx").on(table.worldId, table.zoneId, table.createdAt),
 ]);
 
-/**
- * Cross-zone causal transfers.
- * Used to synchronize deterministic interactions between adjacent simulation domains.
- */
 export const aurionCrossZoneTransfers = mysqlTable("aurionCrossZoneTransfers", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+  id: varchar("id", { length: 96 }).primaryKey(),
   sourceWorldId: varchar("sourceWorldId", { length: 64 }).notNull(),
   sourceZoneId: varchar("sourceZoneId", { length: 64 }).notNull(),
   sourceTick: int("sourceTick").notNull(),
   targetWorldId: varchar("targetWorldId", { length: 64 }).notNull(),
   targetZoneId: varchar("targetZoneId", { length: 64 }).notNull(),
-  targetTick: int("targetTick"), // Nullable until consumed by target zone
-  transferHash: varchar("transferHash", { length: 64 }).notNull(),
-  payloadJson: text("payloadJson").notNull(), // The object being transferred (e.g. Player data)
+  targetTick: int("targetTick"),
+  transferHash: varchar("transferHash", { length: HASH_LENGTH }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
   status: mysqlEnum("status", ["PENDING", "CONSUMED", "REJECTED"]).default("PENDING").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   consumedAt: timestamp("consumedAt"),
@@ -107,17 +87,13 @@ export const aurionCrossZoneTransfers = mysqlTable("aurionCrossZoneTransfers", {
   index("aurionCrossZoneTransfers_target_idx").on(table.targetWorldId, table.targetZoneId),
 ]);
 
-/**
- * Aggregated causal proofs for global world epochs.
- * This table reconciles all zone-specific proofs into a unified world evidence record.
- */
 export const aurionGlobalStateProofs = mysqlTable("aurionGlobalStateProofs", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+  id: varchar("id", { length: 96 }).primaryKey(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
   epoch: int("epoch").notNull(),
-  globalProofHash: varchar("globalProofHash", { length: 64 }).notNull(),
-  globalProofJson: text("globalProofJson").notNull(), // GlobalWorldCanonicalState
-  status: mysqlEnum("status", ["VERIFIED", "UNPROVABLE", "CONFLICT"]).default("VERIFIED").notNull(),
+  globalProofHash: varchar("globalProofHash", { length: HASH_LENGTH }).notNull(),
+  globalProofJson: text("globalProofJson").notNull(),
+  status: mysqlEnum("status", ["VERIFIED", "UNPROVABLE", "CONFLICT"]).default("UNPROVABLE").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionGlobalStateProofs_world_epoch_uq").on(table.worldId, table.epoch),
