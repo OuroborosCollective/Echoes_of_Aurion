@@ -51,6 +51,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
           pnpm install --frozen-lockfile
           pnpm check
+          expected_build_input_digest="$(pnpm exec tsx -e 'import { readFileSync } from "node:fs"; import { canonicalSha256 } from "./shared/aurionCanonicalHash.ts"; process.stdout.write(canonicalSha256(readFileSync("pnpm-lock.yaml", "utf8")));')"
+          [[ "${expected_build_input_digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          test "${expected_build_input_digest}" != "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          printf 'EXPECTED_BUILD_INPUT_DIGEST=%s\n' "${expected_build_input_digest}" >> "${GITHUB_ENV}"
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
           node scripts/build-aurion-traefik-runtime-artifact.mjs
@@ -59,6 +63,7 @@ jobs:
           const manifest = JSON.parse(fs.readFileSync('dist-traefik-runtime/manifest.json', 'utf8'));
           if (manifest.schemaVersion !== 1 || manifest.recordType !== 'aurion_traefik_runtime_artifact') throw new Error('RUNTIME_ARTIFACT_CONTRACT');
           if (manifest.revision !== process.env.EXPECTED_HEAD) throw new Error('RUNTIME_ARTIFACT_REVISION_MISMATCH');
+          if (!manifest.files?.['pnpm-lock.yaml']) throw new Error('RUNTIME_ARTIFACT_LOCKFILE_MISSING');
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
           git diff --check
@@ -100,15 +105,24 @@ jobs:
           docker run --detach --name "${app}" --network "${network}" \
             --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
             -e AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb \
+            -e AURION_RUNTIME_IMAGE_DIGEST="${image_id}" \
             -e "DATABASE_URL=mysql://aurion_runtime:${password}@mariadb:3306/aurion_runtime" \
             "${image}" >/dev/null
 
           runtime_ready=0
           for _attempt in $(seq 1 60); do
             health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "${app}")"
-            if [[ "${health}" == healthy ]] && docker exec -e EXPECTED_HEAD="${EXPECTED_HEAD}" "${app}" node --input-type=module -e '
+            if [[ "${health}" == healthy ]] && docker exec \
+              -e EXPECTED_HEAD="${EXPECTED_HEAD}" \
+              -e EXPECTED_BUILD_INPUT_DIGEST="${EXPECTED_BUILD_INPUT_DIGEST}" \
+              -e EXPECTED_IMAGE_ID="${image_id}" \
+              "${app}" node --input-type=module -e '
               const r=await fetch("http://127.0.0.1:3000/healthz"); const b=await r.json();
+              const bound = value => typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value) && value !== `sha256:${"0".repeat(64)}`;
               if(!r.ok||b.status!=="ok"||b.service!=="echoes-of-aurion"||b.revision!==process.env.EXPECTED_HEAD) process.exit(1);
+              if(b.buildInputDigest!==process.env.EXPECTED_BUILD_INPUT_DIGEST) process.exit(2);
+              if(b.runtimeImageDigest!==process.env.EXPECTED_IMAGE_ID) process.exit(3);
+              if(!bound(b.buildInputDigest)||!bound(b.artifactDigest)||!bound(b.runtimeImageDigest)) process.exit(4);
             '; then runtime_ready=1; break; fi
             if [[ "$(docker inspect --format '{{.State.Status}}' "${app}")" != running ]]; then break; fi
             sleep 2
@@ -119,8 +133,10 @@ jobs:
           IMAGE_ID="${image_id}" HEALTH_JSON="${health_json}" node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const health=JSON.parse(process.env.HEALTH_JSON);
-          const receipt={schemaVersion:1,recordType:'aurion_pr_runtime_container_proof',revision:process.env.EXPECTED_HEAD,immutableImageId:process.env.IMAGE_ID,health,productionPromoted:false};
+          const receipt={schemaVersion:1,recordType:'aurion_pr_runtime_container_proof',revision:process.env.EXPECTED_HEAD,buildInputDigest:process.env.EXPECTED_BUILD_INPUT_DIGEST,immutableImageId:process.env.IMAGE_ID,health,productionPromoted:false};
           if(health.revision!==receipt.revision) throw new Error('CANDIDATE_HEALTH_REVISION_MISMATCH');
+          if(health.buildInputDigest!==receipt.buildInputDigest) throw new Error('CANDIDATE_BUILD_INPUT_DIGEST_MISMATCH');
+          if(health.runtimeImageDigest!==receipt.immutableImageId) throw new Error('CANDIDATE_RUNTIME_IMAGE_DIGEST_MISMATCH');
           fs.writeFileSync('aurion-pr-runtime-container-proof.json',`${JSON.stringify(receipt,null,2)}\n`);
           NODE
           trap - EXIT
