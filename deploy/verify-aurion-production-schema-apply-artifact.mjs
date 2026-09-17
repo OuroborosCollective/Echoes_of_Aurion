@@ -14,6 +14,7 @@ const tags = [
   "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
   "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
   "0047_aurion_world_context_capsules",
+  "0048_aurion_causal_evidence",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 
@@ -38,20 +39,8 @@ function fail() {
   process.stderr.write("schema apply artifact integrity contract failed\n");
   process.exit(70);
 }
-
-function sameEntries(actual, expected) {
-  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
-}
-
-function safeRelative(value) {
-  return typeof value === "string"
-    && value.length > 0
-    && !value.startsWith("/")
-    && !value.includes("\\")
-    && !value.includes("\0")
-    && !value.split("/").includes("..");
-}
-
+function sameEntries(actual, expected) { return actual.length === expected.length && actual.every((value, index) => value === expected[index]); }
+function safeRelative(value) { return typeof value === "string" && value.length > 0 && !value.startsWith("/") && !value.includes("\\") && !value.includes("\0") && !value.split("/").includes(".."); }
 async function listedFiles(root, prefix = "") {
   const entries = await readdir(path.join(root, prefix), { withFileTypes: true });
   const files = [];
@@ -64,10 +53,7 @@ async function listedFiles(root, prefix = "") {
   }
   return files;
 }
-
-async function sha256(filePath) {
-  return createHash("sha256").update(await readFile(filePath)).digest("hex");
-}
+async function sha256(filePath) { return createHash("sha256").update(await readFile(filePath)).digest("hex"); }
 
 async function main() {
   if (process.argv.length !== 4) fail();
@@ -81,16 +67,7 @@ async function main() {
   const checksumsPath = path.join(artifact, "checksums.sha256");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (
-    manifest?.schemaVersion !== 1
-    || manifest.recordType !== "aurion_production_schema_apply_artifact"
-    || manifest.revision !== expectedRevision
-    || manifest.nodeTarget !== "node22"
-    || manifest.mode !== "backup_recovery_apply"
-    || manifest.moduleFormat !== "commonjs"
-    || !Array.isArray(manifest.migrationTags)
-    || !manifest.files
-    || typeof manifest.files !== "object"
-    || Array.isArray(manifest.files)
+    manifest?.schemaVersion !== 1 || manifest.recordType !== "aurion_production_schema_apply_artifact" || manifest.revision !== expectedRevision || manifest.nodeTarget !== "node22" || manifest.mode !== "backup_recovery_apply" || manifest.moduleFormat !== "commonjs" || !Array.isArray(manifest.migrationTags) || !manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)
   ) fail();
   if (!sameEntries(Object.keys(manifest).sort(), ["files", "migrationTags", "mode", "moduleFormat", "nodeTarget", "recordType", "revision", "schemaVersion"])) fail();
   if (!sameEntries(manifest.migrationTags, tags)) fail();
@@ -115,13 +92,7 @@ async function main() {
 
   for (const relative of requiredFiles) {
     const metadata = manifest.files[relative];
-    if (
-      !metadata
-      || !sameEntries(Object.keys(metadata).sort(), ["bytes", "sha256"])
-      || !Number.isSafeInteger(metadata.bytes)
-      || metadata.bytes < 0
-      || !/^[a-f0-9]{64}$/.test(metadata.sha256)
-    ) fail();
+    if (!metadata || !sameEntries(Object.keys(metadata).sort(), ["bytes", "sha256"]) || !Number.isSafeInteger(metadata.bytes) || metadata.bytes < 0 || !/^[a-f0-9]{64}$/.test(metadata.sha256)) fail();
     const filePath = path.join(artifact, relative);
     const stat = await lstat(filePath);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== metadata.bytes) fail();
@@ -131,21 +102,9 @@ async function main() {
   if (await sha256(manifestPath) !== checksumEntries.get("manifest.json")) fail();
 
   const imageContract = JSON.parse(await readFile(path.join(artifact, "deploy/aurion-reconcile-runtime-image.conf"), "utf8"));
-  if (
-    imageContract?.schemaVersion !== 1
-    || imageContract.recordType !== "aurion_reconcile_runtime_image_contract"
-    || imageContract.nodeMajorVersion !== 22
-    || typeof imageContract.imageTag !== "string"
-    || !/^node:22[A-Za-z0-9._:-]*$/.test(imageContract.imageTag)
-    || typeof imageContract.imageDigest !== "string"
-    || !/^sha256:[a-f0-9]{64}$/.test(imageContract.imageDigest)
-  ) fail();
+  if (imageContract?.schemaVersion !== 1 || imageContract.recordType !== "aurion_reconcile_runtime_image_contract" || imageContract.nodeMajorVersion !== 22 || typeof imageContract.imageTag !== "string" || !/^node:22[A-Za-z0-9._:-]*$/.test(imageContract.imageTag) || typeof imageContract.imageDigest !== "string" || !/^sha256:[a-f0-9]{64}$/.test(imageContract.imageDigest)) fail();
   const networkContract = JSON.parse(await readFile(path.join(artifact, "deploy/aurion-reconcile-runtime-network.conf"), "utf8"));
-  if (
-    networkContract?.schemaVersion !== 1
-    || networkContract.recordType !== "aurion_reconcile_runtime_network_contract"
-    || networkContract.network !== "echoes-of-aurion-internal"
-  ) fail();
+  if (networkContract?.schemaVersion !== 1 || networkContract.recordType !== "aurion_reconcile_runtime_network_contract" || networkContract.network !== "echoes-of-aurion-internal") fail();
 
   const journal = JSON.parse(await readFile(path.join(artifact, "drizzle/meta/_journal.json"), "utf8"));
   if (journal?.version !== "7" || journal.dialect !== "mysql" || !Array.isArray(journal.entries)) fail();
