@@ -5,6 +5,9 @@ export interface CanonicalPlayerState {
   userId: number;
   x: number;
   z: number;
+  /** Last authoritative movement vector; transport arrival metadata stays outside truth. */
+  inputX: number;
+  inputZ: number;
   health: number;
   maxHealth: number;
   stamina: number;
@@ -24,9 +27,12 @@ export interface CanonicalMobState {
   z: number;
   health: number;
   maxHealth: number;
+  stamina: number;
   state: string;
   targetEntityId: string | null;
-  lastAttackTick: number;
+  idleUntilTick: number;
+  patrolIndex: number;
+  nextAttackTick: number;
 }
 
 export interface CanonicalResourceState {
@@ -48,7 +54,7 @@ export interface CanonicalTransferPayload {
   schema: "aurion.transfer.payload.v1";
   entityId: string;
   kind: "player" | "item" | "projectile";
-  data: any; // e.g. CanonicalPlayerState
+  data: unknown;
 }
 
 export interface CanonicalZoneState {
@@ -65,8 +71,8 @@ export interface CanonicalZoneState {
 }
 
 /**
- * Canonical state is a value snapshot. Never preserve mutable object identity from
- * the live runtime here: causal PRE/POST evidence must not change after capture.
+ * Return an immutable-by-value canonical snapshot: no live map/object identity is
+ * retained and every domain collection has a deterministic order.
  */
 export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZoneState {
   return {
@@ -78,18 +84,14 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
     combatSequence: state.combatSequence,
     players: state.players.map(player => ({
       ...player,
-      skillCooldowns: { ...player.skillCooldowns },
-    })).sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
-    mobs: state.mobs.map(mob => ({ ...mob })).sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
-    resources: state.resources.map(resource => ({ ...resource })).sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0)),
-    questSummaries: (state.questSummaries || []).map(quest => ({ ...quest })).sort((a, b) => {
-      if (a.userId !== b.userId) return a.userId - b.userId;
-      return a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0;
-    }),
+      skillCooldowns: Object.fromEntries(Object.entries(player.skillCooldowns).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
+    })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
+    mobs: state.mobs.map(mob => ({ ...mob })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
+    resources: state.resources.map(resource => ({ ...resource })).sort((a, b) => a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0),
+    questSummaries: (state.questSummaries || []).map(quest => ({ ...quest })).sort((a, b) => a.userId - b.userId || (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0)),
   };
 }
 
 export function hashCanonicalZoneState(state: CanonicalZoneState): string {
-  const sorted = sortCanonicalZoneState(state);
-  return canonicalSha256(sorted);
+  return canonicalSha256(sortCanonicalZoneState(state));
 }
