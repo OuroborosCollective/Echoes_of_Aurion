@@ -64,6 +64,10 @@ export interface CanonicalZoneState {
   questSummaries: CanonicalQuestSummary[];
 }
 
+/**
+ * Canonical state is a value snapshot. Never preserve mutable object identity from
+ * the live runtime here: causal PRE/POST evidence must not change after capture.
+ */
 export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZoneState {
   return {
     schema: "aurion.zone.state.v1",
@@ -72,10 +76,13 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
     tick: state.tick,
     ruleset: state.ruleset,
     combatSequence: state.combatSequence,
-    players: [...state.players].sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
-    mobs: [...state.mobs].sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
-    resources: [...state.resources].sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0)),
-    questSummaries: [...(state.questSummaries || [])].sort((a, b) => {
+    players: state.players.map(player => ({
+      ...player,
+      skillCooldowns: { ...player.skillCooldowns },
+    })).sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
+    mobs: state.mobs.map(mob => ({ ...mob })).sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
+    resources: state.resources.map(resource => ({ ...resource })).sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0)),
+    questSummaries: (state.questSummaries || []).map(quest => ({ ...quest })).sort((a, b) => {
       if (a.userId !== b.userId) return a.userId - b.userId;
       return a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0;
     }),
