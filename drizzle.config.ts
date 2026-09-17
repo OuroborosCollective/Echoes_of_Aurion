@@ -15,6 +15,7 @@ export default defineConfig({
     "./drizzle/groupInstanceSchema.ts",
     "./drizzle/playerUiSchema.ts",
     "./drizzle/ax1StarterEquipmentSchema.ts",
+    "./drizzle/aurionCausalitySchema.ts",
   ],
   out: "./drizzle",
   dialect: "mysql",

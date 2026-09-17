@@ -13,6 +13,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Archive, Server, BadgeDollarSign, Boxes, CheckCircle2, Crown, ExternalLink, Link2, Save, Search, Shield, Sparkles, Trophy, Upload, Users, XCircle, Landmark, MapPin, AlertTriangle, RefreshCw, Hourglass, History } from "lucide-react";
 import { useMemo, useState } from "react";
 import SystemStatusDashboard from "@/components/SystemStatusDashboard";
+import CausalStudioDashboard from "@/components/CausalStudioDashboard";
+import SessionReplayVisualizer from "@/components/SessionReplayVisualizer";
+import ArchiveDashboard from "@/components/ArchiveDashboard";
+import CrossZoneSyncDashboard from "@/components/CrossZoneSyncDashboard";
+import GlobalStateReconciliationDashboard from "@/components/GlobalStateReconciliationDashboard";
+import CausalRecoveryDashboard from "@/components/CausalRecoveryDashboard";
 import { Link } from "wouter";
 
 const MAX_GLB_BYTES = 24 * 1024 * 1024;
@@ -45,6 +51,7 @@ function AssetStatus({ status }: { status: "draft" | "approved" | "rejected" | "
 export default function Operations() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const [activeTab, setActiveTab] = useState<"readback" | "archiving" | "cross-zone" | "global-state">("readback");
   const [guildName, setGuildName] = useState("");
   const [guildTag, setGuildTag] = useState("");
   const [playerSearch, setPlayerSearch] = useState("");
@@ -159,7 +166,7 @@ export default function Operations() {
       <header className="flex flex-col gap-4 border-b border-cyan-200/10 pb-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs tracking-[.24em] text-cyan-300">AURION // OPERATIONS</p><h1 className="mt-2 text-3xl font-semibold text-amber-100">Expeditionsverwaltung</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Spielwerte, Gilden und Assets werden serverseitig geführt. Der Browser zeigt bestätigte Zustände, setzt sie aber nicht verbindlich.</p></div><Button asChild variant="outline" className="border-amber-300/30 bg-transparent text-amber-100 hover:bg-amber-200/10"><Link href="/"><ExternalLink className="mr-2 h-4 w-4" />Zum Spiel</Link></Button></header>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="PROGRESSIONS-TRACKS" value={state.progression.tracks.length} icon={Sparkles} /><Stat label="AURION-PUNKTE" value={state.profile.aurionPoints} icon={Trophy} /><Stat label="SIEGE" value={state.profile.victories} icon={Crown} /><Stat label="WAFFENPFAD" value={state.progression.tracks.filter(track => track.trackKind === "weapon").length} icon={Shield} /></section>
-      <Tabs defaultValue="profile" className="w-full"><TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0"><TabsTrigger value="profile">Profil & Gilde</TabsTrigger><TabsTrigger value="endgame">Endgame</TabsTrigger><TabsTrigger value="ranking">Ranglisten</TabsTrigger><TabsTrigger value="civilization">Zivilisation</TabsTrigger>{user?.role === "admin" && <><TabsTrigger value="admin">Admin</TabsTrigger><TabsTrigger value="system">System Status</TabsTrigger></>}</TabsList>
+      <Tabs defaultValue="profile" className="w-full"><TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0"><TabsTrigger value="profile">Profil & Gilde</TabsTrigger><TabsTrigger value="endgame">Endgame</TabsTrigger><TabsTrigger value="ranking">Ranglisten</TabsTrigger><TabsTrigger value="civilization">Zivilisation</TabsTrigger>{user?.role === "admin" && <><TabsTrigger value="admin">Admin</TabsTrigger><TabsTrigger value="causality">Kausalität</TabsTrigger><TabsTrigger value="replay">Replay</TabsTrigger><TabsTrigger value="archives">Archives</TabsTrigger><TabsTrigger value="crosszone">Cross-Zone Sync</TabsTrigger><TabsTrigger value="global-state">Global State</TabsTrigger><TabsTrigger value="recovery">Recovery</TabsTrigger><TabsTrigger value="system">System Status</TabsTrigger></>}</TabsList>
         <TabsContent value="profile" className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><Card className="border-amber-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Resonanzprofil</CardTitle><CardDescription>Freischaltungen folgen nur bestätigtem serverseitigem Fortschritt.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="flex flex-wrap gap-2"><Badge variant="outline">klassenlos</Badge><Badge variant="outline">Aggregate Level/XP: WASD-Snapshot ausstehend</Badge>{state.progression.tracks.map(track => <Badge key={`${track.trackKind}:${track.trackId}`} className="bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/10">{track.trackKind === "weapon" ? "Waffe" : "Skill"}: {track.trackId} · L{track.levelExact}</Badge>)}</div><div className="rounded-xl border border-cyan-200/10 bg-cyan-400/[.035] p-4"><p className="text-xs tracking-[.14em] text-cyan-200/60">GILDENSTATUS</p>{state.guild ? <div className="mt-2 flex items-center gap-3"><Users className="h-5 w-5 text-cyan-300" /><div><p className="font-medium">[{state.guild.guild.tag}] {state.guild.guild.name}</p><p className="text-sm text-slate-400">Rolle: {state.guild.membership.role} · Saisonpunkte: {state.guild.guild.seasonPoints}</p></div></div> : <p className="mt-2 text-sm text-slate-300">Noch keinem Sternwartenpakt beigetreten.</p>}</div></CardContent></Card>
           <Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100">Sternwartenpakt gründen</CardTitle><CardDescription>Eine aktive Mitgliedschaft pro Spieler. Rollen und Beiträge werden serverseitig geprüft.</CardDescription></CardHeader><CardContent><form className="space-y-4" onSubmit={event => { event.preventDefault(); guildCreate.mutate({ name: guildName, tag: guildTag }); }}><div className="space-y-2"><Label htmlFor="guildName">Gildenname</Label><Input id="guildName" value={guildName} maxLength={48} onChange={event => setGuildName(event.target.value)} placeholder="Pakt der Sternenruinen" disabled={Boolean(state.guild)} /></div><div className="space-y-2"><Label htmlFor="guildTag">Tag</Label><Input id="guildTag" value={guildTag} maxLength={8} onChange={event => setGuildTag(event.target.value.toUpperCase())} placeholder="AURION" disabled={Boolean(state.guild)} /></div>{guildCreate.error && <p className="text-sm text-red-300">{guildCreate.error.message}</p>}<Button type="submit" disabled={!guildName || guildTag.length < 2 || guildCreate.isPending || Boolean(state.guild)} className="w-full bg-cyan-500 text-slate-950 hover:bg-cyan-300">{guildCreate.isPending ? "Pakt wird geprüft…" : "Gilde serverseitig gründen"}</Button></form></CardContent></Card></TabsContent>
         <TabsContent value="endgame" className="mt-5 space-y-5">
@@ -606,6 +613,12 @@ export default function Operations() {
             </Card>
           </section>
         </TabsContent>}
+        {user?.role === "admin" && <TabsContent value="causality" className="mt-5 space-y-5"><CausalStudioDashboard /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="replay" className="mt-5 space-y-5"><SessionReplayVisualizer /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="archives" className="mt-5 space-y-5"><ArchiveDashboard /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="crosszone" className="mt-5 space-y-5"><CrossZoneSyncDashboard /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="global-state" className="mt-5 space-y-5"><GlobalStateReconciliationDashboard /></TabsContent>}
+        {user?.role === "admin" && <TabsContent value="recovery" className="mt-5 space-y-5"><CausalRecoveryDashboard /></TabsContent>}
         {user?.role === "admin" && <TabsContent value="system" className="mt-5 space-y-5"><Card className="border-cyan-200/15 bg-slate-950/70"><CardHeader><CardTitle className="text-amber-100 flex items-center gap-2"><Server className="h-5 w-5 text-cyan-400" /> System Status & Connectivity</CardTitle><CardDescription>Real-time connectivity monitoring for core infrastructure components.</CardDescription></CardHeader><CardContent><SystemStatusDashboard /></CardContent></Card></TabsContent>}
       </Tabs>
     </div>

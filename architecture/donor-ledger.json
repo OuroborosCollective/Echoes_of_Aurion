@@ -1,0 +1,57 @@
+{
+  "schema": "aurion.donor.ledger.v1",
+  "project": "Echoes of Aurion",
+  "donors": {
+    "WASD": {
+      "repository": "wasd-runtime-legacy",
+      "statusSummary": {
+        "DONOR_ONLY": 0,
+        "PORTED": 5,
+        "PARITY_VERIFIED": 3,
+        "RUNTIME_VERIFIED": 2,
+        "AURION_OWNED": 2,
+        "DONOR_RETIRED": 1
+      }
+    },
+    "AX1": {
+      "repository": "ax1-projection-legacy",
+      "statusSummary": {
+        "DONOR_ONLY": 0,
+        "PORTED": 3,
+        "PARITY_VERIFIED": 2,
+        "RUNTIME_VERIFIED": 2,
+        "AURION_OWNED": 1,
+        "DONOR_RETIRED": 0
+      }
+    }
+  },
+  "capabilities": [
+    {
+      "id": "combat.delta-resolution",
+      "donor": "WASD",
+      "donorRevision": "32824045",
+      "aurionPath": "server/wasdCombatDeltaProtocol.ts",
+      "status": "PORTED",
+      "parityEvidence": "server/wasdCombatSourceParity.test.ts",
+      "runtimeEvidence": "server/causality/questReadback.test.ts",
+      "donorRuntimeRequired": true
+    },
+    {
+      "id": "determinism.rng",
+      "donor": "WASD",
+      "donorRevision": "11049281",
+      "aurionPath": "server/determinism/aurionAddressableRandom.ts",
+      "status": "AURION_OWNED",
+      "parityEvidence": "tests/regression/rng-addressable.test.ts",
+      "runtimeEvidence": "receipts.rng.v1",
+      "donorRuntimeRequired": false
+    },
+    {
+      "id": "causality.readback",
+      "donor": "AURION",
+      "status": "AURION_OWNED",
+      "aurionPath": "server/causality/readbackService.ts",
+      "runtimeEvidence": "server/causality/questReadback.test.ts"
+    }
+  ]
+}

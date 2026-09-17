@@ -137,6 +137,7 @@ describe("WASD authoritative zone movement", () => {
 
     const before = zone.mobSnapshot().find(mob => mob.entityId === "mob_12")!.health;
     expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 3, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("accepted");
+    zone.tick();
     const combatEvents = socket.send.mock.calls.map(([payload]) => JSON.parse(payload)).filter(message => message.type === "combat" && message.attackerEntityId === "player:7");
     expect(combatEvents.at(-1)).toMatchObject({
       contractVersion: ZONE_COMBAT_CONTRACT_VERSION,

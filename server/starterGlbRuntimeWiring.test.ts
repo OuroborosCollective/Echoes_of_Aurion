@@ -16,28 +16,34 @@ describe("starter GLB runtime wiring", () => {
     expect(route).toContain('readAssignment("enemy", STARTER_GLB_TARGET_KEYS.spider)');
   });
 
-  it("keeps the retired Babylon starter scene absent and binds the live /play surface to AX1/Three", () => {
-    const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
-    const glbImportE2e = read("e2e/glbImport.spec.ts");
-
-    expect(fs.existsSync(path.join(root, "client/src/components/GameCanvas.tsx"))).toBe(false);
-    expect(fs.existsSync(path.join(root, "client/src/game/sceneWithStarterCharacters.ts"))).toBe(false);
-    expect(fs.existsSync(path.join(root, "client/src/game/starterCreatureVisuals.ts"))).toBe(false);
-
-    expect(runtime).toContain('data-testid="xaurion-open-world-runtime"');
-    expect(runtime).toContain("selectedCharacterUrl");
-    expect(runtime).toContain("MMOEngine.checkWebGLSupport()");
-    expect(glbImportE2e).toContain("/api/game/starter-glb-assets");
-    expect(glbImportE2e).toContain("starter_player");
-    expect(glbImportE2e).toContain("xaurion-open-world-runtime");
+  it("loads runtime assignments before creating the Babylon starter scene", () => {
+    const canvas = read("client/src/components/GameCanvas.tsx");
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
+    const creatures = read("client/src/game/starterCreatureVisuals.ts");
+    expect(canvas).toContain('fetch("/api/game/starter-glb-assets"');
+    expect(canvas).toContain("normalizeStarterRuntimeAssetSources");
+    expect(canvas).toContain("createGameScene(engine, canvas, characterModelUrlRef.current, starterSources)");
+    expect(scene).toContain("starterSources.player?.storageUrl");
+    expect(scene).toContain("new StarterCreatureVisuals(scene, sentinel, starterSources)");
+    expect(creatures).toContain('SceneLoader.ImportMeshAsync("", "", source.storageUrl, scene)');
   });
 
-  it("keeps the removed Babylon dependencies and payload materialization path retired", () => {
+  it("keeps AX1 skill animation confirmation-only", () => {
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
+    const rawHandler = scene.slice(scene.indexOf("const onHumanAction"), scene.indexOf("const onAuthoritativeAction"));
+    const confirmedHandler = scene.slice(scene.indexOf("const onAuthoritativeAction"), scene.indexOf('window.addEventListener("aurion:mission-state"'));
+    expect(rawHandler).toContain('command === "F"');
+    expect(rawHandler).not.toContain('command === "1"');
+    expect(confirmedHandler).toContain('detail?.command === "F" || detail?.command === "1"');
+    expect(confirmedHandler).toContain('(detail.source ?? "gateway") === "human"');
+  });
+
+  it("removes the broken repository payload materialization build dependency", () => {
     const packageJson = read("package.json");
-    expect(packageJson).not.toContain("@babylonjs/core");
-    expect(packageJson).not.toContain("@babylonjs/loaders");
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
     expect(packageJson).not.toContain("starter-glb:materialize");
     expect(packageJson).not.toContain("prebuild:itch");
+    expect(scene).not.toContain("materializeChunkedGlb");
     expect(fs.existsSync(path.join(root, "scripts/materialize-starter-glb-assets.ts"))).toBe(false);
     expect(fs.existsSync(path.join(root, "client/src/game/chunkedGlb.ts"))).toBe(false);
     expect(fs.existsSync(path.join(root, "shared/starterGlbAssetManifest.ts"))).toBe(false);

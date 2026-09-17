@@ -19,8 +19,15 @@ function rejectZoneInput(socket:WebSocket,code:ZoneReject["code"]):void{socket.s
 /** `/v1/ws` is the live AX1/WASD gameplay transport. tRPC/MCP legacy encounter routes are not consulted. */
 export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=new ZoneRegistry(),consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink){
   if(fixedTick&&(!Number.isSafeInteger(fixedTick.intervalTicks)||fixedTick.intervalTicks<1))throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
-  const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const presenceObservers=new Set<()=>void>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();
-  const tickTimer=setInterval(()=>{registry.tick();gatewayTick+=1;presenceObservers.forEach(observe=>observe());if(fixedTick&&gatewayTick%fixedTick.intervalTicks===0){const tick=gatewayTick;const run=fixedTickChain.then(()=>fixedTick.observe({tick})).then(()=>undefined);fixedTickChain=run.catch(error=>console.error("[Aurion Zone] Fixed-tick sink failed",error));}},ZONE_TICK_MS);
+  const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const presenceObservers=new Set<()=>void>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
+  const tickTimer=setInterval(async()=>{
+    if(isTicking)return;
+    isTicking=true;
+    try{await registry.tick();}catch(error){console.error("[Aurion Zone] Registry tick failed",error);}
+    isTicking=false;
+    gatewayTick+=1;
+    presenceObservers.forEach(observe=>observe());
+    if(fixedTick&&gatewayTick%fixedTick.intervalTicks===0){const tick=gatewayTick;const run=fixedTickChain.then(()=>fixedTick.observe({tick})).then(()=>undefined);fixedTickChain=run.catch(error=>console.error("[Aurion Zone] Fixed-tick sink failed",error));}},ZONE_TICK_MS);
   server.on("upgrade",(request,socket,head)=>{const pathname=new URL(request.url??"/","http://localhost").pathname;if(pathname!=="/v1/ws")return;if(!isAllowedZoneOrigin(request.headers.origin)){socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");socket.destroy();return;}wss.handleUpgrade(request,socket,head,webSocket=>wss.emit("connection",webSocket,request));});
   wss.on("connection",(socket:WebSocket,_request:IncomingMessage)=>{const helloTimeout=setTimeout(()=>closePolicyViolation(socket),HELLO_TIMEOUT_MS);socket.once("close",()=>clearTimeout(helloTimeout));socket.once("message",async(data,isBinary)=>{
     clearTimeout(helloTimeout);if(isBinary)return closePolicyViolation(socket);let raw:unknown;try{raw=parseMessage(data);}catch{return closePolicyViolation(socket);}const hello=parseZoneHello(raw);if(!hello){if(raw&&typeof raw==="object"&&(raw as {type?:unknown}).type==="hello"&&(raw as {protocolVersion?:unknown}).protocolVersion!==ZONE_PROTOCOL_VERSION)rejectZoneInput(socket,"PROTOCOL_VERSION_UNSUPPORTED");return closePolicyViolation(socket);}

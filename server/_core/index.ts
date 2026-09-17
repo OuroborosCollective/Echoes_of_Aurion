@@ -25,6 +25,11 @@ import { canConnectToDatabase, isConfiguredDatabaseUrl, recordWorldPresenceLease
 import { consumeZoneTicketWithCombatProfile } from "../zoneCombatPersistence";
 import { initialWolframCagRuntimeReadback, resolveWolframCagRuntimeReadback } from "../wolframCagRuntimeReadback";
 import { createAutonomousNpcLifeRuntime } from "../autonomousNpcLifeRuntime";
+import { activeProvenance } from "../aurionProvenance";
+import { globalReadbackService } from "../causality/readbackService";
+import { globalSnapshotReconciliationService } from "../causality/snapshotReconciliationService";
+import { globalCausalArchivingService } from "../causality/archivingService";
+import { globalStateReconciliationService } from "../causality/globalStateReconciliationService";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
@@ -42,6 +47,12 @@ async function startServer(){
   const gameDevelopmentStudio=await resolveGameDevelopmentStudioRuntimeReadback();
   if(gameDevelopmentStudio.required&&!gameDevelopmentStudio.available)throw new Error(gameDevelopmentStudio.error??"GAME_DEV_REQUIRED_UNAVAILABLE");
   const databaseConnected = await canConnectToDatabase(1000);
+  if (databaseConnected) {
+    globalReadbackService.start();
+    globalSnapshotReconciliationService.start();
+    globalCausalArchivingService.start();
+    globalStateReconciliationService.start();
+  }
   const autonomousNpcLife = createAutonomousNpcLifeRuntime({ enabled: databaseConnected });
   const app=express();
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -56,7 +67,25 @@ async function startServer(){
   }));
 
   app.use(express.json({limit:"50mb"}));app.use(express.urlencoded({limit:"50mb",extended:true}));
-  app.get("/healthz",(_req,res)=>res.status(200).json({status:"ok",service:"echoes-of-aurion",...(releaseRevision?{revision:releaseRevision}:{}),gameDevelopmentStudio,wolframCag,npcLife:autonomousNpcLife.readback()}));
+  const healthPayload = () => ({
+    status: "ok",
+    service: "echoes-of-aurion",
+    revision: releaseRevision || activeProvenance.sourceRevision || activeProvenance.commit,
+    buildInputDigest: activeProvenance.buildInputDigest || `sha256:${process.env.AURION_BUILD_INPUT_DIGEST || "unknown"}`,
+    artifactDigest: activeProvenance.artifactDigest || `sha256:${process.env.AURION_ARTIFACT_DIGEST || "unknown"}`,
+    runtimeImageDigest: activeProvenance.runtimeImageDigest || `sha256:${process.env.AURION_RUNTIME_IMAGE_DIGEST || "unknown"}`,
+    authority: {
+      ruleset: "aurion-zone-v3",
+      tickHz: 10,
+      causalReceipts: true
+    },
+    // Retaining operational diagnostics
+    gameDevelopmentStudio,
+    wolframCag,
+    npcLife: autonomousNpcLife.readback()
+  });
+  app.get("/healthz", (_req, res) => res.status(200).json(healthPayload()));
+  app.get("/api/health", (_req, res) => res.status(200).json(healthPayload()));
   registerGameDevelopmentStudioRuntime(app,gameDevelopmentStudio);registerGlbSmartUpload(app);registerGlbZipUpload(app);registerGlbAssetRoutes(app);registerConfirmedEquipmentVisualRoutes(app);registerStarterGlbRuntimeAssets(app);registerStorageProxy(app);registerOAuthRoutes(app);registerMcpGateway(app);registerAdminMcp(app);registerGuildGovernanceRoutes(app);registerGuildBankRoutes(app);
   registerZoneGateway(server,undefined,consumeZoneTicketWithCombatProfile,{upsert:recordWorldPresenceLease,release:releaseWorldPresenceLease},autonomousNpcLife.enabled?autonomousNpcLife:undefined);
   app.use("/api/trpc",createExpressMiddleware({router:appRouter,createContext}));if(process.env.NODE_ENV==="development")await setupVite(app,server);else serveStatic(app);

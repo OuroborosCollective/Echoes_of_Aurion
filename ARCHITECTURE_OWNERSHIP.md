@@ -4,22 +4,48 @@ description: Kanonische Zuständigkeits- und Truth-Boundary für Echoes of Aurio
 
 # Architektur-Ownership: Aurion · AX1 · WASD
 
-> **Kanonischer Vertrag nach AIM-298 Owner-Reset (September 2026).** Dieses Dokument legt fest, dass **Aurion** die einzige kanonische Gameplay-, Quest-, NPC-, Welt- und Persistenz-Authority für Echoes of Aurion ist. WASD dient als Integrations- und Referenzmaterial.
+> **Kanonischer Vertrag nach C-Aurion End-State Integration (September 2026).** Dieses Dokument legt fest, dass **Echoes of Aurion** die alleinige kanonische Wahrheit und Gameplay-Autorität ist. WASD und AX1 sind Spender/Referenz-Systeme (Donor/Reference), deren funktionale Fähigkeiten schrittweise nativ in Aurion überführt werden mit dem Ziel: *Donor runtime dependency target = zero*.
 
-Die drei Eigentümer:
+Die Rollen und Verantwortungen:
 
-| Fläche | Kanonischer Eigentümer | Verantwortung |
+| Fläche | Rolle | Verantwortung |
 | --- | --- | --- |
-| Website, Landing Page, Auth, Konto, Community, Forum, Asset-/Ops-Verwaltung, MariaDB, Chunks, Quests, NPCs, WorldState, Receipts | **Aurion** | Einzige kanonische Wahrheit, Persistenz und Ausführungsautorität |
-| Hauptspiel, Gameplay-Identität/-Verträge, `/play`, Welt-/Contentstruktur, 3D-Runtime, Renderer, HUD, Eingaben, Animation/VFX | **AX1** | Kanonisches Spielprodukt, Präsentation und Interaktion |
-| Deterministische Regel-, Berechnungs- und Simulationsalgorithmen | **WASD** | Quell- und Integrationsreferenz (nativ in Aurion eingebettet) |
+| **Echoes of Aurion** | **Sole Canonical Truth & Authority** | Welt, Zonen, Tick-Boundary-Simulation, Quests, NPCs, Kampf, Loot, Progression, Persistenz, Transport und Kausal-Receipts (`aurion.causal.tick.v1`) |
+| **AX1** | **Client Projection & Presentation** | 3D-Renderer, WebGL/WebGPU, Assets, HUD, Kamera, Client-Eingaben, Animation/VFX, Mobile (keine autoritative Gameplay-Wahrheit) |
+| **WASD** | **Donor / Algorithmic Reference** | Mathematische Formeln, Bewegungsgesetze und Kampf-Delta-Algorithmen (vollständig als reine Funktionen in Aurion integriert) |
 
-Kurzform:
+Kanonisches Architekturmodell:
 
 ```
-Aurion = Sole Gameplay + Quest + World + Persistence + Host + Auth Authority
-AX1    = kanonisches Hauptspiel + Content + Runtime/UI Presentation
-WASD   = integrierte deterministische Regel- und Berechnungsreferenz
+                  ECHOES OF AURION
+                 sole canonical truth
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+   Authority         Projection       Evidence
+        │                │                │
+ gameplay/world       renderer/UI       replay
+ quests/NPCs          assets/HUD         receipts
+ combat/loot          WebGL/WebGPU       provenance
+ progression          mobile             verification
+ persistence          streaming          readback
+        │                │                │
+        └────────────────┴────────────────┘
+```
+
+Kausale Tick-Architektur:
+
+```
+Tick N
+  ├── PRE State (Canonical Zone Hash)
+  ├── Ordered Intents (Canonical Input Queue)
+  │     ├── Movement
+  │     ├── Skills / Player Actions
+  │     ├── Combat Deltas
+  │     ├── NPC / Mob FSM
+  │     └── Resource Nodes
+  └── POST State (Transition & Post State Hash)
+        └── Causal Tick Receipt (aurion.causal.tick.v1)
 ```
 
 ## Kanonische Kausalkette

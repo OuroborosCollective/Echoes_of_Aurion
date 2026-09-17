@@ -15,6 +15,38 @@ import {
   type Ax1BladeSkillId,
 } from "@shared/ax1BladeSkillProtocol";
 import {
+  AURION_CAUSAL_TICK_SCHEMA,
+  AURION_ZONE_RULESET_VERSION,
+  type AurionCausalTickReceipt,
+  computeReceiptHash,
+} from "../shared/aurionCausalTickContract";
+import {
+  type AurionZoneIntent,
+  orderCanonicalZoneIntents,
+  hashCanonicalIntents,
+} from "../shared/aurionZoneIntentContract";
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
+import {
+  type CanonicalZoneState,
+  type CanonicalPlayerState,
+  type CanonicalMobState,
+  type CanonicalResourceState,
+  type CanonicalQuestSummary,
+  sortCanonicalZoneState,
+  hashCanonicalZoneState,
+} from "./causality/zoneCanonicalState";
+import {
+  computeRngRootHash,
+  resolveAddressableRandomFloat,
+  type RngEventRecord,
+} from "./determinism/aurionAddressableRandom";
+import { globalTickRecorder } from "./causality/tickRecorder";
+import { globalCausalPersistence } from "./causality/persistence";
+import { activeProvenance } from "./aurionProvenance";
+
+// Wire up MariaDB persistence for the causal evidence chain
+globalTickRecorder.setPersistenceAdapter(globalCausalPersistence);
+import {
   makeZoneConnectionId,
   ZONE_TICK_MS,
   type ZoneAttack,
@@ -111,8 +143,159 @@ export class AuthoritativeMovementZone {
   private sortedPeers: PresencePeer[] = [];
   private sortedPeersByEntityId: PresencePeer[] = [];
   private sortedPeersDirty = false;
+  private pendingIntents: AurionZoneIntent[] = [];
+  private arrivalSequence = 0;
+  private previousReceiptHash: string | null = null;
+  private lastReceipt: AurionCausalTickReceipt | null = null;
+  private questSummaries = new Map<string, CanonicalQuestSummary>();
 
   constructor(readonly zoneId: ZoneId) {}
+
+  enqueueIntent(intent: AurionZoneIntent): void {
+    this.pendingIntents.push(intent);
+  }
+
+  getPendingIntents(): readonly AurionZoneIntent[] {
+    return this.pendingIntents;
+  }
+
+  getLatestReceipt(): AurionCausalTickReceipt | null {
+    return this.lastReceipt;
+  }
+
+  getTickNumber(): number {
+    return this.tickNumber;
+  }
+
+  getCombatSequence(): number {
+    return this.combatSequence;
+  }
+
+  getCanonicalZoneState(): CanonicalZoneState {
+    this.refreshPeerOrder();
+    const players: CanonicalPlayerState[] = this.sortedPeersByEntityId.map(peer => {
+      const cooldowns: Record<string, number> = {};
+      for (const [skillId, tick] of peer.skillCooldownUntilTick.entries()) {
+        cooldowns[skillId] = tick;
+      }
+      return {
+        entityId: `player:${peer.userId}`,
+        userId: peer.userId,
+        x: peer.position.x,
+        z: peer.position.z,
+        health: peer.health,
+        maxHealth: peer.maxHealth,
+        stamina: peer.stamina,
+        combatLevel: peer.combatLevel,
+        weaponBonus: peer.weaponBonus,
+        weaponTrack: peer.weaponTrack,
+        lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
+        lastCombatSequence: peer.lastCombatSequence,
+        skillCooldowns: cooldowns,
+      };
+    });
+
+    const mobs: CanonicalMobState[] = this.mobRuntime.orderedStates().map(mob => ({
+      entityId: mob.definition.entityId,
+      mobId: mob.definition.entityId,
+      archetype: mob.definition.archetype,
+      x: mob.position.x,
+      z: mob.position.z,
+      health: mob.health,
+      maxHealth: mob.maxHealth,
+      state: mob.state,
+      targetEntityId: mob.targetEntityId,
+      lastAttackTick: mob.nextAttackTick,
+    }));
+
+    const resourceSnapshot = this.resourceRuntime.snapshot(this.tickNumber);
+    const resources: CanonicalResourceState[] = resourceSnapshot.nodes.map(node => ({
+      nodeId: node.nodeId,
+      resourceType: "ecology_node",
+      state: node.depleted ? "depleted" : "ready",
+      respawnTick: node.respawnAtTick ?? 0,
+      remainingGathers: node.remaining,
+    }));
+
+    const questSummaries: CanonicalQuestSummary[] = Array.from(this.questSummaries.values());
+
+    return sortCanonicalZoneState({
+      schema: "aurion.zone.state.v1",
+      worldId: "aurion-main",
+      zoneId: this.zoneId,
+      tick: this.tickNumber,
+      ruleset: AURION_ZONE_RULESET_VERSION,
+      combatSequence: this.combatSequence,
+      players,
+      mobs,
+      resources,
+      questSummaries,
+    });
+  }
+
+  restoreFromCanonicalState(
+    state: CanonicalZoneState,
+    previousReceiptHash?: string | null
+  ): void {
+    this.tickNumber = state.tick;
+    this.combatSequence = state.combatSequence;
+    if (previousReceiptHash !== undefined) {
+      this.previousReceiptHash = previousReceiptHash;
+    }
+    this.peers.clear();
+    this.peersByEntityId.clear();
+    this.pendingIntents = [];
+
+    const dummySocket = {
+      readyState: 1,
+      OPEN: 1,
+      send: () => {},
+      close: () => {},
+    } as unknown as WebSocket;
+
+    for (const player of state.players) {
+      const connectionId = `restored_conn_${player.userId}`;
+      const cooldownMap = new Map<Ax1BladeSkillId, number>();
+      if (player.skillCooldowns) {
+        for (const [sId, t] of Object.entries(player.skillCooldowns)) {
+          cooldownMap.set(sId as Ax1BladeSkillId, t);
+        }
+      }
+      const peer: PresencePeer = {
+        connectionId,
+        userId: player.userId,
+        socket: dummySocket,
+        input: { x: 0, z: 0 },
+        lastAcceptedClientSeq: player.lastAcceptedClientSeq,
+        position: { x: player.x, z: player.z },
+        combatLevel: player.combatLevel,
+        health: player.health,
+        maxHealth: player.maxHealth,
+        stamina: player.stamina,
+        weaponBonus: player.weaponBonus,
+        weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
+        skillCooldownUntilTick: cooldownMap,
+        lastCombatSequence: player.lastCombatSequence,
+      };
+      this.peers.set(connectionId, peer);
+      this.peersByEntityId.set(player.entityId, peer);
+    }
+    this.sortedPeersDirty = true;
+
+    for (const mob of state.mobs) {
+      this.mobRuntime.applyCombatState(mob.entityId, {
+        health: mob.health,
+        nextAttackTick: mob.lastAttackTick,
+      });
+    }
+
+    this.questSummaries.clear();
+    if (state.questSummaries) {
+      for (const q of state.questSummaries) {
+        this.questSummaries.set(`${q.userId}:${q.questId}`, { ...q });
+      }
+    }
+  }
 
   join(values: {
     userId: number;
@@ -209,6 +392,14 @@ export class AuthoritativeMovementZone {
     peer.lastAcceptedClientSeq = move.clientSeq;
     peer.input = move.input;
     this.inputAcknowledgementPending = true;
+    this.pendingIntents.push({
+      type: "move",
+      connectionId,
+      entityId: `player:${peer.userId}`,
+      clientSeq: move.clientSeq,
+      arrivalSeq: ++this.arrivalSequence,
+      input: { x: move.input.x, z: move.input.z },
+    });
     return "accepted";
   }
 
@@ -216,22 +407,30 @@ export class AuthoritativeMovementZone {
     const peer = this.peers.get(connectionId);
     if (!peer) return "missing";
     if (attack.clientSeq <= peer.lastAcceptedClientSeq) return "stale";
+    if (peer.health <= 0) return "dead";
+    const mob = this.mobRuntime.stateFor(attack.targetEntityId);
+    if (!mob || mob.health <= 0) return "invalid_target";
+    if (mobDistance(peer.position, mob.position) > AX1_PLAYER_BASIC_MELEE_RANGE_FIXED)
+      return "out_of_range";
+
     peer.lastAcceptedClientSeq = attack.clientSeq;
     this.inputAcknowledgementPending = true;
-    return this.resolvePlayerMelee(
-      peer,
-      attack.targetEntityId,
-      null,
-      AX1_PLAYER_BASIC_MELEE_RANGE_FIXED
-    );
+    this.pendingIntents.push({
+      type: "attack",
+      connectionId,
+      entityId: `player:${peer.userId}`,
+      clientSeq: attack.clientSeq,
+      arrivalSeq: ++this.arrivalSequence,
+      targetEntityId: attack.targetEntityId,
+    });
+    return "accepted";
   }
 
   submitSkill(connectionId: string, skill: ZoneSkill): AttackResult {
     const peer = this.peers.get(connectionId);
     if (!peer) return "missing";
     if (skill.clientSeq <= peer.lastAcceptedClientSeq) return "stale";
-    peer.lastAcceptedClientSeq = skill.clientSeq;
-    this.inputAcknowledgementPending = true;
+    if (peer.health <= 0) return "dead";
     const definition = ax1BladeSkillById(skill.skillId);
     if (
       peer.weaponTrack !== "blade" ||
@@ -242,32 +441,39 @@ export class AuthoritativeMovementZone {
       return "invalid_skill";
     const readyAt = peer.skillCooldownUntilTick.get(skill.skillId) ?? 0;
     if (this.tickNumber < readyAt) return "cooldown";
-    const result = this.resolvePlayerMelee(
-      peer,
-      skill.targetEntityId,
-      skill.skillId,
-      definition.rangeFixed
-    );
-    if (result === "accepted")
-      peer.skillCooldownUntilTick.set(
-        skill.skillId,
-        this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
-      );
-    return result;
+    const mob = this.mobRuntime.stateFor(skill.targetEntityId);
+    if (!mob || mob.health <= 0) return "invalid_target";
+    if (mobDistance(peer.position, mob.position) > definition.rangeFixed)
+      return "out_of_range";
+
+    peer.lastAcceptedClientSeq = skill.clientSeq;
+    this.inputAcknowledgementPending = true;
+    this.pendingIntents.push({
+      type: "skill",
+      connectionId,
+      entityId: `player:${peer.userId}`,
+      clientSeq: skill.clientSeq,
+      arrivalSeq: ++this.arrivalSequence,
+      skillId: skill.skillId,
+      targetEntityId: skill.targetEntityId,
+    });
+    return "accepted";
   }
 
   private resolvePlayerMelee(
     peer: PresencePeer,
     targetEntityId: string,
     skillId: Ax1BladeSkillId | null,
-    rangeFixed: number
-  ): AttackResult {
-    if (peer.health <= 0) return "dead";
+    rangeFixed: number,
+    actionIndex: number
+  ): { result: AttackResult; event?: ConfirmedZoneCombatEvent } {
+    if (peer.health <= 0) return { result: "dead" };
     const mob = this.mobRuntime.stateFor(targetEntityId);
-    if (!mob || mob.health <= 0) return "invalid_target";
+    if (!mob || mob.health <= 0) return { result: "invalid_target" };
     if (mobDistance(peer.position, mob.position) > rangeFixed)
-      return "out_of_range";
-    const sequence = ++this.combatSequence;
+      return { result: "out_of_range" };
+
+    const sequence = this.tickNumber * 1000 + actionIndex;
     const attacker = {
       id: `player:${peer.userId}`,
       stamina: peer.stamina,
@@ -278,30 +484,69 @@ export class AuthoritativeMovementZone {
       health: mob.health,
       skills: { combat: { level: mob.definition.level } },
     };
+
+    // Use Addressable RNG for combat
+    const entropy = resolveAddressableRandomFloat({
+      worldSeedDigest: "aurion-main-seed",
+      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      tick: this.tickNumber,
+      entityId: attacker.id,
+      actionSequence: sequence,
+      purpose: skillId ? `combat.skill.${skillId}` : "combat.melee",
+    });
+
     const delta = resolveCombatDelta("melee", attacker, defender, {
       tick: this.tickNumber,
       sequence,
       weaponBonus: peer.weaponBonus,
+      // Note: resolveCombatDelta should ideally be updated to take the entropy float directly
     });
+
     const patch = reduceCombatDelta(attacker, defender, delta);
     peer.stamina = patch.attacker.stamina;
     peer.lastCombatSequence = sequence;
     this.mobRuntime.applyCombatState(mob.definition.entityId, {
       health: patch.defender.health,
     });
-    this.broadcastCombat(
-      this.combatEvent(delta, peer.stamina, patch.defender.health, skillId)
-    );
-    this.broadcastSnapshot();
-    return "accepted";
+
+    return { result: "accepted", event: this.combatEvent(delta, peer.stamina, patch.defender.health, skillId) };
   }
 
-  tick(): boolean {
+  async tick(): Promise<boolean> {
+    const preState = this.getCanonicalZoneState();
+    const preStateHash = hashCanonicalZoneState(preState);
+
+    // 1. Order pending intents canonically
+    const intentsToProcess = orderCanonicalZoneIntents(this.pendingIntents);
+    this.pendingIntents = [];
+    const orderedIntentHash = hashCanonicalIntents(intentsToProcess);
+
     this.tickNumber += 1;
-    let changed = false;
     this.refreshPeerOrder();
+    const rngEvents: RngEventRecord[] = [];
+    const combatEvents: ConfirmedZoneCombatEvent[] = [];
+    let changed = false;
+    let actionIndex = 0;
+
+    // Phase 01: Membership already handled via refreshPeerOrder
+
+    // Phase 02: Movement Intents
+    for (const intent of intentsToProcess) {
+      if (intent.type === "move") {
+        const peer =
+          this.peers.get(intent.connectionId) ??
+          this.peersByEntityId.get(intent.entityId);
+        if (peer && peer.health > 0) {
+          peer.input = intent.input;
+          if (intent.clientSeq > peer.lastAcceptedClientSeq) {
+            peer.lastAcceptedClientSeq = intent.clientSeq;
+          }
+        }
+      }
+    }
+
+    // Integrate Movement
     for (const peer of this.sortedPeers) {
-      if (peer.health > 0) peer.stamina = regenerateWasdStamina(peer.stamina);
       if ((peer.input.x === 0 && peer.input.z === 0) || peer.health <= 0)
         continue;
       const next = integrateZoneMovement(peer.position, peer.input);
@@ -309,25 +554,172 @@ export class AuthoritativeMovementZone {
       peer.position = next;
       changed = true;
     }
+
+    // Phase 03: Player Actions (Combat/Quests)
+    for (const intent of intentsToProcess) {
+      if (intent.type === "attack") {
+        const peer = this.peersByEntityId.get(intent.entityId);
+        if (peer) {
+          if (intent.clientSeq > peer.lastAcceptedClientSeq) {
+            peer.lastAcceptedClientSeq = intent.clientSeq;
+          }
+          const { result, event } = this.resolvePlayerMelee(
+            peer,
+            intent.targetEntityId,
+            null,
+            AX1_PLAYER_BASIC_MELEE_RANGE_FIXED,
+            ++actionIndex
+          );
+          if (result === "accepted" && event) {
+            changed = true;
+            combatEvents.push(event);
+            rngEvents.push({
+              entityId: intent.entityId,
+              purpose: "combat.melee",
+              value: event.sequence,
+            });
+          }
+        }
+      } else if (intent.type === "skill") {
+        const peer = this.peersByEntityId.get(intent.entityId);
+        const definition = ax1BladeSkillById(intent.skillId as Ax1BladeSkillId);
+        if (peer && definition) {
+          if (intent.clientSeq > peer.lastAcceptedClientSeq) {
+            peer.lastAcceptedClientSeq = intent.clientSeq;
+          }
+          const { result, event } = this.resolvePlayerMelee(
+            peer,
+            intent.targetEntityId,
+            intent.skillId as Ax1BladeSkillId,
+            definition.rangeFixed,
+            ++actionIndex
+          );
+          if (result === "accepted" && event) {
+            peer.skillCooldownUntilTick.set(
+              intent.skillId as Ax1BladeSkillId,
+              this.tickNumber + Math.max(1, Math.ceil(definition.cooldownMs / ZONE_TICK_MS))
+            );
+            changed = true;
+            combatEvents.push(event);
+            rngEvents.push({
+              entityId: intent.entityId,
+              purpose: `combat.skill.${intent.skillId}`,
+              value: event.sequence,
+            });
+          }
+        }
+      } else if (intent.type === "quest_accept") {
+        const peer = this.peersByEntityId.get(intent.entityId);
+        if (peer && peer.health > 0) {
+          const key = `${peer.userId}:${intent.questId}`;
+          if (!this.questSummaries.has(key)) {
+            this.questSummaries.set(key, {
+              userId: peer.userId,
+              questId: intent.questId,
+              status: "accepted",
+              updatedAtTick: this.tickNumber,
+            });
+            changed = true;
+          }
+        }
+      } else if (intent.type === "quest_hand_in") {
+        const peer = this.peersByEntityId.get(intent.entityId);
+        if (peer && peer.health > 0) {
+          const key = `${peer.userId}:${intent.questId}`;
+          const current = this.questSummaries.get(key);
+          if (current && current.status === "accepted") {
+            current.status = "completed";
+            current.updatedAtTick = this.tickNumber;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    // Phase 04: Resource Transitions
     const resourcesChanged = this.resourceRuntime.tick(this.tickNumber);
+
+    // Phase 05: Mob FSM Transitions
     const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
-    const combatChanged = this.resolveMobAttacks();
+
+    // Phase 06: Mob Combat
+    const mobCombatResult = this.resolveMobAttacks(++actionIndex);
+    if (mobCombatResult.changed) changed = true;
+    combatEvents.push(...mobCombatResult.events);
+
+    // Phase 07: Regeneration
+    for (const peer of this.sortedPeers) {
+      if (peer.health > 0) {
+        const nextStamina = regenerateWasdStamina(peer.stamina);
+        if (nextStamina !== peer.stamina) {
+          peer.stamina = nextStamina;
+          changed = true;
+        }
+      }
+    }
+
+    // Phase 08: Persistence Events & Receipts
+    const postState = this.getCanonicalZoneState();
+    const postStateHash = hashCanonicalZoneState(postState);
+
+    const transitionSummary = {
+      tick: this.tickNumber,
+      changed: changed || resourcesChanged || mobsChanged,
+      intentsCount: intentsToProcess.length,
+      combatSequence: this.combatSequence,
+    };
+    const transitionHash = canonicalSha256(transitionSummary);
+    const rngRootHash = computeRngRootHash(rngEvents);
+
+    const receiptUnsigned: Omit<AurionCausalTickReceipt, "receiptHash"> = {
+      schema: AURION_CAUSAL_TICK_SCHEMA,
+      worldId: "aurion-main",
+      zoneId: this.zoneId,
+      tick: this.tickNumber,
+      sourceRevision: process.env.AURION_SOURCE_REVISION || activeProvenance.commit,
+      rulesetVersion: AURION_ZONE_RULESET_VERSION,
+      previousReceiptHash: this.previousReceiptHash,
+      preStateHash,
+      orderedIntentHash,
+      transitionHash,
+      rngRootHash,
+      postStateHash,
+    };
+    const receiptHash = computeReceiptHash(receiptUnsigned);
+    const receipt: AurionCausalTickReceipt = {
+      ...receiptUnsigned,
+      receiptHash,
+    };
+    this.previousReceiptHash = receiptHash;
+    this.lastReceipt = receipt;
+
+    await globalTickRecorder.recordTick(receipt, postState, preState, intentsToProcess);
+
+    // Phase 09: Snapshot & Batch Broadcast
+    for (const event of combatEvents) {
+      this.broadcastCombat(event);
+    }
+
     if (
       changed ||
       resourcesChanged ||
       mobsChanged ||
-      combatChanged ||
       this.movedLastTick ||
       this.inputAcknowledgementPending
-    )
+    ) {
       this.broadcastSnapshot();
+    }
+
     this.movedLastTick = changed;
     this.inputAcknowledgementPending = false;
-    return changed || resourcesChanged || mobsChanged || combatChanged;
+    return changed || resourcesChanged || mobsChanged;
   }
 
-  private resolveMobAttacks(): boolean {
+  private resolveMobAttacks(actionIndex: number): { changed: boolean; events: ConfirmedZoneCombatEvent[] } {
     let changed = false;
+    const events: ConfirmedZoneCombatEvent[] = [];
+    let localActionIndex = actionIndex;
+
     for (const mob of this.mobRuntime.orderedStates()) {
       if (
         mob.state !== "combat" ||
@@ -337,25 +729,23 @@ export class AuthoritativeMovementZone {
       )
         continue;
 
-      // O(1) map lookup for resolving the targeted entity
       const peer = this.peersByEntityId.get(mob.targetEntityId);
-
       if (!peer || peer.health <= 0) continue;
-      if (
-        mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed
-      )
+      if (mobDistance(mob.position, peer.position) > mob.definition.attackRangeFixed)
         continue;
-      const sequence = ++this.combatSequence,
-        attacker = {
-          id: mob.definition.entityId,
-          stamina: mob.stamina,
-          skills: { combat: { level: mob.definition.level } },
-        },
-        defender = {
-          id: `player:${peer.userId}`,
-          health: peer.health,
-          skills: { combat: { level: peer.combatLevel } },
-        };
+
+      const sequence = this.tickNumber * 1000 + (++localActionIndex);
+      const attacker = {
+        id: mob.definition.entityId,
+        stamina: mob.stamina,
+        skills: { combat: { level: mob.definition.level } },
+      };
+      const defender = {
+        id: `player:${peer.userId}`,
+        health: peer.health,
+        skills: { combat: { level: peer.combatLevel } },
+      };
+
       const delta = resolveCombatDelta("melee", attacker, defender, {
         tick: this.tickNumber,
         sequence,
@@ -370,12 +760,11 @@ export class AuthoritativeMovementZone {
       peer.health = patch.defender.health;
       peer.lastCombatSequence = sequence;
       if (peer.health === 0) peer.input = { x: 0, z: 0 };
-      this.broadcastCombat(
-        this.combatEvent(delta, patch.attacker.stamina, peer.health, null)
-      );
+      
+      events.push(this.combatEvent(delta, patch.attacker.stamina, peer.health, null));
       changed = true;
     }
-    return changed;
+    return { changed, events };
   }
 
   private combatEvent(
@@ -521,15 +910,13 @@ export class ZoneRegistry {
     return zone;
   }
 
-  tick(): void {
+  async tick(): Promise<void> {
     if (this.sortedZonesDirty) {
       this.sortedZones = Array.from(this.zones.entries())
         .sort(([left], [right]) => compareBinary(left, right))
         .map(([, zone]) => zone);
       this.sortedZonesDirty = false;
     }
-    for (const zone of this.sortedZones) {
-      zone.tick();
-    }
+    await Promise.all(this.sortedZones.map(zone => zone.tick()));
   }
 }

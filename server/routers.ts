@@ -25,6 +25,7 @@ import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./world
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
+import { globalCausalArchivingService } from "./causality/archivingService";
 import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
 import { desc, eq } from "drizzle-orm";
@@ -35,6 +36,8 @@ import {
 import { aurionNpcPolicyVersions } from "../drizzle/schema";
 import { aurionQuestRouter } from "./routes/aurionQuestRouter";
 import { aurionContextRouter } from "./routes/aurionContextRouter";
+import { causalityRouter } from "./routes/causalityRouter";
+import { sessionLogRouter } from "./routes/sessionLogRouter";
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -48,6 +51,8 @@ const companionMemory = new CompanionMemoryStore();
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
+  causality: causalityRouter,
+  sessionLogs: sessionLogRouter,
   aurionQuest: aurionQuestRouter,
   aurionContext: aurionContextRouter,
   worldAssets: router({
@@ -91,6 +96,11 @@ export const appRouter = router({
       return record.user;
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
+      // Trigger causal backup on logout
+      globalCausalArchivingService.triggerZoneBackup("observatory_threshold").catch(err => 
+        console.error("[Causality] Auto-archive failed on logout:", err)
+      );
+
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return {
@@ -192,7 +202,16 @@ export const appRouter = router({
     issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),
     consumeZoneTicket: publicProcedure.input(z.object({ ticket: z.string().trim().min(32).max(128), zoneId: z.literal("observatory_threshold") })).mutation(({ input }) => db.consumeZoneConnectionTicket({ ticket: input.ticket, zoneId: input.zoneId as ZoneId })),
     acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
-    completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(({ ctx, input }) => db.completeGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey, giver: input.giver })),
+    completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(async ({ ctx, input }) => {
+      const result = await db.completeGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey, giver: input.giver });
+      
+      // Trigger causal backup on quest completion
+      globalCausalArchivingService.triggerZoneBackup("observatory_threshold").catch(err => 
+        console.error("[Causality] Auto-archive failed on quest completion:", err)
+      );
+
+      return result;
+    }),
     startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
     act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
     interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(["lyra", "orun"]), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),

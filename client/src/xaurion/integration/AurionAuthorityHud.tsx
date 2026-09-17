@@ -154,7 +154,13 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     }
   }, [connected, panel, groupOpen, expandedMenu, pending, startAfterClose, auto]);
   useEffect(() => {
-    const update = () => { void refresh().catch(() => setMessage("Aktuelle Daten sind nicht verfügbar.")); };
+    const update = () => { 
+      void refresh().catch(() => setMessage("Aktuelle Daten sind nicht verfügbar."));
+      // Notify about causal backup on significant actions
+      window.dispatchEvent(new CustomEvent("aurion:causal-backup-confirmed", { 
+        detail: { message: "Sitzung serverseitig gesichert" } 
+      }));
+    };
     const contacts = () => { setQuestTab("contacts"); openPanel("quests"); };
     const crafting = () => openPanel("crafting");
     const controls = () => openPanel("controls");

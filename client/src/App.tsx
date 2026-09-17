@@ -5,6 +5,7 @@ import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LocalAuthPanel from "./components/LocalAuthPanel";
 import AurionCommunityHost from "./components/AurionCommunityHost";
+import { CausalBackupNotifier } from "./components/CausalBackupNotifier";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Account from "./pages/Account";
 import Community from "./pages/Community";
@@ -25,6 +26,7 @@ function App() {
       <ThemeProvider defaultTheme="dark" switchable={true}>
         <TooltipProvider>
           <Toaster />
+          <CausalBackupNotifier />
           <SoundManager />
           <LocalAuthPanel />
           {websiteSurface && <AurionCommunityHost />}

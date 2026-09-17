@@ -114,6 +114,14 @@ export function adminMcpCapabilities(
       Object.freeze({ name: "aurion_admin_get_capabilities", mode: "read", description: "Lists the current safe capabilities and boundaries." }),
       Object.freeze({ name: "aurion_admin_get_world_overview", mode: "read", description: "Reads the confirmed global world descriptor without advancing an epoch." }),
       Object.freeze({ name: "aurion_admin_wolfram_status", mode: "read", description: "Reports secret-free Wolfram CAG runtime configuration without making a provider request." }),
+      Object.freeze({ name: "aurion_causality_status", mode: "read", description: "Reports causality engine status, active ruleset hashes, and receipt chain integrity." }),
+      Object.freeze({ name: "aurion_tick_receipt_get", mode: "read", description: "Retrieves a specific causal tick receipt by zone and tick number." }),
+      Object.freeze({ name: "aurion_tick_explain", mode: "read", description: "Explains pre-state, intents, transitions, RNG root, and post-state for a recorded tick." }),
+      Object.freeze({ name: "aurion_tick_replay", mode: "read", description: "Replays a single recorded zone tick through all 8 verification stages." }),
+      Object.freeze({ name: "aurion_replay_range", mode: "read", description: "Replays a range of recorded ticks for a zone to pinpoint any divergence." }),
+      Object.freeze({ name: "aurion_runtime_identity", mode: "read", description: "Returns exact source revision, build input digest, artifact digest, and runtime image digest." }),
+      Object.freeze({ name: "aurion_donor_ledger", mode: "read", description: "Reads the machine-readable donor migration ledger and capability retirement status." }),
+      Object.freeze({ name: "aurion_donor_capability_explain", mode: "read", description: "Explains parity evidence and runtime verification for a specific donor capability." }),
       ...(wolframConfigured ? [
         { name: "aurion_admin_wolfram_compute", mode: "read", description: "Evaluates bounded Wolfram Language code as external evidence only." },
         { name: "aurion_admin_wolfram_hints", mode: "read", description: "Retrieves bounded Wolfram Language hints for an engineering or balancing task." },
@@ -360,6 +368,152 @@ function createAdminMcpServer(actor: AdminActor) {
   }, async () => {
     const { aurionWorldContextService } = require("./worldContext/service");
     return content(await aurionWorldContextService.getEvaluationSummary());
+  });
+
+  /* C-Aurion Causality and Determinism MCP Tools */
+  server.registerTool("aurion_causality_status", {
+    title: "Aurion Causality Engine Status",
+    description: "Reports active causality ruleset versions, chain verification results, and tick recorder capacity.",
+    inputSchema: z.object({
+      zoneId: z.string().optional(),
+    }),
+  }, async input => {
+    const { globalTickRecorder } = require("./causality/tickRecorder");
+    const { activeProvenance } = require("./aurionProvenance");
+    const chainCheck = globalTickRecorder.verifyReceiptChain(input.zoneId);
+    return content({
+      status: "ok",
+      provenance: activeProvenance,
+      chainIntegrity: chainCheck,
+      recordedTicksCount: globalTickRecorder.getReceipts(input.zoneId).length,
+    });
+  });
+
+  server.registerTool("aurion_tick_receipt_get", {
+    title: "Get Causal Tick Receipt",
+    description: "Retrieves an immutable causal tick receipt for a given zone and tick number.",
+    inputSchema: z.object({
+      zoneId: z.string(),
+      tick: z.number().int().nonnegative(),
+    }),
+  }, async input => {
+    const { globalTickRecorder } = require("./causality/tickRecorder");
+    const receipt = globalTickRecorder.getReceipt(input.zoneId, input.tick);
+    if (!receipt) throw new Error(`Receipt not found for zone ${input.zoneId} at tick ${input.tick}`);
+    return content(receipt);
+  });
+
+  server.registerTool("aurion_tick_explain", {
+    title: "Explain Causal Tick",
+    description: "Explains pre-state hash, ordered intents, state transitions, RNG root, and post-state hash for a recorded tick.",
+    inputSchema: z.object({
+      zoneId: z.string(),
+      tick: z.number().int().nonnegative(),
+    }),
+  }, async input => {
+    const { globalTickRecorder } = require("./causality/tickRecorder");
+    const entry = globalTickRecorder.getEntry(input.zoneId, input.tick);
+    if (!entry) throw new Error(`Recorded tick entry not found for zone ${input.zoneId} at tick ${input.tick}`);
+    return content(entry);
+  });
+
+  server.registerTool("aurion_tick_replay", {
+    title: "Replay Recorded Zone Tick",
+    description: "Replays a recorded zone tick through all 8 verification stages and returns the exact divergence or match verdict.",
+    inputSchema: z.object({
+      zoneId: z.string(),
+      tick: z.number().int().nonnegative(),
+    }),
+  }, async input => {
+    const { globalTickRecorder } = require("./causality/tickRecorder");
+    const { replayZoneTick } = require("./causality/replayZoneTick");
+    const entry = globalTickRecorder.getEntry(input.zoneId, input.tick);
+    if (!entry) throw new Error(`Recorded tick entry not found for zone ${input.zoneId} at tick ${input.tick}`);
+    if (!entry.preState) throw new Error(`Pre-state snapshot was not recorded for tick ${input.tick}`);
+    const verdict = replayZoneTick({
+      preState: entry.preState,
+      intents: entry.intents || [],
+      expectedReceipt: entry.receipt,
+    });
+    return content(verdict);
+  });
+
+  server.registerTool("aurion_replay_range", {
+    title: "Replay Zone Tick Range",
+    description: "Replays a sequential range of recorded ticks for a zone to verify end-to-end deterministic progression.",
+    inputSchema: z.object({
+      zoneId: z.string(),
+      fromTick: z.number().int().nonnegative(),
+      toTick: z.number().int().nonnegative(),
+    }),
+  }, async input => {
+    const { globalTickRecorder } = require("./causality/tickRecorder");
+    const { replayZoneTick } = require("./causality/replayZoneTick");
+    const results = [];
+    for (let t = input.fromTick; t <= input.toTick; t++) {
+      const entry = globalTickRecorder.getEntry(input.zoneId, t);
+      if (!entry || !entry.preState) {
+        results.push({ tick: t, verdict: { status: "UNPROVABLE", verdict: "UNPROVABLE", reason: `Tick ${t} data unavailable` } });
+        break;
+      }
+      const verdict = replayZoneTick({
+        preState: entry.preState,
+        intents: entry.intents || [],
+        expectedReceipt: entry.receipt,
+      });
+      results.push({ tick: t, verdict });
+      if (verdict.verdict !== "MATCH") break;
+    }
+    return content({ zoneId: input.zoneId, fromTick: input.fromTick, toTick: input.toTick, results });
+  });
+
+  server.registerTool("aurion_runtime_identity", {
+    title: "Read Aurion Runtime Identity",
+    description: "Returns source revision, build input digest, artifact digest, runtime image digest, and authority parameters.",
+    inputSchema: z.object({}),
+  }, async () => {
+    const { activeProvenance } = require("./aurionProvenance");
+    return content({
+      sourceRevision: activeProvenance.sourceRevision,
+      commit: activeProvenance.commit,
+      dirty: activeProvenance.dirty,
+      buildInputDigest: activeProvenance.buildInputDigest,
+      artifactDigest: activeProvenance.artifactDigest,
+      runtimeImageDigest: activeProvenance.runtimeImageDigest,
+      authority: activeProvenance.authority,
+      rulesets: activeProvenance.rulesets,
+      runtimeHash: activeProvenance.runtimeHash,
+    });
+  });
+
+  server.registerTool("aurion_donor_ledger", {
+    title: "Read Aurion Donor Migration Ledger",
+    description: "Reads the machine-readable donor migration ledger (WASD and AX1 capability retirement).",
+    inputSchema: z.object({}),
+  }, async () => {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const ledgerPath = path.resolve(process.cwd(), "architecture/donor-ledger.json");
+    if (!fs.existsSync(ledgerPath)) throw new Error("Donor ledger file not found");
+    const data = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
+    return content(data);
+  });
+
+  server.registerTool("aurion_donor_capability_explain", {
+    title: "Explain Donor Capability Migration Status",
+    description: "Explains migration status, parity evidence, and retirement progress for a specific donor capability.",
+    inputSchema: z.object({
+      capabilityId: z.string(),
+    }),
+  }, async input => {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const ledgerPath = path.resolve(process.cwd(), "architecture/donor-ledger.json");
+    if (!fs.existsSync(ledgerPath)) throw new Error("Donor ledger file not found");
+    const data = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
+    const match = data.capabilities?.find((c: any) => c.id === input.capabilityId);
+    if (!match) throw new Error(`Capability ${input.capabilityId} not found in donor ledger`);
+    return content(match);
   });
 
   return server;
