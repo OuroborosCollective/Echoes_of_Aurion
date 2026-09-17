@@ -6,6 +6,7 @@ import { aurionCausalTickReceipts, aurionCausalCheckpoints, aurionReplayRuns, au
 import { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
+import { operationalDate, operationalNow } from "../../shared/operationalClock";
 import { CanonicalZoneState } from "./zoneCanonicalState";
 import { CausalPersistenceAdapter, RecordedTickEntry } from "./tickRecorder";
 
@@ -72,7 +73,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     if (!db) return;
 
     await db.insert(aurionReplayRuns).values({
-      id: `run_${run.worldId}_${run.zoneId}_${run.fromTick}_${run.toTick}_${Date.now()}`,
+      id: `run_${run.worldId}_${run.zoneId}_${run.fromTick}_${run.toTick}_${operationalNow()}`,
       worldId: run.worldId,
       zoneId: run.zoneId,
       fromTick: run.fromTick,
@@ -113,7 +114,6 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
 
     if (!receiptRow) return null;
 
-    // Try to find a pre-state checkpoint if tick is 0 or if we have one
     let preState: CanonicalZoneState | undefined;
     const [checkpointRow] = await db.select()
       .from(aurionCausalCheckpoints)
@@ -150,7 +150,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     await db.update(aurionCausalCheckpoints)
       .set({ 
         reconciled: status,
-        reconciledAt: new Date()
+        reconciledAt: operationalDate()
       })
       .where(eq(aurionCausalCheckpoints.id, id));
   }
@@ -159,7 +159,6 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const db = await getDb();
     if (!db) return [];
 
-    // Let's use a proper range query
     const results = await db.execute(sqlDrizzle`
       SELECT * FROM aurionCausalTickReceipts 
       WHERE zoneId = ${zoneId} AND tick >= ${fromTick} AND tick <= ${toTick} 
@@ -207,7 +206,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
         snapshotJson: checkpoint.snapshotJson,
         snapshotHash: checkpoint.snapshotHash,
         epoch: checkpoint.tick,
-        updatedAt: new Date()
+        updatedAt: operationalDate()
       })
       .where(eq(aurionGlobalWorldStates.worldId, checkpoint.worldId));
 
@@ -220,7 +219,6 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const db = await getDb();
     if (!db) return null;
 
-    // 1. Get verified receipts before target tick
     const receiptsToArchive = await db.select()
       .from(aurionCausalTickReceipts)
       .where(and(
@@ -235,7 +233,6 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const endTick = receiptsToArchive[receiptsToArchive.length - 1].tick;
     const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
 
-    // 2. Prepare payload (full lossless summary)
     const payload = receiptsToArchive.map(r => ({
       tick: r.tick,
       receiptHash: r.receiptHash,
@@ -253,7 +250,6 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const payloadJson = JSON.stringify(payload);
     const archiveHash = createHash('sha256').update(payloadJson).digest('hex');
 
-    // 3. Save to archive
     await db.insert(aurionCausalArchive).values({
       id: archiveId,
       worldId: receiptsToArchive[0].worldId,
@@ -265,7 +261,6 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       payloadJson,
     });
 
-    // 4. Delete from hot storage
     await db.delete(aurionCausalTickReceipts)
       .where(and(
         eq(aurionCausalTickReceipts.zoneId, zoneId),
