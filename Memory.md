@@ -404,8 +404,8 @@ Decisions: Bind rigged equipment only to exact ordered `quaternius-universal-65-
 Touched surfaces: Shared rig/classifier/import plan, equipment projection, owner-asset provenance and AIM-292 readback contract.
 Evidence: Exact pre-memory head `008b246d3538730e5217e31561bcc14a495bdac5`; 42/42 prepared GLBs self-contained and below 24 MiB; AIM-292 run `34795972970` passed 5/5 new contract tests, 15 MariaDB tests, 3 browser profiles and final receipt readback; Local Test Pack, AIM-240, AIM-259, AIM-262, AIM-284, AIM-286, AIM-290 and Android also green. Main `46bf4fc603cc7485bff208f152ee1d5511e1b34f` production health confirms required `game-dev 1.0.2` available.
 Learned: Mutable latest-state equality is not a valid cross-read invariant under autonomous progress; monotone advancement must be proven by immutable receipts.
-Open: Live catalog admission/Game-Dev inspect+validate of these owner GLBs, Blender/native visual evidence and appearance slots remain separate.
-Next safe step: Re-run exact-head gates after this append; keep #331 Draft and do not merge or admit owner assets until explicitly authorized.
+Open: v4 episodes record confirmed goal selection, not unexecuted plan steps as actions. AIM-293 action/consent and AIM-294 evidence graphs remain separate lanes.
+Next safe step: Bind AIM-293 consumer work to exact merged WASD source and prove host locking/consent/effects in Aurion before claiming action execution.
 
 ### 2026-09-14 — Quaternius live-admission hardening
 Status: PARTIAL — repository/runtime admission boundary verified; owner GLB live upload still external.
@@ -563,7 +563,7 @@ Task: Complete the full AIM-271 optimization epic sequence including Build-Time 
 Decisions:
 - **AIM-276 (Texture Atlas Pipeline)**: Built `TextureAtlasPipeline.ts` for static tile descriptor registration, sub-region UV offset mapping, and geometry UV remapping to eliminate runtime DOM canvas churn and optimize PBR material batching.
 - **AIM-277 (bitECS Render-ECS Pilot)**: Integrated `bitECS` strictly for presentation transform and distance-based LOD tier calculations across high-density typed arrays (`Position`, `LodTier`, `InstanceRef`). Maintained zero gameplay authority divergence; benchmark confirms high typed-array throughput.
-- **AIM-278 (Procedural Low-Poly & VFX)**: Created `ProceduralLowPolyWorld.ts` with deterministic rock/crystal geometry generation via `seededRandom` and device profile governed PostFX / particle pool limits (`phone`: 600, `tablet`: 1200, `desktop`: 2400).
+- **AIM-278 (Procedural Low-Poly & VFX)**: Created `ProceduralLowPolyWorld.ts` with deterministic rock/crystal geometry generation via `seededRandom` and device profile governed PostFX / particle pool limits (`phone`: 600, `tablet`: 1200, `desktop`: 2400`).
 - **AIM-279 (End-to-End Performance Gate)**: Developed `HighDensityPerformanceGate.ts` executing end-to-end evaluation across phone, tablet, and desktop profiles. Verified 100% actor presence (zero actor elimination), BVH static collider acceleration, and valid render budgets.
 Touched surfaces: `client/src/xaurion/world/TextureAtlasPipeline.ts`, `client/src/xaurion/world/TextureAtlasPipeline.test.ts`, `client/src/xaurion/spatial/RenderEcsPilot.ts`, `client/src/xaurion/spatial/RenderEcsPilot.test.ts`, `client/src/xaurion/world/ProceduralLowPolyWorld.ts`, `client/src/xaurion/world/ProceduralLowPolyWorld.test.ts`, `client/src/xaurion/spatial/HighDensityPerformanceGate.ts`, `client/src/xaurion/spatial/HighDensityPerformanceGate.test.ts`.
 Evidence: 100% unit test pass across all new test suites via Vitest (`TextureAtlasPipeline.test.ts`, `RenderEcsPilot.test.ts`, `ProceduralLowPolyWorld.test.ts`, `HighDensityPerformanceGate.test.ts`). Global build compilation (`compile_applet`) succeeded cleanly with zero errors.
@@ -839,3 +839,11 @@ Evidence: PR #363 exact pre-memory head `2afa1dfe8993f3d8c35d8d1d7fef0abc42f6449
 Learned: Asset naming/classification and renderer visibility must be proven independently from gameplay authority; live catalog admission does not grant gameplay truth.
 Open: Cross-zone discovered-waygate travel is intentionally out of scope.
 Next safe step: Re-run exact-head CI after this append, merge only if green, then perform post-merge live revision/container readback.
+
+### 2026-09-18 — Causal truth exact-head completion
+Status: VERIFIED pre-merge; production deployment/readback not claimed.
+Änderung: C-Aurion auf fail-closed kanonische Truth-Verträge abgeschlossen: finite Zahlen werden nicht still gerundet, Intent-Ordnung ist an Entity/Sequence statt Arrival gebunden, unabhängige Tests nutzen getrennte Evidence-Lineages ohne das Production-Konfliktgate zu schwächen, operationale Zeit läuft wieder ausschließlich über `operationalDate()`, und der Candidate-Container bindet Revision, Build-Input-, Artifact-Checksum-Root- und tatsächlichen Image-Digest explizit.
+Erkenntnis: Ein strikt append-only Tick-Recorder macht wiederverwendete Test-Lineages sichtbar statt sie zu verschlucken; fail-closed Runtime-Provenienz muss von der Release-Orchestrierung mit exakten unveränderlichen Identitäten versorgt werden und darf sie nicht aus plausiblen Defaults rekonstruieren.
+Evidence: Exact pre-memory head `ca4529c826db121f9260e2f042f2094dbc2c6b51`; Aurion Local Test Pack run `35283619765` vollständig grün (frozen install, 49/49 Migrationen + Apply, TypeScript, fokussierte Regressionen, volle Repository-Suite, Offline-Pack und Workspace-Hash); Aurion PR Runtime Container Proof run `35283619782` vollständig grün (revision-bound Artifact, production-shaped MariaDB, echter Candidate-Boot, exact Health/Digest-Verifikation und Evidence-Upload). Zuvor grüne unveränderte GLB/Return-Stone-, Root/Schema-, Android-, AIM-259/265/292-, Guild/Profession-Flächen wurden nicht künstlich als neue technische Arbeit interpretiert.
+Open: Der folgende Memory-only Commit ändert keine Runtime-/Schema-/Workflow-Logik; Produktions-Promotion und Live/PatchMon-Readback bleiben ein separater Post-Merge-Beweis.
+Next safe step: Memory-bound PR-Head und unverändertes `main` readbacken, nur formal notwendige Merge-Gates beachten, PR #367 unter Owner-Freigabe mergen und anschließend Merge-Commit/main readbacken.
