@@ -219,7 +219,10 @@ export class AuthoritativeMovementZone {
       remainingGathers: node.remaining,
     }));
 
-    const questSummaries: CanonicalQuestSummary[] = Array.from(this.questSummaries.values());
+    const questSummaries: CanonicalQuestSummary[] = Array.from(
+      this.questSummaries.values(),
+      quest => ({ ...quest })
+    );
 
     return sortCanonicalZoneState({
       schema: "aurion.zone.state.v1",
@@ -285,11 +288,9 @@ export class AuthoritativeMovementZone {
     this.sortedPeersDirty = true;
 
     for (const mob of state.mobs) {
-      this.mobRuntime.applyCombatState(mob.entityId, {
-        health: mob.health,
-        nextAttackTick: mob.lastAttackTick,
-      });
+      this.mobRuntime.restoreCanonicalState(mob);
     }
+    this.resourceRuntime.restoreCanonicalStates(state.resources);
 
     this.questSummaries.clear();
     if (state.questSummaries) {
@@ -650,8 +651,11 @@ export class AuthoritativeMovementZone {
           const key = `${peer.userId}:${intent.questId}`;
           const current = this.questSummaries.get(key);
           if (current && current.status === "accepted") {
-            current.status = "completed";
-            current.updatedAtTick = this.tickNumber;
+            this.questSummaries.set(key, {
+              ...current,
+              status: "completed",
+              updatedAtTick: this.tickNumber,
+            });
             changed = true;
           }
         }
