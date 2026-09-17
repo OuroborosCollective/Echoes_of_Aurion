@@ -64,11 +64,12 @@ export class WorldAssetProjection {
  }
  private select(position:{x:number;z:number},width:number){
   if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width)],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
-  // Selection is presentation-only, but under a tight mobile budget it must not spend
-  // memory on nearby placements behind the camera while visible confirmed placements starve.
+  // Selection is presentation-only. Under a tight asset budget, use the same
+  // anchored footprint as rebuild() and prioritize actually visible placements
+  // instead of nearby models behind/outside the camera.
   this.camera.updateMatrixWorld();
   const frustum=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix,this.camera.matrixWorldInverse));
-  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!,x=placement.xMm/1000,z=placement.zMm/1000,y=this.terrain(x,z);const distance=Math.hypot(x-this.camera.position.x,z-this.camera.position.z,this.camera.position.y-y);const bounds=asset.bounds,height=(bounds.max[1]!-bounds.min[1]!)*asset.scale;const radius=Math.hypot((bounds.max[0]!-bounds.min[0]!)*asset.scale,height,(bounds.max[2]!-bounds.min[2]!)*asset.scale)/2;const visible=frustum.intersectsSphere(new THREE.Sphere(new THREE.Vector3(x,y+height/2,z),radius));const previous=this.previousLod.get(placement.id);
+  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!,x=placement.xMm/1000,z=placement.zMm/1000,y=this.terrain(x,z);const distance=Math.hypot(x-this.camera.position.x,z-this.camera.position.z,this.camera.position.y-y);const bounds=asset.bounds,height=(bounds.max[1]!-bounds.min[1]!)*asset.scale,extentX=(bounds.max[0]!-bounds.min[0]!)*asset.scale,extentZ=(bounds.max[2]!-bounds.min[2]!)*asset.scale,rotated=(placement.rotation&1)===1,halfX=(rotated?extentZ:extentX)/2,halfZ=(rotated?extentX:extentZ)/2;const visible=frustum.intersectsBox(new THREE.Box3(new THREE.Vector3(x-halfX,y,z-halfZ),new THREE.Vector3(x+halfX,y+height,z+halfZ)));const previous=this.previousLod.get(placement.id);
    let lod:0|1|2;
    if(this.pressure){const residentPrevious=previous!==undefined&&this.cache.has(`${placement.assetId}:${previous}`);lod=residentPrevious?previous:2;}
    else {lod=worldAssetLod(height,distance,this.camera.fov,phone);if(previous!==undefined&&previous!==lod){const stable=worldAssetLod(height,distance*(lod>previous?0.9:1.1),this.camera.fov,phone);if(stable!==lod)lod=previous;}}
@@ -92,7 +93,10 @@ export class WorldAssetProjection {
    const shipped=shippingById.get(s.placement.assetId)?.lods[s.lod];
    if(shipped&&(shipped.sourceSha256!==baseline.sha256||shipping.manifest.sourceBinding.catalogHash!==this.region?.catalogHash||shipping.manifest.sourceBinding.collisionHash!==this.region?.collisionHash))throw Error("WORLD_SHIPPING_BINDING");
    const convert=(spec:NonNullable<typeof shipped>)=>({...spec,url:`/world-shipping/${spec.file}`});
-   const variants=shipped?[...(this.ktxEnabled?[convert(shipped)]:[]),{...shipped.fallback,url:`/world-shipping/${shipped.fallback.file}`}]:[{...baseline,format:"legacy"}];
+   // Recovery remains hash-bound at every stage: compressed KTX2, the separately
+   // verified WebP shipping fallback, then the canonical source LOD from the
+   // authenticated world catalog if browser blob decoding itself is unavailable.
+   const variants=shipped?[...(this.ktxEnabled?[convert(shipped)]:[]),{...shipped.fallback,url:`/world-shipping/${shipped.fallback.file}`},{...baseline,format:"catalog-raster"}]:[{...baseline,format:"legacy"}];
    const request=new AbortController();this.requests.add(request);
    const signal=AbortSignal.any([request.signal,AbortSignal.timeout(20_000)]);
    void glbResourcePool.job(Math.max(...variants.map(spec=>spec.bytes)),async()=>{
@@ -116,7 +120,7 @@ export class WorldAssetProjection {
       releaseBudget?.();
       if(index===variants.length-1||signal.aborted)throw error;
       // A failed KTX2 decode disables future compressed attempts for this projection.
-      // The next separately hash-verified fallback is decoded by a fresh GLTFLoader.
+      // Later candidates still use fresh GLTFLoader instances and immutable hashes.
       if(spec.format==="ktx2")this.ktxEnabled=false;
      }
     }
