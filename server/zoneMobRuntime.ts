@@ -1,5 +1,6 @@
 import type { ConfirmedZonePresence } from "../shared/zonePresenceContract";
-import type { ConfirmedZoneMob } from "../shared/zoneMobContract";
+import type { ConfirmedZoneMob, ZoneMobState } from "../shared/zoneMobContract";
+import type { CanonicalMobState } from "./causality/zoneCanonicalState";
 import { observatoryMobDefinitions } from "./ax1MobContent";
 import {
   applyMobCombatState,
@@ -18,6 +19,7 @@ import { worldNatureCollision } from "./worldNatureCollision";
 export const MOB_COLLISION_SUBSTEP_MAX_MM = WASD_MOB_COLLISION_SUBSTEP_MAX_MM;
 export { mobCollisionSubsteps };
 const NO_FROZEN_MOBS: ReadonlySet<string> = new Set<string>();
+const CANONICAL_MOB_STATES = new Set<ZoneMobState>(["idle", "patrolling", "combat", "evading", "dead"]);
 
 function sameMob(left: ConfirmedZoneMob, right: ConfirmedZoneMob): boolean {
   return (
@@ -86,6 +88,42 @@ export class ZoneMobRuntime {
     if (!current) return undefined;
     const next = applyMobCombatState(current, values);
     this.states.set(entityId, next);
+    return next;
+  }
+
+  /**
+   * Restore every mob field that already belongs to the canonical zone-state
+   * contract. Hidden deterministic FSM fields remain on their original seeded
+   * values; no new receipt/hash schema is invented during replay repair.
+   */
+  restoreCanonicalState(mob: CanonicalMobState): MobRuntimeState {
+    const current = this.states.get(mob.entityId);
+    if (!current || mob.mobId !== mob.entityId) throw new Error("ZONE_MOB_RESTORE_IDENTITY_INVALID");
+    if (mob.archetype !== undefined && mob.archetype !== current.definition.archetype)
+      throw new Error("ZONE_MOB_RESTORE_ARCHETYPE_INVALID");
+    if (mob.maxHealth !== current.definition.maxHealth)
+      throw new Error("ZONE_MOB_RESTORE_MAX_HEALTH_INVALID");
+    if (!Number.isSafeInteger(mob.x) || !Number.isSafeInteger(mob.z))
+      throw new Error("ZONE_MOB_RESTORE_POSITION_INVALID");
+    if (!Number.isSafeInteger(mob.health) || mob.health < 0 || mob.health > mob.maxHealth)
+      throw new Error("ZONE_MOB_RESTORE_HEALTH_INVALID");
+    if (!Number.isSafeInteger(mob.lastAttackTick) || mob.lastAttackTick < 0)
+      throw new Error("ZONE_MOB_RESTORE_ATTACK_TICK_INVALID");
+    if (!CANONICAL_MOB_STATES.has(mob.state as ZoneMobState))
+      throw new Error("ZONE_MOB_RESTORE_STATE_INVALID");
+    if (mob.health === 0 && mob.state !== "dead")
+      throw new Error("ZONE_MOB_RESTORE_DEAD_STATE_INVALID");
+
+    const next: MobRuntimeState = Object.freeze({
+      ...current,
+      state: mob.state as ZoneMobState,
+      position: Object.freeze({ x: mob.x, z: mob.z }),
+      targetEntityId: mob.targetEntityId,
+      health: mob.health,
+      maxHealth: mob.maxHealth,
+      nextAttackTick: mob.lastAttackTick,
+    });
+    this.states.set(mob.entityId, next);
     return next;
   }
 

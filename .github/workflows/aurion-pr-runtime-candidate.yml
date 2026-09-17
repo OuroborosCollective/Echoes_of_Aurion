@@ -1,0 +1,220 @@
+name: Aurion PR Runtime Candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aurion-pr-runtime-candidate.yml"
+      - "client/**"
+      - "server/**"
+      - "shared/**"
+      - "drizzle/**"
+      - "assets/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "Dockerfile"
+      - "docker-compose.traefik.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "patches/**"
+
+concurrency:
+  group: aurion-pr-runtime-candidate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-candidate:
+    name: Exact-head immutable runtime candidate
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      RETURN_STONE_SHA256: dec4033e1f19e0d79c0d7494de3a3d4f5aeb4c3f4e422529df2721e13deb27cf
+      RETURN_STONE_BYTES: "7954128"
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove exact source and authoritative revive path
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
+          pnpm check
+          pnpm exec vitest run \
+            server/returnStoneRevival.test.ts \
+            server/returnStoneZoneRuntime.test.ts \
+            client/src/xaurion/core/UploadedAssetRuntime.test.ts \
+            --reporter=json \
+            --outputFile=return-stone-revive-evidence.json
+          test -s return-stone-revive-evidence.json
+          git diff --check
+
+      - name: Read back approved live return-stone asset
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            https://arelogic.space/api/game/glb-catalog \
+            --output live-glb-catalog.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const catalog = JSON.parse(fs.readFileSync('live-glb-catalog.json', 'utf8'));
+          const sha = process.env.RETURN_STONE_SHA256;
+          const expectedId = `glb_${sha.slice(0, 48)}`;
+          const entry = catalog.entries?.find((candidate) => candidate.sha256 === sha);
+          if (!entry) throw new Error('RETURN_STONE_LIVE_CATALOG_MISSING');
+          if (entry.assetId !== expectedId) throw new Error('RETURN_STONE_ASSET_ID_MISMATCH');
+          const lodVariant = Array.isArray(entry.lods) ? entry.lods.find((variant) => variant.sha256 === sha) : null;
+          if (lodVariant?.bytes != null && lodVariant.bytes !== Number(process.env.RETURN_STONE_BYTES)) throw new Error('RETURN_STONE_LOD_BYTE_COUNT_MISMATCH');
+          if (entry.storageUrl !== `/api/assets/glb/${sha}.glb`) throw new Error('RETURN_STONE_STORAGE_URL_MISMATCH');
+          if (entry.purpose !== 'world-environment' || entry.assetType !== 'arena' || entry.subcategory !== 'teleporter' || entry.targetKey !== null) {
+            throw new Error('RETURN_STONE_CATALOG_CLASSIFICATION_MISMATCH');
+          }
+          fs.writeFileSync('return-stone-catalog-readback.json', `${JSON.stringify({
+            schemaVersion: 1,
+            recordType: 'aurion_return_stone_catalog_readback',
+            catalogRevision: catalog.revision,
+            asset: entry,
+          }, null, 2)}\n`);
+          NODE
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://arelogic.space/api/assets/glb/${RETURN_STONE_SHA256}.glb" \
+            --output return-stone-live.glb
+          test "$(wc -c < return-stone-live.glb | tr -d ' ')" = "${RETURN_STONE_BYTES}"
+          printf '%s  %s\n' "${RETURN_STONE_SHA256}" return-stone-live.glb | sha256sum --strict -c -
+
+      - name: Build and boot exact immutable candidate container
+        run: |
+          set -euo pipefail
+          export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
+          pnpm build:runtime-artifact
+          node scripts/build-aurion-traefik-runtime-artifact.mjs
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('dist-traefik-runtime/manifest.json', 'utf8'));
+          if (manifest.schemaVersion !== 1 || manifest.recordType !== 'aurion_traefik_runtime_artifact') throw new Error('RUNTIME_ARTIFACT_CONTRACT');
+          if (manifest.revision !== process.env.EXPECTED_HEAD) throw new Error('RUNTIME_ARTIFACT_REVISION_MISMATCH');
+          NODE
+          (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
+
+          image="echoes-of-aurion:pr-candidate-${EXPECTED_HEAD}"
+          app="aurion-pr-candidate-${GITHUB_RUN_ID}"
+          db="aurion-pr-candidate-db-${GITHUB_RUN_ID}"
+          network="aurion-pr-candidate-net-${GITHUB_RUN_ID}"
+          volume="aurion-pr-candidate-glb-${GITHUB_RUN_ID}"
+          password="$(openssl rand -hex 24)"
+          cleanup() {
+            docker rm --force "${app}" >/dev/null 2>&1 || true
+            docker rm --force "${db}" >/dev/null 2>&1 || true
+            docker volume rm "${volume}" >/dev/null 2>&1 || true
+            docker network rm "${network}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker network create "${network}" >/dev/null
+          docker volume create "${volume}" >/dev/null
+          docker run --detach \
+            --name "${db}" \
+            --network "${network}" \
+            --network-alias mariadb \
+            -e MARIADB_ROOT_PASSWORD="${password}" \
+            -e MARIADB_DATABASE=aurion_runtime \
+            -e MARIADB_USER=aurion_runtime \
+            -e MARIADB_PASSWORD="${password}" \
+            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1 >/dev/null
+
+          ready=0
+          for _attempt in $(seq 1 60); do
+            if docker exec -e MYSQL_PWD="${password}" "${db}" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "${ready}" = 1
+
+          docker build --pull=false --build-arg "AURION_RELEASE_SHA=${EXPECTED_HEAD}" --tag "${image}" dist-traefik-runtime
+          image_id="$(docker image inspect --format '{{.Id}}' "${image}")"
+          [[ "${image_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
+
+          docker run --detach \
+            --name "${app}" \
+            --network "${network}" \
+            --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
+            -e AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb \
+            -e "DATABASE_URL=mysql://aurion_runtime:${password}@mariadb:3306/aurion_runtime" \
+            "${image}" >/dev/null
+
+          runtime_ready=0
+          for _attempt in $(seq 1 60); do
+            health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "${app}")"
+            if [[ "${health}" == healthy ]]; then
+              if docker exec -e EXPECTED_HEAD="${EXPECTED_HEAD}" "${app}" node --input-type=module -e '
+                const response = await fetch("http://127.0.0.1:3000/healthz");
+                const body = await response.json();
+                if (!response.ok || body.status !== "ok" || body.service !== "echoes-of-aurion" || body.revision !== process.env.EXPECTED_HEAD) process.exit(1);
+              '; then
+                runtime_ready=1
+                break
+              fi
+            fi
+            if [[ "$(docker inspect --format '{{.State.Status}}' "${app}")" != running ]]; then break; fi
+            sleep 2
+          done
+          if [[ "${runtime_ready}" != 1 ]]; then
+            docker logs --tail 200 "${app}" >&2 || true
+            exit 1
+          fi
+
+          health_json="$(docker exec "${app}" node --input-type=module -e 'const r=await fetch("http://127.0.0.1:3000/healthz");process.stdout.write(await r.text())')"
+          IMAGE_ID="${image_id}" HEALTH_JSON="${health_json}" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const health = JSON.parse(process.env.HEALTH_JSON);
+          const receipt = {
+            schemaVersion: 1,
+            recordType: 'aurion_pr_runtime_candidate',
+            repository: process.env.GITHUB_REPOSITORY,
+            pullRequest: Number(process.env.GITHUB_REF_NAME?.split('/')[0] || 0) || null,
+            revision: process.env.EXPECTED_HEAD,
+            immutableImageId: process.env.IMAGE_ID,
+            health,
+            productionPromoted: false,
+          };
+          if (receipt.health.revision !== receipt.revision) throw new Error('CANDIDATE_HEALTH_REVISION_MISMATCH');
+          fs.writeFileSync('aurion-pr-runtime-candidate.json', `${JSON.stringify(receipt, null, 2)}\n`);
+          NODE
+
+          trap - EXIT
+          cleanup
+
+      - name: Publish revision-bound candidate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-pr-runtime-candidate-${{ github.event.pull_request.head.sha }}
+          path: |
+            aurion-pr-runtime-candidate.json
+            return-stone-revive-evidence.json
+            return-stone-catalog-readback.json
+            live-glb-catalog.json
+            dist-traefik-runtime/manifest.json
+            dist-traefik-runtime/checksums.sha256
+          if-no-files-found: error
+          retention-days: 30

@@ -4,10 +4,13 @@ import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { globalCausalPersistence } from "../causality/persistence";
 import { globalCausalArchivingService } from "../causality/archivingService";
 import { globalCrossZoneSyncService } from "../causality/crossZoneSynchronizationService";
+import { globalReadbackService } from "../causality/readbackService";
 import { replayZoneTick } from "../causality/replayZoneTick";
 import { isReplayMatch } from "../../shared/aurionReplayContract";
 
 export const causalityRouter = router({
+  getReadbackStatus: adminProcedure.query(() => globalReadbackService.getStatus()),
+
   getLatestReceipts: adminProcedure
     .input(z.object({ zoneId: z.string().optional() }).optional())
     .query(async ({ input }) => {
@@ -16,7 +19,6 @@ export const causalityRouter = router({
         const receipt = await globalCausalPersistence.getLatestReceipt(zoneId);
         return receipt ? [receipt] : [];
       }
-      // If no zoneId, we could list all, but for now let's just support specific zone or nothing
       return [];
     }),
 
@@ -53,17 +55,24 @@ export const causalityRouter = router({
   getCheckpoints: adminProcedure
     .input(z.object({ zoneId: z.string(), limit: z.number().int().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
-      const db = await getDb(); // Hack for now or make it public
+      const db = await getDb();
       if (!db) return [];
-      
-      const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
-      const { eq, desc, and } = await import("drizzle-orm");
 
-      return await db.select()
+      const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
+      const { eq, desc } = await import("drizzle-orm");
+
+      const checkpoints = await db.select()
         .from(aurionCausalCheckpoints)
         .where(eq(aurionCausalCheckpoints.zoneId, input.zoneId))
         .orderBy(desc(aurionCausalCheckpoints.tick))
         .limit(input.limit);
+
+      // Compatibility alias sourced only from the persisted canonical snapshot hash.
+      // It fixes the existing dashboard contract drift without inventing a second hash.
+      return checkpoints.map(checkpoint => Object.freeze({
+        ...checkpoint,
+        stateHash: checkpoint.snapshotHash,
+      }));
     }),
 
   getDivergentCheckpoints: adminProcedure
@@ -99,7 +108,7 @@ export const causalityRouter = router({
         .orderBy(desc(aurionCausalArchive.createdAt))
         .limit(input.limit);
     }),
-  
+
   triggerBackup: protectedProcedure
     .input(z.object({ zoneId: z.string().default("observatory_threshold") }))
     .mutation(async ({ input }) => {

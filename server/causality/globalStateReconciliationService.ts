@@ -8,6 +8,7 @@ import {
   ZoneProofReference,
   hashGlobalWorldCanonicalState 
 } from "../../shared/aurionGlobalWorldContract";
+import { operationalDate } from "../../shared/operationalClock";
 import { globalCausalPersistence } from "./persistence";
 import { globalReadbackService } from "./readbackService";
 
@@ -137,7 +138,7 @@ export class AurionGlobalStateReconciliationService {
     // expected by the client, but anchored in our new verified proof.
     const materializedSnapshot = {
       source: "causal_reconciliation",
-      verifiedAt: new Date().toISOString(),
+      verifiedAt: operationalDate().toISOString(),
       worldSeed: epoch.worldSeed || "echoes-of-aurion-v1",
       epoch: epoch.epoch,
       activePlayerCount: epoch.activePlayerCount || 1,

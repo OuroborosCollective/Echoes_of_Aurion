@@ -39,6 +39,20 @@ export interface CausalPersistenceAdapter {
   getArchiveStats(zoneId: string): Promise<{ totalArchives: number; totalArchivedReceipts: number }>;
 }
 
+function clonePlainValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function snapshotRecordedEntry(entry: RecordedTickEntry): RecordedTickEntry {
+  return {
+    receipt: { ...entry.receipt },
+    preState: entry.preState ? clonePlainValue(entry.preState) : undefined,
+    postState: entry.postState ? clonePlainValue(entry.postState) : undefined,
+    intents: entry.intents ? clonePlainValue(entry.intents) : undefined,
+    transitionSummary: entry.transitionSummary ? clonePlainValue(entry.transitionSummary) : undefined,
+  };
+}
+
 export class AurionTickRecorder {
   private readonly maxEntries: number;
   private readonly receiptsByZone = new Map<string, RecordedTickEntry[]>();
@@ -70,7 +84,8 @@ export class AurionTickRecorder {
   }
 
   record(entry: RecordedTickEntry): void {
-    const zoneId = entry.receipt.zoneId;
+    const storedEntry = snapshotRecordedEntry(entry);
+    const zoneId = storedEntry.receipt.zoneId;
     let list = this.receiptsByZone.get(zoneId);
     if (!list) {
       list = [];
@@ -82,8 +97,8 @@ export class AurionTickRecorder {
       this.receiptsByZoneAndTick.set(zoneId, map);
     }
 
-    list.push(entry);
-    map.set(entry.receipt.tick, entry);
+    list.push(storedEntry);
+    map.set(storedEntry.receipt.tick, storedEntry);
 
     if (list.length > this.maxEntries) {
       const removed = list.shift();
@@ -190,7 +205,6 @@ export class AurionTickRecorder {
         }
       }
     }
-
     return { valid: true };
   }
 }

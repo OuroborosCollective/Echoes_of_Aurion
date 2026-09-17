@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Wrench, ShieldAlert, CheckCircle2, History } from "lucide-react";
+import { AlertTriangle, Wrench, ShieldAlert, History } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CausalRecoveryDashboard() {
@@ -12,10 +10,10 @@ export default function CausalRecoveryDashboard() {
   const triggerRollback = trpc.causality.triggerAutomaticRollback.useMutation({
     onSuccess: (success) => {
       if (success) {
-        toast.success("The zone was successfully repaired from the last known good checkpoint.");
+        toast.success("The zone was successfully restored from the last known good checkpoint.");
         statusQuery.refetch();
       } else {
-        toast.error("Could not find a valid reconciled checkpoint to rollback to.");
+        toast.error("Could not find a valid reconciled checkpoint to restore from.");
       }
     }
   });
@@ -28,7 +26,7 @@ export default function CausalRecoveryDashboard() {
             <AlertTriangle className="h-5 w-5 text-red-500" /> Causal Recovery & World Repair
           </CardTitle>
           <CardDescription>
-            Automatic rollback and manual determinism divergence repair tools (Step 20).
+            Checkpoint restoration and determinism divergence repair tools (Step 20).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -40,7 +38,7 @@ export default function CausalRecoveryDashboard() {
                 <p className="text-xs text-red-300/70">Monitors the causal timeline for logical divergence.</p>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between mt-2">
               <div className="flex gap-4">
                 <div className="flex flex-col">
@@ -53,15 +51,15 @@ export default function CausalRecoveryDashboard() {
                 </div>
               </div>
 
-              <Button 
-                variant="destructive" 
-                size="sm" 
+              <Button
+                variant="destructive"
+                size="sm"
                 className="gap-2"
                 disabled={triggerRollback.isPending}
                 onClick={() => triggerRollback.mutate({ zoneId })}
               >
                 <Wrench className="h-4 w-4" />
-                Trigger Safe Revert
+                Restore Checkpoint
               </Button>
             </div>
           </div>
@@ -71,10 +69,10 @@ export default function CausalRecoveryDashboard() {
               <History className="h-4 w-4" /> Recovery Protocol
             </h4>
             <ul className="list-disc pl-4 space-y-1">
-              <li>When a <b>Determinism Divergence</b> is detected during readback, the system automatically flags the epoch.</li>
-              <li>A <b>Safe Revert</b> finds the last known <i>reconciled</i> checkpoint for the affected zone.</li>
-              <li>The world state is restored to this checkpoint, and all subsequent divergent causal receipts are pruned.</li>
-              <li>Clients automatically re-sync with the restored readmodel on their next heartbeat.</li>
+              <li>When a <b>Determinism Divergence</b> is detected during readback, the system records the mismatch.</li>
+              <li>A <b>Checkpoint Restore</b> finds the latest reconciled checkpoint for the affected zone.</li>
+              <li>The canonical zone state is restored from that checkpoint while later receipts and checkpoints remain append-only evidence rather than being deleted.</li>
+              <li>Subsequent authoritative ticks continue from the restored state and produce a new receipt chain that can be compared with the preserved history.</li>
             </ul>
           </div>
         </CardContent>

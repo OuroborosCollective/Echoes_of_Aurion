@@ -2,6 +2,7 @@ import {
   type AurionCausalTickReceipt,
 } from "../../shared/aurionCausalTickContract";
 import { type ReplayVerdict, isReplayMatch } from "../../shared/aurionReplayContract";
+import { operationalDate } from "../../shared/operationalClock";
 import { replayZoneTick } from "./replayZoneTick";
 import { globalTickRecorder, type RecordedTickEntry, type CausalPersistenceAdapter } from "./tickRecorder";
 import { globalCausalPersistence } from "./persistence";
@@ -93,7 +94,7 @@ export class AurionCausalReadbackService {
       zoneId,
       tick: nextTick,
       verdict,
-      verifiedAt: new Date(),
+      verifiedAt: operationalDate(),
     };
 
     this.recordVerification(verification);

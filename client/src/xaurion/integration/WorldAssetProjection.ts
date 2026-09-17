@@ -9,7 +9,7 @@ import { requireDecodedMaterialTextures } from "../core/GlbTextureEvidence";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import { worldAssetById, worldAssetLod, worldAssetRegionSchema, type WorldAssetPlacement, type WorldAssetRegion } from "@shared/worldAssetProtocol";
 
-type Selection = { placement: WorldAssetPlacement; key: string; lod: 0|1|2; distance: number };
+type Selection = { placement: WorldAssetPlacement; key: string; lod: 0|1|2; distance: number; visible: boolean };
 type Cached = { gltf: GLTF; access: number; textures: Set<string>; releaseBudget: ()=>void; format: string; drawn: boolean };
 const shippingById = new Map(shipping.manifest.assets.map(asset=>[asset.asset,asset]));
 function disposeModel(gltf: GLTF, preserveTextures=false) {
@@ -27,7 +27,6 @@ async function decodeModel(loader:GLTFLoader,bytes:ArrayBuffer,signal:AbortSigna
 /** View-only projection of the authenticated, versioned server placement plan. */
 export class WorldAssetProjection {
  readonly root=new THREE.Group();
- private readonly loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
  private readonly cache=new Map<string,Cached>();
  private readonly sharedTextures=new Map<string,{texture:THREE.Texture;refs:number}>();
  private renderedKey="";
@@ -52,9 +51,9 @@ export class WorldAssetProjection {
  };
  constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
-  // The factory supplies an initialized Three renderer; RuntimeRenderer exposes
-  // only the methods used by the engine, while the loader also reads capabilities.
-  if(this.renderer){try{this.ktx.detectSupport(this.renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.loader.setKTX2Loader(this.ktx);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
+  // Detect KTX2 support once, but do not attach the decoder to a shared GLTFLoader.
+  // A failed KTX2 worker must never poison the separately hash-verified raster fallback.
+  if(this.renderer){try{this.ktx.detectSupport(this.renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
   if(typeof window!=="undefined")window.addEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);
  }
  update(delta:number,position:{x:number;z:number},viewportWidth:number){
@@ -65,16 +64,26 @@ export class WorldAssetProjection {
  }
  private select(position:{x:number;z:number},width:number){
   if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width)],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
-  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!;const distance=Math.hypot(placement.xMm/1000-this.camera.position.x,placement.zMm/1000-this.camera.position.z,this.camera.position.y-this.terrain(placement.xMm/1000,placement.zMm/1000));const height=(asset.bounds.max[1]!-asset.bounds.min[1]!)*asset.scale;const previous=this.previousLod.get(placement.id);
+  // Selection is presentation-only. Under a tight asset budget, use the same
+  // anchored footprint as rebuild() and prioritize actually visible placements
+  // instead of nearby models behind/outside the camera.
+  this.camera.updateMatrixWorld();
+  const frustum=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix,this.camera.matrixWorldInverse));
+  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!,x=placement.xMm/1000,z=placement.zMm/1000,y=this.terrain(x,z);const distance=Math.hypot(x-this.camera.position.x,z-this.camera.position.z,this.camera.position.y-y);const bounds=asset.bounds,height=(bounds.max[1]!-bounds.min[1]!)*asset.scale,extentX=(bounds.max[0]!-bounds.min[0]!)*asset.scale,extentZ=(bounds.max[2]!-bounds.min[2]!)*asset.scale,rotated=(placement.rotation&1)===1,halfX=(rotated?extentZ:extentX)/2,halfZ=(rotated?extentX:extentZ)/2;const visible=frustum.intersectsBox(new THREE.Box3(new THREE.Vector3(x-halfX,y,z-halfZ),new THREE.Vector3(x+halfX,y+height,z+halfZ)));const previous=this.previousLod.get(placement.id);
    let lod:0|1|2;
    if(this.pressure){const residentPrevious=previous!==undefined&&this.cache.has(`${placement.assetId}:${previous}`);lod=residentPrevious?previous:2;}
    else {lod=worldAssetLod(height,distance,this.camera.fov,phone);if(previous!==undefined&&previous!==lod){const stable=worldAssetLod(height,distance*(lod>previous?0.9:1.1),this.camera.fov,phone);if(stable!==lod)lod=previous;}}
-   this.previousLod.set(placement.id,lod);return {placement,lod,distance,key:`${placement.assetId}:${lod}`};})
-   .filter(s=>s.distance<this.camera.far*0.9).sort((a,b)=>a.distance-b.distance||a.placement.id.localeCompare(b.placement.id));
+   this.previousLod.set(placement.id,lod);return {placement,lod,distance,visible,key:`${placement.assetId}:${lod}`};})
+   .filter(s=>s.distance<this.camera.far*0.9).sort((a,b)=>Number(b.visible)-Number(a.visible)||a.distance-b.distance||a.placement.id.localeCompare(b.placement.id));
   const keys=new Set<string>();this.selected=[];
   for(const entry of selection){if(!keys.has(entry.key)&&keys.size>=limit)continue;keys.add(entry.key);this.selected.push(entry);if(this.selected.length>=Math.floor(budget.worldInstances/(this.pressure?2:1)))break;}
   for(const key of [...this.previousLod.keys()])if(!selection.some(s=>s.placement.id===key))this.previousLod.delete(key);
   this.trim(this.pressure?0:budget.worldCache);this.rebuild();this.pump();
+ }
+ private loaderFor(format:string):GLTFLoader{
+  const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  if(format==="ktx2")loader.setKTX2Loader(this.ktx);
+  return loader;
  }
  private pump(){
   if(this.disposed)return;
@@ -84,7 +93,10 @@ export class WorldAssetProjection {
    const shipped=shippingById.get(s.placement.assetId)?.lods[s.lod];
    if(shipped&&(shipped.sourceSha256!==baseline.sha256||shipping.manifest.sourceBinding.catalogHash!==this.region?.catalogHash||shipping.manifest.sourceBinding.collisionHash!==this.region?.collisionHash))throw Error("WORLD_SHIPPING_BINDING");
    const convert=(spec:NonNullable<typeof shipped>)=>({...spec,url:`/world-shipping/${spec.file}`});
-   const variants=shipped?[...(this.ktxEnabled?[convert(shipped)]:[]),{...shipped.fallback,url:`/world-shipping/${shipped.fallback.file}`}]:[{...baseline,format:"legacy"}];
+   // Recovery remains hash-bound at every stage: compressed KTX2, the separately
+   // verified WebP shipping fallback, then the canonical source LOD from the
+   // authenticated world catalog if browser blob decoding itself is unavailable.
+   const variants=shipped?[...(this.ktxEnabled?[convert(shipped)]:[]),{...shipped.fallback,url:`/world-shipping/${shipped.fallback.file}`},{...baseline,format:"catalog-raster"}]:[{...baseline,format:"legacy"}];
    const request=new AbortController();this.requests.add(request);
    const signal=AbortSignal.any([request.signal,AbortSignal.timeout(20_000)]);
    void glbResourcePool.job(Math.max(...variants.map(spec=>spec.bytes)),async()=>{
@@ -96,7 +108,7 @@ export class WorldAssetProjection {
       if(allocation.animations||json.skins?.length)throw Error("STATIC_WORLD_ASSET_REQUIRED");
       releaseBudget=glbResourcePool.reserve(allocation);
       if(!releaseBudget){this.pressure=true;this.budgetDeferred.add(s.key);return;}
-      const started=performance.now(),gltf=await decodeModel(this.loader,bytes,signal);parsed=gltf;glbResourcePool.decodedModel(performance.now()-started);
+      const started=performance.now(),gltf=await decodeModel(this.loaderFor(spec.format),bytes,signal);parsed=gltf;glbResourcePool.decodedModel(performance.now()-started);
       if(this.disposed||signal.aborted){disposeModel(gltf);releaseBudget();return;}
       requireDecodedMaterialTextures(gltf,json);
       gltf.scene.updateMatrixWorld(true);const textures=this.adoptTextures(gltf,json,spec.textureHashes);
@@ -107,9 +119,9 @@ export class WorldAssetProjection {
       if(parsed)disposeModel(parsed);
       releaseBudget?.();
       if(index===variants.length-1||signal.aborted)throw error;
-      // A failed actual decode/format selects only the separately hash-verified
-      // alternative from the same source/LOD family.
-      this.ktxEnabled=false;
+      // A failed KTX2 decode disables future compressed attempts for this projection.
+      // Later candidates still use fresh GLTFLoader instances and immutable hashes.
+      if(spec.format==="ktx2")this.ktxEnabled=false;
      }
     }
    }).catch(error=>{if(!this.disposed){if(error instanceof Error&&error.message.includes("BUDGET")){this.pressure=true;this.budgetDeferred.add(s.key);}else this.failed.add(s.key);}}).finally(()=>{this.loading.delete(s.key);this.requests.delete(request);if(!this.disposed){this.rebuild();this.pump();}});

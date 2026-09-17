@@ -6,6 +6,7 @@ import {
   validConfirmedZoneResourceSnapshot,
 } from "@shared/zoneResourceContract";
 import { AX1_ECOLOGY_SOURCE_REVISION } from "@shared/ax1ResourceEcologyProtocol";
+import type { CanonicalResourceState } from "./causality/zoneCanonicalState";
 
 /** AX1 source semantics were a 60 second respawn. At the zone's 100 ms fixed tick this is exactly 600 ticks. */
 export const AX1_RESOURCE_RESPAWN_TICKS = 600 as const;
@@ -78,6 +79,35 @@ export class ZoneResourceRuntime {
       throw new Error("ZONE_RESOURCE_SNAPSHOT_INVALID");
     }
     return snapshot;
+  }
+
+  /**
+   * Restore the resource fields already covered by CanonicalZoneState. Replay
+   * fails closed on unknown/missing nodes or contradictory depletion metadata.
+   */
+  public restoreCanonicalStates(resources: readonly CanonicalResourceState[]): void {
+    if (resources.length !== this.states.size) throw new Error("ZONE_RESOURCE_RESTORE_COUNT_INVALID");
+    const seen = new Set<string>();
+    for (const resource of resources) {
+      const state = this.states.get(resource.nodeId);
+      if (!state || seen.has(resource.nodeId)) throw new Error("ZONE_RESOURCE_RESTORE_IDENTITY_INVALID");
+      seen.add(resource.nodeId);
+      if (resource.resourceType !== "ecology_node") throw new Error("ZONE_RESOURCE_RESTORE_TYPE_INVALID");
+      if (!Number.isSafeInteger(resource.remainingGathers) || resource.remainingGathers < 0 || resource.remainingGathers > state.capacity)
+        throw new Error("ZONE_RESOURCE_RESTORE_REMAINING_INVALID");
+      if (!Number.isSafeInteger(resource.respawnTick) || resource.respawnTick < 0)
+        throw new Error("ZONE_RESOURCE_RESTORE_RESPAWN_INVALID");
+      const depleted = resource.state === "depleted";
+      if (depleted !== (resource.remainingGathers === 0))
+        throw new Error("ZONE_RESOURCE_RESTORE_STATE_INVALID");
+      if (depleted && resource.respawnTick === 0)
+        throw new Error("ZONE_RESOURCE_RESTORE_DEPLETED_TICK_INVALID");
+      if (!depleted && resource.respawnTick !== 0)
+        throw new Error("ZONE_RESOURCE_RESTORE_READY_TICK_INVALID");
+      state.remaining = resource.remainingGathers;
+      state.depleted = depleted;
+      state.respawnAtTick = depleted ? resource.respawnTick : null;
+    }
   }
 
   /**
