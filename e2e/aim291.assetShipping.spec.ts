@@ -6,6 +6,28 @@ const shipping = JSON.parse(await readFile(new URL("../shared/worldAssetShipping
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable authenticated MariaDB");
 const assets = async (page: Page) => JSON.parse(await page.getByTestId("world-assets-evidence").getAttribute("data-presentation") ?? "null");
 
+/**
+ * AIM-291 must prove an actual render, not merely a successful decode. The
+ * confirmed spawn plan puts the shipped city-foundation asset at (-8m,+24m),
+ * behind the default +Z follow camera. Orbit through the real MMOEngine mouse
+ * handlers so the shipped asset is inside the view before asserting onAfterRender.
+ */
+async function faceShippedCityAsset(page: Page): Promise<void> {
+  await page.locator("#threejs-canvas").waitFor({state: "visible"});
+  await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("#threejs-canvas");
+    if (!canvas) throw new Error("AIM291_CANVAS_REQUIRED");
+    const rect = canvas.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    // MMOEngine: cameraYaw -= deltaX * 0.006. A negative half-turn mouse delta
+    // therefore moves the follow camera to -Z and looks toward the +Z asset.
+    const targetX = x - Math.PI / 0.006;
+    canvas.dispatchEvent(new MouseEvent("mousedown", {bubbles: true, button: 0, buttons: 1, clientX: x, clientY: y}));
+    window.dispatchEvent(new MouseEvent("mousemove", {bubbles: true, buttons: 1, clientX: targetX, clientY: y}));
+    window.dispatchEvent(new MouseEvent("mouseup", {bubbles: true, button: 0, buttons: 0, clientX: targetX, clientY: y}));
+  });
+}
+
 async function chromiumRssBytes(): Promise<number> {
   const pids = (await readdir("/proc")).filter(name => /^\d+$/.test(name));
   const values = await Promise.all(pids.map(async pid => {
@@ -44,6 +66,7 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
       const compressed = await enterAx1(page);
       await page.mouse.move(profile.width/2, profile.height/2);
       await page.mouse.wheel(0, 1200);
+      await faceShippedCityAsset(page);
       await expect.poll(async () => (await assets(page))?.shipping.ktxModels ?? 0, {timeout: 90_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.shipping.textures.transcodedMipPayloadBytes ?? 0, {timeout: 60_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.loading, {timeout: 60_000}).toBe(0);
@@ -67,6 +90,7 @@ for (const profile of [{name: "phone", width: 412, height: 915}, {name: "tablet"
       const fallback = await enterAx1(page);
       await page.mouse.move(profile.width/2, profile.height/2);
       await page.mouse.wheel(0, 1200);
+      await faceShippedCityAsset(page);
       await expect.poll(async () => (await assets(page))?.shipping.fallbackCount ?? 0, {timeout: 90_000}).toBeGreaterThan(0);
       await expect.poll(async () => (await assets(page))?.loading, {timeout: 60_000}).toBe(0);
       await expect.poll(async () => (await assets(page))?.shipping.drawnFallbackModels ?? 0, {timeout: 30_000}).toBeGreaterThan(0);
