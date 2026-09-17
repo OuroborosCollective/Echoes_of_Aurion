@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GlbCatalogEntry, GlbRuntimeCatalog } from "@shared/glbImportContract";
-import { publicPlayerCharacterCatalog, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk } from "./UploadedAssetRuntime";
+import { AURION_RETURN_STONE_ASSET_ID, AURION_RETURN_STONE_SOURCE_SHA256 } from "@shared/aurionReturnStoneContract";
+import { publicPlayerCharacterCatalog, returnStoneCatalogAsset, returnStoneVisualPlacement, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk } from "./UploadedAssetRuntime";
 
 const sha = (digit: string) => digit.repeat(64);
 function entry(values: Partial<GlbCatalogEntry> & Pick<GlbCatalogEntry, "assetId" | "purpose" | "assetType">): GlbCatalogEntry {
@@ -18,6 +19,19 @@ function entry(values: Partial<GlbCatalogEntry> & Pick<GlbCatalogEntry, "assetId
 }
 function catalog(entries: GlbCatalogEntry[], revision = sha("f")): GlbRuntimeCatalog {
   return { version: "aurion.glb-import.v1", revision, entries };
+}
+
+function returnStoneEntry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
+  return entry({
+    assetId: AURION_RETURN_STONE_ASSET_ID,
+    sha256: AURION_RETURN_STONE_SOURCE_SHA256,
+    storageUrl: `/api/assets/glb/${AURION_RETURN_STONE_SOURCE_SHA256}.glb`,
+    displayName: "World Environment · teleporter · Aurion Return Stone",
+    purpose: "world-environment",
+    assetType: "arena",
+    subcategory: "teleporter",
+    ...overrides,
+  });
 }
 
 describe("uploaded GLB runtime selection", () => {
@@ -45,10 +59,30 @@ describe("uploaded GLB runtime selection", () => {
     expect(selectEquipmentCatalogAsset(source, "boots", "item:boots:42")).toBeNull();
   });
 
+  it("binds the owner return-stone GLB only by exact immutable catalog identity", () => {
+    const approved = returnStoneEntry();
+    const source = catalog([
+      approved,
+      returnStoneEntry({ assetId: "glb_wrong_identity" }),
+      returnStoneEntry({ sha256: sha("9"), storageUrl: `/api/assets/glb/${sha("9")}.glb` }),
+      entry({ assetId: "glb_other_portal", purpose: "world-environment", assetType: "arena", subcategory: "teleporter" }),
+    ]);
+    expect(returnStoneCatalogAsset(source)).toEqual(approved);
+    expect(returnStoneVisualPlacement(source)).toMatchObject({
+      asset: approved,
+      xMm: 0,
+      zMm: 0,
+      rotationQuarterTurns: 0,
+    });
+    expect(returnStoneCatalogAsset(catalog([returnStoneEntry({ purpose: "auto" })]))).toBeNull();
+    expect(returnStoneCatalogAsset(catalog([returnStoneEntry({ subcategory: "fountain" })]))).toBeNull();
+  });
+
   it("keeps uploaded world visuals deterministic, purpose-separated and away from the central cross", () => {
     const source = catalog([
       entry({ assetId: "glb_house", purpose: "world-environment", assetType: "arena" }),
       entry({ assetId: "glb_fountain", purpose: "world-environment", assetType: "arena" }),
+      returnStoneEntry(),
       entry({ assetId: "glb_tree", purpose: "world-nature", assetType: "arena" }),
       entry({ assetId: "glb_rock", purpose: "world-nature", assetType: "arena" }),
     ]);
@@ -57,6 +91,7 @@ describe("uploaded GLB runtime selection", () => {
     expect(repeat).toEqual(settlement);
     expect(settlement.length).toBeGreaterThan(0);
     expect(settlement.every(value => value.asset.purpose === "world-environment")).toBe(true);
+    expect(settlement.every(value => value.asset.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256)).toBe(true);
     expect(settlement.every(value => Math.abs(value.xMm) >= 24_000 || Math.abs(value.zMm) >= 24_000)).toBe(true);
 
     const nature = uploadedWorldVisualsForChunk(source, { x: 2, z: 2 });
