@@ -1,37 +1,15 @@
-import { createHash } from "node:crypto";
+import { canonicalJson, canonicalSha256 } from "./aurionCanonicalHash";
 
 /**
- * Ensures deterministic stringification by sorting object keys recursively
- * and dropping non-canonical metadata (like wall-clock time, sockets, or renderer refs).
+ * Backwards-compatible alias for the single Aurion canonical encoder.
+ * Domain-specific code must remove operational metadata before calling this
+ * function; the generic encoder never silently drops fields.
  */
 export function canonicalEncode(data: unknown): string {
-  return JSON.stringify(sortKeysRecursive(data));
+  return canonicalJson(data);
 }
 
-function sortKeysRecursive(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(sortKeysRecursive);
-  }
-
-  const sortedObj: Record<string, unknown> = {};
-  const keys = Object.keys(value as Record<string, unknown>).sort();
-
-  for (const key of keys) {
-    // Exclude volatile fields that must not affect the canonical state hash
-    if (["socket", "ws", "socketId", "renderer", "wallClock", "lastPing", "timeoutId", "arrivalSeq"].includes(key)) {
-      continue;
-    }
-    sortedObj[key] = sortKeysRecursive((value as Record<string, unknown>)[key]);
-  }
-
-  return sortedObj;
-}
-
+/** Returns the unprefixed SHA-256 hex form for legacy callers. */
 export function computeCanonicalHash(data: unknown): string {
-  const canonicalString = canonicalEncode(data);
-  return createHash("sha256").update(canonicalString).digest("hex");
+  return canonicalSha256(data).slice("sha256:".length);
 }

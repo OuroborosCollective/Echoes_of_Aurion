@@ -52,6 +52,7 @@ on:
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
       - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0047_aurion_world_context_capsules.sql"
+      - "drizzle/0048_aurion_causal_evidence.sql"
   push:
     branches: [main]
     paths:
@@ -104,6 +105,7 @@ on:
       - "drizzle/0045_aurion_deterministic_quest_compiler.sql"
       - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0047_aurion_world_context_capsules.sql"
+      - "drizzle/0048_aurion_causal_evidence.sql"
 
 permissions:
   contents: read

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
-import type { ZoneServerMessage, ZoneSnapshot } from "./zoneProtocol";
+import type { ZoneId, ZoneServerMessage, ZoneSnapshot } from "./zoneProtocol";
 import { AuthoritativeMovementZone } from "./zoneRuntime";
 
 function recordingSocket() {
@@ -19,10 +19,14 @@ function recordingSocket() {
   return { socket, messages, bytes, snapshot };
 }
 
+function isolatedTestZone(suffix: string): ZoneId {
+  return `observatory_threshold:${suffix}` as unknown as ZoneId;
+}
+
 // Transport recording is a unit-test seam; zone state and readbacks use the actual implementation.
 describe("immediate zone peer readbacks", () => {
   it("includes a newly authenticated peer in its welcome before the first tick", () => {
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(isolatedTestZone("peer-welcome"));
     const peer = recordingSocket();
     const welcome = zone.join({ userId: 2, socket: peer.socket });
     expect(welcome.presences.map(value => value.entityId)).toEqual(["player:2"]);
@@ -31,7 +35,7 @@ describe("immediate zone peer readbacks", () => {
   });
 
   it("keeps join and leave readbacks sorted and current without advancing the tick", () => {
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(isolatedTestZone("peer-membership"));
     const a = recordingSocket(), b = recordingSocket();
     const first = zone.join({ userId: 2, socket: a.socket });
     const second = zone.join({ userId: 10, socket: b.socket });
@@ -44,7 +48,7 @@ describe("immediate zone peer readbacks", () => {
   });
 
   it("does not resurrect a retired connection through the cached projection", () => {
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(isolatedTestZone("peer-reconnect"));
     const old = recordingSocket(), next = recordingSocket();
     const first = zone.join({ userId: 2, socket: old.socket });
     zone.submitMovement(first.connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
@@ -59,7 +63,7 @@ describe("immediate zone peer readbacks", () => {
   });
 
   it("sends snapshots only to open peers and uses identical bytes for every recipient", () => {
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(isolatedTestZone("peer-broadcast"));
     const a = recordingSocket(), b = recordingSocket();
     zone.join({ userId: 1, socket: a.socket });
     zone.join({ userId: 2, socket: b.socket });
@@ -71,8 +75,9 @@ describe("immediate zone peer readbacks", () => {
   });
 
   it("replays identical movement and membership inputs to identical projected state", () => {
+    const zoneId = isolatedTestZone("peer-deterministic-replay");
     const replay = () => {
-      const zone = new AuthoritativeMovementZone("observatory_threshold");
+      const zone = new AuthoritativeMovementZone(zoneId);
       const a = recordingSocket(), b = recordingSocket();
       const first = zone.join({ userId: 2, socket: a.socket });
       zone.join({ userId: 10, socket: b.socket });

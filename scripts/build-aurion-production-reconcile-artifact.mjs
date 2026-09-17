@@ -23,6 +23,7 @@ const tags = [
   "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
   "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
   "0047_aurion_world_context_capsules",
+  "0048_aurion_causal_evidence",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [
@@ -35,60 +36,27 @@ const deployFiles = [
   "verify-aurion-production-schema-reconcile-artifact.mjs",
 ];
 
-if (!/^[a-f0-9]{40}$/.test(revision)) {
-  throw new Error("AURION_RELEASE_SHA must be the exact 40-character source revision");
-}
-
+if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error("AURION_RELEASE_SHA must be the exact 40-character source revision");
 const sha256 = async filePath => createHash("sha256").update(await readFile(filePath)).digest("hex");
-
 await rm(out, { recursive: true, force: true });
 await mkdir(bin, { recursive: true });
 await mkdir(drizzle, { recursive: true });
 await mkdir(deploy, { recursive: true });
-
 await execFileAsync(path.join(root, "node_modules", ".bin", "esbuild"), [
-  path.join(root, "scripts", "reconcile-aurion-production-schema.ts"),
-  "--bundle",
-  "--platform=node",
-  "--target=node22",
-  "--format=cjs",
-  `--outfile=${path.join(bin, "reconcile.cjs")}`,
+  path.join(root, "scripts", "reconcile-aurion-production-schema.ts"), "--bundle", "--platform=node", "--target=node22", "--format=cjs", `--outfile=${path.join(bin, "reconcile.cjs")}`,
 ]);
-
-for (const tag of contractTags) {
-  await copyFile(path.join(root, "drizzle", `${tag}.sql`), path.join(drizzle, `${tag}.sql`));
-}
-for (const filename of deployFiles) {
-  await copyFile(path.join(root, "deploy", filename), path.join(deploy, filename));
-}
-
-const relativeFiles = [
-  "bin/reconcile.cjs",
-  ...contractTags.map(tag => `drizzle/${tag}.sql`),
-  ...deployFiles.map(filename => `deploy/${filename}`),
-];
+for (const tag of contractTags) await copyFile(path.join(root, "drizzle", `${tag}.sql`), path.join(drizzle, `${tag}.sql`));
+for (const filename of deployFiles) await copyFile(path.join(root, "deploy", filename), path.join(deploy, filename));
+const relativeFiles = ["bin/reconcile.cjs", ...contractTags.map(tag => `drizzle/${tag}.sql`), ...deployFiles.map(filename => `deploy/${filename}`)];
 const files = {};
 for (const relative of relativeFiles) {
   const absolute = path.join(out, relative);
   const content = await readFile(absolute);
   files[relative] = { bytes: content.length, sha256: await sha256(absolute) };
 }
-
-const manifest = {
-  schemaVersion: 1,
-  recordType: "aurion_production_schema_reconcile_artifact",
-  revision,
-  nodeTarget: "node22",
-  moduleFormat: "commonjs",
-  mode: "read_only",
-  files,
-};
+const manifest = { schemaVersion: 1, recordType: "aurion_production_schema_reconcile_artifact", revision, nodeTarget: "node22", moduleFormat: "commonjs", mode: "read_only", files };
 await writeFile(path.join(out, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o644 });
-
 const checksumLines = [];
-for (const relative of ["manifest.json", ...relativeFiles]) {
-  checksumLines.push(`${await sha256(path.join(out, relative))}  ${relative}`);
-}
+for (const relative of ["manifest.json", ...relativeFiles]) checksumLines.push(`${await sha256(path.join(out, relative))}  ${relative}`);
 await writeFile(path.join(out, "checksums.sha256"), `${checksumLines.join("\n")}\n`, { mode: 0o644 });
-
 console.log(JSON.stringify({ revision, artifact: "dist-production-reconcile", files: Object.keys(files).length }));

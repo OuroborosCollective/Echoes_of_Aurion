@@ -22,68 +22,36 @@ const NO_FROZEN_MOBS: ReadonlySet<string> = new Set<string>();
 const CANONICAL_MOB_STATES = new Set<ZoneMobState>(["idle", "patrolling", "combat", "evading", "dead"]);
 
 function sameMob(left: ConfirmedZoneMob, right: ConfirmedZoneMob): boolean {
-  return (
-    left.entityId === right.entityId &&
-    left.state === right.state &&
-    left.position.x === right.position.x &&
-    left.position.z === right.position.z &&
-    left.targetEntityId === right.targetEntityId &&
-    left.health === right.health &&
-    left.maxHealth === right.maxHealth
-  );
+  return left.entityId === right.entityId && left.state === right.state && left.position.x === right.position.x && left.position.z === right.position.z && left.targetEntityId === right.targetEntityId && left.health === right.health && left.maxHealth === right.maxHealth;
 }
 
-/** Concrete geometry adapter only; sweep sequencing belongs to WASD. */
-export function resolveMobCollisionMovement(
-  from: Readonly<{ x: number; z: number }>,
-  desired: Readonly<{ x: number; z: number }>
-) {
-  return resolveWasdMobCollisionMovement(from, desired, (current, target) =>
-    worldNatureCollision.resolve(current, target)
-  );
+export function resolveMobCollisionMovement(from: Readonly<{ x: number; z: number }>, desired: Readonly<{ x: number; z: number }>) {
+  return resolveWasdMobCollisionMovement(from, desired, (current, target) => worldNatureCollision.resolve(current, target));
 }
 
-/** Server orchestration: AX1 content + WASD state transitions + persisted world geometry. */
+/** Aurion-hosted mob runtime; donor formulas remain historical provenance. */
 export class ZoneMobRuntime {
   private readonly states = new Map<string, MobRuntimeState>();
-  private readonly orderedEntityIds: string[] = [];
+  private readonly orderedEntityIds: string[];
+
   constructor() {
-    observatoryMobDefinitions.forEach(definition =>
-      this.states.set(
-        definition.entityId,
-        initialMobRuntimeState(definition, 0)
-      )
-    );
+    for (const definition of observatoryMobDefinitions) this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
     this.orderedEntityIds = Array.from(this.states.keys()).sort();
   }
 
-  tick(
-    presences: readonly ConfirmedZonePresence[],
-    tick: number,
-    frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS
-  ): boolean {
+  tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
     let changed = false;
     for (const entityId of this.orderedEntityIds) {
-      const current = this.states.get(entityId)!,
-        before = publicMobSnapshot(current);
-      const next = frozenEntityIds.has(entityId)
-        ? current
-        : resolveMobFsmTick({
-            current,
-            presences,
-            tick,
-            resolveMovement: resolveMobCollisionMovement,
-          });
+      const current = this.states.get(entityId)!;
+      const before = publicMobSnapshot(current);
+      const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
       this.states.set(entityId, next);
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }
     return changed;
   }
 
-  applyCombatState(
-    entityId: string,
-    values: { health: number; stamina?: number; nextAttackTick?: number }
-  ): MobRuntimeState | undefined {
+  applyCombatState(entityId: string, values: { health: number; stamina?: number; nextAttackTick?: number }): MobRuntimeState | undefined {
     const current = this.states.get(entityId);
     if (!current) return undefined;
     const next = applyMobCombatState(current, values);
@@ -91,57 +59,41 @@ export class ZoneMobRuntime {
     return next;
   }
 
-  /**
-   * Restore every mob field that already belongs to the canonical zone-state
-   * contract. Hidden deterministic FSM fields remain on their original seeded
-   * values; no new receipt/hash schema is invented during replay repair.
-   */
+  /** Replay restoration is fail-closed and covers every mutable FSM field in CanonicalZoneState. */
   restoreCanonicalState(mob: CanonicalMobState): MobRuntimeState {
     const current = this.states.get(mob.entityId);
     if (!current || mob.mobId !== mob.entityId) throw new Error("ZONE_MOB_RESTORE_IDENTITY_INVALID");
-    if (mob.archetype !== undefined && mob.archetype !== current.definition.archetype)
-      throw new Error("ZONE_MOB_RESTORE_ARCHETYPE_INVALID");
-    if (mob.maxHealth !== current.definition.maxHealth)
-      throw new Error("ZONE_MOB_RESTORE_MAX_HEALTH_INVALID");
-    if (!Number.isSafeInteger(mob.x) || !Number.isSafeInteger(mob.z))
-      throw new Error("ZONE_MOB_RESTORE_POSITION_INVALID");
-    if (!Number.isSafeInteger(mob.health) || mob.health < 0 || mob.health > mob.maxHealth)
-      throw new Error("ZONE_MOB_RESTORE_HEALTH_INVALID");
-    if (!Number.isSafeInteger(mob.lastAttackTick) || mob.lastAttackTick < 0)
-      throw new Error("ZONE_MOB_RESTORE_ATTACK_TICK_INVALID");
-    if (!CANONICAL_MOB_STATES.has(mob.state as ZoneMobState))
-      throw new Error("ZONE_MOB_RESTORE_STATE_INVALID");
-    if (mob.health === 0 && mob.state !== "dead")
-      throw new Error("ZONE_MOB_RESTORE_DEAD_STATE_INVALID");
+    if (mob.archetype !== undefined && mob.archetype !== current.definition.archetype) throw new Error("ZONE_MOB_RESTORE_ARCHETYPE_INVALID");
+    if (mob.maxHealth !== current.definition.maxHealth) throw new Error("ZONE_MOB_RESTORE_MAX_HEALTH_INVALID");
+    if (!Number.isSafeInteger(mob.x) || !Number.isSafeInteger(mob.z)) throw new Error("ZONE_MOB_RESTORE_POSITION_INVALID");
+    if (!Number.isSafeInteger(mob.health) || mob.health < 0 || mob.health > mob.maxHealth) throw new Error("ZONE_MOB_RESTORE_HEALTH_INVALID");
+    if (!Number.isSafeInteger(mob.stamina) || mob.stamina < 0 || mob.stamina > 100) throw new Error("ZONE_MOB_RESTORE_STAMINA_INVALID");
+    if (!Number.isSafeInteger(mob.idleUntilTick) || mob.idleUntilTick < 0) throw new Error("ZONE_MOB_RESTORE_IDLE_TICK_INVALID");
+    if (!Number.isSafeInteger(mob.patrolIndex) || mob.patrolIndex < 0) throw new Error("ZONE_MOB_RESTORE_PATROL_INDEX_INVALID");
+    if (!Number.isSafeInteger(mob.nextAttackTick) || mob.nextAttackTick < 0) throw new Error("ZONE_MOB_RESTORE_ATTACK_TICK_INVALID");
+    if (!CANONICAL_MOB_STATES.has(mob.state as ZoneMobState)) throw new Error("ZONE_MOB_RESTORE_STATE_INVALID");
+    if (mob.health === 0 && mob.state !== "dead") throw new Error("ZONE_MOB_RESTORE_DEAD_STATE_INVALID");
+    if (mob.targetEntityId !== null && typeof mob.targetEntityId !== "string") throw new Error("ZONE_MOB_RESTORE_TARGET_INVALID");
 
     const next: MobRuntimeState = Object.freeze({
       ...current,
       state: mob.state as ZoneMobState,
       position: Object.freeze({ x: mob.x, z: mob.z }),
       targetEntityId: mob.targetEntityId,
+      idleUntilTick: mob.idleUntilTick,
+      patrolIndex: mob.patrolIndex,
       health: mob.health,
       maxHealth: mob.maxHealth,
-      nextAttackTick: mob.lastAttackTick,
+      stamina: mob.stamina,
+      nextAttackTick: mob.nextAttackTick,
     });
     this.states.set(mob.entityId, next);
     return next;
   }
 
   snapshot(): readonly ConfirmedZoneMob[] {
-    const out: ConfirmedZoneMob[] = [];
-    for (const entityId of this.orderedEntityIds) {
-      out.push(publicMobSnapshot(this.states.get(entityId)!));
-    }
-    return Object.freeze(out);
+    return Object.freeze(this.orderedEntityIds.map(entityId => publicMobSnapshot(this.states.get(entityId)!)));
   }
-  stateFor(entityId: string): MobRuntimeState | undefined {
-    return this.states.get(entityId);
-  }
-  orderedStates(): readonly MobRuntimeState[] {
-    const out: MobRuntimeState[] = [];
-    for (const entityId of this.orderedEntityIds) {
-      out.push(this.states.get(entityId)!);
-    }
-    return Object.freeze(out);
-  }
+  stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
+  orderedStates(): readonly MobRuntimeState[] { return Object.freeze(this.orderedEntityIds.map(entityId => this.states.get(entityId)!)); }
 }
