@@ -5,6 +5,8 @@ export interface CanonicalPlayerState {
   userId: number;
   x: number;
   z: number;
+  inputX: number;
+  inputZ: number;
   health: number;
   maxHealth: number;
   stamina: number;
@@ -24,9 +26,12 @@ export interface CanonicalMobState {
   z: number;
   health: number;
   maxHealth: number;
+  stamina: number;
   state: string;
   targetEntityId: string | null;
-  lastAttackTick: number;
+  idleUntilTick: number;
+  patrolIndex: number;
+  nextAttackTick: number;
 }
 
 export interface CanonicalResourceState {
@@ -48,7 +53,7 @@ export interface CanonicalTransferPayload {
   schema: "aurion.transfer.payload.v1";
   entityId: string;
   kind: "player" | "item" | "projectile";
-  data: any; // e.g. CanonicalPlayerState
+  data: unknown;
 }
 
 export interface CanonicalZoneState {
@@ -72,17 +77,13 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
     tick: state.tick,
     ruleset: state.ruleset,
     combatSequence: state.combatSequence,
-    players: [...state.players].sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
-    mobs: [...state.mobs].sort((a, b) => (a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0)),
-    resources: [...state.resources].sort((a, b) => (a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0)),
-    questSummaries: [...(state.questSummaries || [])].sort((a, b) => {
-      if (a.userId !== b.userId) return a.userId - b.userId;
-      return a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0;
-    }),
+    players: [...state.players].sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
+    mobs: [...state.mobs].sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
+    resources: [...state.resources].sort((a, b) => a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0),
+    questSummaries: [...(state.questSummaries || [])].sort((a, b) => a.userId - b.userId || (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0)),
   };
 }
 
 export function hashCanonicalZoneState(state: CanonicalZoneState): string {
-  const sorted = sortCanonicalZoneState(state);
-  return canonicalSha256(sorted);
+  return canonicalSha256(sortCanonicalZoneState(state));
 }
