@@ -1,4 +1,4 @@
-import { createARESeed, SeededARERng, WASD_GAMEPLAY_SOURCE_REVISION } from "./wasdAREDeterminism";
+import { WASD_GAMEPLAY_SOURCE_REVISION } from "./wasdAREDeterminism";
 
 /** Historical donor provenance for the combat formula now hosted by Aurion. */
 export const WASD_COMBAT_DELTA_SOURCE_REVISION = WASD_GAMEPLAY_SOURCE_REVISION;
@@ -24,7 +24,6 @@ export interface CombatDeltaContext {
   /** Aurion-owned addressable draws are mandatory for every gameplay-authority caller. */
   entropy: CombatEntropy;
 }
-export type HistoricalCombatDeltaContext = Omit<CombatDeltaContext, "entropy">;
 export interface CombatDeltaResult { success: boolean; hit: boolean; damage: number; crit: boolean; killed: boolean; defenderHealth: number; reason?: "no_stamina" }
 export interface CombatDelta { kind: "combat_delta"; action: CombatDeltaAction; tick: number; sequence: number; attackerId: string; defenderId: string; staminaDelta: number; healthDelta: number; result: CombatDeltaResult }
 export interface CombatStatePatch { attacker: { id: string; stamina: number }; defender: { id: string; health: number } }
@@ -53,11 +52,11 @@ export function calculateCombatHitChance(attacker: CombatDeltaEntityView | numbe
   return Math.min(0.95, Math.max(0.3, 0.65 + diff * 0.3));
 }
 
-function createHistoricalCombatRng(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, tick: number, sequence: number, weaponBonus: number): SeededARERng {
-  return new SeededARERng(createARESeed(["combat_delta", action, stableEntityId(attacker), stableEntityId(defender), tick, sequence, weaponBonus, attacker.stamina ?? 0, defender.health ?? 0]));
-}
-
-function resolveCombatDeltaInternal(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext | HistoricalCombatDeltaContext): CombatDelta {
+/**
+ * Aurion gameplay combat resolver. All randomness arrives as already-addressed
+ * U32 entropy from the authoritative zone. No sequential RNG exists on this path.
+ */
+export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext): CombatDelta {
   const tick = safeInteger(context.tick, 0);
   const sequence = safeInteger(context.sequence, 0);
   const weaponBonus = safeInteger(context.weaponBonus, 0);
@@ -67,50 +66,19 @@ function resolveCombatDeltaInternal(action: CombatDeltaAction, attacker: CombatD
   const staminaCost = action === "melee" ? STAMINA_COST : 0;
   if (action === "melee" && staminaBefore <= 0) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:0, healthDelta:0, result:Object.freeze({ success:false, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore, reason:"no_stamina" }) });
 
-  const entropy = "entropy" in context ? context.entropy : undefined;
-  const historicalRng = entropy ? null : createHistoricalCombatRng(action, attacker, defender, tick, sequence, weaponBonus);
-  if (entropy) assertEntropy(entropy);
-
+  assertEntropy(context.entropy);
   const hitChance = calculateCombatHitChance(attacker, defender);
-  const hit = entropy
-    ? entropy.hitU32 < probabilityThreshold(hitChance)
-    : historicalRng!.nextFloat() <= hitChance;
+  const hit = context.entropy.hitU32 < probabilityThreshold(hitChance);
   if (!hit) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:0, result:Object.freeze({ success:true, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore }) });
 
-  const crit = entropy
-    ? entropy.critU32 < probabilityThreshold(0.08)
-    : historicalRng!.nextFloat() < 0.08;
-  const damageRoll = entropy ? entropy.damageU32 % 4 : historicalRng!.fork("damage").nextInt(4);
+  const crit = context.entropy.critU32 < probabilityThreshold(0.08);
+  const damageRoll = context.entropy.damageU32 % 4;
   const base = 5 + combatLevel(attacker) + Math.max(0, weaponBonus);
   const mitigation = Math.floor(combatLevel(defender) * 0.3);
   const baseDamage = Math.max(1, base - mitigation + damageRoll);
   const damage = crit ? Math.floor(baseDamage * 1.75) : baseDamage;
   const healthAfter = Math.max(0, healthBefore - damage);
   return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:healthAfter-healthBefore, result:Object.freeze({ success:true, hit:true, damage, crit, killed:healthAfter<=0, defenderHealth:healthAfter }) });
-}
-
-/** Production/gameplay entry point: addressable entropy is compulsory. */
-export function resolveCombatDelta(
-  action: CombatDeltaAction,
-  attacker: CombatDeltaEntityView,
-  defender: CombatDeltaEntityView,
-  context: CombatDeltaContext,
-): CombatDelta {
-  assertEntropy(context.entropy);
-  return resolveCombatDeltaInternal(action, attacker, defender, context);
-}
-
-/**
- * Test/parity-only donor comparator. Never call this from a gameplay runtime.
- * Its sequential RNG is retained solely to prove the pinned historical WASD vector.
- */
-export function resolveHistoricalCombatDeltaForParity(
-  action: CombatDeltaAction,
-  attacker: CombatDeltaEntityView,
-  defender: CombatDeltaEntityView,
-  context: HistoricalCombatDeltaContext,
-): CombatDelta {
-  return resolveCombatDeltaInternal(action, attacker, defender, context);
 }
 
 export function reduceCombatDelta(attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, delta: CombatDelta): CombatStatePatch {
