@@ -79,12 +79,15 @@ export default function Community() {
             type="button"
             aria-haspopup="dialog"
             disabled={!isAuthenticated || loading}
+            aria-busy={loading}
             aria-describedby={
               !isAuthenticated ? "community-auth-required" : undefined
             }
             onClick={() => openCommunity("chat")}
             title={
-              !isAuthenticated
+              loading
+                ? "Ladevorgang läuft..."
+                : !isAuthenticated
                 ? "Nur für angemeldete Explorer verfügbar"
                 : undefined
             }
@@ -136,12 +139,15 @@ export default function Community() {
             type="button"
             aria-haspopup="dialog"
             disabled={!isAuthenticated || loading}
+            aria-busy={loading}
             aria-describedby={
               !isAuthenticated ? "community-auth-required" : undefined
             }
             onClick={() => openCommunity("guild")}
             title={
-              !isAuthenticated
+              loading
+                ? "Ladevorgang läuft..."
+                : !isAuthenticated
                 ? "Nur für angemeldete Explorer verfügbar"
                 : undefined
             }

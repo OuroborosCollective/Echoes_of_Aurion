@@ -18,3 +18,7 @@
 ## 2026-09-15 - Landing and Community ARIA Improvements
 **Learning:** Buttons that trigger dialog overlays (like the community and account panels) lacked semantic structure, and disabled states didn't fully account for loading transitions, causing poor screen reader experiences.
 **Action:** Applied `aria-haspopup="dialog"` to buttons opening the Aurion panels and integrated `loading` states with `disabled` properties during initialization, extending `aria-busy` for explicit wait indications.
+
+## 2024-10-24 - Consistent UI Loading and Disabled States
+**Learning:** Secondary navigation buttons often lack identical loading and disabled state management (like `aria-busy`, `disabled`, and tooltip titles) compared to primary call-to-action buttons, creating an inconsistent accessibility and UX pattern.
+**Action:** Apply consistent disabled, `aria-busy`, contextual `title` text, and disabled tactile feedback (`disabled:motion-safe:hover:translate-y-0`, `disabled:motion-safe:active:scale-100`) to all buttons triggering authentication or guarded overlays, ensuring parity across the UI.
