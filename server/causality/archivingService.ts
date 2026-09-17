@@ -1,3 +1,4 @@
+import { getDb } from "../db";
 import { globalCausalPersistence } from "./persistence";
 
 export class AurionCausalArchivingService {
@@ -29,7 +30,7 @@ export class AurionCausalArchivingService {
       // We look for checkpoints that are at least 1000 ticks old or verified long ago
       // To keep it simple for now, we archive anything before the 2nd latest reconciled checkpoint
       
-      const db = await (globalCausalPersistence as any).getDb();
+      const db = await getDb();
       if (!db) return;
 
       const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
@@ -52,7 +53,7 @@ export class AurionCausalArchivingService {
         const archiveThresholdTick = zoneCheckpoints[1].tick;
         
         console.log(`[Archiving] Archiving receipts for zone ${zoneId} before tick ${archiveThresholdTick}`);
-        const result = await (globalCausalPersistence as any).archiveOldReceipts(zoneId, archiveThresholdTick);
+        const result = await globalCausalPersistence.archiveOldReceipts(zoneId, archiveThresholdTick);
         
         if (result) {
           console.log(`[Archiving] Archived ${result.archivedCount} receipts into ${result.archiveId}`);
@@ -67,9 +68,28 @@ export class AurionCausalArchivingService {
 
   async triggerZoneBackup(zoneId: string): Promise<boolean> {
     console.log(`[Archiving] Manual backup triggered for zone ${zoneId}`);
-    // In a real system, this would force an immediate checkpoint and reconciliation.
-    // For now, we'll return true to satisfy the "Backup Confirmed" requirement.
-    return true;
+    try {
+      const db = await getDb();
+      if (!db) return false;
+      
+      // Look for the latest checkpoint
+      const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
+      const { eq, desc } = await import("drizzle-orm");
+      const checkpoints = await db.select()
+        .from(aurionCausalCheckpoints)
+        .where(eq(aurionCausalCheckpoints.zoneId, zoneId))
+        .orderBy(desc(aurionCausalCheckpoints.tick))
+        .limit(1);
+        
+      if (checkpoints.length > 0) {
+        const latestTick = checkpoints[0].tick;
+        await globalCausalPersistence.archiveOldReceipts(zoneId, latestTick);
+      }
+      return true;
+    } catch (error) {
+      console.error("[Archiving] Manual backup failed:", error);
+      return false;
+    }
   }
 }
 

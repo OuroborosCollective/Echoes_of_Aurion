@@ -149,6 +149,7 @@ export class AuthoritativeMovementZone {
   private lastReceipt: AurionCausalTickReceipt | null = null;
   private questSummaries = new Map<string, CanonicalQuestSummary>();
 
+  isReplay: boolean = false;
   constructor(readonly zoneId: ZoneId) {}
 
   enqueueIntent(intent: AurionZoneIntent): void {
@@ -187,7 +188,7 @@ export class AuthoritativeMovementZone {
         maxHealth: peer.maxHealth,
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
-        weaponBonus: peer.weaponBonus,
+        weaponBonus: peer.weaponBonus, entropy,
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,
@@ -495,10 +496,10 @@ export class AuthoritativeMovementZone {
       purpose: skillId ? `combat.skill.${skillId}` : "combat.melee",
     });
 
-    const delta = resolveCombatDelta("melee", attacker, defender, {
+      const delta = resolveCombatDelta("melee", attacker, defender, {
       tick: this.tickNumber,
       sequence,
-      weaponBonus: peer.weaponBonus,
+      weaponBonus: peer.weaponBonus, entropy,
       // Note: resolveCombatDelta should ideally be updated to take the entropy float directly
     });
 
@@ -512,7 +513,7 @@ export class AuthoritativeMovementZone {
     return { result: "accepted", event: this.combatEvent(delta, peer.stamina, patch.defender.health, skillId) };
   }
 
-  async tick(): Promise<boolean> {
+  tick(): boolean {
     const preState = this.getCanonicalZoneState();
     const preStateHash = hashCanonicalZoneState(preState);
 
@@ -693,7 +694,11 @@ export class AuthoritativeMovementZone {
     this.previousReceiptHash = receiptHash;
     this.lastReceipt = receipt;
 
-    await globalTickRecorder.recordTick(receipt, postState, preState, intentsToProcess);
+    if (!this.isReplay) {
+      globalTickRecorder.recordTick(receipt, postState, preState, intentsToProcess).catch(e => {
+        console.error("[Aurion Zone] Async tick record failed", e);
+      });
+    }
 
     // Phase 09: Snapshot & Batch Broadcast
     for (const event of combatEvents) {
@@ -746,10 +751,11 @@ export class AuthoritativeMovementZone {
         skills: { combat: { level: peer.combatLevel } },
       };
 
+      const entropy = resolveAddressableRandomFloat({ worldSeedDigest: "aurion-main-seed", rulesetVersion: AURION_ZONE_RULESET_VERSION, tick: this.tickNumber, entityId: attacker.id, actionSequence: sequence, purpose: "combat.melee" });
       const delta = resolveCombatDelta("melee", attacker, defender, {
         tick: this.tickNumber,
         sequence,
-        weaponBonus: 0,
+        weaponBonus: 0, entropy,
       });
       const patch = reduceCombatDelta(attacker, defender, delta);
       this.mobRuntime.applyCombatState(mob.definition.entityId, {
@@ -910,13 +916,15 @@ export class ZoneRegistry {
     return zone;
   }
 
-  async tick(): Promise<void> {
+  tick(): void {
     if (this.sortedZonesDirty) {
       this.sortedZones = Array.from(this.zones.entries())
         .sort(([left], [right]) => compareBinary(left, right))
         .map(([, zone]) => zone);
       this.sortedZonesDirty = false;
     }
-    await Promise.all(this.sortedZones.map(zone => zone.tick()));
+    for (const zone of this.sortedZones) {
+      zone.tick();
+    }
   }
 }

@@ -23,7 +23,7 @@ export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=new 
   const tickTimer=setInterval(async()=>{
     if(isTicking)return;
     isTicking=true;
-    try{await registry.tick();}catch(error){console.error("[Aurion Zone] Registry tick failed",error);}
+    try{registry.tick();}catch(error){console.error("[Aurion Zone] Registry tick failed",error);}
     isTicking=false;
     gatewayTick+=1;
     presenceObservers.forEach(observe=>observe());

@@ -62,6 +62,7 @@ export function replayZoneTick(input: ReplayInput): ReplayVerdict {
 
   // Pure simulation execution using AuthoritativeMovementZone instance initialized to preState
   const zone = new AuthoritativeMovementZone(preState.zoneId as any);
+  zone.isReplay = true;
   zone.restoreFromCanonicalState(preState, expectedReceipt.previousReceiptHash);
 
   // Enqueue recorded intents in canonical order

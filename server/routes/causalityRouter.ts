@@ -1,3 +1,4 @@
+import { getDb } from "../db";
 import { z } from "zod";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { globalCausalPersistence } from "../causality/persistence";
@@ -52,7 +53,7 @@ export const causalityRouter = router({
   getCheckpoints: adminProcedure
     .input(z.object({ zoneId: z.string(), limit: z.number().int().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
-      const db = await (globalCausalPersistence as any).getDb(); // Hack for now or make it public
+      const db = await getDb(); // Hack for now or make it public
       if (!db) return [];
       
       const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
@@ -87,7 +88,7 @@ export const causalityRouter = router({
   getArchives: adminProcedure
     .input(z.object({ zoneId: z.string(), limit: z.number().int().min(1).max(50).default(20) }))
     .query(async ({ input }) => {
-      const db = await (globalCausalPersistence as any).getDb();
+      const db = await getDb();
       if (!db) return [];
       const { aurionCausalArchive } = await import("../../drizzle/aurionCausalitySchema");
       const { eq, desc } = await import("drizzle-orm");
@@ -115,7 +116,7 @@ export const causalityRouter = router({
   getGlobalStateProofs: adminProcedure
     .input(z.object({ worldId: z.string().default("aurion-world-01"), limit: z.number().int().min(1).max(50).default(10) }))
     .query(async ({ input }) => {
-      const db = await (globalCausalPersistence as any).getDb();
+      const db = await getDb();
       if (!db) return [];
       const { aurionGlobalStateProofs } = await import("../../drizzle/aurionCausalitySchema");
       const { eq, desc } = await import("drizzle-orm");

@@ -816,3 +816,16 @@ Next safe step: Implementation of Step 18 (Global State Reconciliation) to aggre
 
 
 
+### 2026-09-17 — Evidence Chain & Ticking Determinism Fixes
+Status: INTEGRATED; Append-only chain restored, tick loops synchronized.
+Task: Fix critical divergences reported by code review (async authority loop, destructive repairs, and lossy archives).
+
+Decisions:
+- **Tick Determinism**: Removed `async`/`await` from `tick()` in `zoneRuntime.ts` and `zoneGateway.ts`. Evidence persistence (`globalTickRecorder.recordTick`) is now fired asynchronously (`.catch()`) outside the hotpath, preventing MariaDB lag from stalling the 10-Hz gameplay loop.
+- **Append-Only Evidence**: Modified `repairZone` in `server/causality/persistence.ts` to remove the `DELETE` queries. Future tick receipts and checkpoints are no longer destroyed during a rollback, strictly preserving the append-only evidence chain.
+- **Lossless Archiving**: Updated `archiveOldReceipts` to prevent lossy summaries. The archive payload now serializes the full receipt record (including `inputJson`, `previousReceiptHash`, `rulesetVersion`) so that historical hot-receipts are preserved losslessly.
+- **Visual Diagnostics**: Implemented Diff Tree visualizations, interactive sparkline navigation, and threshold alert highlighting in the Causal Studio Dashboard for faster triage of causal regressions.
+
+Touched surfaces: `server/zoneRuntime.ts`, `server/zoneGateway.ts`, `server/causality/persistence.ts`, `client/src/components/CausalStudioDashboard.tsx`.
+Evidence: `compile_applet` successful; zone ticking is synchronous; repair/archive methods strictly preserve all evidence.
+Learned: An append-only evidence model requires that rollbacks branch the timeline or emit compensating events rather than deleting history. Asynchronous external I/O must never block a deterministic simulation loop.

@@ -211,17 +211,9 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       })
       .where(eq(aurionGlobalWorldStates.worldId, checkpoint.worldId));
 
-    await db.delete(aurionCausalTickReceipts)
-      .where(and(
-        eq(aurionCausalTickReceipts.zoneId, zoneId),
-        gt(aurionCausalTickReceipts.tick, checkpoint.tick)
-      ));
-      
-    await db.delete(aurionCausalCheckpoints)
-      .where(and(
-        eq(aurionCausalCheckpoints.zoneId, zoneId),
-        gt(aurionCausalCheckpoints.tick, checkpoint.tick)
-      ));
+    // We do NOT delete newer receipts or checkpoints.
+    // The chain of evidence is append-only. New ticks after the repair
+    // will just branch from the restored checkpoint.
   }
 
   async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string } | null> {
@@ -243,15 +235,19 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const endTick = receiptsToArchive[receiptsToArchive.length - 1].tick;
     const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
 
-    // 2. Prepare payload (compact summary)
+    // 2. Prepare payload (full lossless summary)
     const payload = receiptsToArchive.map(r => ({
-      t: r.tick,
-      h: r.receiptHash,
-      ph: r.preStateHash,
-      ih: r.inputHash,
-      th: r.transitionHash,
-      rh: r.rngRootHash,
-      oh: r.postStateHash,
+      tick: r.tick,
+      receiptHash: r.receiptHash,
+      preStateHash: r.preStateHash,
+      inputHash: r.inputHash,
+      inputJson: r.inputJson,
+      transitionHash: r.transitionHash,
+      rngRootHash: r.rngRootHash,
+      postStateHash: r.postStateHash,
+      previousReceiptHash: r.previousReceiptHash,
+      rulesetVersion: r.rulesetVersion,
+      revision: r.revision
     }));
 
     const payloadJson = JSON.stringify(payload);
