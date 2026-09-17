@@ -27,7 +27,6 @@ async function decodeModel(loader:GLTFLoader,bytes:ArrayBuffer,signal:AbortSigna
 /** View-only projection of the authenticated, versioned server placement plan. */
 export class WorldAssetProjection {
  readonly root=new THREE.Group();
- private readonly loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
  private readonly cache=new Map<string,Cached>();
  private readonly sharedTextures=new Map<string,{texture:THREE.Texture;refs:number}>();
  private renderedKey="";
@@ -52,9 +51,9 @@ export class WorldAssetProjection {
  };
  constructor(scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly terrain:(x:number,z:number)=>number,private readonly fetchRegion:(center:WorldChunkCoordinate)=>Promise<unknown>,private readonly report:(value:ReturnType<WorldAssetProjection["evidence"]>)=>void,private readonly renderer?:RuntimeRenderer){
   this.root.name="aurion-optimized-world-assets";scene.add(this.root);
-  // The factory supplies an initialized Three renderer; RuntimeRenderer exposes
-  // only the methods used by the engine, while the loader also reads capabilities.
-  if(this.renderer){try{this.ktx.detectSupport(this.renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.loader.setKTX2Loader(this.ktx);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
+  // Detect KTX2 support once, but do not attach the decoder to a shared GLTFLoader.
+  // A failed KTX2 worker must never poison the separately hash-verified raster fallback.
+  if(this.renderer){try{this.ktx.detectSupport(this.renderer as Parameters<KTX2Loader["detectSupport"]>[0]);this.ktxEnabled=true;}catch{/* Verified raster alternatives remain available. */}}
   if(typeof window!=="undefined")window.addEventListener("aurion:zone-snapshot",this.onConfirmedZoneSnapshot);
  }
  update(delta:number,position:{x:number;z:number},viewportWidth:number){
@@ -76,6 +75,11 @@ export class WorldAssetProjection {
   for(const key of [...this.previousLod.keys()])if(!selection.some(s=>s.placement.id===key))this.previousLod.delete(key);
   this.trim(this.pressure?0:budget.worldCache);this.rebuild();this.pump();
  }
+ private loaderFor(format:string):GLTFLoader{
+  const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  if(format==="ktx2")loader.setKTX2Loader(this.ktx);
+  return loader;
+ }
  private pump(){
   if(this.disposed)return;
   for(const s of this.selected){if(this.loading.size>=2)break;if(this.cache.has(s.key)||this.loading.has(s.key)||this.failed.has(s.key))continue;
@@ -96,7 +100,7 @@ export class WorldAssetProjection {
       if(allocation.animations||json.skins?.length)throw Error("STATIC_WORLD_ASSET_REQUIRED");
       releaseBudget=glbResourcePool.reserve(allocation);
       if(!releaseBudget){this.pressure=true;this.budgetDeferred.add(s.key);return;}
-      const started=performance.now(),gltf=await decodeModel(this.loader,bytes,signal);parsed=gltf;glbResourcePool.decodedModel(performance.now()-started);
+      const started=performance.now(),gltf=await decodeModel(this.loaderFor(spec.format),bytes,signal);parsed=gltf;glbResourcePool.decodedModel(performance.now()-started);
       if(this.disposed||signal.aborted){disposeModel(gltf);releaseBudget();return;}
       requireDecodedMaterialTextures(gltf,json);
       gltf.scene.updateMatrixWorld(true);const textures=this.adoptTextures(gltf,json,spec.textureHashes);
@@ -107,9 +111,9 @@ export class WorldAssetProjection {
       if(parsed)disposeModel(parsed);
       releaseBudget?.();
       if(index===variants.length-1||signal.aborted)throw error;
-      // A failed actual decode/format selects only the separately hash-verified
-      // alternative from the same source/LOD family.
-      this.ktxEnabled=false;
+      // A failed KTX2 decode disables future compressed attempts for this projection.
+      // The next separately hash-verified fallback is decoded by a fresh GLTFLoader.
+      if(spec.format==="ktx2")this.ktxEnabled=false;
      }
     }
    }).catch(error=>{if(!this.disposed){if(error instanceof Error&&error.message.includes("BUDGET")){this.pressure=true;this.budgetDeferred.add(s.key);}else this.failed.add(s.key);}}).finally(()=>{this.loading.delete(s.key);this.requests.delete(request);if(!this.disposed){this.rebuild();this.pump();}});
