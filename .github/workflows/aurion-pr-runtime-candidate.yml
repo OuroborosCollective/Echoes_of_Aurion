@@ -82,7 +82,8 @@ jobs:
           const entry = catalog.entries?.find((candidate) => candidate.sha256 === sha);
           if (!entry) throw new Error('RETURN_STONE_LIVE_CATALOG_MISSING');
           if (entry.assetId !== expectedId) throw new Error('RETURN_STONE_ASSET_ID_MISMATCH');
-          if (entry.bytes !== Number(process.env.RETURN_STONE_BYTES)) throw new Error('RETURN_STONE_BYTE_COUNT_MISMATCH');
+          const lodVariant = Array.isArray(entry.lods) ? entry.lods.find((variant) => variant.sha256 === sha) : null;
+          if (lodVariant?.bytes != null && lodVariant.bytes !== Number(process.env.RETURN_STONE_BYTES)) throw new Error('RETURN_STONE_LOD_BYTE_COUNT_MISMATCH');
           if (entry.storageUrl !== `/api/assets/glb/${sha}.glb`) throw new Error('RETURN_STONE_STORAGE_URL_MISMATCH');
           if (entry.purpose !== 'world-environment' || entry.assetType !== 'arena' || entry.subcategory !== 'teleporter' || entry.targetKey !== null) {
             throw new Error('RETURN_STONE_CATALOG_CLASSIFICATION_MISMATCH');
