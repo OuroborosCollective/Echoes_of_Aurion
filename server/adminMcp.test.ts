@@ -12,6 +12,7 @@ const BASE_READ_TOOLS = [
   "aurion_tick_replay",
   "aurion_replay_range",
   "aurion_runtime_identity",
+  "aurion_recovery_plan",
   "aurion_donor_ledger",
   "aurion_donor_capability_explain",
 ] as const;
@@ -25,31 +26,27 @@ const WOLFRAM_READ_TOOLS = [
 ] as const;
 
 describe("adminMcp", () => {
-  it("exposes asset writes only for the dedicated scope without opening gameplay or shell authority", () => {
+  it("keeps causality read-only and exposes asset writes only behind the dedicated scope", () => {
     const writable = adminMcpCapabilities(["aurion.admin.read", "aurion.admin.assets.write"], { wolframConfigured: true });
     expect(writable.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual(["aurion_admin_glb_import", "aurion_admin_glb_assign"]);
-    expect(writable.unavailable).toContain("shell_access");
-    expect(writable.unavailable).toContain("npc_reward_mutation");
-    expect(adminMcpCapabilities(["aurion.admin.read"], { wolframConfigured: true }).tools.every(tool => tool.mode === "read")).toBe(true);
+    expect(writable.unavailable).toEqual(expect.arrayContaining(["causal_rollback", "world_delta_write", "shell_access", "git_or_vps_access"]));
+    expect(writable.consent).toMatchObject({ defaultAuthority: "read_only", gameplayMutation: "unavailable" });
   });
 
-  it("keeps Wolfram status visible but exposes provider calls only when the server key is configured", () => {
+  it("keeps Wolfram external-evidence tools conditional without mutation authority", () => {
     const unavailable = adminMcpCapabilities(["aurion.admin.read"]);
     expect(unavailable.wolfram).toEqual({ configured: false, mutationAuthority: "none" });
     expect(unavailable.tools.map(tool => tool.name)).toEqual(BASE_READ_TOOLS);
 
     const configured = adminMcpCapabilities(["aurion.admin.read"], { wolframConfigured: true });
     expect(configured.wolfram).toEqual({ configured: true, mutationAuthority: "none" });
-    expect(configured.tools.map(tool => tool.name)).toEqual([
-      ...BASE_READ_TOOLS,
-      ...WOLFRAM_READ_TOOLS,
-    ]);
+    expect(configured.tools.map(tool => tool.name)).toEqual([...BASE_READ_TOOLS, ...WOLFRAM_READ_TOOLS]);
     expect(configured.tools.every(tool => tool.mode === "read")).toBe(true);
   });
 
-  it("exposes only the bounded ChatGPT-Pro read surface when Wolfram is not configured", () => {
+  it("exposes the bounded ChatGPT evidence surface without gameplay/recovery mutation", () => {
     const capabilities = adminMcpCapabilities();
-    expect(capabilities.chatGptProMode).toBe("read_fetch_only");
+    expect(capabilities.chatGptProMode).toBe("read_evidence_only");
     expect(capabilities.tools.map(tool => tool.name)).toEqual(BASE_READ_TOOLS);
     expect(capabilities.tools.every(tool => tool.mode === "read")).toBe(true);
     expect(capabilities.unavailable).toEqual(expect.arrayContaining([
@@ -57,13 +54,14 @@ describe("adminMcp", () => {
       "object_placement",
       "quest_publish",
       "npc_reward_mutation",
+      "causal_rollback",
       "database_access",
       "shell_access",
       "git_or_vps_access",
     ]));
   });
 
-  it("builds a deterministic preview when no database is configured instead of advancing or persisting world state", async () => {
+  it("builds a deterministic preview when no database is configured instead of advancing world state", async () => {
     const overview = await getGlobalWorldAdminReadModel();
     expect(overview.source).toBe("preview");
     expect(overview.updatedAt).toBeNull();
