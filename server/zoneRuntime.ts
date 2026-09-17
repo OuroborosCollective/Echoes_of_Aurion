@@ -188,7 +188,7 @@ export class AuthoritativeMovementZone {
         maxHealth: peer.maxHealth,
         stamina: peer.stamina,
         combatLevel: peer.combatLevel,
-        weaponBonus: peer.weaponBonus, entropy,
+        weaponBonus: peer.weaponBonus,
         weaponTrack: peer.weaponTrack,
         lastAcceptedClientSeq: peer.lastAcceptedClientSeq,
         lastCombatSequence: peer.lastCombatSequence,
@@ -499,7 +499,8 @@ export class AuthoritativeMovementZone {
       const delta = resolveCombatDelta("melee", attacker, defender, {
       tick: this.tickNumber,
       sequence,
-      weaponBonus: peer.weaponBonus, entropy,
+      weaponBonus: peer.weaponBonus,
+      entropy,
       // Note: resolveCombatDelta should ideally be updated to take the entropy float directly
     });
 
