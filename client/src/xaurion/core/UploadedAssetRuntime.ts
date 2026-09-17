@@ -1,5 +1,11 @@
 import type { GlbCatalogEntry, GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { WORLD_CHUNK_SIZE_MM, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
+import {
+  AURION_RETURN_STONE_ASSET_ID,
+  AURION_RETURN_STONE_CONTRACT_VERSION,
+  AURION_RETURN_STONE_POSITION,
+  AURION_RETURN_STONE_SOURCE_SHA256,
+} from "@shared/aurionReturnStoneContract";
 
 function fnv1a(value: string): number {
   let hash = 2166136261;
@@ -49,9 +55,42 @@ const NATURE_ANCHORS = Object.freeze([
 ] as const);
 
 /**
+ * Resolve only the immutable owner-supplied return-stone GLB from the approved
+ * catalog. The binding is exact SHA + asset identity + purpose/category and is
+ * presentation-only. Absence or mismatch fails closed to no visual.
+ */
+export function returnStoneCatalogAsset(catalog: GlbRuntimeCatalog): GlbCatalogEntry | null {
+  const expectedUrl = `/api/assets/glb/${AURION_RETURN_STONE_SOURCE_SHA256}.glb`;
+  return catalog.entries.find(entry =>
+    entry.assetId === AURION_RETURN_STONE_ASSET_ID
+    && entry.sha256 === AURION_RETURN_STONE_SOURCE_SHA256
+    && entry.storageUrl === expectedUrl
+    && entry.purpose === "world-environment"
+    && entry.assetType === "arena"
+    && entry.subcategory === "teleporter"
+    && entry.targetKey === null
+  ) ?? null;
+}
+
+/** Dedicated visual placement for the live return stone at the confirmed zone
+ * origin. This function creates no interaction or gameplay authority. */
+export function returnStoneVisualPlacement(catalog: GlbRuntimeCatalog): UploadedWorldVisualPlacement | null {
+  const asset = returnStoneCatalogAsset(catalog);
+  if (!asset) return null;
+  return Object.freeze({
+    id: `${AURION_RETURN_STONE_CONTRACT_VERSION}:${catalog.revision.slice(0, 12)}:${asset.assetId}`,
+    asset,
+    xMm: AURION_RETURN_STONE_POSITION.x,
+    zMm: AURION_RETURN_STONE_POSITION.z,
+    rotationQuarterTurns: 0,
+  });
+}
+
+/**
  * Presentation-only deterministic placements for admin-approved uploaded world GLBs.
  * The central road/spawn cross stays clear and no collision, interaction, teleport,
  * quest, loot or world mutation authority is derived from these placements.
+ * The exact return-stone GLB is reserved for the dedicated city-centre projection.
  */
 export function uploadedWorldVisualsForChunk(
   catalog: GlbRuntimeCatalog,
@@ -60,7 +99,10 @@ export function uploadedWorldVisualsForChunk(
   const settlement = mod(coordinate.x, 6) < 2 && mod(coordinate.z, 6) < 2;
   const purpose = settlement ? "world-environment" : "world-nature";
   const assets = catalog.entries
-    .filter(entry => entry.purpose === purpose && entry.assetType === "arena" && entry.targetKey === null)
+    .filter(entry => entry.purpose === purpose
+      && entry.assetType === "arena"
+      && entry.targetKey === null
+      && entry.sha256 !== AURION_RETURN_STONE_SOURCE_SHA256)
     .slice()
     .sort(byIdentity);
   if (!assets.length) return Object.freeze([]);
