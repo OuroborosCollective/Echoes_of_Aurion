@@ -1,0 +1,30 @@
+{
+  "schema": "aurion.rng.inventory.v1",
+  "policy": "All gameplay-authority randomness must be a pure function of a complete causal address. Sequential RNG is forbidden in production server callers.",
+  "classifications": [
+    {
+      "path": "server/determinism/aurionAddressableRandom.ts",
+      "classification": "GAMEPLAY_AUTHORITY",
+      "mechanism": "aurion.rng.address.v2",
+      "runtimeRequired": true
+    },
+    {
+      "path": "server/zoneRuntime.ts",
+      "classification": "GAMEPLAY_AUTHORITY",
+      "mechanism": "addressed combat draws: worldSeedDigest + rulesetVersion + tick + systemId + entityId + eventId + purpose + drawIndex",
+      "runtimeRequired": true
+    },
+    {
+      "path": "server/wasdAREDeterminism.ts",
+      "classification": "UNUSED_DONOR_REFERENCE",
+      "mechanism": "historical sequential SeededARERng retained for pinned parity tests only",
+      "runtimeRequired": false
+    },
+    {
+      "path": "client/src/xaurion/integration/aurionWorldCore.ts",
+      "classification": "PROJECTION_ONLY",
+      "mechanism": "presentation-side deterministic PRNG",
+      "runtimeRequired": true
+    }
+  ]
+}
