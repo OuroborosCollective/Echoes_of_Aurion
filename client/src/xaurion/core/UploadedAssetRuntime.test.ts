@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GlbCatalogEntry, GlbRuntimeCatalog } from "@shared/glbImportContract";
-import { AURION_RETURN_STONE_ASSET_ID, AURION_RETURN_STONE_SOURCE_SHA256 } from "@shared/aurionReturnStoneContract";
+import { AURION_RETURN_STONE_ASSET_ID, AURION_RETURN_STONE_POSITION, AURION_RETURN_STONE_SOURCE_SHA256 } from "@shared/aurionReturnStoneContract";
 import { publicPlayerCharacterCatalog, returnStoneCatalogAsset, returnStoneVisualPlacement, selectEquipmentCatalogAsset, uploadedWorldVisualsForChunk } from "./UploadedAssetRuntime";
 
 const sha = (digit: string) => digit.repeat(64);
@@ -70,8 +70,8 @@ describe("uploaded GLB runtime selection", () => {
     expect(returnStoneCatalogAsset(source)).toEqual(approved);
     expect(returnStoneVisualPlacement(source)).toMatchObject({
       asset: approved,
-      xMm: 0,
-      zMm: 0,
+      xMm: AURION_RETURN_STONE_POSITION.x,
+      zMm: AURION_RETURN_STONE_POSITION.z,
       rotationQuarterTurns: 0,
     });
     expect(returnStoneCatalogAsset(catalog([returnStoneEntry({ purpose: "auto" })]))).toBeNull();
