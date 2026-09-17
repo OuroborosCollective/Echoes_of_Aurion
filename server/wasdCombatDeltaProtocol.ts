@@ -21,6 +21,7 @@ export interface CombatDeltaEntityView {
   identity?: { npcId?: string };
 }
 export interface CombatDeltaContext { tick: number; sequence: number; weaponBonus?: number; entropy?: number }
+type NormalizedCombatDeltaContext = Readonly<{ tick: number; sequence: number; weaponBonus: number; entropy?: number }>;
 export interface CombatDeltaResult { success: boolean; hit: boolean; damage: number; crit: boolean; killed: boolean; defenderHealth: number; reason?: "no_stamina" }
 export interface CombatDelta { kind: "combat_delta"; action: CombatDeltaAction; tick: number; sequence: number; attackerId: string; defenderId: string; staminaDelta: number; healthDelta: number; result: CombatDeltaResult }
 export interface CombatStatePatch { attacker: { id: string; stamina: number }; defender: { id: string; health: number } }
@@ -40,8 +41,11 @@ export function calculateCombatHitChance(attacker: CombatDeltaEntityView | numbe
   return Math.min(0.95, Math.max(0.3, 0.65 + diff * 0.3));
 }
 
-function createCombatRng(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: Required<CombatDeltaContext>): SeededARERng {
-  const baseSeed = context.entropy !== undefined ? [context.entropy] : ["combat_delta", action, stableEntityId(attacker), stableEntityId(defender), context.tick, context.sequence, context.weaponBonus, attacker.stamina ?? 0, defender.health ?? 0]; return new SeededARERng(createARESeed(baseSeed));
+function createCombatRng(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: NormalizedCombatDeltaContext): SeededARERng {
+  const baseSeed = context.entropy !== undefined
+    ? [context.entropy]
+    : ["combat_delta", action, stableEntityId(attacker), stableEntityId(defender), context.tick, context.sequence, context.weaponBonus, attacker.stamina ?? 0, defender.health ?? 0];
+  return new SeededARERng(createARESeed(baseSeed));
 }
 function calculateCombatDamage(attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, weaponBonus: number, rng: ARERng): number {
   const base = 5 + combatLevel(attacker) + Math.max(0, weaponBonus);
@@ -50,7 +54,12 @@ function calculateCombatDamage(attacker: CombatDeltaEntityView, defender: Combat
 }
 
 export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext): CombatDelta {
-  const normalizedContext: Required<CombatDeltaContext> = { tick: safeInteger(context.tick, 0), sequence: safeInteger(context.sequence, 0), weaponBonus: safeInteger(context.weaponBonus, 0), entropy: context.entropy !== undefined ? context.entropy : undefined };
+  const normalizedContext: NormalizedCombatDeltaContext = {
+    tick: safeInteger(context.tick, 0),
+    sequence: safeInteger(context.sequence, 0),
+    weaponBonus: safeInteger(context.weaponBonus, 0),
+    ...(context.entropy !== undefined ? { entropy: context.entropy } : {}),
+  };
   const attackerId = stableEntityId(attacker), defenderId = stableEntityId(defender);
   const staminaBefore = typeof attacker.stamina === "number" ? attacker.stamina : 100;
   const healthBefore = typeof defender.health === "number" ? defender.health : 100;
