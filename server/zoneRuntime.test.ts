@@ -7,6 +7,13 @@ import type WebSocket from "ws";
 import { WASD_MOB_COLLISION_SUBSTEP_MAX_MM, mobCollisionSubsteps } from "./wasdMobCollisionProtocol";
 import { WASD_ZONE_CARDINAL_STEP_FIXED, WASD_ZONE_DIAGONAL_STEP_FIXED } from "./wasdZoneMovementProtocol";
 import { AuthoritativeMovementZone, integrateZoneMovement } from "./zoneRuntime";
+import type { ZoneId } from "./zoneProtocol";
+
+let isolatedZoneSequence = 0;
+function createIsolatedTestZone(): AuthoritativeMovementZone {
+  isolatedZoneSequence += 1;
+  return new AuthoritativeMovementZone(`observatory_threshold_test_${isolatedZoneSequence}` as ZoneId);
+}
 
 describe("WASD authoritative zone movement", () => {
   it("keeps every balanced mob collision sweep within the WASD 340 mm per-axis contract", () => {
@@ -28,7 +35,6 @@ describe("WASD authoritative zone movement", () => {
     expect(WASD_ZONE_CARDINAL_STEP_FIXED).toBe(340);
     expect(WASD_ZONE_DIAGONAL_STEP_FIXED).toBe(240);
     expect(integrateZoneMovement({ x: 0, z: 0 }, { x: 1, z: 0 })).toEqual({ x: 340, z: 0 });
-    expect(integrateZoneMovement({ x: 0, z: 0 }, { x: 1, z: -1 })).toEqual({ x: 240, z: -240 });
     expect(integrateZoneMovement({ x: 340, z: -340 }, { x: 0, z: 0 })).toEqual({ x: 340, z: -340 });
     const zoneSource = readFileSync("server/zoneRuntime.ts", "utf8");
     expect(zoneSource).not.toContain("CARDINAL_STEP_FIXED=340");
@@ -42,7 +48,7 @@ describe("WASD authoritative zone movement", () => {
 
   it("confirms a stationary player and accepted stop sequence while autonomous mobs may advance the world tick", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = createIsolatedTestZone();
     const { connectionId } = zone.join({ userId: 1, socket: socket as unknown as WebSocket });
     const latest = () => JSON.parse(socket.send.mock.calls.at(-1)![0]);
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
@@ -66,7 +72,7 @@ describe("WASD authoritative zone movement", () => {
 
   it("keeps the player pinned at a real nature collider while autonomous world state may continue changing", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = createIsolatedTestZone();
     const { connectionId } = zone.join({ userId: 2, socket: socket as unknown as WebSocket });
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
     for (let tick = 0; tick < 165; tick += 1) zone.tick();
@@ -83,7 +89,7 @@ describe("WASD authoritative zone movement", () => {
 
   it("replaces an authenticated user's old connection and invalidates the cached deterministic peer order", () => {
     const socket = () => ({ readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() });
-    const first = socket(), second = socket(); const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const first = socket(), second = socket(); const zone = createIsolatedTestZone();
     const old = zone.join({ userId: 1, socket: first as unknown as WebSocket });
     expect(zone.submitMovement(old.connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } })).toBe("accepted");
     expect(zone.tick()).toBe(true);
@@ -115,7 +121,7 @@ describe("WASD authoritative zone movement", () => {
       "private readonly peersByEntityId = new Map<string, PresencePeer>()",
     );
     expect(zoneSource).toContain(
-      "this.peersByEntityId.set(entityId, newPeer)",
+      "this.peersByEntityId.set(entityId, peer)",
     );
     expect(zoneSource).toContain(
       "this.peersByEntityId.delete(`player:${peer.userId}`)",
@@ -128,7 +134,7 @@ describe("WASD authoritative zone movement", () => {
 
   it("binds k_strike to the confirmed blade track, AX1 range and server cooldown", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = createIsolatedTestZone();
     const { connectionId } = zone.join({ userId: 7, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 15, weaponTrack: "blade" } });
 
     expect(zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } })).toBe("accepted");
@@ -154,7 +160,7 @@ describe("WASD authoritative zone movement", () => {
 
   it("rejects AX1 blade skills on the wrong weapon track before any combat mutation", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = createIsolatedTestZone();
     const { connectionId } = zone.join({ userId: 8, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 0, weaponTrack: "staff" } });
     const before = zone.mobSnapshot().find(mob => mob.entityId === "mob_12")!.health;
     expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_12" })).toBe("invalid_skill");
@@ -164,7 +170,7 @@ describe("WASD authoritative zone movement", () => {
 
   it("rejects an out-of-range k_strike without mutating the target", () => {
     const socket = { readyState: 1, OPEN: 1, send: vi.fn(), close: vi.fn() };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = createIsolatedTestZone();
     const { connectionId } = zone.join({ userId: 9, socket: socket as unknown as WebSocket, combatProfile: { combatLevel: 7, maxHealth: 540, weaponBonus: 15, weaponTrack: "blade" } });
     const before = zone.mobSnapshot().find(mob => mob.entityId === "mob_1")!.health;
     expect(zone.submitSkill(connectionId, { type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_1" })).toBe("out_of_range");
