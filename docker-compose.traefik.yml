@@ -9,7 +9,6 @@ services:
       STRICT_PORT: "true"
       TRUST_PROXY_HOPS: "1"
       AURION_GLB_STORAGE_DIR: /var/lib/aurion/glb
-      AURION_RUNTIME_IMAGE_DIGEST: ${AURION_RUNTIME_IMAGE_DIGEST:?AURION_RUNTIME_IMAGE_DIGEST must identify the inspected runtime image}
     env_file:
       - ${AURION_ENV_FILE:?AURION_ENV_FILE must point to the root-managed production environment}
     expose:
