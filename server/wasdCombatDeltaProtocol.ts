@@ -21,9 +21,10 @@ export interface CombatDeltaContext {
   tick: number;
   sequence: number;
   weaponBonus?: number;
-  /** Aurion-owned addressable draws. Omit only for historical donor-parity callers. */
-  entropy?: CombatEntropy;
+  /** Aurion-owned addressable draws are mandatory for every gameplay-authority caller. */
+  entropy: CombatEntropy;
 }
+export type HistoricalCombatDeltaContext = Omit<CombatDeltaContext, "entropy">;
 export interface CombatDeltaResult { success: boolean; hit: boolean; damage: number; crit: boolean; killed: boolean; defenderHealth: number; reason?: "no_stamina" }
 export interface CombatDelta { kind: "combat_delta"; action: CombatDeltaAction; tick: number; sequence: number; attackerId: string; defenderId: string; staminaDelta: number; healthDelta: number; result: CombatDeltaResult }
 export interface CombatStatePatch { attacker: { id: string; stamina: number }; defender: { id: string; health: number } }
@@ -56,7 +57,7 @@ function createHistoricalCombatRng(action: CombatDeltaAction, attacker: CombatDe
   return new SeededARERng(createARESeed(["combat_delta", action, stableEntityId(attacker), stableEntityId(defender), tick, sequence, weaponBonus, attacker.stamina ?? 0, defender.health ?? 0]));
 }
 
-export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext): CombatDelta {
+function resolveCombatDeltaInternal(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext | HistoricalCombatDeltaContext): CombatDelta {
   const tick = safeInteger(context.tick, 0);
   const sequence = safeInteger(context.sequence, 0);
   const weaponBonus = safeInteger(context.weaponBonus, 0);
@@ -66,7 +67,7 @@ export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDe
   const staminaCost = action === "melee" ? STAMINA_COST : 0;
   if (action === "melee" && staminaBefore <= 0) return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:0, healthDelta:0, result:Object.freeze({ success:false, hit:false, damage:0, crit:false, killed:false, defenderHealth:healthBefore, reason:"no_stamina" }) });
 
-  const entropy = context.entropy;
+  const entropy = "entropy" in context ? context.entropy : undefined;
   const historicalRng = entropy ? null : createHistoricalCombatRng(action, attacker, defender, tick, sequence, weaponBonus);
   if (entropy) assertEntropy(entropy);
 
@@ -86,6 +87,30 @@ export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDe
   const damage = crit ? Math.floor(baseDamage * 1.75) : baseDamage;
   const healthAfter = Math.max(0, healthBefore - damage);
   return Object.freeze({ kind:"combat_delta", action, tick, sequence, attackerId, defenderId, staminaDelta:-staminaCost, healthDelta:healthAfter-healthBefore, result:Object.freeze({ success:true, hit:true, damage, crit, killed:healthAfter<=0, defenderHealth:healthAfter }) });
+}
+
+/** Production/gameplay entry point: addressable entropy is compulsory. */
+export function resolveCombatDelta(
+  action: CombatDeltaAction,
+  attacker: CombatDeltaEntityView,
+  defender: CombatDeltaEntityView,
+  context: CombatDeltaContext,
+): CombatDelta {
+  assertEntropy(context.entropy);
+  return resolveCombatDeltaInternal(action, attacker, defender, context);
+}
+
+/**
+ * Test/parity-only donor comparator. Never call this from a gameplay runtime.
+ * Its sequential RNG is retained solely to prove the pinned historical WASD vector.
+ */
+export function resolveHistoricalCombatDeltaForParity(
+  action: CombatDeltaAction,
+  attacker: CombatDeltaEntityView,
+  defender: CombatDeltaEntityView,
+  context: HistoricalCombatDeltaContext,
+): CombatDelta {
+  return resolveCombatDeltaInternal(action, attacker, defender, context);
 }
 
 export function reduceCombatDelta(attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, delta: CombatDelta): CombatStatePatch {
