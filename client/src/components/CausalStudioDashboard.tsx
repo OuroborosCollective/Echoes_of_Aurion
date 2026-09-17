@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { operationalDate } from "@shared/operationalClock";
 
 const OBSERVABLE_STAGES = ["PRE_STATE", "INPUT_ORDER", "POST_STATE", "RECEIPT"] as const;
 const UNOBSERVABLE_V1 = ["MOVEMENT", "PLAYER_ACTION", "RESOURCE", "MOB_FSM", "MOB_COMBAT"] as const;
@@ -54,7 +55,7 @@ export default function CausalStudioDashboard() {
 
   function exportDiagnostics() {
     const payload = {
-      exportedAt: new Date().toISOString(),
+      exportedAt: operationalDate().toISOString(),
       runtimeIdentity: healthQuery.data ?? null,
       zoneId,
       tick: tickNumber,
