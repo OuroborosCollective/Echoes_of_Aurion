@@ -50,7 +50,7 @@ function calculateCombatDamage(attacker: CombatDeltaEntityView, defender: Combat
 }
 
 export function resolveCombatDelta(action: CombatDeltaAction, attacker: CombatDeltaEntityView, defender: CombatDeltaEntityView, context: CombatDeltaContext): CombatDelta {
-  const normalizedContext: Required<CombatDeltaContext> = { tick: safeInteger(context.tick, 0), sequence: safeInteger(context.sequence, 0), weaponBonus: safeInteger(context.weaponBonus, 0), entropy: context.entropy !== undefined ? context.entropy : undefined };
+  const normalizedContext: Required<CombatDeltaContext> = { tick: safeInteger(context.tick, 0), sequence: safeInteger(context.sequence, 0), weaponBonus: safeInteger(context.weaponBonus ?? 0, 0), entropy: context.entropy !== undefined ? context.entropy : 0 };
   const attackerId = stableEntityId(attacker), defenderId = stableEntityId(defender);
   const staminaBefore = typeof attacker.stamina === "number" ? attacker.stamina : 100;
   const healthBefore = typeof defender.health === "number" ? defender.health : 100;

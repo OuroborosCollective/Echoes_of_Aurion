@@ -207,15 +207,15 @@ export class NavGrid {
     const closed = new Set<string>();
     while (open.size) {
       // Optimized: Linear scan avoiding array sort and caching keys
-      let currentKey: string | null = null;
+      let currentKey: string = "";
       let current = null;
       for (const node of open.values()) {
-        if (!current || node.f < current.f || (node.f === current.f && (node.g < current.g || (node.g === current.g && node.key.localeCompare(currentKey!) < 0)))) {
+        if (!current || node.f < current.f || (node.f === current.f && (node.g < current.g || (node.g === current.g && node.key.localeCompare(currentKey) < 0)))) {
           current = node;
           currentKey = node.key;
         }
       }
-      open.delete(currentKey!);
+      open.delete(currentKey);
       if (currentKey === gridKey(goal)) {
         const path: GridPoint[] = [goal];
         let cursor = currentKey;
@@ -231,7 +231,7 @@ export class NavGrid {
         const g = current!.g + 1;
         const existing = open.get(key);
         if (existing && existing.g <= g) continue;
-        cameFrom.set(key, currentKey!); points.set(key, Object.freeze({ ...neighbour }));
+        cameFrom.set(key, currentKey); points.set(key, Object.freeze({ ...neighbour }));
         open.set(key, { key, point: neighbour, g, f: g + Math.abs(goal.x - neighbour.x) + Math.abs(goal.z - neighbour.z) });
       }
     }

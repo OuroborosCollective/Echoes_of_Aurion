@@ -65,7 +65,7 @@ export default function CausalStudioDashboard() {
     if (!searchQuery) return checkpointsQuery.data;
     const lowerQuery = searchQuery.toLowerCase();
     return checkpointsQuery.data.filter(cp => 
-      cp.stateHash.toLowerCase().includes(lowerQuery) || 
+      cp.snapshotHash.toLowerCase().includes(lowerQuery) ||
       cp.id.toLowerCase().includes(lowerQuery)
     );
   }, [checkpointsQuery.data, searchQuery]);
@@ -367,7 +367,7 @@ export default function CausalStudioDashboard() {
                   filteredCheckpoints.map(cp => (
                     <div key={cp.id} className="grid grid-cols-[60px_1fr_60px] gap-2 items-center p-2 rounded hover:bg-white/5 text-xs border-b border-white/5 last:border-0 cursor-pointer" onClick={() => setTickNumber(cp.tick)}>
                       <span className="font-mono text-slate-400">T-{cp.tick}</span>
-                      <span className="font-mono text-cyan-300 truncate" title={cp.stateHash}>{cp.stateHash}</span>
+                      <span className="font-mono text-cyan-300 truncate" title={cp.snapshotHash}>{cp.snapshotHash}</span>
                       <Badge variant={cp.reconciled === 1 ? "outline" : "destructive"} className="text-[9px] uppercase justify-center">
                         {cp.reconciled === 1 ? "SYNC" : "DIV"}
                       </Badge>

@@ -8,6 +8,11 @@ import { replayZoneTick } from "../causality/replayZoneTick";
 import { isReplayMatch } from "../../shared/aurionReplayContract";
 
 export const causalityRouter = router({
+  getReadbackStatus: adminProcedure.query(async () => {
+    const { globalReadbackService } = await import("../causality/readbackService");
+    return globalReadbackService.getStatus();
+  }),
+
   getLatestReceipts: adminProcedure
     .input(z.object({ zoneId: z.string().optional() }).optional())
     .query(async ({ input }) => {
