@@ -1,17 +1,10 @@
 import type { CanonicalZoneState } from "./zoneCanonicalState";
 import { hashCanonicalZoneState } from "./zoneCanonicalState";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
-import {
-  orderCanonicalZoneIntents,
-  hashCanonicalIntents,
-} from "../../shared/aurionZoneIntentContract";
-import {
-  type AurionCausalTickReceipt,
-  computeReceiptHash,
-} from "../../shared/aurionCausalTickContract";
+import { orderCanonicalZoneIntents, hashCanonicalIntents } from "../../shared/aurionZoneIntentContract";
+import type { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import type { ReplayVerdict } from "../../shared/aurionReplayContract";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
-import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 
 export interface ReplayInput {
   preState: CanonicalZoneState;
@@ -20,108 +13,80 @@ export interface ReplayInput {
 }
 
 /**
- * Deterministically replays a single zone tick starting from a known PRE state
- * with recorded ordered intents, and verifies each phase against the expected receipt.
+ * Re-executes one tick without persistence, broadcasts or live-state mutation.
+ * Receipt v1 proves PRE, canonical INPUT_ORDER, resulting POST and the receipt
+ * identity. Intermediate per-phase hashes are not present in v1 and therefore
+ * remain UNOBSERVABLE rather than being reported as verified.
  */
 export function replayZoneTick(input: ReplayInput): ReplayVerdict {
   const { preState, intents, expectedReceipt } = input;
   const tick = expectedReceipt.tick;
 
-  // Stage 1: PRE_STATE verification
+  if (preState.zoneId !== expectedReceipt.zoneId || preState.worldId !== expectedReceipt.worldId) {
+    return { status: "UNPROVABLE", verdict: "UNPROVABLE", tick, reason: "REPLAY_SCOPE_MISMATCH" };
+  }
+  if (preState.ruleset !== expectedReceipt.rulesetVersion) {
+    return { status: "UNPROVABLE", verdict: "UNPROVABLE", tick, reason: `RULESET_MISMATCH:${preState.ruleset}:${expectedReceipt.rulesetVersion}` };
+  }
+
   const computedPreStateHash = hashCanonicalZoneState(preState);
   if (computedPreStateHash !== expectedReceipt.preStateHash) {
     return {
-      status: "FIRST_DIVERGENCE",
-      verdict: "FIRST_DIVERGENCE",
-      stage: "PRE_STATE",
-      expected: expectedReceipt.preStateHash,
-      observed: computedPreStateHash,
-      tick,
-      expectedHash: expectedReceipt.preStateHash,
-      observedHash: computedPreStateHash,
+      status: "FIRST_DIVERGENCE", verdict: "FIRST_DIVERGENCE", stage: "PRE_STATE", tick,
+      expected: expectedReceipt.preStateHash, observed: computedPreStateHash,
+      expectedHash: expectedReceipt.preStateHash, observedHash: computedPreStateHash,
       diffDetails: `Pre-state hash mismatch. Expected ${expectedReceipt.preStateHash}, observed ${computedPreStateHash}`,
     };
   }
 
-  // Stage 2: INPUT_ORDER verification
   const orderedIntents = orderCanonicalZoneIntents(intents);
   const computedIntentHash = hashCanonicalIntents(orderedIntents);
   if (computedIntentHash !== expectedReceipt.orderedIntentHash) {
     return {
-      status: "FIRST_DIVERGENCE",
-      verdict: "FIRST_DIVERGENCE",
-      stage: "INPUT_ORDER",
-      expected: expectedReceipt.orderedIntentHash,
-      observed: computedIntentHash,
-      tick,
-      expectedHash: expectedReceipt.orderedIntentHash,
-      observedHash: computedIntentHash,
+      status: "FIRST_DIVERGENCE", verdict: "FIRST_DIVERGENCE", stage: "INPUT_ORDER", tick,
+      expected: expectedReceipt.orderedIntentHash, observed: computedIntentHash,
+      expectedHash: expectedReceipt.orderedIntentHash, observedHash: computedIntentHash,
       diffDetails: `Ordered intent hash mismatch. Expected ${expectedReceipt.orderedIntentHash}, observed ${computedIntentHash}`,
     };
   }
 
-  // Pure simulation execution using AuthoritativeMovementZone instance initialized to preState
   const zone = new AuthoritativeMovementZone(preState.zoneId as any);
   zone.isReplay = true;
+  zone.sourceRevisionOverride = expectedReceipt.sourceRevision;
   zone.restoreFromCanonicalState(preState, expectedReceipt.previousReceiptHash);
-
-  // Enqueue recorded intents in canonical order
-  for (const intent of orderedIntents) {
-    zone.enqueueIntent(intent);
-  }
-
-  // Advance simulation by 1 tick
+  for (const intent of orderedIntents) zone.enqueueIntent(intent);
   zone.tick();
 
   const postState = zone.getCanonicalZoneState();
   const computedPostStateHash = hashCanonicalZoneState(postState);
-
   if (computedPostStateHash !== expectedReceipt.postStateHash) {
     return {
-      status: "FIRST_DIVERGENCE",
-      verdict: "FIRST_DIVERGENCE",
-      stage: "POST_STATE",
-      expected: expectedReceipt.postStateHash,
-      observed: computedPostStateHash,
-      tick,
-      expectedHash: expectedReceipt.postStateHash,
-      observedHash: computedPostStateHash,
+      status: "FIRST_DIVERGENCE", verdict: "FIRST_DIVERGENCE", stage: "POST_STATE", tick,
+      expected: expectedReceipt.postStateHash, observed: computedPostStateHash,
+      expectedHash: expectedReceipt.postStateHash, observedHash: computedPostStateHash,
       diffDetails: `Post-state hash divergence. Expected ${expectedReceipt.postStateHash}, observed ${computedPostStateHash}`,
     };
   }
 
-  const latestReceipt = zone.getLatestReceipt();
-  if (!latestReceipt) {
+  const replayReceipt = zone.getLatestReceipt();
+  if (!replayReceipt) return { status: "UNPROVABLE", verdict: "UNPROVABLE", tick, reason: "REPLAY_RECEIPT_MISSING" };
+  if (replayReceipt.receiptHash !== expectedReceipt.receiptHash) {
     return {
-      status: "UNPROVABLE",
-      verdict: "UNPROVABLE",
-      tick,
-      reason: "No receipt generated during replay tick",
-    };
-  }
-
-  if (latestReceipt.receiptHash !== expectedReceipt.receiptHash) {
-    return {
-      status: "FIRST_DIVERGENCE",
-      verdict: "FIRST_DIVERGENCE",
-      stage: "POST_STATE",
-      expected: expectedReceipt.receiptHash,
-      observed: latestReceipt.receiptHash,
-      tick,
-      expectedHash: expectedReceipt.receiptHash,
-      observedHash: latestReceipt.receiptHash,
-      diffDetails: `Receipt hash divergence. Expected ${expectedReceipt.receiptHash}, observed ${latestReceipt.receiptHash}`,
+      status: "FIRST_DIVERGENCE", verdict: "FIRST_DIVERGENCE", stage: "RECEIPT", tick,
+      expected: expectedReceipt.receiptHash, observed: replayReceipt.receiptHash,
+      expectedHash: expectedReceipt.receiptHash, observedHash: replayReceipt.receiptHash,
+      diffDetails: `Receipt hash divergence. Expected ${expectedReceipt.receiptHash}, observed ${replayReceipt.receiptHash}`,
     };
   }
 
   return {
     status: "MATCH",
     verdict: "MATCH",
-    stagesVerified: 8,
+    stagesVerified: 4,
     tick,
     preStateHash: computedPreStateHash,
     postStateHash: computedPostStateHash,
-    receiptHash: latestReceipt.receiptHash,
-    postState: postState,
+    receiptHash: replayReceipt.receiptHash,
+    postState,
   };
 }
