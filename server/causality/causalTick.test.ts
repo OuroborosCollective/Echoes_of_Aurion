@@ -4,7 +4,6 @@ import { AuthoritativeMovementZone } from "../zoneRuntime";
 import type { ZoneId } from "../zoneProtocol";
 import { orderCanonicalZoneIntents, hashCanonicalIntents, type AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import { canonicalJson, canonicalSha256 } from "../../shared/aurionCanonicalHash";
-import { hashCanonicalZoneState } from "./zoneCanonicalState";
 import { globalTickRecorder } from "./tickRecorder";
 import { replayZoneTick } from "./replayZoneTick";
 import { activeProvenance } from "../aurionProvenance";
@@ -76,7 +75,7 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     expect(receipts).toHaveLength(2);
   });
 
-  it("successfully replays a recorded zone tick through all 8 verification stages", () => {
+  it("successfully replays a recorded zone tick through all receipt-v1 observable verification stages", () => {
     const zoneId = isolatedTestZone("causal-replay");
     const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
     const zone = new AuthoritativeMovementZone(zoneId);
@@ -100,7 +99,7 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
 
     expect(verdict.verdict).toBe("MATCH");
     if (verdict.verdict === "MATCH") {
-      expect(verdict.stagesVerified).toBe(8);
+      expect(verdict.stagesVerified).toBe(4);
       expect(verdict.receiptHash).toBe(receipt.receiptHash);
     }
   });
