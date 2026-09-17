@@ -9,7 +9,7 @@ import { requireDecodedMaterialTextures } from "../core/GlbTextureEvidence";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import { worldAssetById, worldAssetLod, worldAssetRegionSchema, type WorldAssetPlacement, type WorldAssetRegion } from "@shared/worldAssetProtocol";
 
-type Selection = { placement: WorldAssetPlacement; key: string; lod: 0|1|2; distance: number };
+type Selection = { placement: WorldAssetPlacement; key: string; lod: 0|1|2; distance: number; visible: boolean };
 type Cached = { gltf: GLTF; access: number; textures: Set<string>; releaseBudget: ()=>void; format: string; drawn: boolean };
 const shippingById = new Map(shipping.manifest.assets.map(asset=>[asset.asset,asset]));
 function disposeModel(gltf: GLTF, preserveTextures=false) {
@@ -64,12 +64,16 @@ export class WorldAssetProjection {
  }
  private select(position:{x:number;z:number},width:number){
   if(!this.region||this.disposed)return;this.viewportWidth=width;const phone=width<768,budget=assetBudgets[assetTier(width)],limit=this.pressure?Math.floor(budget.worldModels/2):budget.worldModels;
-  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!;const distance=Math.hypot(placement.xMm/1000-this.camera.position.x,placement.zMm/1000-this.camera.position.z,this.camera.position.y-this.terrain(placement.xMm/1000,placement.zMm/1000));const height=(asset.bounds.max[1]!-asset.bounds.min[1]!)*asset.scale;const previous=this.previousLod.get(placement.id);
+  // Selection is presentation-only, but under a tight mobile budget it must not spend
+  // memory on nearby placements behind the camera while visible confirmed placements starve.
+  this.camera.updateMatrixWorld();
+  const frustum=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix,this.camera.matrixWorldInverse));
+  const selection=this.region.placements.map(placement=>{const asset=worldAssetById.get(placement.assetId)!,x=placement.xMm/1000,z=placement.zMm/1000,y=this.terrain(x,z);const distance=Math.hypot(x-this.camera.position.x,z-this.camera.position.z,this.camera.position.y-y);const bounds=asset.bounds,height=(bounds.max[1]!-bounds.min[1]!)*asset.scale;const radius=Math.hypot((bounds.max[0]!-bounds.min[0]!)*asset.scale,height,(bounds.max[2]!-bounds.min[2]!)*asset.scale)/2;const visible=frustum.intersectsSphere(new THREE.Sphere(new THREE.Vector3(x,y+height/2,z),radius));const previous=this.previousLod.get(placement.id);
    let lod:0|1|2;
    if(this.pressure){const residentPrevious=previous!==undefined&&this.cache.has(`${placement.assetId}:${previous}`);lod=residentPrevious?previous:2;}
    else {lod=worldAssetLod(height,distance,this.camera.fov,phone);if(previous!==undefined&&previous!==lod){const stable=worldAssetLod(height,distance*(lod>previous?0.9:1.1),this.camera.fov,phone);if(stable!==lod)lod=previous;}}
-   this.previousLod.set(placement.id,lod);return {placement,lod,distance,key:`${placement.assetId}:${lod}`};})
-   .filter(s=>s.distance<this.camera.far*0.9).sort((a,b)=>a.distance-b.distance||a.placement.id.localeCompare(b.placement.id));
+   this.previousLod.set(placement.id,lod);return {placement,lod,distance,visible,key:`${placement.assetId}:${lod}`};})
+   .filter(s=>s.distance<this.camera.far*0.9).sort((a,b)=>Number(b.visible)-Number(a.visible)||a.distance-b.distance||a.placement.id.localeCompare(b.placement.id));
   const keys=new Set<string>();this.selected=[];
   for(const entry of selection){if(!keys.has(entry.key)&&keys.size>=limit)continue;keys.add(entry.key);this.selected.push(entry);if(this.selected.length>=Math.floor(budget.worldInstances/(this.pressure?2:1)))break;}
   for(const key of [...this.previousLod.keys()])if(!selection.some(s=>s.placement.id===key))this.previousLod.delete(key);
