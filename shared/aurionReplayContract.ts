@@ -1,12 +1,15 @@
+import type { CanonicalZoneState } from "../server/causality/zoneCanonicalState";
+
 export type ReplayStage =
   | "PRE_STATE"
   | "INPUT_ORDER"
+  | "POST_STATE"
+  | "RECEIPT"
   | "MOVEMENT"
   | "PLAYER_ACTION"
   | "RESOURCE"
   | "MOB_FSM"
-  | "MOB_COMBAT"
-  | "POST_STATE";
+  | "MOB_COMBAT";
 
 export type ReplayVerdict =
   | {
@@ -17,7 +20,7 @@ export type ReplayVerdict =
       preStateHash?: string;
       postStateHash?: string;
       receiptHash?: string;
-      postState?: any;
+      postState?: CanonicalZoneState;
     }
   | {
       status: "FIRST_DIVERGENCE";
@@ -40,4 +43,3 @@ export type ReplayVerdict =
 export function isReplayMatch(verdict: ReplayVerdict): boolean {
   return verdict.status === "MATCH";
 }
-
