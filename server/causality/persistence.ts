@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, lt, sql as sqlDrizzle } from "drizzle-orm";
 import { getDb } from "../db";
 import {
@@ -12,7 +12,7 @@ import type { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContr
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
-import type { CausalPersistenceAdapter, RecordedTickEntry } from "./tickRecorder";
+import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
@@ -24,19 +24,11 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const inputJson = intents ? stableJson(intents) : null;
     try {
       await db.insert(aurionCausalTickReceipts).values({
-        id,
-        worldId: receipt.worldId,
-        zoneId: receipt.zoneId,
-        tick: receipt.tick,
-        revision: receipt.sourceRevision,
-        rulesetVersion: receipt.rulesetVersion,
-        preStateHash: receipt.preStateHash,
-        inputHash: receipt.orderedIntentHash,
-        inputJson,
-        transitionHash: receipt.transitionHash,
-        rngRootHash: receipt.rngRootHash,
-        postStateHash: receipt.postStateHash,
-        previousReceiptHash: receipt.previousReceiptHash,
+        id, worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
+        revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
+        preStateHash: receipt.preStateHash, inputHash: receipt.orderedIntentHash, inputJson,
+        transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
+        postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
         receiptHash: receipt.receiptHash,
       });
     } catch (error) {
@@ -62,15 +54,11 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     } catch (error) {
       const [existing] = await db.select().from(aurionCausalCheckpoints).where(eq(aurionCausalCheckpoints.id, id)).limit(1);
       if (!existing) throw error;
-      if (existing.snapshotHash !== stateHash || existing.snapshotJson !== snapshotJson)
-        throw new Error(`CAUSAL_CHECKPOINT_CONFLICT:${id}`);
+      if (existing.snapshotHash !== stateHash || existing.snapshotJson !== snapshotJson) throw new Error(`CAUSAL_CHECKPOINT_CONFLICT:${id}`);
     }
   }
 
-  async saveReplayRun(run: {
-    worldId: string; zoneId: string; fromTick: number; toTick: number; sourceRevision: string; runtimeRuleset: string;
-    status: "MATCH" | "FIRST_DIVERGENCE" | "UNPROVABLE"; firstDivergentStage?: string; expectedHash?: string; observedHash?: string;
-  }): Promise<void> {
+  async saveReplayRun(run: { worldId: string; zoneId: string; fromTick: number; toTick: number; sourceRevision: string; runtimeRuleset: string; status: "MATCH" | "FIRST_DIVERGENCE" | "UNPROVABLE"; firstDivergentStage?: string; expectedHash?: string; observedHash?: string }): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     await db.insert(aurionReplayRuns).values({
@@ -82,24 +70,37 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   }
 
   async getLatestReceipt(zoneId: string): Promise<AurionCausalTickReceipt | null> {
-    const db = await getDb();
-    if (!db) return null;
+    const db = await getDb(); if (!db) return null;
     const [row] = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.zoneId, zoneId)).orderBy(desc(aurionCausalTickReceipts.tick)).limit(1);
     return row ? this.mapReceipt(row) : null;
   }
 
   async getRecordedTick(zoneId: string, tick: number): Promise<RecordedTickEntry | null> {
-    const db = await getDb();
-    if (!db) return null;
-    const [receiptRow] = await db.select().from(aurionCausalTickReceipts)
-      .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), eq(aurionCausalTickReceipts.tick, tick))).limit(1);
+    const db = await getDb(); if (!db) return null;
+    const [receiptRow] = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), eq(aurionCausalTickReceipts.tick, tick))).limit(1);
     if (!receiptRow) return null;
-    const [checkpointRow] = await db.select().from(aurionCausalCheckpoints)
-      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.tick, tick - 1))).limit(1);
+    const checkpoint = await this.getCheckpoint(zoneId, tick - 1);
     return {
       receipt: this.mapReceipt(receiptRow),
-      preState: checkpointRow ? JSON.parse(checkpointRow.snapshotJson) as CanonicalZoneState : undefined,
+      preState: checkpoint?.state,
       intents: receiptRow.inputJson ? JSON.parse(receiptRow.inputJson) as AurionZoneIntent[] : undefined,
+    };
+  }
+
+  async getCheckpoint(zoneId: string, tick: number): Promise<PersistedCheckpoint | null> {
+    if (!Number.isSafeInteger(tick) || tick < 0) return null;
+    const db = await getDb(); if (!db) return null;
+    const [row] = await db.select().from(aurionCausalCheckpoints)
+      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.tick, tick))).limit(1);
+    if (!row) return null;
+    return {
+      id: row.id,
+      worldId: row.worldId,
+      zoneId: row.zoneId,
+      tick: row.tick,
+      snapshotHash: row.snapshotHash,
+      state: JSON.parse(row.snapshotJson) as CanonicalZoneState,
+      reconciled: row.reconciled,
     };
   }
 
@@ -110,9 +111,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
 
   async getDivergentCheckpoints(zoneId: string, limit: number): Promise<any[]> {
     const db = await getDb(); if (!db) return [];
-    return db.select().from(aurionCausalCheckpoints)
-      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.reconciled, -1)))
-      .orderBy(desc(aurionCausalCheckpoints.tick)).limit(limit);
+    return db.select().from(aurionCausalCheckpoints).where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.reconciled, -1))).orderBy(desc(aurionCausalCheckpoints.tick)).limit(limit);
   }
 
   async updateCheckpointReconciliation(id: string, status: number): Promise<void> {
@@ -129,12 +128,9 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     return rows.map(row => ({ receipt: this.mapReceipt(row), intents: row.inputJson ? JSON.parse(row.inputJson) as AurionZoneIntent[] : undefined }));
   }
 
-  /** Copy-only cold storage. Primary causal rows remain immutable and queryable. */
   async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string } | null> {
     const db = await getDb(); if (!db) return null;
-    const rows = await db.select().from(aurionCausalTickReceipts)
-      .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), lt(aurionCausalTickReceipts.tick, beforeTick)))
-      .orderBy(aurionCausalTickReceipts.tick);
+    const rows = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), lt(aurionCausalTickReceipts.tick, beforeTick))).orderBy(aurionCausalTickReceipts.tick);
     if (rows.length === 0) return null;
     const startTick = rows[0].tick, endTick = rows[rows.length - 1].tick;
     const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
@@ -157,8 +153,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
 
   async getArchiveStats(zoneId: string): Promise<{ totalArchives: number; totalArchivedReceipts: number }> {
     const db = await getDb(); if (!db) return { totalArchives: 0, totalArchivedReceipts: 0 };
-    const rows = await db.select({ count: sqlDrizzle<number>`count(*)`, totalReceipts: sqlDrizzle<number>`sum(receiptCount)` })
-      .from(aurionCausalArchive).where(eq(aurionCausalArchive.zoneId, zoneId));
+    const rows = await db.select({ count: sqlDrizzle<number>`count(*)`, totalReceipts: sqlDrizzle<number>`sum(receiptCount)` }).from(aurionCausalArchive).where(eq(aurionCausalArchive.zoneId, zoneId));
     return { totalArchives: Number(rows[0]?.count) || 0, totalArchivedReceipts: Number(rows[0]?.totalReceipts) || 0 };
   }
 
@@ -168,8 +163,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const globalProofJson = stableJson(proof);
     const [existing] = await db.select().from(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.id, id)).limit(1);
     if (existing) {
-      if (existing.globalProofHash !== proofHash || existing.globalProofJson !== globalProofJson || existing.status !== status)
-        throw new Error(`GLOBAL_PROOF_CONFLICT:${id}`);
+      if (existing.globalProofHash !== proofHash || existing.globalProofJson !== globalProofJson || existing.status !== status) throw new Error(`GLOBAL_PROOF_CONFLICT:${id}`);
       return;
     }
     await db.insert(aurionGlobalStateProofs).values({ id, worldId: proof.worldId, epoch: proof.epoch, globalProofHash: proofHash, globalProofJson, status });
