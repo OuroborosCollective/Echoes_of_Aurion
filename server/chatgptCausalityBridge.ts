@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { computeReceiptHash } from "../shared/aurionCausalTickContract";
+import { computeReceiptHash, type AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
 import { activeProvenance } from "./aurionProvenance";
 import { globalCausalPersistence } from "./causality/persistence";
 import { globalCausalRecoveryService } from "./causality/causalRecoveryService";
@@ -18,9 +18,9 @@ async function recordedEntry(zoneId: string, tick: number) {
   return globalTickRecorder.getEntry(zoneId, tick) ?? await globalCausalPersistence.getRecordedTick(zoneId, tick);
 }
 
-function receiptTruthStatus(receipt: { receiptHash: string } & Record<string, unknown>): EvidenceTruthStatus {
+function receiptTruthStatus(receipt: AurionCausalTickReceipt): EvidenceTruthStatus {
   try {
-    return computeReceiptHash(receipt as any) === receipt.receiptHash ? "VERIFIED" : "CONTRADICTED";
+    return computeReceiptHash(receipt) === receipt.receiptHash ? "VERIFIED" : "CONTRADICTED";
   } catch {
     return "UNVERIFIED";
   }
