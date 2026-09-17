@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import type { AurionProvenance } from "../shared/aurionProvenanceContract";
 
+const UNBOUND_SHA256 = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
 function fileSha256(relPath: string): string {
   try {
     const full = resolve(process.cwd(), relPath);
@@ -11,9 +13,9 @@ function fileSha256(relPath: string): string {
       return canonicalSha256(content);
     }
   } catch {
-    // fallback
+    // A release gate must reject the explicit unbound sentinel.
   }
-  return "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+  return UNBOUND_SHA256;
 }
 
 export function computeRuntimeProvenance(): AurionProvenance {
@@ -43,7 +45,10 @@ export function computeRuntimeProvenance(): AurionProvenance {
   const buildTimestamp = "2026-09-16T12:00:00.000Z";
   const buildInputDigest = process.env.AURION_BUILD_INPUT_DIGEST || fileSha256("pnpm-lock.yaml");
   const artifactDigest = process.env.AURION_ARTIFACT_DIGEST || fileSha256("package.json");
-  const runtimeImageDigest = process.env.AURION_RUNTIME_IMAGE_DIGEST || "sha256:553aad9a959999359289cf347f0e08cac5bdd8e1d47098c55b2a3bc2acc8f356";
+  // A final Docker image identity is only knowable after the image has been built.
+  // Production/candidate orchestrators must inject the exact inspected image ID at
+  // container start; never reuse a historical digest as a plausible-looking fallback.
+  const runtimeImageDigest = process.env.AURION_RUNTIME_IMAGE_DIGEST || UNBOUND_SHA256;
 
   const authority = {
     ruleset: "aurion-zone-v3",
