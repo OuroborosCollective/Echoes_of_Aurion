@@ -4,7 +4,7 @@ import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
-import { uploadedWorldVisualsForChunk, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
+import { returnStoneVisualPlacement, uploadedWorldVisualsForChunk, type UploadedWorldVisualPlacement } from "../core/UploadedAssetRuntime";
 
 type Rendered = Readonly<{ sha256: string; root: THREE.Group; lodLevels: readonly number[] }>;
 const MAX_RENDERED = 18;
@@ -34,6 +34,9 @@ function staticRenderable(scene: THREE.Group): boolean {
  * Placement is deterministic from the confirmed catalog + chunk identity. This
  * class never registers colliders, teleports, interactions or gameplay objects.
  * Logical catalog assets may contain up to four hash-bound physical LOD GLBs.
+ *
+ * The exact owner-selected return-stone GLB has one dedicated visual placement
+ * at the live zone origin. Its presence still grants no gameplay authority.
  */
 export class UploadedWorldCatalogProjection {
   readonly root = new THREE.Group();
@@ -62,6 +65,8 @@ export class UploadedWorldCatalogProjection {
     for (let z = center.z - 1; z <= center.z + 1; z += 1) for (let x = center.x - 1; x <= center.x + 1; x += 1) {
       placements.push(...uploadedWorldVisualsForChunk(this.catalog, { x, z }));
     }
+    const returnStone = returnStoneVisualPlacement(this.catalog);
+    if (returnStone && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(returnStone);
     placements.sort((left, right) => {
       const ld = Math.hypot(left.xMm / 1000 - position.x, left.zMm / 1000 - position.z);
       const rd = Math.hypot(right.xMm / 1000 - position.x, right.zMm / 1000 - position.z);
