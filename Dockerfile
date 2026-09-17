@@ -24,8 +24,11 @@ LABEL org.opencontainers.image.revision=${AURION_RELEASE_SHA} \
       org.opencontainers.image.game-dev.revision=${AURION_GAME_DEV_SOURCE_REVISION}
 
 # The hosted artifact contains the exact dependency graph installed from the pinned lockfile.
+# Keep the sealed lockfile inside the runtime image as provenance input so /healthz
+# can bind buildInputDigest to the same bytes that produced runtime-node_modules.tgz.
 # The VPS Docker build must not resolve or install packages.
 COPY package.json ./
+COPY pnpm-lock.yaml ./
 ADD runtime-node_modules.tgz ./
 
 # Game Development Studio is staged and verified on the hosted runner, then
@@ -39,6 +42,7 @@ COPY dist ./dist
 COPY deploy/verify-aurion-runtime-database.mjs ./deploy/verify-aurion-runtime-database.mjs
 RUN test -n "$AURION_RELEASE_SHA" \
  && test "$AURION_GAME_DEV_SOURCE_REVISION" = "96a0b4f34b979279ab983e9547af43133e85f310" \
+ && test -f /app/pnpm-lock.yaml \
  && test -f /app/dist/.aurion-runtime-build.json \
  && test -f /app/deploy/verify-aurion-runtime-database.mjs \
  && test -x /opt/game-dev/node_modules/.bin/game-dev \
