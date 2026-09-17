@@ -829,3 +829,13 @@ Decisions:
 Touched surfaces: `server/zoneRuntime.ts`, `server/zoneGateway.ts`, `server/causality/persistence.ts`, `client/src/components/CausalStudioDashboard.tsx`.
 Evidence: `compile_applet` successful; zone ticking is synchronous; repair/archive methods strictly preserve all evidence.
 Learned: An append-only evidence model requires that rollbacks branch the timeline or emit compensating events rather than deleting history. Asynchronous external I/O must never block a deterministic simulation loop.
+
+### 2026-09-17 — Return-stone GLB revival projection
+Status: VERIFIED
+Task: Bind the owner GLB as the canonical return-stone visual and move revival into the authoritative Aurion zone tick.
+Decisions: Keep GLB/pixels presentation-only; exact SHA catalog binding; 30-tick revive at the city return-stone; cross-zone fast travel remains fail-closed.
+Touched surfaces: Return-stone contract, catalog projection/resolver, zone revival/runtime, GLB classifier, candidate-runtime evidence.
+Evidence: PR #363 exact pre-memory head `2afa1dfe8993f3d8c35d8d1d7fef0abc42f64494`; live catalog SHA `dec4033e1f19e0d79c0d7494de3a3d4f5aeb4c3f4e422529df2721e13deb27cf` classified `arena / teleporter / world-environment`; exact-head candidate + container proofs, revive proof, AIM-240, AIM-259, AIM-284, AIM-290, AIM-291, AIM-292, Android and Local Test Pack green.
+Learned: Asset naming/classification and renderer visibility must be proven independently from gameplay authority; live catalog admission does not grant gameplay truth.
+Open: Cross-zone discovered-waygate travel is intentionally out of scope.
+Next safe step: Re-run exact-head CI after this append, merge only if green, then perform post-merge live revision/container readback.
