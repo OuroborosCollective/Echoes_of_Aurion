@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest";
 import type WebSocket from "ws";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
+import type { ZoneId } from "../zoneProtocol";
 import { orderCanonicalZoneIntents, hashCanonicalIntents, type AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import { canonicalJson, canonicalSha256 } from "../../shared/aurionCanonicalHash";
 import { hashCanonicalZoneState } from "./zoneCanonicalState";
 import { globalTickRecorder } from "./tickRecorder";
 import { replayZoneTick } from "./replayZoneTick";
 import { activeProvenance } from "../aurionProvenance";
+
+function isolatedTestZone(suffix: string): ZoneId {
+  return `observatory_threshold:${suffix}` as unknown as ZoneId;
+}
 
 describe("C-Aurion Causal Tick & Determinism Engine", () => {
   it("enforces canonical intent ordering with deterministic tie-breaking", () => {
@@ -18,28 +23,31 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     ];
 
     const ordered = orderCanonicalZoneIntents(rawIntents);
-    expect(ordered[0].type).toBe("move");
-    expect(ordered[0].entityId).toBe("player:2");
-    expect(ordered[1].type).toBe("move");
-    expect(ordered[1].entityId).toBe("player:1");
-    expect(ordered[2].type).toBe("skill");
-    expect(ordered[3].type).toBe("attack");
+    expect(ordered.map(intent => [intent.entityId, intent.clientSeq, intent.type])).toEqual([
+      ["player:1", 2, "move"],
+      ["player:1", 4, "skill"],
+      ["player:2", 1, "move"],
+      ["player:2", 5, "attack"],
+    ]);
 
-    // Repeat ordering - must produce identical hash
+    // Transport arrival order is deliberately excluded from canonical ordering.
     const orderedAgain = orderCanonicalZoneIntents([...rawIntents].reverse());
     expect(hashCanonicalIntents(ordered)).toBe(hashCanonicalIntents(orderedAgain));
   });
 
-  it("rounds IEEE 754 floating point numbers to 4 decimal places in canonical JSON", () => {
+  it("preserves finite IEEE 754 values exactly while normalizing only negative zero", () => {
     const objA = { x: 12.3456789, z: -0.00001 };
     const objB = { x: 12.3457, z: 0 };
-    expect(canonicalJson(objA)).toBe(canonicalJson(objB));
-    expect(canonicalSha256(objA)).toBe(canonicalSha256(objB));
+    expect(canonicalJson(objA)).not.toBe(canonicalJson(objB));
+    expect(canonicalSha256(objA)).not.toBe(canonicalSha256(objB));
+    expect(canonicalJson({ zero: -0 })).toBe(canonicalJson({ zero: 0 }));
+    expect(() => canonicalJson({ x: Number.POSITIVE_INFINITY })).toThrow("CANONICAL_NUMBER_NON_FINITE");
   });
 
   it("produces a valid cryptographic receipt chain across zone ticks", () => {
+    const zoneId = isolatedTestZone("causal-chain");
     const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(zoneId);
     const { connectionId } = zone.join({
       userId: 101,
       socket: socket as unknown as WebSocket,
@@ -61,16 +69,17 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     expect(r2!.tick).toBe(2);
     expect(r2!.previousReceiptHash).toBe(r1!.receiptHash);
 
-    // Verify chain integrity in global recorder
-    const receipts = globalTickRecorder.getReceipts();
-    const chainVerification = globalTickRecorder.verifyReceiptChain();
+    // Verify only this test lineage; unrelated test zones must never alias it.
+    const receipts = globalTickRecorder.getReceipts(zoneId);
+    const chainVerification = globalTickRecorder.verifyReceiptChain(zoneId);
     expect(chainVerification.valid).toBe(true);
-    expect(receipts.length).toBeGreaterThanOrEqual(2);
+    expect(receipts).toHaveLength(2);
   });
 
   it("successfully replays a recorded zone tick through all 8 verification stages", () => {
+    const zoneId = isolatedTestZone("causal-replay");
     const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(zoneId);
     const { connectionId } = zone.join({
       userId: 202,
       socket: socket as unknown as WebSocket,
@@ -80,7 +89,7 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
     zone.tick();
     const receipt = zone.getLatestReceipt()!;
-    const entry = globalTickRecorder.getEntry("observatory_threshold", receipt.tick)!;
+    const entry = globalTickRecorder.getEntry(zoneId, receipt.tick)!;
     expect(entry).toBeDefined();
 
     const verdict = replayZoneTick({
@@ -97,8 +106,9 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
   });
 
   it("detects divergence when intents or states are tampered", () => {
+    const zoneId = isolatedTestZone("causal-tamper");
     const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(zoneId);
     const { connectionId } = zone.join({
       userId: 303,
       socket: socket as unknown as WebSocket,
@@ -108,7 +118,7 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
     zone.tick();
     const receipt = zone.getLatestReceipt()!;
-    const entry = globalTickRecorder.getEntry("observatory_threshold", receipt.tick)!;
+    const entry = globalTickRecorder.getEntry(zoneId, receipt.tick)!;
 
     // Tamper with intent input
     const tamperedIntents: AurionZoneIntent[] = [
@@ -134,7 +144,7 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     expect(activeProvenance.rulesets.bladeSkills).toMatch(/^sha256:[a-f0-9]{64}$/);
 
     const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
-    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    const zone = new AuthoritativeMovementZone(isolatedTestZone("causal-provenance"));
     zone.join({
       userId: 404,
       socket: socket as unknown as WebSocket,
