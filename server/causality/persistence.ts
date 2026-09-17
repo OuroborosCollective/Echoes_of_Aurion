@@ -11,6 +11,7 @@ import {
 import type { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
+import { operationalDate } from "../../shared/operationalClock";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
@@ -117,7 +118,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   async updateCheckpointReconciliation(id: string, status: number): Promise<void> {
     if (![1, -1].includes(status)) throw new Error("CHECKPOINT_RECONCILIATION_STATUS_INVALID");
     const db = await getDb(); if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
-    await db.update(aurionCausalCheckpoints).set({ reconciled: status, reconciledAt: new Date() }).where(eq(aurionCausalCheckpoints.id, id));
+    await db.update(aurionCausalCheckpoints).set({ reconciled: status, reconciledAt: operationalDate() }).where(eq(aurionCausalCheckpoints.id, id));
   }
 
   async getTicksInRange(zoneId: string, fromTick: number, toTick: number): Promise<RecordedTickEntry[]> {
