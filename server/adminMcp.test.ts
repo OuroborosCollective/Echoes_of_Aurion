@@ -2,6 +2,28 @@ import { describe, expect, it } from "vitest";
 import { adminMcpCapabilities } from "./adminMcp";
 import { getGlobalWorldAdminReadModel } from "./db";
 
+const BASE_READ_TOOLS = [
+  "aurion_admin_get_capabilities",
+  "aurion_admin_get_world_overview",
+  "aurion_admin_wolfram_status",
+  "aurion_causality_status",
+  "aurion_tick_receipt_get",
+  "aurion_tick_explain",
+  "aurion_tick_replay",
+  "aurion_replay_range",
+  "aurion_runtime_identity",
+  "aurion_donor_ledger",
+  "aurion_donor_capability_explain",
+] as const;
+
+const WOLFRAM_READ_TOOLS = [
+  "aurion_admin_wolfram_compute",
+  "aurion_admin_wolfram_hints",
+  "aurion_admin_wolfram_alpha_results",
+  "aurion_admin_wolfram_alpha_context",
+  "aurion_admin_wolfram_canary",
+] as const;
+
 describe("adminMcp", () => {
   it("exposes asset writes only for the dedicated scope without opening gameplay or shell authority", () => {
     const writable = adminMcpCapabilities(["aurion.admin.read", "aurion.admin.assets.write"], { wolframConfigured: true });
@@ -14,23 +36,13 @@ describe("adminMcp", () => {
   it("keeps Wolfram status visible but exposes provider calls only when the server key is configured", () => {
     const unavailable = adminMcpCapabilities(["aurion.admin.read"]);
     expect(unavailable.wolfram).toEqual({ configured: false, mutationAuthority: "none" });
-    expect(unavailable.tools.map(tool => tool.name)).toEqual([
-      "aurion_admin_get_capabilities",
-      "aurion_admin_get_world_overview",
-      "aurion_admin_wolfram_status",
-    ]);
+    expect(unavailable.tools.map(tool => tool.name)).toEqual(BASE_READ_TOOLS);
 
     const configured = adminMcpCapabilities(["aurion.admin.read"], { wolframConfigured: true });
     expect(configured.wolfram).toEqual({ configured: true, mutationAuthority: "none" });
     expect(configured.tools.map(tool => tool.name)).toEqual([
-      "aurion_admin_get_capabilities",
-      "aurion_admin_get_world_overview",
-      "aurion_admin_wolfram_status",
-      "aurion_admin_wolfram_compute",
-      "aurion_admin_wolfram_hints",
-      "aurion_admin_wolfram_alpha_results",
-      "aurion_admin_wolfram_alpha_context",
-      "aurion_admin_wolfram_canary",
+      ...BASE_READ_TOOLS,
+      ...WOLFRAM_READ_TOOLS,
     ]);
     expect(configured.tools.every(tool => tool.mode === "read")).toBe(true);
   });
@@ -38,11 +50,7 @@ describe("adminMcp", () => {
   it("exposes only the bounded ChatGPT-Pro read surface when Wolfram is not configured", () => {
     const capabilities = adminMcpCapabilities();
     expect(capabilities.chatGptProMode).toBe("read_fetch_only");
-    expect(capabilities.tools.map(tool => tool.name)).toEqual([
-      "aurion_admin_get_capabilities",
-      "aurion_admin_get_world_overview",
-      "aurion_admin_wolfram_status",
-    ]);
+    expect(capabilities.tools.map(tool => tool.name)).toEqual(BASE_READ_TOOLS);
     expect(capabilities.tools.every(tool => tool.mode === "read")).toBe(true);
     expect(capabilities.unavailable).toEqual(expect.arrayContaining([
       "world_delta_write",
