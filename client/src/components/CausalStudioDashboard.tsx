@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip, YAxis } from "recharts";
+import { operationalDate } from "@shared/operationalClock";
 
 export default function CausalStudioDashboard() {
   const [zoneId, setZoneId] = useState("observatory_threshold");
@@ -41,7 +42,7 @@ export default function CausalStudioDashboard() {
 
   const handleExportDiagnostics = () => {
     const diagnosticData = {
-      timestamp: new Date().toISOString(),
+      timestamp: operationalDate().toISOString(),
       identity: healthQuery.data,
       zoneId,
       tickNumber,
