@@ -158,12 +158,15 @@ export class QuestRuntimeEngine {
       throw new Error(`CANNOT_PROGRESS_INACTIVE_QUEST:${instance.state}`);
     }
 
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1_000) throw new Error("QUEST_PROGRESS_AMOUNT_INVALID");
+    const currentNode = plan.nodes.find(n => n.id === instance.currentNodeId);
+    if (!currentNode?.objective || currentNode.objective.key !== objectiveKey) throw new Error("QUEST_OBJECTIVE_KEY_MISMATCH");
+
     const occurredAt = operationalDate(this.clock).toISOString();
     const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const currentProgress = (instance.objectiveProgress[objectiveKey] as number) || 0;
     const newProgress = currentProgress + amount;
 
-    const currentNode = plan.nodes.find(n => n.id === instance.currentNodeId);
     let completedNode = false;
     let nextNodeId = instance.currentNodeId;
     const completedNodeIds = [...instance.completedNodeIds];
