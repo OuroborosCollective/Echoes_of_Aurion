@@ -7,6 +7,7 @@ import {
   buildGameDevPackageBuildArgs,
   buildGameDevVendorAdmitArgs,
   gameDevelopmentStudioLiveAssetInputSchema,
+  gameDevelopmentStudioRightsLabel,
   planGameDevelopmentStudioLiveAsset,
 } from "./gameDevelopmentStudioProduction";
 
@@ -26,8 +27,20 @@ function input(license = "CC0-1.0") {
     contentBase64: testGlb("Aurion_Spear_Weapon").toString("base64"),
     purpose: "equipment",
     packageVersion: "1.0.0",
+    rightsBasis: "licensed",
     license,
     designWorkOrderSha256: "a".repeat(64),
+  });
+}
+
+function ownerCreatedInput() {
+  return gameDevelopmentStudioLiveAssetInputSchema.parse({
+    displayName: "Lyra Keeper of the Observatory",
+    fileName: "Lyra_character_questgiver.glb",
+    contentBase64: testGlb("Lyra_character_questgiver").toString("base64"),
+    purpose: "npc-fallback",
+    packageVersion: "1.0.0",
+    rightsBasis: "owner-created-private",
   });
 }
 
@@ -46,8 +59,12 @@ describe("productive Game Development Studio live admission contract", () => {
     expect(confirmed.filter(value => value === "--confirm")).toHaveLength(1);
   });
 
-  it("rejects unknown licensing before any production package admission", () => {
+  it("rejects unknown licensed assets but accepts owner-created private rights without a foreign license", () => {
     expect(() => input("unknown")).toThrow("explicit license required");
+    const owner = ownerCreatedInput();
+    expect(owner.license).toBeUndefined();
+    expect(gameDevelopmentStudioRightsLabel(owner)).toBe("Proprietary-Owner-Created");
+    expect(buildGameDevPackageBuildArgs("/tmp/source.glb", "/tmp/output", owner)).toContain("Proprietary-Owner-Created");
   });
 
   it("creates a deterministic review plan from real GLB bytes and GDS validation evidence", async () => {
