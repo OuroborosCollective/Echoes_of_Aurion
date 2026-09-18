@@ -62,7 +62,7 @@ describe("Aurion donor/runtime ownership ledger", () => {
     expect(liveAssets).not.toContain("wasdGlb:");
 
     const loader = readFileSync("client/src/xaurion/core/GLBModelManager.ts", "utf8");
-    expect(loader).toContain("/api/assets/glb/");
+    expect(loader).toContain("const match = /^\\/api\\/assets\\/glb\\/");
     expect(loader).toContain("GLB_SOURCE_HASH_REQUIRED");
     expect(loader).not.toContain("raw.githubusercontent.com");
 
