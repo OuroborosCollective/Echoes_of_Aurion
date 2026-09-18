@@ -274,7 +274,12 @@ container_probe_status=0
 phase=container-health
 for _attempt in $(seq 1 30); do
   if [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container_id")" == "healthy" ]]; then
-    if docker exec -e "EXPECTED_SHA=$expected_sha" "$container_id" node --input-type=module -e '
+    if docker exec \
+      -e "EXPECTED_SHA=$expected_sha" \
+      -e "EXPECTED_BUILD_INPUT_DIGEST=$build_input_digest" \
+      -e "EXPECTED_ARTIFACT_DIGEST=$artifact_digest" \
+      -e "EXPECTED_RUNTIME_IMAGE_DIGEST=$runtime_image_id" \
+      "$container_id" node --input-type=module -e '
       const healthResponse = await fetch("http://127.0.0.1:3000/healthz");
       let health;
       try {
@@ -282,7 +287,18 @@ for _attempt in $(seq 1 30); do
       } catch {
         process.exit(10);
       }
-      if (!healthResponse.ok || health.status !== "ok" || health.service !== "echoes-of-aurion" || health.revision !== process.env.EXPECTED_SHA) process.exit(10);
+      if (
+        !healthResponse.ok ||
+        health.status !== "ok" ||
+        health.service !== "echoes-of-aurion" ||
+        health.revision !== process.env.EXPECTED_SHA ||
+        health.buildInputDigest !== process.env.EXPECTED_BUILD_INPUT_DIGEST ||
+        health.artifactDigest !== process.env.EXPECTED_ARTIFACT_DIGEST ||
+        health.runtimeImageDigest !== process.env.EXPECTED_RUNTIME_IMAGE_DIGEST ||
+        health.authority?.ruleset !== "aurion-zone-v3" ||
+        health.authority?.tickHz !== 10 ||
+        health.authority?.causalReceipts !== true
+      ) process.exit(10);
       const pageResponse = await fetch("http://127.0.0.1:3000/");
       const page = await pageResponse.text();
       if (!pageResponse.ok || !pageResponse.headers.get("content-type")?.includes("text/html")) process.exit(11);
@@ -369,8 +385,19 @@ for _attempt in $(seq 1 30); do
       let raw = "";
       for await (const chunk of process.stdin) raw += chunk;
       const body = JSON.parse(raw);
-      if (body.status !== "ok" || body.service !== "echoes-of-aurion" || body.revision !== process.argv[1]) process.exit(1);
-    ' "$expected_sha"; then
+      const [revision,buildInputDigest,artifactDigest,runtimeImageDigest] = process.argv.slice(1);
+      if (
+        body.status !== "ok" ||
+        body.service !== "echoes-of-aurion" ||
+        body.revision !== revision ||
+        body.buildInputDigest !== buildInputDigest ||
+        body.artifactDigest !== artifactDigest ||
+        body.runtimeImageDigest !== runtimeImageDigest ||
+        body.authority?.ruleset !== "aurion-zone-v3" ||
+        body.authority?.tickHz !== 10 ||
+        body.authority?.causalReceipts !== true
+      ) process.exit(1);
+    ' "$expected_sha" "$build_input_digest" "$artifact_digest" "$runtime_image_id"; then
       printf '%s\n' "$health_json"
       public_ready=1
       break
@@ -410,10 +437,9 @@ receipt="${receipt_dir}/${release_id}.json"
 receipt_tmp="${receipt}.tmp"
 runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
 umask 077
-printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1"}\n' \
-  "$expected_sha" "$release_id" \
-  "$runtime_image_id" \
-  "$container_id" "$aurion_domain" "$traefik_network" "$database_network" > "$receipt_tmp"
+printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","authority":{"ruleset":"aurion-zone-v3","tickHz":10,"causalReceipts":true}}\n' \
+  "$expected_sha" "$release_id" "$build_input_digest" "$artifact_digest" "$runtime_image_id" "$release_archive_digest" \
+  "$runtime_image_id" "$container_id" "$aurion_domain" "$traefik_network" "$database_network" > "$receipt_tmp"
 mv -Tf "$receipt_tmp" "$receipt"
 ln -sTfn "$receipt" "${receipt_dir}/current.next"
 mv -Tf "${receipt_dir}/current.next" "${receipt_dir}/current.json"
@@ -429,8 +455,8 @@ schema_manifest_sha256="$(sha256sum "${schema_current}/manifest.json" | awk '{pr
 install -d -o root -g root -m 0755 "$public_readback_dir"
 public_readback_tmp="${public_readback_dir}/.${release_id}.json.tmp"
 public_readback="${public_readback_dir}/current.json"
-printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only"}\n' \
-  "$expected_sha" "$release_id" "$runtime_image_id" "$container_id" "$aurion_domain" \
+printf '{"recordType":"aurion_traefik_runtime_readback","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","runtimeManifestSha256":"%s","schemaManifestSha256":"%s","schemaMode":"read_only","authority":{"ruleset":"aurion-zone-v3","tickHz":10,"causalReceipts":true}}\n' \
+  "$expected_sha" "$release_id" "$build_input_digest" "$artifact_digest" "$runtime_image_id" "$release_archive_digest" "$runtime_image_id" "$container_id" "$aurion_domain" \
   "$traefik_network" "$database_network" "$runtime_manifest_sha256" "$schema_manifest_sha256" > "$public_readback_tmp"
 chown root:root "$public_readback_tmp"
 chmod 0644 "$public_readback_tmp"
