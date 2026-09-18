@@ -3,7 +3,7 @@
 # Dieses Image führt keinen Frontendbuild aus. Das gebundene `dist`-Artefakt
 # wird vor dem Containerbuild durch `pnpm build:runtime-artifact` erzeugt und
 # mit einer Quellrevision versehen.
-FROM node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
+FROM node:26.9.0-bookworm-slim@sha256:c8fedd782bcd1b68d8a7d1ed2577b5f820eba820871323f605292651ff11e3c6 AS runtime
 WORKDIR /app
 
 ARG AURION_RELEASE_SHA
