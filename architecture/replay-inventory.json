@@ -11,7 +11,14 @@
       "tests": [
         "server/causality/causalTick.test.ts"
       ],
-      "verdictContract": "shared/aurionReplayContract.ts"
+      "verdictContract": "shared/aurionReplayContract.ts",
+      "adapters": [
+        "server/causality/readbackService.ts",
+        "server/routes/causalityRouter.ts",
+        "server/chatgptCausalityBridge.ts",
+        "scripts/replay-aurion-zone.ts",
+        "server/causality/replayZoneTickRunner.ts"
+      ]
     },
     {
       "replayId": "quest.compiler",
@@ -21,7 +28,12 @@
       "tests": [
         "server/questCompiler/replay.test.ts"
       ],
-      "verdictContract": "shared/aurionReplayContract.ts"
+      "verdictContract": "shared/aurionReplayContract.ts",
+      "adapters": [
+        "server/questCompiler/adminService.ts",
+        "server/routes/aurionQuestRouter.ts",
+        "server/adminMcp.ts"
+      ]
     },
     {
       "replayId": "world.context",
@@ -31,7 +43,12 @@
       "tests": [
         "server/worldContext/replay.test.ts"
       ],
-      "verdictContract": "shared/aurionReplayContract.ts"
+      "verdictContract": "shared/aurionReplayContract.ts",
+      "adapters": [
+        "server/worldContext/service.ts",
+        "server/routes/aurionContextRouter.ts",
+        "server/adminMcp.ts"
+      ]
     },
     {
       "replayId": "npc.decision-rehydration",
