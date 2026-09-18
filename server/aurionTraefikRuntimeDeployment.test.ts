@@ -247,6 +247,11 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("./patches/wouter-3.7.1.patch");
     expect(workflow).toContain("legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad");
     expect(workflow).toContain("refusing to invoke an unrecognized promoter");
+    expect(workflow).toContain("promoter_kind=legacy");
+    expect(workflow).toContain("promoter_kind=compatible");
+    expect(workflow).toContain("promoter bootstrap did not install canonical promoter");
+    expect(workflow).toContain("promoter upgraded to canonical promoter before production promotion");
+    expect(workflow).not.toContain("will receive the canonical artifact directly");
     expect(workflow).toContain("promoter_needs_readback_replay=0");
     expect(workflow).toContain('if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then');
     expect(promoter).toContain("# aurion-traefik-promoter-protocol: 2");

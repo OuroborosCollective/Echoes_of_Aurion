@@ -618,21 +618,34 @@ jobs:
           promoter_needs_readback_replay=0
           if ! sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
             installed_promoter_sha256="$(sudo sha256sum "$installed" | awk '{print $1}')"
+            promoter_kind=""
             if [[ "$installed_promoter_sha256" == "$legacy_promoter_sha256" ]]; then
-              bootstrap_release_id="${bootstrap_expected_sha}-0"
-              set +e
-              sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
-              bootstrap_status=$?
-              set -e
-              printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
-              sudo test -x "$installed"
-              sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
+              promoter_kind=legacy
             elif sudo grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { sudo grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && sudo grep -Fq 'image_id="$(docker image inspect' "$installed"; }; then
-              printf 'compatible promoter %s will receive the canonical artifact directly\n' "$installed_promoter_sha256"
+              promoter_kind=compatible
             else
               printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
               exit 70
             fi
+
+            # Any recognized but non-identical promoter must first consume the
+            # bootstrap-only artifact. The bootstrap may fail after installing
+            # the canonical promoter, but production promotion stays blocked
+            # until byte-identical readback proves the canonical promoter is
+            # installed.
+            bootstrap_release_id="${bootstrap_expected_sha}-0"
+            set +e
+            sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
+            bootstrap_status=$?
+            set -e
+            printf '%s promoter bootstrap status=%s\n' "$promoter_kind" "$bootstrap_status"
+            sudo test -x "$installed"
+            if ! sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
+              printf 'promoter bootstrap did not install canonical promoter: kind=%s status=%s previous_sha256=%s\n' \
+                "$promoter_kind" "$bootstrap_status" "$installed_promoter_sha256" >&2
+              exit 71
+            fi
+            printf '%s promoter upgraded to canonical promoter before production promotion\n' "$promoter_kind"
           fi
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
 
