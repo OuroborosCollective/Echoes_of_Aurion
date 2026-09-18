@@ -66,8 +66,7 @@ export class AdminQuestStudioService {
       giverNpcId: "npc_merchant_kaelen",
       triggerEventId: "evt_init_caravan",
     });
-    void this.persistenceEngine.savePlan(plan);
-    void this.persistenceEngine.saveInstance(instance);
+    this.persistenceEngine.seedEphemeral(plan, instance);
   }
 
   private async ensureHydrated(): Promise<void> {
