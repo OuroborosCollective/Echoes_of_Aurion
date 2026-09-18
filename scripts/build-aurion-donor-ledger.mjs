@@ -37,7 +37,7 @@ function relativeFiles(root, relativeRoot) {
 
 function runtimeScanFiles(root) {
   const explicit = ["package.json", "Dockerfile", "docker-compose.yml", "docker-compose.yaml"];
-  const roots = ["server", "shared", "client/src", "deploy", ".github/workflows"];
+  const roots = ["server", "shared", "client/src", "drizzle", "config", "vendor", "scripts", "deploy", ".github/workflows"];
   const set = new Set(explicit.filter(file => fs.existsSync(path.join(root, file))));
   for (const relativeRoot of roots) {
     for (const file of relativeFiles(root, relativeRoot)) {
@@ -49,17 +49,20 @@ function runtimeScanFiles(root) {
 }
 
 export function donorDerivedSurfaceFiles(root = process.cwd()) {
-  const roots = ["server", "shared", "client/src/xaurion"];
+  const roots = ["server", "shared", "client/src", "drizzle", "config", "vendor", "scripts", "deploy", ".github/workflows"];
   const files = new Set();
   for (const relativeRoot of roots) {
     for (const file of relativeFiles(root, relativeRoot)) {
       if (/\.(?:test|spec)\.[^.]+$/.test(file)) continue;
-      if (!/\.(?:ts|tsx|js|mjs|cjs)$/.test(file)) continue;
+      if (!/\.(?:ts|tsx|js|mjs|cjs|json|ya?ml|sh)$/.test(file)) continue;
+      const donorNamed = /(?:^|\/)[^/]*(?:wasd|ax1)[^/]*$/i.test(file);
       if (
         file.startsWith("server/wasd") ||
         file.startsWith("server/ax1") ||
         file.startsWith("shared/ax1") ||
-        file.startsWith("client/src/xaurion/")
+        file.startsWith("client/src/xaurion/") ||
+        donorNamed ||
+        file === "client/src/game/glbUsagePlan.ts"
       ) files.add(file);
     }
   }
@@ -74,6 +77,8 @@ export function externalRuntimeDependencyFindings(records) {
     ["external-ax1-package", /(?:from\s+["']|require\(["'])@ax1\//i],
     ["wasd-runtime-url", /https?:\/\/(?:[^/"'\s]*\.)?wasd(?:[.:"'/]|$)/i],
     ["ax1-runtime-url", /https?:\/\/(?:[^/"'\s]*\.)?ax1(?:[.:"'/]|$)/i],
+    ["donor-github-source-url", /https:\/\/(?:raw\.)?githubusercontent\.com\/OuroborosCollective\/(?:Wasd|-ax1)\//i],
+    ["donor-github-repository-url", /https:\/\/github\.com\/OuroborosCollective\/(?:Wasd|-ax1)\/(?:raw|blob)\//i],
     ["wasd-service-env", /\bWASD_(?:SERVICE|RUNTIME|API)_URL\b/],
     ["ax1-service-env", /\bAX1_(?:SERVICE|RUNTIME|API)_URL\b/],
   ];
@@ -92,6 +97,27 @@ export function scanExternalRuntimeDependencies(root = process.cwd()) {
     content: fs.readFileSync(path.join(root, file), "utf8"),
   }));
   return externalRuntimeDependencyFindings(records);
+}
+
+export function provenanceModuleReferenceFindings(records, provenancePaths) {
+  const allowed = new Set(provenancePaths);
+  const markers = [...allowed].map(value => path.basename(value).replace(/\.[^.]+$/, "")).filter(Boolean);
+  const findings = [];
+  for (const record of records) {
+    if (allowed.has(record.path)) continue;
+    for (const marker of markers) {
+      if (record.content.includes(marker)) findings.push({ marker, path: record.path });
+    }
+  }
+  return findings;
+}
+
+export function scanProvenanceModuleReachability(root, provenancePaths) {
+  const records = runtimeScanFiles(root).map(file => ({
+    path: file,
+    content: fs.readFileSync(path.join(root, file), "utf8"),
+  }));
+  return provenanceModuleReferenceFindings(records, provenancePaths);
 }
 
 function pathExists(root, value) {
@@ -206,6 +232,16 @@ export function validateDonorLedgerObject(ledger, options = {}) {
     if (!discoveredSet.has(surfacePath)) fail("DONOR_SURFACE_STALE", surfacePath);
   }
 
+  const provenanceOnlyPaths = Array.isArray(ledger.provenanceOnlyPaths) ? ledger.provenanceOnlyPaths : [];
+  const provenanceSet = new Set(provenanceOnlyPaths);
+  for (const provenancePath of provenanceOnlyPaths) {
+    if (!pathExists(root, provenancePath)) fail("DONOR_PROVENANCE_PATH_MISSING", provenancePath);
+    if (!surfacePaths.has(provenancePath)) fail("DONOR_PROVENANCE_PATH_UNINVENTORIED", provenancePath);
+  }
+  for (const reference of scanProvenanceModuleReachability(root, provenanceOnlyPaths)) {
+    fail("DONOR_PROVENANCE_MODULE_RUNTIME_REACHABLE", `${reference.marker}:${reference.path}`);
+  }
+
   for (const [donorName, donor] of Object.entries(donors)) {
     const summary = donor?.statusSummary;
     for (const status of DONOR_LEDGER_STATUSES) {
@@ -217,7 +253,10 @@ export function validateDonorLedgerObject(ledger, options = {}) {
 
   if (includeRuntimeScan) {
     for (const finding of scanExternalRuntimeDependencies(root)) {
-      fail("EXTERNAL_DONOR_RUNTIME_DEPENDENCY", `${finding.kind}:${finding.path}`);
+      const provenanceOnlyUrl =
+        (finding.kind === "donor-github-source-url" || finding.kind === "donor-github-repository-url") &&
+        provenanceSet.has(finding.path);
+      if (!provenanceOnlyUrl) fail("EXTERNAL_DONOR_RUNTIME_DEPENDENCY", `${finding.kind}:${finding.path}`);
     }
   }
 
