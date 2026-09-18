@@ -436,6 +436,7 @@ phase=promotion-receipt
 receipt="${receipt_dir}/${release_id}.json"
 receipt_tmp="${receipt}.tmp"
 runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
+[[ "$runtime_image_id" == "$AURION_RUNTIME_IMAGE_DIGEST" ]]
 umask 077
 printf '{"recordType":"aurion_traefik_runtime_receipt","revision":"%s","releaseId":"%s","buildInputDigest":"%s","artifactDigest":"%s","runtimeImageDigest":"%s","releaseArchiveDigest":"%s","imageId":"%s","containerId":"%s","domain":"%s","traefikNetwork":"%s","databaseNetwork":"%s","databaseConnectivity":"authenticated_select_1","authority":{"ruleset":"aurion-zone-v3","tickHz":10,"causalReceipts":true}}\n' \
   "$expected_sha" "$release_id" "$build_input_digest" "$artifact_digest" "$runtime_image_id" "$release_archive_digest" \
