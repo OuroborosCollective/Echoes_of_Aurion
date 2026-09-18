@@ -31,7 +31,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
-    "@genkit-ai/google-genai": "^1.41.0",
+    "@genkit-ai/google-genai": "^1.42.0",
     "@hookform/resolvers": "^5.2.2",
     "@modelcontextprotocol/express": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
@@ -80,7 +80,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.7.0",
     "framer-motion": "^12.23.22",
-    "genkit": "^1.41.0",
+    "genkit": "^1.42.0",
     "helmet": "^8.3.0",
     "input-otp": "^1.4.2",
     "jose": "6.1.0",
