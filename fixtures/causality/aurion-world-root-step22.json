@@ -1,0 +1,30 @@
+{
+  "worldId": "echoes-of-aurion-global",
+  "epoch": 1842,
+  "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "rulesetVersion": "aurion.zone.rules.v2",
+  "expectedZoneIds": ["observatory_threshold"],
+  "previousWorldRoot": null,
+  "zoneReceipts": {
+    "observatory_threshold": [
+      {
+        "worldId": "echoes-of-aurion-global",
+        "zoneId": "observatory_threshold",
+        "tick": 8000,
+        "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rulesetVersion": "aurion.zone.rules.v2",
+        "previousReceiptHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "receiptHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "worldId": "echoes-of-aurion-global",
+        "zoneId": "observatory_threshold",
+        "tick": 8001,
+        "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rulesetVersion": "aurion.zone.rules.v2",
+        "previousReceiptHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "receiptHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  }
+}

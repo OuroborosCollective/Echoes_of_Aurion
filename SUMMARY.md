@@ -20,6 +20,7 @@
   * [Game Development Studio — Visual Production & Worldbuilding](docs/game-development-studio-visual-production-and-worldbuilding/README.md)
     * [Lokale Blender-Arbeit — GLB/GDS Referenz](docs/game-development-studio-visual-production-and-worldbuilding/lokale-blender-arbeit-glb-gds-referenz.md)
   * [Unreal-derived Architecture Milestone 1–21 — Abschlussnachweis](docs/unreal-derived-architecture-milestone-1-21-abschlussnachweis.md)
+  * [World Causal Root — Step 22](docs/aurion-world-causal-root.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)

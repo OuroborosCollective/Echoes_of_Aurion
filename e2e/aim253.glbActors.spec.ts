@@ -163,7 +163,7 @@ for (const viewport of [
       }
 
       await hud.getByRole("button", { name: "Aufträge", exact: true }).click();
-      await expect(dialog.getByText("Legacy-Aurion-Aufträge sind im Spiel deaktiviert.", { exact: false })).toBeVisible();
+      await expect(dialog.getByText("Legacy-Aufträge bleiben deaktiviert.", { exact: false })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Bei Lyra (annehmen|abgeben)/ })).toHaveCount(0);
       await dialog.getByRole("button", { name: "Quest-Buch schließen", exact: true }).click();
       await expect(hud.getByRole("button", { name: "Begegnungen", exact: true })).toHaveCount(0);

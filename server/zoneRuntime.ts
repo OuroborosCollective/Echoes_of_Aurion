@@ -53,6 +53,7 @@ import { regenerateWasdStamina, WASD_MAX_STAMINA } from "./wasdStaminaProtocol";
 import { integrateWasdZoneMovement } from "./wasdZoneMovementProtocol";
 import { WASD_DEFAULT_ZONE_COMBAT_PROFILE, validWasdZoneCombatProfile, type WasdZoneCombatProfile } from "./wasdCombatProfileProtocol";
 import { resolveReturnStoneRevival } from "./returnStoneRevival";
+import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 
 // Evidence persistence is observational. The recorder captures synchronously in
 // memory and drains MariaDB writes outside the deterministic authority hot path.
@@ -61,7 +62,7 @@ globalTickRecorder.setPersistenceAdapter(globalCausalPersistence);
 export type ZoneCombatProfile = WasdZoneCombatProfile;
 export const DEFAULT_ZONE_COMBAT_PROFILE: ZoneCombatProfile = WASD_DEFAULT_ZONE_COMBAT_PROFILE;
 
-const WORLD_ID = "aurion-main" as const;
+const WORLD_ID = GLOBAL_WORLD_ID;
 const WORLD_SEED_DIGEST = canonicalSha256({ worldId: WORLD_ID, seedContract: "aurion.world.seed.v1" });
 
 type PresencePeer = {

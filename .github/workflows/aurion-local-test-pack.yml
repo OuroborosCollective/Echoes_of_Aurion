@@ -106,6 +106,17 @@ jobs:
             server/questCompiler/replay.test.ts \
             server/worldContext/replay.test.ts \
             2>&1 | tee .aurion-local-test-pack/evidence/replay-verdict.log
+      - name: Verify Wave 2 Step 22 world causal root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          env -u DATABASE_URL pnpm exec vitest run server/causality/worldCausalRootService.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-world-root.log
+          env -u DATABASE_URL pnpm exec vitest run server/causality 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-causality.log
+          env -u DATABASE_URL pnpm exec vitest run server/causality server/replayVerdictContract.test.ts server/questCompiler/replay.test.ts server/worldContext/replay.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-replay.log
+          pnpm exec tsx scripts/read-aurion-world-root.ts --fixture fixtures/causality/aurion-world-root-step22.json 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-root-readback.log
+          NODE_ENV=test AURION_WORLD_EPOCH_E2E=1 pnpm exec vitest run server/worldEpochReaction.e2e.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-mariadb-readback.log
+
       - name: Verify milestone gate evidence contract
         shell: bash
         run: |
