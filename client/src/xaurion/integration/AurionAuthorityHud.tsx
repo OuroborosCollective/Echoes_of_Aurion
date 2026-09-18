@@ -16,6 +16,7 @@ import { ClassSelectModal, DeterminismDebugOverlay, GuildManagementModal, Homest
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
+import { AuthoredQuestJournal } from "./AuthoredQuestJournal";
 import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
 import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
@@ -372,7 +373,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onInventory={() => openPanel("inventory")}
     />
     <ClassSelectModal open={panel === "disciplines"} onClose={() => openPanel(null)} tracks={player.data?.progression.tracks} state={projectionState} />
-    {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} pending={false} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} />}
+    {panel === "quests" && <QuestLogModal key={questTab} isOpen onClose={() => openPanel(null)} pending={false} message={message} initialTab={questTab} contacts={<><NpcStandingPanel userId={userId} /><NpcDecisionPanel userId={userId} /></>} authoredContent={<AuthoredQuestJournal />} />}
     <CraftingModal
       isOpen={panel === "crafting"}
       onClose={() => openPanel(null)}
