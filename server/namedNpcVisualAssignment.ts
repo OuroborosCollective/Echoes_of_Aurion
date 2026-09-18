@@ -13,6 +13,11 @@ export const namedNpcVisualInputSchema = z.object({
 
 export type NamedNpcVisualInput = z.infer<typeof namedNpcVisualInputSchema>;
 
+export function namedNpcVisualTargetKey(npcId: string): string {
+  const parsed = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/).parse(npcId);
+  return `npc_${parsed}`;
+}
+
 export type NamedNpcVisualPlan = Readonly<{
   schemaVersion: "aurion.named-npc-visual-plan.v1";
   planHash: string;
@@ -38,7 +43,7 @@ function hash(value: unknown): string {
 export async function planNamedNpcVisual(raw: NamedNpcVisualInput): Promise<NamedNpcVisualPlan> {
   const input = namedNpcVisualInputSchema.parse(raw);
   await assertCanonicalNpc(input.npcId);
-  const targetKey = `npc_${input.npcId}`;
+  const targetKey = namedNpcVisualTargetKey(input.npcId);
   const catalog = await glbImportStore().catalog();
 
   const candidates = catalog.entries.filter(entry => entry.assetId === input.assetId);
