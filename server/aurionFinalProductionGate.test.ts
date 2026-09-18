@@ -50,6 +50,7 @@ describe("Blocker 1 final production proof contract", () => {
     expect(workflow).toContain('schema.state!=="PRESENT_SCHEMA_MATCH"');
     expect(workflow).toContain('schema.migrations.at(-1)?.tag!=="0049_aurion_causal_receipt_v2"');
     expect(workflow).toContain("health.releaseArchiveDigest!==identity.releaseArchiveDigest");
+    expect(workflow).toContain("releaseArchiveDigest:identity.releaseArchiveDigest");
     expect(workflow).toContain('gateId:"AURION-M21-B1-PRODUCTION"');
     expect(workflow).toContain("authenticatedReadback:true");
   });
