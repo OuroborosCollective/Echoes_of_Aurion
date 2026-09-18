@@ -194,6 +194,9 @@ export function computeWorldCausalRoot(input: {
   previousWorldRootProvable?: boolean;
 }): AurionWorldCausalRootResult {
   const expectedZoneIds = canonicalZoneIds(input.expectedZoneIds);
+  if (!GIT_SHA.test(input.sourceRevision)) {
+    return unprovable({ ...input, reason: "SOURCE_REVISION_UNVERIFIED" });
+  }
   const seen = new Set<string>();
   for (const zoneRoot of input.zoneRoots) {
     if (
@@ -227,9 +230,6 @@ export function computeWorldCausalRoot(input: {
       unexpectedZoneIds,
       reason: "UNEXPECTED_ZONE_EVIDENCE",
     });
-  }
-  if (!GIT_SHA.test(input.sourceRevision)) {
-    return unprovable({ ...input, reason: "SOURCE_REVISION_UNVERIFIED" });
   }
   if (input.previousWorldRootProvable === false) {
     return unprovable({ ...input, reason: "PREVIOUS_WORLD_ROOT_UNPROVABLE" });
