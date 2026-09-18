@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
       - name: Install frozen application and asset toolchains
@@ -115,7 +115,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 

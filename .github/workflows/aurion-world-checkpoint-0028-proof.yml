@@ -60,7 +60,7 @@ jobs:
       - name: Verify source identity
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v4
         with:

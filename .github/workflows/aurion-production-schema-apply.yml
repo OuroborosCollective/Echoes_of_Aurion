@@ -52,7 +52,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

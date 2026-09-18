@@ -98,7 +98,7 @@ jobs:
           ref: ${{ env.AURION_TEST_SOURCE_SHA }}
       - name: Verify exact source revision
         run: test "$(git rev-parse HEAD)" = "$AURION_TEST_SOURCE_SHA"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22

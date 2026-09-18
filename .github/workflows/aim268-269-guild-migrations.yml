@@ -71,7 +71,7 @@ jobs:
       DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_guild_test
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22
