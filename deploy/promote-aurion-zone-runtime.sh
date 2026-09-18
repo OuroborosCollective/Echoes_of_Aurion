@@ -261,6 +261,7 @@ phase=compose-promotion
 
 container_id="$("${compose[@]}" ps -q aurion)"
 [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
+[[ "$(docker inspect --format '{{.Image}}' "$container_id")" == "$runtime_image_id" ]]
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.enable" }}' "$container_id")" == "true" ]]
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.docker.network" }}' "$container_id")" == "$traefik_network" ]]
 [[ "$(docker inspect --format '{{ index .Config.Labels "traefik.http.services.aurion.loadbalancer.server.port" }}' "$container_id")" == "3000" ]]
