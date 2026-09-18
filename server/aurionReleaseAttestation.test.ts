@@ -28,6 +28,7 @@ describe("Blocker 2 detached release attestation contract", () => {
     expect(workflow).toContain("--source-digest");
     expect(workflow).toContain('--source-ref "refs/heads/main"');
     expect(workflow).toContain('--predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1"');
+    expect(workflow).toContain("--deny-self-hosted-runners");
     expect(workflow).toContain('--predicate-type "https://arelogic.space/attestations/aurion-runtime-release/v1"');
     expect(workflow).toContain('test "${tamper_status}" -ne 0');
   });
