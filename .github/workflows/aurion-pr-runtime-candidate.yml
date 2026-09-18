@@ -71,7 +71,7 @@ jobs:
       - name: Read back approved live return-stone asset
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location --retry 3 \
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 10 --max-time 120 \
             https://arelogic.space/api/game/glb-catalog \
             --output live-glb-catalog.json
           node --input-type=module <<'NODE'
@@ -95,7 +95,7 @@ jobs:
             asset: entry,
           }, null, 2)}\n`);
           NODE
-          curl --fail --silent --show-error --location --retry 3 \
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 10 --max-time 120 \
             "https://arelogic.space/api/assets/glb/${RETURN_STONE_SHA256}.glb" \
             --output return-stone-live.glb
           test "$(wc -c < return-stone-live.glb | tr -d ' ')" = "${RETURN_STONE_BYTES}"

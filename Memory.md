@@ -943,3 +943,17 @@ Status: VERIFIED pre-merge on exact technical head.
 Änderung: Aurions bestehender HTTPS `/admin-mcp` exponiert den gepinnten serverseitigen Game Development Studio Runtime als GDS Status/Plan/Apply sowie einen separaten Plan→Confirm-Pfad für benannte NPC-Visuals wie `npc_lyra`; World-/Dungeon-Authoring besitzt einen getrennten OAuth-Write-Scope. Owner-erzeugte private Assets werden ohne erfundene Fremdlizenz als `Proprietary-Owner-Created` paketiert.
 Erkenntnis: Für den mobilen ChatGPT-Workflow darf GDS nicht von einem lokalen Rechner abhängen; der richtige Ausführungspunkt ist der revisionsgebundene Aurion-Produktionscontainer, während ChatGPT/n8n ausschließlich den OAuth-geschützten Remote-MCP aufrufen.
 Evidence: Exact technical head `b8dd176eff59276a1540568b9985b8b12c90d9fe`; Game Development Studio Smoke `35317091484` PASS; Aurion Local Test Pack `35317091322` PASS; Runtime Candidate `35317091375` PASS; Runtime Container Proof `35317091372` PASS; Android APK `35317091331` PASS.
+
+
+### 2026-09-18 — Production promoter digest environment repair
+Status: VERIFIED pre-merge; fresh post-merge B1 production proof remains required.
+Änderung: Der Traefik-Promoter bindet BuildInput-, Artifact-, Runtime-Image- und Release-Archive-Digest explizit an jeden Docker-Compose-Aufruf; die bestehenden Required-Variable-Guards und B1-Evidence-Anforderungen bleiben unverändert.
+Erkenntnis: Shell-Exports allein sind keine hinreichende Produktionsgrenze, wenn ein installierter kompatibler Promoter Compose in einem abweichenden Environment-Kontext ausführt; revisionsgebundene Identitätswerte müssen an der Compose-Interpolation explizit übergeben werden.
+Evidence: Exact technical head `0bb1998eea9391a538ff2bb61529c389a21f5563`; Deploy verify `35319536756` PASS; Local Test Pack `35319534780` PASS, artifact `sha256:330b77301bb7a23a72637dcec43d54c9a743df1d55f40842b3ce69644960e4dd`; Runtime Container Proof `35319534787` PASS, artifact `sha256:8c3db6404fa197966cc5aa60ef5a1369fde48b7d0dd4cfd250cbd9a4af9ae5f7`; Runtime Candidate `35319534876` PASS; AIM-292 MariaDB/AX1 `35319534781` PASS.
+
+
+### 2026-09-18 — Production Admin MCP metadata smoke
+Status: VERIFIED pre-merge; public metadata smoke executes only on post-merge main promotion.
+Änderung: Der Traefik-Production-Deploy prüft nach erfolgreichem Public-Health-Readback zusätzlich `/.well-known/oauth-protected-resource` und verlangt die exakte Resource `https://arelogic.space/admin-mcp`, mindestens einen HTTPS-Authorization-Server sowie die getrennten Scopes `aurion.admin.read`, `aurion.admin.assets.write` und `aurion.admin.authoring.write`.
+Erkenntnis: Ein gesunder Spielruntime-Healthcheck beweist nicht, dass der mobile ChatGPT/n8n-GDS-Pfad konfiguriert ist; die OAuth-Protected-Resource-Metadaten müssen als eigener Production-Vertrag gelesen werden.
+Evidence: Exact technical head `baba6bdb8a74e99260d540e8e88df2ccee5c466f`; Local Test Pack `35326888824` PASS; Runtime Candidate `35326888815` PASS; Runtime Container Proof `35326888838` PASS; Deploy PR verify/build `35326889844` PASS, Production-only promotion steps correctly skipped on pull_request.
