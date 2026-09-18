@@ -16,6 +16,7 @@ import { QuestRuntimeEngine } from "./runtime";
 import { QuestPersistenceEngine } from "./persistence";
 import { QuestReplayEngine } from "./replay";
 import { QuestValidator } from "./validator";
+import { CandidateResolver } from "./candidateResolver";
 import { authoringHash, createQuestPublishReceipt } from "../aurionAuthoringPersistence";
 
 export interface AdminQuestStudioStatus {
