@@ -35,6 +35,7 @@ export default function GameDevelopmentStudioWorkbench() {
   const [brief, setBrief] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [purpose, setPurpose] = useState<LivePurpose>("world-environment");
+  const [rightsBasis, setRightsBasis] = useState<"owner-created-private" | "licensed">("owner-created-private");
   const [license, setLicense] = useState("");
   const [packageVersion, setPackageVersion] = useState("1.0.0");
   const [fileName, setFileName] = useState("");
@@ -61,11 +62,12 @@ export default function GameDevelopmentStudioWorkbench() {
     contentBase64,
     purpose,
     packageVersion,
-    license,
+    rightsBasis,
+    ...(rightsBasis === "licensed" && license ? { license } : {}),
     ...(design.data?.workOrderSha256 ? { designWorkOrderSha256: design.data.workOrderSha256 } : {}),
   };
 
-  const readyForPlan = Boolean(displayName && fileName && contentBase64 && license && packageVersion);
+  const readyForPlan = Boolean(displayName && fileName && contentBase64 && packageVersion && (rightsBasis === "owner-created-private" || license));
   const resetPlan = () => {
     if (plan.data) plan.reset();
     if (apply.data || apply.error) apply.reset();
@@ -123,7 +125,7 @@ export default function GameDevelopmentStudioWorkbench() {
             <Upload className="h-5 w-5 text-amber-300" /> Reale Asset-Bytes + Provenienz
           </CardTitle>
           <CardDescription>
-            Der Mensch liefert die GLB-Datei und die echte Lizenz. Änderungen nach dem Plan machen die Live-Freigabe ungültig.
+            Der Mensch liefert die GLB-Datei und die echte Rechtebasis. Eigene privat erzeugte Assets brauchen keine Fremdlizenz; Aurion dokumentiert sie als owner-created/private. Änderungen nach dem Plan machen die Live-Freigabe ungültig.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
@@ -168,14 +170,28 @@ export default function GameDevelopmentStudioWorkbench() {
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="gds-license">Lizenz / Rechtebasis</Label>
-            <Input
-              id="gds-license"
-              value={license}
-              onChange={event => { setLicense(event.target.value); resetPlan(); }}
-              placeholder="z. B. CC0-1.0 oder eigener Rechtevermerk"
-              maxLength={128}
-            />
+            <Label htmlFor="gds-rights">Rechtebasis</Label>
+            <select
+              id="gds-rights"
+              value={rightsBasis}
+              onChange={event => {
+                setRightsBasis(event.target.value as "owner-created-private" | "licensed");
+                resetPlan();
+              }}
+              className="flex h-10 w-full rounded-md border border-cyan-200/20 bg-slate-950 px-3 text-sm text-slate-100"
+            >
+              <option value="owner-created-private">Von mir erzeugt · privat/proprietär</option>
+              <option value="licensed">Fremd-/Lizenzasset</option>
+            </select>
+            {rightsBasis === "owner-created-private"
+              ? <p className="text-xs text-slate-400">Kein CC-/SPDX-Etikett nötig. Das Package wird als <code>Proprietary-Owner-Created</code> dokumentiert.</p>
+              : <Input
+                  id="gds-license"
+                  value={license}
+                  onChange={event => { setLicense(event.target.value); resetPlan(); }}
+                  placeholder="z. B. CC0-1.0 oder kommerzieller Lizenzbezeichner"
+                  maxLength={128}
+                />}
           </div>
           <div className="space-y-2">
             <Label htmlFor="gds-version">Asset-Version</Label>

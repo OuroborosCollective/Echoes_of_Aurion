@@ -25,12 +25,70 @@ const WOLFRAM_READ_TOOLS = [
   "aurion_admin_wolfram_canary",
 ] as const;
 
+const ASSET_TOOLS = [
+  "aurion_admin_glb_plan",
+  "aurion_admin_glb_import",
+  "aurion_admin_glb_catalog",
+  "aurion_admin_glb_assign",
+  "aurion_admin_gds_status",
+  "aurion_admin_gds_plan",
+  "aurion_admin_gds_apply",
+  "aurion_admin_named_npc_visual_plan",
+  "aurion_admin_named_npc_visual_apply",
+] as const;
+
+const AUTHORING_TOOLS = [
+  "aurion_admin_world_design_read",
+  "aurion_admin_world_design_plan",
+  "aurion_admin_world_design_apply",
+  "aurion_admin_dungeon_design_read",
+  "aurion_admin_dungeon_design_plan",
+  "aurion_admin_dungeon_design_apply",
+] as const;
+
 describe("adminMcp", () => {
-  it("keeps causality read-only and exposes asset writes only behind the dedicated scope", () => {
+  it("exposes server-side GDS/NPC writes only behind the dedicated asset scope", () => {
     const writable = adminMcpCapabilities(["aurion.admin.read", "aurion.admin.assets.write"], { wolframConfigured: true });
-    expect(writable.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual(["aurion_admin_glb_import", "aurion_admin_glb_assign"]);
-    expect(writable.unavailable).toEqual(expect.arrayContaining(["causal_rollback", "world_delta_write", "shell_access", "git_or_vps_access"]));
-    expect(writable.consent).toMatchObject({ defaultAuthority: "read_only", gameplayMutation: "unavailable" });
+    expect(writable.tools.map(tool => tool.name)).toEqual([
+      ...BASE_READ_TOOLS,
+      ...WOLFRAM_READ_TOOLS,
+      ...ASSET_TOOLS,
+    ]);
+    expect(writable.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual([
+      "aurion_admin_glb_import",
+      "aurion_admin_glb_assign",
+      "aurion_admin_gds_apply",
+      "aurion_admin_named_npc_visual_apply",
+    ]);
+    expect(writable.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([...AUTHORING_TOOLS]));
+    expect(writable.consent).toMatchObject({
+      defaultAuthority: "read_only",
+      gameplayMutation: "aurion_plan_confirm_only",
+      assetWriteScope: "aurion.admin.assets.write",
+      authoringWriteScope: null,
+    });
+  });
+
+  it("exposes world and dungeon publish only behind the separate authoring scope", () => {
+    const authoring = adminMcpCapabilities(["aurion.admin.read", "aurion.admin.authoring.write"]);
+    expect(authoring.tools.map(tool => tool.name)).toEqual([...BASE_READ_TOOLS, ...AUTHORING_TOOLS]);
+    expect(authoring.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual([
+      "aurion_admin_world_design_apply",
+      "aurion_admin_dungeon_design_apply",
+    ]);
+    expect(authoring.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([...ASSET_TOOLS]));
+    expect(authoring.consent).toMatchObject({
+      assetWriteScope: null,
+      authoringWriteScope: "aurion.admin.authoring.write",
+    });
+    expect(authoring.unavailable).toEqual(expect.arrayContaining([
+      "raw_world_delta_write",
+      "raw_object_placement",
+      "npc_reward_mutation",
+      "database_access",
+      "shell_access",
+      "git_or_vps_access",
+    ]));
   });
 
   it("keeps Wolfram external-evidence tools conditional without mutation authority", () => {
@@ -44,21 +102,16 @@ describe("adminMcp", () => {
     expect(configured.tools.every(tool => tool.mode === "read")).toBe(true);
   });
 
-  it("exposes the bounded ChatGPT evidence surface without gameplay/recovery mutation", () => {
+  it("keeps the no-write token read-only", () => {
     const capabilities = adminMcpCapabilities();
     expect(capabilities.chatGptProMode).toBe("read_evidence_only");
     expect(capabilities.tools.map(tool => tool.name)).toEqual(BASE_READ_TOOLS);
     expect(capabilities.tools.every(tool => tool.mode === "read")).toBe(true);
-    expect(capabilities.unavailable).toEqual(expect.arrayContaining([
-      "world_delta_write",
-      "object_placement",
-      "quest_publish",
-      "npc_reward_mutation",
-      "causal_rollback",
-      "database_access",
-      "shell_access",
-      "git_or_vps_access",
-    ]));
+    expect(capabilities.consent).toMatchObject({
+      defaultAuthority: "read_only",
+      assetWriteScope: null,
+      authoringWriteScope: null,
+    });
   });
 
   it("builds a deterministic preview when no database is configured instead of advancing world state", async () => {
