@@ -78,6 +78,7 @@ export function issueGroupTicket(party: GroupParty, world: { snapshotJson: strin
       ? authoredDungeon.rooms.map((room, index) => ({
           id: index,
           kind: room.kind,
+          title: room.title,
           position: { x: room.xMm, z: room.zMm },
           hash: groupHash({ designHash: authoredDungeon.designHash, roomKey: room.roomKey, kind: room.kind, xMm: room.xMm, zMm: room.zMm, assetId: room.assetId, objective: room.objective }),
           ...(room.assetId ? { assetId: room.assetId } : {}),
