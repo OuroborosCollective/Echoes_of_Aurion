@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Validate reviewed capsule and source pin before execution
@@ -136,7 +136,7 @@ jobs:
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
