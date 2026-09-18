@@ -1,6 +1,7 @@
 import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import { glbRuntimeCatalogSchema, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { WorldDesignReadbackSchema } from "@shared/aurionAuthoringContract";
 import type { NPCCharacter } from "../types";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -97,6 +98,12 @@ export class NpcFallbackProjection {
         this.equipment.setCatalog(catalog);
         this.trees.setCatalog(catalog);
         this.mobs.setCatalog(catalog);
+        try {
+          const worldResponse = await fetch("/api/game/world-design", { credentials: "same-origin" });
+          if (worldResponse.ok) this.uploadedWorld.setWorldDesign(WorldDesignReadbackSchema.parse(await worldResponse.json()));
+        } catch {
+          // Retain the last confirmed world-design manifest through transient failures.
+        }
       }
     } catch {
       // Keep the last confirmed catalog through transient transport failures.
