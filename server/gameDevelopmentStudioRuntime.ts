@@ -29,6 +29,8 @@ export type GameDevelopmentStudioRuntimeReadback = Readonly<{
   sourceRevision: string;
   capabilitiesSchema: string | null;
   doctorSchema: string | null;
+  packageBuildAvailable: boolean;
+  vendorAdmitAvailable: boolean;
   providerCalls: false;
   boundary: "human-confirmed-package-vendor-live-admission";
   error: string | null;
@@ -81,7 +83,7 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
   const required = process.env.AURION_GAME_DEV_REQUIRED === "true";
   const sourceRevision = process.env.AURION_GAME_DEV_SOURCE_REVISION?.trim().toLowerCase() || GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION;
   if (sourceRevision !== GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION) {
-    return Object.freeze({ available: false, required, version: null, sourceRevision, capabilitiesSchema: null, doctorSchema: null, providerCalls: false, boundary: "human-confirmed-package-vendor-live-admission", error: "GAME_DEV_SOURCE_REVISION_MISMATCH" });
+    return Object.freeze({ available: false, required, version: null, sourceRevision, capabilitiesSchema: null, doctorSchema: null, packageBuildAvailable: false, vendorAdmitAvailable: false, providerCalls: false, boundary: "human-confirmed-package-vendor-live-admission", error: "GAME_DEV_SOURCE_REVISION_MISMATCH" });
   }
   try {
     await mkdir(gameDevelopmentStudioWorkspaceRoot(), { recursive: true });
@@ -89,6 +91,10 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
     if (!versionOutput.includes(GAME_DEVELOPMENT_STUDIO_VERSION)) throw new Error("GAME_DEV_VERSION_MISMATCH");
     const capabilities = parseJsonOutput("CAPABILITIES", await runGameDevelopmentStudioCommand(["capabilities", "--output-dir", gameDevelopmentStudioWorkspaceRoot(), "--json"]));
     const doctor = parseJsonOutput("DOCTOR", await runGameDevelopmentStudioCommand(["doctor", "--output-dir", gameDevelopmentStudioWorkspaceRoot(), "--json"]));
+    const help = await runGameDevelopmentStudioCommand(["--help"]);
+    const packageBuildAvailable = help.includes("game-dev package build");
+    const vendorAdmitAvailable = help.includes("game-dev vendor admit");
+    if (!packageBuildAvailable || !vendorAdmitAvailable) throw new Error("GAME_DEV_PRODUCTION_COMMANDS_MISSING");
     return Object.freeze({
       available: true,
       required,
@@ -96,6 +102,8 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
       sourceRevision,
       capabilitiesSchema: schemaName(capabilities),
       doctorSchema: schemaName(doctor),
+      packageBuildAvailable,
+      vendorAdmitAvailable,
       providerCalls: false,
       boundary: "human-confirmed-package-vendor-live-admission",
       error: null,
@@ -108,6 +116,8 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
       sourceRevision,
       capabilitiesSchema: null,
       doctorSchema: null,
+      packageBuildAvailable: false,
+      vendorAdmitAvailable: false,
       providerCalls: false,
       boundary: "human-confirmed-package-vendor-live-admission",
       error: error instanceof Error && /^GAME_DEV_[A-Z0-9_]+$/.test(error.message) ? error.message : "GAME_DEV_UNAVAILABLE",
