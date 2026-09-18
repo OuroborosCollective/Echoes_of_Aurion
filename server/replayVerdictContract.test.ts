@@ -41,7 +41,7 @@ describe("Blocker 6 shared replay verdict gate", () => {
     expect(() => replayVerdictSchema.parse({
       ...replayUnprovable(context, [], "MISSING_EVIDENCE"),
       status: "MATCH",
-      verdict: "UNPROVABLE",
+      verdict: "MATCH",
       reason: null,
     })).toThrow();
   });
