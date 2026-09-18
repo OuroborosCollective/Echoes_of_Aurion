@@ -42,6 +42,9 @@ function runtimeScanFiles(root) {
   for (const relativeRoot of roots) {
     for (const file of relativeFiles(root, relativeRoot)) {
       if (/\.(?:test|spec)\.[^.]+$/.test(file)) continue;
+      // The verifier contains contradiction tokens as detection rules; scanning its
+      // own source would manufacture false runtime dependencies from the guard itself.
+      if (file === "scripts/build-aurion-donor-ledger.mjs") continue;
       if (/\.(?:ts|tsx|js|mjs|cjs|json|ya?ml|sh)$/.test(file)) set.add(file);
     }
   }
