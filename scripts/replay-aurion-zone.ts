@@ -45,14 +45,15 @@ async function run() {
     const entry = globalTickRecorder.getEntry(zoneId, singleTick) || 
                   await globalCausalPersistence.getRecordedTick(zoneId, singleTick);
 
-    if (!entry || !entry.preState) {
-      console.error(`[AURION REPLAY UNPROVABLE] Tick ${singleTick} data not found in memory or persistence.`);
+    if (!entry || !entry.preState || !entry.intents) {
+      const reason = !entry ? "RECORDED_TICK_MISSING" : !entry.preState ? "REPLAY_PRE_STATE_UNAVAILABLE" : "RECORDED_INTENTS_MISSING";
+      console.error(`[AURION REPLAY UNPROVABLE] Tick ${singleTick}: ${reason}`);
       process.exit(2);
     }
 
     const res = replayZoneTick({
       preState: entry.preState,
-      intents: entry.intents || [],
+      intents: entry.intents,
       expectedReceipt: entry.receipt,
     });
 
@@ -78,13 +79,14 @@ async function run() {
       const entry = globalTickRecorder.getEntry(zoneId, t) || 
                     await globalCausalPersistence.getRecordedTick(zoneId, t);
       
-      if (!entry || !entry.preState) {
-        console.error(`[AURION REPLAY UNPROVABLE] Tick ${t} data not available.`);
+      if (!entry || !entry.preState || !entry.intents) {
+        const reason = !entry ? "RECORDED_TICK_MISSING" : !entry.preState ? "REPLAY_PRE_STATE_UNAVAILABLE" : "RECORDED_INTENTS_MISSING";
+        console.error(`[AURION REPLAY UNPROVABLE] Tick ${t}: ${reason}`);
         process.exit(2);
       }
       const res = replayZoneTick({
         preState: entry.preState,
-        intents: entry.intents || [],
+        intents: entry.intents,
         expectedReceipt: entry.receipt,
       });
       if (res.verdict === "MATCH") {
