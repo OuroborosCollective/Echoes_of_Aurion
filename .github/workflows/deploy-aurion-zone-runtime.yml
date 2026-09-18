@@ -795,10 +795,145 @@ jobs:
             sleep 1
           done
           [[ "$public_ready" -eq 1 ]]
+  verify-release-attestations:
+    name: Verify detached Aurion release attestations
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [verify-and-build, promote-zone-runtime]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    steps:
+      - name: Check out exact attested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download attested build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: runtime-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download attested production runtime identity
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-runtime-attestation-${{ github.sha }}
+          path: runtime-attestation
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Verify signer, source, predicates and tamper rejection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="${GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml"
+          artifact="runtime-artifact/aurion-traefik-runtime-release.tgz"
+          identity="runtime-attestation/aurion-runtime-release-identity.json"
+          verify_artifact() {
+            gh attestation verify "${artifact}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${signer}" \
+              --source-digest "${GITHUB_SHA}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1"
+          }
+          verify_runtime() {
+            gh attestation verify "${identity}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${signer}" \
+              --source-digest "${GITHUB_SHA}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://arelogic.space/attestations/aurion-runtime-release/v1"
+          }
+          verify_artifact
+          verify_runtime
+
+          cp "${identity}" "${identity}.untampered"
+          printf '\0' >> "${identity}"
+          set +e
+          verify_runtime >/dev/null 2>&1
+          tamper_status=$?
+          set -e
+          test "${tamper_status}" -ne 0
+          mv "${identity}.untampered" "${identity}"
+          verify_runtime
+
+          node --test scripts/aurion-build-input-manifest.test.mjs scripts/aurion-release-attestation.test.mjs scripts/aurion-milestone-gate-evidence.test.mjs
+
+      - name: Emit Blocker 2 attestation gate receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
+          const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
+          const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
+          const artifactMeta=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-attestation.json","utf8"));
+          scanReleaseMetadataForSecrets({identity,runtimeMeta,artifactMeta});
+          const expected={
+            sourceRevision:process.env.GITHUB_SHA,
+            artifactAttestationVerified:true,
+            runtimeAttestationVerified:true,
+            artifactTamperRejected:true,
+            runtimeTamperRejected:true,
+            signerWorkflow:`${process.env.GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml`,
+          };
+          const observed={
+            sourceRevision:identity.sourceRevision,
+            artifactAttestationVerified:artifactMeta.verified===true,
+            runtimeAttestationVerified:/^[1-9][0-9]*$/.test(runtimeMeta.attestationId??""),
+            artifactTamperRejected:artifactMeta.tamperRejected===true,
+            runtimeTamperRejected:true,
+            signerWorkflow:expected.signerWorkflow,
+          };
+          const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
+          const receipt={
+            schemaVersion:"aurion.milestone.gate-evidence.v1",
+            gateId:"AURION-M21-B2-ATTESTATION",
+            scope:"runtime",
+            passCriteria:["final artifact is signed only after finalization","runtime identity binds docker-inspected immutable image digest","GitHub OIDC/Sigstore signer workflow and exact source are verified","tampered subjects fail verification","release metadata secret scan passes"],
+            failCriteria:["missing detached attestation","wrong signer/source/predicate","runtime image digest missing","tampered subject verifies","secret-like metadata detected"],
+            sourceRevision:identity.sourceRevision,
+            workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
+            command:"gh attestation verify --signer-workflow ... --source-digest ... --source-ref refs/heads/main --predicate-type ...",
+            testSources:["scripts/aurion-build-input-manifest.mjs","scripts/aurion-build-input-manifest.test.mjs","scripts/aurion-release-attestation.mjs","scripts/aurion-release-attestation.test.mjs",".github/workflows/deploy-aurion-zone-runtime.yml"],
+            externalId:runtimeMeta.attestationUrl,
+            reproducible:true,
+            releaseIdentity:{
+              sourceRevision:identity.sourceRevision,
+              buildInputDigest:identity.buildInputDigest,
+              artifactDigest:identity.artifactDigest,
+              runtimeImageDigest:identity.runtimeImageDigest,
+            },
+            expected,
+            observed,
+            checks,
+            status:checks.every(check=>check.pass)?"PASS":"FAIL",
+          };
+          fs.writeFileSync("aurion-gate-b2-attestation.json",JSON.stringify(receipt,null,2)+"\n");
+          NODE
+          node scripts/aurion-milestone-gate-evidence.mjs verify aurion-gate-b2-attestation.json --require-pass
+
+      - name: Upload Blocker 2 attestation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-gate-b2-attestation-${{ github.sha }}
+          path: aurion-gate-b2-attestation.json
+          if-no-files-found: error
+          retention-days: 30
+
   apply-reviewed-schema-plan:
     name: Apply reviewed 0021–0049 plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [migration-ledger, promote-zone-runtime]
+    needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
