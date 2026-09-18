@@ -18,7 +18,9 @@ import { isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
-import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
+import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperGenkit";
+import { hashGameDevAssetDesignWorkOrder } from "./liveDeveloperProtocol";
+import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInputSchema, planGameDevelopmentStudioLiveAsset } from "./gameDevelopmentStudioProduction";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
@@ -377,6 +379,22 @@ export const appRouter = router({
         changeKind: z.enum(["world", "quest", "npc_behavior", "content_model"]),
         request: z.string().trim().min(12).max(1_800),
       })).mutation(({ input }) => proposeAurionDeveloperChange({ ...input, actorRole: "admin" })),
+      designAsset: adminProcedure.input(z.object({
+        request: z.string().trim().min(12).max(1_800),
+      }).strict()).mutation(async ({ input }) => {
+        const workOrder = await proposeGameDevAssetDesign({ ...input, actorRole: "admin" });
+        return { workOrder, workOrderSha256: hashGameDevAssetDesignWorkOrder(workOrder) };
+      }),
+      gameDevPlan: adminProcedure
+        .input(gameDevelopmentStudioLiveAssetInputSchema)
+        .mutation(({ input }) => planGameDevelopmentStudioLiveAsset(input)),
+      gameDevApply: adminProcedure
+        .input(z.object({
+          asset: gameDevelopmentStudioLiveAssetInputSchema,
+          expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/),
+          confirmation: z.literal("APPLY_TO_LIVE_AURION"),
+        }).strict())
+        .mutation(({ ctx, input }) => applyGameDevelopmentStudioLiveAsset(ctx.user.id, input.asset, input.expectedPlanSha256)),
     }),
     players: router({
       list: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25), query: z.string().trim().max(64).regex(/^[A-Za-z0-9@._ -]*$/).optional() }).optional()).query(({ input }) => db.listAdminPlayers(input ?? { limit: 25 })),
