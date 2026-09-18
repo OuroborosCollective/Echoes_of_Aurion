@@ -28,8 +28,8 @@ export class QuestRuntimeEngine {
   public compileAndOfferQuest(params: {
     worldId: string;
     playerUserId: number;
-    giverNpcId: string;
     triggerEventId: string;
+    requestedTemplateId?: string;
     compilerVersion?: string;
   }): { instance: QuestInstance; plan: QuestPlan } {
     const occurredAt = operationalDate(this.clock).toISOString();
@@ -40,9 +40,14 @@ export class QuestRuntimeEngine {
 
     const activeTemplates = this.templateRegistry.getActiveTemplates();
     const templateSetHash = this.templateRegistry.getTemplateSetHash();
+    const requestedPool = params.requestedTemplateId
+      ? activeTemplates.filter(template => template.templateId === params.requestedTemplateId)
+      : activeTemplates;
+    if (params.requestedTemplateId && requestedPool.length === 0) throw new Error("QUEST_TEMPLATE_NOT_ACTIVE");
 
-    // 1. Resolve eligible candidates & candidate set hash
-    const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
+    // 1. Resolve eligible candidates & candidate set hash. A player may select
+    // among server-confirmed eligible templates, but never supplies seed/event truth.
+    const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(requestedPool, facts);
     if (eligibleTemplates.length === 0) {
       throw new Error('NO_ELIGIBLE_QUEST_TEMPLATES');
     }
@@ -64,7 +69,8 @@ export class QuestRuntimeEngine {
     }
 
     // 4. Resolve semantic role bindings against world entities
-    const { boundRoles, roleBindingHash } = RoleResolver.resolveRoles(winningTemplate.roles, undefined, params.giverNpcId);
+    const { boundRoles, roleBindingHash } = RoleResolver.resolveRoles(winningTemplate.roles);
+    const giverNpcId = boundRoles.find(role => role.roleName === "giver" && role.entityType === "npc")?.entityId ?? "aurion_system";
 
     // 5. Compose QuestPlan / Graph
     const plan = QuestComposer.composePlan({
@@ -91,7 +97,7 @@ export class QuestRuntimeEngine {
       id: instanceId,
       worldId: params.worldId,
       playerUserId: params.playerUserId,
-      giverNpcId: params.giverNpcId,
+      giverNpcId,
       templateId: winningTemplate.templateId,
       templateVersion: winningTemplate.version,
       seedDigest,
