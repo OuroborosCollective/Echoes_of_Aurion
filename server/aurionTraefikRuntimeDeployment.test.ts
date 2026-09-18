@@ -98,6 +98,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain(
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
+    expect(workflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 120");
+    expect(workflow.match(/--retry-all-errors --connect-timeout 10 --max-time 120/g)?.length).toBeGreaterThanOrEqual(2);
     expect(workflow).toContain('health.revision!==process.argv[1]');
     expect(workflow).toContain("node --check deploy/verify-aurion-runtime-database.mjs");
   });
