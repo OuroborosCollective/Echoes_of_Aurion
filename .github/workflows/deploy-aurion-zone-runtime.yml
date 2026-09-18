@@ -186,7 +186,8 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
           if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
-          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          if(manifest.buildInputManifest!=="build-input-manifest.json"||!/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest??"")) throw new Error("Traefik runtime build input identity missing");
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","build-input-manifest.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
           runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
