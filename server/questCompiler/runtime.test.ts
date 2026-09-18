@@ -45,7 +45,7 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
 
     // 3. Progress
     const objectiveKey = plan.nodes.find(node => node.id === acceptedInstance.currentNodeId)?.objective?.key;
-    expect(objectiveKey).toBeTruthy();
+    if (!objectiveKey) throw new Error("fixture objective missing");
     const { updatedInstance: progressedInstance, receipt: progressReceipt } = runtime.progressObjective(
       acceptedInstance,
       plan,
