@@ -22,11 +22,18 @@ export function ConfirmedGroupInstance({ data }: { data: GroupReadmodel }) {
         <text x={index * 84 + 22} y="5" textAnchor="middle" fill="#e0eee8" fontSize="13">{room.id + 1}</text>
       </g>)}
     </svg>
+    <ol className="aurion-group-room-goals">
+      {ticket.rooms.map(room => <li key={room.id}>
+        <b>{room.title ?? `Raum ${room.id + 1}`}</b> · {room.kind}
+        {room.objective && <span> — Ziel: {room.objective.description} ({room.objective.targetValue})</span>}
+        {room.assetId && <code> · {room.assetId}</code>}
+      </li>)}
+    </ol>
     <ul>{party.roster.map(member => { const health = party.health.find(h => h.userId === member.userId); return <li key={member.userId}>
       <span>{member.name} · {roleNames[member.role]} · {data.enteredUserIds.includes(member.userId) ? "eingetreten" : "außerhalb"}</span>
       {health && <><progress aria-label={`${member.name} Lebenspunkte`} value={health.hp} max={ticket.playerMaxHp} /><span>{health.hp}/{ticket.playerMaxHp} LP</span></>}
     </li>; })}</ul>
-    {party.phase === "active" && <p>{ticket.bosses[party.bossIndex]?.id.replaceAll("_", " ")} · {party.bossHp} LP</p>}
+    {party.phase === "active" && <p>{ticket.bosses[party.bossIndex]?.label ?? ticket.bosses[party.bossIndex]?.id.replaceAll("_", " ")} · {party.bossHp} LP</p>}
     <p className="aurion-group-note">Gruppenbelohnungen sind noch nicht freigeschaltet. Dieser Lauf vergibt keine EP, Gegenstände oder Questfortschritte.</p>
     <details><summary>Instanzbeleg</summary><code>{ticket.id}</code><code>{ticket.sourceRevision}</code><code>{ticket.hash}</code></details>
   </section>;

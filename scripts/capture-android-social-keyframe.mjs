@@ -10,7 +10,7 @@ const browser = await chromium.launch({ headless: true, args: ["--use-angle=swif
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
   await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i }).waitFor({ state: "visible", timeout: 60_000 });
+  await page.getByRole("heading", { name: /^Echoes of Aurion$/i }).first().waitFor({ state: "visible", timeout: 60_000 });
   await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).first().waitFor({ state: "visible", timeout: 60_000 });
   await page.getByRole("button", { name: "Forum", exact: true }).waitFor({ state: "visible", timeout: 60_000 });
   await page.getByRole("button", { name: "Events", exact: true }).waitFor({ state: "visible", timeout: 60_000 });

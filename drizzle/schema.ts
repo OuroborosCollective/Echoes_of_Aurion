@@ -1595,3 +1595,56 @@ export const aurionWorldContextEvalRuns = mysqlTable("aurionWorldContextEvalRuns
 
 
 
+
+
+/** Human+AI authoring versions remain Aurion-owned and immutable per version. */
+export const aurionWorldDesignVersions = mysqlTable("aurionWorldDesignVersions", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  designKey: varchar("designKey", { length: 96 }).notNull(),
+  version: int("version").notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  expectedCatalogRevision: varchar("expectedCatalogRevision", { length: 64 }).notNull(),
+  designJson: text("designJson").notNull(),
+  designHash: varchar("designHash", { length: 64 }).notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdByUserId: int("createdByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionWorldDesignVersions_key_version_idx").on(table.designKey, table.version),
+  index("aurionWorldDesignVersions_active_idx").on(table.active),
+]);
+
+export const aurionDungeonDesignVersions = mysqlTable("aurionDungeonDesignVersions", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  dungeonId: varchar("dungeonId", { length: 96 }).notNull(),
+  version: int("version").notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  zone: varchar("zone", { length: 96 }).notNull(),
+  expectedCatalogRevision: varchar("expectedCatalogRevision", { length: 64 }).notNull(),
+  designJson: text("designJson").notNull(),
+  designHash: varchar("designHash", { length: 64 }).notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdByUserId: int("createdByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionDungeonDesignVersions_id_version_idx").on(table.dungeonId, table.version),
+  index("aurionDungeonDesignVersions_active_idx").on(table.active),
+]);
+
+export const aurionAuthoringReceipts = mysqlTable("aurionAuthoringReceipts", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  kind: varchar("kind", { length: 32 }).notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
+  targetId: varchar("targetId", { length: 128 }).notNull(),
+  actorUserId: int("actorUserId").notNull(),
+  planHash: varchar("planHash", { length: 64 }).notNull(),
+  previousHash: varchar("previousHash", { length: 64 }),
+  resultHash: varchar("resultHash", { length: 64 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  index("aurionAuthoringReceipts_target_idx").on(table.kind, table.targetId),
+  index("aurionAuthoringReceipts_plan_idx").on(table.planHash),
+]);
