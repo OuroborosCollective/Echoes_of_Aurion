@@ -2,7 +2,18 @@ import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import { AX1_BLADE_SKILL_SOURCE_REVISION, ax1BladeSkillById, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
-import { AURION_CAUSAL_TICK_SCHEMA, AURION_ZONE_RULESET_VERSION, type AurionCausalTickReceipt, computeReceiptHash } from "../shared/aurionCausalTickContract";
+import {
+  AURION_ACTIVE_CAUSAL_TICK_SCHEMA,
+  AURION_CAUSAL_TICK_SCHEMA_V1,
+  AURION_CAUSAL_TICK_SCHEMA_V2,
+  AURION_ZONE_RULESET_VERSION,
+  computeCausalStageReceipt,
+  computeReceiptHash,
+  type AurionCausalStageName,
+  type AurionCausalStageReceipt,
+  type AurionCausalTickReceipt,
+  type AurionCausalTickReceiptUnsigned,
+} from "../shared/aurionCausalTickContract";
 import { type AurionZoneIntent, orderCanonicalZoneIntents, hashCanonicalIntents } from "../shared/aurionZoneIntentContract";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import {
@@ -114,6 +125,14 @@ export class AuthoritativeMovementZone {
   public isReplay = false;
   /** Replay reproduces the source revision carried by the recorded receipt. */
   public sourceRevisionOverride: string | null = null;
+  /**
+   * Replay/test-only schema selection. Live default remains v1 until B3/0049
+   * has physically persisted the v2 stage envelope.
+   */
+  public receiptSchemaOverride:
+    | typeof AURION_CAUSAL_TICK_SCHEMA_V1
+    | typeof AURION_CAUSAL_TICK_SCHEMA_V2
+    | null = null;
 
   constructor(readonly zoneId: ZoneId) {}
 
@@ -400,6 +419,24 @@ export class AuthoritativeMovementZone {
     let changed = false;
     let actionIndex = 0;
 
+    const stageReceipts: AurionCausalStageReceipt[] = [];
+    let previousStageStateHash = preStateHash;
+    let stageOrdinal = 0;
+    const captureAuthorityStage = (stageName: AurionCausalStageName): void => {
+      const canonicalStateHash = hashCanonicalZoneState(this.getCanonicalZoneState());
+      stageOrdinal += 1;
+      const stage = computeCausalStageReceipt({
+        stageName,
+        stageOrdinal,
+        tick: this.tickNumber,
+        previousCanonicalStateHash: previousStageStateHash,
+        orderedIntentHash,
+        canonicalStateHash,
+      });
+      stageReceipts.push(stage);
+      previousStageStateHash = canonicalStateHash;
+    };
+
     // 01 membership/order is stable after refreshPeerOrder().
     // 01.5 deterministic return-stone revival. Visual GLB availability is not an input.
     for (const peer of this.sortedPeersByEntityId) {
@@ -419,6 +456,7 @@ export class AuthoritativeMovementZone {
       revivedEntityIds.push(`player:${peer.userId}`);
       changed = true;
     }
+    captureAuthorityStage("MEMBERSHIP_REVIVAL");
 
     // 02 movement intents become canonical only here.
     for (const intent of intentsToProcess) {
@@ -435,6 +473,7 @@ export class AuthoritativeMovementZone {
       peer.position = next;
       changed = true;
     }
+    captureAuthorityStage("MOVEMENT");
 
     // 03 player actions and quest summaries.
     for (const intent of intentsToProcess) {
@@ -477,22 +516,27 @@ export class AuthoritativeMovementZone {
         }
       }
     }
+    captureAuthorityStage("PLAYER_ACTION");
 
     // 04 resource lifecycle.
     const resourcesChanged = this.resourceRuntime.tick(this.tickNumber);
+    captureAuthorityStage("RESOURCE");
     // 05 mob FSM.
     const mobsChanged = this.mobRuntime.tick(this.presences(), this.tickNumber);
+    captureAuthorityStage("MOB_FSM");
     // 06 mob combat.
     const mobCombat = this.resolveMobAttacks(++actionIndex);
     if (mobCombat.changed) changed = true;
     combatEvents.push(...mobCombat.events);
     rngEvents.push(...mobCombat.rngEvents);
+    captureAuthorityStage("MOB_COMBAT");
     // 07 regeneration.
     for (const peer of this.sortedPeers) {
       if (peer.health <= 0) continue;
       const next = regenerateWasdStamina(peer.stamina);
       if (next !== peer.stamina) { peer.stamina = next; changed = true; }
     }
+    captureAuthorityStage("REGENERATION");
 
     // 08 receipt creation; durable persistence is an observer queue.
     const postState = this.getCanonicalZoneState();
@@ -505,8 +549,8 @@ export class AuthoritativeMovementZone {
       combatSequence: this.combatSequence,
       revivedEntityIds,
     });
-    const receiptUnsigned: Omit<AurionCausalTickReceipt, "receiptHash"> = {
-      schema: AURION_CAUSAL_TICK_SCHEMA,
+    const receiptSchema = this.receiptSchemaOverride ?? AURION_ACTIVE_CAUSAL_TICK_SCHEMA;
+    const commonReceipt = {
       worldId: WORLD_ID,
       zoneId: this.zoneId,
       tick: this.tickNumber,
@@ -519,7 +563,14 @@ export class AuthoritativeMovementZone {
       rngRootHash: computeRngRootHash(rngEvents),
       postStateHash,
     };
-    const receipt: AurionCausalTickReceipt = { ...receiptUnsigned, receiptHash: computeReceiptHash(receiptUnsigned) };
+    const receiptUnsigned: AurionCausalTickReceiptUnsigned =
+      receiptSchema === AURION_CAUSAL_TICK_SCHEMA_V2
+        ? { schema: AURION_CAUSAL_TICK_SCHEMA_V2, ...commonReceipt, stages: Object.freeze([...stageReceipts]) }
+        : { schema: AURION_CAUSAL_TICK_SCHEMA_V1, ...commonReceipt };
+    const receipt: AurionCausalTickReceipt = {
+      ...receiptUnsigned,
+      receiptHash: computeReceiptHash(receiptUnsigned),
+    } as AurionCausalTickReceipt;
     this.previousReceiptHash = receipt.receiptHash;
     this.lastReceipt = receipt;
     if (!this.isReplay) globalTickRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
