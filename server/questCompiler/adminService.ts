@@ -257,7 +257,7 @@ export class AdminQuestStudioService {
 
   public async acceptQuest(userId: number, instanceId: string) {
     const { instance } = await this.ownedInstance(userId, instanceId);
-    const result = this.runtimeEngine.acceptQuest(instance);
+    const result = this.runtimeEngine.acceptQuest(instance, plan);
     await this.persistenceEngine.saveReceipt(result.receipt);
     await this.persistenceEngine.saveInstance(result.updatedInstance);
     return result;

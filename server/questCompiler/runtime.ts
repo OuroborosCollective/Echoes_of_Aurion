@@ -117,16 +117,25 @@ export class QuestRuntimeEngine {
     return { instance, plan };
   }
 
-  public acceptQuest(instance: QuestInstance): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
+  public acceptQuest(instance: QuestInstance, plan: QuestPlan): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
     if (instance.state !== 'offered') {
       throw new Error(`CANNOT_ACCEPT_QUEST_IN_STATE:${instance.state}`);
     }
+    if (plan.planHash !== instance.planHash || plan.graphHash !== instance.graphHash) throw new Error("QUEST_ACCEPT_PLAN_MISMATCH");
+    const startNode = plan.nodes.find(node => node.id === instance.currentNodeId);
+    if (!startNode || startNode.type !== "start") throw new Error("QUEST_ACCEPT_START_NODE_REQUIRED");
+    const outgoing = plan.edges
+      .filter(edge => edge.fromNodeId === startNode.id && !edge.conditionPredicate)
+      .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id));
+    if (outgoing.length !== 1) throw new Error("QUEST_ACCEPT_START_EDGE_AMBIGUOUS");
 
     const occurredAt = operationalDate(this.clock).toISOString();
     const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const updatedInstance: QuestInstance = {
       ...instance,
       state: 'active',
+      currentNodeId: outgoing[0]!.toNodeId,
+      completedNodeIds: instance.completedNodeIds.includes(startNode.id) ? [...instance.completedNodeIds] : [...instance.completedNodeIds, startNode.id],
       updatedAt: occurredAt,
     };
 
