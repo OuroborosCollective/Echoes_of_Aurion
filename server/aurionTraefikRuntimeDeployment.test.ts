@@ -231,6 +231,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("Bootstrap and promote labelled Traefik container");
     expect(workflow).not.toContain("sudo docker");
     expect(promoter).toContain("docker compose --project-name echoes-of-aurion");
+    expect(promoter).toContain('compose_digest_env=(');
+    expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" config --quiet');
+    expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion');
     expect(promoter).toContain("docker build --pull=false");
     expect(promoter).toContain("traefik.enable");
     expect(promoter).toContain("traefik.docker.network");
