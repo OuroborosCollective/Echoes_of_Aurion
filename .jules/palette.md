@@ -18,3 +18,6 @@
 ## 2026-09-15 - Landing and Community ARIA Improvements
 **Learning:** Buttons that trigger dialog overlays (like the community and account panels) lacked semantic structure, and disabled states didn't fully account for loading transitions, causing poor screen reader experiences.
 **Action:** Applied `aria-haspopup="dialog"` to buttons opening the Aurion panels and integrated `loading` states with `disabled` properties during initialization, extending `aria-busy` for explicit wait indications.
+## 2024-05-15 - UI Disabled States Optimization
+**Learning:** When making interactive buttons read-only during data loading (`loading` state in hooks), they should reflect proper visual affordance and accessibility flags rather than just preventing clicks.
+**Action:** Always map disabled state correctly via `disabled={loading}` and `aria-busy={loading}` for assistive technologies. In Tailwind, apply styling hooks like `disabled:opacity-60 disabled:cursor-not-allowed` and freeze interactive tactile animations with `disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100` to prevent unintended layout jumping for disabled elements. Lastly, inject explanatory `title={loading ? "Ladevorgang läuft..." : undefined}` attributes to provide a fallback visual tooltip.

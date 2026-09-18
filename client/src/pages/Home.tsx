@@ -211,8 +211,11 @@ export default function Home() {
           <button
             type="button"
             aria-haspopup="dialog"
+            disabled={loading}
+            aria-busy={loading}
             onClick={openAccountAccess}
-            className="group flex items-center justify-center min-h-12 rounded-xl border border-slate-500/40 bg-white/5 px-3 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
+            title={loading ? "Ladevorgang läuft..." : undefined}
+            className="group flex items-center justify-center min-h-12 rounded-xl border border-slate-500/40 bg-white/5 px-3 disabled:opacity-60 disabled:cursor-not-allowed hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
           >
             <ShieldCheck className="mr-2 inline size-4 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
             Anmelden
