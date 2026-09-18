@@ -1,6 +1,4 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
-import type { CanonicalTransferPayload } from "../server/causality/zoneCanonicalState";
-
 export const AURION_CROSS_ZONE_HANDOVER_SCHEMA = "aurion.cross-zone-handover.v2" as const;
 export const AURION_CROSS_ZONE_HANDOVER_STATES = [
   "PREPARED",
@@ -14,6 +12,13 @@ export const AURION_CROSS_ZONE_HANDOVER_STATES = [
 ] as const;
 export type AurionCrossZoneHandoverStatus = (typeof AURION_CROSS_ZONE_HANDOVER_STATES)[number];
 
+export interface AurionCrossZonePayload {
+  schema: "aurion.transfer.payload.v1";
+  entityId: string;
+  kind: "player" | "item" | "projectile";
+  data: unknown;
+}
+
 export interface AurionCrossZoneHandoverV2 {
   schema: typeof AURION_CROSS_ZONE_HANDOVER_SCHEMA;
   transferId: string;
@@ -25,7 +30,7 @@ export interface AurionCrossZoneHandoverV2 {
   sourceStateHash: string;
   targetWorldId: string;
   targetZoneId: string;
-  payload: CanonicalTransferPayload;
+  payload: AurionCrossZonePayload;
   payloadHash: string;
   targetAcceptedTick: number | null;
   targetReceiptHash: string | null;
@@ -87,7 +92,7 @@ export function prepareCrossZoneHandover(input: {
   sourceStateHash: string;
   targetWorldId: string;
   targetZoneId: string;
-  payload: CanonicalTransferPayload;
+  payload: AurionCrossZonePayload;
 }): AurionCrossZoneHandoverV2 {
   if (!input.entityId.trim() || input.payload.entityId !== input.entityId) throw new Error("CROSS_ZONE_ENTITY_IDENTITY_MISMATCH");
   if (!Number.isSafeInteger(input.sourceTick) || input.sourceTick < 0) throw new Error("CROSS_ZONE_SOURCE_TICK_INVALID");
