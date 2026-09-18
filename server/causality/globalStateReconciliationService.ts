@@ -1,11 +1,13 @@
 import { desc } from "drizzle-orm";
 import { aurionGlobalWorldEpochReceipts } from "../../drizzle/schema";
+import { aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
+import { verifyWorldCausalRoot, type AurionWorldCausalRootResult } from "../../shared/aurionWorldCausalRootContract";
 import { getDb } from "../db";
 
 export type GlobalReconciliationStatus = Readonly<{
   protocol: "aurion.global-reconciliation.v1";
   mutationAuthority: "none";
-  truthStatus: "UNOBSERVABLE" | "UNPROVABLE";
+  truthStatus: "VERIFIED" | "UNOBSERVABLE" | "UNPROVABLE";
   reason: string;
   lastObservedEpoch: number | null;
 }>;
@@ -58,12 +60,43 @@ export class AurionGlobalStateReconciliationService {
         .from(aurionGlobalWorldEpochReceipts)
         .orderBy(desc(aurionGlobalWorldEpochReceipts.epoch))
         .limit(1);
+      if (!latest) {
+        this.status = Object.freeze({
+          protocol: "aurion.global-reconciliation.v1",
+          mutationAuthority: "none",
+          truthStatus: "UNOBSERVABLE",
+          reason: "WORLD_EPOCH_UNOBSERVABLE",
+          lastObservedEpoch: null,
+        });
+        return;
+      }
+      const [proof] = await db.select().from(aurionGlobalStateProofs)
+        .orderBy(desc(aurionGlobalStateProofs.epoch))
+        .limit(1);
+      if (!proof || proof.epoch !== latest.epoch) {
+        this.status = Object.freeze({
+          protocol: "aurion.global-reconciliation.v1",
+          mutationAuthority: "none",
+          truthStatus: "UNPROVABLE",
+          reason: "WORLD_CAUSAL_ROOT_MISSING",
+          lastObservedEpoch: latest.epoch,
+        });
+        return;
+      }
+      let result: AurionWorldCausalRootResult | null = null;
+      try {
+        const parsed = JSON.parse(proof.globalProofJson) as AurionWorldCausalRootResult;
+        if (parsed?.schema === "aurion.world.causal-root-result.v1") result = parsed;
+      } catch {
+        result = null;
+      }
+      const verified = result?.status === "VERIFIED" && !!result.root && verifyWorldCausalRoot(result.root) && result.root.worldRootHash === proof.globalProofHash;
       this.status = Object.freeze({
         protocol: "aurion.global-reconciliation.v1",
         mutationAuthority: "none",
-        truthStatus: "UNOBSERVABLE",
-        reason: "EPOCH_ZONE_TICK_BINDING_UNAVAILABLE",
-        lastObservedEpoch: latest?.epoch ?? null,
+        truthStatus: verified ? "VERIFIED" : "UNPROVABLE",
+        reason: verified ? "WORLD_CAUSAL_ROOT_MATCH" : (result?.reason ?? "WORLD_CAUSAL_ROOT_INVALID"),
+        lastObservedEpoch: latest.epoch,
       });
     } catch (error) {
       this.status = Object.freeze({
