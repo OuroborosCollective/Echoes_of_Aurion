@@ -337,13 +337,14 @@ async function buildWorldCausalRootForEpoch(
   tx: DatabaseTransaction,
   epoch: number,
 ): Promise<AurionWorldCausalRootResult> {
-  const [priorRow] = await tx.select().from(aurionGlobalStateProofs).where(and(
+  const priorRows = await tx.select().from(aurionGlobalStateProofs).where(and(
     eq(aurionGlobalStateProofs.worldId, GLOBAL_WORLD_ID),
     lt(aurionGlobalStateProofs.epoch, epoch),
-  )).orderBy(desc(aurionGlobalStateProofs.epoch)).limit(1);
-
-  const prior = priorRow ? parsePriorWorldCausalRoot(priorRow.globalProofJson) : null;
-  const previousWorldRootProvable = !priorRow || prior?.status === "VERIFIED";
+  )).orderBy(desc(aurionGlobalStateProofs.epoch)).limit(64);
+  const prior = priorRows
+    .map(row => parsePriorWorldCausalRoot(row.globalProofJson))
+    .find((value): value is AurionWorldCausalRootResult => value !== null) ?? null;
+  const previousWorldRootProvable = prior === null || prior.status === "VERIFIED";
   const previousWorldRoot = prior?.status === "VERIFIED" ? prior.root.worldRootHash : null;
   const previousByZone = new Map(
     prior?.status === "VERIFIED" ? prior.root.zoneRoots.map(root => [root.zoneId, root] as const) : [],
