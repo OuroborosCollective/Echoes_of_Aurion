@@ -900,6 +900,21 @@ jobs:
           test "${tamper_status}" -ne 0
           mv "${identity}.untampered" "${identity}"
           verify_runtime
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt={
+            schemaVersion:"aurion.detached-attestation-verification.v1",
+            sourceRevision:process.env.GITHUB_SHA,
+            signerWorkflow:`${process.env.GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml`,
+            sourceRef:"refs/heads/main",
+            artifactPredicateType:"https://arelogic.space/attestations/aurion-release-artifact/v1",
+            runtimePredicateType:"https://arelogic.space/attestations/aurion-runtime-release/v1",
+            artifactVerified:true,
+            runtimeVerified:true,
+            runtimeTamperRejected:true,
+          };
+          fs.writeFileSync("aurion-detached-attestation-verification.json",JSON.stringify(receipt,null,2)+"\n");
+          NODE
 
           node --test scripts/aurion-build-input-manifest.test.mjs scripts/aurion-release-attestation.test.mjs scripts/aurion-milestone-gate-evidence.test.mjs
 
@@ -913,7 +928,8 @@ jobs:
           const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
           const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
           const artifactMeta=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-attestation.json","utf8"));
-          scanReleaseMetadataForSecrets({identity,runtimeMeta,artifactMeta});
+          const verification=JSON.parse(fs.readFileSync("aurion-detached-attestation-verification.json","utf8"));
+          scanReleaseMetadataForSecrets({identity,runtimeMeta,artifactMeta,verification});
           const expected={
             sourceRevision:process.env.GITHUB_SHA,
             artifactAttestationVerified:true,
@@ -925,10 +941,10 @@ jobs:
           const observed={
             sourceRevision:identity.sourceRevision,
             artifactAttestationVerified:artifactMeta.verified===true,
-            runtimeAttestationVerified:/^[1-9][0-9]*$/.test(runtimeMeta.attestationId??""),
-            artifactTamperRejected:artifactMeta.tamperRejected===true,
-            runtimeTamperRejected:true,
-            signerWorkflow:expected.signerWorkflow,
+            runtimeAttestationVerified:verification.runtimeVerified===true && /^[1-9][0-9]*$/.test(runtimeMeta.attestationId??""),
+            artifactTamperRejected:artifactMeta.tamperRejected===true && verification.artifactVerified===true,
+            runtimeTamperRejected:verification.runtimeTamperRejected===true,
+            signerWorkflow:verification.signerWorkflow,
           };
           const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
           const receipt={
@@ -962,7 +978,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-gate-b2-attestation-${{ github.sha }}
-          path: aurion-gate-b2-attestation.json
+          path: |
+            aurion-gate-b2-attestation.json
+            aurion-detached-attestation-verification.json
           if-no-files-found: error
           retention-days: 30
 
