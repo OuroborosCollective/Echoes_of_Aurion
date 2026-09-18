@@ -257,8 +257,14 @@ export AURION_RUNTIME_IMAGE_DIGEST="$runtime_image_id"
 export AURION_RELEASE_ARCHIVE_DIGEST="$release_archive_digest"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
 phase=compose-promotion
-"${compose[@]}" config --quiet
-"${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion
+compose_digest_env=(
+  "AURION_BUILD_INPUT_DIGEST=$build_input_digest"
+  "AURION_ARTIFACT_DIGEST=$artifact_digest"
+  "AURION_RUNTIME_IMAGE_DIGEST=$runtime_image_id"
+  "AURION_RELEASE_ARCHIVE_DIGEST=$release_archive_digest"
+)
+env "${compose_digest_env[@]}" "${compose[@]}" config --quiet
+env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion
 
 container_id="$("${compose[@]}" ps -q aurion)"
 [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
