@@ -971,3 +971,10 @@ Status: VERIFIED pre-merge on exact technical head.
 Änderung: Der Traefik-Runtime-Container erhält die nicht geheime, domaingebundene `AURION_ADMIN_MCP_RESOURCE_URL=https://${AURION_DOMAIN:-arelogic.space}/admin-mcp`; der bestehende OIDC-Issuer bleibt ausschließlich in der root-managed `.env.production`.
 Erkenntnis: Ein vollständig gesunder Runtime-/GDS-Container reicht nicht für ChatGPT/n8n-Remote-Nutzung; die OAuth Protected Resource Metadata muss im tatsächlich promoted Container konfiguriert und öffentlich lesbar sein.
 Evidence: Exact technical head `10cca1e59c6f7e4c6c51464f0aab3e047db9b3ea`; Deploy verify `35333376711` PASS; Game Development Studio Smoke `35333375501` PASS; Runtime Container Proof `35333375588` PASS; Runtime Candidate `35333375521` PASS; Local Test Pack `35333375650` PASS.
+
+
+### 2026-09-18 — Root reconciliation MariaDB readiness hardening
+Status: VERIFIED pre-merge on exact technical head.
+Änderung: Der private Root-Reconciliation-Proof prüft MariaDB-Readiness und Readback-User-Provisioning über authentifiziertes TCP auf `127.0.0.1:3306` statt über den während Container-Initialisierung flüchtigen Unix-Socket; der Migrationsschritt ist korrekt als 0021–0050 bezeichnet.
+Erkenntnis: Ein kurzzeitig vorhandener MariaDB-Socket ist kein stabiler Readiness-Vertrag; belastbar ist erst ein erfolgreicher authentifizierter Query über den dauerhaft genutzten TCP-Listener, ohne Host-Port-Publishing.
+Evidence: Exact technical head `1e6069eee7d904baa4f36806dccadeeb5c706cf7`; Root Reconciliation `35335761903` PASS; Zone Schema Bootstrap `35335761807` PASS; Runtime Candidate `35335761982` PASS; Runtime Container Proof `35335761802` PASS; Local Test Pack `35335761966` PASS.

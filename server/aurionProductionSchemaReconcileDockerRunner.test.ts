@@ -212,9 +212,9 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     }
   });
 
-  it("waits for an authenticated MariaDB query rather than a liveness-only ping", () => {
-    expect(rootProof).toContain("mariadb --protocol=socket -uroot -e 'SELECT 1'");
-    expect(rootProof).not.toContain("mariadb-admin --protocol=socket -uroot ping");
+  it("waits for an authenticated MariaDB TCP query rather than a liveness-only ping or published host port", () => {
+    expect(rootProof).toContain("mariadb --protocol=tcp -h127.0.0.1 -P3306 -uroot -e 'SELECT 1'");
+    expect(rootProof).not.toContain("mariadb-admin");
     expect(rootProof).not.toContain("-p 127.0.0.1:3306:3306");
     expect(rootProof).toContain("./node_modules/.bin/drizzle-kit migrate");
     expect(rootProof).toContain('--network "$AURION_RECONCILE_TEST_NETWORK"');
