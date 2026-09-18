@@ -123,10 +123,20 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       expect(pushBlock).toContain(ignored);
     }
     expect(triggerBlock).toContain("workflow_dispatch:");
-    expect(workflow.split(trustedMainCondition)).toHaveLength(5);
+    for (const jobName of [
+      "promote-zone-runtime",
+      "verify-release-attestations",
+      "apply-reviewed-schema-plan",
+    ]) {
+      const job = workflow
+        .split(`\n  ${jobName}:`)[1]
+        ?.split(/\n  [A-Za-z0-9_-]+:/)[0];
+      expect(job, `missing workflow job ${jobName}`).toBeDefined();
+      expect(job).toContain(trustedMainCondition);
+    }
     const dispatchJob = workflow.split("\n  apply-reviewed-schema-plan:")[1]?.split("\n  production-schema-readback:")[0];
     expect(dispatchJob).toContain(trustedMainCondition);
-    expect(dispatchJob).toContain("needs: [migration-ledger, promote-zone-runtime]");
+    expect(dispatchJob).toContain("needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]");
     expect(dispatchJob).toContain("actions: write");
     expect(dispatchJob).toContain("node scripts/dispatch-aurion-schema-plan.mjs");
     expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.ref }}");
