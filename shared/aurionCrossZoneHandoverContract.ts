@@ -85,6 +85,33 @@ export function computeCrossZoneTransferReceiptHash(
   return canonicalSha256(unsigned(receipt));
 }
 
+export function computeTargetAcceptanceReceiptHash(input: {
+  transferId: string;
+  entityId: string;
+  sourceReceiptHash: string;
+  payloadHash: string;
+  targetWorldId: string;
+  targetZoneId: string;
+  targetAcceptedTick: number;
+}): string {
+  if (!Number.isSafeInteger(input.targetAcceptedTick) || input.targetAcceptedTick < 0) {
+    throw new Error("CROSS_ZONE_TARGET_ACCEPTANCE_TICK_INVALID");
+  }
+  if (!HASH.test(input.sourceReceiptHash) || !HASH.test(input.payloadHash)) {
+    throw new Error("CROSS_ZONE_TARGET_ACCEPTANCE_EVIDENCE_INVALID");
+  }
+  return canonicalSha256({
+    schema: "aurion.cross-zone-target-acceptance.v2",
+    transferId: input.transferId,
+    entityId: input.entityId,
+    sourceReceiptHash: input.sourceReceiptHash,
+    payloadHash: input.payloadHash,
+    targetWorldId: input.targetWorldId,
+    targetZoneId: input.targetZoneId,
+    targetAcceptedTick: input.targetAcceptedTick,
+  });
+}
+
 export function prepareCrossZoneHandover(input: {
   entityId: string;
   sourceWorldId: string;
