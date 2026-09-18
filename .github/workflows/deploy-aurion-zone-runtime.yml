@@ -67,6 +67,12 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: migration-ledger
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Guard repository scope
@@ -112,7 +118,12 @@ jobs:
           [[ "${{ needs.migration-ledger.outputs.plan_sha256 }}" =~ ^[a-f0-9]{64}$ ]]
           pnpm check
           pnpm test
-          node --test scripts/dispatch-aurion-schema-plan.test.mjs
+          node --test \
+            scripts/dispatch-aurion-schema-plan.test.mjs \
+            scripts/aurion-build-input-manifest.test.mjs \
+            scripts/aurion-release-attestation.test.mjs \
+            scripts/scan-aurion-release-secrets.test.mjs \
+            scripts/aurion-milestone-gate-evidence.test.mjs
           bash -n deploy/promote-aurion-zone-runtime.sh
           node --check deploy/verify-aurion-runtime-database.mjs
           node --check scripts/build-aurion-traefik-runtime-artifact.mjs
@@ -176,7 +187,8 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
           if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
-          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          if(manifest.buildInputManifest!=="build-input-manifest.json"||!/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest??"")) throw new Error("Traefik runtime build input identity missing");
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","build-input-manifest.json","release-secret-scan.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
           runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
@@ -387,6 +399,94 @@ jobs:
           bootstrap_image_id="$(docker image inspect --format '{{.Id}}' "$bootstrap_image")"
           [[ "$bootstrap_image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
 
+      - name: Prepare canonical release artifact attestation predicate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          import { buildArtifactAttestationPredicate } from "./scripts/aurion-release-attestation.mjs";
+          const sha256=file=>`sha256:${createHash("sha256").update(fs.readFileSync(file)).digest("hex")}`;
+          const runtime=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
+          const build=JSON.parse(fs.readFileSync("dist-traefik-runtime/build-input-manifest.json","utf8"));
+          if(runtime.revision!==process.env.GITHUB_SHA||runtime.buildInputDigest!==build.buildInputDigest) throw new Error("BUILD_INPUT_IDENTITY_MISMATCH");
+          const predicate=buildArtifactAttestationPredicate({
+            sourceRevision:process.env.GITHUB_SHA,
+            buildInputDigest:runtime.buildInputDigest,
+            artifactDigest:sha256("dist-traefik-runtime/checksums.sha256"),
+            releaseArchiveDigest:sha256("aurion-traefik-runtime-release.tgz"),
+            secretScanReceiptDigest:`sha256:${runtime.secretScan?.receiptSha256 ?? ""}`,
+            secretValuesReturned:runtime.secretScan?.secretValuesReturned,
+            workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
+            workflowRunId:process.env.GITHUB_RUN_ID,
+          });
+          fs.writeFileSync("aurion-release-artifact-predicate.json",JSON.stringify(predicate,null,2)+"\n");
+          fs.writeFileSync("aurion-release-artifact-subject.sha256",`${predicate.releaseArchiveDigest.slice(7)}  aurion-traefik-runtime-release.tgz\n`);
+          NODE
+          sha256sum --strict -c aurion-release-artifact-subject.sha256
+
+      - name: Attest finalized Aurion runtime release archive
+        id: attest-release-artifact
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: aurion-traefik-runtime-release.tgz
+          predicate-type: https://arelogic.space/attestations/aurion-release-artifact/v1
+          predicate-path: aurion-release-artifact-predicate.json
+
+      - name: Verify detached artifact attestation and tamper rejection
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTESTATION_BUNDLE: ${{ steps.attest-release-artifact.outputs.bundle-path }}
+          ATTESTATION_ID: ${{ steps.attest-release-artifact.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.attest-release-artifact.outputs.attestation-url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${ATTESTATION_BUNDLE}"
+          cp "${ATTESTATION_BUNDLE}" aurion-release-artifact-attestation.sigstore.json
+          verify_artifact() {
+            gh attestation verify aurion-traefik-runtime-release.tgz \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml" \
+              --source-digest "${GITHUB_SHA}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1" \
+              --deny-self-hosted-runners \
+              --bundle aurion-release-artifact-attestation.sigstore.json
+          }
+          verify_artifact
+          cp aurion-traefik-runtime-release.tgz aurion-traefik-runtime-release.tgz.untampered
+          printf '\0' >> aurion-traefik-runtime-release.tgz
+          set +e
+          verify_artifact >/dev/null 2>&1
+          tamper_status=$?
+          set -e
+          test "${tamper_status}" -ne 0
+          mv aurion-traefik-runtime-release.tgz.untampered aurion-traefik-runtime-release.tgz
+          sha256sum --strict -c aurion-release-artifact-subject.sha256
+          verify_artifact
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const bundle=fs.readFileSync("aurion-release-artifact-attestation.sigstore.json");
+          const predicate=JSON.parse(fs.readFileSync("aurion-release-artifact-predicate.json","utf8"));
+          const metadata={
+            schemaVersion:"aurion.release-artifact-attestation-metadata.v1",
+            sourceRevision:predicate.sourceRevision,
+            attestationId:process.env.ATTESTATION_ID,
+            attestationUrl:process.env.ATTESTATION_URL,
+            bundleSha256:`sha256:${createHash("sha256").update(bundle).digest("hex")}`,
+            releaseArchiveDigest:predicate.releaseArchiveDigest,
+            verified:true,
+            tamperRejected:true,
+          };
+          if(!/^[1-9][0-9]*$/.test(metadata.attestationId??"")||!/^https:\/\/github\.com\//.test(metadata.attestationUrl??"")) throw new Error("ATTESTATION_IDENTITY_INVALID");
+          fs.writeFileSync("aurion-release-artifact-attestation.json",JSON.stringify(metadata,null,2)+"\n");
+          NODE
+
       - name: Publish immutable runtime artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -406,6 +506,10 @@ jobs:
             dist-production-reconcile
             dist-production-apply
             aurion-workflow-provenance.json
+            aurion-release-artifact-predicate.json
+            aurion-release-artifact-subject.sha256
+            aurion-release-artifact-attestation.sigstore.json
+            aurion-release-artifact-attestation.json
           if-no-files-found: error
           retention-days: 30
 
@@ -439,6 +543,12 @@ jobs:
     needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
       EXPECTED_SHA: ${{ github.sha }}
@@ -450,6 +560,13 @@ jobs:
           test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
           test "${GITHUB_REF_NAME}" = "main"
           test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
+
+      - name: Check out exact production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Reset workflow-owned artifact directories
         run: rm -rf runtime-artifact runtime-bootstrap-artifact
@@ -562,6 +679,92 @@ jobs:
           bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
           bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
           bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
+      - name: Prepare fully bound runtime release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/runtime-artifact"
+          readback=/var/lib/aurion-traefik-runtime-readback/current.json
+          test -f "${readback}"
+          test -f "${artifact}/aurion-release-artifact-predicate.json"
+          test -f "${artifact}/aurion-release-artifact-attestation.json"
+          cp "${readback}" aurion-installed-runtime-readback.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          import { buildRuntimeReleaseIdentity, scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
+          const sha256=file=>`sha256:${createHash("sha256").update(fs.readFileSync(file)).digest("hex")}`;
+          const artifact=process.env.GITHUB_WORKSPACE+"/runtime-artifact";
+          const predicate=JSON.parse(fs.readFileSync(artifact+"/aurion-release-artifact-predicate.json","utf8"));
+          const attestation=JSON.parse(fs.readFileSync(artifact+"/aurion-release-artifact-attestation.json","utf8"));
+          const readback=JSON.parse(fs.readFileSync("aurion-installed-runtime-readback.json","utf8"));
+          const archiveDigest=sha256(artifact+"/aurion-traefik-runtime-release.tgz");
+          if(predicate.sourceRevision!==process.env.EXPECTED_SHA||predicate.releaseArchiveDigest!==archiveDigest) throw new Error("ARTIFACT_ATTESTATION_BINDING_MISMATCH");
+          if(attestation.sourceRevision!==process.env.EXPECTED_SHA||attestation.releaseArchiveDigest!==archiveDigest||attestation.verified!==true||attestation.tamperRejected!==true) throw new Error("ARTIFACT_ATTESTATION_NOT_VERIFIED");
+          if(readback.revision!==process.env.EXPECTED_SHA||readback.releaseId!==process.env.RELEASE_ID||readback.databaseConnectivity!=="authenticated_select_1") throw new Error("PROMOTION_READBACK_IDENTITY_MISMATCH");
+          const identity=buildRuntimeReleaseIdentity({
+            sourceRevision:process.env.EXPECTED_SHA,
+            mergeSha:process.env.EXPECTED_SHA,
+            releaseId:process.env.RELEASE_ID,
+            buildInputDigest:predicate.buildInputDigest,
+            artifactDigest:predicate.artifactDigest,
+            runtimeImageDigest:readback.imageId,
+            releaseArchiveDigest:archiveDigest,
+            containerId:readback.containerId,
+            artifactAttestationId:attestation.attestationId,
+            artifactAttestationUrl:attestation.attestationUrl,
+          });
+          scanReleaseMetadataForSecrets(identity);
+          fs.writeFileSync("aurion-runtime-release-identity.json",JSON.stringify(identity,null,2)+"\n");
+          NODE
+
+      - name: Attest inspected production runtime identity
+        id: attest-runtime-identity
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: aurion-runtime-release-identity.json
+          predicate-type: https://arelogic.space/attestations/aurion-runtime-release/v1
+          predicate-path: aurion-runtime-release-identity.json
+
+      - name: Seal runtime attestation metadata
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest-runtime-identity.outputs.bundle-path }}
+          ATTESTATION_ID: ${{ steps.attest-runtime-identity.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.attest-runtime-identity.outputs.attestation-url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${ATTESTATION_BUNDLE}"
+          cp "${ATTESTATION_BUNDLE}" aurion-runtime-release-attestation.sigstore.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const identity=JSON.parse(fs.readFileSync("aurion-runtime-release-identity.json","utf8"));
+          const bundle=fs.readFileSync("aurion-runtime-release-attestation.sigstore.json");
+          const metadata={
+            schemaVersion:"aurion.runtime-release-attestation-metadata.v1",
+            sourceRevision:identity.sourceRevision,
+            runtimeImageDigest:identity.runtimeImageDigest,
+            attestationId:process.env.ATTESTATION_ID,
+            attestationUrl:process.env.ATTESTATION_URL,
+            bundleSha256:`sha256:${createHash("sha256").update(bundle).digest("hex")}`,
+          };
+          if(!/^[1-9][0-9]*$/.test(metadata.attestationId??"")||!/^https:\/\/github\.com\//.test(metadata.attestationUrl??"")) throw new Error("RUNTIME_ATTESTATION_IDENTITY_INVALID");
+          fs.writeFileSync("aurion-runtime-release-attestation.json",JSON.stringify(metadata,null,2)+"\n");
+          NODE
+
+      - name: Publish detached production runtime attestation
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-runtime-attestation-${{ github.sha }}
+          path: |
+            aurion-runtime-release-identity.json
+            aurion-runtime-release-attestation.sigstore.json
+            aurion-runtime-release-attestation.json
+            aurion-installed-runtime-readback.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail
@@ -582,10 +785,180 @@ jobs:
             sleep 1
           done
           [[ "$public_ready" -eq 1 ]]
+  verify-release-attestations:
+    name: Verify detached Aurion release attestations
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [verify-and-build, promote-zone-runtime]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    steps:
+      - name: Check out exact attested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download attested build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: runtime-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download attested production runtime identity
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-runtime-attestation-${{ github.sha }}
+          path: runtime-attestation
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Verify signer, source, predicates and tamper rejection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="${GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml"
+          artifact="runtime-artifact/aurion-traefik-runtime-release.tgz"
+          identity="runtime-attestation/aurion-runtime-release-identity.json"
+          verify_artifact() {
+            gh attestation verify "${artifact}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${signer}" \
+              --source-digest "${GITHUB_SHA}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1" \
+              --deny-self-hosted-runners
+          }
+          verify_runtime() {
+            gh attestation verify "${identity}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${signer}" \
+              --source-digest "${GITHUB_SHA}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://arelogic.space/attestations/aurion-runtime-release/v1"
+          }
+          verify_artifact
+          verify_runtime
+
+          tar -xOzf "${artifact}" ./release-secret-scan.json > aurion-release-secret-scan.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const scan=JSON.parse(fs.readFileSync("aurion-release-secret-scan.json","utf8"));
+          const predicate=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-predicate.json","utf8"));
+          const digest=`sha256:${createHash("sha256").update(fs.readFileSync("aurion-release-secret-scan.json")).digest("hex")}`;
+          if(scan.status!=="PASS"||scan.secretValuesReturned!==false||scan.findings?.length!==0) throw new Error("RELEASE_SECRET_SCAN_NOT_CLEAN");
+          if(predicate.secretValuesReturned!==false||predicate.secretScanReceiptDigest!==digest) throw new Error("RELEASE_SECRET_SCAN_ATTESTATION_MISMATCH");
+          NODE
+
+          cp "${identity}" "${identity}.untampered"
+          printf '\0' >> "${identity}"
+          set +e
+          verify_runtime >/dev/null 2>&1
+          tamper_status=$?
+          set -e
+          test "${tamper_status}" -ne 0
+          mv "${identity}.untampered" "${identity}"
+          verify_runtime
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const receipt={
+            schemaVersion:"aurion.detached-attestation-verification.v1",
+            sourceRevision:process.env.GITHUB_SHA,
+            signerWorkflow:`${process.env.GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml`,
+            sourceRef:"refs/heads/main",
+            artifactPredicateType:"https://arelogic.space/attestations/aurion-release-artifact/v1",
+            runtimePredicateType:"https://arelogic.space/attestations/aurion-runtime-release/v1",
+            artifactVerified:true,
+            runtimeVerified:true,
+            runtimeTamperRejected:true,
+          };
+          fs.writeFileSync("aurion-detached-attestation-verification.json",JSON.stringify(receipt,null,2)+"\n");
+          NODE
+
+          node --test scripts/aurion-build-input-manifest.test.mjs scripts/aurion-release-attestation.test.mjs scripts/aurion-milestone-gate-evidence.test.mjs
+
+      - name: Emit Blocker 2 attestation gate receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
+          const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
+          const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
+          const artifactMeta=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-attestation.json","utf8"));
+          const predicate=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-predicate.json","utf8"));
+          const secretScan=JSON.parse(fs.readFileSync("aurion-release-secret-scan.json","utf8"));
+          const verification=JSON.parse(fs.readFileSync("aurion-detached-attestation-verification.json","utf8"));
+          scanReleaseMetadataForSecrets({identity,runtimeMeta,artifactMeta,verification});
+          const expected={
+            sourceRevision:process.env.GITHUB_SHA,
+            artifactAttestationVerified:true,
+            runtimeAttestationVerified:true,
+            artifactTamperRejected:true,
+            runtimeTamperRejected:true,
+            secretScanClean:true,
+            signerWorkflow:`${process.env.GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml`,
+          };
+          const observed={
+            sourceRevision:identity.sourceRevision,
+            artifactAttestationVerified:artifactMeta.verified===true,
+            runtimeAttestationVerified:verification.runtimeVerified===true && /^[1-9][0-9]*$/.test(runtimeMeta.attestationId??""),
+            artifactTamperRejected:artifactMeta.tamperRejected===true && verification.artifactVerified===true,
+            runtimeTamperRejected:verification.runtimeTamperRejected===true,
+            secretScanClean:secretScan.status==="PASS" && secretScan.secretValuesReturned===false && secretScan.findings?.length===0 && predicate.secretValuesReturned===false && /^sha256:[a-f0-9]{64}$/.test(predicate.secretScanReceiptDigest??""),
+            signerWorkflow:verification.signerWorkflow,
+          };
+          const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
+          const receipt={
+            schemaVersion:"aurion.milestone.gate-evidence.v1",
+            gateId:"AURION-M21-B2-ATTESTATION",
+            scope:"runtime",
+            passCriteria:["final artifact is signed only after finalization","runtime identity binds docker-inspected immutable image digest","GitHub OIDC/Sigstore signer workflow and exact source are verified","tampered subjects fail verification","release metadata secret scan passes"],
+            failCriteria:["missing detached attestation","wrong signer/source/predicate","runtime image digest missing","tampered subject verifies","secret-like metadata detected"],
+            sourceRevision:identity.sourceRevision,
+            workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
+            command:"gh attestation verify --signer-workflow ... --source-digest ... --source-ref refs/heads/main --predicate-type ...",
+            testSources:["scripts/aurion-build-input-manifest.mjs","scripts/aurion-build-input-manifest.test.mjs","scripts/aurion-release-attestation.mjs","scripts/aurion-release-attestation.test.mjs",".github/workflows/deploy-aurion-zone-runtime.yml"],
+            externalId:runtimeMeta.attestationUrl,
+            reproducible:true,
+            releaseIdentity:{
+              sourceRevision:identity.sourceRevision,
+              buildInputDigest:identity.buildInputDigest,
+              artifactDigest:identity.artifactDigest,
+              runtimeImageDigest:identity.runtimeImageDigest,
+            },
+            expected,
+            observed,
+            checks,
+            status:checks.every(check=>check.pass)?"PASS":"FAIL",
+          };
+          fs.writeFileSync("aurion-gate-b2-attestation.json",JSON.stringify(receipt,null,2)+"\n");
+          NODE
+          node scripts/aurion-milestone-gate-evidence.mjs verify aurion-gate-b2-attestation.json --require-pass
+
+      - name: Upload Blocker 2 attestation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-gate-b2-attestation-${{ github.sha }}
+          path: |
+            aurion-gate-b2-attestation.json
+            aurion-detached-attestation-verification.json
+            aurion-release-secret-scan.json
+          if-no-files-found: error
+          retention-days: 30
+
   apply-reviewed-schema-plan:
     name: Apply reviewed 0021–0049 plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    needs: [migration-ledger, promote-zone-runtime]
+    needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
