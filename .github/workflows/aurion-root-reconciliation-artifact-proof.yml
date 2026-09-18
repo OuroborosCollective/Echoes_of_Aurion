@@ -118,14 +118,14 @@ jobs:
             mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
           ready=0
           for _attempt in $(seq 1 30); do
-            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then ready=1; break; fi
+            if docker exec -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=tcp -h127.0.0.1 -P3306 -uroot -e 'SELECT 1' >/dev/null 2>&1; then ready=1; break; fi
             sleep 1
           done
           test "$ready" -eq 1
       - name: Establish read-only reconciliation database identity
         run: |
           set -euo pipefail
-          docker exec -i -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=socket -uroot <<SQL
+          docker exec -i -e MYSQL_PWD="$AURION_RECONCILE_TEST_ROOT_PASSWORD" "$AURION_RECONCILE_TEST_DB" mariadb --protocol=tcp -h127.0.0.1 -P3306 -uroot <<SQL
           CREATE USER IF NOT EXISTS '${AURION_RECONCILE_TEST_READ_USER}'@'%' IDENTIFIED BY '${AURION_RECONCILE_TEST_READ_PASSWORD}';
           GRANT SELECT, SHOW VIEW ON \`${AURION_RECONCILE_TEST_DATABASE}\`.* TO '${AURION_RECONCILE_TEST_READ_USER}'@'%';
           FLUSH PRIVILEGES;
@@ -255,7 +255,7 @@ jobs:
           if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("expected the complete declared late migration wave");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
-      - name: Apply 0021 through 0049 only inside ephemeral proof database
+      - name: Apply 0021 through 0050 only inside ephemeral proof database
         run: |
           set -euo pipefail
           root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
