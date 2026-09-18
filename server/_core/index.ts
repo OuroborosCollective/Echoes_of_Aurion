@@ -43,6 +43,7 @@ async function startServer(){
     delete process.env.DATABASE_URL;
   }
   const releaseRevision=process.env.AURION_RELEASE_SHA?.trim().toLowerCase();if(releaseRevision&&!/^[a-f0-9]{40}$/.test(releaseRevision))throw new Error("AURION_RELEASE_SHA must be a 40-character Git revision when it is set");
+  const releaseArchiveDigest=process.env.AURION_RELEASE_ARCHIVE_DIGEST?.trim().toLowerCase();if(releaseArchiveDigest&&!/^sha256:[a-f0-9]{64}$/.test(releaseArchiveDigest))throw new Error("AURION_RELEASE_ARCHIVE_DIGEST must be a sha256 digest when it is set");
   let wolframCag=initialWolframCagRuntimeReadback();if(wolframCag.configured)void resolveWolframCagRuntimeReadback().then(readback=>{wolframCag=readback;});
   const gameDevelopmentStudio=await resolveGameDevelopmentStudioRuntimeReadback();
   if(gameDevelopmentStudio.required&&!gameDevelopmentStudio.available)throw new Error(gameDevelopmentStudio.error??"GAME_DEV_REQUIRED_UNAVAILABLE");
@@ -74,6 +75,7 @@ async function startServer(){
     buildInputDigest: activeProvenance.buildInputDigest || `sha256:${process.env.AURION_BUILD_INPUT_DIGEST || "unknown"}`,
     artifactDigest: activeProvenance.artifactDigest || `sha256:${process.env.AURION_ARTIFACT_DIGEST || "unknown"}`,
     runtimeImageDigest: activeProvenance.runtimeImageDigest || `sha256:${process.env.AURION_RUNTIME_IMAGE_DIGEST || "unknown"}`,
+    releaseArchiveDigest: releaseArchiveDigest || "UNVERIFIED",
     authority: {
       ruleset: "aurion-zone-v3",
       tickHz: 10,
