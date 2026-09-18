@@ -7,7 +7,7 @@
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "node scripts/verify-wasd-npc.mjs && node scripts/prepare-world-assets.mjs && node scripts/compile-world-colliders.mjs --check && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:sandbox": "NODE_OPTIONS=--max-old-space-size=${AURION_BUILD_HEAP_MB:-1536} pnpm build",
-    "build:runtime-artifact": "pnpm build && node scripts/write-runtime-build-manifest.mjs",
+    "build:runtime-artifact": "pnpm verify:donor-ledger && pnpm build && node scripts/write-runtime-build-manifest.mjs",
     "build:promoter-bootstrap-artifact": "node scripts/build-aurion-promoter-bootstrap-artifact.mjs",
     "build:zone-runtime": "esbuild server/zoneService.ts --platform=node --bundle --format=cjs --outfile=dist-zone/zoneService.cjs",
     "migration:wasd:ledger": "node scripts/build-aurion-wasd-migration-ledger.mjs",
@@ -25,7 +25,8 @@
     "test:aurion-post-promote-readback": "vitest run server/aurionPostPromoteReadbackSudo.test.ts",
     "test:e2e": "playwright test",
     "db:push": "pnpm verify:migrations && drizzle-kit generate && drizzle-kit migrate",
-    "verify:wasd-npc": "node scripts/verify-wasd-npc.mjs"
+    "verify:wasd-npc": "node scripts/verify-wasd-npc.mjs",
+    "verify:donor-ledger": "node scripts/build-aurion-donor-ledger.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
