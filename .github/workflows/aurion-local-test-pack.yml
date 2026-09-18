@@ -106,6 +106,15 @@ jobs:
             server/questCompiler/replay.test.ts \
             server/worldContext/replay.test.ts \
             2>&1 | tee .aurion-local-test-pack/evidence/replay-verdict.log
+      - name: Verify Wave 2 Step 22 world causal root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          pnpm test -- worldCausalRootService 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-world-root.log
+          pnpm test -- causality 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-causality.log
+          pnpm test -- replay 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-replay.log
+
       - name: Verify milestone gate evidence contract
         shell: bash
         run: |
