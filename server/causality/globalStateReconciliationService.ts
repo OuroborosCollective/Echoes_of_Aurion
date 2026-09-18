@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { aurionGlobalWorldEpochReceipts } from "../../drizzle/schema";
 import { aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
 import { verifyWorldCausalRoot, type AurionWorldCausalRootResult } from "../../shared/aurionWorldCausalRootContract";
@@ -56,7 +56,7 @@ export class AurionGlobalStateReconciliationService {
       return;
     }
     try {
-      const [latest] = await db.select({ epoch: aurionGlobalWorldEpochReceipts.epoch })
+      const [latest] = await db.select({ worldId: aurionGlobalWorldEpochReceipts.worldId, epoch: aurionGlobalWorldEpochReceipts.epoch })
         .from(aurionGlobalWorldEpochReceipts)
         .orderBy(desc(aurionGlobalWorldEpochReceipts.epoch))
         .limit(1);
@@ -71,6 +71,7 @@ export class AurionGlobalStateReconciliationService {
         return;
       }
       const [proof] = await db.select().from(aurionGlobalStateProofs)
+        .where(eq(aurionGlobalStateProofs.worldId, latest.worldId))
         .orderBy(desc(aurionGlobalStateProofs.epoch))
         .limit(1);
       if (!proof || proof.epoch !== latest.epoch) {
