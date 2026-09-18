@@ -351,6 +351,13 @@
       "when": 1788937000000,
       "tag": "0049_aurion_causal_receipt_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1789706460000,
+      "tag": "0050_aurion_human_ai_authoring",
+      "breakpoints": true
     }
   ]
 }
