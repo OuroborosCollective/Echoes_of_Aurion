@@ -12,6 +12,7 @@ import { globalCrossZoneSyncService } from "../causality/crossZoneSynchronizatio
 import { globalReadbackService } from "../causality/readbackService";
 import { replayZoneTick } from "../causality/replayZoneTick";
 import { getDb } from "../db";
+import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 
 export const causalityRouter = router({
   getReadbackStatus: adminProcedure.query(() => globalReadbackService.getStatus()),
@@ -99,7 +100,7 @@ export const causalityRouter = router({
     .query(({ input }) => globalCrossZoneSyncService.getPendingInboundTransfers(input.worldId, input.zoneId)),
 
   getGlobalStateProofs: adminProcedure
-    .input(z.object({ worldId: z.string().default("aurion-world-01"), limit: z.number().int().min(1).max(50).default(10) }))
+    .input(z.object({ worldId: z.string().default(GLOBAL_WORLD_ID), limit: z.number().int().min(1).max(50).default(10) }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
