@@ -420,31 +420,6 @@ jobs:
           fs.writeFileSync("aurion-release-artifact-subject.sha256",`${predicate.releaseArchiveDigest.slice(7)}  aurion-traefik-runtime-release.tgz\n`);
           NODE
           sha256sum --strict -c aurion-release-artifact-subject.sha256
-          node scripts/aurion-milestone-gate-evidence.mjs verify <(node --input-type=module -e '
-            import fs from "node:fs";
-            const p=JSON.parse(fs.readFileSync("aurion-release-artifact-predicate.json","utf8"));
-            const receipt={
-              schemaVersion:"aurion.milestone.gate-evidence.v1",
-              gateId:"AURION-M21-B2-ATTESTATION",
-              scope:"runtime",
-              passCriteria:["final artifact hashes are canonical and revision-bound","release metadata contains no secret values"],
-              failCriteria:["missing build input identity","artifact digest mismatch","secret-like release metadata"],
-              sourceRevision:p.sourceRevision,
-              workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
-              command:"node scripts/aurion-release-attestation.test.mjs + SHA256 readback before Sigstore signing",
-              testSources:["scripts/aurion-release-attestation.mjs","scripts/aurion-release-attestation.test.mjs","scripts/aurion-build-input-manifest.mjs",".github/workflows/deploy-aurion-zone-runtime.yml"],
-              externalId:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-              reproducible:true,
-              releaseIdentity:{sourceRevision:p.sourceRevision,buildInputDigest:p.buildInputDigest,artifactDigest:p.artifactDigest,runtimeImageDigest:"sha256:"+"0".repeat(64)},
-              expected:{releaseArchiveDigest:p.releaseArchiveDigest},
-              observed:{releaseArchiveDigest:p.releaseArchiveDigest},
-              checks:[{name:"releaseArchiveDigest",expected:p.releaseArchiveDigest,observed:p.releaseArchiveDigest,pass:true}],
-              status:"FAIL"
-            };
-            // This pre-sign receipt is intentionally FAIL because the runtime
-            // image digest is not observable until production docker inspect.
-            process.stdout.write(JSON.stringify(receipt));
-          ') >/dev/null || true
 
       - name: Attest finalized Aurion runtime release archive
         id: attest-release-artifact
