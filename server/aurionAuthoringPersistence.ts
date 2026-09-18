@@ -28,6 +28,7 @@ import {
   aurionWorldDesignVersions,
 } from "../drizzle/schema";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
+import { groupDungeonIds } from "../shared/groupInstanceProtocol";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -217,6 +218,7 @@ export async function readActiveWorldDesign(database?: DatabaseLike): Promise<Wo
 
 export async function planDungeonDesign(raw: DungeonDesignDraft): Promise<DungeonDesignPlan> {
   const draft = DungeonDesignDraftSchema.parse(raw);
+  if ((groupDungeonIds as readonly string[]).includes(draft.dungeonId)) throw new Error("AUTHORING_DUNGEON_STATIC_ID_RESERVED");
   assertDungeonGraph(draft);
   const catalog = await glbImportStore().catalog();
   if (catalog.revision !== draft.expectedCatalogRevision) throw new Error("AUTHORING_GLB_CATALOG_CHANGED");
