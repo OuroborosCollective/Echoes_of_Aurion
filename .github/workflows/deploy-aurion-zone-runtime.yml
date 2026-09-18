@@ -797,6 +797,24 @@ jobs:
             sleep 1
           done
           [[ "$public_ready" -eq 1 ]]
+
+      - name: Verify public Aurion Admin MCP protected-resource metadata
+        run: |
+          set -euo pipefail
+          metadata="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 "https://arelogic.space/.well-known/oauth-protected-resource")"
+          printf '%s' "$metadata" | node --input-type=module -e '
+            let raw="";
+            for await (const chunk of process.stdin) raw+=chunk;
+            const body=JSON.parse(raw);
+            if(body.resource!=="https://arelogic.space/admin-mcp") process.exit(21);
+            if(!Array.isArray(body.authorization_servers)||body.authorization_servers.length<1) process.exit(22);
+            if(body.authorization_servers.some(value=>typeof value!=="string"||!value.startsWith("https://"))) process.exit(23);
+            const scopes=new Set(Array.isArray(body.scopes_supported)?body.scopes_supported:[]);
+            for(const required of ["aurion.admin.read","aurion.admin.assets.write","aurion.admin.authoring.write"]) {
+              if(!scopes.has(required)) process.exit(24);
+            }
+          '
+
   verify-release-attestations:
     name: Verify detached Aurion release attestations
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
