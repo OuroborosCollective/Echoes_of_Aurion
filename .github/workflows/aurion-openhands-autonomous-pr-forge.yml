@@ -872,7 +872,7 @@ jobs:
 
     steps:
       - name: 📥 Download forge bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurion-openhands-forge-${{ matrix.issue_type }}-${{ matrix.issue_number }}
           path: ${{ env.FORGE_DIR }}

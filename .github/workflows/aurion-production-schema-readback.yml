@@ -48,7 +48,7 @@ jobs:
           rm -f production-schema-readback.json production-schema-readback.raw.json production-schema-readback.stderr
 
       - name: Download exact successful deployment artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurion-zone-runtime-${{ inputs.expected_sha }}
           path: deployment-artifact

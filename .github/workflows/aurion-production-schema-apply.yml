@@ -64,7 +64,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download immutable cross-repository ledger receipt
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurion-wasd-migration-ledger-${{ inputs.plan_sha256 }}
           path: migration-ledger
@@ -168,7 +168,7 @@ jobs:
         run: rm -rf schema-apply-artifact production-schema-apply.raw.json production-schema-apply.json production-schema-apply.stderr production-schema-apply.oidc
 
       - name: Download verified bounded apply artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.verify-ledger-and-apply-artifact.outputs.artifact_name }}
           path: schema-apply-artifact
