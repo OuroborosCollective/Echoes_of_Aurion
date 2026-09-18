@@ -15,7 +15,7 @@ export type AurionCrossZoneHandoverStatus = (typeof AURION_CROSS_ZONE_HANDOVER_S
 export interface AurionCrossZonePayload {
   schema: "aurion.transfer.payload.v1";
   entityId: string;
-  kind: "player" | "item" | "projectile";
+  kind: "player" | "npc" | "item" | "projectile";
   data: unknown;
 }
 
@@ -35,6 +35,7 @@ export interface AurionCrossZoneHandoverV2 {
   targetAcceptedTick: number | null;
   targetReceiptHash: string | null;
   status: AurionCrossZoneHandoverStatus;
+  previousTransferReceiptHash: string | null;
   transferReceiptHash: string;
 }
 
@@ -74,6 +75,7 @@ function unsigned(receipt: Omit<AurionCrossZoneHandoverV2, "transferReceiptHash"
     targetAcceptedTick: receipt.targetAcceptedTick,
     targetReceiptHash: receipt.targetReceiptHash,
     status: receipt.status,
+    previousTransferReceiptHash: receipt.previousTransferReceiptHash,
   };
 }
 
@@ -116,6 +118,7 @@ export function prepareCrossZoneHandover(input: {
     targetAcceptedTick: null,
     targetReceiptHash: null,
     status: "PREPARED" as const,
+    previousTransferReceiptHash: null,
   };
   return Object.freeze({ ...base, transferReceiptHash: computeCrossZoneTransferReceiptHash(base) });
 }
@@ -164,6 +167,7 @@ export function advanceCrossZoneHandover(
     targetAcceptedTick,
     targetReceiptHash,
     status: nextStatus,
+    previousTransferReceiptHash: current.transferReceiptHash,
   };
   const next = Object.freeze({
     ...nextBase,
@@ -179,28 +183,27 @@ export function verifyCrossZoneHandover(receipt: AurionCrossZoneHandoverV2): boo
   if (canonicalSha256(receipt.payload) !== receipt.payloadHash) return false;
   if (!HASH.test(receipt.sourceReceiptHash) || !HASH.test(receipt.sourceStateHash)) return false;
   if (receipt.targetReceiptHash !== null && !HASH.test(receipt.targetReceiptHash)) return false;
+  if (receipt.previousTransferReceiptHash !== null && !HASH.test(receipt.previousTransferReceiptHash)) return false;
   return receipt.transferReceiptHash === computeCrossZoneTransferReceiptHash(receipt);
 }
 
 export function authoritativeOwnersForHandover(receipt: AurionCrossZoneHandoverV2): readonly string[] {
   switch (receipt.status) {
     case "PREPARED":
+    case "SOURCE_FROZEN":
+    case "TARGET_ACCEPTED":
     case "REJECTED":
     case "EXPIRED":
+    case "UNPROVABLE":
       return Object.freeze([`${receipt.sourceWorldId}/${receipt.sourceZoneId}`]);
     case "SOURCE_FINALIZED":
     case "COMMITTED":
       return Object.freeze([`${receipt.targetWorldId}/${receipt.targetZoneId}`]);
-    case "SOURCE_FROZEN":
-    case "TARGET_ACCEPTED":
-    case "UNPROVABLE":
-      return Object.freeze([]);
   }
 }
 
 export function assertCrossZoneOwnerInvariant(receipt: AurionCrossZoneHandoverV2): readonly string[] {
   const owners = authoritativeOwnersForHandover(receipt);
-  if (owners.length > 1) throw new Error("CROSS_ZONE_OWNER_INVARIANT_VIOLATION");
-  if (receipt.status === "COMMITTED" && owners.length !== 1) throw new Error("CROSS_ZONE_COMMITTED_OWNER_REQUIRED");
+  if (owners.length !== 1) throw new Error("CROSS_ZONE_OWNER_INVARIANT_VIOLATION");
   return owners;
 }
