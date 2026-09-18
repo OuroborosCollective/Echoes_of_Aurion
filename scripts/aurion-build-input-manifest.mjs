@@ -41,6 +41,7 @@ export async function buildAurionBuildInputManifest({ root = process.cwd(), revi
     "docker-compose.traefik.yml",
     "scripts/build-aurion-traefik-runtime-artifact.mjs",
     "scripts/aurion-build-input-manifest.mjs",
+    "scripts/scan-aurion-release-secrets.mjs",
     "scripts/install-game-development-studio.mjs",
     "drizzle/meta/_journal.json",
   ];
