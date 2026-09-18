@@ -871,3 +871,12 @@ Status: VERIFIED pre-merge; v2 live activation intentionally deferred to migrati
 Änderung: Additives `aurion.causal.tick.v2` mit sieben Authority-Stage-Receipts (StageName/InputIdentity/CanonicalStateHash/TransitionHash) und stage-by-stage Replay ergänzt; v1-Hashpayload unverändert eingefroren und v1-Zwischenstufen bleiben UNOBSERVABLE.
 Erkenntnis: First-Divergence ist nur belastbar, wenn Zwischenphasen selbst receipt-gebunden sind; ein identischer Endzustand darf eine frühere abweichende Authority-Phase nicht verdecken.
 Evidence: Exact technical head `5ad779f4e5df1bc128d3510d5eb091da5e5f4fc8`; Local Test Pack `35300128005` PASS (targeted 20/20, TypeScript/classless, full 250 Test Files / 1083 Tests, migration verify/apply, offline/workspace hashes); Runtime Candidate `35300128032` PASS; Runtime Container Proof `35300127965` PASS; candidate evidence artifact digest `sha256:d69300ba46a4a214632136a80ee6ee02bc87ee32ce5a36f6effe26cba7cc2863`; container evidence digest `sha256:0a6ceae29abc1c265b809a6552c37a9607930313161e6ab502c4e2a56644c05d`.
+
+
+### 2026-09-18 — Dependabot guardrails
+Status: VERIFIED repository triage; no dependency merge or runtime claim.
+Änderung: Dependabot-Welle #374–#386 triagiert: Major-/ungeeignete PRs #374, #376, #377, #379, #380, #381 und #383 geschlossen; #375, #378, #382, #384, #385 und #386 als Draft fail-safe gestellt. Routine-Version-Updates in npm/Gradle/GitHub Actions/Docker auf Patch+Minor begrenzt, PR-Limits reduziert und Three.js-0.x-Minors aus der Routine-Automatik genommen.
+Erkenntnis: SemVer-Gruppierung allein macht 0.x-Renderer- oder Plattform-Majors nicht sicher; Versions-Automation muss vor dem PR-Erzeugen an Aurions Evidence-Grenzen gebunden werden.
+Evidence: Ausgangs-main `1c8335d7888c346429683ff453b2dd0e5261714e`; Guardrail technical head vor Memory `99f10edba423c5514c995a9d981342ff6e920165`; PR #376 zeigte am exakten Head mehrere fehlgeschlagene Renderer/Runtime-Lanes, während kein Dependabot-PR gemerged wurde.
+Open: Die sechs Draft-Updates benötigen weiterhin exakte Head-/Regression-/Runtime-Evidence vor einer späteren Übernahme.
+Next safe step: Guardrail-Draft-PR prüfen; danach verbleibende Draft-Updates einzeln nur nach aktualisiertem main und vollständiger Evidence entscheiden.
