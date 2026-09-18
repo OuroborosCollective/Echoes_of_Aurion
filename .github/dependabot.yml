@@ -1,66 +1,53 @@
 # Echoes of Aurion — Dependabot
 #
-# Ziele:
-# - Dependency-Updates regelmäßig erkennen
-# - Sicherheitsupdates NICHT künstlich verzögern
-# - zusammengehörige Stacks gemeinsam aktualisieren
-# - große / riskante Updates isoliert halten
-# - PR-Flut begrenzen
-# - deterministische Runtime-/Regression-/Evidence-Prüfung vor Merge ermöglichen
-#
-# Wichtig:
-# Dependabot-PR != Merge-Freigabe.
-# Jeder PR muss weiterhin durch die Aurion Regression-/Runtime-/Evidence-Lanes.
+# Routine version updates are intentionally bounded.
+# Security updates remain enabled independently of the version-update limits.
+# Dependabot PRs are never merge authority: exact-head regression/runtime/evidence
+# remains mandatory before any dependency reaches main.
 
 version: 2
 
 updates:
-  # ---------------------------------------------------------------------------
-  # Node.js / pnpm
-  #
-  # Repository:
-  #   /package.json
-  #   /pnpm-lock.yaml
-  #
-  # pnpm wird von Dependabot über das npm ecosystem verwaltet.
-  # ---------------------------------------------------------------------------
   - package-ecosystem: "npm"
     directory: "/"
-
     schedule:
       interval: "weekly"
       day: "tuesday"
       time: "04:10"
       timezone: "Europe/Berlin"
 
-    # Kein Dependency-PR-Sturm.
-    # Security-PRs zählen laut GitHub nicht gegen dieses Limit.
-    open-pull-requests-limit: 8
+    open-pull-requests-limit: 4
 
-    # Neue Releases nicht sofort auf die Runtime loslassen.
-    # Security Updates sind vom Dependabot-Cooldown nicht betroffen.
     cooldown:
       default-days: 7
       semver-major-days: 21
       semver-minor-days: 7
       semver-patch-days: 3
 
+    # Routine Dependabot version PRs may only move patch/minor.
+    # Major upgrades are explicit integration work.
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
+
+    # three.js is 0.x. 0.185 -> 0.186 already failed several exact-head
+    # renderer/runtime lanes, so only patch-level routine updates are accepted.
+    # The version-update selector does not disable Dependabot security updates.
+    ignore:
+      - dependency-name: "three"
+        update-types:
+          - "version-update:semver-minor"
+      - dependency-name: "@types/three"
+        update-types:
+          - "version-update:semver-minor"
+
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
 
     groups:
-      # -----------------------------------------------------------------------
-      # Three.js Runtime Stack
-      #
-      # Aurion koppelt Three.js, Typen und BVH eng miteinander.
-      # Diese sollten bei kompatiblen Patch/Minor-Bumps gemeinsam geprüft
-      # werden statt in zeitlich getrennten Runtime-Zuständen zu landen.
-      #
-      # ACHTUNG:
-      # Three befindet sich im 0.x-Versionsraum. Auch "minor" kann dort
-      # substantiell sein -> vollständige Renderer-/Collision-/Replay-Evidence.
-      # -----------------------------------------------------------------------
       three-render-stack:
         patterns:
           - "three"
@@ -68,9 +55,7 @@ updates:
           - "three-mesh-bvh"
         update-types:
           - "patch"
-          - "minor"
 
-      # React und die zugehörigen Typen nicht auseinanderlaufen lassen.
       react-stack:
         patterns:
           - "react"
@@ -81,7 +66,6 @@ updates:
           - "patch"
           - "minor"
 
-      # tRPC Client/Server/React-Versionen gemeinsam halten.
       trpc-stack:
         patterns:
           - "@trpc/*"
@@ -89,8 +73,6 @@ updates:
           - "patch"
           - "minor"
 
-      # Capacitor Android/Core/CLI müssen als zusammengehöriger Mobile-Stack
-      # betrachtet werden.
       capacitor-stack:
         patterns:
           - "@capacitor/*"
@@ -98,7 +80,6 @@ updates:
           - "patch"
           - "minor"
 
-      # Genkit-Kern und Provider gemeinsam bewegen.
       genkit-stack:
         patterns:
           - "genkit"
@@ -107,7 +88,6 @@ updates:
           - "patch"
           - "minor"
 
-      # MCP-Pakete bilden einen gemeinsamen Contract-/Runtime-Stack.
       mcp-stack:
         patterns:
           - "@modelcontextprotocol/*"
@@ -115,7 +95,6 @@ updates:
           - "patch"
           - "minor"
 
-      # ORM + Migration Tooling gemeinsam prüfen.
       drizzle-stack:
         patterns:
           - "drizzle-orm"
@@ -124,7 +103,6 @@ updates:
           - "patch"
           - "minor"
 
-      # Vite / React Plugin gemeinsam testen.
       vite-stack:
         patterns:
           - "vite"
@@ -133,7 +111,6 @@ updates:
           - "patch"
           - "minor"
 
-      # Tailwind Build-/Presentation-Stack.
       tailwind-stack:
         patterns:
           - "tailwindcss"
@@ -147,7 +124,6 @@ updates:
           - "patch"
           - "minor"
 
-      # Radix-Komponenten sind untereinander eng verwandt.
       radix-ui:
         patterns:
           - "@radix-ui/*"
@@ -155,10 +131,6 @@ updates:
           - "patch"
           - "minor"
 
-      # Weniger kritische Development-Abhängigkeiten zusammenfassen.
-      #
-      # Die oben definierten Gruppen werden zuerst ausgewertet; dadurch
-      # bleiben React/Three/Vite/etc. in ihren eigenen Gruppen.
       dev-tooling:
         dependency-type: "development"
         patterns:
@@ -167,31 +139,24 @@ updates:
           - "patch"
           - "minor"
 
-
-  # ---------------------------------------------------------------------------
-  # Android / Gradle
-  #
-  # Repository:
-  #   /android/build.gradle
-  #   /android/app/build.gradle
-  #   /android/variables.gradle
-  #   /android/gradle/wrapper/gradle-wrapper.properties
-  #
-  # AGP / Google Services bleiben absichtlich eigenständige Updates.
-  # ---------------------------------------------------------------------------
   - package-ecosystem: "gradle"
     directory: "/android"
-
     schedule:
       interval: "weekly"
       day: "tuesday"
       time: "04:25"
       timezone: "Europe/Berlin"
 
-    open-pull-requests-limit: 4
+    open-pull-requests-limit: 2
 
     cooldown:
       default-days: 7
+
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
     commit-message:
       prefix: "build(android-deps)"
@@ -204,28 +169,24 @@ updates:
           - "patch"
           - "minor"
 
-
-  # ---------------------------------------------------------------------------
-  # GitHub Actions
-  #
-  # directory "/" ist bei diesem Ecosystem korrekt:
-  # Dependabot untersucht damit .github/workflows.
-  #
-  # Major Action Upgrades bleiben absichtlich einzelne PRs.
-  # ---------------------------------------------------------------------------
   - package-ecosystem: "github-actions"
     directory: "/"
-
     schedule:
       interval: "weekly"
       day: "tuesday"
       time: "04:40"
       timezone: "Europe/Berlin"
 
-    open-pull-requests-limit: 4
+    open-pull-requests-limit: 2
 
     cooldown:
       default-days: 7
+
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
     commit-message:
       prefix: "ci(deps)"
@@ -238,31 +199,24 @@ updates:
           - "patch"
           - "minor"
 
-
-  # ---------------------------------------------------------------------------
-  # Production Container
-  #
-  # Der aktuelle Dockerfile nutzt einen expliziten Node-Tag PLUS SHA256 Digest:
-  #
-  #   node:22.23.2-bookworm-slim@sha256:...
-  #
-  # Genau diese Provenienz soll erhalten bleiben.
-  # Keine Gruppierung mit npm/Actions/Gradle, weil Containeränderungen einen
-  # eigenen Runtime-/Digest-/Health-Readback verdienen.
-  # ---------------------------------------------------------------------------
   - package-ecosystem: "docker"
     directory: "/"
-
     schedule:
       interval: "weekly"
       day: "tuesday"
       time: "04:55"
       timezone: "Europe/Berlin"
 
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
 
     cooldown:
       default-days: 7
+
+    allow:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
     commit-message:
       prefix: "build(container-deps)"
