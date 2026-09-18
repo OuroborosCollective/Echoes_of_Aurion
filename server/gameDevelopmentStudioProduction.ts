@@ -32,11 +32,22 @@ export const gameDevelopmentStudioLiveAssetInputSchema = z.object({
   contentBase64: z.string().min(16).max(MAX_GLB_BASE64_CHARS),
   purpose: z.enum(LIVE_GAME_DEV_PURPOSES),
   packageVersion: z.string().trim().regex(PACKAGE_VERSION).default("1.0.0"),
-  license: z.string().trim().regex(LICENSE).refine(value => value.toLowerCase() !== "unknown", "explicit license required"),
+  rightsBasis: z.enum(["owner-created-private", "licensed"]).default("licensed"),
+  license: z.string().trim().regex(LICENSE).refine(value => value.toLowerCase() !== "unknown", "explicit license required").optional(),
   designWorkOrderSha256: z.string().regex(SHA256).optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.rightsBasis === "licensed" && !value.license) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "licensed assets require a license identifier", path: ["license"] });
+  }
+});
 
 export type GameDevelopmentStudioLiveAssetInput = z.infer<typeof gameDevelopmentStudioLiveAssetInputSchema>;
+
+export function gameDevelopmentStudioRightsLabel(input: Pick<GameDevelopmentStudioLiveAssetInput, "rightsBasis" | "license">): string {
+  if (input.rightsBasis === "owner-created-private") return "Proprietary-Owner-Created";
+  if (!input.license) throw new Error("GAME_DEV_LICENSE_REQUIRED");
+  return input.license;
+}
 
 type JsonObject = Record<string, unknown>;
 
@@ -109,14 +120,14 @@ async function ensureExactFile(target: string, bytes: Buffer): Promise<void> {
 export function buildGameDevPackageBuildArgs(
   sourcePath: string,
   outputDir: string,
-  input: Pick<GameDevelopmentStudioLiveAssetInput, "displayName" | "packageVersion" | "license">,
+  input: Pick<GameDevelopmentStudioLiveAssetInput, "displayName" | "packageVersion" | "rightsBasis" | "license">,
 ): readonly string[] {
   if (!path.isAbsolute(sourcePath) || !path.isAbsolute(outputDir)) throw new Error("GAME_DEV_ABSOLUTE_PATH_REQUIRED");
   return Object.freeze([
     "package", "build", sourcePath,
     "--name", input.displayName,
     "--version", input.packageVersion,
-    "--license", input.license,
+    "--license", gameDevelopmentStudioRightsLabel(input),
     "--output-dir", outputDir,
     "--json",
   ]);
@@ -152,6 +163,7 @@ export type GameDevelopmentStudioLivePlan = Readonly<{
   fileName: string;
   purpose: (typeof LIVE_GAME_DEV_PURPOSES)[number];
   packageVersion: string;
+  rightsBasis: "owner-created-private" | "licensed";
   license: string;
   designWorkOrderSha256: string | null;
   inspectResultSha256: string;
@@ -196,7 +208,8 @@ export async function planGameDevelopmentStudioLiveAsset(
       fileName: input.fileName,
       purpose: input.purpose,
       packageVersion: input.packageVersion,
-      license: input.license,
+      rightsBasis: input.rightsBasis,
+      license: gameDevelopmentStudioRightsLabel(input),
       designWorkOrderSha256: input.designWorkOrderSha256 ?? null,
       inspectResultSha256: canonicalSha256(normalizeRunEvidence(inspect, runDir)),
       validateResultSha256: canonicalSha256(normalizeRunEvidence(validate, runDir)),

@@ -12,6 +12,7 @@ import {
   AURION_ADMIN_MCP_PATH,
   AURION_ADMIN_MCP_READ_SCOPE,
   AURION_ADMIN_GLB_WRITE_SCOPE,
+  AURION_ADMIN_AUTHORING_WRITE_SCOPE,
   bearerChallenge,
   openIdForOidcSubject,
   parseAurionAdminMcpTokenClaims,
@@ -20,6 +21,29 @@ import {
   type AurionAdminMcpSettings,
 } from "./adminMcpProtocol";
 import { resolveApprovedGatewayHost } from "./gatewayHost";
+import { resolveGameDevelopmentStudioRuntimeReadback } from "./gameDevelopmentStudioRuntime";
+import {
+  applyGameDevelopmentStudioLiveAsset,
+  gameDevelopmentStudioLiveAssetInputSchema,
+  planGameDevelopmentStudioLiveAsset,
+} from "./gameDevelopmentStudioProduction";
+import {
+  applyNamedNpcVisual,
+  namedNpcVisualInputSchema,
+  planNamedNpcVisual,
+} from "./namedNpcVisualAssignment";
+import {
+  applyDungeonDesign,
+  applyWorldDesign,
+  planDungeonDesign,
+  planWorldDesign,
+  readActiveDungeonDesigns,
+  readActiveWorldDesign,
+} from "./aurionAuthoringPersistence";
+import {
+  DungeonDesignDraftSchema,
+  WorldDesignDraftSchema,
+} from "../shared/aurionAuthoringContract";
 import { requireWolframCagClient, runAurionWolframCagCanary, wolframCagConfigurationStatus } from "./wolframCag";
 import {
   chatGptCausalityStatus,
@@ -95,10 +119,16 @@ export async function authenticateAdminGlbBearer(request: Request): Promise<{ id
 
 export function adminMcpCapabilities(scopes: readonly string[] = [], options: Readonly<{ wolframConfigured?: boolean }> = {}) {
   const writable = scopes.includes(AURION_ADMIN_GLB_WRITE_SCOPE);
+  const authoringWritable = scopes.includes(AURION_ADMIN_AUTHORING_WRITE_SCOPE);
   const wolframConfigured = options.wolframConfigured === true;
   return Object.freeze({
     protocol: "aurion.admin-mcp.v1",
-    consent: Object.freeze({ defaultAuthority: "read_only" as const, gameplayMutation: "unavailable" as const, assetWriteScope: writable ? AURION_ADMIN_GLB_WRITE_SCOPE : null }),
+    consent: Object.freeze({
+      defaultAuthority: "read_only" as const,
+      gameplayMutation: "aurion_plan_confirm_only" as const,
+      assetWriteScope: writable ? AURION_ADMIN_GLB_WRITE_SCOPE : null,
+      authoringWriteScope: authoringWritable ? AURION_ADMIN_AUTHORING_WRITE_SCOPE : null,
+    }),
     tools: Object.freeze([
       { name: "aurion_admin_get_capabilities", mode: "read", description: "Lists the current safe capabilities and boundaries." },
       { name: "aurion_admin_get_world_overview", mode: "read", description: "Reads the confirmed global world descriptor without advancing an epoch." },
@@ -124,12 +154,27 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
         { name: "aurion_admin_glb_import", mode: "write", description: "Persist one separately authorized visual GLB; no gameplay mutation." },
         { name: "aurion_admin_glb_catalog", mode: "read", description: "Read approved persistent GLB catalog and visual assignments." },
         { name: "aurion_admin_glb_assign", mode: "write", description: "Compare-and-set one visual assignment; no gameplay semantics." },
+        { name: "aurion_admin_gds_status", mode: "read", description: "Read the pinned server-side Game Development Studio runtime status." },
+        { name: "aurion_admin_gds_plan", mode: "read", description: "Run server-side GDS inspect/validate and return a human-confirmed plan." },
+        { name: "aurion_admin_gds_apply", mode: "write", description: "Run GDS package/verify/vendor and ingest verified bytes after exact plan confirmation." },
+        { name: "aurion_admin_named_npc_visual_plan", mode: "read", description: "Plan one approved named-NPC visual binding, e.g. npc_lyra." },
+        { name: "aurion_admin_named_npc_visual_apply", mode: "write", description: "Apply one named-NPC visual binding after exact plan confirmation." },
+      ] : []),
+      ...(authoringWritable ? [
+        { name: "aurion_admin_world_design_read", mode: "read", description: "Read the active Aurion world-design manifest." },
+        { name: "aurion_admin_world_design_plan", mode: "read", description: "Validate and hash one world-design draft." },
+        { name: "aurion_admin_world_design_apply", mode: "write", description: "Apply one exact world-design plan after explicit confirmation." },
+        { name: "aurion_admin_dungeon_design_read", mode: "read", description: "Read active authored Aurion dungeons." },
+        { name: "aurion_admin_dungeon_design_plan", mode: "read", description: "Validate and hash one dungeon-design draft." },
+        { name: "aurion_admin_dungeon_design_apply", mode: "write", description: "Publish one exact dungeon-design plan after explicit confirmation." },
       ] : []),
     ]),
     wolfram: Object.freeze({ configured: wolframConfigured, mutationAuthority: "none" as const }),
-    unavailable: Object.freeze(["world_delta_write", "object_placement", "quest_publish", "npc_reward_mutation", "causal_rollback", "database_access", "shell_access", "git_or_vps_access"]),
-    chatGptProMode: writable ? "read_evidence_plus_scoped_asset_import" : "read_evidence_only",
-    writePath: writable ? "GLB imports and compare-and-set visual assignments only; gameplay/recovery mutations remain unavailable." : "Write tools require the separate asset-write scope. Gameplay/recovery mutations remain unavailable.",
+    unavailable: Object.freeze(["raw_world_delta_write", "raw_object_placement", "npc_reward_mutation", "causal_rollback", "database_access", "shell_access", "git_or_vps_access"]),
+    chatGptProMode: writable || authoringWritable ? "read_evidence_plus_scoped_plan_confirm_writes" : "read_evidence_only",
+    writePath: writable || authoringWritable
+      ? "Only typed Aurion plan→confirm writes are available. Raw gameplay/database/shell/git/VPS mutations remain unavailable."
+      : "Write tools require explicit asset-write and/or authoring-write OAuth scopes.",
   });
 }
 
@@ -162,6 +207,38 @@ function createAdminMcpServer(actor: AdminActor) {
     server.registerTool("aurion_admin_glb_import", { description: "Import one visual GLB using the exact plan hash; no gameplay mutation.", inputSchema: z.object({ displayName: z.string().trim().min(3).max(120), contentBase64: payload, expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }) }, async input => content(await glbImportStore().ingest(actor.userId, input)));
     server.registerTool("aurion_admin_glb_catalog", { description: "Read approved GLB catalog and visual assignments.", inputSchema: z.object({}) }, async () => content(await glbImportStore().catalog()));
     server.registerTool("aurion_admin_glb_assign", { description: "Compare-and-set one visual assignment.", inputSchema: z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }) }, async input => content(await glbImportStore().assign(actor.userId, input)));
+    server.registerTool("aurion_admin_gds_status", { title: "Game Development Studio status", description: "Reads the pinned server-side GDS runtime. No provider or gameplay mutation.", inputSchema: z.object({}) }, async () => content(await resolveGameDevelopmentStudioRuntimeReadback()));
+    server.registerTool("aurion_admin_gds_plan", { title: "Plan Game Development Studio asset admission", description: "Runs server-side inspect/validate and returns an exact plan; no live write.", inputSchema: gameDevelopmentStudioLiveAssetInputSchema }, async input => content(await planGameDevelopmentStudioLiveAsset(input)));
+    server.registerTool("aurion_admin_gds_apply", { title: "Apply Game Development Studio asset admission", description: "Runs package→verify→vendor→Aurion ingest only for the exact confirmed plan.", inputSchema: z.object({
+      asset: gameDevelopmentStudioLiveAssetInputSchema,
+      expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("APPLY_TO_LIVE_AURION"),
+    }).strict() }, async input => content(await applyGameDevelopmentStudioLiveAsset(actor.userId, input.asset, input.expectedPlanSha256)));
+    server.registerTool("aurion_admin_named_npc_visual_plan", { title: "Plan named NPC visual binding", description: "Binds no bytes yet; verifies canonical NPC + approved npc-fallback asset and returns exact plan.", inputSchema: namedNpcVisualInputSchema }, async input => content(await planNamedNpcVisual(input)));
+    server.registerTool("aurion_admin_named_npc_visual_apply", { title: "Apply named NPC visual binding", description: "Assigns one confirmed character GLB to one canonical Aurion NPC after exact plan confirmation.", inputSchema: z.object({
+      binding: namedNpcVisualInputSchema,
+      expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("APPLY_NAMED_NPC_VISUAL"),
+    }).strict() }, async input => content(await applyNamedNpcVisual(actor.userId, input.binding, input.expectedPlanHash)));
+  }
+
+
+  if (actor.scopes.includes(AURION_ADMIN_AUTHORING_WRITE_SCOPE)) {
+    server.registerTool("aurion_admin_world_design_read", { title: "Read active world design", description: "Reads active world-design versions; no mutation.", inputSchema: z.object({}) }, async () => content(await readActiveWorldDesign()));
+    server.registerTool("aurion_admin_world_design_plan", { title: "Plan world design", description: "Validates approved GLB placements and returns an exact plan hash.", inputSchema: WorldDesignDraftSchema }, async input => content(await planWorldDesign(input)));
+    server.registerTool("aurion_admin_world_design_apply", { title: "Apply world design", description: "Applies only the exact confirmed plan.", inputSchema: z.object({
+      draft: WorldDesignDraftSchema,
+      expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("APPLY_WORLD_DESIGN"),
+    }).strict() }, async input => content(await applyWorldDesign(actor.userId, input.draft, input.expectedPlanHash)));
+
+    server.registerTool("aurion_admin_dungeon_design_read", { title: "Read active authored dungeons", description: "Reads published Aurion dungeon designs; no mutation.", inputSchema: z.object({}) }, async () => content(await readActiveDungeonDesigns()));
+    server.registerTool("aurion_admin_dungeon_design_plan", { title: "Plan dungeon design", description: "Validates topology, assets and graph hash; no publish.", inputSchema: DungeonDesignDraftSchema }, async input => content(await planDungeonDesign(input)));
+    server.registerTool("aurion_admin_dungeon_design_apply", { title: "Publish dungeon design", description: "Publishes only the exact confirmed dungeon plan.", inputSchema: z.object({
+      draft: DungeonDesignDraftSchema,
+      expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("PUBLISH_DUNGEON"),
+    }).strict() }, async input => content(await applyDungeonDesign(actor.userId, input.draft, input.expectedPlanHash)));
   }
 
   const questService = new (require("./questCompiler/adminService").AdminQuestStudioService)();

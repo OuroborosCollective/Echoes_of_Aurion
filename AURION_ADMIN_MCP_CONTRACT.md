@@ -64,3 +64,37 @@ Ein erfolgreicher Admin-MCP-Readback beweist nur die gelesene Aurion-Evidencefl�
 - fremde/fehlende/stale Evidence fail-closed;
 - Secrets werden nicht zurückgegeben;
 - Telemetry-/MCP-Health kann keinen Gameplay-Erfolg behaupten.
+
+
+## Remote Game Development Studio + Authoring
+
+Der Admin-MCP ist die **serverseitige ChatGPT-/n8n-Brücke**. Es ist kein lokaler Rechner und kein Desktop-Connector erforderlich. Der gepinnte Game-Development-Studio-Runtime liegt im Aurion-Produktionscontainer unter `/opt/game-dev`; MCP-Tools rufen ausschließlich die gebundenen Aurion-Adapter auf und besitzen keinen allgemeinen Shell-Zugriff.
+
+### OAuth-Scopes
+
+- `aurion.admin.read` — ausschließlich Readback/Evidence.
+- `aurion.admin.assets.write` — GLB/GDS/NPC-Visual Plan→Confirm→Apply.
+- `aurion.admin.authoring.write` — World-/Dungeon-Authoring Plan→Confirm→Apply.
+
+Ein Scope impliziert niemals den anderen.
+
+### GDS-Tools
+
+- `aurion_admin_gds_status`
+- `aurion_admin_gds_plan`
+- `aurion_admin_gds_apply`
+- `aurion_admin_named_npc_visual_plan`
+- `aurion_admin_named_npc_visual_apply`
+
+`gds_plan` führt serverseitig `game-dev asset inspect/validate` aus. `gds_apply` darf erst mit `APPLY_TO_LIVE_AURION` den Ablauf `package build → package verify → vendor dry-run → vendor --confirm → Aurion ingest → catalog readback` ausführen.
+
+Private, vom Projekteigentümer selbst erzeugte Assets verwenden die Rechtebasis `owner-created-private`; im GDS-Package wird sie als `Proprietary-Owner-Created` dokumentiert. Dafür wird keine erfundene CC-/SPDX-Lizenz verlangt.
+
+Named-NPC-Bindings verwenden einen zweiten Consent-Schritt. Beispiel: `lyra` wird ausschließlich als `npc_lyra` gebunden, nachdem Aurion den NPC und das bereits freigegebene `npc-fallback`-Character-Asset bestätigt hat. GLB-Metadaten erzeugen niemals NPC-, Quest- oder Spawn-Authority.
+
+### Authoring-Tools
+
+- `aurion_admin_world_design_read/plan/apply`
+- `aurion_admin_dungeon_design_read/plan/apply`
+
+Diese Werkzeuge verwenden die bereits produktiven Aurion-Authoring-Verträge und benötigen den separaten Authoring-Write-Scope. Rohes SQL, Shell, Git/VPS-Zugriff, direkte World-Delta-Writes oder Reward-Mutationen bleiben nicht verfügbar.
