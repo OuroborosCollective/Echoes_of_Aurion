@@ -99,6 +99,11 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain(
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
+    expect(workflow).toContain("Verify public Aurion Admin MCP protected-resource metadata");
+    expect(workflow).toContain("https://arelogic.space/.well-known/oauth-protected-resource");
+    expect(workflow).toContain('body.resource!=="https://arelogic.space/admin-mcp"');
+    expect(workflow).toContain('"aurion.admin.assets.write"');
+    expect(workflow).toContain('"aurion.admin.authoring.write"');
     expect(runtimeCandidateWorkflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 120");
     expect(runtimeCandidateWorkflow.match(/--retry-all-errors --connect-timeout 10 --max-time 120/g)?.length).toBeGreaterThanOrEqual(2);
     expect(workflow).toContain('health.revision!==process.argv[1]');
