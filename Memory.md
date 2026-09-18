@@ -910,12 +910,6 @@ Erkenntnis: Ein grüner Workflow-Status ist keine Evidence; erst ein revisionsge
 Evidence: Exact technical head `ffb744a9d59de43555e4366c60e3566c74f90dd3`; Local Test Pack `35308451332` PASS (252 Test Files / 1090 Tests; B8 repository gate PASS); Runtime Candidate `35308451325` PASS; Runtime Container Proof `35308451338` PASS; BuildInput `sha256:0ef7be55ee7ba535a68f0e859d1068fe65758b7c7da1af097ce5c4f87f2f09e3`; Artifact `sha256:b00c02f144ed46e5e946825336eb6cf991f5835407a97391666a01423a6f240f`; Image `sha256:ca7089958f7d7c8f9259eaa73224845c856a28092ee92e91ad76d8f06dbbb3b3`.
 
 
-### 2026-09-18 — Blocker 2 detached release trust
-Status: VERIFIED pre-merge; production OIDC/Sigstore signing remains post-merge by design.
-Änderung: Kanonisches BuildInputManifest eingeführt, finalisiertes Runtime-Release-Archiv und docker-inspected Runtime-Identity über GitHub OIDC/Sigstore-Attestations gebunden, exakten Signer-Workflow/Source-Revision/Predicate-Typ verifiziert, Tamper-Proben und Secret-Scan fail-closed gemacht.
-Erkenntnis: Ein Hash im Release-JSON ist noch keine Vertrauenskette; belastbar wird die Release-Identität erst, wenn finalisierte Artefaktbytes und die später beobachtete Runtime-Image-Identity getrennt attestiert und unabhängig verifiziert werden.
-Evidence: Exact technical head `e8eeb69927745edb0f3f4901d33eff8eb87cdb54`; Local Test Pack `35310918183` PASS; Deploy/Build verification `35310918096` PASS; Runtime Candidate `35310917443` PASS; Runtime Container Proof `35310917324` PASS; BuildInput `sha256:f6be8993f12ba327c1400e2840ebe2c548f01621e73ee44c2ce2a1d37ee3a78b`; Artifact `sha256:8dc26c1fbbb855c7639a4d020c7d0f471f4c6a0176b5911bdcb7939811514560`; Image `sha256:d8ffa5f9bfbfd0bebdd12847627d01af7f8da00244065e60b21887b645e4ff60`; container evidence artifact digest `sha256:4f0235de70a62deadda99a2f7f7dc30f922d776a2ac4d4bbe3edff08da9720db`.
-
 
 ### 2026-09-18 — Blocker 2 detached release attestation gate
 Status: VERIFIED pre-merge source/runtime compatibility; real OIDC/Sigstore signing remains post-merge-only.
