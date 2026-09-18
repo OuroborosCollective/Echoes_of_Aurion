@@ -49,7 +49,7 @@ describe("adminMcp HTTP resource", () => {
       await expect(metadata.json()).resolves.toMatchObject({
         resource: "https://arelogic.space/admin-mcp",
         authorization_servers: ["https://id.arelogic.space"],
-        scopes_supported: ["aurion.admin.read", "aurion.admin.assets.write"],
+        scopes_supported: ["aurion.admin.read", "aurion.admin.assets.write", "aurion.admin.authoring.write"],
       });
       const response = await fetch(`${baseUrl}/admin-mcp`, {
         method: "POST",
