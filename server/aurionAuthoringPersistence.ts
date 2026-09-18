@@ -52,7 +52,7 @@ function dungeonAssetAllowed(
   return entry.targetKey === null && (entry.assetType === "enemy" || entry.assetType === "character");
 }
 
-function assertDungeonGraph(draft: DungeonDesignDraft): void {
+export function validateDungeonDesignTopology(draft: DungeonDesignDraft): void {
   const entrance = draft.rooms.find(room => room.kind === "entrance");
   if (!entrance) throw new Error("AUTHORING_DUNGEON_ENTRANCE_REQUIRED");
   const adjacency = new Map(draft.rooms.map(room => [room.roomKey, [] as string[]]));
@@ -219,7 +219,7 @@ export async function readActiveWorldDesign(database?: DatabaseLike): Promise<Wo
 export async function planDungeonDesign(raw: DungeonDesignDraft): Promise<DungeonDesignPlan> {
   const draft = DungeonDesignDraftSchema.parse(raw);
   if ((groupDungeonIds as readonly string[]).includes(draft.dungeonId)) throw new Error("AUTHORING_DUNGEON_STATIC_ID_RESERVED");
-  assertDungeonGraph(draft);
+  validateDungeonDesignTopology(draft);
   const catalog = await glbImportStore().catalog();
   if (catalog.revision !== draft.expectedCatalogRevision) throw new Error("AUTHORING_GLB_CATALOG_CHANGED");
   const referenced = new Set<string>();
