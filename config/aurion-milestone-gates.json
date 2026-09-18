@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "aurion.milestone.gates.v1",
+  "gates": [
+    {
+      "gateId": "AURION-M21-B4-RNG",
+      "scope": "repository",
+      "passCriteria": [
+        "all gameplay RNG is addressable and deterministic",
+        "projection RNG is separated"
+      ],
+      "failCriteria": [
+        "sequential gameplay RNG reachable",
+        "Math.random reachable from gameplay authority"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B7-DONOR-RUNTIME",
+      "scope": "runtime",
+      "passCriteria": [
+        "all donor-derived surfaces are inventoried",
+        "productive capabilities require donorRuntimeRequired=false",
+        "provenance-only donor paths are runtime-unreachable"
+      ],
+      "failCriteria": [
+        "unmapped donor surface",
+        "live donor runtime dependency",
+        "runtime-reachable provenance-only donor module"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B9-PROCESS",
+      "scope": "repository",
+      "passCriteria": [
+        "isolated lane",
+        "exact-head evidence",
+        "exactly one Memory entry before merge",
+        "post-merge readback"
+      ],
+      "failCriteria": [
+        "stale head",
+        "missing Memory entry",
+        "merge without exact-head evidence"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B6-REPLAY-VERDICT",
+      "scope": "runtime",
+      "passCriteria": [
+        "shared fail-closed verdict contract",
+        "missing evidence is UNPROVABLE"
+      ],
+      "failCriteria": [
+        "domain-specific success semantics diverge",
+        "missing evidence becomes MATCH"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B5-RECEIPT-V2",
+      "scope": "runtime",
+      "passCriteria": [
+        "v1 semantics frozen",
+        "v2 stage receipts identify first divergent authority stage"
+      ],
+      "failCriteria": [
+        "projection or transport enters causal stages",
+        "later stage marked verified after divergence"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B3-MIGRATION-0049",
+      "scope": "production",
+      "passCriteria": [
+        "0048 remains immutable",
+        "0049 persists receipt-v2 evidence",
+        "production wave/readback includes 0049"
+      ],
+      "failCriteria": [
+        "0048 rewritten",
+        "0049 absent from journal/apply/readback",
+        "v2 evidence lost on MariaDB roundtrip"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B8-EVIDENCE",
+      "scope": "runtime",
+      "passCriteria": [
+        "every PASS receipt is revision-bound and reproducible",
+        "test source and command are archived",
+        "runtime evidence carries immutable release digests"
+      ],
+      "failCriteria": [
+        "missing or nonreproducible evidence",
+        "PASS without immutable runtime identity"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B2-ATTESTATION",
+      "scope": "runtime",
+      "passCriteria": [
+        "final artifact receives detached trusted attestation after artifact creation",
+        "tamper verification fails closed",
+        "secret scan passes"
+      ],
+      "failCriteria": [
+        "self-asserted unsigned release",
+        "attestation predates artifact",
+        "tampered subject verifies"
+      ]
+    },
+    {
+      "gateId": "AURION-M21-B1-PRODUCTION",
+      "scope": "production",
+      "passCriteria": [
+        "exact main release promoted through canonical control plane",
+        "installed container/image/schema identities match",
+        "authenticated internal/public health and production schema readbacks match"
+      ],
+      "failCriteria": [
+        "mutable/manual promotion",
+        "revision or digest drift",
+        "unauthenticated production claim"
+      ]
+    }
+  ]
+}
