@@ -29,6 +29,8 @@ export class QuestRuntimeEngine {
     worldId: string;
     playerUserId: number;
     triggerEventId: string;
+    /** Legacy caller compatibility only; production offer routes never control giver binding. */
+    giverNpcId?: string;
     requestedTemplateId?: string;
     compilerVersion?: string;
   }): { instance: QuestInstance; plan: QuestPlan } {
