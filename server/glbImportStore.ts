@@ -203,6 +203,55 @@ export class GlbImportStore {
     });
   }
 
+  async assignNamedNpcVisual(actorUserId: number, input: { assetId: string; npcId: string; expectedActiveAssetId: string | null }) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(input.npcId)) throw new Error("GLB_NPC_ID_INVALID");
+    const targetKey = `npc_${input.npcId}`;
+    return this.locked(actorUserId, async connection => {
+      const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
+      const asset = assets[0];
+      if (!asset || asset.status !== "approved" || asset.assetType !== "character") throw new Error("GLB_APPROVED_CHARACTER_REQUIRED");
+      if (glbPurposeFromDisplayName(String(asset.displayName)) !== "npc-fallback") throw new Error("GLB_NPC_FALLBACK_PURPOSE_REQUIRED");
+      if (String(asset.storageKey).startsWith("local-glb/")) {
+        const bytes = await readStoredGlb(String(asset.sha256), this.storageRoot);
+        const plan = buildGlbImportPlan(bytes.toString("base64"), "npc-fallback", "character-npc.glb");
+        if (plan.assetType !== "character" || plan.sha256 !== asset.sha256) throw new Error("GLB_NPC_SOURCE_IDENTITY_MISMATCH");
+      }
+
+      const [otherAssignments] = await connection.query<RowDataPacket[]>(
+        "SELECT targetKey FROM glbAssignments WHERE assetId = ? AND active = 1 AND targetKey <> ? ORDER BY targetKey FOR UPDATE",
+        [input.assetId, targetKey],
+      );
+      if (otherAssignments.length) throw new Error("GLB_NPC_ASSET_ALREADY_ASSIGNED");
+
+      const [active] = await connection.query<RowDataPacket[]>(
+        "SELECT id, assetId FROM glbAssignments WHERE targetType = 'character' AND targetKey = ? AND active = 1 ORDER BY id FOR UPDATE",
+        [targetKey],
+      );
+      if (active.length > 1) throw new Error("GLB_ASSIGNMENT_DRIFT");
+      const previous = active[0];
+      if ((previous?.assetId ?? null) !== input.expectedActiveAssetId) throw new Error("GLB_ASSIGNMENT_CHANGED");
+      if (previous?.assetId === asset.id) return Object.freeze({ assetId: String(asset.id), targetKey, active: 1 as const, changed: false });
+
+      const assignmentId = `assign_${createHash("sha256").update(`${previous?.id ?? "empty"}:character:${targetKey}:${asset.sha256}`).digest("hex").slice(0, 48)}`;
+      await connection.execute(
+        "UPDATE glbAssignments SET active = 0 WHERE targetType = 'character' AND targetKey = ? AND active = 1",
+        [targetKey],
+      );
+      await connection.execute(
+        "INSERT INTO glbAssignments (id, assetId, targetType, targetKey, active, assignedByUserId) VALUES (?, ?, 'character', ?, 1, ?)",
+        [assignmentId, asset.id, targetKey, actorUserId],
+      );
+      const [readback] = await connection.query<RowDataPacket[]>(
+        "SELECT assetId, targetKey, active FROM glbAssignments WHERE id = ?",
+        [assignmentId],
+      );
+      if (readback[0]?.assetId !== asset.id || readback[0]?.targetKey !== targetKey || Number(readback[0]?.active) !== 1) {
+        throw new Error("GLB_NPC_ASSIGNMENT_READBACK_FAILED");
+      }
+      return Object.freeze({ assetId: String(asset.id), targetKey, active: 1 as const, changed: true });
+    });
+  }
+
   async review(actorUserId: number, input: { assetId: string; status: "approved" | "rejected" | "archived" }) {
     return this.locked(actorUserId, async connection => {
       const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
