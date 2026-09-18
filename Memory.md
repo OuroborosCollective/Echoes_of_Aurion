@@ -865,3 +865,9 @@ Status: VERIFIED pre-merge; production promotion not claimed.
 Änderung: Zone-, Quest- und WorldContext-Replays auf einen gemeinsamen fail-closed Verdict-v2-Vertrag mit Domain/Revision/Ruleset/Scope/Range/verifiedStages/FIRST_DIVERGENCE-Hashes/Reason vereinheitlicht; fehlende Evidence wird UNPROVABLE, NPC-Receipt-Rehydration bleibt explizit kein formaler MATCH-Verdict.
 Erkenntnis: Gleiche Statuswörter reichen nicht für gemeinsame Replay-Semantik; erst ein geteilter strukturierter Vertrag verhindert, dass Adapter fehlende Evidence als Erfolg hochstufen.
 Evidence: Exact pre-memory head `919cec96bfabaf4a7f0f7d25491b1ac5d495c864`; Local Test Pack `35298119455` PASS (shared replay gate, TypeScript, full repository regression, migration verify/apply, offline/workspace evidence); Runtime Candidate `35298119432` PASS; Runtime Container Proof `35298119402` PASS; candidate artifact evidence digest `sha256:d9340c3b7b1bb0c1bc1077b8dad89e0fcca81fd087badab9a7f9db06683a3bcf`.
+
+## 2026-09-18 — Blocker 6 shared replay verdict lane
+Status: VERIFIED repository/runtime candidate
+Änderung: Zone-, Quest- und WorldContext-Replay auf einen gemeinsamen fail-closed Verdict-v2-Vertrag mit revisions-/ruleset-/scope-/range-gebundener Evidence und explizitem UNPROVABLE bei fehlender Evidence vereinheitlicht; NPC-Receipt-Rehydration separat inventarisiert.
+Erkenntnis: Gemeinsame Statusnamen reichen nicht; erst ein strukturell identischer Verdict-Vertrag verhindert, dass fehlende Evidence domain- oder adapterabhängig zu MATCH hochgestuft wird.
+Evidence: exact technical head 919cec96bfabaf4a7f0f7d25491b1ac5d495c864; Local Test Pack 35298119455 PASS incl. shared replay gate, typecheck, full regression and offline hashes; Runtime Candidate 35298119432 PASS; Runtime Container Proof 35298119402 PASS.
