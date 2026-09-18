@@ -13,9 +13,9 @@ export type GlobalReconciliationStatus = Readonly<{
 }>;
 
 /**
- * Global reconciliation remains observational until Aurion has an explicit,
- * receipt-bound mapping from each global epoch to the exact zone ticks that form
- * that epoch. The previous epoch===zoneTick shortcut was an inference, not proof.
+ * Global reconciliation is evidence-only. Step 22 binds each new world epoch to
+ * the exact causal zone receipt ranges observed in the epoch transaction. This
+ * service verifies that evidence and never mutates world or gameplay authority.
  */
 export class AurionGlobalStateReconciliationService {
   private isRunning = false;
