@@ -89,7 +89,25 @@ describe("Blocker 6 shared replay verdict gate", () => {
       expect(entry.verdictContract).toBe("shared/aurionReplayContract.ts");
       const source = readFileSync(entry.implementation, "utf8");
       expect(source).toContain("aurionReplayContract");
+      expect(entry.adapters?.length).toBeGreaterThan(0);
+      for (const adapterPath of entry.adapters) {
+        expect(readFileSync(adapterPath, "utf8").length).toBeGreaterThan(0);
+      }
     }
+
+    const zoneAdapters = formal.find((entry: any) => entry.replayId === "zone.tick")!.adapters;
+    const router = readFileSync("server/routes/causalityRouter.ts", "utf8");
+    const bridge = readFileSync("server/chatgptCausalityBridge.ts", "utf8");
+    const cli = readFileSync("scripts/replay-aurion-zone.ts", "utf8");
+    expect(zoneAdapters).toEqual(expect.arrayContaining([
+      "server/routes/causalityRouter.ts",
+      "server/chatgptCausalityBridge.ts",
+      "scripts/replay-aurion-zone.ts",
+    ]));
+    expect(router).toContain("replayUnprovable");
+    expect(router).not.toContain('{ status: "UNPROVABLE", verdict: "UNPROVABLE"');
+    expect(bridge).toContain("replayUnprovable");
+    expect(cli).not.toContain("intents: entry.intents || []");
 
     expect(inventory.systems).toEqual(expect.arrayContaining([
       expect.objectContaining({
