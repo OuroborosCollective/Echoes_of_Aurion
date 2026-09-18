@@ -8,7 +8,14 @@ import {
   aurionGlobalStateProofs,
   aurionReplayRuns,
 } from "../../drizzle/aurionCausalitySchema";
-import type { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
+import {
+  AURION_CAUSAL_STAGE_NAMES,
+  AURION_CAUSAL_TICK_SCHEMA_V1,
+  AURION_CAUSAL_TICK_SCHEMA_V2,
+  computeReceiptHash,
+  type AurionCausalStageReceipt,
+  type AurionCausalTickReceipt,
+} from "../../shared/aurionCausalTickContract";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
 import { operationalDate } from "../../shared/operationalClock";
@@ -23,11 +30,14 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     const id = `rcpt_${receipt.worldId}_${receipt.zoneId}_${receipt.tick}`;
     const inputJson = intents ? stableJson(intents) : null;
+    const stageReceiptsJson = receipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2 ? stableJson(receipt.stages) : null;
     try {
       await db.insert(aurionCausalTickReceipts).values({
         id, worldId: receipt.worldId, zoneId: receipt.zoneId, tick: receipt.tick,
         revision: receipt.sourceRevision, rulesetVersion: receipt.rulesetVersion,
+        receiptSchema: receipt.schema,
         preStateHash: receipt.preStateHash, inputHash: receipt.orderedIntentHash, inputJson,
+        stageReceiptsJson,
         transitionHash: receipt.transitionHash, rngRootHash: receipt.rngRootHash,
         postStateHash: receipt.postStateHash, previousReceiptHash: receipt.previousReceiptHash,
         receiptHash: receipt.receiptHash,
@@ -37,8 +47,10 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       if (!existing) throw error;
       const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
         existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
+        existing.receiptSchema === receipt.schema &&
         existing.preStateHash === receipt.preStateHash && existing.inputHash === receipt.orderedIntentHash &&
-        existing.inputJson === inputJson && existing.transitionHash === receipt.transitionHash &&
+        existing.inputJson === inputJson && existing.stageReceiptsJson === stageReceiptsJson &&
+        existing.transitionHash === receipt.transitionHash &&
         existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
         existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
       if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
@@ -137,8 +149,10 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
     const payload = rows.map(row => ({
       id: row.id, worldId: row.worldId, zoneId: row.zoneId, tick: row.tick, revision: row.revision,
-      rulesetVersion: row.rulesetVersion, preStateHash: row.preStateHash, inputHash: row.inputHash,
-      inputJson: row.inputJson, transitionHash: row.transitionHash, rngRootHash: row.rngRootHash,
+      rulesetVersion: row.rulesetVersion, receiptSchema: row.receiptSchema,
+      preStateHash: row.preStateHash, inputHash: row.inputHash,
+      inputJson: row.inputJson, stageReceiptsJson: row.stageReceiptsJson,
+      transitionHash: row.transitionHash, rngRootHash: row.rngRootHash,
       postStateHash: row.postStateHash, previousReceiptHash: row.previousReceiptHash, receiptHash: row.receiptHash,
     }));
     const payloadJson = stableJson(payload);
@@ -177,8 +191,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   }
 
   private mapReceipt(row: any): AurionCausalTickReceipt {
-    return {
-      schema: "aurion.causal.tick.v1",
+    const common = {
       worldId: row.worldId,
       zoneId: row.zoneId,
       tick: row.tick,
@@ -192,6 +205,42 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
       previousReceiptHash: row.previousReceiptHash,
       receiptHash: row.receiptHash,
     };
+
+    let receipt: AurionCausalTickReceipt;
+    if (row.receiptSchema === AURION_CAUSAL_TICK_SCHEMA_V1) {
+      if (row.stageReceiptsJson !== null && row.stageReceiptsJson !== undefined) {
+        throw new Error("CAUSAL_V1_STAGE_EVIDENCE_FORBIDDEN");
+      }
+      receipt = { schema: AURION_CAUSAL_TICK_SCHEMA_V1, ...common };
+    } else if (row.receiptSchema === AURION_CAUSAL_TICK_SCHEMA_V2) {
+      if (typeof row.stageReceiptsJson !== "string" || !row.stageReceiptsJson) {
+        throw new Error("CAUSAL_V2_STAGE_EVIDENCE_MISSING");
+      }
+      let stages: AurionCausalStageReceipt[];
+      try {
+        stages = JSON.parse(row.stageReceiptsJson) as AurionCausalStageReceipt[];
+      } catch {
+        throw new Error("CAUSAL_V2_STAGE_EVIDENCE_INVALID_JSON");
+      }
+      if (
+        !Array.isArray(stages) ||
+        stages.length !== AURION_CAUSAL_STAGE_NAMES.length ||
+        stages.some((stage, index) =>
+          stage?.stageName !== AURION_CAUSAL_STAGE_NAMES[index] ||
+          stage?.stageOrdinal !== index + 1
+        )
+      ) {
+        throw new Error("CAUSAL_V2_STAGE_EVIDENCE_INVALID");
+      }
+      receipt = { schema: AURION_CAUSAL_TICK_SCHEMA_V2, ...common, stages };
+    } else {
+      throw new Error(`CAUSAL_RECEIPT_SCHEMA_UNSUPPORTED:${String(row.receiptSchema)}`);
+    }
+
+    if (computeReceiptHash(receipt) !== receipt.receiptHash) {
+      throw new Error("CAUSAL_PERSISTED_RECEIPT_HASH_MISMATCH");
+    }
+    return receipt;
   }
 }
 
