@@ -583,7 +583,7 @@ jobs:
           done
           [[ "$public_ready" -eq 1 ]]
   apply-reviewed-schema-plan:
-    name: Apply reviewed 0021–0049 plan through the existing OIDC workflow
+    name: Apply reviewed 0021–0050 plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [migration-ledger, promote-zone-runtime]
     runs-on: ubuntu-24.04
