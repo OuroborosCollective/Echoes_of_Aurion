@@ -880,3 +880,10 @@ Erkenntnis: SemVer-Gruppierung allein macht 0.x-Renderer- oder Plattform-Majors 
 Evidence: Ausgangs-main `1c8335d7888c346429683ff453b2dd0e5261714e`; Guardrail technical head vor Memory `99f10edba423c5514c995a9d981342ff6e920165`; PR #376 zeigte am exakten Head mehrere fehlgeschlagene Renderer/Runtime-Lanes, während kein Dependabot-PR gemerged wurde.
 Open: Die sechs Draft-Updates benötigen weiterhin exakte Head-/Regression-/Runtime-Evidence vor einer späteren Übernahme.
 Next safe step: Guardrail-Draft-PR prüfen; danach verbleibende Draft-Updates einzeln nur nach aktualisiertem main und vollständiger Evidence entscheiden.
+
+
+### 2026-09-18 — Dependabot version updates disabled
+Status: VERIFIED repository configuration change; no runtime claim.
+Änderung: `.github/dependabot.yml` entfernt und die noch offenen automatisch erzeugten Dependabot-PRs #375, #384, #387, #389, #391 und #392 geschlossen; der produktive Genkit/Game-Dev-Head aus #384 wurde unverändert als Draft-PR #394 auf einen normalen Integrations-Branch gesichert.
+Erkenntnis: Dependency-Automation darf nicht die CI-Queue und Integrationsarbeit dominieren; wertvolle manuell erweiterte Arbeit muss vor dem Abschalten aus Bot-Branch-Lifecycle herausgelöst werden.
+Evidence: Ausgangs-main `bfeea52d58cf71bae6f13715ed7d1f83535cacf2`; Disable-Commit vor Memory `79655d2568c15eef59119b4e785b8ad23bc7af30`; #394 bewahrt exakt den #384-Head `73c588bc00206f4e54f524fe4425b9f5c5a6b2e2`.
