@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canonicalSha256 } from "./aurionCanonicalHash";
 
 export const AURION_REPLAY_VERDICT_SCHEMA = "aurion.replay.verdict.v2" as const;
 
@@ -148,6 +149,11 @@ export function replayMatch(
   }) as Extract<ReplayVerdict, { status: "MATCH" }>;
 }
 
+function replayObservedValueHash(value: string): string {
+  if (/^(?:sha256:)?[a-f0-9]{64}$/i.test(value)) return value;
+  return canonicalSha256({ schema: "aurion.replay.observed-value.v1", value });
+}
+
 export function replayFirstDivergence(
   context: ReplayVerdictContext,
   verifiedStages: readonly string[],
@@ -166,8 +172,8 @@ export function replayFirstDivergence(
     status: "FIRST_DIVERGENCE",
     verdict: "FIRST_DIVERGENCE",
     firstDivergentStage: input.stage,
-    expectedHash: input.expectedHash ?? input.expected,
-    observedHash: input.observedHash ?? input.observed,
+    expectedHash: input.expectedHash ?? replayObservedValueHash(input.expected),
+    observedHash: input.observedHash ?? replayObservedValueHash(input.observed),
     reason: null,
     stage: input.stage,
     expected: input.expected,
