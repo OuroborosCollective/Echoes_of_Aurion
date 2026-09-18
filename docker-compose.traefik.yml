@@ -10,6 +10,10 @@ services:
       TRUST_PROXY_HOPS: "1"
       AURION_GLB_STORAGE_DIR: /var/lib/aurion/glb
       AURION_GAME_DEV_WORKSPACE: /var/lib/aurion/game-dev-workspace
+      AURION_BUILD_INPUT_DIGEST: ${AURION_BUILD_INPUT_DIGEST:?AURION_BUILD_INPUT_DIGEST must bind the canonical BuildInputManifest}
+      AURION_ARTIFACT_DIGEST: ${AURION_ARTIFACT_DIGEST:?AURION_ARTIFACT_DIGEST must bind the verified release checksums}
+      AURION_RUNTIME_IMAGE_DIGEST: ${AURION_RUNTIME_IMAGE_DIGEST:?AURION_RUNTIME_IMAGE_DIGEST must bind docker image inspect}
+      AURION_RELEASE_ARCHIVE_DIGEST: ${AURION_RELEASE_ARCHIVE_DIGEST:?AURION_RELEASE_ARCHIVE_DIGEST must bind the attested runtime archive}
     env_file:
       - ${AURION_ENV_FILE:?AURION_ENV_FILE must point to the root-managed production environment}
     expose:
