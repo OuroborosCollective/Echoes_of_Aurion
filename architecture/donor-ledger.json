@@ -541,5 +541,860 @@
       "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
       "donorRuntimeRequired": false
     }
-  ]
+  ],
+  "surfaceInventory": [
+    {
+      "path": "client/src/xaurion/adapters/GameAdapter.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/adapters/GenkitAdapter.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/adapters/PythonBridgeAdapter.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/audio/SoundManager.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/audio/SoundSynthesizer.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/AdminGlbMenu.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1CharacterModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "progression.armor-mastery-content",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1CharacterPreview.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1HpMeter.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1InventoryModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1Modal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1ProjectionModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1SkillBook.tsx",
+      "donor": "AX1",
+      "capabilityId": "progression.armor-mastery-content",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/Ax1WorldSurfaces.tsx",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/CharacterModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "progression.armor-mastery-content",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/ClassSelectModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/ControlsModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/CraftingModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "crafting.catalog-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/GameHUD.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/InventoryModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/NPCDialogueModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/PartyModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/PublicCharacterPicker.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/QuestLogModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/TouchController.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/VirtualJoystick.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/WorldMapModal.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/AdminService.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/AnimatedGlbActor.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/Ax1CombatTelegraphPresenter.ts",
+      "donor": "AX1",
+      "capabilityId": "client.combat-vfx",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/EquipmentAttachmentSizing.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/GLBModelManager.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/GlbModelLease.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/GlbResourceBudget.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/GlbTextureEvidence.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/ItemGlbRegistry.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/MMOEngine.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/NpcGlbFallback.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/ParticleSystem.ts",
+      "donor": "AX1",
+      "capabilityId": "client.combat-vfx",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/core/PartyManager.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/ProceduralEquipmentVisuals.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/RendererFactory.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/core/RuntimeFrameLoop.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/SharedHumanoidRig.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/SyncManager.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/UploadedAssetRuntime.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/VisualItemAttachmentController.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/VisualItemGeometryCompiler.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/VisualItemGlbOverrideResolver.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/VisualItemMaterialCompiler.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/WebGpuRenderer.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/core/actorLod.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/renderBudget.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/data/ax1Lore.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/data/mmorpgData.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/entities/LootDropManager.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/entities/MobManager.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/entities/OpenWorldPlayer.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/entities/SimulatedRealmPlayers.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/hooks/usePerformanceObserver.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/AurionAuthorityHud.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/AurionGroupFinder.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/AurionPlayRoute.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/Ax1CompanionOverlay.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/Ax1PlayNavigationBridge.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/ConfirmedPlayerMotion.ts",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/EquipmentCatalogProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/MobCatalogProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcDecisionPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "npc.decision-projection",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcFallbackProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcStandingPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/OpenWorldErrorBoundary.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/RemotePresenceProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/RemotePublicAppearanceProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/ResourceNodeProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/ServiceNpcProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/TreeCatalogReplacement.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/UploadedWorldCatalogProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/WorldAssetProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/aurionAuthorityAdapter.ts",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/aurionWorldCore.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/authoritativeHudProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "progression.armor-mastery-content",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/ax1SourceManifest.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/combatPresentation.ts",
+      "donor": "AX1",
+      "capabilityId": "client.combat-vfx",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/confirmedActionRequest.ts",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/confirmedVisualEffects.ts",
+      "donor": "AX1",
+      "capabilityId": "client.combat-vfx",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/zoneCombatBridge.ts",
+      "donor": "AX1",
+      "capabilityId": "client.input-zone-bridge",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/services/DeviceConfigService.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/services/PerformanceLoggerService.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/shaders/FlowerWellShader.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/shaders/GroundFlowShader.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/shaders/ShieldShader.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/spatial/HighDensityPerformanceGate.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/spatial/RenderEcsPilot.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/spatial/WorldColliderBvh.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/spatial/bvhInit.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/spatial/bvhWorkerHelper.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/types.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/OpenWorldLandscape.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/ProceduralLowPolyWorld.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/TerrainSplatting.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/TextureAtlasPipeline.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/WorldChunkManager.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/WorldCollisionSystem.ts",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/WorldSurfaceAtlas.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1ClasslessItemization.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1CombatAuthority.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1CombatProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/ax1CraftingPersistence.ts",
+      "donor": "AX1",
+      "capabilityId": "crafting.catalog-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1CraftingProtocol.ts",
+      "donor": "AX1",
+      "capabilityId": "crafting.catalog-rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/ax1LivingWorldProtocol.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1LivingWorldRuntime.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1MobContent.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/ax1StarterEquipmentPersistence.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAREDeterminism.ts",
+      "donor": "WASD",
+      "capabilityId": "determinism.addressable-rng",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionAiProposalProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionCivilizationProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "society.rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionCivilizationService.ts",
+      "donor": "WASD",
+      "capabilityId": "society.rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionDialogueQuestIntentProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "quest.dialogue-intents",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdAurionExpeditionProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionItemProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdAurionRuntime.ts",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdAurionSkillProgressionProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "progression.skill-rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdAurionSocietyProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "society.rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdAurionSourceCatalog.ts",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionStewardshipProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "society.rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdAurionWorldIntegrityProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "world.integrity-rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdCombatDeltaProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "combat.delta-resolution",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdCombatProfileProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdMobCollisionProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "combat.mob-collision",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdMobFsmProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdNpcCapsule.ts",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdNpcEvolutionPersistence.ts",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/wasdSemanticGraphPersistence.ts",
+      "donor": "WASD",
+      "capabilityId": "semantic-memory.provenance",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdStaminaProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "combat.stamina-regeneration",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "server/wasdZoneMovementProtocol.ts",
+      "donor": "WASD",
+      "capabilityId": "movement.zone-fixed-step",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "shared/ax1ArmorMasteryProtocol.ts",
+      "donor": "AX1",
+      "capabilityId": "progression.armor-mastery-content",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "shared/ax1BladeSkillProtocol.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "shared/ax1CraftingCatalog.ts",
+      "donor": "AX1",
+      "capabilityId": "crafting.catalog-rules",
+      "role": "CAPABILITY"
+    },
+    {
+      "path": "shared/ax1ResourceEcologyProtocol.ts",
+      "donor": "AX1",
+      "capabilityId": "world.resource-ecology",
+      "role": "CAPABILITY"
+    }
+  ],
+  "surfaceInventoryRevision": "480e23ce04de1386a57a9e23068313396934a481"
 }
