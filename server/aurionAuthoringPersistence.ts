@@ -166,7 +166,7 @@ export async function applyWorldDesign(
         worldId: GLOBAL_WORLD_ID,
         title: plan.title,
         expectedCatalogRevision: plan.expectedCatalogRevision,
-        designJson: stableCatalogStringify(WorldDesignDraftSchema.parse(plan)),
+        designJson: stableCatalogStringify(WorldDesignPlanSchema.parse(plan)),
         designHash,
         active: true,
         createdByUserId: actorUserId,
@@ -196,16 +196,16 @@ export async function readActiveWorldDesign(database?: DatabaseLike): Promise<Wo
     .where(eq(aurionWorldDesignVersions.active, true))
     .orderBy(asc(aurionWorldDesignVersions.designKey), asc(aurionWorldDesignVersions.version));
   const designs = rows.map(row => {
-    const draft = WorldDesignDraftSchema.parse(JSON.parse(row.designJson));
-    if (row.designHash !== authoringHash({ schemaVersion: AURION_WORLD_DESIGN_SCHEMA, plan: { ...draft, referencedAssetHashes: [] } })
-      && !/^[a-f0-9]{64}$/.test(row.designHash)) throw new Error("AUTHORING_WORLD_STORED_HASH_INVALID");
+    const plan = WorldDesignPlanSchema.parse(JSON.parse(row.designJson));
+    const expectedDesignHash = authoringHash({ schemaVersion: AURION_WORLD_DESIGN_SCHEMA, plan });
+    if (row.designHash !== expectedDesignHash) throw new Error("AUTHORING_WORLD_STORED_HASH_INVALID");
     return {
-      designKey: draft.designKey,
-      version: draft.version,
-      title: draft.title,
+      designKey: plan.designKey,
+      version: plan.version,
+      title: plan.title,
       designHash: row.designHash,
-      expectedCatalogRevision: draft.expectedCatalogRevision,
-      placements: draft.placements,
+      expectedCatalogRevision: plan.expectedCatalogRevision,
+      placements: plan.placements,
     };
   });
   return WorldDesignReadbackSchema.parse({
