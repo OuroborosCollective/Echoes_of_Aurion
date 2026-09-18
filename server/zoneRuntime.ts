@@ -147,7 +147,10 @@ export class AuthoritativeMovementZone {
     this.refreshPeerOrder();
     const players: CanonicalPlayerState[] = this.sortedPeersByEntityId.map(peer => {
       const skillCooldowns: Record<string, number> = {};
-      for (const [skillId, tick] of Array.from(peer.skillCooldownUntilTick.entries()).sort(([a], [b]) => compareBinary(a, b))) skillCooldowns[skillId] = tick;
+      const keys: string[] = [];
+      for (const skillId of peer.skillCooldownUntilTick.keys()) keys.push(skillId);
+      keys.sort(compareBinary);
+      for (const skillId of keys) skillCooldowns[skillId] = peer.skillCooldownUntilTick.get(skillId as any)!;
       return {
         entityId: `player:${peer.userId}`,
         userId: peer.userId,
@@ -189,6 +192,8 @@ export class AuthoritativeMovementZone {
       respawnTick: node.respawnAtTick ?? 0,
       remainingGathers: node.remaining,
     }));
+    const questSummaries = [];
+    for (const quest of this.questSummaries.values()) questSummaries.push({ ...quest });
     return sortCanonicalZoneState({
       schema: "aurion.zone.state.v1",
       worldId: WORLD_ID,
@@ -199,7 +204,7 @@ export class AuthoritativeMovementZone {
       players,
       mobs,
       resources,
-      questSummaries: Array.from(this.questSummaries.values(), quest => ({ ...quest })),
+      questSummaries,
     });
   }
 
@@ -642,8 +647,10 @@ export class AuthoritativeMovementZone {
 
   private refreshPeerOrder(): void {
     if (!this.sortedPeersDirty) return;
-    this.sortedPeers = Array.from(this.peers.values()).sort((a, b) => compareBinary(a.connectionId, b.connectionId));
-    this.sortedPeersByEntityId = Array.from(this.peers.values()).sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
+    const peers = [];
+    for (const peer of this.peers.values()) peers.push(peer);
+    this.sortedPeers = [...peers].sort((a, b) => compareBinary(a.connectionId, b.connectionId));
+    this.sortedPeersByEntityId = peers.sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
     this.sortedPeersDirty = false;
   }
 
@@ -706,7 +713,11 @@ export class ZoneRegistry {
 
   tick(): void {
     if (this.sortedZonesDirty) {
-      this.sortedZones = Array.from(this.zones.entries()).sort(([left], [right]) => compareBinary(left, right)).map(([, zone]) => zone);
+      const keys = [];
+      for (const key of this.zones.keys()) keys.push(key);
+      keys.sort(compareBinary);
+      this.sortedZones = [];
+      for (const key of keys) this.sortedZones.push(this.zones.get(key as any)!);
       this.sortedZonesDirty = false;
     }
     for (const zone of this.sortedZones) zone.tick();
