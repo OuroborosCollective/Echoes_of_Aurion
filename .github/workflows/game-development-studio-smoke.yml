@@ -53,6 +53,9 @@ jobs:
           AURION_IMAGE_TAG: ci
           AURION_ENV_FILE: /tmp/aurion-ci.env
           AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURION_BUILD_INPUT_DIGEST: sha256:1111111111111111111111111111111111111111111111111111111111111111
+          AURION_ARTIFACT_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
+          AURION_RUNTIME_IMAGE_DIGEST: sha256:3333333333333333333333333333333333333333333333333333333333333333
         run: |
           : > "$AURION_ENV_FILE"
           docker compose -f docker-compose.traefik.yml config > /tmp/aurion-compose.yml
