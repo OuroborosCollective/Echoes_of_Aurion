@@ -846,6 +846,17 @@ jobs:
           verify_artifact
           verify_runtime
 
+          tar -xOzf "${artifact}" ./release-secret-scan.json > aurion-release-secret-scan.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const scan=JSON.parse(fs.readFileSync("aurion-release-secret-scan.json","utf8"));
+          const predicate=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-predicate.json","utf8"));
+          const digest=`sha256:${createHash("sha256").update(fs.readFileSync("aurion-release-secret-scan.json")).digest("hex")}`;
+          if(scan.status!=="PASS"||scan.secretValuesReturned!==false||scan.findings?.length!==0) throw new Error("RELEASE_SECRET_SCAN_NOT_CLEAN");
+          if(predicate.secretValuesReturned!==false||predicate.secretScanReceiptDigest!==digest) throw new Error("RELEASE_SECRET_SCAN_ATTESTATION_MISMATCH");
+          NODE
+
           cp "${identity}" "${identity}.untampered"
           printf '\0' >> "${identity}"
           set +e
@@ -883,6 +894,8 @@ jobs:
           const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
           const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
           const artifactMeta=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-attestation.json","utf8"));
+          const predicate=JSON.parse(fs.readFileSync("runtime-artifact/aurion-release-artifact-predicate.json","utf8"));
+          const secretScan=JSON.parse(fs.readFileSync("aurion-release-secret-scan.json","utf8"));
           const verification=JSON.parse(fs.readFileSync("aurion-detached-attestation-verification.json","utf8"));
           scanReleaseMetadataForSecrets({identity,runtimeMeta,artifactMeta,verification});
           const expected={
@@ -891,6 +904,7 @@ jobs:
             runtimeAttestationVerified:true,
             artifactTamperRejected:true,
             runtimeTamperRejected:true,
+            secretScanClean:true,
             signerWorkflow:`${process.env.GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml`,
           };
           const observed={
@@ -899,6 +913,7 @@ jobs:
             runtimeAttestationVerified:verification.runtimeVerified===true && /^[1-9][0-9]*$/.test(runtimeMeta.attestationId??""),
             artifactTamperRejected:artifactMeta.tamperRejected===true && verification.artifactVerified===true,
             runtimeTamperRejected:verification.runtimeTamperRejected===true,
+            secretScanClean:secretScan.status==="PASS" && secretScan.secretValuesReturned===false && secretScan.findings?.length===0 && predicate.secretValuesReturned===false && /^sha256:[a-f0-9]{64}$/.test(predicate.secretScanReceiptDigest??""),
             signerWorkflow:verification.signerWorkflow,
           };
           const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
@@ -936,6 +951,7 @@ jobs:
           path: |
             aurion-gate-b2-attestation.json
             aurion-detached-attestation-verification.json
+            aurion-release-secret-scan.json
           if-no-files-found: error
           retention-days: 30
 
