@@ -15,6 +15,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const runtimeEnvironment = read("deploy/aurion-traefik-runtime.environment.template");
   const databaseVerifier = read("deploy/verify-aurion-runtime-database.mjs");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
+  const runtimeCandidateWorkflow = read(".github/workflows/aurion-pr-runtime-candidate.yml");
   const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
@@ -98,8 +99,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain(
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
-    expect(workflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 120");
-    expect(workflow.match(/--retry-all-errors --connect-timeout 10 --max-time 120/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(runtimeCandidateWorkflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 120");
+    expect(runtimeCandidateWorkflow.match(/--retry-all-errors --connect-timeout 10 --max-time 120/g)?.length).toBeGreaterThanOrEqual(2);
     expect(workflow).toContain('health.revision!==process.argv[1]');
     expect(workflow).toContain("node --check deploy/verify-aurion-runtime-database.mjs");
   });
