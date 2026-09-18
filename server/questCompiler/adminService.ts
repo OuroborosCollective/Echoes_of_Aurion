@@ -262,12 +262,33 @@ export class AdminQuestStudioService {
     return result;
   }
 
-  public async progressQuest(userId: number, instanceId: string, objectiveKey: string, amount: number) {
-    const { instance, plan } = await this.ownedInstance(userId, instanceId);
-    const result = this.runtimeEngine.progressObjective(instance, plan, objectiveKey, amount);
-    await this.persistenceEngine.saveReceipt(result.receipt);
-    await this.persistenceEngine.saveInstance(result.updatedInstance);
-    return result;
+  public async applyConfirmedObjectiveEvent(userId: number, event: {
+    source: "world_chunk_delta" | "group_instance";
+    event: "resource_depleted" | "structure_placed" | "structure_removed" | "road_built" | "cleared";
+    targetId?: string;
+    payload?: Record<string, string | number | boolean>;
+  }) {
+    const active = await this.persistenceEngine.listInstances({ playerUserId: userId, state: "active" });
+    const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean }> = [];
+    for (const instance of active) {
+      const plan = await this.persistenceEngine.getPlan(instance.planHash);
+      if (!plan) continue;
+      const node = plan.nodes.find(candidate => candidate.id === instance.currentNodeId);
+      const objective = node?.objective;
+      const binding = objective?.eventBinding;
+      if (!objective || !binding || binding.source !== event.source || binding.event !== event.event) continue;
+      if (binding.matchField && binding.matchValue) {
+        const actual = binding.matchField === "targetId"
+          ? event.targetId
+          : event.payload?.[binding.matchField];
+        if (String(actual ?? "") !== binding.matchValue) continue;
+      }
+      const result = this.runtimeEngine.progressObjective(instance, plan, objective.key, 1);
+      await this.persistenceEngine.saveReceipt(result.receipt);
+      await this.persistenceEngine.saveInstance(result.updatedInstance);
+      updates.push({ instanceId: instance.id, receiptId: result.receipt.id, completedNode: result.completedNode });
+    }
+    return Object.freeze(updates);
   }
 
   public async chooseQuestBranch(userId: number, instanceId: string, edgeId: string) {
