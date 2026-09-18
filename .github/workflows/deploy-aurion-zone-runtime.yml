@@ -652,13 +652,51 @@ jobs:
           test -f "$readback"
           runtime_manifest_sha256="$(tar -xOzf "$runtime_archive" ./manifest.json | sha256sum | awk '{print $1}')"
           schema_manifest_sha256="$(sha256sum "$artifact/manifest.json" | awk '{print $1}')"
+          build_input_digest="$(tar -xOzf "$runtime_archive" ./manifest.json | node --input-type=module -e '
+            let raw=""; for await (const chunk of process.stdin) raw+=chunk;
+            const manifest=JSON.parse(raw);
+            if(!/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest??"")) process.exit(2);
+            process.stdout.write(manifest.buildInputDigest);
+          ')"
+          artifact_digest="sha256:$(tar -xOzf "$runtime_archive" ./checksums.sha256 | sha256sum | awk '{print $1}')"
+          release_archive_digest="sha256:$(sha256sum "$runtime_archive" | awk '{print $1}')"
           node --input-type=module -e '
             import fs from "node:fs";
-            const [file, expected, releaseId, runtimeManifest, schemaManifest]=process.argv.slice(1);
+            const [file, expected, releaseId, runtimeManifest, schemaManifest, buildInputDigest, artifactDigest, releaseArchiveDigest]=process.argv.slice(1);
             const receipt=JSON.parse(fs.readFileSync(file,"utf8"));
-            if(receipt.recordType!=="aurion_traefik_runtime_readback"||receipt.revision!==expected||receipt.releaseId!==releaseId||!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)||!/^[a-f0-9]{64}$/.test(receipt.containerId)||receipt.domain!=="arelogic.space"||receipt.traefikNetwork!=="areloria_arelorian-network"||receipt.databaseNetwork!=="echoes-of-aurion-internal"||receipt.databaseConnectivity!=="authenticated_select_1"||receipt.runtimeManifestSha256!==runtimeManifest||receipt.schemaManifestSha256!==schemaManifest||receipt.schemaMode!=="read_only") throw new Error("Traefik runtime readback mismatch");
-            console.log(JSON.stringify({revision:receipt.revision,releaseId:receipt.releaseId,imageId:receipt.imageId,containerId:receipt.containerId,domain:receipt.domain,traefikNetwork:receipt.traefikNetwork,databaseNetwork:receipt.databaseNetwork,databaseConnectivity:receipt.databaseConnectivity}));
-          ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256"
+            if(
+              receipt.recordType!=="aurion_traefik_runtime_readback" ||
+              receipt.revision!==expected ||
+              receipt.releaseId!==releaseId ||
+              receipt.buildInputDigest!==buildInputDigest ||
+              receipt.artifactDigest!==artifactDigest ||
+              receipt.releaseArchiveDigest!==releaseArchiveDigest ||
+              receipt.runtimeImageDigest!==receipt.imageId ||
+              !/^sha256:[a-f0-9]{64}$/.test(receipt.runtimeImageDigest) ||
+              !/^[a-f0-9]{64}$/.test(receipt.containerId) ||
+              receipt.domain!=="arelogic.space" ||
+              receipt.traefikNetwork!=="areloria_arelorian-network" ||
+              receipt.databaseNetwork!=="echoes-of-aurion-internal" ||
+              receipt.databaseConnectivity!=="authenticated_select_1" ||
+              receipt.runtimeManifestSha256!==runtimeManifest ||
+              receipt.schemaManifestSha256!==schemaManifest ||
+              receipt.schemaMode!=="read_only" ||
+              receipt.authority?.ruleset!=="aurion-zone-v3" ||
+              receipt.authority?.tickHz!==10 ||
+              receipt.authority?.causalReceipts!==true
+            ) throw new Error("Traefik runtime readback mismatch");
+            console.log(JSON.stringify({
+              revision:receipt.revision,
+              releaseId:receipt.releaseId,
+              buildInputDigest:receipt.buildInputDigest,
+              artifactDigest:receipt.artifactDigest,
+              runtimeImageDigest:receipt.runtimeImageDigest,
+              releaseArchiveDigest:receipt.releaseArchiveDigest,
+              containerId:receipt.containerId,
+              authority:receipt.authority,
+              databaseConnectivity:receipt.databaseConnectivity
+            }));
+          ' "$readback" "$EXPECTED_SHA" "$RELEASE_ID" "$runtime_manifest_sha256" "$schema_manifest_sha256" "$build_input_digest" "$artifact_digest" "$release_archive_digest"
           (cd "$artifact" && sha256sum --strict -c checksums.sha256)
           node "${artifact}/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$artifact" "$EXPECTED_SHA"
           (cd "$apply_artifact" && sha256sum --strict -c checksums.sha256)
@@ -763,7 +801,19 @@ jobs:
                 let raw="";
                 for await (const chunk of process.stdin) raw+=chunk;
                 const health=JSON.parse(raw);
-                if(health.status!=="ok"||health.service!=="echoes-of-aurion"||health.revision!==process.argv[1]) process.exit(1);
+                const installed=JSON.parse(require("node:fs").readFileSync("aurion-installed-runtime-readback.json","utf8"));
+                if(
+                  health.status!=="ok" ||
+                  health.service!=="echoes-of-aurion" ||
+                  health.revision!==process.argv[1] ||
+                  health.revision!==installed.revision ||
+                  health.buildInputDigest!==installed.buildInputDigest ||
+                  health.artifactDigest!==installed.artifactDigest ||
+                  health.runtimeImageDigest!==installed.runtimeImageDigest ||
+                  health.authority?.ruleset!==installed.authority?.ruleset ||
+                  health.authority?.tickHz!==installed.authority?.tickHz ||
+                  health.authority?.causalReceipts!==installed.authority?.causalReceipts
+                ) process.exit(1);
               ' "${EXPECTED_SHA}"; then
                 printf '%s\n' "$health_json"
                 public_ready=1
