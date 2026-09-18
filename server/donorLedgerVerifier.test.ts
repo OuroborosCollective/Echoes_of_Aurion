@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  donorDerivedSurfaceFiles,
   externalRuntimeDependencyFindings,
   scanExternalRuntimeDependencies,
   validateDonorLedgerObject,
@@ -20,6 +21,28 @@ describe("Aurion donor/runtime ownership ledger", () => {
       expect.objectContaining({ capabilityId: "determinism.addressable-rng", status: "AURION_OWNED", donorRuntimeRequired: false }),
       expect.objectContaining({ capabilityId: "client.visible-runtime", status: "AURION_OWNED", donorRuntimeRequired: false }),
     ]));
+  });
+
+  it("binds every donor-derived production file to exactly one capability owner", () => {
+    const ledger = readLedger();
+    const discovered = donorDerivedSurfaceFiles(process.cwd());
+    expect(discovered.length).toBeGreaterThan(100);
+    expect(ledger.surfaceInventory.map((surface: { path: string }) => surface.path).sort()).toEqual(discovered);
+    expect(new Set(ledger.surfaceInventory.map((surface: { path: string }) => surface.path)).size).toBe(discovered.length);
+  });
+
+  it("rejects uninventoried, duplicate and cross-donor surface ownership", () => {
+    const missing = readLedger();
+    missing.surfaceInventory = missing.surfaceInventory.slice(1);
+    expect(codes(missing)).toContain("DONOR_SURFACE_UNINVENTORIED");
+
+    const duplicate = readLedger();
+    duplicate.surfaceInventory.push(clone(duplicate.surfaceInventory[0]));
+    expect(codes(duplicate)).toContain("DONOR_SURFACE_DUPLICATE");
+
+    const mismatch = readLedger();
+    mismatch.surfaceInventory[0].donor = mismatch.surfaceInventory[0].donor === "WASD" ? "AX1" : "WASD";
+    expect(codes(mismatch)).toContain("DONOR_SURFACE_DONOR_MISMATCH");
   });
 
   it("rejects duplicate capability IDs", () => {
