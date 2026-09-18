@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
+import { aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { getDb, getGlobalWorldPlan, listActiveWorldPresence, recordWorldPresenceLease, releaseWorldPresenceLease, resolveAndRecordGlobalWorldEpoch } from "./db";
 import { WORLD_PRESENCE_LEASE_MS } from "./worldPresenceProtocol";
 
@@ -15,6 +16,7 @@ async function cleanupEpochState() {
   await db.delete(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, WORLD_ID));
   await db.delete(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, WORLD_ID));
+  await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, WORLD_ID));
 }
 
