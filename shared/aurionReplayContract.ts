@@ -66,6 +66,8 @@ const replayCommonShape = {
 export const replayVerdictSchema = z.discriminatedUnion("status", [
   z.object({
     ...replayCommonShape,
+    verifiedStages: z.array(z.string().min(1)).min(1),
+    stagesVerified: z.number().int().positive(),
     status: z.literal("MATCH"),
     verdict: z.literal("MATCH"),
     firstDivergentStage: z.null(),
@@ -103,7 +105,15 @@ export const replayVerdictSchema = z.discriminatedUnion("status", [
     reason: z.string().min(1),
     tick: z.number().int().nonnegative().optional(),
   }).strict(),
-]);
+]).superRefine((value, ctx) => {
+  if (value.stagesVerified !== value.verifiedStages.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["stagesVerified"],
+      message: "REPLAY_VERIFIED_STAGE_COUNT_MISMATCH",
+    });
+  }
+});
 export type ReplayVerdict = z.infer<typeof replayVerdictSchema>;
 
 export interface ReplayVerdictContext {
