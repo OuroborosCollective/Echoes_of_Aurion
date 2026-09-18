@@ -60,13 +60,6 @@ export const aurionQuestRouter = router({
   accept: protectedProcedure
     .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
     .mutation(({ ctx, input }) => adminQuestService.acceptQuest(ctx.user.id, input.instanceId)),
-  progress: protectedProcedure
-    .input(z.object({
-      instanceId: z.string().min(8).max(128),
-      objectiveKey: z.string().trim().min(2).max(96),
-      amount: z.number().int().min(1).max(10_000),
-    }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.progressQuest(ctx.user.id, input.instanceId, input.objectiveKey, input.amount)),
   choose: protectedProcedure
     .input(z.object({
       instanceId: z.string().min(8).max(128),
