@@ -103,7 +103,7 @@ node --input-type=module -e '
   const [release, expected] = process.argv.slice(1);
   const manifest = JSON.parse(await readFile(path.join(release, "manifest.json"), "utf8"));
   if (manifest.schemaVersion !== 1 || manifest.recordType !== "aurion_traefik_runtime_artifact" || manifest.revision !== expected) process.exit(2);
-  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json"];
+  const required = ["deploy/aurion-revision-alignment-controller.py", "deploy/aurion-revision-alignment-controller.service", "deploy/aurion-revision-alignment-controller.timer", "deploy/aurion-revision-alignment-controller.env.template", "Dockerfile", "docker-compose.traefik.yml", "package.json", "pnpm-lock.yaml", "deploy/promote-aurion-zone-runtime.sh", "deploy/aurion-traefik-runtime.environment.template", "deploy/verify-aurion-runtime-database.mjs", "dist/.aurion-runtime-build.json", "build-input-manifest.json"];
   for (const relative of required) {
     if (typeof manifest.files?.[relative] !== "string" || !/^[a-f0-9]{64}$/.test(manifest.files[relative])) process.exit(3);
   }
@@ -116,6 +116,9 @@ node --input-type=module -e '
   }
   const runtime = JSON.parse(await readFile(path.join(release, "dist/.aurion-runtime-build.json"), "utf8"));
   if (runtime.revision !== expected || runtime.artifact !== "aurion-runtime") process.exit(7);
+  const buildInput = JSON.parse(await readFile(path.join(release, "build-input-manifest.json"), "utf8"));
+  if (manifest.buildInputManifest !== "build-input-manifest.json" || !/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest ?? "")) process.exit(8);
+  if (buildInput.schemaVersion !== "aurion.build-input-manifest.v1" || buildInput.sourceRevision !== expected || buildInput.buildInputDigest !== manifest.buildInputDigest) process.exit(9);
 ' "$release" "$expected_sha"
 
 # Keep the bounded, read-only schema runner revision-identical to the promoted
@@ -227,6 +230,19 @@ runtime_image="echoes-of-aurion:${expected_sha}"
 phase=runtime-image-build
 docker build --pull=false --build-arg "AURION_RELEASE_SHA=${expected_sha}" --tag "$runtime_image" "$release"
 [[ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$runtime_image")" == "$expected_sha" ]]
+runtime_image_id="$(docker image inspect --format '{{.Id}}' "$runtime_image")"
+[[ "$runtime_image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
+build_input_digest="$(node --input-type=module -e '
+  import fs from "node:fs";
+  const manifest=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+  if(!/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest??"")) process.exit(2);
+  process.stdout.write(manifest.buildInputDigest);
+' "${release}/manifest.json")"
+artifact_digest="sha256:$(sha256sum "${release}/checksums.sha256" | awk '{print $1}')"
+release_archive_digest="sha256:$(sha256sum "$runtime_archive" | awk '{print $1}')"
+[[ "$build_input_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+[[ "$artifact_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+[[ "$release_archive_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
 
 export AURION_ENV_FILE="$aurion_env_file"
 export AURION_DOMAIN="$aurion_domain"
@@ -235,6 +251,9 @@ export AURION_DATABASE_NETWORK="$database_network"
 export TRAEFIK_CERTRESOLVER="$traefik_certresolver"
 export AURION_IMAGE_TAG="$expected_sha"
 export AURION_RELEASE_SHA="$expected_sha"
+export AURION_BUILD_INPUT_DIGEST="$build_input_digest"
+export AURION_ARTIFACT_DIGEST="$artifact_digest"
+export AURION_RUNTIME_IMAGE_DIGEST="$runtime_image_id"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
 phase=compose-promotion
 "${compose[@]}" config --quiet
