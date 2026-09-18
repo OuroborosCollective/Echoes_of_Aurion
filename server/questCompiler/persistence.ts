@@ -12,6 +12,8 @@ import {
   type QuestTemplateVersion,
 } from "../../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
+import { persistAuthoringReceipt } from "../aurionAuthoringPersistence";
+import type { AuthoringReceipt } from "../../shared/aurionAuthoringContract";
 import { getDb } from "../db";
 import {
   aurionQuestAdminProposals,
@@ -121,6 +123,49 @@ export class QuestPersistenceEngine {
     this.proposals.set(id, next);
     const db = await getDb();
     if (db) await db.update(aurionQuestAdminProposals).set({ status }).where(eq(aurionQuestAdminProposals.id, id));
+  }
+
+  public async publishProposal(input: {
+    proposal: QuestAdminProposal;
+    template: QuestTemplateVersion;
+    receipt: AuthoringReceipt;
+    payload: unknown;
+  }): Promise<void> {
+    const proposal = QuestAdminProposalSchema.parse(input.proposal);
+    const template = QuestTemplateVersionSchema.parse(input.template);
+    const templateHash = computeCanonicalHash("aurion.quest.template.v1", template);
+    const db = await getDb();
+    if (!db) {
+      this.templates.set(this.templateKey(template.templateId, template.version), template);
+      this.proposals.set(proposal.id, QuestAdminProposalSchema.parse({ ...proposal, status: "active" }));
+      return;
+    }
+    await db.transaction(async tx => {
+      const existing = (await tx.select().from(aurionQuestTemplateVersions)
+        .where(and(eq(aurionQuestTemplateVersions.templateId, template.templateId), eq(aurionQuestTemplateVersions.version, template.version))).for("update"))[0];
+      if (existing && existing.templateHash !== templateHash) throw new Error("QUEST_TEMPLATE_VERSION_CONFLICT");
+      if (!existing) {
+        await tx.insert(aurionQuestTemplateVersions).values({
+          templateId: template.templateId,
+          version: template.version,
+          title: template.title,
+          description: template.description,
+          templateJson: JSON.stringify(template),
+          templateHash,
+          active: true,
+          quarantined: false,
+        });
+      } else {
+        await tx.update(aurionQuestTemplateVersions).set({ active: true, quarantined: false })
+          .where(and(eq(aurionQuestTemplateVersions.templateId, template.templateId), eq(aurionQuestTemplateVersions.version, template.version)));
+      }
+      const proposalRow = (await tx.select().from(aurionQuestAdminProposals).where(eq(aurionQuestAdminProposals.id, proposal.id)).for("update"))[0];
+      if (!proposalRow || proposalRow.receiptHash !== proposal.receiptHash || proposalRow.status !== "draft") throw new Error("QUEST_PROPOSAL_STALE_OR_MISSING");
+      await tx.update(aurionQuestAdminProposals).set({ status: "active" }).where(eq(aurionQuestAdminProposals.id, proposal.id));
+      await persistAuthoringReceipt(tx, input.receipt, input.payload);
+    });
+    this.templates.set(this.templateKey(template.templateId, template.version), template);
+    this.proposals.set(proposal.id, QuestAdminProposalSchema.parse({ ...proposal, status: "active" }));
   }
 
   public async savePlan(raw: QuestPlan): Promise<void> {
