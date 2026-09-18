@@ -72,6 +72,7 @@ jobs:
       actions: read
       id-token: write
       attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Guard repository scope
@@ -448,7 +449,8 @@ jobs:
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml" \
               --source-digest "${GITHUB_SHA}" \
               --source-ref "refs/heads/main" \
-              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1"
+              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1" \
+              --bundle aurion-release-artifact-attestation.sigstore.json
           }
           verify_artifact
           cp aurion-traefik-runtime-release.tgz aurion-traefik-runtime-release.tgz.untampered
@@ -541,6 +543,7 @@ jobs:
       actions: read
       id-token: write
       attestations: write
+      artifact-metadata: write
     env:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
       EXPECTED_SHA: ${{ github.sha }}
