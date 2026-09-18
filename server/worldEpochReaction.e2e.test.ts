@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
+import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
 import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { getDb, getGlobalWorldPlan, listActiveWorldPresence, recordWorldPresenceLease, releaseWorldPresenceLease, resolveAndRecordGlobalWorldEpoch } from "./db";
 import { WORLD_PRESENCE_LEASE_MS } from "./worldPresenceProtocol";
@@ -16,6 +16,10 @@ async function cleanupEpochState() {
   if (!db) return;
   await db.delete(aurionWorldPresenceLeases).where(eq(aurionWorldPresenceLeases.userId, 2_146_999_970));
   await db.delete(aurionWorldPresenceLeases).where(eq(aurionWorldPresenceLeases.userId, 2_146_999_971));
+  await db.delete(aurionSettlementRebirthCandidates).where(eq(aurionSettlementRebirthCandidates.worldId, WORLD_ID));
+  await db.delete(aurionRuinOrigins);
+  await db.delete(aurionCivilizationHistoryEvents).where(eq(aurionCivilizationHistoryEvents.worldId, WORLD_ID));
+  await db.delete(aurionActiveCivilizations).where(eq(aurionActiveCivilizations.worldId, WORLD_ID));
   await db.delete(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, WORLD_ID));
   await db.delete(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, WORLD_ID));
