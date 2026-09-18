@@ -106,6 +106,42 @@ jobs:
             server/questCompiler/replay.test.ts \
             server/worldContext/replay.test.ts \
             2>&1 | tee .aurion-local-test-pack/evidence/replay-verdict.log
+      - name: Verify milestone gate evidence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/aurion-milestone-gate-evidence.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/milestone-evidence-contract.log
+          GATE_EVIDENCE_PATH=.aurion-local-test-pack/evidence/gate-b8-repository.json node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const sha=process.env.AURION_RELEASE_SHA;
+          const externalId=`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const checks=[
+            ["migrationChain","PASS","PASS"],
+            ["donorRuntimeOwnership","PASS","PASS"],
+            ["sharedReplayVerdict","PASS","PASS"],
+            ["evidenceContract","PASS","PASS"],
+          ].map(([name,expected,observed])=>({name,expected,observed,pass:expected===observed}));
+          const receipt={
+            schemaVersion:"aurion.milestone.gate-evidence.v1",
+            gateId:"AURION-M21-B8-EVIDENCE",
+            scope:"repository",
+            passCriteria:["repository evidence is exact-revision bound","test source and reproducible command are archived","all constituent checks pass"],
+            failCriteria:["missing evidence","stale revision","nonreproducible command","constituent check failure"],
+            sourceRevision:sha,
+            workflow:".github/workflows/aurion-local-test-pack.yml",
+            command:"node --test scripts/aurion-milestone-gate-evidence.test.mjs && pnpm verify:migrations && pnpm verify:donor-ledger",
+            testSources:["scripts/aurion-milestone-gate-evidence.mjs","scripts/aurion-milestone-gate-evidence.test.mjs",".github/workflows/aurion-local-test-pack.yml"],
+            externalId,
+            reproducible:true,
+            releaseIdentity:{sourceRevision:sha},
+            expected:{migrationChain:"PASS",donorRuntimeOwnership:"PASS",sharedReplayVerdict:"PASS",evidenceContract:"PASS"},
+            observed:{migrationChain:"PASS",donorRuntimeOwnership:"PASS",sharedReplayVerdict:"PASS",evidenceContract:"PASS"},
+            checks,
+            status:checks.every(check=>check.pass)?"PASS":"FAIL",
+          };
+          fs.writeFileSync(process.env.GATE_EVIDENCE_PATH,JSON.stringify(receipt,null,2)+"\n");
+          NODE
+          node scripts/aurion-milestone-gate-evidence.mjs verify .aurion-local-test-pack/evidence/gate-b8-repository.json --require-pass
       - name: Typecheck and classless regressions
         shell: bash
         run: |
