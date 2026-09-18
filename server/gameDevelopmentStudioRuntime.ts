@@ -30,7 +30,7 @@ export type GameDevelopmentStudioRuntimeReadback = Readonly<{
   capabilitiesSchema: string | null;
   doctorSchema: string | null;
   providerCalls: false;
-  boundary: "approved-live-glb-catalog-only";
+  boundary: "human-confirmed-package-vendor-live-admission";
   error: string | null;
 }>;
 
@@ -38,7 +38,7 @@ function gameDevBinary(): string {
   return process.env.AURION_GAME_DEV_BIN?.trim() || "game-dev";
 }
 
-function workspaceRoot(): string {
+export function gameDevelopmentStudioWorkspaceRoot(): string {
   return process.env.AURION_GAME_DEV_WORKSPACE?.trim() || (process.env.NODE_ENV === "production" ? "/var/lib/aurion/game-dev-workspace" : path.join(tmpdir(), "aurion-game-dev-workspace"));
 }
 
@@ -62,7 +62,7 @@ function schemaName(value: GameDevJson): string | null {
   return typeof candidate === "string" && candidate.length <= 160 ? candidate : null;
 }
 
-async function runGameDev(args: readonly string[], timeout = 20_000): Promise<string> {
+export async function runGameDevelopmentStudioCommand(args: readonly string[], timeout = 20_000): Promise<string> {
   const result = await execFileAsync(gameDevBinary(), [...args], {
     env: safeRuntimeEnvironment(),
     timeout,
@@ -81,14 +81,14 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
   const required = process.env.AURION_GAME_DEV_REQUIRED === "true";
   const sourceRevision = process.env.AURION_GAME_DEV_SOURCE_REVISION?.trim().toLowerCase() || GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION;
   if (sourceRevision !== GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION) {
-    return Object.freeze({ available: false, required, version: null, sourceRevision, capabilitiesSchema: null, doctorSchema: null, providerCalls: false, boundary: "approved-live-glb-catalog-only", error: "GAME_DEV_SOURCE_REVISION_MISMATCH" });
+    return Object.freeze({ available: false, required, version: null, sourceRevision, capabilitiesSchema: null, doctorSchema: null, providerCalls: false, boundary: "human-confirmed-package-vendor-live-admission", error: "GAME_DEV_SOURCE_REVISION_MISMATCH" });
   }
   try {
-    await mkdir(workspaceRoot(), { recursive: true });
-    const versionOutput = await runGameDev(["--version"]);
+    await mkdir(gameDevelopmentStudioWorkspaceRoot(), { recursive: true });
+    const versionOutput = await runGameDevelopmentStudioCommand(["--version"]);
     if (!versionOutput.includes(GAME_DEVELOPMENT_STUDIO_VERSION)) throw new Error("GAME_DEV_VERSION_MISMATCH");
-    const capabilities = parseJsonOutput("CAPABILITIES", await runGameDev(["capabilities", "--output-dir", workspaceRoot(), "--json"]));
-    const doctor = parseJsonOutput("DOCTOR", await runGameDev(["doctor", "--output-dir", workspaceRoot(), "--json"]));
+    const capabilities = parseJsonOutput("CAPABILITIES", await runGameDevelopmentStudioCommand(["capabilities", "--output-dir", gameDevelopmentStudioWorkspaceRoot(), "--json"]));
+    const doctor = parseJsonOutput("DOCTOR", await runGameDevelopmentStudioCommand(["doctor", "--output-dir", gameDevelopmentStudioWorkspaceRoot(), "--json"]));
     return Object.freeze({
       available: true,
       required,
@@ -97,7 +97,7 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
       capabilitiesSchema: schemaName(capabilities),
       doctorSchema: schemaName(doctor),
       providerCalls: false,
-      boundary: "approved-live-glb-catalog-only",
+      boundary: "human-confirmed-package-vendor-live-admission",
       error: null,
     });
   } catch (error) {
@@ -109,7 +109,7 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
       capabilitiesSchema: null,
       doctorSchema: null,
       providerCalls: false,
-      boundary: "approved-live-glb-catalog-only",
+      boundary: "human-confirmed-package-vendor-live-admission",
       error: error instanceof Error && /^GAME_DEV_[A-Z0-9_]+$/.test(error.message) ? error.message : "GAME_DEV_UNAVAILABLE",
     });
   }
@@ -156,7 +156,7 @@ export async function inspectApprovedAsset(operation: "inspect" | "validate", as
   const bytes = await glbImportStore().approvedBytes(asset.sha256);
   if (!bytes) throw new Error("GAME_DEV_APPROVED_ASSET_REQUIRED");
 
-  const root = workspaceRoot();
+  const root = gameDevelopmentStudioWorkspaceRoot();
   await mkdir(root, { recursive: true });
   const runDir = await mkdtemp(path.join(root, `${operation}-`));
   const filePath = path.join(runDir, `${asset.sha256}.glb`);
@@ -164,7 +164,7 @@ export async function inspectApprovedAsset(operation: "inspect" | "validate", as
   try {
     await mkdir(outputDir, { recursive: true });
     await writeFile(filePath, bytes, { flag: "wx" });
-    const result = parseJsonOutput(operation.toUpperCase(), await runGameDev(buildGameDevAssetArgs(operation, filePath, outputDir), 30_000));
+    const result = parseJsonOutput(operation.toUpperCase(), await runGameDevelopmentStudioCommand(buildGameDevAssetArgs(operation, filePath, outputDir), 30_000));
     const resultSha256 = createHash("sha256").update(JSON.stringify(result)).digest("hex");
     return Object.freeze({
       operation,
