@@ -957,3 +957,10 @@ Status: VERIFIED pre-merge; public metadata smoke executes only on post-merge ma
 Änderung: Der Traefik-Production-Deploy prüft nach erfolgreichem Public-Health-Readback zusätzlich `/.well-known/oauth-protected-resource` und verlangt die exakte Resource `https://arelogic.space/admin-mcp`, mindestens einen HTTPS-Authorization-Server sowie die getrennten Scopes `aurion.admin.read`, `aurion.admin.assets.write` und `aurion.admin.authoring.write`.
 Erkenntnis: Ein gesunder Spielruntime-Healthcheck beweist nicht, dass der mobile ChatGPT/n8n-GDS-Pfad konfiguriert ist; die OAuth-Protected-Resource-Metadaten müssen als eigener Production-Vertrag gelesen werden.
 Evidence: Exact technical head `baba6bdb8a74e99260d540e8e88df2ccee5c466f`; Local Test Pack `35326888824` PASS; Runtime Candidate `35326888815` PASS; Runtime Container Proof `35326888838` PASS; Deploy PR verify/build `35326889844` PASS, Production-only promotion steps correctly skipped on pull_request.
+
+
+### 2026-09-18 — Remote GDS / ChatGPT Admin MCP without local PC
+Status: VERIFIED pre-merge on exact technical head.
+Änderung: Aurions OAuth-geschützter Streamable-HTTP Admin MCP exponiert serverseitiges Game Development Studio Plan/Apply, Named-NPC-Visual Plan/Apply sowie gescoptes World/Quest/Dungeon-Authoring; ein lokaler Benutzer-PC/Connector ist nicht Teil des Pfads. Owner-erzeugte private Assets verwenden `owner-created-private → Proprietary-Owner-Created`. Named-NPC-Bindings wie `lyra → npc_lyra` bleiben reine Presentation-Zuordnungen mit Plan-Hash, Human Confirm und Catalog-Readback.
+Erkenntnis: ChatGPT-Skills sind keine ausführbare Plugin-Verbindung; für den mobilen/no-PC Workflow muss GDS im Aurion-Runtime-Container laufen und über Aurions Remote Admin MCP aufgerufen werden. Asset- und Authoring-Writes benötigen getrennte OAuth-Scopes; read-only Tokens dürfen keine versteckten Draft-Writes besitzen.
+Evidence: Exact technical head `7fc7a99645c5c73f3f1ddce377782e8699de8da6`; AIM-240 GLB Upload Regression `35330970351` PASS; Local Test Pack `35330970274` PASS; Runtime Candidate `35330970277` PASS; Runtime Container Proof `35330970294` PASS.
