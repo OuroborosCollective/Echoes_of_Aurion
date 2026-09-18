@@ -450,6 +450,7 @@ jobs:
               --source-digest "${GITHUB_SHA}" \
               --source-ref "refs/heads/main" \
               --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1" \
+              --deny-self-hosted-runners \
               --bundle aurion-release-artifact-attestation.sigstore.json
           }
           verify_artifact
@@ -827,7 +828,8 @@ jobs:
               --signer-workflow "${signer}" \
               --source-digest "${GITHUB_SHA}" \
               --source-ref "refs/heads/main" \
-              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1"
+              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1" \
+              --deny-self-hosted-runners
           }
           verify_runtime() {
             gh attestation verify "${identity}" \
