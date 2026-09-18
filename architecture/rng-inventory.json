@@ -26,5 +26,10 @@
       "mechanism": "presentation-side deterministic PRNG",
       "runtimeRequired": true
     }
-  ]
+  ],
+  "searchPolicy": {
+    "allProductionServer": "Math.random and SeededARERng imports/usages are checked globally",
+    "gameplayCandidates": "generic random()/nextFloat() checks cover zone, wasd, world, quest, npc, endgame, combat, loot, gameplay, determinism and causality server paths",
+    "excludedNonGameplayExample": "server/_core/oidcProtocol.ts uses injected node:crypto.randomBytes for OIDC state/nonce/codeVerifier and is not gameplay RNG"
+  }
 }
