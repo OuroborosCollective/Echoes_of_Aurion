@@ -53,6 +53,7 @@ on:
       - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0047_aurion_world_context_capsules.sql"
       - "drizzle/0048_aurion_causal_evidence.sql"
+      - "drizzle/0049_aurion_causal_receipt_v2.sql"
   push:
     branches: [main]
     paths:
@@ -106,6 +107,7 @@ on:
       - "drizzle/0046_aurion_semantic_node_history_key.sql"
       - "drizzle/0047_aurion_world_context_capsules.sql"
       - "drizzle/0048_aurion_causal_evidence.sql"
+      - "drizzle/0049_aurion_causal_receipt_v2.sql"
 
 permissions:
   contents: read
