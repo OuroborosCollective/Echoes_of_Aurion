@@ -328,6 +328,15 @@ export class AurionCrossZoneSynchronizationService {
       if (owner.worldId !== input.sourceWorldId || owner.zoneId !== input.sourceZoneId) {
         throw new Error("CROSS_ZONE_SOURCE_NOT_OWNER");
       }
+      // A concurrent identical prepare may have committed while this transaction
+      // waited on the per-entity ownership lock. Re-read after the lock so it is
+      // idempotent instead of surfacing a duplicate-key race.
+      const concurrentRow = await lockedTransfer(tx, prepared.transferId);
+      if (concurrentRow) {
+        const concurrent = parseV2TransferRow(concurrentRow);
+        if (!sameTransferIdentity(concurrent, prepared)) throw new Error("CROSS_ZONE_TRANSFER_IDEMPOTENCY_CONFLICT");
+        return concurrent;
+      }
       if (owner.activeTransferId && owner.activeTransferId !== prepared.transferId) {
         throw new Error("CROSS_ZONE_ENTITY_TRANSFER_IN_PROGRESS");
       }
