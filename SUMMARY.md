@@ -19,6 +19,7 @@
     * [AIM-292 — Bestätigtes NPC-Gedächtnis](docs/migrations/AIM292_NPC_MULTI_MEMORY.md)
   * [Game Development Studio — Visual Production & Worldbuilding](docs/game-development-studio-visual-production-and-worldbuilding/README.md)
     * [Lokale Blender-Arbeit — GLB/GDS Referenz](docs/game-development-studio-visual-production-and-worldbuilding/lokale-blender-arbeit-glb-gds-referenz.md)
+  * [Unreal-derived Architecture Milestone 1–21 — Abschlussnachweis](docs/unreal-derived-architecture-milestone-1-21-abschlussnachweis.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)
