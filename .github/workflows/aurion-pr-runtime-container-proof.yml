@@ -51,13 +51,21 @@ jobs:
           test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
           pnpm install --frozen-lockfile
           pnpm check
-          expected_build_input_digest="$(pnpm exec tsx -e 'import { readFileSync } from "node:fs"; import { canonicalSha256 } from "./shared/aurionCanonicalHash.ts"; process.stdout.write(canonicalSha256(readFileSync("pnpm-lock.yaml", "utf8")));')"
+          export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
+          pnpm build:runtime-artifact
+          node --test scripts/aurion-build-input-manifest.test.mjs
+          node scripts/build-aurion-traefik-runtime-artifact.mjs
+          expected_build_input_digest="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const manifest=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
+            if(manifest.buildInputManifest!=="build-input-manifest.json"||!/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest)) process.exit(2);
+            const build=JSON.parse(fs.readFileSync("dist-traefik-runtime/build-input-manifest.json","utf8"));
+            if(build.buildInputDigest!==manifest.buildInputDigest||build.sourceRevision!==process.env.EXPECTED_HEAD) process.exit(3);
+            process.stdout.write(manifest.buildInputDigest);
+          ')"
           [[ "${expected_build_input_digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
           test "${expected_build_input_digest}" != "sha256:0000000000000000000000000000000000000000000000000000000000000000"
           printf 'EXPECTED_BUILD_INPUT_DIGEST=%s\n' "${expected_build_input_digest}" >> "${GITHUB_ENV}"
-          export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
-          pnpm build:runtime-artifact
-          node scripts/build-aurion-traefik-runtime-artifact.mjs
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const manifest = JSON.parse(fs.readFileSync('dist-traefik-runtime/manifest.json', 'utf8'));
@@ -214,6 +222,7 @@ jobs:
             aurion-pr-runtime-container-proof.json
             aurion-gate-b8-runtime.json
             dist-traefik-runtime/manifest.json
+            dist-traefik-runtime/build-input-manifest.json
             dist-traefik-runtime/checksums.sha256
           if-no-files-found: error
           retention-days: 30
