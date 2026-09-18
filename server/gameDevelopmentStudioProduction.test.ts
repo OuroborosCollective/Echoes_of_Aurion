@@ -54,21 +54,18 @@ describe("productive Game Development Studio live admission contract", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "aurion-game-dev-plan-"));
     roots.push(root);
     process.env.AURION_GAME_DEV_WORKSPACE = root;
-    const calls: readonly string[][] = [];
     const recorded: string[][] = [];
     const runner = async (args: readonly string[]) => {
       recorded.push([...args]);
       if (args[0] !== "asset") throw new Error("unexpected command");
       if (args[1] === "inspect") {
-        return JSON.stringify({ operation: "asset.inspect", ok: true, data: { schema: "org.gamedebug.asset_inspection.v1", meshCount: 1, materialCount: 0 } });
+        return JSON.stringify({ operation: "asset.inspect", ok: true, data: { schema: "org.gamedebug.asset_inspection.v1", modelPath: args[2], meshCount: 1, materialCount: 0 } });
       }
       if (args[1] === "validate") {
-        return JSON.stringify({ operation: "asset.validate", ok: true, data: { schema: "org.gamedebug.asset_validation.v1", passed: true, errorCount: 0, warningCount: 0 } });
+        return JSON.stringify({ operation: "asset.validate", ok: true, data: { schema: "org.gamedebug.asset_validation.v1", modelPath: args[2], passed: true, errorCount: 0, warningCount: 0 } });
       }
       throw new Error("unexpected command");
     };
-    void calls;
-
     const first = await planGameDevelopmentStudioLiveAsset(input(), runner);
     const second = await planGameDevelopmentStudioLiveAsset(input(), runner);
 
