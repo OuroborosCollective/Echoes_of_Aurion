@@ -36,7 +36,7 @@ import {
   requestNpcPolicyRollback 
 } from "./wasdNpcEvolutionPersistence";
 import { aurionNpcPolicyVersions } from "../drizzle/schema";
-import { aurionQuestRouter } from "./routes/aurionQuestRouter";
+import { aurionQuestRouter, adminQuestService } from "./routes/aurionQuestRouter";
 import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { aurionContextRouter } from "./routes/aurionContextRouter";
 import { causalityRouter } from "./routes/causalityRouter";
@@ -65,7 +65,18 @@ export const appRouter = router({
   }),
   groups: router({
     read: protectedProcedure.query(({ ctx }) => readGroupForUser(ctx.user.id)),
-    command: protectedProcedure.input(groupCommandSchema).mutation(({ ctx, input }) => commandGroupForUser(ctx.user.id, input)),
+    command: protectedProcedure.input(groupCommandSchema).mutation(async ({ ctx, input }) => {
+      const result = await commandGroupForUser(ctx.user.id, input);
+      if (result.applied && input.action.kind === "strike" && result.result.party?.phase === "cleared") {
+        await adminQuestService.applyConfirmedObjectiveEvent(ctx.user.id, {
+          source: "group_instance",
+          event: "cleared",
+          targetId: result.result.party.id,
+          payload: { dungeonId: result.result.party.dungeonId },
+        });
+      }
+      return result;
+    }),
   }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -194,7 +205,18 @@ export const appRouter = router({
       z.object({ kind: z.literal("place_structure"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), assetKey: z.enum(["aurion_tripo_starpath_marker", "aurion_tripo_garden_border"]), xMm: z.number().int().min(0).max(63_999), zMm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
       z.object({ kind: z.literal("remove_structure"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), structureId: z.string().regex(/^structure:[1-9][0-9]*:[0-9a-f]{16}$/), xMm: z.number().int().min(0).max(63_999), zMm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
       z.object({ kind: z.literal("build_road"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), fromXmm: z.number().int().min(0).max(63_999), fromZmm: z.number().int().min(0).max(63_999), toXmm: z.number().int().min(0).max(63_999), toZmm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
-    ])).mutation(({ ctx, input }) => db.applyWorldChunkAction({ actorUserId: ctx.user.id, intent: input })),
+    ])).mutation(async ({ ctx, input }) => {
+      const result = await db.applyWorldChunkAction({ actorUserId: ctx.user.id, intent: input });
+      if (result.source === "created") {
+        await adminQuestService.applyConfirmedObjectiveEvent(ctx.user.id, {
+          source: "world_chunk_delta",
+          event: result.delta.kind,
+          targetId: result.delta.targetId,
+          payload: result.delta.payload,
+        });
+      }
+      return result;
+    }),
     worldChunkWindow: protectedProcedure.input(z.object({
       worldVersion: z.literal("aurion-global-world.v1"),
       expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION),
