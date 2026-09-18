@@ -54,6 +54,7 @@ export const groupTicketSchema = z.object({
   rooms: z.array(z.object({
     id: revision,
     kind: z.string(),
+    title: z.string().max(120).optional(),
     position,
     hash: digest,
     assetId: z.string().regex(/^glb_[a-z0-9._:-]{4,91}$/).nullable().optional(),
