@@ -214,6 +214,53 @@ export class QuestRuntimeEngine {
     return { updatedInstance, completedNode, receipt };
   }
 
+  public chooseBranch(
+    instance: QuestInstance,
+    plan: QuestPlan,
+    edgeId: string
+  ): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
+    if (instance.state !== "active") throw new Error(`CANNOT_CHOOSE_INACTIVE_QUEST:${instance.state}`);
+    const node = plan.nodes.find(candidate => candidate.id === instance.currentNodeId);
+    if (!node || node.type !== "branch") throw new Error("QUEST_BRANCH_NODE_REQUIRED");
+    const edge = plan.edges.find(candidate => candidate.id === edgeId && candidate.fromNodeId === node.id);
+    if (!edge) throw new Error("QUEST_BRANCH_EDGE_INVALID");
+    if (edge.conditionPredicate) throw new Error("QUEST_BRANCH_CONDITION_UNSUPPORTED");
+
+    const occurredAt = operationalDate(this.clock).toISOString();
+    const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
+    const completedNodeIds = instance.completedNodeIds.includes(node.id)
+      ? [...instance.completedNodeIds]
+      : [...instance.completedNodeIds, node.id];
+    const updatedInstance: QuestInstance = {
+      ...instance,
+      currentNodeId: edge.toNodeId,
+      completedNodeIds,
+      updatedAt: occurredAt,
+    };
+    const resultStateHash = computeCanonicalHash("aurion.quest.instance.v1", updatedInstance);
+    const eventSequence = completedNodeIds.length + 2;
+    const receiptIdentity = computeCanonicalHash("aurion.quest.receipt.identity.v1", {
+      instanceId: instance.id,
+      edgeId,
+      eventSequence,
+      previousStateHash,
+      resultStateHash,
+    });
+    const receipt: QuestReceipt = {
+      id: `rcpt_${receiptIdentity.slice(0, 24)}`,
+      instanceId: instance.id,
+      eventSequence,
+      planHash: instance.planHash,
+      graphHash: instance.graphHash,
+      previousStateHash,
+      resultStateHash,
+      idempotencyKey: `choice:${instance.id}:${edgeId}`,
+      receiptHash: computeCanonicalHash("aurion.quest.event.v1", { previousStateHash, resultStateHash }),
+      createdAt: occurredAt,
+    };
+    return { updatedInstance, receipt };
+  }
+
   public completeQuest(
     instance: QuestInstance,
     plan: QuestPlan
