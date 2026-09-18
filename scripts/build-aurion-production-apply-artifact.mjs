@@ -25,6 +25,7 @@ const tags = [
   "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
   "0047_aurion_world_context_capsules",
   "0048_aurion_causal_evidence",
+  "0049_aurion_causal_receipt_v2",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [

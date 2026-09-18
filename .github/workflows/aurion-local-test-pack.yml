@@ -101,6 +101,7 @@ jobs:
           pnpm exec vitest run \
             server/replayVerdictContract.test.ts \
             server/causality/causalReceiptV2.test.ts \
+            server/causality/causalReceiptV2Persistence.test.ts \
             server/causality/causalTick.test.ts \
             server/questCompiler/replay.test.ts \
             server/worldContext/replay.test.ts \

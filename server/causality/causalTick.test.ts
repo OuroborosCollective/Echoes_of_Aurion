@@ -8,6 +8,7 @@ import { globalTickRecorder } from "./tickRecorder";
 import { replayZoneTick } from "./replayZoneTick";
 import { activeProvenance } from "../aurionProvenance";
 import { AURION_REPLAY_VERDICT_SCHEMA } from "../../shared/aurionReplayContract";
+import { AURION_CAUSAL_TICK_SCHEMA_V1 } from "../../shared/aurionCausalTickContract";
 
 function isolatedTestZone(suffix: string): ZoneId {
   return `observatory_threshold:${suffix}` as unknown as ZoneId;
@@ -80,6 +81,7 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     const zoneId = isolatedTestZone("causal-replay");
     const socket = { readyState: 1, OPEN: 1, send: () => {}, close: () => {} };
     const zone = new AuthoritativeMovementZone(zoneId);
+    zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V1;
     const { connectionId } = zone.join({
       userId: 202,
       socket: socket as unknown as WebSocket,
