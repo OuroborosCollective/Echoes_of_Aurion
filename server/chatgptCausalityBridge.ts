@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { AURION_ZONE_RULESET_VERSION, computeReceiptHash, type AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
+import { AURION_CAUSAL_TICK_SCHEMA_V2, AURION_ZONE_RULESET_VERSION, computeReceiptHash, type AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
 import { replayUnprovable } from "../shared/aurionReplayContract";
 import { activeProvenance } from "./aurionProvenance";
 import { globalCausalPersistence } from "./causality/persistence";
@@ -75,7 +75,10 @@ export async function chatGptTickExplain(zoneId: string, tick: number) {
     intents: entry.intents ?? null,
     preStateAvailability: entry.preState ? "OBSERVED" : "UNOBSERVABLE",
     postStateAvailability: entry.postState ? "OBSERVED" : "UNOBSERVABLE",
-    intermediateStages: "UNOBSERVABLE_IN_RECEIPT_V1" as const,
+    intermediateStages:
+      entry.receipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2
+        ? entry.receipt.stages
+        : "UNOBSERVABLE_IN_RECEIPT_V1" as const,
   });
 }
 
