@@ -113,6 +113,7 @@ function makeArtifact() {
     "0047_aurion_world_context_capsules",
     "0048_aurion_causal_evidence",
             "0049_aurion_causal_receipt_v2",
+  "0050_aurion_human_ai_authoring",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
