@@ -29,8 +29,16 @@ function forbiddenPath(relative) {
   return forbiddenPathPatterns.some(pattern => pattern.test(relative.replaceAll("\\", "/")));
 }
 function listArchiveEntries(file) {
-  const result=spawnSync("tar",["-tzf",file],{encoding:"utf8"});
-  if(result.status!==0) throw new Error(`RELEASE_SECRET_SCAN_ARCHIVE_READ_FAILED:${path.basename(file)}`);
+  const result=spawnSync("tar",["-tzf",file],{
+    encoding:"utf8",
+    maxBuffer:128*1024*1024,
+  });
+  if(result.error) {
+    throw new Error(`RELEASE_SECRET_SCAN_ARCHIVE_READ_FAILED:${path.basename(file)}:${result.error.code ?? result.error.message}`);
+  }
+  if(result.status!==0) {
+    throw new Error(`RELEASE_SECRET_SCAN_ARCHIVE_READ_FAILED:${path.basename(file)}:exit_${result.status}`);
+  }
   return result.stdout.split("\n").map(item=>item.trim()).filter(Boolean);
 }
 
