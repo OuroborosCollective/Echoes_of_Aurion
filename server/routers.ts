@@ -37,6 +37,7 @@ import {
 } from "./wasdNpcEvolutionPersistence";
 import { aurionNpcPolicyVersions } from "../drizzle/schema";
 import { aurionQuestRouter } from "./routes/aurionQuestRouter";
+import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { aurionContextRouter } from "./routes/aurionContextRouter";
 import { causalityRouter } from "./routes/causalityRouter";
 import { sessionLogRouter } from "./routes/sessionLogRouter";
@@ -56,6 +57,7 @@ export const appRouter = router({
   causality: causalityRouter,
   sessionLogs: sessionLogRouter,
   aurionQuest: aurionQuestRouter,
+  aurionAuthoring: aurionAuthoringRouter,
   aurionContext: aurionContextRouter,
   worldAssets: router({
     region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => legacyWorldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
