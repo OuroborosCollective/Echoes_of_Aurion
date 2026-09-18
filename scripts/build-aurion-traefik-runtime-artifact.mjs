@@ -101,6 +101,15 @@ if ((await stat(path.join(output, "game-dev-runtime.tgz"))).size < 1) {
   throw new Error("Game Development Studio runtime archive is empty");
 }
 
+execFileSync(process.execPath, [
+  "scripts/scan-aurion-release-secrets.mjs",
+  output,
+  path.join(output, "release-secret-scan.json"),
+], {
+  cwd: root,
+  stdio: "inherit",
+});
+
 async function sha256(filePath) {
   return createHash("sha256").update(await readFile(filePath)).digest("hex");
 }
@@ -135,6 +144,11 @@ const manifest = {
   buildInputDigest: buildInput.digest,
   buildInputManifest: "build-input-manifest.json",
   buildInputManifestSha256: files["build-input-manifest.json"],
+  secretScan: {
+    receipt: "release-secret-scan.json",
+    receiptSha256: files["release-secret-scan.json"],
+    secretValuesReturned: false,
+  },
   gameDevelopmentStudio: {
     package: "@theisegoria/game-development-studio",
     version: expectedGameDevVersion,
