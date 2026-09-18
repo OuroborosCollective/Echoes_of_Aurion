@@ -59,7 +59,7 @@ async function run() {
 
     if (res.verdict === "MATCH") {
       console.log(`[AURION REPLAY MATCH] Tick ${singleTick} is deterministic.`);
-    } else {
+    } else if (res.verdict === "FIRST_DIVERGENCE") {
       console.error(`[AURION REPLAY DIVERGENCE] Tick ${singleTick} diverged!`);
       console.error(`Stage: ${res.stage}`);
       console.error(`Expected: ${res.expectedHash}`);
@@ -68,6 +68,9 @@ async function run() {
         console.error(`Details: ${res.diffDetails}`);
       }
       process.exit(1);
+    } else {
+      console.error(`[AURION REPLAY UNPROVABLE] Tick ${singleTick}: ${res.reason}`);
+      process.exit(2);
     }
     process.exit(0);
   }
@@ -91,9 +94,12 @@ async function run() {
       });
       if (res.verdict === "MATCH") {
         matches++;
-      } else {
+      } else if (res.verdict === "FIRST_DIVERGENCE") {
         console.error(`[AURION REPLAY DIVERGENCE] Tick ${t} diverged at ${res.stage}: ${res.expectedHash} vs ${res.observedHash}`);
         process.exit(1);
+      } else {
+        console.error(`[AURION REPLAY UNPROVABLE] Tick ${t}: ${res.reason}`);
+        process.exit(2);
       }
     }
     console.log(`[AURION REPLAY SUCCESS] Replayed ${matches} ticks. All stages MATCH.`);
