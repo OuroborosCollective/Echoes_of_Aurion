@@ -17,11 +17,11 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
       idx: 49,
       tag: "0049_aurion_causal_receipt_v2",
     });
-    expect(journal.entries).toHaveLength(51);
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 50, tag: "0050_aurion_human_ai_authoring" });
-    expect(manifest.waveId).toBe("aurion-production-0021-0050");
+    expect(journal.entries).toHaveLength(52);
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 51, tag: "0051_aurion_cross_zone_handover_v2" });
+    expect(manifest.waveId).toBe("aurion-production-0021-0051");
     expect(manifest.migrations.some((migration: { tag: string }) => migration.tag === "0049_aurion_causal_receipt_v2")).toBe(true);
-    expect(manifest.migrations.at(-1)?.tag).toBe("0050_aurion_human_ai_authoring");
+    expect(manifest.migrations.at(-1)?.tag).toBe("0051_aurion_cross_zone_handover_v2");
 
     expect(sql).toContain("ADD COLUMN `receiptSchema`");
     expect(sql).toContain("ADD COLUMN `stageReceiptsJson`");
