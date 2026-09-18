@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { writeAurionBuildInputManifest } from "./aurion-build-input-manifest.mjs";
 
 const revision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase() ?? "";
 if (!/^[a-f0-9]{40}$/.test(revision)) {
@@ -56,6 +57,15 @@ if (stagedGameDevPackage?.name !== "@theisegoria/game-development-studio" || sta
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
+
+const buildInput = await writeAurionBuildInputManifest({
+  root,
+  revision,
+  output: path.join(output, "build-input-manifest.json"),
+});
+if (!/^sha256:[a-f0-9]{64}$/.test(buildInput.digest)) {
+  throw new Error("build input manifest digest is invalid");
+}
 
 for (const relative of filesToCopy) {
   await mkdir(path.dirname(path.join(output, relative)), { recursive: true });
@@ -122,6 +132,9 @@ const manifest = {
   recordType: "aurion_traefik_runtime_artifact",
   dependencyClosure: "hosted-lockfile-install",
   revision,
+  buildInputDigest: buildInput.digest,
+  buildInputManifest: "build-input-manifest.json",
+  buildInputManifestSha256: files["build-input-manifest.json"],
   gameDevelopmentStudio: {
     package: "@theisegoria/game-development-studio",
     version: expectedGameDevVersion,
