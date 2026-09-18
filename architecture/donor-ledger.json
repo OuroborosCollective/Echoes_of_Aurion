@@ -23,6 +23,11 @@
           "revision": "328240450d33490637f8cc4ae87d3fbeecca27c9",
           "inventoryPath": "server/wasdAREDeterminism.ts",
           "coverage": "bounded live combat/determinism source identity"
+        },
+        {
+          "revision": "a4d99432e47b82ce98105eadb30360cd8040ad13",
+          "inventoryPath": "client/src/lib/wasdGlbCatalog.ts",
+          "coverage": "revision-locked donor GLB provenance catalog; never a runtime asset source"
         }
       ],
       "integratedRoots": [
@@ -35,7 +40,7 @@
         "PARITY_VERIFIED": 0,
         "RUNTIME_VERIFIED": 0,
         "AURION_OWNED": 12,
-        "DONOR_RETIRED": 0
+        "DONOR_RETIRED": 1
       }
     },
     "AX1": {
@@ -540,9 +545,60 @@
       ],
       "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
       "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "assets.donor-glb-provenance",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a4d99432e47b82ce98105eadb30360cd8040ad13",
+        "sourcePaths": [
+          "client/public/assets/models",
+          "server/public/models"
+        ]
+      },
+      "aurionPaths": [
+        "client/src/lib/wasdGlbCatalog.ts",
+        "client/src/game/glbUsagePlan.ts",
+        "client/src/lib/wasdAurionSceneAssets.ts"
+      ],
+      "status": "DONOR_RETIRED",
+      "parityEvidence": [
+        "client/src/game/glbUsagePlan.test.ts",
+        "client/src/lib/wasdAurionSceneAssets.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/donorLedgerVerifier.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
     }
   ],
   "surfaceInventory": [
+    {
+      "path": ".github/workflows/aurion-wasd-migration-ledger.yml",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/game/glbUsagePlan.ts",
+      "donor": "WASD",
+      "capabilityId": "assets.donor-glb-provenance",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/lib/wasdAurionSceneAssets.ts",
+      "donor": "WASD",
+      "capabilityId": "assets.donor-glb-provenance",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/lib/wasdGlbCatalog.ts",
+      "donor": "WASD",
+      "capabilityId": "assets.donor-glb-provenance",
+      "role": "CAPABILITY"
+    },
     {
       "path": "client/src/xaurion/adapters/GameAdapter.ts",
       "donor": "AX1",
@@ -1180,6 +1236,48 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/world/assets/aurion-surface-atlas.json",
+      "donor": "AX1",
+      "capabilityId": "client.renderer-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "config/wasd-npc-capsule.json",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "drizzle/ax1StarterEquipmentSchema.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "scripts/build-aurion-wasd-migration-ledger.mjs",
+      "donor": "WASD",
+      "capabilityId": "world.reaction-rules",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "scripts/vendor/verify-wasd-npc-capsule.mjs",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "scripts/verify-wasd-npc.mjs",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "server/aurionAx1ContentCatalog.ts",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
       "path": "server/ax1ClasslessItemization.ts",
       "donor": "AX1",
       "capabilityId": "content.combat-projection",
@@ -1372,6 +1470,12 @@
       "role": "CAPABILITY"
     },
     {
+      "path": "shared/aurionAx1ContentCatalog.json",
+      "donor": "AX1",
+      "capabilityId": "content.combat-projection",
+      "role": "SUPPORT"
+    },
+    {
       "path": "shared/ax1ArmorMasteryProtocol.ts",
       "donor": "AX1",
       "capabilityId": "progression.armor-mastery-content",
@@ -1394,7 +1498,18 @@
       "donor": "AX1",
       "capabilityId": "world.resource-ecology",
       "role": "CAPABILITY"
+    },
+    {
+      "path": "vendor/wasd-npc/ax1LivingWorldProtocol.d.ts",
+      "donor": "WASD",
+      "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
     }
   ],
-  "surfaceInventoryRevision": "480e23ce04de1386a57a9e23068313396934a481"
+  "surfaceInventoryRevision": "009bccc3534b6fa7fc795c77d62935bef1e5842c",
+  "provenanceOnlyPaths": [
+    "client/src/lib/wasdGlbCatalog.ts",
+    "client/src/game/glbUsagePlan.ts",
+    "client/src/lib/wasdAurionSceneAssets.ts"
+  ]
 }
