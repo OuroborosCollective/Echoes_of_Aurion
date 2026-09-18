@@ -32,6 +32,13 @@ export class QuestPersistenceEngine {
 
   private templateKey(templateId: string, version: number) { return `${templateId}:v${version}`; }
 
+  public seedEphemeral(plan: QuestPlan, instance: QuestInstance): void {
+    const parsedPlan = QuestPlanSchema.parse(plan);
+    const parsedInstance = QuestInstanceSchema.parse(instance);
+    this.plans.set(parsedPlan.planHash, parsedPlan);
+    this.instances.set(parsedInstance.id, parsedInstance);
+  }
+
   public async saveTemplateVersion(raw: QuestTemplateVersion): Promise<void> {
     const template = QuestTemplateVersionSchema.parse(raw);
     const templateHash = computeCanonicalHash("aurion.quest.template.v1", template);
