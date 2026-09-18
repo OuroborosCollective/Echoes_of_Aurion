@@ -25,7 +25,10 @@ export interface AurionZoneReceiptReference {
 }
 
 export interface AurionZoneEpochRoot {
+  worldId: string;
   zoneId: string;
+  sourceRevision: string;
+  rulesetVersion: string;
   fromTick: number;
   toTick: number;
   firstReceiptHash: string;
@@ -133,6 +136,10 @@ export function computeZoneEpochRoot(
     if (
       receipt.worldId !== first.worldId ||
       receipt.zoneId !== first.zoneId ||
+      receipt.sourceRevision !== first.sourceRevision ||
+      receipt.rulesetVersion !== first.rulesetVersion ||
+      !GIT_SHA.test(receipt.sourceRevision) ||
+      !receipt.rulesetVersion.trim() ||
       !Number.isSafeInteger(receipt.tick) ||
       receipt.tick < 0 ||
       !HASH.test(receipt.receiptHash)
@@ -164,7 +171,10 @@ export function computeZoneEpochRoot(
     })),
   });
   return Object.freeze({
+    worldId: first.worldId,
     zoneId: first.zoneId,
+    sourceRevision: first.sourceRevision,
+    rulesetVersion: first.rulesetVersion,
     fromTick: first.tick,
     toTick: last.tick,
     firstReceiptHash: first.receiptHash,
@@ -186,6 +196,13 @@ export function computeWorldCausalRoot(input: {
   const expectedZoneIds = canonicalZoneIds(input.expectedZoneIds);
   const seen = new Set<string>();
   for (const zoneRoot of input.zoneRoots) {
+    if (
+      zoneRoot.worldId !== input.worldId ||
+      zoneRoot.sourceRevision !== input.sourceRevision ||
+      zoneRoot.rulesetVersion !== input.rulesetVersion
+    ) {
+      return unprovable({ ...input, reason: "ZONE_RECEIPT_IDENTITY_MISMATCH" });
+    }
     if (seen.has(zoneRoot.zoneId)) {
       return unprovable({ ...input, reason: "DUPLICATE_ZONE_EVIDENCE" });
     }
