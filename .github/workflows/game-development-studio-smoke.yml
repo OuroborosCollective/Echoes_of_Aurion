@@ -5,6 +5,19 @@ on:
     paths:
       - "scripts/install-game-development-studio.mjs"
       - ".github/workflows/game-development-studio-smoke.yml"
+      - "server/gameDevelopmentStudioRuntime.ts"
+      - "server/gameDevelopmentStudioRuntime.test.ts"
+      - "server/gameDevelopmentStudioProduction.ts"
+      - "server/gameDevelopmentStudioProduction.test.ts"
+      - "server/liveDeveloperGenkit.ts"
+      - "server/liveDeveloperProtocol.ts"
+      - "server/liveDeveloperProtocol.test.ts"
+      - "server/routers.ts"
+      - "client/src/components/GameDevelopmentStudioWorkbench.tsx"
+      - "client/src/pages/Operations.tsx"
+      - "docker-compose.traefik.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".gitignore"
   workflow_dispatch:
 
@@ -14,11 +27,34 @@ permissions:
 jobs:
   verify-game-dev:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22.16.0"
       - name: Install and verify pinned Game Development Studio
         run: node scripts/install-game-development-studio.mjs
+      - name: Install exact Aurion dependency graph
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+      - name: Prove productive GDS authority boundaries
+        run: |
+          pnpm exec vitest run \
+            server/gameDevelopmentStudioRuntime.test.ts \
+            server/gameDevelopmentStudioProduction.test.ts \
+            server/liveDeveloperProtocol.test.ts
+          pnpm check
+      - name: Validate production compose with persistent GDS workspace
+        env:
+          AURION_IMAGE_TAG: ci
+          AURION_ENV_FILE: /tmp/aurion-ci.env
+          AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          : > "$AURION_ENV_FILE"
+          docker compose -f docker-compose.traefik.yml config > /tmp/aurion-compose.yml
+          grep -Fq "echoes-of-aurion-game-dev-workspace" /tmp/aurion-compose.yml
+          grep -Fq "/var/lib/aurion/game-dev-workspace" /tmp/aurion-compose.yml
