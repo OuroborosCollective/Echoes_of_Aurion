@@ -1,57 +1,545 @@
 {
-  "schema": "aurion.donor.ledger.v1",
+  "schema": "aurion.donor.ledger.v2",
   "project": "Echoes of Aurion",
+  "verifiedAgainstRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+  "policy": {
+    "runtimeOwnership": "Aurion owns gameplay and persistence truth; AX1-derived presentation and WASD-derived rules execute only from code vendored/ported into this repository.",
+    "provenance": "Historical donor identity is preserved without requiring a donor repository, donor service, donor container, or cross-repository network call at runtime.",
+    "productivelyAdoptedStatuses": [
+      "AURION_OWNED",
+      "DONOR_RETIRED"
+    ]
+  },
   "donors": {
     "WASD": {
-      "repository": "wasd-runtime-legacy",
+      "repository": "OuroborosCollective/Wasd",
+      "sourceInventories": [
+        {
+          "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+          "inventoryPath": "server/wasdAurionSourceCatalog.ts",
+          "coverage": "revision-locked full source catalog"
+        },
+        {
+          "revision": "328240450d33490637f8cc4ae87d3fbeecca27c9",
+          "inventoryPath": "server/wasdAREDeterminism.ts",
+          "coverage": "bounded live combat/determinism source identity"
+        }
+      ],
+      "integratedRoots": [
+        "server/wasd",
+        "server/determinism/aurionAddressableRandom.ts"
+      ],
       "statusSummary": {
         "DONOR_ONLY": 0,
-        "PORTED": 5,
-        "PARITY_VERIFIED": 3,
-        "RUNTIME_VERIFIED": 2,
-        "AURION_OWNED": 2,
-        "DONOR_RETIRED": 1
+        "PORTED": 0,
+        "PARITY_VERIFIED": 0,
+        "RUNTIME_VERIFIED": 0,
+        "AURION_OWNED": 12,
+        "DONOR_RETIRED": 0
       }
     },
     "AX1": {
-      "repository": "ax1-projection-legacy",
+      "repository": "OuroborosCollective/-ax1",
+      "sourceInventories": [
+        {
+          "revision": "f24e3bbb452bd6991c8365fc7827ce6dbcc16d95",
+          "inventoryPath": "client/src/xaurion/integration/ax1SourceManifest.ts",
+          "coverage": "visible AX1 source manifest"
+        },
+        {
+          "revision": "d356881538dae23c3aa97364a5596d48b6ac3079",
+          "inventoryPath": "server/ax1CombatProjection.ts",
+          "coverage": "combat/content source identity"
+        },
+        {
+          "revision": "286c575d3d0050ffa77b794d5b7a7e24858acee8",
+          "inventoryPath": "shared/ax1ResourceEcologyProtocol.ts",
+          "coverage": "ecology/armor/content source identity"
+        },
+        {
+          "revision": "cf9cd7a9e197a110724d4f517655a63168ed63e0",
+          "inventoryPath": "client/src/xaurion/integration/ax1SourceManifest.ts",
+          "coverage": "NPC engine source identity"
+        }
+      ],
+      "integratedRoots": [
+        "server/ax1",
+        "shared/ax1",
+        "client/src/xaurion"
+      ],
       "statusSummary": {
         "DONOR_ONLY": 0,
-        "PORTED": 3,
-        "PARITY_VERIFIED": 2,
-        "RUNTIME_VERIFIED": 2,
-        "AURION_OWNED": 1,
+        "PORTED": 0,
+        "PARITY_VERIFIED": 0,
+        "RUNTIME_VERIFIED": 0,
+        "AURION_OWNED": 8,
         "DONOR_RETIRED": 0
       }
     }
   },
   "capabilities": [
     {
-      "id": "combat.delta-resolution",
+      "capabilityId": "combat.delta-resolution",
       "donor": "WASD",
-      "donorRevision": "32824045",
-      "aurionPath": "server/wasdCombatDeltaProtocol.ts",
-      "status": "PORTED",
-      "parityEvidence": "server/wasdCombatSourceParity.test.ts",
-      "runtimeEvidence": "server/causality/questReadback.test.ts",
-      "donorRuntimeRequired": true
-    },
-    {
-      "id": "determinism.rng",
-      "donor": "WASD",
-      "donorRevision": "11049281",
-      "aurionPath": "server/determinism/aurionAddressableRandom.ts",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "328240450d33490637f8cc4ae87d3fbeecca27c9",
+        "sourcePaths": [
+          "server/src/modules/combat/CombatDeltaResolver.ts"
+        ]
+      },
+      "aurionPaths": [
+        "server/wasdCombatDeltaProtocol.ts"
+      ],
       "status": "AURION_OWNED",
-      "parityEvidence": "tests/regression/rng-addressable.test.ts",
-      "runtimeEvidence": "receipts.rng.v1",
+      "parityEvidence": [
+        "server/wasdCombatSourceParity.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
       "donorRuntimeRequired": false
     },
     {
-      "id": "causality.readback",
-      "donor": "AURION",
+      "capabilityId": "combat.stamina-regeneration",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "328240450d33490637f8cc4ae87d3fbeecca27c9",
+        "sourcePaths": [
+          "server/src/modules/player/StaminaRegen.ts"
+        ]
+      },
+      "aurionPaths": [
+        "server/wasdStaminaProtocol.ts"
+      ],
       "status": "AURION_OWNED",
-      "aurionPath": "server/causality/readbackService.ts",
-      "runtimeEvidence": "server/causality/questReadback.test.ts"
+      "parityEvidence": [
+        "server/wasdCombatSourceParity.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "movement.zone-fixed-step",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdZoneMovementProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "combat.mob-collision",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdMobCollisionProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "npc.mob-fsm",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdMobFsmProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "determinism.addressable-rng",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "328240450d33490637f8cc4ae87d3fbeecca27c9",
+        "sourcePaths": [
+          "server/src/core/determinism/AREDeterminism.ts"
+        ]
+      },
+      "aurionPaths": [
+        "server/determinism/aurionAddressableRandom.ts",
+        "architecture/rng-inventory.json"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/determinism/aurionAddressableRandom.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/causality/causalTick.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "world.reaction-rules",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdAurionProtocol.ts",
+        "server/wasdAurionRuntime.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdAurionProtocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/wasdAurionProtocol.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "quest.dialogue-intents",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdAurionDialogueQuestIntentProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdAurionDialogueQuestIntentProtocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/causality/questReadback.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "progression.skill-rules",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdAurionSkillProgressionProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdAurionSkillProgressionProtocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/wasdAurionSkillProgressionProtocol.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "society.rules",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdAurionSocietyProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdAurionSocietyProtocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/wasdAurionSocietyProtocol.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "world.integrity-rules",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdAurionWorldIntegrityProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdAurionWorldIntegrityProtocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/wasdAurionWorldIntegrityProtocol.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "semantic-memory.provenance",
+      "donor": "WASD",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/Wasd",
+        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
+        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+      },
+      "aurionPaths": [
+        "server/wasdSemanticGraphPersistence.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdSemanticGraphPersistence.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/wasdSemanticGraphPersistence.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "client.visible-runtime",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "f24e3bbb452bd6991c8365fc7827ce6dbcc16d95",
+        "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
+      },
+      "aurionPaths": [
+        "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx",
+        "client/src/xaurion/integration/ax1SourceManifest.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "client/src/xaurion/integration/ax1FullCutover.test.tsx"
+      ],
+      "runtimeEvidence": [
+        "client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "client.renderer-runtime",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "f24e3bbb452bd6991c8365fc7827ce6dbcc16d95",
+        "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
+      },
+      "aurionPaths": [
+        "client/src/xaurion/core/RendererFactory.ts",
+        "client/src/xaurion/core/WebGpuRenderer.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "client/src/xaurion/core/RendererFactory.test.ts"
+      ],
+      "runtimeEvidence": [
+        "client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "client.input-zone-bridge",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "f24e3bbb452bd6991c8365fc7827ce6dbcc16d95",
+        "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
+      },
+      "aurionPaths": [
+        "client/src/xaurion/integration/confirmedActionRequest.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "client/src/xaurion/integration/confirmedActionRequest.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/aim270LegacyEncounterReachability.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "client.combat-vfx",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "f24e3bbb452bd6991c8365fc7827ce6dbcc16d95",
+        "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
+      },
+      "aurionPaths": [
+        "client/src/xaurion/core/ParticleSystem.ts",
+        "client/src/xaurion/integration/confirmedVisualEffects.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/aim262VisualEffects.test.ts"
+      ],
+      "runtimeEvidence": [
+        "client/src/xaurion/integration/combatPresentation.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "content.combat-projection",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "d356881538dae23c3aa97364a5596d48b6ac3079",
+        "sourcePaths": [
+          "src/entities/MobManager.ts",
+          "src/data/mmorpgData.ts"
+        ]
+      },
+      "aurionPaths": [
+        "server/ax1CombatProjection.ts",
+        "shared/ax1BladeSkillProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/wasdCombatSourceParity.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "crafting.catalog-rules",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "d356881538dae23c3aa97364a5596d48b6ac3079",
+        "catalogPath": "shared/ax1CraftingCatalog.ts"
+      },
+      "aurionPaths": [
+        "shared/ax1CraftingCatalog.ts",
+        "server/ax1CraftingProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/ax1CraftingProtocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/ax1CraftingProtocol.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "world.resource-ecology",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "286c575d3d0050ffa77b794d5b7a7e24858acee8",
+        "sourcePaths": [
+          "src/world/WorldChunkManager.ts",
+          "src/data/mmorpgData.ts"
+        ]
+      },
+      "aurionPaths": [
+        "shared/ax1ResourceEcologyProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/ax1Update286c575Protocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "server/zoneResourceRuntime.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "progression.armor-mastery-content",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "286c575d3d0050ffa77b794d5b7a7e24858acee8",
+        "sourcePaths": [
+          "src/data/mmorpgData.ts",
+          "src/entities/OpenWorldPlayer.ts"
+        ]
+      },
+      "aurionPaths": [
+        "shared/ax1ArmorMasteryProtocol.ts"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "server/ax1Update286c575Protocol.test.ts"
+      ],
+      "runtimeEvidence": [
+        "client/src/xaurion/integration/authoritativeHudProjection.test.ts"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
+    },
+    {
+      "capabilityId": "npc.decision-projection",
+      "donor": "AX1",
+      "sourceIdentity": {
+        "repository": "OuroborosCollective/-ax1",
+        "revision": "cf9cd7a9e197a110724d4f517655a63168ed63e0",
+        "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
+      },
+      "aurionPaths": [
+        "client/src/xaurion/integration/NpcDecisionPanel.tsx"
+      ],
+      "status": "AURION_OWNED",
+      "parityEvidence": [
+        "client/src/xaurion/integration/NpcDecisionPanel.test.tsx"
+      ],
+      "runtimeEvidence": [
+        "client/src/xaurion/integration/NpcDecisionPanel.test.tsx"
+      ],
+      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "donorRuntimeRequired": false
     }
   ]
 }
