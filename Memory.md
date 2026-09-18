@@ -964,3 +964,10 @@ Status: VERIFIED pre-merge on exact technical head.
 Änderung: Aurions OAuth-geschützter Streamable-HTTP Admin MCP exponiert serverseitiges Game Development Studio Plan/Apply, Named-NPC-Visual Plan/Apply sowie gescoptes World/Quest/Dungeon-Authoring; ein lokaler Benutzer-PC/Connector ist nicht Teil des Pfads. Owner-erzeugte private Assets verwenden `owner-created-private → Proprietary-Owner-Created`. Named-NPC-Bindings wie `lyra → npc_lyra` bleiben reine Presentation-Zuordnungen mit Plan-Hash, Human Confirm und Catalog-Readback.
 Erkenntnis: ChatGPT-Skills sind keine ausführbare Plugin-Verbindung; für den mobilen/no-PC Workflow muss GDS im Aurion-Runtime-Container laufen und über Aurions Remote Admin MCP aufgerufen werden. Asset- und Authoring-Writes benötigen getrennte OAuth-Scopes; read-only Tokens dürfen keine versteckten Draft-Writes besitzen.
 Evidence: Exact technical head `7fc7a99645c5c73f3f1ddce377782e8699de8da6`; AIM-240 GLB Upload Regression `35330970351` PASS; Local Test Pack `35330970274` PASS; Runtime Candidate `35330970277` PASS; Runtime Container Proof `35330970294` PASS.
+
+
+### 2026-09-18 — Admin MCP production resource metadata wiring
+Status: VERIFIED pre-merge on exact technical head.
+Änderung: Der Traefik-Runtime-Container erhält die nicht geheime, domaingebundene `AURION_ADMIN_MCP_RESOURCE_URL=https://${AURION_DOMAIN:-arelogic.space}/admin-mcp`; der bestehende OIDC-Issuer bleibt ausschließlich in der root-managed `.env.production`.
+Erkenntnis: Ein vollständig gesunder Runtime-/GDS-Container reicht nicht für ChatGPT/n8n-Remote-Nutzung; die OAuth Protected Resource Metadata muss im tatsächlich promoted Container konfiguriert und öffentlich lesbar sein.
+Evidence: Exact technical head `10cca1e59c6f7e4c6c51464f0aab3e047db9b3ea`; Deploy verify `35333376711` PASS; Game Development Studio Smoke `35333375501` PASS; Runtime Container Proof `35333375588` PASS; Runtime Candidate `35333375521` PASS; Local Test Pack `35333375650` PASS.
