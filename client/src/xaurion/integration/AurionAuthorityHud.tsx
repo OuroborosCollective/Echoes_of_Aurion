@@ -16,7 +16,7 @@ import { ClassSelectModal, DeterminismDebugOverlay, GuildManagementModal, Homest
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
 import { AurionGroupFinder } from "./AurionGroupFinder";
-import { AuthoredQuestJournal } from "./AuthoredQuestJournal";
+import { AuthoredQuestJournal } from "@/components/AuthoredQuestJournal";
 import { projectPlayerReadback, projectReadback, readbackLabels, worldReadbackSchema } from "./authoritativeHudProjection";
 import { ConfirmedAutoAttack, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import type { AurionGameplayCommand } from "./aurionAuthorityAdapter";
