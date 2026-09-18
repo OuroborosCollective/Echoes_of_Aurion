@@ -10,6 +10,7 @@ import {
   authenticateGameDevelopmentStudioBearer,
   buildGameDevAssetArgs,
   resolveGameDevelopmentStudioRuntimeReadback,
+  runGameDevelopmentStudioCommand,
 } from "./gameDevelopmentStudioRuntime";
 
 const original = {
@@ -47,6 +48,27 @@ describe("live Game Development Studio runtime boundary", () => {
       "asset", "validate", "/tmp/model.glb", "--output-dir", "/tmp/result", "--json",
     ]);
     expect(() => buildGameDevAssetArgs("inspect", "relative.glb", "/tmp/result")).toThrow("GAME_DEV_ABSOLUTE_PATH_REQUIRED");
+  });
+
+  it("rejects provider, exception and out-of-workspace execution before spawning game-dev", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-game-dev-guard-test-"));
+    process.env.AURION_GAME_DEV_WORKSPACE = root;
+    try {
+      await expect(runGameDevelopmentStudioCommand([
+        "vendor", "admit", path.join(root, "package"),
+        "--project", path.join(root, "project"),
+        "--allow-invalid",
+        "--json",
+      ])).rejects.toThrow("GAME_DEV_COMMAND_NOT_ALLOWED");
+
+      await expect(runGameDevelopmentStudioCommand([
+        "package", "verify", "/outside/package",
+        "--output-dir", root,
+        "--json",
+      ])).rejects.toThrow("GAME_DEV_PATH_OUTSIDE_WORKSPACE");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("accepts the same bounded one-hour GLB agent session for approved-asset validation", async () => {
