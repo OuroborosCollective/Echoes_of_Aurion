@@ -25,9 +25,29 @@ Ein KI-Vorschlag, Asset, Screenshot, Capture oder Provider-Job darf niemals Game
 
 `Design → Inspect → Validate → Package → Package Verify → Vendor Dry-Run → Human Confirm → Vendor Admit → SHA-Readback → Aurion GLB Ingest → Live-Katalog-Readback`
 
-Die produktive GDS-Lane ist providerfrei begrenzt. Sie akzeptiert keine unbekannte Lizenz, keinen `--allow-invalid`-Bypass, keine fremden Workspace-Pfade und keinen ungeprüften Provider-Spend.
+Die produktive GDS-Lane ist providerfrei begrenzt. Fremd-/Lizenzassets benötigen einen echten Lizenzbezeichner. Vom Projekteigentümer selbst erzeugte, privat/proprietär gehaltene Assets verwenden `owner-created-private` und werden als `Proprietary-Owner-Created` dokumentiert; dafür wird keine erfundene CC-/SPDX-Lizenz verlangt. `--allow-invalid`, fremde Workspace-Pfade und ungeprüfter Provider-Spend bleiben verboten.
 
 Aktueller GDS-Stand: **v1.0.2**, gepinnt auf Source-Revision `96a0b4f34b979279ab983e9547af43133e85f310`.
+
+
+
+## Remote ChatGPT / n8n ohne lokalen Rechner
+
+Die produktive GDS-Ausführung benötigt **keinen Benutzer-PC**. Der gepinnte GDS-Runtime befindet sich im Aurion-Produktionscontainer. Remote-Clients verwenden ausschließlich den OAuth-geschützten Streamable-HTTP-Endpunkt:
+
+`https://arelogic.space/admin-mcp`
+
+Asset-Scope `aurion.admin.assets.write` stellt unter anderem bereit:
+
+- `aurion_admin_gds_status`
+- `aurion_admin_gds_plan`
+- `aurion_admin_gds_apply`
+- `aurion_admin_named_npc_visual_plan`
+- `aurion_admin_named_npc_visual_apply`
+
+Authoring-Scope `aurion.admin.authoring.write` stellt World-/Quest-/Dungeon-Plan→Confirm-Writes bereit. n8n oder Sovereign dürfen denselben Endpoint orchestrieren, besitzen aber keine zusätzliche Authority.
+
+Named-NPC-Beispiel: Ein approved `npc-fallback`-Character kann nach Plan-Readback und explizitem `APPLY_NAMED_NPC_VISUAL` an den bestätigten NPC `lyra` gebunden werden. Der Renderer-Target-Key ist `npc_lyra`; NPC-Position, Questzustand und Gameplay bleiben unverändert Aurion-owned.
 
 ## Human+AI Authoring Control Plane
 

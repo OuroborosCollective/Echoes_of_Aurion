@@ -167,6 +167,9 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
         { name: "aurion_admin_dungeon_design_read", mode: "read", description: "Read active authored Aurion dungeons." },
         { name: "aurion_admin_dungeon_design_plan", mode: "read", description: "Validate and hash one dungeon-design draft." },
         { name: "aurion_admin_dungeon_design_apply", mode: "write", description: "Publish one exact dungeon-design plan after explicit confirmation." },
+        { name: "aurion_quest_draft_propose", mode: "write", description: "Persist a bounded quest draft proposal only; no publish." },
+        { name: "aurion_quest_publish_plan", mode: "read", description: "Validate one quest proposal and return its exact publish plan." },
+        { name: "aurion_quest_publish", mode: "write", description: "Publish one quest template only for the exact confirmed plan." },
       ] : []),
     ]),
     wolfram: Object.freeze({ configured: wolframConfigured, mutationAuthority: "none" as const }),
@@ -264,7 +267,27 @@ function createAdminMcpServer(actor: AdminActor) {
     return content(instance);
   });
   server.registerTool("aurion_quest_replay", { title: "Replay Quest Causality", description: "Re-evaluates deterministic quest composition.", inputSchema: z.object({ instanceId: z.string() }) }, async input => content(await questService.replayInstance(input.instanceId)));
-  server.registerTool("aurion_quest_draft_propose", { title: "Propose Quest Draft", description: "Creates a draft proposal only; it does not publish gameplay truth.", inputSchema: z.object({ templateId: z.string(), templateVersion: z.number().int().positive(), proposedDataJson: z.string() }) }, async input => content(await questService.createDraftProposal({ authorUserId: actor.userId, templateId: input.templateId, templateVersion: input.templateVersion, proposedDataJson: input.proposedDataJson })));
+
+  if (actor.scopes.includes(AURION_ADMIN_AUTHORING_WRITE_SCOPE)) {
+    server.registerTool("aurion_quest_draft_propose", { title: "Propose Quest Draft", description: "Creates a draft proposal only; it does not publish gameplay truth.", inputSchema: z.object({
+      templateId: z.string().min(3).max(96),
+      templateVersion: z.number().int().positive(),
+      proposedDataJson: z.string().min(2).max(120_000),
+    }).strict() }, async input => content(await questService.createDraftProposal({
+      authorUserId: actor.userId,
+      templateId: input.templateId,
+      templateVersion: input.templateVersion,
+      proposedDataJson: input.proposedDataJson,
+    })));
+    server.registerTool("aurion_quest_publish_plan", { title: "Plan quest publish", description: "Validates one draft proposal and returns an exact publish plan hash.", inputSchema: z.object({
+      proposalId: z.string().min(8).max(128),
+    }).strict() }, async input => content(await questService.planPublishProposal(input.proposalId)));
+    server.registerTool("aurion_quest_publish", { title: "Publish quest template", description: "Publishes only the exact confirmed quest plan.", inputSchema: z.object({
+      proposalId: z.string().min(8).max(128),
+      expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("PUBLISH_QUEST_TEMPLATE"),
+    }).strict() }, async input => content(await questService.publishProposal(actor.userId, input.proposalId, input.expectedPlanHash)));
+  }
 
   server.registerTool("aurion_context_inspect_capsule", { title: "Inspect Context Capsule", description: "Reads immutable context-capsule evidence.", inputSchema: z.object({ capsuleId: z.string() }) }, async input => {
     const { aurionWorldContextService } = require("./worldContext/service");
