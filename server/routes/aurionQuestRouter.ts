@@ -28,7 +28,7 @@ export const aurionQuestRouter = router({
       z.object({
         templateId: z.string(),
         templateVersion: z.number().int().positive(),
-        proposedDataJson: z.string(),
+        proposedDataJson: z.string().min(2).max(120_000),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -39,6 +39,42 @@ export const aurionQuestRouter = router({
         proposedDataJson: input.proposedDataJson,
       });
     }),
+  publishPlan: adminProcedure
+    .input(z.object({ proposalId: z.string().min(8).max(128) }).strict())
+    .mutation(({ input }) => adminQuestService.planPublishProposal(input.proposalId)),
+  publish: adminProcedure
+    .input(z.object({
+      proposalId: z.string().min(8).max(128),
+      expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
+      confirmation: z.literal("PUBLISH_QUEST_TEMPLATE"),
+    }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash)),
+  myInstances: protectedProcedure.query(({ ctx }) => adminQuestService.listInstances({ playerUserId: ctx.user.id })),
+  offer: protectedProcedure
+    .input(z.object({
+      giverNpcId: z.string().trim().min(3).max(96),
+      triggerEventId: z.string().trim().min(3).max(128),
+    }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.offerQuest({ playerUserId: ctx.user.id, giverNpcId: input.giverNpcId, triggerEventId: input.triggerEventId })),
+  accept: protectedProcedure
+    .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.acceptQuest(ctx.user.id, input.instanceId)),
+  progress: protectedProcedure
+    .input(z.object({
+      instanceId: z.string().min(8).max(128),
+      objectiveKey: z.string().trim().min(2).max(96),
+      amount: z.number().int().min(1).max(10_000),
+    }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.progressQuest(ctx.user.id, input.instanceId, input.objectiveKey, input.amount)),
+  choose: protectedProcedure
+    .input(z.object({
+      instanceId: z.string().min(8).max(128),
+      edgeId: z.string().trim().min(2).max(96),
+    }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.chooseQuestBranch(ctx.user.id, input.instanceId, input.edgeId)),
+  complete: protectedProcedure
+    .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.completeQuest(ctx.user.id, input.instanceId)),
   visualSupport: adminProcedure
     .input(
       z.object({
