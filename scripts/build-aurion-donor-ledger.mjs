@@ -41,6 +41,7 @@ function runtimeScanFiles(root) {
   const set = new Set(explicit.filter(file => fs.existsSync(path.join(root, file))));
   for (const relativeRoot of roots) {
     for (const file of relativeFiles(root, relativeRoot)) {
+      if (/\.(?:test|spec)\.[^.]+$/.test(file)) continue;
       if (/\.(?:ts|tsx|js|mjs|cjs|json|ya?ml|sh)$/.test(file)) set.add(file);
     }
   }
