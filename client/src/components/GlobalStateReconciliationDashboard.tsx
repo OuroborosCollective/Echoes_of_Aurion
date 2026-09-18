@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Globe, ShieldCheck, History, CheckCircle2, AlertCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
 
 export default function GlobalStateReconciliationDashboard() {
-  const worldId = "aurion-world-01";
+  const worldId = GLOBAL_WORLD_ID;
   const proofsQuery = trpc.causality.getGlobalStateProofs.useQuery({ worldId });
 
   return (
@@ -16,7 +17,7 @@ export default function GlobalStateReconciliationDashboard() {
             <Globe className="h-5 w-5 text-emerald-400" /> Global State Reconciliation
           </CardTitle>
           <CardDescription>
-            Aggregating proven zone states into a unified world evidence record (Step 18).
+            Evidence-only World Causal Roots from exact zone receipt ranges (Wave 2 · Step 22).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -33,9 +34,15 @@ export default function GlobalStateReconciliationDashboard() {
                       <History className="h-4 w-4 text-emerald-400" />
                       <span className="text-sm font-bold text-slate-200">World Epoch {proof.epoch}</span>
                     </div>
-                    <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> {proof.status}
-                    </Badge>
+                    {proof.status === "VERIFIED" ? (
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> VERIFIED
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1">
+                        <AlertCircle className="h-3 w-3" /> {proof.status}
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-2">
@@ -53,11 +60,11 @@ export default function GlobalStateReconciliationDashboard() {
                   <div className="flex items-center gap-4 text-[10px] text-slate-400">
                     <div className="flex items-center gap-1">
                       <ShieldCheck className="h-3 w-3 text-emerald-400" />
-                      Causally Bound
+                      {proof.status === "VERIFIED" ? "Causally Bound" : "Evidence not proven"}
                     </div>
                     <div className="flex items-center gap-1">
                       <AlertCircle className="h-3 w-3 text-cyan-400" />
-                      Full-World Readmodel Consistently Formed
+                      {proof.status === "VERIFIED" ? "World evidence root independently reproducible" : "Gameplay truth unchanged; evidence remains fail-closed"}
                     </div>
                   </div>
                 </div>
@@ -84,13 +91,13 @@ export default function GlobalStateReconciliationDashboard() {
             1. <b>Epoch Staging:</b> The global host proposes a world epoch after resolving world-wide events (weather, ecology).
           </p>
           <p>
-            2. <b>Zone Readback:</b> The background readback service replays individual zone ticks to prove their deterministic post-state hashes.
+            2. <b>Zone Evidence:</b> Exact persisted causal receipt ranges are grouped into deterministic zone epoch roots.
           </p>
           <p>
-            3. <b>Evidence Aggregation:</b> The Reconciliation Service verifies that ALL active zones have "proven" receipts for the epoch window.
+            3. <b>Evidence Aggregation:</b> Every expected live causal zone must be present; missing or mismatched evidence becomes UNPROVABLE.
           </p>
           <p>
-            4. <b>Consolidation:</b> A unified World Proof is signed, binding all zone states into a single verifiable snapshot hash for the global readmodel.
+            4. <b>Consolidation:</b> Canonically sorted zone roots and the previous world root are hashed into one evidence-only World Causal Root.
           </p>
         </CardContent>
       </Card>
