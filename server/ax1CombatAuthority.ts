@@ -158,7 +158,15 @@ export class ThreatMatrix {
   target(mobId: string): string | null {
     const actors = this.byMob.get(mobId);
     if (!actors?.size) return null;
-    return Array.from(actors.entries()).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]![0];
+    let maxActor: string | null = null;
+    let maxThreat = -1;
+    for (const [actor, threat] of actors.entries()) {
+      if (maxActor === null || threat > maxThreat || (threat === maxThreat && actor.localeCompare(maxActor) < 0)) {
+        maxActor = actor;
+        maxThreat = threat;
+      }
+    }
+    return maxActor;
   }
 }
 
@@ -191,13 +199,23 @@ export class NavGrid {
   private valid(point: GridPoint): boolean { return point.x >= 0 && point.z >= 0 && point.x < this.width && point.z < this.height && !this.blocked.has(gridKey(point)); }
   findPath(start: GridPoint, goal: GridPoint): readonly GridPoint[] {
     if (!this.valid(start) || !this.valid(goal)) return [];
-    const open = new Map<string, { point: GridPoint; g: number; f: number }>([[gridKey(start), { point: start, g: 0, f: Math.abs(goal.x - start.x) + Math.abs(goal.z - start.z) }]]);
+    const startKey = gridKey(start);
+    const open = new Map<string, { point: GridPoint; g: number; f: number; key: string }>([[startKey, { point: start, g: 0, f: Math.abs(goal.x - start.x) + Math.abs(goal.z - start.z), key: startKey }]]);
     const cameFrom = new Map<string, string>();
-    const points = new Map<string, GridPoint>([[gridKey(start), start]]);
+    const points = new Map<string, GridPoint>([[startKey, start]]);
     const closed = new Set<string>();
     while (open.size) {
-      const current = Array.from(open.values()).sort((a, b) => a.f - b.f || a.g - b.g || gridKey(a.point).localeCompare(gridKey(b.point)))[0]!;
-      const currentKey = gridKey(current.point);
+      let current: { point: GridPoint; g: number; f: number; key: string } | null = null;
+      for (const node of open.values()) {
+        if (!current) { current = node; continue; }
+        if (node.f < current.f) current = node;
+        else if (node.f === current.f) {
+          if (node.g < current.g) current = node;
+          else if (node.g === current.g && node.key.localeCompare(current.key) < 0) current = node;
+        }
+      }
+      if (!current) break; // Should not happen
+      const currentKey = current.key;
       open.delete(currentKey);
       if (currentKey === gridKey(goal)) {
         const path: GridPoint[] = [goal];
@@ -215,7 +233,7 @@ export class NavGrid {
         const existing = open.get(key);
         if (existing && existing.g <= g) continue;
         cameFrom.set(key, currentKey); points.set(key, Object.freeze({ ...neighbour }));
-        open.set(key, { point: neighbour, g, f: g + Math.abs(goal.x - neighbour.x) + Math.abs(goal.z - neighbour.z) });
+        open.set(key, { point: neighbour, g, f: g + Math.abs(goal.x - neighbour.x) + Math.abs(goal.z - neighbour.z), key });
       }
     }
     return [];
