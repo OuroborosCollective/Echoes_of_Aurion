@@ -252,7 +252,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain('sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"');
     expect(workflow).not.toContain("compatible promoter %s will receive the canonical artifact directly");
     expect(workflow).not.toContain("promoter_needs_readback_replay");
-    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 3");
+    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 2");
     expect(promoter).toContain("public_readback_dir=/var/lib/aurion-traefik-runtime-readback");
     expect(promoter).toContain('"recordType":"aurion_traefik_runtime_readback"');
     expect(promoter).toContain('chmod 0644 "$public_readback_tmp"');
