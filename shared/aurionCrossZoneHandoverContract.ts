@@ -47,6 +47,8 @@ function transferIdFor(input: {
   sourceZoneId: string;
   sourceTick: number;
   sourceReceiptHash: string;
+  targetWorldId: string;
+  targetZoneId: string;
 }): string {
   const digest = canonicalSha256({
     schema: "aurion.cross-zone-transfer-id.v2",
@@ -55,6 +57,8 @@ function transferIdFor(input: {
     sourceZoneId: input.sourceZoneId,
     sourceTick: input.sourceTick,
     sourceReceiptHash: input.sourceReceiptHash,
+    targetWorldId: input.targetWorldId,
+    targetZoneId: input.targetZoneId,
   }).slice("sha256:".length);
   return `xfer2_${digest.slice(0, 56)}`;
 }
