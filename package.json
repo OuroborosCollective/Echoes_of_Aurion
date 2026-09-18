@@ -29,8 +29,8 @@
     "verify:donor-ledger": "node scripts/build-aurion-donor-ledger.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.0",
-    "@capacitor/core": "^8.5.0",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@genkit-ai/google-genai": "^1.41.0",
     "@hookform/resolvers": "^5.2.2",
     "@modelcontextprotocol/express": "^2.0.0",
@@ -111,7 +111,7 @@
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
-    "@capacitor/cli": "^8.5.0",
+    "@capacitor/cli": "^8.5.2",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
