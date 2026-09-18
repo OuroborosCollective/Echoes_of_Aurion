@@ -99,6 +99,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain(
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
+    expect(compose).toContain('AURION_ADMIN_MCP_RESOURCE_URL: https://${AURION_DOMAIN:-arelogic.space}/admin-mcp');
     expect(workflow).toContain("Verify public Aurion Admin MCP protected-resource metadata");
     expect(workflow).toContain("https://arelogic.space/.well-known/oauth-protected-resource");
     expect(workflow).toContain('body.resource!=="https://arelogic.space/admin-mcp"');
