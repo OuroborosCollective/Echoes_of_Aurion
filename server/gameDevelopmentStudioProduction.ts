@@ -59,6 +59,19 @@ function canonicalSha256(value: unknown): string {
   return sha256(JSON.stringify(canonical(value)));
 }
 
+function normalizeRunEvidence(value: unknown, runDir: string): unknown {
+  if (Array.isArray(value)) return value.map(entry => normalizeRunEvidence(entry, runDir));
+  if (!value || typeof value !== "object") {
+    if (typeof value !== "string" || !path.isAbsolute(value)) return value;
+    const relative = path.relative(runDir, value);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return value;
+    return `run://${relative.split(path.sep).join("/")}`;
+  }
+  return Object.fromEntries(
+    Object.entries(value as JsonObject).map(([key, nested]) => [key, normalizeRunEvidence(nested, runDir)]),
+  );
+}
+
 function object(value: unknown, code: string): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(code);
   return value as JsonObject;
@@ -185,8 +198,8 @@ export async function planGameDevelopmentStudioLiveAsset(
       packageVersion: input.packageVersion,
       license: input.license,
       designWorkOrderSha256: input.designWorkOrderSha256 ?? null,
-      inspectResultSha256: canonicalSha256(inspect),
-      validateResultSha256: canonicalSha256(validate),
+      inspectResultSha256: canonicalSha256(normalizeRunEvidence(inspect, runDir)),
+      validateResultSha256: canonicalSha256(normalizeRunEvidence(validate, runDir)),
       validationPassed,
       requiresHumanConfirmation: true as const,
       providerCalls: false as const,
