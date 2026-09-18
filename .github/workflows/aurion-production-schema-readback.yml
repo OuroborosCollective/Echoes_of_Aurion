@@ -181,7 +181,7 @@ jobs:
 
       - name: Upload revision-bound production receipt
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurion-production-schema-readback-${{ inputs.expected_sha }}
           path: production-schema-readback.json

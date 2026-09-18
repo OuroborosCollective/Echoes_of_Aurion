@@ -74,7 +74,7 @@ jobs:
           sha256sum aurion-static-release.tgz > aurion-static-release.tgz.sha256
 
       - name: Publish immutable build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurion-static-${{ github.sha }}
           path: |

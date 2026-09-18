@@ -38,7 +38,7 @@ jobs:
       - name: Upload proxy and run free Tripo rig-check
         run: node scripts/tripo-lyra-rig-check.mjs
       - name: Upload read-only preflight evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lyra-game-dev-source-preflight
           path: |

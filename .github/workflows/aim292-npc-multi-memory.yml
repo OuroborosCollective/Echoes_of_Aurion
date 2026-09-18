@@ -95,7 +95,7 @@ jobs:
           diff --recursive vendor/wasd-npc /tmp/aim292-rebuilt
           cmp scripts/vendor/verify-wasd-npc-capsule.mjs wasd-source/scripts/verify-aurion-npc-capsule.mjs
           WASD_NPC_CAPSULE_DIR=/tmp/aim292-rebuilt node --test wasd-source/scripts/__tests__/aurion-npc-capsule.test.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aim292-wasd-capsule-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/aim292-rebuilt
@@ -173,7 +173,7 @@ jobs:
         run: pnpm exec playwright test --config=playwright.aim292.config.ts
       - name: Read back the actual autonomous decision and memory receipts
         run: node scripts/verify-autonomous-npc-life-runtime.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: aim292-mariadb-ax1-${{ github.event.pull_request.head.sha || github.sha }}

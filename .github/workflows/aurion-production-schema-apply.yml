@@ -131,7 +131,7 @@ jobs:
           NODE
 
       - name: Publish exact apply artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurion-production-schema-apply-artifact-${{ github.sha }}-${{ inputs.plan_sha256 }}
           path: dist-production-apply
@@ -267,7 +267,7 @@ jobs:
 
       - name: Upload sanitized production apply receipt
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurion-production-schema-apply-receipt-${{ github.sha }}-${{ inputs.plan_sha256 }}
           path: production-schema-apply.json

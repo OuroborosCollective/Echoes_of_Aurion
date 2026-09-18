@@ -70,7 +70,7 @@ jobs:
           done
       - name: Enforce byte-identical output, sealed metadata and unchanged collider
         run: node scripts/verify-shipping-repro.mjs .asset-build/a .asset-build/b
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: aim291-reproducible-shipping-${{ github.event.pull_request.head.sha || github.sha }}
@@ -163,7 +163,7 @@ jobs:
           AIM290_VIEWPORT: ${{ matrix.viewport }}
         run: pnpm exec playwright test --config=playwright.aim291.config.ts --grep "on $AIM290_VIEWPORT$"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: aim291-renderer-recovery-${{ matrix.viewport }}-${{ github.event.pull_request.head.sha || github.sha }}

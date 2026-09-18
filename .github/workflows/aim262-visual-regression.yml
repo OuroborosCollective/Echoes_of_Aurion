@@ -139,7 +139,7 @@ jobs:
             assets) pnpm exec playwright test --config=playwright.aurion-migration.config.ts --grep "real GLB actors" ;;
             *) exit 1 ;;
           esac
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: aurion-authenticated-browser-${{ matrix.scenario }}-${{ github.event.pull_request.head.sha || github.sha }}

@@ -213,7 +213,7 @@ jobs:
           NODE
 
       - name: Upload proof receipt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurion-world-checkpoint-0028-proof-${{ env.EXPECTED_SOURCE_SHA }}
           path: aurion-world-checkpoint-0028-proof.json
