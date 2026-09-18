@@ -113,6 +113,22 @@ describe("worldCausalRootService contract", () => {
     expect(() => computeZoneEpochRoot(receipts)).toThrow("ZONE_RECEIPT_CHAIN_INVALID");
   });
 
+  it("rejects zone evidence from another source revision or ruleset", () => {
+    const zone = computeZoneEpochRoot(chain("observatory_threshold"));
+    const revisionMismatch = computeWorldCausalRoot({
+      worldId: WORLD, epoch: 4, sourceRevision: "b".repeat(40), rulesetVersion: RULESET,
+      expectedZoneIds: ["observatory_threshold"], zoneRoots: [zone], previousWorldRoot: null,
+    });
+    const rulesetMismatch = computeWorldCausalRoot({
+      worldId: WORLD, epoch: 4, sourceRevision: REVISION, rulesetVersion: "aurion.zone.rules.v999",
+      expectedZoneIds: ["observatory_threshold"], zoneRoots: [zone], previousWorldRoot: null,
+    });
+    expect(revisionMismatch.status).toBe("UNPROVABLE");
+    expect(revisionMismatch.reason).toBe("ZONE_RECEIPT_IDENTITY_MISMATCH");
+    expect(rulesetMismatch.status).toBe("UNPROVABLE");
+    expect(rulesetMismatch.reason).toBe("ZONE_RECEIPT_IDENTITY_MISMATCH");
+  });
+
   it("marks an unobserved source revision UNPROVABLE", () => {
     const zone = computeZoneEpochRoot(chain("observatory_threshold"));
     const result = computeWorldCausalRoot({
