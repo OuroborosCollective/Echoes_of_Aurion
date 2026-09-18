@@ -556,6 +556,13 @@ jobs:
           test "${GITHUB_REF_NAME}" = "main"
           test "${GITHUB_SHA}" = "${EXPECTED_SHA}"
 
+      - name: Check out exact production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Reset workflow-owned artifact directories
         run: rm -rf runtime-artifact runtime-bootstrap-artifact
 
