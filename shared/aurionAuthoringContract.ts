@@ -129,9 +129,22 @@ export const DungeonDesignPlanSchema = DungeonDesignDraftSchema.extend({
 
 export type DungeonDesignPlan = z.infer<typeof DungeonDesignPlanSchema>;
 
-export const ActiveDungeonDesignSchema = DungeonDesignPlanSchema.extend({
+export const ActiveDungeonDesignSchema = z.object({
+  schemaVersion: z.literal(AURION_DUNGEON_DESIGN_SCHEMA),
+  dungeonId: authoredDungeonId,
+  version: z.number().int().min(1).max(1_000_000),
+  label: z.string().trim().min(3).max(160),
+  zone: canonicalId,
+  expectedCatalogRevision: digest,
+  rooms: z.array(DungeonRoomSchema).min(4).max(9),
+  connections: z.array(DungeonConnectionSchema).min(3).max(24),
+  bosses: z.array(DungeonBossSchema).min(2).max(4),
+  partyCapabilities: z.tuple([z.literal(1), z.literal(1), z.literal(3)]),
+  planHash: digest,
+  referencedAssetHashes: z.array(digest).max(32),
+  graphHash: digest,
   designHash: digest,
-}).omit({ requiresHumanConfirmation: true }).strict();
+}).strict();
 
 export type ActiveDungeonDesign = z.infer<typeof ActiveDungeonDesignSchema>;
 
