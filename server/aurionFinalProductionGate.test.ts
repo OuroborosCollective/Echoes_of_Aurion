@@ -17,6 +17,7 @@ describe("Blocker 1 final production proof contract", () => {
       expect(promoter).toContain(`export ${key}=`);
     }
     expect(promoter).toContain('runtime_image_id="$(docker image inspect');
+    expect(promoter).toContain("docker inspect --format '{{.Image}}' \"$container_id\"");
     expect(promoter).toContain('build_input_digest="$(node --input-type=module');
     expect(promoter).toContain('artifact_digest="sha256:$(sha256sum');
     expect(promoter).toContain('release_archive_digest="sha256:$(sha256sum');
