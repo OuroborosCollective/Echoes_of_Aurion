@@ -553,6 +553,11 @@ jobs:
     needs: [verify-and-build, root-reconciliation-proof, root-schema-apply-proof]
     runs-on: [self-hosted, Linux, X64, aurion-static]
     environment: production
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
     env:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
       EXPECTED_SHA: ${{ github.sha }}
@@ -676,6 +681,92 @@ jobs:
           bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$artifact/deploy/verify-aurion-production-schema-reconcile-artifact.mjs" "$verifier"
           bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/aurion-production-schema-apply" "$apply_runner"
           bash "$artifact/deploy/verify-aurion-installed-schema-tool" "$apply_artifact/deploy/verify-aurion-production-schema-apply-artifact.mjs" "$apply_verifier"
+      - name: Prepare fully bound runtime release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="${GITHUB_WORKSPACE}/runtime-artifact"
+          readback=/var/lib/aurion-traefik-runtime-readback/current.json
+          test -f "${readback}"
+          test -f "${artifact}/aurion-release-artifact-predicate.json"
+          test -f "${artifact}/aurion-release-artifact-attestation.json"
+          cp "${readback}" aurion-installed-runtime-readback.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          import { buildRuntimeReleaseIdentity, scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
+          const sha256=file=>`sha256:${createHash("sha256").update(fs.readFileSync(file)).digest("hex")}`;
+          const artifact=process.env.GITHUB_WORKSPACE+"/runtime-artifact";
+          const predicate=JSON.parse(fs.readFileSync(artifact+"/aurion-release-artifact-predicate.json","utf8"));
+          const attestation=JSON.parse(fs.readFileSync(artifact+"/aurion-release-artifact-attestation.json","utf8"));
+          const readback=JSON.parse(fs.readFileSync("aurion-installed-runtime-readback.json","utf8"));
+          const archiveDigest=sha256(artifact+"/aurion-traefik-runtime-release.tgz");
+          if(predicate.sourceRevision!==process.env.EXPECTED_SHA||predicate.releaseArchiveDigest!==archiveDigest) throw new Error("ARTIFACT_ATTESTATION_BINDING_MISMATCH");
+          if(attestation.sourceRevision!==process.env.EXPECTED_SHA||attestation.releaseArchiveDigest!==archiveDigest||attestation.verified!==true||attestation.tamperRejected!==true) throw new Error("ARTIFACT_ATTESTATION_NOT_VERIFIED");
+          if(readback.revision!==process.env.EXPECTED_SHA||readback.releaseId!==process.env.RELEASE_ID||readback.databaseConnectivity!=="authenticated_select_1") throw new Error("PROMOTION_READBACK_IDENTITY_MISMATCH");
+          const identity=buildRuntimeReleaseIdentity({
+            sourceRevision:process.env.EXPECTED_SHA,
+            mergeSha:process.env.EXPECTED_SHA,
+            releaseId:process.env.RELEASE_ID,
+            buildInputDigest:predicate.buildInputDigest,
+            artifactDigest:predicate.artifactDigest,
+            runtimeImageDigest:readback.imageId,
+            releaseArchiveDigest:archiveDigest,
+            containerId:readback.containerId,
+            artifactAttestationId:attestation.attestationId,
+            artifactAttestationUrl:attestation.attestationUrl,
+          });
+          scanReleaseMetadataForSecrets(identity);
+          fs.writeFileSync("aurion-runtime-release-identity.json",JSON.stringify(identity,null,2)+"\n");
+          NODE
+
+      - name: Attest inspected production runtime identity
+        id: attest-runtime-identity
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: aurion-runtime-release-identity.json
+          predicate-type: https://arelogic.space/attestations/aurion-runtime-release/v1
+          predicate-path: aurion-runtime-release-identity.json
+
+      - name: Seal runtime attestation metadata
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest-runtime-identity.outputs.bundle-path }}
+          ATTESTATION_ID: ${{ steps.attest-runtime-identity.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.attest-runtime-identity.outputs.attestation-url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${ATTESTATION_BUNDLE}"
+          cp "${ATTESTATION_BUNDLE}" aurion-runtime-release-attestation.sigstore.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const identity=JSON.parse(fs.readFileSync("aurion-runtime-release-identity.json","utf8"));
+          const bundle=fs.readFileSync("aurion-runtime-release-attestation.sigstore.json");
+          const metadata={
+            schemaVersion:"aurion.runtime-release-attestation-metadata.v1",
+            sourceRevision:identity.sourceRevision,
+            runtimeImageDigest:identity.runtimeImageDigest,
+            attestationId:process.env.ATTESTATION_ID,
+            attestationUrl:process.env.ATTESTATION_URL,
+            bundleSha256:`sha256:${createHash("sha256").update(bundle).digest("hex")}`,
+          };
+          if(!/^[1-9][0-9]*$/.test(metadata.attestationId??"")||!/^https:\/\/github\.com\//.test(metadata.attestationUrl??"")) throw new Error("RUNTIME_ATTESTATION_IDENTITY_INVALID");
+          fs.writeFileSync("aurion-runtime-release-attestation.json",JSON.stringify(metadata,null,2)+"\n");
+          NODE
+
+      - name: Publish detached production runtime attestation
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-runtime-attestation-${{ github.sha }}
+          path: |
+            aurion-runtime-release-identity.json
+            aurion-runtime-release-attestation.sigstore.json
+            aurion-runtime-release-attestation.json
+            aurion-installed-runtime-readback.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Independently verify public Traefik runtime health
         run: |
           set -euo pipefail
