@@ -8,7 +8,8 @@ import {
   type WorldFact,
 } from "../../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
-import { QuestPublishPlanSchema, type AuthoringReceipt, type QuestPublishPlan } from "../../shared/aurionAuthoringContract";
+import { type AuthoringReceipt } from "../../shared/aurionAuthoringContract";
+import { QuestPublishPlanSchema, type QuestPublishPlan } from "./questPublishContract";
 import { OperationalClock, hostOperationalClock, operationalDate } from "../../shared/operationalClock";
 import { WorldFactEngine } from "./worldFacts";
 import { QuestTemplateRegistry } from "./templateRegistry";
