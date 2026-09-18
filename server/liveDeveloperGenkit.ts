@@ -94,3 +94,56 @@ export const proposeGameDevAssetDesign = ai.defineFlow(
     return validateGameDevAssetDesignWorkOrder(response.output);
   },
 );
+
+
+const authoringDraftInputSchema = z.object({
+  kind: z.enum(["world", "quest", "dungeon"]),
+  request: z.string().trim().min(12).max(4_000),
+  actorRole: z.literal("admin"),
+  contextJson: z.string().max(24_000),
+});
+
+const authoringDraftOutputSchema = z.object({
+  kind: z.enum(["world", "quest", "dungeon"]),
+  title: z.string(),
+  draftJson: z.string(),
+  reviewNotes: z.array(z.string()),
+  requiresHumanReview: z.literal(true),
+});
+
+/**
+ * Authoring AI is a proposal generator only. It has no tools and cannot publish.
+ * The returned JSON is untrusted until Aurion's domain plan endpoint parses,
+ * validates, hashes and previews it.
+ */
+export const proposeAurionAuthoringDraft = ai.defineFlow(
+  {
+    name: "proposeAurionAuthoringDraft",
+    inputSchema: authoringDraftInputSchema,
+    outputSchema: authoringDraftOutputSchema,
+  },
+  async input => {
+    const domainContract = input.kind === "world"
+      ? "Return a WorldDesignDraft JSON with schemaVersion aurion.world-design.v1, designKey, version, title, expectedCatalogRevision, placements. Every placement uses only listed approved assetId values and integer chunk/local millimeter coordinates."
+      : input.kind === "dungeon"
+        ? "Return a DungeonDesignDraft JSON with schemaVersion aurion.dungeon-design.v1, dungeonId starting dungeon_, version, label, zone, expectedCatalogRevision, 4-9 rooms, directed connections, 2-4 bosses and [1,1,3] partyCapabilities. Use listed approved assetId values only."
+        : "Return a complete aurion.quest.v1 QuestTemplateVersion JSON with templateId, version, title, description, prerequisiteFacts, roles, nodes, edges, outcomes, maxCompositionDepth, active=true and quarantined=false. Use exactly one start node, at least one end node, valid graph references and bounded rewards.";
+
+    const response = await ai.generate({
+      model: googleAI.model("gemini-2.5-flash"),
+      prompt: [
+        "You are an Aurion content-design collaborator, never gameplay authority.",
+        "Do not execute tools, write files, publish content, claim that anything is live, invent licenses, expose credentials, or grant rewards outside the requested draft.",
+        "The draft is reviewed by a human and then independently validated by Aurion. Any changed draft requires a new plan.",
+        domainContract,
+        `Human brief: ${input.request}`,
+        `Authoritative context: ${input.contextJson}`,
+        "Return draftJson as strict JSON only inside the structured draftJson field.",
+      ].join("\n\n"),
+      output: { schema: authoringDraftOutputSchema },
+    });
+    if (!response.output) throw new Error("Genkit returned no structured Aurion authoring draft");
+    if (response.output.kind !== input.kind || response.output.requiresHumanReview !== true) throw new Error("Genkit authoring draft authority mismatch");
+    return response.output;
+  },
+);

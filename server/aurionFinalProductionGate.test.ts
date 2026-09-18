@@ -48,14 +48,18 @@ describe("Blocker 1 final production proof contract", () => {
     expect(workflow).toContain("needs: [verify-release-attestations, production-schema-readback]");
     expect(workflow).toContain('--deny-self-hosted-runners');
     expect(workflow).toContain('schema.state!=="PRESENT_SCHEMA_MATCH"');
-    expect(workflow).toContain('schema.migrations.at(-1)?.tag!=="0049_aurion_causal_receipt_v2"');
+    expect(workflow).toContain('expectedTags.includes(requiredCausalReceiptV2Tag)');
+    expect(workflow).toContain('schema.migrations.some(item=>item.tag===requiredCausalReceiptV2Tag)');
+    expect(workflow).toContain('schema.migrations.at(-1)?.tag!==expectedTags.at(-1)');
+    expect(workflow).toContain('schemaCausalReceiptV2Present:true');
+    expect(workflow).toContain('schemaLastMigration:expectedTags.at(-1)');
     expect(workflow).toContain("health.releaseArchiveDigest!==identity.releaseArchiveDigest");
     expect(workflow).toContain("releaseArchiveDigest:identity.releaseArchiveDigest");
     expect(workflow).toContain('gateId:"AURION-M21-B1-PRODUCTION"');
     expect(workflow).toContain("authenticatedReadback:true");
   });
 
-  it("keeps production schema readback revision-bound through 0049", () => {
+  it("keeps causal receipt v2 explicit while following the canonical migration manifest", () => {
     expect(schemaReadback).toContain('"0049_aurion_causal_receipt_v2"');
     expect(schemaReadback).toContain("receipt.sourceRevision!==process.env.EXPECTED_SHA");
     expect(schemaReadback).toContain("receipt.databaseCredentialReturned!==false");

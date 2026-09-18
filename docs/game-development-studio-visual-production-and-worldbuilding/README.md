@@ -1,121 +1,160 @@
 ---
 description: >-
-  Kanonischer Aurion-Workflow für Game Development Studio, Worldbuilding,
-  Asset-Produktion und visuelle Evidence.
+  Kanonischer Aurion-Workflow für Game Development Studio sowie menschlich
+  bestätigtes World-, Quest- und Dungeon-Authoring mit revisionsgebundener
+  Evidence.
 ---
 
 # Game Development Studio — Visual Production & Worldbuilding
 
 ## Zweck
 
-`game-dev` ist die feste Visual-Production- und Evidence-Lane für **Echoes of Aurion**. Es ersetzt weder Gameplay-Authority noch die Engine.
+`game-dev` ist die feste Visual-Production- und Evidence-Lane für **Echoes of Aurion**. Seit PR #399 ist diese Lane mit einem Aurion-eigenen Human+AI-Authoring-Control-Plane verbunden.
 
-* **Aurion** besitzt Gameplay-/Simulationsregeln, Questwirkungen, Progression, Collision, World-Truth, Host, Auth, Asset-Katalog, MariaDB, Persistenz, Receipts, Readbacks und Ops/Evidence.
-* **AX1** besitzt sichtbare Welt, Renderer, UI, Kamera, Animation, VFX, LOD/HLOD und Presentation Content. AX1 projiziert Aurion-Wahrheit, erzeugt aber keine eigene Gameplay-Authority.
-* **WASD** ist ausschließlich historische Migrations-/Provenienzquelle. Bestehende revisionsgebundene WASD-Receipts dürfen Migrationen belegen, aber keine neue Aurion-Runtime-Wahrheit autorisieren.
-* **Game Development Studio** besitzt die lokale Werkzeugkette für Asset-Produktion, GLB/PBR/Blender-Prüfung, Packaging/Vendoring, reproduzierbare Captures, Visual-Diffs und begrenzte Performance-Evidence.
+* **Aurion** ist die einzige Gameplay-/Simulations-Authority. Aurion besitzt World-Truth, Questwirkungen, Dungeon-/Gruppenregeln, Progression, Collision, Persistenz, Plan-Validierung, Receipts, Runtime-Projektion und Publish/Apply.
+* **AX1** besitzt Renderer, UI, Kamera, Animation, VFX, LOD/HLOD und Presentation Content. AX1 projiziert bestätigte Aurion-Wahrheit und autorisiert keine Gameplaymutation.
+* **WASD** ist ausschließlich historische Migrations-/Provenienzquelle. Historische revisionsgebundene WASD-Belege dürfen Migrationen belegen, aber keine neue Aurion-Runtime-Wahrheit autorisieren.
+* **Game Development Studio** produziert, inspiziert, validiert, paketiert und vendort Assets. GDS darf keine Quest-, Dungeon- oder World-Truth setzen.
+* **Genkit** erzeugt strukturierte Entwürfe. Genkit hat in der Authoring-Lane keine Publish-, Tool- oder Gameplay-Authority.
 
 {% hint style="warning" %}
-Ein Asset, Screenshot oder Capture darf niemals Gameplay-Wahrheit erzeugen. Provider-Job, Download, GLB-Prüfung, Blender-Normalisierung, Package-Verifikation, Project Admission, Render-Capture, Performance und menschliche Sichtprüfung bleiben getrennte Beweise.
+Ein KI-Vorschlag, Asset, Screenshot, Capture oder Provider-Job darf niemals Gameplay-Wahrheit erzeugen. Produktiv wird Content erst nach Aurion-Validierung, kanonischem Plan-Hash und einer separaten menschlichen Apply-/Publish-Bestätigung.
 {% endhint %}
 
-## Gemeinsamer Arbeitsablauf
+## Produktiver Asset-Workflow
 
-{% stepper %}
-{% step %}
-### Idee und Zielbild
+`Design → Inspect → Validate → Package → Package Verify → Vendor Dry-Run → Human Confirm → Vendor Admit → SHA-Readback → Aurion GLB Ingest → Live-Katalog-Readback`
 
-Der Owner beschreibt Stimmung, Ort, Silhouette, Funktion und gewünschte Spielerwirkung. Beispiele: breites Tal mit Fluss, alpine Ruine, dichter Wald, Marktplatz, Quest-Mühle, Ranger-Ausrüstung.
-{% endstep %}
+Die produktive GDS-Lane ist providerfrei begrenzt. Sie akzeptiert keine unbekannte Lizenz, keinen `--allow-invalid`-Bypass, keine fremden Workspace-Pfade und keinen ungeprüften Provider-Spend.
 
-{% step %}
-### Makro-Geometrie und Spielraum
+Aktueller GDS-Stand: **v1.0.2**, gepinnt auf Source-Revision `96a0b4f34b979279ab983e9547af43133e85f310`.
 
-Aurion definiert die revisionsgebundene autoritative Weltprojektion: Höhenprofil, Fluss-/Straßen-Splines, Landmarken, Chunk-/LOD-Grenzen und gameplayrelevante Collision-/Traversal-Verträge. AX1 konsumiert diese Verträge für die sichtbare Projektion. Game Development Studio darf diese Grenze visualisieren und prüfen, aber nicht autorisieren.
-{% endstep %}
+## Human+AI Authoring Control Plane
 
-{% step %}
-### Modulare Asset-Produktion
+Der gemeinsame Authoring-Ablauf ist für Welt, Nebenquests und Dungeons gleich:
 
-`game-dev` produziert oder prüft kleine wiederverwendbare Bausteine: Felsen, Klippen, Brücken, Ruinen, Häuser, Vegetation, Props, Waffen, Rüstung, Sounds und PBR-Materialien. Vorhandene Bytes werden zuerst inspiziert. Blender-Normalisierung erfolgt nur bei belegtem Reparatur-/Exportbedarf und nie in-place.
-{% endstep %}
-
-{% step %}
-### Canonical Package
-
-Wiederverwendbare Assets werden als verifizierte Packages mit Hash, Provenance, Lizenz, Validation und optionaler Preview gebaut. Lose Provider-Downloads werden nicht direkt ins Spiel kopiert.
-{% endstep %}
-
-{% step %}
-### Dry-run-first Admission
-
-`vendor admit` wird zunächst gegen das exakte Projekt und Ziel geplant. Erst die bestätigte Admission schreibt ins Projekt. Das Admission-Receipt beweist Byte-/Package-Integrität, nicht Ingame-Rendering.
-{% endstep %}
-
-{% step %}
-### Reproduzierbare Capture-Szenarien
-
-Ein projekt-eigener `.game-dev/adapter.json` definiert kleine, stabile Szenarien mit festem Build, Szene, Kamera, Seed/Tick, Auflösung und Ausgabe. Baseline und Candidate müssen dieselben Kontrollen benutzen.
-{% endstep %}
-
-{% step %}
-### Vergleich und Iteration
-
-Color plus vorhandene Depth/Normal/Object-ID/Material-ID/Motion/Overdraw-Anhänge werden zusammen mit Telemetry und Metriken verglichen. Das lokalisiert technische Änderungen; die künstlerische Abnahme bleibt menschlich.
-{% endstep %}
-{% endstepper %}
+1. **Design-Brief:** Der Mensch beschreibt Ziel, Stimmung, Funktion, Geometrie, Questlogik oder Dungeonstruktur.
+2. **Genkit Draft:** Genkit liefert ausschließlich strukturiertes, untrusted Draft-JSON. Keine Tools, kein Publish, keine Lizenzbehauptung.
+3. **Aurion Plan:** Aurion parst, validiert, bindet bestätigte GLB-IDs, prüft Graph/Layout/Referenzen und erzeugt einen kanonischen Plan-Hash.
+4. **Human Review:** Änderungen am Draft invalidieren den Plan und erzwingen eine neue Validierung.
+5. **Expliziter Commit:** Der Mensch bestätigt exakt eine Consequence-Grenze:
+   * `APPLY_WORLD_DESIGN`
+   * `PUBLISH_QUEST_TEMPLATE`
+   * `PUBLISH_DUNGEON`
+6. **Persistenz + Receipt:** Aurion schreibt die versionierte Definition und das Authoring-Receipt atomar nach MariaDB.
+7. **Runtime-Readback:** Nur die bestätigte Aurion-Version wird in der Live-Runtime projiziert.
 
 ## Weltgestaltung
 
-### Berge und Täler
+World-Authoring erzeugt ein versioniertes `aurion.world-design.v1`-Manifest. Jede Platzierung enthält ausschließlich bestätigte GLB-Asset-IDs und integerbasierte Chunk-/Millimeterkoordinaten.
 
-Makroformen werden deterministisch/prozedural in der Weltprojektion erzeugt. `game-dev` liefert modulare Klippen, Felsgruppen, Schnee-/Fels-/Grasmaterialien, Landmarken und Capture-Evidence. Große monolithische Welt-GLBs sind keine Gameplay-Truth.
+Der Apply-Pfad revalidiert unmittelbar vor dem Write:
 
-### Flüsse und Wasser
+* aktuelle GLB-Katalogrevision,
+* Asset-ID und SHA-256,
+* erlaubten Presentation-Purpose,
+* Placement-Key,
+* Chunk-/Lokalkoordinaten,
+* Rotation und Scale,
+* exakten Plan-Hash.
 
-Der Flussverlauf gehört in eine deterministische Spline-/Hydrologie-Projektion. Visuelle Bausteine sind Uferfelsen, Wasserfallsegmente, Treibholz, Pflanzen, Brücken, Schaum-/Wasser-Materialien und Ruinen. Die visuelle Lane verändert keine World-State-Regel.
+Veröffentlichte World-Designs werden über `/api/game/world-design` ausgelesen und durch die bestehende `UploadedWorldCatalogProjection` in `/play` dargestellt. Diese Projektion registriert keine eigene Gameplay-Authority.
 
-### Städte und Dörfer
+Damit kann ein Mensch gemeinsam mit KI z. B. Tempelanlagen, Dörfer, Ruinen, Landmarken, Vegetation und Props räumlich komponieren, ohne Player-`place_structure` oder andere Gameplay-Kommandos zu missbrauchen.
 
-Städte werden aus modularen Kits aufgebaut: Häuser, Schmiede, Taverne, Brunnen, Marktstände, Tore, Mauern, Türme, Laternen und Props. Wiederverwendung + Instancing + LOD/HLOD sind bevorzugt gegenüber einem einzigen riesigen Stadtmodell.
+## Nebenquests
 
-## Charaktere, Waffen und Rüstung
+Der Quest-Compiler unterstützt versionierte Templates mit:
 
-`Design → Inspect → Triangle/Material/Rig/Anchor-Budgets → Blender-Normalisierung bei Bedarf → Validate → Package → Admission → Ingame-Capture → Tablet/Desktop-Vergleich`
+* Rollen für NPC, Location, Item, Player und Faction,
+* `start`, `objective`, `branch`, `subquest`, `end`,
+* gerichteten Graph-Edges und Choices,
+* Voraussetzungen,
+* Outcomes und gebundenen Rewards,
+* deterministischen Role-Bindings und Plan-/Graph-Hashes.
 
-Die sichtbare Qualität zählt; Triangle-Budgets sind Grenzwerte, keine Zielwerte. Attachment-Origins und Rig-/Socket-Namen werden als eigene Integrationsverträge geprüft.
+### Publish-Grenze
 
-## Quests
+`Draft → Graph/Reward/Reference Validation → Publish Plan → PUBLISH_QUEST_TEMPLATE → MariaDB Template Version + Proposal Status + Authoring Receipt`
 
-Questlogik und Belohnungen bleiben Aurion-owned. Game Development Studio inszeniert die Quest:
+Neue Objective-Nodes müssen an eine bestätigte Aurion-Eventquelle gebunden sein. Der Client besitzt **keine** freie `+1`-Progress-Mutation.
 
-* Ort und Landmarke,
-* Props und Questgegenstände,
-* NPC-/Gegneroptik,
-* Licht, Wetter und Sound,
-* visuelle Spuren und Umgebungsgeschichte,
-* reproduzierbare Capture-Szenarien für die Abnahme.
+Aktuell bestätigte Objective-Quellen:
 
-Damit wird aus `Text + Marker + Reward` ein räumlich inszenierter Quest-Ort, ohne die Authority-Grenze zu verwischen.
+* `world_chunk_delta` — z. B. Resource, Structure oder Road Receipts,
+* `group_instance` — z. B. bestätigter Dungeon-Clear.
 
-## Forschung und Mathematik
+Der Spieler kann ein bestätigtes Angebot annehmen, eine echte Branch-Choice auslösen und eine End-Node abschließen. Trigger-Event, Seed und Giver-Rolle bleiben serverseitig.
 
-Wolfram/Research dürfen Formeln und Candidate-Geometrie für Höhenfelder, Flussnetze, Sampling, Abstände, Dichte, LOD-Budgets und Vergleichsmetriken liefern. Die Ergebnisse werden erst durch revisionsgebundene Aurion-Authority- und AX1-Presentation-Verträge produktiv. Historische WASD-Belege bleiben dabei ausschließlich Provenienz.
+Veröffentlichte Nebenquests erscheinen im Live-Questbuch über den `AuthoredQuestJournal`. Die alten Legacy-Lyra/WASD-Mutationsbuttons bleiben auf `/play` deaktiviert.
 
-## Installationsvertrag
+## Dungeons
 
-Aktueller unterstützter Stand: **Game Development Studio v1.0.2**, gepinnt auf Upstream-Revision `96a0b4f34b979279ab983e9547af43133e85f310`.
+Ein veröffentlichter `aurion.dungeon-design.v1`-Entwurf enthält:
 
-Der historische MCP-Server aus v0.4.0 ist retired. Aktueller Vertrag: **`game-dev` CLI + Skills + JSON/JSONL**.
+* **4–9 Räume**,
+* genau einen Entrance und Exit,
+* gerichtete Room-Connections,
+* **2–4 Bosse**,
+* optionale Room-Objectives,
+* bestätigte GLB-Bindings für Räume und Bosse,
+* kanonischen Graph-Hash,
+* Plan-Hash und Asset-Hashes,
+* Party-Capability-Vertrag `[1 Tank, 1 Heiler, 3 DPS]`.
 
-Aurion PR #318 führt einen providerfreien Smoke aus: Source-Build, CLI-Installation, `game-dev --version`, `capabilities` und `doctor`.
+Aurion prüft Topologie, Erreichbarkeit, Boss-Room-Bindungen, reservierte Built-in-IDs und Asset-Governance vor dem Publish.
+
+Nach `PUBLISH_DUNGEON` erscheint der Dungeon im echten Group-Finder. Das Instance-Ticket friert Design-Hash, Räume, Positionen, Ziele, Asset-Bindings, Bosse und Source-Revision ein. Die bestehende deterministische Group-/Combat-Runtime bleibt die Authority für den tatsächlichen Run.
+
+## Consent- und Sicherheitsregeln
+
+* Plan/Preview ist read-only.
+* Kein Batch-Approve für Publish-/Apply-Aktionen.
+* Die bestätigte Aktion zeigt Plan-Hash und exakte Consequence.
+* Geänderte Inputs invalidieren den Plan.
+* Kein Client darf World-/Quest-/Dungeon-Truth frei schreiben.
+* Genkit- oder GDS-Ausgaben werden niemals direkt persistiert.
+* Kein Provider-Spend in dieser Authoring-Lane.
+* Jede Mutation erzeugt Revision/Hash/Receipt und einen Readback.
+
+## Persistenz
+
+Migration **0050 — `aurion_human_ai_authoring`** ergänzt:
+
+* `aurionWorldDesignVersions`,
+* `aurionDungeonDesignVersions`,
+* `aurionAuthoringReceipts`.
+
+Quest Templates, Proposals, Plans, Instances und Quest Receipts verwenden die bereits vorhandene Aurion-Quest-Persistenz und wurden vom alten RAM-only-Pfad auf MariaDB gebunden.
+
+## Evidence
+
+Repository-Integration: **PR #399**, Merge-Commit `863076bd08a15d43c631768093fe99f09c70f060`.
+
+Technical Head vor Memory: `3030c97dfe393d1c20702eaaee436a039cf2e8eb`.
+
+Grüne Exact-Head-Evidence:
+
+* Game Development Studio Smoke — run `35312451045`
+* Android APK / real Open-World keyframe — run `35312450465`
+* Schema Reconciliation — run `35312450584`
+* Root Schema Apply — run `35312450669`
+* Root Reconciliation — run `35312450543`
+* Runtime Container Proof — run `35312450617`
+* Runtime Candidate — run `35312450509`
+* Local Test Pack — run `35312450685`
+* AIM-259 real Group/Browser regression — run `35312450671`
+
+{% hint style="info" %}
+Der Merge beweist Repository-/Candidate-Integration. Ein Produktions-Deploy oder tatsächlicher Live-Draw gilt erst nach einem separaten revisionsgebundenen Production-Readback des Merge-SHA als bestätigt.
+{% endhint %}
 
 ## Dauerregel
 
-Bei zukünftigen Welt-/Asset-/Visual-Aufträgen gilt:
+Für Authoring-Integrationen gilt weiterhin:
 
-`Idee → Authority-Grenze → Asset-/World-Spezifikation → game-dev Inspect/Produce → Validate → Package → Admission → deterministic Capture → Visual/Metric Diff → menschliche Abnahme → Runtime/Regression/Evidence`
+`Memory.md lesen → Integration → Runtime/Regression/Evidence → genau ein kurzer Memory.md-Eintrag → erst dann Merge → Post-Merge-Readback`
 
-Diese Lane ergänzt die allgemeine Integrationsregel:
+Für Content gilt zusätzlich:
 
-`Memory.md lesen → Integration → Runtime/Regression/Evidence → genau ein kurzer Memory.md-Eintrag → erst dann Merge`.
+`Human Brief → Genkit Draft → Aurion Plan → Human Confirm → Persist/Receipt → Runtime Readback`

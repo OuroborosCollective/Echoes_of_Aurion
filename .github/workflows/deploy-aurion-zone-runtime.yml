@@ -1019,7 +1019,7 @@ jobs:
           retention-days: 30
 
   apply-reviewed-schema-plan:
-    name: Apply reviewed 0021–0049 plan through the existing OIDC workflow
+    name: Apply reviewed 0021–0050 plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]
     runs-on: ubuntu-24.04
@@ -1162,8 +1162,11 @@ jobs:
           if(blocker2.status!=="PASS"||blocker2.sourceRevision!==process.env.GITHUB_SHA) throw new Error("FINAL_ATTESTATION_GATE_NOT_PASS");
           if(schema.sourceRevision!==process.env.GITHUB_SHA||schema.state!=="PRESENT_SCHEMA_MATCH"||schema.readOnly!==true||schema.databaseCredentialReturned!==false) throw new Error("FINAL_SCHEMA_READBACK_NOT_MATCH");
           const expectedTags=manifest.migrations.map(item=>item.tag);
+          const requiredCausalReceiptV2Tag="0049_aurion_causal_receipt_v2";
+          if(!expectedTags.includes(requiredCausalReceiptV2Tag)) throw new Error("FINAL_SCHEMA_MANIFEST_0049_MISSING");
           if(!Array.isArray(schema.migrations)||schema.migrations.map(item=>item.tag).join(",")!==expectedTags.join(",")) throw new Error("FINAL_SCHEMA_WAVE_MISMATCH");
-          if(schema.migrations.at(-1)?.tag!=="0049_aurion_causal_receipt_v2") throw new Error("FINAL_SCHEMA_0049_MISSING");
+          if(!schema.migrations.some(item=>item.tag===requiredCausalReceiptV2Tag)) throw new Error("FINAL_SCHEMA_0049_MISSING");
+          if(schema.migrations.at(-1)?.tag!==expectedTags.at(-1)) throw new Error("FINAL_SCHEMA_LAST_MIGRATION_MISMATCH");
           if(schema.summary?.migrationCount!==expectedTags.length||schema.summary?.matchCount!==expectedTags.length||schema.summary?.absentCount!==0||schema.summary?.driftCount!==0) throw new Error("FINAL_SCHEMA_SUMMARY_MISMATCH");
           if(installed.buildInputDigest!==identity.buildInputDigest||installed.artifactDigest!==identity.artifactDigest||installed.runtimeImageDigest!==identity.runtimeImageDigest||installed.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_INSTALLED_DIGEST_MISMATCH");
           if(health.revision!==identity.sourceRevision||health.buildInputDigest!==identity.buildInputDigest||health.artifactDigest!==identity.artifactDigest||health.runtimeImageDigest!==identity.runtimeImageDigest||health.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_PUBLIC_DIGEST_MISMATCH");
@@ -1182,7 +1185,8 @@ jobs:
             databaseConnectivity:"authenticated_select_1",
             schemaState:"PRESENT_SCHEMA_MATCH",
             schemaMigrationCount:expectedTags.length,
-            schemaLastMigration:"0049_aurion_causal_receipt_v2",
+            schemaCausalReceiptV2Present:true,
+            schemaLastMigration:expectedTags.at(-1),
             attestationStatus:"PASS"
           };
           const observed={
@@ -1197,6 +1201,7 @@ jobs:
             databaseConnectivity:installed.databaseConnectivity,
             schemaState:schema.state,
             schemaMigrationCount:schema.summary?.matchCount,
+            schemaCausalReceiptV2Present:schema.migrations.some(item=>item.tag===requiredCausalReceiptV2Tag),
             schemaLastMigration:schema.migrations.at(-1)?.tag,
             attestationStatus:blocker2.status
           };
@@ -1205,8 +1210,8 @@ jobs:
             schemaVersion:"aurion.milestone.gate-evidence.v1",
             gateId:"AURION-M21-B1-PRODUCTION",
             scope:"production",
-            passCriteria:["exact merged main revision promoted through canonical control plane","signed build/runtime identities bind immutable digests","root-authored installed readback and public TLS health agree","authenticated database SELECT succeeded","production schema is exact 0021-0049 PRESENT_SCHEMA_MATCH"],
-            failCriteria:["manual or mutable promotion","revision/digest drift","missing attestation","public/internal identity mismatch","production schema drift or missing 0049"],
+            passCriteria:["exact merged main revision promoted through canonical control plane","signed build/runtime identities bind immutable digests","root-authored installed readback and public TLS health agree","authenticated database SELECT succeeded","production schema exactly matches the canonical migration manifest and retains 0049 causal receipt v2"],
+            failCriteria:["manual or mutable promotion","revision/digest drift","missing attestation","public/internal identity mismatch","production schema drift or missing 0049 causal receipt v2"],
             sourceRevision:identity.sourceRevision,
             mergeSha:identity.mergeSha,
             authenticatedReadback:true,

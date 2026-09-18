@@ -45,6 +45,7 @@ export type UploadedWorldVisualPlacement = Readonly<{
   xMm: number;
   zMm: number;
   rotationQuarterTurns: 0 | 1 | 2 | 3;
+  scalePermille?: number;
 }>;
 
 const ENVIRONMENT_ANCHORS = Object.freeze([

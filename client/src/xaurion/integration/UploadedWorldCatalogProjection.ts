@@ -1,6 +1,7 @@
 import { releaseGlbTree } from "../core/GlbModelLease";
 import * as THREE from "three";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
+import type { WorldDesignReadback } from "@shared/aurionAuthoringContract";
 import { splitWorldChunkPositionMm, type WorldChunkCoordinate } from "@shared/worldChunkProtocol";
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
@@ -41,6 +42,7 @@ function staticRenderable(scene: THREE.Group): boolean {
 export class UploadedWorldCatalogProjection {
   readonly root = new THREE.Group();
   private catalog: GlbRuntimeCatalog | null = null;
+  private worldDesign: WorldDesignReadback | null = null;
   private readonly rendered = new Map<string, Rendered>();
   private readonly pending = new Set<string>();
   private signature = "";
@@ -58,6 +60,13 @@ export class UploadedWorldCatalogProjection {
     this.signature = "";
   }
 
+  setWorldDesign(worldDesign: WorldDesignReadback | null): void {
+    if (this.disposed) return;
+    if (this.worldDesign?.revision === worldDesign?.revision) return;
+    this.worldDesign = worldDesign;
+    this.signature = "";
+  }
+
   private desired(position: { x: number; z: number }): { center: WorldChunkCoordinate; placements: UploadedWorldVisualPlacement[] } {
     if (!this.catalog) return { center: { x: 0, z: 0 }, placements: [] };
     const center = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
@@ -67,6 +76,27 @@ export class UploadedWorldCatalogProjection {
     }
     const returnStone = returnStoneVisualPlacement(this.catalog);
     if (returnStone && Math.abs(center.x) <= 1 && Math.abs(center.z) <= 1) placements.push(returnStone);
+
+    for (const design of this.worldDesign?.designs ?? []) {
+      for (const placement of design.placements) {
+        if (Math.abs(placement.chunkX - center.x) > 1 || Math.abs(placement.chunkZ - center.z) > 1) continue;
+        const asset = this.catalog.entries.find(entry =>
+          entry.assetId === placement.assetId
+          && entry.targetKey === null
+          && entry.assetType === "arena"
+          && (entry.purpose === "world-environment" || entry.purpose === "world-nature")
+        );
+        if (!asset) continue;
+        placements.push(Object.freeze({
+          id: `authored:${design.designHash.slice(0, 12)}:${placement.placementKey}`,
+          asset,
+          xMm: placement.chunkX * 64_000 + placement.xMm,
+          zMm: placement.chunkZ * 64_000 + placement.zMm,
+          rotationQuarterTurns: placement.rotationQuarterTurns,
+          scalePermille: placement.scalePermille,
+        }));
+      }
+    }
     placements.sort((left, right) => {
       const ld = Math.hypot(left.xMm / 1000 - position.x, left.zMm / 1000 - position.z);
       const rd = Math.hypot(right.xMm / 1000 - position.x, right.zMm / 1000 - position.z);
@@ -104,7 +134,7 @@ export class UploadedWorldCatalogProjection {
       const size = bounds.getSize(new THREE.Vector3());
       const maxDimension = Math.max(size.x, size.y, size.z);
       if (!Number.isFinite(maxDimension) || maxDimension <= 0.0001) return;
-      const scale = THREE.MathUtils.clamp(targetSizeMeters(placement.asset.subcategory) / maxDimension, 0.05, 12);
+      const scale = THREE.MathUtils.clamp((targetSizeMeters(placement.asset.subcategory) / maxDimension) * ((placement.scalePermille ?? 1_000) / 1_000), 0.05, 12);
       const center = bounds.getCenter(new THREE.Vector3());
       const worldX = placement.xMm / 1000;
       const worldZ = placement.zMm / 1000;
@@ -142,7 +172,7 @@ export class UploadedWorldCatalogProjection {
     const { center, placements } = this.desired(position);
     const originX = center.x * 64;
     const originZ = center.z * 64;
-    const nextSignature = `${this.catalog?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${(value.asset.lods ?? []).map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
+    const nextSignature = `${this.catalog?.revision ?? "none"}:${this.worldDesign?.revision ?? "none"}:${center.x}:${center.z}:${placements.map(value => `${value.id}:${value.asset.sha256}:${value.scalePermille ?? 1000}:${(value.asset.lods ?? []).map(lod => `${lod.level}:${lod.sha256}`).join(",")}`).join("|")}`;
     if (nextSignature === this.signature) return;
     this.signature = nextSignature;
     this.root.position.set(originX, 0, originZ);
@@ -152,7 +182,7 @@ export class UploadedWorldCatalogProjection {
   }
 
   evidence() {
-    return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED,
+    return Object.freeze({ catalogRevision: this.catalog?.revision ?? null, worldDesignRevision: this.worldDesign?.revision ?? null, rendered: this.rendered.size, pending: this.pending.size, maxRendered: MAX_RENDERED,
       assets: Object.freeze([...this.rendered.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, value]) => Object.freeze({ id, sha256: value.sha256, lodLevels: value.lodLevels }))) });
   }
 

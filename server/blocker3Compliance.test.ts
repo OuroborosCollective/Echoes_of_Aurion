@@ -13,13 +13,15 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
     const drizzle = readFileSync("drizzle/aurionCausalitySchema.ts", "utf8");
     const persistence = readFileSync("server/causality/persistence.ts", "utf8");
 
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.find((entry: { tag: string }) => entry.tag === "0049_aurion_causal_receipt_v2")).toMatchObject({
       idx: 49,
       tag: "0049_aurion_causal_receipt_v2",
     });
-    expect(journal.entries).toHaveLength(50);
-    expect(manifest.waveId).toBe("aurion-production-0021-0049");
-    expect(manifest.migrations.at(-1)?.tag).toBe("0049_aurion_causal_receipt_v2");
+    expect(journal.entries).toHaveLength(51);
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 50, tag: "0050_aurion_human_ai_authoring" });
+    expect(manifest.waveId).toBe("aurion-production-0021-0050");
+    expect(manifest.migrations.some((migration: { tag: string }) => migration.tag === "0049_aurion_causal_receipt_v2")).toBe(true);
+    expect(manifest.migrations.at(-1)?.tag).toBe("0050_aurion_human_ai_authoring");
 
     expect(sql).toContain("ADD COLUMN `receiptSchema`");
     expect(sql).toContain("ADD COLUMN `stageReceiptsJson`");
