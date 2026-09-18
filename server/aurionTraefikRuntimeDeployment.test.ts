@@ -176,6 +176,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
 
   it("uses Traefik labels and a root-managed secret environment file", () => {
     expect(compose).toContain("${AURION_ENV_FILE:?AURION_ENV_FILE must point to the root-managed production environment}");
+    expect(compose).toContain("AURION_ADMIN_MCP_RESOURCE_URL: https://${AURION_DOMAIN:-arelogic.space}/admin-mcp");
     expect(compose).toContain("traefik.enable=true");
     expect(compose).toContain("traefik.docker.network=${TRAEFIK_NETWORK:-areloria_arelorian-network}");
     expect(compose).toContain("traefik.http.routers.aurion.rule=Host(`${AURION_DOMAIN:-arelogic.space}`)");
