@@ -95,7 +95,7 @@ describe("live Game Development Studio runtime boundary", () => {
         capabilitiesSchema: "game_dev.capabilities.v1",
         doctorSchema: "game_dev.doctor.v1",
         providerCalls: false,
-        boundary: "approved-live-glb-catalog-only",
+        boundary: "human-confirmed-package-vendor-live-admission",
         error: null,
       });
       const auditRows = fs.readFileSync(audit, "utf8").trim().split("\n").map(line => JSON.parse(line));
