@@ -212,17 +212,37 @@ export class AdminQuestStudioService {
     return { receipt, templateSetHash: this.templateRegistry.getTemplateSetHash(), template: plan.template };
   }
 
-  public async offerQuest(params: { playerUserId: number; giverNpcId: string; triggerEventId: string }) {
+  public async availableQuests() {
     await this.ensureHydrated();
+    const { eligibleTemplates } = CandidateResolver.resolveCandidates(this.templateRegistry.getActiveTemplates(), this.worldFactEngine.getFacts());
+    return eligibleTemplates.map(template => ({
+      templateId: template.templateId,
+      version: template.version,
+      title: template.title,
+      description: template.description,
+      roles: template.roles.map(role => role.roleName),
+      nodeCount: template.nodes.length,
+    }));
+  }
+
+  public async offerQuest(params: { playerUserId: number; templateId: string }) {
+    await this.ensureHydrated();
+    const event = this.worldFactEngine.getEvents().at(-1);
+    if (!event) throw new Error("QUEST_CANONICAL_TRIGGER_EVENT_REQUIRED");
     const { instance, plan } = this.runtimeEngine.compileAndOfferQuest({
       worldId: "echoes-of-aurion-global",
       playerUserId: params.playerUserId,
-      giverNpcId: params.giverNpcId,
-      triggerEventId: params.triggerEventId,
+      triggerEventId: event.id,
+      requestedTemplateId: params.templateId,
     });
     await this.persistenceEngine.savePlan(plan);
     await this.persistenceEngine.saveInstance(instance);
     return { instance, planHash: plan.planHash, graphHash: plan.graphHash };
+  }
+
+  public async playerQuestDetails(userId: number, instanceId: string) {
+    const { instance, plan } = await this.ownedInstance(userId, instanceId);
+    return { instance, plan };
   }
 
   private async ownedInstance(userId: number, instanceId: string) {
