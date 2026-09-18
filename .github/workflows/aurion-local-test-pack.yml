@@ -89,6 +89,11 @@ jobs:
           mkdir -p .aurion-local-test-pack/evidence
           pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
           pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
+      - name: Verify donor/runtime ownership ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm verify:donor-ledger 2>&1 | tee .aurion-local-test-pack/evidence/donor-ledger.log
       - name: Typecheck and classless regressions
         shell: bash
         run: |
