@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { evaluateGateEvidence, GATE_EVIDENCE_SCHEMA } from "./aurion-milestone-gate-evidence.mjs";
 
@@ -85,4 +86,15 @@ test("secret-like values fail closed", () => {
   const result = evaluateGateEvidence(candidate);
   assert.equal(result.status, "FAIL");
   assert.ok(result.errors.some(error => error.startsWith("secret:")));
+});
+
+test("evidence machinery is absent from deterministic authority hot paths", () => {
+  for (const source of [
+    "server/zoneRuntime.ts",
+    "server/causality/tickRecorder.ts",
+    "server/causality/replayZoneTick.ts",
+  ]) {
+    const text = readFileSync(source, "utf8");
+    assert.doesNotMatch(text, /aurion-milestone-gate-evidence|milestone\.gate-evidence/);
+  }
 });
