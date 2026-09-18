@@ -44,6 +44,11 @@ export class QuestValidator {
       }
       for (const node of template.nodes) if (!visited.has(node.id)) diagnostics.push({ code: "UNREACHABLE_NODE", message: `Quest node ${node.id} is unreachable.`, severity: "error" });
     }
+    for (const node of template.nodes) {
+      if (node.type === "objective" && !node.objective?.eventBinding) {
+        diagnostics.push({ code: "OBJECTIVE_EVENT_BINDING_REQUIRED", message: `Quest objective ${node.id} has no confirmed Aurion event binding.`, severity: "error" });
+      }
+    }
     const outcomeIds = template.outcomes.map(outcome => outcome.id);
     if (new Set(outcomeIds).size !== outcomeIds.length) diagnostics.push({ code: "DUPLICATE_OUTCOME_ID", message: "Quest template contains duplicate outcome ids.", severity: "error" });
     for (const outcome of template.outcomes) for (const reward of outcome.rewards) {
