@@ -978,3 +978,10 @@ Status: VERIFIED pre-merge on exact technical head.
 Änderung: Der private Root-Reconciliation-Proof prüft MariaDB-Readiness und Readback-User-Provisioning über authentifiziertes TCP auf `127.0.0.1:3306` statt über den während Container-Initialisierung flüchtigen Unix-Socket; der Migrationsschritt ist korrekt als 0021–0050 bezeichnet.
 Erkenntnis: Ein kurzzeitig vorhandener MariaDB-Socket ist kein stabiler Readiness-Vertrag; belastbar ist erst ein erfolgreicher authentifizierter Query über den dauerhaft genutzten TCP-Listener, ohne Host-Port-Publishing.
 Evidence: Exact technical head `1e6069eee7d904baa4f36806dccadeeb5c706cf7`; Root Reconciliation `35335761903` PASS; Zone Schema Bootstrap `35335761807` PASS; Runtime Candidate `35335761982` PASS; Runtime Container Proof `35335761802` PASS; Local Test Pack `35335761966` PASS.
+
+
+### 2026-09-18 — Wave 2 Step 22 World Causal Root
+Status: VERIFIED pre-merge on exact technical head.
+Änderung: Aurion bindet den globalen Epoch-Receipt nun evidence-only an kanonisch sortierte, revisions-/rulesetgebundene Zone-Roots samt Previous-World-Root; fehlende oder widersprüchliche Evidence bleibt UNPROVABLE und mutiert keine Gameplay-Authority.
+Erkenntnis: Weltkausalität ist erst belegbar, wenn Zone-Runtime und Epoch-Resolver dieselbe kanonische World-ID verwenden und der persistierte Root aus echten MariaDB-Receipts unabhängig reproduziert wird; Content-Regionen dürfen nicht als aktive Causal-Zonen erfunden werden.
+Evidence: Pre-Memory exact head `d18ea5a7137d266331dbb112e3e87356ba7b6191`; Local Test Pack `35361770356` PASS inkl. Step-22-MariaDB-Readback + Full Regression; Runtime Candidate `35361770479` PASS; Runtime Container Proof `35361770193` PASS.
