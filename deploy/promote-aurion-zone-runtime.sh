@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# aurion-traefik-promoter-protocol: 2
+# aurion-traefik-promoter-protocol: 3
 set -euo pipefail
 unset NODE_OPTIONS
 

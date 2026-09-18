@@ -615,30 +615,30 @@ jobs:
 
           installed=/usr/local/sbin/promote-aurion-zone-runtime
           legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad
-          promoter_needs_readback_replay=0
+          digest_unaware_promoter_sha256=8885f5a364b51df0e4f97796edf737b46b6caab1afa07f21e62538bb6fc39f86
           if ! sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"; then
             installed_promoter_sha256="$(sudo sha256sum "$installed" | awk '{print $1}')"
-            if [[ "$installed_promoter_sha256" == "$legacy_promoter_sha256" ]]; then
-              bootstrap_release_id="${bootstrap_expected_sha}-0"
-              set +e
-              sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
-              bootstrap_status=$?
-              set -e
-              printf 'legacy promoter bootstrap status=%s\n' "$bootstrap_status"
-              sudo test -x "$installed"
-              sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
-            elif sudo grep -Fqx '# aurion-traefik-promoter-protocol: 2' "$installed" || { sudo grep -Fq 'runtime_base=/opt/aurion-traefik-runtime' "$installed" && sudo grep -Fq 'image_id="$(docker image inspect' "$installed"; }; then
-              printf 'compatible promoter %s will receive the canonical artifact directly\n' "$installed_promoter_sha256"
-            else
-              printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
-              exit 70
-            fi
+            case "$installed_promoter_sha256" in
+              "$legacy_promoter_sha256"|"$digest_unaware_promoter_sha256")
+                bootstrap_release_id="${bootstrap_expected_sha}-0"
+                set +e
+                sudo /usr/local/sbin/promote-aurion-zone-runtime "${bootstrap_artifact}" "${bootstrap_expected_sha}" "${bootstrap_release_id}"
+                bootstrap_status=$?
+                set -e
+                printf 'bounded promoter bootstrap status=%s old_sha256=%s\n' "$bootstrap_status" "$installed_promoter_sha256"
+                sudo test -x "$installed"
+                sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
+                ;;
+              *)
+                printf 'refusing to invoke an unrecognized promoter: %s\n' "$installed_promoter_sha256" >&2
+                exit 70
+                ;;
+            esac
           fi
+          # The canonical production artifact may only be invoked after the
+          # installed root entrypoint is byte-identical to this revision.
+          sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"
           sudo /usr/local/sbin/promote-aurion-zone-runtime "${artifact}" "${EXPECTED_SHA}" "${RELEASE_ID}"
-
-          if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then
-            printf 'promoter readback replay required for revision=%s\n' "${EXPECTED_SHA}"
-          fi
 
           bash "$artifact/dist-production-reconcile/deploy/verify-aurion-installed-schema-tool" "$artifact/dist-production-reconcile/deploy/aurion-production-schema-reconcile" /usr/local/sbin/aurion-production-schema-reconcile
           sudo -n test -f /opt/echoes-of-aurion-schema-reconcile/current/manifest.json

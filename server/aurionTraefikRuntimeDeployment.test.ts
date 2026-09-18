@@ -246,10 +246,13 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("bootstrap runtime archive contains a legacy-incompatible path");
     expect(workflow).toContain("./patches/wouter-3.7.1.patch");
     expect(workflow).toContain("legacy_promoter_sha256=4e0a5f6d8829397923a37edaf36d52b0c0fc479e0e9b7e55e5c44f8366de69ad");
+    expect(workflow).toContain("digest_unaware_promoter_sha256=8885f5a364b51df0e4f97796edf737b46b6caab1afa07f21e62538bb6fc39f86");
+    expect(workflow).toContain("bounded promoter bootstrap status=%s old_sha256=%s");
     expect(workflow).toContain("refusing to invoke an unrecognized promoter");
-    expect(workflow).toContain("promoter_needs_readback_replay=0");
-    expect(workflow).toContain('if [[ "$promoter_needs_readback_replay" -eq 1 ]]; then');
-    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 2");
+    expect(workflow).toContain('sudo cmp -s "${artifact}/deploy/promote-aurion-zone-runtime.sh" "$installed"');
+    expect(workflow).not.toContain("compatible promoter %s will receive the canonical artifact directly");
+    expect(workflow).not.toContain("promoter_needs_readback_replay");
+    expect(promoter).toContain("# aurion-traefik-promoter-protocol: 3");
     expect(promoter).toContain("public_readback_dir=/var/lib/aurion-traefik-runtime-readback");
     expect(promoter).toContain('"recordType":"aurion_traefik_runtime_readback"');
     expect(promoter).toContain('chmod 0644 "$public_readback_tmp"');
