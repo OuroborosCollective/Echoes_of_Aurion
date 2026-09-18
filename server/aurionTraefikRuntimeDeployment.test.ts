@@ -267,6 +267,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain('body.buildInputDigest !== buildInputDigest');
     expect(promoter).toContain('body.artifactDigest !== artifactDigest');
     expect(promoter).toContain('body.runtimeImageDigest !== runtimeImageDigest');
+    expect(promoter).toContain('body.releaseArchiveDigest !== releaseArchiveDigest');
     expect(promoter).toContain('body.authority?.ruleset !== "aurion-zone-v3"');
     expect(promoter).toContain('body.authority?.tickHz !== 10');
     expect(promoter).toContain('body.authority?.causalReceipts !== true');

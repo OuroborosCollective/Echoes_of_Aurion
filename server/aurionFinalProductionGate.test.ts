@@ -6,9 +6,10 @@ describe("Blocker 1 final production proof contract", () => {
   const promoter = fs.readFileSync("deploy/promote-aurion-zone-runtime.sh", "utf8");
   const compose = fs.readFileSync("docker-compose.traefik.yml", "utf8");
   const schemaReadback = fs.readFileSync(".github/workflows/aurion-production-schema-readback.yml", "utf8");
+  const serverCore = fs.readFileSync("server/_core/index.ts", "utf8");
 
-  it("injects immutable build/artifact/image digests into production", () => {
-    for (const key of ["AURION_BUILD_INPUT_DIGEST","AURION_ARTIFACT_DIGEST","AURION_RUNTIME_IMAGE_DIGEST"]) {
+  it("injects immutable build/artifact/image/archive digests into production", () => {
+    for (const key of ["AURION_BUILD_INPUT_DIGEST","AURION_ARTIFACT_DIGEST","AURION_RUNTIME_IMAGE_DIGEST","AURION_RELEASE_ARCHIVE_DIGEST"]) {
       expect(compose).toContain(key);
       expect(promoter).toContain(`export ${key}=`);
     }
@@ -16,6 +17,7 @@ describe("Blocker 1 final production proof contract", () => {
     expect(promoter).toContain('build_input_digest="$(node --input-type=module');
     expect(promoter).toContain('artifact_digest="sha256:$(sha256sum');
     expect(promoter).toContain('release_archive_digest="sha256:$(sha256sum');
+    expect(serverCore).toContain('releaseArchiveDigest: releaseArchiveDigest || "UNVERIFIED"');
   });
 
   it("requires internal and public health to match immutable identity and authority", () => {
@@ -23,6 +25,7 @@ describe("Blocker 1 final production proof contract", () => {
       "health.buildInputDigest",
       "health.artifactDigest",
       "health.runtimeImageDigest",
+      "health.releaseArchiveDigest",
       'health.authority?.ruleset !== "aurion-zone-v3"',
       "health.authority?.tickHz !== 10",
       "health.authority?.causalReceipts !== true",
@@ -46,6 +49,7 @@ describe("Blocker 1 final production proof contract", () => {
     expect(workflow).toContain('--deny-self-hosted-runners');
     expect(workflow).toContain('schema.state!=="PRESENT_SCHEMA_MATCH"');
     expect(workflow).toContain('schema.migrations.at(-1)?.tag!=="0049_aurion_causal_receipt_v2"');
+    expect(workflow).toContain("health.releaseArchiveDigest!==identity.releaseArchiveDigest");
     expect(workflow).toContain('gateId:"AURION-M21-B1-PRODUCTION"');
     expect(workflow).toContain("authenticatedReadback:true");
   });

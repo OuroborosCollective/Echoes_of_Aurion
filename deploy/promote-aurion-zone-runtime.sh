@@ -254,6 +254,7 @@ export AURION_RELEASE_SHA="$expected_sha"
 export AURION_BUILD_INPUT_DIGEST="$build_input_digest"
 export AURION_ARTIFACT_DIGEST="$artifact_digest"
 export AURION_RUNTIME_IMAGE_DIGEST="$runtime_image_id"
+export AURION_RELEASE_ARCHIVE_DIGEST="$release_archive_digest"
 compose=(docker compose --project-name echoes-of-aurion --env-file "$runtime_env" -f "${release}/docker-compose.traefik.yml")
 phase=compose-promotion
 "${compose[@]}" config --quiet
@@ -279,6 +280,7 @@ for _attempt in $(seq 1 30); do
       -e "EXPECTED_BUILD_INPUT_DIGEST=$build_input_digest" \
       -e "EXPECTED_ARTIFACT_DIGEST=$artifact_digest" \
       -e "EXPECTED_RUNTIME_IMAGE_DIGEST=$runtime_image_id" \
+      -e "EXPECTED_RELEASE_ARCHIVE_DIGEST=$release_archive_digest" \
       "$container_id" node --input-type=module -e '
       const healthResponse = await fetch("http://127.0.0.1:3000/healthz");
       let health;
@@ -295,6 +297,7 @@ for _attempt in $(seq 1 30); do
         health.buildInputDigest !== process.env.EXPECTED_BUILD_INPUT_DIGEST ||
         health.artifactDigest !== process.env.EXPECTED_ARTIFACT_DIGEST ||
         health.runtimeImageDigest !== process.env.EXPECTED_RUNTIME_IMAGE_DIGEST ||
+        health.releaseArchiveDigest !== process.env.EXPECTED_RELEASE_ARCHIVE_DIGEST ||
         health.authority?.ruleset !== "aurion-zone-v3" ||
         health.authority?.tickHz !== 10 ||
         health.authority?.causalReceipts !== true
@@ -385,7 +388,7 @@ for _attempt in $(seq 1 30); do
       let raw = "";
       for await (const chunk of process.stdin) raw += chunk;
       const body = JSON.parse(raw);
-      const [revision, buildInputDigest, artifactDigest, runtimeImageDigest] = process.argv.slice(1);
+      const [revision, buildInputDigest, artifactDigest, runtimeImageDigest, releaseArchiveDigest] = process.argv.slice(1);
       if (
         body.status !== "ok" ||
         body.service !== "echoes-of-aurion" ||
@@ -393,11 +396,12 @@ for _attempt in $(seq 1 30); do
         body.buildInputDigest !== buildInputDigest ||
         body.artifactDigest !== artifactDigest ||
         body.runtimeImageDigest !== runtimeImageDigest ||
+        body.releaseArchiveDigest !== releaseArchiveDigest ||
         body.authority?.ruleset !== "aurion-zone-v3" ||
         body.authority?.tickHz !== 10 ||
         body.authority?.causalReceipts !== true
       ) process.exit(1);
-    ' "$expected_sha" "$build_input_digest" "$artifact_digest" "$runtime_image_id"; then
+    ' "$expected_sha" "$build_input_digest" "$artifact_digest" "$runtime_image_id" "$release_archive_digest"; then
       printf '%s\n' "$health_json"
       public_ready=1
       break

@@ -783,6 +783,7 @@ jobs:
                   health.buildInputDigest!==installed.buildInputDigest ||
                   health.artifactDigest!==installed.artifactDigest ||
                   health.runtimeImageDigest!==installed.runtimeImageDigest ||
+                  health.releaseArchiveDigest!==installed.releaseArchiveDigest ||
                   health.authority?.ruleset!==installed.authority?.ruleset ||
                   health.authority?.tickHz!==installed.authority?.tickHz ||
                   health.authority?.causalReceipts!==installed.authority?.causalReceipts
@@ -1165,7 +1166,7 @@ jobs:
           if(schema.migrations.at(-1)?.tag!=="0049_aurion_causal_receipt_v2") throw new Error("FINAL_SCHEMA_0049_MISSING");
           if(schema.summary?.migrationCount!==expectedTags.length||schema.summary?.matchCount!==expectedTags.length||schema.summary?.absentCount!==0||schema.summary?.driftCount!==0) throw new Error("FINAL_SCHEMA_SUMMARY_MISMATCH");
           if(installed.buildInputDigest!==identity.buildInputDigest||installed.artifactDigest!==identity.artifactDigest||installed.runtimeImageDigest!==identity.runtimeImageDigest||installed.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_INSTALLED_DIGEST_MISMATCH");
-          if(health.revision!==identity.sourceRevision||health.buildInputDigest!==identity.buildInputDigest||health.artifactDigest!==identity.artifactDigest||health.runtimeImageDigest!==identity.runtimeImageDigest) throw new Error("FINAL_PUBLIC_DIGEST_MISMATCH");
+          if(health.revision!==identity.sourceRevision||health.buildInputDigest!==identity.buildInputDigest||health.artifactDigest!==identity.artifactDigest||health.runtimeImageDigest!==identity.runtimeImageDigest||health.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_PUBLIC_DIGEST_MISMATCH");
           if(installed.authority?.ruleset!=="aurion-zone-v3"||installed.authority?.tickHz!==10||installed.authority?.causalReceipts!==true) throw new Error("FINAL_INSTALLED_AUTHORITY_MISMATCH");
           if(health.authority?.ruleset!=="aurion-zone-v3"||health.authority?.tickHz!==10||health.authority?.causalReceipts!==true) throw new Error("FINAL_PUBLIC_AUTHORITY_MISMATCH");
 
@@ -1189,7 +1190,7 @@ jobs:
             buildInputDigest:health.buildInputDigest,
             artifactDigest:health.artifactDigest,
             runtimeImageDigest:health.runtimeImageDigest,
-            releaseArchiveDigest:installed.releaseArchiveDigest,
+            releaseArchiveDigest:health.releaseArchiveDigest,
             authorityRuleset:health.authority?.ruleset,
             authorityTickHz:health.authority?.tickHz,
             causalReceipts:health.authority?.causalReceipts,
