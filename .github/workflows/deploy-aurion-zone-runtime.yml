@@ -67,6 +67,11 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: migration-ledger
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
 
     steps:
       - name: Guard repository scope
@@ -112,7 +117,11 @@ jobs:
           [[ "${{ needs.migration-ledger.outputs.plan_sha256 }}" =~ ^[a-f0-9]{64}$ ]]
           pnpm check
           pnpm test
-          node --test scripts/dispatch-aurion-schema-plan.test.mjs
+          node --test \
+            scripts/dispatch-aurion-schema-plan.test.mjs \
+            scripts/aurion-build-input-manifest.test.mjs \
+            scripts/aurion-release-attestation.test.mjs \
+            scripts/aurion-milestone-gate-evidence.test.mjs
           bash -n deploy/promote-aurion-zone-runtime.sh
           node --check deploy/verify-aurion-runtime-database.mjs
           node --check scripts/build-aurion-traefik-runtime-artifact.mjs
