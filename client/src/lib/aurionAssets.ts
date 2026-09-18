@@ -1,4 +1,3 @@
-import { wasdGlbCatalog, wasdGlbCatalogSummary, wasdGlbSourceRevision } from "./wasdGlbCatalog";
 import { aurionApiOrigin } from "./runtimeConfig";
 
 const staticDistribution = import.meta.env.VITE_AURION_STATIC_DISTRIBUTION === "true";
@@ -63,11 +62,5 @@ export const aurionAssets = {
     gardenParcels: resolveOnlineAsset("/manus-storage/aurion-terrain-garden-parcels_8810616b.png"),
     starpath: resolveOnlineAsset("/manus-storage/aurion-terrain-starpath_37c69d4b.png"),
     starpathCrossing: resolveOnlineAsset("/manus-storage/aurion-terrain-starpath-crossing_ead3a305.png"),
-  },
-  wasdGlb: {
-    sourceRevision: wasdGlbSourceRevision,
-    summary: wasdGlbCatalogSummary,
-    catalog: wasdGlbCatalog,
-    streamable: wasdGlbCatalog.filter(asset => asset.budgetStatus === "streamable"),
   },
 } as const;
