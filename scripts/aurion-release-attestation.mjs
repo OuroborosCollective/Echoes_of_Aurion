@@ -29,11 +29,14 @@ export function buildArtifactAttestationPredicate(input){
     buildInputDigest:requiredDigest(input.buildInputDigest,"BUILD_INPUT_DIGEST"),
     artifactDigest:requiredDigest(input.artifactDigest,"ARTIFACT_DIGEST"),
     releaseArchiveDigest:requiredDigest(input.releaseArchiveDigest,"RELEASE_ARCHIVE_DIGEST"),
+    secretScanReceiptDigest:requiredDigest(input.secretScanReceiptDigest,"SECRET_SCAN_RECEIPT_DIGEST"),
+    secretValuesReturned:input.secretValuesReturned,
     artifactName:"aurion-traefik-runtime-release.tgz",
     workflow:input.workflow,
     workflowRunId:String(input.workflowRunId??""),
   };
-  if(typeof predicate.workflow!=="string"||!predicate.workflow.trim()) throw new Error("RELEASE_IDENTITY_WORKFLOW_INVALID");
+  if(predicate.secretValuesReturned!==false) throw new Error("RELEASE_IDENTITY_SECRET_SCAN_NOT_CLEAN");
+    if(typeof predicate.workflow!=="string"||!predicate.workflow.trim()) throw new Error("RELEASE_IDENTITY_WORKFLOW_INVALID");
   if(!/^[1-9][0-9]*$/.test(predicate.workflowRunId)) throw new Error("RELEASE_IDENTITY_RUN_ID_INVALID");
   rejectSecrets(predicate);
   return Object.freeze(predicate);
