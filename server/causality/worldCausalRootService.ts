@@ -5,7 +5,6 @@ import {
   computeWorldCausalRoot,
   computeZoneEpochRoot,
   verifyWorldCausalRoot,
-  type AurionWorldCausalRoot,
   type AurionWorldCausalRootResult,
   type AurionZoneReceiptReference,
 } from "../../shared/aurionWorldCausalRootContract";
