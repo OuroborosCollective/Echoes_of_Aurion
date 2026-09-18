@@ -48,6 +48,24 @@ function runtimeScanFiles(root) {
   return [...set].sort();
 }
 
+export function donorDerivedSurfaceFiles(root = process.cwd()) {
+  const roots = ["server", "shared", "client/src/xaurion"];
+  const files = new Set();
+  for (const relativeRoot of roots) {
+    for (const file of relativeFiles(root, relativeRoot)) {
+      if (/\.(?:test|spec)\.[^.]+$/.test(file)) continue;
+      if (!/\.(?:ts|tsx|js|mjs|cjs)$/.test(file)) continue;
+      if (
+        file.startsWith("server/wasd") ||
+        file.startsWith("server/ax1") ||
+        file.startsWith("shared/ax1") ||
+        file.startsWith("client/src/xaurion/")
+      ) files.add(file);
+    }
+  }
+  return [...files].sort();
+}
+
 export function externalRuntimeDependencyFindings(records) {
   const patterns = [
     ["legacy-wasd-runtime-name", /wasd-runtime-legacy/i],
@@ -158,6 +176,34 @@ export function validateDonorLedgerObject(ledger, options = {}) {
       if (capability.donorRuntimeRequired !== false) fail("PRODUCTIVE_CAPABILITY_REQUIRES_DONOR_RUNTIME", id);
       if (!SHA40.test(capability.ownershipRevision ?? "")) fail("CAPABILITY_OWNERSHIP_REVISION_INVALID", id);
     }
+  }
+
+  const capabilityById = new Map(capabilities.map(capability => [capability?.capabilityId, capability]));
+  const surfaces = Array.isArray(ledger.surfaceInventory) ? ledger.surfaceInventory : [];
+  if (surfaces.length === 0) fail("DONOR_SURFACE_INVENTORY_EMPTY", "surfaceInventory");
+  const surfacePaths = new Set();
+  for (const surface of surfaces) {
+    const surfacePath = surface?.path;
+    if (typeof surfacePath !== "string" || !surfacePath) {
+      fail("DONOR_SURFACE_PATH_INVALID", String(surfacePath));
+      continue;
+    }
+    if (surfacePaths.has(surfacePath)) fail("DONOR_SURFACE_DUPLICATE", surfacePath);
+    else surfacePaths.add(surfacePath);
+    if (!pathExists(root, surfacePath)) fail("DONOR_SURFACE_PATH_MISSING", surfacePath);
+    if (!["CAPABILITY", "SUPPORT"].includes(surface?.role)) fail("DONOR_SURFACE_ROLE_INVALID", `${surfacePath}:${surface?.role}`);
+    const capability = capabilityById.get(surface?.capabilityId);
+    if (!capability) fail("DONOR_SURFACE_CAPABILITY_UNKNOWN", `${surfacePath}:${surface?.capabilityId}`);
+    else if (capability.donor !== surface?.donor) fail("DONOR_SURFACE_DONOR_MISMATCH", `${surfacePath}:${surface?.donor}:${capability.donor}`);
+  }
+
+  const discoveredSurfaces = donorDerivedSurfaceFiles(root);
+  const discoveredSet = new Set(discoveredSurfaces);
+  for (const file of discoveredSurfaces) {
+    if (!surfacePaths.has(file)) fail("DONOR_SURFACE_UNINVENTORIED", file);
+  }
+  for (const surfacePath of surfacePaths) {
+    if (!discoveredSet.has(surfacePath)) fail("DONOR_SURFACE_STALE", surfacePath);
   }
 
   for (const [donorName, donor] of Object.entries(donors)) {
