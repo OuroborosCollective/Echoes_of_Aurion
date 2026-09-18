@@ -467,17 +467,25 @@ jobs:
           set -euo pipefail
           test -f "${ATTESTATION_BUNDLE}"
           cp "${ATTESTATION_BUNDLE}" aurion-release-artifact-attestation.sigstore.json
-          gh attestation verify aurion-traefik-runtime-release.tgz --repo "${GITHUB_REPOSITORY}"
+          verify_artifact() {
+            gh attestation verify aurion-traefik-runtime-release.tgz \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml" \
+              --source-digest "${GITHUB_SHA}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1"
+          }
+          verify_artifact
           cp aurion-traefik-runtime-release.tgz aurion-traefik-runtime-release.tgz.untampered
           printf '\0' >> aurion-traefik-runtime-release.tgz
           set +e
-          gh attestation verify aurion-traefik-runtime-release.tgz --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1
+          verify_artifact >/dev/null 2>&1
           tamper_status=$?
           set -e
           test "${tamper_status}" -ne 0
           mv aurion-traefik-runtime-release.tgz.untampered aurion-traefik-runtime-release.tgz
           sha256sum --strict -c aurion-release-artifact-subject.sha256
-          gh attestation verify aurion-traefik-runtime-release.tgz --repo "${GITHUB_REPOSITORY}"
+          verify_artifact
           node --input-type=module <<'NODE'
           import { createHash } from "node:crypto";
           import fs from "node:fs";
