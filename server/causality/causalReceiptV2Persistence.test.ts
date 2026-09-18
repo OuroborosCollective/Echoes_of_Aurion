@@ -67,7 +67,7 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     ]));
 
     const [journal] = await pool.query("SELECT COUNT(*) AS rowCount FROM __drizzle_migrations");
-    expect(Number((journal as Array<{ rowCount: number | string }>)[0]?.rowCount)).toBe(50);
+    expect(Number((journal as Array<{ rowCount: number | string }>)[0]?.rowCount )).toBe(51);
   });
 
   it("round-trips v2 stage evidence through MariaDB and verifies the persisted receipt hash", async () => {
