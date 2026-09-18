@@ -122,6 +122,7 @@ jobs:
             scripts/dispatch-aurion-schema-plan.test.mjs \
             scripts/aurion-build-input-manifest.test.mjs \
             scripts/aurion-release-attestation.test.mjs \
+            scripts/scan-aurion-release-secrets.test.mjs \
             scripts/aurion-milestone-gate-evidence.test.mjs
           bash -n deploy/promote-aurion-zone-runtime.sh
           node --check deploy/verify-aurion-runtime-database.mjs
@@ -187,7 +188,7 @@ jobs:
           if(manifest.schemaVersion!==1||manifest.recordType!=="aurion_traefik_runtime_artifact") throw new Error("unexpected Traefik runtime artifact");
           if(manifest.revision!==process.env.GITHUB_SHA) throw new Error("Traefik runtime revision mismatch");
           if(manifest.buildInputManifest!=="build-input-manifest.json"||!/^sha256:[a-f0-9]{64}$/.test(manifest.buildInputDigest??"")) throw new Error("Traefik runtime build input identity missing");
-          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","build-input-manifest.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
+          for(const file of ["Dockerfile","docker-compose.traefik.yml","deploy/promote-aurion-zone-runtime.sh","deploy/aurion-traefik-runtime.environment.template","deploy/verify-aurion-runtime-database.mjs","dist/.aurion-runtime-build.json","build-input-manifest.json","release-secret-scan.json","runtime-node_modules.tgz"]) if(!manifest.files?.[file]) throw new Error(`Traefik runtime artifact is missing ${file}`);
           NODE
           (cd dist-traefik-runtime && sha256sum --strict -c checksums.sha256)
           runtime_verify_image="echoes-of-aurion:verify-${GITHUB_SHA}"
@@ -415,6 +416,8 @@ jobs:
             buildInputDigest:runtime.buildInputDigest,
             artifactDigest:sha256("dist-traefik-runtime/checksums.sha256"),
             releaseArchiveDigest:sha256("aurion-traefik-runtime-release.tgz"),
+            secretScanReceiptDigest:`sha256:${runtime.secretScan?.receiptSha256 ?? ""}`,
+            secretValuesReturned:runtime.secretScan?.secretValuesReturned,
             workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
             workflowRunId:process.env.GITHUB_RUN_ID,
           });
