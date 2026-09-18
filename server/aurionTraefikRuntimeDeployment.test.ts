@@ -241,11 +241,9 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).not.toContain("{{range .RepoDigests}}");
     expect(workflow).toContain("one-time promoter bootstrap artifact");
     expect(workflow).toContain("runtime-bootstrap-artifact");
-    expect(workflow).toContain("bootstrap_current_promoter()");
     expect(workflow).toContain('bootstrap_release_id="${bootstrap_expected_sha}-0"');
-    expect(workflow).toContain("bootstrap_current_promoter legacy");
-    expect(workflow).toContain("bootstrap_current_promoter compatible");
-    expect(workflow).toContain("will bootstrap the canonical promoter before production");
+    expect(workflow).toContain("requires bootstrap to the canonical promoter before production");
+    expect(workflow).toContain("compatible promoter bootstrap status=%s");
     expect(workflow).not.toContain("will receive the canonical artifact directly");
     expect(workflow).toContain("bootstrap-identity.json.sha256");
     expect(workflow).toContain("bootstrap runtime archive contains a legacy-incompatible path");
