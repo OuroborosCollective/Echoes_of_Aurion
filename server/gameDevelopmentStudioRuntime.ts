@@ -64,7 +64,39 @@ function schemaName(value: GameDevJson): string | null {
   return typeof candidate === "string" && candidate.length <= 160 ? candidate : null;
 }
 
+function assertAllowedGameDevCommand(args: readonly string[]): void {
+  const exactReadOnly = args.length === 1 && (args[0] === "--version" || args[0] === "--help");
+  const command = `${args[0] ?? ""} ${args[1] ?? ""}`.trim();
+  const allowed = new Set([
+    "capabilities --output-dir",
+    "doctor --output-dir",
+    "asset inspect",
+    "asset validate",
+    "package build",
+    "package verify",
+    "vendor admit",
+  ]);
+  if (!exactReadOnly && !allowed.has(command)) throw new Error("GAME_DEV_COMMAND_NOT_ALLOWED");
+
+  const forbiddenFlags = new Set([
+    "--approve-spend",
+    "--allow-unknown-license",
+    "--allow-invalid",
+    "--allow-gpu",
+    "--allow-performance",
+  ]);
+  if (args.some(argument => forbiddenFlags.has(argument))) throw new Error("GAME_DEV_COMMAND_NOT_ALLOWED");
+
+  const workspace = path.resolve(gameDevelopmentStudioWorkspaceRoot());
+  for (const argument of args) {
+    if (!path.isAbsolute(argument)) continue;
+    const relative = path.relative(workspace, path.resolve(argument));
+    if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("GAME_DEV_PATH_OUTSIDE_WORKSPACE");
+  }
+}
+
 export async function runGameDevelopmentStudioCommand(args: readonly string[], timeout = 20_000): Promise<string> {
+  assertAllowedGameDevCommand(args);
   const result = await execFileAsync(gameDevBinary(), [...args], {
     env: safeRuntimeEnvironment(),
     timeout,
