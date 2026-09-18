@@ -2,7 +2,12 @@ import type { CanonicalZoneState } from "./zoneCanonicalState";
 import { hashCanonicalZoneState } from "./zoneCanonicalState";
 import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import { orderCanonicalZoneIntents, hashCanonicalIntents } from "../../shared/aurionZoneIntentContract";
-import type { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
+import {
+  AURION_CAUSAL_TICK_SCHEMA_V2,
+  type AurionCausalStageReceipt,
+  type AurionCausalTickReceipt,
+} from "../../shared/aurionCausalTickContract";
+import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 import {
   replayFirstDivergence,
   replayMatch,
@@ -28,11 +33,67 @@ function contextFor(receipt: AurionCausalTickReceipt): ReplayVerdictContext {
   };
 }
 
+function stageHash(stage: AurionCausalStageReceipt): string {
+  return canonicalSha256({
+    stageName: stage.stageName,
+    stageOrdinal: stage.stageOrdinal,
+    stageInputIdentity: stage.stageInputIdentity,
+    canonicalStateHash: stage.canonicalStateHash,
+    transitionHash: stage.transitionHash,
+  });
+}
+
+function firstV2StageDivergence(
+  context: ReplayVerdictContext,
+  verified: string[],
+  tick: number,
+  expected: readonly AurionCausalStageReceipt[],
+  observed: readonly AurionCausalStageReceipt[],
+): ReplayVerdict | null {
+  const count = Math.max(expected.length, observed.length);
+  for (let index = 0; index < count; index += 1) {
+    const expectedStage = expected[index];
+    const observedStage = observed[index];
+    const stageName = expectedStage?.stageName ?? observedStage?.stageName ?? `AUTHORITY_STAGE_${index + 1}`;
+    if (!expectedStage || !observedStage) {
+      return replayFirstDivergence(context, verified, {
+        stage: stageName,
+        tick,
+        expected: expectedStage ? stageHash(expectedStage) : "MISSING",
+        observed: observedStage ? stageHash(observedStage) : "MISSING",
+        diffDetails: `Authority stage set diverged at ordinal ${index + 1}`,
+      });
+    }
+
+    const expectedHash = stageHash(expectedStage);
+    const observedHash = stageHash(observedStage);
+    if (expectedHash !== observedHash) {
+      return replayFirstDivergence(context, verified, {
+        stage: stageName,
+        tick,
+        expected: expectedHash,
+        observed: observedHash,
+        expectedHash,
+        observedHash,
+        diffDetails:
+          `Authority stage ${stageName} diverged: ` +
+          `input ${expectedStage.stageInputIdentity} vs ${observedStage.stageInputIdentity}; ` +
+          `state ${expectedStage.canonicalStateHash} vs ${observedStage.canonicalStateHash}; ` +
+          `transition ${expectedStage.transitionHash} vs ${observedStage.transitionHash}`,
+      });
+    }
+    verified.push(`AUTHORITY:${stageName}`);
+  }
+  return null;
+}
+
 /**
  * Re-executes one tick without persistence, broadcasts or live-state mutation.
- * Receipt v1 proves PRE, canonical INPUT_ORDER, resulting POST and the receipt
- * identity. Intermediate per-phase hashes are not present in v1 and therefore
- * remain unverified rather than being reported as verified.
+ *
+ * v1 semantics stay frozen: PRE -> INPUT_ORDER -> POST -> RECEIPT are the only
+ * observable stages. v2 additionally compares every authority phase in order
+ * and returns immediately at the first divergent phase; projection/transport
+ * is deliberately outside the receipt.
  */
 export function replayZoneTick(input: ReplayInput): ReplayVerdict {
   const { preState, intents, expectedReceipt } = input;
@@ -79,9 +140,27 @@ export function replayZoneTick(input: ReplayInput): ReplayVerdict {
   const zone = new AuthoritativeMovementZone(preState.zoneId as any);
   zone.isReplay = true;
   zone.sourceRevisionOverride = expectedReceipt.sourceRevision;
+  zone.receiptSchemaOverride = expectedReceipt.schema;
   zone.restoreFromCanonicalState(preState, expectedReceipt.previousReceiptHash);
   for (const intent of orderedIntents) zone.enqueueIntent(intent);
   zone.tick();
+
+  const replayReceipt = zone.getLatestReceipt();
+  if (!replayReceipt) return replayUnprovable(context, verified, "REPLAY_RECEIPT_MISSING", { tick });
+
+  if (expectedReceipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2) {
+    if (replayReceipt.schema !== AURION_CAUSAL_TICK_SCHEMA_V2) {
+      return replayUnprovable(context, verified, "REPLAY_V2_STAGE_EVIDENCE_MISSING", { tick });
+    }
+    const stageVerdict = firstV2StageDivergence(
+      context,
+      verified,
+      tick,
+      expectedReceipt.stages,
+      replayReceipt.stages,
+    );
+    if (stageVerdict) return stageVerdict;
+  }
 
   const postState = zone.getCanonicalZoneState();
   const computedPostStateHash = hashCanonicalZoneState(postState);
@@ -98,8 +177,6 @@ export function replayZoneTick(input: ReplayInput): ReplayVerdict {
   }
   verified.push("POST_STATE");
 
-  const replayReceipt = zone.getLatestReceipt();
-  if (!replayReceipt) return replayUnprovable(context, verified, "REPLAY_RECEIPT_MISSING", { tick });
   if (replayReceipt.receiptHash !== expectedReceipt.receiptHash) {
     return replayFirstDivergence(context, verified, {
       stage: "RECEIPT",
