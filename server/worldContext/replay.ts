@@ -7,12 +7,17 @@ import {
   hashWorldContextCapsule,
   hashWorldContextQuery,
 } from "../../shared/aurionWorldContextCanonicalHash";
+import {
+  replayFirstDivergence,
+  replayMatch,
+  replayUnprovable,
+  type ReplayVerdict,
+  type ReplayVerdictContext,
+} from "../../shared/aurionReplayContract";
+import { activeProvenance } from "../aurionProvenance";
 import { selectContextEntries } from "./selector";
 
-export type WorldContextReplayVerdict =
-  | { status: "MATCH"; capsuleHash: string; stagesVerified: number }
-  | { status: "FIRST_DIVERGENCE"; stage: string; expected: string; observed: string }
-  | { status: "UNPROVABLE"; reason: string };
+export type WorldContextReplayVerdict = ReplayVerdict;
 
 export interface ReplayContextCapsuleInput {
   expectedCapsule: WorldContextCapsule;
@@ -20,98 +25,104 @@ export interface ReplayContextCapsuleInput {
   sources: readonly CanonicalContextSource[];
 }
 
+function contextFor(input: ReplayContextCapsuleInput): ReplayVerdictContext {
+  return {
+    domain: "WORLD_CONTEXT",
+    sourceRevision: activeProvenance.sourceRevision,
+    rulesetVersion: input.query.policyVersion,
+    scopeIdentity: {
+      worldId: input.query.worldId,
+      actorId: input.query.actorId,
+      capsuleHash: input.expectedCapsule.capsuleHash,
+    },
+    range: { fromTick: input.query.logicalTick, toTick: input.query.logicalTick },
+  };
+}
+
 /**
  * Deterministically replays the construction of a WorldContextCapsule.
- * Verifies stage-by-stage causality and pinpoints first divergence.
+ * Every domain now emits the same fail-closed replay verdict contract.
  */
 export function replayWorldContextCapsule(
   input: ReplayContextCapsuleInput
 ): WorldContextReplayVerdict {
-  let stagesVerified = 0;
+  const context = contextFor(input);
+  const verified: string[] = [];
 
-  // Stage 1: Query Contract & Query Hash
   const expectedQueryHash = input.expectedCapsule.queryHash;
   const recomputedQueryHash = hashWorldContextQuery(input.query);
   if (recomputedQueryHash !== expectedQueryHash) {
-    return {
-      status: "FIRST_DIVERGENCE",
-      stage: "query_contract",
+    return replayFirstDivergence(context, verified, {
+      stage: "QUERY_CONTRACT",
       expected: expectedQueryHash,
       observed: recomputedQueryHash,
-    };
+      expectedHash: expectedQueryHash,
+      observedHash: recomputedQueryHash,
+    });
   }
-  stagesVerified++;
+  verified.push("QUERY_CONTRACT");
 
-  // Stage 2: Scope & Source Set Validation
   if (input.sources.length === 0 && input.expectedCapsule.selectedSourceCount > 0) {
-    return {
-      status: "UNPROVABLE",
-      reason: "No sources provided for replay of non-empty capsule",
-    };
+    return replayUnprovable(context, verified, "WORLD_CONTEXT_SOURCE_EVIDENCE_MISSING");
   }
 
-  for (const s of input.sources) {
-    if (s.worldId !== input.query.worldId) {
-      return {
-        status: "FIRST_DIVERGENCE",
-        stage: "source_scope",
+  for (const source of input.sources) {
+    if (source.worldId !== input.query.worldId) {
+      return replayFirstDivergence(context, verified, {
+        stage: "SOURCE_SCOPE",
         expected: input.query.worldId,
-        observed: s.worldId,
-      };
+        observed: source.worldId,
+      });
     }
   }
-  stagesVerified++;
+  verified.push("SOURCE_SCOPE");
 
-  // Stage 3: Selector Execution & Source Roots
   try {
     const selection = selectContextEntries(input.sources, input.query);
 
-    // Check Source Root Hash
     if (selection.sourceRootHash !== input.expectedCapsule.sourceRootHash) {
-      return {
-        status: "FIRST_DIVERGENCE",
-        stage: "source_root_hash",
+      return replayFirstDivergence(context, verified, {
+        stage: "SOURCE_ROOT_HASH",
         expected: input.expectedCapsule.sourceRootHash,
         observed: selection.sourceRootHash,
-      };
+        expectedHash: input.expectedCapsule.sourceRootHash,
+        observedHash: selection.sourceRootHash,
+      });
     }
-    stagesVerified++;
+    verified.push("SOURCE_ROOT_HASH");
 
-    // Check Selected Source Count
     if (selection.selectedSources.length !== input.expectedCapsule.selectedSourceCount) {
-      return {
-        status: "FIRST_DIVERGENCE",
-        stage: "selected_source_count",
+      return replayFirstDivergence(context, verified, {
+        stage: "SELECTED_SOURCE_COUNT",
         expected: String(input.expectedCapsule.selectedSourceCount),
         observed: String(selection.selectedSources.length),
-      };
+      });
     }
-    stagesVerified++;
+    verified.push("SELECTED_SOURCE_COUNT");
 
-    // Check Selected Source Root Hash
     if (selection.selectedSourceRootHash !== input.expectedCapsule.selectedSourceRootHash) {
-      return {
-        status: "FIRST_DIVERGENCE",
-        stage: "selected_source_root_hash",
+      return replayFirstDivergence(context, verified, {
+        stage: "SELECTED_SOURCE_ROOT_HASH",
         expected: input.expectedCapsule.selectedSourceRootHash,
         observed: selection.selectedSourceRootHash,
-      };
+        expectedHash: input.expectedCapsule.selectedSourceRootHash,
+        observedHash: selection.selectedSourceRootHash,
+      });
     }
-    stagesVerified++;
+    verified.push("SELECTED_SOURCE_ROOT_HASH");
 
-    // Check Omitted Source Root Hash
     if (selection.omittedSourceRootHash !== input.expectedCapsule.omittedSourceRootHash) {
-      return {
-        status: "FIRST_DIVERGENCE",
-        stage: "omitted_source_root_hash",
+      return replayFirstDivergence(context, verified, {
+        stage: "OMITTED_SOURCE_ROOT_HASH",
         expected: input.expectedCapsule.omittedSourceRootHash,
         observed: selection.omittedSourceRootHash,
-      };
+        expectedHash: input.expectedCapsule.omittedSourceRootHash,
+        observedHash: selection.omittedSourceRootHash,
+      });
     }
-    stagesVerified++;
+    verified.push("OMITTED_SOURCE_ROOT_HASH");
 
-    // Stage 4: Capsule Hash
-    const selectedEntryHashes = selection.selectedEntries.map(e => e.entryHash);
+    const selectedEntryHashes = selection.selectedEntries.map(entry => entry.entryHash);
     const recomputedCapsuleHash = hashWorldContextCapsule({
       query: input.query,
       sourceRootHash: selection.sourceRootHash,
@@ -120,24 +131,19 @@ export function replayWorldContextCapsule(
     });
 
     if (recomputedCapsuleHash !== input.expectedCapsule.capsuleHash) {
-      return {
-        status: "FIRST_DIVERGENCE",
-        stage: "capsule_hash",
+      return replayFirstDivergence(context, verified, {
+        stage: "CAPSULE_HASH",
         expected: input.expectedCapsule.capsuleHash,
         observed: recomputedCapsuleHash,
-      };
+        expectedHash: input.expectedCapsule.capsuleHash,
+        observedHash: recomputedCapsuleHash,
+      });
     }
-    stagesVerified++;
+    verified.push("CAPSULE_HASH");
 
-    return {
-      status: "MATCH",
-      capsuleHash: recomputedCapsuleHash,
-      stagesVerified,
-    };
-  } catch (err: any) {
-    return {
-      status: "UNPROVABLE",
-      reason: err?.message || "Unknown error during replay selection",
-    };
+    return replayMatch(context, verified, { capsuleHash: recomputedCapsuleHash });
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : "WORLD_CONTEXT_REPLAY_SELECTION_FAILED";
+    return replayUnprovable(context, verified, reason);
   }
 }
