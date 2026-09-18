@@ -116,6 +116,7 @@ jobs:
           docker build --pull=false --build-arg "AURION_RELEASE_SHA=${EXPECTED_HEAD}" --tag "${image}" dist-traefik-runtime
           image_id="$(docker image inspect --format '{{.Id}}' "${image}")"
           [[ "${image_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf 'EXPECTED_IMAGE_ID=%s\n' "${image_id}" >> "${GITHUB_ENV}"
           docker run --detach --name "${app}" --network "${network}" \
             --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
             -e AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb \
@@ -161,12 +162,57 @@ jobs:
           trap - EXIT
           cleanup
 
+      - name: Emit immutable runtime gate evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/aurion-milestone-gate-evidence.test.mjs
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const sha=process.env.EXPECTED_HEAD;
+          const proof=JSON.parse(fs.readFileSync("aurion-pr-runtime-container-proof.json","utf8"));
+          const expected={
+            revision:sha,
+            buildInputDigest:process.env.EXPECTED_BUILD_INPUT_DIGEST,
+            artifactDigest:process.env.EXPECTED_ARTIFACT_DIGEST,
+            runtimeImageDigest:process.env.EXPECTED_IMAGE_ID,
+          };
+          const observed={
+            revision:proof.health?.revision,
+            buildInputDigest:proof.health?.buildInputDigest,
+            artifactDigest:proof.health?.artifactDigest,
+            runtimeImageDigest:proof.health?.runtimeImageDigest,
+          };
+          const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
+          const receipt={
+            schemaVersion:"aurion.milestone.gate-evidence.v1",
+            gateId:"AURION-M21-B8-EVIDENCE",
+            scope:"runtime",
+            passCriteria:["runtime boots from exact head","build input/artifact/image digests match health readback","evidence command and sources are retained"],
+            failCriteria:["revision drift","missing immutable digest","runtime health digest mismatch","nonreproducible evidence"],
+            sourceRevision:sha,
+            workflow:".github/workflows/aurion-pr-runtime-container-proof.yml",
+            command:"pnpm build:runtime-artifact && node scripts/build-aurion-traefik-runtime-artifact.mjs && docker build/inspect/run + /healthz readback",
+            testSources:["scripts/aurion-milestone-gate-evidence.mjs","scripts/aurion-milestone-gate-evidence.test.mjs",".github/workflows/aurion-pr-runtime-container-proof.yml"],
+            externalId:`${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            reproducible:true,
+            releaseIdentity:{sourceRevision:sha,buildInputDigest:expected.buildInputDigest,artifactDigest:expected.artifactDigest,runtimeImageDigest:expected.runtimeImageDigest},
+            expected,
+            observed,
+            checks,
+            status:checks.every(check=>check.pass)?"PASS":"FAIL",
+          };
+          fs.writeFileSync("aurion-gate-b8-runtime.json",JSON.stringify(receipt,null,2)+"\n");
+          NODE
+          node scripts/aurion-milestone-gate-evidence.mjs verify aurion-gate-b8-runtime.json --require-pass
+
       - name: Publish exact-head container evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aurion-pr-runtime-container-${{ github.event.pull_request.head.sha }}
           path: |
             aurion-pr-runtime-container-proof.json
+            aurion-gate-b8-runtime.json
             dist-traefik-runtime/manifest.json
             dist-traefik-runtime/checksums.sha256
           if-no-files-found: error
