@@ -991,3 +991,191 @@ jobs:
     with:
       expected_sha: ${{ github.sha }}
       upstream_run_id: ${{ github.run_id }}
+
+  final-production-gate:
+    name: Prove final Aurion production release identity
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [verify-release-attestations, production-schema-readback]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      attestations: read
+    steps:
+      - name: Check out exact merged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download signed runtime identity
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-runtime-attestation-${{ github.sha }}
+          path: runtime-attestation
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download signed release artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-zone-runtime-${{ github.sha }}
+          path: runtime-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download Blocker 2 trust receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-gate-b2-attestation-${{ github.sha }}
+          path: blocker2
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download authenticated production schema receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aurion-production-schema-readback-${{ github.sha }}
+          path: schema-readback
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Independently verify release attestations again
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="${GITHUB_REPOSITORY}/.github/workflows/deploy-aurion-zone-runtime.yml"
+          gh attestation verify runtime-artifact/aurion-traefik-runtime-release.tgz \
+            --repo "${GITHUB_REPOSITORY}" \
+            --signer-workflow "${signer}" \
+            --source-digest "${GITHUB_SHA}" \
+            --source-ref "refs/heads/main" \
+            --predicate-type "https://arelogic.space/attestations/aurion-release-artifact/v1"
+          gh attestation verify runtime-attestation/aurion-runtime-release-identity.json \
+            --repo "${GITHUB_REPOSITORY}" \
+            --signer-workflow "${signer}" \
+            --source-digest "${GITHUB_SHA}" \
+            --source-ref "refs/heads/main" \
+            --predicate-type "https://arelogic.space/attestations/aurion-runtime-release/v1"
+
+      - name: Read public production health independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for _attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "https://arelogic.space/healthz?revision=${GITHUB_SHA}" > aurion-public-production-health.json 2>/dev/null; then
+              if EXPECTED_SHA="${GITHUB_SHA}" node --input-type=module -e '
+                import fs from "node:fs";
+                const health=JSON.parse(fs.readFileSync("aurion-public-production-health.json","utf8"));
+                if(health.status!=="ok"||health.service!=="echoes-of-aurion"||health.revision!==process.env.EXPECTED_SHA) process.exit(1);
+              '; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 2
+          done
+          test "${ready}" -eq 1
+
+      - name: Emit final Blocker 1 production gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { scanReleaseMetadataForSecrets } from "./scripts/aurion-release-attestation.mjs";
+
+          const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
+          const installed=JSON.parse(fs.readFileSync("runtime-attestation/aurion-installed-runtime-readback.json","utf8"));
+          const runtimeMeta=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.json","utf8"));
+          const blocker2=JSON.parse(fs.readFileSync("blocker2/aurion-gate-b2-attestation.json","utf8"));
+          const schema=JSON.parse(fs.readFileSync("schema-readback/production-schema-readback.json","utf8"));
+          const health=JSON.parse(fs.readFileSync("aurion-public-production-health.json","utf8"));
+          const manifest=JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8"));
+
+          scanReleaseMetadataForSecrets({identity,installed,runtimeMeta,blocker2,schema,health});
+
+          if(identity.sourceRevision!==process.env.GITHUB_SHA||identity.mergeSha!==process.env.GITHUB_SHA) throw new Error("FINAL_SOURCE_REVISION_MISMATCH");
+          if(installed.recordType!=="aurion_traefik_runtime_readback"||installed.revision!==process.env.GITHUB_SHA||installed.databaseConnectivity!=="authenticated_select_1") throw new Error("FINAL_INSTALLED_READBACK_INVALID");
+          if(blocker2.status!=="PASS"||blocker2.sourceRevision!==process.env.GITHUB_SHA) throw new Error("FINAL_ATTESTATION_GATE_NOT_PASS");
+          if(schema.sourceRevision!==process.env.GITHUB_SHA||schema.state!=="PRESENT_SCHEMA_MATCH"||schema.readOnly!==true||schema.databaseCredentialReturned!==false) throw new Error("FINAL_SCHEMA_READBACK_NOT_MATCH");
+          if(!Array.isArray(schema.migrations)||schema.migrations.map(item=>item.tag).join(",")!==manifest.migrations.map(item=>item.tag).join(",")) throw new Error("FINAL_SCHEMA_WAVE_MISMATCH");
+          if(schema.migrations.at(-1)?.tag!=="0049_aurion_causal_receipt_v2") throw new Error("FINAL_SCHEMA_0049_MISSING");
+          if(schema.summary?.migrationCount!==manifest.migrations.length||schema.summary?.matchCount!==manifest.migrations.length||schema.summary?.absentCount!==0||schema.summary?.driftCount!==0) throw new Error("FINAL_SCHEMA_SUMMARY_MISMATCH");
+
+          const expected={
+            revision:process.env.GITHUB_SHA,
+            buildInputDigest:identity.buildInputDigest,
+            artifactDigest:identity.artifactDigest,
+            runtimeImageDigest:identity.runtimeImageDigest,
+            releaseArchiveDigest:identity.releaseArchiveDigest,
+            authorityRuleset:"aurion-zone-v3",
+            authorityTickHz:10,
+            causalReceipts:true,
+            databaseConnectivity:"authenticated_select_1",
+            schemaState:"PRESENT_SCHEMA_MATCH",
+            schemaMigrationCount:manifest.migrations.length,
+            schemaLastMigration:"0049_aurion_causal_receipt_v2",
+            attestationStatus:"PASS",
+          };
+          const observed={
+            revision:health.revision,
+            buildInputDigest:health.buildInputDigest,
+            artifactDigest:health.artifactDigest,
+            runtimeImageDigest:health.runtimeImageDigest,
+            releaseArchiveDigest:installed.releaseArchiveDigest,
+            authorityRuleset:health.authority?.ruleset,
+            authorityTickHz:health.authority?.tickHz,
+            causalReceipts:health.authority?.causalReceipts,
+            databaseConnectivity:installed.databaseConnectivity,
+            schemaState:schema.state,
+            schemaMigrationCount:schema.summary?.matchCount,
+            schemaLastMigration:schema.migrations.at(-1)?.tag,
+            attestationStatus:blocker2.status,
+          };
+          if(installed.buildInputDigest!==identity.buildInputDigest||installed.artifactDigest!==identity.artifactDigest||installed.runtimeImageDigest!==identity.runtimeImageDigest||installed.releaseArchiveDigest!==identity.releaseArchiveDigest) throw new Error("FINAL_INSTALLED_DIGEST_MISMATCH");
+          if(installed.authority?.ruleset!==expected.authorityRuleset||installed.authority?.tickHz!==expected.authorityTickHz||installed.authority?.causalReceipts!==true) throw new Error("FINAL_INSTALLED_AUTHORITY_MISMATCH");
+
+          const checks=Object.keys(expected).map(name=>({name,expected:expected[name],observed:observed[name],pass:expected[name]===observed[name]}));
+          const receipt={
+            schemaVersion:"aurion.milestone.gate-evidence.v1",
+            gateId:"AURION-M21-B1-PRODUCTION",
+            scope:"production",
+            passCriteria:["exact merged main revision is promoted through the canonical control plane","signed build and runtime identities bind immutable digests","root-authored installed readback and public TLS health agree","authenticated database SELECT succeeded inside exact container","production schema is exact 0021-0049 PRESENT_SCHEMA_MATCH"],
+            failCriteria:["manual or mutable promotion","revision or digest drift","missing/invalid release attestation","public/internal identity mismatch","production schema drift or missing 0049"],
+            sourceRevision:identity.sourceRevision,
+            mergeSha:identity.mergeSha,
+            authenticatedReadback:true,
+            workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
+            command:"gh attestation verify + root-authored runtime readback + public TLS /healthz + production schema reconciliation",
+            testSources:["deploy/promote-aurion-zone-runtime.sh","docker-compose.traefik.yml","scripts/aurion-release-attestation.mjs","scripts/aurion-milestone-gate-evidence.mjs",".github/workflows/deploy-aurion-zone-runtime.yml",".github/workflows/aurion-production-schema-readback.yml"],
+            externalId:runtimeMeta.attestationUrl,
+            reproducible:true,
+            releaseIdentity:{
+              sourceRevision:identity.sourceRevision,
+              buildInputDigest:identity.buildInputDigest,
+              artifactDigest:identity.artifactDigest,
+              runtimeImageDigest:identity.runtimeImageDigest,
+            },
+            expected,
+            observed,
+            checks,
+            status:checks.every(check=>check.pass)?"PASS":"FAIL",
+          };
+          fs.writeFileSync("aurion-gate-b1-production.json",JSON.stringify(receipt,null,2)+"\n");
+          NODE
+          node scripts/aurion-milestone-gate-evidence.mjs verify aurion-gate-b1-production.json --require-pass
+
+      - name: Upload final production gate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-gate-b1-production-${{ github.sha }}
+          path: |
+            aurion-gate-b1-production.json
+            aurion-public-production-health.json
+          if-no-files-found: error
+          retention-days: 30
+
