@@ -546,9 +546,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      id-token: write
-      attestations: write
-      artifact-metadata: write
     env:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}
       EXPECTED_SHA: ${{ github.sha }}
@@ -718,49 +715,12 @@ jobs:
           fs.writeFileSync("aurion-runtime-release-identity.json",JSON.stringify(identity,null,2)+"\n");
           NODE
 
-      - name: Attest inspected production runtime identity
-        id: attest-runtime-identity
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: aurion-runtime-release-identity.json
-          predicate-type: https://arelogic.space/attestations/aurion-runtime-release/v1
-          predicate-path: aurion-runtime-release-identity.json
-
-      - name: Seal runtime attestation metadata
-        env:
-          ATTESTATION_BUNDLE: ${{ steps.attest-runtime-identity.outputs.bundle-path }}
-          ATTESTATION_ID: ${{ steps.attest-runtime-identity.outputs.attestation-id }}
-          ATTESTATION_URL: ${{ steps.attest-runtime-identity.outputs.attestation-url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f "${ATTESTATION_BUNDLE}"
-          cp "${ATTESTATION_BUNDLE}" aurion-runtime-release-attestation.sigstore.json
-          node --input-type=module <<'NODE'
-          import { createHash } from "node:crypto";
-          import fs from "node:fs";
-          const identity=JSON.parse(fs.readFileSync("aurion-runtime-release-identity.json","utf8"));
-          const bundle=fs.readFileSync("aurion-runtime-release-attestation.sigstore.json");
-          const metadata={
-            schemaVersion:"aurion.runtime-release-attestation-metadata.v1",
-            sourceRevision:identity.sourceRevision,
-            runtimeImageDigest:identity.runtimeImageDigest,
-            attestationId:process.env.ATTESTATION_ID,
-            attestationUrl:process.env.ATTESTATION_URL,
-            bundleSha256:`sha256:${createHash("sha256").update(bundle).digest("hex")}`,
-          };
-          if(!/^[1-9][0-9]*$/.test(metadata.attestationId??"")||!/^https:\/\/github\.com\//.test(metadata.attestationUrl??"")) throw new Error("RUNTIME_ATTESTATION_IDENTITY_INVALID");
-          fs.writeFileSync("aurion-runtime-release-attestation.json",JSON.stringify(metadata,null,2)+"\n");
-          NODE
-
-      - name: Publish detached production runtime attestation
+      - name: Publish observed production runtime identity for trusted signing
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aurion-runtime-attestation-${{ github.sha }}
+          name: aurion-runtime-identity-${{ github.sha }}
           path: |
             aurion-runtime-release-identity.json
-            aurion-runtime-release-attestation.sigstore.json
-            aurion-runtime-release-attestation.json
             aurion-installed-runtime-readback.json
           if-no-files-found: error
           retention-days: 30
@@ -793,7 +753,9 @@ jobs:
     permissions:
       contents: read
       actions: read
-      attestations: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - name: Check out exact attested source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -809,13 +771,49 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
 
-      - name: Download attested production runtime identity
+      - name: Download observed production runtime identity
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: aurion-runtime-attestation-${{ github.sha }}
+          name: aurion-runtime-identity-${{ github.sha }}
           path: runtime-attestation
           github-token: ${{ github.token }}
           run-id: ${{ github.run_id }}
+
+      - name: Attest observed runtime identity on trusted GitHub-hosted runner
+        id: attest-runtime-identity
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: runtime-attestation/aurion-runtime-release-identity.json
+          predicate-type: https://arelogic.space/attestations/aurion-runtime-release/v1
+          predicate-path: runtime-attestation/aurion-runtime-release-identity.json
+
+      - name: Seal hosted runtime attestation metadata
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest-runtime-identity.outputs.bundle-path }}
+          ATTESTATION_ID: ${{ steps.attest-runtime-identity.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.attest-runtime-identity.outputs.attestation-url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${ATTESTATION_BUNDLE}"
+          cp "${ATTESTATION_BUNDLE}" runtime-attestation/aurion-runtime-release-attestation.sigstore.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          const identity=JSON.parse(fs.readFileSync("runtime-attestation/aurion-runtime-release-identity.json","utf8"));
+          const bundle=fs.readFileSync("runtime-attestation/aurion-runtime-release-attestation.sigstore.json");
+          const metadata={
+            schemaVersion:"aurion.runtime-release-attestation-metadata.v1",
+            sourceRevision:identity.sourceRevision,
+            runtimeImageDigest:identity.runtimeImageDigest,
+            attestationId:process.env.ATTESTATION_ID,
+            attestationUrl:process.env.ATTESTATION_URL,
+            bundleSha256:`sha256:${createHash("sha256").update(bundle).digest("hex")}`,
+            signerRunner:"github-hosted",
+          };
+          if(!/^[1-9][0-9]*$/.test(metadata.attestationId??"")||!/^https:\/\/github\.com\//.test(metadata.attestationUrl??"")) throw new Error("RUNTIME_ATTESTATION_IDENTITY_INVALID");
+          fs.writeFileSync("runtime-attestation/aurion-runtime-release-attestation.json",JSON.stringify(metadata,null,2)+"\n");
+          NODE
 
       - name: Verify signer, source, predicates and tamper rejection
         env:
@@ -841,7 +839,8 @@ jobs:
               --signer-workflow "${signer}" \
               --source-digest "${GITHUB_SHA}" \
               --source-ref "refs/heads/main" \
-              --predicate-type "https://arelogic.space/attestations/aurion-runtime-release/v1"
+              --predicate-type "https://arelogic.space/attestations/aurion-runtime-release/v1" \
+              --deny-self-hosted-runners
           }
           verify_artifact
           verify_runtime
@@ -883,6 +882,18 @@ jobs:
           NODE
 
           node --test scripts/aurion-build-input-manifest.test.mjs scripts/aurion-release-attestation.test.mjs scripts/aurion-milestone-gate-evidence.test.mjs
+
+      - name: Publish hosted detached runtime attestation
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aurion-runtime-attestation-${{ github.sha }}
+          path: |
+            runtime-attestation/aurion-runtime-release-identity.json
+            runtime-attestation/aurion-runtime-release-attestation.sigstore.json
+            runtime-attestation/aurion-runtime-release-attestation.json
+            runtime-attestation/aurion-installed-runtime-readback.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Emit Blocker 2 attestation gate receipt
         shell: bash
