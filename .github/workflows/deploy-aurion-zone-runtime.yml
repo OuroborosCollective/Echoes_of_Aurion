@@ -801,7 +801,8 @@ jobs:
                 let raw="";
                 for await (const chunk of process.stdin) raw+=chunk;
                 const health=JSON.parse(raw);
-                const installed=JSON.parse(require("node:fs").readFileSync("aurion-installed-runtime-readback.json","utf8"));
+                const fs=await import("node:fs");
+                const installed=JSON.parse(fs.readFileSync("aurion-installed-runtime-readback.json","utf8"));
                 if(
                   health.status!=="ok" ||
                   health.service!=="echoes-of-aurion" ||
