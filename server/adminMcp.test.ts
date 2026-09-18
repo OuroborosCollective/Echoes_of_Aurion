@@ -44,6 +44,9 @@ const AUTHORING_TOOLS = [
   "aurion_admin_dungeon_design_read",
   "aurion_admin_dungeon_design_plan",
   "aurion_admin_dungeon_design_apply",
+  "aurion_quest_draft_propose",
+  "aurion_quest_publish_plan",
+  "aurion_quest_publish",
 ] as const;
 
 describe("adminMcp", () => {
@@ -75,6 +78,8 @@ describe("adminMcp", () => {
     expect(authoring.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual([
       "aurion_admin_world_design_apply",
       "aurion_admin_dungeon_design_apply",
+      "aurion_quest_draft_propose",
+      "aurion_quest_publish",
     ]);
     expect(authoring.tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([...ASSET_TOOLS]));
     expect(authoring.consent).toMatchObject({
