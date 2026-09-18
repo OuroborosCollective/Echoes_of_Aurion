@@ -49,13 +49,14 @@ export const aurionQuestRouter = router({
       confirmation: z.literal("PUBLISH_QUEST_TEMPLATE"),
     }).strict())
     .mutation(({ ctx, input }) => adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash)),
+  available: protectedProcedure.query(() => adminQuestService.availableQuests()),
   myInstances: protectedProcedure.query(({ ctx }) => adminQuestService.listInstances({ playerUserId: ctx.user.id })),
+  details: protectedProcedure
+    .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
+    .query(({ ctx, input }) => adminQuestService.playerQuestDetails(ctx.user.id, input.instanceId)),
   offer: protectedProcedure
-    .input(z.object({
-      giverNpcId: z.string().trim().min(3).max(96),
-      triggerEventId: z.string().trim().min(3).max(128),
-    }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.offerQuest({ playerUserId: ctx.user.id, giverNpcId: input.giverNpcId, triggerEventId: input.triggerEventId })),
+    .input(z.object({ templateId: z.string().trim().min(3).max(96) }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.offerQuest({ playerUserId: ctx.user.id, templateId: input.templateId })),
   accept: protectedProcedure
     .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
     .mutation(({ ctx, input }) => adminQuestService.acceptQuest(ctx.user.id, input.instanceId)),
