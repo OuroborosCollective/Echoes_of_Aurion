@@ -1,0 +1,201 @@
+import { canonicalSha256 } from "./aurionCanonicalHash";
+import type { CanonicalTransferPayload } from "../server/causality/zoneCanonicalState";
+
+export const AURION_CROSS_ZONE_HANDOVER_SCHEMA = "aurion.cross-zone-handover.v2" as const;
+export const AURION_CROSS_ZONE_HANDOVER_STATES = [
+  "PREPARED",
+  "SOURCE_FROZEN",
+  "TARGET_ACCEPTED",
+  "SOURCE_FINALIZED",
+  "COMMITTED",
+  "REJECTED",
+  "EXPIRED",
+  "UNPROVABLE",
+] as const;
+export type AurionCrossZoneHandoverStatus = (typeof AURION_CROSS_ZONE_HANDOVER_STATES)[number];
+
+export interface AurionCrossZoneHandoverV2 {
+  schema: typeof AURION_CROSS_ZONE_HANDOVER_SCHEMA;
+  transferId: string;
+  entityId: string;
+  sourceWorldId: string;
+  sourceZoneId: string;
+  sourceTick: number;
+  sourceReceiptHash: string;
+  sourceStateHash: string;
+  targetWorldId: string;
+  targetZoneId: string;
+  payload: CanonicalTransferPayload;
+  payloadHash: string;
+  targetAcceptedTick: number | null;
+  targetReceiptHash: string | null;
+  status: AurionCrossZoneHandoverStatus;
+  transferReceiptHash: string;
+}
+
+const HASH = /^sha256:[a-f0-9]{64}$/;
+
+function transferIdFor(input: {
+  entityId: string;
+  sourceWorldId: string;
+  sourceZoneId: string;
+  sourceTick: number;
+  sourceReceiptHash: string;
+}): string {
+  const digest = canonicalSha256({
+    schema: "aurion.cross-zone-transfer-id.v2",
+    entityId: input.entityId,
+    sourceWorldId: input.sourceWorldId,
+    sourceZoneId: input.sourceZoneId,
+    sourceTick: input.sourceTick,
+    sourceReceiptHash: input.sourceReceiptHash,
+  }).slice("sha256:".length);
+  return `xfer2_${digest.slice(0, 56)}`;
+}
+
+function unsigned(receipt: Omit<AurionCrossZoneHandoverV2, "transferReceiptHash"> | AurionCrossZoneHandoverV2) {
+  return {
+    schema: receipt.schema,
+    transferId: receipt.transferId,
+    entityId: receipt.entityId,
+    sourceWorldId: receipt.sourceWorldId,
+    sourceZoneId: receipt.sourceZoneId,
+    sourceTick: receipt.sourceTick,
+    sourceReceiptHash: receipt.sourceReceiptHash,
+    sourceStateHash: receipt.sourceStateHash,
+    targetWorldId: receipt.targetWorldId,
+    targetZoneId: receipt.targetZoneId,
+    payloadHash: receipt.payloadHash,
+    targetAcceptedTick: receipt.targetAcceptedTick,
+    targetReceiptHash: receipt.targetReceiptHash,
+    status: receipt.status,
+  };
+}
+
+export function computeCrossZoneTransferReceiptHash(
+  receipt: Omit<AurionCrossZoneHandoverV2, "transferReceiptHash"> | AurionCrossZoneHandoverV2,
+): string {
+  return canonicalSha256(unsigned(receipt));
+}
+
+export function prepareCrossZoneHandover(input: {
+  entityId: string;
+  sourceWorldId: string;
+  sourceZoneId: string;
+  sourceTick: number;
+  sourceReceiptHash: string;
+  sourceStateHash: string;
+  targetWorldId: string;
+  targetZoneId: string;
+  payload: CanonicalTransferPayload;
+}): AurionCrossZoneHandoverV2 {
+  if (!input.entityId.trim() || input.payload.entityId !== input.entityId) throw new Error("CROSS_ZONE_ENTITY_IDENTITY_MISMATCH");
+  if (!Number.isSafeInteger(input.sourceTick) || input.sourceTick < 0) throw new Error("CROSS_ZONE_SOURCE_TICK_INVALID");
+  if (!HASH.test(input.sourceReceiptHash) || !HASH.test(input.sourceStateHash)) throw new Error("CROSS_ZONE_SOURCE_EVIDENCE_INVALID");
+  if (!input.sourceWorldId.trim() || !input.targetWorldId.trim() || !input.sourceZoneId.trim() || !input.targetZoneId.trim()) throw new Error("CROSS_ZONE_DOMAIN_IDENTITY_INVALID");
+  if (input.sourceWorldId === input.targetWorldId && input.sourceZoneId === input.targetZoneId) throw new Error("CROSS_ZONE_TARGET_MUST_DIFFER");
+  const payloadHash = canonicalSha256(input.payload);
+  const base = {
+    schema: AURION_CROSS_ZONE_HANDOVER_SCHEMA,
+    transferId: transferIdFor(input),
+    entityId: input.entityId,
+    sourceWorldId: input.sourceWorldId,
+    sourceZoneId: input.sourceZoneId,
+    sourceTick: input.sourceTick,
+    sourceReceiptHash: input.sourceReceiptHash,
+    sourceStateHash: input.sourceStateHash,
+    targetWorldId: input.targetWorldId,
+    targetZoneId: input.targetZoneId,
+    payload: input.payload,
+    payloadHash,
+    targetAcceptedTick: null,
+    targetReceiptHash: null,
+    status: "PREPARED" as const,
+  };
+  return Object.freeze({ ...base, transferReceiptHash: computeCrossZoneTransferReceiptHash(base) });
+}
+
+const allowed: Readonly<Record<AurionCrossZoneHandoverStatus, readonly AurionCrossZoneHandoverStatus[]>> = Object.freeze({
+  PREPARED: Object.freeze(["SOURCE_FROZEN", "REJECTED", "EXPIRED", "UNPROVABLE"]),
+  SOURCE_FROZEN: Object.freeze(["TARGET_ACCEPTED", "REJECTED", "EXPIRED", "UNPROVABLE"]),
+  TARGET_ACCEPTED: Object.freeze(["SOURCE_FINALIZED", "REJECTED", "EXPIRED", "UNPROVABLE"]),
+  SOURCE_FINALIZED: Object.freeze(["COMMITTED", "UNPROVABLE"]),
+  COMMITTED: Object.freeze([]),
+  REJECTED: Object.freeze([]),
+  EXPIRED: Object.freeze([]),
+  UNPROVABLE: Object.freeze([]),
+});
+
+export function advanceCrossZoneHandover(
+  current: AurionCrossZoneHandoverV2,
+  nextStatus: AurionCrossZoneHandoverStatus,
+  targetAcceptance?: { targetAcceptedTick: number; targetReceiptHash: string },
+): AurionCrossZoneHandoverV2 {
+  if (!verifyCrossZoneHandover(current)) throw new Error("CROSS_ZONE_TRANSFER_RECEIPT_INVALID");
+  if (nextStatus === current.status) {
+    if (nextStatus === "TARGET_ACCEPTED" && targetAcceptance &&
+      (current.targetAcceptedTick !== targetAcceptance.targetAcceptedTick || current.targetReceiptHash !== targetAcceptance.targetReceiptHash)) {
+      throw new Error("CROSS_ZONE_DUPLICATE_ACCEPT_CONFLICT");
+    }
+    return current;
+  }
+  if (!allowed[current.status].includes(nextStatus)) throw new Error(`CROSS_ZONE_TRANSITION_INVALID:${current.status}->${nextStatus}`);
+
+  let targetAcceptedTick = current.targetAcceptedTick;
+  let targetReceiptHash = current.targetReceiptHash;
+  if (nextStatus === "TARGET_ACCEPTED") {
+    if (!targetAcceptance || !Number.isSafeInteger(targetAcceptance.targetAcceptedTick) || targetAcceptance.targetAcceptedTick < 0 || !HASH.test(targetAcceptance.targetReceiptHash)) {
+      throw new Error("CROSS_ZONE_TARGET_ACCEPTANCE_INVALID");
+    }
+    targetAcceptedTick = targetAcceptance.targetAcceptedTick;
+    targetReceiptHash = targetAcceptance.targetReceiptHash;
+  }
+  if (["SOURCE_FINALIZED", "COMMITTED"].includes(nextStatus) && (targetAcceptedTick === null || targetReceiptHash === null)) {
+    throw new Error("CROSS_ZONE_TARGET_ACCEPTANCE_REQUIRED");
+  }
+
+  const nextBase = {
+    ...current,
+    targetAcceptedTick,
+    targetReceiptHash,
+    status: nextStatus,
+  };
+  const next = Object.freeze({
+    ...nextBase,
+    transferReceiptHash: computeCrossZoneTransferReceiptHash(nextBase),
+  });
+  assertCrossZoneOwnerInvariant(next);
+  return next;
+}
+
+export function verifyCrossZoneHandover(receipt: AurionCrossZoneHandoverV2): boolean {
+  if (receipt.schema !== AURION_CROSS_ZONE_HANDOVER_SCHEMA) return false;
+  if (receipt.payload.entityId !== receipt.entityId) return false;
+  if (canonicalSha256(receipt.payload) !== receipt.payloadHash) return false;
+  if (!HASH.test(receipt.sourceReceiptHash) || !HASH.test(receipt.sourceStateHash)) return false;
+  if (receipt.targetReceiptHash !== null && !HASH.test(receipt.targetReceiptHash)) return false;
+  return receipt.transferReceiptHash === computeCrossZoneTransferReceiptHash(receipt);
+}
+
+export function authoritativeOwnersForHandover(receipt: AurionCrossZoneHandoverV2): readonly string[] {
+  switch (receipt.status) {
+    case "PREPARED":
+    case "REJECTED":
+    case "EXPIRED":
+      return Object.freeze([`${receipt.sourceWorldId}/${receipt.sourceZoneId}`]);
+    case "SOURCE_FINALIZED":
+    case "COMMITTED":
+      return Object.freeze([`${receipt.targetWorldId}/${receipt.targetZoneId}`]);
+    case "SOURCE_FROZEN":
+    case "TARGET_ACCEPTED":
+    case "UNPROVABLE":
+      return Object.freeze([]);
+  }
+}
+
+export function assertCrossZoneOwnerInvariant(receipt: AurionCrossZoneHandoverV2): readonly string[] {
+  const owners = authoritativeOwnersForHandover(receipt);
+  if (owners.length > 1) throw new Error("CROSS_ZONE_OWNER_INVARIANT_VIOLATION");
+  if (receipt.status === "COMMITTED" && owners.length !== 1) throw new Error("CROSS_ZONE_COMMITTED_OWNER_REQUIRED");
+  return owners;
+}
