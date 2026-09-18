@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { QuestTemplateVersionSchema } from "./aurionQuestContract";
 
 export const AURION_AUTHORING_SCHEMA = "aurion.authoring.v1" as const;
 export const AURION_WORLD_DESIGN_SCHEMA = "aurion.world-design.v1" as const;
@@ -135,19 +134,6 @@ export const ActiveDungeonDesignSchema = DungeonDesignPlanSchema.extend({
 }).omit({ requiresHumanConfirmation: true }).strict();
 
 export type ActiveDungeonDesign = z.infer<typeof ActiveDungeonDesignSchema>;
-
-export const QuestPublishPlanSchema = z.object({
-  schemaVersion: z.literal(AURION_AUTHORING_SCHEMA),
-  proposalId: z.string().min(8).max(128),
-  expectedTemplateSetHash: digest,
-  proposalReceiptHash: digest,
-  template: QuestTemplateVersionSchema,
-  templateHash: digest,
-  planHash: digest,
-  requiresHumanConfirmation: z.literal(true),
-}).strict();
-
-export type QuestPublishPlan = z.infer<typeof QuestPublishPlanSchema>;
 
 export const AuthoringReceiptSchema = z.object({
   schemaVersion: z.literal(AURION_AUTHORING_RECEIPT_SCHEMA),
