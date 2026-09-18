@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { replayVerdictSchema } from './aurionReplayContract';
 
 /**
  * AIM-298: Shared Canonical Contract for Aurion-native Deterministic Quest Compiler & Story Chains.
@@ -232,9 +233,15 @@ export const QuestReplayReceiptSchema = z.object({
   replayedPlanHash: z.string(),
   replayedGraphHash: z.string(),
   replayedOutcomeHash: z.string(),
+  replayVerdict: replayVerdictSchema,
+  /** Compatibility projection; must equal replayVerdict.status. */
   verdict: z.enum(['MATCH', 'FIRST_DIVERGENCE', 'UNPROVABLE']),
   firstDivergenceDetails: z.string().optional(),
   timestamp: z.string(),
+}).superRefine((value, ctx) => {
+  if (value.verdict !== value.replayVerdict.status) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'QUEST_REPLAY_VERDICT_PROJECTION_MISMATCH', path: ['verdict'] });
+  }
 });
 
 export type QuestReplayReceipt = z.infer<typeof QuestReplayReceiptSchema>;

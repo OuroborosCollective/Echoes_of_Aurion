@@ -94,6 +94,16 @@ jobs:
         run: |
           set -euo pipefail
           pnpm verify:donor-ledger 2>&1 | tee .aurion-local-test-pack/evidence/donor-ledger.log
+      - name: Verify shared replay verdict semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run \
+            server/replayVerdictContract.test.ts \
+            server/causality/causalTick.test.ts \
+            server/questCompiler/replay.test.ts \
+            server/worldContext/replay.test.ts \
+            2>&1 | tee .aurion-local-test-pack/evidence/replay-verdict.log
       - name: Typecheck and classless regressions
         shell: bash
         run: |

@@ -1,0 +1,66 @@
+{
+  "schema": "aurion.replay.inventory.v1",
+  "verifiedAgainstRevision": "f7f9cbf9bd3390e1088795d565b63c9eaca2f782",
+  "policy": "Formal replay engines must emit shared/aurionReplayContract.ts verdicts. Missing required evidence is UNPROVABLE and can never be promoted to MATCH.",
+  "systems": [
+    {
+      "replayId": "zone.tick",
+      "classification": "FORMAL_REPLAY_ENGINE",
+      "domain": "ZONE_TICK",
+      "implementation": "server/causality/replayZoneTick.ts",
+      "tests": [
+        "server/causality/causalTick.test.ts"
+      ],
+      "verdictContract": "shared/aurionReplayContract.ts",
+      "adapters": [
+        "server/causality/readbackService.ts",
+        "server/routes/causalityRouter.ts",
+        "server/chatgptCausalityBridge.ts",
+        "scripts/replay-aurion-zone.ts",
+        "server/causality/replayZoneTickRunner.ts"
+      ]
+    },
+    {
+      "replayId": "quest.compiler",
+      "classification": "FORMAL_REPLAY_ENGINE",
+      "domain": "QUEST_COMPILER",
+      "implementation": "server/questCompiler/replay.ts",
+      "tests": [
+        "server/questCompiler/replay.test.ts"
+      ],
+      "verdictContract": "shared/aurionReplayContract.ts",
+      "adapters": [
+        "server/questCompiler/adminService.ts",
+        "server/routes/aurionQuestRouter.ts",
+        "server/adminMcp.ts"
+      ]
+    },
+    {
+      "replayId": "world.context",
+      "classification": "FORMAL_REPLAY_ENGINE",
+      "domain": "WORLD_CONTEXT",
+      "implementation": "server/worldContext/replay.ts",
+      "tests": [
+        "server/worldContext/replay.test.ts"
+      ],
+      "verdictContract": "shared/aurionReplayContract.ts",
+      "adapters": [
+        "server/worldContext/service.ts",
+        "server/routes/aurionContextRouter.ts",
+        "server/adminMcp.ts"
+      ]
+    },
+    {
+      "replayId": "npc.decision-rehydration",
+      "classification": "RECEIPT_REHYDRATION_ONLY",
+      "domain": "NPC",
+      "implementation": "server/wasdAurionRuntime.ts",
+      "tests": [
+        "server/aim263NpcPersistence.test.ts",
+        "server/aim292NpcMultiMemory.test.ts"
+      ],
+      "verdictContract": null,
+      "note": "Active NPC replay/rehydration validates immutable decision receipts but does not emit MATCH/FIRST_DIVERGENCE/UNPROVABLE and therefore must not be presented as a formal replay verdict."
+    }
+  ]
+}

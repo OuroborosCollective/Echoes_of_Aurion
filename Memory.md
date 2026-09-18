@@ -860,3 +860,9 @@ Status: VERIFIED pre-merge; production promotion not claimed.
 Erkenntnis: Ein grünes Capability-Ledger reicht nicht, wenn donor-abgeleitete Dateien außerhalb seiner Suchfläche liegen; Provenienz-URLs dürfen erhalten bleiben, müssen aber vom Live-Loader nachweislich unerreichbar sein.
 Evidence: Exact pre-memory head `8989f6fe5d798603d8a91507002e88584541b24d`; Local Test Pack `35293304155` PASS (248 Test Files / 1074 Tests, Migration verify/apply, Donor-Verifier, Offline-Pack + Workspace-Hash); Runtime Candidate `35293304165` PASS; Runtime Container Proof `35293304167` PASS; BuildInput `sha256:12b58d45e9e955938bccc8936ac7780c8022cd5140a50f99ea7f6fc1ada71f2d`, Artifact `sha256:1f2bcb160d4289fd5d3f0174d8572d60598bf0c94eb25f047bdaf4601845255c`, Image `sha256:faea03031950ab24fbe32dd5e44b2ae63d23e7bf770a5550417eae171e82efc6`.
 
+### 2026-09-18 — Blocker 6 shared replay verdict gate
+Status: VERIFIED pre-merge; production promotion not claimed.
+Änderung: Zone-, Quest- und WorldContext-Replays auf einen gemeinsamen fail-closed Verdict-v2-Vertrag mit Domain/Revision/Ruleset/Scope/Range/verifiedStages/FIRST_DIVERGENCE-Hashes/Reason vereinheitlicht; fehlende Evidence wird UNPROVABLE, NPC-Receipt-Rehydration bleibt explizit kein formaler MATCH-Verdict.
+Erkenntnis: Gleiche Statuswörter reichen nicht für gemeinsame Replay-Semantik; erst ein geteilter strukturierter Vertrag verhindert, dass Adapter fehlende Evidence als Erfolg hochstufen.
+Evidence: Exact pre-memory head `919cec96bfabaf4a7f0f7d25491b1ac5d495c864`; Local Test Pack `35298119455` PASS (shared replay gate, TypeScript, full repository regression, migration verify/apply, offline/workspace evidence); Runtime Candidate `35298119432` PASS; Runtime Container Proof `35298119402` PASS; candidate artifact evidence digest `sha256:d9340c3b7b1bb0c1bc1077b8dad89e0fcca81fd087badab9a7f9db06683a3bcf`.
+

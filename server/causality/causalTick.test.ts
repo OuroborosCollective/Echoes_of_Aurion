@@ -7,6 +7,7 @@ import { canonicalJson, canonicalSha256 } from "../../shared/aurionCanonicalHash
 import { globalTickRecorder } from "./tickRecorder";
 import { replayZoneTick } from "./replayZoneTick";
 import { activeProvenance } from "../aurionProvenance";
+import { AURION_REPLAY_VERDICT_SCHEMA } from "../../shared/aurionReplayContract";
 
 function isolatedTestZone(suffix: string): ZoneId {
   return `observatory_threshold:${suffix}` as unknown as ZoneId;
@@ -99,7 +100,14 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
 
     expect(verdict.verdict).toBe("MATCH");
     if (verdict.verdict === "MATCH") {
-      expect(verdict.stagesVerified).toBe(4);
+      expect(verdict.schemaVersion).toBe(AURION_REPLAY_VERDICT_SCHEMA);
+      expect(verdict.domain).toBe("ZONE_TICK");
+      expect(verdict.scopeIdentity).toEqual({ worldId: receipt.worldId, zoneId: receipt.zoneId });
+      expect(verdict.range).toEqual({ fromTick: receipt.tick, toTick: receipt.tick });
+      expect(verdict.verifiedStages).toEqual(["PRE_STATE", "INPUT_ORDER", "POST_STATE", "RECEIPT"]);
+      expect(verdict.stagesVerified).toBe(verdict.verifiedStages.length);
+      expect(verdict.firstDivergentStage).toBeNull();
+      expect(verdict.reason).toBeNull();
       expect(verdict.receiptHash).toBe(receipt.receiptHash);
     }
   });
@@ -131,6 +139,13 @@ describe("C-Aurion Causal Tick & Determinism Engine", () => {
     });
 
     expect(verdict.verdict).toBe("FIRST_DIVERGENCE");
+    if (verdict.status === "FIRST_DIVERGENCE") {
+      expect(verdict.firstDivergentStage).toBe("INPUT_ORDER");
+      expect(verdict.verifiedStages).toEqual(["PRE_STATE"]);
+      expect(verdict.reason).toBeNull();
+      expect(verdict.expectedHash).toBe(entry.receipt.orderedIntentHash);
+      expect(verdict.observedHash).not.toBe(entry.receipt.orderedIntentHash);
+    }
   });
 
   it("embeds build and runtime provenance into receipts and active server state", () => {

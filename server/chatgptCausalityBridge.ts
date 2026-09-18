@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { computeReceiptHash, type AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
+import { AURION_ZONE_RULESET_VERSION, computeReceiptHash, type AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
+import { replayUnprovable } from "../shared/aurionReplayContract";
 import { activeProvenance } from "./aurionProvenance";
 import { globalCausalPersistence } from "./causality/persistence";
 import { globalCausalRecoveryService } from "./causality/causalRecoveryService";
@@ -80,11 +81,28 @@ export async function chatGptTickExplain(zoneId: string, tick: number) {
 
 export async function chatGptTickReplay(zoneId: string, tick: number) {
   const entry = await recordedEntry(zoneId, tick);
-  if (!entry) return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: "UNPROVABLE" as const, zoneId, tick, reason: "RECORDED_TICK_MISSING" });
-  if (!entry.preState) return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: "UNPROVABLE" as const, zoneId, tick, reason: "REPLAY_PRE_STATE_UNAVAILABLE", receipt: entry.receipt });
-  if (!entry.intents) return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: "UNPROVABLE" as const, zoneId, tick, reason: "RECORDED_INTENTS_MISSING", receipt: entry.receipt });
+  const receipt = entry?.receipt;
+  const replayContext = {
+    domain: "ZONE_TICK" as const,
+    sourceRevision: receipt?.sourceRevision ?? activeProvenance.sourceRevision,
+    rulesetVersion: receipt?.rulesetVersion ?? AURION_ZONE_RULESET_VERSION,
+    scopeIdentity: { worldId: receipt?.worldId ?? "UNOBSERVABLE", zoneId },
+    range: { fromTick: tick, toTick: tick },
+  };
+  if (!entry) {
+    const verdict = replayUnprovable(replayContext, [], "RECORDED_TICK_MISSING", { tick });
+    return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: null });
+  }
+  if (!entry.preState) {
+    const verdict = replayUnprovable(replayContext, [], "REPLAY_PRE_STATE_UNAVAILABLE", { tick });
+    return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: entry.receipt });
+  }
+  if (!entry.intents) {
+    const verdict = replayUnprovable(replayContext, [], "RECORDED_INTENTS_MISSING", { tick });
+    return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: entry.receipt });
+  }
   const verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
-  return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict });
+  return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: entry.receipt });
 }
 
 export async function chatGptReplayRange(zoneId: string, fromTick: number, toTick: number) {

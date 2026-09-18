@@ -1,4 +1,4 @@
-import { type ReplayVerdict, isReplayMatch } from "../../shared/aurionReplayContract";
+import { isReplayMatch, replayUnprovable, type ReplayVerdict } from "../../shared/aurionReplayContract";
 import { operationalDate } from "../../shared/operationalClock";
 import { replayZoneTick } from "./replayZoneTick";
 import { globalTickRecorder, type RecordedTickEntry, type CausalPersistenceAdapter } from "./tickRecorder";
@@ -49,13 +49,22 @@ export class AurionCausalReadbackService {
     let entry: RecordedTickEntry | undefined | null = this.recorder.getEntry(zoneId, nextTick);
     if (!entry && this.persistenceAdapter) entry = await this.persistenceAdapter.getRecordedTick(zoneId, nextTick);
 
+    const evidenceReceipt = entry?.receipt ?? latest;
+    const replayContext = {
+      domain: "ZONE_TICK" as const,
+      sourceRevision: evidenceReceipt.sourceRevision,
+      rulesetVersion: evidenceReceipt.rulesetVersion,
+      scopeIdentity: { worldId: evidenceReceipt.worldId, zoneId },
+      range: { fromTick: nextTick, toTick: nextTick },
+    };
+
     let verdict: ReplayVerdict;
     if (!entry) {
-      verdict = { status: "UNPROVABLE", verdict: "UNPROVABLE", tick: nextTick, reason: "RECORDED_TICK_MISSING" };
+      verdict = replayUnprovable(replayContext, [], "RECORDED_TICK_MISSING", { tick: nextTick });
     } else if (!entry.intents) {
-      verdict = { status: "UNPROVABLE", verdict: "UNPROVABLE", tick: nextTick, reason: "RECORDED_INTENTS_MISSING" };
+      verdict = replayUnprovable(replayContext, [], "RECORDED_INTENTS_MISSING", { tick: nextTick });
     } else if (!entry.preState) {
-      verdict = { status: "UNPROVABLE", verdict: "UNPROVABLE", tick: nextTick, reason: "REPLAY_PRE_STATE_UNAVAILABLE" };
+      verdict = replayUnprovable(replayContext, [], "REPLAY_PRE_STATE_UNAVAILABLE", { tick: nextTick });
     } else {
       verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
     }

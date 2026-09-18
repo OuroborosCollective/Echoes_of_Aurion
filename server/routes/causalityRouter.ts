@@ -1,7 +1,9 @@
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { aurionCausalArchive, aurionCausalCheckpoints, aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
-import { isReplayMatch } from "../../shared/aurionReplayContract";
+import { isReplayMatch, replayUnprovable } from "../../shared/aurionReplayContract";
+import { AURION_ZONE_RULESET_VERSION } from "../../shared/aurionCausalTickContract";
+import { activeProvenance } from "../aurionProvenance";
 import { adminProcedure, router } from "../_core/trpc";
 import { globalCausalArchivingService } from "../causality/archivingService";
 import { globalCausalPersistence } from "../causality/persistence";
@@ -30,8 +32,30 @@ export const causalityRouter = router({
     .input(z.object({ zoneId: z.string().min(1), tick: z.number().int().min(0) }))
     .query(async ({ input }) => {
       const entry = await globalCausalPersistence.getRecordedTick(input.zoneId, input.tick);
-      if (!entry) return { verdict: { status: "UNPROVABLE", verdict: "UNPROVABLE", tick: input.tick, reason: "RECORDED_TICK_MISSING" } as const, isMatch: false, recordedReceipt: null };
-      if (!entry.preState || !entry.intents) return { verdict: { status: "UNPROVABLE", verdict: "UNPROVABLE", tick: input.tick, reason: !entry.preState ? "REPLAY_PRE_STATE_UNAVAILABLE" : "RECORDED_INTENTS_MISSING" } as const, isMatch: false, recordedReceipt: entry.receipt };
+      const evidenceReceipt = entry?.receipt;
+      const replayContext = {
+        domain: "ZONE_TICK" as const,
+        sourceRevision: evidenceReceipt?.sourceRevision ?? activeProvenance.sourceRevision,
+        rulesetVersion: evidenceReceipt?.rulesetVersion ?? AURION_ZONE_RULESET_VERSION,
+        scopeIdentity: {
+          worldId: evidenceReceipt?.worldId ?? "UNOBSERVABLE",
+          zoneId: input.zoneId,
+        },
+        range: { fromTick: input.tick, toTick: input.tick },
+      };
+      if (!entry) {
+        const verdict = replayUnprovable(replayContext, [], "RECORDED_TICK_MISSING", { tick: input.tick });
+        return { verdict, isMatch: isReplayMatch(verdict), recordedReceipt: null };
+      }
+      if (!entry.preState || !entry.intents) {
+        const verdict = replayUnprovable(
+          replayContext,
+          [],
+          !entry.preState ? "REPLAY_PRE_STATE_UNAVAILABLE" : "RECORDED_INTENTS_MISSING",
+          { tick: input.tick },
+        );
+        return { verdict, isMatch: isReplayMatch(verdict), recordedReceipt: entry.receipt };
+      }
       const verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
       return { verdict, isMatch: isReplayMatch(verdict), recordedReceipt: entry.receipt };
     }),

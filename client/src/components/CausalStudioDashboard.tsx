@@ -124,8 +124,8 @@ export default function CausalStudioDashboard() {
               {verdict?.status === "FIRST_DIVERGENCE" && (
                 <div className="rounded border border-red-500/30 bg-red-950/20 p-3 text-xs">
                   <div className="mb-2 flex items-center gap-2 font-semibold text-red-300"><AlertCircle className="h-4 w-4" /> FIRST_DIVERGENCE: {verdict.stage}</div>
-                  <HashRow label="Expected" value={verdict.expectedHash ?? verdict.expected} />
-                  <HashRow label="Observed" value={verdict.observedHash ?? verdict.observed} />
+                  <HashRow label="Expected" value={verdict.expectedHash} />
+                  <HashRow label="Observed" value={verdict.observedHash} />
                 </div>
               )}
               {verdict?.status === "MATCH" && (
