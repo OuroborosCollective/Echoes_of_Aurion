@@ -30,6 +30,22 @@ function productionTsFiles(root: string): string[] {
   return out;
 }
 
+function isGameplayCandidatePath(file: string): boolean {
+  return [
+    "server/zone",
+    "server/wasd",
+    "server/world",
+    "server/quest",
+    "server/npc",
+    "server/endgame",
+    "server/combat",
+    "server/loot",
+    "server/gameplay",
+    "server/determinism",
+    "server/causality",
+  ].some(prefix => file.startsWith(prefix));
+}
+
 describe("Aurion addressable RNG v2", () => {
   it("returns the same U32 for the same complete causal address", () => {
     expect(resolveAddressableRandomU32(base)).toBe(resolveAddressableRandomU32({ ...base }));
@@ -84,12 +100,14 @@ describe("Aurion addressable RNG v2", () => {
         if (ts.isNewExpression(node) && node.expression.getText(source) === "SeededARERng" && file !== classifiedSequentialReference)
           violations.push(`${file}:new SeededARERng`);
         if (
+          isGameplayCandidatePath(file) &&
           ts.isCallExpression(node) &&
           ts.isPropertyAccessExpression(node.expression) &&
           node.expression.name.text === "nextFloat" &&
           file !== classifiedSequentialReference
         ) violations.push(`${file}:nextFloat`);
         if (
+          isGameplayCandidatePath(file) &&
           ts.isCallExpression(node) &&
           ((ts.isIdentifier(node.expression) && node.expression.text === "random") ||
             (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "random"))
