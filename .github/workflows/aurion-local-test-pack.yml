@@ -117,6 +117,14 @@ jobs:
           pnpm exec tsx scripts/read-aurion-world-root.ts --fixture fixtures/causality/aurion-world-root-step22.json 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-root-readback.log
           NODE_ENV=test AURION_WORLD_EPOCH_E2E=1 pnpm exec vitest run server/worldEpochReaction.e2e.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step22-mariadb-readback.log
 
+      - name: Verify Wave 2 Step 23 cross-zone handover
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          env -u DATABASE_URL pnpm exec vitest run server/causality/crossZoneSynchronizationService.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-contract.log
+          NODE_ENV=test AURION_CROSS_ZONE_E2E=1 pnpm exec vitest run server/causality/crossZoneHandoverMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-mariadb.log
+
       - name: Verify milestone gate evidence contract
         shell: bash
         run: |
