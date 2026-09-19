@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
@@ -117,6 +118,8 @@ suite("Cross-Zone Handover V2 MariaDB", () => {
     expect(explanation!.receipts.map(receipt => receipt.status)).toEqual([
       "PREPARED", "SOURCE_FROZEN", "TARGET_ACCEPTED", "SOURCE_FINALIZED", "COMMITTED",
     ]);
+    const evidencePath = process.env.AURION_STEP23_TRANSFER_ID_PATH?.trim();
+    if (evidencePath) writeFileSync(evidencePath, `${prepared.transferId}\n`, "utf8");
   });
 
   it("duplicate delivery is logically exactly once", async () => {
