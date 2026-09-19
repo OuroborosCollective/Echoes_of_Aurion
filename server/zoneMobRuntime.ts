@@ -31,38 +31,50 @@ export function resolveMobCollisionMovement(from: Readonly<{ x: number; z: numbe
 
 /** Aurion-hosted mob runtime; donor formulas remain historical provenance. */
 export class ZoneMobRuntime {
-  private readonly states = new Map<string, MobRuntimeState>();
-  private readonly orderedEntityIds: string[];
+  private readonly entityIdToIndex = new Map<string, number>();
+  private readonly cachedOrderedStates: MobRuntimeState[];
 
   constructor() {
-    for (const definition of observatoryMobDefinitions) this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
-    this.orderedEntityIds = Array.from(this.states.keys()).sort();
+    const states = new Map<string, MobRuntimeState>();
+    for (const definition of observatoryMobDefinitions) states.set(definition.entityId, initialMobRuntimeState(definition, 0));
+
+    const orderedEntityIds = Array.from(states.keys()).sort();
+    this.cachedOrderedStates = new Array(orderedEntityIds.length);
+
+    for (let i = 0; i < orderedEntityIds.length; i++) {
+      const entityId = orderedEntityIds[i]!;
+      this.entityIdToIndex.set(entityId, i);
+      this.cachedOrderedStates[i] = states.get(entityId)!;
+    }
   }
 
   tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
     let changed = false;
-    for (const entityId of this.orderedEntityIds) {
-      const current = this.states.get(entityId)!;
+    for (let i = 0; i < this.cachedOrderedStates.length; i++) {
+      const current = this.cachedOrderedStates[i]!;
       const before = publicMobSnapshot(current);
-      const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
-      this.states.set(entityId, next);
+      const next = frozenEntityIds.has(current.definition.entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
+      this.cachedOrderedStates[i] = next;
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }
     return changed;
   }
 
   applyCombatState(entityId: string, values: { health: number; stamina?: number; nextAttackTick?: number }): MobRuntimeState | undefined {
-    const current = this.states.get(entityId);
-    if (!current) return undefined;
+    const index = this.entityIdToIndex.get(entityId);
+    if (index === undefined) return undefined;
+    const current = this.cachedOrderedStates[index]!;
     const next = applyMobCombatState(current, values);
-    this.states.set(entityId, next);
+    this.cachedOrderedStates[index] = next;
     return next;
   }
 
   /** Replay restoration is fail-closed and covers every mutable FSM field in CanonicalZoneState. */
   restoreCanonicalState(mob: CanonicalMobState): MobRuntimeState {
-    const current = this.states.get(mob.entityId);
-    if (!current || mob.mobId !== mob.entityId) throw new Error("ZONE_MOB_RESTORE_IDENTITY_INVALID");
+    const index = this.entityIdToIndex.get(mob.entityId);
+    if (index === undefined) throw new Error("ZONE_MOB_RESTORE_IDENTITY_INVALID");
+    const current = this.cachedOrderedStates[index]!;
+    if (mob.mobId !== mob.entityId) throw new Error("ZONE_MOB_RESTORE_IDENTITY_INVALID");
     if (mob.archetype !== undefined && mob.archetype !== current.definition.archetype) throw new Error("ZONE_MOB_RESTORE_ARCHETYPE_INVALID");
     if (mob.maxHealth !== current.definition.maxHealth) throw new Error("ZONE_MOB_RESTORE_MAX_HEALTH_INVALID");
     if (!Number.isSafeInteger(mob.x) || !Number.isSafeInteger(mob.z)) throw new Error("ZONE_MOB_RESTORE_POSITION_INVALID");
@@ -87,13 +99,24 @@ export class ZoneMobRuntime {
       stamina: mob.stamina,
       nextAttackTick: mob.nextAttackTick,
     });
-    this.states.set(mob.entityId, next);
+    this.cachedOrderedStates[index] = next;
     return next;
   }
 
   snapshot(): readonly ConfirmedZoneMob[] {
-    return Object.freeze(this.orderedEntityIds.map(entityId => publicMobSnapshot(this.states.get(entityId)!)));
+    const result = new Array(this.cachedOrderedStates.length);
+    for (let i = 0; i < this.cachedOrderedStates.length; i++) {
+      result[i] = publicMobSnapshot(this.cachedOrderedStates[i]!);
+    }
+    return Object.freeze(result);
   }
-  stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
-  orderedStates(): readonly MobRuntimeState[] { return Object.freeze(this.orderedEntityIds.map(entityId => this.states.get(entityId)!)); }
+
+  stateFor(entityId: string): MobRuntimeState | undefined {
+    const index = this.entityIdToIndex.get(entityId);
+    return index !== undefined ? this.cachedOrderedStates[index] : undefined;
+  }
+
+  orderedStates(): readonly MobRuntimeState[] {
+    return this.cachedOrderedStates;
+  }
 }
