@@ -8,6 +8,7 @@ import {
   merchantInventoryStateHash,
   merchantMarketStateHash,
   merchantPolityStateHash,
+  npcHash,
   npcIdentity,
   type HubId,
 } from "./wasdNpcCapsule";
@@ -61,7 +62,7 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
   async function cleanup() {
     if(!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     for(const table of [
-      "aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts",
+      "aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionEpochSourceReceipts",
       "aurionNpcActionConsentReceipts","aurionNpcActionLeases",
       "aurionSemanticGraphIndexV2","aurionSemanticGraphProvenanceV2","aurionSemanticGraphEdgesV2","aurionSemanticGraphNodesV2","aurionSemanticGraphReceiptsV2",
       "aurionSemanticRetrievalIndex","aurionSemanticProvenance","aurionSemanticNodes","aurionSemanticMemoryReceipts",
@@ -104,6 +105,63 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
   });
   beforeEach(cleanup);
   afterAll(async()=>{if(pool){if(isolated)await cleanup();await pool.end();}});
+
+  it("revalidates a historical 0053 epoch set before atomically binding it to the current WASD source",async()=>{
+    const source=await seedSource();
+    const previousRevision="002e7c35309816cd043295f47398e52fdb388694";
+    const previousSha="7a524e3d329dd34205c41fdc00dc088e3b3187ab39c9f17a42a0c2cd8294e82f";
+    await pool.query("UPDATE aurionNpcActionEpochStates SET sourceRevision=?,sourceSha256=?",[previousRevision,previousSha]);
+
+    const [before]=await pool.query<RowDataPacket[]>("SELECT * FROM aurionNpcActionEpochStates ORDER BY hubId");
+    expect(new Set(before.map(row=>row.sourceRevision))).toEqual(new Set([previousRevision]));
+
+    const result=await executeConfirmedMerchantAction({worldSeed:"aim293-rebind-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId});
+    expect(result.status).toBe("committed");
+
+    const [after]=await pool.query<RowDataPacket[]>("SELECT * FROM aurionNpcActionEpochStates ORDER BY hubId");
+    expect(after.every(row=>row.sourceRevision===pin.sourceRevision&&row.sourceSha256===pin.sourceSha256)).toBe(true);
+
+    const [receipts]=await pool.query<RowDataPacket[]>("SELECT * FROM aurionNpcActionEpochSourceReceipts ORDER BY hubId");
+    expect(receipts).toHaveLength(hubs.length);
+    for(const receipt of receipts){
+      const prior=before.find(row=>row.hubId===receipt.hubId)!;
+      const core={
+        version:"aurion-npc-action-epoch-source-rebind.v1",
+        hubId:receipt.hubId,
+        previousSourceRevision:receipt.previousSourceRevision,
+        previousSourceSha256:receipt.previousSourceSha256,
+        sourceRevision:receipt.sourceRevision,
+        sourceSha256:receipt.sourceSha256,
+        capsuleManifestSha256:receipt.capsuleManifestSha256,
+        marketVersion:receipt.marketVersion,
+        marketHash:receipt.marketHash,
+        inventoryHash:receipt.inventoryHash,
+        polityVersion:receipt.polityVersion,
+        polityStateHash:receipt.polityStateHash,
+      };
+      expect(receipt).toMatchObject({
+        previousSourceRevision:previousRevision,previousSourceSha256:previousSha,
+        sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256,capsuleManifestSha256:pin.manifestSha256,
+        marketHash:prior.marketHash,inventoryHash:prior.inventoryHash,polityStateHash:prior.polityStateHash,
+      });
+      expect(receipt.receiptHash).toBe(npcHash(core));
+    }
+  });
+
+  it("refuses an epoch source rebind when current WASD cannot reproduce the stored state hashes",async()=>{
+    const source=await seedSource();
+    const previousRevision="002e7c35309816cd043295f47398e52fdb388694";
+    const previousSha="7a524e3d329dd34205c41fdc00dc088e3b3187ab39c9f17a42a0c2cd8294e82f";
+    await pool.query("UPDATE aurionNpcActionEpochStates SET sourceRevision=?,sourceSha256=?",[previousRevision,previousSha]);
+    await pool.query("UPDATE aurionNpcActionEpochStates SET marketHash=REPEAT('0',64) WHERE hubId=?",[homeHub]);
+
+    await expect(executeConfirmedMerchantAction({worldSeed:"aim293-rebind-tamper",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId}))
+      .rejects.toThrow("NPC_ACTION_MARKET_READBACK_MISMATCH");
+    const [receipts]=await pool.query<RowDataPacket[]>("SELECT id FROM aurionNpcActionEpochSourceReceipts");
+    expect(receipts).toHaveLength(0);
+    const [sources]=await pool.query<RowDataPacket[]>("SELECT DISTINCT sourceRevision,sourceSha256 FROM aurionNpcActionEpochStates");
+    expect(sources).toEqual([expect.objectContaining({sourceRevision:previousRevision,sourceSha256:previousSha})]);
+  });
 
   it("commits action, effects, real readback and only then the successor memory link",async()=>{
     const source=await seedSource();
@@ -204,7 +262,7 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
   it("fails closed on persisted source/capsule drift before action mutation",async()=>{
     const source=await seedSource();
     await pool.query("UPDATE aurionNpcActionEpochStates SET sourceRevision=REPEAT('0',40) WHERE hubId=?",[homeHub]);
-    await expect(executeConfirmedMerchantAction({worldSeed:"aim293-db-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId})).rejects.toThrow("SOURCE_DRIFT");
+    await expect(executeConfirmedMerchantAction({worldSeed:"aim293-db-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId})).rejects.toThrow("NPC_ACTION_EPOCH_SOURCE_SET_DRIFT");
     const value=await counts();
     expect(value.aurionNpcActionReceipts).toBe(0);
     expect(value.aurionNpcActionEffectReadbacks).toBe(0);
