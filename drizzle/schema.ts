@@ -715,6 +715,30 @@ export const aurionNpcActionEpochStates = mysqlTable("aurionNpcActionEpochStates
   index("aurionNpcActionEpochStates_active_idx").on(table.active),
 ]);
 
+/** Immutable proof that an existing epoch state was revalidated before binding it to a newer WASD capsule. */
+export const aurionNpcActionEpochSourceReceipts = mysqlTable("aurionNpcActionEpochSourceReceipts", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  hubId: varchar("hubId", { length: 96 }).notNull(),
+  previousSourceRevision: varchar("previousSourceRevision", { length: 40 }).notNull(),
+  previousSourceSha256: varchar("previousSourceSha256", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  capsuleManifestSha256: varchar("capsuleManifestSha256", { length: 64 }).notNull(),
+  marketVersion: int("marketVersion").notNull(),
+  marketHash: varchar("marketHash", { length: 64 }).notNull(),
+  inventoryHash: varchar("inventoryHash", { length: 64 }).notNull(),
+  polityVersion: int("polityVersion").notNull(),
+  polityStateHash: varchar("polityStateHash", { length: 64 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionEpochSourceReceipts_hash_uq").on(table.receiptHash),
+  uniqueIndex("aurionNpcActionEpochSourceReceipts_transition_uq").on(
+    table.hubId, table.previousSourceRevision, table.sourceRevision, table.marketVersion, table.polityVersion,
+  ),
+  index("aurionNpcActionEpochSourceReceipts_hub_idx").on(table.hubId, table.createdAt),
+]);
+
 /** Logical lease custody is Aurion-owned and mutable only through the action transaction. */
 export const aurionNpcActionLeases = mysqlTable("aurionNpcActionLeases", {
   id: varchar("id", { length: 96 }).primaryKey(),
