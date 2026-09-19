@@ -70,3 +70,49 @@ export function verifyEffectIntent(intent: AurionEffectIntent): boolean {
     return false;
   }
 }
+
+export interface AurionEffectDeliveryReceipt {
+  schema: "aurion.effect-delivery-receipt.v1";
+  effectId: string;
+  attempt: number;
+  deliveryState: AurionEffectDeliveryState;
+  providerReceiptHash: string | null;
+  errorCode: string | null;
+  previousDeliveryReceiptHash: string | null;
+  deliveryReceiptHash: string;
+}
+
+export function computeEffectDeliveryReceiptHash(
+  receipt: Omit<AurionEffectDeliveryReceipt, "deliveryReceiptHash"> | AurionEffectDeliveryReceipt,
+): string {
+  if (!HASH.test(receipt.effectId)) throw new Error("EFFECT_DELIVERY_EFFECT_ID_INVALID");
+  if (!Number.isSafeInteger(receipt.attempt) || receipt.attempt < 1) throw new Error("EFFECT_DELIVERY_ATTEMPT_INVALID");
+  if (receipt.providerReceiptHash !== null && !HASH.test(receipt.providerReceiptHash)) throw new Error("EFFECT_PROVIDER_RECEIPT_INVALID");
+  if (receipt.previousDeliveryReceiptHash !== null && !HASH.test(receipt.previousDeliveryReceiptHash)) throw new Error("EFFECT_PREVIOUS_DELIVERY_RECEIPT_INVALID");
+  return canonicalSha256({
+    schema: "aurion.effect-delivery-receipt.v1",
+    effectId: receipt.effectId,
+    attempt: receipt.attempt,
+    deliveryState: receipt.deliveryState,
+    providerReceiptHash: receipt.providerReceiptHash,
+    errorCode: receipt.errorCode,
+    previousDeliveryReceiptHash: receipt.previousDeliveryReceiptHash,
+  });
+}
+
+export function createEffectDeliveryReceipt(input: Omit<AurionEffectDeliveryReceipt, "schema" | "deliveryReceiptHash">): AurionEffectDeliveryReceipt {
+  const unsigned = {
+    schema: "aurion.effect-delivery-receipt.v1" as const,
+    ...input,
+  };
+  return Object.freeze({ ...unsigned, deliveryReceiptHash: computeEffectDeliveryReceiptHash(unsigned) });
+}
+
+export function verifyEffectDeliveryReceipt(receipt: AurionEffectDeliveryReceipt): boolean {
+  try {
+    return receipt.schema === "aurion.effect-delivery-receipt.v1" &&
+      receipt.deliveryReceiptHash === computeEffectDeliveryReceiptHash(receipt);
+  } catch {
+    return false;
+  }
+}
