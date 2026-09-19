@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
 import {
   aurionNpcActionConsentReceipts,
@@ -430,3 +430,43 @@ export async function readLatestConfirmedNpcAction(npcId:string) {
     return Object.freeze({ version:"aurion-public-npc-action.v1" as const, npcId, actionReceiptId:row.id, resolutionIndex:row.resolutionIndex, action:parsed<MerchantActionReceipt>(row.receiptJson,"NPC_ACTION_RECEIPT_JSON_INVALID").action, effectsHash:row.effectsHash, readbackHash:readback.readbackHash, sourceRevision:row.sourceRevision });
   });
 }
+
+const visibleNpcActions = [
+  "lyra",
+  "orun",
+  "ax1_merchant_observatory_threshold",
+  "ax1_merchant_windhollow",
+  "ax1_merchant_emberfall",
+  "ax1_merchant_cinder_vault",
+] as const;
+
+/** Authenticated bounded AX1 projection. Only fully linked action/readback/memory truth is emitted. */
+export async function readConfirmedNpcActionPacket(userId:number) {
+  if(!Number.isSafeInteger(userId)||userId<1) throw new Error("NPC_ACTION_PACKET_OWNER_INVALID");
+  const db=await getDb(); if(!db) throw new Error("Game database is not available");
+  return db.transaction(async tx=>{
+    const rows=await tx.select().from(aurionNpcActionReceipts)
+      .where(inArray(aurionNpcActionReceipts.npcId,[...visibleNpcActions]))
+      .orderBy(asc(aurionNpcActionReceipts.npcId),desc(aurionNpcActionReceipts.resolutionIndex));
+    const latest=new Map<string,ActionRow>();
+    for(const row of rows) if(!latest.has(row.npcId)) latest.set(row.npcId,row);
+    const actions=[];
+    for(const npcId of [...latest.keys()].sort()){
+      const row=latest.get(npcId)!;
+      const confirmed=await readPersistedAction(tx,row);
+      if(confirmed.status!=="persisted") throw new Error("NPC_ACTION_PACKET_READBACK_INVALID");
+      actions.push(Object.freeze({
+        npcId,
+        actionReceiptId:confirmed.actionReceiptId,
+        resolutionIndex:row.resolutionIndex,
+        action:confirmed.resolution.action,
+        effectsHash:row.effectsHash,
+        readbackHash:confirmed.effectReadbackHash,
+        sourceRevision:row.sourceRevision,
+      }));
+    }
+    if(actions.length>visibleNpcActions.length) throw new Error("NPC_ACTION_PACKET_COUNT_INVALID");
+    return Object.freeze({userId,format:"aurion-public-npc-actions.v1" as const,actions:Object.freeze(actions)});
+  });
+}
+
