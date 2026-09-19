@@ -1,0 +1,162 @@
+name: AIM-294 Semantic Memory Graph V2
+
+on:
+  pull_request:
+    paths:
+      - "server/wasdSemanticGraph*"
+      - "server/npcMultiMemoryPersistence.ts"
+      - "server/npcActionGatewayPersistence.ts"
+      - "server/wasdAurionRuntime.ts"
+      - "server/worldContext/sourceAdapter.ts"
+      - "server/aim294SemanticGraphV2MariaDb.test.ts"
+      - "shared/npcSemanticGraphReadmodel.ts"
+      - "client/src/xaurion/integration/NpcDecisionPanel*"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+      - "drizzle/**"
+      - "e2e/aim292.npcMemory.spec.ts"
+      - ".github/workflows/aim294-semantic-memory-graph-v2.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/wasdSemanticGraph*"
+      - "server/npcMultiMemoryPersistence.ts"
+      - "server/npcActionGatewayPersistence.ts"
+      - "server/wasdAurionRuntime.ts"
+      - "server/worldContext/sourceAdapter.ts"
+      - "server/aim294SemanticGraphV2MariaDb.test.ts"
+      - "shared/npcSemanticGraphReadmodel.ts"
+      - "client/src/xaurion/integration/NpcDecisionPanel*"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+      - "drizzle/**"
+      - "e2e/aim292.npcMemory.spec.ts"
+      - ".github/workflows/aim294-semantic-memory-graph-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim294-graph-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-reproduction:
+    name: Exact merged WASD AIM-294 capsule
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify reviewed consumer pin before artifact execution
+        id: pin
+        run: |
+          set -euo pipefail
+          node scripts/verify-wasd-npc.mjs
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import fs from "node:fs";
+          const pin=JSON.parse(fs.readFileSync("config/wasd-npc-capsule.json","utf8"));
+          if(!/^[a-f0-9]{40}$/.test(pin.sourceRevision)||!(/^[a-f0-9]{64}$/).test(pin.sourceSha256)||!(/^[a-f0-9]{64}$/).test(pin.manifestSha256)) throw new Error("AIM294_EXACT_PIN_REQUIRED");
+          console.log(`source_revision=${pin.sourceRevision}`);
+          console.log(`manifest_sha256=${pin.manifestSha256}`);
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/Wasd
+          ref: ${{ steps.pin.outputs.source_revision }}
+          path: wasd-source
+          persist-credentials: false
+          sparse-checkout: |
+            server
+            packages
+            scripts
+            patches
+      - name: Install frozen WASD source toolchain
+        working-directory: wasd-source
+        run: npm exec --yes --package=pnpm@11.8.0 -- pnpm install --frozen-lockfile --filter @wasd/server...
+      - name: Double rebuild, byte-compare, verify and run compiled AIM-294 tests
+        run: |
+          set -euo pipefail
+          test "$(git -C wasd-source rev-parse HEAD)" = "${{ steps.pin.outputs.source_revision }}"
+          node wasd-source/scripts/build-aurion-npc-capsule.mjs /tmp/aim294-a
+          node wasd-source/scripts/build-aurion-npc-capsule.mjs /tmp/aim294-b
+          diff --recursive /tmp/aim294-a /tmp/aim294-b
+          diff --recursive vendor/wasd-npc /tmp/aim294-a
+          cmp scripts/vendor/verify-wasd-npc-capsule.mjs wasd-source/scripts/verify-aurion-npc-capsule.mjs
+          WASD_NPC_CAPSULE_DIR=/tmp/aim294-a node --test wasd-source/scripts/__tests__/aurion-npc-capsule.test.mjs
+          node scripts/vendor/verify-wasd-npc-capsule.mjs /tmp/aim294-a "${{ steps.pin.outputs.source_revision }}" "${{ steps.pin.outputs.manifest_sha256 }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aim294-source-capsule-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/aim294-a
+            /tmp/aim294-b
+          if-no-files-found: error
+          retention-days: 14
+
+  mariadb-contract:
+    name: Real MariaDB graph rollback, provenance and retrieval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_graph_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_graph_test
+      AURION_NPC_E2E: '1'
+      AURION_NPC_ACTION_E2E: '1'
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply exact journal and prove schema contract
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          node scripts/verify-wasd-npc.mjs
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+      - name: Typecheck and run Step-27 plus AIM-292/AIM-293 regression set
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm exec vitest run --no-file-parallelism \
+            server/wasdSemanticGraphPersistence.test.ts \
+            server/aim292NpcSourceBoundary.test.ts \
+            server/aim292NpcMultiMemoryMariaDb.test.ts \
+            server/aim293NpcActionGatewayMariaDb.test.ts \
+            server/autonomousNpcLifeMariaDb.test.ts \
+            server/aim294SemanticGraphV2MariaDb.test.ts \
+            client/src/xaurion/integration/NpcDecisionPanel.test.tsx \
+            client/src/xaurion/integration/ax1FullCutover.test.tsx
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim294-mariadb-contract-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            drizzle/meta/_journal.json
+            config/wasd-npc-capsule.json
+          if-no-files-found: error
+          retention-days: 14
