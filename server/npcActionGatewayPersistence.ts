@@ -320,7 +320,17 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     if (!current) throw new Error("NPC_ACTION_SOURCE_STATE_REQUIRED");
 
     const existing = (await tx.select().from(aurionNpcActionReceipts).where(eq(aurionNpcActionReceipts.sourceDecisionReceiptId,input.sourceDecisionReceiptId)).limit(1))[0];
-    if (existing) return readPersistedAction(tx,existing);
+    if (existing) {
+      const receipt=parsed<MerchantActionReceipt>(existing.receiptJson,"NPC_ACTION_RECEIPT_JSON_INVALID");
+      const expectedConsent=input.consent ?? {verdict:"NOT_REQUIRED" as const,policyVersion:NO_CONSENT_POLICY};
+      const consent=(await tx.select().from(aurionNpcActionConsentReceipts).where(eq(aurionNpcActionConsentReceipts.id,existing.consentReceiptId)).limit(1))[0];
+      const expectedPolicyHash=npcHash({version:CONSENT_VERSION,verdict:expectedConsent.verdict,policyVersion:expectedConsent.policyVersion});
+      if(existing.npcId!==npcId || receipt.worldSeedSha256!==createHash("sha256").update(input.worldSeed,"utf8").digest("hex")
+          || !consent || consent.verdict!==expectedConsent.verdict || consent.policyVersion!==expectedConsent.policyVersion || consent.policyHash!==expectedPolicyHash) {
+        throw new Error("NPC_ACTION_COMMITTED_RETRY_CONFLICT");
+      }
+      return readPersistedAction(tx,existing);
+    }
 
     const source = (await tx.select().from(aurionNpcDecisionReceipts).where(and(eq(aurionNpcDecisionReceipts.id,input.sourceDecisionReceiptId),eq(aurionNpcDecisionReceipts.npcId,npcId))).limit(1))[0];
     if (!source) throw new Error("NPC_ACTION_SOURCE_RECEIPT_REQUIRED");
