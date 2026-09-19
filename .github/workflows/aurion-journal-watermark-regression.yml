@@ -191,7 +191,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 52) throw new Error("expected 52 journal rows after bounded apply");
+            if (Number(rows[0]?.rowCount) !== 53) throw new Error("expected 53 journal rows after bounded apply");
             if (Number(rows[0]?.maxCreatedAt) !== expectedWatermark) throw new Error("legacy historical watermark was rewritten");
           } finally {
             await connection.end();
@@ -217,7 +217,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 52 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
+            if (Number(rows[0]?.rowCount) !== 53 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
               throw new Error("retry changed historical journal state");
             }
           } finally {
