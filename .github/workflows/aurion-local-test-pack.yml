@@ -123,7 +123,9 @@ jobs:
           set -euo pipefail
           mkdir -p .aurion-local-test-pack/evidence
           env -u DATABASE_URL pnpm exec vitest run server/causality/crossZoneSynchronizationService.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-contract.log
-          NODE_ENV=test AURION_CROSS_ZONE_E2E=1 pnpm exec vitest run server/causality/crossZoneHandoverMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-mariadb.log
+          NODE_ENV=test AURION_CROSS_ZONE_E2E=1 AURION_STEP23_TRANSFER_ID_PATH=.aurion-local-test-pack/evidence/wave2-step23-transfer-id.txt pnpm exec vitest run server/causality/crossZoneHandoverMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-mariadb.log
+          transfer_id="$(cat .aurion-local-test-pack/evidence/wave2-step23-transfer-id.txt)"
+          pnpm exec tsx scripts/read-aurion-cross-zone-transfer.ts --transfer "$transfer_id" 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-transfer-readback.log
 
       - name: Verify milestone gate evidence contract
         shell: bash
