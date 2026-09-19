@@ -762,6 +762,7 @@ export const aurionNpcActionReceipts = mysqlTable("aurionNpcActionReceipts", {
   sourceDecisionSha256: varchar("sourceDecisionSha256", { length: 64 }).notNull(),
   sourcePlanHash: varchar("sourcePlanHash", { length: 64 }).notNull(),
   sourceGoal: varchar("sourceGoal", { length: 64 }).notNull(),
+  sourceGoalHash: varchar("sourceGoalHash", { length: 64 }).notNull(),
   sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
   sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
   capsuleManifestSha256: varchar("capsuleManifestSha256", { length: 64 }).notNull(),
