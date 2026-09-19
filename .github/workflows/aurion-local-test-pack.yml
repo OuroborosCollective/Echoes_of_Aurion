@@ -127,6 +127,16 @@ jobs:
           transfer_id="$(cat .aurion-local-test-pack/evidence/wave2-step23-transfer-id.txt)"
           pnpm exec tsx scripts/read-aurion-cross-zone-transfer.ts --transfer "$transfer_id" 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step23-transfer-readback.log
 
+      - name: Verify Wave 2 Step 24 effect intent journal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          env -u DATABASE_URL pnpm exec vitest run server/effects/aurionEffectJournal.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step24-contract.log
+          NODE_ENV=test AURION_EFFECT_E2E=1 AURION_STEP24_EFFECT_ID_PATH=.aurion-local-test-pack/evidence/wave2-step24-effect-id.txt pnpm exec vitest run server/effects/aurionEffectJournalMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step24-mariadb.log
+          effect_id="$(cat .aurion-local-test-pack/evidence/wave2-step24-effect-id.txt)"
+          pnpm exec tsx scripts/read-aurion-effect-intent.ts --effect-id "$effect_id" 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step24-effect-readback.log
+
       - name: Verify milestone gate evidence contract
         shell: bash
         run: |
