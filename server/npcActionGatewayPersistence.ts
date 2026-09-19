@@ -5,6 +5,7 @@ import {
   aurionNpcActionConsentReceipts,
   aurionNpcActionEffectReadbacks,
   aurionNpcActionEpochStates,
+  aurionNpcActionEpochSourceReceipts,
   aurionNpcActionLeases,
   aurionNpcActionMemoryLinks,
   aurionNpcActionReceipts,
@@ -69,6 +70,7 @@ import {
 
 const ACTION_READBACK_VERSION = "aurion-npc-action-effect-readback.v1" as const;
 const ACTION_MEMORY_LINK_VERSION = "aurion-npc-action-memory-link.v1" as const;
+const EPOCH_SOURCE_REBIND_VERSION = "aurion-npc-action-epoch-source-rebind.v1" as const;
 const CONSENT_VERSION = "aurion-npc-editorial-consent.v1" as const;
 const NO_CONSENT_POLICY = "aurion-npc-editorial-consent.not-required.v1" as const;
 const expectedHubIds = Object.keys(merchantBootstrapMarkets).sort();
@@ -126,9 +128,7 @@ function assertPin(): void {
   }
 }
 
-function verifyEpochRow(row: EpochRow): Readonly<{ market: MarketState; inventory: MerchantInventoryEvidence }> {
-  assertPin();
-  if (row.sourceRevision !== pin.sourceRevision || row.sourceSha256 !== pin.sourceSha256) throw new Error("NPC_ACTION_EPOCH_SOURCE_DRIFT");
+function verifyEpochState(row: EpochRow): Readonly<{ market: MarketState; inventory: MerchantInventoryEvidence }> {
   const market = parsed<MarketState>(row.marketJson, "NPC_ACTION_MARKET_JSON_INVALID");
   if (market.hubId !== row.hubId || merchantMarketStateHash(market) !== row.marketHash) throw new Error("NPC_ACTION_MARKET_READBACK_MISMATCH");
   const inventory = parsed<MerchantInventoryEvidence>(row.inventoryJson, "NPC_ACTION_INVENTORY_JSON_INVALID");
@@ -139,6 +139,68 @@ function verifyEpochRow(row: EpochRow): Readonly<{ market: MarketState; inventor
   const polityHash = merchantPolityStateHash({ polityId: row.polityId, version: row.polityVersion, stability: row.polityStability });
   if (row.polityId !== `polity:${row.hubId}` || polityHash !== row.polityStateHash) throw new Error("NPC_ACTION_POLITY_READBACK_MISMATCH");
   return Object.freeze({ market, inventory });
+}
+
+function verifyEpochRow(row: EpochRow): Readonly<{ market: MarketState; inventory: MerchantInventoryEvidence }> {
+  assertPin();
+  if (row.sourceRevision !== pin.sourceRevision || row.sourceSha256 !== pin.sourceSha256) throw new Error("NPC_ACTION_EPOCH_SOURCE_DRIFT");
+  return verifyEpochState(row);
+}
+
+async function ensureEpochSourceBound(tx:NpcTransaction):Promise<void>{
+  assertPin();
+  const rows=await tx.select().from(aurionNpcActionEpochStates).orderBy(asc(aurionNpcActionEpochStates.hubId)).for("update");
+  if(rows.length!==expectedHubIds.length||rows.map(row=>row.hubId).join("|")!==expectedHubIds.join("|")) throw new Error("NPC_ACTION_EPOCH_SET_INCOMPLETE");
+  const sourcePairs=new Set(rows.map(row=>`${row.sourceRevision}:${row.sourceSha256}`));
+  const currentPair=`${pin.sourceRevision}:${pin.sourceSha256}`;
+  if(sourcePairs.size===1&&sourcePairs.has(currentPair)) return;
+  if(sourcePairs.size!==1) throw new Error("NPC_ACTION_EPOCH_SOURCE_SET_DRIFT");
+
+  for(const row of rows){
+    verifyEpochState(row);
+    const core={
+      version:EPOCH_SOURCE_REBIND_VERSION,
+      hubId:row.hubId,
+      previousSourceRevision:row.sourceRevision,
+      previousSourceSha256:row.sourceSha256,
+      sourceRevision:pin.sourceRevision,
+      sourceSha256:pin.sourceSha256,
+      capsuleManifestSha256:pin.manifestSha256,
+      marketVersion:row.marketVersion,
+      marketHash:row.marketHash,
+      inventoryHash:row.inventoryHash,
+      polityVersion:row.polityVersion,
+      polityStateHash:row.polityStateHash,
+    };
+    const receiptHash=npcHash(core);
+    const id=`naesr_${receiptHash.slice(0,58)}`;
+    const existing=(await tx.select().from(aurionNpcActionEpochSourceReceipts)
+      .where(eq(aurionNpcActionEpochSourceReceipts.id,id)).limit(1))[0];
+    if(existing){
+      if(existing.receiptHash!==receiptHash||existing.hubId!==row.hubId||existing.previousSourceRevision!==row.sourceRevision||
+         existing.previousSourceSha256!==row.sourceSha256||existing.sourceRevision!==pin.sourceRevision||
+         existing.sourceSha256!==pin.sourceSha256||existing.capsuleManifestSha256!==pin.manifestSha256){
+        throw new Error("NPC_ACTION_EPOCH_SOURCE_RECEIPT_CONFLICT");
+      }
+    }else{
+      await tx.insert(aurionNpcActionEpochSourceReceipts).values({...core,id,receiptHash});
+    }
+    await tx.update(aurionNpcActionEpochStates)
+      .set({sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256})
+      .where(eq(aurionNpcActionEpochStates.hubId,row.hubId));
+  }
+
+  const rebound=await tx.select().from(aurionNpcActionEpochStates).orderBy(asc(aurionNpcActionEpochStates.hubId));
+  if(rebound.length!==rows.length) throw new Error("NPC_ACTION_EPOCH_SOURCE_REBIND_READBACK_REQUIRED");
+  for(let i=0;i<rebound.length;i++){
+    const before=rows[i]!,after=rebound[i]!;
+    if(after.hubId!==before.hubId||after.sourceRevision!==pin.sourceRevision||after.sourceSha256!==pin.sourceSha256||
+       after.marketVersion!==before.marketVersion||after.marketHash!==before.marketHash||after.inventoryHash!==before.inventoryHash||
+       after.polityVersion!==before.polityVersion||after.polityStateHash!==before.polityStateHash){
+      throw new Error("NPC_ACTION_EPOCH_SOURCE_REBIND_READBACK_MISMATCH");
+    }
+    verifyEpochRow(after);
+  }
 }
 
 async function lockedContext(tx: NpcTransaction, homeHubId: HubId, confirmed: ConfirmedNpcDecision): Promise<Readonly<{ context: MerchantGatewayContext; rows: readonly EpochRow[]; origin: EpochRow }>> {
@@ -340,6 +402,7 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     const confirmed = verifyConfirmedNpcDecision(source.observationIdsJson,{...source,receiptId:source.id});
     if (confirmed.authority.sourceRevision !== pin.sourceRevision || confirmed.authority.sourceSha256 !== pin.sourceSha256) throw new Error("NPC_ACTION_SOURCE_CAPSULE_DRIFT");
 
+    await ensureEpochSourceBound(tx);
     const locked = await lockedContext(tx,input.homeHubId,confirmed);
     const context = withWorldSeed(locked.context,input.worldSeed);
     const planned = planMerchantAction(context);
