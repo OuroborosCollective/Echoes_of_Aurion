@@ -63,6 +63,7 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     for(const table of [
       "aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts",
       "aurionNpcActionConsentReceipts","aurionNpcActionLeases",
+      "aurionSemanticGraphIndexV2","aurionSemanticGraphProvenanceV2","aurionSemanticGraphEdgesV2","aurionSemanticGraphNodesV2","aurionSemanticGraphReceiptsV2",
       "aurionSemanticRetrievalIndex","aurionSemanticProvenance","aurionSemanticNodes","aurionSemanticMemoryReceipts",
       "aurionNpcMemoryReceiptsV4","aurionWorldResolutions","aurionPolityStates",
     ]) await pool.query(`TRUNCATE TABLE ${table}`);
