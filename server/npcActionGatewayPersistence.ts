@@ -32,6 +32,7 @@ import {
   decodeNpcReceipt,
   encodeNpcLifeReceipt,
   merchantActionEffectsHash,
+  merchantActionReceiptHash,
   merchantBootstrapMarkets,
   merchantInventoryStateHash,
   merchantMarketStateHash,
@@ -262,11 +263,18 @@ async function readPersistedAction(tx: NpcTransaction, row: ActionRow): Promise<
   if (row.sourceRevision !== pin.sourceRevision || row.sourceSha256 !== pin.sourceSha256 || row.capsuleManifestSha256 !== pin.manifestSha256) throw new Error("NPC_ACTION_COMMITTED_SOURCE_DRIFT");
   const receipt = parsed<MerchantActionReceipt>(row.receiptJson,"NPC_ACTION_RECEIPT_JSON_INVALID");
   const effects = parsed<MerchantDecisionRequests>(row.effectSetJson,"NPC_ACTION_EFFECT_SET_JSON_INVALID");
-  if (receipt.id !== row.id || receipt.receiptHash !== row.receiptHash || receipt.effectsHash !== row.effectsHash || merchantActionEffectsHash(effects) !== row.effectsHash) throw new Error("NPC_ACTION_COMMITTED_RECEIPT_CONFLICT");
+  const { receiptHash: _receiptHash, ...unsignedReceipt } = receipt;
+  if (receipt.id !== row.id || receipt.receiptHash !== row.receiptHash || receipt.effectsHash !== row.effectsHash
+      || merchantActionReceiptHash(unsignedReceipt) !== row.receiptHash
+      || merchantActionEffectsHash(effects) !== row.effectsHash) throw new Error("NPC_ACTION_COMMITTED_RECEIPT_CONFLICT");
   const effectReadback = (await tx.select().from(aurionNpcActionEffectReadbacks).where(eq(aurionNpcActionEffectReadbacks.actionReceiptId,row.id)).limit(1))[0];
   if (!effectReadback || effectReadback.effectsHash !== row.effectsHash || effectReadback.sourceRevision !== pin.sourceRevision) throw new Error("NPC_ACTION_COMMITTED_READBACK_REQUIRED");
+  const readbackPayload = parsed<Record<string,unknown>>(effectReadback.readbackJson,"NPC_ACTION_READBACK_JSON_INVALID");
+  if (npcHash(readbackPayload) !== effectReadback.readbackHash) throw new Error("NPC_ACTION_COMMITTED_READBACK_HASH_MISMATCH");
   const link = (await tx.select().from(aurionNpcActionMemoryLinks).where(eq(aurionNpcActionMemoryLinks.actionReceiptId,row.id)).limit(1))[0];
   if (!link || link.effectReadbackId !== effectReadback.id) throw new Error("NPC_ACTION_COMMITTED_MEMORY_LINK_REQUIRED");
+  const linkPayload = { version:ACTION_MEMORY_LINK_VERSION, actionReceiptId:link.actionReceiptId, effectReadbackId:link.effectReadbackId, memoryReceiptId:link.memoryReceiptId, npcId:link.npcId, resolutionIndex:link.resolutionIndex };
+  if (npcHash(linkPayload) !== link.linkHash) throw new Error("NPC_ACTION_COMMITTED_MEMORY_LINK_HASH_MISMATCH");
   const decision = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id,row.successorNpcReceiptId)).limit(1))[0];
   if (!decision) throw new Error("NPC_ACTION_COMMITTED_NPC_RECEIPT_REQUIRED");
   const snapshot = decodeNpcReceipt(decision.observationIdsJson,decision);
@@ -322,12 +330,11 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     const planned = planMerchantAction(context);
     if (planned.status === "blocked") return Object.freeze({status:"blocked" as const,code:planned.code,replanHash:planned.replanHash});
 
-    const lease = await persistedLease(tx,planned.proposedLease);
     const consent = await persistConsent(tx,source.id,planned.intent.id,npcId,input.consent);
     if (consent.verdict === "DENY") {
-      await tx.update(aurionNpcActionLeases).set({state:"revoked"}).where(eq(aurionNpcActionLeases.id,lease.id));
       return Object.freeze({status:"denied" as const,consentReceiptId:consent.id,intentId:planned.intent.id});
     }
+    const lease = await persistedLease(tx,planned.proposedLease);
 
     const validated = validateMerchantAction({context,intent:planned.intent,lease});
     if (validated.status !== "validated") throw new Error(`NPC_ACTION_REVALIDATION_BLOCKED:${validated.code}`);
