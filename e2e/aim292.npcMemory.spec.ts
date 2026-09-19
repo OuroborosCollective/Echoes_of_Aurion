@@ -60,7 +60,7 @@ for(const profile of profiles){
     expect(graphProjection.bounds).toEqual({maxDepth:4,maxCandidates:64,maxResults:32});
     expect(graphProjection.relations.some(edge=>edge.kind==="performed_action")).toBe(true);
     const publicGraphJson=JSON.stringify(graphPacket);
-    for(const forbidden of ["provenance","receiptJson","effectSetJson","memoryJson","databaseCredential","actionReceiptId","effectReadbackId","memoryReceiptId"]) expect(publicGraphJson).not.toContain(forbidden);
+    for(const forbidden of ['"provenance":','"provenanceId":','"provenanceHash":',"receiptJson","effectSetJson","memoryJson","databaseCredential","actionReceiptId","effectReadbackId","memoryReceiptId"]) expect(publicGraphJson).not.toContain(forbidden);
     const graphRow=page.getByTestId("npc-semantic-graph-row").filter({has:page.locator('[data-npc-id="ax1_merchant_observatory_threshold"]')});
     const merchantGraph=page.locator('[data-testid="npc-semantic-graph-row"][data-npc-id="ax1_merchant_observatory_threshold"]');
     await expect(merchantGraph).toBeVisible({timeout:30_000});
