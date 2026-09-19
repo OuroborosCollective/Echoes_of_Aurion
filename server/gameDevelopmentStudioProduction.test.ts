@@ -1,66 +1,101 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { testGlb } from "./glbImportFixtures";
 import {
+  buildGameDevPackageBuildArgs,
+  buildGameDevVendorAdmitArgs,
   gameDevelopmentStudioLiveAssetInputSchema,
+  gameDevelopmentStudioRightsLabel,
   planGameDevelopmentStudioLiveAsset,
 } from "./gameDevelopmentStudioProduction";
-import { testGlb } from "./glbImportFixtures";
 
-describe("gameDevelopmentStudioProduction", () => {
-  it("documents owner-created private assets as Proprietary-Owner-Created without requiring invented license", async () => {
-    const glbBase64 = testGlb("Temple_Dawn").toString("base64");
-    const input = gameDevelopmentStudioLiveAssetInputSchema.parse({
-      displayName: "Temple of Dawn",
-      fileName: "temple_dawn.glb",
-      contentBase64: glbBase64,
-      purpose: "world-environment",
-      rightsBasis: "owner-created-private",
-      packageVersion: "1.0.0",
-    });
+const originalWorkspace = process.env.AURION_GAME_DEV_WORKSPACE;
+const roots: string[] = [];
 
-    const plan = await planGameDevelopmentStudioLiveAsset(input);
-    expect(plan.rightsBasis).toBe("owner-created-private");
-    expect(plan.license).toBe("Proprietary-Owner-Created");
-    expect(plan.providerSpend).toBe(false);
-    expect(plan.planSha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(plan.validationStatus).toBe("valid");
+afterEach(async () => {
+  if (originalWorkspace === undefined) delete process.env.AURION_GAME_DEV_WORKSPACE;
+  else process.env.AURION_GAME_DEV_WORKSPACE = originalWorkspace;
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+});
+
+function input(license = "CC0-1.0") {
+  return gameDevelopmentStudioLiveAssetInputSchema.parse({
+    displayName: "Aurion Studio Spear",
+    fileName: "Aurion_Spear_Weapon.glb",
+    contentBase64: testGlb("Aurion_Spear_Weapon").toString("base64"),
+    purpose: "equipment",
+    packageVersion: "1.0.0",
+    rightsBasis: "licensed",
+    license,
+    designWorkOrderSha256: "a".repeat(64),
+  });
+}
+
+function ownerCreatedInput() {
+  return gameDevelopmentStudioLiveAssetInputSchema.parse({
+    displayName: "Lyra Keeper of the Observatory",
+    fileName: "Lyra_character_questgiver.glb",
+    contentBase64: testGlb("Lyra_character_questgiver").toString("base64"),
+    purpose: "npc-fallback",
+    packageVersion: "1.0.0",
+    rightsBasis: "owner-created-private",
+  });
+}
+
+describe("productive Game Development Studio live admission contract", () => {
+  it("keeps package construction separate from the explicit vendor confirmation", () => {
+    expect(buildGameDevPackageBuildArgs("/tmp/source.glb", "/tmp/output", input())).toEqual([
+      "package", "build", "/tmp/source.glb",
+      "--name", "Aurion Studio Spear",
+      "--version", "1.0.0",
+      "--license", "CC0-1.0",
+      "--output-dir", "/tmp/output",
+      "--json",
+    ]);
+    expect(buildGameDevVendorAdmitArgs("/tmp/package", "/tmp/project", "/tmp/output", false)).not.toContain("--confirm");
+    const confirmed = buildGameDevVendorAdmitArgs("/tmp/package", "/tmp/project", "/tmp/output", true);
+    expect(confirmed.filter(value => value === "--confirm")).toHaveLength(1);
   });
 
-  it("requires a non-empty license string for licensed assets", async () => {
-    const glbBase64 = testGlb("Wagon_Cart").toString("base64");
-    const invalidInput = {
-      displayName: "Licensed Wagon",
-      fileName: "wagon.glb",
-      contentBase64: glbBase64,
-      purpose: "world-environment" as const,
-      rightsBasis: "licensed" as const,
-      license: "   ",
-    };
-
-    await expect(planGameDevelopmentStudioLiveAsset(invalidInput)).rejects.toThrow(
-      "GDS_LICENSED_ASSET_REQUIRES_LICENSE"
-    );
-
-    const validInput = {
-      ...invalidInput,
-      license: "CC-BY-4.0",
-    };
-    const plan = await planGameDevelopmentStudioLiveAsset(validInput);
-    expect(plan.rightsBasis).toBe("licensed");
-    expect(plan.license).toBe("CC-BY-4.0");
+  it("rejects unknown licensed assets but accepts owner-created private rights without a foreign license", () => {
+    expect(() => input("unknown")).toThrow("explicit license required");
+    const owner = ownerCreatedInput();
+    expect(owner.license).toBeUndefined();
+    expect(gameDevelopmentStudioRightsLabel(owner)).toBe("Proprietary-Owner-Created");
+    expect(buildGameDevPackageBuildArgs("/tmp/source.glb", "/tmp/output", owner)).toContain("Proprietary-Owner-Created");
   });
 
-  it("rejects invalid GLB buffers missing the glTF magic header", async () => {
-    const invalidBuffer = Buffer.from("not-a-valid-glb-file-at-all-at-least-twenty-bytes");
-    const input = {
-      displayName: "Corrupted Asset",
-      fileName: "corrupt.glb",
-      contentBase64: invalidBuffer.toString("base64"),
-      purpose: "world-environment" as const,
-      rightsBasis: "owner-created-private" as const,
+  it("creates a deterministic review plan from real GLB bytes and GDS validation evidence", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "aurion-game-dev-plan-"));
+    roots.push(root);
+    process.env.AURION_GAME_DEV_WORKSPACE = root;
+    const recorded: string[][] = [];
+    const runner = async (args: readonly string[]) => {
+      recorded.push([...args]);
+      if (args[0] !== "asset") throw new Error("unexpected command");
+      if (args[1] === "inspect") {
+        return JSON.stringify({ operation: "asset.inspect", ok: true, data: { schema: "org.gamedebug.asset_inspection.v1", modelPath: args[2], meshCount: 1, materialCount: 0 } });
+      }
+      if (args[1] === "validate") {
+        return JSON.stringify({ operation: "asset.validate", ok: true, data: { schema: "org.gamedebug.asset_validation.v1", modelPath: args[2], passed: true, errorCount: 0, warningCount: 0 } });
+      }
+      throw new Error("unexpected command");
     };
+    const first = await planGameDevelopmentStudioLiveAsset(input(), runner);
+    const second = await planGameDevelopmentStudioLiveAsset(input(), runner);
 
-    await expect(planGameDevelopmentStudioLiveAsset(input)).rejects.toThrow(
-      "GDS_INVALID_GLB_MAGIC"
-    );
+    expect(first).toEqual(second);
+    expect(first.validationPassed).toBe(true);
+    expect(first.requiresHumanConfirmation).toBe(true);
+    expect(first.providerCalls).toBe(false);
+    expect(first.planSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.aurionPlanSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(recorded.map(args => args.slice(0, 2))).toEqual([
+      ["asset", "inspect"], ["asset", "validate"],
+      ["asset", "inspect"], ["asset", "validate"],
+    ]);
+    expect(recorded.flat()).not.toContain("--confirm");
   });
 });

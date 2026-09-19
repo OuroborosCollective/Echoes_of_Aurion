@@ -1,32 +1,55 @@
-import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
-import type { AurionProvenance } from "../shared/aurionProvenanceContract";
+import type { AurionProvenance, ProvenanceObservation } from "../shared/aurionProvenanceContract";
 
-function fileSha256(relPath: string): string {
+const GIT_SHA = /^[a-f0-9]{40}$/;
+const SHA256 = /^sha256:[a-f0-9]{64}$/;
+
+function observedDigest(value: string | undefined): { value: string; status: ProvenanceObservation } {
+  const normalized = value?.trim().toLowerCase();
+  return normalized && SHA256.test(normalized)
+    ? { value: normalized, status: "OBSERVED" }
+    : { value: "UNVERIFIED", status: "UNVERIFIED" };
+}
+
+function fileSha256(relativePath: string): string {
   try {
-    const full = resolve(process.cwd(), relPath);
-    if (existsSync(full)) {
-      const content = readFileSync(full, "utf8");
-      return canonicalSha256(content);
-    }
+    const fullPath = resolve(process.cwd(), relativePath);
+    if (!existsSync(fullPath)) return "UNOBSERVABLE";
+    return `sha256:${createHash("sha256").update(readFileSync(fullPath)).digest("hex")}`;
   } catch {
-    // fallback
+    return "UNOBSERVABLE";
   }
-  return "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+}
+
+function runtimeBuildRevision(): string | null {
+  const candidates = ["dist/.aurion-runtime-build.json", ".aurion-runtime-build.json"];
+  for (const candidate of candidates) {
+    try {
+      const path = resolve(process.cwd(), candidate);
+      if (!existsSync(path)) continue;
+      const parsed = JSON.parse(readFileSync(path, "utf8")) as { revision?: unknown };
+      if (typeof parsed.revision === "string" && GIT_SHA.test(parsed.revision.toLowerCase())) return parsed.revision.toLowerCase();
+    } catch {
+      // Try the next authoritative build artifact location.
+    }
+  }
+  return null;
 }
 
 export function computeRuntimeProvenance(): AurionProvenance {
-  // Check if static pre-built provenance file exists
-  const jsonPath = resolve(process.cwd(), "architecture/aurion-provenance.json");
-  if (existsSync(jsonPath)) {
-    try {
-      const data = JSON.parse(readFileSync(jsonPath, "utf8"));
-      return data;
-    } catch {
-      // fall through to dynamic computation
-    }
-  }
+  const envRevision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase();
+  const manifestRevision = runtimeBuildRevision();
+  const sourceRevision = envRevision && GIT_SHA.test(envRevision) ? envRevision : manifestRevision ?? "UNVERIFIED";
+  const sourceObservation: ProvenanceObservation = sourceRevision === "UNVERIFIED" ? "UNVERIFIED" : "OBSERVED";
+
+  const buildInput = observedDigest(process.env.AURION_BUILD_INPUT_DIGEST);
+  const artifact = observedDigest(process.env.AURION_ARTIFACT_DIGEST);
+  const image = observedDigest(process.env.AURION_RUNTIME_IMAGE_DIGEST);
+  const buildTimestamp = process.env.AURION_BUILD_TIMESTAMP?.trim() || "UNVERIFIED";
 
   const rulesets = {
     movement: fileSha256("server/wasdZoneMovementProtocol.ts"),
@@ -37,36 +60,34 @@ export function computeRuntimeProvenance(): AurionProvenance {
     tickContract: fileSha256("shared/aurionCausalTickContract.ts"),
   };
 
-  const commit = process.env.AURION_COMMIT || "local-head-c-aurion-endstate";
-  const sourceRevision = process.env.AURION_RELEASE_SHA || commit;
-  const dirty = Boolean(process.env.AURION_DIRTY ?? false);
-  const buildTimestamp = "2026-09-16T12:00:00.000Z";
-  const buildInputDigest = process.env.AURION_BUILD_INPUT_DIGEST || fileSha256("pnpm-lock.yaml");
-  const artifactDigest = process.env.AURION_ARTIFACT_DIGEST || fileSha256("package.json");
-  const runtimeImageDigest = process.env.AURION_RUNTIME_IMAGE_DIGEST || "sha256:553aad9a959999359289cf347f0e08cac5bdd8e1d47098c55b2a3bc2acc8f356";
-
-  const authority = {
-    ruleset: "aurion-zone-v3",
-    tickHz: 10,
-    causalReceipts: true,
-  };
-
+  const observation = {
+    sourceRevision: sourceObservation,
+    buildInputDigest: buildInput.status,
+    artifactDigest: artifact.status,
+    runtimeImageDigest: image.status,
+  } as const;
+  const authority = { ruleset: AURION_ZONE_RULESET_VERSION, tickHz: 10, causalReceipts: true };
+  const dirty = process.env.AURION_DIRTY === "true" || sourceObservation !== "OBSERVED";
   const runtimeHash = canonicalSha256({
-    commit,
     sourceRevision,
     dirty,
-    buildInputDigest,
+    buildInputDigest: buildInput.value,
+    artifactDigest: artifact.value,
+    runtimeImageDigest: image.value,
+    observation,
+    authority,
     rulesets,
   });
 
   return {
-    commit,
+    commit: sourceRevision,
     sourceRevision,
     dirty,
     buildTimestamp,
-    buildInputDigest,
-    artifactDigest,
-    runtimeImageDigest,
+    buildInputDigest: buildInput.value,
+    artifactDigest: artifact.value,
+    runtimeImageDigest: image.value,
+    observation,
     authority,
     rulesets,
     runtimeHash,

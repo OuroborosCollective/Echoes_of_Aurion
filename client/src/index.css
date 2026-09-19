@@ -23,9 +23,9 @@
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; min-height: 100%; margin: 0; background: var(--background); -webkit-overflow-scrolling: touch; overflow-x: hidden; }
 body { color: var(--foreground); font-family: "Manrope", Arial, sans-serif; }
-button, input, select, textarea { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #2DE2CF; outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #2DE2CF; outline-offset: 3px; }
 
 .aurion-app { position: relative; min-height: 100dvh; isolation: isolate; background: radial-gradient(ellipse at 75% 43%, #183f42 0%, #082229 33%, #04141b 72%); }
 .game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; outline: none; z-index: -3; }

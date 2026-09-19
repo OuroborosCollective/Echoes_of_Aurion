@@ -18,7 +18,9 @@ import { isWeaponTrack, type WeaponTrack } from "./endgameProtocol";
 import { MAX_GLB_BASE64_CHARS, USER_GLB_MAX_BASE64_CHARS } from "./adminProtocol";
 import { forumCategories, mayPublishForumCategory, normalizeCommunityBody, normalizeCommunityText } from "./communityProtocol";
 import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLocalHandle, verifyLocalPassword } from "./localAuth";
-import { proposeAurionDeveloperChange } from "./liveDeveloperGenkit";
+import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperGenkit";
+import { hashGameDevAssetDesignWorkOrder } from "./liveDeveloperProtocol";
+import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInputSchema, planGameDevelopmentStudioLiveAsset } from "./gameDevelopmentStudioProduction";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
@@ -34,18 +36,11 @@ import {
   requestNpcPolicyRollback 
 } from "./wasdNpcEvolutionPersistence";
 import { aurionNpcPolicyVersions } from "../drizzle/schema";
-import { aurionQuestRouter } from "./routes/aurionQuestRouter";
+import { aurionQuestRouter, adminQuestService } from "./routes/aurionQuestRouter";
 import { aurionAuthoringRouter } from "./routes/aurionAuthoringRouter";
 import { aurionContextRouter } from "./routes/aurionContextRouter";
 import { causalityRouter } from "./routes/causalityRouter";
-import { causalResonanceRouter } from "./routes/causalResonanceRouter";
 import { sessionLogRouter } from "./routes/sessionLogRouter";
-import {
-  gameDevelopmentStudioLiveAssetInputSchema,
-  planGameDevelopmentStudioLiveAsset,
-  applyGameDevelopmentStudioLiveAsset,
-} from "./gameDevelopmentStudioProduction";
-import { createHash } from "node:crypto";
 
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
@@ -60,18 +55,28 @@ export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   causality: causalityRouter,
-  causalResonance: causalResonanceRouter,
   sessionLogs: sessionLogRouter,
   aurionQuest: aurionQuestRouter,
-  aurionContext: aurionContextRouter,
   aurionAuthoring: aurionAuthoringRouter,
+  aurionContext: aurionContextRouter,
   worldAssets: router({
     region: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => legacyWorldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
     regionV2: protectedProcedure.input(worldAssetRegionInput).query(({ input }) => worldAssetRegion(db.GLOBAL_WORLD_ID, db.GLOBAL_WORLD_SEED, input)),
   }),
   groups: router({
     read: protectedProcedure.query(({ ctx }) => readGroupForUser(ctx.user.id)),
-    command: protectedProcedure.input(groupCommandSchema).mutation(({ ctx, input }) => commandGroupForUser(ctx.user.id, input)),
+    command: protectedProcedure.input(groupCommandSchema).mutation(async ({ ctx, input }) => {
+      const result = await commandGroupForUser(ctx.user.id, input);
+      if (result.applied && input.action.kind === "strike" && result.result.party?.phase === "cleared") {
+        await adminQuestService.applyConfirmedObjectiveEvent(ctx.user.id, {
+          source: "group_instance",
+          event: "cleared",
+          targetId: result.result.party.id,
+          payload: { dungeonId: result.result.party.dungeonId },
+        });
+      }
+      return result;
+    }),
   }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -200,7 +205,18 @@ export const appRouter = router({
       z.object({ kind: z.literal("place_structure"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), assetKey: z.enum(["aurion_tripo_starpath_marker", "aurion_tripo_garden_border"]), xMm: z.number().int().min(0).max(63_999), zMm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
       z.object({ kind: z.literal("remove_structure"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), structureId: z.string().regex(/^structure:[1-9][0-9]*:[0-9a-f]{16}$/), xMm: z.number().int().min(0).max(63_999), zMm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
       z.object({ kind: z.literal("build_road"), coordinate: z.object({ x: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), z: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT) }), expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION), expectedBaseHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/), fromXmm: z.number().int().min(0).max(63_999), fromZmm: z.number().int().min(0).max(63_999), toXmm: z.number().int().min(0).max(63_999), toZmm: z.number().int().min(0).max(63_999), idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/) }),
-    ])).mutation(({ ctx, input }) => db.applyWorldChunkAction({ actorUserId: ctx.user.id, intent: input })),
+    ])).mutation(async ({ ctx, input }) => {
+      const result = await db.applyWorldChunkAction({ actorUserId: ctx.user.id, intent: input });
+      if (result.source === "created") {
+        await adminQuestService.applyConfirmedObjectiveEvent(ctx.user.id, {
+          source: "world_chunk_delta",
+          event: result.delta.kind,
+          targetId: result.delta.targetId,
+          payload: result.delta.payload,
+        });
+      }
+      return result;
+    }),
     worldChunkWindow: protectedProcedure.input(z.object({
       worldVersion: z.literal("aurion-global-world.v1"),
       expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION),
@@ -389,62 +405,20 @@ export const appRouter = router({
       })).mutation(({ input }) => proposeAurionDeveloperChange({ ...input, actorRole: "admin" })),
       designAsset: adminProcedure.input(z.object({
         request: z.string().trim().min(12).max(1_800),
-      })).mutation(async ({ input }) => {
-        const workOrderSha256 = createHash("sha256").update(input.request).digest("hex");
-        const words = input.request.toLowerCase();
-        let suggestedPurpose: "world-environment" | "world-nature" | "npc-fallback" | "player-public" | "equipment" = "world-environment";
-        if (words.includes("tree") || words.includes("plant") || words.includes("rock") || words.includes("nature")) {
-          suggestedPurpose = "world-nature";
-        } else if (words.includes("npc") || words.includes("character") || words.includes("guard")) {
-          suggestedPurpose = "npc-fallback";
-        } else if (words.includes("player")) {
-          suggestedPurpose = "player-public";
-        } else if (words.includes("weapon") || words.includes("sword") || words.includes("shield") || words.includes("armor")) {
-          suggestedPurpose = "equipment";
-        }
-        const suggestedDisplayName = input.request.slice(0, 48).trim();
-        return {
-          workOrderSha256,
-          workOrder: {
-            title: `Design: ${suggestedDisplayName}`,
-            designIntent: input.request,
-            suggestedDisplayName,
-            suggestedPurpose,
-            acceptanceCriteria: [
-              "Self-contained GLB binary without external URIs",
-              "Matches Aurion low-end performance and budget constraints",
-              "Human review required before live commit",
-            ],
-          },
-        };
+      }).strict()).mutation(async ({ input }) => {
+        const workOrder = await proposeGameDevAssetDesign({ ...input, actorRole: "admin" });
+        return { workOrder, workOrderSha256: hashGameDevAssetDesignWorkOrder(workOrder) };
       }),
-      gameDevPlan: adminProcedure.input(gameDevelopmentStudioLiveAssetInputSchema).mutation(async ({ input }) => {
-        const plan = await planGameDevelopmentStudioLiveAsset(input);
-        return {
-          validationPassed: true,
-          planSha256: plan.planSha256,
-          sourceSha256: plan.assetSha256,
-          targetType: plan.assetType,
-          targetKey: plan.targetKey,
-          purpose: plan.purpose,
-          rightsBasis: plan.rightsBasis,
-          license: plan.license,
-          byteLength: plan.byteLength,
-        };
-      }),
-      gameDevApply: adminProcedure.input(z.object({
-        asset: gameDevelopmentStudioLiveAssetInputSchema,
-        expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/),
-        confirmation: z.literal("APPLY_TO_LIVE_AURION"),
-      })).mutation(async ({ ctx, input }) => {
-        const result = await applyGameDevelopmentStudioLiveAsset(ctx.user.id, input.asset, input.expectedPlanSha256);
-        return {
-          aurionAssetId: result.assetId,
-          aurionStorageSha256: result.sha256,
-          aurionCatalogRevision: result.catalogRevision,
-          status: result.status,
-        };
-      }),
+      gameDevPlan: adminProcedure
+        .input(gameDevelopmentStudioLiveAssetInputSchema)
+        .mutation(({ input }) => planGameDevelopmentStudioLiveAsset(input)),
+      gameDevApply: adminProcedure
+        .input(z.object({
+          asset: gameDevelopmentStudioLiveAssetInputSchema,
+          expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/),
+          confirmation: z.literal("APPLY_TO_LIVE_AURION"),
+        }).strict())
+        .mutation(({ ctx, input }) => applyGameDevelopmentStudioLiveAsset(ctx.user.id, input.asset, input.expectedPlanSha256)),
     }),
     players: router({
       list: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(100).default(25), query: z.string().trim().max(64).regex(/^[A-Za-z0-9@._ -]*$/).optional() }).optional()).query(({ input }) => db.listAdminPlayers(input ?? { limit: 25 })),

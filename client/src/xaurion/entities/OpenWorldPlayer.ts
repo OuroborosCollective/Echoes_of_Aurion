@@ -1074,9 +1074,6 @@ export class OpenWorldPlayer {
     const dur = duration || this.attackAnimDuration;
     this.attackAnimTimer = dur;
 
-    // Trigger one-shot attack animation on external GLB actor if active
-    this.glbActor?.playOnce("attack");
-
     if (type === 'aoe' || type === 'projectile') {
       (this.spellGlyphRing.material as THREE.MeshBasicMaterial).opacity = 0.85;
     } else if (type === 'buff') {
@@ -1361,38 +1358,30 @@ export class OpenWorldPlayer {
           this.torsoGroup.rotation.y = THREE.MathUtils.lerp(0.45, 0, p);
         }
       } else if (this.activeAttackType === 'projectile' || this.activeAttackType === 'turret') {
-        // Aim raise & sharp recoil kickback with head focus
+        // Aim raise & sharp recoil kickback
         if (progress < 0.3) {
           this.rightArmPivot.rotation.x = -1.4;
           this.rightForearmPivot.rotation.x = -0.1;
           this.weaponPivot.rotation.x = 0.5;
-          this.headGroup.rotation.x = -0.15;
         } else {
           const p = (progress - 0.3) / 0.7;
           this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(-1.4, -0.2, p);
           this.weaponPivot.rotation.x = THREE.MathUtils.lerp(0.5, 0, p);
-          this.headGroup.rotation.x = THREE.MathUtils.lerp(-0.15, 0, p);
         }
       } else if (this.activeAttackType === 'buff') {
-        // Active Buff / Warcry: Stomp ground, puff chest, raise arms outward, and lift head
+        // Active Buff / Warcry: Stomp ground and raise arms outward
         const p = Math.sin(progress * Math.PI);
         this.leftArmPivot.rotation.z = -p * 1.2;
         this.rightArmPivot.rotation.z = p * 1.2;
         this.leftArmPivot.rotation.x = -p * 0.8;
         this.rightArmPivot.rotation.x = -p * 0.8;
-        this.torsoGroup.rotation.x = -p * 0.15;
-        this.headGroup.rotation.x = -p * 0.25;
       } else {
-        // Spellcast (AoE / Chrono Magic / Arcane): Raise staff overhead with dual channeling pose, floating lift & head elevation
+        // Spellcast (AoE / Chrono Magic): Raise staff overhead with dual channeling pose
         const arc = Math.sin(progress * Math.PI);
         this.rightArmPivot.rotation.x = -0.2 - arc * 1.5;
         this.leftArmPivot.rotation.x = -0.2 - arc * 1.5;
-        this.rightArmPivot.rotation.z = arc * 0.3;
-        this.leftArmPivot.rotation.z = -arc * 0.3;
         this.weaponPivot.rotation.z = arc * 0.8;
-        this.pelvisGroup.position.y += arc * 0.18; // Floating sensation while channeling!
-        this.torsoGroup.rotation.x = -arc * 0.12;
-        this.headGroup.rotation.x = -arc * 0.3;
+        this.pelvisGroup.position.y += arc * 0.15; // Floating sensation while channeling!
       }
 
       if (this.attackAnimTimer <= 0) {
@@ -1435,7 +1424,7 @@ export class OpenWorldPlayer {
     this.glbActor?.dispose();
     this.glbActor = null;
 
-    if (!modelId || modelId === "offline-testbed-procedural") {
+    if (!modelId) {
       this.activeGlbModelId = null;
       this.rootGroup.visible = true;
       return true;

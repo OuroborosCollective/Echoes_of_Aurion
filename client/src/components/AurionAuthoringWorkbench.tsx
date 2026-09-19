@@ -10,47 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AuthoringKind = "world" | "quest" | "dungeon";
 
-const STARTER_TEMPLATES: Record<AuthoringKind, Record<string, unknown>> = {
-  world: {
-    zoneId: "zone_windhain_sanctum",
-    zoneName: "Windhain Runenaltar",
-    version: 1,
-    placements: [
-      {
-        instanceId: "altar-center",
-        assetSlot: "ruin_altar",
-        position: [0, 0, 0],
-        rotation: [0, 0, 0, 1],
-        scale: [1, 1, 1],
-        tags: ["sanctum", "interactive"],
-      },
-    ],
-    referencedAssetHashes: [],
-  },
-  dungeon: {
-    dungeonId: "dungeon_windhain_catacombs",
-    name: "Katakomben von Windhain",
-    version: 1,
-    rooms: [
-      { id: "vestibule", name: "Vorhof der Stille", exits: ["inner-sanctum"] },
-      { id: "inner-sanctum", name: "Runenkrypta", exits: [] },
-    ],
-    bosses: [
-      { id: "boss-shade", name: "Runenwächter", room: "inner-sanctum" },
-    ],
-  },
-  quest: {
-    templateId: "quest_windhain_awakening",
-    version: 1,
-    title: "Das Erwachen der Windhain-Runen",
-    summary: "Hilf Althea, die uralten Runensteine zu harmonisieren.",
-    steps: [
-      { id: "step-find-shrine", description: "Finde den uralten Altar in Windhain." },
-      { id: "step-activate", description: "Berühre die Resonanz-Steine." },
-    ],
-  },
-};
-
 const confirmationFor = (kind: AuthoringKind) =>
   kind === "world" ? "APPLY_WORLD_DESIGN" : kind === "quest" ? "PUBLISH_QUEST_TEMPLATE" : "PUBLISH_DUNGEON";
 
@@ -248,18 +207,6 @@ export default function AurionAuthoringWorkbench() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-400">JSON-Drafting</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    onClick={() => mutateDraft(JSON.stringify(STARTER_TEMPLATES[tab], null, 2))}
-                    className="text-xs text-cyan-300 border-cyan-500/30 hover:bg-cyan-950/40"
-                  >
-                    Muster-Draft einfügen
-                  </Button>
-                </div>
                 <textarea
                   value={draftJson}
                   onChange={event => mutateDraft(event.target.value)}
@@ -285,16 +232,7 @@ export default function AurionAuthoringWorkbench() {
                 <div className="rounded-md border border-cyan-200/10 bg-cyan-400/[.03] p-3 font-mono text-[11px] text-cyan-100/70">
                   Plan: {planHash || "noch nicht validiert"}
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={`authoring-confirm-${tab}`}>Zum Veröffentlichen exakt eingeben: <code>{expectedConfirmation}</code></Label>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmation(expectedConfirmation)}
-                    className="text-xs text-cyan-400 hover:text-cyan-300 underline font-mono cursor-pointer"
-                  >
-                    (Ausfüllen)
-                  </button>
-                </div>
+                <Label htmlFor={`authoring-confirm-${tab}`}>Zum Veröffentlichen exakt eingeben: <code>{expectedConfirmation}</code></Label>
                 <Input
                   id={`authoring-confirm-${tab}`}
                   value={confirmation}

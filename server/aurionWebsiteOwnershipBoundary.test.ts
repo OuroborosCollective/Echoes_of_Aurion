@@ -78,11 +78,11 @@ describe("Aurion website ownership boundary", () => {
     }
   });
 
-  it("ships AX1 as the canonical game with Aurion sole authority and WASD integrated calculation reference", () => {
+  it("keeps Aurion as sole authority while AX1 presents and WASD supplies deterministic algorithms", () => {
     const contract = source("ARCHITECTURE_OWNERSHIP.md");
-    expect(contract).toContain("Aurion = Sole Gameplay + Quest + World + Persistence + Host + Auth Authority");
-    expect(contract).toContain("AX1    = kanonisches Hauptspiel + Content + Runtime/UI Presentation");
-    expect(contract).toContain("WASD   = integrierte deterministische Regel- und Berechnungsreferenz");
+    expect(contract).toContain("**Echoes of Aurion** | **Sole Canonical Truth & Authority**");
+    expect(contract).toContain("**AX1** | **Client Projection & Presentation**");
+    expect(contract).toContain("**WASD** | **Donor / Algorithmic Reference**");
     expect(contract).toContain("WASD ist die integrierte deterministische Regel-, Berechnungs- und Simulationsreferenz unter Aurion-Verträgen");
     expect(contract).toContain("Aurion Website, Admin UI, Admin MCP, Datenbankhelper, Worker oder Service Cells dürfen nicht");
   });

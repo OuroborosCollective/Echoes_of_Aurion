@@ -5,6 +5,8 @@ export const groupRoles = ["tank", "healer", "dps"] as const;
 export const groupSkills = ["mending_light", "guardian_stance"] as const;
 export const groupVariants = ["normal", "elite", "challenge", "endless"] as const;
 export const groupDungeonIds = ["dungeon_aschengewoelbe", "dungeon_sonnenspitze", "dungeon_windhain", "dungeon_aethermine"] as const;
+export const groupDungeonIdSchema = z.string().regex(/^dungeon_[a-z0-9][a-z0-9_]{2,79}$/);
+export type GroupDungeonId = z.infer<typeof groupDungeonIdSchema>;
 export type GroupRole = typeof groupRoles[number];
 export type GroupSkill = typeof groupSkills[number];
 const revision = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -15,7 +17,7 @@ export const groupCommandSchema = z.object({
   expectedRevision: revision,
   action: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("equip"), skills: z.array(z.enum(groupSkills)).max(2).refine(v => new Set(v).size === v.length) }).strict(),
-    z.object({ kind: z.literal("join"), dungeonId: z.enum(groupDungeonIds), variant: z.enum(groupVariants), role: z.enum(groupRoles), qualificationHash: digest }).strict(),
+    z.object({ kind: z.literal("join"), dungeonId: groupDungeonIdSchema, variant: z.enum(groupVariants), role: z.enum(groupRoles), qualificationHash: digest }).strict(),
     z.object({ kind: z.literal("renew") }).strict(),
     z.object({ kind: z.literal("cancel") }).strict(),
     z.object({ kind: z.literal("ready"), partyId: digest, rosterHash: digest, ready: z.boolean() }).strict(),
@@ -45,18 +47,32 @@ const position = z.object({ x: z.number().int(), z: z.number().int() }).strict()
 export const groupTicketSchema = z.object({
   id: digest, partyId: digest, rosterHash: digest, ruleset: z.literal(GROUP_RULESET), sourceRevision,
   catalogHash: digest, worldHash: z.string().regex(/^fnv1a-[a-f0-9]{8}$/), worldSnapshotSha256: digest, seed: digest,
-  dungeonId: z.enum(groupDungeonIds), label: z.string(), variant: z.enum(groupVariants),
+  dungeonId: groupDungeonIdSchema, label: z.string(), variant: z.enum(groupVariants),
   roster: z.array(rosterMemberSchema).length(5),
   regionHash: digest, progressionHash: digest,
   affixes: z.array(z.string()).max(10),
-  rooms: z.array(z.object({ id: revision, kind: z.string(), position, hash: digest }).strict()).min(4).max(9),
-  bosses: z.array(z.object({ id: z.string(), hp: z.number().int().positive(), damage: z.number().int().nonnegative() }).strict()).min(2).max(4),
+  rooms: z.array(z.object({
+    id: revision,
+    kind: z.string(),
+    title: z.string().max(120).optional(),
+    position,
+    hash: digest,
+    assetId: z.string().regex(/^glb_[a-z0-9._:-]{4,91}$/).nullable().optional(),
+    objective: z.object({ kind: z.enum(["defeat", "interact", "collect", "survive", "reach"]), targetId: z.string(), targetValue: z.number().int().positive(), description: z.string() }).strict().nullable().optional(),
+  }).strict()).min(4).max(9),
+  bosses: z.array(z.object({
+    id: z.string(),
+    label: z.string().optional(),
+    assetId: z.string().regex(/^glb_[a-z0-9._:-]{4,91}$/).nullable().optional(),
+    hp: z.number().int().positive(),
+    damage: z.number().int().nonnegative(),
+  }).strict()).min(2).max(4),
   playerMaxHp: z.number().int().positive(), playerDamage: z.number().int().positive(), healAmount: z.number().int().positive(),
   rewardStatus: z.literal("not_integrated"), hash: digest,
 }).strict();
 export type GroupTicket = z.infer<typeof groupTicketSchema>;
 export const groupPartySchema = z.object({
-  id: digest, revision, sourceRevision, dungeonId: z.enum(groupDungeonIds), variant: z.enum(groupVariants),
+  id: digest, revision, sourceRevision, dungeonId: groupDungeonIdSchema, variant: z.enum(groupVariants),
   roster: z.array(rosterMemberSchema).length(5), rosterHash: digest, leaderUserId: userId,
   phase: z.enum(["ready", "active", "cleared", "aborted"]), ticketId: digest.nullable(),
   instanceRevision: revision, bossIndex: revision, bossHp: revision,
@@ -67,7 +83,7 @@ export type GroupParty = z.infer<typeof groupPartySchema>;
 export const groupReadmodelSchema = z.object({
   ruleset: z.literal(GROUP_RULESET), sourceRevision, player: groupPlayerSchema,
   qualification: z.object({ hash: digest, roles: z.array(z.enum(groupRoles)).max(3), weaponTrack: z.string().nullable() }).strict(),
-  catalog: z.array(z.object({ id: z.enum(groupDungeonIds), label: z.string() }).strict()).length(4),
+  catalog: z.array(z.object({ id: groupDungeonIdSchema, label: z.string() }).strict()).min(1).max(64),
   party: groupPartySchema.nullable(), readyUserIds: z.array(userId).max(5), enteredUserIds: z.array(userId).max(5),
   ticket: groupTicketSchema.nullable(),
 }).strict().superRefine((value, context) => {

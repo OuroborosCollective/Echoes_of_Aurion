@@ -1,106 +1,78 @@
-import {
-  type AurionCausalTickReceipt,
-} from "../../shared/aurionCausalTickContract";
-import { type ReplayVerdict, isReplayMatch } from "../../shared/aurionReplayContract";
+import { isReplayMatch, replayUnprovable, type ReplayVerdict } from "../../shared/aurionReplayContract";
+import { operationalDate } from "../../shared/operationalClock";
 import { replayZoneTick } from "./replayZoneTick";
 import { globalTickRecorder, type RecordedTickEntry, type CausalPersistenceAdapter } from "./tickRecorder";
 import { globalCausalPersistence } from "./persistence";
-import { globalCausalRecoveryService } from "./causalRecoveryService";
 
-export interface ReadbackVerificatonReceipt {
+export interface ReadbackVerificationReceipt {
   zoneId: string;
   tick: number;
   verdict: ReplayVerdict;
   verifiedAt: Date;
 }
 
-/**
- * Background service that continuously replays and verifies recorded ticks
- * to ensure that the production simulation is maintaining 100% deterministic parity.
- */
+/** Observer-only replay auditor. It never rolls back or mutates gameplay state. */
 export class AurionCausalReadbackService {
   private isRunning = false;
-  private lastVerifiedTickByZone = new Map<string, number>();
-  private verificationHistory: ReadbackVerificatonReceipt[] = [];
+  private lastObservedTickByZone = new Map<string, number>();
+  private verificationHistory: ReadbackVerificationReceipt[] = [];
   private readonly maxHistory = 1000;
   private persistenceAdapter?: CausalPersistenceAdapter;
 
   constructor(private readonly recorder = globalTickRecorder) {}
+  setPersistenceAdapter(adapter: CausalPersistenceAdapter): void { this.persistenceAdapter = adapter; }
 
-  public setPersistenceAdapter(adapter: CausalPersistenceAdapter): void {
-    this.persistenceAdapter = adapter;
-  }
-
-  public start(): void {
+  start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
-    this.runLoop();
+    void this.runLoop();
   }
-
-  public stop(): void {
-    this.isRunning = false;
-  }
+  stop(): void { this.isRunning = false; }
 
   private async runLoop(): Promise<void> {
     while (this.isRunning) {
-      const zones = Array.from(new Set(this.recorder.getReceipts().map(r => r.zoneId)));
-      
+      const zones = Array.from(new Set(this.recorder.getReceipts().map(receipt => receipt.zoneId)));
       for (const zoneId of zones) {
-        try {
-          await this.verifyNextForZone(zoneId);
-        } catch (error) {
-          console.error(`[C-Aurion] Error in readback for ${zoneId}`, error);
-        }
+        try { await this.verifyNextForZone(zoneId); }
+        catch (error) { console.error(`[C-Aurion] Readback error for ${zoneId}`, error); }
       }
-
-      // Small delay to prevent CPU saturation in the background loop
       await new Promise(resolve => setTimeout(resolve, 50));
     }
   }
 
   private async verifyNextForZone(zoneId: string): Promise<void> {
-    const latestReceipt = this.recorder.getLatestReceipt(zoneId) || 
-                         (this.persistenceAdapter ? await this.persistenceAdapter.getLatestReceipt(zoneId) : null);
-    if (!latestReceipt) return;
-
-    let nextTick = (this.lastVerifiedTickByZone.get(zoneId) ?? (latestReceipt.tick - 50)) + 1;
-    if (nextTick < 0) nextTick = 0;
-
-    // Don't try to verify beyond what we have recorded
-    if (nextTick > latestReceipt.tick) return;
+    const latest = this.recorder.getLatestReceipt(zoneId) ?? (this.persistenceAdapter ? await this.persistenceAdapter.getLatestReceipt(zoneId) : null);
+    if (!latest) return;
+    let nextTick = (this.lastObservedTickByZone.get(zoneId) ?? Math.max(0, latest.tick - 50)) + 1;
+    if (nextTick > latest.tick) return;
 
     let entry: RecordedTickEntry | undefined | null = this.recorder.getEntry(zoneId, nextTick);
-    
-    // If not in memory, try to pull from persistence
-    if (!entry && this.persistenceAdapter) {
-      entry = await this.persistenceAdapter.getRecordedTick(zoneId, nextTick);
-    }
+    if (!entry && this.persistenceAdapter) entry = await this.persistenceAdapter.getRecordedTick(zoneId, nextTick);
 
-    if (!entry || !entry.intents || !entry.preState) {
-      // If we are missing preState or intents, we move on but don't count it as verified
-      // Unless we reach a point where we MUST have them
-      this.lastVerifiedTickByZone.set(zoneId, nextTick);
-      return;
-    }
-
-    const verdict = replayZoneTick({
-      preState: entry.preState,
-      intents: entry.intents,
-      expectedReceipt: entry.receipt,
-    });
-
-    const verification: ReadbackVerificatonReceipt = {
-      zoneId,
-      tick: nextTick,
-      verdict,
-      verifiedAt: new Date(),
+    const evidenceReceipt = entry?.receipt ?? latest;
+    const replayContext = {
+      domain: "ZONE_TICK" as const,
+      sourceRevision: evidenceReceipt.sourceRevision,
+      rulesetVersion: evidenceReceipt.rulesetVersion,
+      scopeIdentity: { worldId: evidenceReceipt.worldId, zoneId },
+      range: { fromTick: nextTick, toTick: nextTick },
     };
 
-    this.recordVerification(verification);
-    this.lastVerifiedTickByZone.set(zoneId, nextTick);
+    let verdict: ReplayVerdict;
+    if (!entry) {
+      verdict = replayUnprovable(replayContext, [], "RECORDED_TICK_MISSING", { tick: nextTick });
+    } else if (!entry.intents) {
+      verdict = replayUnprovable(replayContext, [], "RECORDED_INTENTS_MISSING", { tick: nextTick });
+    } else if (!entry.preState) {
+      verdict = replayUnprovable(replayContext, [], "REPLAY_PRE_STATE_UNAVAILABLE", { tick: nextTick });
+    } else {
+      verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
+    }
 
-    // Save replay result to persistence
-    if (this.persistenceAdapter) {
+    this.recordVerification({ zoneId, tick: nextTick, verdict, verifiedAt: operationalDate() });
+    this.lastObservedTickByZone.set(zoneId, nextTick);
+
+    if (entry && this.persistenceAdapter) {
       await this.persistenceAdapter.saveReplayRun({
         worldId: entry.receipt.worldId,
         zoneId: entry.receipt.zoneId,
@@ -115,30 +87,25 @@ export class AurionCausalReadbackService {
       });
     }
 
-    if (!isReplayMatch(verdict)) {
+    if (verdict.status === "FIRST_DIVERGENCE") {
       console.error(`[C-Aurion] DETERMINISM_DIVERGENCE at ${zoneId} tick ${nextTick}`, verdict);
-      
-      // Step 20: Causal Recovery & World Repair
-      // Automatically trigger a safe revert when a divergence is detected.
-      globalCausalRecoveryService.triggerAutomaticRollback(zoneId).catch(err => {
-        console.error(`[C-Aurion] Failed to execute automatic rollback for ${zoneId}:`, err);
-      });
+    } else if (verdict.status === "UNPROVABLE") {
+      console.warn(`[C-Aurion] REPLAY_UNPROVABLE at ${zoneId} tick ${nextTick}: ${verdict.reason}`);
     }
   }
 
-  private recordVerification(receipt: ReadbackVerificatonReceipt): void {
+  private recordVerification(receipt: ReadbackVerificationReceipt): void {
     this.verificationHistory.push(receipt);
-    if (this.verificationHistory.length > this.maxHistory) {
-      this.verificationHistory.shift();
-    }
+    if (this.verificationHistory.length > this.maxHistory) this.verificationHistory.shift();
   }
 
-  public getStatus(): { verifiedTicks: number; divergences: number; history: ReadbackVerificatonReceipt[] } {
+  getStatus(): { observedTicks: number; verifiedTicks: number; divergences: number; unprovable: number; history: ReadbackVerificationReceipt[] } {
     const history = [...this.verificationHistory];
-    const divergences = history.filter(h => !isReplayMatch(h.verdict)).length;
     return {
-      verifiedTicks: history.length,
-      divergences,
+      observedTicks: history.length,
+      verifiedTicks: history.filter(item => isReplayMatch(item.verdict)).length,
+      divergences: history.filter(item => item.verdict.status === "FIRST_DIVERGENCE").length,
+      unprovable: history.filter(item => item.verdict.status === "UNPROVABLE").length,
       history,
     };
   }
