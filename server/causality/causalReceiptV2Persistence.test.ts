@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createPool, type Pool } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type WebSocket from "ws";
@@ -67,7 +68,15 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     ]));
 
     const [journal] = await pool.query("SELECT COUNT(*) AS rowCount FROM __drizzle_migrations");
-    expect(Number((journal as Array<{ rowCount: number | string }>)[0]?.rowCount )).toBe(51);
+    const declaredJournal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8")) as {
+      entries: Array<{ idx: number; tag: string }>;
+    };
+    expect(Number((journal as Array<{ rowCount: number | string }>)[0]?.rowCount))
+      .toBe(declaredJournal.entries.length);
+    expect(declaredJournal.entries.at(-1)).toMatchObject({
+      idx: 51,
+      tag: "0051_aurion_cross_zone_handover_v2",
+    });
   });
 
   it("round-trips v2 stage evidence through MariaDB and verifies the persisted receipt hash", async () => {

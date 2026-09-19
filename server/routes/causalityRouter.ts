@@ -99,6 +99,14 @@ export const causalityRouter = router({
     .input(z.object({ worldId: z.string().default("aurion-world-01"), zoneId: z.string().min(1) }))
     .query(({ input }) => globalCrossZoneSyncService.getPendingInboundTransfers(input.worldId, input.zoneId)),
 
+  explainCrossZoneTransfer: adminProcedure
+    .input(z.object({ transferId: z.string().regex(/^xfer2_[a-f0-9]{56}$/) }))
+    .query(({ input }) => globalCrossZoneSyncService.explainTransfer(input.transferId)),
+
+  getEntityZoneOwner: adminProcedure
+    .input(z.object({ entityId: z.string().min(1).max(128) }))
+    .query(({ input }) => globalCrossZoneSyncService.readAuthoritativeOwner(input.entityId)),
+
   getGlobalStateProofs: adminProcedure
     .input(z.object({ worldId: z.string().default(GLOBAL_WORLD_ID), limit: z.number().int().min(1).max(50).default(10) }))
     .query(async ({ input }) => {

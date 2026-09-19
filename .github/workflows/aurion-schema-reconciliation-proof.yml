@@ -39,6 +39,7 @@ on:
       - "drizzle/0048_aurion_causal_evidence.sql"
       - "drizzle/0049_aurion_causal_receipt_v2.sql"
       - "drizzle/0050_aurion_human_ai_authoring.sql"
+      - "drizzle/0051_aurion_cross_zone_handover_v2.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -82,6 +83,7 @@ on:
       - "drizzle/0048_aurion_causal_evidence.sql"
       - "drizzle/0049_aurion_causal_receipt_v2.sql"
       - "drizzle/0050_aurion_human_ai_authoring.sql"
+      - "drizzle/0051_aurion_cross_zone_handover_v2.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -158,7 +160,7 @@ jobs:
           for(const migration of receipt.migrations) if(migration.state!=="ABSENT_APPLY_REQUIRED") throw new Error(`${migration.tag} was not absent`);
           console.log(JSON.stringify({phase:"0020-only",summary:receipt.summary,states:receipt.migrations.map(m=>[m.tag,m.state])}));
           NODE
-      - name: Apply 0021 through 0049 only inside this isolated proof database
+      - name: Apply 0021 through 0050 inside this isolated proof database
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -180,8 +182,31 @@ jobs:
               for(const statement of statements) await connection.query(statement);
             }
           } finally { await connection.end(); }
-          console.log(JSON.stringify({phase:"isolated-late-apply",appliedTags:tags}));
+          console.log(JSON.stringify({phase:"pre-0051-compatibility",appliedTags:tags}));
           NODE
+      - name: Prove new runtime is compatible with canonical 0050 schema
+        env:
+          NODE_ENV: test
+          AURION_CROSS_ZONE_LEGACY_E2E: "1"
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/causality/crossZoneLegacyCompatibilityMariaDb.test.ts
+
+      - name: Apply 0051 cross-zone handover migration separately
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const sql=fs.readFileSync("drizzle/0051_aurion_cross_zone_handover_v2.sql","utf8");
+          const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            for(const statement of statements) await connection.query(statement);
+          } finally { await connection.end(); }
+          console.log(JSON.stringify({phase:"0051-applied",statementCount:statements.length}));
+          NODE
+
       - name: Prove all declared late migrations match after isolated apply
         run: |
           set -euo pipefail
