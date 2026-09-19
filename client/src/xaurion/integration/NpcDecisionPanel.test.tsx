@@ -2,9 +2,13 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { encodeNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
-const fixture=vi.hoisted(()=>({query:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},memory:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()}}));
-vi.mock("@/lib/trpc",()=>({trpc:{gameplay:{npcMultiMemory:{useQuery:()=>fixture.memory},npcSnapshots:{useQuery:()=>fixture.query}}}}));
-beforeEach(()=>{fixture.query.data=undefined;fixture.query.isError=false;fixture.memory.data=undefined;fixture.memory.isError=false;});
+const fixture=vi.hoisted(()=>({
+ query:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
+ memory:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
+ actions:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
+}));
+vi.mock("@/lib/trpc",()=>({trpc:{gameplay:{npcActions:{useQuery:()=>fixture.actions},npcMultiMemory:{useQuery:()=>fixture.memory},npcSnapshots:{useQuery:()=>fixture.query}}}}));
+beforeEach(()=>{fixture.query.data=undefined;fixture.query.isError=false;fixture.memory.data=undefined;fixture.memory.isError=false;fixture.actions.data=undefined;fixture.actions.isError=false;});
 describe("confirmed NPC decision panel",()=>{
  it("shows confirmed decisions and rejects a corrupt or foreign packet without partial display",()=>{
   const data=btoa(String.fromCharCode(...encodeNpcSnapshot([{npcId:"lyra",regionId:"observatory_threshold",resolutionIndex:2,goal:"trade",needs:{safety:0,resources:0,belonging:0,status:0,wealth:1,power:0},memoryCount:1,decisionHash:"12".repeat(32)}])));
@@ -20,5 +24,17 @@ describe("confirmed NPC decision panel",()=>{
   fixture.memory.data={userId:8,format:"aurion-public-npc-memory.v4",npcs:[npc]};rerender(<NpcDecisionPanel userId={7}/>);expect(screen.queryByText("Valen")).toBeNull();
   fixture.memory.data={userId:7,format:"aurion-public-npc-memory.v4",npcs:[{...npc,counts:{...npc.counts,semantic:65}}]};rerender(<NpcDecisionPanel userId={7}/>);expect(screen.queryByText("Valen")).toBeNull();
   fixture.memory.isError=true;rerender(<NpcDecisionPanel userId={7}/>);expect(screen.getByRole("button",{name:"Erinnerungen aktualisieren"})).toBeTruthy();
+ });
+ it("shows only effect-readback-confirmed actions and rejects a foreign action packet",()=>{
+  fixture.actions.data={userId:7,format:"aurion-public-npc-actions.v1",actions:[{npcId:"ax1_merchant_observatory_threshold",actionReceiptId:"nar_"+"1".repeat(56),resolutionIndex:9,action:"caravan",effectsHash:"2".repeat(64),readbackHash:"3".repeat(64),sourceRevision:"4".repeat(40)}]};
+  const {rerender}=render(<NpcDecisionPanel userId={7}/>);
+  expect(screen.getByText("Ausgeführt: caravan")).toBeTruthy();
+  const row=screen.getByTestId("npc-action-row");
+  expect(row.getAttribute("data-action-receipt-id")).toMatch(/^nar_/);
+  expect(row.getAttribute("data-effect-readback-hash")).toBe("3".repeat(64));
+  fixture.actions.data={...fixture.actions.data,userId:8};
+  rerender(<NpcDecisionPanel userId={7}/>);
+  expect(screen.queryByText("Ausgeführt: caravan")).toBeNull();
+  expect(screen.getByRole("button",{name:"Aktionen aktualisieren"})).toBeTruthy();
  });
 });
