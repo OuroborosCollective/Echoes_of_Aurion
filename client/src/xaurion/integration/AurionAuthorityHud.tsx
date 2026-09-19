@@ -11,9 +11,6 @@ import { QuestLogModal } from "../components/QuestLogModal";
 import { CraftingModal } from "../components/CraftingModal";
 import { ControlsModal } from "../components/ControlsModal";
 import { GameHUD } from "../components/GameHUD";
-import type { Ax1HudCompanion } from "../components/GameHUD";
-import { loadCompanionSession } from "@/lib/companionLearning";
-import type { CompanionSession } from "@shared/companionLearningProtocol";
 import { VirtualJoystick } from "../components/VirtualJoystick";
 import { ClassSelectModal, DeterminismDebugOverlay, GuildManagementModal, HomesteadBuilderModal, MiniMap, NPCDialogueModal, NPCEconomyModal, ResearchModal, TerritoryPoliticsModal, WorldMapModal, type Ax1ConfirmedWorld } from "../components/Ax1WorldSurfaces";
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
@@ -244,59 +241,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     setGroupMode(mode);
     setGroupOpen(true);
   };
-  const [companionSession, setCompanionSession] = useState<CompanionSession | null>(() => {
-    try {
-      return loadCompanionSession();
-    } catch {
-      return null;
-    }
-  });
-
-  useEffect(() => {
-    const onCompanionState = (event: Event) => {
-      const detail = (event as CustomEvent<CompanionSession>).detail;
-      if (detail) setCompanionSession(detail);
-    };
-    window.addEventListener("aurion:companion-state", onCompanionState);
-    return () => window.removeEventListener("aurion:companion-state", onCompanionState);
-  }, []);
-
-  const hudCompanion: Ax1HudCompanion = useMemo(() => {
-    if (companionSession) {
-      const modeLabel = companionSession.mode === "playing"
-        ? "Aktiv"
-        : companionSession.mode === "learning"
-        ? "Lernt"
-        : companionSession.mode === "ready"
-        ? "Bereit"
-        : companionSession.online
-        ? "Verbunden"
-        : "Standby";
-      return {
-        name: "Echo",
-        label: "AI Partner",
-        provider: companionSession.llmLabel || "ChatGPT",
-        mode: companionSession.mode,
-        online: companionSession.online,
-        datasetRows: companionSession.datasetRows,
-        spawned: companionSession.companionSpawned,
-        resonance: companionSession.online ? 100 : 0,
-        statusText: modeLabel,
-      };
-    }
-    return {
-      name: "Echo",
-      label: "AI Partner",
-      provider: "ChatGPT",
-      mode: "ready",
-      online: true,
-      datasetRows: 0,
-      spawned: false,
-      resonance: 100,
-      statusText: "Bereit",
-    };
-  }, [companionSession]);
-
   const hudParty = party?.roster.map(member => {
     const health = party.health.find(value => value.userId === member.userId)?.hp;
     return {
@@ -315,25 +259,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       label: world.data.primaryEncounter.label,
       detail: world.data.primaryEncounter.narrative,
       kind: "primary" as const,
-      progress: 0.7,
-      subtasks: ["Begegnungsort erreichen", "Resonanz-Wächter schwächen", "Aurion-Sphäre versiegeln"],
-      lore: "Die Schwingungen des Realms verdichten sich an diesem Knotenpunkt.",
     }] : []),
     ...objectiveItems.map(item => ({
       id: item.id,
       label: item.label,
       detail: `${item.kind === "npc" ? "Kontakt" : item.kind === "encounter" ? "Begegnung" : item.kind === "portal" ? "Portal" : "Landmarke"} · serverbestätigt`,
       kind: item.kind,
-      completed: item.state === "completed",
-      progress: item.state === "completed" ? 1 : item.state === "available" ? 0.4 : 0,
-      subtasks: item.kind === "encounter"
-        ? ["Wächter herausfordern", "Verderbnis neutralisieren"]
-        : item.kind === "npc"
-        ? ["Kontakt aufnehmen", "Auftrag besprechen"]
-        : item.kind === "portal"
-        ? ["Portalschlüssel aktivieren", "Resonanz synchronisieren"]
-        : ["Gebiet erkunden", "Wegpunkt registrieren"],
-      lore: `${item.label} wurde im aktuellen Aurion-Weltenzustand validiert.`,
     })),
   ];
   const hudHotbar = (ui.data?.settings.hotbar ?? []).flatMap(command => {
@@ -364,7 +295,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       worldState={world.state}
       worldStateLabel={readbackLabels[world.state]}
       party={hudParty}
-      companion={hudCompanion}
       objectives={hudObjectives}
       hotbar={hudHotbar}
       autoLoot={ui.data?.settings.autoLoot ?? false}

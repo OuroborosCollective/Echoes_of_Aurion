@@ -101,20 +101,6 @@ describe("open world session ownership", () => {
     expect(fixture.tickets).toHaveLength(1);
   });
 
-  it("starts the offline testbed without showing the character selection gate even when appearance is null", async () => {
-    fixture.appearanceData = null;
-    render(<AurionOpenWorldRuntime />);
-    await act(async () => {
-      fireEvent(window, new CustomEvent("aurion:load-open-world", {
-        detail: { displayName: "Offline Testbed", globalWorld: { epoch: 0, worldSeed: "offline" }, isOfflineTestbed: true }
-      }));
-    });
-    expect(screen.queryByTestId("player-character-selection-gate")).toBeNull();
-    expect(fixture.engines).toHaveLength(1);
-    expect(fixture.engines[0].player.equipGlbModel).toHaveBeenCalledWith("offline-testbed-procedural");
-    expect(fixture.tickets).toHaveLength(0);
-  });
-
   it("forwards confirmed active-runtime positions to the shared stream and retires the callback on return", async () => {
     const received: unknown[] = [];
     const listener = (event: Event) => received.push((event as CustomEvent).detail);

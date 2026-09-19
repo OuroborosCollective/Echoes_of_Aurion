@@ -1,27 +1,38 @@
 import { create } from "zustand";
 
-export interface AdminStoreState {
+export type AdminInspectionTarget = {
+  type: "model" | "terrain" | "entity";
+  id: string;
+  name: string;
+  assetId?: string;
+  category?: string;
+  position: { x: number; y: number; z: number };
+  targetKey?: string;
+  targetType?: string;
+};
+
+interface AdminState {
   isAdmin: boolean;
   inspectionMode: boolean;
   bvhDebugMode: boolean;
   activeModelId: string | null;
-  currentTarget: unknown | null;
-  setIsAdmin: (val: boolean) => void;
-  setInspectionMode: (val: boolean) => void;
-  setBvhDebugMode: (val: boolean) => void;
-  setActiveModelId: (val: string | null) => void;
-  setCurrentTarget: (val: unknown | null) => void;
+  currentTarget: AdminInspectionTarget | null;
+  setIsAdmin: (isAdmin: boolean) => void;
+  setInspectionMode: (mode: boolean) => void;
+  setBvhDebugMode: (mode: boolean) => void;
+  setActiveModelId: (id: string | null) => void;
+  setCurrentTarget: (target: AdminInspectionTarget | null) => void;
 }
 
-export const useAdminStore = create<AdminStoreState>((set) => ({
+export const useAdminStore = create<AdminState>((set) => ({
   isAdmin: false,
   inspectionMode: false,
   bvhDebugMode: false,
   activeModelId: null,
   currentTarget: null,
-  setIsAdmin: (isAdmin: boolean) => set({ isAdmin }),
-  setInspectionMode: (inspectionMode: boolean) => set({ inspectionMode }),
-  setBvhDebugMode: (bvhDebugMode: boolean) => set({ bvhDebugMode }),
-  setActiveModelId: (activeModelId: string | null) => set({ activeModelId }),
-  setCurrentTarget: (currentTarget: unknown | null) => set({ currentTarget }),
+  setIsAdmin: (isAdmin) => set({ isAdmin }),
+  setInspectionMode: (inspectionMode) => set({ inspectionMode, currentTarget: inspectionMode ? null : null }),
+  setBvhDebugMode: (bvhDebugMode) => set({ bvhDebugMode }),
+  setActiveModelId: (activeModelId) => set({ activeModelId }),
+  setCurrentTarget: (currentTarget) => set({ currentTarget }),
 }));

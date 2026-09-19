@@ -1,8 +1,12 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
+import { aurionActiveCivilizations, aurionCivilizationHistoryEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionRuinOrigins, aurionSettlementRebirthCandidates, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases } from "../drizzle/schema";
+import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { getDb, getGlobalWorldPlan, listActiveWorldPresence, recordWorldPresenceLease, releaseWorldPresenceLease, resolveAndRecordGlobalWorldEpoch } from "./db";
 import { WORLD_PRESENCE_LEASE_MS } from "./worldPresenceProtocol";
+import { AuthoritativeMovementZone } from "./zoneRuntime";
+import { globalTickRecorder } from "./causality/tickRecorder";
+import { worldCausalRootService } from "./causality/worldCausalRootService";
 
 const describeWithEpochDatabase = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_WORLD_EPOCH_E2E === "1" ? describe : describe.skip;
 const WORLD_ID = "echoes-of-aurion-global";
@@ -12,9 +16,15 @@ async function cleanupEpochState() {
   if (!db) return;
   await db.delete(aurionWorldPresenceLeases).where(eq(aurionWorldPresenceLeases.userId, 2_146_999_970));
   await db.delete(aurionWorldPresenceLeases).where(eq(aurionWorldPresenceLeases.userId, 2_146_999_971));
+  await db.delete(aurionSettlementRebirthCandidates).where(eq(aurionSettlementRebirthCandidates.worldId, WORLD_ID));
+  await db.delete(aurionRuinOrigins);
+  await db.delete(aurionCivilizationHistoryEvents).where(eq(aurionCivilizationHistoryEvents.worldId, WORLD_ID));
+  await db.delete(aurionActiveCivilizations).where(eq(aurionActiveCivilizations.worldId, WORLD_ID));
   await db.delete(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, WORLD_ID));
   await db.delete(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, WORLD_ID));
+  await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
+  await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, WORLD_ID));
 }
 
@@ -56,6 +66,63 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     const reactions = await db.select().from(aurionWorldEpochReactions).where(eq(aurionWorldEpochReactions.worldId, WORLD_ID));
     expect(reactions).toHaveLength(1);
     expect(JSON.parse(reactions[0]!.reactionJson)).toMatchObject({ resolutionIndex: 1, receiptId: reactions[0]!.receiptId, deterministicHash: reactions[0]!.reactionHash });
+  }, 30_000);
+
+  it("persists a real zone receipt, binds it to the world epoch, and independently replays the world root", async () => {
+    const releaseSha = process.env.AURION_RELEASE_SHA;
+    expect(releaseSha).toMatch(/^[a-f0-9]{40}$/);
+
+    const zone = new AuthoritativeMovementZone("observatory_threshold");
+    zone.sourceRevisionOverride = releaseSha!;
+    zone.tick();
+    await globalTickRecorder.flushPersistence();
+
+    const db = await getDb();
+    expect(db).not.toBeNull();
+    if (!db) return;
+    const tickReceipts = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
+    expect(tickReceipts).toHaveLength(1);
+    expect(tickReceipts[0]).toMatchObject({
+      zoneId: "observatory_threshold",
+      tick: 1,
+      revision: releaseSha,
+    });
+
+    const epoch = await resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: 2_146_999_970,
+      idempotencyKey: "world-epoch-e2e:causal-root:0001",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    expect(epoch).toMatchObject({ source: "created", plan: { epoch: 1 } });
+
+    const proofs = await db.select().from(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
+    expect(proofs).toHaveLength(1);
+    const stored = JSON.parse(proofs[0]!.globalProofJson);
+    expect(stored).toMatchObject({
+      schema: "aurion.world.causal-root-result.v1",
+      status: "VERIFIED",
+      root: {
+        worldId: WORLD_ID,
+        epoch: 1,
+        sourceRevision: releaseSha,
+        zoneRoots: [{ zoneId: "observatory_threshold", fromTick: 1, toTick: 1 }],
+      },
+    });
+    expect(proofs[0]!.globalProofHash).toBe(stored.root.worldRootHash);
+
+    await expect(worldCausalRootService.replay(WORLD_ID, 1)).resolves.toMatchObject({
+      status: "MATCH",
+      epoch: 1,
+      worldRootHash: stored.root.worldRootHash,
+    });
+
+    const idempotentReplay = await resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: 2_146_999_970,
+      idempotencyKey: "world-epoch-e2e:causal-root:0001",
+      now: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    expect(idempotentReplay.source).toBe("persisted");
+    expect(await db.select().from(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID))).toHaveLength(1);
   }, 30_000);
 
   it("serializes concurrent distinct epoch requests into separate contiguous world and reaction receipts", async () => {

@@ -7,11 +7,11 @@ import { rewardReceiptIdentity } from "./rewardReceiptIdentity";
 import { commitNativeQuestRelationship, commitFactionQuestRelationship, readRelationshipStanding } from "./npcStandingPersistence";
 import { encounterActionIdentity, encounterSessionIdentity } from "./encounterIdentity";
 import { parseOwnedEncounterReadback } from "../shared/encounterReadback";
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import { aurionDialogueCommandReceipts, aurionDialogueReceipts, aurionFactionQuestlineDecisionReceipts, aurionFactionQuestlineOathReceipts, aurionFactionQuestlineRewardReceipts, aurionFactionQuestlineStates, aurionEthosEvents, aurionGlobalWorldEpochReceipts, aurionGlobalWorldStates, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionMasteryEvents, aurionWorldChunkDeltas, aurionWorldEpochReactions, aurionWorldEpochRequests, aurionWorldPresenceLeases, craftingReceipts, expeditionChatMessages, expeditionResultReceipts, expeditionTeamMembers, expeditionTeams, expeditionTeamSignals, forumReplies, forumThreads, gatewayCommands, gatewaySessions, gameplayActionReceipts, gameplayDungeonKeys, gameplayQuestProgress, gameplaySessions, glbAssetSubmissions, glbAssets, glbAssignments, guildMemberships, guilds, InsertUser, itemInstances, localCredentials, lootAffixes, lootDropReceipts, lootSetDefinitions, marketListings, marketTransactionReceipts, monetizationPlacements, partnerRequests, playerCharacterAppearances, playerProfiles, progressionLedger, seasonLeaderboardSnapshots, seasons, seasonTransitionReceipts, skillProgressionEvents, systemSaleReceipts, treasureClasses, users, weaponLoadouts, weaponMasteries, weaponMasteryReceipts, zoneConnectionTickets } from "../drizzle/schema";
-import { aurionCausalTickReceipts, aurionCausalCheckpoints, aurionReplayRuns, aurionCrossZoneTransfers } from "../drizzle/aurionCausalitySchema";
+import { aurionCausalTickReceipts, aurionCausalCheckpoints, aurionReplayRuns, aurionCrossZoneTransfers, aurionGlobalStateProofs } from "../drizzle/aurionCausalitySchema";
 import { ENV } from './_core/env';
 import type { AurionCommand } from "./gatewayProtocol";
 import { canChooseClass, isPlayerClass, isServerEvidenceDigest, isWeaponActionAllowed, isWeaponTrack, levelFromTotalXp, rollLootQuality, type LootAffix, type PlayerClass, type WeaponTrack } from "./endgameProtocol";
@@ -43,6 +43,16 @@ import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, reso
 import { aurionLootCatalogV2 } from "./aurionLootCatalog";
 import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aurionLootProtocol";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
+import { activeProvenance } from "./aurionProvenance";
+import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
+import {
+  AURION_WORLD_CAUSAL_ZONE_IDS,
+  computeWorldCausalRoot,
+  computeZoneEpochRoot,
+  verifyWorldCausalRoot,
+  type AurionWorldCausalRootResult,
+  type AurionZoneReceiptReference,
+} from "../shared/aurionWorldCausalRootContract";
 
 export function isConfiguredDatabaseUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -295,6 +305,88 @@ function planFromStoredGlobalSnapshot(snapshotJson: string, snapshotHash: string
   return plan;
 }
 
+function causalReceiptReference(row: typeof aurionCausalTickReceipts.$inferSelect): AurionZoneReceiptReference {
+  return {
+    worldId: row.worldId,
+    zoneId: row.zoneId,
+    tick: row.tick,
+    sourceRevision: row.revision,
+    rulesetVersion: row.rulesetVersion,
+    previousReceiptHash: row.previousReceiptHash,
+    receiptHash: row.receiptHash,
+  };
+}
+
+function parsePriorWorldCausalRoot(value: string): AurionWorldCausalRootResult | null {
+  try {
+    const parsed = JSON.parse(value) as AurionWorldCausalRootResult;
+    if (parsed?.schema !== "aurion.world.causal-root-result.v1") return null;
+    if (parsed.status === "VERIFIED" && (!parsed.root || !verifyWorldCausalRoot(parsed.root))) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Evidence-only snapshot of the exact causal zone receipt ranges visible inside
+ * the same DB transaction that commits the world epoch. Missing or contradictory
+ * evidence never blocks or mutates gameplay truth; it produces UNPROVABLE.
+ */
+async function buildWorldCausalRootForEpoch(
+  tx: DatabaseTransaction,
+  epoch: number,
+): Promise<AurionWorldCausalRootResult> {
+  const priorRows = await tx.select().from(aurionGlobalStateProofs).where(and(
+    eq(aurionGlobalStateProofs.worldId, GLOBAL_WORLD_ID),
+    lt(aurionGlobalStateProofs.epoch, epoch),
+  )).orderBy(desc(aurionGlobalStateProofs.epoch)).limit(64);
+  const prior = priorRows
+    .map(row => parsePriorWorldCausalRoot(row.globalProofJson))
+    .find((value): value is AurionWorldCausalRootResult => value !== null) ?? null;
+  const previousWorldRootProvable = prior === null || prior.status === "VERIFIED";
+  const previousWorldRoot = prior?.status === "VERIFIED" ? prior.root.worldRootHash : null;
+  const previousByZone = new Map(
+    prior?.status === "VERIFIED" ? prior.root.zoneRoots.map(root => [root.zoneId, root] as const) : [],
+  );
+
+  const zoneRoots = [];
+  for (const zoneId of AURION_WORLD_CAUSAL_ZONE_IDS) {
+    const [latest] = await tx.select().from(aurionCausalTickReceipts).where(and(
+      eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
+      eq(aurionCausalTickReceipts.zoneId, zoneId),
+    )).orderBy(desc(aurionCausalTickReceipts.tick)).limit(1);
+    if (!latest) continue;
+
+    const previousZoneRoot = previousByZone.get(zoneId);
+    const candidateFromTick = previousZoneRoot ? previousZoneRoot.toTick + 1 : latest.tick;
+    const fromTick = candidateFromTick <= latest.tick ? candidateFromTick : latest.tick;
+    const rows = await tx.select().from(aurionCausalTickReceipts).where(and(
+      eq(aurionCausalTickReceipts.worldId, GLOBAL_WORLD_ID),
+      eq(aurionCausalTickReceipts.zoneId, zoneId),
+      gte(aurionCausalTickReceipts.tick, fromTick),
+      lte(aurionCausalTickReceipts.tick, latest.tick),
+    )).orderBy(aurionCausalTickReceipts.tick);
+    if (rows.length !== latest.tick - fromTick + 1) continue;
+    try {
+      zoneRoots.push(computeZoneEpochRoot(rows.map(causalReceiptReference)));
+    } catch {
+      // The root contract will turn the absent zone root into UNPROVABLE.
+    }
+  }
+
+  return computeWorldCausalRoot({
+    worldId: GLOBAL_WORLD_ID,
+    epoch,
+    sourceRevision: activeProvenance.sourceRevision,
+    rulesetVersion: AURION_ZONE_RULESET_VERSION,
+    expectedZoneIds: AURION_WORLD_CAUSAL_ZONE_IDS,
+    zoneRoots,
+    previousWorldRoot,
+    previousWorldRootProvable,
+  });
+}
+
 /**
  * Applies one globally serialised, receipt-bound resolution request. A running
  * scheduler is deliberately outside this method; callers need an explicit
@@ -339,6 +431,15 @@ export async function resolveAndRecordGlobalWorldEpoch(input: { requestedByUserI
         ).limit(192);
         const reaction = resolveWorldEpochReaction({ plan, resolutionIndex: plan.epoch, confirmedDeltas: sourceRows.map(parseWorldChunkDelta), observedPresence: presence });
         await tx.insert(aurionGlobalWorldEpochReceipts).values({ id: newCommunityId("worldepoch"), worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, activePlayerCount: activePresenceCount, highWaterPlayerCount: plan.highWaterPlayerCount, snapshotHash: plan.deterministicHash, snapshotJson });
+        const causalRoot = await buildWorldCausalRootForEpoch(tx, plan.epoch);
+        await tx.insert(aurionGlobalStateProofs).values({
+          id: `gprf_${GLOBAL_WORLD_ID}_${plan.epoch}`,
+          worldId: GLOBAL_WORLD_ID,
+          epoch: plan.epoch,
+          globalProofHash: causalRoot.evidenceHash,
+          globalProofJson: JSON.stringify(causalRoot),
+          status: causalRoot.status === "VERIFIED" ? "VERIFIED" : "UNPROVABLE",
+        });
         await tx.insert(aurionWorldEpochReactions).values({ receiptId: reaction.receiptId, worldId: GLOBAL_WORLD_ID, epoch: plan.epoch, ruleSetVersion: reaction.ruleSetVersion, contentVersion: reaction.contentVersion, snapshotHash: plan.deterministicHash, reactionHash: reaction.deterministicHash, reactionJson: JSON.stringify(reaction) });
         await tx.insert(aurionWorldEpochRequests).values({ idempotencyKey, worldId: GLOBAL_WORLD_ID, requestedByUserId: input.requestedByUserId, ruleSetVersion: AURION_WORLD_EPOCH_RULESET_VERSION, epoch: plan.epoch, snapshotHash: plan.deterministicHash, snapshotJson });
         

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Ax1HpMeter } from "./Ax1HpMeter";
-import { ActiveQuestsPanel } from "./ActiveQuestsPanel";
 import {
   Activity,
   Award,
@@ -9,16 +8,12 @@ import {
   ChevronUp,
   Coins,
   Compass,
-  Crosshair,
   Crown,
-  Eye,
-  EyeOff,
   Gamepad2,
   Hand,
   Hammer,
   Landmark,
   Languages,
-  ListTodo,
   Map as MapIcon,
   Menu,
   MessageSquare,
@@ -41,20 +36,6 @@ export type Ax1HudPartyMember = Readonly<{
   hp?: number;
   maxHp?: number;
   weaponTrack?: string;
-  isAi?: boolean;
-  statusText?: string;
-}>;
-
-export type Ax1HudCompanion = Readonly<{
-  name: string;
-  label: string;
-  provider: string;
-  mode: string;
-  online: boolean;
-  datasetRows?: number;
-  spawned?: boolean;
-  resonance?: number;
-  statusText?: string;
 }>;
 
 export type Ax1HudObjective = Readonly<{
@@ -99,7 +80,6 @@ export interface GameHUDProps {
   worldState: string;
   worldStateLabel: string;
   party?: readonly Ax1HudPartyMember[];
-  companion?: Ax1HudCompanion;
   objectives: readonly Ax1HudObjective[];
   hotbar: readonly Ax1HudSkill[];
   autoLoot: boolean;
@@ -148,28 +128,12 @@ const utilityButton = "w-10 h-10 sm:w-11 sm:h-11 rounded-full border flex flex-c
 
 export function GameHUD(props: GameHUDProps) {
   const [menuExpanded, setMenuExpanded] = useState(false);
-  const [partyCollapsed, setPartyCollapsed] = useState(true);
+  const [partyCollapsed, setPartyCollapsed] = useState(false);
   const [objectivesCollapsed, setObjectivesCollapsed] = useState(false);
-  const [activeQuestsOpen, setActiveQuestsOpen] = useState(false);
-  const [focusedObjectiveId, setFocusedObjectiveId] = useState<string | null>(null);
   const [combatOpen, setCombatOpen] = useState(false);
-  const [freeView, setFreeView] = useState(false);
   const prevObjectivesRef = useRef<readonly Ax1HudObjective[]>([]);
   const [activeEffects, setActiveEffects] = useState<Map<string, 'shake' | 'pulse'>>(new Map());
   const [completedLedger, setCompletedLedger] = useState<Ax1HudObjective[]>([]);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "v" || e.key === "V") {
-        setFreeView(v => !v);
-      } else if (e.key === "l" || e.key === "L" || e.key === "o" || e.key === "O") {
-        setActiveQuestsOpen(v => !v);
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, []);
 
   useEffect(() => {
     const nextEffects = new Map<string, 'shake' | 'pulse'>();
@@ -273,226 +237,31 @@ export function GameHUD(props: GameHUDProps) {
               <b>{props.connected ? "Realm verbunden" : "Verbinde Realm"}</b>
               {props.connected && <span>👥 {props.remotePlayerCount + 1}</span>}
             </div>
-
-            <button
-              type="button"
-              onClick={() => setFreeView(v => !v)}
-              title="Freie Sicht umschalten [Taste V]"
-              aria-label="Freie Sicht umschalten"
-              aria-pressed={freeView}
-              className={`flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[9px] sm:text-[10px] font-mono transition-all backdrop-blur-sm cursor-pointer select-none ${
-                freeView
-                  ? "border-emerald-500/70 bg-emerald-950/80 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.35)] font-bold"
-                  : "border-gray-800 bg-black/70 text-gray-400 hover:border-gray-600 hover:text-gray-200"
-              }`}
-            >
-              {freeView ? <EyeOff className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-400" /> : <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-400" />}
-              <span>{freeView ? "Freie Sicht [V]" : "Fokus [V]"}</span>
-            </button>
           </div>
 
-          {!freeView && (() => {
-            const companion: Ax1HudCompanion = props.companion ?? {
-              name: "Echo",
-              label: "AI Partner",
-              provider: "ChatGPT",
-              mode: "ready",
-              online: true,
-              datasetRows: 0,
-              spawned: false,
-              resonance: 100,
-              statusText: "Bereit",
-            };
-
-            const humanMembers: readonly Ax1HudPartyMember[] = (props.party && props.party.length > 0)
-              ? props.party
-              : [{
-                  id: "local_explorer",
-                  name: props.playerName || "Explorer",
-                  role: "Explorer",
-                  ready: props.connected,
-                  hp: undefined,
-                  maxHp: undefined,
-                  weaponTrack: props.mastery?.name,
-                }];
-
-            return (
-              <section
-                id="party-strip-frame"
-                aria-label="Gruppe und Partner Status"
-                className="w-44 sm:w-60 rounded-xl border border-sky-900/60 bg-black/85 p-1 sm:p-1.5 backdrop-blur-md shadow-lg transition-all duration-300"
-              >
-                {/* Header with smart toggle and fast shortcuts */}
-                <div className="flex items-center justify-between border-b border-gray-800/80 pb-1 text-[9px] font-serif font-bold uppercase tracking-wider text-sky-400">
-                  <button
-                    type="button"
-                    onClick={() => setPartyCollapsed(value => !value)}
-                    className="flex items-center gap-1 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400 rounded px-0.5"
-                    aria-expanded={!partyCollapsed}
-                    aria-label="Party- und Partner-Details umschalten"
-                  >
-                    <Users className="h-3 w-3 text-sky-400" />
-                    <span>Party ({humanMembers.length}H · 1AI)</span>
-                    {partyCollapsed ? <ChevronDown className="h-3 w-3 text-gray-400" /> : <ChevronUp className="h-3 w-3 text-gray-400" />}
-                  </button>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={props.onOpenParty}
-                      title="Gruppe verwalten"
-                      aria-label="Gruppe verwalten"
-                      className="rounded border border-gray-800 bg-black/60 px-1 py-0.5 text-[8px] font-mono text-gray-400 hover:border-sky-500/50 hover:text-sky-300"
-                    >
-                      GRP
-                    </button>
-                    <button
-                      type="button"
-                      onClick={props.onOpenCompanion}
-                      title="AI Companion öffnen"
-                      aria-label="AI Companion öffnen"
-                      className="rounded border border-cyan-700/60 bg-cyan-950/40 px-1 py-0.5 text-[8px] font-mono text-cyan-300 hover:border-cyan-400 hover:text-cyan-200"
-                    >
-                      AI
-                    </button>
-                  </div>
-                </div>
-
-                {/* Collapsed Micro-Status Mode: Small status symbols without blocking screen */}
-                {partyCollapsed ? (
-                  <div className="flex items-center justify-between gap-1 pt-1 text-[8px] font-mono">
-                    {/* Human Partner Micro Symbol */}
-                    <button
-                      type="button"
-                      onClick={props.onOpenParty}
-                      aria-label={`Human Partner: ${humanMembers[0]?.name ?? "Explorer"}, Status ${humanMembers[0]?.ready ? "Bereit" : "Warten"}`}
-                      className="flex items-center gap-1 rounded border border-amber-500/30 bg-black/60 px-1.5 py-0.5 hover:border-amber-400/60 text-amber-200 transition-colors"
-                      title="Human Partner [Gruppe öffnen]"
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${humanMembers[0]?.ready ? "bg-emerald-400" : "bg-amber-400"}`} />
-                      <span className="truncate max-w-[65px] font-bold">{humanMembers[0]?.name ?? "Explorer"}</span>
-                      {humanMembers[0]?.hp !== undefined && humanMembers[0]?.maxHp ? (
-                        <span className="text-[7px] text-emerald-400 font-bold">{Math.round((humanMembers[0].hp / humanMembers[0].maxHp) * 100)}%</span>
-                      ) : (
-                        <span className="text-[7px] text-gray-400 font-normal">{props.connected ? "LIVE" : "OK"}</span>
-                      )}
-                    </button>
-
-                    {/* AI Partner (Echo) Micro Symbol */}
-                    <button
-                      type="button"
-                      onClick={props.onOpenCompanion}
-                      aria-label={`AI Partner: ${companion.name} (${companion.provider}), Status: ${companion.statusText ?? "Bereit"}`}
-                      className="flex items-center gap-1 rounded border border-cyan-500/40 bg-cyan-950/40 px-1.5 py-0.5 hover:border-cyan-400 text-cyan-300 transition-colors"
-                      title="AI Partner Echo [Companion öffnen]"
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${companion.online ? "bg-[#2DE2CF] animate-pulse" : "bg-gray-500"}`} />
-                      <Sparkles className="h-2.5 w-2.5 text-[#2DE2CF]" />
-                      <span className="truncate max-w-[48px] font-bold">{companion.name}</span>
-                      <span className="text-[7px] font-bold text-[#2DE2CF]">{companion.statusText ?? "Bereit"}</span>
-                    </button>
-                  </div>
-                ) : (
-                  /* Expanded Detailed View: Full indicators for both partners */
-                  <div className="space-y-1.5 pt-1.5">
-                    {/* Human Partner(s) */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[7px] font-mono uppercase tracking-wider text-amber-400/90">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-2.5 w-2.5 text-amber-400" />
-                          Human Partner {humanMembers.length > 1 ? `(${humanMembers.length})` : ""}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={props.onOpenParty}
-                          className="text-[7px] text-amber-300 hover:underline"
-                          aria-label="Gruppe anpassen"
-                        >
-                          Öffnen ›
-                        </button>
-                      </div>
-                      {humanMembers.map(member => (
-                        <button
-                          type="button"
-                          key={member.id}
-                          onClick={props.onOpenParty}
-                          aria-label={`Human Partner: ${member.name}, Rolle ${member.role}`}
-                          className="block w-full rounded-lg border border-amber-900/40 bg-black/60 p-1 text-left hover:border-amber-500/50 transition-colors"
-                        >
-                          <div className="flex items-center justify-between gap-1 text-[8px] font-mono">
-                            <span className="flex items-center gap-1 truncate font-bold text-gray-200">
-                              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${member.ready ? "bg-emerald-400" : "bg-amber-400"}`} />
-                              <b className="truncate font-normal">{member.name}</b>
-                            </span>
-                            <span className="shrink-0 text-[7px] text-gray-400 font-mono">
-                              {member.role}{member.ready ? " · bereit" : ""}
-                            </span>
-                          </div>
-                          {member.hp !== undefined && member.maxHp !== undefined ? (
-                            <Ax1HpMeter hp={member.hp} maxHp={member.maxHp} className="mt-1" />
-                          ) : (
-                            <small className="block text-[7px] text-gray-500 mt-0.5 truncate font-mono">
-                              {props.playerState === "live" ? "Status: Bestätigt im Realm" : (member.weaponTrack ?? "Bestätigte Werte ausstehend")}
-                            </small>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* AI Partner (Echo) */}
-                    <div className="space-y-1 border-t border-gray-800/80 pt-1.5">
-                      <div className="flex items-center justify-between text-[7px] font-mono uppercase tracking-wider text-cyan-400">
-                        <span className="flex items-center gap-1">
-                          <Sparkles className="h-2.5 w-2.5 text-[#2DE2CF]" />
-                          AI Partner // Echo
-                        </span>
-                        <button
-                          type="button"
-                          onClick={props.onOpenCompanion}
-                          className="text-[7px] text-cyan-300 hover:underline"
-                          aria-label="Companion öffnen"
-                        >
-                          Öffnen ›
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={props.onOpenCompanion}
-                        aria-label={`AI Partner ${companion.name} (${companion.provider}): ${companion.statusText ?? "Bereit"}`}
-                        className="block w-full rounded-lg border border-cyan-500/30 bg-cyan-950/20 p-1 text-left hover:border-cyan-400/60 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-1 text-[8px] font-mono">
-                          <span className="flex items-center gap-1 truncate text-cyan-200 font-bold">
-                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${companion.online ? "bg-[#2DE2CF] animate-pulse" : "bg-gray-500"}`} />
-                            <b className="truncate font-normal">{companion.name}</b>
-                            <span className="rounded bg-cyan-900/60 px-1 text-[6px] text-cyan-300 uppercase tracking-wider">
-                              {companion.provider}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-[7px] font-mono font-bold text-[#2DE2CF]">
-                            {companion.statusText ?? "Bereit"}
-                          </span>
-                        </div>
-
-                        {/* AI Partner Resonance & Status Bar */}
-                        <div className="mt-1 space-y-0.5">
-                          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-black/80 border border-cyan-900/60">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-cyan-600 via-cyan-400 to-teal-300 transition-all duration-500"
-                              style={{ width: `${companion.resonance ?? (companion.online ? 100 : 20)}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between text-[6px] font-mono text-cyan-400/80">
-                            <span>SYNC-RESONANZ</span>
-                            <span>{companion.datasetRows !== undefined ? `${companion.datasetRows} Aktionen` : "Aktiv"}</span>
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </section>
-            );
-          })()}
+          {props.party && props.party.length > 0 && (
+            <section className="w-40 sm:w-52 rounded-xl border border-sky-900/60 bg-black/80 p-1.5 backdrop-blur-md shadow-lg">
+              <button type="button" onClick={() => setPartyCollapsed(value => !value)} className="flex w-full items-center justify-between border-b border-gray-800/80 pb-1 text-[9px] font-serif font-bold uppercase tracking-wider text-sky-400">
+                <span className="flex items-center gap-1"><Users className="h-3 w-3" /> Party ({props.party.length})</span>
+                {partyCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+              </button>
+              {!partyCollapsed && <div className="space-y-1 pt-1">
+                {props.party.map(member => {
+                  const hpPct = member.hp !== undefined && member.maxHp ? Math.max(0, Math.min(100, member.hp / member.maxHp * 100)) : null;
+                  return <button type="button" key={member.id} onClick={props.onOpenParty} className="block w-full rounded-lg border border-gray-800/80 bg-black/60 p-1 text-left hover:border-sky-500/50">
+                    <div className="flex items-center justify-between gap-1 text-[8px] font-mono"><b className="truncate text-gray-200">{member.name}</b><span className="shrink-0 text-gray-400">{member.role}{member.ready ? " · bereit" : ""}</span></div>
+                    {member.hp !== undefined && member.maxHp !== undefined ? (
+                      <Ax1HpMeter hp={member.hp} maxHp={member.maxHp} className="mt-1" />
+                    ) : (
+                      <small className="text-[7px] text-gray-500">
+                        {member.weaponTrack ?? "Bestätigte Werte ausstehend"}
+                      </small>
+                    )}
+                  </button>;
+                })}
+              </div>}
+            </section>
+          )}
         </div>
 
         <div className="pointer-events-auto flex max-w-[64vw] flex-col items-end gap-1.5">
@@ -508,7 +277,6 @@ export function GameHUD(props: GameHUDProps) {
 
           {menuExpanded && (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-1 rounded-xl border border-cyan-500/30 bg-black/90 p-1.5 backdrop-blur-xl shadow-2xl">
-              <MenuButton title="Missionsziele [O]" onClick={() => closeMenu(() => setActiveQuestsOpen(true))}><ListTodo /></MenuButton>
               <MenuButton title="Steuerung" onClick={() => closeMenu(props.onOpenControls)}><Gamepad2 /></MenuButton>
               <MenuButton title="Disziplinen" onClick={() => closeMenu(props.onOpenDisciplines)}><Swords /></MenuButton>
               <MenuButton title="Dungeons" onClick={() => closeMenu(props.onOpenDungeonFinder)}><ShieldCheck /></MenuButton>
@@ -520,165 +288,99 @@ export function GameHUD(props: GameHUDProps) {
               <MenuButton title="Territorium" onClick={() => closeMenu(props.onOpenTerritory)}><Landmark /></MenuButton>
               <MenuButton title="Homestead" onClick={() => closeMenu(props.onOpenHomestead)}><Hammer /></MenuButton>
               <MenuButton title="Evidence" onClick={() => closeMenu(props.onOpenDeterminism)}><Activity /></MenuButton>
+              <MenuButton title="Research" onClick={() => closeMenu(props.onOpenResearch)}><Sparkles /></MenuButton>
             </div>
           )}
 
           <div className="origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
 
-          {!freeView && (
-            <section className="w-36 sm:w-64 rounded-xl border border-[#b8860b]/40 bg-black/85 p-1.5 sm:p-2 backdrop-blur-md shadow-2xl">
-              <div className="flex items-center justify-between border-b border-gray-800/80 pb-1 text-[10px] font-serif font-bold uppercase tracking-wider text-[#b8860b]">
-                <button
-                  type="button"
-                  onClick={() => setObjectivesCollapsed(value => !value)}
-                  aria-expanded={!objectivesCollapsed}
-                  aria-label="Missionsziele umschalten"
-                  className="flex items-center gap-1 hover:text-amber-300 transition-colors"
-                >
-                  <Award className="h-3 w-3 text-[#fbbf24]" />
-                  <span>Ziele ({props.objectives.length})</span>
-                  {objectivesCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveQuestsOpen(true)}
-                  title="Aktive Quests & Missionsziele Panel öffnen [O / L]"
-                  aria-label="Aktives Quest Panel öffnen"
-                  className="flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[8px] font-mono font-bold text-amber-300 hover:bg-amber-500/30 hover:border-amber-400 active:scale-95 transition-all"
-                >
-                  <ListTodo className="h-2.5 w-2.5" />
-                  <span>PANEL [O]</span>
-                </button>
-              </div>
-              {!objectivesCollapsed && <div className="max-h-60 space-y-1 overflow-y-auto pt-1.5">
-                {props.objectives.length ? (
-                  [...props.objectives]
-                    .sort((a, b) => (a.id === focusedObjectiveId ? -1 : b.id === focusedObjectiveId ? 1 : 0))
-                    .map(objective => {
-                      const effectClass = activeEffects.get(objective.id) === 'shake' ? 'shake-highlight' : activeEffects.get(objective.id) === 'pulse' ? 'pulse-highlight' : '';
-                      const isFocused = objective.id === focusedObjectiveId;
-                      return (
-                      <Collapsible key={objective.id}>
-                        <CollapsibleTrigger asChild>
-                          <button type="button" className={`block w-full rounded-lg border p-1.5 text-left transition-all ${isFocused ? "border-cyan-400 bg-cyan-950/40 shadow-sm" : objective.kind === "primary" ? "border-purple-500/40 bg-purple-950/20" : "border-gray-800/80 bg-black/60 hover:border-amber-500/40"} ${effectClass}`}>
-                            <div className="flex items-center justify-between gap-1">
-                              <b className="block truncate text-[10px] text-gray-100">{objective.label}</b>
-                              {isFocused && <span className="text-[7px] font-mono text-cyan-300 bg-cyan-900/60 px-1 py-0.2 rounded shrink-0">FOKUS</span>}
-                            </div>
-                            <span className="block line-clamp-2 text-[8px] text-gray-400">{objective.detail}</span>
-                            {objective.progress !== undefined && (
-                                <div className="mt-1.5 flex items-center gap-2">
-                                   <div className="h-1.5 flex-1 rounded-full bg-stone-900 overflow-hidden">
-                                      <div className={`h-full rounded-full bg-amber-500 transition-all duration-500 ease-out ${activeEffects.get(objective.id) === 'pulse' ? 'flash-meter' : ''}`} style={{ width: `${Math.max(4, Math.min(100, objective.progress * 100))}%` }} />
-                                   </div>
-                                   <span className="text-[8px] text-amber-400 font-mono font-bold">{Math.round(objective.progress * 100)}%</span>
-                                </div>
-                            )}
-                          </button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="px-1.5 py-1 text-[9px] text-gray-300">
-                          {objective.subtasks && objective.subtasks.length > 0 && (
-                              <ul className="list-disc pl-3">
-                                  {objective.subtasks.map((task, i) => <li key={i}>{task}</li>)}
-                              </ul>
-                          )}
-                          {objective.lore && <p className="italic text-gray-400 mt-1">{objective.lore}</p>}
-                          <div className="mt-1.5 flex items-center justify-between border-t border-gray-800/80 pt-1">
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                setFocusedObjectiveId(prev => prev === objective.id ? null : objective.id);
-                              }}
-                              className="text-[8px] font-mono text-cyan-400 hover:underline flex items-center gap-1"
-                            >
-                              <Crosshair className="h-2.5 w-2.5" />
-                              {isFocused ? "Fokus aufheben" : "Im HUD fokussieren"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                setActiveQuestsOpen(true);
-                              }}
-                              className="text-[8px] font-mono text-amber-300 hover:underline flex items-center gap-1"
-                            >
-                              <ListTodo className="h-2.5 w-2.5" />
-                              Details
-                            </button>
+          <section className="w-36 sm:w-64 rounded-xl border border-[#b8860b]/40 bg-black/85 p-1.5 sm:p-2 backdrop-blur-md shadow-2xl">
+            <button type="button" onClick={() => setObjectivesCollapsed(value => !value)} className="flex w-full items-center justify-between border-b border-gray-800/80 pb-1 text-[10px] font-serif font-bold uppercase tracking-wider text-[#b8860b]">
+              <span className="flex items-center gap-1"><Award className="h-3 w-3 text-[#fbbf24]" /> Ziele ({props.objectives.length})</span>
+              {objectivesCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+            </button>
+            {!objectivesCollapsed && <div className="max-h-60 space-y-1 overflow-y-auto pt-1.5">
+              {props.objectives.length ? props.objectives.map(objective => {
+                const effectClass = activeEffects.get(objective.id) === 'shake' ? 'shake-highlight' : activeEffects.get(objective.id) === 'pulse' ? 'pulse-highlight' : '';
+                return (
+                <Collapsible key={objective.id}>
+                  <CollapsibleTrigger asChild>
+                    <button type="button" className={`block w-full rounded-lg border p-1.5 text-left transition-all ${objective.kind === "primary" ? "border-purple-500/40 bg-purple-950/20" : "border-gray-800/80 bg-black/60 hover:border-amber-500/40"} ${effectClass}`}>
+                      <b className="block truncate text-[10px] text-gray-100">{objective.label}</b>
+                      <span className="block line-clamp-2 text-[8px] text-gray-400">{objective.detail}</span>
+                      {objective.progress !== undefined && (
+                          <div className="mt-1.5 flex items-center gap-2">
+                             <div className="h-1.5 flex-1 rounded-full bg-stone-900">
+                                <div className={`h-full rounded-full bg-amber-500 transition-all duration-500 ease-out ${activeEffects.get(objective.id) === 'pulse' ? 'flash-meter' : ''}`} style={{ width: `${objective.progress * 100}%` }} />
+                             </div>
+                             <span className="text-[8px] text-amber-500 font-mono">{Math.round(objective.progress * 100)}%</span>
                           </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    );
-                  })
-                ) : <p className="p-1 text-[10px] italic text-gray-500">{props.worldState === "live" ? "Keine bestätigten aktiven Ziele." : props.worldStateLabel}</p>}
-              </div>}
-              
-              {completedLedger.length > 0 && (
-                  <div className="mt-2 border-t border-gray-800 pt-2">
-                      <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Zuletzt bestätigt:</p>
-                      <div className="max-h-20 overflow-y-auto space-y-1">
-                          {completedLedger.map(obj => (
-                              <div key={obj.id} className="text-[8px] text-emerald-500 flex items-center gap-1">
-                                  <ShieldCheck className="h-3 w-3" /> {obj.label}
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              )}
-            </section>
-          )}
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-1.5 py-1 text-[9px] text-gray-300">
+                    {objective.subtasks && objective.subtasks.length > 0 && (
+                        <ul className="list-disc pl-3">
+                            {objective.subtasks.map((task, i) => <li key={i}>{task}</li>)}
+                        </ul>
+                    )}
+                    {objective.lore && <p className="italic text-gray-400 mt-1">{objective.lore}</p>}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}) : <p className="p-1 text-[10px] italic text-gray-500">{props.worldState === "live" ? "Keine bestätigten aktiven Ziele." : props.worldStateLabel}</p>}
+            </div>}
+            
+            {completedLedger.length > 0 && (
+                <div className="mt-2 border-t border-gray-800 pt-2">
+                    <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Zuletzt bestätigt:</p>
+                    <div className="max-h-20 overflow-y-auto space-y-1">
+                        {completedLedger.map(obj => (
+                            <div key={obj.id} className="text-[8px] text-emerald-500 flex items-center gap-1">
+                                <ShieldCheck className="h-3 w-3" /> {obj.label}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+          </section>
         </div>
       </div>
 
-      <div className={`pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2 transition-opacity duration-300 ${freeView ? "opacity-75 hover:opacity-100" : "opacity-100"}`}>
-        <button type="button" onClick={props.onOpenChat} aria-label="Realm Chat öffnen" className="flex items-center gap-1.5 rounded-full border border-gray-800 bg-black/80 px-2.5 py-1.5 text-xs font-mono text-[#fbbf24] backdrop-blur-md shadow hover:border-[#b8860b]"><MessageSquare className="h-3.5 w-3.5" /> Realm Chat</button>
+      <div className="pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
+        <button type="button" onClick={props.onOpenChat} className="flex items-center gap-1.5 rounded-full border border-gray-800 bg-black/80 px-2.5 py-1.5 text-xs font-mono text-[#fbbf24] backdrop-blur-md shadow hover:border-[#b8860b]"><MessageSquare className="h-3.5 w-3.5" /> Realm Chat</button>
         <div>{props.movementControl}</div>
       </div>
 
-      <div className={`pointer-events-auto absolute bottom-2 right-2 sm:bottom-4 sm:right-4 flex max-w-[72vw] flex-col items-end gap-2 transition-opacity duration-300 ${freeView ? "opacity-80 hover:opacity-100" : "opacity-100"}`}>
+      <div className="pointer-events-auto absolute bottom-2 right-2 sm:bottom-4 sm:right-4 flex max-w-[72vw] flex-col items-end gap-2">
         <div className="flex flex-wrap justify-end gap-1.5">
-          <button type="button" disabled={props.controlsDisabled} onClick={props.onToggleAutoLoot} aria-pressed={props.autoLoot} aria-label="Auto-Loot umschalten" className={`${utilityButton} ${props.autoLoot ? "border-emerald-400 bg-emerald-950/80 text-emerald-300" : "border-gray-700 bg-black/80 text-gray-500"}`} title="Auto-Loot"><Sparkles className="h-4 w-4" /><span>A-LOOT</span></button>
-          <button type="button" disabled={props.actionsDisabled} onClick={props.onInteract} aria-label="Interaktion ausführen" className={`${utilityButton} border-amber-400/70 bg-black/85 text-amber-300`} title="Interaktion [F]"><Hand className="h-4 w-4" /><span>ACTION</span></button>
-          <button type="button" disabled={props.actionsDisabled} onClick={props.onToggleAutoAttack} aria-pressed={props.autoAttack} aria-label="Auto-Angriff umschalten" className={`${utilityButton} ${props.autoAttack ? "border-red-400 bg-red-950/80 text-red-300" : "border-gray-700 bg-black/80 text-gray-300"}`} title="Auto-Angriff"><Repeat className="h-4 w-4" /><span>{props.autoAttack ? "AUTO AN" : "AUTO"}</span></button>
-          <button type="button" onClick={props.onOpenControls} aria-label="Steuerung öffnen" className={`${utilityButton} border-cyan-500/60 bg-black/85 text-cyan-300`} title="Steuerung"><Gamepad2 className="h-4 w-4" /><span>CTRL</span></button>
-          <button type="button" onClick={props.onOpenParty} aria-label="Gruppe öffnen" className={`${utilityButton} border-sky-500/60 bg-black/85 text-sky-300`} title="Gruppe"><ShieldCheck className="h-4 w-4" /><span>GROUP</span></button>
+          <button type="button" disabled={props.controlsDisabled} onClick={props.onToggleAutoLoot} aria-pressed={props.autoLoot} className={`${utilityButton} ${props.autoLoot ? "border-emerald-400 bg-emerald-950/80 text-emerald-300" : "border-gray-700 bg-black/80 text-gray-500"}`} title="Auto-Loot"><Sparkles className="h-4 w-4" /><span>A-LOOT</span></button>
+          <button type="button" disabled={props.actionsDisabled} onClick={props.onInteract} className={`${utilityButton} border-amber-400/70 bg-black/85 text-amber-300`} title="Interaktion [F]"><Hand className="h-4 w-4" /><span>ACTION</span></button>
+          <button type="button" disabled={props.actionsDisabled} onClick={props.onToggleAutoAttack} aria-pressed={props.autoAttack} className={`${utilityButton} ${props.autoAttack ? "border-red-400 bg-red-950/80 text-red-300" : "border-gray-700 bg-black/80 text-gray-300"}`} title="Auto-Angriff"><Repeat className="h-4 w-4" /><span>{props.autoAttack ? "AUTO AN" : "AUTO"}</span></button>
+          <button type="button" onClick={props.onOpenControls} className={`${utilityButton} border-cyan-500/60 bg-black/85 text-cyan-300`} title="Steuerung"><Gamepad2 className="h-4 w-4" /><span>CTRL</span></button>
+          <button type="button" onClick={props.onOpenParty} className={`${utilityButton} border-sky-500/60 bg-black/85 text-sky-300`} title="Gruppe"><ShieldCheck className="h-4 w-4" /><span>GROUP</span></button>
         </div>
 
         <div className="flex items-center gap-1.5 rounded-2xl border border-[#b8860b]/40 bg-black/85 p-1.5 backdrop-blur-md shadow-2xl">
-          <button type="button" disabled={props.actionsDisabled} onClick={props.onAttack} aria-label="Standard-Angriff ausführen" className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-xl border border-amber-400 bg-gradient-to-br from-amber-600/30 to-black text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-90" title="Angriff [R]">
+          <button type="button" disabled={props.actionsDisabled} onClick={props.onAttack} className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-xl border border-amber-400 bg-gradient-to-br from-amber-600/30 to-black text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-90" title="Angriff [R]">
             <Swords className="mx-auto h-6 w-6" /><kbd className="absolute -left-1 -top-1 rounded bg-black px-1 text-[8px] text-amber-300">R</kbd><span className="block text-[7px] font-bold">ANGRIFF</span>
           </button>
-          {props.hotbar.map((skill, index) => <button type="button" key={`${skill.command}:${index}`} disabled={props.actionsDisabled} onClick={() => props.onCastSkill(skill.command)} aria-label={`Fertigkeit ${skill.name} ausführen`} className="relative h-10 w-10 sm:h-12 sm:w-12 rounded-xl border border-gray-700 bg-black/70 hover:border-[#fbbf24] active:scale-90" title={skill.name}>
+          {props.hotbar.map((skill, index) => <button type="button" key={`${skill.command}:${index}`} disabled={props.actionsDisabled} onClick={() => props.onCastSkill(skill.command)} className="relative h-10 w-10 sm:h-12 sm:w-12 rounded-xl border border-gray-700 bg-black/70 hover:border-[#fbbf24] active:scale-90" title={skill.name}>
             <span className="text-lg sm:text-xl" style={{ color: skill.color }}>{skill.icon}</span><kbd className="absolute -left-1 -top-1 rounded bg-black px-1 text-[8px] text-[#fbbf24]">{index + 1}</kbd><small className="sr-only">{skill.name}</small>
           </button>)}
         </div>
         <div className="h-1 w-full max-w-xs overflow-hidden rounded-full border border-gray-800 bg-black/90"><div className={`h-full ${props.connected ? "bg-gradient-to-r from-amber-600 to-yellow-400" : "bg-gray-700"}`} style={{ width: typeof props.mastery?.xpPercent === "number" ? `${props.mastery.xpPercent * 100}%` : (props.connected ? "100%" : "15%") }} /></div>
       </div>
 
-      {!freeView && (
-        <button type="button" onClick={() => setCombatOpen(value => !value)} aria-label="Combat Metrics Details umschalten" className="pointer-events-auto absolute right-2 top-[46%] sm:right-4 rounded-xl border border-amber-500/40 bg-black/85 px-2.5 py-2 text-[9px] font-mono text-amber-300 backdrop-blur-md shadow-xl" aria-expanded={combatOpen}>
-          <Swords className="mx-auto mb-0.5 h-4 w-4" /> DPS {props.combat.eventCount ? props.combat.currentDps : "—"}
-        </button>
-      )}
+      <button type="button" onClick={() => setCombatOpen(value => !value)} className="pointer-events-auto absolute right-2 top-[46%] sm:right-4 rounded-xl border border-amber-500/40 bg-black/85 px-2.5 py-2 text-[9px] font-mono text-amber-300 backdrop-blur-md shadow-xl" aria-expanded={combatOpen}>
+        <Swords className="mx-auto mb-0.5 h-4 w-4" /> DPS {props.combat.eventCount ? props.combat.currentDps : "—"}
+      </button>
       {combatOpen && <section id="dps-meter-modal" className="pointer-events-auto absolute right-14 top-[28%] z-30 w-72 sm:w-80 max-w-[calc(100vw-72px)] rounded-2xl border border-amber-500/40 bg-black/92 p-3 shadow-2xl backdrop-blur-xl font-mono">
-        <div className="flex items-center justify-between border-b border-gray-800 pb-2"><b className="text-[10px] tracking-wider text-amber-200">BESTÄTIGTE COMBAT METRICS</b><button type="button" onClick={() => setCombatOpen(false)} aria-label="Combat Metrics schließen" className="text-gray-400">✕</button></div>
+        <div className="flex items-center justify-between border-b border-gray-800 pb-2"><b className="text-[10px] tracking-wider text-amber-200">BESTÄTIGTE COMBAT METRICS</b><button type="button" onClick={() => setCombatOpen(false)} className="text-gray-400">✕</button></div>
         <div className="grid grid-cols-3 gap-1.5 py-2 text-center"><Metric label="DPS" value={props.combat.eventCount ? props.combat.currentDps : "—"} /><Metric label="PEAK" value={props.combat.eventCount ? props.combat.peakDps : "—"} /><Metric label="DTPS" value={props.combat.eventCount ? props.combat.currentDtps : "—"} /></div>
         <div className="max-h-36 space-y-1 overflow-y-auto text-[8px]">{props.combat.logs.length ? props.combat.logs.slice(0, 8).map(log => <div key={log.id} className="flex gap-1 rounded border border-stone-800 bg-black/60 px-2 py-1"><i className="shrink-0 text-gray-500">T{log.tick}</i><span className="flex-1 text-gray-300">{log.text}</span><b className="text-amber-300">{log.value}</b></div>) : <p className="py-3 text-center italic text-gray-600">Noch keine bestätigten Combat-Events.</p>}</div>
       </section>}
 
       {props.feedback && <p className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
-
-      <div className="pointer-events-auto">
-        <ActiveQuestsPanel
-          isOpen={activeQuestsOpen}
-          onClose={() => setActiveQuestsOpen(false)}
-          objectives={props.objectives}
-          zoneName={props.zoneName}
-          focusedObjectiveId={focusedObjectiveId}
-          onFocusObjective={id => setFocusedObjectiveId(prev => (prev === id ? null : id))}
-        />
-      </div>
     </div>
   );
 }
