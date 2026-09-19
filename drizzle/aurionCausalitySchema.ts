@@ -137,6 +137,43 @@ export const aurionEntityZoneOwnership = mysqlTable("aurionEntityZoneOwnership",
   uniqueIndex("aurionEntityZoneOwnership_active_transfer_uq").on(table.activeTransferId),
 ]);
 
+export const aurionEffectIntents = mysqlTable("aurionEffectIntents", {
+  effectId: varchar("effectId", { length: 96 }).primaryKey(),
+  authorityReceiptHash: varchar("authorityReceiptHash", { length: HASH_LENGTH }).notNull(),
+  effectType: varchar("effectType", { length: 96 }).notNull(),
+  subjectId: varchar("subjectId", { length: 128 }).notNull(),
+  ordinal: int("ordinal").notNull(),
+  payloadHash: varchar("payloadHash", { length: HASH_LENGTH }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+  deliveryState: mysqlEnum("deliveryState", ["PENDING", "DELIVERED", "FAILED", "RETRYABLE", "PERMANENT_FAILURE"]).default("PENDING").notNull(),
+  attemptCount: int("attemptCount").default(0).notNull(),
+  providerReceiptHash: varchar("providerReceiptHash", { length: HASH_LENGTH }),
+  lastErrorCode: varchar("lastErrorCode", { length: 96 }),
+  deliveredAt: timestamp("deliveredAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEffectIntents_authority_identity_uq").on(table.authorityReceiptHash, table.effectType, table.subjectId, table.ordinal),
+  index("aurionEffectIntents_state_created_idx").on(table.deliveryState, table.createdAt),
+]);
+
+export const aurionEffectDeliveryReceipts = mysqlTable("aurionEffectDeliveryReceipts", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  effectId: varchar("effectId", { length: 96 }).notNull(),
+  attempt: int("attempt").notNull(),
+  deliveryState: mysqlEnum("deliveryState", ["PENDING", "DELIVERED", "FAILED", "RETRYABLE", "PERMANENT_FAILURE"]).notNull(),
+  providerReceiptHash: varchar("providerReceiptHash", { length: HASH_LENGTH }),
+  errorCode: varchar("errorCode", { length: 96 }),
+  deliveryReceiptHash: varchar("deliveryReceiptHash", { length: HASH_LENGTH }).notNull(),
+  previousDeliveryReceiptHash: varchar("previousDeliveryReceiptHash", { length: HASH_LENGTH }),
+  receiptJson: text("receiptJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEffectDeliveryReceipts_effect_attempt_uq").on(table.effectId, table.attempt),
+  uniqueIndex("aurionEffectDeliveryReceipts_hash_uq").on(table.deliveryReceiptHash),
+  index("aurionEffectDeliveryReceipts_effect_created_idx").on(table.effectId, table.createdAt),
+]);
+
 export const aurionGlobalStateProofs = mysqlTable("aurionGlobalStateProofs", {
   id: varchar("id", { length: 96 }).primaryKey(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
