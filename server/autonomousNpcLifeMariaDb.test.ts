@@ -10,10 +10,11 @@ const suite = process.env.AURION_NPC_E2E === "1" && process.env.DATABASE_URL ? d
 const hubs = ["observatory_threshold","windhollow","emberfall","cinder_vault"] as const;
 
 function opportunities(tick:number, hub:HubId) {
-  return [
+  const specs = [
     ["safe_hub","safe"],["resource","resource"],["social","social"],
     ["reputation","reputation"],["market","market"],["influence","influence"],
-  ].map(([kind,suffix])=>({
+  ] as const;
+  return specs.map(([kind,suffix])=>({
     id:`autonomous-op:${tick}:${suffix}`,kind,regionId:hub,targetId:`target:${suffix}`,
     benefitBps:8_000,riskBps:0,distanceBps:0,sourceReceiptId:`autonomous-source:${tick}`,resolutionIndex:tick,
   }));
