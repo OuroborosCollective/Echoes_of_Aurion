@@ -1,6 +1,29 @@
-import { type LivingWorldSocialAction, type HubId, type MarketState, type NpcEconomyState } from "./ax1LivingWorldProtocol.js";
+import { resolveLivingWorldTick, socialMasteryEvidence, type LivingWorldSocialAction, type HubId, type MarketState, type NpcEconomyState } from "./ax1LivingWorldProtocol.js";
 import type { NpcRequest, NpcSnapshot } from "./npcPersistenceProtocol.js";
+import type { PolityGovernmentType, WorldSignal } from "./worldPolityRules.js";
+export type MerchantDecisionRequests = Readonly<{
+    resolution: ReturnType<typeof resolveLivingWorldTick>;
+    npcRequest: NpcRequest;
+    worldRequest: Readonly<{
+        worldSeed: string;
+        regionId: HubId;
+        resolutionIndex: number;
+        signals: readonly WorldSignal[];
+    }>;
+    polityRequest: Readonly<{
+        polityId: string;
+        governmentType: PolityGovernmentType;
+        territoryIds: readonly string[];
+        stability: number;
+        activeDiplomacy: readonly ("alliance" | "trade" | "non_aggression" | "tribute" | "sanction")[];
+        warSignals: readonly WorldSignal[];
+    }>;
+    socialEvidence?: ReturnType<typeof socialMasteryEvidence>;
+    receiptId: string;
+}>;
+export declare const merchantBootstrapMarkets: Readonly<Record<HubId, MarketState>>;
 export declare function npcIdentity(regionId: HubId): string;
+export declare function confirmedNpcEconomy(homeRegionId: HubId, snapshot: NpcSnapshot | null): NpcEconomyState;
 /** Pure WASD merchant decision input derivation. Aurion supplies only confirmed prior state. */
 export declare function prepareMerchantNpcDecision(input: {
     worldSeed: string;
@@ -12,67 +35,22 @@ export declare function prepareMerchantNpcDecision(input: {
         sourceReceiptId: string;
     }>;
 }): Readonly<{
-    resolution: Readonly<{
-        resolutionIndex: number;
-        market: MarketState;
-        npc: NpcEconomyState;
-        preferredGoal: import("./npcNeeds.js").NpcGoal | null;
-        action: "consume" | "produce" | "trade" | "caravan" | "patrol" | "rest" | "socialize";
-        commodity: import("./ax1LivingWorldProtocol.js").CommodityId;
-        quantity: number;
-        unitPriceCopper: number;
-        taxCopper: number;
-        caravan: Readonly<{
-            destination: HubId | null;
-            securityIndex: number;
-            ambushed: boolean;
-        }>;
-        nextMemory: readonly string[];
-        stabilityDelta: number;
-        deterministicHash: string;
-    }>;
+    resolution: ReturnType<typeof resolveLivingWorldTick>;
     npcRequest: NpcRequest;
     worldRequest: Readonly<{
         worldSeed: string;
         regionId: HubId;
         resolutionIndex: number;
-        signals: ({
-            id: string;
-            kind: "economy";
-            regionId: HubId;
-            magnitude: number;
-            sourceReceiptId: string;
-            resolutionIndex: number;
-        } | {
-            id: string;
-            kind: "politics" | "war";
-            regionId: HubId;
-            magnitude: number;
-            sourceReceiptId: string;
-            resolutionIndex: number;
-        })[];
+        signals: readonly WorldSignal[];
     }>;
     polityRequest: Readonly<{
-        polityId: "polity:observatory_threshold" | "polity:windhollow" | "polity:emberfall" | "polity:cinder_vault";
-        governmentType: "council" | "trade_republic" | "warband";
-        territoryIds: HubId[];
+        polityId: string;
+        governmentType: PolityGovernmentType;
+        territoryIds: readonly string[];
         stability: number;
-        activeDiplomacy: "trade"[] | "non_aggression"[];
-        warSignals: {
-            id: string;
-            kind: "politics" | "war";
-            regionId: HubId;
-            magnitude: number;
-            sourceReceiptId: string;
-            resolutionIndex: number;
-        }[];
+        activeDiplomacy: readonly ("alliance" | "trade" | "non_aggression" | "tribute" | "sanction")[];
+        warSignals: readonly WorldSignal[];
     }>;
-    socialEvidence: Readonly<{
-        disciplineId: "diplomacy" | "council" | "sovereignty" | "stewardship";
-        amountExact: string;
-        sourceReceiptId: string;
-        resolutionIndex: number;
-        reputationDelta: number;
-    }> | undefined;
+    socialEvidence?: ReturnType<typeof socialMasteryEvidence>;
     receiptId: string;
 }>;
