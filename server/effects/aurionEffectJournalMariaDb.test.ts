@@ -79,6 +79,13 @@ suite("Aurion EffectIntent Journal MariaDB", () => {
     expect(duplicate.attemptCount).toBe(0);
   });
 
+  it("fails closed when the same effect identity is reused with different payload", async () => {
+    const journal = new AurionEffectJournal();
+    await journal.recordIntent(effectInput("player:24007", 0, { achievementId: "first-light" }));
+    await expect(journal.recordIntent(effectInput("player:24007", 0, { achievementId: "forged-second-payload" })))
+      .rejects.toThrow("EFFECT_INTENT_IDEMPOTENCY_CONFLICT");
+  });
+
   it("replay recomputes intent identity while producing zero provider calls and zero delivery receipts", async () => {
     const journal = new AurionEffectJournal();
     const worker = new AurionEffectWorker();
