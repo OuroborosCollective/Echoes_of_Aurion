@@ -1037,7 +1037,7 @@ jobs:
           retention-days: 30
 
   apply-reviewed-schema-plan:
-    name: Apply reviewed 0021–0050 plan through the existing OIDC workflow
+    name: Apply reviewed 0021–0052 plan through the existing OIDC workflow
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]
     runs-on: ubuntu-24.04

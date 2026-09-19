@@ -38,6 +38,7 @@ jobs:
       TEST_DB_PASSWORD: aurion-watermark-proof
       TEST_DB_PORT: "33306"
       TEST_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000028"
+      MARIADB_IMAGE: "mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,16 +59,27 @@ jobs:
           set -euo pipefail
           pnpm check
           pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionProductionSchemaApplyWorkflow.test.ts
+          grep -Fq 'docker run -d --pull=never' .github/workflows/aurion-journal-watermark-regression.yml
+          grep -Fq 'for pull_attempt in $(seq 1 5)' .github/workflows/aurion-journal-watermark-regression.yml
 
       - name: Start isolated MariaDB
         run: |
           set -euo pipefail
-          docker run -d \
+          pulled=0
+          for pull_attempt in $(seq 1 5); do
+            if docker pull "$MARIADB_IMAGE"; then
+              pulled=1
+              break
+            fi
+            sleep $((pull_attempt * 2))
+          done
+          test "$pulled" -eq 1
+          docker run -d --pull=never \
             --name "$TEST_DB_CONTAINER" \
             -p "127.0.0.1:${TEST_DB_PORT}:3306" \
             -e MARIADB_ROOT_PASSWORD="$TEST_DB_PASSWORD" \
             -e MARIADB_DATABASE="$TEST_DB_NAME" \
-            mariadb:11.4
+            "$MARIADB_IMAGE"
           ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="$TEST_DB_PASSWORD" "$TEST_DB_CONTAINER" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
@@ -114,7 +126,7 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
-          const lastLate = journal.entries.find(entry => entry.tag === "0051_aurion_cross_zone_handover_v2");
+          const lastLate = journal.entries.find(entry => entry.tag === "0052_aurion_effect_intent_journal");
           if (!lastLate || !Number.isSafeInteger(Number(lastLate.when))) throw new Error("late journal timestamp missing");
           const legacyWatermark = Number(lastLate.when) + 10_000_000;
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
@@ -143,7 +155,7 @@ jobs:
           (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
           node dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs dist-production-apply "$GITHUB_SHA"
 
-      - name: Apply 0021 through 0051 despite the legacy watermark
+      - name: Apply 0021 through 0052 despite the legacy watermark
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
           AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
@@ -170,6 +182,7 @@ jobs:
             "0049_aurion_causal_receipt_v2",
             "0050_aurion_human_ai_authoring",
             "0051_aurion_cross_zone_handover_v2",
+            "0052_aurion_effect_intent_journal",
           ];
           if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
           if (receipt.preflight?.absentCount !== tags.length || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
@@ -178,7 +191,7 @@ jobs:
           if (receipt.repairedJournalTags?.length !== 0) throw new Error("unexpected journal repair on clean 0020 prefix");
           NODE
 
-      - name: Prove all 52 journal rows exist while the historical watermark is untouched
+      - name: Prove all 53 journal rows exist while the historical watermark is untouched
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
         run: |
@@ -190,7 +203,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 52) throw new Error("expected 52 journal rows after bounded apply");
+            if (Number(rows[0]?.rowCount) !== 53) throw new Error("expected 53 journal rows after bounded apply");
             if (Number(rows[0]?.maxCreatedAt) !== expectedWatermark) throw new Error("legacy historical watermark was rewritten");
           } finally {
             await connection.end();
@@ -216,7 +229,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 52 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
+            if (Number(rows[0]?.rowCount) !== 53 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
               throw new Error("retry changed historical journal state");
             }
           } finally {
