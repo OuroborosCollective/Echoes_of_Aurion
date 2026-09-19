@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, gt, lt, sql as sqlDrizzle } from "drizzle-orm";
+import { and, desc, eq, gt, lt, lte, sql as sqlDrizzle } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   aurionCausalArchive,
@@ -146,6 +146,25 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const db = await getDb(); if (!db) return null;
     const [row] = await db.select().from(aurionCausalCheckpoints)
       .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.tick, tick))).limit(1);
+    if (!row) return null;
+    return {
+      id: row.id,
+      worldId: row.worldId,
+      zoneId: row.zoneId,
+      tick: row.tick,
+      snapshotHash: row.snapshotHash,
+      state: JSON.parse(row.snapshotJson) as CanonicalZoneState,
+      reconciled: row.reconciled,
+    };
+  }
+
+  async getCheckpointAtOrBefore(zoneId: string, tick: number): Promise<PersistedCheckpoint | null> {
+    if (!Number.isSafeInteger(tick) || tick < 0) return null;
+    const db = await getDb(); if (!db) return null;
+    const [row] = await db.select().from(aurionCausalCheckpoints)
+      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), lte(aurionCausalCheckpoints.tick, tick)))
+      .orderBy(desc(aurionCausalCheckpoints.tick))
+      .limit(1);
     if (!row) return null;
     return {
       id: row.id,

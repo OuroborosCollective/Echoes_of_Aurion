@@ -137,6 +137,16 @@ jobs:
           effect_id="$(cat .aurion-local-test-pack/evidence/wave2-step24-effect-id.txt)"
           pnpm exec tsx scripts/read-aurion-effect-intent.ts --effect-id "$effect_id" 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step24-effect-readback.log
 
+      - name: Verify Wave 2 Step 25 headless causal oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          env -u DATABASE_URL pnpm exec vitest run server/causality/headlessCausalOracle.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step25-oracle-contract.log
+          NODE_ENV=test AURION_ORACLE_E2E=1 AURION_STEP25_ZONE_ID_PATH=.aurion-local-test-pack/evidence/wave2-step25-zone-id.txt pnpm exec vitest run server/causality/headlessCausalOracleMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step25-oracle-mariadb.log
+          zone_id="$(cat .aurion-local-test-pack/evidence/wave2-step25-zone-id.txt)"
+          pnpm exec tsx scripts/oracle-aurion-zone.ts --zone "$zone_id" --from-tick 3 --to-tick 4 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step25-oracle-readback.log
+
       - name: Verify milestone gate evidence contract
         shell: bash
         run: |

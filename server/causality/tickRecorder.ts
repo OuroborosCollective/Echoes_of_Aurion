@@ -27,6 +27,7 @@ export interface CausalPersistenceAdapter {
   getLatestReceipt(zoneId: string): Promise<AurionCausalTickReceipt | null>;
   getRecordedTick(zoneId: string, tick: number): Promise<RecordedTickEntry | null>;
   getCheckpoint(zoneId: string, tick: number): Promise<PersistedCheckpoint | null>;
+  getCheckpointAtOrBefore(zoneId: string, tick: number): Promise<PersistedCheckpoint | null>;
   getUnreconciledCheckpoints(limit: number): Promise<any[]>;
   getDivergentCheckpoints(zoneId: string, limit: number): Promise<any[]>;
   updateCheckpointReconciliation(id: string, status: number): Promise<void>;

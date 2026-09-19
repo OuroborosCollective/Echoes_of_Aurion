@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { replayZoneTick } from "../server/causality/replayZoneTick";
 import { globalTickRecorder } from "../server/causality/tickRecorder";
 import { globalCausalPersistence } from "../server/causality/persistence";
+import { globalHeadlessCausalOracle } from "../server/causality/headlessCausalOracle";
 
 async function run() {
   const args = process.argv.slice(2);
@@ -75,35 +76,19 @@ async function run() {
     process.exit(0);
   }
 
-  if (zoneId && fromTick >= 0 && toTick >= 0) {
-    console.log(`[AURION REPLAY] Replaying zone ${zoneId} from tick ${fromTick} to ${toTick}...`);
-    let matches = 0;
-    for (let t = fromTick; t <= toTick; t++) {
-      const entry = globalTickRecorder.getEntry(zoneId, t) || 
-                    await globalCausalPersistence.getRecordedTick(zoneId, t);
-      
-      if (!entry || !entry.preState || !entry.intents) {
-        const reason = !entry ? "RECORDED_TICK_MISSING" : !entry.preState ? "REPLAY_PRE_STATE_UNAVAILABLE" : "RECORDED_INTENTS_MISSING";
-        console.error(`[AURION REPLAY UNPROVABLE] Tick ${t}: ${reason}`);
-        process.exit(2);
-      }
-      const res = replayZoneTick({
-        preState: entry.preState,
-        intents: entry.intents,
-        expectedReceipt: entry.receipt,
-      });
-      if (res.verdict === "MATCH") {
-        matches++;
-      } else if (res.verdict === "FIRST_DIVERGENCE") {
-        console.error(`[AURION REPLAY DIVERGENCE] Tick ${t} diverged at ${res.stage}: ${res.expectedHash} vs ${res.observedHash}`);
-        process.exit(1);
-      } else {
-        console.error(`[AURION REPLAY UNPROVABLE] Tick ${t}: ${res.reason}`);
-        process.exit(2);
-      }
+  if (zoneId && fromTick >= 1 && toTick >= fromTick) {
+    console.log(`[AURION ORACLE V2] Replaying zone ${zoneId} from tick ${fromTick} to ${toTick} from persisted sparse-checkpoint evidence...`);
+    const result = await globalHeadlessCausalOracle.replayRange({ zoneId, fromTick, toTick });
+    if (result.status === "MATCH") {
+      console.log(`[AURION ORACLE MATCH] Verified ${result.verifiedTicks.length} requested ticks after ${result.warmupTicks.length} warm-up ticks. Result: ${result.oracleResultHash}`);
+      process.exit(0);
     }
-    console.log(`[AURION REPLAY SUCCESS] Replayed ${matches} ticks. All stages MATCH.`);
-    process.exit(0);
+    if (result.status === "FIRST_DIVERGENCE") {
+      console.error(`[AURION ORACLE DIVERGENCE] Tick ${result.firstDivergence?.tick} stage ${result.firstDivergence?.stage}: ${result.firstDivergence?.expectedHash} vs ${result.firstDivergence?.observedHash}`);
+      process.exit(1);
+    }
+    console.error(`[AURION ORACLE UNPROVABLE] ${result.reason}`);
+    process.exit(2);
   }
 
   if (filePath && existsSync(filePath)) {
