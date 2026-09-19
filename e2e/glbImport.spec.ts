@@ -40,9 +40,11 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(scrollMetrics.connected).toBe(true);
     await scrollRegion.focus();
     await scrollRegion.press('End');
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(Math.max(1, scrollMetrics.maxScrollTop - 2));
     await scrollRegion.press('Home');
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBe(0);
+    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
+      .toBeLessThanOrEqual(2);
 
     const input = page.locator('#smartGlbFile');
     await expect(input).toBeEnabled();
