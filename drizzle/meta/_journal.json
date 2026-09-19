@@ -379,6 +379,13 @@
       "when": 1789827600000,
       "tag": "0053_aurion_npc_action_gateway_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1789842600000,
+      "tag": "0054_aurion_semantic_memory_graph_v2",
+      "breakpoints": true
     }
   ]
 }
