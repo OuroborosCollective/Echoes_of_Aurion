@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { describe, expect, it, beforeAll } from "vitest";
 import { eq } from "drizzle-orm";
 import type WebSocket from "ws";
@@ -109,6 +110,8 @@ suite("Aurion EffectIntent Journal MariaDB", () => {
     expect(explanation?.intent.deliveryState).toBe("DELIVERED");
     expect(explanation?.receipts).toHaveLength(1);
     expect(explanation?.receiptChainValid).toBe(true);
+    const evidencePath = process.env.AURION_STEP24_EFFECT_ID_PATH?.trim();
+    if (evidencePath) writeFileSync(evidencePath, `${intent.effectId}\n`, "utf8");
   });
 
   it("retries a retryable provider failure with a chained delivery receipt", async () => {
