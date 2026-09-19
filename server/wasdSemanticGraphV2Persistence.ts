@@ -46,7 +46,17 @@ const ACTION_MEMORY_LINK_VERSION="aurion-npc-action-memory-link.v1" as const;
 const visibleNpcs=["lyra","orun","ax1_merchant_observatory_threshold","ax1_merchant_windhollow","ax1_merchant_emberfall","ax1_merchant_cinder_vault"] as const;
 
 type GraphRow=typeof aurionSemanticGraphReceiptsV2.$inferSelect;
-const verifiedGraphCache=new Map<string,NpcSemanticMemoryGraph>(); // exactly one warm predecessor per NPC
+const VERIFIED_GRAPH_CACHE_LIMIT=64;
+const verifiedGraphCache=new Map<string,NpcSemanticMemoryGraph>(); // performance-only; never authority
+function cacheVerifiedGraph(graph:NpcSemanticMemoryGraph):void{
+  verifiedGraphCache.delete(graph.npcId);
+  cacheVerifiedGraph(graph);
+  while(verifiedGraphCache.size>VERIFIED_GRAPH_CACHE_LIMIT){
+    const oldest=verifiedGraphCache.keys().next().value as string|undefined;
+    if(!oldest) break;
+    verifiedGraphCache.delete(oldest);
+  }
+}
 type FailurePoint="after_receipt"|"after_node"|"after_edge"|"after_provenance"|"before_readback";
 
 function parseJson<T>(raw:string,code:string):T{
@@ -302,7 +312,7 @@ async function verifiedGraphFromRow(
      graph.version!==row.graphVersion||graph.retrievalVersion!==row.retrievalVersion||
      graph.authority.sourceRevision!==row.sourceRevision||graph.authority.sourceSha256!==row.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
   await verifyStoredRows(tx,row,graph);
-  verifiedGraphCache.set(graph.npcId,graph);
+  cacheVerifiedGraph(graph);
   return Object.freeze({row:Object.freeze(row),graph,memory,evidence});
 }
 
@@ -359,7 +369,7 @@ export async function appendNpcSemanticGraphV2(
   if(verifiedGraph.graphHash!==stored.graphHash||verifiedGraph.previousGraphHash!==stored.previousGraphHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
   await verifyStoredRows(tx,stored,verifiedGraph);
   await verifyStoredIndex(tx,stored,verifiedGraph);
-  verifiedGraphCache.set(verifiedGraph.npcId,verifiedGraph);
+  cacheVerifiedGraph(verifiedGraph);
   return Object.freeze({row:Object.freeze(stored),graph:verifiedGraph,memory,evidence});
 }
 
