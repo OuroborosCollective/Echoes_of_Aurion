@@ -92,11 +92,20 @@ suite("Aurion EffectIntent Journal MariaDB", () => {
     const intent = await journal.recordIntent(effectInput("player:24002", 0));
     const provider = new QueueProvider([]);
     expect(await worker.processEffect(intent.effectId, provider, { mode: "REPLAY" }))
-      .toEqual({ status: "REPLAY_SKIPPED", effectId: intent.effectId });
+      .toEqual({ status: "MATCH", effectId: intent.effectId, payloadHash: intent.payloadHash });
     expect(provider.calls).toHaveLength(0);
     const explanation = await journal.explain(intent.effectId);
     expect(explanation?.intent.deliveryState).toBe("PENDING");
     expect(explanation?.receipts).toHaveLength(0);
+  });
+
+  it("marks replay of a missing effect UNPROVABLE without calling the provider", async () => {
+    const worker = new AurionEffectWorker();
+    const provider = new QueueProvider([]);
+    const missing = "sha256:" + "f".repeat(64);
+    expect(await worker.processEffect(missing, provider, { mode: "REPLAY" }))
+      .toEqual({ status: "UNPROVABLE", effectId: missing, reason: "EFFECT_INTENT_MISSING" });
+    expect(provider.calls).toHaveLength(0);
   });
 
   it("serializes duplicate workers to one logical delivery", async () => {
