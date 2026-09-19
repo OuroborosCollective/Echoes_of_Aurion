@@ -45,3 +45,4 @@ process.stdout.write(JSON.stringify({
   resolutionIndex:action.npc.decision.resolutionIndex,
   secretValuesReturned:false,
 })+"\n");
+process.exit(0);
