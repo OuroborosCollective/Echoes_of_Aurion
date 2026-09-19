@@ -18,10 +18,11 @@ const npcId=npcIdentity(homeHub);
 const hubs=Object.keys(merchantBootstrapMarkets).sort() as HubId[];
 
 function opportunities(tick:number, hub:HubId) {
-  return [
+  const specs = [
     ["safe_hub","safe"],["resource","resource"],["social","social"],
     ["reputation","reputation"],["market","market"],["influence","influence"],
-  ].map(([kind,suffix])=>({
+  ] as const;
+  return specs.map(([kind,suffix])=>({
     id:`db-op:${tick}:${suffix}`,kind,regionId:hub,targetId:`target:${suffix}`,
     benefitBps:8_000,riskBps:0,distanceBps:0,sourceReceiptId:`db-evidence:${tick}`,resolutionIndex:tick,
   }));
