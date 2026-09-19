@@ -16,6 +16,7 @@ describe("AIM-292 WASD source and public transport boundary",()=>{
     }
     expect(appRouter._def.procedures).not.toHaveProperty("admin.world.resolveNpc");
     expect(appRouter._def.procedures).toHaveProperty("gameplay.npcMultiMemory");
+    expect(appRouter._def.procedures).toHaveProperty("gameplay.npcActions");
   });
   it("requires exact owner, bounded unique ordered identities and a readmodel without raw fields",()=>{
     const npc={version:"wasd-npc-memory-public.v4",npcId:"lyra",resolutionIndex:7,goal:"trade",planStatus:"planned",memoryHash:"a".repeat(64),sourceRevision:pin.sourceRevision,counts:{working:1,episodic:1,semantic:2,procedural:2},conflictedFacts:0,expiredFacts:0};
