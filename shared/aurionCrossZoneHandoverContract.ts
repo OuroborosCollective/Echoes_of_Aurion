@@ -165,6 +165,14 @@ const allowed = Object.freeze({
   UNPROVABLE: Object.freeze([] as const),
 } satisfies Readonly<Record<AurionCrossZoneHandoverStatus, readonly AurionCrossZoneHandoverStatus[]>>);
 
+function isAllowedTransition(
+  currentStatus: AurionCrossZoneHandoverStatus,
+  nextStatus: AurionCrossZoneHandoverStatus,
+): boolean {
+  const transitions: readonly AurionCrossZoneHandoverStatus[] = allowed[currentStatus];
+  return transitions.includes(nextStatus);
+}
+
 export function advanceCrossZoneHandover(
   current: AurionCrossZoneHandoverV2,
   nextStatus: AurionCrossZoneHandoverStatus,
@@ -178,7 +186,7 @@ export function advanceCrossZoneHandover(
     }
     return current;
   }
-  if (!allowed[current.status].includes(nextStatus)) throw new Error(`CROSS_ZONE_TRANSITION_INVALID:${current.status}->${nextStatus}`);
+  if (!isAllowedTransition(current.status, nextStatus)) throw new Error(`CROSS_ZONE_TRANSITION_INVALID:${current.status}->${nextStatus}`);
 
   let targetAcceptedTick = current.targetAcceptedTick;
   let targetReceiptHash = current.targetReceiptHash;
