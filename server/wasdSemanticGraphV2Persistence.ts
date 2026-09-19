@@ -46,6 +46,7 @@ const ACTION_MEMORY_LINK_VERSION="aurion-npc-action-memory-link.v1" as const;
 const visibleNpcs=["lyra","orun","ax1_merchant_observatory_threshold","ax1_merchant_windhollow","ax1_merchant_emberfall","ax1_merchant_cinder_vault"] as const;
 
 type GraphRow=typeof aurionSemanticGraphReceiptsV2.$inferSelect;
+const verifiedGraphCache=new Map<string,NpcSemanticMemoryGraph>();
 type FailurePoint="after_receipt"|"after_node"|"after_edge"|"after_provenance"|"before_readback";
 
 function parseJson<T>(raw:string,code:string):T{
@@ -231,6 +232,31 @@ async function verifyStoredIndex(tx:NpcTransaction,row:GraphRow,graph:NpcSemanti
   const expected=indexRows(row.id,graph);
   if(stableCatalogStringify(stripCreated(index))!==stableCatalogStringify(expected)) throw new Error("NPC_SEMANTIC_GRAPH_V2_INDEX_READBACK_MISMATCH");
 }
+function verifyGraphRowEnvelope(row:GraphRow):void{
+  assertPin();
+  if(row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256||row.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_DRIFT");
+  const receiptCore={
+    version:GRAPH_RECEIPT_VERSION,id:row.id,npcId:row.npcId,generation:row.generation,graphVersion:row.graphVersion,
+    retrievalVersion:row.retrievalVersion,memoryReceiptId:row.memoryReceiptId,sourceRevision:row.sourceRevision,
+    sourceSha256:row.sourceSha256,capsuleManifestSha256:row.capsuleManifestSha256,previousGraphHash:row.previousGraphHash,graphHash:row.graphHash,
+  };
+  if(npcHash(receiptCore)!==row.receiptHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_RECEIPT_HASH_MISMATCH");
+}
+
+async function verifiedPredecessorForAppend(tx:NpcTransaction,row:GraphRow):Promise<NpcSemanticMemoryGraph>{
+  const cached=verifiedGraphCache.get(row.graphHash);
+  if(!cached) return (await verifiedGraphFromRow(tx,row)).graph;
+  verifyGraphRowEnvelope(row);
+  if(row.graphJson!==stableCatalogStringify(cached)||
+     cached.npcId!==row.npcId||cached.generation!==row.generation||cached.graphHash!==row.graphHash||
+     cached.previousGraphHash!==row.previousGraphHash||cached.version!==row.graphVersion||cached.retrievalVersion!==row.retrievalVersion||
+     cached.authority.sourceRevision!==row.sourceRevision||cached.authority.sourceSha256!==row.sourceSha256){
+    throw new Error("NPC_SEMANTIC_GRAPH_V2_CACHED_PREDECESSOR_MISMATCH");
+  }
+  await verifyStoredRows(tx,row,cached);
+  return cached;
+}
+
 async function verifiedGraphFromRow(
   tx:NpcTransaction,
   row:GraphRow,
@@ -241,15 +267,8 @@ async function verifiedGraphFromRow(
   memory:ConfirmedNpcMultiMemory;
   evidence:Awaited<ReturnType<typeof graphEvidence>>;
 }>>{
-  assertPin();
   if(seenGraphHashes.has(row.graphHash)) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_CYCLE");
-  if(row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256||row.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_DRIFT");
-  const receiptCore={
-    version:GRAPH_RECEIPT_VERSION,id:row.id,npcId:row.npcId,generation:row.generation,graphVersion:row.graphVersion,
-    retrievalVersion:row.retrievalVersion,memoryReceiptId:row.memoryReceiptId,sourceRevision:row.sourceRevision,
-    sourceSha256:row.sourceSha256,capsuleManifestSha256:row.capsuleManifestSha256,previousGraphHash:row.previousGraphHash,graphHash:row.graphHash,
-  };
-  if(npcHash(receiptCore)!==row.receiptHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_RECEIPT_HASH_MISMATCH");
+  verifyGraphRowEnvelope(row);
 
   const prior=(await tx.select().from(aurionSemanticGraphReceiptsV2)
     .where(and(
@@ -277,6 +296,7 @@ async function verifiedGraphFromRow(
      graph.version!==row.graphVersion||graph.retrievalVersion!==row.retrievalVersion||
      graph.authority.sourceRevision!==row.sourceRevision||graph.authority.sourceSha256!==row.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
   await verifyStoredRows(tx,row,graph);
+  verifiedGraphCache.set(graph.graphHash,graph);
   return Object.freeze({row:Object.freeze(row),graph,memory,evidence});
 }
 
@@ -297,11 +317,11 @@ export async function appendNpcSemanticGraphV2(
     return verifiedGraphFromRow(tx,latest);
   }
 
-  const verifiedPrevious=latest?await verifiedGraphFromRow(tx,latest):null;
-  const evidence=await graphEvidence(tx,memory,verifiedPrevious?.graph??null);
+  const previousGraph=latest?await verifiedPredecessorForAppend(tx,latest):null;
+  const evidence=await graphEvidence(tx,memory,previousGraph);
   const graph=compileNpcSemanticMemoryGraph(evidence);
   if(graph.npcId!==memory.row.npcId||graph.generation!==memory.row.resolutionIndex||graph.memoryHash!==memory.row.memoryHash||
-     graph.previousGraphHash!==(verifiedPrevious?.graph.graphHash??null)) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_GRAPH_MISMATCH");
+     graph.previousGraphHash!==(previousGraph?.graphHash??null)) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_GRAPH_MISMATCH");
 
   const id=graphReceiptId(graph);
   const core=graphReceiptCore({id,graph,memoryReceiptId:memory.row.id});
@@ -328,9 +348,13 @@ export async function appendNpcSemanticGraphV2(
   if(options.failureInjection==="before_readback") throw new Error("AIM294_FORCED_BEFORE_GRAPH_READBACK");
   const stored=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(eq(aurionSemanticGraphReceiptsV2.id,id)).limit(1))[0];
   if(!stored||stored.receiptHash!==receiptHash||stored.graphJson!==graphJson) throw new Error("NPC_SEMANTIC_GRAPH_V2_RECEIPT_READBACK_REQUIRED");
-  const verified=await verifiedGraphFromRow(tx,stored);
-  await verifyStoredIndex(tx,stored,verified.graph);
-  return verified;
+  verifyGraphRowEnvelope(stored);
+  const verifiedGraph=verifyNpcSemanticMemoryGraph(stored.graphJson,evidence);
+  if(verifiedGraph.graphHash!==stored.graphHash||verifiedGraph.previousGraphHash!==stored.previousGraphHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
+  await verifyStoredRows(tx,stored,verifiedGraph);
+  await verifyStoredIndex(tx,stored,verifiedGraph);
+  verifiedGraphCache.set(verifiedGraph.graphHash,verifiedGraph);
+  return Object.freeze({row:Object.freeze(stored),graph:verifiedGraph,memory,evidence});
 }
 
 export async function readVerifiedNpcSemanticGraphV2(tx:NpcTransaction,npcId:string){
