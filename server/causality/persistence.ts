@@ -24,11 +24,40 @@ import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry }
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
+function compactCausalPersistenceId(
+  prefix: "rcpt" | "chk",
+  identity: { worldId: string; zoneId: string; tick: number },
+): string {
+  const digest = createHash("sha256")
+    .update(stableJson(identity), "utf8")
+    .digest("hex")
+    .slice(0, 56);
+  return `${prefix}_${digest}`;
+}
+
+export function causalReceiptPersistenceId(
+  receipt: Pick<AurionCausalTickReceipt, "worldId" | "zoneId" | "tick">,
+): string {
+  return compactCausalPersistenceId("rcpt", {
+    worldId: receipt.worldId,
+    zoneId: receipt.zoneId,
+    tick: receipt.tick,
+  });
+}
+
+export function causalCheckpointPersistenceId(
+  worldId: string,
+  zoneId: string,
+  tick: number,
+): string {
+  return compactCausalPersistenceId("chk", { worldId, zoneId, tick });
+}
+
 export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter {
   async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[]): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
-    const id = `rcpt_${receipt.worldId}_${receipt.zoneId}_${receipt.tick}`;
+    const id = causalReceiptPersistenceId(receipt);
     const inputJson = intents ? stableJson(intents) : null;
     const stageReceiptsJson = receipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2 ? stableJson(receipt.stages) : null;
     try {
@@ -43,7 +72,13 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
         receiptHash: receipt.receiptHash,
       });
     } catch (error) {
-      const [existing] = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.id, id)).limit(1);
+      // Natural-key readback preserves idempotency for receipts created before
+      // compact hashed IDs were introduced. Historical primary keys are never rewritten.
+      const [existing] = await db.select().from(aurionCausalTickReceipts).where(and(
+        eq(aurionCausalTickReceipts.worldId, receipt.worldId),
+        eq(aurionCausalTickReceipts.zoneId, receipt.zoneId),
+        eq(aurionCausalTickReceipts.tick, receipt.tick),
+      )).limit(1);
       if (!existing) throw error;
       const same = existing.worldId === receipt.worldId && existing.zoneId === receipt.zoneId && existing.tick === receipt.tick &&
         existing.revision === receipt.sourceRevision && existing.rulesetVersion === receipt.rulesetVersion &&
@@ -60,12 +95,18 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
   async saveCheckpoint(zoneId: string, tick: number, stateHash: string, state: CanonicalZoneState): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
-    const id = `chk_${state.worldId}_${zoneId}_${tick}`;
+    const id = causalCheckpointPersistenceId(state.worldId, zoneId, tick);
     const snapshotJson = stableJson(state);
     try {
       await db.insert(aurionCausalCheckpoints).values({ id, worldId: state.worldId, zoneId, tick, snapshotHash: stateHash, snapshotJson });
     } catch (error) {
-      const [existing] = await db.select().from(aurionCausalCheckpoints).where(eq(aurionCausalCheckpoints.id, id)).limit(1);
+      // Same rollout rule as receipts: match the canonical natural key so
+      // checkpoints written with the historical textual ID remain idempotent.
+      const [existing] = await db.select().from(aurionCausalCheckpoints).where(and(
+        eq(aurionCausalCheckpoints.worldId, state.worldId),
+        eq(aurionCausalCheckpoints.zoneId, zoneId),
+        eq(aurionCausalCheckpoints.tick, tick),
+      )).limit(1);
       if (!existing) throw error;
       if (existing.snapshotHash !== stateHash || existing.snapshotJson !== snapshotJson) throw new Error(`CAUSAL_CHECKPOINT_CONFLICT:${id}`);
     }
