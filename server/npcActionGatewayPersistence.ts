@@ -510,7 +510,12 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
 export async function readLatestConfirmedNpcAction(npcId:string) {
   const db = await getDb(); if (!db) throw new Error("Game database is not available");
   return db.transaction(async tx => {
-    const row = (await tx.select().from(aurionNpcActionReceipts).where(eq(aurionNpcActionReceipts.npcId,npcId)).orderBy(desc(aurionNpcActionReceipts.resolutionIndex)).limit(1))[0];
+    const row = (await tx.select().from(aurionNpcActionReceipts).where(and(
+      eq(aurionNpcActionReceipts.npcId,npcId),
+      eq(aurionNpcActionReceipts.sourceRevision,pin.sourceRevision),
+      eq(aurionNpcActionReceipts.sourceSha256,pin.sourceSha256),
+      eq(aurionNpcActionReceipts.capsuleManifestSha256,pin.manifestSha256),
+    )).orderBy(desc(aurionNpcActionReceipts.resolutionIndex)).limit(1))[0];
     if (!row) return null;
     const readback = (await tx.select().from(aurionNpcActionEffectReadbacks).where(eq(aurionNpcActionEffectReadbacks.actionReceiptId,row.id)).limit(1))[0];
     if (!readback) throw new Error("NPC_ACTION_CONFIRMED_READBACK_REQUIRED");
@@ -533,7 +538,12 @@ export async function readConfirmedNpcActionPacket(userId:number) {
   const db=await getDb(); if(!db) throw new Error("Game database is not available");
   return db.transaction(async tx=>{
     const rows=await tx.select().from(aurionNpcActionReceipts)
-      .where(inArray(aurionNpcActionReceipts.npcId,[...visibleNpcActions]))
+      .where(and(
+        inArray(aurionNpcActionReceipts.npcId,[...visibleNpcActions]),
+        eq(aurionNpcActionReceipts.sourceRevision,pin.sourceRevision),
+        eq(aurionNpcActionReceipts.sourceSha256,pin.sourceSha256),
+        eq(aurionNpcActionReceipts.capsuleManifestSha256,pin.manifestSha256),
+      ))
       .orderBy(asc(aurionNpcActionReceipts.npcId),desc(aurionNpcActionReceipts.resolutionIndex));
     const latest=new Map<string,ActionRow>();
     for(const row of rows) if(!latest.has(row.npcId)) latest.set(row.npcId,row);
