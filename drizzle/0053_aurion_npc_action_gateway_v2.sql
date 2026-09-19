@@ -64,6 +64,7 @@ CREATE TABLE `aurionNpcActionReceipts` (
   `sourceDecisionSha256` varchar(64) NOT NULL,
   `sourcePlanHash` varchar(64) NOT NULL,
   `sourceGoal` varchar(64) NOT NULL,
+  `sourceGoalHash` varchar(64) NOT NULL,
   `sourceRevision` varchar(40) NOT NULL,
   `sourceSha256` varchar(64) NOT NULL,
   `capsuleManifestSha256` varchar(64) NOT NULL,
