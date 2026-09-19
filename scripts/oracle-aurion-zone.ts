@@ -22,17 +22,16 @@ async function main() {
     toTick < fromTick
   ) {
     console.error("Usage: pnpm exec tsx scripts/oracle-aurion-zone.ts --zone <zoneId> --from-tick <n> --to-tick <n>");
-    process.exitCode = 64;
-    return;
+    process.exit(64);
   }
 
   try {
     const result = await globalHeadlessCausalOracle.replayRange({ zoneId, fromTick, toTick });
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
-    process.exitCode = result.status === "MATCH" ? 0 : result.status === "FIRST_DIVERGENCE" ? 1 : 2;
+    process.exit(result.status === "MATCH" ? 0 : result.status === "FIRST_DIVERGENCE" ? 1 : 2);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
+    process.exit(2);
   }
 }
 
