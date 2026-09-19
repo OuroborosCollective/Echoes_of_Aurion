@@ -1,6 +1,6 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { AUTONOMOUS_NPC_LIFE_NPC_ID, createAutonomousNpcLifeRuntime } from "./autonomousNpcLifeRuntime";
+import { AUTONOMOUS_NPC_LIFE_HOME_REGION, AUTONOMOUS_NPC_LIFE_NPC_ID, createAutonomousNpcLifeRuntime } from "./autonomousNpcLifeRuntime";
 import { resolveAndRecordNpc, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
 import { merchantBootstrapMarkets, merchantInventoryStateHash, merchantMarketStateHash, merchantPolityStateHash, type HubId } from "./wasdNpcCapsule";
