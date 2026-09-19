@@ -32,11 +32,11 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
       const scrollHeight = element.scrollHeight;
       const clientHeight = element.clientHeight;
       const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
-      element.scrollTo({ top: maxScrollTop, behavior: "instant" });
+      element.scrollTo({ top: maxScrollTop, behavior: "auto" });
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const scrolledTop = element.scrollTop;
       const connectedAfterScroll = element.isConnected;
-      element.scrollTo({ top: 0, behavior: "instant" });
+      element.scrollTo({ top: 0, behavior: "auto" });
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       return { scrollHeight, clientHeight, maxScrollTop, scrolledTop, resetScrollTop: element.scrollTop, overflowY, connectedAfterScroll };
     });
