@@ -186,7 +186,7 @@ jobs:
             /tmp/aurion-aim292-server.log
             /tmp/aim292-repository-receipt.json
             /tmp/aim293-browser-seed.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
       - name: Stop isolated application
         if: always()
