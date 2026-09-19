@@ -211,9 +211,24 @@ export function advanceCrossZoneHandover(
 export function verifyCrossZoneHandover(receipt: AurionCrossZoneHandoverV2): boolean {
   if (receipt.schema !== AURION_CROSS_ZONE_HANDOVER_SCHEMA) return false;
   if (receipt.payload.entityId !== receipt.entityId) return false;
+  if (receipt.transferId !== transferIdFor(receipt)) return false;
   if (canonicalSha256(receipt.payload) !== receipt.payloadHash) return false;
   if (!HASH.test(receipt.sourceReceiptHash) || !HASH.test(receipt.sourceStateHash)) return false;
-  if (receipt.targetReceiptHash !== null && !HASH.test(receipt.targetReceiptHash)) return false;
+  if ((receipt.targetAcceptedTick === null) !== (receipt.targetReceiptHash === null)) return false;
+  if (receipt.targetAcceptedTick !== null && receipt.targetReceiptHash !== null) {
+    if (!HASH.test(receipt.targetReceiptHash)) return false;
+    if (receipt.targetReceiptHash !== computeTargetAcceptanceReceiptHash({
+      transferId: receipt.transferId,
+      entityId: receipt.entityId,
+      sourceReceiptHash: receipt.sourceReceiptHash,
+      payloadHash: receipt.payloadHash,
+      targetWorldId: receipt.targetWorldId,
+      targetZoneId: receipt.targetZoneId,
+      targetAcceptedTick: receipt.targetAcceptedTick,
+    })) return false;
+  }
+  if (["TARGET_ACCEPTED", "SOURCE_FINALIZED", "COMMITTED"].includes(receipt.status) &&
+      (receipt.targetAcceptedTick === null || receipt.targetReceiptHash === null)) return false;
   if (receipt.previousTransferReceiptHash !== null && !HASH.test(receipt.previousTransferReceiptHash)) return false;
   return receipt.transferReceiptHash === computeCrossZoneTransferReceiptHash(receipt);
 }
