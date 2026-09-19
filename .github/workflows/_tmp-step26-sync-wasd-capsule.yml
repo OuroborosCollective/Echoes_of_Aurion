@@ -24,20 +24,15 @@ jobs:
           ref: ${{ env.WASD_SOURCE_REVISION }}
           path: wasd-source
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.8.0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: wasd-source/pnpm-lock.yaml
       - name: Build exact capsule twice
         working-directory: wasd-source
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$WASD_SOURCE_REVISION"
-          pnpm install --frozen-lockfile --filter @wasd/server...
+          npm exec --yes --package=pnpm@11.8.0 -- pnpm install --frozen-lockfile --filter @wasd/server...
           node scripts/build-aurion-npc-capsule.mjs /tmp/aurion-step26-a
           node scripts/build-aurion-npc-capsule.mjs /tmp/aurion-step26-b
           diff --recursive /tmp/aurion-step26-a /tmp/aurion-step26-b
