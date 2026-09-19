@@ -38,6 +38,7 @@ jobs:
       TEST_DB_PASSWORD: aurion-watermark-proof
       TEST_DB_PORT: "33306"
       TEST_PLAN_SHA256: "0000000000000000000000000000000000000000000000000000000000000028"
+      MARIADB_IMAGE: "mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,16 +59,27 @@ jobs:
           set -euo pipefail
           pnpm check
           pnpm vitest run server/aurionProductionSchemaApplyDockerRunner.test.ts server/aurionProductionSchemaApplyWorkflow.test.ts
+          grep -Fq 'docker run -d --pull=never' .github/workflows/aurion-journal-watermark-regression.yml
+          grep -Fq 'for pull_attempt in $(seq 1 5)' .github/workflows/aurion-journal-watermark-regression.yml
 
       - name: Start isolated MariaDB
         run: |
           set -euo pipefail
-          docker run -d \
+          pulled=0
+          for pull_attempt in $(seq 1 5); do
+            if docker pull "$MARIADB_IMAGE"; then
+              pulled=1
+              break
+            fi
+            sleep $((pull_attempt * 2))
+          done
+          test "$pulled" -eq 1
+          docker run -d --pull=never \
             --name "$TEST_DB_CONTAINER" \
             -p "127.0.0.1:${TEST_DB_PORT}:3306" \
             -e MARIADB_ROOT_PASSWORD="$TEST_DB_PASSWORD" \
             -e MARIADB_DATABASE="$TEST_DB_NAME" \
-            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
+            "$MARIADB_IMAGE"
           ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="$TEST_DB_PASSWORD" "$TEST_DB_CONTAINER" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
