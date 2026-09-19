@@ -40,6 +40,20 @@ export function computeEffectId(input: {
   });
 }
 
+function assertEffectPayloadSafe(value: unknown, path = "payload"): void {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertEffectPayloadSafe(entry, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (/password|passwd|secret|token|authorization|cookie|api[-_]?key/i.test(key)) {
+      throw new Error(`EFFECT_PAYLOAD_SENSITIVE_FIELD_FORBIDDEN:${path}.${key}`);
+    }
+    assertEffectPayloadSafe(entry, `${path}.${key}`);
+  }
+}
+
 export function createEffectIntent(input: {
   authorityReceiptHash: string;
   effectType: string;
@@ -47,6 +61,7 @@ export function createEffectIntent(input: {
   ordinal: number;
   payload: Readonly<Record<string, unknown>>;
 }): AurionEffectIntent {
+  assertEffectPayloadSafe(input.payload);
   const effectId = computeEffectId(input);
   const payloadHash = canonicalSha256(input.payload);
   return Object.freeze({
