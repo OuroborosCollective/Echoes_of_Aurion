@@ -228,12 +228,20 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     const before=decodeOwnedNpcSemanticGraphs(await readConfirmedNpcSemanticGraphPacket(7),7);
     const beforeGraph=before.graphs.find(graph=>graph.npcId===npcId);
     expect(beforeGraph?.generation).toBe(1);
-    const [chain]=await pool.query<RowDataPacket[]>("SELECT generation,graphHash,previousGraphHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? ORDER BY generation",[npcId]);
+    const [chain]=await pool.query<RowDataPacket[]>("SELECT id,generation,graphHash,previousGraphHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? ORDER BY generation",[npcId]);
     expect(chain).toHaveLength(2);
     expect(chain[1].previousGraphHash).toBe(chain[0].graphHash);
     const db=await getDb();if(!db)throw new Error("DB_REQUIRED");
+
+    // The index is a rebuildable projection, never graph authority: lose it completely,
+    // still verify the canonical graph, then reconstruct exact index rows.
+    await pool.query("DELETE FROM aurionSemanticGraphIndexV2 WHERE graphReceiptId=?",[chain[1].id]);
+    const graphWithoutIndex=await db.transaction(tx=>readVerifiedNpcSemanticGraphV2(tx,npcId));
+    expect(graphWithoutIndex?.graph.graphHash).toBe(beforeGraph?.graphHash);
     const rebuilt=await db.transaction(tx=>rebuildSemanticGraphIndexV2(tx,npcId));
-    expect(rebuilt?.resultHash).toBe(before.graphs.find(graph=>graph.npcId===npcId)?.sourceResultHash);
+    expect(rebuilt?.resultHash).toBe(beforeGraph?.sourceResultHash);
+    const [rebuiltRows]=await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionSemanticGraphIndexV2 WHERE graphReceiptId=?",[chain[1].id]);
+    expect(Number(rebuiltRows[0]?.n??0)).toBe(rebuilt?.indexCount);
     const after=decodeOwnedNpcSemanticGraphs(await readConfirmedNpcSemanticGraphPacket(7),7);
     expect(after).toEqual(before);
 
