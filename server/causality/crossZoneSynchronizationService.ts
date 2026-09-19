@@ -210,7 +210,6 @@ export class AurionCrossZoneSynchronizationService {
     const id = `xfer_${sourceZoneId}_${targetZoneId}_${sourceTick}_${payload.entityId}`;
     await db.insert(aurionCrossZoneTransfers).values({
       id,
-      handoverVersion: 1,
       sourceWorldId,
       sourceZoneId,
       sourceTick,
@@ -226,7 +225,20 @@ export class AurionCrossZoneSynchronizationService {
   async getPendingInboundTransfers(worldId: string, zoneId: string): Promise<CrossZoneTransferRecord[]> {
     const db = await getDb();
     if (!db) return [];
-    const rows = await db.select().from(aurionCrossZoneTransfers).where(and(
+    // Keep the legacy read path deploy-before-migration compatible: select
+    // only columns that existed before 0051 instead of SELECT *.
+    const rows = await db.select({
+      id: aurionCrossZoneTransfers.id,
+      sourceWorldId: aurionCrossZoneTransfers.sourceWorldId,
+      sourceZoneId: aurionCrossZoneTransfers.sourceZoneId,
+      sourceTick: aurionCrossZoneTransfers.sourceTick,
+      targetWorldId: aurionCrossZoneTransfers.targetWorldId,
+      targetZoneId: aurionCrossZoneTransfers.targetZoneId,
+      targetTick: aurionCrossZoneTransfers.targetTick,
+      transferHash: aurionCrossZoneTransfers.transferHash,
+      payloadJson: aurionCrossZoneTransfers.payloadJson,
+      status: aurionCrossZoneTransfers.status,
+    }).from(aurionCrossZoneTransfers).where(and(
       eq(aurionCrossZoneTransfers.targetWorldId, worldId),
       eq(aurionCrossZoneTransfers.targetZoneId, zoneId),
       eq(aurionCrossZoneTransfers.status, "PENDING"),
@@ -254,7 +266,6 @@ export class AurionCrossZoneSynchronizationService {
       targetTick,
       consumedAt: operationalDate(),
     }).where(and(
-      eq(aurionCrossZoneTransfers.handoverVersion, 1),
       isNull(aurionCrossZoneTransfers.consumedAt),
       inArray(aurionCrossZoneTransfers.id, transferIds),
     ));
