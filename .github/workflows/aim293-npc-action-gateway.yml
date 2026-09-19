@@ -128,6 +128,10 @@ jobs:
           node scripts/verify-wasd-npc.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
+      - name: Read back exact 0053 bootstrap epochs
+        run: |
+          mkdir -p test-results
+          pnpm exec tsx scripts/verify-aim293-action-epoch-seed.ts | tee test-results/aim293-epoch-seed.json
       - name: Prove contract, rollback, deny, retry, concurrency and AIM-292 compatibility
         run: |
           set -euo pipefail
