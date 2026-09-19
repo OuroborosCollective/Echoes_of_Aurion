@@ -85,6 +85,20 @@ NODE_ENV=test AURION_CROSS_ZONE_E2E=1 pnpm exec vitest run server/causality/cros
 
 The MariaDB suite uses an actual Aurion zone tick as source causal evidence and covers normal transfer, duplicates, target offline, source/target restart, delayed delivery, rejection, replay and concurrent transfer attempts.
 
+## Rollback and recovery
+
+Migration 0051 is expand-first: legacy transfer columns/states remain readable while V2 adds nullable evidence columns and new tables. Application rollback may stop producing V2 transfers, but it must not delete V2 transition receipts or rewrite entity ownership history.
+
+Recovery rules:
+
+* `PREPARED` resumes with source freeze;
+* `SOURCE_FROZEN` waits for target acceptance or explicitly expires/rejects;
+* `TARGET_ACCEPTED` resumes the atomic finalize/commit;
+* `COMMITTED` is idempotently terminal;
+* contradictory owner/receipt state is evidence to investigate, never a reason for silent destructive repair.
+
+A database rollback that drops 0051 tables/columns is not an automatic recovery path. Preserve evidence first, then use an explicitly reviewed schema recovery plan.
+
 ## Current live-zone boundary
 
 The public gameplay ticket/gateway still admits only `observatory_threshold`. Step 23 does not invent additional live zone runtimes or silently convert content-region names into active simulation processes. The V2 handover contract and persistence are therefore safe for multi-zone authority coordination without claiming that a second live zone has already been deployed.
