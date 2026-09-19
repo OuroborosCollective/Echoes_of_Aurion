@@ -26,13 +26,14 @@ describe("confirmed NPC decision panel",()=>{
   fixture.memory.isError=true;rerender(<NpcDecisionPanel userId={7}/>);expect(screen.getByRole("button",{name:"Erinnerungen aktualisieren"})).toBeTruthy();
  });
  it("shows only effect-readback-confirmed actions and rejects a foreign action packet",()=>{
-  fixture.actions.data={userId:7,format:"aurion-public-npc-actions.v1",actions:[{npcId:"ax1_merchant_observatory_threshold",actionReceiptId:"nar_"+"1".repeat(56),resolutionIndex:9,action:"caravan",effectsHash:"2".repeat(64),readbackHash:"3".repeat(64),sourceRevision:"4".repeat(40)}]};
+  const actionPacket={userId:7,format:"aurion-public-npc-actions.v1",actions:[{npcId:"ax1_merchant_observatory_threshold",actionReceiptId:"nar_"+"1".repeat(56),resolutionIndex:9,action:"caravan",effectsHash:"2".repeat(64),readbackHash:"3".repeat(64),sourceRevision:"4".repeat(40)}]};
+  fixture.actions.data=actionPacket;
   const {rerender}=render(<NpcDecisionPanel userId={7}/>);
   expect(screen.getByText("Ausgeführt: caravan")).toBeTruthy();
   const row=screen.getByTestId("npc-action-row");
   expect(row.getAttribute("data-action-receipt-id")).toMatch(/^nar_/);
   expect(row.getAttribute("data-effect-readback-hash")).toBe("3".repeat(64));
-  fixture.actions.data={...fixture.actions.data,userId:8};
+  fixture.actions.data={...actionPacket,userId:8};
   rerender(<NpcDecisionPanel userId={7}/>);
   expect(screen.queryByText("Ausgeführt: caravan")).toBeNull();
   expect(screen.getByRole("button",{name:"Aktionen aktualisieren"})).toBeTruthy();
