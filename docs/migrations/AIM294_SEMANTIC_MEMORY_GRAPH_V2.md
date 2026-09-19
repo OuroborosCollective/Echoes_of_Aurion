@@ -32,7 +32,11 @@ The invariant is `results <= candidates <= retained nodes` (32 <= 64 <= 160). Re
 
 For one generation, Aurion persists one immutable graph receipt plus the bounded WASD node/edge/provenance set and a rebuildable index projection. The index is not graph authority: deleting the current index must not prevent canonical graph verification, and rebuilding it must reproduce the same WASD retrieval bytes/result hash.
 
-The canonical predecessor contract is hash chained. After process recreation, verifying generation `G` re-verifies the immediately preceding persisted V2 graph until the first V2 graph for that NPC is reached. Therefore the current cold verification cost is **O(H)** in the number `H` of persisted V2 graph generations for that NPC, while each individual graph remains bounded by the table above. This is an explicit operational cost, not a hidden “PASS”. A future checkpoint optimization must be introduced in the WASD verification contract rather than by trusting an Aurion-local shortcut.
+The canonical predecessor contract is hash chained. After process recreation, verifying generation `G` re-verifies the immediately preceding persisted V2 graph until the first V2 graph for that NPC is reached. Therefore cold verification remains **O(H)** in the number `H` of persisted V2 graph generations for that NPC, while each individual graph remains bounded by the table above.
+
+For a continuously running writer, the immediately preceding graph is cached only after WASD has compiled or fully re-verified it in that process. The next write rechecks the immutable receipt envelope and persisted node/edge/provenance rows against that already verified object, then supplies that branded object back to WASD as `previousGraph`. This keeps sequential writes linear over history instead of repeatedly traversing the full ancestor chain. The cache is never a cold-start truth source: after restart it is empty and the chain must be rebuilt from MariaDB evidence.
+
+This is an explicit operational contract, not a hidden wall-clock “PASS”. A future persistent checkpoint optimization must be introduced in the WASD verification contract rather than by trusting an Aurion-local shortcut.
 
 ## Evidence required before merge
 
