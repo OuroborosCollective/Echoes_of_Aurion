@@ -169,8 +169,8 @@ function isAllowedTransition(
   currentStatus: AurionCrossZoneHandoverStatus,
   nextStatus: AurionCrossZoneHandoverStatus,
 ): boolean {
-  const transitions: readonly AurionCrossZoneHandoverStatus[] = allowed[currentStatus];
-  return transitions.includes(nextStatus);
+  const transitions = allowed[currentStatus] as readonly AurionCrossZoneHandoverStatus[];
+  return transitions.some(status => status === nextStatus);
 }
 
 export function advanceCrossZoneHandover(
