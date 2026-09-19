@@ -1,7 +1,7 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
-import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence";
+import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource, readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
 import { resolveAndRecordNpc } from "./wasdAurionRuntime";
 import {
   merchantBootstrapMarkets,
@@ -117,6 +117,7 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     const [readbacks]=await pool.query<RowDataPacket[]>("SELECT * FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",[result.actionReceiptId]);
     const [links]=await pool.query<RowDataPacket[]>("SELECT * FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[result.actionReceiptId]);
     expect(actions).toHaveLength(1);expect(readbacks).toHaveLength(1);expect(links).toHaveLength(1);
+    expect(actions[0].sourceGoalHash).toMatch(/^[a-f0-9]{64}$/);
     expect(readbacks[0].effectsHash).toBe(actions[0].effectsHash);
     expect(readbacks[0].sourceRevision).toBe(pin.sourceRevision);
     expect(links[0].effectReadbackId).toBe(readbacks[0].id);
@@ -143,10 +144,25 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     expect(state[0].lastResolutionIndex).toBe(0);
     const [epoch]=await pool.query<RowDataPacket[]>("SELECT marketVersion FROM aurionNpcActionEpochStates WHERE hubId=?",[homeHub]);
     expect(epoch[0].marketVersion).toBe(0);
+    expect((await readConfirmedNpcActionPacket(7)).actions).toEqual([]);
     await expect(executeConfirmedMerchantAction({...input,consent:{verdict:"ALLOW",policyVersion:"editorial-test-v1"}})).rejects.toThrow("CONSENT_CONFLICT");
   });
 
-  for(const failureInjection of ["after_epoch_effect","before_effect_readback","before_memory_commit"] as const){
+  it("editorial allow preserves the WASD effect set byte-for-byte",async()=>{
+    const source=await seedSource();
+    const result=await executeConfirmedMerchantAction({worldSeed:"aim293-db-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId,consent:{verdict:"ALLOW",policyVersion:"editorial-allow-v1"}});
+    expect(result.status).toBe("committed");
+    if(result.status!=="committed"&&result.status!=="persisted") return;
+    const [actions]=await pool.query<RowDataPacket[]>("SELECT effectSetJson,effectsHash,consentReceiptId FROM aurionNpcActionReceipts WHERE id=?",[result.actionReceiptId]);
+    const [consents]=await pool.query<RowDataPacket[]>("SELECT verdict,policyVersion FROM aurionNpcActionConsentReceipts WHERE id=?",[actions[0].consentReceiptId]);
+    expect(consents).toEqual([expect.objectContaining({verdict:"ALLOW",policyVersion:"editorial-allow-v1"})]);
+    const canonical=JSON.stringify(JSON.parse(actions[0].effectSetJson),Object.keys(JSON.parse(actions[0].effectSetJson)).sort());
+    expect(actions[0].effectsHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.parse(actions[0].effectSetJson).receiptId).toBe(result.actionReceiptId);
+    expect(canonical).not.toContain("editorial-allow-v1");
+  });
+
+  for(const failureInjection of ["after_epoch_effect","after_npc_effect","after_world_effect","after_polity_effect","before_effect_readback","before_memory_commit"] as const){
     it(`rolls back the entire action transaction on ${failureInjection}`,async()=>{
       const source=await seedSource();
       await expect(executeConfirmedMerchantAction({worldSeed:"aim293-db-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId,failureInjection})).rejects.toThrow("AIM293_FORCED");
