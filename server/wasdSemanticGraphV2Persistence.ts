@@ -26,7 +26,6 @@ import {
   merchantActionReceiptHash,
   npcHash,
   npcMemoryReceiptIds,
-  parseNpcSemanticMemoryGraph,
   retrieveNpcSemanticMemoryGraph,
   stableCatalogStringify,
   verifyConfirmedNpcDecision,
@@ -47,7 +46,6 @@ const ACTION_MEMORY_LINK_VERSION="aurion-npc-action-memory-link.v1" as const;
 const visibleNpcs=["lyra","orun","ax1_merchant_observatory_threshold","ax1_merchant_windhollow","ax1_merchant_emberfall","ax1_merchant_cinder_vault"] as const;
 
 type GraphRow=typeof aurionSemanticGraphReceiptsV2.$inferSelect;
-type MemoryRow=typeof aurionNpcMemoryReceiptsV4.$inferSelect;
 type FailurePoint="after_receipt"|"after_node"|"after_edge"|"after_provenance"|"before_readback";
 
 function parseJson<T>(raw:string,code:string):T{
@@ -55,7 +53,7 @@ function parseJson<T>(raw:string,code:string):T{
 }
 function assertPin():void{
   if(pin.schemaVersion!=="aurion-wasd-npc-pin.v1"||pin.repository!=="OuroborosCollective/Wasd"||
-     !/^[a-f0-9]{40}$/.test(pin.sourceRevision)||!/[a-f0-9]{64}/.test(pin.sourceSha256)||
+     !/^[a-f0-9]{40}$/.test(pin.sourceRevision)||!/^[a-f0-9]{64}$/.test(pin.sourceSha256)||
      !/^[a-f0-9]{64}$/.test(pin.manifestSha256)) throw new Error("NPC_SEMANTIC_GRAPH_V2_PIN_INVALID");
 }
 function graphReceiptId(graph:NpcSemanticMemoryGraph):string{
