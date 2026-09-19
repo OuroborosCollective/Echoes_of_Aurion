@@ -154,16 +154,16 @@ export function prepareCrossZoneHandover(input: {
   return Object.freeze({ ...base, transferReceiptHash: computeCrossZoneTransferReceiptHash(base) });
 }
 
-const allowed: Readonly<Record<AurionCrossZoneHandoverStatus, readonly AurionCrossZoneHandoverStatus[]>> = Object.freeze({
-  PREPARED: Object.freeze(["SOURCE_FROZEN", "REJECTED", "EXPIRED", "UNPROVABLE"]),
-  SOURCE_FROZEN: Object.freeze(["TARGET_ACCEPTED", "REJECTED", "EXPIRED", "UNPROVABLE"]),
-  TARGET_ACCEPTED: Object.freeze(["SOURCE_FINALIZED", "REJECTED", "EXPIRED", "UNPROVABLE"]),
-  SOURCE_FINALIZED: Object.freeze(["COMMITTED", "UNPROVABLE"]),
-  COMMITTED: Object.freeze([]),
-  REJECTED: Object.freeze([]),
-  EXPIRED: Object.freeze([]),
-  UNPROVABLE: Object.freeze([]),
-});
+const allowed = Object.freeze({
+  PREPARED: Object.freeze(["SOURCE_FROZEN", "REJECTED", "EXPIRED", "UNPROVABLE"] as const),
+  SOURCE_FROZEN: Object.freeze(["TARGET_ACCEPTED", "REJECTED", "EXPIRED", "UNPROVABLE"] as const),
+  TARGET_ACCEPTED: Object.freeze(["SOURCE_FINALIZED", "REJECTED", "EXPIRED", "UNPROVABLE"] as const),
+  SOURCE_FINALIZED: Object.freeze(["COMMITTED", "UNPROVABLE"] as const),
+  COMMITTED: Object.freeze([] as const),
+  REJECTED: Object.freeze([] as const),
+  EXPIRED: Object.freeze([] as const),
+  UNPROVABLE: Object.freeze([] as const),
+} satisfies Readonly<Record<AurionCrossZoneHandoverStatus, readonly AurionCrossZoneHandoverStatus[]>>);
 
 export function advanceCrossZoneHandover(
   current: AurionCrossZoneHandoverV2,
