@@ -692,6 +692,145 @@ export const aurionNpcMemoryReceiptsV4 = mysqlTable("aurionNpcMemoryReceiptsV4",
   uniqueIndex("aurionNpcMemoryReceiptsV4_hash_uq").on(table.receiptHash),
 ]);
 
+/** AIM-293 host evidence state for one merchant hub. WASD owns action rules; Aurion owns the locked persisted epoch. */
+export const aurionNpcActionEpochStates = mysqlTable("aurionNpcActionEpochStates", {
+  hubId: varchar("hubId", { length: 96 }).primaryKey(),
+  active: boolean("active").default(true).notNull(),
+  marketVersion: int("marketVersion").notNull(),
+  marketJson: text("marketJson").notNull(),
+  marketHash: varchar("marketHash", { length: 64 }).notNull(),
+  inventoryJson: text("inventoryJson").notNull(),
+  inventoryHash: varchar("inventoryHash", { length: 64 }).notNull(),
+  polityVersion: int("polityVersion").notNull(),
+  polityId: varchar("polityId", { length: 96 }).notNull(),
+  polityStability: int("polityStability").notNull(),
+  polityStateHash: varchar("polityStateHash", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  check("aurionNpcActionEpochStates_market_version_ck", sql`${table.marketVersion} >= 0`),
+  check("aurionNpcActionEpochStates_polity_version_ck", sql`${table.polityVersion} >= 0`),
+  check("aurionNpcActionEpochStates_polity_stability_ck", sql`${table.polityStability} >= 0 and ${table.polityStability} <= 100`),
+  index("aurionNpcActionEpochStates_active_idx").on(table.active),
+]);
+
+/** Logical lease custody is Aurion-owned and mutable only through the action transaction. */
+export const aurionNpcActionLeases = mysqlTable("aurionNpcActionLeases", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  intentId: varchar("intentId", { length: 96 }).notNull(),
+  targetId: varchar("targetId", { length: 128 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  lockedStateHash: varchar("lockedStateHash", { length: 64 }).notNull(),
+  issuedAtLogicalIndex: int("issuedAtLogicalIndex").notNull(),
+  expiresAtLogicalIndex: int("expiresAtLogicalIndex").notNull(),
+  state: mysqlEnum("state", ["active","consumed","revoked"]).notNull(),
+  leaseJson: text("leaseJson").notNull(),
+  leaseHash: varchar("leaseHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionLeases_intent_uq").on(table.intentId),
+  uniqueIndex("aurionNpcActionLeases_hash_uq").on(table.leaseHash),
+  index("aurionNpcActionLeases_npc_state_idx").on(table.npcId, table.state),
+]);
+
+/** Editorial consent is an Aurion host gate. It can allow/deny but never rewrite WASD effects. */
+export const aurionNpcActionConsentReceipts = mysqlTable("aurionNpcActionConsentReceipts", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  intentId: varchar("intentId", { length: 96 }).notNull(),
+  verdict: mysqlEnum("verdict", ["NOT_REQUIRED","ALLOW","DENY"]).notNull(),
+  policyVersion: varchar("policyVersion", { length: 96 }).notNull(),
+  policyHash: varchar("policyHash", { length: 64 }).notNull(),
+  consentHash: varchar("consentHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionConsentReceipts_intent_uq").on(table.intentId),
+  uniqueIndex("aurionNpcActionConsentReceipts_hash_uq").on(table.consentHash),
+]);
+
+/** Immutable WASD action receipt persisted before any gameplay effect in the same transaction. */
+export const aurionNpcActionReceipts = mysqlTable("aurionNpcActionReceipts", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  sourceDecisionReceiptId: varchar("sourceDecisionReceiptId", { length: 64 }).notNull(),
+  sourceDecisionSha256: varchar("sourceDecisionSha256", { length: 64 }).notNull(),
+  sourcePlanHash: varchar("sourcePlanHash", { length: 64 }).notNull(),
+  sourceGoal: varchar("sourceGoal", { length: 64 }).notNull(),
+  sourceGoalHash: varchar("sourceGoalHash", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  capsuleManifestSha256: varchar("capsuleManifestSha256", { length: 64 }).notNull(),
+  intentId: varchar("intentId", { length: 96 }).notNull(),
+  intentHash: varchar("intentHash", { length: 64 }).notNull(),
+  leaseId: varchar("leaseId", { length: 96 }).notNull(),
+  effectsHash: varchar("effectsHash", { length: 64 }).notNull(),
+  effectSetJson: mediumtext("effectSetJson").notNull(),
+  expectedMarketVersion: int("expectedMarketVersion").notNull(),
+  expectedMarketHash: varchar("expectedMarketHash", { length: 64 }).notNull(),
+  expectedPolityVersion: int("expectedPolityVersion").notNull(),
+  expectedPolityHash: varchar("expectedPolityHash", { length: 64 }).notNull(),
+  expectedInventoryHash: varchar("expectedInventoryHash", { length: 64 }).notNull(),
+  expectedTargetHash: varchar("expectedTargetHash", { length: 64 }).notNull(),
+  consentReceiptId: varchar("consentReceiptId", { length: 96 }).notNull(),
+  successorNpcReceiptId: varchar("successorNpcReceiptId", { length: 64 }).notNull(),
+  successorWorldReceiptId: varchar("successorWorldReceiptId", { length: 64 }).notNull(),
+  successorPolityHash: varchar("successorPolityHash", { length: 64 }).notNull(),
+  successorMarketHash: varchar("successorMarketHash", { length: 64 }).notNull(),
+  successorInventoryHash: varchar("successorInventoryHash", { length: 64 }).notNull(),
+  receiptJson: mediumtext("receiptJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionReceipts_hash_uq").on(table.receiptHash),
+  uniqueIndex("aurionNpcActionReceipts_source_uq").on(table.sourceDecisionReceiptId),
+  uniqueIndex("aurionNpcActionReceipts_intent_uq").on(table.intentId),
+  uniqueIndex("aurionNpcActionReceipts_lease_uq").on(table.leaseId),
+  index("aurionNpcActionReceipts_npc_index_idx").on(table.npcId, table.resolutionIndex),
+]);
+
+/** Exact database readback of every committed WASD effect; this is the performed-action gate. */
+export const aurionNpcActionEffectReadbacks = mysqlTable("aurionNpcActionEffectReadbacks", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  actionReceiptId: varchar("actionReceiptId", { length: 96 }).notNull(),
+  effectsHash: varchar("effectsHash", { length: 64 }).notNull(),
+  npcReceiptId: varchar("npcReceiptId", { length: 64 }).notNull(),
+  npcDecisionHash: varchar("npcDecisionHash", { length: 64 }).notNull(),
+  worldReceiptId: varchar("worldReceiptId", { length: 64 }).notNull(),
+  worldReactionHash: varchar("worldReactionHash", { length: 64 }).notNull(),
+  polityId: varchar("polityId", { length: 96 }).notNull(),
+  polityStateHash: varchar("polityStateHash", { length: 64 }).notNull(),
+  marketStateHash: varchar("marketStateHash", { length: 64 }).notNull(),
+  inventoryStateHash: varchar("inventoryStateHash", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  readbackHash: varchar("readbackHash", { length: 64 }).notNull(),
+  readbackJson: text("readbackJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionEffectReadbacks_action_uq").on(table.actionReceiptId),
+  uniqueIndex("aurionNpcActionEffectReadbacks_hash_uq").on(table.readbackHash),
+]);
+
+/** Memory may claim the successor decision only after the corresponding effect readback exists. */
+export const aurionNpcActionMemoryLinks = mysqlTable("aurionNpcActionMemoryLinks", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  actionReceiptId: varchar("actionReceiptId", { length: 96 }).notNull(),
+  effectReadbackId: varchar("effectReadbackId", { length: 96 }).notNull(),
+  memoryReceiptId: varchar("memoryReceiptId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  linkHash: varchar("linkHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionMemoryLinks_action_uq").on(table.actionReceiptId),
+  uniqueIndex("aurionNpcActionMemoryLinks_memory_uq").on(table.memoryReceiptId),
+  uniqueIndex("aurionNpcActionMemoryLinks_hash_uq").on(table.linkHash),
+]);
+
 /** Account/character-bound NPC memory evidence. Gameplay truth is supplied by a confirmed result receipt. */
 export const aurionNpcMemoryReceipts = mysqlTable("aurionNpcMemoryReceipts", {
   id: varchar("id", { length: 64 }).primaryKey(),

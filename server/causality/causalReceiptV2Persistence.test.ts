@@ -74,8 +74,8 @@ suite("Blocker 3 migration 0049 causal receipt-v2 persistence", () => {
     expect(Number((journal as Array<{ rowCount: number | string }>)[0]?.rowCount))
       .toBe(declaredJournal.entries.length);
     expect(declaredJournal.entries.at(-1)).toMatchObject({
-      idx: 52,
-      tag: "0052_aurion_effect_intent_journal",
+      idx: 53,
+      tag: "0053_aurion_npc_action_gateway_v2",
     });
   });
 

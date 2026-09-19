@@ -88,6 +88,7 @@ jobs:
           set -euo pipefail
           mkdir -p .aurion-local-test-pack/evidence
           pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
+          node --test scripts/dispatch-aurion-schema-plan.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/schema-dispatch-contract.log
           pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
       - name: Verify donor/runtime ownership ledger
         shell: bash

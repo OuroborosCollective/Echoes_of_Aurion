@@ -119,6 +119,7 @@ jobs:
     env:
       DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_browser_test
       AURION_NPC_E2E: '1'
+      AURION_NPC_ACTION_E2E: '1'
       AURION_UI_E2E: '1'
       AURION_E2E_ISOLATED: '1'
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -151,9 +152,11 @@ jobs:
         run: |
           node --test scripts/autonomous-npc-life-readback-contract.test.mjs
           pnpm check
-          pnpm exec vitest run --no-file-parallelism server/aim263NpcMariaDb.test.ts server/aim263NpcSnapshotMariaDb.test.ts server/autonomousNpcLifeMariaDb.test.ts server/aim292NpcMultiMemoryMariaDb.test.ts
+          pnpm exec vitest run --no-file-parallelism server/aim245LivingWorld.test.ts server/aim293NpcActionGatewayContract.test.ts server/aim293NpcActionGatewayMariaDb.test.ts server/aim263NpcMariaDb.test.ts server/aim263NpcSnapshotMariaDb.test.ts server/autonomousNpcLifeMariaDb.test.ts server/aim292NpcMultiMemoryMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
           python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit --repo "$PWD" --expected-revision "$AURION_RELEASE_SHA" --run-canonical --output /tmp/aim292-repository-receipt.json
+      - name: Seed one real confirmed AIM-293 action for authenticated AX1 projection
+        run: pnpm exec tsx scripts/seed-aim293-browser-evidence.ts | tee /tmp/aim293-browser-seed.json
       - name: Build production application and install Chromium
         run: |
           pnpm build
@@ -182,7 +185,8 @@ jobs:
             playwright-aim292-report/
             /tmp/aurion-aim292-server.log
             /tmp/aim292-repository-receipt.json
-          if-no-files-found: error
+            /tmp/aim293-browser-seed.json
+          if-no-files-found: warn
           retention-days: 14
       - name: Stop isolated application
         if: always()

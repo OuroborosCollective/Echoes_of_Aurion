@@ -108,6 +108,7 @@ jobs:
       DATABASE_URL: mysql://root:aurion-disposable-group-test@127.0.0.1:3306/aurion_group_test
       AURION_GROUP_E2E: "1"
       AURION_UI_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
       AURION_COLLISION_E2E: "1"
       AURION_GLB_STORAGE_DIR: /tmp/aurion-group-browser-assets
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -135,6 +136,10 @@ jobs:
           pnpm vitest run server/aim259GroupMariaDb.test.ts server/playerUiMariaDb.test.ts server/worldNatureCollisionMariaDb.test.ts
           pnpm vitest run server/aim259GroupCompletionMariaDb.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+      - name: Seed confirmed AIM-293 source and action for isolated runtime health
+        run: |
+          mkdir -p test-results
+          pnpm exec tsx scripts/seed-aim293-browser-evidence.ts | tee test-results/aim293-group-runtime-seed.json
       - name: Build the exact runtime and install browser
         run: |
           pnpm build:runtime-artifact

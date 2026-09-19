@@ -6,6 +6,7 @@ import { resolveNpcNeeds } from "./wasdAurionProtocol";
 import { appRouter } from "./routers";
 import pin from "../config/wasd-npc-capsule.json";
 import { decodeOwnedNpcMultiMemory } from "../shared/npcMultiMemoryReadmodel";
+import { decodeOwnedNpcActions } from "../shared/npcActionReadmodel";
 
 describe("AIM-292 WASD source and public transport boundary",()=>{
   it("binds the real imported rule functions and compiled identity to the reviewed WASD source",()=>{
@@ -16,6 +17,18 @@ describe("AIM-292 WASD source and public transport boundary",()=>{
     }
     expect(appRouter._def.procedures).not.toHaveProperty("admin.world.resolveNpc");
     expect(appRouter._def.procedures).toHaveProperty("gameplay.npcMultiMemory");
+    expect(appRouter._def.procedures).toHaveProperty("gameplay.npcActions");
+  });
+  it("keeps confirmed action transport owner-bound, bounded and free of raw effect payloads",()=>{
+    const action={npcId:"ax1_merchant_observatory_threshold",actionReceiptId:"nar_"+"1".repeat(56),resolutionIndex:8,action:"trade",effectsHash:"2".repeat(64),readbackHash:"3".repeat(64),sourceRevision:pin.sourceRevision};
+    const packet={userId:7,format:"aurion-public-npc-actions.v1",actions:[action]};
+    expect(decodeOwnedNpcActions(packet,7).actions).toEqual([action]);
+    for(const changed of [
+      {...packet,userId:8},
+      {...packet,actions:[action,action]},
+      {...packet,actions:[{...action,effectSetJson:"private"}]},
+      {...packet,actions:[{...action,readbackHash:"changed"}]},
+    ]) expect(()=>decodeOwnedNpcActions(changed,7)).toThrow();
   });
   it("requires exact owner, bounded unique ordered identities and a readmodel without raw fields",()=>{
     const npc={version:"wasd-npc-memory-public.v4",npcId:"lyra",resolutionIndex:7,goal:"trade",planStatus:"planned",memoryHash:"a".repeat(64),sourceRevision:pin.sourceRevision,counts:{working:1,episodic:1,semantic:2,procedural:2},conflictedFacts:0,expiredFacts:0};
