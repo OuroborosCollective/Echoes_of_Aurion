@@ -11,8 +11,8 @@ describe("causal persistence identities", () => {
       zoneId: "z".repeat(64),
       tick: 2_147_483_647,
     };
-    const first = causalReceiptPersistenceId(identity as any);
-    const second = causalReceiptPersistenceId(identity as any);
+    const first = causalReceiptPersistenceId(identity);
+    const second = causalReceiptPersistenceId(identity);
     expect(first).toBe(second);
     expect(first).toMatch(/^rcpt_[a-f0-9]{56}$/);
     expect(first.length).toBeLessThanOrEqual(64);
@@ -31,10 +31,10 @@ describe("causal persistence identities", () => {
   it("changes the persistence identity when any canonical natural-key component changes", () => {
     const base = { worldId: "echoes-of-aurion-global", zoneId: "observatory_threshold:causal-chain", tick: 1 };
     const ids = new Set([
-      causalReceiptPersistenceId(base as any),
-      causalReceiptPersistenceId({ ...base, tick: 2 } as any),
-      causalReceiptPersistenceId({ ...base, zoneId: base.zoneId + ":other" } as any),
-      causalReceiptPersistenceId({ ...base, worldId: base.worldId + ":other" } as any),
+      causalReceiptPersistenceId(base),
+      causalReceiptPersistenceId({ ...base, tick: 2 }),
+      causalReceiptPersistenceId({ ...base, zoneId: base.zoneId + ":other" }),
+      causalReceiptPersistenceId({ ...base, worldId: base.worldId + ":other" }),
     ]);
     expect(ids.size).toBe(4);
   });
