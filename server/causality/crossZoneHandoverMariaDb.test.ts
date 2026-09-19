@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
+  aurionCausalCheckpoints,
   aurionCausalTickReceipts,
   aurionCrossZoneTransferReceipts,
   aurionCrossZoneTransfers,
@@ -78,6 +79,7 @@ suite("Cross-Zone Handover V2 MariaDB", () => {
     await db.delete(aurionCrossZoneTransfers);
     const existingTransitions = await db.select().from(aurionCrossZoneTransferReceipts);
     expect(existingTransitions).toHaveLength(0);
+    await db.delete(aurionCausalCheckpoints).where(eq(aurionCausalCheckpoints.worldId, WORLD));
     await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD));
 
     const zone = new AuthoritativeMovementZone("observatory_threshold");
