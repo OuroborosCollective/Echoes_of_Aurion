@@ -1,0 +1,79 @@
+name: TEMP Step 26 sync merged WASD capsule
+on:
+  push:
+    branches:
+      - sovereign/chatgpt/aurion-wave2-step26-ai-npc-action-gateway-v2
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      WASD_SOURCE_REVISION: 002e7c35309816cd043295f47398e52fdb388694
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/Wasd
+          ref: ${{ env.WASD_SOURCE_REVISION }}
+          path: wasd-source
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: wasd-source/pnpm-lock.yaml
+      - name: Build exact capsule twice
+        working-directory: wasd-source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$WASD_SOURCE_REVISION"
+          pnpm install --frozen-lockfile --filter @wasd/server...
+          node scripts/build-aurion-npc-capsule.mjs /tmp/aurion-step26-a
+          node scripts/build-aurion-npc-capsule.mjs /tmp/aurion-step26-b
+          diff --recursive /tmp/aurion-step26-a /tmp/aurion-step26-b
+          manifest_sha="$(node -e "console.log(require('/tmp/aurion-step26-a/manifest.json').manifestSha256)")"
+          node scripts/verify-aurion-npc-capsule.mjs /tmp/aurion-step26-a "$WASD_SOURCE_REVISION" "$manifest_sha"
+          WASD_NPC_CAPSULE_DIR=/tmp/aurion-step26-a node --test scripts/__tests__/aurion-npc-capsule.test.mjs
+      - name: Materialize reviewed capsule into Aurion branch
+        run: |
+          set -euo pipefail
+          rm -rf vendor/wasd-npc
+          mkdir -p vendor/wasd-npc scripts/vendor
+          cp -a /tmp/aurion-step26-a/. vendor/wasd-npc/
+          cp wasd-source/scripts/verify-aurion-npc-capsule.mjs scripts/vendor/verify-wasd-npc-capsule.mjs
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          const manifest=JSON.parse(fs.readFileSync('vendor/wasd-npc/manifest.json','utf8'));
+          const verifier=fs.readFileSync('scripts/vendor/verify-wasd-npc-capsule.mjs');
+          const verifierSha256=crypto.createHash('sha256').update(verifier).digest('hex');
+          const pin={
+            schemaVersion:'aurion-wasd-npc-pin.v1',
+            repository:'OuroborosCollective/Wasd',
+            sourceRevision:manifest.sourceRevision,
+            sourceSha256:manifest.sourceSha256,
+            manifestSha256:manifest.manifestSha256,
+            verifierSha256,
+          };
+          fs.writeFileSync('config/wasd-npc-capsule.json',JSON.stringify(pin,null,2)+'\n');
+          NODE
+          node scripts/verify-wasd-npc.mjs
+      - name: Commit deterministic vendor bytes
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/wasd-npc config/wasd-npc-capsule.json scripts/vendor/verify-wasd-npc-capsule.mjs
+          git diff --cached --check
+          git commit -m "chore(npc): sync AIM-293 capsule from merged WASD"
+          git push origin "HEAD:${{ github.ref_name }}"
