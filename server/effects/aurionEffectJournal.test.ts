@@ -24,6 +24,16 @@ describe("Aurion EffectIntent contract", () => {
     expect(ids.size).toBe(4);
   });
 
+  it("rejects secret-like fields before an EffectIntent can enter evidence", () => {
+    expect(() => createEffectIntent({
+      authorityReceiptHash: receipt,
+      effectType: "notification.dispatch",
+      subjectId: "player:23",
+      ordinal: 0,
+      payload: { apiToken: "must-never-enter-evidence" },
+    })).toThrow("EFFECT_PAYLOAD_SENSITIVE_FIELD_FORBIDDEN");
+  });
+
   it("binds payload content without putting delivery status into gameplay identity", () => {
     const intent = createEffectIntent({
       authorityReceiptHash: receipt,
