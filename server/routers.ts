@@ -1,5 +1,6 @@
 import { readConfirmedNpcMultiMemoryPacket } from "./npcMultiMemoryPersistence";
 import { readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
+import { readConfirmedNpcSemanticGraphPacket } from "./wasdSemanticGraphV2Persistence";
 import { worldAssetRegion, legacyWorldAssetRegion, worldAssetRegionInput } from "../shared/worldAssetProtocol";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
@@ -189,6 +190,7 @@ export const appRouter = router({
     npcSnapshots: protectedProcedure.query(({ ctx }) => readConfirmedNpcPacket(ctx.user.id)),
     npcMultiMemory: protectedProcedure.query(({ ctx }) => readConfirmedNpcMultiMemoryPacket(ctx.user.id)),
     npcActions: protectedProcedure.query(({ ctx }) => readConfirmedNpcActionPacket(ctx.user.id)),
+    npcSemanticGraph: protectedProcedure.query(({ ctx }) => readConfirmedNpcSemanticGraphPacket(ctx.user.id)),
     relationshipStanding: protectedProcedure.query(({ ctx }) => db.getRelationshipStanding(ctx.user.id)),
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
