@@ -22,6 +22,7 @@
   * [Unreal-derived Architecture Milestone 1–21 — Abschlussnachweis](docs/unreal-derived-architecture-milestone-1-21-abschlussnachweis.md)
   * [World Causal Root — Step 22](docs/aurion-world-causal-root.md)
   * [Cross-Zone Handover V2 — Step 23](docs/aurion-cross-zone-handover-v2.md)
+  * [Effect Intent Journal — Step 24](docs/aurion-effect-intent-journal.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)
