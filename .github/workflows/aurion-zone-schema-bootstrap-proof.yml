@@ -56,6 +56,7 @@ on:
       - "drizzle/0049_aurion_causal_receipt_v2.sql"
       - "drizzle/0050_aurion_human_ai_authoring.sql"
       - "drizzle/0051_aurion_cross_zone_handover_v2.sql"
+      - "drizzle/0052_aurion_effect_intent_journal.sql"
   push:
     branches: [main]
     paths:
@@ -112,6 +113,7 @@ on:
       - "drizzle/0049_aurion_causal_receipt_v2.sql"
       - "drizzle/0050_aurion_human_ai_authoring.sql"
       - "drizzle/0051_aurion_cross_zone_handover_v2.sql"
+      - "drizzle/0052_aurion_effect_intent_journal.sql"
 
 permissions:
   contents: read
