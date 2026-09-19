@@ -268,6 +268,7 @@ async function readPersistedAction(tx: NpcTransaction, row: ActionRow): Promise<
   const effects = parsed<MerchantDecisionRequests>(row.effectSetJson,"NPC_ACTION_EFFECT_SET_JSON_INVALID");
   const { receiptHash: _receiptHash, ...unsignedReceipt } = receipt;
   if (receipt.id !== row.id || receipt.receiptHash !== row.receiptHash || receipt.effectsHash !== row.effectsHash
+      || row.sourceGoalHash !== npcHash({goal:receipt.sourceDecision.goal})
       || merchantActionReceiptHash(unsignedReceipt) !== row.receiptHash
       || merchantActionEffectsHash(effects) !== row.effectsHash) throw new Error("NPC_ACTION_COMMITTED_RECEIPT_CONFLICT");
   const effectReadback = (await tx.select().from(aurionNpcActionEffectReadbacks).where(eq(aurionNpcActionEffectReadbacks.actionReceiptId,row.id)).limit(1))[0];
@@ -309,7 +310,7 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
   homeHubId:HubId;
   sourceDecisionReceiptId:string;
   consent?:EditorialConsent;
-  failureInjection?:"after_epoch_effect"|"before_effect_readback"|"before_memory_commit";
+  failureInjection?:"after_epoch_effect"|"after_npc_effect"|"after_world_effect"|"after_polity_effect"|"before_effect_readback"|"before_memory_commit";
 }>): Promise<ConfirmedMerchantActionResult> {
   assertPin();
   if (!input.worldSeed || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(input.sourceDecisionReceiptId)) throw new Error("NPC_ACTION_EXECUTION_INPUT_INVALID");
@@ -374,6 +375,7 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
       id:validated.receipt.id, receiptHash:validated.receipt.receiptHash, npcId, resolutionIndex:validated.receipt.resolutionIndex,
       sourceDecisionReceiptId:source.id, sourceDecisionSha256:validated.receipt.sourceDecision.receiptSha256,
       sourcePlanHash:validated.receipt.sourceDecision.planHash, sourceGoal:validated.receipt.sourceDecision.goal,
+      sourceGoalHash:npcHash({goal:validated.receipt.sourceDecision.goal}),
       sourceRevision:validated.receipt.authority.sourceRevision, sourceSha256:validated.receipt.authority.sourceSha256,
       capsuleManifestSha256:pin.manifestSha256, intentId:validated.intent.id, intentHash:validated.intent.intentHash, leaseId:lease.id,
       effectsHash:validated.receipt.effectsHash, effectSetJson:stableCatalogStringify(validated.requests),
@@ -398,8 +400,11 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     if (input.failureInjection === "after_epoch_effect" && process.env.AURION_NPC_ACTION_E2E === "1") throw new Error("AIM293_FORCED_AFTER_EFFECT_1");
 
     const npcEffect = await persistNpcSuccessor(tx,current,confirmed,validated.requests.npcRequest);
+    if (input.failureInjection === "after_npc_effect" && process.env.AURION_NPC_ACTION_E2E === "1") throw new Error("AIM293_FORCED_AFTER_NPC_EFFECT");
     const worldEffect = await persistWorld(tx,validated.requests.worldRequest);
+    if (input.failureInjection === "after_world_effect" && process.env.AURION_NPC_ACTION_E2E === "1") throw new Error("AIM293_FORCED_AFTER_WORLD_EFFECT");
     const polityEffect = await persistPolity(tx,validated.requests.polityRequest);
+    if (input.failureInjection === "after_polity_effect" && process.env.AURION_NPC_ACTION_E2E === "1") throw new Error("AIM293_FORCED_AFTER_POLITY_EFFECT");
 
     if (input.failureInjection === "before_effect_readback" && process.env.AURION_NPC_ACTION_E2E === "1") throw new Error("AIM293_FORCED_BEFORE_READBACK");
 
