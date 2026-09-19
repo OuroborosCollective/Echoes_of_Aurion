@@ -50,7 +50,7 @@ const VERIFIED_GRAPH_CACHE_LIMIT=64;
 const verifiedGraphCache=new Map<string,NpcSemanticMemoryGraph>(); // performance-only; never authority
 function cacheVerifiedGraph(graph:NpcSemanticMemoryGraph):void{
   verifiedGraphCache.delete(graph.npcId);
-  cacheVerifiedGraph(graph);
+  verifiedGraphCache.set(graph.npcId,graph);
   while(verifiedGraphCache.size>VERIFIED_GRAPH_CACHE_LIMIT){
     const oldest=verifiedGraphCache.keys().next().value as string|undefined;
     if(!oldest) break;
