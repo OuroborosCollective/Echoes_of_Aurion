@@ -128,13 +128,17 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
   it("creates performed_action only after the confirmed AIM-293 ActionReceipt EffectReadback MemoryLink chain",async()=>{
     const source=await seedSource();
     const before=decodeOwnedNpcSemanticGraphs(await readConfirmedNpcSemanticGraphPacket(7),7);
-    expect(before.graphs.find(graph=>graph.npcId===npcId)?.relations.some(edge=>edge.kind==="performed_action")).toBe(false);
+    const beforeGraph=before.graphs.find(graph=>graph.npcId===npcId);
+    expect(beforeGraph?.relations.some(edge=>edge.kind==="performed_action")).toBe(false);
+    expect(beforeGraph?.generation).toBe(0);
     const action=await executeConfirmedMerchantAction({worldSeed:"aim294-db-world",homeHubId:homeHub,sourceDecisionReceiptId:source.receiptId});
     expect(action.status).toBe("committed");
     if(action.status!=="committed"&&action.status!=="persisted") return;
     const db=await getDb();if(!db)throw new Error("DB_REQUIRED");
     const confirmed=await db.transaction(tx=>readVerifiedNpcSemanticGraphV2(tx,npcId));
     expect(confirmed?.graph.generation).toBe(1);
+    expect(confirmed?.graph.previousGraphHash).toBe(beforeGraph?.graphHash);
+    expect(confirmed?.row.previousGraphHash).toBe(beforeGraph?.graphHash);
     expect(confirmed?.graph.edges.filter(edge=>edge.kind==="performed_action")).toHaveLength(1);
     const performed=confirmed?.graph.edges.find(edge=>edge.kind==="performed_action");
     expect(performed?.provenance.map(value=>value.kind)).toEqual(expect.arrayContaining(["decision_receipt","action_receipt","effect_readback","memory_link"]));
@@ -200,9 +204,33 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     await expect(db.transaction(tx=>readVerifiedNpcSemanticGraphV2(tx,npcId))).rejects.toThrow(/NPC_SEMANTIC_GRAPH_/);
   });
 
+  it("fails closed when a persisted successor loses its canonical predecessor row",async()=>{
+    await seedSource();
+    await resolveAndRecordNpc(sourceRequest(1));
+    const [rows]=await pool.query<RowDataPacket[]>("SELECT * FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? ORDER BY generation",[npcId]);
+    expect(rows.map(row=>row.generation)).toEqual([0,1]);
+    expect(rows[1].previousGraphHash).toBe(rows[0].graphHash);
+
+    const successor={...rows[1]};
+    delete successor.createdAt;
+    await truncateGraphV2();
+    await pool.query(
+      "INSERT INTO aurionSemanticGraphReceiptsV2 (id,npcId,generation,graphVersion,retrievalVersion,memoryReceiptId,sourceRevision,sourceSha256,capsuleManifestSha256,previousGraphHash,graphHash,graphJson,receiptHash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      [successor.id,successor.npcId,successor.generation,successor.graphVersion,successor.retrievalVersion,successor.memoryReceiptId,successor.sourceRevision,successor.sourceSha256,successor.capsuleManifestSha256,successor.previousGraphHash,successor.graphHash,successor.graphJson,successor.receiptHash],
+    );
+    const db=await getDb();if(!db)throw new Error("DB_REQUIRED");
+    await expect(db.transaction(tx=>readVerifiedNpcSemanticGraphV2(tx,npcId))).rejects.toThrow("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_MISMATCH");
+  });
+
   it("rebuilds the readmodel index without changing WASD retrieval bytes or result hash, including after process restart",async()=>{
     await seedSource();
+    await resolveAndRecordNpc(sourceRequest(1));
     const before=decodeOwnedNpcSemanticGraphs(await readConfirmedNpcSemanticGraphPacket(7),7);
+    const beforeGraph=before.graphs.find(graph=>graph.npcId===npcId);
+    expect(beforeGraph?.generation).toBe(1);
+    const [chain]=await pool.query<RowDataPacket[]>("SELECT generation,graphHash,previousGraphHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? ORDER BY generation",[npcId]);
+    expect(chain).toHaveLength(2);
+    expect(chain[1].previousGraphHash).toBe(chain[0].graphHash);
     const db=await getDb();if(!db)throw new Error("DB_REQUIRED");
     const rebuilt=await db.transaction(tx=>rebuildSemanticGraphIndexV2(tx,npcId));
     expect(rebuilt?.resultHash).toBe(before.graphs.find(graph=>graph.npcId===npcId)?.sourceResultHash);
