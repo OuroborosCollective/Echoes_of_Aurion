@@ -86,11 +86,7 @@ jobs:
           node wasd-source/scripts/build-aurion-npc-capsule.mjs /tmp/aim294-a
           node wasd-source/scripts/build-aurion-npc-capsule.mjs /tmp/aim294-b
           diff --recursive /tmp/aim294-a /tmp/aim294-b
-          echo "AIM294_VENDOR_INDEX_B64_BEGIN"
-          base64 -w 6000 /tmp/aim294-a/index.js
-          echo
-          echo "AIM294_VENDOR_INDEX_B64_END"
-          sha256sum /tmp/aim294-a/index.js
+          sha256sum /tmp/aim294-a/index.js vendor/wasd-npc/index.js
           diff --recursive vendor/wasd-npc /tmp/aim294-a
           cmp scripts/vendor/verify-wasd-npc-capsule.mjs wasd-source/scripts/verify-aurion-npc-capsule.mjs
           WASD_NPC_CAPSULE_DIR=/tmp/aim294-a node --test wasd-source/scripts/__tests__/aurion-npc-capsule.test.mjs
