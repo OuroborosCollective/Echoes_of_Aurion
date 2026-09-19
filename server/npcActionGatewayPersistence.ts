@@ -111,7 +111,10 @@ function canonicalSignals(signals: readonly WorldSignal[]): string {
     magnitude: signal.magnitude,
     sourceReceiptId: signal.sourceReceiptId,
     resolutionIndex: signal.resolutionIndex,
-  })).sort((a,b) => a.resolutionIndex-b.resolutionIndex || a.regionId.localeCompare(b.regionId) || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
+  })).sort((a,b) => a.resolutionIndex-b.resolutionIndex
+    || (a.regionId<b.regionId?-1:a.regionId>b.regionId?1:0)
+    || (a.kind<b.kind?-1:a.kind>b.kind?1:0)
+    || (a.id<b.id?-1:a.id>b.id?1:0));
   if (new Set(values.map(value => value.id)).size !== values.length) throw new Error("NPC_ACTION_WORLD_SIGNAL_DUPLICATE");
   return stableCatalogStringify(values);
 }
