@@ -15,6 +15,10 @@
 **Learning:** Animations like scaling or translating elements on hover can cause dizziness or discomfort for users who have requested reduced motion at the OS level.
 **Action:** When adding tactile feedback such as `hover:-translate-y-0.5`, `active:scale-95` or `group-hover:scale-110`, always prefix them with Tailwind's `motion-safe:` utility (e.g. `motion-safe:hover:-translate-y-0.5`). When clearing these on disabled elements, use `disabled:motion-safe:hover:translate-y-0` and `disabled:motion-safe:active:scale-100`. Apply `group-disabled:motion-safe:group-hover:scale-100` on internal icons. I updated `client/src/pages/Home.tsx` and its test file to verify this.
 
-## 2026-09-15 - Landing and Community ARIA Improvements
+## 2024-09-15 - Landing and Community ARIA Improvements
 **Learning:** Buttons that trigger dialog overlays (like the community and account panels) lacked semantic structure, and disabled states didn't fully account for loading transitions, causing poor screen reader experiences.
 **Action:** Applied `aria-haspopup="dialog"` to buttons opening the Aurion panels and integrated `loading` states with `disabled` properties during initialization, extending `aria-busy` for explicit wait indications.
+
+## 2026-09-19 - Tooltips for Icon-only Buttons
+**Learning:** Sighted users navigating with a mouse or keyboard without a screen reader require visual tooltips (`title` attribute) on icon-only buttons, as they cannot perceive the `aria-label`.
+**Action:** Always ensure icon-only buttons include both an `aria-label` for screen readers and a visual `title` tooltip for sighted users.

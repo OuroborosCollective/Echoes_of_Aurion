@@ -84,7 +84,7 @@ export default function CausalStudioDashboard() {
               <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-xs">
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-semibold text-cyan-300">Runtime Identity</h4>
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={exportDiagnostics} aria-label="Export diagnostic JSON">
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={exportDiagnostics} aria-label="Export diagnostic JSON" title="Export diagnostic JSON">
                     <Download className="h-3.5 w-3.5" />
                   </Button>
                 </div>

@@ -63,10 +63,10 @@ export default function OpenWorldHud({
         <div>
           <span>EXPLORER</span>
           <div className="open-world-dpad" aria-label="Open-World-Touchsteuerung">
-            <button type="button" onClick={() => onMove("W")} aria-label="Open World vorwärts"><ArrowUp size={21} /></button>
-            <button type="button" onClick={() => onMove("A")} aria-label="Open World links"><ArrowLeft size={21} /></button>
-            <button type="button" onClick={() => onMove("S")} aria-label="Open World rückwärts"><ArrowDown size={21} /></button>
-            <button type="button" onClick={() => onMove("D")} aria-label="Open World rechts"><ArrowRight size={21} /></button>
+            <button type="button" onClick={() => onMove("W")} aria-label="Open World vorwärts" title="Open World vorwärts"><ArrowUp size={21} /></button>
+            <button type="button" onClick={() => onMove("A")} aria-label="Open World links" title="Open World links"><ArrowLeft size={21} /></button>
+            <button type="button" onClick={() => onMove("S")} aria-label="Open World rückwärts" title="Open World rückwärts"><ArrowDown size={21} /></button>
+            <button type="button" onClick={() => onMove("D")} aria-label="Open World rechts" title="Open World rechts"><ArrowRight size={21} /></button>
           </div>
         </div>
         <div className="open-world-hud__actions">
