@@ -67,7 +67,7 @@ jobs:
             -p "127.0.0.1:${TEST_DB_PORT}:3306" \
             -e MARIADB_ROOT_PASSWORD="$TEST_DB_PASSWORD" \
             -e MARIADB_DATABASE="$TEST_DB_NAME" \
-            mariadb:11.4
+            mariadb:11.4.13@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
           ready=0
           for _attempt in $(seq 1 60); do
             if docker exec -e MYSQL_PWD="$TEST_DB_PASSWORD" "$TEST_DB_CONTAINER" mariadb --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
