@@ -17,6 +17,7 @@ export const lateAurionMigrationTags = [
   "0049_aurion_causal_receipt_v2",
   "0050_aurion_human_ai_authoring",
   "0051_aurion_cross_zone_handover_v2",
+  "0052_aurion_effect_intent_journal",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
