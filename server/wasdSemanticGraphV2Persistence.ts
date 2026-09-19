@@ -139,11 +139,11 @@ async function confirmedDecisionById(tx:NpcTransaction,id:string):Promise<Confir
   return verifyConfirmedNpcDecision(row.observationIdsJson,{...row,receiptId:row.id});
 }
 async function verifiedPerformedActions(tx:NpcTransaction,npcId:string,generation:number):Promise<readonly VerifiedPerformedActionEvidence[]>{
-  const rows=await tx.select().from(aurionNpcActionReceipts)
+  const newest=await tx.select().from(aurionNpcActionReceipts)
     .where(and(eq(aurionNpcActionReceipts.npcId,npcId),lte(aurionNpcActionReceipts.resolutionIndex,generation)))
-    .orderBy(asc(aurionNpcActionReceipts.resolutionIndex),asc(aurionNpcActionReceipts.id))
-    .limit(NPC_SEMANTIC_GRAPH_LIMITS.performedActions+1);
-  if(rows.length>NPC_SEMANTIC_GRAPH_LIMITS.performedActions) throw new Error("NPC_SEMANTIC_GRAPH_V2_ACTION_LIMIT");
+    .orderBy(desc(aurionNpcActionReceipts.resolutionIndex),desc(aurionNpcActionReceipts.id))
+    .limit(NPC_SEMANTIC_GRAPH_LIMITS.performedActions);
+  const rows=[...newest].sort((a,b)=>a.resolutionIndex-b.resolutionIndex||(a.id<b.id?-1:a.id>b.id?1:0));
   const result:VerifiedPerformedActionEvidence[]=[];
   for(const row of rows){
     if(row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256||row.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_ACTION_SOURCE_DRIFT");
@@ -206,24 +206,30 @@ async function memoryForGraphRow(tx:NpcTransaction,row:GraphRow):Promise<Confirm
 function expectedProvenanceComparable(rows:ReturnType<typeof provenanceRows>){
   return rows.map(({id:_,...row})=>row);
 }
+const stripCreated=<T extends {createdAt?:unknown}>(values:readonly T[])=>values.map(({createdAt:_,...value})=>value);
+
 async function verifyStoredRows(tx:NpcTransaction,row:GraphRow,graph:NpcSemanticMemoryGraph):Promise<void>{
-  const [nodes,edges,provenance,index]=await Promise.all([
+  const [nodes,edges,provenance]=await Promise.all([
     tx.select().from(aurionSemanticGraphNodesV2).where(eq(aurionSemanticGraphNodesV2.graphReceiptId,row.id)).orderBy(asc(aurionSemanticGraphNodesV2.id)),
     tx.select().from(aurionSemanticGraphEdgesV2).where(eq(aurionSemanticGraphEdgesV2.graphReceiptId,row.id)).orderBy(asc(aurionSemanticGraphEdgesV2.id)),
     tx.select().from(aurionSemanticGraphProvenanceV2).where(eq(aurionSemanticGraphProvenanceV2.graphReceiptId,row.id)).orderBy(asc(aurionSemanticGraphProvenanceV2.id)),
-    tx.select().from(aurionSemanticGraphIndexV2).where(eq(aurionSemanticGraphIndexV2.graphReceiptId,row.id)).orderBy(asc(aurionSemanticGraphIndexV2.nodeId)),
   ]);
   const expectedNodes=graph.nodes.map(node=>nodeRow(row.id,graph.npcId,node)).sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
   const expectedEdges=graph.edges.map(edge=>edgeRow(row.id,graph.npcId,edge)).sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
   const expectedProv=provenanceRows(row.id,graph);
-  const expectedIndex=indexRows(row.id,graph);
-  const stripCreated=<T extends {createdAt?:unknown}>(values:readonly T[])=>values.map(({createdAt:_,...value})=>value);
   if(stableCatalogStringify(stripCreated(nodes))!==stableCatalogStringify(expectedNodes)||
      stableCatalogStringify(stripCreated(edges))!==stableCatalogStringify(expectedEdges)||
-     stableCatalogStringify(stripCreated(index))!==stableCatalogStringify(expectedIndex)||
      stableCatalogStringify(expectedProvenanceComparable(stripCreated(provenance) as typeof expectedProv))!==stableCatalogStringify(expectedProvenanceComparable(expectedProv))){
     throw new Error("NPC_SEMANTIC_GRAPH_V2_ROW_READBACK_MISMATCH");
   }
+}
+
+async function verifyStoredIndex(tx:NpcTransaction,row:GraphRow,graph:NpcSemanticMemoryGraph):Promise<void>{
+  const index=await tx.select().from(aurionSemanticGraphIndexV2)
+    .where(eq(aurionSemanticGraphIndexV2.graphReceiptId,row.id))
+    .orderBy(asc(aurionSemanticGraphIndexV2.nodeId));
+  const expected=indexRows(row.id,graph);
+  if(stableCatalogStringify(stripCreated(index))!==stableCatalogStringify(expected)) throw new Error("NPC_SEMANTIC_GRAPH_V2_INDEX_READBACK_MISMATCH");
 }
 async function verifiedGraphFromRow(
   tx:NpcTransaction,
@@ -322,7 +328,9 @@ export async function appendNpcSemanticGraphV2(
   if(options.failureInjection==="before_readback") throw new Error("AIM294_FORCED_BEFORE_GRAPH_READBACK");
   const stored=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(eq(aurionSemanticGraphReceiptsV2.id,id)).limit(1))[0];
   if(!stored||stored.receiptHash!==receiptHash||stored.graphJson!==graphJson) throw new Error("NPC_SEMANTIC_GRAPH_V2_RECEIPT_READBACK_REQUIRED");
-  return verifiedGraphFromRow(tx,stored);
+  const verified=await verifiedGraphFromRow(tx,stored);
+  await verifyStoredIndex(tx,stored,verified.graph);
+  return verified;
 }
 
 export async function readVerifiedNpcSemanticGraphV2(tx:NpcTransaction,npcId:string){
@@ -339,6 +347,7 @@ export async function rebuildSemanticGraphIndexV2(tx:NpcTransaction,npcId:string
   await tx.delete(aurionSemanticGraphIndexV2).where(eq(aurionSemanticGraphIndexV2.graphReceiptId,confirmed.row.id));
   const rows=indexRows(confirmed.row.id,confirmed.graph);
   if(rows.length) await tx.insert(aurionSemanticGraphIndexV2).values(rows);
+  await verifyStoredIndex(tx,confirmed.row,confirmed.graph);
   const afterConfirmed=await verifiedGraphFromRow(tx,confirmed.row);
   const after=retrieveNpcSemanticMemoryGraph(afterConfirmed.graph,query);
   if(before.resultHash!==after.resultHash||stableCatalogStringify(before)!==stableCatalogStringify(after)) throw new Error("NPC_SEMANTIC_GRAPH_V2_INDEX_REBUILD_DRIFT");
