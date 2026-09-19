@@ -174,7 +174,7 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     await truncateGraphV2();
     await pool.query(
       "INSERT INTO aurionSemanticGraphReceiptsV2 (id,npcId,generation,graphVersion,retrievalVersion,memoryReceiptId,sourceRevision,sourceSha256,capsuleManifestSha256,previousGraphHash,graphHash,graphJson,receiptHash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-      ["smg2_"+"1".repeat(59),npcId,0,"wasd-npc-semantic-graph.v2","wasd-npc-semantic-retrieval.v1",memory.row.id,pin.sourceRevision,pin.sourceSha256,pin.manifestSha256,null,"0".repeat(64),"{}","0".repeat(64)],
+      ["smg2_"+"1".repeat(59),npcId,0,"wasd-npc-semantic-graph.v2","wasd-npc-semantic-retrieval.v1","npm4_"+"9".repeat(58),pin.sourceRevision,pin.sourceSha256,pin.manifestSha256,null,"0".repeat(64),"{}","0".repeat(64)],
     );
     await expect(db.transaction(tx=>appendNpcSemanticGraphV2(tx,memory))).rejects.toThrow("CONFLICTING_DUPLICATE");
   });
