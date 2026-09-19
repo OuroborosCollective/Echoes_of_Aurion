@@ -29,6 +29,7 @@ const tags = [
   "0050_aurion_human_ai_authoring",
   "0051_aurion_cross_zone_handover_v2",
   "0052_aurion_effect_intent_journal",
+  "0053_aurion_npc_action_gateway_v2",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [
