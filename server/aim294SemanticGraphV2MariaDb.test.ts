@@ -64,7 +64,7 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     if(!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     await truncateGraphV2();
     for(const table of [
-      "aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionConsentReceipts","aurionNpcActionLeases",
+      "aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionEpochSourceReceipts","aurionNpcActionConsentReceipts","aurionNpcActionLeases",
       "aurionSemanticRetrievalIndex","aurionSemanticProvenance","aurionSemanticNodes","aurionSemanticMemoryReceipts",
       "aurionNpcMemoryReceiptsV4","aurionWorldResolutions","aurionPolityStates",
     ]) await pool.query(`TRUNCATE TABLE ${table}`);
