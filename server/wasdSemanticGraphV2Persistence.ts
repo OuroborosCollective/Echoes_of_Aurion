@@ -141,7 +141,13 @@ async function confirmedDecisionById(tx:NpcTransaction,id:string):Promise<Confir
 }
 async function verifiedPerformedActions(tx:NpcTransaction,npcId:string,generation:number):Promise<readonly VerifiedPerformedActionEvidence[]>{
   const newest=await tx.select().from(aurionNpcActionReceipts)
-    .where(and(eq(aurionNpcActionReceipts.npcId,npcId),lte(aurionNpcActionReceipts.resolutionIndex,generation)))
+    .where(and(
+      eq(aurionNpcActionReceipts.npcId,npcId),
+      lte(aurionNpcActionReceipts.resolutionIndex,generation),
+      eq(aurionNpcActionReceipts.sourceRevision,pin.sourceRevision),
+      eq(aurionNpcActionReceipts.sourceSha256,pin.sourceSha256),
+      eq(aurionNpcActionReceipts.capsuleManifestSha256,pin.manifestSha256),
+    ))
     .orderBy(desc(aurionNpcActionReceipts.resolutionIndex),desc(aurionNpcActionReceipts.id))
     .limit(NPC_SEMANTIC_GRAPH_LIMITS.performedActions);
   const rows=[...newest].sort((a,b)=>a.resolutionIndex-b.resolutionIndex||(a.id<b.id?-1:a.id>b.id?1:0));
