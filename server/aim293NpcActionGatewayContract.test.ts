@@ -23,14 +23,15 @@ import {
 } from "./wasdNpcCapsule";
 
 function opportunities(tick:number, hub:HubId) {
-  return [
+  const specs = [
     ["safe_hub","safe"],
     ["resource","resource"],
     ["social","social"],
     ["reputation","reputation"],
     ["market","market"],
     ["influence","influence"],
-  ].map(([kind,suffix]) => ({
+  ] as const;
+  return specs.map(([kind,suffix]) => ({
     id:`op:${tick}:${suffix}`,
     kind,
     regionId:hub,
