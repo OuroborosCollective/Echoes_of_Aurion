@@ -60,7 +60,6 @@ export function decodeOwnedNpcSemanticGraphs(input: unknown, userId: number) {
   for(const value of parsed.graphs){
     const ids=new Set(value.nodes.map(node=>node.nodeId));
     if(ids.size!==value.nodes.length||value.relations.some(edge=>!ids.has(edge.fromNodeId)||!ids.has(edge.toNodeId))) throw new Error("NPC_SEMANTIC_GRAPH_PACKET_RELATION_INVALID");
-    if(JSON.stringify(value.nodes.map(node=>node.nodeId))!==JSON.stringify([...value.nodes].map(node=>node.nodeId))) throw new Error("NPC_SEMANTIC_GRAPH_PACKET_INVALID");
   }
   return parsed;
 }
