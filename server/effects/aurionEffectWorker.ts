@@ -1,4 +1,5 @@
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
+import { createEffectIntent } from "../../shared/aurionEffectIntentContract";
 import type { PersistedAurionEffectIntent } from "./aurionEffectJournal";
 import { globalAurionEffectJournal, type AurionEffectDeliveryOutcome } from "./aurionEffectJournal";
 
@@ -19,11 +20,32 @@ export class AurionEffectWorker {
     provider: AurionEffectProvider,
     options: Readonly<{ mode?: "LIVE" | "REPLAY" }> = {},
   ): Promise<
-    | Readonly<{ status: "REPLAY_SKIPPED"; effectId: string }>
+    | Readonly<{ status: "MATCH"; effectId: string; payloadHash: string }>
+    | Readonly<{ status: "UNPROVABLE"; effectId: string; reason: "EFFECT_INTENT_MISSING" }>
+    | Readonly<{ status: "FIRST_DIVERGENCE"; effectId: string; expectedEffectId: string; observedEffectId: string }>
     | Awaited<ReturnType<typeof globalAurionEffectJournal.withDeliveryLock>>
   > {
     if (options.mode === "REPLAY") {
-      return Object.freeze({ status: "REPLAY_SKIPPED", effectId });
+      const persisted = await globalAurionEffectJournal.readIntent(effectId);
+      if (!persisted) {
+        return Object.freeze({ status: "UNPROVABLE", effectId, reason: "EFFECT_INTENT_MISSING" });
+      }
+      const recomputed = createEffectIntent({
+        authorityReceiptHash: persisted.authorityReceiptHash,
+        effectType: persisted.effectType,
+        subjectId: persisted.subjectId,
+        ordinal: persisted.ordinal,
+        payload: persisted.payload,
+      });
+      if (recomputed.effectId !== persisted.effectId || recomputed.payloadHash !== persisted.payloadHash) {
+        return Object.freeze({
+          status: "FIRST_DIVERGENCE",
+          effectId,
+          expectedEffectId: persisted.effectId,
+          observedEffectId: recomputed.effectId,
+        });
+      }
+      return Object.freeze({ status: "MATCH", effectId: persisted.effectId, payloadHash: persisted.payloadHash });
     }
 
     return globalAurionEffectJournal.withDeliveryLock(effectId, async (intent, attempt) => {
