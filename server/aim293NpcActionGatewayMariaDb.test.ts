@@ -179,6 +179,9 @@ suite("Wave 2 Step 26 AIM-293 actual MariaDB host transaction",()=>{
     expect(value.aurionNpcActionEffectReadbacks).toBe(1);
     expect(value.aurionNpcActionMemoryLinks).toBe(1);
     expect(value.aurionNpcMemoryReceiptsV4).toBe(2);
+    await expect(executeConfirmedMerchantAction({...input,worldSeed:"aim293-conflicting-world"})).rejects.toThrow("COMMITTED_RETRY_CONFLICT");
+    await expect(executeConfirmedMerchantAction({...input,consent:{verdict:"DENY",policyVersion:"retry-conflict-v1"}})).rejects.toThrow("COMMITTED_RETRY_CONFLICT");
+    expect(await counts()).toEqual(value);
   });
 
   it("fails closed on persisted source/capsule drift before action mutation",async()=>{
