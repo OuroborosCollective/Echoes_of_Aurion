@@ -4,6 +4,7 @@ import { AURION_CAUSAL_TICK_SCHEMA_V2, AURION_ZONE_RULESET_VERSION, computeRecei
 import { replayUnprovable } from "../shared/aurionReplayContract";
 import { activeProvenance } from "./aurionProvenance";
 import { globalCausalPersistence } from "./causality/persistence";
+import { globalHeadlessCausalOracle } from "./causality/headlessCausalOracle";
 import { globalCausalRecoveryService } from "./causality/causalRecoveryService";
 import { globalReadbackService } from "./causality/readbackService";
 import { replayZoneTick } from "./causality/replayZoneTick";
@@ -117,6 +118,16 @@ export async function chatGptReplayRange(zoneId: string, fromTick: number, toTic
     if (result.truthStatus !== "VERIFIED") break;
   }
   return Object.freeze({ protocol: "aurion.chatgpt.replay-range.v1", mutationAuthority: "none" as const, zoneId, fromTick, toTick, results });
+}
+
+export async function chatGptCausalOracleRange(zoneId: string, fromTick: number, toTick: number) {
+  const oracle = await globalHeadlessCausalOracle.replayRange({ zoneId, fromTick, toTick });
+  return Object.freeze({
+    protocol: "aurion.chatgpt.causal-oracle.v2",
+    mutationAuthority: "none" as const,
+    truthStatus: truthStatusForReplay(oracle.status),
+    oracle,
+  });
 }
 
 export function chatGptRuntimeIdentity() {
