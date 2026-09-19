@@ -14,6 +14,11 @@ Die Rollen und Verantwortungen:
 | **AX1** | **Client Projection & Presentation** | 3D-Renderer, WebGL/WebGPU, Assets, HUD, Kamera, Client-Eingaben, Animation/VFX, Mobile (keine autoritative Gameplay-Wahrheit) |
 | **WASD** | **Donor / Algorithmic Reference** | Mathematische Formeln, Bewegungsgesetze und Kampf-Delta-Algorithmen (vollständig als reine Funktionen in Aurion integriert) |
 
+Verbindliche Ownership-Formel (AIM-298):
+- Aurion = Sole Gameplay + Quest + World + Persistence + Host + Auth Authority
+- AX1    = kanonisches Hauptspiel + Content + Runtime/UI Presentation
+- WASD   = integrierte deterministische Regel- und Berechnungsreferenz
+
 Kanonisches Architekturmodell:
 
 ```

@@ -7,7 +7,6 @@ import { buildGlobalWorldPlan } from "./globalWorldProtocol";
 import { resolveRegionProgression } from "./aurionRegionProgressionProtocol";
 import { resolveDungeonProgression } from "./aurionDungeonProgressionProtocol";
 import { resolveExpeditionLayout } from "./wasdAurionExpeditionProtocol";
-import type { ActiveDungeonDesign } from "../shared/aurionAuthoringContract";
 
 export const groupCatalog = validateAurionAx1ContentCatalog(content);
 export const groupHash = (value: unknown) => createHash("sha256").update(stableCatalogStringify(value)).digest("hex");
@@ -46,18 +45,15 @@ function boundedInteger(value: string): number {
   return Number(value);
 }
 
-export function issueGroupTicket(party: GroupParty, world: { snapshotJson: string; snapshotHash: string }, authoredDungeon: ActiveDungeonDesign | null = null): GroupTicket {
+export function issueGroupTicket(party: GroupParty, world: { snapshotJson: string; snapshotHash: string }): GroupTicket {
   assertGroupRoster(party.roster, party.rosterHash);
   const stored = JSON.parse(world.snapshotJson);
   const plan = buildGlobalWorldPlan({ worldSeed: stored.worldSeed, epoch: stored.epoch, activePlayerCount: stored.activePlayerCount, highWaterPlayerCount: stored.highWaterPlayerCount });
   if (plan.deterministicHash !== world.snapshotHash || stableCatalogStringify(plan) !== stableCatalogStringify(stored)) throw new Error("GROUP_WORLD_EVIDENCE_CORRUPT");
-  const staticDungeon = groupCatalog.dungeons.find(item => item.id === party.dungeonId);
-  if (!staticDungeon && !authoredDungeon) throw new Error("GROUP_DUNGEON_UNAVAILABLE");
-  if (authoredDungeon && authoredDungeon.dungeonId !== party.dungeonId) throw new Error("GROUP_DUNGEON_DESIGN_IDENTITY_MISMATCH");
-  if (!plan.sectors.length) throw new Error("GROUP_DUNGEON_UNAVAILABLE");
-  const catalogHash = authoredDungeon ? groupHash({ baseCatalogHash: groupCatalog.catalogSha256, authoredDesignHash: authoredDungeon.designHash }) : groupCatalog.catalogSha256;
+  const dungeon = groupCatalog.dungeons.find(item => item.id === party.dungeonId);
+  if (!dungeon || !plan.sectors.length) throw new Error("GROUP_DUNGEON_UNAVAILABLE");
   const worldSnapshotSha256 = groupHash(plan);
-  const seed = groupHash({ ruleset: GROUP_RULESET, partyId: party.id, rosterHash: party.rosterHash, worldHash: world.snapshotHash, worldSnapshotSha256, catalogHash });
+  const seed = groupHash({ ruleset: GROUP_RULESET, partyId: party.id, rosterHash: party.rosterHash, worldHash: world.snapshotHash, worldSnapshotSha256, catalogHash: groupCatalog.catalogSha256 });
   // The portal binds to an actual persisted-world sector. Catalog zone labels
   // are source content, never manufactured global-world snapshots.
   const sector = plan.sectors[Number(BigInt(`0x${groupHash(party.dungeonId)}`) % BigInt(plan.sectors.length))]!;
@@ -70,30 +66,12 @@ export function issueGroupTicket(party: GroupParty, world: { snapshotJson: strin
   const playerMaxHp = boundedInteger(region.archetype.referencePlayerEffectiveHpExact);
   const payload = {
     id: groupHash({ ruleset: GROUP_RULESET, partyId: party.id, seed }), partyId: party.id, rosterHash: party.rosterHash,
-    ruleset: GROUP_RULESET, sourceRevision: party.sourceRevision, catalogHash,
-    worldHash: world.snapshotHash, worldSnapshotSha256, seed, dungeonId: party.dungeonId, label: authoredDungeon?.label ?? staticDungeon!.label, variant: party.variant, roster: party.roster,
+    ruleset: GROUP_RULESET, sourceRevision: party.sourceRevision, catalogHash: groupCatalog.catalogSha256,
+    worldHash: world.snapshotHash, worldSnapshotSha256, seed, dungeonId: party.dungeonId, label: dungeon.label, variant: party.variant, roster: party.roster,
     regionHash: region.deterministicHash, progressionHash: progression.deterministicHash,
     affixes: progression.affixes.map(affix => affix.key),
-    rooms: authoredDungeon
-      ? authoredDungeon.rooms.map((room, index) => ({
-          id: index,
-          kind: room.kind,
-          title: room.title,
-          position: { x: room.xMm, z: room.zMm },
-          hash: groupHash({ designHash: authoredDungeon.designHash, roomKey: room.roomKey, kind: room.kind, xMm: room.xMm, zMm: room.zMm, assetId: room.assetId, objective: room.objective }),
-          ...(room.assetId ? { assetId: room.assetId } : {}),
-          ...(room.objective ? { objective: room.objective } : {}),
-        }))
-      : layout.rooms.map(room => ({ id: room.id, kind: room.kind, position: { x: room.id * 12_000, z: 0 }, hash: room.receiptHash })),
-    bosses: authoredDungeon
-      ? authoredDungeon.bosses.map((boss, index) => ({
-          id: boss.bossId,
-          label: boss.label,
-          ...(boss.assetId ? { assetId: boss.assetId } : {}),
-          hp: boundedInteger(progression.enemyBudget.hpExact) + index * boundedInteger(region.archetype.referencePlayerDpsExact),
-          damage: boundedInteger(progression.enemyBudget.outgoingDamagePerSecondExact),
-        }))
-      : staticDungeon!.bosses.map((id, index) => ({ id, hp: boundedInteger(progression.enemyBudget.hpExact) + index * boundedInteger(region.archetype.referencePlayerDpsExact), damage: boundedInteger(progression.enemyBudget.outgoingDamagePerSecondExact) })),
+    rooms: layout.rooms.map(room => ({ id: room.id, kind: room.kind, position: { x: room.id * 12_000, z: 0 }, hash: room.receiptHash })),
+    bosses: dungeon.bosses.map((id, index) => ({ id, hp: boundedInteger(progression.enemyBudget.hpExact) + index * boundedInteger(region.archetype.referencePlayerDpsExact), damage: boundedInteger(progression.enemyBudget.outgoingDamagePerSecondExact) })),
     playerMaxHp, playerDamage: boundedInteger(region.archetype.referencePlayerDpsExact), healAmount: Math.max(1, Math.floor(playerMaxHp / 4)),
     // This integration owns queue, roster, admission and shared instance state.
     // The existing native dungeon/quest reward transactions are not invoked.

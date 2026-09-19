@@ -4,6 +4,7 @@ import {
   getDb,
   getGameplayProgress,
   requestQuestActionFromDialogue,
+  canConnectToDatabase,
 } from "./db";
 import { interpretAndRecordDialogue } from "./wasdAurionRuntime";
 import {
@@ -15,7 +16,13 @@ import {
   skillProgressionEvents,
 } from "../drizzle/schema";
 
-const describeWithDatabase = process.env.DATABASE_URL
+let dbReachable = false;
+try {
+  dbReachable = await canConnectToDatabase(300);
+} catch {
+  dbReachable = false;
+}
+const describeWithDatabase = dbReachable
   ? describe
   : describe.skip;
 const DIALOGUE_INTENT_E2E_USER_ID = 2_146_999_995;

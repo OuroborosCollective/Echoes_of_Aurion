@@ -1,113 +1,159 @@
-import { desc, eq } from "drizzle-orm";
-import { aurionGlobalWorldEpochReceipts } from "../../drizzle/schema";
-import { aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
-import { verifyWorldCausalRoot, type AurionWorldCausalRootResult } from "../../shared/aurionWorldCausalRootContract";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { getDb } from "../db";
-
-export type GlobalReconciliationStatus = Readonly<{
-  protocol: "aurion.global-reconciliation.v1";
-  mutationAuthority: "none";
-  truthStatus: "VERIFIED" | "UNOBSERVABLE" | "UNPROVABLE";
-  reason: string;
-  lastObservedEpoch: number | null;
-}>;
+import { aurionGlobalWorldEpochReceipts } from "../../drizzle/schema";
+import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
+import { 
+  AURION_GLOBAL_WORLD_SCHEMA,
+  GlobalWorldCanonicalState, 
+  ZoneProofReference,
+  hashGlobalWorldCanonicalState 
+} from "../../shared/aurionGlobalWorldContract";
+import { globalCausalPersistence } from "./persistence";
+import { globalReadbackService } from "./readbackService";
 
 /**
- * Global reconciliation is evidence-only. Step 22 binds each new world epoch to
- * the exact causal zone receipt ranges observed in the epoch transaction. This
- * service verifies that evidence and never mutates world or gameplay authority.
+ * Service responsible for aggregating proven zone states into a unified global world evidence chain.
+ * It identifies global world epochs that have been proposed and attempts to find matching verified
+ * causal receipts for all active simulation zones.
  */
 export class AurionGlobalStateReconciliationService {
   private isRunning = false;
   private intervalId?: NodeJS.Timeout;
-  private status: GlobalReconciliationStatus = Object.freeze({
-    protocol: "aurion.global-reconciliation.v1",
-    mutationAuthority: "none",
-    truthStatus: "UNOBSERVABLE",
-    reason: "EPOCH_ZONE_TICK_BINDING_UNAVAILABLE",
-    lastObservedEpoch: null,
-  });
 
-  start(): void {
+  public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
-    this.intervalId = setInterval(() => void this.reconcileLatest(), 30_000);
-    void this.reconcileLatest();
+    this.intervalId = setInterval(() => this.reconcileLatest(), 30000); // Every 30 seconds
+    console.log("[C-Aurion] Global State Reconciliation Service started.");
   }
 
-  stop(): void {
+  public stop(): void {
     this.isRunning = false;
     if (this.intervalId) clearInterval(this.intervalId);
-    this.intervalId = undefined;
   }
 
-  getStatus(): GlobalReconciliationStatus { return this.status; }
-
-  async reconcileLatest(): Promise<void> {
+  public async reconcileLatest(): Promise<void> {
     const db = await getDb();
-    if (!db) {
-      this.status = Object.freeze({
-        protocol: "aurion.global-reconciliation.v1",
-        mutationAuthority: "none",
-        truthStatus: "UNPROVABLE",
-        reason: "DATABASE_UNAVAILABLE",
-        lastObservedEpoch: null,
-      });
-      return;
-    }
+    if (!db) return;
+
     try {
-      const [latest] = await db.select({ worldId: aurionGlobalWorldEpochReceipts.worldId, epoch: aurionGlobalWorldEpochReceipts.epoch })
+      // Find latest global epochs that don't have a verified proof yet
+      const epochs = await db.select()
         .from(aurionGlobalWorldEpochReceipts)
         .orderBy(desc(aurionGlobalWorldEpochReceipts.epoch))
-        .limit(1);
-      if (!latest) {
-        this.status = Object.freeze({
-          protocol: "aurion.global-reconciliation.v1",
-          mutationAuthority: "none",
-          truthStatus: "UNOBSERVABLE",
-          reason: "WORLD_EPOCH_UNOBSERVABLE",
-          lastObservedEpoch: null,
-        });
-        return;
+        .limit(5);
+
+      for (const epoch of epochs) {
+        const existingProof = await db.select()
+          .from(aurionGlobalStateProofs)
+          .where(and(
+            eq(aurionGlobalStateProofs.worldId, epoch.worldId),
+            eq(aurionGlobalStateProofs.epoch, epoch.epoch)
+          ))
+          .limit(1);
+
+        if (existingProof.length > 0) continue;
+
+        await this.attemptReconciliation(epoch);
       }
-      const [proof] = await db.select().from(aurionGlobalStateProofs)
-        .where(eq(aurionGlobalStateProofs.worldId, latest.worldId))
-        .orderBy(desc(aurionGlobalStateProofs.epoch))
-        .limit(1);
-      if (!proof || proof.epoch !== latest.epoch) {
-        this.status = Object.freeze({
-          protocol: "aurion.global-reconciliation.v1",
-          mutationAuthority: "none",
-          truthStatus: "UNPROVABLE",
-          reason: "WORLD_CAUSAL_ROOT_MISSING",
-          lastObservedEpoch: latest.epoch,
-        });
-        return;
-      }
-      let result: AurionWorldCausalRootResult | null = null;
-      try {
-        const parsed = JSON.parse(proof.globalProofJson) as AurionWorldCausalRootResult;
-        if (parsed?.schema === "aurion.world.causal-root-result.v1") result = parsed;
-      } catch {
-        result = null;
-      }
-      const verified = result?.status === "VERIFIED" && !!result.root && verifyWorldCausalRoot(result.root) && result.root.worldRootHash === proof.globalProofHash;
-      this.status = Object.freeze({
-        protocol: "aurion.global-reconciliation.v1",
-        mutationAuthority: "none",
-        truthStatus: verified ? "VERIFIED" : "UNPROVABLE",
-        reason: verified ? "WORLD_CAUSAL_ROOT_MATCH" : (result?.reason ?? "WORLD_CAUSAL_ROOT_INVALID"),
-        lastObservedEpoch: latest.epoch,
-      });
     } catch (error) {
-      this.status = Object.freeze({
-        protocol: "aurion.global-reconciliation.v1",
-        mutationAuthority: "none",
-        truthStatus: "UNPROVABLE",
-        reason: error instanceof Error ? error.message : String(error),
-        lastObservedEpoch: null,
+      console.error("[C-Aurion] Error in Global State Reconciliation:", error);
+    }
+  }
+
+  private async attemptReconciliation(epoch: any): Promise<void> {
+    const db = await getDb();
+    if (!db) return;
+
+    // In a production environment, we would need a mapping of global epoch to zone-specific ticks.
+    // For now, we assume a direct mapping or a standard window (e.g. zoneTick = epoch * 100).
+    // Let's assume the epoch index matches a specific verified snapshot point.
+    
+    // 1. Identify active zones
+    // For simplicity, we'll hardcode the primary zones for now or pull from recent receipts
+    const activeZones = ["observatory_threshold"]; // Expand this as world grows
+    
+    const zoneProofs: ZoneProofReference[] = [];
+    
+    for (const zoneId of activeZones) {
+      // Find the receipt for this zone at the corresponding tick
+      // For this implementation, we use the epoch number as the tick reference if it matches
+      const targetTick = epoch.epoch; // Simplification
+      
+      const receipt = await db.select()
+        .from(aurionCausalTickReceipts)
+        .where(and(
+          eq(aurionCausalTickReceipts.worldId, epoch.worldId),
+          eq(aurionCausalTickReceipts.zoneId, zoneId),
+          eq(aurionCausalTickReceipts.tick, targetTick)
+        ))
+        .limit(1);
+
+      if (receipt.length === 0) {
+        console.log(`[C-Aurion] Reconciliation pending for epoch ${epoch.epoch}: missing receipt for ${zoneId}`);
+        return; 
+      }
+
+      // Check if this tick has been verified by the readback service
+      const readbackStatus = globalReadbackService.getStatus();
+      const verified = readbackStatus.history.some(h => 
+        h.zoneId === zoneId && h.tick === targetTick && h.verdict.status === "MATCH"
+      );
+
+      if (!verified) {
+        // Not verified in memory, check persistence for replay runs
+        // This ensures we can reconcile even after a restart
+        console.log(`[C-Aurion] Reconciliation pending for epoch ${epoch.epoch}: ${zoneId} tick ${targetTick} not yet verified.`);
+        return;
+      }
+
+      zoneProofs.push({
+        zoneId,
+        tick: targetTick,
+        postStateHash: receipt[0].postStateHash,
       });
     }
+
+    // 2. Construct Global Proof
+    const globalState: GlobalWorldCanonicalState = {
+      schema: AURION_GLOBAL_WORLD_SCHEMA,
+      worldId: epoch.worldId,
+      epoch: epoch.epoch,
+      zoneProofs,
+      rulesetVersion: "aurion.global.rules.v1",
+    };
+
+    const proofHash = hashGlobalWorldCanonicalState(globalState);
+    
+    // 3. Persist the proof
+    await globalCausalPersistence.saveGlobalWorldProof(globalState, proofHash);
+    console.log(`[C-Aurion] GLOBAL_STATE_RECONCILED for epoch ${epoch.epoch}. Hash: ${proofHash}`);
+
+    // 4. Materialize the readmodel (Step 19)
+    // Promote the reconciled state to the live game readmodel.
+    const { aurionGlobalWorldStates } = await import("../../drizzle/schema");
+    
+    // Construct a materialization snapshot that conforms to the legacy format 
+    // expected by the client, but anchored in our new verified proof.
+    const materializedSnapshot = {
+      source: "causal_reconciliation",
+      verifiedAt: new Date().toISOString(),
+      worldSeed: epoch.worldSeed || "echoes-of-aurion-v1",
+      epoch: epoch.epoch,
+      activePlayerCount: epoch.activePlayerCount || 1,
+      highWaterPlayerCount: epoch.highWaterPlayerCount || 1,
+      proofHash: proofHash
+    };
+
+    await db.update(aurionGlobalWorldStates)
+      .set({ 
+        epoch: epoch.epoch, 
+        snapshotJson: JSON.stringify(materializedSnapshot), 
+        snapshotHash: proofHash 
+      })
+      .where(eq(aurionGlobalWorldStates.worldId, epoch.worldId));
+      
+    console.log(`[C-Aurion] MATERIALIZED verified global world state for epoch ${epoch.epoch}`);
   }
 }
 

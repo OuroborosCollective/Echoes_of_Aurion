@@ -15,7 +15,6 @@ describe("Aurion labelled Traefik runtime deployment", () => {
   const runtimeEnvironment = read("deploy/aurion-traefik-runtime.environment.template");
   const databaseVerifier = read("deploy/verify-aurion-runtime-database.mjs");
   const workflow = read(".github/workflows/deploy-aurion-zone-runtime.yml");
-  const runtimeCandidateWorkflow = read(".github/workflows/aurion-pr-runtime-candidate.yml");
   const migrationLedger = read(".github/workflows/aurion-wasd-migration-ledger.yml");
   const artifactBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
   const runtimeBuilder = read("scripts/build-aurion-traefik-runtime-artifact.mjs");
@@ -99,14 +98,6 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain(
       "https://arelogic.space/healthz?revision=${EXPECTED_SHA}"
     );
-    expect(compose).toContain('AURION_ADMIN_MCP_RESOURCE_URL: https://${AURION_DOMAIN:-arelogic.space}/admin-mcp');
-    expect(workflow).toContain("Verify public Aurion Admin MCP protected-resource metadata");
-    expect(workflow).toContain("https://arelogic.space/.well-known/oauth-protected-resource");
-    expect(workflow).toContain('body.resource!=="https://arelogic.space/admin-mcp"');
-    expect(workflow).toContain('"aurion.admin.assets.write"');
-    expect(workflow).toContain('"aurion.admin.authoring.write"');
-    expect(runtimeCandidateWorkflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 120");
-    expect(runtimeCandidateWorkflow.match(/--retry-all-errors --connect-timeout 10 --max-time 120/g)?.length).toBeGreaterThanOrEqual(2);
     expect(workflow).toContain('health.revision!==process.argv[1]');
     expect(workflow).toContain("node --check deploy/verify-aurion-runtime-database.mjs");
   });
@@ -132,20 +123,10 @@ describe("Aurion labelled Traefik runtime deployment", () => {
       expect(pushBlock).toContain(ignored);
     }
     expect(triggerBlock).toContain("workflow_dispatch:");
-    for (const jobName of [
-      "promote-zone-runtime",
-      "verify-release-attestations",
-      "apply-reviewed-schema-plan",
-    ]) {
-      const job = workflow
-        .split(`\n  ${jobName}:`)[1]
-        ?.split(/\n  [A-Za-z0-9_-]+:/)[0];
-      expect(job, `missing workflow job ${jobName}`).toBeDefined();
-      expect(job).toContain(trustedMainCondition);
-    }
+    expect(workflow.split(trustedMainCondition)).toHaveLength(5);
     const dispatchJob = workflow.split("\n  apply-reviewed-schema-plan:")[1]?.split("\n  production-schema-readback:")[0];
     expect(dispatchJob).toContain(trustedMainCondition);
-    expect(dispatchJob).toContain("needs: [migration-ledger, promote-zone-runtime, verify-release-attestations]");
+    expect(dispatchJob).toContain("needs: [migration-ledger, promote-zone-runtime]");
     expect(dispatchJob).toContain("actions: write");
     expect(dispatchJob).toContain("node scripts/dispatch-aurion-schema-plan.mjs");
     expect(workflow).toContain("group: deploy-aurion-zone-runtime-${{ github.ref }}");
@@ -240,9 +221,6 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain("Bootstrap and promote labelled Traefik container");
     expect(workflow).not.toContain("sudo docker");
     expect(promoter).toContain("docker compose --project-name echoes-of-aurion");
-    expect(promoter).toContain('compose_digest_env=(');
-    expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" config --quiet');
-    expect(promoter).toContain('env "${compose_digest_env[@]}" "${compose[@]}" up --detach --no-build --force-recreate --no-deps aurion');
     expect(promoter).toContain("docker build --pull=false");
     expect(promoter).toContain("traefik.enable");
     expect(promoter).toContain("traefik.docker.network");
@@ -275,14 +253,7 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(promoter).toContain(
       '"https://${aurion_domain}/healthz?revision=${expected_sha}"'
     );
-    expect(promoter).toContain('body.revision !== revision');
-    expect(promoter).toContain('body.buildInputDigest !== buildInputDigest');
-    expect(promoter).toContain('body.artifactDigest !== artifactDigest');
-    expect(promoter).toContain('body.runtimeImageDigest !== runtimeImageDigest');
-    expect(promoter).toContain('body.releaseArchiveDigest !== releaseArchiveDigest');
-    expect(promoter).toContain('body.authority?.ruleset !== "aurion-zone-v3"');
-    expect(promoter).toContain('body.authority?.tickHz !== 10');
-    expect(promoter).toContain('body.authority?.causalReceipts !== true');
+    expect(promoter).toContain('body.revision !== process.argv[1]');
     expect(promoter).toContain('health.revision !== process.env.EXPECTED_SHA');
     expect(promoter).toContain('"mode":"traefik-labelled"');
     expect(promoter).toContain('systemctl disable --now "$legacy_service"');

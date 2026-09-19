@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
 
-describe("GLB runtime wiring", () => {
-  it("registers the approved-assignment compatibility endpoint in the real server", () => {
+describe("starter GLB runtime wiring", () => {
+  it("registers the approved-assignment runtime endpoint in the real server", () => {
     const index = read("server/_core/index.ts");
     const route = read("server/starterGlbRuntimeAssets.ts");
     expect(index).toContain('import { registerStarterGlbRuntimeAssets } from "../starterGlbRuntimeAssets"');
@@ -16,32 +16,34 @@ describe("GLB runtime wiring", () => {
     expect(route).toContain('readAssignment("enemy", STARTER_GLB_TARGET_KEYS.spider)');
   });
 
-  it("loads the current approved GLB catalog before AX1 world projection", () => {
-    const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
-    const catalogHook = read("client/src/hooks/useGlbCatalog.ts");
-    expect(runtime).toContain("const catalog = useGlbCatalog(Boolean(activation));");
-    expect(runtime).toContain("const selectedCharacterUrl = characterAppearance.data?.storageUrl ?? confirmedSelection?.storageUrl ?? null;");
-    expect(catalogHook).toContain('fetch("/api/game/glb-catalog"');
-    expect(catalogHook).toContain("glbRuntimeCatalogSchema.parse");
-    expect(catalogHook).toContain("projectServiceNpcFallbackTargets(authoritative)");
+  it("loads runtime assignments before creating the Babylon starter scene", () => {
+    const canvas = read("client/src/components/GameCanvas.tsx");
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
+    const creatures = read("client/src/game/starterCreatureVisuals.ts");
+    expect(canvas).toContain('fetch("/api/game/starter-glb-assets"');
+    expect(canvas).toContain("normalizeStarterRuntimeAssetSources");
+    expect(canvas).toContain("createGameScene(engine, canvas, characterModelUrlRef.current, starterSources)");
+    expect(scene).toContain("starterSources.player?.storageUrl");
+    expect(scene).toContain("new StarterCreatureVisuals(scene, sentinel, starterSources)");
+    expect(creatures).toContain('SceneLoader.ImportMeshAsync("", "", source.storageUrl, scene)');
   });
 
-  it("keeps AX1 attack animation confirmation-only", () => {
-    const runtime = read("client/src/xaurion/integration/AurionOpenWorldRuntime.tsx");
-    const confirmedHandler = runtime.slice(
-      runtime.indexOf("const onConfirmedAction"),
-      runtime.indexOf("const fail =", runtime.indexOf("const onConfirmedAction"))
-    );
-    expect(confirmedHandler).toContain("confirmedVisuals.accept");
-    expect(confirmedHandler).toContain("engine.player.triggerAttackAnimation()");
-    expect(confirmedHandler).toContain("engine.player.playConfirmedGlbAttack()");
-    expect(runtime).toContain('window.addEventListener("aurion:authoritative-action", onConfirmedAction)');
+  it("keeps AX1 skill animation confirmation-only", () => {
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
+    const rawHandler = scene.slice(scene.indexOf("const onHumanAction"), scene.indexOf("const onAuthoritativeAction"));
+    const confirmedHandler = scene.slice(scene.indexOf("const onAuthoritativeAction"), scene.indexOf('window.addEventListener("aurion:mission-state"'));
+    expect(rawHandler).toContain('command === "F"');
+    expect(rawHandler).not.toContain('command === "1"');
+    expect(confirmedHandler).toContain('detail?.command === "F" || detail?.command === "1"');
+    expect(confirmedHandler).toContain('(detail.source ?? "gateway") === "human"');
   });
 
   it("removes the broken repository payload materialization build dependency", () => {
     const packageJson = read("package.json");
+    const scene = read("client/src/game/sceneWithStarterCharacters.ts");
     expect(packageJson).not.toContain("starter-glb:materialize");
     expect(packageJson).not.toContain("prebuild:itch");
+    expect(scene).not.toContain("materializeChunkedGlb");
     expect(fs.existsSync(path.join(root, "scripts/materialize-starter-glb-assets.ts"))).toBe(false);
     expect(fs.existsSync(path.join(root, "client/src/game/chunkedGlb.ts"))).toBe(false);
     expect(fs.existsSync(path.join(root, "shared/starterGlbAssetManifest.ts"))).toBe(false);

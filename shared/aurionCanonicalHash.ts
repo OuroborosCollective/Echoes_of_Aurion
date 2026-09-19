@@ -1,56 +1,58 @@
 import { createHash } from "node:crypto";
 
 /**
- * Canonical JSON used by Aurion evidence contracts.
- *
- * Rules:
- * - object keys are sorted lexicographically;
- * - arrays preserve their domain-defined order;
- * - finite numbers are encoded exactly as ECMAScript numbers (with -0 normalized to 0);
- * - undefined object properties are omitted, matching JSON object semantics;
- * - non-finite numbers and unsupported values fail closed instead of being rewritten.
- *
- * Gameplay authority should prefer integer/fixed-point fields. This encoder does not
- * round floating-point inputs because rounding can collapse distinct states into one hash.
+ * Deterministically serializes any JS object or primitive into a stable canonical JSON string.
+ * - Object keys are sorted lexicographically.
+ * - Numbers are serialized deterministically (floats rounded to 4 decimals to eliminate IEEE 754 platform jitter).
+ * - Arrays preserve order unless explicitly sorted by domain comparator.
+ * - Undefined values in objects are skipped (like JSON.stringify).
  */
-export function canonicalJson(value: unknown): string {
-  if (value === null) return "null";
-  if (value === undefined) return "null";
-
-  switch (typeof value) {
-    case "boolean":
-      return value ? "true" : "false";
-    case "number": {
-      if (!Number.isFinite(value)) throw new Error("CANONICAL_NUMBER_NON_FINITE");
-      if (Object.is(value, -0) || value === 0) return "0";
-      return JSON.stringify(value);
-    }
-    case "string":
-      return JSON.stringify(value);
-    case "object": {
-      if (Array.isArray(value)) {
-        return `[${value.map(item => canonicalJson(item)).join(",")}]`;
-      }
-      const record = value as Record<string, unknown>;
-      const keys = Object.keys(record)
-        .filter(key => record[key] !== undefined)
-        .sort();
-      return `{${keys
-        .map(key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-        .join(",")}}`;
-    }
-    default:
-      throw new Error(`CANONICAL_VALUE_UNSUPPORTED:${typeof value}`);
+export function canonicalJson(obj: unknown): string {
+  if (obj === null || obj === undefined) {
+    return "null";
   }
+  if (typeof obj === "boolean") {
+    return obj ? "true" : "false";
+  }
+  if (typeof obj === "number") {
+    if (!Number.isFinite(obj)) return "0";
+    const rounded = Math.round(obj * 10000) / 10000;
+    if (Object.is(rounded, -0) || rounded === 0) return "0";
+    return rounded.toString(10);
+  }
+  if (typeof obj === "string") {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return "[" + obj.map(item => canonicalJson(item)).join(",") + "]";
+  }
+  if (typeof obj === "object") {
+    const record = obj as Record<string, unknown>;
+    const sortedKeys = Object.keys(record)
+      .filter(key => record[key] !== undefined)
+      .sort();
+    const keyValues = sortedKeys.map(
+      key => `${JSON.stringify(key)}:${canonicalJson(record[key])}`
+    );
+    return "{" + keyValues.join(",") + "}";
+  }
+  return JSON.stringify(String(obj));
 }
 
-/** SHA-256 over the canonical representation. */
+/**
+ * Computes a prefixed SHA-256 hash ("sha256:<hex>") of the canonical JSON representation.
+ */
 export function canonicalSha256(data: unknown): string {
-  return `sha256:${createHash("sha256").update(canonicalJson(data), "utf8").digest("hex")}`;
+  const serialized = canonicalJson(data);
+  const digest = createHash("sha256").update(serialized, "utf-8").digest("hex");
+  return `sha256:${digest}`;
 }
 
-/** Domain-separated SHA-256 without delimiter ambiguity. */
+/**
+ * Domain-separated SHA-256 calculation for tuples/sequences of elements.
+ */
 export function domainSha256(domain: string, elements: readonly unknown[]): string {
-  if (!domain.trim()) throw new Error("HASH_DOMAIN_REQUIRED");
-  return canonicalSha256({ domain, elements });
+  const serialized = [canonicalJson(domain), ...elements.map(e => canonicalJson(e))].join("::");
+  const digest = createHash("sha256").update(serialized, "utf-8").digest("hex");
+  return `sha256:${digest}`;
 }

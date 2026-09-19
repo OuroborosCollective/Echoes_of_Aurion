@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
+import { ArrowLeft, Compass } from "lucide-react";
 import AurionOpenWorldRuntime from "./AurionOpenWorldRuntime";
 import Ax1CompanionOverlay from "./Ax1CompanionOverlay";
 import { OpenWorldErrorBoundary } from "./OpenWorldErrorBoundary";
@@ -28,8 +29,30 @@ export function persistConfirmedPlayLaunch(value: unknown): boolean {
   try { sessionStorage.setItem(AURION_PLAY_LAUNCH_KEY, JSON.stringify(value)); return true; } catch { return false; }
 }
 
-function consumeLaunch(): PlayLaunch | null {
+export const DEV_OFFLINE_FIXTURE: PlayLaunch = Object.freeze({
+  displayName: "Echoes of Aurion [Offline Dev Testbed]",
+  revision: 1,
+  zoneTier: 1,
+  globalWorld: Object.freeze({
+    worldSeed: "offline-dev-testbed-seed",
+    epoch: 1,
+    deterministicHash: "fnv1a-00000000",
+  }),
+  isOfflineTestbed: true,
+});
+
+if (typeof window !== "undefined" && import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__aurionInjectOfflinePlayLaunch = () => {
+    persistConfirmedPlayLaunch(DEV_OFFLINE_FIXTURE);
+    window.location.reload();
+  };
+}
+
+export function consumeLaunch(): PlayLaunch | null {
   try {
+    if (typeof window !== "undefined" && (window.location.search.includes("dev_offline=1") || window.location.search.includes("offline_test=true"))) {
+      return DEV_OFFLINE_FIXTURE;
+    }
     const raw = sessionStorage.getItem(AURION_PLAY_LAUNCH_KEY);
     sessionStorage.removeItem(AURION_PLAY_LAUNCH_KEY);
     if (!raw) return null;
@@ -60,11 +83,23 @@ export default function AurionPlayRoute() {
   }, [launch]);
 
   if (!launch) return (
-    <main className="min-h-screen grid place-items-center bg-slate-950 text-slate-100 p-6">
-      <section className="max-w-xl text-center space-y-4">
-        <h1 className="text-2xl font-semibold">AX1-Spielstart benötigt einen bestätigten WASD-Weltvertrag</h1>
-        <p className="text-slate-300">Öffne die Welt über das Aurion-Portal. Die Spielroute erfindet keinen Snapshot und startet keine Legacy-Arena.</p>
-        <Link href="/" className="underline">Zum Aurion-Portal</Link>
+    <main className="min-h-screen grid place-items-center bg-[#070b13] text-slate-100 p-6">
+      <section className="max-w-md w-full rounded-2xl border border-amber-500/30 bg-black/85 p-6 text-center space-y-4 backdrop-blur-xl shadow-2xl">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/40 bg-amber-500/10 text-amber-300 shadow-[0_0_20px_rgba(251,191,36,0.15)]">
+          <Compass className="h-7 w-7" />
+        </div>
+        <h1 className="text-xl font-serif font-bold text-amber-100">AX1-Spielstart</h1>
+        <p className="text-sm text-slate-300 leading-relaxed">
+          AX1-Spielstart benötigt einen bestätigten WASD-Weltvertrag aus dem Aurion-Portal. Die Spielroute erfindet keinen Snapshot und startet keine Legacy-Arena.
+        </p>
+        <div className="pt-2 flex flex-col gap-2">
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/60 bg-amber-500/20 px-4 py-2.5 text-sm font-serif font-semibold text-amber-200 hover:bg-amber-500/30 transition-all shadow-md"
+          >
+            <ArrowLeft className="h-4 w-4" /> Zum Aurion-Portal
+          </Link>
+        </div>
       </section>
     </main>
   );

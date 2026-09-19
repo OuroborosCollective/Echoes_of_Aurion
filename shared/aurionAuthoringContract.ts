@@ -1,176 +1,102 @@
 import { z } from "zod";
 
-export const AURION_AUTHORING_SCHEMA = "aurion.authoring.v1" as const;
-export const AURION_WORLD_DESIGN_SCHEMA = "aurion.world-design.v1" as const;
-export const AURION_DUNGEON_DESIGN_SCHEMA = "aurion.dungeon-design.v1" as const;
-export const AURION_AUTHORING_RECEIPT_SCHEMA = "aurion.authoring-receipt.v1" as const;
-
-const digest = z.string().regex(/^[a-f0-9]{64}$/);
-const canonicalId = z.string().regex(/^[a-z][a-z0-9._:-]{2,95}$/);
-const authoredDungeonId = z.string().regex(/^dungeon_[a-z0-9][a-z0-9_]{2,79}$/);
-const assetId = z.string().regex(/^glb_[a-z0-9._:-]{4,91}$/);
-const localMm = z.number().int().min(0).max(63_999);
-const layoutMm = z.number().int().min(-1_000_000).max(1_000_000);
-const chunkCoordinate = z.number().int().min(-100_000).max(100_000);
-
 export const WorldDesignPlacementSchema = z.object({
-  placementKey: canonicalId,
-  assetId,
-  chunkX: chunkCoordinate,
-  chunkZ: chunkCoordinate,
-  xMm: localMm,
-  zMm: localMm,
-  rotationQuarterTurns: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
-  scalePermille: z.number().int().min(250).max(4_000).default(1_000),
-}).strict();
+  placementKey: z.string().trim().min(2).max(64),
+  assetId: z.string().trim().min(8).max(64),
+  chunkX: z.number().int().min(-1000).max(1000),
+  chunkZ: z.number().int().min(-1000).max(1000),
+  xMm: z.number().int().min(0).max(64_000),
+  zMm: z.number().int().min(0).max(64_000),
+  rotationQuarterTurns: z.number().int().min(0).max(3).default(0),
+  scalePermille: z.number().int().min(100).max(10_000).default(1000),
+});
+export type WorldDesignPlacement = z.infer<typeof WorldDesignPlacementSchema>;
 
 export const WorldDesignDraftSchema = z.object({
-  schemaVersion: z.literal(AURION_WORLD_DESIGN_SCHEMA).default(AURION_WORLD_DESIGN_SCHEMA),
-  designKey: canonicalId,
-  version: z.number().int().min(1).max(1_000_000),
-  title: z.string().trim().min(3).max(160),
-  expectedCatalogRevision: digest,
-  placements: z.array(WorldDesignPlacementSchema).min(1).max(256),
-}).strict().superRefine((value, ctx) => {
-  const keys = value.placements.map(item => item.placementKey);
-  if (new Set(keys).size !== keys.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WORLD_DESIGN_DUPLICATE_PLACEMENT_KEY", path: ["placements"] });
+  designKey: z.string().trim().min(3).max(96),
+  worldId: z.string().trim().min(3).max(96).default("aurion-main"),
+  title: z.string().trim().min(3).max(255),
+  expectedCatalogRevision: z.string().trim().min(8).max(64),
+  placements: z.array(WorldDesignPlacementSchema).min(1).max(500),
 });
-
 export type WorldDesignDraft = z.infer<typeof WorldDesignDraftSchema>;
 
-export const WorldDesignPlanSchema = WorldDesignDraftSchema.extend({
-  planHash: digest,
-  referencedAssetHashes: z.array(digest).min(1).max(256),
-  requiresHumanConfirmation: z.literal(true),
-}).strict();
-
-export type WorldDesignPlan = z.infer<typeof WorldDesignPlanSchema>;
+export const WorldDesignVersionSchema = z.object({
+  id: z.string(),
+  designKey: z.string(),
+  version: z.number().int(),
+  worldId: z.string(),
+  title: z.string(),
+  expectedCatalogRevision: z.string(),
+  designJson: z.string().optional(),
+  designHash: z.string(),
+  active: z.boolean(),
+  placements: z.array(WorldDesignPlacementSchema),
+  createdByUserId: z.number().int().optional(),
+  createdAt: z.string().or(z.date()).optional(),
+});
+export type WorldDesignVersion = z.infer<typeof WorldDesignVersionSchema>;
 
 export const WorldDesignReadbackSchema = z.object({
-  schemaVersion: z.literal(AURION_WORLD_DESIGN_SCHEMA),
-  revision: digest,
-  designs: z.array(z.object({
-    designKey: canonicalId,
-    version: z.number().int().positive(),
-    title: z.string(),
-    designHash: digest,
-    expectedCatalogRevision: digest,
-    placements: z.array(WorldDesignPlacementSchema),
-  }).strict()).max(64),
-}).strict();
-
+  revision: z.string(),
+  designs: z.array(WorldDesignVersionSchema),
+});
 export type WorldDesignReadback = z.infer<typeof WorldDesignReadbackSchema>;
 
-export const DungeonObjectiveSchema = z.object({
-  kind: z.enum(["defeat", "interact", "collect", "survive", "reach"]),
-  targetId: canonicalId,
-  targetValue: z.number().int().min(1).max(100_000),
-  description: z.string().trim().min(3).max(240),
-}).strict();
-
 export const DungeonRoomSchema = z.object({
-  roomKey: canonicalId,
-  kind: z.enum(["entrance", "combat", "puzzle", "objective", "treasure", "rest", "boss", "exit"]),
-  title: z.string().trim().min(2).max(120),
-  xMm: layoutMm,
-  zMm: layoutMm,
-  assetId: assetId.nullable().default(null),
-  objective: DungeonObjectiveSchema.nullable().default(null),
-}).strict();
-
-export const DungeonConnectionSchema = z.object({
-  fromRoomKey: canonicalId,
-  toRoomKey: canonicalId,
-  label: z.string().trim().min(1).max(80).nullable().default(null),
-}).strict();
-
-export const DungeonBossSchema = z.object({
-  bossId: canonicalId,
+  roomId: z.string().trim().min(2).max(64),
   label: z.string().trim().min(2).max(120),
-  roomKey: canonicalId,
-  assetId: assetId.nullable().default(null),
-}).strict();
+  connectedRoomIds: z.array(z.string().trim().min(2).max(64)).default([]),
+  assetIds: z.array(z.string().trim().min(8).max(64)).default([]),
+  boss: z.boolean().default(false),
+  encounterKey: z.string().optional(),
+});
+export type DungeonRoom = z.infer<typeof DungeonRoomSchema>;
 
 export const DungeonDesignDraftSchema = z.object({
-  schemaVersion: z.literal(AURION_DUNGEON_DESIGN_SCHEMA).default(AURION_DUNGEON_DESIGN_SCHEMA),
-  dungeonId: authoredDungeonId,
-  version: z.number().int().min(1).max(1_000_000),
-  label: z.string().trim().min(3).max(160),
-  zone: canonicalId,
-  expectedCatalogRevision: digest,
-  rooms: z.array(DungeonRoomSchema).min(4).max(9),
-  connections: z.array(DungeonConnectionSchema).min(3).max(24),
-  bosses: z.array(DungeonBossSchema).min(2).max(4),
-  partyCapabilities: z.tuple([z.literal(1), z.literal(1), z.literal(3)]).default([1, 1, 3]),
-}).strict().superRefine((value, ctx) => {
-  const roomKeys = value.rooms.map(room => room.roomKey);
-  const roomSet = new Set(roomKeys);
-  if (roomSet.size !== roomKeys.length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "DUNGEON_DUPLICATE_ROOM_KEY", path: ["rooms"] });
-  if (value.rooms.filter(room => room.kind === "entrance").length !== 1) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "DUNGEON_EXACTLY_ONE_ENTRANCE_REQUIRED", path: ["rooms"] });
-  if (value.rooms.filter(room => room.kind === "exit").length !== 1) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "DUNGEON_EXACTLY_ONE_EXIT_REQUIRED", path: ["rooms"] });
-  for (const [index, edge] of value.connections.entries()) {
-    if (!roomSet.has(edge.fromRoomKey) || !roomSet.has(edge.toRoomKey) || edge.fromRoomKey === edge.toRoomKey) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "DUNGEON_CONNECTION_INVALID", path: ["connections", index] });
-    }
-  }
-  for (const [index, boss] of value.bosses.entries()) {
-    if (!roomSet.has(boss.roomKey)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "DUNGEON_BOSS_ROOM_UNKNOWN", path: ["bosses", index] });
-  }
+  dungeonId: z.string().trim().min(3).max(96),
+  label: z.string().trim().min(3).max(255),
+  zone: z.string().trim().min(3).max(96),
+  expectedCatalogRevision: z.string().trim().min(8).max(64),
+  rooms: z.array(DungeonRoomSchema).min(1).max(50),
+  objectives: z.array(z.string().trim().min(2).max(200)).default([]),
 });
-
 export type DungeonDesignDraft = z.infer<typeof DungeonDesignDraftSchema>;
 
-export const DungeonDesignPlanSchema = DungeonDesignDraftSchema.extend({
-  planHash: digest,
-  referencedAssetHashes: z.array(digest).max(32),
-  graphHash: digest,
-  requiresHumanConfirmation: z.literal(true),
-}).strict();
+export const DungeonDesignVersionSchema = z.object({
+  id: z.string(),
+  dungeonId: z.string(),
+  version: z.number().int(),
+  label: z.string(),
+  zone: z.string(),
+  expectedCatalogRevision: z.string(),
+  designJson: z.string().optional(),
+  designHash: z.string(),
+  active: z.boolean(),
+  rooms: z.array(DungeonRoomSchema),
+  objectives: z.array(z.string()),
+  createdByUserId: z.number().int().optional(),
+  createdAt: z.string().or(z.date()).optional(),
+});
+export type DungeonDesignVersion = z.infer<typeof DungeonDesignVersionSchema>;
 
-export type DungeonDesignPlan = z.infer<typeof DungeonDesignPlanSchema>;
-
-export const ActiveDungeonDesignSchema = z.object({
-  schemaVersion: z.literal(AURION_DUNGEON_DESIGN_SCHEMA),
-  dungeonId: authoredDungeonId,
-  version: z.number().int().min(1).max(1_000_000),
-  label: z.string().trim().min(3).max(160),
-  zone: canonicalId,
-  expectedCatalogRevision: digest,
-  rooms: z.array(DungeonRoomSchema).min(4).max(9),
-  connections: z.array(DungeonConnectionSchema).min(3).max(24),
-  bosses: z.array(DungeonBossSchema).min(2).max(4),
-  partyCapabilities: z.tuple([z.literal(1), z.literal(1), z.literal(3)]),
-  planHash: digest,
-  referencedAssetHashes: z.array(digest).max(32),
-  graphHash: digest,
-  designHash: digest,
-}).strict();
-
-export type ActiveDungeonDesign = z.infer<typeof ActiveDungeonDesignSchema>;
+export const DungeonDesignReadbackSchema = z.object({
+  revision: z.string(),
+  dungeons: z.array(DungeonDesignVersionSchema),
+});
+export type DungeonDesignReadback = z.infer<typeof DungeonDesignReadbackSchema>;
 
 export const AuthoringReceiptSchema = z.object({
-  schemaVersion: z.literal(AURION_AUTHORING_RECEIPT_SCHEMA),
-  receiptId: z.string().min(8).max(128),
+  id: z.string(),
   kind: z.enum(["world", "quest", "dungeon"]),
-  action: z.enum(["apply", "publish"]),
-  targetId: z.string().min(3).max(128),
-  actorUserId: z.number().int().positive(),
-  planHash: digest,
-  previousHash: digest.nullable(),
-  resultHash: digest,
-  receiptHash: digest,
-  humanConfirmed: z.literal(true),
-}).strict();
-
+  action: z.string(),
+  targetId: z.string(),
+  actorUserId: z.number().int(),
+  planHash: z.string(),
+  previousHash: z.string().nullable().optional(),
+  resultHash: z.string(),
+  payloadJson: z.string(),
+  receiptHash: z.string(),
+  createdAt: z.string().or(z.date()).optional(),
+});
 export type AuthoringReceipt = z.infer<typeof AuthoringReceiptSchema>;
-
-export const AuthoringProposalInputSchema = z.object({
-  kind: z.enum(["world", "quest", "dungeon"]),
-  request: z.string().trim().min(12).max(4_000),
-}).strict();
-
-export const AuthoringApplyConfirmationSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("world"), confirmation: z.literal("APPLY_WORLD_DESIGN") }).strict(),
-  z.object({ kind: z.literal("quest"), confirmation: z.literal("PUBLISH_QUEST_TEMPLATE") }).strict(),
-  z.object({ kind: z.literal("dungeon"), confirmation: z.literal("PUBLISH_DUNGEON") }).strict(),
-]);

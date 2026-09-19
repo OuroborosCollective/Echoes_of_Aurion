@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { GlbImportStore } from "./glbImportStore";
 import { buildGlbImportPlan } from "./glbImportPlan";
-import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
+import { testGlb } from "./glbImportFixtures";
 
 const enabled = process.env.AURION_GLB_DB_TEST === "1";
 describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () => {
@@ -31,47 +31,6 @@ describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () =
     }
     if (root) await rm(root, { recursive: true, force: true });
   });
-  it("binds an approved npc-fallback asset to a named Aurion NPC with CAS readback", async () => {
-    const bytes = testAnimatedPlayerGlb("Lyra_character_questgiver", true);
-    const contentBase64 = bytes.toString("base64");
-    const receipt = await store.ingest(admin, {
-      displayName: "Lyra Keeper of the Observatory",
-      fileName: "Lyra_character_questgiver.glb",
-      contentBase64,
-      purpose: "npc-fallback",
-      expectedPlanSha256: buildGlbImportPlan(contentBase64, "npc-fallback", "Lyra_character_questgiver.glb").planSha256,
-    });
-    expect(receipt.status).toBe("catalog");
-    expect(receipt.targetKey).toBeNull();
-
-    await expect(store.assignNamedNpcVisual(member, {
-      assetId: receipt.assetId,
-      npcId: "lyra",
-      expectedActiveAssetId: null,
-    })).rejects.toThrow("GLB_ADMIN_REQUIRED");
-
-    const assigned = await store.assignNamedNpcVisual(admin, {
-      assetId: receipt.assetId,
-      npcId: "lyra",
-      expectedActiveAssetId: null,
-    });
-    expect(assigned).toMatchObject({ assetId: receipt.assetId, targetKey: "npc_lyra", active: 1, changed: true });
-
-    const catalog = await store.catalog();
-    expect(catalog.entries.find(entry => entry.targetKey === "npc_lyra")).toMatchObject({
-      assetId: receipt.assetId,
-      sha256: receipt.sha256,
-      purpose: "npc-fallback",
-      assetType: "character",
-    });
-
-    await expect(store.assignNamedNpcVisual(admin, {
-      assetId: receipt.assetId,
-      npcId: "lyra",
-      expectedActiveAssetId: "glb_wrong000",
-    })).rejects.toThrow("GLB_ASSIGNMENT_CHANGED");
-  }, 45_000);
-
   it("serializes duplicate intake, preserves occupied slots, checks CAS and survives a new store instance", async () => {
     const bytes = testGlb(); const contentBase64 = bytes.toString("base64");
     const input = { displayName: "Isolated spear", contentBase64, expectedPlanSha256: buildGlbImportPlan(contentBase64).planSha256 };

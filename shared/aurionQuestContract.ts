@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { replayVerdictSchema } from './aurionReplayContract';
 
 /**
  * AIM-298: Shared Canonical Contract for Aurion-native Deterministic Quest Compiler & Story Chains.
@@ -67,12 +66,6 @@ export const QuestObjectiveRequirementSchema = z.object({
   key: z.string(),
   targetValue: z.union([z.number(), z.string(), z.boolean()]),
   description: z.string().optional(),
-  eventBinding: z.object({
-    source: z.enum(["world_chunk_delta", "group_instance"]),
-    event: z.enum(["resource_depleted", "structure_placed", "structure_removed", "road_built", "cleared"]),
-    matchField: z.enum(["targetId", "resourceKind", "assetKey", "dungeonId"]).nullable().default(null),
-    matchValue: z.string().min(1).max(128).nullable().default(null),
-  }).strict().optional(),
 });
 
 export type QuestObjectiveRequirement = z.infer<typeof QuestObjectiveRequirementSchema>;
@@ -239,15 +232,9 @@ export const QuestReplayReceiptSchema = z.object({
   replayedPlanHash: z.string(),
   replayedGraphHash: z.string(),
   replayedOutcomeHash: z.string(),
-  replayVerdict: replayVerdictSchema,
-  /** Compatibility projection; must equal replayVerdict.status. */
   verdict: z.enum(['MATCH', 'FIRST_DIVERGENCE', 'UNPROVABLE']),
   firstDivergenceDetails: z.string().optional(),
   timestamp: z.string(),
-}).superRefine((value, ctx) => {
-  if (value.verdict !== value.replayVerdict.status) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'QUEST_REPLAY_VERDICT_PROJECTION_MISMATCH', path: ['verdict'] });
-  }
 });
 
 export type QuestReplayReceipt = z.infer<typeof QuestReplayReceiptSchema>;

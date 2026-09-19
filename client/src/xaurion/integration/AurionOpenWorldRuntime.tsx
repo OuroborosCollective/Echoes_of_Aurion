@@ -26,6 +26,7 @@ import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
 import { aurionAssets } from "@/lib/aurionAssets";
 import { ax1MovementToAurionIntent, bindAurionAuthorityProjection, type AurionGameplayCommand } from "./aurionAuthorityAdapter";
+import { DEV_OFFLINE_FIXTURE } from "./AurionPlayRoute";
 import type { CharacterClassId } from "../types";
 import "./aurionOpenWorldRuntime.css";
 
@@ -34,6 +35,7 @@ type ActivationSnapshot = Readonly<{
   entryNarrative?: string;
   zoneTier?: number;
   globalWorld?: { epoch?: number; worldSeed?: string };
+  isOfflineTestbed?: boolean;
 }>;
 
 type AurionPlayerProjection = Readonly<{
@@ -55,13 +57,22 @@ const ZONE_MAX_RECONNECT_ATTEMPTS = 8;
 const FATAL_ZONE_REJECT_CODES = new Set(["PROTOCOL_VERSION_UNSUPPORTED", "INVALID_MESSAGE", "UNSUPPORTED_ZONE_COMMAND"]);
 
 function validActivation(detail: unknown): ActivationSnapshot {
-  if (!detail || typeof detail !== "object") return Object.freeze({ displayName: "Aurion Open World" });
+  const isOfflineUrl = typeof window !== "undefined" && (window.location.search.includes("dev_offline=1") || window.location.search.includes("offline_test=true"));
+  if (!detail || typeof detail !== "object") {
+    return Object.freeze({
+      displayName: isOfflineUrl ? "Echoes of Aurion [Offline Dev Testbed]" : "Aurion Open World",
+      globalWorld: isOfflineUrl ? DEV_OFFLINE_FIXTURE.globalWorld : undefined,
+      isOfflineTestbed: isOfflineUrl,
+    });
+  }
   const value = detail as Record<string, unknown>;
+  const isOffline = value.isOfflineTestbed === true || isOfflineUrl;
   return Object.freeze({
-    displayName: typeof value.displayName === "string" ? value.displayName : "Aurion Open World",
+    displayName: typeof value.displayName === "string" ? value.displayName : isOffline ? "Echoes of Aurion [Offline Dev Testbed]" : "Aurion Open World",
     entryNarrative: typeof value.entryNarrative === "string" ? value.entryNarrative : undefined,
     zoneTier: typeof value.zoneTier === "number" ? value.zoneTier : undefined,
-    globalWorld: value.globalWorld && typeof value.globalWorld === "object" ? value.globalWorld as ActivationSnapshot["globalWorld"] : undefined,
+    globalWorld: value.globalWorld && typeof value.globalWorld === "object" ? value.globalWorld as ActivationSnapshot["globalWorld"] : isOffline ? DEV_OFFLINE_FIXTURE.globalWorld : undefined,
+    isOfflineTestbed: isOffline,
   });
 }
 
@@ -99,7 +110,12 @@ export default function AurionOpenWorldRuntime() {
     }
   }, []);
 
-  const [activation, setActivation] = useState<ActivationSnapshot | null>(null);
+  const [activation, setActivation] = useState<ActivationSnapshot | null>(() => {
+    if (typeof window !== "undefined" && (window.location.search.includes("dev_offline=1") || window.location.search.includes("offline_test=true"))) {
+      return DEV_OFFLINE_FIXTURE;
+    }
+    return null;
+  });
   const [confirmedSelection, setConfirmedSelection] = useState<PublicCharacterSelection | null>(null);
   const catalog = useGlbCatalog(Boolean(activation));
   const [modelStatus, setModelStatus] = useState("procedural");
@@ -148,10 +164,13 @@ export default function AurionOpenWorldRuntime() {
     return () => container.removeEventListener("click", handleClick);
   }, [inspectionMode, setCurrentTarget]);
 
+  const isOfflineTestbed = Boolean(activation?.isOfflineTestbed) || (typeof window !== "undefined" && (window.location.search.includes("dev_offline=1") || window.location.search.includes("offline_test=true")));
+  const effectiveUserId = user?.id ?? (isOfflineTestbed ? 1 : null);
+
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
-  const selectedCharacterUrl = characterAppearance.data?.storageUrl ?? confirmedSelection?.storageUrl ?? null;
+  const selectedCharacterUrl = characterAppearance.data?.storageUrl ?? confirmedSelection?.storageUrl ?? (isOfflineTestbed ? "offline-testbed-procedural" : null);
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
   const controlsQuery = trpc.player.ui.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated, staleTime: 15_000, refetchInterval: 10_000 });
   const controlsRef = useRef<ControlSettings | null>(null);
@@ -161,8 +180,11 @@ export default function AurionOpenWorldRuntime() {
   const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
     if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
     if (!automated) window.dispatchEvent(new CustomEvent(WORLD_DEMONSTRATION_EVENT, { detail: { kind: "action", command } }));
+    if (isOfflineTestbed) {
+      return { confirmed: true, completed: true, message: `Offline Testbed: ${command}` };
+    }
     return requestConfirmedAction(command);
-  }, []);
+  }, [isOfflineTestbed]);
   const requestHotbarAction = useCallback((command: AurionGameplayCommand) => {
     const mapped = /^[1-5]$/.test(command) ? controlsRef.current?.hotbar[Number(command) - 1] : command;
     if (mapped) void requestAuthoritativeAction(mapped);
@@ -268,6 +290,7 @@ export default function AurionOpenWorldRuntime() {
       virtualInputRef.current = { forward: 0, right: 0 };
       zoneConnectedRef.current = false;
       setZoneStatus("closed");
+      console.error("[Aurion OpenWorld Runtime Error]", error);
       const recoverable = error instanceof Error && ["WEBGL_CONTEXT_LOST", "WEBGPU_DEVICE_LOST", "WEBGPU_RENDER_ERROR"].includes(error.message);
       if (recoverable && recoveryAttempts.current < 2) {
         recoveryAttempts.current++;
@@ -280,7 +303,7 @@ export default function AurionOpenWorldRuntime() {
     void (async () => { try {
       // A replacement generation obtains the current authenticated world context;
       // it never advances the previous local projection to invent a recovery state.
-      const world = recoveryEpoch > 0
+      const world = (recoveryEpoch > 0 && !isOfflineTestbed)
         ? (await rpcUtils.gameplay.openWorld.fetch(undefined, { staleTime: 0 })).globalWorld
         : activation.globalWorld;
       if (disposed) return;
@@ -296,7 +319,7 @@ export default function AurionOpenWorldRuntime() {
       engineRef.current = engine;
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
-        center => rpcUtils.worldAssets.regionV2.fetch(center),
+        center => isOfflineTestbed ? Promise.resolve({ center, revision: "offline", placements: [] }) : rpcUtils.worldAssets.regionV2.fetch(center),
         evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); }, engine.renderer);
       engine.onProjectionTick = delta => {
         serviceNpcRef.current?.update(delta);
@@ -308,13 +331,15 @@ export default function AurionOpenWorldRuntime() {
         requestAction: requestHotbarAction,
         requestMount: requestAuthoritativeMount,
       }, { worldSeed: world.worldSeed, epoch: world.epoch });
-      motionRef.current = new ConfirmedPlayerMotion(engine.player, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
-      remotePresence = new RemotePresenceProjection(engine.scene, user!.id, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
+      if (!isOfflineTestbed) {
+        motionRef.current = new ConfirmedPlayerMotion(engine.player, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
+      }
+      remotePresence = new RemotePresenceProjection(engine.scene, effectiveUserId ?? 1, (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z));
       remotePresenceRef.current = remotePresence;
       capture = new VisibleCanvasCapture(() => {
         if (!engine || disposed || engineRef.current !== engine) throw new Error("RETIRED_RENDERER");
         return engine.renderer.domElement;
-      }, () => { const session = loadCompanionSession(); return !disposed && zoneConnectedRef.current && session?.userId === user?.id && session?.online === true && session?.mode === "learning"; }, "renderer");
+      }, () => { const session = loadCompanionSession(); return !disposed && zoneConnectedRef.current && session?.userId === (effectiveUserId ?? 1) && session?.online === true && session?.mode === "learning"; }, "renderer");
       let evidenceFrames = 0;
       engine.onFrameRendered = () => {
         capture?.onRenderedFrame();
@@ -388,10 +413,30 @@ export default function AurionOpenWorldRuntime() {
   }, [activation, selectedCharacterUrl, catalog?.revision, worldSnapshot.data?.serviceNpcs, readyGeneration]);
 
   useEffect(() => {
-    if (!readyGeneration || !activation || !selectedCharacterUrl || webglError || !engineRef.current || !isAuthenticated || !user?.id) return;
+    if (!readyGeneration || !activation || !selectedCharacterUrl || webglError || !engineRef.current) return;
     const boundEngine = engineRef.current;
     let disposed = false;
     const current = () => !disposed && engineRef.current === boundEngine;
+
+    if (activation.isOfflineTestbed) {
+      setZoneStatus("connected");
+      zoneConnectedRef.current = true;
+      soundSynth.changeAmbient(aurionAssets.audio.plains, 0.4);
+      boundEngine.start();
+      const posX = boundEngine.player?.position?.x ?? 0;
+      const posZ = boundEngine.player?.position?.z ?? 0;
+      const initialPos = { x: Math.round(posX * 1000), z: Math.round(posZ * 1000) };
+      setConfirmedPosition(initialPos);
+      window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", {
+        detail: { userId: effectiveUserId ?? 1, position: initialPos }
+      }));
+      return () => {
+        disposed = true;
+        zoneConnectedRef.current = false;
+      };
+    }
+
+    if (!isAuthenticated || !user?.id) return;
     let client: ZoneMovementClient | undefined;
     let retryTimer: number | undefined;
     let fatalReject = false;
@@ -482,7 +527,7 @@ export default function AurionOpenWorldRuntime() {
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
-  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch, readyGeneration]);
+  }, [activation, selectedCharacterUrl, webglError, isAuthenticated, user?.id, zoneRetryEpoch, readyGeneration, effectiveUserId]);
 
   const sendAuthoritativeMovement = useCallback((input: ZoneMovementInput) => {
     zoneClientRef.current?.sendMovement(input);
@@ -630,7 +675,7 @@ export default function AurionOpenWorldRuntime() {
       <div ref={containerRef} className="xaurion-runtime__viewport" id="three-viewport" data-inspection-mode={inspectionMode} />
       <div className="xaurion-runtime__bridge-status" aria-live="polite">
         <span className="xaurion-connection-dot" data-connected={zoneStatus === "connected"} />
-        <span>{webglError ? "Angehalten" : zoneStatus === "connected" ? worldLabel : zoneStatus === "connecting" ? "Verbindung wird hergestellt" : "Verbindung unterbrochen"}</span>
+        <span>{webglError ? "Angehalten" : zoneStatus === "connected" ? (activation.isOfflineTestbed ? `${worldLabel} (Offline)` : worldLabel) : zoneStatus === "connecting" ? "Verbindung wird hergestellt" : "Verbindung unterbrochen"}</span>
         <b className="sr-only">{zoneStatus === "connected" ? "BEWEGUNG VERBUNDEN" : "NICHT VERBUNDEN"}</b>
       </div>
       <button className="xaurion-runtime__return" type="button" onClick={() => window.dispatchEvent(new Event("aurion:xaurion-return-request"))}>
@@ -658,9 +703,9 @@ export default function AurionOpenWorldRuntime() {
 
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
-      {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
+      {worldAssetsFailed && !activation.isOfflineTestbed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
-      {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
+      {!webglError && effectiveUserId && <AurionAuthorityHud userId={effectiveUserId} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
       <AdminGlbMenu />
     </section>
   );

@@ -1,38 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AX1_GAME_SOURCE_REVISION, AX1_MOB_SOURCE_GIT_BLOB_SHA, AX1_STARTER_BLADE_ATTACK_BONUS, AX1_STARTER_BLADE_MAX_HP_BONUS, AX1_STARTER_SOURCE_GIT_BLOB_SHA, ax1MobCombatProjection, ax1PlayerBaseMaxHealth } from "./ax1CombatProjection";
-import { createARESeed, SeededARERng, WASD_ARE_DETERMINISM_SOURCE_GIT_BLOB_SHA, WASD_GAMEPLAY_SOURCE_REVISION } from "./wasdAREDeterminism";
-import type { CombatDeltaAction, CombatDeltaEntityView, CombatEntropy } from "./wasdCombatDeltaProtocol";
+import { WASD_ARE_DETERMINISM_SOURCE_GIT_BLOB_SHA, WASD_GAMEPLAY_SOURCE_REVISION } from "./wasdAREDeterminism";
 import { WASD_COMBAT_DELTA_SOURCE_GIT_BLOB_SHA, resolveCombatDelta, reduceCombatDelta } from "./wasdCombatDeltaProtocol";
 import { regenerateWasdStamina, WASD_STAMINA_SOURCE_GIT_BLOB_SHA } from "./wasdStaminaProtocol";
-
-function parityEntityId(entity: CombatDeltaEntityView): string {
-  return String(entity.id ?? entity.playerId ?? entity.npcId ?? entity.identity?.npcId ?? entity.name ?? "entity");
-}
-
-function historicalParityEntropy(
-  action: CombatDeltaAction,
-  attacker: CombatDeltaEntityView,
-  defender: CombatDeltaEntityView,
-  tick: number,
-  sequence: number,
-  weaponBonus: number,
-): CombatEntropy {
-  const rng = new SeededARERng(createARESeed([
-    "combat_delta",
-    action,
-    parityEntityId(attacker),
-    parityEntityId(defender),
-    tick,
-    sequence,
-    weaponBonus,
-    attacker.stamina ?? 0,
-    defender.health ?? 0,
-  ]));
-  const hitU32 = Math.floor(rng.nextFloat() * 0x1_0000_0000);
-  const critU32 = Math.floor(rng.nextFloat() * 0x1_0000_0000);
-  const damageU32 = rng.fork("damage").nextInt(4);
-  return { hitU32, critU32, damageU32 };
-}
 
 describe("pinned AX1/WASD live combat contract",()=>{
   it("binds the exact source revisions and blobs used by the migration",()=>{
@@ -48,16 +18,14 @@ describe("pinned AX1/WASD live combat contract",()=>{
   it("matches the canonical WASD delta-resolver test vector",()=>{
     const attacker={id:"p1",stamina:50,skills:{combat:{level:50}}};
     const defender={id:"m1",health:100,skills:{combat:{level:1}}};
-    const delta=resolveCombatDelta("melee",attacker,defender,{tick:10,sequence:1,weaponBonus:5,entropy:historicalParityEntropy("melee",attacker,defender,10,1,5)});
+    const delta=resolveCombatDelta("melee",attacker,defender,{tick:10,sequence:1,weaponBonus:5});
     expect(delta.result).toEqual({success:true,hit:true,damage:62,crit:false,killed:false,defenderHealth:38});
     expect(delta.staminaDelta).toBe(-8);
     expect(reduceCombatDelta(attacker,defender,delta)).toEqual({attacker:{id:"p1",stamina:42},defender:{id:"m1",health:38}});
   });
 
   it("makes a starter attack independent from quest state",()=>{
-    const attacker={id:"player:1",stamina:100,skills:{combat:{level:1}}};
-    const defender={id:"mob_1",health:225,skills:{combat:{level:1}}};
-    const delta=resolveCombatDelta("melee",attacker,defender,{tick:7,sequence:1,weaponBonus:AX1_STARTER_BLADE_ATTACK_BONUS,entropy:historicalParityEntropy("melee",attacker,defender,7,1,AX1_STARTER_BLADE_ATTACK_BONUS)});
+    const delta=resolveCombatDelta("melee",{id:"player:1",stamina:100,skills:{combat:{level:1}}},{id:"mob_1",health:225,skills:{combat:{level:1}}},{tick:7,sequence:1,weaponBonus:AX1_STARTER_BLADE_ATTACK_BONUS});
     expect(delta.result).toEqual({success:true,hit:true,damage:23,crit:false,killed:false,defenderHealth:202});
     expect(Object.keys(delta)).not.toContain("quest");
   });

@@ -113,7 +113,7 @@ export class MMOEngine {
 
   // 3rd-Person Orbit & Follow Camera
   public cameraDistance: number = 10.5;
-  public cameraHeight: number = 4.2;
+  public cameraHeight: number = 2.8;
   public cameraYaw: number = 0;
   public cameraPitch: number = 0.28;
   private isOrbitingCamera: boolean = false;
@@ -729,7 +729,7 @@ export class MMOEngine {
     if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     e.preventDefault();
     this.cameraDistance = Math.max(7.0, Math.min(28.0, this.cameraDistance + e.deltaY * 0.015));
-    this.cameraHeight = this.cameraDistance * 0.55;
+    this.cameraHeight = Math.max(1.8, this.cameraDistance * 0.28);
   };
 
   private handleTouchStart = (e: TouchEvent) => {
@@ -766,7 +766,7 @@ export class MMOEngine {
       if (this.lastPinchDistance > 0) {
         const diff = this.lastPinchDistance - distance;
         this.cameraDistance = Math.max(6.0, Math.min(32.0, this.cameraDistance + diff * 0.04));
-        this.cameraHeight = this.cameraDistance * 0.55;
+        this.cameraHeight = Math.max(1.8, this.cameraDistance * 0.28);
       }
       this.lastPinchDistance = distance;
     }
@@ -1272,6 +1272,8 @@ export class MMOEngine {
     size: FloatingCombatText['size'] = 'md',
     isCrit: boolean = false
   ) {
+    const maxLifespan = isCrit ? 1.6 : 1.3;
+    const initialVy = isCrit ? 2.4 : 1.6;
     this.floatingTexts.push({
       id: `ftext_${++this.textIdCounter}`,
       text,
@@ -1280,8 +1282,10 @@ export class MMOEngine {
       color,
       size,
       opacity: 1.0,
-      lifespan: 1.4,
-      vy: 1.2,
+      lifespan: maxLifespan,
+      maxLifespan,
+      vy: initialVy,
+      scale: isCrit ? 1.3 : 1.1,
       isCrit,
     });
   }
@@ -1383,14 +1387,42 @@ export class MMOEngine {
       }
     });
 
-    // 4. Update 3rd Person Orbit / Follow Camera
+    // 4. Update 3rd Person Orbit / Follow Camera with Spring-Arm (Terrain & Occlusion Protection)
+    // When the player is moving and the user is not actively orbiting manually,
+    // gently track behind the player's movement direction for seamless forward navigation.
+    if (this.player.isMoving && !this.isOrbitingCamera) {
+      const targetYaw = this.player.facingAngle - Math.PI;
+      let yawDiff = targetYaw - this.cameraYaw;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      this.cameraYaw += yawDiff * Math.min(1.0, delta * 3.5);
+    }
+
     const horizDist = this.cameraDistance * Math.cos(this.cameraPitch);
     const vertDist = this.cameraHeight + this.cameraDistance * Math.sin(this.cameraPitch);
-    const targetCamX = this.player.position.x + Math.sin(this.cameraYaw) * horizDist;
-    const targetCamY = this.player.position.y + vertDist;
-    const targetCamZ = this.player.position.z + Math.cos(this.cameraYaw) * horizDist;
+    let targetCamX = this.player.position.x + Math.sin(this.cameraYaw) * horizDist;
+    let targetCamY = this.player.position.y + vertDist;
+    let targetCamZ = this.player.position.z + Math.cos(this.cameraYaw) * horizDist;
 
-    this.camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), delta * 8.0);
+    // Spring-Arm: check terrain height at target camera position & along the camera boom
+    if (this.landscape?.chunkManager) {
+      const terrainAtCam = this.landscape.chunkManager.getElevationAt(targetCamX, targetCamZ);
+      const minCamY = terrainAtCam + 1.2;
+      if (targetCamY < minCamY) {
+        targetCamY = minCamY;
+      }
+
+      // Sample midpoint along camera boom to prevent clipping through rising crests/hills
+      const midX = (this.player.position.x + targetCamX) * 0.5;
+      const midZ = (this.player.position.z + targetCamZ) * 0.5;
+      const midTerrain = this.landscape.chunkManager.getElevationAt(midX, midZ);
+      const midExpectedY = (this.player.position.y + 1.6 + targetCamY) * 0.5;
+      if (midExpectedY < midTerrain + 0.8) {
+        targetCamY = Math.max(targetCamY, midTerrain + 1.4);
+      }
+    }
+
+    this.camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), Math.min(1.0, delta * 8.0));
     this.camera.lookAt(this.player.position.x, this.player.position.y + 1.6, this.player.position.z);
 
     // 5. Update Mobs AI
@@ -1451,11 +1483,32 @@ export class MMOEngine {
     // 9. Update Simulated Players
     this.simPlayers.update(delta);
 
-    // 10. Update Floating Combat Texts
+    // 10. Update Floating Combat Texts with parabolic easing and pop-in scale
     this.floatingTexts.forEach((t) => {
-      t.y += t.vy * delta;
+      const maxLife = t.maxLifespan || 1.3;
       t.lifespan -= delta;
-      t.opacity = Math.max(0, t.lifespan / 1.4);
+      // Parabolic upward deceleration
+      t.vy = Math.max(0.2, t.vy - delta * 2.0);
+      t.y += t.vy * delta;
+      
+      const elapsed = Math.max(0, maxLife - t.lifespan);
+      const progress = Math.min(1.0, elapsed / maxLife);
+
+      // Smooth pop-in scale during first 15% of lifetime, then gentle settle
+      if (progress < 0.15) {
+        const pop = progress / 0.15;
+        t.scale = (t.isCrit ? 1.35 : 1.15) * Math.sin(pop * (Math.PI / 2));
+      } else {
+        t.scale = THREE.MathUtils.lerp(t.scale ?? 1.0, 1.0, delta * 5.0);
+      }
+
+      // Crisp opacity during first 60%, then smooth quad fade-out
+      if (progress < 0.6) {
+        t.opacity = 1.0;
+      } else {
+        const fadeProgress = (progress - 0.6) / 0.4;
+        t.opacity = Math.max(0, 1.0 - fadeProgress * fadeProgress);
+      }
     });
     this.floatingTexts = this.floatingTexts.filter((t) => t.lifespan > 0);
 

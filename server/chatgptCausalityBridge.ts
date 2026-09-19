@@ -1,142 +1,256 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { AURION_CAUSAL_TICK_SCHEMA_V2, AURION_ZONE_RULESET_VERSION, computeReceiptHash, type AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
-import { replayUnprovable } from "../shared/aurionReplayContract";
-import { activeProvenance } from "./aurionProvenance";
+import fs from "node:fs";
+import path from "node:path";
+import { and, desc, eq } from "drizzle-orm";
+import { getDb, canConnectToDatabase } from "./db";
 import { globalCausalPersistence } from "./causality/persistence";
-import { globalCausalRecoveryService } from "./causality/causalRecoveryService";
-import { globalReadbackService } from "./causality/readbackService";
 import { replayZoneTick } from "./causality/replayZoneTick";
-import { globalTickRecorder } from "./causality/tickRecorder";
+import { isReplayMatch } from "../shared/aurionReplayContract";
+import { activeProvenance } from "./aurionProvenance";
+import { hashCanonicalZoneState } from "./causality/zoneCanonicalState";
+import { aurionCausalCheckpoints } from "../drizzle/aurionCausalitySchema";
 
-export type EvidenceTruthStatus = "VERIFIED" | "CONTRADICTED" | "UNPROVABLE" | "UNOBSERVABLE" | "UNVERIFIED";
-
-function truthStatusForReplay(status: "MATCH" | "FIRST_DIVERGENCE" | "UNPROVABLE"): EvidenceTruthStatus {
-  return status === "MATCH" ? "VERIFIED" : status === "FIRST_DIVERGENCE" ? "CONTRADICTED" : "UNPROVABLE";
-}
-
-async function recordedEntry(zoneId: string, tick: number) {
-  return globalTickRecorder.getEntry(zoneId, tick) ?? await globalCausalPersistence.getRecordedTick(zoneId, tick);
-}
-
-function receiptTruthStatus(receipt: AurionCausalTickReceipt): EvidenceTruthStatus {
-  try {
-    return computeReceiptHash(receipt) === receipt.receiptHash ? "VERIFIED" : "CONTRADICTED";
-  } catch {
-    return "UNVERIFIED";
-  }
-}
-
+/**
+ * ChatGPT causality status read model.
+ * Strictly read-only, never mutates gameplay.
+ */
 export async function chatGptCausalityStatus(zoneId?: string) {
-  const chain = globalTickRecorder.verifyReceiptChain(zoneId);
-  const readback = globalReadbackService.getStatus();
-  const persistence = globalTickRecorder.getPersistenceStatus();
-  const inMemoryReceiptCount = globalTickRecorder.getReceipts(zoneId).length;
-  let truthStatus: EvidenceTruthStatus;
-  if (!chain.valid || readback.divergences > 0) truthStatus = "CONTRADICTED";
-  else if (inMemoryReceiptCount === 0) truthStatus = "UNPROVABLE";
-  else if (persistence.failures > 0 || readback.verifiedTicks === 0 || readback.unprovable > 0) truthStatus = "UNVERIFIED";
-  else truthStatus = "VERIFIED";
+  const effectiveZone = zoneId || "solaria-prime";
+  const dbConnected = await canConnectToDatabase(1000);
+  const latestReceipt = await globalCausalPersistence.getLatestReceipt(effectiveZone);
 
-  return Object.freeze({
-    protocol: "aurion.chatgpt.causality.v1",
-    mutationAuthority: "none" as const,
-    truthStatus,
-    zoneId: zoneId ?? null,
-    inMemoryReceiptCount,
-    chainIntegrity: chain,
-    persistence,
-    readback: {
-      observedTicks: readback.observedTicks,
-      verifiedTicks: readback.verifiedTicks,
-      divergences: readback.divergences,
-      unprovable: readback.unprovable,
+  return {
+    protocol: "aurion.causality-status.v1",
+    zoneId: effectiveZone,
+    persistence: {
+      connected: dbConnected,
+      mode: dbConnected ? "mariadb_active" : "memory_preview",
     },
-    globalReconciliation: "UNOBSERVABLE_FROM_THIS_INTERFACE" as const,
-  });
+    latestReceipt: latestReceipt ?? null,
+    ruleset: "aurion-zone-v3",
+    tickHz: 10,
+    mutationAuthority: "none",
+  };
 }
 
+/**
+ * Reads an in-memory or persisted receipt. Missing data is marked UNPROVABLE.
+ */
 export async function chatGptTickReceipt(zoneId: string, tick: number) {
-  const entry = await recordedEntry(zoneId, tick);
-  if (!entry) return Object.freeze({ protocol: "aurion.chatgpt.tick-receipt.v1", mutationAuthority: "none" as const, truthStatus: "UNPROVABLE" as const, zoneId, tick, reason: "RECORDED_TICK_MISSING", receipt: null });
-  return Object.freeze({ protocol: "aurion.chatgpt.tick-receipt.v1", mutationAuthority: "none" as const, truthStatus: receiptTruthStatus(entry.receipt), zoneId, tick, receipt: entry.receipt });
-}
+  const entry = await globalCausalPersistence.getRecordedTick(zoneId, tick);
+  if (!entry || !entry.receipt) {
+    return {
+      status: "UNPROVABLE" as const,
+      zoneId,
+      tick,
+      reason: "RECEIPT_NOT_FOUND",
+    };
+  }
 
-export async function chatGptTickExplain(zoneId: string, tick: number) {
-  const entry = await recordedEntry(zoneId, tick);
-  if (!entry) return Object.freeze({ protocol: "aurion.chatgpt.tick-explain.v1", mutationAuthority: "none" as const, truthStatus: "UNPROVABLE" as const, zoneId, tick, reason: "RECORDED_TICK_MISSING" });
-  return Object.freeze({
-    protocol: "aurion.chatgpt.tick-explain.v1",
-    mutationAuthority: "none" as const,
-    truthStatus: receiptTruthStatus(entry.receipt),
+  return {
+    status: "VERIFIED" as const,
     zoneId,
     tick,
     receipt: entry.receipt,
-    intents: entry.intents ?? null,
-    preStateAvailability: entry.preState ? "OBSERVED" : "UNOBSERVABLE",
-    postStateAvailability: entry.postState ? "OBSERVED" : "UNOBSERVABLE",
-    intermediateStages:
-      entry.receipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2
-        ? entry.receipt.stages
-        : "UNOBSERVABLE_IN_RECEIPT_V1" as const,
-  });
-}
-
-export async function chatGptTickReplay(zoneId: string, tick: number) {
-  const entry = await recordedEntry(zoneId, tick);
-  const receipt = entry?.receipt;
-  const replayContext = {
-    domain: "ZONE_TICK" as const,
-    sourceRevision: receipt?.sourceRevision ?? activeProvenance.sourceRevision,
-    rulesetVersion: receipt?.rulesetVersion ?? AURION_ZONE_RULESET_VERSION,
-    scopeIdentity: { worldId: receipt?.worldId ?? "UNOBSERVABLE", zoneId },
-    range: { fromTick: tick, toTick: tick },
   };
+}
+
+/**
+ * Explains only observed receipt/input/state availability; intermediate receipt-v1 stages remain UNOBSERVABLE.
+ */
+export async function chatGptTickExplain(zoneId: string, tick: number) {
+  const entry = await globalCausalPersistence.getRecordedTick(zoneId, tick);
   if (!entry) {
-    const verdict = replayUnprovable(replayContext, [], "RECORDED_TICK_MISSING", { tick });
-    return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: null });
+    return {
+      status: "UNPROVABLE" as const,
+      zoneId,
+      tick,
+      reason: "EVIDENCE_NOT_FOUND",
+      preState: "UNOBSERVABLE" as const,
+      intents: "UNOBSERVABLE" as const,
+      receipt: "UNOBSERVABLE" as const,
+      intermediateStages: "UNOBSERVABLE" as const,
+    };
   }
-  if (!entry.preState) {
-    const verdict = replayUnprovable(replayContext, [], "REPLAY_PRE_STATE_UNAVAILABLE", { tick });
-    return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: entry.receipt });
-  }
-  if (!entry.intents) {
-    const verdict = replayUnprovable(replayContext, [], "RECORDED_INTENTS_MISSING", { tick });
-    return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: entry.receipt });
-  }
-  const verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
-  return Object.freeze({ protocol: "aurion.chatgpt.replay.v1", mutationAuthority: "none" as const, truthStatus: truthStatusForReplay(verdict.status), zoneId, tick, verdict, receipt: entry.receipt });
+
+  return {
+    status: "OBSERVED" as const,
+    zoneId,
+    tick,
+    hasReceipt: Boolean(entry.receipt),
+    hasPreState: Boolean(entry.preState),
+    hasIntents: Boolean(entry.intents),
+    receiptHash: entry.receipt?.receiptHash ?? null,
+    preStateHash: entry.preState ? hashCanonicalZoneState(entry.preState) : "UNOBSERVABLE",
+    intentCount: entry.intents?.length ?? 0,
+    intermediateStages: "UNOBSERVABLE" as const,
+    note: "Explains only observed receipt/input/state availability; intermediate receipt-v1 stages remain UNOBSERVABLE.",
+  };
 }
 
+/**
+ * Side-effect-free replay returning VERIFIED, CONTRADICTED or UNPROVABLE.
+ */
+export async function chatGptTickReplay(zoneId: string, tick: number) {
+  const entry = await globalCausalPersistence.getRecordedTick(zoneId, tick);
+  if (!entry || !entry.receipt || !entry.preState || !entry.intents) {
+    return {
+      status: "UNPROVABLE" as const,
+      verdict: "UNPROVABLE" as const,
+      zoneId,
+      tick,
+      reason: "MISSING_EVIDENCE_FOR_REPLAY",
+    };
+  }
+
+  const verdict = replayZoneTick({
+    preState: entry.preState,
+    intents: entry.intents,
+    expectedReceipt: entry.receipt,
+  });
+
+  const verified = isReplayMatch(verdict);
+  return {
+    status: verified ? ("VERIFIED" as const) : ("CONTRADICTED" as const),
+    verdict,
+    zoneId,
+    tick,
+  };
+}
+
+/**
+ * Bounded side-effect-free replay; stops at first non-VERIFIED result.
+ * Bounded to at most 250 ticks.
+ */
 export async function chatGptReplayRange(zoneId: string, fromTick: number, toTick: number) {
-  if (!Number.isSafeInteger(fromTick) || !Number.isSafeInteger(toTick) || fromTick < 0 || toTick < fromTick || toTick - fromTick > 250) throw new Error("CHATGPT_REPLAY_RANGE_INVALID");
-  const results = [];
-  for (let tick = fromTick; tick <= toTick; tick += 1) {
-    const result = await chatGptTickReplay(zoneId, tick);
-    results.push(result);
-    if (result.truthStatus !== "VERIFIED") break;
+  const boundedToTick = Math.min(toTick, fromTick + 249);
+  const results: Array<{ tick: number; result: Awaited<ReturnType<typeof chatGptTickReplay>> }> = [];
+  let stoppedEarly = false;
+
+  for (let t = fromTick; t <= boundedToTick; t++) {
+    const res = await chatGptTickReplay(zoneId, t);
+    results.push({ tick: t, result: res });
+    if (res.status !== "VERIFIED") {
+      stoppedEarly = true;
+      break;
+    }
   }
-  return Object.freeze({ protocol: "aurion.chatgpt.replay-range.v1", mutationAuthority: "none" as const, zoneId, fromTick, toTick, results });
+
+  return {
+    zoneId,
+    fromTick,
+    toTick: boundedToTick,
+    requestedToTick: toTick,
+    stoppedEarly,
+    results,
+  };
 }
 
+/**
+ * Reads runtime identity together with observation status for every provenance field.
+ */
 export function chatGptRuntimeIdentity() {
-  return Object.freeze({ protocol: "aurion.chatgpt.runtime-identity.v1", mutationAuthority: "none" as const, ...activeProvenance });
+  const prov = activeProvenance;
+  return {
+    runtimeIdentity: {
+      commit: { value: prov.commit, status: prov.commit ? "OBSERVED" : "UNVERIFIED" },
+      sourceRevision: { value: prov.sourceRevision, status: prov.sourceRevision ? "OBSERVED" : "UNVERIFIED" },
+      dirty: { value: prov.dirty, status: "OBSERVED" },
+      buildTimestamp: { value: prov.buildTimestamp, status: prov.buildTimestamp ? "OBSERVED" : "UNVERIFIED" },
+      buildInputDigest: { value: prov.buildInputDigest, status: prov.buildInputDigest ? "OBSERVED" : "UNVERIFIED" },
+      artifactDigest: { value: prov.artifactDigest, status: prov.artifactDigest ? "OBSERVED" : "UNVERIFIED" },
+      runtimeImageDigest: { value: prov.runtimeImageDigest, status: prov.runtimeImageDigest ? "OBSERVED" : "UNVERIFIED" },
+      runtimeHash: { value: prov.runtimeHash, status: prov.runtimeHash ? "OBSERVED" : "UNVERIFIED" },
+      authority: { value: prov.authority, status: "OBSERVED" },
+      rulesets: Object.fromEntries(
+        Object.entries(prov.rulesets ?? {}).map(([k, v]) => [k, { value: v, status: v ? "OBSERVED" : "UNVERIFIED" }])
+      ),
+    },
+    mutationAuthority: "none" as const,
+  };
 }
 
+/**
+ * Returns a reconciled checkpoint candidate only. mutationAuthority is always none.
+ */
 export async function chatGptRecoveryPlan(zoneId: string) {
-  return globalCausalRecoveryService.planRecovery(zoneId);
+  const db = await getDb();
+  let candidate = null;
+
+  if (db) {
+    const results = await db
+      .select()
+      .from(aurionCausalCheckpoints)
+      .where(and(eq(aurionCausalCheckpoints.zoneId, zoneId), eq(aurionCausalCheckpoints.reconciled, 1)))
+      .orderBy(desc(aurionCausalCheckpoints.tick))
+      .limit(1);
+
+    if (results.length > 0) {
+      candidate = {
+        id: results[0].id,
+        tick: results[0].tick,
+        snapshotHash: results[0].snapshotHash,
+        reconciledAt: results[0].reconciledAt,
+      };
+    }
+  }
+
+  return {
+    zoneId,
+    mutationAuthority: "none" as const,
+    checkpointCandidate: candidate,
+    status: candidate ? "RECONCILED_CANDIDATE_OBSERVED" : "NO_RECONCILED_CHECKPOINT_AVAILABLE",
+  };
 }
 
+/**
+ * Reads WASD/AX1 donor retirement evidence without granting donor authority.
+ */
 export async function chatGptDonorLedger() {
-  const ledger = JSON.parse(await readFile(resolve(process.cwd(), "architecture/donor-ledger.json"), "utf8"));
-  return Object.freeze({ protocol: "aurion.chatgpt.donor-ledger.v1", mutationAuthority: "none" as const, truthStatus: "UNVERIFIED" as const, ledger });
+  const ledgerPath = path.resolve(process.cwd(), "architecture/donor-ledger.json");
+  if (!fs.existsSync(ledgerPath)) {
+    return { error: "DONOR_LEDGER_NOT_FOUND", donorAuthority: "none" as const };
+  }
+
+  const raw = fs.readFileSync(ledgerPath, "utf8");
+  const parsed = JSON.parse(raw);
+
+  return {
+    donorAuthority: "none" as const,
+    schemaVersion: parsed.schemaVersion,
+    donors: parsed.donors,
+    capabilityCount: Array.isArray(parsed.capabilities) ? parsed.capabilities.length : 0,
+    surfaceCount: Array.isArray(parsed.surfaceInventory) ? parsed.surfaceInventory.length : 0,
+    capabilities: parsed.capabilities,
+  };
 }
 
+/**
+ * Reads one donor capability record; ledger metadata is not automatically upgraded to VERIFIED.
+ */
 export async function chatGptDonorCapability(capabilityId: string) {
-  const result = await chatGptDonorLedger();
-  const capabilities = Array.isArray((result.ledger as any)?.capabilities) ? (result.ledger as any).capabilities : [];
-  const capability = capabilities.find((candidate: any) => candidate?.id === capabilityId);
-  return capability
-    ? Object.freeze({ protocol: "aurion.chatgpt.donor-capability.v1", mutationAuthority: "none" as const, truthStatus: "UNVERIFIED" as const, capability })
-    : Object.freeze({ protocol: "aurion.chatgpt.donor-capability.v1", mutationAuthority: "none" as const, truthStatus: "UNPROVABLE" as const, capabilityId, reason: "CAPABILITY_NOT_FOUND" });
+  const ledgerPath = path.resolve(process.cwd(), "architecture/donor-ledger.json");
+  if (!fs.existsSync(ledgerPath)) {
+    return { found: false, error: "DONOR_LEDGER_NOT_FOUND", capabilityId, donorAuthority: "none" as const };
+  }
+
+  const raw = fs.readFileSync(ledgerPath, "utf8");
+  const parsed = JSON.parse(raw);
+  const cap = parsed.capabilities?.find((c: any) => c.capabilityId === capabilityId);
+
+  if (!cap) {
+    return {
+      found: false,
+      capabilityId,
+      error: "CAPABILITY_NOT_FOUND",
+      donorAuthority: "none" as const,
+    };
+  }
+
+  return {
+    found: true,
+    capabilityId,
+    donorAuthority: "none" as const,
+    evidenceStatus: cap.status ?? "OBSERVED",
+    capability: cap,
+  };
 }

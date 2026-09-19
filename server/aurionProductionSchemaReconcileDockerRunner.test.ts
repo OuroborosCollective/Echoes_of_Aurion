@@ -55,43 +55,86 @@ function refreshArtifactMetadata(directory: string) {
 
 function refreshRuntimeArtifactMetadata(directory: string) {
   const files = listFiles(directory)
-    .filter(relative => relative !== "manifest.json" && relative !== "checksums.sha256")
+    .filter(
+      relative =>
+        relative !== "manifest.json" && relative !== "checksums.sha256"
+    )
     .sort();
   const manifest = {
     schemaVersion: 1,
     recordType: "aurion_traefik_runtime_artifact",
     revision: testRevision,
-    files: Object.fromEntries(files.map(relative => [relative, digest(path.join(directory, relative))])),
+    files: Object.fromEntries(
+      files.map(relative => [relative, digest(path.join(directory, relative))])
+    ),
   };
-  fs.writeFileSync(path.join(directory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(
+    path.join(directory, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`
+  );
   const checksumFiles = [...files, "manifest.json"].sort();
   fs.writeFileSync(
     path.join(directory, "checksums.sha256"),
-    `${checksumFiles.map(relative => `${digest(path.join(directory, relative))}  ${relative}`).join("\n")}\n`,
+    `${checksumFiles.map(relative => `${digest(path.join(directory, relative))}  ${relative}`).join("\n")}\n`
   );
 }
 
 function makeRuntimeReleaseArtifact(directory: string) {
-  const runtime = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-bootstrap-runtime-"));
+  const runtime = fs.mkdtempSync(
+    path.join(os.tmpdir(), "aurion-bootstrap-runtime-")
+  );
   try {
     fs.mkdirSync(path.join(runtime, "deploy"), { recursive: true });
     fs.mkdirSync(path.join(runtime, "dist"), { recursive: true });
     fs.mkdirSync(path.join(runtime, "patches"), { recursive: true });
     fs.writeFileSync(path.join(runtime, "Dockerfile"), "FROM scratch\n");
-    fs.writeFileSync(path.join(runtime, "docker-compose.traefik.yml"), "services: {}\n");
-    fs.writeFileSync(path.join(runtime, "deploy/promote-aurion-zone-runtime.sh"), "#!/usr/bin/env bash\n");
-    fs.writeFileSync(path.join(runtime, "deploy/aurion-traefik-runtime.environment.template"), "AURION_ENV_FILE=/opt/echoes-of-aurion/.env.production\n");
-    fs.writeFileSync(path.join(runtime, "dist/.aurion-runtime-build.json"), `${JSON.stringify({ revision: testRevision, artifact: "aurion-runtime" })}\n`);
+    fs.writeFileSync(
+      path.join(runtime, "docker-compose.traefik.yml"),
+      "services: {}\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "deploy/promote-aurion-zone-runtime.sh"),
+      "#!/usr/bin/env bash\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "deploy/aurion-traefik-runtime.environment.template"),
+      "AURION_ENV_FILE=/opt/echoes-of-aurion/.env.production\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "dist/.aurion-runtime-build.json"),
+      `${JSON.stringify({ revision: testRevision, artifact: "aurion-runtime" })}\n`
+    );
     fs.writeFileSync(
       path.join(runtime, "package.json"),
-      `${JSON.stringify({ name: "bootstrap-fixture", pnpm: { patchedDependencies: { "wouter@3.7.1": "patches/wouter@3.7.1.patch" } } }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          name: "bootstrap-fixture",
+          pnpm: {
+            patchedDependencies: {
+              "wouter@3.7.1": "patches/wouter@3.7.1.patch",
+            },
+          },
+        },
+        null,
+        2
+      )}\n`
     );
-    fs.writeFileSync(path.join(runtime, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n\npatchedDependencies:\n  wouter@3.7.1:\n    hash: 4e16e6ff3fde7d6c1024d3e0c8605dc9eb6afb690d0d49958c2f449091813072\n    path: patches/wouter@3.7.1.patch\n");
-    fs.writeFileSync(path.join(runtime, "patches/wouter@3.7.1.patch"), "diff --git a/index.js b/index.js\n");
+    fs.writeFileSync(
+      path.join(runtime, "pnpm-lock.yaml"),
+      "lockfileVersion: '9.0'\n\npatchedDependencies:\n  wouter@3.7.1:\n    hash: 4e16e6ff3fde7d6c1024d3e0c8605dc9eb6afb690d0d49958c2f449091813072\n    path: patches/wouter@3.7.1.patch\n"
+    );
+    fs.writeFileSync(
+      path.join(runtime, "patches/wouter@3.7.1.patch"),
+      "diff --git a/index.js b/index.js\n"
+    );
     refreshRuntimeArtifactMetadata(runtime);
+
     const archive = path.join(directory, "aurion-traefik-runtime-release.tgz");
     execFileSync("tar", ["-C", runtime, "-czf", archive, "."]);
-    fs.writeFileSync(`${archive}.sha256`, `${digest(archive)}  aurion-traefik-runtime-release.tgz\n`);
+    fs.writeFileSync(
+      `${archive}.sha256`,
+      `${digest(archive)}  aurion-traefik-runtime-release.tgz\n`
+    );
   } finally {
     fs.rmSync(runtime, { recursive: true, force: true });
   }
@@ -111,18 +154,18 @@ function makeArtifact() {
     "0028_aurion_world_checkpoint", "0029_aurion_guild_kingdom_authority", "0030_aurion_guild_bank_economy", "0031_aurion_profession_crafting_persistence", "0032_aurion_group_instances", "0033_aurion_ax1_ui_controls", "0034_ax1_starter_equipment_receipts",
     "0035_aurion_npc_memory_quest_offers", "0036_aurion_faction_warfront_receipts", "0037_aurion_trade_crafting_receipts", "0038_aurion_world_chunk_delta_conflicts", "0039_aurion_world_epoch_materializations", "0040_aurion_progression_receipts", "0041_aurion_content_hash_ledger", "0042_aurion_npc_multi_memory", "0043_aurion_civilization_history", "0044_aurion_semantic_memory_graph", "0045_aurion_deterministic_quest_compiler", "0046_aurion_semantic_node_history_key",
     "0047_aurion_world_context_capsules",
-    "0048_aurion_causal_evidence",
-            "0049_aurion_causal_receipt_v2",
-  "0050_aurion_human_ai_authoring",
-  "0051_aurion_cross_zone_handover_v2",
-  "0052_aurion_effect_intent_journal",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
   fs.mkdirSync(path.join(directory, "deploy"), { recursive: true });
   fs.writeFileSync(path.join(directory, "bin/reconcile.cjs"), "module.exports = {};\n");
   for (const tag of tags) fs.writeFileSync(path.join(directory, "drizzle", `${tag}.sql`), `-- ${tag}\n`);
-  for (const name of ["verify-aurion-installed-schema-tool", "aurion-production-schema-reconcile", "aurion-production-schema-reconcile.sudoers", "install-aurion-production-schema-reconcile"]) fs.writeFileSync(path.join(directory, "deploy", name), `${name}\n`);
+  for (const name of [
+    "verify-aurion-installed-schema-tool",
+    "aurion-production-schema-reconcile",
+    "aurion-production-schema-reconcile.sudoers",
+    "install-aurion-production-schema-reconcile",
+  ]) fs.writeFileSync(path.join(directory, "deploy", name), `${name}\n`);
   fs.writeFileSync(path.join(directory, "deploy/aurion-reconcile-runtime-image.conf"), read("deploy/aurion-reconcile-runtime-image.conf"));
   fs.writeFileSync(path.join(directory, "deploy/aurion-reconcile-runtime-network.conf"), read("deploy/aurion-reconcile-runtime-network.conf"));
   fs.copyFileSync(verifier, path.join(directory, "deploy/verify-aurion-production-schema-reconcile-artifact.mjs"));
@@ -142,7 +185,11 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
   const bootstrapBuilder = path.join(root, "scripts/build-aurion-promoter-bootstrap-artifact.mjs");
 
   it("uses the revision-bound private MariaDB network instead of the public Traefik network", () => {
-    expect(networkContract).toEqual({ schemaVersion: 1, recordType: "aurion_reconcile_runtime_network_contract", network: "echoes-of-aurion-internal" });
+    expect(networkContract).toEqual({
+      schemaVersion: 1,
+      recordType: "aurion_reconcile_runtime_network_contract",
+      network: "echoes-of-aurion-internal",
+    });
     expect(runner).toContain("aurion-reconcile-runtime-network.conf");
     expect(runner).toContain('!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(c.network)');
     expect(runner).toContain('docker network inspect "$docker_network"');
@@ -154,7 +201,11 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
   it("executes the embedded network-contract parser against the immutable contract", () => {
     const parser = runner.match(/docker_network="\$\(node --input-type=module -e '([^']*)' "\$network_contract"\)"/);
     expect(parser?.[1]).toBeTruthy();
-    const output = execFileSync(process.execPath, ["--input-type=module", "-e", parser![1], path.join(root, "deploy/aurion-reconcile-runtime-network.conf")], { encoding: "utf8" });
+    const output = execFileSync(
+      process.execPath,
+      ["--input-type=module", "-e", parser![1], path.join(root, "deploy/aurion-reconcile-runtime-network.conf")],
+      { encoding: "utf8" },
+    );
     expect(output).toBe("echoes-of-aurion-internal");
   });
 
@@ -178,35 +229,123 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     try {
       fs.cpSync(sourceArtifact, path.join(sourceRoot, "dist-production-reconcile"), { recursive: true });
       makeRuntimeReleaseArtifact(sourceRoot);
-      const canonicalArchive = path.join(sourceRoot, "aurion-traefik-runtime-release.tgz");
+      const canonicalArchive = path.join(
+        sourceRoot,
+        "aurion-traefik-runtime-release.tgz"
+      );
       const canonicalArchiveHash = digest(canonicalArchive);
       const bootstrapRevision = bootstrapRevisionFor(testRevision);
-      execFileSync(process.execPath, [bootstrapBuilder, sourceRoot, outputRoot], { env: { ...process.env, AURION_RELEASE_SHA: testRevision }, stdio: "pipe" });
-      const canonical = JSON.parse(fs.readFileSync(path.join(sourceRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"), "utf8"));
-      const bootstrap = JSON.parse(fs.readFileSync(path.join(outputRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"), "utf8"));
+      execFileSync(process.execPath, [bootstrapBuilder, sourceRoot, outputRoot], {
+        env: { ...process.env, AURION_RELEASE_SHA: testRevision },
+        stdio: "pipe",
+      });
+
+      const canonical = JSON.parse(fs.readFileSync(
+        path.join(sourceRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"),
+        "utf8",
+      ));
+      const bootstrap = JSON.parse(fs.readFileSync(
+        path.join(outputRoot, "dist-production-reconcile/deploy/aurion-reconcile-runtime-image.conf"),
+        "utf8",
+      ));
       expect(canonical.imageDigest).toBe("sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5");
       expect(bootstrap.imageDigest).toBe("sha256:4d676821dff059fd00d277ee4261ef34ea712317fed0737c03941481b5760c96");
-      const bootstrapIdentity = JSON.parse(fs.readFileSync(path.join(outputRoot, "bootstrap-identity.json"), "utf8"));
-      expect(bootstrapIdentity).toEqual({ schemaVersion: 1, recordType: "aurion_legacy_promoter_bootstrap_identity", sourceRevision: testRevision, bootstrapRevision, mode: "bootstrap_only" });
-      expect(fs.readFileSync(path.join(outputRoot, "bootstrap-identity.json.sha256"), "utf8")).toBe(`${digest(path.join(outputRoot, "bootstrap-identity.json"))}  bootstrap-identity.json\n`);
+      const bootstrapIdentity = JSON.parse(
+        fs.readFileSync(
+          path.join(outputRoot, "bootstrap-identity.json"),
+          "utf8"
+        )
+      );
+      expect(bootstrapIdentity).toEqual({
+        schemaVersion: 1,
+        recordType: "aurion_legacy_promoter_bootstrap_identity",
+        sourceRevision: testRevision,
+        bootstrapRevision,
+        mode: "bootstrap_only",
+      });
+      expect(
+        fs.readFileSync(
+          path.join(outputRoot, "bootstrap-identity.json.sha256"),
+          "utf8"
+        )
+      ).toBe(
+        `${digest(path.join(outputRoot, "bootstrap-identity.json"))}  bootstrap-identity.json\n`
+      );
+
       expect(digest(canonicalArchive)).toBe(canonicalArchiveHash);
-      const bootstrapArchive = path.join(outputRoot, "aurion-traefik-runtime-release.tgz");
+      const bootstrapArchive = path.join(
+        outputRoot,
+        "aurion-traefik-runtime-release.tgz"
+      );
       expect(digest(bootstrapArchive)).not.toBe(canonicalArchiveHash);
-      expect(fs.readFileSync(path.join(outputRoot, "aurion-traefik-runtime-release.tgz.sha256"), "utf8")).toBe(`${digest(bootstrapArchive)}  aurion-traefik-runtime-release.tgz\n`);
-      const bootstrapRuntime = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-bootstrap-runtime-extract-"));
+      expect(
+        fs.readFileSync(
+          path.join(
+            outputRoot,
+            "aurion-traefik-runtime-release.tgz.sha256"
+          ),
+          "utf8"
+        )
+      ).toBe(
+        `${digest(bootstrapArchive)}  aurion-traefik-runtime-release.tgz\n`
+      );
+      const bootstrapRuntime = fs.mkdtempSync(
+        path.join(os.tmpdir(), "aurion-bootstrap-runtime-extract-")
+      );
       try {
-        execFileSync("tar", ["-xzf", bootstrapArchive, "-C", bootstrapRuntime]);
-        expect(fs.existsSync(path.join(bootstrapRuntime, "patches/wouter-3.7.1.patch"))).toBe(true);
-        expect(fs.existsSync(path.join(bootstrapRuntime, "patches/wouter@3.7.1.patch"))).toBe(false);
-        expect(JSON.parse(fs.readFileSync(path.join(bootstrapRuntime, "package.json"), "utf8")).pnpm.patchedDependencies["wouter@3.7.1"]).toBe("patches/wouter-3.7.1.patch");
-        expect(fs.readFileSync(path.join(bootstrapRuntime, "pnpm-lock.yaml"), "utf8")).toContain("path: patches/wouter-3.7.1.patch");
-        expect(JSON.parse(fs.readFileSync(path.join(bootstrapRuntime, "dist/.aurion-runtime-build.json"), "utf8")).revision).toBe(bootstrapRevision);
-        expect(JSON.parse(fs.readFileSync(path.join(bootstrapRuntime, "manifest.json"), "utf8")).revision).toBe(bootstrapRevision);
-        expect(execFileSync("tar", ["-tzf", bootstrapArchive], { encoding: "utf8" })).not.toContain("@");
+        execFileSync("tar", [
+          "-xzf",
+          bootstrapArchive,
+          "-C",
+          bootstrapRuntime,
+        ]);
+        expect(
+          fs.existsSync(
+            path.join(bootstrapRuntime, "patches/wouter-3.7.1.patch")
+          )
+        ).toBe(true);
+        expect(
+          fs.existsSync(
+            path.join(bootstrapRuntime, "patches/wouter@3.7.1.patch")
+          )
+        ).toBe(false);
+        expect(
+          JSON.parse(
+            fs.readFileSync(path.join(bootstrapRuntime, "package.json"), "utf8")
+          ).pnpm.patchedDependencies["wouter@3.7.1"]
+        ).toBe("patches/wouter-3.7.1.patch");
+        expect(
+          fs.readFileSync(path.join(bootstrapRuntime, "pnpm-lock.yaml"), "utf8")
+        ).toContain("path: patches/wouter-3.7.1.patch");
+        expect(
+          JSON.parse(
+            fs.readFileSync(
+              path.join(bootstrapRuntime, "dist/.aurion-runtime-build.json"),
+              "utf8"
+            )
+          ).revision
+        ).toBe(bootstrapRevision);
+        expect(
+          JSON.parse(
+            fs.readFileSync(
+              path.join(bootstrapRuntime, "manifest.json"),
+              "utf8"
+            )
+          ).revision
+        ).toBe(bootstrapRevision);
+
+        expect(
+          execFileSync("tar", ["-tzf", bootstrapArchive], {
+            encoding: "utf8",
+          })
+        ).not.toContain("@");
       } finally {
         fs.rmSync(bootstrapRuntime, { recursive: true, force: true });
       }
-      verifyArtifact(path.join(outputRoot, "dist-production-reconcile"), bootstrapRevision);
+      verifyArtifact(
+        path.join(outputRoot, "dist-production-reconcile"),
+        bootstrapRevision
+      );
     } finally {
       fs.rmSync(sourceArtifact, { recursive: true, force: true });
       fs.rmSync(sourceRoot, { recursive: true, force: true });
@@ -214,16 +353,27 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     }
   });
 
-  it("waits for an authenticated MariaDB TCP query rather than a liveness-only ping or published host port", () => {
-    expect(rootProof).toContain("mariadb --protocol=tcp -h127.0.0.1 -P3306 -uroot -e 'SELECT 1'");
-    expect(rootProof).not.toContain("mariadb-admin");
+  it("waits for an authenticated MariaDB query rather than a liveness-only ping", () => {
+    expect(rootProof).toContain("mariadb --protocol=socket -uroot -e 'SELECT 1'");
+    expect(rootProof).not.toContain("mariadb-admin --protocol=socket -uroot ping");
     expect(rootProof).not.toContain("-p 127.0.0.1:3306:3306");
     expect(rootProof).toContain("./node_modules/.bin/drizzle-kit migrate");
     expect(rootProof).toContain('--network "$AURION_RECONCILE_TEST_NETWORK"');
   });
 
   it("uses an ephemeral hardened Docker boundary with no Docker socket or public port", () => {
-    for (const token of ["--rm", "--read-only", "--user 0:0", "--tmpfs /tmp", "--cap-drop ALL", "--security-opt no-new-privileges", "source=${release},destination=/reconcile,readonly", "source=${env_file},destination=/etc/aurion-production.env,readonly"]) expect(runner).toContain(token);
+    for (const token of [
+      "--rm",
+      "--read-only",
+      "--user 0:0",
+      "--tmpfs /tmp",
+      "--cap-drop ALL",
+      "--security-opt no-new-privileges",
+      "source=${release},destination=/reconcile,readonly",
+      "source=${env_file},destination=/etc/aurion-production.env,readonly",
+    ]) {
+      expect(runner).toContain(token);
+    }
     expect(runner).not.toContain("--privileged");
     expect(runner).not.toContain("--network host");
     expect(runner).not.toContain("/var/run/docker.sock");
@@ -264,16 +414,23 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     const artifact = makeArtifact();
     try {
       expect(() => verifyArtifact(artifact)).not.toThrow();
+
       fs.writeFileSync(path.join(artifact, "unlisted-but-checksum-free.txt"), "unexpected\n");
       expect(() => verifyArtifact(artifact)).toThrow();
       fs.rmSync(path.join(artifact, "unlisted-but-checksum-free.txt"));
+
       fs.symlinkSync("reconcile.cjs", path.join(artifact, "bin/untrusted-link"));
       expect(() => verifyArtifact(artifact)).toThrow();
       fs.unlinkSync(path.join(artifact, "bin/untrusted-link"));
+
       fs.appendFileSync(path.join(artifact, "checksums.sha256"), `${digest(path.join(artifact, "manifest.json"))}  manifest.json\n`);
       expect(() => verifyArtifact(artifact)).toThrow();
       refreshArtifactMetadata(artifact);
-      fs.renameSync(path.join(artifact, "drizzle/0023_aurion_world_presence_epochs.sql"), path.join(artifact, "drizzle/0023_untrusted_replacement.sql"));
+
+      fs.renameSync(
+        path.join(artifact, "drizzle/0023_aurion_world_presence_epochs.sql"),
+        path.join(artifact, "drizzle/0023_untrusted_replacement.sql"),
+      );
       refreshArtifactMetadata(artifact);
       expect(() => verifyArtifact(artifact)).toThrow();
     } finally {
@@ -289,7 +446,10 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
       manifest.nodeTarget = "node23";
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       const checksumFiles = listFiles(artifact).filter(relative => relative !== "checksums.sha256").sort();
-      fs.writeFileSync(path.join(artifact, "checksums.sha256"), `${checksumFiles.map(relative => `${digest(path.join(artifact, relative))}  ${relative}`).join("\n")}\n`);
+      fs.writeFileSync(
+        path.join(artifact, "checksums.sha256"),
+        `${checksumFiles.map(relative => `${digest(path.join(artifact, relative))}  ${relative}`).join("\n")}\n`,
+      );
       expect(() => verifyArtifact(artifact)).toThrow();
     } finally {
       fs.rmSync(artifact, { recursive: true, force: true });

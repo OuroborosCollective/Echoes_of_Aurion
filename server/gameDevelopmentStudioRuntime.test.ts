@@ -10,7 +10,6 @@ import {
   authenticateGameDevelopmentStudioBearer,
   buildGameDevAssetArgs,
   resolveGameDevelopmentStudioRuntimeReadback,
-  runGameDevelopmentStudioCommand,
 } from "./gameDevelopmentStudioRuntime";
 
 const original = {
@@ -50,27 +49,6 @@ describe("live Game Development Studio runtime boundary", () => {
     expect(() => buildGameDevAssetArgs("inspect", "relative.glb", "/tmp/result")).toThrow("GAME_DEV_ABSOLUTE_PATH_REQUIRED");
   });
 
-  it("rejects provider, exception and out-of-workspace execution before spawning game-dev", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-game-dev-guard-test-"));
-    process.env.AURION_GAME_DEV_WORKSPACE = root;
-    try {
-      await expect(runGameDevelopmentStudioCommand([
-        "vendor", "admit", path.join(root, "package"),
-        "--project", path.join(root, "project"),
-        "--allow-invalid",
-        "--json",
-      ])).rejects.toThrow("GAME_DEV_COMMAND_NOT_ALLOWED");
-
-      await expect(runGameDevelopmentStudioCommand([
-        "package", "verify", "/outside/package",
-        "--output-dir", root,
-        "--json",
-      ])).rejects.toThrow("GAME_DEV_PATH_OUTSIDE_WORKSPACE");
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   it("accepts the same bounded one-hour GLB agent session for approved-asset validation", async () => {
     const secret = "aurion-game-dev-test-secret-000000000000000000000000";
     process.env.JWT_SECRET = secret;
@@ -99,7 +77,7 @@ describe("live Game Development Studio runtime boundary", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-game-dev-runtime-test-"));
     const executable = path.join(root, "game-dev-fixture.mjs");
     const audit = path.join(root, "env-audit.jsonl");
-    fs.writeFileSync(executable, `#!/usr/bin/env node\nimport fs from "node:fs";\nfs.appendFileSync(${JSON.stringify(audit)}, JSON.stringify({tripo:process.env.TRIPO_API_KEY??null,leonardo:process.env.LEONARDO_API_KEY??null})+"\\n");\nconst args=process.argv.slice(2);\nif(args[0]==="--version"){console.log("game-dev ${GAME_DEVELOPMENT_STUDIO_VERSION}");process.exit(0);}\nif(args[0]==="capabilities"){console.log(JSON.stringify({schema:"game_dev.capabilities.v1"}));process.exit(0);}\nif(args[0]==="doctor"){console.log(JSON.stringify({schema:"game_dev.doctor.v1"}));process.exit(0);}\nif(args[0]==="--help"){console.log("game-dev package build <model.glb>\\ngame-dev vendor admit <package>");process.exit(0);}\nprocess.exit(9);\n`, "utf8");
+    fs.writeFileSync(executable, `#!/usr/bin/env node\nimport fs from "node:fs";\nfs.appendFileSync(${JSON.stringify(audit)}, JSON.stringify({tripo:process.env.TRIPO_API_KEY??null,leonardo:process.env.LEONARDO_API_KEY??null})+"\\n");\nconst args=process.argv.slice(2);\nif(args[0]==="--version"){console.log("game-dev ${GAME_DEVELOPMENT_STUDIO_VERSION}");process.exit(0);}\nif(args[0]==="capabilities"){console.log(JSON.stringify({schema:"game_dev.capabilities.v1"}));process.exit(0);}\nif(args[0]==="doctor"){console.log(JSON.stringify({schema:"game_dev.doctor.v1"}));process.exit(0);}\nprocess.exit(9);\n`, "utf8");
     fs.chmodSync(executable, 0o755);
     process.env.AURION_GAME_DEV_BIN = executable;
     process.env.AURION_GAME_DEV_REQUIRED = "true";
@@ -116,15 +94,13 @@ describe("live Game Development Studio runtime boundary", () => {
         sourceRevision: GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION,
         capabilitiesSchema: "game_dev.capabilities.v1",
         doctorSchema: "game_dev.doctor.v1",
-        packageBuildAvailable: true,
-        vendorAdmitAvailable: true,
         providerCalls: false,
-        boundary: "human-confirmed-package-vendor-live-admission",
+        boundary: "approved-live-glb-catalog-only",
         error: null,
       });
       const auditRows = fs.readFileSync(audit, "utf8").trim().split("\n").map(line => JSON.parse(line));
-      expect(auditRows).toHaveLength(4);
-      expect(auditRows).toEqual(Array(4).fill({ tripo: null, leonardo: null }));
+      expect(auditRows).toHaveLength(3);
+      expect(auditRows).toEqual(Array(3).fill({ tripo: null, leonardo: null }));
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

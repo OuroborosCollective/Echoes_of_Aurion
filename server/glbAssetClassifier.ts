@@ -191,16 +191,11 @@ export function classifyGlbBase64(contentBase64: string, sourceName = ""): GlbAs
     if (equipmentSlot) {
       return Object.freeze({ assetType: "armor", subcategory: `equipment-${equipmentSlot}`, confidence: "medium", ...base, equipmentSlot, worldFamily: null });
     }
-    const environmentKind = detectRule(searchable, ENVIRONMENT_RULES);
-    // A teleporter/portal/waygate signal is more specific than generic material
-    // words such as "stone". Preserve nature-first classification otherwise.
-    if (environmentKind === "teleporter") {
-      return Object.freeze({ assetType: "arena", subcategory: environmentKind, confidence: "medium", ...base, equipmentSlot: null, worldFamily: "environment" });
-    }
     const natureKind = detectRule(searchable, NATURE_RULES);
     if (natureKind) {
       return Object.freeze({ assetType: "arena", subcategory: natureKind, confidence: "medium", ...base, equipmentSlot: null, worldFamily: "nature" });
     }
+    const environmentKind = detectRule(searchable, ENVIRONMENT_RULES);
     if (environmentKind) {
       return Object.freeze({ assetType: "arena", subcategory: environmentKind, confidence: "medium", ...base, equipmentSlot: null, worldFamily: "environment" });
     }
