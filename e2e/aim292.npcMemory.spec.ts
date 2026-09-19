@@ -109,7 +109,9 @@ for(const profile of profiles){
       expect(graphRows[0]).toMatchObject({graphHash:graphProjection.graphHash,sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256,capsuleManifestSha256:pin.manifestSha256});
       expect(graphRows[0].receiptHash).toMatch(/^[a-f0-9]{64}$/);
       const [graphEdges]=await pool.query<RowDataPacket[]>("SELECT id,kind,fromNodeId,toNodeId FROM aurionSemanticGraphEdgesV2 WHERE graphReceiptId=?",[graphRows[0].id]);
-      const performedEdges=graphEdges.filter(row=>row.kind==="performed_action");
+      const [actionNodes]=await pool.query<RowDataPacket[]>("SELECT id,semanticKey FROM aurionSemanticGraphNodesV2 WHERE graphReceiptId=? AND kind='action' AND semanticKey=?",[graphRows[0].id,displayedAction.actionReceiptId]);
+      expect(actionNodes).toHaveLength(1);
+      const performedEdges=graphEdges.filter(row=>row.kind==="performed_action"&&row.toNodeId===actionNodes[0].id);
       expect(performedEdges).toHaveLength(1);
       const [performedProv]=await pool.query<RowDataPacket[]>("SELECT provenanceKind,provenanceHash,sourceRevision FROM aurionSemanticGraphProvenanceV2 WHERE graphReceiptId=? AND elementType='edge' AND elementId=? ORDER BY provenanceKind,provenanceId",[graphRows[0].id,performedEdges[0].id]);
       expect(performedProv.map(row=>row.provenanceKind)).toEqual(expect.arrayContaining(["decision_receipt","action_receipt","effect_readback","memory_link"]));
