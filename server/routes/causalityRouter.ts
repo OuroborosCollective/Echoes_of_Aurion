@@ -13,6 +13,7 @@ import { globalReadbackService } from "../causality/readbackService";
 import { replayZoneTick } from "../causality/replayZoneTick";
 import { getDb } from "../db";
 import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
+import { globalAurionEffectJournal } from "../effects/aurionEffectJournal";
 
 export const causalityRouter = router({
   getReadbackStatus: adminProcedure.query(() => globalReadbackService.getStatus()),
@@ -106,6 +107,11 @@ export const causalityRouter = router({
   getEntityZoneOwner: adminProcedure
     .input(z.object({ entityId: z.string().min(1).max(128) }))
     .query(({ input }) => globalCrossZoneSyncService.readAuthoritativeOwner(input.entityId)),
+
+  /** Read-only external-effect evidence; never mutates gameplay authority. */
+  explainEffectIntent: adminProcedure
+    .input(z.object({ effectId: z.string().regex(/^sha256:[a-f0-9]{64}$/) }))
+    .query(({ input }) => globalAurionEffectJournal.explain(input.effectId)),
 
   getGlobalStateProofs: adminProcedure
     .input(z.object({ worldId: z.string().default(GLOBAL_WORLD_ID), limit: z.number().int().min(1).max(50).default(10) }))
