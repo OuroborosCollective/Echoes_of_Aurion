@@ -21,6 +21,7 @@ import {
   type ConfirmedNpcMultiMemory,
   type NpcTransaction,
 } from "./npcMultiMemoryPersistence";
+import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import {
   AURION_WASD_CONTENT_VERSION,
   AURION_WASD_RULESET_VERSION,
@@ -432,6 +433,10 @@ export async function executeConfirmedMerchantAction(input: Readonly<{
     await tx.insert(aurionNpcActionMemoryLinks).values({ id:linkId, actionReceiptId:validated.receipt.id, effectReadbackId:readback.id, memoryReceiptId:multiMemory.row.id, npcId, resolutionIndex:npcEffect.row.resolutionIndex, linkHash });
     const link = (await tx.select().from(aurionNpcActionMemoryLinks).where(eq(aurionNpcActionMemoryLinks.id,linkId)).limit(1))[0];
     if (!link || link.linkHash !== linkHash) throw new Error("NPC_ACTION_MEMORY_LINK_READBACK_MISMATCH");
+
+    // AIM-294: performed_action becomes graph truth only after ActionReceipt + EffectReadback + MemoryLink are all real DB readbacks.
+    await appendNpcSemanticGraphV2(tx,multiMemory);
+
     await tx.update(aurionNpcActionLeases).set({state:"consumed"}).where(eq(aurionNpcActionLeases.id,lease.id));
 
     return Object.freeze({ status:"committed" as const, actionReceiptId:validated.receipt.id, effectReadbackId:readback.id, effectReadbackHash:readback.readbackHash, resolution:validated.resolution, npc:Object.freeze({ ...npcEffect.snapshot, multiMemory:multiMemory.memory }), world:worldEffect.reaction, polity:polityEffect });
