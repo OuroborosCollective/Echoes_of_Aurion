@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, lte } from "drizzle-orm";
 import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
 import {
   aurionNpcActionEffectReadbacks,
@@ -60,7 +60,7 @@ function graphReceiptId(graph:NpcSemanticMemoryGraph):string{
   return `smg2_${npcHash([GRAPH_RECEIPT_VERSION,graph.npcId,graph.generation,graph.graphHash,pin.manifestSha256]).slice(0,59)}`;
 }
 function graphReceiptCore(input:{
-  id:string;graph:NpcSemanticMemoryGraph;memoryReceiptId:string;previousGraphHash:string|null;
+  id:string;graph:NpcSemanticMemoryGraph;memoryReceiptId:string;
 }){
   return {
     version:GRAPH_RECEIPT_VERSION,
@@ -73,7 +73,7 @@ function graphReceiptCore(input:{
     sourceRevision:pin.sourceRevision,
     sourceSha256:pin.sourceSha256,
     capsuleManifestSha256:pin.manifestSha256,
-    previousGraphHash:input.previousGraphHash,
+    previousGraphHash:input.graph.previousGraphHash,
     graphHash:input.graph.graphHash,
   };
 }
@@ -184,11 +184,16 @@ async function verifiedPerformedActions(tx:NpcTransaction,npcId:string,generatio
   }
   return Object.freeze(result);
 }
-async function graphEvidence(tx:NpcTransaction,memory:ConfirmedNpcMultiMemory){
+async function graphEvidence(
+  tx:NpcTransaction,
+  memory:ConfirmedNpcMultiMemory,
+  previousGraph:NpcSemanticMemoryGraph|null,
+){
   return Object.freeze({
     memory:memory.memory,
     memoryReceipts:await verifiedMemoryReceipts(tx,memory),
     performedActions:await verifiedPerformedActions(tx,memory.row.npcId,memory.row.resolutionIndex),
+    previousGraph,
   });
 }
 async function memoryForGraphRow(tx:NpcTransaction,row:GraphRow):Promise<ConfirmedNpcMultiMemory>{
@@ -220,8 +225,18 @@ async function verifyStoredRows(tx:NpcTransaction,row:GraphRow,graph:NpcSemantic
     throw new Error("NPC_SEMANTIC_GRAPH_V2_ROW_READBACK_MISMATCH");
   }
 }
-async function verifiedGraphFromRow(tx:NpcTransaction,row:GraphRow){
+async function verifiedGraphFromRow(
+  tx:NpcTransaction,
+  row:GraphRow,
+  seenGraphHashes:ReadonlySet<string>=new Set(),
+):Promise<Readonly<{
+  row:Readonly<GraphRow>;
+  graph:NpcSemanticMemoryGraph;
+  memory:ConfirmedNpcMultiMemory;
+  evidence:Awaited<ReturnType<typeof graphEvidence>>;
+}>>{
   assertPin();
+  if(seenGraphHashes.has(row.graphHash)) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_CYCLE");
   if(row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256||row.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_DRIFT");
   const receiptCore={
     version:GRAPH_RECEIPT_VERSION,id:row.id,npcId:row.npcId,generation:row.generation,graphVersion:row.graphVersion,
@@ -229,10 +244,30 @@ async function verifiedGraphFromRow(tx:NpcTransaction,row:GraphRow){
     sourceSha256:row.sourceSha256,capsuleManifestSha256:row.capsuleManifestSha256,previousGraphHash:row.previousGraphHash,graphHash:row.graphHash,
   };
   if(npcHash(receiptCore)!==row.receiptHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_RECEIPT_HASH_MISMATCH");
+
+  const prior=(await tx.select().from(aurionSemanticGraphReceiptsV2)
+    .where(and(
+      eq(aurionSemanticGraphReceiptsV2.npcId,row.npcId),
+      lt(aurionSemanticGraphReceiptsV2.generation,row.generation),
+    ))
+    .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
+
+  let previousGraph:NpcSemanticMemoryGraph|null=null;
+  if(row.previousGraphHash===null){
+    if(prior) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_GAP");
+  }else{
+    if(!prior||prior.graphHash!==row.previousGraphHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_MISMATCH");
+    const nextSeen=new Set(seenGraphHashes);nextSeen.add(row.graphHash);
+    const verifiedPrevious=await verifiedGraphFromRow(tx,prior,nextSeen);
+    if(verifiedPrevious.graph.graphHash!==row.previousGraphHash||verifiedPrevious.graph.generation>=row.generation) throw new Error("NPC_SEMANTIC_GRAPH_V2_PREDECESSOR_MISMATCH");
+    previousGraph=verifiedPrevious.graph;
+  }
+
   const memory=await memoryForGraphRow(tx,row);
-  const evidence=await graphEvidence(tx,memory);
+  const evidence=await graphEvidence(tx,memory,previousGraph);
   const graph=verifyNpcSemanticMemoryGraph(row.graphJson,evidence);
   if(graph.npcId!==row.npcId||graph.generation!==row.generation||graph.graphHash!==row.graphHash||
+     graph.previousGraphHash!==row.previousGraphHash||
      graph.version!==row.graphVersion||graph.retrievalVersion!==row.retrievalVersion||
      graph.authority.sourceRevision!==row.sourceRevision||graph.authority.sourceSha256!==row.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_GRAPH_READBACK_MISMATCH");
   await verifyStoredRows(tx,row,graph);
@@ -246,23 +281,28 @@ export async function appendNpcSemanticGraphV2(
 ){
   assertPin();
   if(memory.row.sourceRevision!==pin.sourceRevision||memory.row.sourceSha256!==pin.sourceSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_MEMORY_SOURCE_DRIFT");
-  const evidence=await graphEvidence(tx,memory);
-  const graph=compileNpcSemanticMemoryGraph(evidence);
-  if(graph.npcId!==memory.row.npcId||graph.generation!==memory.row.resolutionIndex||graph.memoryHash!==memory.row.memoryHash) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_GRAPH_MISMATCH");
+
   const latest=(await tx.select().from(aurionSemanticGraphReceiptsV2)
-    .where(eq(aurionSemanticGraphReceiptsV2.npcId,graph.npcId))
+    .where(eq(aurionSemanticGraphReceiptsV2.npcId,memory.row.npcId))
     .orderBy(desc(aurionSemanticGraphReceiptsV2.generation)).limit(1))[0];
-  if(latest&&latest.generation>graph.generation) throw new Error("NPC_SEMANTIC_GRAPH_V2_GENERATION_REGRESSION");
-  if(latest&&latest.generation===graph.generation){
-    if(latest.memoryReceiptId!==memory.row.id||latest.graphHash!==graph.graphHash||latest.sourceRevision!==pin.sourceRevision||latest.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_CONFLICTING_DUPLICATE");
+  if(latest&&latest.generation>memory.row.resolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_V2_GENERATION_REGRESSION");
+  if(latest&&latest.generation===memory.row.resolutionIndex){
+    if(latest.memoryReceiptId!==memory.row.id||latest.sourceRevision!==pin.sourceRevision||latest.capsuleManifestSha256!==pin.manifestSha256) throw new Error("NPC_SEMANTIC_GRAPH_V2_CONFLICTING_DUPLICATE");
     return verifiedGraphFromRow(tx,latest);
   }
+
+  const verifiedPrevious=latest?await verifiedGraphFromRow(tx,latest):null;
+  const evidence=await graphEvidence(tx,memory,verifiedPrevious?.graph??null);
+  const graph=compileNpcSemanticMemoryGraph(evidence);
+  if(graph.npcId!==memory.row.npcId||graph.generation!==memory.row.resolutionIndex||graph.memoryHash!==memory.row.memoryHash||
+     graph.previousGraphHash!==(verifiedPrevious?.graph.graphHash??null)) throw new Error("NPC_SEMANTIC_GRAPH_V2_SOURCE_GRAPH_MISMATCH");
+
   const id=graphReceiptId(graph);
-  const previousGraphHash=latest?.graphHash??null;
-  const core=graphReceiptCore({id,graph,memoryReceiptId:memory.row.id,previousGraphHash});
+  const core=graphReceiptCore({id,graph,memoryReceiptId:memory.row.id});
   const receiptHash=npcHash(core);
   const graphJson=stableCatalogStringify(graph);
-  await tx.insert(aurionSemanticGraphReceiptsV2).values({...core,graphJson,receiptHash});
+  const {version:_receiptVersion,...dbCore}=core;
+  await tx.insert(aurionSemanticGraphReceiptsV2).values({...dbCore,graphJson,receiptHash});
   if(options.failureInjection==="after_receipt") throw new Error("AIM294_FORCED_AFTER_GRAPH_RECEIPT");
   for(const [index,node] of graph.nodes.entries()){
     await tx.insert(aurionSemanticGraphNodesV2).values(nodeRow(id,graph.npcId,node));
