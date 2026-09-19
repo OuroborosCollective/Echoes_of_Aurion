@@ -18,3 +18,7 @@
 ## 2026-09-15 - Landing and Community ARIA Improvements
 **Learning:** Buttons that trigger dialog overlays (like the community and account panels) lacked semantic structure, and disabled states didn't fully account for loading transitions, causing poor screen reader experiences.
 **Action:** Applied `aria-haspopup="dialog"` to buttons opening the Aurion panels and integrated `loading` states with `disabled` properties during initialization, extending `aria-busy` for explicit wait indications.
+
+## 2026-09-17 - Landing and Community secondary buttons missing loading/disabled states
+**Learning:** Some secondary or repeating action buttons (like the secondary 'Anmelden' button in `Home.tsx` and the 'Signalraum'/'Gildenzugehörigkeit' buttons in `Community.tsx`) were missing proper visual loading states (`aria-busy={loading}`, descriptive `title`, updated text). The opacity class was also inconsistent (`disabled:opacity-50` instead of `disabled:opacity-60`).
+**Action:** Applied `disabled:opacity-60 disabled:cursor-not-allowed`, integrated `aria-busy={loading}`, and dynamically adjusted the `title` attribute for loading state on these community/landing buttons.
