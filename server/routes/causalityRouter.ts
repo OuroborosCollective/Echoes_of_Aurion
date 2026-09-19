@@ -6,6 +6,7 @@ import { AURION_ZONE_RULESET_VERSION } from "../../shared/aurionCausalTickContra
 import { activeProvenance } from "../aurionProvenance";
 import { adminProcedure, router } from "../_core/trpc";
 import { globalCausalArchivingService } from "../causality/archivingService";
+import { globalHeadlessCausalOracle } from "../causality/headlessCausalOracle";
 import { globalCausalPersistence } from "../causality/persistence";
 import { globalCausalRecoveryService } from "../causality/causalRecoveryService";
 import { globalCrossZoneSyncService } from "../causality/crossZoneSynchronizationService";
@@ -61,6 +62,17 @@ export const causalityRouter = router({
       const verdict = replayZoneTick({ preState: entry.preState, intents: entry.intents, expectedReceipt: entry.receipt });
       return { verdict, isMatch: isReplayMatch(verdict), recordedReceipt: entry.receipt };
     }),
+
+  /** Step 25: pure sparse-checkpoint range replay; never writes replay/gameplay state. */
+  oracleRange: adminProcedure
+    .input(z.object({
+      zoneId: z.string().min(1),
+      fromTick: z.number().int().min(1),
+      toTick: z.number().int().min(1),
+    }).refine(value => value.toTick >= value.fromTick && value.toTick - value.fromTick < 250, {
+      message: "HEADLESS_CAUSAL_ORACLE_RANGE_INVALID",
+    }))
+    .query(({ input }) => globalHeadlessCausalOracle.replayRange(input)),
 
   getCheckpoints: adminProcedure
     .input(z.object({ zoneId: z.string().min(1), limit: z.number().int().min(1).max(100).default(50) }))
