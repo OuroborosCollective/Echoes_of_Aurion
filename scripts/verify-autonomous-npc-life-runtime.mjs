@@ -22,7 +22,8 @@ const identity = value => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._
 if (!life || life.enabled !== true || life.status !== "confirmed" || life.intervalTicks !== 600) throw new Error("NPC_LIFE_RUNTIME_NOT_CONFIRMED");
 if (!Number.isSafeInteger(life.lastGatewayTick) || life.lastGatewayTick < 600 || life.lastGatewayTick % 600 !== 0) throw new Error("NPC_LIFE_GATEWAY_TICK_INVALID");
 if (!Number.isSafeInteger(life.lastResolutionIndex) || life.lastResolutionIndex < 0) throw new Error("NPC_LIFE_RESOLUTION_INVALID");
-if (![life.decisionHash, life.lifeStateHash, life.worldReactionHash].every(hash)) throw new Error("NPC_LIFE_HASH_READBACK_INVALID");
+if (![life.decisionHash, life.lifeStateHash, life.worldReactionHash, life.effectReadbackHash].every(hash)) throw new Error("NPC_LIFE_HASH_READBACK_INVALID");
+if (typeof life.actionReceiptId!=="string" || !/^nar_[a-f0-9]{56}$/.test(life.actionReceiptId)) throw new Error("NPC_ACTION_RECEIPT_ID_INVALID");
 if (![life.npcId, life.homeRegionId, life.currentHubId, life.worldRegionId].every(identity) || !life.goal || !life.longTermGoal || life.failureCode !== null) throw new Error("NPC_LIFE_RUNTIME_READBACK_INCOMPLETE");
 if (life.npcReceiptSource !== "created" && life.npcReceiptSource !== "persisted") throw new Error("NPC_LIFE_NPC_RECEIPT_SOURCE_INVALID");
 if (life.worldReceiptSource !== "created" && life.worldReceiptSource !== "persisted") throw new Error("NPC_LIFE_WORLD_RECEIPT_SOURCE_INVALID");
@@ -41,13 +42,22 @@ try {
   }
   const stateReadback = verifyAutonomousNpcStateReadback({ snapshot: life, stateRow, latestDecisionReceipt });
 
-  const [receiptRows] = await pool.query("SELECT regionId,goal,decisionHash,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? AND resolutionIndex=?", [life.npcId, life.lastResolutionIndex]);
+  const [receiptRows] = await pool.query("SELECT id,regionId,goal,decisionHash,observationIdsJson FROM aurionNpcDecisionReceipts WHERE npcId=? AND resolutionIndex=?", [life.npcId, life.lastResolutionIndex]);
   if (receiptRows.length !== 1 || receiptRows[0].regionId !== life.currentHubId || receiptRows[0].goal !== life.goal || receiptRows[0].decisionHash !== life.decisionHash) throw new Error("NPC_LIFE_DECISION_RECEIPT_MISMATCH");
   const envelope = JSON.parse(receiptRows[0].observationIdsJson);
   if (envelope.version !== "aurion-npc-decision.v3" || envelope.snapshot?.npcId !== life.npcId || envelope.snapshot?.regionId !== life.currentHubId || envelope.snapshot?.decision?.resolutionIndex !== life.lastResolutionIndex || envelope.snapshot?.decision?.decisionHash !== life.decisionHash || envelope.snapshot?.lifeState?.stateHash !== life.lifeStateHash || envelope.snapshot?.lifeState?.economy?.currentHubId !== life.currentHubId) throw new Error("NPC_LIFE_V3_RECEIPT_MISMATCH");
 
-  const [worldRows] = await pool.query("SELECT regionId,resolutionIndex,reactionHash FROM aurionWorldResolutions WHERE regionId=? AND resolutionIndex=?", [life.worldRegionId, life.lastResolutionIndex]);
+  const [worldRows] = await pool.query("SELECT id,regionId,resolutionIndex,reactionHash FROM aurionWorldResolutions WHERE regionId=? AND resolutionIndex=?", [life.worldRegionId, life.lastResolutionIndex]);
   if (worldRows.length !== 1 || worldRows[0].regionId !== life.worldRegionId || worldRows[0].resolutionIndex !== life.lastResolutionIndex || worldRows[0].reactionHash !== life.worldReactionHash) throw new Error("NPC_LIFE_WORLD_RECEIPT_MISMATCH");
+
+  const [actionRows] = await pool.query("SELECT * FROM aurionNpcActionReceipts WHERE id=?",[life.actionReceiptId]);
+  if(actionRows.length!==1) throw new Error("NPC_ACTION_RECEIPT_REQUIRED");
+  const actionRow=actionRows[0];
+  if(actionRow.npcId!==life.npcId||Number(actionRow.resolutionIndex)!==life.lastResolutionIndex||actionRow.sourceRevision!==npcPin.sourceRevision||actionRow.successorNpcReceiptId!==receiptRows[0].id||actionRow.successorWorldReceiptId!==worldRows[0].id) throw new Error("NPC_ACTION_RECEIPT_RUNTIME_MISMATCH");
+  const [readbackRows]=await pool.query("SELECT * FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",[life.actionReceiptId]);
+  if(readbackRows.length!==1) throw new Error("NPC_ACTION_EFFECT_READBACK_REQUIRED");
+  const actionReadback=readbackRows[0];
+  if(actionReadback.readbackHash!==life.effectReadbackHash||actionReadback.effectsHash!==actionRow.effectsHash||actionReadback.npcReceiptId!==receiptRows[0].id||actionReadback.worldReceiptId!==worldRows[0].id||actionReadback.worldReactionHash!==life.worldReactionHash||actionReadback.sourceRevision!==npcPin.sourceRevision) throw new Error("NPC_ACTION_EFFECT_READBACK_RUNTIME_MISMATCH");
 
   const [memoryRows] = await pool.query("SELECT * FROM aurionNpcMemoryReceiptsV4 WHERE npcId=? AND resolutionIndex=?",[life.npcId,life.lastResolutionIndex]);
   if (memoryRows.length!==1) throw new Error("NPC_MULTI_MEMORY_RECEIPT_REQUIRED");
@@ -56,6 +66,8 @@ try {
   const [sourceRows]=await pool.query(`SELECT * FROM aurionNpcDecisionReceipts WHERE npcId=? AND id IN (${ids.map(()=>"?").join(",")})`,[life.npcId,...ids]);
   verifyNpcMemoryEvidence(memory,sourceRows.map(row=>verifyConfirmedNpcDecision(row.observationIdsJson,{...row,receiptId:row.id})));
   if (npcHash(projectNpcMemoryV4(memory))!==npcHash(life.multiMemory)) throw new Error("NPC_MULTI_MEMORY_RUNTIME_PROJECTION_MISMATCH");
+  const [linkRows]=await pool.query("SELECT * FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[life.actionReceiptId]);
+  if(linkRows.length!==1||linkRows[0].effectReadbackId!==actionReadback.id||linkRows[0].memoryReceiptId!==memoryRow.id||Number(linkRows[0].resolutionIndex)!==life.lastResolutionIndex) throw new Error("NPC_ACTION_MEMORY_LINK_RUNTIME_MISMATCH");
 
   console.log(JSON.stringify({
     recordType: "aurion_autonomous_npc_life_runtime_readback",
@@ -73,6 +85,10 @@ try {
     decisionHash: life.decisionHash,
     lifeStateHash: life.lifeStateHash,
     worldReactionHash: life.worldReactionHash,
+    actionReceiptId: life.actionReceiptId,
+    effectReadbackId: actionReadback.id,
+    effectReadbackHash: life.effectReadbackHash,
+    memoryLinkId: linkRows[0].id,
     npcReceiptSource: life.npcReceiptSource,
     worldReceiptSource: life.worldReceiptSource,
     receiptBound: true,

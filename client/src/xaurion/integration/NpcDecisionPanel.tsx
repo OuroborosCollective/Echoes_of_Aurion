@@ -1,8 +1,25 @@
 import { trpc } from "@/lib/trpc";
 import { decodeOwnedNpcPacket, type PublicNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { decodeOwnedNpcMultiMemory, type PublicNpcMultiMemory } from "@shared/npcMultiMemoryReadmodel";
+import { decodeOwnedNpcActions, type PublicNpcAction } from "@shared/npcActionReadmodel";
 const goals: Record<PublicNpcSnapshot["goal"],string> = {seek_safety:"Sicherheit suchen",gather_resources:"Ressourcen sammeln",socialize:"Gemeinschaft suchen",gain_reputation:"Ansehen gewinnen",trade:"Handel treiben",expand_influence:"Einfluss ausbauen"};
 const names: Record<string,string> = {lyra:"Lyra",orun:"Orun",ax1_merchant_observatory_threshold:"Valen",ax1_merchant_windhollow:"Elowen",ax1_merchant_emberfall:"Torin",ax1_merchant_cinder_vault:"Kael"};
+function NpcActionPanel({userId}:{userId:number}) {
+  const query=trpc.gameplay.npcActions.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
+  let actions:PublicNpcAction[]|undefined,invalid=false;
+  if(query.data){try{actions=decodeOwnedNpcActions(query.data,userId).actions;}catch{invalid=true;}}
+  return <section aria-label="Bestätigte NPC-Aktionen" data-testid="npc-action-panel">
+    <h4>Bestätigte NPC-Aktionen</h4>
+    {query.isError||invalid ? <><p role="alert">Die ausgeführten NPC-Aktionen konnten nicht bestätigt werden.</p><button onClick={()=>void query.refetch()}>Aktionen aktualisieren</button></> : !actions ? <p role="status">Bestätigte NPC-Aktionen werden geladen.</p> : <>
+      {query.isStale&&<p role="status">Letzter bestätigter Aktionsstand; Aktualisierung ausstehend.</p>}
+      {actions.length===0 ? <p>Noch keine durch Effect-Readback bestätigte NPC-Aktion.</p> : actions.map(action=><article key={action.npcId} data-testid="npc-action-row" data-npc-id={action.npcId} data-action-receipt-id={action.actionReceiptId} data-effect-readback-hash={action.readbackHash} data-resolution-index={action.resolutionIndex}>
+        <b>{names[action.npcId]??action.npcId}</b>
+        <p>Ausgeführt: {action.action}</p>
+        <small>Receipt {action.actionReceiptId.slice(0,18)}…</small>
+      </article>)}
+    </>}
+  </section>;
+}
 function NpcMemoryPanel({userId}:{userId:number}) {
   const query=trpc.gameplay.npcMultiMemory.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
   let npcs: PublicNpcMultiMemory[]|undefined,invalid=false;
@@ -33,5 +50,6 @@ export function NpcDecisionPanel({userId}:{userId:number}) {
       {npcs.length===0 ? <p>Noch keine bestätigten Verhaltensentscheidungen für Lyra und Orun.</p> : npcs.map(npc=><article key={npc.npcId}><b>{npc.npcId==="lyra"?"Lyra":npc.npcId==="orun"?"Orun":npc.npcId}</b><p>{goals[npc.goal]}</p><small>{npc.memoryCount} bestätigte Erinnerungen</small></article>)}
     </>}
     <NpcMemoryPanel userId={userId}/>
+    <NpcActionPanel userId={userId}/>
   </section>;
 }

@@ -3,6 +3,7 @@ import { createPool, type RowDataPacket } from "mysql2/promise";
 import { readFile } from "node:fs/promises";
 import { register, enterAx1 } from "./helpers/aurionAuthenticated";
 import { decodeOwnedNpcMultiMemory } from "../shared/npcMultiMemoryReadmodel";
+import { decodeOwnedNpcActions } from "../shared/npcActionReadmodel";
 const pin=JSON.parse(await readFile(new URL("../config/wasd-npc-capsule.json",import.meta.url),"utf8"));
 test.skip(process.env.AURION_E2E_ISOLATED!=="1","Requires disposable authenticated MariaDB");
 
@@ -24,6 +25,25 @@ for(const profile of [{name:"phone",width:412,height:915},{name:"tablet",width:8
     const displayed=await merchant.evaluate(element=>({hash:element.getAttribute("data-memory-hash"),index:Number(element.getAttribute("data-resolution-index")),counts:Array.from(element.querySelectorAll("dd"),node=>node.textContent)}));
     const {hash,index}=displayed;
     expect(hash).toMatch(/^[a-f0-9]{64}$/);expect(index).toBeGreaterThanOrEqual(0);
+    const actionPanel=page.getByTestId("npc-action-panel");
+    const actionRow=actionPanel.locator('[data-npc-id="ax1_merchant_observatory_threshold"]');
+    await expect(actionRow).toBeVisible({timeout:30_000});
+    const displayedAction=await actionRow.evaluate(element=>({
+      actionReceiptId:element.getAttribute("data-action-receipt-id"),
+      readbackHash:element.getAttribute("data-effect-readback-hash"),
+      resolutionIndex:Number(element.getAttribute("data-resolution-index")),
+    }));
+    expect(displayedAction.actionReceiptId).toMatch(/^nar_[a-f0-9]{56}$/);
+    expect(displayedAction.readbackHash).toMatch(/^[a-f0-9]{64}$/);
+    const actionResponse=await page.request.get('/api/trpc/gameplay.npcActions?input='+encodeURIComponent(JSON.stringify({json:null})));
+    expect(actionResponse.status()).toBe(200);
+    const actionBody=await actionResponse.json();
+    const actionPacket=actionBody.result.data.json;
+    const actionProjection=decodeOwnedNpcActions(actionPacket,actionPacket.userId).actions.find(entry=>entry.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(actionProjection.actionReceiptId).toBe(displayedAction.actionReceiptId);
+    expect(actionProjection.readbackHash).toBe(displayedAction.readbackHash);
+    expect(actionProjection.resolutionIndex).toBe(displayedAction.resolutionIndex);
+    expect(actionProjection.sourceRevision).toBe(pin.sourceRevision);
     const response=await page.request.get('/api/trpc/gameplay.npcMultiMemory?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(response.status()).toBe(200);const body=await response.json();const packet=body.result.data.json;
     const parsed=decodeOwnedNpcMultiMemory(packet,packet.userId),projection=parsed.npcs.find(n=>n.npcId==="ax1_merchant_observatory_threshold")!;
@@ -36,9 +56,16 @@ for(const profile of [{name:"phone",width:412,height:915},{name:"tablet",width:8
       const [rows]=await pool.query<RowDataPacket[]>("SELECT sourceRevision,sourceSha256,memoryHash,memoryJson,sourceDecisionReceiptId,receiptHash FROM aurionNpcMemoryReceiptsV4 WHERE npcId=? AND resolutionIndex=?",[projection.npcId,index]);
       expect(rows).toHaveLength(1);expect(rows[0].memoryHash).toBe(hash);expect(rows[0].sourceRevision).toBe(pin.sourceRevision);expect(rows[0].sourceSha256).toBe(pin.sourceSha256);
       const memory=JSON.parse(rows[0].memoryJson);expect(memory.lastResolutionIndex).toBe(index);expect(memory.memoryHash).toBe(hash);
+      const [actions]=await pool.query<RowDataPacket[]>("SELECT id,effectsHash,sourceRevision,successorNpcReceiptId FROM aurionNpcActionReceipts WHERE id=?",[displayedAction.actionReceiptId]);
+      expect(actions).toHaveLength(1);expect(actions[0].sourceRevision).toBe(pin.sourceRevision);
+      const [readbacks]=await pool.query<RowDataPacket[]>("SELECT id,effectsHash,readbackHash,npcReceiptId FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",[displayedAction.actionReceiptId]);
+      expect(readbacks).toHaveLength(1);expect(readbacks[0].effectsHash).toBe(actions[0].effectsHash);expect(readbacks[0].readbackHash).toBe(displayedAction.readbackHash);
+      const [links]=await pool.query<RowDataPacket[]>("SELECT effectReadbackId,memoryReceiptId FROM aurionNpcActionMemoryLinks WHERE actionReceiptId=?",[displayedAction.actionReceiptId]);
+      expect(links).toHaveLength(1);expect(links[0].effectReadbackId).toBe(readbacks[0].id);
+      expect(actions[0].successorNpcReceiptId).toBe(readbacks[0].npcReceiptId);
       const counts=[memory.working.confirmedEventIds.length,memory.episodic.length,memory.semantic.length,memory.procedural.length];
       expect(displayed.counts).toEqual(counts.map(String));
-      await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual autonomous zone tick -> persisted WASD memory -> authenticated AX1 UI"}),contentType:"application/json"});
+      await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual confirmed action/effect readback + persisted WASD memory -> authenticated AX1 UI"}),contentType:"application/json"});
     }finally{await pool.end();}
     await page.screenshot({path:testInfo.outputPath("npc-memory-confirmed.png")});
     await page.getByRole("button",{name:"Quest-Buch schließen",exact:true}).click();

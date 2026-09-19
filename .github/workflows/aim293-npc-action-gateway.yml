@@ -1,0 +1,151 @@
+name: AIM-293 NPC Action Gateway
+on:
+  pull_request:
+    paths:
+      - "server/npcActionGatewayPersistence.ts"
+      - "server/ax1LivingWorldRuntime.ts"
+      - "server/autonomousNpcLifeRuntime.ts"
+      - "server/aim293NpcActionGateway*.test.ts"
+      - "server/autonomousNpcLifeMariaDb.test.ts"
+      - "shared/npcActionReadmodel.ts"
+      - "client/src/xaurion/integration/NpcDecisionPanel*"
+      - "e2e/aim292.npcMemory.spec.ts"
+      - "scripts/seed-aim293-browser-evidence.ts"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+      - "scripts/*wasd-npc*"
+      - "scripts/vendor/verify-wasd-npc-capsule.mjs"
+      - "drizzle/**"
+      - ".github/workflows/aim293-npc-action-gateway.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/npcActionGatewayPersistence.ts"
+      - "server/ax1LivingWorldRuntime.ts"
+      - "server/autonomousNpcLifeRuntime.ts"
+      - "server/aim293NpcActionGateway*.test.ts"
+      - "shared/npcActionReadmodel.ts"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+      - "drizzle/**"
+      - ".github/workflows/aim293-npc-action-gateway.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim293-npc-action-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-reproduction:
+    name: Exact merged WASD action capsule
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify reviewed Aurion pin and expose source revision
+        id: pin
+        run: |
+          set -euo pipefail
+          node scripts/verify-wasd-npc.mjs
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import fs from 'node:fs';
+          const pin=JSON.parse(fs.readFileSync('config/wasd-npc-capsule.json','utf8'));
+          console.log(`source_revision=${pin.sourceRevision}`);
+          console.log(`manifest_sha=${pin.manifestSha256}`);
+          NODE
+      - uses: actions/checkout@v4
+        with:
+          repository: OuroborosCollective/Wasd
+          ref: ${{ steps.pin.outputs.source_revision }}
+          path: wasd-source
+          persist-credentials: false
+      - name: Rebuild exact capsule twice and compare checked-in bytes
+        working-directory: wasd-source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ steps.pin.outputs.source_revision }}"
+          npm exec --yes --package=pnpm@11.8.0 -- pnpm install --frozen-lockfile --filter @wasd/server...
+          node scripts/build-aurion-npc-capsule.mjs /tmp/aim293-a
+          node scripts/build-aurion-npc-capsule.mjs /tmp/aim293-b
+          diff --recursive /tmp/aim293-a /tmp/aim293-b
+          node scripts/verify-aurion-npc-capsule.mjs /tmp/aim293-a "${{ steps.pin.outputs.source_revision }}" "${{ steps.pin.outputs.manifest_sha }}"
+          WASD_NPC_CAPSULE_DIR=/tmp/aim293-a node --test scripts/__tests__/aurion-npc-capsule.test.mjs
+          diff --recursive ../vendor/wasd-npc /tmp/aim293-a
+          cmp ../scripts/vendor/verify-wasd-npc-capsule.mjs scripts/verify-aurion-npc-capsule.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aim293-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/aim293-a
+          if-no-files-found: error
+          retention-days: 14
+
+  transaction-proof:
+    name: Real MariaDB rollback retry and memory-after-readback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-aim293-proof
+          MARIADB_DATABASE: aurion_aim293_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-aim293-proof --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-aim293-proof@127.0.0.1:3306/aurion_aim293_test
+      AURION_NPC_ACTION_E2E: "1"
+      AURION_NPC_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-aim293-signing-key-never-production
+      VITE_APP_ID: aurion-isolated-aim293
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply complete exact-head schema
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          node scripts/verify-wasd-npc.mjs
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Read back exact 0053 bootstrap epochs
+        run: |
+          mkdir -p test-results
+          pnpm exec tsx scripts/verify-aim293-action-epoch-seed.ts | tee test-results/aim293-epoch-seed.json
+      - name: Prove contract, rollback, deny, retry, concurrency and AIM-292 compatibility
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm exec vitest run --no-file-parallelism             server/aim245LivingWorld.test.ts             server/aim293NpcActionGatewayContract.test.ts             server/aim293NpcActionGatewayMariaDb.test.ts             server/autonomousNpcLifeMariaDb.test.ts             server/aim292NpcMultiMemoryMariaDb.test.ts             client/src/xaurion/integration/NpcDecisionPanel.test.tsx             client/src/xaurion/integration/ax1FullCutover.test.tsx
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+      - name: Build production bundle
+        run: pnpm build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim293-transaction-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            dist/
+          if-no-files-found: warn
+          retention-days: 14

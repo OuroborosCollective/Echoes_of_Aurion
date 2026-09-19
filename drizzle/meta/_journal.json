@@ -372,6 +372,13 @@
       "when": 1789781160000,
       "tag": "0052_aurion_effect_intent_journal",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1789827600000,
+      "tag": "0053_aurion_npc_action_gateway_v2",
+      "breakpoints": true
     }
   ]
 }
