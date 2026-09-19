@@ -108,3 +108,28 @@ CREATE TRIGGER `aurionSemanticGraphEdgesV2_no_delete` BEFORE DELETE ON `aurionSe
 CREATE TRIGGER `aurionSemanticGraphProvenanceV2_no_update` BEFORE UPDATE ON `aurionSemanticGraphProvenanceV2` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_SEMANTIC_GRAPH_V2_PROVENANCE_APPEND_ONLY';
 --> statement-breakpoint
 CREATE TRIGGER `aurionSemanticGraphProvenanceV2_no_delete` BEFORE DELETE ON `aurionSemanticGraphProvenanceV2` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_SEMANTIC_GRAPH_V2_PROVENANCE_APPEND_ONLY';
+--> statement-breakpoint
+CREATE TABLE `aurionNpcActionEpochSourceReceipts` (
+  `id` varchar(96) NOT NULL,
+  `hubId` varchar(96) NOT NULL,
+  `previousSourceRevision` varchar(40) NOT NULL,
+  `previousSourceSha256` varchar(64) NOT NULL,
+  `sourceRevision` varchar(40) NOT NULL,
+  `sourceSha256` varchar(64) NOT NULL,
+  `capsuleManifestSha256` varchar(64) NOT NULL,
+  `marketVersion` int NOT NULL,
+  `marketHash` varchar(64) NOT NULL,
+  `inventoryHash` varchar(64) NOT NULL,
+  `polityVersion` int NOT NULL,
+  `polityStateHash` varchar(64) NOT NULL,
+  `receiptHash` varchar(64) NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `aurionNpcActionEpochSourceReceipts_id` PRIMARY KEY(`id`),
+  CONSTRAINT `aurionNpcActionEpochSourceReceipts_hash_uq` UNIQUE(`receiptHash`),
+  CONSTRAINT `aurionNpcActionEpochSourceReceipts_transition_uq` UNIQUE(`hubId`,`previousSourceRevision`,`sourceRevision`,`marketVersion`,`polityVersion`),
+  INDEX `aurionNpcActionEpochSourceReceipts_hub_idx`(`hubId`,`createdAt`)
+);
+--> statement-breakpoint
+CREATE TRIGGER `aurionNpcActionEpochSourceReceipts_no_update` BEFORE UPDATE ON `aurionNpcActionEpochSourceReceipts` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_NPC_ACTION_EPOCH_SOURCE_RECEIPTS_APPEND_ONLY';
+--> statement-breakpoint
+CREATE TRIGGER `aurionNpcActionEpochSourceReceipts_no_delete` BEFORE DELETE ON `aurionNpcActionEpochSourceReceipts` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_NPC_ACTION_EPOCH_SOURCE_RECEIPTS_APPEND_ONLY';
