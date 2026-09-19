@@ -183,7 +183,8 @@ async function ensureEpochSourceBound(tx:NpcTransaction):Promise<void>{
         throw new Error("NPC_ACTION_EPOCH_SOURCE_RECEIPT_CONFLICT");
       }
     }else{
-      await tx.insert(aurionNpcActionEpochSourceReceipts).values({...core,id,receiptHash});
+      const {version:_version,...receiptCore}=core;
+      await tx.insert(aurionNpcActionEpochSourceReceipts).values({...receiptCore,id,receiptHash});
     }
     await tx.update(aurionNpcActionEpochStates)
       .set({sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256})
