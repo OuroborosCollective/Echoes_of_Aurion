@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import {
   aurionCausalTickReceipts,
@@ -208,17 +208,19 @@ export class AurionCrossZoneSynchronizationService {
     const payloadJson = JSON.stringify(payload);
     const transferHash = createHash("sha256").update(payloadJson).digest("hex");
     const id = `xfer_${sourceZoneId}_${targetZoneId}_${sourceTick}_${payload.entityId}`;
-    await db.insert(aurionCrossZoneTransfers).values({
-      id,
-      sourceWorldId,
-      sourceZoneId,
-      sourceTick,
-      targetWorldId,
-      targetZoneId,
-      transferHash,
-      payloadJson,
-      status: "PENDING",
-    }).onDuplicateKeyUpdate({ set: { transferHash, payloadJson } });
+    // This path must work while the new runtime is already deployed but
+    // migration 0051 has not been applied yet. A Drizzle insert generated from
+    // the expanded table schema would still mention 0051-only columns as
+    // DEFAULT, which MariaDB correctly rejects on the 0050 schema.
+    await db.execute(sql`
+      INSERT INTO aurionCrossZoneTransfers
+        (id, sourceWorldId, sourceZoneId, sourceTick, targetWorldId, targetZoneId, transferHash, payloadJson, status)
+      VALUES
+        (${id}, ${sourceWorldId}, ${sourceZoneId}, ${sourceTick}, ${targetWorldId}, ${targetZoneId}, ${transferHash}, ${payloadJson}, ${"PENDING"})
+      ON DUPLICATE KEY UPDATE
+        transferHash = VALUES(transferHash),
+        payloadJson = VALUES(payloadJson)
+    `);
     return id;
   }
 
