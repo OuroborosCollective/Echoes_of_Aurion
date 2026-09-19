@@ -1525,7 +1525,7 @@
       "role": "SUPPORT"
     }
   ],
-  "surfaceInventoryRevision": "009bccc3534b6fa7fc795c77d62935bef1e5842c",
+  "surfaceInventoryRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
   "provenanceOnlyPaths": [
     "client/src/lib/wasdGlbCatalog.ts",
     "client/src/game/glbUsagePlan.ts",
