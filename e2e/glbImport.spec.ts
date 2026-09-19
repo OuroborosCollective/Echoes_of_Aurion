@@ -27,11 +27,25 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await page.goto('/ops/glb-upload');
     const scrollRegion = page.getByTestId('glb-upload-scroll-region');
     await expect(scrollRegion).toBeVisible();
-    const scrollMetrics = await scrollRegion.evaluate(element => ({ scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
+    const scrollMetrics = await scrollRegion.evaluate(async element => {
+      const overflowY = getComputedStyle(element).overflowY;
+      const scrollHeight = element.scrollHeight;
+      const clientHeight = element.clientHeight;
+      const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+      element.scrollTo({ top: maxScrollTop, behavior: "instant" });
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const scrolledTop = element.scrollTop;
+      const connectedAfterScroll = element.isConnected;
+      element.scrollTo({ top: 0, behavior: "instant" });
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      return { scrollHeight, clientHeight, maxScrollTop, scrolledTop, resetScrollTop: element.scrollTop, overflowY, connectedAfterScroll };
+    });
+    expect(scrollMetrics.overflowY).toMatch(/^(auto|scroll)$/);
     expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
-    await scrollRegion.evaluate(element => { element.scrollTop = element.scrollHeight; });
-    await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-    await scrollRegion.evaluate(element => { element.scrollTop = 0; });
+    expect(scrollMetrics.maxScrollTop).toBeGreaterThan(0);
+    expect(scrollMetrics.connectedAfterScroll).toBe(true);
+    expect(scrollMetrics.scrolledTop).toBeGreaterThan(0);
+    expect(scrollMetrics.resetScrollTop).toBe(0);
 
     const input = page.locator('#smartGlbFile');
     await expect(input).toBeEnabled();
