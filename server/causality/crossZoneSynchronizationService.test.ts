@@ -115,9 +115,10 @@ describe("crossZoneSynchronizationService V2 contract", () => {
       ...receipt,
       payload: { ...receipt.payload, data: { tampered: true } },
     })).toBe(false);
+    const forgedTransferId = `${receipt.transferId.slice(0, -1)}${receipt.transferId.endsWith("0") ? "1" : "0"}`;
     expect(verifyCrossZoneHandover({
       ...receipt,
-      transferId: receipt.transferId.replace(/^xfer2_./, "xfer2_f"),
+      transferId: forgedTransferId,
     })).toBe(false);
 
     const targetAccepted = accepted();
