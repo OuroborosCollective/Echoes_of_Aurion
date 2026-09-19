@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { aurionNpcMemoryReceiptsV4 } from "../drizzle/schema";
 import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
 import { getDb } from "./db";
 import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence";
@@ -179,7 +181,7 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     const oldMemory=await (async()=>{
       const db=await getDb();if(!db)throw new Error("DB_REQUIRED");
       return db.transaction(async tx=>{
-        const row=(await tx.select().from((await import("../drizzle/schema")).aurionNpcMemoryReceiptsV4).where((await import("drizzle-orm")).eq((await import("../drizzle/schema")).aurionNpcMemoryReceiptsV4.resolutionIndex,0)).limit(1))[0];
+        const row=(await tx.select().from(aurionNpcMemoryReceiptsV4).where(eq(aurionNpcMemoryReceiptsV4.resolutionIndex,0)).limit(1))[0];
         if(!row)throw new Error("OLD_MEMORY_ROW_REQUIRED");
         const value=await readNpcMultiMemoryForDecision(tx,row.sourceDecisionReceiptId);
         if(!value)throw new Error("OLD_MEMORY_REQUIRED");
