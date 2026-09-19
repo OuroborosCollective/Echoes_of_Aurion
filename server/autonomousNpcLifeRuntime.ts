@@ -1,6 +1,7 @@
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { resolveAndRecordAx1LivingWorld } from "./ax1LivingWorldRuntime";
 import { readConfirmedNpcState } from "./wasdAurionRuntime";
+import { readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence";
 import { readConfirmedNpcMultiMemory } from "./npcMultiMemoryPersistence";
 import { projectNpcMemoryV4 } from "./wasdNpcCapsule";
 import { isConfiguredDatabaseUrl } from "./db";
@@ -25,6 +26,8 @@ export type AutonomousNpcLifeReadback = Readonly<{
   decisionHash: string | null;
   lifeStateHash: string | null;
   worldReactionHash: string | null;
+  actionReceiptId: string | null;
+  effectReadbackHash: string | null;
   npcReceiptSource: "created" | "persisted" | null;
   worldReceiptSource: "created" | "persisted" | null;
   multiMemory: ReturnType<typeof projectNpcMemoryV4> | null;
@@ -75,6 +78,8 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     decisionHash: null,
     lifeStateHash: null,
     worldReactionHash: null,
+    actionReceiptId: null,
+    effectReadbackHash: null,
     npcReceiptSource: null,
     worldReceiptSource: null,
     multiMemory: null,
@@ -85,11 +90,12 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
     if (!enabled) return;
     if (!Number.isSafeInteger(tick) || tick < 1) throw new Error("NPC_LIFE_GATEWAY_TICK_INVALID");
     try {
-      const prior = await readConfirmedNpcState(AUTONOMOUS_NPC_LIFE_NPC_ID);
-      const resolutionIndex = (prior?.decision.resolutionIndex ?? -1) + 1;
+      const source = await readConfirmedMerchantActionSource(AUTONOMOUS_NPC_LIFE_NPC_ID);
+      if (!source) throw new Error("NPC_ACTION_SOURCE_DECISION_REQUIRED");
+      const resolutionIndex = source.resolutionIndex + 1;
       const result = await resolveAndRecordAx1LivingWorld({
         worldSeed: GLOBAL_WORLD_SEED,
-        resolutionIndex,
+        sourceDecisionReceiptId: source.receiptId,
         regionId: AUTONOMOUS_NPC_LIFE_HOME_REGION,
       });
       if (!("lifeState" in result.npc)) throw new Error("NPC_LIFE_V3_RECEIPT_REQUIRED");
@@ -110,15 +116,17 @@ export function createAutonomousNpcLifeRuntime(options: Readonly<{ enabled?: boo
         lastGatewayTick: tick,
         lastResolutionIndex: resolutionIndex,
         currentHubId,
-        worldRegionId: result.world.reaction.regionId,
+        worldRegionId: result.world.regionId,
         action: result.resolution.action,
         goal: confirmed.decision.goal,
         longTermGoal: confirmed.lifeState.longTermGoal,
         decisionHash: confirmed.decision.decisionHash,
         lifeStateHash: confirmed.lifeState.stateHash,
-        worldReactionHash: result.world.reaction.deterministicHash,
-        npcReceiptSource: result.npc.source,
-        worldReceiptSource: result.world.source,
+        worldReactionHash: result.world.deterministicHash,
+        actionReceiptId: result.actionReceiptId,
+        effectReadbackHash: result.effectReadbackHash,
+        npcReceiptSource: result.status === "committed" ? "created" : "persisted",
+        worldReceiptSource: result.status === "committed" ? "created" : "persisted",
         multiMemory: projectNpcMemoryV4(memory),
         failureCode: null,
       });
