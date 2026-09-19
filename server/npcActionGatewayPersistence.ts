@@ -22,6 +22,8 @@ import {
   type NpcTransaction,
 } from "./npcMultiMemoryPersistence";
 import {
+  AURION_WASD_CONTENT_VERSION,
+  AURION_WASD_RULESET_VERSION,
   NPC_LIFE_RECEIPT_VERSION,
   advanceNpcMemory,
   buildWorldSeedDigest,
@@ -30,6 +32,7 @@ import {
   decodeNpcReceipt,
   encodeNpcLifeReceipt,
   merchantActionEffectsHash,
+  merchantBootstrapMarkets,
   merchantInventoryStateHash,
   merchantMarketStateHash,
   merchantPolityStateHash,
@@ -66,12 +69,11 @@ const ACTION_READBACK_VERSION = "aurion-npc-action-effect-readback.v1" as const;
 const ACTION_MEMORY_LINK_VERSION = "aurion-npc-action-memory-link.v1" as const;
 const CONSENT_VERSION = "aurion-npc-editorial-consent.v1" as const;
 const NO_CONSENT_POLICY = "aurion-npc-editorial-consent.not-required.v1" as const;
-const expectedHubIds = Object.keys((await import("./wasdNpcCapsule")).merchantBootstrapMarkets).sort();
+const expectedHubIds = Object.keys(merchantBootstrapMarkets).sort();
 
 type EpochRow = typeof aurionNpcActionEpochStates.$inferSelect;
 type DecisionRow = typeof aurionNpcDecisionReceipts.$inferSelect;
 type ActionRow = typeof aurionNpcActionReceipts.$inferSelect;
-type ReadbackRow = typeof aurionNpcActionEffectReadbacks.$inferSelect;
 
 export type EditorialConsent = Readonly<{
   verdict: "ALLOW" | "DENY" | "NOT_REQUIRED";
@@ -250,7 +252,7 @@ async function persistWorld(tx: NpcTransaction, request: MerchantDecisionRequest
 
 async function persistPolity(tx: NpcTransaction, request: MerchantDecisionRequests["polityRequest"]): Promise<PolityState> {
   const state = resolvePolityState(request);
-  await tx.insert(aurionPolityStates).values({ polityId:state.polityId, stateJson:stableCatalogStringify(state), reactionHash:state.reactionHash, ruleSetVersion:"aurion-wasd-rules-v1", contentVersion:"aurion-wasd-content-v1" }).onDuplicateKeyUpdate({ set:{ stateJson:stableCatalogStringify(state), reactionHash:state.reactionHash, ruleSetVersion:"aurion-wasd-rules-v1", contentVersion:"aurion-wasd-content-v1" } });
+  await tx.insert(aurionPolityStates).values({ polityId:state.polityId, stateJson:stableCatalogStringify(state), reactionHash:state.reactionHash, ruleSetVersion:AURION_WASD_RULESET_VERSION, contentVersion:AURION_WASD_CONTENT_VERSION }).onDuplicateKeyUpdate({ set:{ stateJson:stableCatalogStringify(state), reactionHash:state.reactionHash, ruleSetVersion:AURION_WASD_RULESET_VERSION, contentVersion:AURION_WASD_CONTENT_VERSION } });
   const row = (await tx.select().from(aurionPolityStates).where(eq(aurionPolityStates.polityId,state.polityId)).limit(1))[0];
   if (!row || row.reactionHash !== state.reactionHash || row.stateJson !== stableCatalogStringify(state)) throw new Error("NPC_ACTION_POLITY_EFFECT_READBACK_MISMATCH");
   return state;
