@@ -715,6 +715,30 @@ export const aurionNpcActionEpochStates = mysqlTable("aurionNpcActionEpochStates
   index("aurionNpcActionEpochStates_active_idx").on(table.active),
 ]);
 
+/** Immutable proof that an existing epoch state was revalidated before binding it to a newer WASD capsule. */
+export const aurionNpcActionEpochSourceReceipts = mysqlTable("aurionNpcActionEpochSourceReceipts", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  hubId: varchar("hubId", { length: 96 }).notNull(),
+  previousSourceRevision: varchar("previousSourceRevision", { length: 40 }).notNull(),
+  previousSourceSha256: varchar("previousSourceSha256", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  capsuleManifestSha256: varchar("capsuleManifestSha256", { length: 64 }).notNull(),
+  marketVersion: int("marketVersion").notNull(),
+  marketHash: varchar("marketHash", { length: 64 }).notNull(),
+  inventoryHash: varchar("inventoryHash", { length: 64 }).notNull(),
+  polityVersion: int("polityVersion").notNull(),
+  polityStateHash: varchar("polityStateHash", { length: 64 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcActionEpochSourceReceipts_hash_uq").on(table.receiptHash),
+  uniqueIndex("aurionNpcActionEpochSourceReceipts_transition_uq").on(
+    table.hubId, table.previousSourceRevision, table.sourceRevision, table.marketVersion, table.polityVersion,
+  ),
+  index("aurionNpcActionEpochSourceReceipts_hub_idx").on(table.hubId, table.createdAt),
+]);
+
 /** Logical lease custody is Aurion-owned and mutable only through the action transaction. */
 export const aurionNpcActionLeases = mysqlTable("aurionNpcActionLeases", {
   id: varchar("id", { length: 96 }).primaryKey(),
@@ -1498,6 +1522,107 @@ export const aurionSemanticRetrievalIndex = mysqlTable("aurionSemanticRetrievalI
   index("aurionSemanticRetrievalIndex_npc_idx").on(table.npcId),
   index("aurionSemanticRetrievalIndex_subject_idx").on(table.subjectId),
   index("aurionSemanticRetrievalIndex_query_idx").on(table.npcId, table.subjectId, table.predicate),
+]);
+
+/** AIM-294 / Wave 2 Step 27: immutable WASD-derived graph receipt. V1 rows stay historical only. */
+export const aurionSemanticGraphReceiptsV2 = mysqlTable("aurionSemanticGraphReceiptsV2", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  generation: int("generation").notNull(),
+  graphVersion: varchar("graphVersion", { length: 64 }).notNull(),
+  retrievalVersion: varchar("retrievalVersion", { length: 64 }).notNull(),
+  memoryReceiptId: varchar("memoryReceiptId", { length: 64 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  capsuleManifestSha256: varchar("capsuleManifestSha256", { length: 64 }).notNull(),
+  previousGraphHash: varchar("previousGraphHash", { length: 64 }),
+  graphHash: varchar("graphHash", { length: 64 }).notNull(),
+  graphJson: mediumtext("graphJson").notNull(),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  check("aurionSemanticGraphReceiptsV2_generation_ck", sql`${table.generation} >= 0`),
+  uniqueIndex("aurionSemanticGraphReceiptsV2_npc_generation_uq").on(table.npcId, table.generation),
+  uniqueIndex("aurionSemanticGraphReceiptsV2_memory_uq").on(table.memoryReceiptId),
+  uniqueIndex("aurionSemanticGraphReceiptsV2_graph_hash_uq").on(table.graphHash),
+  uniqueIndex("aurionSemanticGraphReceiptsV2_receipt_hash_uq").on(table.receiptHash),
+  index("aurionSemanticGraphReceiptsV2_npc_idx").on(table.npcId, table.generation),
+]);
+
+export const aurionSemanticGraphNodesV2 = mysqlTable("aurionSemanticGraphNodesV2", {
+  id: varchar("id", { length: 64 }).notNull(),
+  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  kind: varchar("kind", { length: 64 }).notNull(),
+  semanticKey: varchar("semanticKey", { length: 128 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  validFromIndex: int("validFromIndex").notNull(),
+  validUntilIndex: int("validUntilIndex"),
+  payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  primaryKey({ name: "aurionSemanticGraphNodesV2_pk", columns: [table.id, table.graphReceiptId] }),
+  index("aurionSemanticGraphNodesV2_graph_idx").on(table.graphReceiptId),
+  index("aurionSemanticGraphNodesV2_npc_kind_idx").on(table.npcId, table.kind, table.status),
+  index("aurionSemanticGraphNodesV2_key_idx").on(table.npcId, table.semanticKey),
+]);
+
+export const aurionSemanticGraphEdgesV2 = mysqlTable("aurionSemanticGraphEdgesV2", {
+  id: varchar("id", { length: 64 }).notNull(),
+  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  kind: varchar("kind", { length: 64 }).notNull(),
+  relationKey: varchar("relationKey", { length: 256 }).notNull(),
+  fromNodeId: varchar("fromNodeId", { length: 64 }).notNull(),
+  toNodeId: varchar("toNodeId", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  validFromIndex: int("validFromIndex").notNull(),
+  validUntilIndex: int("validUntilIndex"),
+  payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  primaryKey({ name: "aurionSemanticGraphEdgesV2_pk", columns: [table.id, table.graphReceiptId] }),
+  index("aurionSemanticGraphEdgesV2_graph_idx").on(table.graphReceiptId),
+  index("aurionSemanticGraphEdgesV2_npc_kind_idx").on(table.npcId, table.kind, table.status),
+  index("aurionSemanticGraphEdgesV2_from_idx").on(table.graphReceiptId, table.fromNodeId),
+  index("aurionSemanticGraphEdgesV2_to_idx").on(table.graphReceiptId, table.toNodeId),
+]);
+
+export const aurionSemanticGraphProvenanceV2 = mysqlTable("aurionSemanticGraphProvenanceV2", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
+  elementType: mysqlEnum("elementType", ["node", "edge"]).notNull(),
+  elementId: varchar("elementId", { length: 64 }).notNull(),
+  provenanceKind: varchar("provenanceKind", { length: 32 }).notNull(),
+  provenanceId: varchar("provenanceId", { length: 128 }).notNull(),
+  provenanceHash: varchar("provenanceHash", { length: 64 }).notNull(),
+  logicalIndex: int("logicalIndex").notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionSemanticGraphProvenanceV2_unique").on(
+    table.graphReceiptId, table.elementType, table.elementId, table.provenanceKind, table.provenanceId, table.provenanceHash,
+  ),
+  index("aurionSemanticGraphProvenanceV2_element_idx").on(table.graphReceiptId, table.elementType, table.elementId),
+]);
+
+/** Rebuildable deterministic readmodel only. It is checked against the verified graph before use. */
+export const aurionSemanticGraphIndexV2 = mysqlTable("aurionSemanticGraphIndexV2", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  nodeId: varchar("nodeId", { length: 64 }).notNull(),
+  semanticKey: varchar("semanticKey", { length: 128 }).notNull(),
+  kind: varchar("kind", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  validFromIndex: int("validFromIndex").notNull(),
+  validUntilIndex: int("validUntilIndex"),
+  payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionSemanticGraphIndexV2_node_uq").on(table.graphReceiptId, table.nodeId),
+  index("aurionSemanticGraphIndexV2_lookup_idx").on(table.npcId, table.kind, table.status, table.semanticKey),
 ]);
 
 export const aurionNpcPolicyVersions = mysqlTable("aurionNpcPolicyVersions", {

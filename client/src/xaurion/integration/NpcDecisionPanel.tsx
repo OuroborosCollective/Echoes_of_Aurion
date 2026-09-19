@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { decodeOwnedNpcPacket, type PublicNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { decodeOwnedNpcMultiMemory, type PublicNpcMultiMemory } from "@shared/npcMultiMemoryReadmodel";
 import { decodeOwnedNpcActions, type PublicNpcAction } from "@shared/npcActionReadmodel";
+import { decodeOwnedNpcSemanticGraphs, type PublicNpcSemanticGraph } from "@shared/npcSemanticGraphReadmodel";
 const goals: Record<PublicNpcSnapshot["goal"],string> = {seek_safety:"Sicherheit suchen",gather_resources:"Ressourcen sammeln",socialize:"Gemeinschaft suchen",gain_reputation:"Ansehen gewinnen",trade:"Handel treiben",expand_influence:"Einfluss ausbauen"};
 const names: Record<string,string> = {lyra:"Lyra",orun:"Orun",ax1_merchant_observatory_threshold:"Valen",ax1_merchant_windhollow:"Elowen",ax1_merchant_emberfall:"Torin",ax1_merchant_cinder_vault:"Kael"};
 function NpcActionPanel({userId}:{userId:number}) {
@@ -16,6 +17,24 @@ function NpcActionPanel({userId}:{userId:number}) {
         <b>{names[action.npcId]??action.npcId}</b>
         <p>Ausgeführt: {action.action}</p>
         <small>Receipt {action.actionReceiptId.slice(0,18)}…</small>
+      </article>)}
+    </>}
+  </section>;
+}
+function NpcSemanticGraphPanel({userId}:{userId:number}) {
+  const query=trpc.gameplay.npcSemanticGraph.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
+  let graphs:PublicNpcSemanticGraph[]|undefined,invalid=false;
+  if(query.data){try{graphs=decodeOwnedNpcSemanticGraphs(query.data,userId).graphs;}catch{invalid=true;}}
+  return <section aria-label="Verifizierter NPC-Erinnerungsgraph" data-testid="npc-semantic-graph-panel">
+    <h4>Verifizierter Erinnerungsgraph</h4>
+    {query.isError||invalid ? <><p role="alert">Der semantische Erinnerungsgraph konnte nicht bestätigt werden.</p><button onClick={()=>void query.refetch()}>Graph aktualisieren</button></> : !graphs ? <p role="status">Verifizierter Erinnerungsgraph wird geladen.</p> : <>
+      {query.isStale&&<p role="status">Letzter verifizierter Graphstand; Aktualisierung ausstehend.</p>}
+      {graphs.length===0 ? <p>Noch kein verifizierter Graphstand verfügbar.</p> : graphs.map(graph=><article key={graph.npcId} data-testid="npc-semantic-graph-row" data-npc-id={graph.npcId} data-graph-hash={graph.graphHash} data-result-hash={graph.resultHash} data-source-result-hash={graph.sourceResultHash} data-generation={graph.generation} data-provenance-status={graph.provenanceStatus}>
+        <b>{names[graph.npcId]??graph.npcId}</b>
+        <p>{graph.nodes.length} aktive Knoten · {graph.relations.length} bestätigte Beziehungen</p>
+        <small>Generation {graph.generation} · Provenienz {graph.provenanceStatus}</small>
+        <ul>{graph.nodes.filter(node=>node.semanticKey!==null).slice(0,6).map(node=><li key={node.nodeId}>{node.kind}: {node.semanticKey}</li>)}</ul>
+        {(graph.excluded.expired+graph.excluded.contradicted+graph.excluded.superseded)>0&&<p>{graph.excluded.expired} abgelaufen · {graph.excluded.contradicted} widersprochen · {graph.excluded.superseded} ersetzt</p>}
       </article>)}
     </>}
   </section>;
@@ -51,5 +70,6 @@ export function NpcDecisionPanel({userId}:{userId:number}) {
     </>}
     <NpcMemoryPanel userId={userId}/>
     <NpcActionPanel userId={userId}/>
+    <NpcSemanticGraphPanel userId={userId}/>
   </section>;
 }

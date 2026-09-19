@@ -1,7 +1,7 @@
 {
   "schema": "aurion.donor.ledger.v2",
   "project": "Echoes of Aurion",
-  "verifiedAgainstRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+  "verifiedAgainstRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
   "policy": {
     "runtimeOwnership": "Aurion owns gameplay and persistence truth; AX1-derived presentation and WASD-derived rules execute only from code vendored/ported into this repository.",
     "provenance": "Historical donor identity is preserved without requiring a donor repository, donor service, donor container, or cross-repository network call at runtime.",
@@ -28,6 +28,11 @@
           "revision": "a4d99432e47b82ce98105eadb30360cd8040ad13",
           "inventoryPath": "client/src/lib/wasdGlbCatalog.ts",
           "coverage": "revision-locked donor GLB provenance catalog; never a runtime asset source"
+        },
+        {
+          "revision": "28ecb7aec84271bd3bcc4fa5e1e7deef530804b6",
+          "inventoryPath": "config/wasd-npc-capsule.json",
+          "coverage": "revision-bound AIM-294 semantic graph, multi-memory and action-gateway capsule"
         }
       ],
       "integratedRoots": [
@@ -327,20 +332,28 @@
       "donor": "WASD",
       "sourceIdentity": {
         "repository": "OuroborosCollective/Wasd",
-        "revision": "a80df4d150cfeb12365fc26886420763eeb18313",
-        "catalogPath": "server/wasdAurionSourceCatalog.ts"
+        "revision": "28ecb7aec84271bd3bcc4fa5e1e7deef530804b6",
+        "sourcePaths": [
+          "server/src/aurion/npc/semanticMemoryGraph.ts",
+          "server/src/aurion/npc/multiMemory.ts",
+          "server/src/aurion/npc/actionGateway.ts"
+        ]
       },
       "aurionPaths": [
-        "server/wasdSemanticGraphPersistence.ts"
+        "server/wasdSemanticGraphV2Persistence.ts",
+        "server/wasdSemanticGraphPersistence.ts",
+        "server/wasdNpcCapsule.ts"
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
-        "server/wasdSemanticGraphPersistence.test.ts"
+        "server/aim292NpcSourceBoundary.test.ts",
+        "server/aim294SemanticGraphV2MariaDb.test.ts"
       ],
       "runtimeEvidence": [
-        "server/wasdSemanticGraphPersistence.test.ts"
+        "server/aim294SemanticGraphV2MariaDb.test.ts",
+        "e2e/aim292.npcMemory.spec.ts"
       ],
-      "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
+      "ownershipRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
       "donorRuntimeRequired": false
     },
     {
@@ -1458,6 +1471,12 @@
       "role": "CAPABILITY"
     },
     {
+      "path": "server/wasdSemanticGraphV2Persistence.ts",
+      "donor": "WASD",
+      "capabilityId": "semantic-memory.provenance",
+      "role": "CAPABILITY"
+    },
+    {
       "path": "server/wasdStaminaProtocol.ts",
       "donor": "WASD",
       "capabilityId": "combat.stamina-regeneration",
@@ -1506,7 +1525,7 @@
       "role": "SUPPORT"
     }
   ],
-  "surfaceInventoryRevision": "009bccc3534b6fa7fc795c77d62935bef1e5842c",
+  "surfaceInventoryRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
   "provenanceOnlyPaths": [
     "client/src/lib/wasdGlbCatalog.ts",
     "client/src/game/glbUsagePlan.ts",

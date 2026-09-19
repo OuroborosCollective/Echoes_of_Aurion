@@ -1,9 +1,8 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { aurionNpcDecisionReceipts, aurionNpcMemoryReceiptsV4, aurionNpcStates, aurionSemanticMemoryReceipts } from "../drizzle/schema";
+import { aurionNpcDecisionReceipts, aurionNpcMemoryReceiptsV4, aurionNpcStates } from "../drizzle/schema";
 import { getDb } from "./db";
 import { commitNpcMemoryV4, createNpcMemoryV4, npcHash, npcMemoryReceiptIds, parseNpcMemoryV4, projectNpcMemoryV4,
   stableCatalogStringify, verifyConfirmedNpcDecision, verifyNpcMemoryEvidence, type NpcMemoryV4 } from "./wasdNpcCapsule";
-import { appendSemanticMemoryGraph } from "./wasdSemanticGraphPersistence";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export type NpcTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -77,16 +76,6 @@ export async function appendNpcMultiMemory(tx: NpcTransaction, source: DecisionR
   await tx.insert(aurionNpcMemoryReceiptsV4).values(row);
   const stored = (await tx.select().from(aurionNpcMemoryReceiptsV4).where(eq(aurionNpcMemoryReceiptsV4.id,row.id)).limit(1))[0];
   if (!stored || stored.receiptHash !== row.receiptHash || stored.memoryJson !== row.memoryJson) throw new Error("NPC_MEMORY_V4_READBACK_MISMATCH");
-
-  // Fetch previous semantic memory graph receipt for continuity checking
-  const prevGraphReceipt = (await tx.select().from(aurionSemanticMemoryReceipts)
-    .where(eq(aurionSemanticMemoryReceipts.npcId, source.npcId))
-    .orderBy(desc(aurionSemanticMemoryReceipts.resolutionIndex)).limit(1))[0];
-  const previousGraphId = prevGraphReceipt?.id ?? null;
-  const previousGraphHash = prevGraphReceipt?.graphHash ?? GENESIS_HASH;
-
-  // Append semantic memory graph (this handles validation, writing nodes/edges, provenance, and rebuilds retrieval index)
-  await appendSemanticMemoryGraph(tx, source, memory, previousGraphId, previousGraphHash);
 
   return verifiedReadback(tx,stored);
 }

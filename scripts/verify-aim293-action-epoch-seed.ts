@@ -1,5 +1,7 @@
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+const AIM293_BOOTSTRAP_SOURCE_REVISION="002e7c35309816cd043295f47398e52fdb388694";
+const AIM293_BOOTSTRAP_SOURCE_SHA256="7a524e3d329dd34205c41fdc00dc088e3b3187ab39c9f17a42a0c2cd8294e82f";
 import {
   merchantBootstrapMarkets,
   merchantInventoryStateHash,
@@ -30,15 +32,17 @@ try{
     const inventoryHash=merchantInventoryStateHash({ownerId:inventory.ownerId,market,entries:inventory.entries});
     const polityHash=merchantPolityStateHash({polityId:row.polityId,version:Number(row.polityVersion),stability:Number(row.polityStability)});
     if(row.marketHash!==marketHash||inventory.stateHash!==inventoryHash||row.inventoryHash!==inventoryHash||row.polityStateHash!==polityHash) throw new Error("AIM293_EPOCH_SEED_HASH_MISMATCH");
-    if(row.polityId!==`polity:${hubId}`||row.sourceRevision!==pin.sourceRevision||row.sourceSha256!==pin.sourceSha256) throw new Error("AIM293_EPOCH_SEED_SOURCE_MISMATCH");
+    if(row.polityId!==`polity:${hubId}`||row.sourceRevision!==AIM293_BOOTSTRAP_SOURCE_REVISION||row.sourceSha256!==AIM293_BOOTSTRAP_SOURCE_SHA256) throw new Error("AIM293_EPOCH_SEED_SOURCE_MISMATCH");
     evidence.push({hubId,marketHash,inventoryHash,polityHash});
   }
   process.stdout.write(JSON.stringify({
     schemaVersion:1,
     recordType:"aim293_action_epoch_seed_readback",
-    sourceRevision:pin.sourceRevision,
-    sourceSha256:pin.sourceSha256,
-    manifestSha256:pin.manifestSha256,
+    sourceRevision:AIM293_BOOTSTRAP_SOURCE_REVISION,
+    sourceSha256:AIM293_BOOTSTRAP_SOURCE_SHA256,
+    consumerSourceRevision:pin.sourceRevision,
+    consumerSourceSha256:pin.sourceSha256,
+    consumerManifestSha256:pin.manifestSha256,
     rowCount:evidence.length,
     rows:evidence,
     readOnly:true,

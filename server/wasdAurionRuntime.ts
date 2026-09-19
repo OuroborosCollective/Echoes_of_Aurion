@@ -5,6 +5,7 @@ import { advanceNpcMemory, createNpcLifeSnapshot, decodeNpcReceipt, encodeNpcLif
 import { aurionDialogueReceipts, aurionNpcDecisionReceipts, aurionNpcStates, aurionPolityStates, aurionWorldResolutions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { appendNpcMultiMemory, readNpcMultiMemoryForDecision, readPreviousNpcMultiMemory } from "./npcMultiMemoryPersistence";
+import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import type { NpcMemoryV4 } from "./wasdNpcCapsule";
 import {
   AURION_WASD_CONTENT_VERSION,
@@ -216,8 +217,9 @@ export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcRea
     const row = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id, id)).limit(1))[0];
     if (!row) throw new Error("NPC decision readback failed");
     const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
-    const multiMemory = (await appendNpcMultiMemory(tx,row,previousMultiMemory)).memory;
-    return Object.freeze({ ...readback, source: "created" as const, multiMemory });
+    const confirmedMemory = await appendNpcMultiMemory(tx,row,previousMultiMemory);
+    await appendNpcSemanticGraphV2(tx,confirmedMemory);
+    return Object.freeze({ ...readback, source: "created" as const, multiMemory:confirmedMemory.memory });
   });
 }
 

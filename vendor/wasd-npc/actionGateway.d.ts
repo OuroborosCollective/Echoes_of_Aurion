@@ -164,6 +164,7 @@ export declare function merchantPolityStateHash(input: Readonly<{
 }>): string;
 export declare function merchantActionEffectsHash(requests: MerchantDecisionRequests): string;
 export declare function merchantActionReceiptHash(receipt: Omit<MerchantActionReceipt, "receiptHash">): string;
+export declare function merchantActionReceiptId(receipt: Omit<MerchantActionReceipt, "id" | "effectsHash" | "receiptHash">): string;
 /** The only proposal API. A returned lease still requires persistence and re-read validation. */
 export declare function planMerchantAction(input: MerchantGatewayContext): MerchantActionReady | MerchantActionBlocked;
 /** Re-read context and persisted lease must pass this before any host mutation. */

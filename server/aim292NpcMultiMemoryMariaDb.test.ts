@@ -22,6 +22,11 @@ suite("AIM-292 actual transactional multi-memory in isolated MariaDB",()=>{
     // This database is created solely for the isolated CI proof and the files run
     // serially. Reset derived semantic fixtures with DDL so production append-only
     // UPDATE/DELETE triggers remain installed and are still exercised by the runtime.
+    await pool.query("TRUNCATE TABLE aurionSemanticGraphIndexV2");
+    await pool.query("TRUNCATE TABLE aurionSemanticGraphProvenanceV2");
+    await pool.query("TRUNCATE TABLE aurionSemanticGraphEdgesV2");
+    await pool.query("TRUNCATE TABLE aurionSemanticGraphNodesV2");
+    await pool.query("TRUNCATE TABLE aurionSemanticGraphReceiptsV2");
     await pool.query("TRUNCATE TABLE aurionSemanticRetrievalIndex");
     await pool.query("TRUNCATE TABLE aurionSemanticProvenance");
     await pool.query("TRUNCATE TABLE aurionSemanticNodes");

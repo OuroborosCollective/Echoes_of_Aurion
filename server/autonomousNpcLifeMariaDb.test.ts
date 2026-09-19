@@ -40,7 +40,8 @@ suite("AIM-263 autonomous NPC life in isolated MariaDB", () => {
 
   async function cleanup() {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
-    for (const table of ["aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionConsentReceipts","aurionNpcActionLeases","aurionSemanticRetrievalIndex","aurionSemanticProvenance","aurionSemanticNodes","aurionSemanticMemoryReceipts","aurionNpcMemoryReceiptsV4"]) {
+    for (const table of ["aurionNpcActionMemoryLinks","aurionNpcActionEffectReadbacks","aurionNpcActionReceipts","aurionNpcActionEpochSourceReceipts","aurionNpcActionConsentReceipts","aurionNpcActionLeases","aurionSemanticGraphIndexV2","aurionSemanticGraphProvenanceV2","aurionSemanticGraphEdgesV2","aurionSemanticGraphNodesV2","aurionSemanticGraphReceiptsV2",
+      "aurionSemanticRetrievalIndex","aurionSemanticProvenance","aurionSemanticNodes","aurionSemanticMemoryReceipts","aurionNpcMemoryReceiptsV4"]) {
       await pool.query(`TRUNCATE TABLE ${table}`);
     }
     await pool.query("TRUNCATE TABLE aurionNpcActionEpochStates");

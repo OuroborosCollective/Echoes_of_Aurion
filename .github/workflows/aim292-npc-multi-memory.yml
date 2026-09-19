@@ -152,7 +152,7 @@ jobs:
         run: |
           node --test scripts/autonomous-npc-life-readback-contract.test.mjs
           pnpm check
-          pnpm exec vitest run --no-file-parallelism server/aim245LivingWorld.test.ts server/aim293NpcActionGatewayContract.test.ts server/aim293NpcActionGatewayMariaDb.test.ts server/aim263NpcMariaDb.test.ts server/aim263NpcSnapshotMariaDb.test.ts server/autonomousNpcLifeMariaDb.test.ts server/aim292NpcMultiMemoryMariaDb.test.ts
+          pnpm exec vitest run --no-file-parallelism server/aim245LivingWorld.test.ts server/aim293NpcActionGatewayContract.test.ts server/aim293NpcActionGatewayMariaDb.test.ts server/aim263NpcMariaDb.test.ts server/aim263NpcSnapshotMariaDb.test.ts server/autonomousNpcLifeMariaDb.test.ts server/aim292NpcMultiMemoryMariaDb.test.ts server/aim294SemanticGraphV2MariaDb.test.ts server/wasdSemanticGraphPersistence.test.ts
           AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
           python3 docs/agent-knowledgebase/skill-archive/aurion-migration-ops/scripts/aurion_guard.py repo-audit --repo "$PWD" --expected-revision "$AURION_RELEASE_SHA" --run-canonical --output /tmp/aim292-repository-receipt.json
       - name: Seed one real confirmed AIM-293 action for authenticated AX1 projection
