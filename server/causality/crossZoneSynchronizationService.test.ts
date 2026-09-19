@@ -109,13 +109,22 @@ describe("crossZoneSynchronizationService V2 contract", () => {
     expect(() => advanceCrossZoneHandover(frozen, "SOURCE_FINALIZED")).toThrow("CROSS_ZONE_TRANSITION_INVALID");
   });
 
-  it("rejects tampered payload and transition receipts", () => {
+  it("rejects tampered payload, transfer identity and target acceptance", () => {
     const receipt = prepared();
-    const tampered = {
+    expect(verifyCrossZoneHandover({
       ...receipt,
       payload: { ...receipt.payload, data: { tampered: true } },
-    };
-    expect(verifyCrossZoneHandover(tampered)).toBe(false);
+    })).toBe(false);
+    expect(verifyCrossZoneHandover({
+      ...receipt,
+      transferId: receipt.transferId.replace(/^xfer2_./, "xfer2_f"),
+    })).toBe(false);
+
+    const targetAccepted = accepted();
+    expect(verifyCrossZoneHandover({
+      ...targetAccepted,
+      targetReceiptHash: canonicalSha256({ forged: true }),
+    })).toBe(false);
   });
 
   it("keeps rejected, expired and unprovable transfers owned by the source", () => {
