@@ -3,7 +3,7 @@ import { openSource3dFallbackSource, planOpenSource3dFallback } from "../server/
 
 const source = openSource3dFallbackSource();
 const plan = await planOpenSource3dFallback({
-  sourceAssetId: "medieval-fair-003",
+  sourceAssetId: "ca-world-053",
   purpose: "world-environment",
   tier: "phone",
 });
@@ -12,7 +12,7 @@ if (plan.registryRevision !== source.registryRevision) throw new Error("OS3A_PRO
 if (plan.modelRevision !== source.modelRevision) throw new Error("OS3A_PROBE_MODEL_REVISION_MISMATCH");
 if (plan.license !== "CC0-1.0") throw new Error("OS3A_PROBE_LICENSE_MISMATCH");
 if (!plan.validationPassed) throw new Error("OS3A_PROBE_GDS_VALIDATION_FAILED");
-if (plan.sourceBytes !== 930884) throw new Error("OS3A_PROBE_SOURCE_SIZE_MISMATCH");
+if (plan.sourceBytes !== 7956) throw new Error("OS3A_PROBE_SOURCE_SIZE_MISMATCH");
 if (plan.budget.tier !== "phone" || plan.budget.conservativeWorkingSetBytes > plan.budget.limits.assetWorkingSetBytes) {
   throw new Error("OS3A_PROBE_BUDGET_MISMATCH");
 }
