@@ -24,7 +24,6 @@ describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () =
   afterAll(async () => {
     if (store) await store.close();
     if (pool) {
-      await pool.execute("DELETE FROM aurionContentHashLedger WHERE migrationTag LIKE 'os3a-cc0:%'");
       await pool.execute("DELETE FROM glbAssignments WHERE assignedByUserId = ?", [admin]);
       await pool.execute("DELETE FROM glbAssets WHERE createdByUserId = ?", [admin]);
       await pool.execute("DELETE FROM users WHERE id IN (?, ?)", [admin, member]);
