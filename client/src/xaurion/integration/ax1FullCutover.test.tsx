@@ -68,9 +68,11 @@ describe("AX1 full visible cutover contract", () => {
     expect(panel).toContain("gameplay.npcMultiMemory");
     expect(panel).toContain("gameplay.npcActions");
     expect(panel).toContain("gameplay.npcSemanticGraph");
+    expect(panel).toContain("gameplay.npcProjectionProvenance");
     expect(panel).toContain("decodeOwnedNpcMultiMemory");
     expect(panel).toContain("decodeOwnedNpcActions");
     expect(panel).toContain("decodeOwnedNpcSemanticGraphs");
+    expect(panel).toContain("decodeOwnedNpcProjectionProvenance");
     expect(runtime).toContain("readConfirmedNpcMultiMemory");
     expect(runtime).toContain("resolveAndRecordAx1LivingWorld");
     expect(runtime).toContain("createAutonomousNpcLifeRuntime");
