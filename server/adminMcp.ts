@@ -47,6 +47,7 @@ import {
 import { requireWolframCagClient, runAurionWolframCagCanary, wolframCagConfigurationStatus } from "./wolframCag";
 import {
   chatGptCausalityStatus,
+  chatGptAssuranceStatus,
   chatGptDonorCapability,
   chatGptDonorLedger,
   chatGptRecoveryPlan,
@@ -134,6 +135,7 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
       { name: "aurion_admin_get_world_overview", mode: "read", description: "Reads the confirmed global world descriptor without advancing an epoch." },
       { name: "aurion_admin_wolfram_status", mode: "read", description: "Reports secret-free Wolfram CAG runtime configuration without making a provider request." },
       { name: "aurion_causality_status", mode: "read", description: "Reads receipt-chain, persistence and replay coverage without mutating gameplay." },
+      { name: "aurion_assurance_status", mode: "read", description: "Reads continuous causal-assurance evidence and a non-destructive recovery plan." },
       { name: "aurion_tick_receipt_get", mode: "read", description: "Reads one in-memory or persisted causal tick receipt." },
       { name: "aurion_tick_explain", mode: "read", description: "Explains only evidence actually available for one tick; missing stages remain UNOBSERVABLE." },
       { name: "aurion_tick_replay", mode: "read", description: "Runs a side-effect-free replay and returns VERIFIED, CONTRADICTED or UNPROVABLE." },
@@ -318,6 +320,7 @@ function createAdminMcpServer(actor: AdminActor) {
 
   /* ChatGPT causality integration: read-only, persistence-aware, evidence-status preserving. */
   server.registerTool("aurion_causality_status", { title: "Aurion Causality Status", description: "Reads causal chain, persistence and replay coverage. Never mutates gameplay.", inputSchema: z.object({ zoneId: z.string().min(1).optional() }) }, async input => content(await chatGptCausalityStatus(input.zoneId)));
+  server.registerTool("aurion_assurance_status", { title: "Aurion Causal Assurance Status", description: "Reads sealed assurance observations and a recovery plan. It cannot mutate gameplay or execute recovery.", inputSchema: z.object({}) }, async () => content(await chatGptAssuranceStatus()));
   server.registerTool("aurion_tick_receipt_get", { title: "Get Causal Tick Receipt", description: "Reads an in-memory or persisted receipt; missing data is UNPROVABLE.", inputSchema: z.object({ zoneId: z.string().min(1), tick: z.number().int().nonnegative() }) }, async input => content(await chatGptTickReceipt(input.zoneId, input.tick)));
   server.registerTool("aurion_tick_explain", { title: "Explain Causal Tick", description: "Explains only observed receipt/input/state availability; intermediate receipt-v1 stages remain UNOBSERVABLE.", inputSchema: z.object({ zoneId: z.string().min(1), tick: z.number().int().nonnegative() }) }, async input => content(await chatGptTickExplain(input.zoneId, input.tick)));
   server.registerTool("aurion_tick_replay", { title: "Replay Recorded Zone Tick", description: "Side-effect-free replay returning VERIFIED, CONTRADICTED or UNPROVABLE.", inputSchema: z.object({ zoneId: z.string().min(1), tick: z.number().int().nonnegative() }) }, async input => content(await chatGptTickReplay(input.zoneId, input.tick)));
