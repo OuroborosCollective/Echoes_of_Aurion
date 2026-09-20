@@ -53,6 +53,7 @@ export type ProductionAssuranceReceipt = Readonly<{
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const SUMMARY = /^[A-Z0-9_:-]{3,160}$/;
+const OBSERVATION_STATUSES = new Set<AssuranceObservationStatus>(["MATCH", "DEGRADED", "UNVERIFIED", "CONTRADICTED"]);
 
 export function assuranceStatus(observations: readonly AssuranceObservation[]): AssuranceStatus {
   if (observations.some(value => value.status === "CONTRADICTED")) return "CONTRADICTED";
@@ -89,7 +90,8 @@ export function sealAssuranceSnapshot(input: {
   if (byKey.size !== assuranceKeys.length || assuranceKeys.some(key => !byKey.has(key))) throw Error("ASSURANCE_OBSERVATION_SET_INVALID");
   const observations = Object.freeze(assuranceKeys.map(key => {
     const value = byKey.get(key)!;
-    if (!SUMMARY.test(value.summary) || (value.evidenceHash !== null && !HASH.test(value.evidenceHash)) ||
+    if (!OBSERVATION_STATUSES.has(value.status) || !SUMMARY.test(value.summary) ||
+        (value.evidenceHash !== null && !HASH.test(value.evidenceHash)) ||
         !Number.isSafeInteger(value.sampleCount) || value.sampleCount < 0) throw Error(`ASSURANCE_OBSERVATION_INVALID:${key}`);
     return Object.freeze({ ...value });
   }));
