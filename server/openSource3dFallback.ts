@@ -17,7 +17,7 @@ import { glbImportStore } from "./glbImportStore";
 export const OS3A_FALLBACK_CONFIRMATION = "ADMIT_OS3A_FALLBACK" as const;
 const PLAN_PURPOSES = ["npc-fallback", "world-environment", "world-nature", "player-public", "equipment"] as const;
 const TIERS = ["phone", "tablet", "desktop"] as const;
-const SOURCE_PATH = /^projects\/[A-Za-z0-9._/-]+\.glb$/;
+const SOURCE_PATH = /^projects\/[A-Za-z0-9._ /-]+\.glb$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 
 type CatalogAsset = Readonly<{
@@ -62,7 +62,7 @@ if (
     candidate.sourcePath.includes("..") ||
     !Number.isSafeInteger(candidate.fileSize) ||
     candidate.fileSize < 1 ||
-    candidate.fileSize > 24 * 1024 * 1024 ||
+    candidate.fileSize > 64 * 1024 * 1024 ||
     !candidate.attributes ||
     typeof candidate.attributes !== "object" ||
     Object.entries(candidate.attributes).some(([key, value]) => !key || typeof value !== "string") ||
@@ -148,7 +148,7 @@ function candidateById(sourceAssetId: string): CatalogAsset {
     candidate.sourcePath.includes("..") ||
     !Number.isSafeInteger(candidate.fileSize) ||
     candidate.fileSize < 1 ||
-    candidate.fileSize > 24 * 1024 * 1024
+    candidate.fileSize > 64 * 1024 * 1024
   ) throw new Error("OS3A_SOURCE_METADATA_INVALID");
   return candidate;
 }
