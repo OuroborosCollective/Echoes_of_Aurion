@@ -9,6 +9,7 @@ import { globalCausalRecoveryService } from "./causality/causalRecoveryService";
 import { globalReadbackService } from "./causality/readbackService";
 import { replayZoneTick } from "./causality/replayZoneTick";
 import { globalTickRecorder } from "./causality/tickRecorder";
+import { globalAssuranceService } from "./causality/assuranceService";
 
 export type EvidenceTruthStatus = "VERIFIED" | "CONTRADICTED" | "UNPROVABLE" | "UNOBSERVABLE" | "UNVERIFIED";
 
@@ -136,6 +137,14 @@ export function chatGptRuntimeIdentity() {
 
 export async function chatGptRecoveryPlan(zoneId: string) {
   return globalCausalRecoveryService.planRecovery(zoneId);
+}
+
+export async function chatGptAssuranceStatus() {
+  const snapshot = await globalAssuranceService.sample();
+  return Object.freeze({ protocol: "aurion.chatgpt.assurance-status.v1", mutationAuthority: "none" as const,
+    truthStatus: snapshot.status === "HEALTHY" ? "VERIFIED" as const :
+      snapshot.status === "CONTRADICTED" ? "CONTRADICTED" as const : "UNVERIFIED" as const,
+    snapshot, measuredSloBaseline: globalAssuranceService.measuredBaseline() });
 }
 
 export async function chatGptDonorLedger() {
