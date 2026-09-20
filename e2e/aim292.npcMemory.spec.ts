@@ -16,6 +16,14 @@ for(const profile of profiles){
     await page.setViewportSize(profile);
     const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
     await register(page,`aim292_${profile.name}`);
+    const authenticatedUserId=await (async()=>{
+      const pool=createPool(process.env.DATABASE_URL!);
+      try{
+        const [accounts]=await pool.query<RowDataPacket[]>("SELECT userId FROM localCredentials WHERE handle=?",[`aim292_${profile.name}`]);
+        expect(accounts).toHaveLength(1);
+        return Number(accounts[0].userId);
+      }finally{await pool.end();}
+    })();
     const {runtime}=await enterAx1(page);
     await expect.poll(async()=>{const r=await page.request.get("/healthz");return (await r.json()).npcLife?.multiMemory?.sourceRevision;},{timeout:100_000}).toBe(pin.sourceRevision);
     await runtime.getByRole("button",{name:"Aufträge",exact:true}).click();
@@ -42,19 +50,22 @@ for(const profile of profiles){
     expect(actionResponse.status()).toBe(200);
     const actionBody=await actionResponse.json();
     const actionPacket=actionBody.result.data.json;
-    const actionProjection=decodeOwnedNpcActions(actionPacket,actionPacket.userId).actions.find(entry=>entry.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(actionPacket.userId).toBe(authenticatedUserId);
+    const actionProjection=decodeOwnedNpcActions(actionPacket,authenticatedUserId).actions.find(entry=>entry.npcId==="ax1_merchant_observatory_threshold")!;
     expect(actionProjection.actionReceiptId).toBe(displayedAction.actionReceiptId);
     expect(actionProjection.readbackHash).toBe(displayedAction.readbackHash);
     expect(actionProjection.resolutionIndex).toBe(displayedAction.resolutionIndex);
     expect(actionProjection.sourceRevision).toBe(pin.sourceRevision);
     const response=await page.request.get('/api/trpc/gameplay.npcMultiMemory?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(response.status()).toBe(200);const body=await response.json();const packet=body.result.data.json;
-    const parsed=decodeOwnedNpcMultiMemory(packet,packet.userId),projection=parsed.npcs.find(n=>n.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(packet.userId).toBe(authenticatedUserId);
+    const parsed=decodeOwnedNpcMultiMemory(packet,authenticatedUserId),projection=parsed.npcs.find(n=>n.npcId==="ax1_merchant_observatory_threshold")!;
     expect(projection.sourceRevision).toBe(pin.sourceRevision);expect(projection.counts.procedural).toBe(2);expect(projection.counts.semantic).toBeGreaterThan(0);
     const graphResponse=await page.request.get('/api/trpc/gameplay.npcSemanticGraph?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(graphResponse.status()).toBe(200);
     const graphBody=await graphResponse.json(),graphPacket=graphBody.result.data.json;
-    const graphParsed=decodeOwnedNpcSemanticGraphs(graphPacket,graphPacket.userId);
+    expect(graphPacket.userId).toBe(authenticatedUserId);
+    const graphParsed=decodeOwnedNpcSemanticGraphs(graphPacket,authenticatedUserId);
     const graphProjection=graphParsed.graphs.find(graph=>graph.npcId==="ax1_merchant_observatory_threshold")!;
     expect(graphProjection.sourceRevision).toBe(pin.sourceRevision);
     expect(graphProjection.provenanceStatus).toBe("VERIFIED");
@@ -65,7 +76,8 @@ for(const profile of profiles){
     const provenanceResponse=await page.request.get('/api/trpc/gameplay.npcProjectionProvenance?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(provenanceResponse.status()).toBe(200);
     const provenanceBody=await provenanceResponse.json(),provenancePacket=provenanceBody.result.data.json;
-    const provenanceProjection=decodeOwnedNpcProjectionProvenance(provenancePacket,provenancePacket.userId).projections.find(value=>value.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(provenancePacket.userId).toBe(authenticatedUserId);
+    const provenanceProjection=decodeOwnedNpcProjectionProvenance(provenancePacket,authenticatedUserId).projections.find(value=>value.npcId==="ax1_merchant_observatory_threshold")!;
     expect(provenanceProjection).toEqual({npcId:graphProjection.npcId,generation:graphProjection.generation,graphHash:graphProjection.graphHash,sourceResultHash:graphProjection.sourceResultHash,semanticGraphResultHash:graphProjection.resultHash,sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"});
     const publicProvenanceJson=JSON.stringify(provenancePacket);
     for(const forbidden of ['"nodeId":','"payloadHash":','"provenanceId":','"provenanceHash":',"receiptJson","effectSetJson","memoryJson","databaseCredential","actionReceiptId","effectReadbackId","memoryReceiptId"]) expect(publicProvenanceJson).not.toContain(forbidden);
