@@ -28,6 +28,16 @@ import {
   planGameDevelopmentStudioLiveAsset,
 } from "./gameDevelopmentStudioProduction";
 import {
+  applyOpenSource3dFallback,
+  openSource3dFallbackSource,
+  os3aApplyInputSchema,
+  os3aPlanInputSchema,
+  os3aSearchInputSchema,
+  planOpenSource3dFallback,
+  searchOpenSource3dFallback,
+} from "./openSource3dFallback";
+
+import {
   applyNamedNpcVisual,
   namedNpcVisualInputSchema,
   planNamedNpcVisual,
@@ -144,6 +154,8 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
       { name: "aurion_recovery_plan", mode: "read", description: "Returns a reconciled checkpoint candidate with mutationAuthority=none." },
       { name: "aurion_donor_ledger", mode: "read", description: "Reads the WASD/AX1 donor migration ledger." },
       { name: "aurion_donor_capability_explain", mode: "read", description: "Reads one donor capability record without upgrading its evidence status." },
+      { name: "aurion_admin_os3a_source", mode: "read", description: "Read the pinned local OS3A CC0 fallback source identity; no upstream call or mutation." },
+      { name: "aurion_admin_os3a_search", mode: "read", description: "Search the pinned local OS3A metadata snapshot; candidates remain unclassified until byte-plan." },
       ...(wolframConfigured ? [
         { name: "aurion_admin_wolfram_compute", mode: "read", description: "Evaluates bounded Wolfram Language code as external evidence only." },
         { name: "aurion_admin_wolfram_hints", mode: "read", description: "Retrieves bounded Wolfram Language hints as external evidence only." },
@@ -156,6 +168,8 @@ export function adminMcpCapabilities(scopes: readonly string[] = [], options: Re
         { name: "aurion_admin_glb_import", mode: "write", description: "Persist one separately authorized visual GLB; no gameplay mutation." },
         { name: "aurion_admin_glb_catalog", mode: "read", description: "Read approved persistent GLB catalog and visual assignments." },
         { name: "aurion_admin_glb_assign", mode: "write", description: "Compare-and-set one visual assignment; no gameplay semantics." },
+        { name: "aurion_admin_os3a_plan", mode: "read", description: "Fetch one SHA-pinned candidate, apply Aurion budgets and run GDS inspect/validate; no live write." },
+        { name: "aurion_admin_os3a_apply", mode: "write", description: "Admit one exact OS3A plan through GDS and persist source provenance after explicit confirmation." },
         { name: "aurion_admin_gds_status", mode: "read", description: "Read the pinned server-side Game Development Studio runtime status." },
         { name: "aurion_admin_gds_plan", mode: "read", description: "Run server-side GDS inspect/validate and return a human-confirmed plan." },
         { name: "aurion_admin_gds_apply", mode: "write", description: "Run GDS package/verify/vendor and ingest verified bytes after exact plan confirmation." },
@@ -206,12 +220,33 @@ function createAdminMcpServer(actor: AdminActor) {
     server.registerTool("aurion_admin_wolfram_canary", { title: "Run Aurion Wolfram CAG canary", description: "Fixed exact canary before reporting provider evidence.", inputSchema: z.object({}) }, async () => content(await runAurionWolframCagCanary(wolfram)));
   }
 
+  server.registerTool("aurion_admin_os3a_source", {
+    title: "Read pinned OS3A fallback source",
+    description: "Reads only the checked-in, revision-pinned CC0 source manifest. No network call and no mutation.",
+    inputSchema: z.object({}),
+  }, async () => content(openSource3dFallbackSource()));
+  server.registerTool("aurion_admin_os3a_search", {
+    title: "Search pinned OS3A fallback metadata",
+    description: "Deterministic local metadata search. Results are DISCOVERED candidates, not approved assets.",
+    inputSchema: os3aSearchInputSchema,
+  }, async input => content(searchOpenSource3dFallback(input)));
+
   if (actor.scopes.includes(AURION_ADMIN_GLB_WRITE_SCOPE)) {
     const payload = z.string().min(16).max(MAX_GLB_BASE64_CHARS);
     server.registerTool("aurion_admin_glb_plan", { description: "Validate GLB bytes without publishing.", inputSchema: z.object({ contentBase64: payload }) }, async input => content(buildGlbImportPlan(input.contentBase64)));
     server.registerTool("aurion_admin_glb_import", { description: "Import one visual GLB using the exact plan hash; no gameplay mutation.", inputSchema: z.object({ displayName: z.string().trim().min(3).max(120), contentBase64: payload, expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }) }, async input => content(await glbImportStore().ingest(actor.userId, input)));
     server.registerTool("aurion_admin_glb_catalog", { description: "Read approved GLB catalog and visual assignments.", inputSchema: z.object({}) }, async () => content(await glbImportStore().catalog()));
     server.registerTool("aurion_admin_glb_assign", { description: "Compare-and-set one visual assignment.", inputSchema: z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }) }, async input => content(await glbImportStore().assign(actor.userId, input)));
+    server.registerTool("aurion_admin_os3a_plan", {
+      title: "Plan pinned OS3A fallback admission",
+      description: "Fetches exact pinned bytes, checks the selected device budget and runs GDS inspect/validate. No catalog write.",
+      inputSchema: os3aPlanInputSchema,
+    }, async input => content(await planOpenSource3dFallback(input)));
+    server.registerTool("aurion_admin_os3a_apply", {
+      title: "Apply pinned OS3A fallback admission",
+      description: "Replays the exact plan and admits through GDS only after ADMIT_OS3A_FALLBACK confirmation.",
+      inputSchema: os3aApplyInputSchema,
+    }, async input => content(await applyOpenSource3dFallback(actor.userId, input)));
     server.registerTool("aurion_admin_gds_status", { title: "Game Development Studio status", description: "Reads the pinned server-side GDS runtime. No provider or gameplay mutation.", inputSchema: z.object({}) }, async () => content(await resolveGameDevelopmentStudioRuntimeReadback()));
     server.registerTool("aurion_admin_gds_plan", { title: "Plan Game Development Studio asset admission", description: "Runs server-side inspect/validate and returns an exact plan; no live write.", inputSchema: gameDevelopmentStudioLiveAssetInputSchema }, async input => content(await planGameDevelopmentStudioLiveAsset(input)));
     server.registerTool("aurion_admin_gds_apply", { title: "Apply Game Development Studio asset admission", description: "Runs package→verify→vendor→Aurion ingest only for the exact confirmed plan.", inputSchema: z.object({
