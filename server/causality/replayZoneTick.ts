@@ -177,6 +177,18 @@ export function replayZoneTick(input: ReplayInput): ReplayVerdict {
   }
   verified.push("POST_STATE");
 
+  // V1's observable stages are frozen. V2 can localize an RNG commitment
+  // mismatch after state/stage checks rather than hide it behind RECEIPT.
+  if (expectedReceipt.schema === AURION_CAUSAL_TICK_SCHEMA_V2) {
+    if (replayReceipt.rngRootHash !== expectedReceipt.rngRootHash) {
+      return replayFirstDivergence(context, verified, {
+        stage: "RNG_ROOT", tick,
+        expected: expectedReceipt.rngRootHash, observed: replayReceipt.rngRootHash,
+      });
+    }
+    verified.push("RNG_ROOT");
+  }
+
   if (replayReceipt.receiptHash !== expectedReceipt.receiptHash) {
     return replayFirstDivergence(context, verified, {
       stage: "RECEIPT",

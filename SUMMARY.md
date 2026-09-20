@@ -27,6 +27,7 @@
   * [Canonical Chunk State — Step 28a prerequisite](docs/aurion-canonical-chunk-state.md)
   * [World-Chunk Projection V2 — Step 28 corrective draft](docs/aurion-world-chunk-projection-v2.md)
   * [Client Verification — Step 29 dependent draft](docs/aurion-client-verification-draft.md)
+  * [Causal Chaos — Step 30 dependent draft](docs/aurion-causal-chaos.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)
