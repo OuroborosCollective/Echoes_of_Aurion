@@ -69,32 +69,40 @@ export class ConfirmedChunkProjection {
   private readonly abort = new AbortController();
   private readonly groups = new Map<string, THREE.Group>();
   private readonly pending = new Set<string>();
+  private readonly failures = new Map<string, { attempts: number; retryAt: number }>();
   private desired: { x: number; z: number }[] = [];
   private serial = 0;
   private center = "";
   constructor(private scene: THREE.Scene, private epoch: number,
     private terrain: (x: number, z: number) => number,
     private fetch: (input: { epoch: number; chunkX: number; chunkZ: number }) => Promise<unknown>,
-    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void) {}
+    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void,
+    private now: () => number = Date.now) {}
 
   update(position: { x: number; z: number }) {
     if (this.abort.signal.aborted || this.epoch < 1) return;
     const c = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
     const key = `${c.x}:${c.z}`;
-    if (this.center === key) return;
-    this.center = key; this.desired = [];
-    for (let z = c.z - 1; z <= c.z + 1; z++) for (let x = c.x - 1; x <= c.x + 1; x++) if (Math.abs(x) <= 1_000_000 && Math.abs(z) <= 1_000_000) this.desired.push({ x, z });
-    const desired = new Set(this.desired.map(p => `${p.x}:${p.z}`));
-    for (const [id, group] of this.groups) if (!desired.has(id)) { disposeGroup(group); this.groups.delete(id); }
+    if (this.center !== key) {
+      this.center = key; this.desired = [];
+      for (let z = c.z - 1; z <= c.z + 1; z++) for (let x = c.x - 1; x <= c.x + 1; x++) if (Math.abs(x) <= 1_000_000 && Math.abs(z) <= 1_000_000) this.desired.push({ x, z });
+      const desired = new Set(this.desired.map(p => `${p.x}:${p.z}`));
+      for (const [id, group] of this.groups) if (!desired.has(id)) { disposeGroup(group); this.groups.delete(id); }
+      for (const id of this.failures.keys()) if (!desired.has(id)) this.failures.delete(id);
+    }
     this.pump();
   }
 
   private pump() {
     if (this.abort.signal.aborted) return;
     while (this.pending.size < 2) {
-      const index = this.desired.findIndex(p => !this.groups.has(`${p.x}:${p.z}`) && !this.pending.has(`${p.x}:${p.z}`));
+      const now = this.now();
+      const index = this.desired.findIndex(p => {
+        const key = `${p.x}:${p.z}`, failure = this.failures.get(key);
+        return !this.groups.has(key) && !this.pending.has(key) && (!failure || failure.retryAt <= now);
+      });
       if (index < 0) return;
-      const [coordinate] = this.desired.splice(index, 1);
+      const coordinate = this.desired[index];
       if (!coordinate) return;
       const key = `${coordinate.x}:${coordinate.z}`;
       const center = this.center, generation = ++this.serial;
@@ -105,13 +113,19 @@ export class ConfirmedChunkProjection {
         if (!await matchesWorldChunkProjectionWorkerResultV2(prepared.job, result, prepared.bytes)) throw Error("PROJECTION_WORKER_BINDING_MISMATCH");
         if (this.abort.signal.aborted || center !== this.center) return;
         const group = buildConfirmedChunkMeshes(prepared.decoded, this.terrain);
-        this.groups.set(key, group); this.scene.add(group);
+        this.groups.set(key, group); this.failures.delete(key); this.scene.add(group);
         const meshCount = [...this.groups.values()].reduce((total, item) => total + item.children.length, 0);
         this.report({ status: "APPLIED", count: this.groups.size, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
-      }).catch(() => { if (!this.abort.signal.aborted && center === this.center) this.report({ status: "UNPROVABLE", count: this.groups.size }); })
+      }).catch(() => {
+        if (!this.abort.signal.aborted && center === this.center) {
+          const attempts = (this.failures.get(key)?.attempts ?? 0) + 1;
+          this.failures.set(key, { attempts, retryAt: this.now() + Math.min(500 * 2 ** (attempts - 1), 10_000) });
+          this.report({ status: "UNPROVABLE", count: this.groups.size });
+        }
+      })
         .finally(() => { this.pending.delete(key); this.pump(); });
     }
   }
 
-  dispose() { this.abort.abort(); for (const group of this.groups.values()) disposeGroup(group); this.groups.clear(); this.desired = []; }
+  dispose() { this.abort.abort(); for (const group of this.groups.values()) disposeGroup(group); this.groups.clear(); this.failures.clear(); this.desired = []; }
 }

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { buildConfirmedChunkMeshes, prepareConfirmedChunkProjection } from "../client/src/xaurion/integration/ConfirmedChunkProjection";
+import { describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
+import { buildConfirmedChunkMeshes, ConfirmedChunkProjection, prepareConfirmedChunkProjection } from "../client/src/xaurion/integration/ConfirmedChunkProjection";
 import { CHUNK_ASSET_PROJECTION_POLICY, decodeChunkAssetWorkerPayload, type ChunkAssetPayload } from "../shared/worldChunkProjectionPayload";
 import { createWorldChunkProjectionManifestV2, hashWorldChunkProjectionPayload, WORLD_CHUNK_PROJECTION_VERSION_V2 } from "../shared/worldChunkProjectionV2";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
@@ -62,5 +63,19 @@ describe("active projection adapter boundaries (synthetic unit input, not author
   it("rejects anonymous projection reads before database reconstruction", async () => {
     const caller = appRouter.createCaller({ req: { protocol: "https", headers: {} } as TrpcContext["req"], res: {} as TrpcContext["res"], user: null });
     await expect(caller.gameplay.worldChunkProjectionV2({ epoch: 2, chunkX: 0, chunkZ: 0 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("retries transient chunk failures while the player remains in the same chunk", async () => {
+    let now = 0;
+    const fetch = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
+    const projection = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, fetch, vi.fn(), () => now);
+    projection.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(9));
+    projection.update({ x: 0, z: 0 });
+    expect(fetch).toHaveBeenCalledTimes(9);
+    now = 500;
+    projection.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(fetch.mock.calls.length).toBeGreaterThan(9));
+    projection.dispose();
   });
 });
