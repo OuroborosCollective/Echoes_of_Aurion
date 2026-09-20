@@ -4,15 +4,30 @@ on:
     paths:
       - 'scripts/causal-chaos/**'
       - 'scripts/run-aurion-causal-chaos.mjs'
+      - 'scripts/aurionProductionSchemaReconciliation.ts'
       - 'server/causality/**'
       - 'shared/aurion*Causal*'
+      - 'shared/aurionReplayContract.ts'
+      - 'shared/aurionEffectIntentContract.ts'
+      - 'shared/aurionClientVerificationContract.ts'
+      - 'shared/worldChunkProjectionV2.ts'
+      - 'shared/worldChunkProjectionPayload.ts'
+      - 'drizzle/0041_aurion_content_hash_ledger.sql'
       - '.github/workflows/aurion-causal-chaos.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/causal-chaos/**'
       - 'scripts/run-aurion-causal-chaos.mjs'
+      - 'scripts/aurionProductionSchemaReconciliation.ts'
       - 'server/causality/**'
+      - 'shared/aurion*Causal*'
+      - 'shared/aurionReplayContract.ts'
+      - 'shared/aurionEffectIntentContract.ts'
+      - 'shared/aurionClientVerificationContract.ts'
+      - 'shared/worldChunkProjectionV2.ts'
+      - 'shared/worldChunkProjectionPayload.ts'
+      - 'drizzle/0041_aurion_content_hash_ledger.sql'
       - '.github/workflows/aurion-causal-chaos.yml'
   workflow_dispatch:
 permissions:
@@ -49,7 +64,7 @@ jobs:
         run: pnpm exec vitest run server/causality/causalFaultInjection.test.ts server/causality/headlessCausalOracle.test.ts server/causality/causalTick.test.ts server/causality/causalReceiptV2.test.ts server/replayVerdictContract.test.ts
       - name: Build an explicitly test-only immutable subject
         run: |
-          node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync("chaos-subject.bin", "aurion.causal-chaos.test-subject.v1\n"); fs.writeFileSync("chaos-predicate.json", JSON.stringify({schema:"aurion.causal-chaos.test-predicate.v1",sourceRevision:process.env.GITHUB_SHA,productionEvidence:false}));'
+          node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync("chaos-subject.bin", "aurion.causal-chaos.test-subject.v1\n"); fs.writeFileSync("chaos-predicate.json", JSON.stringify({schema:"aurion.causal-chaos.test-predicate.v1",sourceRevision:process.env.AURION_CHAOS_REVISION,workflowSourceRevision:process.env.GITHUB_SHA,productionEvidence:false}));'
       - name: Sign test-only subject through real GitHub OIDC
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
@@ -68,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: causal-chaos-${{ github.sha }}
+          name: causal-chaos-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             causal-chaos-report.json
             chaos-subject.bin
