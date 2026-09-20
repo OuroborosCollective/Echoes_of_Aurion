@@ -186,6 +186,12 @@ function arrayBuffer(bytes: Buffer): ArrayBuffer {
 
 export function openSource3dFallbackSource() {
   const discoveryOnly = sourceCatalog.assets.filter(asset => asset.discoveryOnly).length;
+  const classified = sourceCatalog.assets.filter(asset => !asset.discoveryOnly);
+  const tierCandidateCounts = Object.freeze({
+    phone: classified.filter(asset => asset.fileSize <= assetBudgets.phone.assetBytes).length,
+    tablet: classified.filter(asset => asset.fileSize <= assetBudgets.tablet.assetBytes).length,
+    desktop: classified.filter(asset => asset.fileSize <= assetBudgets.desktop.assetBytes).length,
+  });
   return Object.freeze({
     schemaVersion: sourceCatalog.schemaVersion,
     registryRepository: sourceCatalog.registryRepository,
@@ -195,7 +201,10 @@ export function openSource3dFallbackSource() {
     license: sourceCatalog.license,
     licensePath: sourceCatalog.licensePath,
     sourceAssetCount: sourceCatalog.sourceAssetCount,
-    admissionCandidateCount: sourceCatalog.sourceAssetCount - discoveryOnly,
+    classificationCandidateCount: classified.length,
+    admissionCandidateCount: tierCandidateCounts.desktop,
+    transferOversizeCount: classified.length - tierCandidateCounts.desktop,
+    tierCandidateCounts,
     discoveryOnlyCount: discoveryOnly,
     collections: Object.freeze([...sourceCatalog.projectIds]),
     runtimeDependency: false as const,
