@@ -40,15 +40,17 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
     expect(scrollMetrics.maxScrollTop).toBeGreaterThan(0);
     expect(scrollMetrics.connected).toBe(true);
-    await scrollRegion.focus();
-    await scrollRegion.press('End');
+    // Target actual user scrolling at this container independently of keyboard focus.
+    await scrollRegion.hover();
+    await page.mouse.wheel(0, 10_000);
     // Loading/font layout may change the scroll extent after the initial probe.
     // Compare position and extent in one live sample, still requiring real input
     // to have moved this scroll container to its actual current bottom.
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop > 0 &&
       Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 2), { timeout: 10_000 })
       .toBe(true);
-    await scrollRegion.press('Home');
+    await scrollRegion.hover();
+    await page.mouse.wheel(0, -10_000);
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
       .toBeLessThanOrEqual(2);
 
