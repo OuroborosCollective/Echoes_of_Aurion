@@ -28,6 +28,7 @@ import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
 import { readConfirmedChunkAssetProjection } from "./causality/worldChunkProjectionService";
 import { clientVerificationRegistry } from "./causality/clientVerificationRegistry";
+import { globalAssuranceService } from "./causality/assuranceService";
 import { clientObservationIdentifier } from "../shared/aurionClientVerificationContract";
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
@@ -199,6 +200,8 @@ export const appRouter = router({
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    assuranceStatus: protectedProcedure.input(z.strictObject({ worldId: z.literal(db.GLOBAL_WORLD_ID) }))
+      .query(async () => Object.freeze({ snapshot: await globalAssuranceService.sample(), measuredSloBaseline: globalAssuranceService.measuredBaseline(), mutationAuthority: "none" as const })),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     beginClientProjection: protectedProcedure.input(z.strictObject({
       connectionId: clientObservationIdentifier,

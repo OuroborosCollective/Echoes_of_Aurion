@@ -7,6 +7,7 @@ const BASE_READ_TOOLS = [
   "aurion_admin_get_world_overview",
   "aurion_admin_wolfram_status",
   "aurion_causality_status",
+  "aurion_assurance_status",
   "aurion_tick_receipt_get",
   "aurion_tick_explain",
   "aurion_tick_replay",
