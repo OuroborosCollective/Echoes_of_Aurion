@@ -5,16 +5,38 @@ import { register, enterAx1 } from "./helpers/aurionAuthenticated";
 import { decodeOwnedNpcMultiMemory } from "../shared/npcMultiMemoryReadmodel";
 import { decodeOwnedNpcActions } from "../shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs } from "../shared/npcSemanticGraphReadmodel";
+import { decodeOwnedNpcProjectionProvenance } from "../shared/npcSemanticGraphProvenanceReadmodel";
+import { npcHash, retrieveNpcSemanticMemoryGraph, type NpcSemanticMemoryGraph } from "../server/wasdNpcCapsule";
+import { getDb } from "../server/db";
+import { readVerifiedNpcSemanticGraphV2AtGeneration } from "../server/wasdSemanticGraphV2Persistence";
 const pin=JSON.parse(await readFile(new URL("../config/wasd-npc-capsule.json",import.meta.url),"utf8"));
 test.skip(process.env.AURION_E2E_ISOLATED!=="1","Requires disposable authenticated MariaDB");
 
 const profiles=[{name:"phone",width:412,height:915},{name:"tablet",width:800,height:1280},{name:"desktop",width:1440,height:1000}] as const;
+function activeAt(status:string,from:number,until:number|null,index:number){return status==="active"&&index>=from&&(until===null||index<until);}
+function publicSemanticKey(node:NpcSemanticMemoryGraph["nodes"][number]){return ["actor","location","goal","procedural_competency","polity","item_resource"].includes(node.kind)?node.key:null;}
+function readmodelFromVerifiedGraph(graph:NpcSemanticMemoryGraph,sourceRevision:string){
+  const result=retrieveNpcSemanticMemoryGraph(graph,{logicalIndex:graph.generation,startKeys:[graph.npcId],maxDepth:4,maxCandidates:64,maxResults:32});
+  const resultIds=new Set(result.results.map(item=>item.nodeId));
+  const nodes=result.results.map(item=>{const source=graph.nodes.find(node=>node.id===item.nodeId);if(!source)throw new Error("stored graph retrieval node missing");return {nodeId:item.nodeId,kind:item.kind,semanticKey:publicSemanticKey(source),status:"active" as const,depth:item.depth,score:item.score,payloadHash:item.payloadHash};});
+  const relations=graph.edges.filter(edge=>resultIds.has(edge.fromNodeId)&&resultIds.has(edge.toNodeId)&&activeAt(edge.status,edge.validFromIndex,edge.validUntilIndex,graph.generation)).sort((a,b)=>a.kind<b.kind?-1:a.kind>b.kind?1:a.fromNodeId<b.fromNodeId?-1:a.fromNodeId>b.fromNodeId?1:a.toNodeId<b.toNodeId?-1:a.toNodeId>b.toNodeId?1:0).slice(0,64).map(edge=>({kind:edge.kind,fromNodeId:edge.fromNodeId,toNodeId:edge.toNodeId,status:"active" as const}));
+  const core={npcId:graph.npcId,generation:graph.generation,graphHash:graph.graphHash,sourceResultHash:result.resultHash,sourceRevision,provenanceStatus:"VERIFIED" as const,bounds:{maxDepth:4,maxCandidates:64,maxResults:32},nodes,relations,excluded:{expired:graph.nodes.filter(node=>node.status==="expired").length,contradicted:graph.nodes.filter(node=>node.status==="contradicted").length,superseded:graph.nodes.filter(node=>node.status==="superseded").length}};
+  return {...core,resultHash:npcHash(core)};
+}
 for(const profile of profiles){
   test(`actual confirmed NPC memory on ${profile.name}`,async({page,baseURL},testInfo)=>{
     expect(baseURL).toBe("http://127.0.0.1:3000");expect(new URL(process.env.DATABASE_URL!).pathname).toBe("/aurion_browser_test");
     await page.setViewportSize(profile);
     const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
     await register(page,`aim292_${profile.name}`);
+    const authenticatedUserId=await (async()=>{
+      const pool=createPool(process.env.DATABASE_URL!);
+      try{
+        const [accounts]=await pool.query<RowDataPacket[]>("SELECT userId FROM localCredentials WHERE handle=?",[`aim292_${profile.name}`]);
+        expect(accounts).toHaveLength(1);
+        return Number(accounts[0].userId);
+      }finally{await pool.end();}
+    })();
     const {runtime}=await enterAx1(page);
     await expect.poll(async()=>{const r=await page.request.get("/healthz");return (await r.json()).npcLife?.multiMemory?.sourceRevision;},{timeout:100_000}).toBe(pin.sourceRevision);
     await runtime.getByRole("button",{name:"Aufträge",exact:true}).click();
@@ -41,19 +63,22 @@ for(const profile of profiles){
     expect(actionResponse.status()).toBe(200);
     const actionBody=await actionResponse.json();
     const actionPacket=actionBody.result.data.json;
-    const actionProjection=decodeOwnedNpcActions(actionPacket,actionPacket.userId).actions.find(entry=>entry.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(actionPacket.userId).toBe(authenticatedUserId);
+    const actionProjection=decodeOwnedNpcActions(actionPacket,authenticatedUserId).actions.find(entry=>entry.npcId==="ax1_merchant_observatory_threshold")!;
     expect(actionProjection.actionReceiptId).toBe(displayedAction.actionReceiptId);
     expect(actionProjection.readbackHash).toBe(displayedAction.readbackHash);
     expect(actionProjection.resolutionIndex).toBe(displayedAction.resolutionIndex);
     expect(actionProjection.sourceRevision).toBe(pin.sourceRevision);
     const response=await page.request.get('/api/trpc/gameplay.npcMultiMemory?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(response.status()).toBe(200);const body=await response.json();const packet=body.result.data.json;
-    const parsed=decodeOwnedNpcMultiMemory(packet,packet.userId),projection=parsed.npcs.find(n=>n.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(packet.userId).toBe(authenticatedUserId);
+    const parsed=decodeOwnedNpcMultiMemory(packet,authenticatedUserId),projection=parsed.npcs.find(n=>n.npcId==="ax1_merchant_observatory_threshold")!;
     expect(projection.sourceRevision).toBe(pin.sourceRevision);expect(projection.counts.procedural).toBe(2);expect(projection.counts.semantic).toBeGreaterThan(0);
     const graphResponse=await page.request.get('/api/trpc/gameplay.npcSemanticGraph?input='+encodeURIComponent(JSON.stringify({json:null})));
     expect(graphResponse.status()).toBe(200);
     const graphBody=await graphResponse.json(),graphPacket=graphBody.result.data.json;
-    const graphParsed=decodeOwnedNpcSemanticGraphs(graphPacket,graphPacket.userId);
+    expect(graphPacket.userId).toBe(authenticatedUserId);
+    const graphParsed=decodeOwnedNpcSemanticGraphs(graphPacket,authenticatedUserId);
     const graphProjection=graphParsed.graphs.find(graph=>graph.npcId==="ax1_merchant_observatory_threshold")!;
     expect(graphProjection.sourceRevision).toBe(pin.sourceRevision);
     expect(graphProjection.provenanceStatus).toBe("VERIFIED");
@@ -61,6 +86,14 @@ for(const profile of profiles){
     expect(graphProjection.relations.some(edge=>edge.kind==="performed_action")).toBe(true);
     const publicGraphJson=JSON.stringify(graphPacket);
     for(const forbidden of ['"provenance":','"provenanceId":','"provenanceHash":',"receiptJson","effectSetJson","memoryJson","databaseCredential","actionReceiptId","effectReadbackId","memoryReceiptId"]) expect(publicGraphJson).not.toContain(forbidden);
+    const provenanceResponse=await page.request.get('/api/trpc/gameplay.npcProjectionProvenance?input='+encodeURIComponent(JSON.stringify({json:null})));
+    expect(provenanceResponse.status()).toBe(200);
+    const provenanceBody=await provenanceResponse.json(),provenancePacket=provenanceBody.result.data.json;
+    expect(provenancePacket.userId).toBe(authenticatedUserId);
+    const provenanceProjection=decodeOwnedNpcProjectionProvenance(provenancePacket,authenticatedUserId).projections.find(value=>value.npcId==="ax1_merchant_observatory_threshold")!;
+    expect(provenanceProjection).toMatchObject({npcId:"ax1_merchant_observatory_threshold",sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"});
+    const publicProvenanceJson=JSON.stringify(provenancePacket);
+    for(const forbidden of ['"nodeId":','"payloadHash":','"provenanceId":','"provenanceHash":',"receiptJson","effectSetJson","memoryJson","databaseCredential","actionReceiptId","effectReadbackId","memoryReceiptId"]) expect(publicProvenanceJson).not.toContain(forbidden);
     const graphRow=page.getByTestId("npc-semantic-graph-row").filter({has:page.locator('[data-npc-id="ax1_merchant_observatory_threshold"]')});
     const merchantGraph=page.locator('[data-testid="npc-semantic-graph-row"][data-npc-id="ax1_merchant_observatory_threshold"]');
     await expect(merchantGraph).toBeVisible({timeout:30_000});
@@ -74,7 +107,14 @@ for(const profile of profiles){
     }));
     expect(graphRow).toBeDefined();
     expect(displayedGraph).toMatchObject({graphHash:graphProjection.graphHash,resultHash:graphProjection.resultHash,sourceResultHash:graphProjection.sourceResultHash,generation:graphProjection.generation,provenanceStatus:"VERIFIED"});
+    const merchantProvenance=page.locator('[data-testid="npc-projection-provenance-row"][data-npc-id="ax1_merchant_observatory_threshold"]');
+    await expect(merchantProvenance).toBeVisible({timeout:30_000});
+    const displayedProvenance=await merchantProvenance.evaluate(element=>({
+      generation:Number(element.getAttribute("data-generation")),sourceRevision:element.getAttribute("data-source-revision"),provenanceStatus:element.getAttribute("data-provenance-status"),text:element.textContent,
+    }));
+    expect(displayedProvenance).toMatchObject({generation:graphProjection.generation,sourceRevision:graphProjection.sourceRevision,provenanceStatus:"VERIFIED"});
     const semanticViewportBaseline={...displayedGraph};
+    const provenanceViewportBaseline={...displayedProvenance};
     for(const viewport of profiles){
       await page.setViewportSize({width:viewport.width,height:viewport.height});
       await expect(merchantGraph).toBeVisible();
@@ -87,6 +127,10 @@ for(const profile of profiles){
         text:element.textContent,
       }));
       expect(atViewport).toEqual(semanticViewportBaseline);
+      const provenanceAtViewport=await merchantProvenance.evaluate(element=>({
+        generation:Number(element.getAttribute("data-generation")),sourceRevision:element.getAttribute("data-source-revision"),provenanceStatus:element.getAttribute("data-provenance-status"),text:element.textContent,
+      }));
+      expect(provenanceAtViewport).toEqual(provenanceViewportBaseline);
     }
     await page.setViewportSize(profile);
     const pool=createPool(process.env.DATABASE_URL!);
@@ -107,6 +151,13 @@ for(const profile of profiles){
       const [graphRows]=await pool.query<RowDataPacket[]>("SELECT id,generation,graphHash,sourceRevision,sourceSha256,capsuleManifestSha256,receiptHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[graphProjection.npcId,graphProjection.generation]);
       expect(graphRows).toHaveLength(1);
       expect(graphRows[0]).toMatchObject({graphHash:graphProjection.graphHash,sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256,capsuleManifestSha256:pin.manifestSha256});
+      const [provenanceGraphRows]=await pool.query<RowDataPacket[]>("SELECT generation,graphHash,sourceRevision FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[provenanceProjection.npcId,provenanceProjection.generation]);
+      expect(provenanceGraphRows).toHaveLength(1);
+      const database=await getDb(); if(!database) throw new Error("isolated MariaDB unavailable");
+      const verifiedProvenanceGraph=await database.transaction(tx=>readVerifiedNpcSemanticGraphV2AtGeneration(tx,provenanceProjection.npcId,provenanceProjection.generation));
+      expect(verifiedProvenanceGraph).not.toBeNull();
+      const provenanceReadmodel=readmodelFromVerifiedGraph(verifiedProvenanceGraph!.graph,provenanceGraphRows[0].sourceRevision);
+      expect(provenanceProjection).toEqual({npcId:provenanceReadmodel.npcId,generation:provenanceReadmodel.generation,graphHash:provenanceReadmodel.graphHash,sourceResultHash:provenanceReadmodel.sourceResultHash,semanticGraphResultHash:provenanceReadmodel.resultHash,sourceRevision:provenanceReadmodel.sourceRevision,provenanceStatus:"VERIFIED"});
       expect(graphRows[0].receiptHash).toMatch(/^[a-f0-9]{64}$/);
       const [graphEdges]=await pool.query<RowDataPacket[]>("SELECT id,kind,fromNodeId,toNodeId FROM aurionSemanticGraphEdgesV2 WHERE graphReceiptId=?",[graphRows[0].id]);
       const [actionNodes]=await pool.query<RowDataPacket[]>("SELECT id,semanticKey FROM aurionSemanticGraphNodesV2 WHERE graphReceiptId=? AND kind='action' AND semanticKey=?",[graphRows[0].id,displayedAction.actionReceiptId]);
@@ -118,7 +169,7 @@ for(const profile of profiles){
       expect(performedProv.every(row=>row.sourceRevision===pin.sourceRevision&&/^[a-f0-9]{64}$/.test(row.provenanceHash))).toBe(true);
       const counts=[memory.working.confirmedEventIds.length,memory.episodic.length,memory.semantic.length,memory.procedural.length];
       expect(displayed.counts).toEqual(counts.map(String));
-      await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual AIM-292 memory + AIM-293 effect readback + AIM-294 graph DB provenance -> bounded authenticated AX1 projection",graphHash:graphProjection.graphHash,graphResultHash:graphProjection.resultHash,graphSourceResultHash:graphProjection.sourceResultHash}),contentType:"application/json"});
+      await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual AIM-292 memory + AIM-293 effect readback + AIM-294 graph DB provenance -> bounded authenticated AX1 projection",graphHash:graphProjection.graphHash,graphResultHash:graphProjection.resultHash,graphSourceResultHash:graphProjection.sourceResultHash,projectionProvenanceFormat:provenancePacket.format,projectionProvenanceGeneration:provenanceProjection.generation,projectionProvenanceGraphHash:provenanceProjection.graphHash,projectionProvenanceSourceResultHash:provenanceProjection.sourceResultHash,projectionProvenanceSemanticGraphResultHash:provenanceProjection.semanticGraphResultHash,projectionProvenanceStatus:provenanceProjection.provenanceStatus}),contentType:"application/json"});
     }finally{await pool.end();}
     await page.screenshot({path:testInfo.outputPath("npc-memory-confirmed.png")});
     await page.getByRole("button",{name:"Quest-Buch schließen",exact:true}).click();

@@ -37,8 +37,24 @@ describe("confirmed NPC decision panel",()=>{
   expect(screen.getByText("1 abgelaufen · 2 widersprochen · 3 ersetzt")).toBeTruthy();
   fixture.graph.data={userId:8,format:"aurion-public-npc-semantic-graph.v2",graphs:[graph]};rerender(<NpcDecisionPanel userId={7}/>);
   expect(screen.queryByText("goal: trade")).toBeNull();
-  fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[{...graph,rawProvenance:[{id:"private"}]}]};rerender(<NpcDecisionPanel userId={7}/>);
+ fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[{...graph,rawProvenance:[{id:"private"}]}]};rerender(<NpcDecisionPanel userId={7}/>);
   expect(screen.queryByText("goal: trade")).toBeNull();
+ });
+ it("derives provenance atomically from the displayed verified graph without a second poll",()=>{
+  const node={nodeId:"smn_"+"1".repeat(60),kind:"goal",semanticKey:"trade",status:"active",depth:1,score:1200,payloadHash:"2".repeat(64)};
+  const graph={npcId:"ax1_merchant_observatory_threshold",generation:9,graphHash:"3".repeat(64),sourceResultHash:"4".repeat(64),resultHash:"5".repeat(64),sourceRevision:"6".repeat(40),provenanceStatus:"VERIFIED",bounds:{maxDepth:4,maxCandidates:64,maxResults:32},nodes:[node],relations:[],excluded:{expired:0,contradicted:0,superseded:0}};
+  fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[graph]};
+  const {rerender}=render(<NpcDecisionPanel userId={7}/>);
+  const row=screen.getByTestId("npc-projection-provenance-row");
+  expect(row.getAttribute("data-generation")).toBe("9");
+  expect(row.getAttribute("data-source-revision")).toBe("6".repeat(40));
+  expect(row.getAttribute("data-provenance-status")).toBe("VERIFIED");
+  expect(screen.getByText("Quellrevision 666666666666…")).toBeTruthy();
+  fixture.graph.data={userId:8,format:"aurion-public-npc-semantic-graph.v2",graphs:[graph]};rerender(<NpcDecisionPanel userId={7}/>);
+  expect(screen.queryByTestId("npc-projection-provenance-row")).toBeNull();
+  fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[{...graph,rawProvenance:[{id:"private"}]}]};rerender(<NpcDecisionPanel userId={7}/>);
+  expect(screen.queryByTestId("npc-projection-provenance-row")).toBeNull();
+  expect(screen.getByRole("button",{name:"Provenienz aktualisieren"})).toBeTruthy();
  });
  it("shows only effect-readback-confirmed actions and rejects a foreign action packet",()=>{
   const actionPacket={userId:7,format:"aurion-public-npc-actions.v1",actions:[{npcId:"ax1_merchant_observatory_threshold",actionReceiptId:"nar_"+"1".repeat(56),resolutionIndex:9,action:"caravan",effectsHash:"2".repeat(64),readbackHash:"3".repeat(64),sourceRevision:"4".repeat(40)}]};

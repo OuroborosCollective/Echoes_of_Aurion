@@ -61,6 +61,7 @@ describe("AX1 full visible cutover contract", () => {
   it("keeps the autonomous NPC brain, multi-memory and decision readbacks inside AX1", () => {
     const hud = readFileSync(join(process.cwd(), "client/src/xaurion/integration/AurionAuthorityHud.tsx"), "utf8");
     const panel = readFileSync(join(process.cwd(), "client/src/xaurion/integration/NpcDecisionPanel.tsx"), "utf8");
+    const routes = readFileSync(join(process.cwd(), "server/routers.ts"), "utf8");
     const runtime = readFileSync(join(process.cwd(), "server/autonomousNpcLifeRuntime.ts"), "utf8");
     expect(hud).toContain("<NPCDialogueModal");
     expect(hud).toContain("<NpcDecisionPanel userId={userId}");
@@ -68,6 +69,8 @@ describe("AX1 full visible cutover contract", () => {
     expect(panel).toContain("gameplay.npcMultiMemory");
     expect(panel).toContain("gameplay.npcActions");
     expect(panel).toContain("gameplay.npcSemanticGraph");
+    expect(panel).toContain("projectOwnedNpcProjectionProvenance");
+    expect(routes).toContain("npcProjectionProvenance: protectedProcedure.query");
     expect(panel).toContain("decodeOwnedNpcMultiMemory");
     expect(panel).toContain("decodeOwnedNpcActions");
     expect(panel).toContain("decodeOwnedNpcSemanticGraphs");

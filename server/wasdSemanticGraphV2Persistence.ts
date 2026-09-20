@@ -14,6 +14,7 @@ import {
   aurionSemanticGraphReceiptsV2,
 } from "../drizzle/schema";
 import { getDb } from "./db";
+import { projectOwnedNpcProjectionProvenance } from "../shared/npcSemanticGraphProvenanceReadmodel";
 import {
   readNpcMultiMemoryForDecision,
   type ConfirmedNpcMultiMemory,
@@ -379,6 +380,16 @@ export async function readVerifiedNpcSemanticGraphV2(tx:NpcTransaction,npcId:str
   return row?verifiedGraphFromRow(tx,row):null;
 }
 
+/** Read and verify one immutable historical generation without consulting current NPC state. */
+export async function readVerifiedNpcSemanticGraphV2AtGeneration(tx:NpcTransaction,npcId:string,generation:number){
+  if(!Number.isSafeInteger(generation)||generation<0) throw new Error("NPC_SEMANTIC_GRAPH_GENERATION_INVALID");
+  const row=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(and(
+    eq(aurionSemanticGraphReceiptsV2.npcId,npcId),
+    eq(aurionSemanticGraphReceiptsV2.generation,generation),
+  )).limit(1))[0];
+  return row?verifiedGraphFromRow(tx,row):null;
+}
+
 export async function rebuildSemanticGraphIndexV2(tx:NpcTransaction,npcId:string){
   const confirmed=await readVerifiedNpcSemanticGraphV2(tx,npcId);
   if(!confirmed) return null;
@@ -435,4 +446,12 @@ export async function readConfirmedNpcSemanticGraphPacket(userId:number){
     }
     return Object.freeze({userId,format:"aurion-public-npc-semantic-graph.v2" as const,graphs:Object.freeze(graphs)});
   });
+}
+
+/**
+ * Public provenance is a read-only derivative of the verified graph packet above.
+ * It intentionally does not read or expose the raw provenance tables directly.
+ */
+export async function readConfirmedNpcProjectionProvenancePacket(userId:number){
+  return projectOwnedNpcProjectionProvenance(await readConfirmedNpcSemanticGraphPacket(userId),userId);
 }

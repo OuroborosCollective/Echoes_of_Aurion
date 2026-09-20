@@ -9,6 +9,7 @@ import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } fro
 import { readNpcMultiMemoryForDecision, readPreviousNpcMultiMemory } from "./npcMultiMemoryPersistence";
 import {
   appendNpcSemanticGraphV2,
+  readConfirmedNpcProjectionProvenancePacket,
   readConfirmedNpcSemanticGraphPacket,
   readVerifiedNpcSemanticGraphV2,
   rebuildSemanticGraphIndexV2,
@@ -24,6 +25,7 @@ import {
   type HubId,
 } from "./wasdNpcCapsule";
 import { decodeOwnedNpcSemanticGraphs } from "../shared/npcSemanticGraphReadmodel";
+import { decodeOwnedNpcProjectionProvenance } from "../shared/npcSemanticGraphProvenanceReadmodel";
 
 const suite=process.env.AURION_NPC_ACTION_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 const homeHub:HubId="observatory_threshold";
@@ -147,6 +149,10 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     expect(projected?.provenanceStatus).toBe("VERIFIED");
     expect(JSON.stringify(projected)).not.toContain("provenanceId");
     expect(JSON.stringify(projected)).not.toContain("actionReceiptId");
+    const proof=decodeOwnedNpcProjectionProvenance(await readConfirmedNpcProjectionProvenancePacket(7),7).projections.find(value=>value.npcId===npcId);
+    expect(proof).toEqual({npcId,generation:projected?.generation,graphHash:projected?.graphHash,sourceResultHash:projected?.sourceResultHash,semanticGraphResultHash:projected?.resultHash,sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"});
+    const proofJson=JSON.stringify(proof);
+    for(const forbidden of ["nodeId","payloadHash","receiptId","provenanceId","provenanceHash","actionReceiptId","effectReadbackId","memoryReceiptId","receiptJson"]) expect(proofJson).not.toContain(`\"${forbidden}\"`);
   });
 
   for(const failureInjection of ["after_receipt","after_node","after_edge","after_provenance","before_readback"] as const){
@@ -202,6 +208,7 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
       [core.id,core.npcId,core.generation,core.graphVersion,core.retrievalVersion,core.memoryReceiptId,core.sourceRevision,core.sourceSha256,core.capsuleManifestSha256,core.previousGraphHash,core.graphHash,"{}",npcHash(core)],
     );
     await expect(db.transaction(tx=>readVerifiedNpcSemanticGraphV2(tx,npcId))).rejects.toThrow(/NPC_SEMANTIC_GRAPH_/);
+    await expect(readConfirmedNpcProjectionProvenancePacket(7)).rejects.toThrow(/NPC_SEMANTIC_GRAPH_/);
   });
 
   it("fails closed when a persisted successor loses its canonical predecessor row",async()=>{
@@ -244,10 +251,12 @@ suite("Wave 2 Step 27 AIM-294 real MariaDB semantic graph v2",()=>{
     expect(Number(rebuiltRows[0]?.n??0)).toBe(rebuilt?.indexCount);
     const after=decodeOwnedNpcSemanticGraphs(await readConfirmedNpcSemanticGraphPacket(7),7);
     expect(after).toEqual(before);
+    const proofBefore=decodeOwnedNpcProjectionProvenance(await readConfirmedNpcProjectionProvenancePacket(7),7);
+    expect(proofBefore.projections.find(value=>value.npcId===npcId)).toMatchObject({generation:beforeGraph?.generation,graphHash:beforeGraph?.graphHash,sourceResultHash:beforeGraph?.sourceResultHash,semanticGraphResultHash:beforeGraph?.resultHash,sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"});
 
     const output=execFileSync(process.execPath,["--import","tsx","--input-type=module","-e",
-      'import {readConfirmedNpcSemanticGraphPacket} from "./server/wasdSemanticGraphV2Persistence.ts";const p=await readConfirmedNpcSemanticGraphPacket(7);process.stdout.write(JSON.stringify(p));process.exit(0);'
+      'import {readConfirmedNpcProjectionProvenancePacket} from "./server/wasdSemanticGraphV2Persistence.ts";const p=await readConfirmedNpcProjectionProvenancePacket(7);process.stdout.write(JSON.stringify(p));process.exit(0);'
     ],{cwd:process.cwd(),env:process.env,encoding:"utf8",timeout:30000});
-    expect(decodeOwnedNpcSemanticGraphs(JSON.parse(output),7)).toEqual(before);
+    expect(decodeOwnedNpcProjectionProvenance(JSON.parse(output),7)).toEqual(proofBefore);
   });
 });
