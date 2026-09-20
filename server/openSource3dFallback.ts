@@ -142,10 +142,16 @@ function displayName(candidate: CatalogAsset): string {
   return `OS3A · ${candidate.name}`.slice(0, 120);
 }
 
+function safeSourceFileName(candidate: CatalogAsset): string {
+  const raw = candidate.sourcePath.split("/").at(-1) ?? `${candidate.id}.glb`;
+  const sanitized = raw.replace(/[^A-Za-z0-9._ -]/g, "_").replace(/^[^A-Za-z0-9]+/, "").slice(0, 116);
+  return /^[A-Za-z0-9][A-Za-z0-9._ -]*\.glb$/i.test(sanitized) ? sanitized : `${candidate.id}.glb`;
+}
+
 function assetInput(candidate: CatalogAsset, purpose: Os3aPlanInput["purpose"], contentBase64: string): GameDevelopmentStudioLiveAssetInput {
   return {
     displayName: displayName(candidate),
-    fileName: `${candidate.id}.glb`,
+    fileName: safeSourceFileName(candidate),
     contentBase64,
     purpose,
     packageVersion: "1.0.0",
