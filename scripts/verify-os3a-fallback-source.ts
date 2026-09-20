@@ -37,14 +37,16 @@ async function fetchText(url: string): Promise<string> {
   return response.text();
 }
 async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url, {
+  const request = (authenticated: boolean) => fetch(url, {
     signal: AbortSignal.timeout(20_000),
     headers: {
       accept: "application/vnd.github+json",
       "x-github-api-version": "2022-11-28",
-      ...(process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+      ...(authenticated && process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
     },
   });
+  let response = await request(Boolean(process.env.GITHUB_TOKEN));
+  if (!response.ok && process.env.GITHUB_TOKEN && (response.status === 403 || response.status === 404)) response = await request(false);
   if (!response.ok) throw new Error(`OS3A_SOURCE_API_HTTP_${response.status}`);
   return response.json();
 }
