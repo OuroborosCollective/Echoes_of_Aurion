@@ -1081,6 +1081,33 @@ export const glbAssets = mysqlTable("glbAssets", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** Immutable source receipt for externally vendored GLBs. This table is
+ * presentation provenance only and grants no gameplay or assignment authority. */
+export const glbExternalProvenance = mysqlTable("glbExternalProvenance", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  assetId: varchar("assetId", { length: 64 }).notNull().unique(),
+  sourceKind: mysqlEnum("sourceKind", ["os3a-cc0"]).notNull(),
+  registryRepository: varchar("registryRepository", { length: 160 }).notNull(),
+  registryRevision: varchar("registryRevision", { length: 40 }).notNull(),
+  modelRepository: varchar("modelRepository", { length: 160 }).notNull(),
+  modelRevision: varchar("modelRevision", { length: 40 }).notNull(),
+  licensePath: varchar("licensePath", { length: 120 }).notNull(),
+  projectId: varchar("projectId", { length: 96 }).notNull(),
+  sourceAssetId: varchar("sourceAssetId", { length: 96 }).notNull(),
+  sourcePath: varchar("sourcePath", { length: 512 }).notNull(),
+  license: varchar("license", { length: 64 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 64 }).notNull(),
+  sourceBytes: int("sourceBytes").notNull(),
+  sourceMetadataSha256: varchar("sourceMetadataSha256", { length: 64 }).notNull(),
+  fallbackPlanSha256: varchar("fallbackPlanSha256", { length: 64 }).notNull(),
+  receiptSha256: varchar("receiptSha256", { length: 64 }).notNull().unique(),
+  createdByUserId: int("createdByUserId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("glbExternalProvenance_source_identity_uq").on(table.projectId, table.sourceAssetId, table.modelRevision),
+  index("glbExternalProvenance_asset_created_idx").on(table.assetId, table.createdAt),
+]);
+
 export const glbAssignments = mysqlTable("glbAssignments", {
   id: varchar("id", { length: 64 }).primaryKey(),
   assetId: varchar("assetId", { length: 64 }).notNull(),
