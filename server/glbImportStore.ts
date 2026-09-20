@@ -17,6 +17,12 @@ import {
   type GlbImportReceipt,
 } from "../shared/glbImportContract";
 import { buildGlbImportPlan } from "./glbImportPlan";
+import {
+  glbExternalProvenanceInputSchema,
+  glbExternalProvenanceReadbackSchema,
+  type GlbExternalProvenanceInput,
+  type GlbExternalProvenanceReadback,
+} from "../shared/glbExternalProvenanceContract";
 import { persistGlbBytes, readStoredGlb } from "./glbFileStore";
 import type { GlbAssetClassification } from "./glbAssetClassifier";
 import { groupGlbCatalogRows } from "./glbCatalogFamilies";
@@ -67,6 +73,37 @@ function canonicalDisplayName(displayName: string, purpose: GlbImportPurpose, cl
   return result;
 }
 
+
+function externalProvenanceReceipt(assetId: string, provenance: GlbExternalProvenanceInput): GlbExternalProvenanceReadback {
+  const identity = Object.freeze({ assetId, ...provenance });
+  return glbExternalProvenanceReadbackSchema.parse({
+    ...identity,
+    receiptSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex"),
+  });
+}
+
+function provenanceFromRow(row: RowDataPacket): GlbExternalProvenanceReadback {
+  return glbExternalProvenanceReadbackSchema.parse({
+    version: "aurion.glb-external-provenance.v1",
+    sourceKind: row.sourceKind,
+    registryRepository: row.registryRepository,
+    registryRevision: row.registryRevision,
+    modelRepository: row.modelRepository,
+    modelRevision: row.modelRevision,
+    licensePath: row.licensePath,
+    projectId: row.projectId,
+    sourceAssetId: row.sourceAssetId,
+    sourcePath: row.sourcePath,
+    license: row.license,
+    sourceSha256: row.sourceSha256,
+    sourceBytes: Number(row.sourceBytes),
+    sourceMetadataSha256: row.sourceMetadataSha256,
+    fallbackPlanSha256: row.fallbackPlanSha256,
+    assetId: row.assetId,
+    receiptSha256: row.receiptSha256,
+  });
+}
+
 export class GlbImportStore {
   private readonly pool: Pool;
   private readonly lockName: string;
@@ -94,8 +131,9 @@ export class GlbImportStore {
     }
   }
 
-  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; fileName?: string; expectedPlanSha256?: string }): Promise<GlbImportReceipt> {
+  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; fileName?: string; expectedPlanSha256?: string; externalProvenance?: GlbExternalProvenanceInput }): Promise<GlbImportReceipt> {
     const purpose = input.purpose ?? "auto";
+    const externalProvenance = input.externalProvenance ? glbExternalProvenanceInputSchema.parse(input.externalProvenance) : null;
     const plan = buildGlbImportPlan(input.contentBase64, purpose, input.fileName ?? input.displayName);
     if (input.expectedPlanSha256 && plan.planSha256 !== input.expectedPlanSha256) throw new Error("GLB_IMPORT_PLAN_CHANGED");
     const displayName = canonicalDisplayName(input.displayName, purpose, plan.classification);
@@ -135,6 +173,20 @@ export class GlbImportStore {
       const [readback] = await connection.query<RowDataPacket[]>("SELECT id, sha256, bytes, storageUrl, displayName FROM glbAssets WHERE id = ?", [assetId]);
       const row = readback[0];
       if (!row || row.sha256 !== plan.sha256 || row.bytes !== plan.bytes || row.storageUrl !== stored.url || glbPurposeFromDisplayName(String(row.displayName)) !== purpose) throw new Error("GLB_IMPORT_READBACK_FAILED");
+      if (externalProvenance) {
+        if (externalProvenance.sourceSha256 !== plan.sha256 || externalProvenance.sourceBytes !== plan.bytes) throw new Error("GLB_EXTERNAL_PROVENANCE_SOURCE_MISMATCH");
+        const expected = externalProvenanceReceipt(assetId, externalProvenance);
+        const [existingProvenance] = await connection.query<RowDataPacket[]>("SELECT * FROM glbExternalProvenance WHERE assetId = ? FOR UPDATE", [assetId]);
+        if (!existingProvenance.length) {
+          const provenanceId = `prov_${expected.receiptSha256.slice(0, 48)}`;
+          await connection.execute(
+            "INSERT INTO glbExternalProvenance (id, assetId, sourceKind, registryRepository, registryRevision, modelRepository, modelRevision, licensePath, projectId, sourceAssetId, sourcePath, license, sourceSha256, sourceBytes, sourceMetadataSha256, fallbackPlanSha256, receiptSha256, createdByUserId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [provenanceId, assetId, expected.sourceKind, expected.registryRepository, expected.registryRevision, expected.modelRepository, expected.modelRevision, expected.licensePath, expected.projectId, expected.sourceAssetId, expected.sourcePath, expected.license, expected.sourceSha256, expected.sourceBytes, expected.sourceMetadataSha256, expected.fallbackPlanSha256, expected.receiptSha256, actorUserId],
+          );
+        }
+        const [provenanceReadback] = await connection.query<RowDataPacket[]>("SELECT * FROM glbExternalProvenance WHERE assetId = ?", [assetId]);
+        if (provenanceReadback.length !== 1 || JSON.stringify(provenanceFromRow(provenanceReadback[0]!)) !== JSON.stringify(expected)) throw new Error("GLB_EXTERNAL_PROVENANCE_READBACK_FAILED");
+      }
       return glbImportReceiptSchema.parse({ version: GLB_IMPORT_VERSION, assetId, sha256: row.sha256, bytes: row.bytes, storageUrl: row.storageUrl, assetType: plan.assetType, targetKey: plan.targetKey, planSha256: plan.planSha256, status, activeAssetId, deduplicated: Boolean(existing.length) });
     });
   }
@@ -268,6 +320,13 @@ export class GlbImportStore {
       const [rows] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ?", [input.assetId]);
       return rows[0];
     });
+  }
+
+  async externalProvenance(assetId: string): Promise<GlbExternalProvenanceReadback | null> {
+    if (!/^glb_[a-f0-9]{48}$/.test(assetId)) return null;
+    const [rows] = await this.pool.query<RowDataPacket[]>("SELECT * FROM glbExternalProvenance WHERE assetId = ? LIMIT 2", [assetId]);
+    if (rows.length > 1) throw new Error("GLB_EXTERNAL_PROVENANCE_AMBIGUOUS");
+    return rows[0] ? provenanceFromRow(rows[0]) : null;
   }
 
   async approvedBytes(sha256: string): Promise<Buffer | null> {
