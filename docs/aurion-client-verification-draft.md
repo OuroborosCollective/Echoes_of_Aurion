@@ -12,7 +12,7 @@ Only the ticket-authenticated zone gateway opens a registry binding. Connection 
 
 `gameplay.beginClientProjection` independently reads the Step-28 receipt-bound projection, then records its manifest and requested worker generation before returning the bytes. The client cannot supply the expected manifest or server receipt. Up to sixteen observations per connection tolerate concurrent/reordered chunk requests while retiring older generations; the registry admits at most 128 live bindings.
 
-AX1 sends a receipt only after actual byte validation, worker validation and scene insertion. The logical frame is a client-side projection-update counter, never a deadline or simulation input. Hashing, transport or observation failure leaves gameplay and the applied scene untouched. A client can lie about successful apply: `CLIENT_VERIFIED` means an untrusted client reported a matching expected receipt, not independent proof of pixels.
+AX1 sends a receipt only after actual byte validation, worker validation and scene insertion. The logical frame is a client-side projection-update counter, never a deadline or simulation input. If the observer binding/capacity/transport is unavailable, AX1 still uses the same authority-verifying Step-28 producer and reports CLIENT_UNOBSERVABLE. Hashing or report failure leaves gameplay and the applied scene untouched. A client can lie about successful apply: `CLIENT_VERIFIED` means an untrusted client reported a matching expected receipt, not independent proof of pixels.
 
 ## Status semantics
 

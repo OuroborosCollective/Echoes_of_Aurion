@@ -304,10 +304,18 @@ export default function AurionOpenWorldRuntime() {
       delete containerRef.current.dataset.clientVerification;
       const chunkProjection = new ConfirmedChunkProjection(engine.scene, world.epoch,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
-        input => {
+        async input => {
           const connectionId = zoneClientRef.current?.getConnectionId();
-          if (!connectionId) return Promise.reject(Error("CLIENT_CONNECTION_UNAVAILABLE"));
-          return rpcUtils.client.gameplay.beginClientProjection.mutate({ ...input, connectionId });
+          try {
+            if (!connectionId) throw Error("CLIENT_CONNECTION_UNAVAILABLE");
+            return await rpcUtils.client.gameplay.beginClientProjection.mutate({ ...input, connectionId });
+          } catch {
+            // Observer capacity/transport must not gate presentation. The same
+            // authority-verifying Step-28 producer still supplies the bytes.
+            if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify({ status: "CLIENT_UNOBSERVABLE", trust: "untrusted-client-observation", mutationAuthority: "none" });
+            const { generation: _generation, ...coordinate } = input;
+            return rpcUtils.gameplay.worldChunkProjectionV2.fetch(coordinate);
+          }
         },
         evidence => { if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence); },
         async ({ job, binding, observedAtLogicalFrame }) => {

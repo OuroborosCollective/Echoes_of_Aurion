@@ -185,5 +185,19 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     expect(rpcData(await persisted.json())).toMatchObject({ status: "VERIFIED", manifest: { worldCausalRoot: projection.worldRootHash, projectionHash: projection.projectionHash, payloadHash: projection.payloadHash } });
     console.info("STEP28_REAL_BROWSER", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, projection, workerProjection: await chunks(page), backend: selected.backend, recoveredBackend: (await evidence(page)).backend, actualContextLoss: true, actualDeviceDestroy: true }));
     await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: baseline.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), clientVerification, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
+    // Only observer transport is faulted. Actual projection bytes must still come
+    // from the unchanged, authenticated Step-28 authority-verifying endpoint.
+    await optional.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await page.evaluate(() => sessionStorage.setItem("aurion:renderer", "webgl2"));
+    await page.route("**/api/trpc/gameplay.beginClientProjection*", route => route.abort("failed"));
+    const withoutObserver = await enterAx1(page);
+    expect(withoutObserver.snapshot.globalWorld.deterministicHash).toBe(baseline.snapshot.globalWorld.deterministicHash);
+    await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
+    expect(await chunks(page)).toMatchObject({ status: "APPLIED", worldRootHash: projection.worldRootHash });
+    expect((await chunks(page)).meshCount).toBeGreaterThan(0);
+    expect(await clientObservation(page)).toMatchObject({ status: "CLIENT_UNOBSERVABLE", mutationAuthority: "none" });
+    await page.screenshot({ path: testInfo.outputPath("observer-unavailable-projection-intact.png") });
+    console.info("STEP29_OBSERVER_UNAVAILABLE", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, projection: await chunks(page), observation: await clientObservation(page) }));
+    await page.unroute("**/api/trpc/gameplay.beginClientProjection*");
   });
 }
