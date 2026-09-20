@@ -74,6 +74,7 @@ describe("Blocker 5 causal receipt v2", () => {
         "INPUT_ORDER",
         ...AURION_CAUSAL_STAGE_NAMES.map(stage => `AUTHORITY:${stage}`),
         "POST_STATE",
+        "RNG_ROOT",
         "RECEIPT",
       ]);
     }

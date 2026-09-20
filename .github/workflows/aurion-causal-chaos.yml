@@ -31,10 +31,14 @@ jobs:
       attestations: write
     env:
       NODE_ENV: test
+      AURION_CHAOS_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Bind tests to exact source head
+        run: test "$(git rev-parse HEAD)" = "$AURION_CHAOS_REVISION"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -42,7 +46,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Isolated regression and production import exclusion
-        run: pnpm exec vitest run server/causality/causalFaultInjection.test.ts server/causality/headlessCausalOracle.test.ts server/causality/causalTick.test.ts server/replayVerdictContract.test.ts
+        run: pnpm exec vitest run server/causality/causalFaultInjection.test.ts server/causality/headlessCausalOracle.test.ts server/causality/causalTick.test.ts server/causality/causalReceiptV2.test.ts server/replayVerdictContract.test.ts
       - name: Build an explicitly test-only immutable subject
         run: |
           node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync("chaos-subject.bin", "aurion.causal-chaos.test-subject.v1\n"); fs.writeFileSync("chaos-predicate.json", JSON.stringify({schema:"aurion.causal-chaos.test-predicate.v1",sourceRevision:process.env.GITHUB_SHA,productionEvidence:false}));'

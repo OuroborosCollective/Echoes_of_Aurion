@@ -16,6 +16,7 @@ try {
     for (const fault of faults) results.push(await runFault(fault, attestation));
     const exitCode = results.every(r => r.detected) ? 0 : results.some(r => !r.detected && r.observed.status === 'UNPROVABLE') ? 2 : 1;
     process.stdout.write(JSON.stringify({ schema: 'aurion.causal-chaos-report.v1', evidenceKind: 'isolated-test',
-      mutationAuthority: 'none', exitCode, results }, null, 2) + '\n'); process.exitCode = exitCode;
+      mutationAuthority: 'none', testedRevision: process.env.AURION_CHAOS_REVISION ?? null,
+      workflowSourceRevision: process.env.GITHUB_SHA ?? null, exitCode, results }, null, 2) + '\n'); process.exitCode = exitCode;
   }
 } catch (error) { process.stderr.write(`${error.message}\n`); process.exitCode = 1; }

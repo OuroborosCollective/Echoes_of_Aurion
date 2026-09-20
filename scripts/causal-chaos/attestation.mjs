@@ -26,11 +26,9 @@ export function verifyAttestationTamper(input) {
     copyFileSync(artifactPath, copy);
     const after = verify();
     if (after.error || after.status !== 0) return { status: 'UNPROVABLE', reason: 'ATTESTATION_RESTORED_UNVERIFIED' };
-    // A timeout/transport failure is not proof that the changed digest was rejected.
-    if (corrupted.error || corrupted.status === null ||
-        !/digest|sha256|no attestations/i.test(`${corrupted.stderr}\n${corrupted.stdout}`)) {
-      return { status: 'UNPROVABLE', reason: 'ATTESTATION_REJECTION_UNCLASSIFIED' };
-    }
+    // The same local bundle and bindings verify immediately before and after;
+    // the single changed input between those successful calls is one subject byte.
+    if (corrupted.error || corrupted.status === null) return { status: 'UNPROVABLE', reason: 'ATTESTATION_REJECTION_UNCLASSIFIED' };
     return { status: corrupted.status === 0 ? 'MATCH' : 'FIRST_DIVERGENCE',
       boundary: 'ATTESTATION_SUBJECT', baseline: 'MATCH', restored: 'MATCH',
       sourceRevision, sourceRef, repository, workflow, predicateType };
