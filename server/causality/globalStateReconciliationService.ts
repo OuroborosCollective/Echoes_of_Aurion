@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { aurionGlobalWorldEpochReceipts } from "../../drizzle/schema";
 import { aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
-import { verifyWorldCausalRoot, type AurionWorldCausalRootResult } from "../../shared/aurionWorldCausalRootContract";
+import { worldCausalRootService } from "./worldCausalRootService";
 import { getDb } from "../db";
 
 export type GlobalReconciliationStatus = Readonly<{
@@ -84,19 +84,15 @@ export class AurionGlobalStateReconciliationService {
         });
         return;
       }
-      let result: AurionWorldCausalRootResult | null = null;
-      try {
-        const parsed = JSON.parse(proof.globalProofJson) as AurionWorldCausalRootResult;
-        if (parsed?.schema === "aurion.world.causal-root-result.v1") result = parsed;
-      } catch {
-        result = null;
-      }
-      const verified = result?.status === "VERIFIED" && !!result.root && verifyWorldCausalRoot(result.root) && result.root.worldRootHash === proof.globalProofHash;
+      // Recompute the persisted delta prefixes and zone ranges. Merely hashing
+      // the stored root document is not independent state verification.
+      const verdict = await worldCausalRootService.replay(latest.worldId, latest.epoch);
+      const verified = verdict.status === "MATCH" && verdict.worldRootHash === proof.globalProofHash;
       this.status = Object.freeze({
         protocol: "aurion.global-reconciliation.v1",
         mutationAuthority: "none",
         truthStatus: verified ? "VERIFIED" : "UNPROVABLE",
-        reason: verified ? "WORLD_CAUSAL_ROOT_MATCH" : (result?.reason ?? "WORLD_CAUSAL_ROOT_INVALID"),
+        reason: verified ? "WORLD_CAUSAL_ROOT_MATCH" : (verdict.status === "UNPROVABLE" ? verdict.reason : "WORLD_CAUSAL_ROOT_DIVERGENCE"),
         lastObservedEpoch: latest.epoch,
       });
     } catch (error) {

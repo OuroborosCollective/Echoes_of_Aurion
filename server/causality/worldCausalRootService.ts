@@ -1,11 +1,16 @@
 import { and, eq, gte, lte } from "drizzle-orm";
 import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
+import { aurionWorldChunkDeltas } from "../../drizzle/schema";
+import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
+import { createCanonicalChunkReceipt, createChunkUniverse, chunkKey, chunkCoordinateSchema } from "../../shared/aurionChunkStateContract";
+import { buildChunkWorldRoot, parseAnyWorldRootResult, verifyAnyWorldRoot, WORLD_CHUNK_ROOT_SCHEMA, type AnyWorldRootResult } from "../../shared/aurionChunkWorldRootContract";
+import { createWorldChunkDelta, type WorldChunkCoordinate, type WorldChunkDelta } from "../../shared/worldChunkProtocol";
+import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../../shared/worldIdentity";
+import { activeProvenance } from "../aurionProvenance";
 import {
   AURION_WORLD_CAUSAL_ZONE_IDS,
   computeWorldCausalRoot,
   computeZoneEpochRoot,
-  verifyWorldCausalRoot,
-  type AurionWorldCausalRootResult,
   type AurionZoneReceiptReference,
 } from "../../shared/aurionWorldCausalRootContract";
 import { getDb } from "../db";
@@ -14,15 +19,6 @@ export type WorldCausalRootReplayVerdict =
   | Readonly<{ status: "MATCH"; worldRootHash: string; epoch: number }>
   | Readonly<{ status: "FIRST_DIVERGENCE"; expectedHash: string; observedHash: string; epoch: number }>
   | Readonly<{ status: "UNPROVABLE"; reason: string; epoch: number }>;
-
-function parsePersistedResult(value: string): AurionWorldCausalRootResult | null {
-  try {
-    const parsed = JSON.parse(value) as AurionWorldCausalRootResult;
-    return parsed?.schema === "aurion.world.causal-root-result.v1" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 function receiptReference(row: typeof aurionCausalTickReceipts.$inferSelect): AurionZoneReceiptReference {
   return {
@@ -37,7 +33,8 @@ function receiptReference(row: typeof aurionCausalTickReceipts.$inferSelect): Au
 }
 
 export class AurionWorldCausalRootService {
-  async read(worldId: string, epoch: number): Promise<AurionWorldCausalRootResult | null> {
+  async read(worldId: string, epoch: number): Promise<AnyWorldRootResult | null> {
+    if (!Number.isSafeInteger(epoch) || epoch < 1) return null;
     const db = await getDb();
     if (!db) return null;
     const [row] = await db.select().from(aurionGlobalStateProofs).where(and(
@@ -45,7 +42,10 @@ export class AurionWorldCausalRootService {
       eq(aurionGlobalStateProofs.epoch, epoch),
     )).limit(1);
     if (!row) return null;
-    return parsePersistedResult(row.globalProofJson);
+    const parsed = parseAnyWorldRootResult(row.globalProofJson);
+    if (!parsed || row.globalProofHash !== parsed.evidenceHash || row.status !== parsed.status) return null;
+    if (parsed.status === "VERIFIED" && (parsed.root.worldId !== worldId || parsed.root.epoch !== epoch)) return null;
+    return parsed;
   }
 
   async replay(worldId: string, epoch: number): Promise<WorldCausalRootReplayVerdict> {
@@ -54,7 +54,7 @@ export class AurionWorldCausalRootService {
     if (persisted.status !== "VERIFIED" || !persisted.root) {
       return Object.freeze({ status: "UNPROVABLE", reason: persisted.reason ?? "WORLD_ROOT_UNPROVABLE", epoch });
     }
-    if (!verifyWorldCausalRoot(persisted.root)) {
+    if (!verifyAnyWorldRoot(persisted.root)) {
       return Object.freeze({ status: "FIRST_DIVERGENCE", expectedHash: persisted.root.worldRootHash, observedHash: "INVALID_STORED_ROOT", epoch });
     }
 
@@ -78,7 +78,7 @@ export class AurionWorldCausalRootService {
       }
     }
 
-    const recomputed = computeWorldCausalRoot({
+    const zoneResult = computeWorldCausalRoot({
       worldId,
       epoch,
       sourceRevision: persisted.root.sourceRevision,
@@ -88,6 +88,26 @@ export class AurionWorldCausalRootService {
       previousWorldRoot: persisted.root.previousWorldRoot,
       previousWorldRootProvable: true,
     });
+    let recomputed: AnyWorldRootResult = zoneResult;
+    if (persisted.root.schema === WORLD_CHUNK_ROOT_SCHEMA) {
+      if (worldId !== GLOBAL_WORLD_ID || persisted.root.sourceRevision !== activeProvenance.sourceRevision) {
+        return Object.freeze({ status: "UNPROVABLE", reason: "CHUNK_GENERATOR_REVISION_UNAVAILABLE", epoch });
+      }
+      if (canonicalSha256(createChunkUniverse(worldId, GLOBAL_WORLD_SEED)) !== canonicalSha256(persisted.root.chunkUniverse)) {
+        return Object.freeze({ status: "UNPROVABLE", reason: "CHUNK_GENERATOR_IDENTITY_MISMATCH", epoch });
+      }
+      const previous = epoch === 1 ? null : await this.read(worldId, epoch - 1);
+      if (epoch > 1 && (!previous || previous.status !== "VERIFIED" || previous.root.worldRootHash !== persisted.root.previousWorldRoot)) {
+        return Object.freeze({ status: "UNPROVABLE", reason: "PREVIOUS_WORLD_ROOT_UNPROVABLE", epoch });
+      }
+      const deltas: WorldChunkDelta[] = [];
+      for (const receipt of persisted.root.chunkReceipts) {
+        const stream = await this.readChunkPrefix(worldId, receipt.coordinate, receipt.throughSequence);
+        if (!stream) return Object.freeze({ status: "UNPROVABLE", reason: "CHUNK_DELTA_RANGE_INCOMPLETE_OR_INVALID", epoch });
+        deltas.push(...stream);
+      }
+      recomputed = buildChunkWorldRoot({ zoneResult, worldId, epoch, sourceRevision: persisted.root.sourceRevision, worldSeed: GLOBAL_WORLD_SEED, deltas, previous });
+    }
     if (recomputed.status !== "VERIFIED" || !recomputed.root) {
       return Object.freeze({ status: "UNPROVABLE", reason: recomputed.reason ?? "RECOMPUTE_UNPROVABLE", epoch });
     }
@@ -100,6 +120,53 @@ export class AurionWorldCausalRootService {
       });
     }
     return Object.freeze({ status: "MATCH", worldRootHash: recomputed.root.worldRootHash, epoch });
+  }
+
+  private async readChunkPrefix(worldId: string, coordinate: WorldChunkCoordinate, throughSequence: number): Promise<WorldChunkDelta[] | null> {
+    const db = await getDb();
+    if (!db) return null;
+    const rows = await db.select().from(aurionWorldChunkDeltas).where(and(
+      eq(aurionWorldChunkDeltas.worldId, worldId), eq(aurionWorldChunkDeltas.chunkX, coordinate.x),
+      eq(aurionWorldChunkDeltas.chunkZ, coordinate.z), lte(aurionWorldChunkDeltas.sequence, throughSequence),
+    )).orderBy(aurionWorldChunkDeltas.sequence).limit(throughSequence + 1);
+    if (rows.length !== throughSequence) return null;
+    try {
+      return rows.map((row, index) => {
+        if (row.sequence !== index + 1) throw new Error("CHUNK_SEQUENCE_GAP");
+        const delta = createWorldChunkDelta({
+          id: row.id, worldId: row.worldId, coordinate: { x: row.chunkX, z: row.chunkZ },
+          baseRevision: row.baseRevision, sequence: row.sequence, kind: row.kind, targetId: row.targetId,
+          actorUserId: row.actorUserId, idempotencyKey: row.idempotencyKey, payload: JSON.parse(row.payloadJson),
+        });
+        if (delta.deterministicHash !== row.deterministicHash) throw new Error("CHUNK_DELTA_HASH_MISMATCH");
+        return delta;
+      });
+    } catch { return null; }
+  }
+
+  /** Read-only reconstruction from a replayed epoch, never the current mutable view. */
+  async readChunk(worldId: string, epoch: number, coordinate: WorldChunkCoordinate) {
+    chunkCoordinateSchema.parse(coordinate);
+    const unprovable = (reason: string) => Object.freeze({ status: "UNPROVABLE" as const, reason });
+    const replay = await this.replay(worldId, epoch);
+    if (replay.status !== "MATCH") return unprovable(replay.status === "UNPROVABLE" ? replay.reason : "WORLD_ROOT_DIVERGENCE");
+    const result = await this.read(worldId, epoch);
+    if (result?.status !== "VERIFIED" || result.root.schema !== WORLD_CHUNK_ROOT_SCHEMA || result.root.worldRootHash !== replay.worldRootHash) return unprovable("CHUNK_WORLD_ROOT_UNAVAILABLE");
+    const stored = result.root.chunkReceipts.find(r => chunkKey(r.coordinate) === chunkKey(coordinate));
+    const deltas = stored ? await this.readChunkPrefix(worldId, coordinate, stored.throughSequence) : [];
+    if (!deltas) return unprovable("CHUNK_DELTA_RANGE_INCOMPLETE_OR_INVALID");
+    try {
+      const { state, receipt } = createCanonicalChunkReceipt({
+        worldId, epoch, coordinate, worldSeed: GLOBAL_WORLD_SEED, sourceRevision: result.root.sourceRevision,
+        deltas, previousChunkReceiptHash: stored?.previousChunkReceiptHash ?? null,
+      });
+      if (stored && receipt.receiptHash !== stored.receiptHash) return unprovable("CHUNK_STATE_DIVERGENCE");
+      return Object.freeze({
+        status: "VERIFIED" as const,
+        membership: stored ? "COMMITTED_CHUNK_RECEIPT" as const : "GENERATOR_AND_EMPTY_STREAM" as const,
+        worldRootHash: result.root.worldRootHash, receipt, state,
+      });
+    } catch { return unprovable("CHUNK_STATE_INVALID"); }
   }
 }
 
