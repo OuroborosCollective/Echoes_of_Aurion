@@ -43,12 +43,32 @@ type Catalog = Readonly<{
   assets: readonly CatalogAsset[];
 }>;
 
-const sourceCatalog = catalogJson as Catalog;
+const sourceCatalog = catalogJson as unknown as Catalog;
 if (
   sourceCatalog.schemaVersion !== "aurion.os3a-fallback-catalog.v1" ||
+  sourceCatalog.registryRepository !== "ToxSam/open-source-3D-assets" ||
   !/^[a-f0-9]{40}$/.test(sourceCatalog.registryRevision) ||
+  sourceCatalog.modelRepository !== "ToxSam/cc0-models-Polygonal-Mind" ||
   !/^[a-f0-9]{40}$/.test(sourceCatalog.modelRevision) ||
-  sourceCatalog.sourceAssetCount !== sourceCatalog.assets.length
+  sourceCatalog.license !== "CC0-1.0" ||
+  sourceCatalog.licensePath !== "License.md" ||
+  sourceCatalog.sourceAssetCount !== sourceCatalog.assets.length ||
+  sourceCatalog.assets.some(candidate =>
+    !/^[a-z0-9][a-z0-9-]{2,95}$/.test(candidate.id) ||
+    !/^pm-[a-z0-9-]{2,80}$/.test(candidate.projectId) ||
+    typeof candidate.name !== "string" ||
+    candidate.name.length < 1 ||
+    !SOURCE_PATH.test(candidate.sourcePath) ||
+    candidate.sourcePath.includes("..") ||
+    !Number.isSafeInteger(candidate.fileSize) ||
+    candidate.fileSize < 1 ||
+    candidate.fileSize > 24 * 1024 * 1024 ||
+    !candidate.attributes ||
+    typeof candidate.attributes !== "object" ||
+    Object.entries(candidate.attributes).some(([key, value]) => !key || typeof value !== "string") ||
+    typeof candidate.discoveryOnly !== "boolean" ||
+    (candidate.discoveryNote !== null && typeof candidate.discoveryNote !== "string")
+  )
 ) throw new Error("OS3A_PINNED_CATALOG_INVALID");
 
 export const os3aSearchInputSchema = z.object({
