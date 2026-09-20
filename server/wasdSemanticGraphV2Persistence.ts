@@ -14,6 +14,7 @@ import {
   aurionSemanticGraphReceiptsV2,
 } from "../drizzle/schema";
 import { getDb } from "./db";
+import { projectOwnedNpcProjectionProvenance } from "../shared/npcSemanticGraphProvenanceReadmodel";
 import {
   readNpcMultiMemoryForDecision,
   type ConfirmedNpcMultiMemory,
@@ -435,4 +436,12 @@ export async function readConfirmedNpcSemanticGraphPacket(userId:number){
     }
     return Object.freeze({userId,format:"aurion-public-npc-semantic-graph.v2" as const,graphs:Object.freeze(graphs)});
   });
+}
+
+/**
+ * Public provenance is a read-only derivative of the verified graph packet above.
+ * It intentionally does not read or expose the raw provenance tables directly.
+ */
+export async function readConfirmedNpcProjectionProvenancePacket(userId:number){
+  return projectOwnedNpcProjectionProvenance(await readConfirmedNpcSemanticGraphPacket(userId),userId);
 }
