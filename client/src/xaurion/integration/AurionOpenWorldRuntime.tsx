@@ -151,7 +151,11 @@ export default function AurionOpenWorldRuntime() {
   }, [inspectionMode, setCurrentTarget]);
 
   const playerSnapshot = trpc.player.me.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
-  const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
+  const worldSnapshot = trpc.gameplay.openWorld.useQuery(undefined, {
+    enabled: Boolean(activation) && isAuthenticated,
+    staleTime: 0,
+    refetchInterval: activation ? 5_000 : false,
+  });
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const selectedCharacterUrl = characterAppearance.data?.storageUrl ?? confirmedSelection?.storageUrl ?? null;
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
@@ -282,9 +286,13 @@ export default function AurionOpenWorldRuntime() {
     void (async () => { try {
       // A replacement generation obtains the current authenticated world context;
       // it never advances the previous local projection to invent a recovery state.
+      const observedWorld = worldSnapshot.data?.globalWorld;
+      const activationWorld = activation.globalWorld;
+      const currentWorld = observedWorld && typeof observedWorld.epoch === "number" &&
+        observedWorld.epoch >= (activationWorld?.epoch ?? 0) ? observedWorld : activationWorld;
       const world = recoveryEpoch > 0
         ? (await rpcUtils.gameplay.openWorld.fetch(undefined, { staleTime: 0 })).globalWorld
-        : activation.globalWorld;
+        : currentWorld;
       if (disposed) return;
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
       let preference = new URLSearchParams(window.location.search).get("renderer");
@@ -333,7 +341,7 @@ export default function AurionOpenWorldRuntime() {
       abort.signal.addEventListener("abort", () => chunkProjection.dispose(), { once: true });
       engine.onProjectionTick = delta => {
         serviceNpcRef.current?.update(delta);
-        chunkProjection.update(engine!.player.position);
+        chunkProjection.update(engine!.player.position, delta);
         worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth);
         if (containerRef.current) containerRef.current.dataset.playerProjection = JSON.stringify({ position: engine!.player.position, rendered: engine!.player.group.position });
       };
@@ -383,7 +391,8 @@ export default function AurionOpenWorldRuntime() {
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
     };
-  }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch]);
+  }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch,
+    worldSnapshot.data?.globalWorld?.epoch, worldSnapshot.data?.globalWorld?.worldSeed]);
 
   useEffect(() => {
     const engine = engineRef.current;

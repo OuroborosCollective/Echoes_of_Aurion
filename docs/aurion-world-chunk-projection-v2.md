@@ -16,11 +16,13 @@ The manifest binds world/universe, coordinate, schema/policy, authority state, r
 
 ## Active AX1 path
 
-`ConfirmedChunkProjection` requests the current authenticated world's epoch and a bounded 3 × 3 window using canonical 64 m coordinates. At most two requests/workers run concurrently. A real module worker rehashes and validates actual bytes; the main thread independently checks job, generation, manifest, payload and result before applying them. Retired renderer generations and old centers cannot apply pending results.
+`ConfirmedChunkProjection` requests the current authenticated world's epoch and a bounded 3 × 3 window using canonical 64 m coordinates. At most two requests/workers run concurrently. A real module worker rehashes and validates actual bytes; the main thread independently checks job, generation, manifest, payload and result before applying them. Retired renderer generations and old centers cannot apply pending results. The authenticated world readback is polled every five seconds while the runtime is active; an advanced canonical epoch retires the old renderer and projection and rebuilds both from the new server packet without requiring the player to leave `/play`.
 
 The view-only overlay uses deterministic construction markers for the two supported structure keys and road surfaces. It has no collision, command or authority callbacks. AX1's existing terrain manager and separate static GLB catalog retain their responsibilities; this receipt-bound layer covers confirmed constructions and roads.
 
-Failed decoding, unsupported assets, failed geometry construction or absent authority leave that chunk unapplied. Disposal terminates workers and frees geometry/materials. Actual renderer recovery obtains authenticated world context and rebuilds the overlay from the persisted epoch. Projection hashes describe intended bytes, not proof a human saw particular pixels.
+Failed decoding, unsupported assets, failed geometry construction or absent authority leave that chunk unapplied. Explicit authority `UNPROVABLE` pauses that coordinate immediately. Transport and worker failures remain in the current interest window and retry while the player is stationary with simulation-time exponential delay, stopping after four attempts. A changed center retires unrelated retry state; a new epoch creates a new projection context. Disposal terminates workers and frees geometry/materials. Actual renderer recovery obtains authenticated world context and rebuilds the overlay from the persisted epoch. Projection hashes describe intended bytes, not proof a human saw particular pixels.
+
+The server coalesces concurrent verification of the same immutable world epoch and caches only successful replay results for ten seconds, with a 32-epoch LRU bound. `UNPROVABLE` and divergent results are never cached. Chunk bytes and receipt membership are still reconstructed per requested coordinate. This prevents the 3 × 3 client window from replaying every zone receipt and committed chunk prefix nine times while preserving periodic detection of changed evidence.
 
 World Root V2 has explicit snapshot limits and requires the source revision's generator for historical reconstruction. After deployment, an old epoch can therefore be `UNPROVABLE` until a normal authoritative epoch is resolved under the available revision. This read endpoint never resolves an epoch or repairs history to make a projection green.
 
@@ -32,7 +34,7 @@ World Root V2 has explicit snapshot limits and requires the source revision's ge
 | D2 deterministic builder | Public payload from independently reconstructed canonical chunk state |
 | D3 worker binding | Active AX1 module worker validates actual bytes and generation before insertion |
 | D4 connection interest root | Runtime N/A: no per-connection visibility authorization. Optional pure helper remains tested, commits sorted unique projections and rejects mixed world roots/policies; different chunks correctly have different receipts |
-| D5 renderer/failure evidence | Negative unit tests plus actual WebGL2 context loss and WebGPU device destruction/recovery in three-viewport AIM-290 CI; exact-head browser result required |
+| D5 renderer/failure evidence | Negative unit tests, stationary retry, live epoch refresh, plus actual WebGL2 context loss and WebGPU device destruction/recovery in three-viewport AIM-290 CI; exact-head browser result required |
 | D6 CLI | Persisted epoch/chunk explain below; fresh-process execution in real MariaDB regression |
 | D7 Memory | One existing Step-28 entry with dated scope continuation; integrate runtime evidence after logs are available |
 | D8 merge/readback | Final-head checks, authorized merge, main tree and normal deployment readback required |
@@ -50,7 +52,7 @@ A1/A2 come from the merged canonical chunk/World Root prerequisite. A3 preserves
 | Manifest/payload drift | Both threads hash bytes, validate strict identity and reject stale generation |
 | Client privacy | No observation storage, session secrets or raw private authority objects |
 
-The isolated browser lane registers a real player, starts the authoritative zone, performs an authenticated construction action and resolves an epoch through the normal admin API. Temporary admin assignment is restricted to disposable `aurion_browser_test` and restored in `finally`. No synthetic receipt/root is inserted. The test requires a nonempty applied overlay before and after real failures, then reads the same persisted packet again. SwiftShader is software-renderer evidence, with no hardware-performance claim.
+The isolated browser lane registers a real player, starts the authoritative zone, performs an authenticated construction action and resolves an epoch through the normal admin API while the player remains in `/play`. Temporary admin assignment is restricted to disposable `aurion_browser_test` and restored in `finally`. No synthetic receipt/root is inserted. The test requires the active renderer to adopt the new epoch, then requires a nonempty applied overlay before and after real failures and reads the same persisted packet again. SwiftShader is software-renderer evidence, with no hardware-performance claim.
 
 ## Reproducible checks
 

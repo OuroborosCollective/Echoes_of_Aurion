@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { buildConfirmedChunkMeshes, prepareConfirmedChunkProjection } from "../client/src/xaurion/integration/ConfirmedChunkProjection";
+import { describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
+import { buildConfirmedChunkMeshes, ConfirmedChunkProjection, prepareConfirmedChunkProjection } from "../client/src/xaurion/integration/ConfirmedChunkProjection";
 import { CHUNK_ASSET_PROJECTION_POLICY, decodeChunkAssetWorkerPayload, type ChunkAssetPayload } from "../shared/worldChunkProjectionPayload";
 import { createWorldChunkProjectionManifestV2, hashWorldChunkProjectionPayload, WORLD_CHUNK_PROJECTION_VERSION_V2 } from "../shared/worldChunkProjectionV2";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
@@ -62,5 +63,41 @@ describe("active projection adapter boundaries (synthetic unit input, not author
   it("rejects anonymous projection reads before database reconstruction", async () => {
     const caller = appRouter.createCaller({ req: { protocol: "https", headers: {} } as TrpcContext["req"], res: {} as TrpcContext["res"], user: null });
     await expect(caller.gameplay.worldChunkProjectionV2({ epoch: 2, chunkX: 0, chunkZ: 0 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("retries transient chunk failures while the player remains in the same chunk", async () => {
+    const fetch = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
+    const projection = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, fetch, vi.fn());
+    projection.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(9));
+    projection.update({ x: 0, z: 0 });
+    expect(fetch).toHaveBeenCalledTimes(9);
+    projection.update({ x: 0, z: 0 }, 0.5);
+    await vi.waitFor(() => expect(fetch.mock.calls.length).toBeGreaterThan(9));
+    projection.dispose();
+  });
+
+  it("pauses authority-unprovable chunks immediately and bounds repeated transient failures", async () => {
+    const denied = vi.fn(async () => ({ status: "UNPROVABLE", reason: "WORLD_ROOT_EVIDENCE_MISSING" }));
+    const terminal = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, denied, vi.fn());
+    terminal.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(denied).toHaveBeenCalledTimes(9));
+    terminal.update({ x: 0, z: 0 }, 60);
+    await Promise.resolve();
+    expect(denied).toHaveBeenCalledTimes(9);
+    terminal.dispose();
+
+    const failed = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
+    const bounded = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, failed, vi.fn());
+    bounded.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(failed).toHaveBeenCalledTimes(9));
+    for (let attempt = 2; attempt <= 4; attempt += 1) {
+      bounded.update({ x: 0, z: 0 }, 10);
+      await vi.waitFor(() => expect(failed).toHaveBeenCalledTimes(attempt * 9));
+    }
+    bounded.update({ x: 0, z: 0 }, 60);
+    await Promise.resolve();
+    expect(failed).toHaveBeenCalledTimes(36);
+    bounded.dispose();
   });
 });
