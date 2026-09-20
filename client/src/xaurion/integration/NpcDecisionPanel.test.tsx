@@ -7,10 +7,9 @@ const fixture=vi.hoisted(()=>({
  memory:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
  actions:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
  graph:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
- provenance:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
 }));
-vi.mock("@/lib/trpc",()=>({trpc:{gameplay:{npcActions:{useQuery:()=>fixture.actions},npcMultiMemory:{useQuery:()=>fixture.memory},npcSemanticGraph:{useQuery:()=>fixture.graph},npcProjectionProvenance:{useQuery:()=>fixture.provenance},npcSnapshots:{useQuery:()=>fixture.query}}}}));
-beforeEach(()=>{fixture.query.data=undefined;fixture.query.isError=false;fixture.memory.data=undefined;fixture.memory.isError=false;fixture.actions.data=undefined;fixture.actions.isError=false;fixture.graph.data=undefined;fixture.graph.isError=false;fixture.provenance.data=undefined;fixture.provenance.isError=false;});
+vi.mock("@/lib/trpc",()=>({trpc:{gameplay:{npcActions:{useQuery:()=>fixture.actions},npcMultiMemory:{useQuery:()=>fixture.memory},npcSemanticGraph:{useQuery:()=>fixture.graph},npcSnapshots:{useQuery:()=>fixture.query}}}}));
+beforeEach(()=>{fixture.query.data=undefined;fixture.query.isError=false;fixture.memory.data=undefined;fixture.memory.isError=false;fixture.actions.data=undefined;fixture.actions.isError=false;fixture.graph.data=undefined;fixture.graph.isError=false;});
 describe("confirmed NPC decision panel",()=>{
  it("shows confirmed decisions and rejects a corrupt or foreign packet without partial display",()=>{
   const data=btoa(String.fromCharCode(...encodeNpcSnapshot([{npcId:"lyra",regionId:"observatory_threshold",resolutionIndex:2,goal:"trade",needs:{safety:0,resources:0,belonging:0,status:0,wealth:1,power:0},memoryCount:1,decisionHash:"12".repeat(32)}])));
@@ -41,17 +40,19 @@ describe("confirmed NPC decision panel",()=>{
  fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[{...graph,rawProvenance:[{id:"private"}]}]};rerender(<NpcDecisionPanel userId={7}/>);
   expect(screen.queryByText("goal: trade")).toBeNull();
  });
- it("shows a separately bounded provenance projection and rejects foreign or raw-enriched packets",()=>{
-  const projection={npcId:"ax1_merchant_observatory_threshold",generation:9,graphHash:"3".repeat(64),sourceResultHash:"4".repeat(64),semanticGraphResultHash:"5".repeat(64),sourceRevision:"6".repeat(40),provenanceStatus:"VERIFIED"};
-  fixture.provenance.data={userId:7,format:"aurion-public-npc-projection-provenance.v2",projections:[projection]};
+ it("derives provenance atomically from the displayed verified graph without a second poll",()=>{
+  const node={nodeId:"smn_"+"1".repeat(60),kind:"goal",semanticKey:"trade",status:"active",depth:1,score:1200,payloadHash:"2".repeat(64)};
+  const graph={npcId:"ax1_merchant_observatory_threshold",generation:9,graphHash:"3".repeat(64),sourceResultHash:"4".repeat(64),resultHash:"5".repeat(64),sourceRevision:"6".repeat(40),provenanceStatus:"VERIFIED",bounds:{maxDepth:4,maxCandidates:64,maxResults:32},nodes:[node],relations:[],excluded:{expired:0,contradicted:0,superseded:0}};
+  fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[graph]};
   const {rerender}=render(<NpcDecisionPanel userId={7}/>);
   const row=screen.getByTestId("npc-projection-provenance-row");
+  expect(row.getAttribute("data-generation")).toBe("9");
   expect(row.getAttribute("data-source-revision")).toBe("6".repeat(40));
   expect(row.getAttribute("data-provenance-status")).toBe("VERIFIED");
   expect(screen.getByText("Quellrevision 666666666666…")).toBeTruthy();
-  fixture.provenance.data={userId:8,format:"aurion-public-npc-projection-provenance.v2",projections:[projection]};rerender(<NpcDecisionPanel userId={7}/>);
+  fixture.graph.data={userId:8,format:"aurion-public-npc-semantic-graph.v2",graphs:[graph]};rerender(<NpcDecisionPanel userId={7}/>);
   expect(screen.queryByTestId("npc-projection-provenance-row")).toBeNull();
-  fixture.provenance.data={userId:7,format:"aurion-public-npc-projection-provenance.v2",projections:[{...projection,provenanceId:"private"}]};rerender(<NpcDecisionPanel userId={7}/>);
+  fixture.graph.data={userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[{...graph,rawProvenance:[{id:"private"}]}]};rerender(<NpcDecisionPanel userId={7}/>);
   expect(screen.queryByTestId("npc-projection-provenance-row")).toBeNull();
   expect(screen.getByRole("button",{name:"Provenienz aktualisieren"})).toBeTruthy();
  });
