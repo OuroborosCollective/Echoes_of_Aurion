@@ -1,0 +1,76 @@
+name: Aurion causal chaos boundaries
+on:
+  pull_request:
+    paths:
+      - 'scripts/causal-chaos/**'
+      - 'scripts/run-aurion-causal-chaos.mjs'
+      - 'server/causality/**'
+      - 'shared/aurion*Causal*'
+      - '.github/workflows/aurion-causal-chaos.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/causal-chaos/**'
+      - 'scripts/run-aurion-causal-chaos.mjs'
+      - 'server/causality/**'
+      - '.github/workflows/aurion-causal-chaos.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aurion-causal-chaos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-chaos:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      NODE_ENV: test
+      AURION_CHAOS_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Bind tests to exact source head
+        run: test "$(git rev-parse HEAD)" = "$AURION_CHAOS_REVISION"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Isolated regression and production import exclusion
+        run: pnpm exec vitest run server/causality/causalFaultInjection.test.ts server/causality/headlessCausalOracle.test.ts server/causality/causalTick.test.ts server/causality/causalReceiptV2.test.ts server/replayVerdictContract.test.ts
+      - name: Build an explicitly test-only immutable subject
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync("chaos-subject.bin", "aurion.causal-chaos.test-subject.v1\n"); fs.writeFileSync("chaos-predicate.json", JSON.stringify({schema:"aurion.causal-chaos.test-predicate.v1",sourceRevision:process.env.GITHUB_SHA,productionEvidence:false}));'
+      - name: Sign test-only subject through real GitHub OIDC
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: chaos-subject.bin
+          predicate-type: https://arelogic.space/attestations/aurion-chaos-fixture/v1
+          predicate-path: chaos-predicate.json
+      - name: Prove all thirteen fault boundaries including real signature tamper
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AURION_CHAOS_ATTESTATION_SUBJECT: chaos-subject.bin
+          AURION_CHAOS_ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          node --import tsx scripts/run-aurion-causal-chaos.mjs --all > causal-chaos-report.json
+          node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync("causal-chaos-report.json","utf8")); if(r.results.length!==13 || r.exitCode!==0 || r.results.some(x=>!x.detected)) throw Error("CHAOS_BOUNDARY_PROOF_INCOMPLETE"); console.log(JSON.stringify(r));'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: causal-chaos-${{ github.sha }}
+          path: |
+            causal-chaos-report.json
+            chaos-subject.bin
+            chaos-predicate.json
+            ${{ steps.attest.outputs.bundle-path }}
