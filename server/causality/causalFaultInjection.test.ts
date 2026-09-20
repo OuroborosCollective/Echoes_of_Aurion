@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
-import { FAULT_BOUNDARIES, runFault, assertTestIsolation, type Fault } from '../../scripts/causal-chaos/harness';
+import { FAULT_BOUNDARIES, runFault, assertTestIsolation, type Fault } from '../../scripts/causal-chaos/harness';\nimport { deriveChaosExitCode } from '../../scripts/causal-chaos/report';\nimport { classifyCorruptedVerification } from '../../scripts/causal-chaos/attestation.mjs';
 
 beforeEach(() => { vi.stubEnv('DATABASE_URL', ''); vi.stubEnv('AURION_SCHEMA_DATABASE_URL', ''); vi.stubEnv('NODE_ENV', 'test'); });
 afterEach(() => vi.unstubAllEnvs());
@@ -41,6 +41,28 @@ describe('CI-only causal chaos FIRST_DIVERGENCE', () => {
     expect(cli(['--fault', 'unknown']).status).toBe(64);
     expect(cli(['--all'], { ...process.env, NODE_ENV: 'production' }).status).toBe(1);
   }, 60000);
+  it('prioritizes detector regressions over unavailable evidence', () => {
+    expect(deriveChaosExitCode([
+      { detected: false, observed: { status: 'UNPROVABLE' } },
+      { detected: false, observed: { status: 'MATCH' } },
+    ])).toBe(1);
+    expect(deriveChaosExitCode([{ detected: false, observed: { status: 'UNPROVABLE' } }])).toBe(2);
+    expect(deriveChaosExitCode([{ detected: true, observed: { status: 'FIRST_DIVERGENCE' } }])).toBe(0);
+  });
+  it('does not classify cancellation or auth failure as attestation tamper rejection', () => {
+    const base = { attestedSubjectSha256: 'a'.repeat(64), corruptedSubjectSha256: 'b'.repeat(64) };
+    expect(classifyCorruptedVerification({ ...base, status: 2, error: undefined })).toMatchObject({ status: 'UNPROVABLE', reason: 'ATTESTATION_VERIFICATION_CANCELLED' });
+    expect(classifyCorruptedVerification({ ...base, status: 4, error: undefined })).toMatchObject({ status: 'UNPROVABLE', reason: 'ATTESTATION_AUTH_FAILURE' });
+    expect(classifyCorruptedVerification({ ...base, status: 1, error: undefined })).toMatchObject({ status: 'FIRST_DIVERGENCE', boundary: 'ATTESTATION_SUBJECT' });
+    expect(classifyCorruptedVerification({ ...base, corruptedSubjectSha256: 'a'.repeat(64), status: 1, error: undefined })).toMatchObject({ status: 'UNPROVABLE', reason: 'ATTESTATION_SUBJECT_NOT_CHANGED' });
+  });
+  it('keeps push triggers aligned with the shared contracts exercised by chaos', () => {
+    const workflow = readFileSync('.github/workflows/aurion-causal-chaos.yml', 'utf8');
+    for (const dependency of [
+      "shared/aurion*Causal*", "shared/aurionReplayContract.ts", "shared/aurionEffectIntentContract.ts",
+      "shared/aurionClientVerificationContract.ts", "shared/worldChunkProjectionV2.ts", "shared/worldChunkProjectionPayload.ts",
+    ]) expect(workflow.split('push:')[1]).toContain(dependency);
+  });
   it('is absent from the real server and browser bundle import graphs', async () => {
     for (const entry of ['server/_core/index.ts', 'client/src/main.tsx', 'client/src/xaurion/world/chunkProjection.worker.ts']) {
       expect(existsSync(entry)).toBe(true);
