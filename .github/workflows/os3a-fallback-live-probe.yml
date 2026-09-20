@@ -12,7 +12,6 @@ on:
       - "shared/os3aFallbackCatalog.json"
       - "shared/glbPresentationBudget.ts"
       - "shared/glbExternalProvenanceContract.ts"
-      - "drizzle/0055_aurion_glb_external_provenance.sql"
       - "scripts/os3a-fallback-live-probe.ts"
       - ".github/workflows/os3a-fallback-live-probe.yml"
   workflow_dispatch:
