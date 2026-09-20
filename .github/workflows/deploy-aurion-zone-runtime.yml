@@ -1149,7 +1149,9 @@ jobs:
               if EXPECTED_SHA="${GITHUB_SHA}" node --input-type=module -e '
                 import fs from "node:fs";
                 const health=JSON.parse(fs.readFileSync("aurion-public-production-health.json","utf8"));
-                if(health.status!=="ok"||health.service!=="echoes-of-aurion"||health.revision!==process.env.EXPECTED_SHA) process.exit(1);
+                if(health.status!=="ok"||health.service!=="echoes-of-aurion"||health.revision!==process.env.EXPECTED_SHA||
+                   health.causalAssurance?.schema!=="aurion.causal-assurance.v1"||health.causalAssurance?.worldId!=="echoes-of-aurion-global"||
+                   health.causalAssurance?.mutationAuthority!=="none") process.exit(1);
               '; then
                 ready=1
                 break
@@ -1254,6 +1256,25 @@ jobs:
           NODE
           node scripts/aurion-milestone-gate-evidence.mjs verify aurion-gate-b1-production.json --require-pass
 
+      - name: Seal continuous production causal assurance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/aurion-production-assurance.mjs \
+            --health aurion-public-production-health.json \
+            --identity runtime-attestation/aurion-runtime-release-identity.json \
+            --attestation blocker2/aurion-gate-b2-attestation.json \
+            --schema schema-readback/production-schema-readback.json \
+            --expected-sha "${GITHUB_SHA}" \
+            --output aurion-production-assurance.json
+          EXPECTED_SHA="${GITHUB_SHA}" node --input-type=module -e '
+            import fs from "node:fs";
+            const receipt=JSON.parse(fs.readFileSync("aurion-production-assurance.json","utf8"));
+            if(receipt.schema!=="aurion.production-causal-assurance.v1"||receipt.sourceRevision!==process.env.EXPECTED_SHA||
+               receipt.mutationAuthority!=="none"||receipt.snapshot?.mutationAuthority!=="none"||
+               receipt.snapshot?.status==="CONTRADICTED"||!/^sha256:[a-f0-9]{64}$/.test(receipt.receiptHash??"")) process.exit(1);
+          '
+
       - name: Upload final production gate evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1261,6 +1282,6 @@ jobs:
           path: |
             aurion-gate-b1-production.json
             aurion-public-production-health.json
+            aurion-production-assurance.json
           if-no-files-found: error
           retention-days: 30
-
