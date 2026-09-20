@@ -4,7 +4,7 @@ description: "Receipt-bound epoch chunk projections, actual-byte workers and AX1
 
 # World-Chunk Projection V2
 
-Status on 2026-09-20: runtime integration implemented; exact-head MariaDB/browser evidence, merge and production readback remain required. A local test is not production evidence.
+Status on 2026-09-20: real MariaDB/CLI and three-viewport renderer evidence passed on technical head `515afb2376ff3216a6c8e2513195570a4dd0e106`. Final-head checks after main integration and GLB test correction, merge and production readback remain required.
 
 ## Authority boundary
 
@@ -67,6 +67,6 @@ node --import tsx scripts/explain-aurion-projection.ts --world echoes-of-aurion-
 
 The CLI uses the actual epoch/chunk identity rather than inventing a tick-to-chunk or connection-authorization mapping. Exit 0 requires verified persisted evidence; absent evidence exits 2 and invalid invocation 64. `--manifest <file>` remains offline integrity only and exits 2 even for a matching hash.
 
-Local focused regression: 4 files / 31 tests and TypeScript PASS. Full regression/build and exact-head runtime lanes are tracked separately in PR evidence. No migration. Reverting this integration removes the presentation layer without changing receipts/world state.
+Local focused regression: 4 files / 31 tests and TypeScript/build PASS. Technical-head Local Test Pack `35534885023` passed real MariaDB reconstruction, tamper rejection, fresh projection CLI and full regression (269 files / 1,184 tests; 169 environment-gated skips). AIM-290 `35534884992` passed all three actual WebGL2/WebGPU recovery profiles. GLB upload lane `35534885002` exposed a stale pre-layout scroll extent in its test; the correction waits for loaded content and compares actual keyboard scroll to the current extent. The final head must rerun this lane and all triggered checks. No migration. Reverting the integration removes presentation without changing receipts/world state.
 
 Historical Wolfram finite-model evidence covers permutations/subsets of three identifiers, not collision freedom or runtime truth. Local Game Development Studio CLI is unavailable; browser CI provides rendering evidence. The supplied handoff defines Steps 22–31; Steps 32–33 are not invented here.

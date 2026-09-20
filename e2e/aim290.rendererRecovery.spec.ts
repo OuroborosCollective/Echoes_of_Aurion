@@ -137,6 +137,7 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     expect(errors).toEqual([]);
     const persisted = await page.request.get("/api/trpc/gameplay.worldChunkProjectionV2", { params: { input: JSON.stringify({ json: { epoch: projection.epoch, chunkX: 0, chunkZ: 0 } }) } });
     expect(rpcData(await persisted.json())).toMatchObject({ status: "VERIFIED", manifest: { worldCausalRoot: projection.worldRootHash, projectionHash: projection.projectionHash, payloadHash: projection.payloadHash } });
+    console.info("STEP28_REAL_BROWSER", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, projection, workerProjection: await chunks(page), backend: selected.backend, recoveredBackend: (await evidence(page)).backend, actualContextLoss: true, actualDeviceDestroy: true }));
     await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: baseline.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
   });
 }
