@@ -1,5 +1,6 @@
 // Invoke with: NODE_ENV=test node --import tsx scripts/run-aurion-causal-chaos.mjs --all
 import { assertTestIsolation, FAULT_BOUNDARIES, runFault } from './causal-chaos/harness.ts';
+import { deriveChaosExitCode } from './causal-chaos/report.ts';
 try {
   assertTestIsolation();
   const args = process.argv.slice(2);
@@ -10,11 +11,12 @@ try {
     const attestation = process.env.AURION_CHAOS_ATTESTATION_BUNDLE ? {
       artifactPath: process.env.AURION_CHAOS_ATTESTATION_SUBJECT, bundlePath: process.env.AURION_CHAOS_ATTESTATION_BUNDLE,
       repository: process.env.GITHUB_REPOSITORY, sourceRevision: process.env.GITHUB_SHA, sourceRef: process.env.GITHUB_REF,
+      testedRevision: process.env.AURION_CHAOS_REVISION,
       workflow: '.github/workflows/aurion-causal-chaos.yml', predicateType: 'https://arelogic.space/attestations/aurion-chaos-fixture/v1',
     } : undefined;
     const results = [];
     for (const fault of faults) results.push(await runFault(fault, attestation));
-    const exitCode = results.every(r => r.detected) ? 0 : results.some(r => !r.detected && r.observed.status === 'UNPROVABLE') ? 2 : 1;
+    const exitCode = deriveChaosExitCode(results);
     process.stdout.write(JSON.stringify({ schema: 'aurion.causal-chaos-report.v1', evidenceKind: 'isolated-test',
       mutationAuthority: 'none', testedRevision: process.env.AURION_CHAOS_REVISION ?? null,
       workflowSourceRevision: process.env.GITHUB_SHA ?? null, exitCode, results }, null, 2) + '\n'); process.exitCode = exitCode;
