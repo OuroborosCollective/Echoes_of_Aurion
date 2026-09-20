@@ -77,7 +77,7 @@ describe("Aurion CAG deterministic design oracle", () => {
     expect(summary.maxAdjacentDeltaMm).toBeGreaterThanOrEqual(0);
     const probe = buildWorldChunkTerrainCagProbe(chunk);
     expect(probe.expectedExact).toBe(
-      `${summary.minHeightMm},${summary.maxHeightMm},${summary.maxAdjacentDeltaMm}`,
+      `{${summary.minHeightMm},${summary.maxHeightMm},${summary.maxAdjacentDeltaMm}}`,
     );
     expect(probe.code.length).toBeLessThan(20_000);
     expect(probe.truthNotice).toContain("does not generate or mutate terrain authority");
