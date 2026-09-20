@@ -151,7 +151,7 @@ export default function GameDevelopmentStudioWorkbench() {
         <CardContent className="space-y-4 text-sm">
           {fallbackSource.data && (
             <div className="rounded-lg border border-emerald-200/10 bg-emerald-300/[.03] p-3 text-xs text-slate-300">
-              <p><b>{fallbackSource.data.sourceAssetCount}</b> gepinnte Kandidaten · <b>{fallbackSource.data.admissionCandidateCount}</b> in der aktuellen Admission-Lane · Lizenz <code>{fallbackSource.data.license}</code></p>
+              <p><b>{fallbackSource.data.sourceAssetCount}</b> gepinnte Kandidaten · <b>{fallbackSource.data.admissionCandidateCount}</b> passen mindestens ins Desktop-Budget · Phone {fallbackSource.data.tierCandidateCounts.phone} / Tablet {fallbackSource.data.tierCandidateCounts.tablet} / Desktop {fallbackSource.data.tierCandidateCounts.desktop} · Lizenz <code>{fallbackSource.data.license}</code></p>
               <p className="mt-1 break-all font-mono text-[10px] text-slate-500">Registry {fallbackSource.data.registryRevision} · Models {fallbackSource.data.modelRevision}</p>
             </div>
           )}
