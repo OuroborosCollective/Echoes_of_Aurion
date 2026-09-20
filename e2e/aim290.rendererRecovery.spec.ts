@@ -122,9 +122,10 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await register(page, handle);
     const warmup = await enterAx1(page);
     const projection = await commitConstructionEpoch(page, handle);
-    await warmup.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
-    const baseline = await enterAx1(page);
-    expect(baseline.snapshot.globalWorld.epoch).toBe(projection.epoch);
+    const baseline = warmup;
+    // Stay in the active runtime: authenticated world polling must retire the
+    // old renderer/projection and bind the new canonical epoch automatically.
+    await expect.poll(async () => (await evidence(page))?.epoch, { timeout: 45_000 }).toBe(projection.epoch);
     await expect.poll(async () => (await evidence(page))?.status).toBe("rendering");
     expect(await evidence(page)).toMatchObject({ backend: "webgl2", requested: "webgl2", recoveryAttempt: 0 });
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toMatch(/^[a-f0-9]{64}$/);
@@ -158,7 +159,7 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     expect(selected.backend).toBe("webgpu");
     expect(selected.recoveryAttempt).toBe(0);
     await expectChunkProjection(page, projection.worldRootHash);
-    expect(optional.snapshot.globalWorld.deterministicHash).toBe(baseline.snapshot.globalWorld.deterministicHash);
+    expect(optional.snapshot.globalWorld.epoch).toBe(projection.epoch);
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toBe(originalAssets.catalogHash);
     expect((await assets(page)).collisionHash).toBe(originalAssets.collisionHash);
     await page.screenshot({ path: testInfo.outputPath("webgpu.png") });
@@ -184,14 +185,15 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     const persisted = await page.request.get("/api/trpc/gameplay.worldChunkProjectionV2", { params: { input: JSON.stringify({ json: { epoch: projection.epoch, chunkX: 0, chunkZ: 0 } }) } });
     expect(rpcData(await persisted.json())).toMatchObject({ status: "VERIFIED", manifest: { worldCausalRoot: projection.worldRootHash, projectionHash: projection.projectionHash, payloadHash: projection.payloadHash } });
     console.info("STEP28_REAL_BROWSER", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, projection, workerProjection: await chunks(page), backend: selected.backend, recoveredBackend: (await evidence(page)).backend, actualContextLoss: true, actualDeviceDestroy: true }));
-    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: baseline.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), clientVerification, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
+    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: optional.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), clientVerification, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
     // Only observer transport is faulted. Actual projection bytes must still come
     // from the unchanged, authenticated Step-28 authority-verifying endpoint.
     await optional.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await page.evaluate(() => sessionStorage.setItem("aurion:renderer", "webgl2"));
     await page.route("**/api/trpc/gameplay.beginClientProjection*", route => route.abort("failed"));
     const withoutObserver = await enterAx1(page);
-    expect(withoutObserver.snapshot.globalWorld.deterministicHash).toBe(baseline.snapshot.globalWorld.deterministicHash);
+    expect(withoutObserver.snapshot.globalWorld.epoch).toBe(projection.epoch);
+    expect(withoutObserver.snapshot.globalWorld.deterministicHash).toBe(optional.snapshot.globalWorld.deterministicHash);
     await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
     expect(await chunks(page)).toMatchObject({ status: "APPLIED", worldRootHash: projection.worldRootHash });
     expect((await chunks(page)).meshCount).toBeGreaterThan(0);

@@ -6,6 +6,7 @@ import { createCanonicalChunkReceipt, createChunkUniverse, chunkKey, chunkCoordi
 import { buildChunkWorldRoot, parseAnyWorldRootResult, verifyAnyWorldRoot, WORLD_CHUNK_ROOT_SCHEMA, type AnyWorldRootResult } from "../../shared/aurionChunkWorldRootContract";
 import { createWorldChunkDelta, type WorldChunkCoordinate, type WorldChunkDelta } from "../../shared/worldChunkProtocol";
 import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../../shared/worldIdentity";
+import { operationalNow } from "../../shared/operationalClock";
 import { activeProvenance } from "../aurionProvenance";
 import {
   AURION_WORLD_CAUSAL_ZONE_IDS,
@@ -20,6 +21,34 @@ export type WorldCausalRootReplayVerdict =
   | Readonly<{ status: "FIRST_DIVERGENCE"; expectedHash: string; observedHash: string; epoch: number }>
   | Readonly<{ status: "UNPROVABLE"; reason: string; epoch: number }>;
 
+/** Coalesces one immutable epoch replay and bounds both age and retained epochs. */
+export class VerifiedEpochReplayCache {
+  private readonly entries = new Map<string, { expiresAt: number; value: WorldCausalRootReplayVerdict }>();
+  private readonly inflight = new Map<string, Promise<WorldCausalRootReplayVerdict>>();
+  constructor(private readonly maximum = 32, private readonly ttlMs = 10_000, private readonly now = operationalNow) {
+    if (!Number.isSafeInteger(maximum) || maximum < 1 || !Number.isSafeInteger(ttlMs) || ttlMs < 1) throw Error("WORLD_EPOCH_CACHE_CONFIGURATION_INVALID");
+  }
+  async read(key: string, verify: () => Promise<WorldCausalRootReplayVerdict>) {
+    const cached = this.entries.get(key);
+    if (cached && cached.expiresAt > this.now()) {
+      this.entries.delete(key); this.entries.set(key, cached);
+      return cached.value;
+    }
+    if (cached) this.entries.delete(key);
+    const active = this.inflight.get(key);
+    if (active) return active;
+    const pending = verify().then(value => {
+      if (value.status === "MATCH") {
+        this.entries.set(key, { expiresAt: this.now() + this.ttlMs, value });
+        while (this.entries.size > this.maximum) this.entries.delete(this.entries.keys().next().value!);
+      }
+      return value;
+    }).finally(() => this.inflight.delete(key));
+    this.inflight.set(key, pending);
+    return pending;
+  }
+}
+
 function receiptReference(row: typeof aurionCausalTickReceipts.$inferSelect): AurionZoneReceiptReference {
   return {
     worldId: row.worldId,
@@ -33,6 +62,7 @@ function receiptReference(row: typeof aurionCausalTickReceipts.$inferSelect): Au
 }
 
 export class AurionWorldCausalRootService {
+  private readonly projectionReplayCache = new VerifiedEpochReplayCache();
   async read(worldId: string, epoch: number): Promise<AnyWorldRootResult | null> {
     if (!Number.isSafeInteger(epoch) || epoch < 1) return null;
     const db = await getDb();
@@ -148,7 +178,7 @@ export class AurionWorldCausalRootService {
   async readChunk(worldId: string, epoch: number, coordinate: WorldChunkCoordinate) {
     chunkCoordinateSchema.parse(coordinate);
     const unprovable = (reason: string) => Object.freeze({ status: "UNPROVABLE" as const, reason });
-    const replay = await this.replay(worldId, epoch);
+    const replay = await this.projectionReplayCache.read(`${worldId}:${epoch}`, () => this.replay(worldId, epoch));
     if (replay.status !== "MATCH") return unprovable(replay.status === "UNPROVABLE" ? replay.reason : "WORLD_ROOT_DIVERGENCE");
     const result = await this.read(worldId, epoch);
     if (result?.status !== "VERIFIED" || result.root.schema !== WORLD_CHUNK_ROOT_SCHEMA || result.root.worldRootHash !== replay.worldRootHash) return unprovable("CHUNK_WORLD_ROOT_UNAVAILABLE");
