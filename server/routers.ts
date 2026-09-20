@@ -26,6 +26,7 @@ import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInpu
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
+import { readConfirmedChunkAssetProjection } from "./causality/worldChunkProjectionService";
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
@@ -197,6 +198,11 @@ export const appRouter = router({
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    worldChunkProjectionV2: protectedProcedure.input(z.strictObject({
+      epoch: z.number().int().min(1),
+      chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+    })).query(({ input }) => readConfirmedChunkAssetProjection(db.GLOBAL_WORLD_ID, input.epoch, { x: input.chunkX, z: input.chunkZ })),
     worldChunk: protectedProcedure.input(z.object({
       worldVersion: z.literal("aurion-global-world.v1"),
       expectedBaseRevision: z.literal(WORLD_CHUNK_BASE_REVISION),

@@ -991,6 +991,18 @@
       "role": "CAPABILITY"
     },
     {
+      "path": "client/src/xaurion/integration/ConfirmedChunkProjection.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/world/chunkProjection.worker.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/AurionPlayRoute.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",

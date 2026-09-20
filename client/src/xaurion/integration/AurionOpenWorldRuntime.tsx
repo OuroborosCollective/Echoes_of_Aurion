@@ -1,4 +1,5 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
+import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
 import { ConfirmedPlayerMotion } from "./ConfirmedPlayerMotion";
 import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
@@ -298,8 +299,15 @@ export default function AurionOpenWorldRuntime() {
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
         center => rpcUtils.worldAssets.regionV2.fetch(center),
         evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); }, engine.renderer);
+      delete containerRef.current.dataset.chunkProjection;
+      const chunkProjection = new ConfirmedChunkProjection(engine.scene, world.epoch,
+        (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
+        input => rpcUtils.gameplay.worldChunkProjectionV2.fetch(input),
+        evidence => { if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence); });
+      abort.signal.addEventListener("abort", () => chunkProjection.dispose(), { once: true });
       engine.onProjectionTick = delta => {
         serviceNpcRef.current?.update(delta);
+        chunkProjection.update(engine!.player.position);
         worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth);
         if (containerRef.current) containerRef.current.dataset.playerProjection = JSON.stringify({ position: engine!.player.position, rendered: engine!.player.group.position });
       };

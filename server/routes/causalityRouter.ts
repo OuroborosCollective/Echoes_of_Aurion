@@ -15,8 +15,14 @@ import { replayZoneTick } from "../causality/replayZoneTick";
 import { getDb } from "../db";
 import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { globalAurionEffectJournal } from "../effects/aurionEffectJournal";
+import { worldCausalRootService } from "../causality/worldCausalRootService";
+import { chunkCoordinateSchema } from "../../shared/aurionChunkStateContract";
 
 export const causalityRouter = router({
+  /** Source-bound historical reconstruction, never a gameplay mutation. */
+  readChunkState: adminProcedure
+    .input(z.strictObject({ worldId: z.string().min(1).max(128), epoch: z.number().int().min(1), coordinate: chunkCoordinateSchema }))
+    .query(({ input }) => worldCausalRootService.readChunk(input.worldId, input.epoch, input.coordinate)),
   getReadbackStatus: adminProcedure.query(() => globalReadbackService.getStatus()),
 
   getLatestReceipts: adminProcedure
