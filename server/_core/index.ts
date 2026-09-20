@@ -30,6 +30,7 @@ import { globalReadbackService } from "../causality/readbackService";
 import { globalSnapshotReconciliationService } from "../causality/snapshotReconciliationService";
 import { globalCausalArchivingService } from "../causality/archivingService";
 import { globalStateReconciliationService } from "../causality/globalStateReconciliationService";
+import { globalAssuranceService } from "../causality/assuranceService";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
@@ -53,6 +54,7 @@ async function startServer(){
     globalSnapshotReconciliationService.start();
     globalCausalArchivingService.start();
     globalStateReconciliationService.start();
+    globalAssuranceService.start();
   }
   const autonomousNpcLife = createAutonomousNpcLifeRuntime({ enabled: databaseConnected });
   const app=express();
@@ -84,7 +86,8 @@ async function startServer(){
     // Retaining operational diagnostics
     gameDevelopmentStudio,
     wolframCag,
-    npcLife: autonomousNpcLife.readback()
+    npcLife: autonomousNpcLife.readback(),
+    causalAssurance: globalAssuranceService.latest()
   });
   app.get("/healthz", (_req, res) => res.status(200).json(healthPayload()));
   app.get("/api/health", (_req, res) => res.status(200).json(healthPayload()));

@@ -59,6 +59,14 @@ describe("Blocker 1 final production proof contract", () => {
     expect(workflow).toContain("authenticatedReadback:true");
   });
 
+  it("seals non-destructive continuous assurance from runtime and external gate evidence", () => {
+    expect(serverCore).toContain("causalAssurance: globalAssuranceService.latest()");
+    expect(workflow).toContain('health.causalAssurance?.schema!=="aurion.causal-assurance.v1"');
+    expect(workflow).toContain("node scripts/aurion-production-assurance.mjs");
+    expect(workflow).toContain("aurion-production-assurance.json");
+    expect(workflow).toContain('receipt.snapshot?.status==="CONTRADICTED"');
+  });
+
   it("keeps causal receipt v2 explicit while following the canonical migration manifest", () => {
     expect(schemaReadback).toContain('"0049_aurion_causal_receipt_v2"');
     expect(schemaReadback).toContain("receipt.sourceRevision!==process.env.EXPECTED_SHA");
