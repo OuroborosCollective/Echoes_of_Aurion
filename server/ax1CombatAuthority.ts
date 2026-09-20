@@ -212,12 +212,12 @@ export class NavGrid {
         return Object.freeze(path.reverse().map(point => Object.freeze({ ...point })));
       }
       closed.add(currentKey);
-      const neighbours = [{ x: current.point.x - 1, z: current.point.z }, { x: current.point.x, z: current.point.z - 1 }, { x: current.point.x, z: current.point.z + 1 }, { x: current.point.x + 1, z: current.point.z }];
+      const neighbours = [{ x: current!.point.x - 1, z: current!.point.z }, { x: current!.point.x, z: current!.point.z - 1 }, { x: current!.point.x, z: current!.point.z + 1 }, { x: current!.point.x + 1, z: current!.point.z }];
       for (const neighbour of neighbours) {
         if (!this.valid(neighbour)) continue;
         const key = gridKey(neighbour);
         if (closed.has(key)) continue;
-        const g = current.g + 1;
+        const g = current!.g + 1;
         const existing = open.get(key);
         if (existing && existing.g <= g) continue;
         cameFrom.set(key, currentKey); points.set(key, Object.freeze({ ...neighbour }));
