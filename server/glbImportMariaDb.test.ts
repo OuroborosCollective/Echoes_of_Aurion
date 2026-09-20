@@ -24,6 +24,7 @@ describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () =
   afterAll(async () => {
     if (store) await store.close();
     if (pool) {
+      await pool.execute("DELETE FROM glbExternalProvenance WHERE createdByUserId = ?", [admin]);
       await pool.execute("DELETE FROM glbAssignments WHERE assignedByUserId = ?", [admin]);
       await pool.execute("DELETE FROM glbAssets WHERE createdByUserId = ?", [admin]);
       await pool.execute("DELETE FROM users WHERE id IN (?, ?)", [admin, member]);
@@ -70,6 +71,62 @@ describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () =
       npcId: "lyra",
       expectedActiveAssetId: "glb_wrong000",
     })).rejects.toThrow("GLB_ASSIGNMENT_CHANGED");
+  }, 45_000);
+
+  it("persists immutable external fallback provenance atomically with the admitted local GLB", async () => {
+    const bytes = testGlb("Aurion_Barrel_Prop");
+    const contentBase64 = bytes.toString("base64");
+    const plan = buildGlbImportPlan(contentBase64, "world-environment", "Aurion_Barrel_Prop.glb");
+    const externalProvenance = {
+      version: "aurion.glb-external-provenance.v1" as const,
+      sourceKind: "os3a-cc0" as const,
+      registryRepository: "ToxSam/open-source-3D-assets" as const,
+      registryRevision: "c0496c867dfa232ee5dc7ee631133d2753cf6285",
+      modelRepository: "ToxSam/cc0-models-Polygonal-Mind" as const,
+      modelRevision: "56db2d4088512531a070d0bf3eb9d284d077528d",
+      licensePath: "License.md" as const,
+      projectId: "pm-medieval-fair",
+      sourceAssetId: "medieval-fair-test-barrel",
+      sourcePath: "projects/medieval-fair/Aurion_Barrel_Prop.glb",
+      license: "CC0-1.0" as const,
+      sourceSha256: plan.sha256,
+      sourceBytes: bytes.length,
+      sourceMetadataSha256: "b".repeat(64),
+      fallbackPlanSha256: "c".repeat(64),
+    };
+    const receipt = await store.ingest(admin, {
+      displayName: "OS3A test barrel",
+      fileName: "Aurion_Barrel_Prop.glb",
+      contentBase64,
+      purpose: "world-environment",
+      expectedPlanSha256: plan.planSha256,
+      externalProvenance,
+    });
+    const firstReadback = await store.externalProvenance(receipt.assetId);
+    expect(firstReadback).toMatchObject({
+      assetId: receipt.assetId,
+      sourceKind: "os3a-cc0",
+      registryRevision: externalProvenance.registryRevision,
+      modelRevision: externalProvenance.modelRevision,
+      sourceSha256: receipt.sha256,
+      sourceBytes: bytes.length,
+      fallbackPlanSha256: externalProvenance.fallbackPlanSha256,
+    });
+    expect(firstReadback?.receiptSha256).toMatch(/^[a-f0-9]{64}$/);
+
+    await store.close();
+    store = new GlbImportStore(process.env.DATABASE_URL!, root);
+    expect(await store.externalProvenance(receipt.assetId)).toEqual(firstReadback);
+
+    await expect(store.ingest(admin, {
+      displayName: "OS3A test barrel",
+      fileName: "Aurion_Barrel_Prop.glb",
+      contentBase64,
+      purpose: "world-environment",
+      expectedPlanSha256: plan.planSha256,
+      externalProvenance: { ...externalProvenance, fallbackPlanSha256: "d".repeat(64) },
+    })).rejects.toThrow("GLB_EXTERNAL_PROVENANCE_READBACK_FAILED");
+    expect(await store.externalProvenance(receipt.assetId)).toEqual(firstReadback);
   }, 45_000);
 
   it("serializes duplicate intake, preserves occupied slots, checks CAS and survives a new store instance", async () => {
