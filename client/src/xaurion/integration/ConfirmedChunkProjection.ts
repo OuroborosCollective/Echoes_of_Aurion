@@ -8,6 +8,7 @@ import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
 const envelope = z.strictObject({ status: z.literal("VERIFIED"), epoch: z.number().int().min(1),
   sourceRevision: z.string().regex(/^[a-f0-9]{40}$/), membership: z.enum(["COMMITTED_CHUNK_RECEIPT", "GENERATOR_AND_EMPTY_STREAM"]),
   manifest: z.unknown(), payloadJson: z.string().max(1_000_000), mutationAuthority: z.literal("none") });
+const MAX_TRANSIENT_ATTEMPTS = 4;
 
 export async function prepareConfirmedChunkProjection(value: unknown, epoch: number, coordinate: { x: number; z: number }, generation: number) {
   const packet = envelope.parse(value);
@@ -69,7 +70,7 @@ export class ConfirmedChunkProjection {
   private readonly abort = new AbortController();
   private readonly groups = new Map<string, THREE.Group>();
   private readonly pending = new Set<string>();
-  private readonly failures = new Map<string, { attempts: number; retryAt: number }>();
+  private readonly failures = new Map<string, { attempts: number; retryAt: number; terminal: boolean }>();
   private desired: { x: number; z: number }[] = [];
   private serial = 0;
   private center = "";
@@ -100,7 +101,8 @@ export class ConfirmedChunkProjection {
       const now = this.clockMs;
       const index = this.desired.findIndex(p => {
         const key = `${p.x}:${p.z}`, failure = this.failures.get(key);
-        return !this.groups.has(key) && !this.pending.has(key) && (!failure || failure.retryAt <= now);
+        return !this.groups.has(key) && !this.pending.has(key) &&
+          (!failure || (!failure.terminal && failure.attempts < MAX_TRANSIENT_ATTEMPTS && failure.retryAt <= now));
       });
       if (index < 0) return;
       const coordinate = this.desired[index];
@@ -108,7 +110,12 @@ export class ConfirmedChunkProjection {
       const key = `${coordinate.x}:${coordinate.z}`;
       const center = this.center, generation = ++this.serial;
       this.pending.add(key);
+      let terminal = false;
       void this.fetch({ epoch: this.epoch, chunkX: coordinate.x, chunkZ: coordinate.z }).then(async value => {
+        if (value && typeof value === "object" && (value as { status?: unknown }).status === "UNPROVABLE") {
+          terminal = true;
+          throw Error("PROJECTION_AUTHORITY_UNPROVABLE");
+        }
         const prepared = await prepareConfirmedChunkProjection(value, this.epoch, coordinate, generation);
         const result = await workerDecode(prepared.job, prepared.bytes, this.abort.signal);
         if (!await matchesWorldChunkProjectionWorkerResultV2(prepared.job, result, prepared.bytes)) throw Error("PROJECTION_WORKER_BINDING_MISMATCH");
@@ -120,7 +127,8 @@ export class ConfirmedChunkProjection {
       }).catch(() => {
         if (!this.abort.signal.aborted && center === this.center) {
           const attempts = (this.failures.get(key)?.attempts ?? 0) + 1;
-          this.failures.set(key, { attempts, retryAt: this.clockMs + Math.min(500 * 2 ** (attempts - 1), 10_000) });
+          this.failures.set(key, { attempts, terminal: terminal || attempts >= MAX_TRANSIENT_ATTEMPTS,
+            retryAt: this.clockMs + Math.min(500 * 2 ** (attempts - 1), 10_000) });
           this.report({ status: "UNPROVABLE", count: this.groups.size });
         }
       })

@@ -76,4 +76,28 @@ describe("active projection adapter boundaries (synthetic unit input, not author
     await vi.waitFor(() => expect(fetch.mock.calls.length).toBeGreaterThan(9));
     projection.dispose();
   });
+
+  it("pauses authority-unprovable chunks immediately and bounds repeated transient failures", async () => {
+    const denied = vi.fn(async () => ({ status: "UNPROVABLE", reason: "WORLD_ROOT_EVIDENCE_MISSING" }));
+    const terminal = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, denied, vi.fn());
+    terminal.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(denied).toHaveBeenCalledTimes(9));
+    terminal.update({ x: 0, z: 0 }, 60);
+    await Promise.resolve();
+    expect(denied).toHaveBeenCalledTimes(9);
+    terminal.dispose();
+
+    const failed = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
+    const bounded = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, failed, vi.fn());
+    bounded.update({ x: 0, z: 0 });
+    await vi.waitFor(() => expect(failed).toHaveBeenCalledTimes(9));
+    for (let attempt = 2; attempt <= 4; attempt += 1) {
+      bounded.update({ x: 0, z: 0 }, 10);
+      await vi.waitFor(() => expect(failed).toHaveBeenCalledTimes(attempt * 9));
+    }
+    bounded.update({ x: 0, z: 0 }, 60);
+    await Promise.resolve();
+    expect(failed).toHaveBeenCalledTimes(36);
+    bounded.dispose();
+  });
 });
