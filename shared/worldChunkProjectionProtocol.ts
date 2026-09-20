@@ -5,6 +5,10 @@ import {
   type WorldChunkCoordinate,
 } from "./worldChunkProtocol";
 
+// V1 remains byte-compatible. V2 is opt-in until the authoritative runtime
+// supplies receipt/state/root evidence; a V1 manifest is never upgraded by guess.
+export * from "./worldChunkProjectionV2";
+
 /**
  * AX1 presentation contract for deterministic chunk preparation.
  *

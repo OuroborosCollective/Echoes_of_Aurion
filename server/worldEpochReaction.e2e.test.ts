@@ -13,6 +13,9 @@ import { recordWorldChunkDelta } from "./db";
 import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk } from "../shared/worldChunkProtocol";
 import { GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
+import { readConfirmedChunkAssetProjection } from "./causality/worldChunkProjectionService";
+import { createWorldChunkProjectionWorkerJobV2 } from "../shared/worldChunkProjectionV2";
+import { decodeChunkAssetWorkerPayload } from "../shared/worldChunkProjectionPayload";
 
 const describeWithEpochDatabase = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_WORLD_EPOCH_E2E === "1" ? describe : describe.skip;
 const WORLD_ID = "echoes-of-aurion-global";
@@ -100,7 +103,7 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     const command = {
       actorUserId: 2_146_999_970, coordinate: CHUNK, baseRevision: 1,
       kind: "structure_placed" as const, targetId: "chunk-root-e2e-house",
-      idempotencyKey: "chunk-root-e2e:place:0001", payload: { xMm: 1000, zMm: 1000, assetKey: "hut" },
+      idempotencyKey: "chunk-root-e2e:place:0001", payload: { xMm: 1000, zMm: 1000, assetKey: "aurion_tripo_starpath_marker" },
     };
     const firstDelta = await recordWorldChunkDelta(command);
     expect((await recordWorldChunkDelta(command)).source).toBe("persisted");
@@ -166,6 +169,20 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     // Hash-only CLI evidence is retained in the CI log, never geometry or actor/intent fields.
     console.info("STEP28A_REAL_MARIADB_CLI", JSON.stringify(cliEvidence));
 
+    const projected = await readConfirmedChunkAssetProjection(WORLD_ID, 1, CHUNK);
+    expect(projected.status).toBe("VERIFIED");
+    if (projected.status !== "VERIFIED") throw Error(projected.reason);
+    expect(projected.manifest).toMatchObject({ authorityReceiptHash: readback.receipt.receiptHash, authorityStateHash, worldCausalRoot: stored.root.worldRootHash });
+    expect(projected.manifest.projectionHash).not.toBe(authorityStateHash);
+    const projectedBytes = new TextEncoder().encode(projected.payloadJson);
+    const projectedJob = await createWorldChunkProjectionWorkerJobV2({ manifest: projected.manifest, generation: 1 });
+    expect((await decodeChunkAssetWorkerPayload(projectedJob, projectedBytes)).decoded.structures).toEqual(readback.state.materialized.structures);
+    expect(projected.payloadJson).not.toMatch(/actorUserId|idempotencyKey|worldSeed/);
+    const explain = spawnSync(process.execPath, ["--import", "tsx", "scripts/explain-aurion-projection.ts", "--world", WORLD_ID, "--epoch", "1", "--chunk-x", String(CHUNK.x), "--chunk-z", String(CHUNK.z)], { encoding: "utf8", timeout: 20_000, env: process.env });
+    expect(explain.status, explain.stderr).toBe(0);
+    expect(JSON.parse(explain.stdout).manifest.projectionHash).toBe(projected.manifest.projectionHash);
+    console.info("STEP28_REAL_PROJECTION_CLI", explain.stdout.trim());
+
     await recordWorldChunkDelta({ ...command, kind: "structure_removed", idempotencyKey: "chunk-root-e2e:remove:0002" });
     await resolveAndRecordGlobalWorldEpoch({ requestedByUserId: command.actorUserId, idempotencyKey: "chunk-root-e2e:epoch:0002" });
     await expect(worldCausalRootService.replay(WORLD_ID, 1)).resolves.toMatchObject({ status: "MATCH" });
@@ -181,6 +198,7 @@ describeWithEpochDatabase("World epoch reaction receipts E2E", () => {
     await expect(worldCausalRootService.replay(WORLD_ID, 1)).resolves.toMatchObject({ status: "FIRST_DIVERGENCE" });
     await expect(worldCausalRootService.readChunk(WORLD_ID, 1, CHUNK)).resolves.toMatchObject({ status: "UNPROVABLE" });
     expect(runCli().status).toBe(2);
+    await expect(readConfirmedChunkAssetProjection(WORLD_ID, 1, CHUNK)).resolves.toMatchObject({ status: "UNPROVABLE" });
     await db.update(aurionWorldChunkDeltas).set({ payloadJson: JSON.stringify(firstDelta.delta.payload), deterministicHash: firstDelta.delta.deterministicHash }).where(eq(aurionWorldChunkDeltas.id, firstDelta.delta.id));
     await expect(worldCausalRootService.replay(WORLD_ID, 1)).resolves.toMatchObject({ status: "MATCH" });
     await db.delete(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.id, firstDelta.delta.id));

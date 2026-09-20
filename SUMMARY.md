@@ -25,6 +25,7 @@
   * [Effect Intent Journal — Step 24](docs/aurion-effect-intent-journal.md)
   * [Headless Causal Oracle V2 — Step 25](docs/aurion-headless-causal-oracle-v2.md)
   * [Canonical Chunk State — Step 28a prerequisite](docs/aurion-canonical-chunk-state.md)
+  * [World-Chunk Projection V2 — Step 28 corrective draft](docs/aurion-world-chunk-projection-v2.md)
 * [Betrieb](CONTAINER_RUNTIME_DEPLOYMENT.md)
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)

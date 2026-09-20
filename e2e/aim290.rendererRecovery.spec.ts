@@ -1,10 +1,55 @@
 import { expect, test, type Page } from "@playwright/test";
 import { register, enterAx1 } from "./helpers/aurionAuthenticated";
+import { createPool, type RowDataPacket } from "mysql2/promise";
+import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable authenticated MariaDB environment");
 
 const evidence = async (page: Page) => JSON.parse(await page.getByTestId("renderer-evidence").textContent() ?? "null");
 const assets = async (page: Page) => JSON.parse(await page.getByTestId("world-assets-evidence").getAttribute("data-presentation") ?? "null");
+const chunks = async (page: Page) => JSON.parse(await page.locator("#three-viewport").getAttribute("data-chunk-projection") ?? "null");
+const rpcData = (body: any) => body.result?.data?.json;
+
+// Isolated real authority: an authenticated action, running zone receipts and the
+// normal epoch resolver. No fabricated receipt, world root or chunk payload.
+async function commitConstructionEpoch(page: Page, handle: string) {
+  const pool = createPool(process.env.DATABASE_URL!);
+  try {
+    await expect.poll(async () => {
+      const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM aurionCausalTickReceipts WHERE worldId=? AND revision=?", [GLOBAL_WORLD_ID, process.env.AURION_RELEASE_SHA]);
+      return Number(rows[0]!.n);
+    }, { timeout: 30_000 }).toBeGreaterThan(0);
+    const base = await page.request.get("/api/trpc/gameplay.worldChunk", { params: { input: JSON.stringify({ json: { worldVersion: "aurion-global-world.v1", expectedBaseRevision: 1, chunkX: 0, chunkZ: 0 } }) } });
+    expect(base.ok()).toBe(true);
+    const placed = await page.request.post("/api/trpc/gameplay.applyWorldChunkAction", { data: { json: {
+      kind: "place_structure", coordinate: { x: 0, z: 0 }, expectedBaseRevision: 1,
+      expectedBaseHash: rpcData(await base.json()).generation.baseHash,
+      assetKey: "aurion_tripo_starpath_marker", xMm: 34_000, zMm: 34_000,
+      idempotencyKey: `step28-construction-${handle}`,
+    } } });
+    expect(placed.ok(), await placed.text()).toBe(true);
+    expect(rpcData(await placed.json()).source).toBe("created");
+    await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle=?", [handle]);
+    const resolved = await page.request.post("/api/trpc/admin.world.resolveEpoch", { data: { json: { idempotencyKey: `step28-browser-epoch-${handle}` } } });
+    expect(resolved.ok(), await resolved.text()).toBe(true);
+    const epoch = rpcData(await resolved.json()).plan.epoch;
+    const projection = await page.request.get("/api/trpc/gameplay.worldChunkProjectionV2", { params: { input: JSON.stringify({ json: { epoch, chunkX: 0, chunkZ: 0 } }) } });
+    expect(projection.ok()).toBe(true);
+    const packet = rpcData(await projection.json());
+    expect(packet).toMatchObject({ status: "VERIFIED", epoch, sourceRevision: process.env.AURION_RELEASE_SHA, membership: "COMMITTED_CHUNK_RECEIPT", mutationAuthority: "none" });
+    expect(JSON.parse(packet.payloadJson).structures).toHaveLength(1);
+    return { epoch, worldRootHash: packet.manifest.worldCausalRoot, projectionHash: packet.manifest.projectionHash, payloadHash: packet.manifest.payloadHash };
+  } finally {
+    await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='user' WHERE c.handle=?", [handle]);
+    await pool.end();
+  }
+}
+
+async function expectChunkProjection(page: Page, worldRootHash: string) {
+  await expect.poll(async () => (await chunks(page))?.status, { timeout: 45_000 }).toBe("APPLIED");
+  await expect.poll(async () => (await chunks(page))?.meshCount, { timeout: 45_000 }).toBeGreaterThan(0);
+  expect((await chunks(page)).worldRootHash).toBe(worldRootHash);
+}
 
 for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tablet", width: 800, height: 1280 }, { name: "desktop", width: 1440, height: 1000 }]) {
   test(`authenticated backend parity and actual loss recovery on ${profile.name}`, async ({ page, baseURL }, testInfo) => {
@@ -28,12 +73,19 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     });
     const health = await page.request.get("/healthz");
     expect(await health.json()).toMatchObject({ status: "ok", revision: process.env.AURION_RELEASE_SHA });
-    await register(page, `aim290_${profile.name}`);
-    const baseline = await enterAx1(page);
+    const handle = `aim290_${profile.name}`;
+    await register(page, handle);
+    const warmup = await enterAx1(page);
+    const projection = await commitConstructionEpoch(page, handle);
+    const baseline = warmup;
+    // Stay in the active runtime: authenticated world polling must retire the
+    // old renderer/projection and bind the new canonical epoch automatically.
+    await expect.poll(async () => (await evidence(page))?.epoch, { timeout: 45_000 }).toBe(projection.epoch);
     await expect.poll(async () => (await evidence(page))?.status).toBe("rendering");
     expect(await evidence(page)).toMatchObject({ backend: "webgl2", requested: "webgl2", recoveryAttempt: 0 });
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toMatch(/^[a-f0-9]{64}$/);
     const originalAssets = await assets(page);
+    await expectChunkProjection(page, projection.worldRootHash);
     await page.screenshot({ path: testInfo.outputPath("webgl2.png") });
     await page.locator("#three-viewport canvas").evaluate((canvas: HTMLCanvasElement) => {
       const extension = canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context");
@@ -45,6 +97,7 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toBe(originalAssets.catalogHash);
     expect((await assets(page)).collisionHash).toBe(originalAssets.collisionHash);
     expect(await evidence(page)).toMatchObject({ backend: "webgl2", recoveryCause: "WEBGL_CONTEXT_LOST" });
+    await expectChunkProjection(page, projection.worldRootHash);
     await expect(page.locator("#three-viewport canvas")).toHaveCount(1);
     await expect(baseline.runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("webgl2-recovered.png") });
@@ -60,7 +113,8 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     // is software evidence). It cannot pass by silently testing only WebGL2.
     expect(selected.backend).toBe("webgpu");
     expect(selected.recoveryAttempt).toBe(0);
-    expect(optional.snapshot.globalWorld.deterministicHash).toBe(baseline.snapshot.globalWorld.deterministicHash);
+    await expectChunkProjection(page, projection.worldRootHash);
+    expect(optional.snapshot.globalWorld.epoch).toBe(projection.epoch);
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toBe(originalAssets.catalogHash);
     expect((await assets(page)).collisionHash).toBe(originalAssets.collisionHash);
     await page.screenshot({ path: testInfo.outputPath("webgpu.png") });
@@ -76,11 +130,15 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await expect.poll(async () => (await evidence(page))?.recoveryAttempt, { timeout: 45_000 }).toBe(1);
     await expect.poll(async () => (await evidence(page))?.status, { timeout: 45_000 }).toBe("rendering");
     expect(await evidence(page)).toMatchObject({ backend: "webgl2", recoveryCause: "WEBGPU_DEVICE_LOST" });
+    await expectChunkProjection(page, projection.worldRootHash);
     await expect.poll(async () => (await assets(page))?.catalogHash, { timeout: 45_000 }).toBe(originalAssets.catalogHash);
     await expect(page.locator("#three-viewport canvas")).toHaveCount(1);
     await expect(optional.runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("webgpu-recovered.png") });
     expect(errors).toEqual([]);
-    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: baseline.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
+    const persisted = await page.request.get("/api/trpc/gameplay.worldChunkProjectionV2", { params: { input: JSON.stringify({ json: { epoch: projection.epoch, chunkX: 0, chunkZ: 0 } }) } });
+    expect(rpcData(await persisted.json())).toMatchObject({ status: "VERIFIED", manifest: { worldCausalRoot: projection.worldRootHash, projectionHash: projection.projectionHash, payloadHash: projection.payloadHash } });
+    console.info("STEP28_REAL_BROWSER", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, projection, workerProjection: await chunks(page), backend: selected.backend, recoveredBackend: (await evidence(page)).backend, actualContextLoss: true, actualDeviceDestroy: true }));
+    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: optional.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
   });
 }
