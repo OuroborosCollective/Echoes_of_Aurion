@@ -3,7 +3,7 @@ import { decodeOwnedNpcPacket, type PublicNpcSnapshot } from "@shared/npcSnapsho
 import { decodeOwnedNpcMultiMemory, type PublicNpcMultiMemory } from "@shared/npcMultiMemoryReadmodel";
 import { decodeOwnedNpcActions, type PublicNpcAction } from "@shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs, type PublicNpcSemanticGraph } from "@shared/npcSemanticGraphReadmodel";
-import { decodeOwnedNpcProjectionProvenance, type PublicNpcProjectionProvenance } from "@shared/npcSemanticGraphProvenanceReadmodel";
+import { projectOwnedNpcProjectionProvenance, type PublicNpcProjectionProvenance } from "@shared/npcSemanticGraphProvenanceReadmodel";
 const goals: Record<PublicNpcSnapshot["goal"],string> = {seek_safety:"Sicherheit suchen",gather_resources:"Ressourcen sammeln",socialize:"Gemeinschaft suchen",gain_reputation:"Ansehen gewinnen",trade:"Handel treiben",expand_influence:"Einfluss ausbauen"};
 const names: Record<string,string> = {lyra:"Lyra",orun:"Orun",ax1_merchant_observatory_threshold:"Valen",ax1_merchant_windhollow:"Elowen",ax1_merchant_emberfall:"Torin",ax1_merchant_cinder_vault:"Kael"};
 function NpcActionPanel({userId}:{userId:number}) {
@@ -24,11 +24,12 @@ function NpcActionPanel({userId}:{userId:number}) {
 }
 function NpcSemanticGraphPanel({userId}:{userId:number}) {
   const query=trpc.gameplay.npcSemanticGraph.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
-  let graphs:PublicNpcSemanticGraph[]|undefined,invalid=false;
-  if(query.data){try{graphs=decodeOwnedNpcSemanticGraphs(query.data,userId).graphs;}catch{invalid=true;}}
-  return <section aria-label="Verifizierter NPC-Erinnerungsgraph" data-testid="npc-semantic-graph-panel">
+  let graphs:PublicNpcSemanticGraph[]|undefined,projections:PublicNpcProjectionProvenance[]|undefined,invalid=false;
+  if(query.data){try{graphs=decodeOwnedNpcSemanticGraphs(query.data,userId).graphs;projections=projectOwnedNpcProjectionProvenance(query.data,userId).projections;}catch{invalid=true;}}
+  const unavailable=query.isError||invalid;
+  return <><section aria-label="Verifizierter NPC-Erinnerungsgraph" data-testid="npc-semantic-graph-panel">
     <h4>Verifizierter Erinnerungsgraph</h4>
-    {query.isError||invalid ? <><p role="alert">Der semantische Erinnerungsgraph konnte nicht bestätigt werden.</p><button onClick={()=>void query.refetch()}>Graph aktualisieren</button></> : !graphs ? <p role="status">Verifizierter Erinnerungsgraph wird geladen.</p> : <>
+    {unavailable ? <><p role="alert">Der semantische Erinnerungsgraph konnte nicht bestätigt werden.</p><button onClick={()=>void query.refetch()}>Graph aktualisieren</button></> : !graphs ? <p role="status">Verifizierter Erinnerungsgraph wird geladen.</p> : <>
       {query.isStale&&<p role="status">Letzter verifizierter Graphstand; Aktualisierung ausstehend.</p>}
       {graphs.length===0 ? <p>Noch kein verifizierter Graphstand verfügbar.</p> : graphs.map(graph=><article key={graph.npcId} data-testid="npc-semantic-graph-row" data-npc-id={graph.npcId} data-graph-hash={graph.graphHash} data-result-hash={graph.resultHash} data-source-result-hash={graph.sourceResultHash} data-generation={graph.generation} data-provenance-status={graph.provenanceStatus}>
         <b>{names[graph.npcId]??graph.npcId}</b>
@@ -38,16 +39,13 @@ function NpcSemanticGraphPanel({userId}:{userId:number}) {
         {(graph.excluded.expired+graph.excluded.contradicted+graph.excluded.superseded)>0&&<p>{graph.excluded.expired} abgelaufen · {graph.excluded.contradicted} widersprochen · {graph.excluded.superseded} ersetzt</p>}
       </article>)}
     </>}
-  </section>;
+  </section><NpcProjectionProvenancePanel projections={projections} unavailable={unavailable} stale={query.isStale} refetch={query.refetch}/></>;
 }
-function NpcProjectionProvenancePanel({userId}:{userId:number}) {
-  const query=trpc.gameplay.npcProjectionProvenance.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
-  let projections:PublicNpcProjectionProvenance[]|undefined,invalid=false;
-  if(query.data){try{projections=decodeOwnedNpcProjectionProvenance(query.data,userId).projections;}catch{invalid=true;}}
+function NpcProjectionProvenancePanel({projections,unavailable,stale,refetch}:{projections:PublicNpcProjectionProvenance[]|undefined;unavailable:boolean;stale:boolean;refetch:()=>unknown}) {
   return <section aria-label="Verifizierte Projektions-Provenienz" data-testid="npc-projection-provenance-panel">
     <h4>Verifizierte Projektions-Provenienz</h4>
-    {query.isError||invalid ? <><p role="alert">Die Projektions-Provenienz konnte nicht bestätigt werden.</p><button onClick={()=>void query.refetch()}>Provenienz aktualisieren</button></> : !projections ? <p role="status">Verifizierte Projektions-Provenienz wird geladen.</p> : <>
-      {query.isStale&&<p role="status">Letzter verifizierter Provenienzstand; Aktualisierung ausstehend.</p>}
+    {unavailable ? <><p role="alert">Die Projektions-Provenienz konnte nicht bestätigt werden.</p><button onClick={()=>void refetch()}>Provenienz aktualisieren</button></> : !projections ? <p role="status">Verifizierte Projektions-Provenienz wird geladen.</p> : <>
+      {stale&&<p role="status">Letzter verifizierter Provenienzstand; Aktualisierung ausstehend.</p>}
       {projections.length===0 ? <p>Noch kein verifizierter Projektions-Provenienzstand verfügbar.</p> : projections.map(projection=><article key={projection.npcId} data-testid="npc-projection-provenance-row" data-npc-id={projection.npcId} data-generation={projection.generation} data-source-revision={projection.sourceRevision} data-provenance-status={projection.provenanceStatus}>
         <b>{names[projection.npcId]??projection.npcId}</b>
         <small>Generation {projection.generation} · Provenienz {projection.provenanceStatus}</small>
@@ -88,6 +86,5 @@ export function NpcDecisionPanel({userId}:{userId:number}) {
     <NpcMemoryPanel userId={userId}/>
     <NpcActionPanel userId={userId}/>
     <NpcSemanticGraphPanel userId={userId}/>
-    <NpcProjectionProvenancePanel userId={userId}/>
   </section>;
 }
