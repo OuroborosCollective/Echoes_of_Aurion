@@ -8,6 +8,7 @@ import pin from "../config/wasd-npc-capsule.json";
 import { decodeOwnedNpcMultiMemory } from "../shared/npcMultiMemoryReadmodel";
 import { decodeOwnedNpcActions } from "../shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs } from "../shared/npcSemanticGraphReadmodel";
+import { decodeOwnedNpcProjectionProvenance, projectOwnedNpcProjectionProvenance } from "../shared/npcSemanticGraphProvenanceReadmodel";
 
 describe("AIM-292 WASD source and public transport boundary",()=>{
   it("binds the real imported rule functions and compiled identity to the reviewed WASD source",()=>{
@@ -20,6 +21,7 @@ describe("AIM-292 WASD source and public transport boundary",()=>{
     expect(appRouter._def.procedures).toHaveProperty("gameplay.npcMultiMemory");
     expect(appRouter._def.procedures).toHaveProperty("gameplay.npcActions");
     expect(appRouter._def.procedures).toHaveProperty("gameplay.npcSemanticGraph");
+    expect(appRouter._def.procedures).toHaveProperty("gameplay.npcProjectionProvenance");
   });
   it("keeps confirmed action transport owner-bound, bounded and free of raw effect payloads",()=>{
     const action={npcId:"ax1_merchant_observatory_threshold",actionReceiptId:"nar_"+"1".repeat(56),resolutionIndex:8,action:"trade",effectsHash:"2".repeat(64),readbackHash:"3".repeat(64),sourceRevision:pin.sourceRevision};
@@ -43,6 +45,18 @@ describe("AIM-292 WASD source and public transport boundary",()=>{
       {...packet,graphs:[{...graph,rawProvenance:[{id:"secret"}]}]},
       {...packet,graphs:[{...graph,nodes:[{...node,semanticKey:"x",receiptId:"nar_private"}]}]},
     ]) expect(()=>decodeOwnedNpcSemanticGraphs(changed,7)).toThrow();
+  });
+  it("derives projection provenance only from the bounded verified graph transport",()=>{
+    const node={nodeId:"smn_"+"1".repeat(60),kind:"goal",semanticKey:"trade",status:"active",depth:1,score:1200,payloadHash:"2".repeat(64)};
+    const graph={npcId:"lyra",generation:8,graphHash:"3".repeat(64),sourceResultHash:"4".repeat(64),resultHash:"5".repeat(64),sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED",bounds:{maxDepth:4,maxCandidates:64,maxResults:32},nodes:[node],relations:[],excluded:{expired:0,contradicted:0,superseded:0}};
+    const packet=projectOwnedNpcProjectionProvenance({userId:7,format:"aurion-public-npc-semantic-graph.v2",graphs:[graph]},7);
+    expect(decodeOwnedNpcProjectionProvenance(packet,7).projections).toEqual([{npcId:"lyra",generation:8,graphHash:"3".repeat(64),sourceResultHash:"4".repeat(64),semanticGraphResultHash:"5".repeat(64),sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"}]);
+    for(const changed of [
+      {...packet,userId:8},
+      {...packet,projections:[packet.projections[0],packet.projections[0]]},
+      {...packet,projections:[{...packet.projections[0],provenanceHash:"private"}]},
+      {...packet,projections:[{...packet.projections[0],memoryReceiptId:"private"}]},
+    ]) expect(()=>decodeOwnedNpcProjectionProvenance(changed,7)).toThrow();
   });
   it("requires exact owner, bounded unique ordered identities and a readmodel without raw fields",()=>{
     const npc={version:"wasd-npc-memory-public.v4",npcId:"lyra",resolutionIndex:7,goal:"trade",planStatus:"planned",memoryHash:"a".repeat(64),sourceRevision:pin.sourceRevision,counts:{working:1,episodic:1,semantic:2,procedural:2},conflictedFacts:0,expiredFacts:0};
