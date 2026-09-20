@@ -5,6 +5,7 @@ import { z } from "zod";
 import { MAX_GLB_BASE64_CHARS, decodeValidatedGlbBase64 } from "./adminProtocol";
 import { buildGlbImportPlan } from "./glbImportPlan";
 import { glbImportStore } from "./glbImportStore";
+import type { GlbExternalProvenanceInput } from "../shared/glbExternalProvenanceContract";
 import {
   GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION,
   GAME_DEVELOPMENT_STUDIO_VERSION,
@@ -251,6 +252,7 @@ export async function applyGameDevelopmentStudioLiveAsset(
   actorUserId: number,
   rawInput: GameDevelopmentStudioLiveAssetInput,
   expectedPlanSha256: string,
+  externalProvenance?: GlbExternalProvenanceInput,
 ): Promise<GameDevelopmentStudioLiveAdmissionReceipt> {
   if (!Number.isSafeInteger(actorUserId) || actorUserId < 1) throw new Error("GAME_DEV_ACTOR_INVALID");
   if (!SHA256.test(expectedPlanSha256)) throw new Error("GAME_DEV_EXPECTED_PLAN_INVALID");
@@ -324,6 +326,7 @@ export async function applyGameDevelopmentStudioLiveAsset(
     purpose: input.purpose,
     fileName: input.fileName,
     expectedPlanSha256: plan.aurionPlanSha256,
+    ...(externalProvenance ? { externalProvenance } : {}),
   });
   if (aurionReceipt.sha256 !== plan.sourceSha256 || aurionReceipt.planSha256 !== plan.aurionPlanSha256) {
     throw new Error("GAME_DEV_AURION_INGEST_IDENTITY_MISMATCH");
