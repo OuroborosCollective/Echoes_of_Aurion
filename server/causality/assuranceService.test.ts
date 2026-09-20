@@ -134,6 +134,31 @@ describe("continuous causal assurance", () => {
     } finally { log.mockRestore(); vi.useRealTimers(); }
   });
 
+  it("fails closed on unknown observation status values", () => {
+    const observations = probes().map(probe => ({ key: probe.key, status: "MATCH" as const,
+      summary: `${probe.key}_MATCH`, evidenceHash: canonicalSha256(probe.key), sampleCount: 1 }));
+    const invalid = observations.map((value, index) => index === 0 ? { ...value, status: "UNKNOWN" as any } : value);
+    expect(() => sealAssuranceSnapshot({ worldId: GLOBAL_WORLD_ID, sequence: 1, observedAtMs: 1,
+      observations: invalid as any })).toThrow("ASSURANCE_OBSERVATION_INVALID");
+  });
+
+  it("maps degraded assurance to UNVERIFIED in the ChatGPT truth vocabulary", async () => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const degraded = await new AurionAssuranceService(probes({ EFFECT_JOURNAL: "DEGRADED" }), GLOBAL_WORLD_ID, () => 43).sample();
+    log.mockRestore();
+    const sample = vi.spyOn(globalAssuranceService, "sample").mockResolvedValue(degraded);
+    const measured = vi.spyOn(globalAssuranceService, "measuredBaseline").mockReturnValue(globalAssuranceService.measuredBaseline());
+    try {
+      const result = await chatGptAssuranceStatus();
+      expect(result.snapshot.status).toBe("DEGRADED");
+      expect(result.truthStatus).toBe("UNVERIFIED");
+      expect(result.mutationAuthority).toBe("none");
+    } finally {
+      sample.mockRestore();
+      measured.mockRestore();
+    }
+  });
+
   it("rejects incomplete or duplicate observation sets", () => {
     const observations = probes().map(probe => ({ key: probe.key, status: "MATCH" as const,
       summary: `${probe.key}_MATCH`, evidenceHash: canonicalSha256(probe.key), sampleCount: 1 }));
