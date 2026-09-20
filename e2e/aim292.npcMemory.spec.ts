@@ -7,13 +7,15 @@ import { decodeOwnedNpcActions } from "../shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs } from "../shared/npcSemanticGraphReadmodel";
 import { decodeOwnedNpcProjectionProvenance } from "../shared/npcSemanticGraphProvenanceReadmodel";
 import { npcHash, retrieveNpcSemanticMemoryGraph, type NpcSemanticMemoryGraph } from "../server/wasdNpcCapsule";
+import { getDb } from "../server/db";
+import { readVerifiedNpcSemanticGraphV2AtGeneration } from "../server/wasdSemanticGraphV2Persistence";
 const pin=JSON.parse(await readFile(new URL("../config/wasd-npc-capsule.json",import.meta.url),"utf8"));
 test.skip(process.env.AURION_E2E_ISOLATED!=="1","Requires disposable authenticated MariaDB");
 
 const profiles=[{name:"phone",width:412,height:915},{name:"tablet",width:800,height:1280},{name:"desktop",width:1440,height:1000}] as const;
 function activeAt(status:string,from:number,until:number|null,index:number){return status==="active"&&index>=from&&(until===null||index<until);}
 function publicSemanticKey(node:NpcSemanticMemoryGraph["nodes"][number]){return ["actor","location","goal","procedural_competency","polity","item_resource"].includes(node.kind)?node.key:null;}
-function readmodelFromStoredGraph(graph:NpcSemanticMemoryGraph,sourceRevision:string){
+function readmodelFromVerifiedGraph(graph:NpcSemanticMemoryGraph,sourceRevision:string){
   const result=retrieveNpcSemanticMemoryGraph(graph,{logicalIndex:graph.generation,startKeys:[graph.npcId],maxDepth:4,maxCandidates:64,maxResults:32});
   const resultIds=new Set(result.results.map(item=>item.nodeId));
   const nodes=result.results.map(item=>{const source=graph.nodes.find(node=>node.id===item.nodeId);if(!source)throw new Error("stored graph retrieval node missing");return {nodeId:item.nodeId,kind:item.kind,semanticKey:publicSemanticKey(source),status:"active" as const,depth:item.depth,score:item.score,payloadHash:item.payloadHash};});
@@ -149,9 +151,12 @@ for(const profile of profiles){
       const [graphRows]=await pool.query<RowDataPacket[]>("SELECT id,generation,graphHash,sourceRevision,sourceSha256,capsuleManifestSha256,receiptHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[graphProjection.npcId,graphProjection.generation]);
       expect(graphRows).toHaveLength(1);
       expect(graphRows[0]).toMatchObject({graphHash:graphProjection.graphHash,sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256,capsuleManifestSha256:pin.manifestSha256});
-      const [provenanceGraphRows]=await pool.query<RowDataPacket[]>("SELECT generation,graphHash,sourceRevision,graphJson FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[provenanceProjection.npcId,provenanceProjection.generation]);
+      const [provenanceGraphRows]=await pool.query<RowDataPacket[]>("SELECT generation,graphHash,sourceRevision FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[provenanceProjection.npcId,provenanceProjection.generation]);
       expect(provenanceGraphRows).toHaveLength(1);
-      const provenanceReadmodel=readmodelFromStoredGraph(JSON.parse(provenanceGraphRows[0].graphJson) as NpcSemanticMemoryGraph,provenanceGraphRows[0].sourceRevision);
+      const database=await getDb(); if(!database) throw new Error("isolated MariaDB unavailable");
+      const verifiedProvenanceGraph=await database.transaction(tx=>readVerifiedNpcSemanticGraphV2AtGeneration(tx,provenanceProjection.npcId,provenanceProjection.generation));
+      expect(verifiedProvenanceGraph).not.toBeNull();
+      const provenanceReadmodel=readmodelFromVerifiedGraph(verifiedProvenanceGraph!.graph,provenanceGraphRows[0].sourceRevision);
       expect(provenanceProjection).toEqual({npcId:provenanceReadmodel.npcId,generation:provenanceReadmodel.generation,graphHash:provenanceReadmodel.graphHash,sourceResultHash:provenanceReadmodel.sourceResultHash,semanticGraphResultHash:provenanceReadmodel.resultHash,sourceRevision:provenanceReadmodel.sourceRevision,provenanceStatus:"VERIFIED"});
       expect(graphRows[0].receiptHash).toMatch(/^[a-f0-9]{64}$/);
       const [graphEdges]=await pool.query<RowDataPacket[]>("SELECT id,kind,fromNodeId,toNodeId FROM aurionSemanticGraphEdgesV2 WHERE graphReceiptId=?",[graphRows[0].id]);
