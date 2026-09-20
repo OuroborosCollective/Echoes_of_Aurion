@@ -3,6 +3,7 @@ import { decodeOwnedNpcPacket, type PublicNpcSnapshot } from "@shared/npcSnapsho
 import { decodeOwnedNpcMultiMemory, type PublicNpcMultiMemory } from "@shared/npcMultiMemoryReadmodel";
 import { decodeOwnedNpcActions, type PublicNpcAction } from "@shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs, type PublicNpcSemanticGraph } from "@shared/npcSemanticGraphReadmodel";
+import { decodeOwnedNpcProjectionProvenance, type PublicNpcProjectionProvenance } from "@shared/npcSemanticGraphProvenanceReadmodel";
 const goals: Record<PublicNpcSnapshot["goal"],string> = {seek_safety:"Sicherheit suchen",gather_resources:"Ressourcen sammeln",socialize:"Gemeinschaft suchen",gain_reputation:"Ansehen gewinnen",trade:"Handel treiben",expand_influence:"Einfluss ausbauen"};
 const names: Record<string,string> = {lyra:"Lyra",orun:"Orun",ax1_merchant_observatory_threshold:"Valen",ax1_merchant_windhollow:"Elowen",ax1_merchant_emberfall:"Torin",ax1_merchant_cinder_vault:"Kael"};
 function NpcActionPanel({userId}:{userId:number}) {
@@ -39,6 +40,22 @@ function NpcSemanticGraphPanel({userId}:{userId:number}) {
     </>}
   </section>;
 }
+function NpcProjectionProvenancePanel({userId}:{userId:number}) {
+  const query=trpc.gameplay.npcProjectionProvenance.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
+  let projections:PublicNpcProjectionProvenance[]|undefined,invalid=false;
+  if(query.data){try{projections=decodeOwnedNpcProjectionProvenance(query.data,userId).projections;}catch{invalid=true;}}
+  return <section aria-label="Verifizierte Projektions-Provenienz" data-testid="npc-projection-provenance-panel">
+    <h4>Verifizierte Projektions-Provenienz</h4>
+    {query.isError||invalid ? <><p role="alert">Die Projektions-Provenienz konnte nicht bestätigt werden.</p><button onClick={()=>void query.refetch()}>Provenienz aktualisieren</button></> : !projections ? <p role="status">Verifizierte Projektions-Provenienz wird geladen.</p> : <>
+      {query.isStale&&<p role="status">Letzter verifizierter Provenienzstand; Aktualisierung ausstehend.</p>}
+      {projections.length===0 ? <p>Noch kein verifizierter Projektions-Provenienzstand verfügbar.</p> : projections.map(projection=><article key={projection.npcId} data-testid="npc-projection-provenance-row" data-npc-id={projection.npcId} data-generation={projection.generation} data-source-revision={projection.sourceRevision} data-provenance-status={projection.provenanceStatus}>
+        <b>{names[projection.npcId]??projection.npcId}</b>
+        <small>Generation {projection.generation} · Provenienz {projection.provenanceStatus}</small>
+        <p>Quellrevision {projection.sourceRevision.slice(0,12)}…</p>
+      </article>)}
+    </>}
+  </section>;
+}
 function NpcMemoryPanel({userId}:{userId:number}) {
   const query=trpc.gameplay.npcMultiMemory.useQuery(undefined,{enabled:userId>0,staleTime:15_000,refetchInterval:10_000});
   let npcs: PublicNpcMultiMemory[]|undefined,invalid=false;
@@ -71,5 +88,6 @@ export function NpcDecisionPanel({userId}:{userId:number}) {
     <NpcMemoryPanel userId={userId}/>
     <NpcActionPanel userId={userId}/>
     <NpcSemanticGraphPanel userId={userId}/>
+    <NpcProjectionProvenancePanel userId={userId}/>
   </section>;
 }
