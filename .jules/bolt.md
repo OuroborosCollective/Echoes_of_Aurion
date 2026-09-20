@@ -17,3 +17,7 @@
 ## 2024-05-19 - Optimization: caching sorted array to avoid map lookups/dynamic mapping in game loops
 **Learning:** Found a specific anti-pattern in the server game loop codebase: iterating over $O(1)$ maps dynamically on each high frequency tick or converting a map to a sorted array inside `snapshot` each time it is requested. Due to fixed 100ms game ticks, Map lookups in inner loops across numerous entities and allocating arrays mapping those states create huge overhead and GC pressure.
 **Action:** When working on arrays that map static keys to mutable states inside `tick()` or `snapshot()` routines in `zone*Runtime.ts`, pre-sort the list in the constructor as an array cache (like `this.orderedStates`). Use the array inside `tick()` loops and iterate exactly using `for...of` avoiding map `.get()` and avoiding spread + `.map()` dynamic allocations.
+
+## 2026-09-15 - Array Allocation Overhead in Zone Canonical State Snapshot
+**Learning:** In high-frequency game loops, calling `Array.from().sort()` repeatedly (e.g. to serialize `skillCooldownUntilTick` maps or `questSummaries`) on every `getCanonicalZoneState()` call causes unnecessary array creations and mappings, inducing GC pressure. Sorting is already handled centrally in `sortCanonicalZoneState`.
+**Action:** Replaced dynamic `Array.from().sort()` in `getCanonicalZoneState` with a dirty-flagged array cache (`cachedQuestSummaries`) and direct `for...of` Map iteration (for `skillCooldowns`), eliminating per-tick array mapping overhead.

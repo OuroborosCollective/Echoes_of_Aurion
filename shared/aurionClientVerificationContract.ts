@@ -9,6 +9,12 @@ export type ClientVerificationStatus = (typeof CLIENT_VERIFICATION_STATUSES)[num
 export const clientObservationIdentifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const hash = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const counter = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+export const clientVerificationReadbackSchema = z.strictObject({
+  connectionId: clientObservationIdentifier, clientSessionId: clientObservationIdentifier,
+  status: z.enum(CLIENT_VERIFICATION_STATUSES), generation: counter.nullable(),
+  reason: z.enum(["NO_EXPECTATION", "AWAITING_CLIENT_APPLY", "CLIENT_REPORTED_MATCH", "CLIENT_REPORTED_MISMATCH", "DEADLINE_ELAPSED"]),
+  clientVerificationHash: hash.nullable(), trust: z.literal("untrusted-client-observation"), mutationAuthority: z.literal("none"),
+});
 const unsignedSchema = z.strictObject({
   schema: z.literal(AURION_CLIENT_VERIFICATION_SCHEMA),
   connectionId: clientObservationIdentifier,

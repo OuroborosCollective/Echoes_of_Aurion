@@ -26,11 +26,10 @@ type Pending = {
 };
 
 /**
- * Draft observer, not connected to transport yet. One instance per authenticated
- * connection/session; never construct its binding from the report body.
- * At most one record, five-minute readback TTL, no DB/logging/fingerprints/secrets.
- * Expiry is lazy; transport integration must dispose inactive instances on close
- * or schedule cleanup before claiming a physical memory-retention deadline.
+ * One expected generation per authenticated connection/session binding; never
+ * construct its binding from the report body. The live registry bounds records,
+ * schedules five-minute disposal and clears them on authenticated socket close.
+ * This service's own TTL is additionally checked lazily; no DB/logging/secrets.
  * Receipt matching proves only what this untrusted client reported.
  */
 export class AurionClientVerificationService {

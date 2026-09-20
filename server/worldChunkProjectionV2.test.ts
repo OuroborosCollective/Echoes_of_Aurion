@@ -94,7 +94,8 @@ describe("Step 28 V2 projection commitments (synthetic, not production authority
     expect((await root([a])).projectionRoot).not.toBe((await root([a, b])).projectionRoot);
     expect((await root([a], "another-connection")).projectionRoot).not.toBe((await root([a])).projectionRoot);
     await expect(root([a, a])).rejects.toThrow("PROJECTION_INTEREST_DUPLICATE");
-    await expect(root([a, await manifest({ coordinate: { x: 1, z: 0 }, authorityReceiptHash: hash("d") })])).rejects.toThrow("PROJECTION_INTEREST_AUTHORITY_MISMATCH");
+    expect((await root([a, await manifest({ coordinate: { x: 1, z: 0 }, authorityReceiptHash: hash("d"), authorityStateHash: hash("e") })])).projectionRoot).not.toBe((await root([a, b])).projectionRoot);
+    await expect(root([a, await manifest({ coordinate: { x: 1, z: 0 }, worldCausalRoot: hash("d") })])).rejects.toThrow("PROJECTION_INTEREST_AUTHORITY_MISMATCH");
     await expect(root([])).rejects.toThrow();
   });
 

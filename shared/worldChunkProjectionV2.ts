@@ -151,8 +151,7 @@ export async function createWorldChunkConnectionProjectionRootV2(input: {
   const first = manifests[0]!;
   const seen = new Set<string>();
   for (const manifest of manifests) {
-    if (manifest.worldId !== first.worldId || manifest.authorityReceiptHash !== first.authorityReceiptHash ||
-        manifest.authorityStateHash !== first.authorityStateHash || manifest.worldCausalRoot !== first.worldCausalRoot ||
+    if (manifest.worldId !== first.worldId || manifest.worldCausalRoot !== first.worldCausalRoot ||
         manifest.projectionPolicy !== first.projectionPolicy) throw new Error("PROJECTION_INTEREST_AUTHORITY_MISMATCH");
     const key = `${manifest.coordinate.x}:${manifest.coordinate.z}:${manifest.layer}`;
     if (seen.has(key)) throw new Error("PROJECTION_INTEREST_DUPLICATE");
