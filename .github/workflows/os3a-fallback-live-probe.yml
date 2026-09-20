@@ -13,6 +13,7 @@ on:
       - "shared/glbPresentationBudget.ts"
       - "shared/glbExternalProvenanceContract.ts"
       - "scripts/os3a-fallback-live-probe.ts"
+      - "scripts/verify-os3a-fallback-source.ts"
       - ".github/workflows/os3a-fallback-live-probe.yml"
   workflow_dispatch:
 
