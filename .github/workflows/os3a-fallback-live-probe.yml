@@ -26,6 +26,7 @@ jobs:
     env:
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       OS3A_EVIDENCE_PATH: .aurion-os3a-evidence/live-probe.json
+      OS3A_SOURCE_EVIDENCE_PATH: .aurion-os3a-evidence/source-inventory.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +44,12 @@ jobs:
         run: node scripts/install-game-development-studio.mjs
       - name: Install exact Aurion graph
         run: pnpm install --frozen-lockfile
+      - name: Verify complete pinned source inventory
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .aurion-os3a-evidence
+          pnpm exec tsx scripts/verify-os3a-fallback-source.ts
       - name: Targeted fallback regressions
         run: |
           pnpm exec vitest run             server/openSource3dFallback.test.ts             server/adminMcp.test.ts             client/src/xaurion/core/GlbResourceBudget.test.ts
@@ -55,6 +62,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: os3a-fallback-live-probe-${{ env.AURION_RELEASE_SHA }}
-          path: .aurion-os3a-evidence/live-probe.json
+          path: |
+            .aurion-os3a-evidence/source-inventory.json
+            .aurion-os3a-evidence/live-probe.json
           if-no-files-found: error
           retention-days: 14
