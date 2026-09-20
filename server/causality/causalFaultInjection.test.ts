@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
-import { FAULT_BOUNDARIES, runFault, assertTestIsolation, type Fault } from '../../scripts/causal-chaos/harness';\nimport { deriveChaosExitCode } from '../../scripts/causal-chaos/report';\nimport { classifyCorruptedVerification } from '../../scripts/causal-chaos/attestation.mjs';
+import { FAULT_BOUNDARIES, runFault, assertTestIsolation, type Fault } from '../../scripts/causal-chaos/harness';
+import { deriveChaosExitCode } from '../../scripts/causal-chaos/report';
+import { classifyCorruptedVerification } from '../../scripts/causal-chaos/attestation.mjs';
 
 beforeEach(() => { vi.stubEnv('DATABASE_URL', ''); vi.stubEnv('AURION_SCHEMA_DATABASE_URL', ''); vi.stubEnv('NODE_ENV', 'test'); });
 afterEach(() => vi.unstubAllEnvs());
