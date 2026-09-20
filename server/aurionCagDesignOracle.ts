@@ -24,13 +24,17 @@ function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
-/** Accept the bounded provider result itself or Wolfram's notebook-style Out[n]= wrapper. */
+/** Accept only bounded numeric Wolfram output (integer or integer list), optionally wrapped by Out[n]=. */
 export function normalizeWolframComputeResult(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 4096 || /[\r\n]/.test(trimmed)) throw new Error("CAG_RESULT_BOUNDS");
   const match = /^(?:Out\[[0-9]{1,9}\]\s*=\s*)?(.+)$/.exec(trimmed);
   if (!match?.[1]) throw new Error("CAG_RESULT_FORMAT");
-  return match[1].trim();
+  const compact = match[1].replace(/\s+/g, "");
+  if (!/^-?[0-9]+$/.test(compact) && !/^\{-?[0-9]+(?:,-?[0-9]+)*\}$/.test(compact)) {
+    throw new Error("CAG_RESULT_FORMAT");
+  }
+  return compact;
 }
 
 function safeFailureFamily(error: unknown): string {
