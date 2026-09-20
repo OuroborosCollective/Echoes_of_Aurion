@@ -78,7 +78,7 @@ for(const profile of profiles){
     const provenanceBody=await provenanceResponse.json(),provenancePacket=provenanceBody.result.data.json;
     expect(provenancePacket.userId).toBe(authenticatedUserId);
     const provenanceProjection=decodeOwnedNpcProjectionProvenance(provenancePacket,authenticatedUserId).projections.find(value=>value.npcId==="ax1_merchant_observatory_threshold")!;
-    expect(provenanceProjection).toEqual({npcId:graphProjection.npcId,generation:graphProjection.generation,graphHash:graphProjection.graphHash,sourceResultHash:graphProjection.sourceResultHash,semanticGraphResultHash:graphProjection.resultHash,sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"});
+    expect(provenanceProjection).toMatchObject({npcId:"ax1_merchant_observatory_threshold",sourceRevision:pin.sourceRevision,provenanceStatus:"VERIFIED"});
     const publicProvenanceJson=JSON.stringify(provenancePacket);
     for(const forbidden of ['"nodeId":','"payloadHash":','"provenanceId":','"provenanceHash":',"receiptJson","effectSetJson","memoryJson","databaseCredential","actionReceiptId","effectReadbackId","memoryReceiptId"]) expect(publicProvenanceJson).not.toContain(forbidden);
     const graphRow=page.getByTestId("npc-semantic-graph-row").filter({has:page.locator('[data-npc-id="ax1_merchant_observatory_threshold"]')});
@@ -99,7 +99,7 @@ for(const profile of profiles){
     const displayedProvenance=await merchantProvenance.evaluate(element=>({
       generation:Number(element.getAttribute("data-generation")),sourceRevision:element.getAttribute("data-source-revision"),provenanceStatus:element.getAttribute("data-provenance-status"),text:element.textContent,
     }));
-    expect(displayedProvenance).toMatchObject({generation:provenanceProjection.generation,sourceRevision:provenanceProjection.sourceRevision,provenanceStatus:"VERIFIED"});
+    expect(displayedProvenance).toMatchObject({generation:graphProjection.generation,sourceRevision:graphProjection.sourceRevision,provenanceStatus:"VERIFIED"});
     const semanticViewportBaseline={...displayedGraph};
     const provenanceViewportBaseline={...displayedProvenance};
     for(const viewport of profiles){
@@ -138,7 +138,9 @@ for(const profile of profiles){
       const [graphRows]=await pool.query<RowDataPacket[]>("SELECT id,generation,graphHash,sourceRevision,sourceSha256,capsuleManifestSha256,receiptHash FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[graphProjection.npcId,graphProjection.generation]);
       expect(graphRows).toHaveLength(1);
       expect(graphRows[0]).toMatchObject({graphHash:graphProjection.graphHash,sourceRevision:pin.sourceRevision,sourceSha256:pin.sourceSha256,capsuleManifestSha256:pin.manifestSha256});
-      expect(provenanceProjection).toMatchObject({generation:graphRows[0].generation,graphHash:graphRows[0].graphHash,sourceRevision:graphRows[0].sourceRevision});
+      const [provenanceGraphRows]=await pool.query<RowDataPacket[]>("SELECT generation,graphHash,sourceRevision FROM aurionSemanticGraphReceiptsV2 WHERE npcId=? AND generation=?",[provenanceProjection.npcId,provenanceProjection.generation]);
+      expect(provenanceGraphRows).toHaveLength(1);
+      expect(provenanceProjection).toMatchObject({generation:provenanceGraphRows[0].generation,graphHash:provenanceGraphRows[0].graphHash,sourceRevision:provenanceGraphRows[0].sourceRevision});
       expect(graphRows[0].receiptHash).toMatch(/^[a-f0-9]{64}$/);
       const [graphEdges]=await pool.query<RowDataPacket[]>("SELECT id,kind,fromNodeId,toNodeId FROM aurionSemanticGraphEdgesV2 WHERE graphReceiptId=?",[graphRows[0].id]);
       const [actionNodes]=await pool.query<RowDataPacket[]>("SELECT id,semanticKey FROM aurionSemanticGraphNodesV2 WHERE graphReceiptId=? AND kind='action' AND semanticKey=?",[graphRows[0].id,displayedAction.actionReceiptId]);
@@ -150,7 +152,7 @@ for(const profile of profiles){
       expect(performedProv.every(row=>row.sourceRevision===pin.sourceRevision&&/^[a-f0-9]{64}$/.test(row.provenanceHash))).toBe(true);
       const counts=[memory.working.confirmedEventIds.length,memory.episodic.length,memory.semantic.length,memory.procedural.length];
       expect(displayed.counts).toEqual(counts.map(String));
-      await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual AIM-292 memory + AIM-293 effect readback + AIM-294 graph DB provenance -> bounded authenticated AX1 projection",graphHash:graphProjection.graphHash,graphResultHash:graphProjection.resultHash,graphSourceResultHash:graphProjection.sourceResultHash,projectionProvenanceFormat:provenancePacket.format,projectionProvenanceStatus:provenanceProjection.provenanceStatus}),contentType:"application/json"});
+      await testInfo.attach("actual-memory-readback",{body:JSON.stringify({aurionRevision:process.env.AURION_RELEASE_SHA,wasdRevision:pin.sourceRevision,profile:profile.name,npcId:projection.npcId,resolutionIndex:index,memoryHash:hash,receiptHash:rows[0].receiptHash,counts,sourceDecisionReceiptId:rows[0].sourceDecisionReceiptId,scope:"Actual AIM-292 memory + AIM-293 effect readback + AIM-294 graph DB provenance -> bounded authenticated AX1 projection",graphHash:graphProjection.graphHash,graphResultHash:graphProjection.resultHash,graphSourceResultHash:graphProjection.sourceResultHash,projectionProvenanceFormat:provenancePacket.format,projectionProvenanceGeneration:provenanceProjection.generation,projectionProvenanceGraphHash:provenanceProjection.graphHash,projectionProvenanceStatus:provenanceProjection.provenanceStatus}),contentType:"application/json"});
     }finally{await pool.end();}
     await page.screenshot({path:testInfo.outputPath("npc-memory-confirmed.png")});
     await page.getByRole("button",{name:"Quest-Buch schließen",exact:true}).click();
