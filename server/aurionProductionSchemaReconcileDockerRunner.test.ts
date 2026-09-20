@@ -118,6 +118,7 @@ function makeArtifact() {
   "0052_aurion_effect_intent_journal",
   "0053_aurion_npc_action_gateway_v2",
   "0054_aurion_semantic_memory_graph_v2",
+  "0055_aurion_glb_external_provenance",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
