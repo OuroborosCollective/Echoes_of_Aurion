@@ -142,7 +142,8 @@ export async function chatGptRecoveryPlan(zoneId: string) {
 export async function chatGptAssuranceStatus() {
   const snapshot = await globalAssuranceService.sample();
   return Object.freeze({ protocol: "aurion.chatgpt.assurance-status.v1", mutationAuthority: "none" as const,
-    truthStatus: snapshot.status === "HEALTHY" ? "VERIFIED" as const : snapshot.status,
+    truthStatus: snapshot.status === "HEALTHY" ? "VERIFIED" as const :
+      snapshot.status === "CONTRADICTED" ? "CONTRADICTED" as const : "UNVERIFIED" as const,
     snapshot, measuredSloBaseline: globalAssuranceService.measuredBaseline() });
 }
 
