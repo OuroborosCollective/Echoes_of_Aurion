@@ -155,7 +155,7 @@ export default function GameDevelopmentStudioWorkbench() {
               <p className="mt-1 break-all font-mono text-[10px] text-slate-500">Registry {fallbackSource.data.registryRevision} · Models {fallbackSource.data.modelRevision}</p>
             </div>
           )}
-          <div className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
+          <div className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]">
             <div className="space-y-2">
               <Label htmlFor="os3a-query">Fehlendes Asset suchen</Label>
               <Input
@@ -181,6 +181,21 @@ export default function GameDevelopmentStudioWorkbench() {
                 <option value="phone">Phone · 8 MiB</option>
                 <option value="tablet">Tablet · 12 MiB</option>
                 <option value="desktop">Desktop · 16 MiB</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="os3a-purpose">Präsentationszweck</Label>
+              <select
+                id="os3a-purpose"
+                value={purpose}
+                onChange={event => {
+                  setPurpose(event.target.value as LivePurpose);
+                  fallbackPlan.reset();
+                  fallbackApply.reset();
+                }}
+                className="flex h-10 w-full rounded-md border border-cyan-200/20 bg-slate-950 px-3 text-sm text-slate-100"
+              >
+                {purposes.map(entry => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
               </select>
             </div>
             <div className="flex items-end">
