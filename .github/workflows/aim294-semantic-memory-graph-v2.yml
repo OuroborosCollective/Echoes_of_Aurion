@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - "server/wasdSemanticGraph*"
+      - "server/routers.ts"
+      - "server/npcProjectionProvenanceRoute.test.ts"
       - "server/npcMultiMemoryPersistence.ts"
       - "server/npcActionGatewayPersistence.ts"
       - "server/wasdAurionRuntime.ts"
       - "server/worldContext/sourceAdapter.ts"
       - "server/aim294SemanticGraphV2MariaDb.test.ts"
       - "shared/npcSemanticGraphReadmodel.ts"
+      - "shared/npcSemanticGraphProvenanceReadmodel.ts"
+      - "server/npcProjectionProvenanceReadmodel.test.ts"
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "vendor/wasd-npc/**"
       - "config/wasd-npc-capsule.json"
@@ -20,12 +24,16 @@ on:
     branches: [main]
     paths:
       - "server/wasdSemanticGraph*"
+      - "server/routers.ts"
+      - "server/npcProjectionProvenanceRoute.test.ts"
       - "server/npcMultiMemoryPersistence.ts"
       - "server/npcActionGatewayPersistence.ts"
       - "server/wasdAurionRuntime.ts"
       - "server/worldContext/sourceAdapter.ts"
       - "server/aim294SemanticGraphV2MariaDb.test.ts"
       - "shared/npcSemanticGraphReadmodel.ts"
+      - "shared/npcSemanticGraphProvenanceReadmodel.ts"
+      - "server/npcProjectionProvenanceReadmodel.test.ts"
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "vendor/wasd-npc/**"
       - "config/wasd-npc-capsule.json"
@@ -145,12 +153,14 @@ jobs:
           pnpm exec vitest run --no-file-parallelism \
             server/wasdSemanticGraphPersistence.test.ts \
             server/aim292NpcSourceBoundary.test.ts \
+            server/npcProjectionProvenanceRoute.test.ts \
             server/aim292NpcMultiMemoryMariaDb.test.ts \
             server/aim293NpcActionGatewayMariaDb.test.ts \
             server/autonomousNpcLifeMariaDb.test.ts \
             server/aim294SemanticGraphV2MariaDb.test.ts \
             client/src/xaurion/integration/NpcDecisionPanel.test.tsx \
-            client/src/xaurion/integration/ax1FullCutover.test.tsx
+            client/src/xaurion/integration/ax1FullCutover.test.tsx \
+            server/npcProjectionProvenanceReadmodel.test.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
