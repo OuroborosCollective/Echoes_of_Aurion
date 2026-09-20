@@ -380,6 +380,16 @@ export async function readVerifiedNpcSemanticGraphV2(tx:NpcTransaction,npcId:str
   return row?verifiedGraphFromRow(tx,row):null;
 }
 
+/** Read and verify one immutable historical generation without consulting current NPC state. */
+export async function readVerifiedNpcSemanticGraphV2AtGeneration(tx:NpcTransaction,npcId:string,generation:number){
+  if(!Number.isSafeInteger(generation)||generation<0) throw new Error("NPC_SEMANTIC_GRAPH_GENERATION_INVALID");
+  const row=(await tx.select().from(aurionSemanticGraphReceiptsV2).where(and(
+    eq(aurionSemanticGraphReceiptsV2.npcId,npcId),
+    eq(aurionSemanticGraphReceiptsV2.generation,generation),
+  )).limit(1))[0];
+  return row?verifiedGraphFromRow(tx,row):null;
+}
+
 export async function rebuildSemanticGraphIndexV2(tx:NpcTransaction,npcId:string){
   const confirmed=await readVerifiedNpcSemanticGraphV2(tx,npcId);
   if(!confirmed) return null;
