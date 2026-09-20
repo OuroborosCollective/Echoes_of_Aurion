@@ -121,6 +121,8 @@ export class AuthoritativeMovementZone {
   private previousReceiptHash: string | null = null;
   private lastReceipt: AurionCausalTickReceipt | null = null;
   private questSummaries = new Map<string, CanonicalQuestSummary>();
+  private cachedQuestSummaries: CanonicalQuestSummary[] = [];
+  private questSummariesDirty = false;
 
   /** Replay disables persistence and transport projection. */
   public isReplay = false;
@@ -147,7 +149,7 @@ export class AuthoritativeMovementZone {
     this.refreshPeerOrder();
     const players: CanonicalPlayerState[] = this.sortedPeersByEntityId.map(peer => {
       const skillCooldowns: Record<string, number> = {};
-      for (const [skillId, tick] of Array.from(peer.skillCooldownUntilTick.entries()).sort(([a], [b]) => compareBinary(a, b))) skillCooldowns[skillId] = tick;
+      for (const [skillId, tick] of peer.skillCooldownUntilTick) skillCooldowns[skillId] = tick;
       return {
         entityId: `player:${peer.userId}`,
         userId: peer.userId,
@@ -199,8 +201,17 @@ export class AuthoritativeMovementZone {
       players,
       mobs,
       resources,
-      questSummaries: Array.from(this.questSummaries.values(), quest => ({ ...quest })),
+      questSummaries: this.getQuestSummariesArray(),
     });
+  }
+
+  private getQuestSummariesArray(): CanonicalQuestSummary[] {
+    if (this.questSummariesDirty) {
+      this.cachedQuestSummaries = Array.from(this.questSummaries.values(), quest => ({ ...quest }));
+      this.questSummariesDirty = false;
+    }
+    // sortCanonicalZoneState maps and creates new objects, so we can return the array directly
+    return this.cachedQuestSummaries;
   }
 
   restoreFromCanonicalState(state: CanonicalZoneState, previousReceiptHash?: string | null): void {
@@ -244,6 +255,7 @@ export class AuthoritativeMovementZone {
     this.resourceRuntime.restoreCanonicalStates(state.resources);
     this.questSummaries.clear();
     for (const quest of state.questSummaries || []) this.questSummaries.set(`${quest.userId}:${quest.questId}`, { ...quest });
+    this.questSummariesDirty = true;
   }
 
   join(values: { userId: number; socket: WebSocket; combatProfile?: ZoneCombatProfile }): ZoneWelcome {
@@ -506,6 +518,7 @@ export class AuthoritativeMovementZone {
         const key = `${peer.userId}:${intent.questId}`;
         if (!this.questSummaries.has(key)) {
           this.questSummaries.set(key, { userId: peer.userId, questId: intent.questId, status: "accepted", updatedAtTick: this.tickNumber });
+          this.questSummariesDirty = true;
           changed = true;
         }
       } else if (intent.type === "quest_hand_in" && peer.health > 0) {
@@ -513,6 +526,7 @@ export class AuthoritativeMovementZone {
         const current = this.questSummaries.get(key);
         if (current?.status === "accepted") {
           this.questSummaries.set(key, { ...current, status: "completed", updatedAtTick: this.tickNumber });
+          this.questSummariesDirty = true;
           changed = true;
         }
       }
