@@ -65,7 +65,7 @@ export function buildProgressionCagProbe(levelExact: string): AurionCagProbe {
   const expectedExact = cagOracleXpForNextLevelExact(safe.toString(10));
   return Object.freeze({
     kind: "progression",
-    code: `ToString[Floor[50*(${safe.toString(10)})^(7/5)],InputForm]`,
+    code: `Floor[50*(${safe.toString(10)})^(7/5)]`,
     expectedExact,
     truthNotice: "CAG independently recomputes one exact progression threshold; Aurion remains progression authority.",
   });
@@ -141,12 +141,12 @@ export function buildWorldChunkTerrainCagProbe(chunk: BaseWorldChunk): AurionCag
     "flat=Flatten[m]",
     "dx=Flatten[Abs[Map[Differences,m]]]",
     "dz=Flatten[Abs[Differences[m]]]",
-    'StringRiffle[ToString[#,InputForm]&/@{Min[flat],Max[flat],Max[Join[dx,dz]]},","]',
+    "{Min[flat],Max[flat],Max[Join[dx,dz]]}",
   ].join(";");
   return Object.freeze({
     kind: "terrain_invariants",
     code,
-    expectedExact: `${summary.minHeightMm},${summary.maxHeightMm},${summary.maxAdjacentDeltaMm}`,
+    expectedExact: `{${summary.minHeightMm},${summary.maxHeightMm},${summary.maxAdjacentDeltaMm}}`,
     truthNotice: "CAG checks bounded geometry statistics from a canonical Aurion chunk; it does not generate or mutate terrain authority.",
   });
 }
@@ -214,7 +214,7 @@ export function buildModelScaleCagProbe(bounds: ModelBounds, targetMaxExtent: nu
   const extents = normalized.sourceExtents.map(wolframNumber).join(",");
   return Object.freeze({
     kind: "model_scale",
-    code: `source=Max[{${extents}}];ToString[Round[(${wolframNumber(targetMaxExtent)}/source)*100000000],InputForm]`,
+    code: `source=Max[{${extents}}];Round[(${wolframNumber(targetMaxExtent)}/source)*100000000]`,
     expectedExact: String(normalized.scaleE8),
     truthNotice: "CAG verifies a bounded presentation-scale calculation; applying a transform remains an explicit Aurion asset-authoring decision.",
   });
