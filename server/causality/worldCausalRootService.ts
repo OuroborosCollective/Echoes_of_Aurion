@@ -6,6 +6,7 @@ import { createCanonicalChunkReceipt, createChunkUniverse, chunkKey, chunkCoordi
 import { buildChunkWorldRoot, parseAnyWorldRootResult, verifyAnyWorldRoot, WORLD_CHUNK_ROOT_SCHEMA, type AnyWorldRootResult } from "../../shared/aurionChunkWorldRootContract";
 import { createWorldChunkDelta, type WorldChunkCoordinate, type WorldChunkDelta } from "../../shared/worldChunkProtocol";
 import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../../shared/worldIdentity";
+import { operationalNow } from "../../shared/operationalClock";
 import { activeProvenance } from "../aurionProvenance";
 import {
   AURION_WORLD_CAUSAL_ZONE_IDS,
@@ -24,7 +25,7 @@ export type WorldCausalRootReplayVerdict =
 export class VerifiedEpochReplayCache {
   private readonly entries = new Map<string, { expiresAt: number; value: WorldCausalRootReplayVerdict }>();
   private readonly inflight = new Map<string, Promise<WorldCausalRootReplayVerdict>>();
-  constructor(private readonly maximum = 32, private readonly ttlMs = 10_000, private readonly now = Date.now) {
+  constructor(private readonly maximum = 32, private readonly ttlMs = 10_000, private readonly now = operationalNow) {
     if (!Number.isSafeInteger(maximum) || maximum < 1 || !Number.isSafeInteger(ttlMs) || ttlMs < 1) throw Error("WORLD_EPOCH_CACHE_CONFIGURATION_INVALID");
   }
   async read(key: string, verify: () => Promise<WorldCausalRootReplayVerdict>) {

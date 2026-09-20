@@ -73,14 +73,15 @@ export class ConfirmedChunkProjection {
   private desired: { x: number; z: number }[] = [];
   private serial = 0;
   private center = "";
+  private clockMs = 0;
   constructor(private scene: THREE.Scene, private epoch: number,
     private terrain: (x: number, z: number) => number,
     private fetch: (input: { epoch: number; chunkX: number; chunkZ: number }) => Promise<unknown>,
-    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void,
-    private now: () => number = Date.now) {}
+    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void) {}
 
-  update(position: { x: number; z: number }) {
-    if (this.abort.signal.aborted || this.epoch < 1) return;
+  update(position: { x: number; z: number }, deltaSeconds = 0) {
+    if (this.abort.signal.aborted || this.epoch < 1 || !Number.isFinite(deltaSeconds) || deltaSeconds < 0) return;
+    this.clockMs += deltaSeconds * 1_000;
     const c = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
     const key = `${c.x}:${c.z}`;
     if (this.center !== key) {
@@ -96,7 +97,7 @@ export class ConfirmedChunkProjection {
   private pump() {
     if (this.abort.signal.aborted) return;
     while (this.pending.size < 2) {
-      const now = this.now();
+      const now = this.clockMs;
       const index = this.desired.findIndex(p => {
         const key = `${p.x}:${p.z}`, failure = this.failures.get(key);
         return !this.groups.has(key) && !this.pending.has(key) && (!failure || failure.retryAt <= now);
@@ -119,7 +120,7 @@ export class ConfirmedChunkProjection {
       }).catch(() => {
         if (!this.abort.signal.aborted && center === this.center) {
           const attempts = (this.failures.get(key)?.attempts ?? 0) + 1;
-          this.failures.set(key, { attempts, retryAt: this.now() + Math.min(500 * 2 ** (attempts - 1), 10_000) });
+          this.failures.set(key, { attempts, retryAt: this.clockMs + Math.min(500 * 2 ** (attempts - 1), 10_000) });
           this.report({ status: "UNPROVABLE", count: this.groups.size });
         }
       })

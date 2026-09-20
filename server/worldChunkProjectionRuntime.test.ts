@@ -66,15 +66,13 @@ describe("active projection adapter boundaries (synthetic unit input, not author
   });
 
   it("retries transient chunk failures while the player remains in the same chunk", async () => {
-    let now = 0;
     const fetch = vi.fn(async () => { throw Error("TRANSIENT_PROJECTION_READ_FAILURE"); });
-    const projection = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, fetch, vi.fn(), () => now);
+    const projection = new ConfirmedChunkProjection(new THREE.Scene(), 2, () => 0, fetch, vi.fn());
     projection.update({ x: 0, z: 0 });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(9));
     projection.update({ x: 0, z: 0 });
     expect(fetch).toHaveBeenCalledTimes(9);
-    now = 500;
-    projection.update({ x: 0, z: 0 });
+    projection.update({ x: 0, z: 0 }, 0.5);
     await vi.waitFor(() => expect(fetch.mock.calls.length).toBeGreaterThan(9));
     projection.dispose();
   });

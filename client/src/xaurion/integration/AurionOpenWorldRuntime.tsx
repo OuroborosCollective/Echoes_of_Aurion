@@ -315,7 +315,7 @@ export default function AurionOpenWorldRuntime() {
       abort.signal.addEventListener("abort", () => chunkProjection.dispose(), { once: true });
       engine.onProjectionTick = delta => {
         serviceNpcRef.current?.update(delta);
-        chunkProjection.update(engine!.player.position);
+        chunkProjection.update(engine!.player.position, delta);
         worldAssets?.update(delta, engine!.player.position, engine!.renderer.domElement.clientWidth);
         if (containerRef.current) containerRef.current.dataset.playerProjection = JSON.stringify({ position: engine!.player.position, rendered: engine!.player.group.position });
       };
