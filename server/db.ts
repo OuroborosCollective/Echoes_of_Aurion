@@ -49,10 +49,10 @@ import {
   AURION_WORLD_CAUSAL_ZONE_IDS,
   computeWorldCausalRoot,
   computeZoneEpochRoot,
-  verifyWorldCausalRoot,
-  type AurionWorldCausalRootResult,
   type AurionZoneReceiptReference,
 } from "../shared/aurionWorldCausalRootContract";
+import { CHUNK_EPOCH_MAX_DELTAS } from "../shared/aurionChunkStateContract";
+import { buildChunkWorldRoot, parseAnyWorldRootResult, unprovableChunkWorldRoot, type AnyWorldRootResult } from "../shared/aurionChunkWorldRootContract";
 
 export function isConfiguredDatabaseUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -317,17 +317,6 @@ function causalReceiptReference(row: typeof aurionCausalTickReceipts.$inferSelec
   };
 }
 
-function parsePriorWorldCausalRoot(value: string): AurionWorldCausalRootResult | null {
-  try {
-    const parsed = JSON.parse(value) as AurionWorldCausalRootResult;
-    if (parsed?.schema !== "aurion.world.causal-root-result.v1") return null;
-    if (parsed.status === "VERIFIED" && (!parsed.root || !verifyWorldCausalRoot(parsed.root))) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Evidence-only snapshot of the exact causal zone receipt ranges visible inside
  * the same DB transaction that commits the world epoch. Missing or contradictory
@@ -336,14 +325,18 @@ function parsePriorWorldCausalRoot(value: string): AurionWorldCausalRootResult |
 async function buildWorldCausalRootForEpoch(
   tx: DatabaseTransaction,
   epoch: number,
-): Promise<AurionWorldCausalRootResult> {
+): Promise<AnyWorldRootResult> {
+  const context = { worldId: GLOBAL_WORLD_ID, epoch, sourceRevision: activeProvenance.sourceRevision };
   const priorRows = await tx.select().from(aurionGlobalStateProofs).where(and(
     eq(aurionGlobalStateProofs.worldId, GLOBAL_WORLD_ID),
     lt(aurionGlobalStateProofs.epoch, epoch),
-  )).orderBy(desc(aurionGlobalStateProofs.epoch)).limit(64);
-  const prior = priorRows
-    .map(row => parsePriorWorldCausalRoot(row.globalProofJson))
-    .find((value): value is AurionWorldCausalRootResult => value !== null) ?? null;
+  )).orderBy(desc(aurionGlobalStateProofs.epoch)).limit(1);
+  const priorRow = priorRows[0];
+  const prior = priorRow ? parseAnyWorldRootResult(priorRow.globalProofJson) : null;
+  // Never skip a contradictory latest predecessor and silently pick an older green root.
+  if (priorRow && (!prior || prior.evidenceHash !== priorRow.globalProofHash || prior.status !== priorRow.status || priorRow.epoch !== epoch - 1)) {
+    return unprovableChunkWorldRoot(context, "PREVIOUS_WORLD_ROOT_INVALID");
+  }
   const previousWorldRootProvable = prior === null || prior.status === "VERIFIED";
   const previousWorldRoot = prior?.status === "VERIFIED" ? prior.root.worldRootHash : null;
   const previousByZone = new Map(
@@ -375,7 +368,7 @@ async function buildWorldCausalRootForEpoch(
     }
   }
 
-  return computeWorldCausalRoot({
+  const zoneResult = computeWorldCausalRoot({
     worldId: GLOBAL_WORLD_ID,
     epoch,
     sourceRevision: activeProvenance.sourceRevision,
@@ -385,6 +378,18 @@ async function buildWorldCausalRootForEpoch(
     previousWorldRoot,
     previousWorldRootProvable,
   });
+  // Same transaction/MVCC snapshot as the epoch and zone roots. +1 is an overflow
+  // detector; a truncated prefix can never be labelled complete or VERIFIED.
+  const chunkRows = await tx.select().from(aurionWorldChunkDeltas)
+    .where(eq(aurionWorldChunkDeltas.worldId, GLOBAL_WORLD_ID))
+    .orderBy(aurionWorldChunkDeltas.chunkX, aurionWorldChunkDeltas.chunkZ, aurionWorldChunkDeltas.sequence)
+    .limit(CHUNK_EPOCH_MAX_DELTAS + 1);
+  if (chunkRows.length > CHUNK_EPOCH_MAX_DELTAS) return unprovableChunkWorldRoot(context, "CHUNK_DELTA_BOUND_EXCEEDED");
+  try {
+    return buildChunkWorldRoot({ ...context, zoneResult, worldSeed: GLOBAL_WORLD_SEED, deltas: chunkRows.map(parseWorldChunkDelta), previous: prior });
+  } catch {
+    return unprovableChunkWorldRoot(context, "CHUNK_PERSISTED_DELTA_INVALID");
+  }
 }
 
 /**
