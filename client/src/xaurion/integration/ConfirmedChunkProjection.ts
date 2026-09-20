@@ -4,10 +4,14 @@ import { CHUNK_ASSET_PROJECTION_POLICY, decodeChunkAssetWorkerPayload, type Chun
 import { createWorldChunkProjectionWorkerJobV2, decodeWorldChunkProjectionManifestV2, matchesWorldChunkProjectionWorkerResultV2, type WorldChunkProjectionWorkerJobV2 } from "@shared/worldChunkProjectionV2";
 import { splitWorldChunkPositionMm } from "@shared/worldChunkProtocol";
 import { GLOBAL_WORLD_ID } from "@shared/worldIdentity";
+import { clientObservationIdentifier } from "@shared/aurionClientVerificationContract";
+
+const observationSchema = z.strictObject({ connectionId: clientObservationIdentifier, clientSessionId: clientObservationIdentifier });
+export type AppliedChunkObservation = { job: WorldChunkProjectionWorkerJobV2; binding: z.infer<typeof observationSchema>; observedAtLogicalFrame: number };
 
 const envelope = z.strictObject({ status: z.literal("VERIFIED"), epoch: z.number().int().min(1),
   sourceRevision: z.string().regex(/^[a-f0-9]{40}$/), membership: z.enum(["COMMITTED_CHUNK_RECEIPT", "GENERATOR_AND_EMPTY_STREAM"]),
-  manifest: z.unknown(), payloadJson: z.string().max(1_000_000), mutationAuthority: z.literal("none") });
+  manifest: z.unknown(), payloadJson: z.string().max(1_000_000), mutationAuthority: z.literal("none"), observation: observationSchema.optional() });
 const MAX_TRANSIENT_ATTEMPTS = 4;
 
 export async function prepareConfirmedChunkProjection(value: unknown, epoch: number, coordinate: { x: number; z: number }, generation: number) {
@@ -18,7 +22,7 @@ export async function prepareConfirmedChunkProjection(value: unknown, epoch: num
   const job = await createWorldChunkProjectionWorkerJobV2({ manifest, generation });
   const decoded = await decodeChunkAssetWorkerPayload(job, bytes);
   if (decoded.decoded.epoch !== epoch) throw Error("PROJECTION_EPOCH_MISMATCH");
-  return { job, bytes, decoded: decoded.decoded };
+  return { job, bytes, decoded: decoded.decoded, observation: packet.observation };
 }
 
 function workerDecode(job: WorldChunkProjectionWorkerJobV2, bytes: Uint8Array, signal: AbortSignal): Promise<unknown> {
@@ -73,15 +77,18 @@ export class ConfirmedChunkProjection {
   private readonly failures = new Map<string, { attempts: number; retryAt: number; terminal: boolean }>();
   private desired: { x: number; z: number }[] = [];
   private serial = 0;
+  private logicalFrame = 0;
   private center = "";
   private clockMs = 0;
   constructor(private scene: THREE.Scene, private epoch: number,
     private terrain: (x: number, z: number) => number,
-    private fetch: (input: { epoch: number; chunkX: number; chunkZ: number }) => Promise<unknown>,
-    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void) {}
+    private fetch: (input: { epoch: number; chunkX: number; chunkZ: number; generation: number }) => Promise<unknown>,
+    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void,
+    private onApplied?: (observation: AppliedChunkObservation) => Promise<void>) {}
 
   update(position: { x: number; z: number }, deltaSeconds = 0) {
     if (this.abort.signal.aborted || this.epoch < 1 || !Number.isFinite(deltaSeconds) || deltaSeconds < 0) return;
+    this.logicalFrame += 1;
     this.clockMs += deltaSeconds * 1_000;
     const c = splitWorldChunkPositionMm({ x: Math.round(position.x * 1000), z: Math.round(position.z * 1000) }).coordinate;
     const key = `${c.x}:${c.z}`;
@@ -111,7 +118,7 @@ export class ConfirmedChunkProjection {
       const center = this.center, generation = ++this.serial;
       this.pending.add(key);
       let terminal = false;
-      void this.fetch({ epoch: this.epoch, chunkX: coordinate.x, chunkZ: coordinate.z }).then(async value => {
+      void this.fetch({ epoch: this.epoch, chunkX: coordinate.x, chunkZ: coordinate.z, generation }).then(async value => {
         if (value && typeof value === "object" && (value as { status?: unknown }).status === "UNPROVABLE") {
           terminal = true;
           throw Error("PROJECTION_AUTHORITY_UNPROVABLE");
@@ -124,6 +131,10 @@ export class ConfirmedChunkProjection {
         this.groups.set(key, group); this.failures.delete(key); this.scene.add(group);
         const meshCount = [...this.groups.values()].reduce((total, item) => total + item.children.length, 0);
         this.report({ status: "APPLIED", count: this.groups.size, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
+        if (prepared.observation && this.onApplied) {
+          // Observation failure cannot remove the applied scene or change authority.
+          void this.onApplied({ job: prepared.job, binding: prepared.observation, observedAtLogicalFrame: this.logicalFrame }).catch(() => {});
+        }
       }).catch(() => {
         if (!this.abort.signal.aborted && center === this.center) {
           const attempts = (this.failures.get(key)?.attempts ?? 0) + 1;

@@ -1,5 +1,6 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
 import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
+import { AURION_CLIENT_VERIFICATION_SCHEMA, createClientVerificationReceipt } from "@shared/aurionClientVerificationContract";
 import { ConfirmedPlayerMotion } from "./ConfirmedPlayerMotion";
 import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
 import { playerUiReadbackSchema, type ControlSettings } from "@shared/playerUiProtocol";
@@ -308,10 +309,35 @@ export default function AurionOpenWorldRuntime() {
         center => rpcUtils.worldAssets.regionV2.fetch(center),
         evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); }, engine.renderer);
       delete containerRef.current.dataset.chunkProjection;
+      delete containerRef.current.dataset.clientVerification;
       const chunkProjection = new ConfirmedChunkProjection(engine.scene, world.epoch,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
-        input => rpcUtils.gameplay.worldChunkProjectionV2.fetch(input),
-        evidence => { if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence); });
+        async input => {
+          const connectionId = zoneClientRef.current?.getConnectionId();
+          try {
+            if (!connectionId) throw Error("CLIENT_CONNECTION_UNAVAILABLE");
+            return await rpcUtils.client.gameplay.beginClientProjection.mutate({ ...input, connectionId });
+          } catch {
+            // Observer capacity/transport must not gate presentation. The same
+            // authority-verifying Step-28 producer still supplies the bytes.
+            if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify({ status: "CLIENT_UNOBSERVABLE", trust: "untrusted-client-observation", mutationAuthority: "none" });
+            const { generation: _generation, ...coordinate } = input;
+            return rpcUtils.gameplay.worldChunkProjectionV2.fetch(coordinate);
+          }
+        },
+        evidence => { if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence); },
+        async ({ job, binding, observedAtLogicalFrame }) => {
+          try {
+            const receipt = await createClientVerificationReceipt({ schema: AURION_CLIENT_VERIFICATION_SCHEMA, ...binding,
+              serverReceiptHash: job.manifest.authorityReceiptHash, projectionHash: job.manifest.projectionHash,
+              appliedGeneration: job.generation, observedAtLogicalFrame });
+            if (abort.signal.aborted) return;
+            const status = await rpcUtils.client.gameplay.reportClientVerification.mutate(receipt);
+            if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify(status);
+          } catch {
+            if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify({ status: "CLIENT_UNOBSERVABLE", trust: "untrusted-client-observation", mutationAuthority: "none" });
+          }
+        });
       abort.signal.addEventListener("abort", () => chunkProjection.dispose(), { once: true });
       engine.onProjectionTick = delta => {
         serviceNpcRef.current?.update(delta);

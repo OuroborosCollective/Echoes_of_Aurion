@@ -2,12 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 import { register, enterAx1 } from "./helpers/aurionAuthenticated";
 import { createPool, type RowDataPacket } from "mysql2/promise";
 import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
+import { createClientVerificationReceipt } from "../shared/aurionClientVerificationContract";
+import { COOKIE_NAME } from "../shared/const";
+import { spawnSync } from "node:child_process";
 
 test.skip(process.env.AURION_E2E_ISOLATED !== "1", "Requires disposable authenticated MariaDB environment");
 
 const evidence = async (page: Page) => JSON.parse(await page.getByTestId("renderer-evidence").textContent() ?? "null");
 const assets = async (page: Page) => JSON.parse(await page.getByTestId("world-assets-evidence").getAttribute("data-presentation") ?? "null");
 const chunks = async (page: Page) => JSON.parse(await page.locator("#three-viewport").getAttribute("data-chunk-projection") ?? "null");
+const clientObservation = async (page: Page) => JSON.parse(await page.locator("#three-viewport").getAttribute("data-client-verification") ?? "null");
 const rpcData = (body: any) => body.result?.data?.json;
 
 // Isolated real authority: an authenticated action, running zone receipts and the
@@ -49,6 +53,47 @@ async function expectChunkProjection(page: Page, worldRootHash: string) {
   await expect.poll(async () => (await chunks(page))?.status, { timeout: 45_000 }).toBe("APPLIED");
   await expect.poll(async () => (await chunks(page))?.meshCount, { timeout: 45_000 }).toBeGreaterThan(0);
   expect((await chunks(page)).worldRootHash).toBe(worldRootHash);
+  await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
+  await expect.poll(async () => (await clientObservation(page))?.status, { timeout: 30_000 }).toBe("CLIENT_VERIFIED");
+  expect(await clientObservation(page)).toMatchObject({ trust: "untrusted-client-observation", mutationAuthority: "none" });
+}
+
+async function verifyLiveObservations(page: Page, epoch: number, baseURL: string) {
+  const binding = await clientObservation(page);
+  const read = async () => {
+    const response = await page.request.get("/api/trpc/gameplay.clientVerificationStatus", { params: { input: JSON.stringify({ json: {
+      connectionId: binding.connectionId, clientSessionId: binding.clientSessionId,
+    } }) } });
+    expect(response.ok()).toBe(true); return rpcData(await response.json());
+  };
+  await expect.poll(async () => ({ status: (await read()).status, generation: (await read()).generation })).toEqual({ status: "CLIENT_VERIFIED", generation: 9 });
+  const cookie = (await page.context().cookies()).find(value => value.name === COOKIE_NAME);
+  expect(cookie).toBeDefined();
+  const cli = spawnSync(process.execPath, ["--import", "tsx", "scripts/read-aurion-client-verification.ts", "--connection", binding.connectionId, "--session", binding.clientSessionId], {
+    encoding: "utf8", timeout: 15_000, env: { ...process.env, AURION_READBACK_ORIGIN: baseURL, AURION_READBACK_SESSION: cookie!.value },
+  });
+  expect(cli.status, cli.stderr).toBe(0);
+  const cliStatus = JSON.parse(cli.stdout.trim().split("\n").at(-1)!);
+  expect(cliStatus).toMatchObject({ status: "CLIENT_VERIFIED", generation: 9, trust: "untrusted-client-observation", mutationAuthority: "none" });
+  const begin = async (generation: number) => {
+    const response = await page.request.post("/api/trpc/gameplay.beginClientProjection", { data: { json: { connectionId: binding.connectionId, epoch, chunkX: 0, chunkZ: 0, generation } } });
+    expect(response.ok()).toBe(true); return rpcData(await response.json());
+  };
+  const delivered = await begin(1000);
+  expect((await read()).status).toBe("CLIENT_UNOBSERVABLE");
+  // Explicit fault injection: a well-formed untrusted client report contradicts
+  // an actual server-produced projection. This never supplies authority input.
+  const contradiction = await createClientVerificationReceipt({ schema: "aurion.client-verification.v1", ...delivered.observation,
+    serverReceiptHash: delivered.manifest.authorityReceiptHash, projectionHash: `sha256:${"0".repeat(64)}`,
+    appliedGeneration: 1000, observedAtLogicalFrame: 0 });
+  const reported = await page.request.post("/api/trpc/gameplay.reportClientVerification", { data: { json: contradiction } });
+  expect(reported.ok()).toBe(true);
+  expect(rpcData(await reported.json())).toMatchObject({ status: "CLIENT_CONTRADICTED", mutationAuthority: "none" });
+  await begin(1001); // Delivered to this test client, deliberately not applied.
+  await expect.poll(async () => (await read()).status, { timeout: 20_000 }).toBe("CLIENT_TIMEOUT");
+  const timeout = await read();
+  console.info("STEP29_REAL_CLIENT_OBSERVATION", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, cli: cliStatus, contradiction: "CLIENT_CONTRADICTED", timeout }));
+  return { cli: cliStatus, contradiction: "CLIENT_CONTRADICTED", timeout };
 }
 
 for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tablet", width: 800, height: 1280 }, { name: "desktop", width: 1440, height: 1000 }]) {
@@ -136,9 +181,25 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await expect(optional.runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("webgpu-recovered.png") });
     expect(errors).toEqual([]);
+    const clientVerification = await verifyLiveObservations(page, projection.epoch, baseURL!);
     const persisted = await page.request.get("/api/trpc/gameplay.worldChunkProjectionV2", { params: { input: JSON.stringify({ json: { epoch: projection.epoch, chunkX: 0, chunkZ: 0 } }) } });
     expect(rpcData(await persisted.json())).toMatchObject({ status: "VERIFIED", manifest: { worldCausalRoot: projection.worldRootHash, projectionHash: projection.projectionHash, payloadHash: projection.payloadHash } });
     console.info("STEP28_REAL_BROWSER", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, projection, workerProjection: await chunks(page), backend: selected.backend, recoveredBackend: (await evidence(page)).backend, actualContextLoss: true, actualDeviceDestroy: true }));
-    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: optional.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
+    await testInfo.attach("renderer-recovery", { contentType: "application/json", body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, profile: profile.name, driver: "CI SwiftShader software rendering; no hardware performance claim", worldHash: optional.snapshot.globalWorld.deterministicHash, catalogHash: originalAssets.catalogHash, collisionHash: originalAssets.collisionHash, projection, workerProjection: await chunks(page), clientVerification, glRecovery, selected, gpuRecovery: await evidence(page), actualContextLoss: true, actualDeviceDestroy: true, actualLoss }) });
+    // Only observer transport is faulted. Actual projection bytes must still come
+    // from the unchanged, authenticated Step-28 authority-verifying endpoint.
+    await optional.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
+    await page.evaluate(() => sessionStorage.setItem("aurion:renderer", "webgl2"));
+    await page.route("**/api/trpc/gameplay.beginClientProjection*", route => route.abort("failed"));
+    const withoutObserver = await enterAx1(page);
+    expect(withoutObserver.snapshot.globalWorld.epoch).toBe(projection.epoch);
+    expect(withoutObserver.snapshot.globalWorld.deterministicHash).toBe(optional.snapshot.globalWorld.deterministicHash);
+    await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
+    expect(await chunks(page)).toMatchObject({ status: "APPLIED", worldRootHash: projection.worldRootHash });
+    expect((await chunks(page)).meshCount).toBeGreaterThan(0);
+    expect(await clientObservation(page)).toMatchObject({ status: "CLIENT_UNOBSERVABLE", mutationAuthority: "none" });
+    await page.screenshot({ path: testInfo.outputPath("observer-unavailable-projection-intact.png") });
+    console.info("STEP29_OBSERVER_UNAVAILABLE", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, projection: await chunks(page), observation: await clientObservation(page) }));
+    await page.unroute("**/api/trpc/gameplay.beginClientProjection*");
   });
 }

@@ -27,6 +27,8 @@ import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
 import { readConfirmedChunkAssetProjection } from "./causality/worldChunkProjectionService";
+import { clientVerificationRegistry } from "./causality/clientVerificationRegistry";
+import { clientObservationIdentifier } from "../shared/aurionClientVerificationContract";
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
@@ -198,6 +200,24 @@ export const appRouter = router({
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
     openWorld: protectedProcedure.query(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
     enterOpenWorld: protectedProcedure.mutation(({ ctx }) => db.getOpenWorldSnapshot(ctx.user.id)),
+    beginClientProjection: protectedProcedure.input(z.strictObject({
+      connectionId: clientObservationIdentifier,
+      generation: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+      epoch: z.number().int().min(1),
+      chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+      chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
+    })).mutation(async ({ ctx, input }) => {
+      clientVerificationRegistry.requireOwner(ctx.user.id, input.connectionId);
+      const projection = await readConfirmedChunkAssetProjection(db.GLOBAL_WORLD_ID, input.epoch, { x: input.chunkX, z: input.chunkZ });
+      if (projection.status !== "VERIFIED") return projection;
+      const observation = await clientVerificationRegistry.expect(ctx.user.id, input.connectionId, projection.manifest, input.generation);
+      return { ...projection, observation };
+    }),
+    reportClientVerification: protectedProcedure.input(z.unknown()).mutation(({ ctx, input }) => clientVerificationRegistry.observe(ctx.user.id, input)),
+    clientVerificationStatus: protectedProcedure.input(z.strictObject({
+      connectionId: clientObservationIdentifier, clientSessionId: clientObservationIdentifier,
+      generation: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    })).query(({ ctx, input }) => clientVerificationRegistry.read(ctx.user.id, input.connectionId, input.clientSessionId, input.generation)),
     worldChunkProjectionV2: protectedProcedure.input(z.strictObject({
       epoch: z.number().int().min(1),
       chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT),
