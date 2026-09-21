@@ -18,3 +18,6 @@
 ## 2026-09-15 - Landing and Community ARIA Improvements
 **Learning:** Buttons that trigger dialog overlays (like the community and account panels) lacked semantic structure, and disabled states didn't fully account for loading transitions, causing poor screen reader experiences.
 **Action:** Applied `aria-haspopup="dialog"` to buttons opening the Aurion panels and integrated `loading` states with `disabled` properties during initialization, extending `aria-busy` for explicit wait indications.
+## 2024-05-27 - Dual Text Requirements for Icon-Only Buttons
+**Learning:** Icon-only UI buttons must include both an `aria-label` for screen readers and a visual `title` attribute to act as a tooltip for sighted users navigating via mouse or keyboard. A common pitfall is forgetting the visual tooltip even when ARIA support is present.
+**Action:** When auditing or implementing icon-only buttons, consistently add `aria-label` and `title` to ensure accessible feedback and intuitive UX across different interaction modes.
