@@ -7,6 +7,29 @@ export function tradeCraftingSourceEvidenceHash(receipt:Readonly<{receiptHash:st
   return `sha256:${receipt.receiptHash}`;
 }
 
+export function craftingSourceEvidenceHash(
+  receipt:Readonly<{receiptHash:string}>,
+  outputs:readonly Readonly<{
+    id:string;craftingReceiptId:string|null;craftingOutputKey:string;baseItemKey:string;quality:string;
+    itemLevel:number;affixesJson:string;setKey:string|null;
+  }>[],
+):string{
+  if(!BARE.test(receipt.receiptHash)) throw new Error("ECONOMIC_CRAFTING_SOURCE_HASH_INVALID");
+  const canonicalOutputs=[...outputs].map(output=>Object.freeze({
+    id:output.id,craftingReceiptId:output.craftingReceiptId,craftingOutputKey:output.craftingOutputKey,
+    baseItemKey:output.baseItemKey,quality:output.quality,itemLevel:output.itemLevel,
+    affixesJson:output.affixesJson,setKey:output.setKey,
+  })).sort((a,b)=>a.craftingOutputKey.localeCompare(b.craftingOutputKey)||a.id.localeCompare(b.id));
+  if(canonicalOutputs.length<1||new Set(canonicalOutputs.map(output=>output.id)).size!==canonicalOutputs.length) {
+    throw new Error("ECONOMIC_CRAFTING_OUTPUT_EVIDENCE_INVALID");
+  }
+  return canonicalSha256({
+    schema:"aurion.economic-source.crafting.v1",
+    receiptHash:receipt.receiptHash,
+    outputs:canonicalOutputs,
+  });
+}
+
 export function lootV1SourceEvidenceHash(
   receipt:Readonly<{
     id:string;userId:number;expeditionKey:string;treasureClass:string;quality:string;seedDigest:string;idempotencyKey:string;
