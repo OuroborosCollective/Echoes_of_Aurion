@@ -18,6 +18,7 @@ const BASE_READ_TOOLS = [
   "aurion_donor_capability_explain",
   "aurion_admin_os3a_source",
   "aurion_admin_os3a_search",
+  "aurion_admin_os3a_gap_scan",
 ] as const;
 
 const WOLFRAM_READ_TOOLS = [
@@ -35,6 +36,7 @@ const ASSET_TOOLS = [
   "aurion_admin_glb_assign",
   "aurion_admin_os3a_plan",
   "aurion_admin_os3a_apply",
+  "aurion_admin_os3a_gap_reconcile",
   "aurion_admin_gds_status",
   "aurion_admin_gds_plan",
   "aurion_admin_gds_apply",
@@ -66,6 +68,7 @@ describe("adminMcp", () => {
       "aurion_admin_glb_import",
       "aurion_admin_glb_assign",
       "aurion_admin_os3a_apply",
+      "aurion_admin_os3a_gap_reconcile",
       "aurion_admin_gds_apply",
       "aurion_admin_named_npc_visual_apply",
     ]);
