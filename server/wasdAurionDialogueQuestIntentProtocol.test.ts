@@ -48,6 +48,43 @@ describe("Wasd → Aurion dialogue quest intent protocol", () => {
     expect(second).toEqual(first);
   });
 
+  it("offers and turns in Sunwatch only through Orun when the canonical quest state permits it", () => {
+    const sunwatch: readonly DialogueQuestReadModel[] = [{
+      key: "sunwatch_vanguard",
+      giver: "Orun",
+      state: "available",
+      readyToTurnIn: false,
+    }];
+    expect(resolveDialogueQuestIntent({
+      npcId: "orun",
+      interpretation: acceptedQuestRequest,
+      quests: sunwatch,
+    })).toEqual({
+      state: "offer_available_quest",
+      actionKind: "offer_quest",
+      questKey: "sunwatch_vanguard",
+      npcId: "orun",
+      reason: "accepted_quest_request",
+    });
+    expect(resolveDialogueQuestIntent({
+      npcId: "lyra",
+      interpretation: acceptedQuestRequest,
+      quests: sunwatch,
+    })).toEqual({ state: "no_action", reason: "no_matching_quest" });
+
+    const ready: readonly DialogueQuestReadModel[] = [{ ...sunwatch[0], state: "active", readyToTurnIn: true }];
+    expect(resolveDialogueQuestIntent({
+      npcId: "orun",
+      interpretation: { ...acceptedQuestRequest, semanticIntent: "turn_in_quest" as const },
+      quests: ready,
+    })).toMatchObject({
+      state: "turn_in_available",
+      actionKind: "request_turn_in",
+      questKey: "sunwatch_vanguard",
+      npcId: "orun",
+    });
+  });
+
   it("returns a turn-in request only when the exact NPC has a quest ready for hand-in", () => {
     const readyQuests: readonly DialogueQuestReadModel[] = [
       {
