@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { bigint, index, int, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 const HASH_LENGTH = 96;
 
@@ -175,6 +175,58 @@ export const aurionEffectDeliveryReceipts = mysqlTable("aurionEffectDeliveryRece
 ]);
 
 
+
+
+
+export const aurionEconomicLedgerCoordinator = mysqlTable("aurionEconomicLedgerCoordinator", {
+  worldId: varchar("worldId", { length: 64 }).primaryKey(),
+  nextOrdinal: bigint("nextOrdinal", { mode: "bigint", unsigned: true }).default(1n).notNull(),
+});
+
+export const aurionEconomicEvents = mysqlTable("aurionEconomicEvents", {
+  eventId: varchar("eventId", { length: 96 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  ordinal: bigint("ordinal", { mode: "bigint", unsigned: true }).notNull(),
+  eventType: mysqlEnum("eventType", ["resource_delta","asset_create"]).notNull(),
+  sourceKind: mysqlEnum("sourceKind", ["trade_crafting","loot_v2"]).notNull(),
+  sourceId: varchar("sourceId", { length: 128 }).notNull(),
+  sourceEvidenceHash: varchar("sourceEvidenceHash", { length: 96 }).notNull(),
+  temporalEventId: varchar("temporalEventId", { length: 96 }).notNull(),
+  temporalEventHash: varchar("temporalEventHash", { length: 96 }).notNull(),
+  sourceWorldRoot: varchar("sourceWorldRoot", { length: 96 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 64 }).notNull(),
+  rulesetVersion: varchar("rulesetVersion", { length: 64 }).notNull(),
+  eventHash: varchar("eventHash", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionEconomicEvents_world_ordinal_uq").on(table.worldId, table.ordinal),
+  uniqueIndex("aurionEconomicEvents_event_hash_uq").on(table.eventHash),
+  uniqueIndex("aurionEconomicEvents_source_temporal_uq").on(table.sourceKind, table.sourceId, table.temporalEventId),
+  index("aurionEconomicEvents_world_epoch_idx").on(table.worldId, table.epoch),
+  index("aurionEconomicEvents_source_idx").on(table.sourceKind, table.sourceId),
+]);
+
+export const aurionEconomicResourceDeltas = mysqlTable("aurionEconomicResourceDeltas", {
+  eventId: varchar("eventId", { length: 96 }).notNull(),
+  resourceId: varchar("resourceId", { length: 96 }).notNull(),
+  accountId: varchar("accountId", { length: 128 }).notNull(),
+  deltaExact: varchar("deltaExact", { length: 128 }).notNull(),
+}, table => [
+  primaryKey({ name: "aurionEconomicResourceDeltas_pk", columns: [table.eventId, table.resourceId, table.accountId] }),
+  index("aurionEconomicResourceDeltas_resource_account_idx").on(table.resourceId, table.accountId),
+]);
+
+export const aurionEconomicAssetTransitions = mysqlTable("aurionEconomicAssetTransitions", {
+  eventId: varchar("eventId", { length: 96 }).notNull(),
+  assetId: varchar("assetId", { length: 128 }).notNull(),
+  transitionKind: mysqlEnum("transitionKind", ["create","transfer","consume"]).notNull(),
+  fromOwnerId: varchar("fromOwnerId", { length: 128 }),
+  toOwnerId: varchar("toOwnerId", { length: 128 }),
+}, table => [
+  primaryKey({ name: "aurionEconomicAssetTransitions_pk", columns: [table.eventId, table.assetId] }),
+  index("aurionEconomicAssetTransitions_asset_idx").on(table.assetId),
+]);
 
 export const aurionTemporalEvents = mysqlTable("aurionTemporalEvents", {
   eventId: varchar("eventId", { length: 96 }).primaryKey(),

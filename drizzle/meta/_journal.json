@@ -400,6 +400,13 @@
       "when": 1790041000000,
       "tag": "0056_aurion_temporal_history_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "5",
+      "when": 1790042000000,
+      "tag": "0057_aurion_economic_ledger_v2",
+      "breakpoints": true
     }
   ]
 }
