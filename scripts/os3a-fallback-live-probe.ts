@@ -2,41 +2,63 @@ import { writeFile } from "node:fs/promises";
 import { openSource3dFallbackSource, planOpenSource3dFallback } from "../server/openSource3dFallback";
 
 const source = openSource3dFallbackSource();
-const plan = await planOpenSource3dFallback({
+const environmentPlan = await planOpenSource3dFallback({
   sourceAssetId: "ca-world-053",
   purpose: "world-environment",
   tier: "phone",
 });
+const enemyPlan = await planOpenSource3dFallback({
+  sourceAssetId: "xyz-037",
+  purpose: "enemy-fallback",
+  tier: "phone",
+});
 
-if (plan.registryRevision !== source.registryRevision) throw new Error("OS3A_PROBE_REGISTRY_REVISION_MISMATCH");
-if (plan.modelRevision !== source.modelRevision) throw new Error("OS3A_PROBE_MODEL_REVISION_MISMATCH");
-if (plan.license !== "CC0-1.0") throw new Error("OS3A_PROBE_LICENSE_MISMATCH");
-if (!plan.validationPassed) throw new Error("OS3A_PROBE_GDS_VALIDATION_FAILED");
-if (plan.sourceBytes !== 7956) throw new Error("OS3A_PROBE_SOURCE_SIZE_MISMATCH");
-if (plan.budget.tier !== "phone" || plan.budget.conservativeWorkingSetBytes > plan.budget.limits.assetWorkingSetBytes) {
-  throw new Error("OS3A_PROBE_BUDGET_MISMATCH");
+for (const plan of [environmentPlan, enemyPlan]) {
+  if (plan.registryRevision !== source.registryRevision) throw new Error("OS3A_PROBE_REGISTRY_REVISION_MISMATCH");
+  if (plan.modelRevision !== source.modelRevision) throw new Error("OS3A_PROBE_MODEL_REVISION_MISMATCH");
+  if (plan.license !== "CC0-1.0") throw new Error("OS3A_PROBE_LICENSE_MISMATCH");
+  if (!plan.validationPassed) throw new Error("OS3A_PROBE_GDS_VALIDATION_FAILED");
+  if (plan.budget.tier !== "phone" || plan.budget.conservativeWorkingSetBytes > plan.budget.limits.assetWorkingSetBytes) {
+    throw new Error("OS3A_PROBE_BUDGET_MISMATCH");
+  }
+  if (plan.gameplayAuthority !== "none" || plan.worldPlacementAuthority !== "none") throw new Error("OS3A_PROBE_AUTHORITY_ESCALATION");
 }
-if (plan.gameplayAuthority !== "none" || plan.worldPlacementAuthority !== "none") throw new Error("OS3A_PROBE_AUTHORITY_ESCALATION");
+if (environmentPlan.sourceBytes !== 7956) throw new Error("OS3A_PROBE_SOURCE_SIZE_MISMATCH");
+if (environmentPlan.classification.assetType !== "arena" || environmentPlan.classification.worldFamily !== "environment") {
+  throw new Error("OS3A_PROBE_ENVIRONMENT_CLASSIFICATION_MISMATCH");
+}
+if (enemyPlan.sourceBytes !== 219208) throw new Error("OS3A_PROBE_ENEMY_SOURCE_SIZE_MISMATCH");
+if (enemyPlan.classification.assetType !== "enemy" || enemyPlan.classification.subcategory !== "spider") {
+  throw new Error("OS3A_PROBE_ENEMY_CLASSIFICATION_MISMATCH");
+}
+
+function publicPlanReceipt(plan: typeof environmentPlan) {
+  return Object.freeze({
+    sourceAssetId: plan.sourceAssetId,
+    sourceSha256: plan.sourceSha256,
+    sourceBytes: plan.sourceBytes,
+    sourceMetadataSha256: plan.sourceMetadataSha256,
+    fallbackPlanSha256: plan.planSha256,
+    aurionImportPlanSha256: plan.aurionImportPlanSha256,
+    gameDevPlanSha256: plan.gameDevPlanSha256,
+    gameDevInspectSha256: plan.gameDevInspectSha256,
+    gameDevValidateSha256: plan.gameDevValidateSha256,
+    classification: plan.classification,
+    budget: plan.budget,
+    validationPassed: plan.validationPassed,
+  });
+}
 
 const receipt = Object.freeze({
-  schemaVersion: "aurion.os3a-live-probe.v1",
+  schemaVersion: "aurion.os3a-live-probe.v2",
   sourceRevision: process.env.AURION_RELEASE_SHA ?? null,
   registryRepository: source.registryRepository,
   registryRevision: source.registryRevision,
   modelRepository: source.modelRepository,
   modelRevision: source.modelRevision,
   license: source.license,
-  sourceAssetId: plan.sourceAssetId,
-  sourceSha256: plan.sourceSha256,
-  sourceBytes: plan.sourceBytes,
-  sourceMetadataSha256: plan.sourceMetadataSha256,
-  fallbackPlanSha256: plan.planSha256,
-  aurionImportPlanSha256: plan.aurionImportPlanSha256,
-  gameDevPlanSha256: plan.gameDevPlanSha256,
-  gameDevInspectSha256: plan.gameDevInspectSha256,
-  gameDevValidateSha256: plan.gameDevValidateSha256,
-  budget: plan.budget,
-  validationPassed: plan.validationPassed,
+  environmentProbe: publicPlanReceipt(environmentPlan),
+  enemyProbe: publicPlanReceipt(enemyPlan),
   mutation: "none",
 });
 const output = JSON.stringify(receipt, null, 2) + "\n";
