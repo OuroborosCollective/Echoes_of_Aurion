@@ -32,12 +32,20 @@ type Requirement = Readonly<{
   purpose: Exclude<GlbImportPurpose, "auto" | "player-public">;
   need: ClassificationNeed;
   assignment?: Readonly<{
-    targetType: "enemy";
-    targetKey: "starter_spider" | "starter_beast_lod0";
+    targetType: "enemy" | "arena";
+    targetKey: "starter_spider" | "starter_beast_lod0" | "asterion_courtyard";
   }>;
 }>;
 
 const requirements: readonly Requirement[] = Object.freeze([
+  Object.freeze({
+    id: "arena:asterion-courtyard",
+    label: "Asterion courtyard active arena",
+    query: "medieval courtyard plaza building",
+    purpose: "world-environment",
+    need: Object.freeze({ assetType: "arena" }),
+    assignment: Object.freeze({ targetType: "arena", targetKey: "asterion_courtyard" }),
+  }),
   Object.freeze({
     id: "enemy:starter-beast",
     label: "Starter beast fallback",
@@ -130,7 +138,7 @@ type Dependencies = Readonly<{
   search?: typeof searchOpenSource3dFallback;
   plan?: typeof planOpenSource3dFallback;
   apply?: typeof applyOpenSource3dFallback;
-  assign?: (actorUserId: number, input: { assetId: string; targetType: "enemy"; targetKey: "starter_spider" | "starter_beast_lod0"; expectedActiveAssetId: null }) => Promise<unknown>;
+  assign?: (actorUserId: number, input: { assetId: string; targetType: "enemy" | "arena"; targetKey: "starter_spider" | "starter_beast_lod0" | "asterion_courtyard"; expectedActiveAssetId: null }) => Promise<unknown>;
 }>;
 
 function catalogSatisfies(catalog: GlbRuntimeCatalog, requirement: Requirement): boolean {
