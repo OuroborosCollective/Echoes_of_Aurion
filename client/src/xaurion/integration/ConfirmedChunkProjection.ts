@@ -83,7 +83,7 @@ export class ConfirmedChunkProjection {
   constructor(private scene: THREE.Scene, private epoch: number,
     private terrain: (x: number, z: number) => number,
     private fetch: (input: { epoch: number; chunkX: number; chunkZ: number; generation: number }) => Promise<unknown>,
-    private report: (evidence: { status: string; count: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void,
+    private report: (evidence: { status: string; count: number; desiredCount: number; pendingCount: number; failedCount: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void,
     private onApplied?: (observation: AppliedChunkObservation) => Promise<void>) {}
 
   update(position: { x: number; z: number }, deltaSeconds = 0) {
@@ -130,7 +130,7 @@ export class ConfirmedChunkProjection {
         const group = buildConfirmedChunkMeshes(prepared.decoded, this.terrain);
         this.groups.set(key, group); this.failures.delete(key); this.scene.add(group);
         const meshCount = [...this.groups.values()].reduce((total, item) => total + item.children.length, 0);
-        this.report({ status: "APPLIED", count: this.groups.size, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
+        this.report({ status: "APPLIED", count: this.groups.size, desiredCount: this.desired.length, pendingCount: this.pending.size, failedCount: [...this.failures.values()].filter(value => value.terminal).length, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
         if (prepared.observation && this.onApplied) {
           // Observation failure cannot remove the applied scene or change authority.
           void this.onApplied({ job: prepared.job, binding: prepared.observation, observedAtLogicalFrame: this.logicalFrame }).catch(() => {});
@@ -140,7 +140,7 @@ export class ConfirmedChunkProjection {
           const attempts = (this.failures.get(key)?.attempts ?? 0) + 1;
           this.failures.set(key, { attempts, terminal: terminal || attempts >= MAX_TRANSIENT_ATTEMPTS,
             retryAt: this.clockMs + Math.min(500 * 2 ** (attempts - 1), 10_000) });
-          this.report({ status: "UNPROVABLE", count: this.groups.size });
+          this.report({ status: "UNPROVABLE", count: this.groups.size, desiredCount: this.desired.length, pendingCount: this.pending.size, failedCount: [...this.failures.values()].filter(value => value.terminal).length });
         }
       })
         .finally(() => { this.pending.delete(key); this.pump(); });
