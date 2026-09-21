@@ -6,17 +6,17 @@ import {
   aurionEconomicResourceDeltas,
 } from "../../drizzle/aurionCausalitySchema";
 import { aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts } from "../../drizzle/schema";
-import { canonicalJson, canonicalSha256 } from "../../shared/aurionCanonicalHash";
+import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { createEconomicEvent, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
 import { getDb } from "../db";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
 import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
+import { lootV2SourceEvidenceHash, tradeCraftingSourceEvidenceHash } from "./economicSourceEvidence";
 
 type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Tx=Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-function sourceHash(value:unknown){return canonicalSha256(value);}
 function eventId(hash:string){return `economic:${hash.slice("sha256:".length,72)}`;}
 
 async function deriveTradeCrafting(tx:Tx,sourceId:string){
@@ -31,7 +31,7 @@ async function deriveTradeCrafting(tx:Tx,sourceId:string){
   if(normalized.receiptHash!==row.receiptHash) throw new Error("ECONOMIC_SOURCE_RECEIPT_HASH_MISMATCH");
   return Object.freeze({
     eventType:"economic_transition" as const,
-    sourceEvidenceHash:`sha256:${row.receiptHash}`,
+    sourceEvidenceHash:tradeCraftingSourceEvidenceHash(normalized),
     resourceDeltas:Object.freeze(normalized.resourceDeltas.map(delta=>Object.freeze({
       resourceId:delta.resourceId,accountId:`character:${row.characterId}`,deltaExact:delta.quantityExact,
     }))),
@@ -52,14 +52,10 @@ async function deriveLootV2(tx:Tx,sourceId:string){
     item.quality!==resolved.quality||item.itemLevelExact!==resolved.itemLevelExact||(item.setId??null)!==(resolved.setId??null)||
     item.deterministicHash!==resolved.deterministicHash||item.itemPower!==resolved.itemPower
   ) throw new Error("ECONOMIC_LOOT_RECEIPT_MISMATCH");
-  const evidence={receipt:{id:receipt.id,userId:receipt.userId,encounterReceiptId:receipt.encounterReceiptId,itemDefinitionId:receipt.itemDefinitionId,
-    category:receipt.category,quality:receipt.quality,itemLevelExact:receipt.itemLevelExact,setId:receipt.setId??null,contextHash:receipt.contextHash,
-    deterministicHash:receipt.deterministicHash,ruleSetVersion:receipt.ruleSetVersion,contentVersion:receipt.contentVersion},
-    item:{id:item.id,ownerUserId:item.ownerUserId,lootReceiptId:item.lootReceiptId,baseItemDefinitionId:item.baseItemDefinitionId,category:item.category,
-      quality:item.quality,itemLevelExact:item.itemLevelExact,setId:item.setId??null,itemPower:item.itemPower,deterministicHash:item.deterministicHash}};
+
   return Object.freeze({
     eventType:"economic_transition" as const,
-    sourceEvidenceHash:sourceHash(evidence),
+    sourceEvidenceHash:lootV2SourceEvidenceHash(receipt,item),
     resourceDeltas:Object.freeze([]),
     assetTransitions:Object.freeze([{assetId:item.id,transitionKind:"create" as const,fromOwnerId:null,toOwnerId:`user:${receipt.userId}`}]),
   });
@@ -96,7 +92,6 @@ export async function materializeEconomicSource(input:{sourceKind:AurionEconomic
     if(!temporal)throw new Error("ECONOMIC_TEMPORAL_EVENT_MISSING");
     if(temporal.domain!=="economy"&&temporal.domain!=="ownership")throw new Error("ECONOMIC_TEMPORAL_DOMAIN_INVALID");
     const source=await deriveSource(tx,input.sourceKind,input.sourceId);
-    if(temporal.sourceReceiptHash!==source.sourceEvidenceHash)throw new Error("ECONOMIC_TEMPORAL_SOURCE_HASH_MISMATCH");
     const payload=temporal.payload as Record<string,unknown>;
     if(payload.sourceKind!==input.sourceKind||payload.sourceId!==input.sourceId||payload.sourceEvidenceHash!==source.sourceEvidenceHash)throw new Error("ECONOMIC_TEMPORAL_SOURCE_BINDING_MISMATCH");
 
