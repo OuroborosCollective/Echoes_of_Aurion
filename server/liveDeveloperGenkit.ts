@@ -65,7 +65,7 @@ const gameDevDesignInputSchema = z.object({
 const gameDevDesignOutputSchema = z.object({
   title: z.string(),
   suggestedDisplayName: z.string(),
-  suggestedPurpose: z.enum(["npc-fallback", "world-environment", "world-nature", "player-public", "equipment"]),
+  suggestedPurpose: z.enum(["npc-fallback", "enemy-fallback", "world-environment", "world-nature", "player-public", "equipment"]),
   designIntent: z.string(),
   acceptanceCriteria: z.array(z.string()),
   riskNotes: z.array(z.string()),
