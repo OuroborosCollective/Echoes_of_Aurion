@@ -61,6 +61,11 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_zip_browser_admin'");
 
     await page.goto("/ops/glb-upload");
+    // Synchronize on the real storage/catalog readback before asserting the ZIP
+    // control. The test elevates this disposable account directly in MariaDB,
+    // so React auth + catalog hydration may legitimately complete after route
+    // navigation; readiness, not elapsed wall time, is the user-visible gate.
+    await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });
     const input = page.locator("#glbZipFile");
     await expect(input).toBeEnabled();
     const lod0 = testAnimatedPlayerGlb("Zip_Character_Female_Ranger_LOD0");
