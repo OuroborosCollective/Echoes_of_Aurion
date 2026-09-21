@@ -17,6 +17,7 @@ import { getDb } from "../db";
 const SOURCE_LIMIT=4096;
 const SOURCE_KIND_COUNT=7;
 
+export type EconomicSourceReference=Readonly<{sourceKind:AurionEconomicSourceKind;sourceId:string}>;
 type SourceSet=Readonly<{kind:AurionEconomicSourceKind;ids:readonly string[]}>;
 
 function freezeIds(values:readonly string[]):readonly string[]{
@@ -25,46 +26,52 @@ function freezeIds(values:readonly string[]):readonly string[]{
   return Object.freeze(ids);
 }
 
+export async function readEconomicSourceInventory(worldId:string):Promise<Readonly<{
+  worldId:string;
+  sources:readonly SourceSet[];
+  references:readonly EconomicSourceReference[];
+}>>{
+  if(worldId!==GLOBAL_WORLD_ID) throw new Error("ECONOMIC_SOURCE_WORLD_UNSUPPORTED");
+  const db=await getDb(); if(!db) throw new Error("ECONOMIC_DATABASE_UNAVAILABLE");
+  const [tradeCrafting,lootV1,lootV2,market,systemSales,guild,points]=await Promise.all([
+    db.select({id:aurionTradeCraftingReceipts.id}).from(aurionTradeCraftingReceipts).limit(SOURCE_LIMIT+1),
+    db.select({id:lootDropReceipts.id}).from(lootDropReceipts).limit(SOURCE_LIMIT+1),
+    db.select({id:aurionLootDropReceiptsV2.id}).from(aurionLootDropReceiptsV2).limit(SOURCE_LIMIT+1),
+    db.select({id:marketTransactionReceipts.id}).from(marketTransactionReceipts).limit(SOURCE_LIMIT+1),
+    db.select({id:systemSaleReceipts.id}).from(systemSaleReceipts).limit(SOURCE_LIMIT+1),
+    db.select({id:aurionGuildBankReceipts.receiptId}).from(aurionGuildBankReceipts).limit(SOURCE_LIMIT+1),
+    db.select({id:progressionLedger.id}).from(progressionLedger).where(eq(progressionLedger.kind,"points")).limit(SOURCE_LIMIT+1),
+  ]);
+  if([tradeCrafting,lootV1,lootV2,market,systemSales,guild,points].some(rows=>rows.length>SOURCE_LIMIT)) {
+    throw new Error("ECONOMIC_SOURCE_COVERAGE_LIMIT_EXCEEDED");
+  }
+  const sources:readonly SourceSet[]=Object.freeze([
+    Object.freeze({kind:"trade_crafting" as const,ids:freezeIds(tradeCrafting.map(row=>row.id))}),
+    Object.freeze({kind:"loot_v1" as const,ids:freezeIds(lootV1.map(row=>row.id))}),
+    Object.freeze({kind:"loot_v2" as const,ids:freezeIds(lootV2.map(row=>row.id))}),
+    Object.freeze({kind:"market_transaction" as const,ids:freezeIds(market.map(row=>row.id))}),
+    Object.freeze({kind:"system_sale" as const,ids:freezeIds(systemSales.map(row=>row.id))}),
+    Object.freeze({kind:"guild_bank" as const,ids:freezeIds(guild.map(row=>row.id))}),
+    Object.freeze({kind:"progression_points" as const,ids:freezeIds(points.map(row=>row.id))}),
+  ]);
+  const references=Object.freeze(sources
+    .flatMap(source=>source.ids.map(sourceId=>Object.freeze({sourceKind:source.kind,sourceId})))
+    .sort((a,b)=>a.sourceKind.localeCompare(b.sourceKind)||a.sourceId.localeCompare(b.sourceId)));
+  return Object.freeze({worldId,sources,references});
+}
+
 export async function readEconomicSourceCoverage(worldId:string){
-  if(worldId!==GLOBAL_WORLD_ID) return Object.freeze({
-    mutationAuthority:"none" as const,status:"UNPROVABLE" as const,worldId,
-    reason:"ECONOMIC_SOURCE_WORLD_UNSUPPORTED",sources:Object.freeze([]),missingEventCount:0,contradictionCount:0,
-    missingEventSample:Object.freeze([]),contradictionSample:Object.freeze([]),coverageHash:null,
-  });
-  const db=await getDb(); if(!db) return Object.freeze({
-    mutationAuthority:"none" as const,status:"UNPROVABLE" as const,worldId,
-    reason:"ECONOMIC_DATABASE_UNAVAILABLE",sources:Object.freeze([]),missingEventCount:0,contradictionCount:0,
-    missingEventSample:Object.freeze([]),contradictionSample:Object.freeze([]),coverageHash:null,
-  });
   try{
-    const [tradeCrafting,lootV1,lootV2,market,systemSales,guild,points,economic]=await Promise.all([
-      db.select({id:aurionTradeCraftingReceipts.id}).from(aurionTradeCraftingReceipts).limit(SOURCE_LIMIT+1),
-      db.select({id:lootDropReceipts.id}).from(lootDropReceipts).limit(SOURCE_LIMIT+1),
-      db.select({id:aurionLootDropReceiptsV2.id}).from(aurionLootDropReceiptsV2).limit(SOURCE_LIMIT+1),
-      db.select({id:marketTransactionReceipts.id}).from(marketTransactionReceipts).limit(SOURCE_LIMIT+1),
-      db.select({id:systemSaleReceipts.id}).from(systemSaleReceipts).limit(SOURCE_LIMIT+1),
-      db.select({id:aurionGuildBankReceipts.receiptId}).from(aurionGuildBankReceipts).limit(SOURCE_LIMIT+1),
-      db.select({id:progressionLedger.id}).from(progressionLedger).where(eq(progressionLedger.kind,"points")).limit(SOURCE_LIMIT+1),
-      db.select({sourceKind:aurionEconomicEvents.sourceKind,sourceId:aurionEconomicEvents.sourceId})
-        .from(aurionEconomicEvents).where(eq(aurionEconomicEvents.worldId,worldId)).limit(SOURCE_LIMIT*SOURCE_KIND_COUNT+1),
-    ]);
-    if([tradeCrafting,lootV1,lootV2,market,systemSales,guild,points].some(rows=>rows.length>SOURCE_LIMIT)||economic.length>SOURCE_LIMIT*SOURCE_KIND_COUNT){
-      throw new Error("ECONOMIC_SOURCE_COVERAGE_LIMIT_EXCEEDED");
-    }
-    const sources:readonly SourceSet[]=Object.freeze([
-      Object.freeze({kind:"trade_crafting" as const,ids:freezeIds(tradeCrafting.map(row=>row.id))}),
-      Object.freeze({kind:"loot_v1" as const,ids:freezeIds(lootV1.map(row=>row.id))}),
-      Object.freeze({kind:"loot_v2" as const,ids:freezeIds(lootV2.map(row=>row.id))}),
-      Object.freeze({kind:"market_transaction" as const,ids:freezeIds(market.map(row=>row.id))}),
-      Object.freeze({kind:"system_sale" as const,ids:freezeIds(systemSales.map(row=>row.id))}),
-      Object.freeze({kind:"guild_bank" as const,ids:freezeIds(guild.map(row=>row.id))}),
-      Object.freeze({kind:"progression_points" as const,ids:freezeIds(points.map(row=>row.id))}),
-    ]);
+    const inventory=await readEconomicSourceInventory(worldId);
+    const db=await getDb(); if(!db) throw new Error("ECONOMIC_DATABASE_UNAVAILABLE");
+    const economic=await db.select({sourceKind:aurionEconomicEvents.sourceKind,sourceId:aurionEconomicEvents.sourceId})
+      .from(aurionEconomicEvents).where(eq(aurionEconomicEvents.worldId,worldId)).limit(SOURCE_LIMIT*SOURCE_KIND_COUNT+1);
+    if(economic.length>SOURCE_LIMIT*SOURCE_KIND_COUNT) throw new Error("ECONOMIC_SOURCE_COVERAGE_LIMIT_EXCEEDED");
     const materialized=new Set(economic.map(row=>`${row.sourceKind}:${row.sourceId}`));
-    const sourceKeys=new Set(sources.flatMap(source=>source.ids.map(id=>`${source.kind}:${id}`)));
+    const sourceKeys=new Set(inventory.references.map(source=>`${source.sourceKind}:${source.sourceId}`));
     const missingEvents=[...sourceKeys].filter(key=>!materialized.has(key)).sort();
     const orphanEvents=[...materialized].filter(key=>!sourceKeys.has(key)).sort();
-    const sourceSummary=Object.freeze(sources.map(source=>Object.freeze({
+    const sourceSummary=Object.freeze(inventory.sources.map(source=>Object.freeze({
       kind:source.kind,
       sourceCount:source.ids.length,
       materializedCount:source.ids.filter(id=>materialized.has(`${source.kind}:${id}`)).length,
