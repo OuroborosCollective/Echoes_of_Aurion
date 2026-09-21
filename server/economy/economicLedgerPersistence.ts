@@ -3,8 +3,8 @@ import {
   aurionEconomicAssetTransitions,
   aurionEconomicEvents,
   aurionEconomicLedgerCoordinator,
+  aurionCausalTickReceipts,
   aurionEconomicResourceDeltas,
-  aurionTemporalEvents,
 } from "../../drizzle/aurionCausalitySchema";
 import {
   aurionGuildBankReceipts,
@@ -370,15 +370,23 @@ export async function materializeEconomicSource(input:{sourceKind:AurionEconomic
     if(!temporal)throw new Error("ECONOMIC_TEMPORAL_EVENT_MISSING");
     if(temporal.domain!=="economy"&&temporal.domain!=="ownership")throw new Error("ECONOMIC_TEMPORAL_DOMAIN_INVALID");
     await verifyTemporalEventSource(temporal);
-    const temporalRows=await tx.select({eventHash:aurionTemporalEvents.eventHash,createdAt:aurionTemporalEvents.createdAt})
-      .from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId,input.temporalEventId)).limit(2);
-    if(temporalRows.length!==1||temporalRows[0]!.eventHash!==temporal.eventHash) throw new Error("ECONOMIC_TEMPORAL_READBACK_MISMATCH");
     const source=await deriveSource(tx,input.sourceKind,input.sourceId);
-    if(timestampMs(temporalRows[0]!.createdAt,"ECONOMIC_TEMPORAL_CREATED_AT")<timestampMs(source.sourceCreatedAt,"ECONOMIC_SOURCE_CREATED_AT")){
+    const anchors=await tx.select({createdAt:aurionCausalTickReceipts.createdAt})
+      .from(aurionCausalTickReceipts).where(and(
+        eq(aurionCausalTickReceipts.receiptHash,temporal.sourceReceiptHash),
+        eq(aurionCausalTickReceipts.worldId,temporal.worldId),
+      )).limit(2);
+    if(anchors.length!==1) throw new Error("ECONOMIC_TEMPORAL_ANCHOR_UNPROVABLE");
+    if(timestampMs(anchors[0]!.createdAt,"ECONOMIC_ANCHOR_CREATED_AT")<=timestampMs(source.sourceCreatedAt,"ECONOMIC_SOURCE_CREATED_AT")){
       throw new Error("ECONOMIC_TEMPORAL_PRECEDES_SOURCE");
     }
     const payload=temporal.payload as Record<string,unknown>;
-    if(payload.sourceKind!==input.sourceKind||payload.sourceId!==input.sourceId||payload.sourceEvidenceHash!==source.sourceEvidenceHash)throw new Error("ECONOMIC_TEMPORAL_SOURCE_BINDING_MISMATCH");
+    if(
+      payload.sourceKind!==input.sourceKind||
+      payload.sourceId!==input.sourceId||
+      payload.sourceEvidenceHash!==source.sourceEvidenceHash||
+      payload.sourceCreatedAt!==source.sourceCreatedAt.toISOString()
+    ) throw new Error("ECONOMIC_TEMPORAL_SOURCE_BINDING_MISMATCH");
 
     await tx.insert(aurionEconomicLedgerCoordinator).values({worldId:temporal.worldId,nextOrdinal:1n})
       .onDuplicateKeyUpdate({set:{worldId:temporal.worldId}});
