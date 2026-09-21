@@ -20,7 +20,7 @@ const QUEST_CHAIN_REGRESSION_USER_ID = 2_146_999_992;
 
 async function cleanupQuestChainRegressionState() { await cleanupQuestRegressionUser(QUEST_CHAIN_REGRESSION_USER_ID); }
 
-async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium" | "starfall_crater") {
+async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium" | "starfall_crater" | "rootgear_foundry") {
   const encounter = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey });
 
   await expect(applyGameplayAction({
@@ -124,19 +124,40 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "completed", false],
+      ["clockwork_core", "available", false],
     ]);
     expect(completed.keys).toEqual(["ember_key"]);
     expect(completed.canEnterDungeon).toBe(true);
 
+    await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "clockwork_core" });
+    const clockworkBoss = await defeatQuestEncounter("rootgear_foundry");
+    expect(clockworkBoss.resolution).toMatchObject({ completed: true, completedQuest: "clockwork_core", reward: { xp: 0, points: 0 } });
+
+    const clockworkPersistence = (await db.select().from(gameplayQuestProgress).where(and(
+      eq(gameplayQuestProgress.userId, QUEST_CHAIN_REGRESSION_USER_ID),
+      eq(gameplayQuestProgress.questKey, "clockwork_core"),
+    )).limit(1))[0];
+    expect(clockworkPersistence).toMatchObject({ state: "ready_to_turn_in", completionSessionId: clockworkBoss.encounter.session.id });
+
+    const fullyCompleted = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "clockwork_core", giver: "Orun" });
+    expect(fullyCompleted.profile).toMatchObject({ totalXp: 1852, aurionPoints: 280, seasonPoints: 280, victories: 5 });
+    expect(fullyCompleted.quests.map(quest => [quest.key, quest.state, quest.readyToTurnIn])).toEqual([
+      ["astral_call", "completed", false],
+      ["archive_of_echoes", "completed", false],
+      ["ember_key", "completed", false],
+      ["starfall_resonance", "completed", false],
+      ["clockwork_core", "completed", false],
+    ]);
+
     const dungeon = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey: "cinder_vault" });
     expect(dungeon.session).toMatchObject({ encounterKey: "cinder_vault", status: "active", bossHp: 258 });
     const rewards = await db.select().from(progressionLedger).where(eq(progressionLedger.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    expect(rewards).toHaveLength(12);
-    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(12);
+    expect(rewards).toHaveLength(15);
+    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(15);
     expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual([
-      "points:20", "points:35", "points:60", "points:75",
-      "victory:1", "victory:1", "victory:1", "victory:1",
-      "xp:122", "xp:220", "xp:360", "xp:500",
+      "points:20", "points:35", "points:60", "points:75", "points:90",
+      "victory:1", "victory:1", "victory:1", "victory:1", "victory:1",
+      "xp:122", "xp:220", "xp:360", "xp:500", "xp:650",
     ]);
     expect(await db.select().from(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, QUEST_CHAIN_REGRESSION_USER_ID))).toHaveLength(1);
   }, 60_000);
