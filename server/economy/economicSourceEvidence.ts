@@ -1,0 +1,116 @@
+import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
+
+const BARE=/^[a-f0-9]{64}$/;
+
+export function tradeCraftingSourceEvidenceHash(receipt:Readonly<{receiptHash:string}>):string{
+  if(!BARE.test(receipt.receiptHash)) throw new Error("ECONOMIC_TRADE_CRAFTING_SOURCE_HASH_INVALID");
+  return `sha256:${receipt.receiptHash}`;
+}
+
+export function craftingSourceEvidenceHash(
+  receipt:Readonly<{receiptHash:string}>,
+  outputs:readonly Readonly<{
+    id:string;craftingReceiptId:string|null;craftingOutputKey:string;baseItemKey:string;quality:string;
+    itemLevel:number;affixesJson:string;setKey:string|null;
+  }>[],
+):string{
+  if(!BARE.test(receipt.receiptHash)) throw new Error("ECONOMIC_CRAFTING_SOURCE_HASH_INVALID");
+  const canonicalOutputs=[...outputs].map(output=>Object.freeze({
+    id:output.id,craftingReceiptId:output.craftingReceiptId,craftingOutputKey:output.craftingOutputKey,
+    baseItemKey:output.baseItemKey,quality:output.quality,itemLevel:output.itemLevel,
+    affixesJson:output.affixesJson,setKey:output.setKey,
+  })).sort((a,b)=>a.craftingOutputKey.localeCompare(b.craftingOutputKey)||a.id.localeCompare(b.id));
+  if(canonicalOutputs.length<1||new Set(canonicalOutputs.map(output=>output.id)).size!==canonicalOutputs.length) {
+    throw new Error("ECONOMIC_CRAFTING_OUTPUT_EVIDENCE_INVALID");
+  }
+  return canonicalSha256({
+    schema:"aurion.economic-source.crafting.v1",
+    receiptHash:receipt.receiptHash,
+    outputs:canonicalOutputs,
+  });
+}
+
+export function lootV1SourceEvidenceHash(
+  receipt:Readonly<{
+    id:string;userId:number;expeditionKey:string;treasureClass:string;quality:string;seedDigest:string;idempotencyKey:string;
+  }>,
+  item:Readonly<{
+    id:string;sourceKind:string;lootReceiptId:string|null;baseItemKey:string;quality:string;itemLevel:number;
+    affixesJson:string;setKey:string|null;
+  }>,
+):string{
+  if(item.sourceKind!=="loot"||item.lootReceiptId!==receipt.id||item.quality!==receipt.quality) throw new Error("ECONOMIC_LOOT_V1_SOURCE_IDENTITY_INVALID");
+  return canonicalSha256({
+    schema:"aurion.economic-source.loot-v1.v1",
+    receipt:{
+      id:receipt.id,userId:receipt.userId,expeditionKey:receipt.expeditionKey,treasureClass:receipt.treasureClass,
+      quality:receipt.quality,seedDigest:receipt.seedDigest,idempotencyKey:receipt.idempotencyKey,
+    },
+    itemCreation:{
+      id:item.id,sourceKind:item.sourceKind,lootReceiptId:item.lootReceiptId,baseItemKey:item.baseItemKey,
+      quality:item.quality,itemLevel:item.itemLevel,affixesJson:item.affixesJson,setKey:item.setKey,
+      originalOwnerUserId:receipt.userId,
+    },
+  });
+}
+
+export function lootV2SourceEvidenceHash(
+  receipt:Readonly<{
+    id:string;userId:number;encounterReceiptId:string;itemDefinitionId:string;category:string;quality:string;
+    itemLevelExact:string;setId:string|null;resolvedJson:string;contextHash:string;deterministicHash:string;
+    ruleSetVersion:string;contentVersion:string;idempotencyKey:string;
+  }>,
+  item:Readonly<{
+    id:string;ownerUserId:number;lootReceiptId:string;baseItemDefinitionId:string;category:string;equipmentSlot:string|null;
+    quality:string;itemLevelExact:string;affixesJson:string;setId:string|null;itemPower:number;deterministicHash:string;status:string;
+  }>,
+):string{
+  if(item.lootReceiptId!==receipt.id||item.deterministicHash!==receipt.deterministicHash) throw new Error("ECONOMIC_LOOT_SOURCE_IDENTITY_INVALID");
+  return canonicalSha256({
+    schema:"aurion.economic-source.loot-v2.v1",
+    receipt:{
+      id:receipt.id,userId:receipt.userId,encounterReceiptId:receipt.encounterReceiptId,itemDefinitionId:receipt.itemDefinitionId,
+      category:receipt.category,quality:receipt.quality,itemLevelExact:receipt.itemLevelExact,setId:receipt.setId,
+      resolvedJson:receipt.resolvedJson,contextHash:receipt.contextHash,deterministicHash:receipt.deterministicHash,
+      ruleSetVersion:receipt.ruleSetVersion,contentVersion:receipt.contentVersion,idempotencyKey:receipt.idempotencyKey,
+    },
+    itemCreation:{
+      id:item.id,lootReceiptId:item.lootReceiptId,baseItemDefinitionId:item.baseItemDefinitionId,
+      category:item.category,equipmentSlot:item.equipmentSlot,quality:item.quality,itemLevelExact:item.itemLevelExact,
+      affixesJson:item.affixesJson,setId:item.setId,itemPower:item.itemPower,deterministicHash:item.deterministicHash,
+      originalOwnerUserId:receipt.userId,
+    },
+  });
+}
+
+export function marketTransactionSourceEvidenceHash(row:Readonly<{
+  id:string;listingId:string;itemId:string;sellerUserId:number;buyerUserId:number;aurionTransferred:number;idempotencyKey:string;
+}>):string{
+  return canonicalSha256({schema:"aurion.economic-source.market-transaction.v1",...row});
+}
+
+export function systemSaleSourceEvidenceHash(row:Readonly<{
+  id:string;itemId:string;sellerUserId:number;aurionGranted:number;
+}>):string{
+  return canonicalSha256({schema:"aurion.economic-source.system-sale.v1",...row});
+}
+
+export function guildBankSourceEvidenceHash(row:Readonly<{
+  receiptId:string;guildId:string;actorUserId:number;operation:string;expectedRevision:string|number|bigint;resultingRevision:string|number|bigint;
+  idempotencyKey:string;confirmationHash:string;requestHash:string;resultHash:string;ruleSetVersion:string;contentVersion:string;
+}>):string{
+  return canonicalSha256({
+    schema:"aurion.economic-source.guild-bank.v1",
+    receiptId:row.receiptId,guildId:row.guildId,actorUserId:row.actorUserId,operation:row.operation,
+    expectedRevision:String(row.expectedRevision),resultingRevision:String(row.resultingRevision),
+    idempotencyKey:row.idempotencyKey,confirmationHash:row.confirmationHash,requestHash:row.requestHash,resultHash:row.resultHash,
+    ruleSetVersion:row.ruleSetVersion,contentVersion:row.contentVersion,
+  });
+}
+
+export function progressionPointsSourceEvidenceHash(row:Readonly<{
+  id:string;userId:number;kind:string;delta:number;source:string;reason:string;idempotencyKey:string;
+}>):string{
+  if(row.kind!=="points") throw new Error("ECONOMIC_PROGRESSION_SOURCE_KIND_INVALID");
+  return canonicalSha256({schema:"aurion.economic-source.progression-points.v1",...row});
+}

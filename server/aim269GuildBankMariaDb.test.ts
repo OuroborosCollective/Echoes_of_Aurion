@@ -2,6 +2,7 @@ import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { guildBankViewSchema } from "../shared/guildBankView";
 import { GuildBankStore } from "./guildBankStore";
+import { readEconomicSourceProjection } from "./economy/economicLedgerPersistence";
 
 const databaseUrl = process.env.DATABASE_URL;
 const suite = databaseUrl ? describe : describe.skip;
@@ -93,6 +94,12 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS rowCount, SUM(amount) AS amount FROM aurionGuildTreasuryLedger WHERE guildId = ? AND reason = 'player_deposit'", [guildId]);
     expect(Number(ledger[0]?.rowCount)).toBe(1);
     expect(String(ledger[0]?.amount)).toBe("1000");
+    const economic=await readEconomicSourceProjection("guild_bank",left.receipt.receiptId);
+    expect(economic.resourceDeltas).toEqual(expect.arrayContaining([
+      {resourceId:"aurion_points",accountId:`user:${memberUserId}`,deltaExact:"-1000"},
+      {resourceId:"aurion_points",accountId:`guild:${guildId}:treasury`,deltaExact:"1000"},
+    ]));
+    expect(economic.assetTransitions).toEqual([]);
   });
 
   it("denies withdrawal to a normal member and permits the founder atomically", async () => {
@@ -102,6 +109,11 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     expect(applied.readback.treasuryBalanceExact).toBe("750");
     expect(applied.readback.playerPointsExact).toBe("50250");
     expect(applied.readback.revisionExact).toBe("2");
+    const economic=await readEconomicSourceProjection("guild_bank",applied.receipt.receiptId);
+    expect(economic.resourceDeltas).toEqual(expect.arrayContaining([
+      {resourceId:"aurion_points",accountId:`guild:${guildId}:treasury`,deltaExact:"-250"},
+      {resourceId:"aurion_points",accountId:`user:${founderUserId}`,deltaExact:"250"},
+    ]));
   });
 
   it("moves a real legacy item into exclusive guild custody and then to an authorized recipient", async () => {
@@ -118,6 +130,16 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     expect(ownedItem[0]).toMatchObject({ ownerUserId: founderUserId, status: "owned" });
     const [custodyEvents] = await pool.query<RowDataPacket[]>("SELECT eventType, previousOwnerUserId, resultingOwnerUserId FROM aurionGuildItemCustodyLedger WHERE guildId = ? ORDER BY createdAt, eventType", [guildId]);
     expect(custodyEvents.map(row => row.eventType).sort()).toEqual(["deposit", "withdrawal"]);
+    const depositEconomic=await readEconomicSourceProjection("guild_bank",deposited.receipt.receiptId);
+    expect(depositEconomic.assetTransitions).toEqual([{
+      assetId:`item:legacy:${legacyItemId}`,transitionKind:"transfer",
+      fromOwnerId:`user:${memberUserId}`,toOwnerId:`guild:${guildId}:custody`,
+    }]);
+    const withdrawEconomic=await readEconomicSourceProjection("guild_bank",withdrawn.receipt.receiptId);
+    expect(withdrawEconomic.assetTransitions).toEqual([{
+      assetId:`item:legacy:${legacyItemId}`,transitionKind:"transfer",
+      fromOwnerId:`guild:${guildId}:custody`,toOwnerId:`user:${founderUserId}`,
+    }]);
   });
 
   it("consumes a real V2 material instance into one exact guild resource unit", async () => {
@@ -130,6 +152,15 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     expect(resourceRows).toHaveLength(1);
     expect(resourceRows[0]).toMatchObject({ sourceItemId: v2ResourceItemId });
     expect(String(resourceRows[0]?.amount)).toBe("1");
+    const economic=await readEconomicSourceProjection("guild_bank",applied.receipt.receiptId);
+    expect(economic.assetTransitions).toEqual([{
+      assetId:`item:aurion_v2:${v2ResourceItemId}`,transitionKind:"consume",
+      fromOwnerId:`user:${memberUserId}`,toOwnerId:null,
+    }]);
+    expect(economic.resourceDeltas).toEqual(expect.arrayContaining([
+      {resourceId:"guild_resource:wood",accountId:"system:guild_conversion",deltaExact:"-1"},
+      {resourceId:"guild_resource:wood",accountId:`guild:${guildId}:resources`,deltaExact:"1"},
+    ]));
   });
 
   it("upgrades one building by atomically consuming points and all exact resource accounts", async () => {
@@ -143,6 +174,14 @@ suite("AIM-269 MariaDB guild bank and custody transaction", () => {
     expect(applied.readback.buildings).toEqual([expect.objectContaining({ buildingId: "bld_sovereign_academy", levelExact: "1", projection: expect.objectContaining({ bonusesBps: expect.objectContaining({ validatedMasteryXpBps: 200 }) }) })]);
     const [ledger] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS rowCount FROM aurionGuildResourceLedger WHERE guildId = ? AND direction = 'debit'", [guildId]);
     expect(Number(ledger[0]?.rowCount)).toBe(3);
+    const economic=await readEconomicSourceProjection("guild_bank",applied.receipt.receiptId);
+    expect(economic.resourceDeltas).toEqual(expect.arrayContaining([
+      {resourceId:"aurion_points",accountId:`guild:${guildId}:treasury`,deltaExact:"-2200"},
+      {resourceId:"aurion_points",accountId:"system:building",deltaExact:"2200"},
+      {resourceId:"guild_resource:wood",accountId:`guild:${guildId}:resources`,deltaExact:"-500"},
+      {resourceId:"guild_resource:stone",accountId:`guild:${guildId}:resources`,deltaExact:"-450"},
+      {resourceId:"guild_resource:aether",accountId:`guild:${guildId}:resources`,deltaExact:"-350"},
+    ]));
   });
   it("enforces the exact injected deadline and still reads consumed receipts after expiry", async () => {
     let timestamp = 1_800_000_000_000;
