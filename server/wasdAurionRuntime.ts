@@ -1,10 +1,11 @@
 import { encodeNpcSnapshot, type PublicNpcSnapshot } from "@shared/npcSnapshotProtocol";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import { advanceNpcMemory, createNpcLifeSnapshot, decodeNpcReceipt, encodeNpcLifeReceipt, NPC_LIFE_RECEIPT_VERSION, normalizeNpcRequest, npcHash, npcNeedsSchema, npcReceiptVersion, npcRequestHash, parseNpcJson, parseNpcMemory, type NpcRequest, type NpcSnapshot, type NpcLifeSnapshot } from "./npcPersistenceProtocol";
+import { advanceNpcMemory, createNpcLifeSnapshot, decodeNpcReceipt, encodeNpcLifeReceipt, NPC_LIFE_RECEIPT_VERSION, normalizeNpcRequest, npcHash, npcNeedsSchema, npcReceiptVersion, npcRequestHash, parseNpcJson, parseNpcMemory, type NpcRequest, type NpcSnapshot } from "./npcPersistenceProtocol";
 import { aurionDialogueReceipts, aurionNpcDecisionReceipts, aurionNpcStates, aurionPolityStates, aurionWorldResolutions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { appendNpcMultiMemory, readNpcMultiMemoryForDecision, readPreviousNpcMultiMemory } from "./npcMultiMemoryPersistence";
+import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import type { NpcMemoryV4 } from "./wasdNpcCapsule";
 import {
   AURION_WASD_CONTENT_VERSION,
@@ -144,14 +145,14 @@ export async function resolveAndRecordWorld(input: {
   return { reaction: verifiedWorldReadback(readback,expected), source: "created" };
 }
 
-export type AurionNpcReadModel = (NpcSnapshot | NpcLifeSnapshot) & Readonly<{ source: "persisted" | "created"; multiMemory: NpcMemoryV4 | null }>;
+export type AurionNpcReadModel = NpcSnapshot & Readonly<{ source: "persisted" | "created"; multiMemory: NpcMemoryV4 | null }>;
 
 function assertNpcStateMatchesReceipt(state: { npcId: string; regionId: string; needsJson: string; memoryJson: string; lastResolutionIndex: number }, snapshot: NpcSnapshot): void {
   if (snapshot.npcId !== state.npcId || snapshot.regionId !== state.regionId || snapshot.decision.resolutionIndex !== state.lastResolutionIndex || npcHash(snapshot.needs) !== npcHash(npcNeedsSchema.parse(parseNpcJson(state.needsJson))) || npcHash(snapshot.memoryState) !== npcHash(parseNpcMemory(state.memoryJson,state.lastResolutionIndex))) throw new Error("NPC_STORED_CONTENT_CORRUPT");
 }
 
 /** Read the exact latest confirmed NPC receipt. This is server-internal and never synthesizes a default state. */
-export async function readConfirmedNpcState(npcId: string): Promise<NpcSnapshot | NpcLifeSnapshot | null> {
+export async function readConfirmedNpcState(npcId: string): Promise<NpcSnapshot | null> {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(npcId)) throw new Error("NPC_ID_INVALID");
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
@@ -216,8 +217,9 @@ export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcRea
     const row = (await tx.select().from(aurionNpcDecisionReceipts).where(eq(aurionNpcDecisionReceipts.id, id)).limit(1))[0];
     if (!row) throw new Error("NPC decision readback failed");
     const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
-    const multiMemory = (await appendNpcMultiMemory(tx,row,previousMultiMemory)).memory;
-    return Object.freeze({ ...readback, source: "created" as const, multiMemory });
+    const confirmedMemory = await appendNpcMultiMemory(tx,row,previousMultiMemory);
+    await appendNpcSemanticGraphV2(tx,confirmedMemory);
+    return Object.freeze({ ...readback, source: "created" as const, multiMemory:confirmedMemory.memory });
   });
 }
 

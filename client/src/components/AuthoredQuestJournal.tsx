@@ -19,12 +19,12 @@ export function AuthoredQuestJournal() {
   const busy = offer.isPending || accept.isPending || choose.isPending || complete.isPending;
   const selected = details.data;
   const currentNode = useMemo(
-    () => selected?.plan.nodes.find((node: any) => node.id === selected.instance.currentNodeId),
+    () => selected?.plan.nodes.find(node => node.id === selected.instance.currentNodeId),
     [selected],
   );
   const choices = useMemo(
     () => currentNode?.type === "branch"
-      ? selected?.plan.edges.filter((edge: any) => edge.fromNodeId === currentNode.id) ?? []
+      ? selected?.plan.edges.filter(edge => edge.fromNodeId === currentNode.id) ?? []
       : [],
     [currentNode, selected],
   );
@@ -44,7 +44,7 @@ export function AuthoredQuestJournal() {
     <div className="grid gap-4 md:grid-cols-12">
       <section className="md:col-span-5 space-y-3 rounded-2xl border border-cyan-400/20 bg-black/40 p-3">
         <h4 className="font-serif text-xs uppercase text-amber-300">Aurion-authored Nebenquests</h4>
-        {(available.data ?? []).map((template: any) => (
+        {(available.data ?? []).map(template => (
           <div key={template.templateId} className="rounded-xl border border-slate-700 bg-black/40 p-3 text-xs">
             <b className="text-cyan-200">{template.title}</b>
             <p className="mt-1 text-slate-400">{template.description}</p>
@@ -63,7 +63,7 @@ export function AuthoredQuestJournal() {
         {!available.isLoading && !(available.data?.length) && <p className="text-xs text-slate-500">Aktuell erfüllt kein veröffentlichtes Template seine Aurion-Voraussetzungen.</p>}
 
         <h4 className="pt-2 font-serif text-xs uppercase text-amber-300">Deine Instanzen</h4>
-        {(instances.data ?? []).map((instance: any) => (
+        {(instances.data ?? []).map(instance => (
           <button
             key={instance.id}
             className="w-full rounded-xl border border-slate-700 bg-black/40 p-3 text-left text-xs"
@@ -104,7 +104,7 @@ export function AuthoredQuestJournal() {
 
           {selected.instance.state === "active" && choices.length > 0 && <div className="space-y-2">
             <p className="flex items-center gap-2 text-xs text-cyan-300"><GitBranch size={13} /> Entscheidung</p>
-            {choices.map((edge: any) => <button
+            {choices.map(edge => <button
               key={edge.id}
               className="ax1-primary mr-2"
               disabled={busy || Boolean(edge.conditionPredicate)}

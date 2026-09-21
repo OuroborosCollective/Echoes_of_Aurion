@@ -1,8 +1,8 @@
 {
   "schemaVersion": "aurion-wasd-npc-pin.v1",
   "repository": "OuroborosCollective/Wasd",
-  "sourceRevision": "ddce5911e7969f26a9c5b2739d3426004b32260d",
-  "sourceSha256": "fcd4cbc5cfa3deae9389cf1aba6d7d376eec216834b877c30876fb488821442f",
-  "manifestSha256": "a6db231324e295ebc2b3e1569de139ccf8316604c99d5eeee6af547c386db874",
-  "verifierSha256": "e5ba215f9861a657a4b6bb698c79d1a4be87be816162e4180c446ee2292ce3f1"
+  "sourceRevision": "28ecb7aec84271bd3bcc4fa5e1e7deef530804b6",
+  "sourceSha256": "466c835cbae412e9c6a0aa851f99228216f31ae065cb944e4e8232ea59db7a85",
+  "manifestSha256": "a0e4641a1a3a88741dcca726b69d3e6af78bbf5ffcaeb4c80ee0f169c85d8e20",
+  "verifierSha256": "387190ba8d830ef9d1acd5f378dca7b16a95c628f399fbfb54c1b075d032eadc"
 }

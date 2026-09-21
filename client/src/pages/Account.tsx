@@ -5,8 +5,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { readCompanionDataset } from "@/lib/companionLearning";
 import { PublicCharacterPicker } from "@/xaurion/components/PublicCharacterPicker";
-import { CharacterProgressionChart } from "@/components/CharacterProgressionChart";
-import { AchievementsGallery } from "@/components/AchievementsGallery";
 
 /** Aurion account portal: persisted readbacks plus the explicit immutable public appearance binding. */
 export default function Account() {
@@ -47,15 +45,6 @@ export default function Account() {
 
       <PublicCharacterPicker />
 
-      {/* Recharts-powered Character Progression & Statistics Visualizer */}
-      <CharacterProgressionChart
-        profile={profile}
-        progression={progression}
-        craftingProgression={crafting.data?.progression?.progression}
-        confirmedSkills={group.data?.player?.skills}
-        guildRole={guildInfo?.membership.role}
-      />
-
       <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><UserRound className="mb-3 size-5 text-cyan-300"/><h3 className="font-semibold">Charakterstand</h3>{profile ? <div className="mt-3 space-y-1 text-sm text-slate-300"><p>Archetyp <b className="text-white">klassenlos</b></p><p>Progressionspfade <b className="text-white">{progression?.tracks.length ?? 0}</b></p><p>Siege <b className="text-white">{profile.victories}</b></p><p>Aurion <b className="text-white">{profile.aurionPoints}</b></p><p className="pt-2 text-xs text-slate-500">Aggregiertes Charakterlevel und Gesamt-EP werden hier nicht aus Legacy-Aurion abgeleitet. Sie erscheinen erst nach Bindung eines kanonischen WASD-Snapshots.</p></div> : <p className="mt-3 text-sm text-slate-400">Kein bestätigter Charakter-Readback verfügbar.</p>}</article>
         <article className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><Swords className="mb-3 size-5 text-cyan-300"/><h3 className="font-semibold">Skills & Meisterschaften</h3><div className="mt-3 space-y-2 text-sm text-slate-300">{progression?.tracks.length ? progression.tracks.map(entry => <p key={`${entry.trackKind}:${entry.trackId}`}>{entry.trackKind === "weapon" ? "Waffe" : "Skill"} · <b className="text-white">{entry.trackId}</b>: Stufe {entry.levelExact}</p>) : <p>Keine bestätigten dynamischen Skill- oder Waffenstände.</p>}{crafting.data?.progression && <p>Handwerk: <b className="text-white">Stufe {crafting.data.progression.progression.levelExact}</b> · {crafting.data.progression.progression.totalXpExact} EP</p>}{group.data?.player.skills?.length ? <p>Bestätigte Rollen-Skills: <b className="text-white">{group.data.player.skills.join(", ")}</b></p> : <p>Keine bestätigten Rollen-Skills.</p>}<p className="text-xs text-slate-500">Die Liste stammt ausschließlich aus verifizierten Progressions-Receipts; Aurion berechnet weder Klassen noch Ersatzlevel.</p></div></article>
@@ -67,15 +56,7 @@ export default function Account() {
         <article className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><Sparkles className="mb-3 size-5 text-cyan-300"/><h3 className="font-semibold">Companion-Training</h3><p className="mt-1 text-xs text-slate-500">Nur Trainings-/Receipt-Metadaten. Keine Frames werden auf dieser Seite gerendert und kein Companion wird gesteuert.</p><p className="mt-4 text-sm">Lokale Beobachtungszeilen: <b>{training.total}</b></p><div className="mt-3 space-y-2">{training.sessions.map(([sessionId, summary]) => <div key={sessionId} className="rounded-xl border border-slate-700/70 p-3 text-xs"><b>{sessionId}</b><p>{summary.rows} Samples · letzter Beleg {summary.lastSampleId}</p><p>{new Date(summary.latest).toLocaleString()}</p></div>)}{training.sessions.length === 0 && <p className="text-sm text-slate-400">Auf diesem Gerät liegen noch keine Trainingssamples.</p>}</div><div className="mt-4 border-t border-slate-700/60 pt-3 text-xs text-slate-400"><p>Serverseitige Gateway-Sitzungen: {gateways.data?.length ?? 0}</p>{gateways.data?.slice(0,4).map(session => <p key={session.id}>{session.providerLabel} · {session.status}</p>)}</div></article>
       </section>
 
-      {/* Achievements Gallery - Roman Numeral Milestones every 10 levels */}
-      <AchievementsGallery
-        profile={profile}
-        progression={progression}
-        craftingProgression={crafting.data?.progression?.progression}
-        confirmedSkills={group.data?.player?.skills}
-        guildRole={guildInfo?.membership.role}
-      />
-
+      <section className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><h3 className="font-semibold">Achievements</h3><p className="mt-2 text-sm text-slate-400">Noch keine persistierte WASD-Achievement-Readprojektion verbunden. Aurion zeigt deshalb keine aus alten Questzuständen abgeleiteten Ersatz-Achievements.</p></section>
       <section className="rounded-2xl border border-amber-300/25 bg-amber-100/5 p-5 text-sm text-slate-300"><ShieldCheck className="mr-2 inline size-4 text-amber-200"/><b className="text-amber-100">Readonly-Grenze:</b> Aurion zeigt hier persistierte Daten. Einzige Account-Mutation auf dieser Fläche ist die explizite, einmalige öffentliche Modellbindung. Kampf, Quests, Skills, Ausrüstung, Inventarwirkungen, Crafting, Markt und Weltmutation werden nicht von dieser Website ausgelöst.</section>
     </div>
   </main>;

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import GuildGovernancePanel from "./GuildGovernancePanel";
-import GuildBankDashboardSummary from "./GuildBankDashboardSummary";
 import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import {
@@ -215,12 +214,6 @@ export default function GuildBankPanel({ userId }: { userId: number }) {
           <p>
             Gildenkasse: <b>{bank.treasuryBalanceExact} AURION</b>
           </p>
-          <GuildBankDashboardSummary
-            summary={bank.dashboardSummary}
-            treasuryBalanceExact={bank.treasuryBalanceExact}
-            resourceBalancesExact={bank.resourceBalancesExact}
-            heldItemsCount={bank.heldItems.length}
-          />
           {plan ? (
             <div role="group" aria-label="Bankoperation bestätigen">
               <h4>{labels[plan.operation]}</h4>

@@ -41,7 +41,7 @@ export default function SystemStatusDashboard() {
         </button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        {statuses.map((s: any) => {
+        {statuses.map((s) => {
           const isUp = s.status === "UP";
           const isDown = s.status === "DOWN";
           const isMaintained = s.status === "MAINTAINED";

@@ -39,12 +39,13 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
     expect(offeredInstance.updatedAt).toBe(expectedIso);
 
     // 2. Accept
-    const { updatedInstance: acceptedInstance, receipt: acceptReceipt } = runtime.acceptQuest(offeredInstance);
+    const { updatedInstance: acceptedInstance, receipt: acceptReceipt } = runtime.acceptQuest(offeredInstance, plan);
     expect(acceptedInstance.updatedAt).toBe(expectedIso);
     expect(acceptReceipt.createdAt).toBe(expectedIso);
 
     // 3. Progress
-    const objectiveKey = 'recover_crates';
+    const objectiveKey = plan.nodes.find(node => node.id === acceptedInstance.currentNodeId)?.objective?.key;
+    if (!objectiveKey) throw new Error("fixture objective missing");
     const { updatedInstance: progressedInstance, receipt: progressReceipt } = runtime.progressObjective(
       acceptedInstance,
       plan,
@@ -90,11 +91,11 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
         giverNpcId: 'npc_merchant_kaelen',
         triggerEventId: 'evt_init',
       });
-      const { updatedInstance: accepted } = runtime.acceptQuest(instance);
+      const { updatedInstance: accepted } = runtime.acceptQuest(instance, plan);
       const { updatedInstance: progressed, receipt } = runtime.progressObjective(
         accepted,
         plan,
-        'recover_crates',
+        plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key,
         1
       );
 
@@ -121,11 +122,11 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
       giverNpcId: 'npc_merchant_kaelen',
       triggerEventId: 'evt_init',
     });
-    const { updatedInstance: accepted } = runtime.acceptQuest(instance);
+    const { updatedInstance: accepted } = runtime.acceptQuest(instance, plan);
     const { receipt } = runtime.progressObjective(
       accepted,
       plan,
-      'recover_crates',
+      plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key,
       1
     );
 
@@ -133,7 +134,7 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
     expect(receipt.id).toMatch(/^rcpt_[0-9a-f]{24}$/);
     expect(receipt.id).not.toContain('progress_');
     expect(receipt.id).not.toContain(String(fixedEpoch));
-    expect(receipt.idempotencyKey).toBe(`progress:${instance.id}:recover_crates:1`);
+    expect(receipt.idempotencyKey).toBe(`progress:${instance.id}:${plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key}:1`);
   });
 
   it('guarantees identical receipt ID and idempotent hash on command retry', () => {
@@ -144,13 +145,13 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
       giverNpcId: 'npc_merchant_kaelen',
       triggerEventId: 'evt_init',
     });
-    const { updatedInstance: accepted } = runtime.acceptQuest(instance);
+    const { updatedInstance: accepted } = runtime.acceptQuest(instance, plan);
 
     // Initial progress
-    const run1 = runtime.progressObjective(accepted, plan, 'recover_crates', 1);
+    const run1 = runtime.progressObjective(accepted, plan, plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key, 1);
 
     // Retry on same input state
-    const run2 = runtime.progressObjective(accepted, plan, 'recover_crates', 1);
+    const run2 = runtime.progressObjective(accepted, plan, plan.nodes.find(node => node.id === accepted.currentNodeId)!.objective!.key, 1);
 
     expect(run1.receipt.id).toBe(run2.receipt.id);
     expect(run1.receipt.resultStateHash).toBe(run2.receipt.resultStateHash);

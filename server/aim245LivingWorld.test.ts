@@ -52,16 +52,21 @@ describe("AIM-245/AIM-263 living world migration", () => {
     expect(socialMasteryEvidence("leadership", "civic_123", 9)).toMatchObject({ disciplineId: "council", amountExact: "5" });
   });
 
-  it("reads confirmed NPC continuity, fixes satisfaction signs and refreshes only newly observed memory", () => {
+  it("keeps AX1 as a thin host projection over the receipt-gated AIM-293 transaction", () => {
     const runtime = read("server/ax1LivingWorldRuntime.ts");
-    expect(runtime).toContain("readConfirmedNpcState");
-    expect(runtime).toContain("prepareMerchantNpcDecision");
-    expect(runtime).toContain('from "./wasdNpcCapsule"');
-    expect(runtime).not.toContain("const baseMarkets");
-    expect(runtime).not.toContain("function lifeOpportunities");
-    expect(runtime).toContain("resolveAndRecordNpc");
-    expect(runtime).toContain("resolveAndRecordPolity");
-    expect(runtime).toContain("resolveAndRecordWorld");
+    const host = read("server/npcActionGatewayPersistence.ts");
+    expect(runtime).toContain("executeConfirmedMerchantAction");
+    expect(runtime).toContain("sourceDecisionReceiptId");
+    expect(runtime).not.toContain("prepareMerchantNpcDecision");
+    expect(runtime).not.toContain("resolveLivingWorldTick");
+    expect(runtime).not.toContain("resolveAndRecordNpc");
+    expect(runtime).not.toContain("resolveAndRecordPolity");
+    expect(runtime).not.toContain("resolveAndRecordWorld");
+    expect(host).toContain("planMerchantAction");
+    expect(host).toContain("validateMerchantAction");
+    expect(host).toContain("aurionNpcActionEffectReadbacks");
+    expect(host).toContain("appendNpcMultiMemory");
+    expect(host.indexOf("aurionNpcActionEffectReadbacks")).toBeLessThan(host.lastIndexOf("appendNpcMultiMemory"));
     expect(runtime).not.toContain("localStorage");
     expect(runtime).not.toContain("Math.random");
   });

@@ -2,12 +2,13 @@ import { eq, and, inArray } from "drizzle-orm";
 import {
   aurionNpcMemoryReceiptsV4,
   aurionNpcDecisionReceipts,
-  aurionSemanticNodes,
   aurionQuestInstances,
   aurionQuestReceipts,
   aurionWorldContextEpisodes,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
+import { readVerifiedNpcSemanticGraphV2 } from "../wasdSemanticGraphV2Persistence";
+import { retrieveNpcSemanticMemoryGraph, type NpcSemanticGraphNode } from "../wasdNpcCapsule";
 import type {
   CanonicalContextSource,
   ContextSourceKind,
@@ -99,47 +100,59 @@ export class SemanticGraphSourceAdapter implements WorldContextSourceAdapter {
 
     if (input.memorySources) {
       for (const s of input.memorySources) {
-        if (s.kind === "semantic_relation" && s.worldId === input.query.worldId) {
+        if (s.kind === "semantic_relation" && s.worldId === input.query.worldId && s.evidenceClass === "verified") {
           results.push(s);
         }
       }
     }
 
-    try {
-      const db = await getDb();
-      if (!db) return results;
+    const db = await getDb();
+    if (!db) return results;
+    const verified = await db.transaction(tx=>readVerifiedNpcSemanticGraphV2(tx,input.query.actorId));
+    if (!verified) return results;
 
-      const nodes = await db
-        .select()
-        .from(aurionSemanticNodes)
-        .where(eq(aurionSemanticNodes.npcId, input.query.actorId))
-        .limit(64);
+    const queryResult=retrieveNpcSemanticMemoryGraph(verified.graph,{
+      logicalIndex:verified.graph.generation,
+      startKeys:[input.query.actorId],
+      maxDepth:4,
+      maxCandidates:64,
+      maxResults:32,
+    });
+    const resultIds=new Set(queryResult.results.map(item=>item.nodeId));
+    const safeKey=(node:NpcSemanticGraphNode)=>{
+      return ["actor","location","goal","procedural_competency","polity","item_resource"].includes(node.kind)?node.key:null;
+    };
+    const nodeById=new Map(verified.graph.nodes.map(node=>[node.id,node] as const));
+    const activeAt=(status:string,from:number,until:number|null)=>status==="active"&&verified.graph.generation>=from&&(until===null||verified.graph.generation<until);
 
-      for (const node of nodes) {
-        const sourceData: Omit<CanonicalContextSource, "sourceHash"> = {
-          sourceId: `sem_${node.id}_${node.graphReceiptId.slice(0, 12)}`,
-          kind: "semantic_relation",
-          evidenceClass: node.status === "conflicted" ? "contradicted" : "verified",
-          worldId: input.query.worldId,
-          actorIds: [node.npcId, node.subjectId].filter(Boolean),
-          logicalSequence: node.validFromIndex,
-          logicalSequenceMax: node.validUntilIndex,
-          canonicalText: `Semantic Fact [${node.subjectId}] ${node.predicate} = ${node.value} (status: ${node.status}, valid ${node.validFromIndex}..${node.validUntilIndex})`,
-          metadata: {
-            predicate: node.predicate,
-            value: node.value,
-            status: node.status,
-          },
-        };
-        results.push({
-          ...sourceData,
-          sourceHash: hashCanonicalSource(sourceData),
-        });
-      }
-    } catch {
-      // Offline fallback
+    for(const edge of verified.graph.edges
+      .filter(edge=>resultIds.has(edge.fromNodeId)&&resultIds.has(edge.toNodeId)&&activeAt(edge.status,edge.validFromIndex,edge.validUntilIndex))
+      .sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0)
+      .slice(0,64)){
+      const from=nodeById.get(edge.fromNodeId),to=nodeById.get(edge.toNodeId);
+      if(!from||!to) throw new Error("WORLD_CONTEXT_SEMANTIC_GRAPH_NODE_MISSING");
+      const sourceData:Omit<CanonicalContextSource,"sourceHash">={
+        sourceId:edge.id,
+        kind:"semantic_relation",
+        evidenceClass:"verified",
+        worldId:input.query.worldId,
+        actorIds:[verified.graph.npcId],
+        logicalSequence:edge.validFromIndex,
+        ...(edge.validUntilIndex===null?{}:{logicalSequenceMax:edge.validUntilIndex}),
+        canonicalText:`Semantic relation ${edge.kind}: ${safeKey(from)??from.id} -> ${safeKey(to)??to.id}`,
+        metadata:{
+          relation:edge.kind,
+          fromKind:from.kind,
+          toKind:to.kind,
+          fromKey:safeKey(from),
+          toKey:safeKey(to),
+          graphHash:verified.graph.graphHash,
+          resultHash:queryResult.resultHash,
+          generation:verified.graph.generation,
+        },
+      };
+      results.push({...sourceData,sourceHash:hashCanonicalSource(sourceData)});
     }
-
     return results;
   }
 }

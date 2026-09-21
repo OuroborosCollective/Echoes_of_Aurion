@@ -769,6 +769,8 @@ export type ConfirmedNpcDecision = Readonly<{
     snapshot: NpcLifeSnapshot;
     authority: ReturnType<typeof npcAuthority>;
 }>;
+/** Gateway-only brand check; a matching JSON shape is never confirmed evidence. */
+export declare function isConfirmedNpcDecision(value: unknown): value is ConfirmedNpcDecision;
 /** Called on the actual persisted receipt readback, before a memory commit is permitted. */
 export declare function verifyConfirmedNpcDecision(raw: string, expected: Parameters<typeof decodeNpcReceipt>[1] & {
     receiptId: string;

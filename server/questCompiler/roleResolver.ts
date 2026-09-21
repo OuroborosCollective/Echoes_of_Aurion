@@ -16,6 +16,21 @@ export const DEFAULT_AURION_ENTITIES: WorldEntity[] = [
   { id: 'item_damaged_manifest', name: 'Damaged Cargo Manifest', type: 'item' },
 ];
 
+
+function rolePredicateMatches(entity: WorldEntity, predicate: QuestRole["predicates"][number]): boolean {
+  const value = predicate.subjectField === "id" ? entity.id
+    : predicate.subjectField === "name" ? entity.name
+      : predicate.subjectField === "type" ? entity.type
+        : undefined;
+  if (value === undefined) return false;
+  const expected = predicate.expectedValue;
+  if (predicate.operator === "eq") return value === expected;
+  if (predicate.operator === "neq") return value !== expected;
+  if (predicate.operator === "contains") return typeof expected === "string" && value.includes(expected);
+  if (predicate.operator === "in") return Array.isArray(expected) && expected.includes(value);
+  return false;
+}
+
 /**
  * AIM-298: Aurion Role Resolver.
  * Binds semantic template roles against available world entities deterministically.
@@ -46,7 +61,7 @@ export class RoleResolver {
 
       // Filter matching entity types
       const candidates = entities
-        .filter(e => e.type === role.entityType)
+        .filter(e => e.type === role.entityType && role.predicates.every(predicate => rolePredicateMatches(e, predicate)))
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (candidates.length > 0) {

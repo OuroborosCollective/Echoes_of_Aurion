@@ -11,13 +11,16 @@ const canonicalVisualWorkflow = fs.readFileSync(
 describe("Aurion authority documentation", () => {
   it("keeps gameplay and world truth Aurion-owned", () => {
     expect(canonicalVisualWorkflow).toContain(
-      "**Aurion** besitzt Gameplay-/Simulationsregeln, Questwirkungen, Progression, Collision, World-Truth",
+      "**Aurion** ist die einzige Gameplay-/Simulations-Authority.",
     );
     expect(canonicalVisualWorkflow).toContain(
       "**WASD** ist ausschließlich historische Migrations-/Provenienzquelle",
     );
     expect(canonicalVisualWorkflow).toContain(
-      "Questlogik und Belohnungen bleiben Aurion-owned",
+      "GDS darf keine Quest-, Dungeon- oder World-Truth setzen.",
+    );
+    expect(canonicalVisualWorkflow).toContain(
+      "Genkit hat in der Authoring-Lane keine Publish-, Tool- oder Gameplay-Authority.",
     );
   });
 

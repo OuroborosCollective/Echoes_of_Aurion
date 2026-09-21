@@ -1,218 +1,64 @@
-export type AssetTier = "mobile" | "tablet" | "desktop" | "ultra";
+/** Shared presentation-only GLB budgets.
+ * This contract is consumed by both server-side admission and the renderer.
+ * It never grants gameplay, simulation, inventory, collision or world authority. */
+export const assetBudgets = {
+  phone: { worldModels: 18, worldInstances: 48, worldCache: 24, actors: 12, animations: 8, decoderJobs: 2, ktxWorkers: 1, cacheModels: 40, textureBytes: 48*1024*1024, decodedBytes: 64*1024*1024, assetWorkingSetBytes: 96*1024*1024, assetBytes: 8*1024*1024, networkBytes: 16*1024*1024 },
+  tablet: { worldModels: 24, worldInstances: 64, worldCache: 32, actors: 20, animations: 12, decoderJobs: 2, ktxWorkers: 1, cacheModels: 56, textureBytes: 96*1024*1024, decodedBytes: 128*1024*1024, assetWorkingSetBytes: 192*1024*1024, assetBytes: 12*1024*1024, networkBytes: 24*1024*1024 },
+  desktop: { worldModels: 30, worldInstances: 84, worldCache: 40, actors: 32, animations: 20, decoderJobs: 2, ktxWorkers: 2, cacheModels: 80, textureBytes: 192*1024*1024, decodedBytes: 256*1024*1024, assetWorkingSetBytes: 384*1024*1024, assetBytes: 16*1024*1024, networkBytes: 32*1024*1024 },
+} as const;
 
-export interface GlbAllocation {
-  decodedBytes: number;
-  textureBytes: number;
-  animations?: number;
-}
+export type AssetTier = keyof typeof assetBudgets;
+export const assetTier = (width: number): AssetTier => width < 768 ? "phone" : width < 1200 ? "tablet" : "desktop";
+export type GlbAllocation = { decodedBytes: number; textureBytes: number; animations: number };
 
-export interface GlbTierBudget {
-  assetBytes: number;
-  networkBytes: number;
-  assetWorkingSetBytes: number;
-  cacheModels: number;
-  decodedBytes: number;
-  textureBytes: number;
-  actors: number;
-  animations: number;
-  decoderJobs: number;
-  worldModels: number;
-  ktxWorkers: number;
-  worldInstances: number;
-  worldCache: number;
-}
-
-export const assetBudgets: Record<AssetTier, GlbTierBudget> = {
-  mobile: {
-    assetBytes: 15 * 1024 * 1024,
-    networkBytes: 30 * 1024 * 1024,
-    assetWorkingSetBytes: 120 * 1024 * 1024,
-    cacheModels: 32,
-    decodedBytes: 60 * 1024 * 1024,
-    textureBytes: 80 * 1024 * 1024,
-    actors: 16,
-    animations: 32,
-    decoderJobs: 2,
-    worldModels: 24,
-    ktxWorkers: 2,
-    worldInstances: 64,
-    worldCache: 16,
-  },
-  tablet: {
-    assetBytes: 25 * 1024 * 1024,
-    networkBytes: 50 * 1024 * 1024,
-    assetWorkingSetBytes: 200 * 1024 * 1024,
-    cacheModels: 64,
-    decodedBytes: 100 * 1024 * 1024,
-    textureBytes: 128 * 1024 * 1024,
-    actors: 32,
-    animations: 64,
-    decoderJobs: 4,
-    worldModels: 48,
-    ktxWorkers: 4,
-    worldInstances: 128,
-    worldCache: 32,
-  },
-  desktop: {
-    assetBytes: 50 * 1024 * 1024,
-    networkBytes: 100 * 1024 * 1024,
-    assetWorkingSetBytes: 400 * 1024 * 1024,
-    cacheModels: 128,
-    decodedBytes: 200 * 1024 * 1024,
-    textureBytes: 256 * 1024 * 1024,
-    actors: 64,
-    animations: 128,
-    decoderJobs: 8,
-    worldModels: 96,
-    ktxWorkers: 4,
-    worldInstances: 256,
-    worldCache: 64,
-  },
-  ultra: {
-    assetBytes: 100 * 1024 * 1024,
-    networkBytes: 200 * 1024 * 1024,
-    assetWorkingSetBytes: 800 * 1024 * 1024,
-    cacheModels: 256,
-    decodedBytes: 400 * 1024 * 1024,
-    textureBytes: 512 * 1024 * 1024,
-    actors: 128,
-    animations: 256,
-    decoderJobs: 12,
-    worldModels: 160,
-    ktxWorkers: 6,
-    worldInstances: 512,
-    worldCache: 128,
-  },
+const integer = (value: number, maximum = 1_073_741_824) => {
+  if (!Number.isSafeInteger(value) || value < 0 || value > maximum) throw Error("GLB_RESOURCE_BOUNDS");
+  return value;
 };
 
-export function assetTier(viewportWidth: number): AssetTier {
-  if (viewportWidth < 640) return "mobile";
-  if (viewportWidth < 1024) return "tablet";
-  if (viewportWidth < 1600) return "desktop";
-  return "ultra";
-}
-
-export interface GlbInspectionResult {
-  allocation: GlbAllocation;
-  json: any;
-  decodedBytes: number;
-  textureBytes: number;
-  animations?: number;
-}
-
-export function inspectGlbAllocation(input: ArrayBuffer | number): GlbInspectionResult {
-  if (typeof input === "number") {
-    const safe = Math.max(0, Math.trunc(input));
-    const alloc: GlbAllocation = {
-      decodedBytes: safe * 2,
-      textureBytes: Math.trunc(safe * 1.5),
-      animations: 0,
-    };
-    return {
-      allocation: alloc,
-      json: {},
-      decodedBytes: alloc.decodedBytes,
-      textureBytes: alloc.textureBytes,
-      animations: 0,
-    };
-  }
-
-  const bytes = input;
-  if (bytes.byteLength < 20) {
-    throw new Error("GLB_HEADER_INVALID");
-  }
+/** Bound decoded allocation before authenticated bytes reach Meshopt/Basis/Three.js. */
+export function inspectGlbAllocation(bytes: ArrayBuffer): { json: any; allocation: GlbAllocation } {
   const view = new DataView(bytes);
-  const magic = view.getUint32(0, true);
-  if (magic !== 0x46546c67) {
-    throw new Error("GLB_MAGIC_INVALID");
-  }
-  const version = view.getUint32(4, true);
-  if (version !== 2) {
-    throw new Error("GLB_VERSION_INVALID");
-  }
-  const totalLength = view.getUint32(8, true);
-  if (totalLength > bytes.byteLength) {
-    throw new Error("GLB_LENGTH_INVALID");
-  }
-
-  const jsonChunkLength = view.getUint32(12, true);
-  const jsonChunkType = view.getUint32(16, true);
-  if (jsonChunkType !== 0x4e4f534a) {
-    throw new Error("GLB_JSON_CHUNK_INVALID");
-  }
-  if (20 + jsonChunkLength > bytes.byteLength) {
-    throw new Error("GLB_JSON_BOUNDS");
-  }
-
-  const jsonBytes = new Uint8Array(bytes, 20, jsonChunkLength);
-  const jsonText = new TextDecoder().decode(jsonBytes);
-  const json = JSON.parse(jsonText);
-
-  if (Array.isArray(json.images)) {
-    for (const img of json.images) {
-      if (img && typeof img.uri === "string") {
-        throw new Error("GLB_EMBEDDED_IMAGE_REQUIRED");
+  if (bytes.byteLength < 28 || view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.byteLength || view.getUint32(16, true) !== 0x4e4f534a) throw Error("GLB_HEADER");
+  const length = view.getUint32(12, true), start = 28+length;
+  if (length % 4 || start > bytes.byteLength || view.getUint32(24+length, true) !== 0x004e4942 || view.getUint32(20+length, true) !== bytes.byteLength-start) throw Error("GLB_BIN");
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(bytes, 20, length)));
+  if (json.asset?.version !== "2.0" || json.buffers?.some((b: any) => b.uri)) throw Error("GLB_EMBEDDED_V2_REQUIRED");
+  const images = new Set<number>(); let textureBytes = 0;
+  for (const image of json.images ?? []) {
+    if (image.uri || !Number.isSafeInteger(image.bufferView)) throw Error("GLB_EMBEDDED_IMAGE_REQUIRED");
+    const v = json.bufferViews?.[image.bufferView];
+    if (!v) throw Error("GLB_IMAGE_VIEW");
+    const offset = start + integer(v.byteOffset ?? 0), size = integer(v.byteLength);
+    if (offset + size > bytes.byteLength || size < 28) throw Error("GLB_IMAGE_BOUNDS");
+    images.add(image.bufferView);
+    const b = new DataView(bytes, offset, size), u = new Uint8Array(bytes, offset, size);
+    let width = 0, height = 0;
+    if (image.mimeType === "image/ktx2" && b.getUint32(0, true) === 0x58544bab) { width=b.getUint32(20,true); height=b.getUint32(24,true); }
+    else if (image.mimeType === "image/png" && b.getUint32(0, false) === 0x89504e47) { width=b.getUint32(16,false); height=b.getUint32(20,false); }
+    else if (image.mimeType === "image/webp" && b.getUint32(0, true) === 0x46464952 && b.getUint32(8, true) === 0x50424557) {
+      for (let i=12; i+8 <= size;) {
+        const kind=b.getUint32(i,true), chunk=integer(b.getUint32(i+4,true));
+        if (i+8+chunk > size) throw Error("GLB_WEBP_BOUNDS");
+        const p=i+8;
+        if (kind===0x58385056 && chunk>=10) { width=1+u[p+4]+(u[p+5]<<8)+(u[p+6]<<16); height=1+u[p+7]+(u[p+8]<<8)+(u[p+9]<<16); break; }
+        if (kind===0x4c385056 && chunk>=5 && u[p]===0x2f) { const bits=b.getUint32(p+1,true);width=(bits&0x3fff)+1;height=((bits>>>14)&0x3fff)+1;break; }
+        if (kind===0x20385056 && chunk>=10 && u[p+3]===0x9d && u[p+4]===1 && u[p+5]===0x2a) {width=b.getUint16(p+6,true)&0x3fff;height=b.getUint16(p+8,true)&0x3fff;break;}
+        i+=8+chunk+chunk%2;
       }
+    } else if (image.mimeType === "image/jpeg" && b.getUint16(0,false)===0xffd8) {
+      for(let i=2;i+4<size;) {const marker=u[i+1],length=b.getUint16(i+2,false);if(u[i]!==255||length<2||i+2+length>size)throw Error("GLB_JPEG_BOUNDS");if([0xc0,0xc1,0xc2].includes(marker)){height=b.getUint16(i+5,false);width=b.getUint16(i+7,false);break;}i+=2+length;}
     }
+    if (!width || !height || width>4096 || height>4096) throw Error("GLB_TEXTURE_DIMENSIONS");
+    for(let w=width,h=height;;w=Math.max(1,Math.floor(w/2)),h=Math.max(1,Math.floor(h/2))) {textureBytes+=w*h*4;if(w===1&&h===1)break;}
   }
-
-  let totalDecoded = 0;
-  if (Array.isArray(json.accessors)) {
-    for (const acc of json.accessors) {
-      if (!acc) continue;
-      const count = acc.count;
-      if (typeof count !== "number" || count < 0 || count > 10_000_000) {
-        throw new Error("GLB_RESOURCE_BOUNDS");
-      }
-      let components = 1;
-      switch (acc.type) {
-        case "VEC2": components = 2; break;
-        case "VEC3": components = 3; break;
-        case "VEC4": components = 4; break;
-        case "MAT2": components = 4; break;
-        case "MAT3": components = 9; break;
-        case "MAT4": components = 16; break;
-      }
-      let componentSize = 4;
-      switch (acc.componentType) {
-        case 5120: case 5121: componentSize = 1; break;
-        case 5122: case 5123: componentSize = 2; break;
-        case 5125: case 5126: componentSize = 4; break;
-      }
-      const byteSize = count * components * componentSize;
-      if (byteSize > 200_000_000) {
-        throw new Error("GLB_RESOURCE_BOUNDS");
-      }
-      totalDecoded += byteSize;
-    }
-  }
-
-  let totalTextures = 0;
-  if (Array.isArray(json.images)) {
-    for (const img of json.images) {
-      if (img && typeof img.bufferView === "number" && Array.isArray(json.bufferViews) && json.bufferViews[img.bufferView]) {
-        totalTextures += (json.bufferViews[img.bufferView].byteLength ?? 0) * 4;
-      } else {
-        totalTextures += 1024 * 1024;
-      }
-    }
-  }
-
-  const animationCount = Array.isArray(json.animations) ? json.animations.length : 0;
-  const decodedBytes = Math.max(bytes.byteLength, totalDecoded);
-  const textureBytes = Math.max(0, totalTextures);
-
-  const allocation: GlbAllocation = {
-    decodedBytes,
-    textureBytes,
-    animations: animationCount,
-  };
-
-  return {
-    allocation,
-    json,
-    decodedBytes,
-    textureBytes,
-    animations: animationCount,
-  };
+  const components:Record<string,number>={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MAT3:9,MAT4:16};
+  const accessorBytes=(json.accessors??[]).reduce((sum:number,a:any)=>{
+    if(!components[a.type]||![5120,5121,5122,5123,5125,5126].includes(a.componentType))throw Error("GLB_ACCESSOR_TYPE");
+    return integer(sum+integer(a.count)*components[a.type]!*4);
+  },0);
+  integer(json.nodes?.length??0,4096);
+  for(const skin of json.skins??[])integer(skin.joints?.length??0,256);
+  const geometryBytes = (json.bufferViews ?? []).reduce((sum:number, v:any, i:number) => sum + (images.has(i)?0:integer(v.byteLength)), 0);
+  return {json, allocation:{decodedBytes:integer(geometryBytes*2+accessorBytes+textureBytes),textureBytes:integer(textureBytes),animations:integer(json.animations?.length??0,64)}};
 }

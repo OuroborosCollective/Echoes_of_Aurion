@@ -92,7 +92,7 @@ export class UploadedWorldCatalogProjection {
           asset,
           xMm: placement.chunkX * 64_000 + placement.xMm,
           zMm: placement.chunkZ * 64_000 + placement.zMm,
-          rotationQuarterTurns: ((((placement.rotationQuarterTurns % 4) + 4) % 4) as 0 | 1 | 2 | 3),
+          rotationQuarterTurns: placement.rotationQuarterTurns,
           scalePermille: placement.scalePermille,
         }));
       }

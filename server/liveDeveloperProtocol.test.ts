@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveDeveloperGuardrails, validateLiveDeveloperProposal } from "./liveDeveloperProtocol";
+import { buildGameDevAssetDesignGuardrails, buildLiveDeveloperGuardrails, hashGameDevAssetDesignWorkOrder, validateGameDevAssetDesignWorkOrder, validateLiveDeveloperProposal } from "./liveDeveloperProtocol";
 
 describe("Aurion live-developer proposal protocol", () => {
   it("accepts a bounded review-only quest proposal", () => {
@@ -18,5 +18,19 @@ describe("Aurion live-developer proposal protocol", () => {
 
   it("documents the prohibition on autonomous production edits", () => {
     expect(buildLiveDeveloperGuardrails()).toContain("never an instruction to edit code");
+  });
+  it("binds a human-reviewed game asset work order without granting production authority", () => {
+    const workOrder = validateGameDevAssetDesignWorkOrder({
+      title: "Runestone shrine prop",
+      suggestedDisplayName: "Runestone Shrine",
+      suggestedPurpose: "world-environment",
+      designIntent: "A readable mid-poly shrine prop that fits Aurion's existing dark-fantasy world presentation.",
+      acceptanceCriteria: ["Readable silhouette at gameplay camera distance", "No gameplay stats or collision authority encoded in the asset"],
+      riskNotes: ["Human must provide and confirm the real asset license separately"],
+      requiresHumanReview: true,
+    });
+    expect(hashGameDevAssetDesignWorkOrder(workOrder)).toMatch(/^[a-f0-9]{64}$/);
+    expect(buildGameDevAssetDesignGuardrails()).toContain("Do not claim or infer a license");
+    expect(workOrder.requiresHumanReview).toBe(true);
   });
 });

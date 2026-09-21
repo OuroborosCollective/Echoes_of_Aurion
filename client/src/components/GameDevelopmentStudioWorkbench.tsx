@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
-type LivePurpose = "npc-fallback" | "world-environment" | "world-nature" | "player-public" | "equipment";
+type LivePurpose = "npc-fallback" | "enemy-fallback" | "world-environment" | "world-nature" | "player-public" | "equipment";
 type FallbackTier = "phone" | "tablet" | "desktop";
 
 const purposes: readonly { value: LivePurpose; label: string }[] = [
   { value: "world-environment", label: "Welt / Umgebung" },
   { value: "world-nature", label: "Natur" },
   { value: "npc-fallback", label: "NPC-Fallback" },
+  { value: "enemy-fallback", label: "Gegner-Fallback" },
   { value: "player-public", label: "Öffentlicher Spieler-Avatar" },
   { value: "equipment", label: "Ausrüstung" },
 ];
@@ -57,9 +58,10 @@ export default function GameDevelopmentStudioWorkbench() {
     },
   });
   const fallbackSearch = trpc.admin.developer.os3aSearch.useMutation({
-    onSuccess: (result: any) => {
-      const first = result.matches.find((match: any) =>
-        match.transferBudgetFit && !match.discoveryOnly
+    onSuccess: result => {
+      const first = result.matches.find(match =>
+        match.transferBudgetFit
+        && (!match.discoveryOnly || (purpose === "enemy-fallback" && match.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE"))
       );
       setFallbackSelectedId(first?.sourceAssetId ?? null);
       fallbackPlan.reset();
@@ -169,7 +171,7 @@ export default function GameDevelopmentStudioWorkbench() {
                 <Badge variant="outline">Phone-Budget</Badge>
               </div>
               <div className="grid gap-2 md:grid-cols-2">
-                {fallbackGapScan.data.gaps.map((gap: any) => (
+                {fallbackGapScan.data.gaps.map(gap => (
                   <div key={gap.id} className="rounded-lg border border-violet-200/10 bg-violet-300/[.025] p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-amber-100">{gap.label}</span>
@@ -280,8 +282,9 @@ export default function GameDevelopmentStudioWorkbench() {
           </div>
           {fallbackSearch.data && (
             <div className="grid gap-2 md:grid-cols-2">
-              {fallbackSearch.data.matches.map((match: any) => {
-                const selectable = match.transferBudgetFit && !match.discoveryOnly;
+              {fallbackSearch.data.matches.map(match => {
+                const selectable = match.transferBudgetFit
+                  && (!match.discoveryOnly || (purpose === "enemy-fallback" && match.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE"));
                 const selected = fallbackSelectedId === match.sourceAssetId;
                 return (
                   <button

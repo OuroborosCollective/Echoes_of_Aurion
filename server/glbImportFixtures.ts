@@ -50,6 +50,42 @@ export function testAnimatedPlayerGlb(name = "Aurion_Player", includeLocomotion 
   return encodeGlb(source, binary);
 }
 
+/** Renderable enemy fixture with the exact production combat clip contract. */
+export function testAnimatedEnemyGlb(name = "Aurion_Spider_Monster"): Buffer {
+  const positions = Buffer.alloc(36);
+  [0, 0, 0, 1, 0, 0, 0, 1, 0].forEach((value, index) => positions.writeFloatLE(value, index * 4));
+  const times = Buffer.alloc(8);
+  times.writeFloatLE(0, 0); times.writeFloatLE(1, 4);
+  const translations = Buffer.alloc(24);
+  const binary = Buffer.concat([positions, times, translations]);
+  const animations = ["Idle", "Walk", "Attack", "Death"].map(clip => ({
+    name: clip,
+    samplers: [{ input: 1, output: 2, interpolation: "LINEAR" }],
+    channels: [{ sampler: 0, target: { node: 1, path: "translation" } }],
+  }));
+  const source = {
+    asset: { version: "2.0" },
+    scene: 0,
+    scenes: [{ nodes: [0, 1] }],
+    nodes: [{ name, mesh: 0 }, { name: "root_joint" }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    skins: [{ joints: [1], skeleton: 1 }],
+    buffers: [{ byteLength: binary.length }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: positions.length },
+      { buffer: 0, byteOffset: positions.length, byteLength: times.length },
+      { buffer: 0, byteOffset: positions.length + times.length, byteLength: translations.length },
+    ],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: "VEC3", min: [0, 0, 0], max: [1, 1, 0] },
+      { bufferView: 1, componentType: 5126, count: 2, type: "SCALAR", min: [0], max: [1] },
+      { bufferView: 2, componentType: 5126, count: 2, type: "VEC3" },
+    ],
+    animations,
+  };
+  return encodeGlb(source, binary);
+}
+
 function encodeGlb(source: Record<string, unknown>, binary: Buffer): Buffer {
   const raw = Buffer.from(JSON.stringify(source));
   const json = Buffer.alloc(Math.ceil(raw.length / 4) * 4, 0x20); raw.copy(json);
