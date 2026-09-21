@@ -73,4 +73,3 @@ CREATE TRIGGER `aurionEconomicAssetTransitions_no_delete` BEFORE DELETE ON `auri
 CREATE TRIGGER `aurionEconomicProjectionIntents_no_update` BEFORE UPDATE ON `aurionEconomicProjectionIntents` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_INTENT_APPEND_ONLY';
 --> statement-breakpoint
 CREATE TRIGGER `aurionEconomicProjectionIntents_no_delete` BEFORE DELETE ON `aurionEconomicProjectionIntents` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_INTENT_APPEND_ONLY';
---> statement-breakpoint
