@@ -21,7 +21,7 @@ test("dispatches exactly one revision/plan-bound apply and waits for that run", 
   assert.deepEqual(api.writes[0].body, { ref: "main", inputs: { ledger_run_id: "123", plan_sha256: input.planSha256 } });
 });
 test("future waves, PR callers and stale main fail before any dispatch", async () => {
-  const futureManifest={...input.manifest,waveId:"aurion-production-0021-0057",migrations:[...input.manifest.migrations,{tag:"0057_unreviewed_future_wave",source:"aurion"}]};
+  const futureManifest={...input.manifest,waveId:"aurion-production-0021-0058",migrations:[...input.manifest.migrations,{tag:"0058_unreviewed_future_wave",source:"aurion"}]};
   for (const [value, options] of [[{ ...input, manifest: futureManifest }, {}], [input, { caller: { event: "pull_request" } }], [input, { main: "c".repeat(40) }]]) {
     const api = harness(options);
     await assert.rejects(dispatchSchemaPlan(value, api));
