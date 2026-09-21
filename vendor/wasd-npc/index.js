@@ -8,10 +8,10 @@ var __export = (target, all) => {
 // server/src/aurion/npc/authority.ts
 var WASD_NPC_MEMORY_RULESET = "wasd-aurion-npc-memory.v4";
 function npcAuthority() {
-  if (!/^[a-f0-9]{40}$/.test("ddce5911e7969f26a9c5b2739d3426004b32260d") || false || !/^[a-f0-9]{64}$/.test("fcd4cbc5cfa3deae9389cf1aba6d7d376eec216834b877c30876fb488821442f")) {
+  if (!/^[a-f0-9]{40}$/.test("28ecb7aec84271bd3bcc4fa5e1e7deef530804b6") || false || !/^[a-f0-9]{64}$/.test("466c835cbae412e9c6a0aa851f99228216f31ae065cb944e4e8232ea59db7a85")) {
     throw new Error("WASD_NPC_COMPILED_AUTHORITY_REQUIRED");
   }
-  return Object.freeze({ rulesetVersion: WASD_NPC_MEMORY_RULESET, sourceRevision: "ddce5911e7969f26a9c5b2739d3426004b32260d", sourceSha256: "fcd4cbc5cfa3deae9389cf1aba6d7d376eec216834b877c30876fb488821442f" });
+  return Object.freeze({ rulesetVersion: WASD_NPC_MEMORY_RULESET, sourceRevision: "28ecb7aec84271bd3bcc4fa5e1e7deef530804b6", sourceSha256: "466c835cbae412e9c6a0aa851f99228216f31ae065cb944e4e8232ea59db7a85" });
 }
 
 // server/src/aurion/npc/canonical.ts
@@ -66,7 +66,7 @@ function decideNpcGoal(input) {
 // server/src/aurion/npc/npcLifeProtocol.ts
 import { createHash as createHash2 } from "node:crypto";
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/external.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -178,7 +178,7 @@ __export(external_exports, {
   void: () => voidType
 });
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/helpers/util.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_) => {
@@ -312,7 +312,7 @@ var getParsedType = (data) => {
   }
 };
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/ZodError.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -445,7 +445,7 @@ ZodError.create = (issues) => {
   return error;
 };
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/locales/en.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/locales/en.js
 var errorMap = (issue, _ctx) => {
   let message;
   switch (issue.code) {
@@ -548,7 +548,7 @@ var errorMap = (issue, _ctx) => {
 };
 var en_default = errorMap;
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/errors.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default;
 function setErrorMap(map) {
   overrideErrorMap = map;
@@ -557,7 +557,7 @@ function getErrorMap() {
   return overrideErrorMap;
 }
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/helpers/parseUtil.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
   const { data, path, errorMaps, issueData } = params;
   const fullPath = [...path, ...issueData.path || []];
@@ -667,14 +667,14 @@ var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/helpers/errorUtil.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
 
-// node_modules/.pnpm/zod@4.5.4/node_modules/zod/v3/types.js
+// node_modules/.pnpm/zod@4.6.1/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
   constructor(parent, value, path, key) {
     this._cachedPath = [];
@@ -2686,10 +2686,10 @@ var ZodObject = class _ZodObject extends ZodType {
   //   }) as any;
   //   return merged;
   // }
-  catchall(index4) {
+  catchall(index5) {
     return new _ZodObject({
       ...this._def,
-      catchall: index4
+      catchall: index5
     });
   }
   pick(mask) {
@@ -3011,9 +3011,9 @@ function mergeValues(a, b) {
       return { valid: false };
     }
     const newArray = [];
-    for (let index4 = 0; index4 < a.length; index4++) {
-      const itemA = a[index4];
-      const itemB = b[index4];
+    for (let index5 = 0; index5 < a.length; index5++) {
+      const itemA = a[index5];
+      const itemB = b[index5];
       const sharedValue = mergeValues(itemA, itemB);
       if (!sharedValue.valid) {
         return { valid: false };
@@ -3219,10 +3219,10 @@ var ZodMap = class extends ZodType {
     }
     const keyType = this._def.keyType;
     const valueType = this._def.valueType;
-    const pairs = [...ctx.data.entries()].map(([key, value], index4) => {
+    const pairs = [...ctx.data.entries()].map(([key, value], index5) => {
       return {
-        key: keyType._parse(new ParseInputLazyPath(ctx, key, ctx.path, [index4, "key"])),
-        value: valueType._parse(new ParseInputLazyPath(ctx, value, ctx.path, [index4, "value"]))
+        key: keyType._parse(new ParseInputLazyPath(ctx, key, ctx.path, [index5, "key"])),
+        value: valueType._parse(new ParseInputLazyPath(ctx, value, ctx.path, [index5, "value"]))
       };
     });
     if (ctx.common.async) {
@@ -4536,8 +4536,8 @@ function hash(...parts) {
   return createHash4("sha256").update(parts.join(""), "utf8").digest("hex");
 }
 function seed32(value) {
-  const digest2 = createHash4("sha256").update(value, "utf8").digest();
-  return digest2.readUInt32BE(0) >>> 0;
+  const digest3 = createHash4("sha256").update(value, "utf8").digest();
+  return digest3.readUInt32BE(0) >>> 0;
 }
 function next(seed) {
   let state = seed + 1831565813 >>> 0;
@@ -4562,6 +4562,9 @@ function marketPriceCopper(input) {
   const damped = Math.tanh(demand * affinity * scarcity - 1);
   const beforeTax = commodityBasePrice[input.commodity] * (1 + 0.85 * damped);
   return Math.max(1, Math.round(beforeTax * (1 + tax)));
+}
+function hasLivingWorldRoute(from, to) {
+  return from !== to && (routeSecurity[`${from}:${to}`] !== void 0 || routeSecurity[`${to}:${from}`] !== void 0);
 }
 function caravanSecurityIndex(from, to, polityStability, rememberedThreat) {
   const direct = routeSecurity[`${from}:${to}`] ?? routeSecurity[`${to}:${from}`] ?? 50;
@@ -4643,7 +4646,7 @@ function resolveLivingWorldTick(input) {
 }
 
 // server/src/aurion/npc/merchantRules.ts
-var baseMarkets = Object.freeze({
+var merchantBootstrapMarkets = Object.freeze({
   observatory_threshold: Object.freeze({ hubId: "observatory_threshold", controllingGuild: "Order of Aurion", taxRateBasisPoints: 400, treasuryCopper: 5e5, stock: Object.freeze({ grain: 150, sandstone: 100, bronze: 80, aether: 40, salve: 60, rune_core: 25 }) }),
   windhollow: Object.freeze({ hubId: "windhollow", controllingGuild: "Aethelgard Pioneers", taxRateBasisPoints: 250, treasuryCopper: 28e4, stock: Object.freeze({ grain: 600, sandstone: 120, bronze: 30, aether: 15, salve: 40, rune_core: 5 }) }),
   emberfall: Object.freeze({ hubId: "emberfall", controllingGuild: "Bronze Syndicate", taxRateBasisPoints: 550, treasuryCopper: 42e4, stock: Object.freeze({ grain: 80, sandstone: 450, bronze: 350, aether: 20, salve: 25, rune_core: 10 }) }),
@@ -4666,75 +4669,6 @@ function confirmedNpcEconomy(homeRegionId, snapshot) {
   const economy = snapshot.lifeState.economy;
   if (!isHubId(economy.currentHubId)) throw new Error("NPC_LIFE_HUB_INVALID");
   return Object.freeze({ npcId: snapshot.npcId, name: npcName(homeRegionId), currentHubId: economy.currentHubId, wealthCopper: economy.wealthCopper, hungerBps: economy.hungerBps, fatigueBps: economy.fatigueBps, tradeProwessBps: economy.tradeProwessBps, harvestYieldBps: economy.harvestYieldBps, memory: Object.freeze([...snapshot.memory]) });
-}
-function lifeOpportunities(resolution, receiptId) {
-  const riskBps = resolution.caravan.ambushed ? 9e3 : Math.max(0, (100 - resolution.caravan.securityIndex) * 100);
-  const stock = resolution.market.stock[resolution.commodity];
-  const values = [
-    { id: `${receiptId}:safe`, kind: "safe_hub", regionId: resolution.market.hubId, targetId: `hub:${resolution.market.hubId}`, benefitBps: Math.max(2e3, 9e3 - riskBps), riskBps, distanceBps: 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
-    { id: `${receiptId}:resource`, kind: "resource", regionId: resolution.market.hubId, targetId: `commodity:${resolution.commodity}`, benefitBps: Math.max(2e3, Math.min(1e4, 1e4 - Math.min(8e3, stock * 10))), riskBps: Math.floor(riskBps / 3), distanceBps: 500, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
-    { id: `${receiptId}:social`, kind: "social", regionId: resolution.market.hubId, benefitBps: 6e3, riskBps: Math.floor(riskBps / 4), distanceBps: 250, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
-    { id: `${receiptId}:reputation`, kind: "reputation", regionId: resolution.market.hubId, targetId: `polity:${resolution.market.hubId}`, benefitBps: 5500 + Math.max(0, resolution.stabilityDelta) * 500, riskBps: Math.floor(riskBps / 2), distanceBps: 500, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
-    { id: `${receiptId}:market`, kind: "market", regionId: resolution.market.hubId, targetId: `market:${resolution.market.hubId}`, benefitBps: Math.min(1e4, 2500 + resolution.unitPriceCopper * 12), riskBps: Math.floor(riskBps / 3), distanceBps: 300, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
-    { id: `${receiptId}:influence`, kind: "influence", regionId: resolution.caravan.destination ?? resolution.market.hubId, targetId: `polity:${resolution.caravan.destination ?? resolution.market.hubId}`, benefitBps: resolution.caravan.destination ? 8e3 : 4500, riskBps, distanceBps: resolution.caravan.destination ? 2500 : 800, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex }
-  ];
-  return Object.freeze(values.map((value) => Object.freeze(value)));
-}
-function prepareMerchantNpcDecision(input) {
-  const npcId = npcIdentity(input.regionId);
-  const prior = input.prior;
-  const npc = confirmedNpcEconomy(input.regionId, prior);
-  const market = baseMarkets[npc.currentHubId];
-  const preferredGoal = prior?.decision.goal;
-  const resolution = resolveLivingWorldTick({ worldSeed: input.worldSeed, resolutionIndex: input.resolutionIndex, market, npc, polityStability: 72, ...preferredGoal ? { preferredGoal } : {} });
-  const receiptId = `ax1living:${resolution.deterministicHash.slice(0, 40)}`;
-  const needEvents = [
-    { id: `${receiptId}:wealth`, need: "wealth", delta: resolution.action === "trade" || resolution.action === "caravan" ? 0.08 : resolution.action === "consume" ? -0.04 : 0, sourceReceiptId: receiptId, resolutionIndex: input.resolutionIndex },
-    { id: `${receiptId}:safety`, need: "safety", delta: resolution.caravan.ambushed ? -0.18 : resolution.action === "patrol" ? 0.05 : 0, sourceReceiptId: receiptId, resolutionIndex: input.resolutionIndex },
-    { id: `${receiptId}:resources`, need: "resources", delta: resolution.action === "produce" ? 0.07 : resolution.action === "consume" ? -0.04 : 0, sourceReceiptId: receiptId, resolutionIndex: input.resolutionIndex },
-    { id: `${receiptId}:belonging`, need: "belonging", delta: resolution.action === "socialize" ? 0.08 : 0, sourceReceiptId: receiptId, resolutionIndex: input.resolutionIndex },
-    { id: `${receiptId}:status`, need: "status", delta: resolution.action === "patrol" ? 0.03 : resolution.action === "caravan" && !resolution.caravan.ambushed ? 0.02 : 0, sourceReceiptId: receiptId, resolutionIndex: input.resolutionIndex },
-    { id: `${receiptId}:power`, need: "power", delta: resolution.action === "caravan" && !resolution.caravan.ambushed ? 0.02 : 0, sourceReceiptId: receiptId, resolutionIndex: input.resolutionIndex }
-  ];
-  const newestMemory = resolution.nextMemory.length ? [resolution.nextMemory[resolution.nextMemory.length - 1]] : [];
-  const npcRequest = {
-    npcId: resolution.npc.npcId,
-    regionId: resolution.npc.currentHubId,
-    resolutionIndex: input.resolutionIndex,
-    roleId: "merchant",
-    needEvents,
-    observationIds: Object.freeze([receiptId, `market:${resolution.market.hubId}:${resolution.commodity}:${resolution.unitPriceCopper}`]),
-    memory: Object.freeze(newestMemory),
-    opportunities: lifeOpportunities(resolution, receiptId),
-    economy: { currentHubId: resolution.npc.currentHubId, wealthCopper: resolution.npc.wealthCopper, hungerBps: resolution.npc.hungerBps, fatigueBps: resolution.npc.fatigueBps, tradeProwessBps: resolution.npc.tradeProwessBps, harvestYieldBps: resolution.npc.harvestYieldBps }
-  };
-  const economySignal = {
-    id: `${receiptId}:economy`,
-    kind: "economy",
-    regionId: resolution.market.hubId,
-    magnitude: Math.max(-1, Math.min(1, (resolution.taxCopper - (resolution.caravan.ambushed ? 100 : 0)) / 500)),
-    sourceReceiptId: receiptId,
-    resolutionIndex: input.resolutionIndex
-  };
-  const politicsSignal = {
-    id: `${receiptId}:politics`,
-    kind: resolution.caravan.ambushed ? "war" : "politics",
-    regionId: resolution.market.hubId,
-    magnitude: Math.max(-1, Math.min(1, resolution.stabilityDelta / 10)),
-    sourceReceiptId: receiptId,
-    resolutionIndex: input.resolutionIndex
-  };
-  const worldRequest = Object.freeze({ worldSeed: input.worldSeed, regionId: resolution.market.hubId, resolutionIndex: input.resolutionIndex, signals: [economySignal, politicsSignal] });
-  const polityRequest = Object.freeze({
-    polityId: `polity:${resolution.market.hubId}`,
-    governmentType: resolution.market.hubId === "emberfall" ? "trade_republic" : resolution.market.hubId === "cinder_vault" ? "warband" : "council",
-    territoryIds: [resolution.market.hubId],
-    stability: Math.max(0, Math.min(100, 72 + resolution.stabilityDelta)),
-    activeDiplomacy: resolution.action === "caravan" ? ["trade"] : ["non_aggression"],
-    warSignals: resolution.caravan.ambushed ? [politicsSignal] : []
-  });
-  const socialEvidence = input.social ? socialMasteryEvidence(input.social.action, input.social.sourceReceiptId, input.resolutionIndex) : void 0;
-  return Object.freeze({ resolution, npcRequest: Object.freeze(npcRequest), worldRequest, polityRequest, socialEvidence, receiptId });
 }
 
 // server/src/aurion/npc/multiMemory.ts
@@ -4861,6 +4795,9 @@ function createNpcMemoryV4(npcId) {
   });
 }
 var verifiedDecisions = /* @__PURE__ */ new WeakSet();
+function isConfirmedNpcDecision(value) {
+  return !!value && typeof value === "object" && verifiedDecisions.has(value);
+}
 function verifyConfirmedNpcDecision(raw, expected) {
   const snapshot = decodeNpcReceipt(raw, expected);
   if (!("lifeState" in snapshot) || JSON.parse(raw).version !== NPC_LIFE_RECEIPT_VERSION) throw new Error("NPC_MULTI_MEMORY_V3_RECEIPT_REQUIRED");
@@ -4931,7 +4868,7 @@ function verifyNpcMemoryEvidence(value, receipts) {
     if (!verifiedDecisions.has(receipt) || receipt.snapshot.npcId !== memory.npcId || byId.has(receipt.receiptId)) throw new Error("NPC_MULTI_MEMORY_EVIDENCE_INVALID");
     byId.set(receipt.receiptId, receipt);
   }
-  if (byId.size !== ids.length || ids.some((id4) => !byId.has(id4))) throw new Error("NPC_MULTI_MEMORY_EVIDENCE_REQUIRED");
+  if (byId.size !== ids.length || ids.some((id5) => !byId.has(id5))) throw new Error("NPC_MULTI_MEMORY_EVIDENCE_REQUIRED");
   for (const source of [...memory.episodic.map((e) => e.source), ...memory.semantic.flatMap((f) => f.provenance), ...memory.procedural.flatMap((c) => c.provenance)]) {
     const receipt = byId.get(source.receiptId);
     if (receipt.receiptSha256 !== source.receiptSha256 || receipt.snapshot.decision.decisionHash !== source.decisionHash || receipt.snapshot.decision.resolutionIndex !== source.logicalIndex) throw new Error("NPC_MULTI_MEMORY_EVIDENCE_MISMATCH");
@@ -4969,8 +4906,895 @@ function projectNpcMemoryV4(value) {
     expiredFacts: memory.semantic.filter((f) => f.status === "expired").length
   });
 }
+
+// server/src/aurion/npc/worldPolityRules.ts
+import { createHash as createHash6 } from "node:crypto";
+var AURION_WASD_RULESET_VERSION = "aurion-wasd-rules-v1";
+var AURION_WASD_CONTENT_VERSION = "aurion-wasd-content-v1";
+var worldSignalKinds = ["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"];
+var polityGovernmentTypes = ["monarchy", "council", "theocracy", "trade_republic", "warband"];
+var diplomacyTypes = ["alliance", "trade", "non_aggression", "tribute", "sanction"];
+function clampUnit2(value) {
+  return Math.max(0, Math.min(1, Math.round(value * 1e4) / 1e4));
+}
+function clampSigned2(value) {
+  return Math.max(-1, Math.min(1, Math.round(value * 1e4) / 1e4));
+}
+function compareText3(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function canonicalHash2(parts) {
+  return createHash6("sha256").update(parts.join(""), "utf8").digest("hex");
+}
+function canonicalSignalOrder(left, right) {
+  return left.resolutionIndex - right.resolutionIndex || compareText3(left.regionId, right.regionId) || compareText3(left.kind, right.kind) || compareText3(left.id, right.id);
+}
+function buildWorldSeedDigest(input) {
+  if (!input.worldSeed || !input.regionId || !Number.isSafeInteger(input.resolutionIndex) || input.resolutionIndex < 0) {
+    throw new Error("World seed inputs must be explicit and non-negative");
+  }
+  return canonicalHash2([AURION_WASD_RULESET_VERSION, AURION_WASD_CONTENT_VERSION, input.worldSeed, input.regionId, String(input.resolutionIndex)]);
+}
+function resolveWorldReaction(input) {
+  const ordered = input.signals.filter((signal) => signal.regionId === input.regionId && signal.resolutionIndex <= input.resolutionIndex).slice().sort(canonicalSignalOrder);
+  const totals = {
+    weather: 0,
+    ecology: 0,
+    hazard: 0,
+    resonance: 0,
+    economy: 0,
+    politics: 0,
+    war: 0,
+    player_event: 0
+  };
+  ordered.forEach((signal) => {
+    totals[signal.kind] += clampSigned2(signal.magnitude);
+  });
+  const weatherTone = totals.war > 0.6 || totals.hazard > 0.8 ? "ashfall" : totals.weather > 0.55 ? "storm" : totals.weather > 0.15 ? "rain" : "clear";
+  const threatDelta = clampSigned2(totals.hazard * 0.65 + totals.war * 0.55 - totals.resonance * 0.15);
+  const resourceDelta = clampSigned2(totals.ecology * 0.55 + totals.economy * 0.3 - totals.hazard * 0.25 - totals.war * 0.2);
+  const npcNeedDeltas = {
+    safety: clampSigned2(-threatDelta * 0.4),
+    resources: clampSigned2(resourceDelta * 0.3),
+    belonging: clampSigned2(-(totals.war * 0.16) + totals.player_event * 0.08),
+    status: clampSigned2(totals.politics * 0.15 + totals.resonance * 0.08),
+    wealth: clampSigned2(resourceDelta * 0.25 + totals.economy * 0.2),
+    power: clampSigned2(totals.politics * 0.2 + totals.war * 0.1)
+  };
+  const dialogueTone = threatDelta > 0.55 ? "urgent" : threatDelta > 0.2 || totals.politics > 0.3 ? "guarded" : "calm";
+  const seedDigest = buildWorldSeedDigest(input);
+  const signalIds = ordered.map((signal) => signal.id);
+  const deterministicHash = canonicalHash2([
+    seedDigest,
+    ...signalIds,
+    weatherTone,
+    String(threatDelta),
+    String(resourceDelta),
+    dialogueTone
+  ]);
+  return {
+    id: `wr_${deterministicHash.slice(0, 24)}`,
+    regionId: input.regionId,
+    ruleSetVersion: AURION_WASD_RULESET_VERSION,
+    contentVersion: AURION_WASD_CONTENT_VERSION,
+    resolutionIndex: input.resolutionIndex,
+    signalIds,
+    weatherTone,
+    threatDelta,
+    resourceDelta,
+    npcNeedDeltas,
+    dialogueTone,
+    deterministicHash
+  };
+}
+function resolvePolityState(input) {
+  const territoryIds = input.territoryIds.slice().sort(compareText3);
+  const activeDiplomacy = input.activeDiplomacy.slice().sort(compareText3);
+  const warPressure = clampUnit2(input.warSignals.filter((signal) => signal.kind === "war" || signal.kind === "politics").reduce((total, signal) => total + Math.max(0, signal.magnitude), 0) / 4);
+  const stability = clampUnit2(input.stability - warPressure * 0.2 + (activeDiplomacy.includes("alliance") ? 0.05 : 0) - (activeDiplomacy.includes("sanction") ? 0.05 : 0));
+  const reactionHash = canonicalHash2([input.polityId, input.governmentType, ...territoryIds, ...activeDiplomacy, String(stability), String(warPressure)]);
+  return { polityId: input.polityId, governmentType: input.governmentType, territoryIds, stability, activeDiplomacy, warPressure, reactionHash };
+}
+
+// server/src/aurion/npc/actionGateway.ts
+import { createHash as createHash7 } from "node:crypto";
+var NPC_ACTION_GATEWAY_VERSION = "wasd-npc-action-gateway.v1";
+var NPC_ACTION_LEASE_VERSION = "wasd-npc-action-lease.v1";
+var NPC_ACTION_RECEIPT_VERSION = "wasd-npc-action-receipt.v1";
+var NPC_ACTION_GATEWAY_MAX_TARGETS = 16;
+var NPC_ACTION_GATEWAY_MAX_CANDIDATES = 8;
+var hubValues = ["observatory_threshold", "windhollow", "emberfall", "cinder_vault"];
+var commodityValues = ["grain", "sandstone", "bronze", "aether", "salve", "rune_core"];
+var actionValues = ["consume", "produce", "trade", "caravan", "patrol", "rest", "socialize"];
+var id4 = external_exports.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
+var hash642 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var index4 = external_exports.number().int().min(0).max(2147483647);
+var priorIndex = external_exports.number().int().min(-1).max(2147483647);
+var hubSchema = external_exports.enum(hubValues);
+var commoditySchema = external_exports.enum(commodityValues);
+var authoritySchema2 = external_exports.object({ rulesetVersion: external_exports.string().min(1).max(96), sourceRevision: external_exports.string().regex(/^[a-f0-9]{40}$/), sourceSha256: hash642 }).strict();
+var sourceDecisionSchema = external_exports.object({ receiptId: id4, receiptSha256: hash642, npcId: id4, resolutionIndex: index4, decisionHash: hash642, planHash: hash642, goal: external_exports.enum(["seek_safety", "gather_resources", "socialize", "gain_reputation", "trade", "expand_influence"]) }).strict();
+var epochSchema = external_exports.object({ npcResolutionIndex: priorIndex, marketVersion: index4, polityVersion: index4 }).strict();
+var marketEvidenceSchema = external_exports.object({ version: index4, stateHash: hash642 }).strict();
+var targetEvidenceSchema = external_exports.object({ id: id4, kind: external_exports.literal("market"), market: external_exports.unknown(), version: index4, active: external_exports.boolean() }).strict();
+var targetSchema = external_exports.object({ id: id4, kind: external_exports.literal("market"), hubId: hubSchema, version: index4, stateHash: hash642, active: external_exports.boolean() }).strict();
+var inventoryEntrySchema = external_exports.object({ itemId: commoditySchema, quantity: index4, capacity: index4 }).strict();
+var inventorySchema = external_exports.object({ ownerId: id4, stateHash: hash642, entries: external_exports.array(inventoryEntrySchema).length(commodityValues.length) }).strict();
+var politySchema = external_exports.object({ polityId: id4, version: index4, stability: index4.max(100), stateHash: hash642 }).strict();
+function canonicalHash3(value) {
+  return createHash7("sha256").update(stableCatalogStringify(value), "utf8").digest("hex");
+}
+function textOrder(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function same(left, right) {
+  return stableCatalogStringify(left) === stableCatalogStringify(right);
+}
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+function authority(value) {
+  const parsed = authoritySchema2.parse(value);
+  return Object.freeze({ rulesetVersion: parsed.rulesetVersion, sourceRevision: parsed.sourceRevision, sourceSha256: parsed.sourceSha256 });
+}
+function freezeSourceDecision(value) {
+  const p = sourceDecisionSchema.parse(value);
+  return Object.freeze({ receiptId: p.receiptId, receiptSha256: p.receiptSha256, npcId: p.npcId, resolutionIndex: p.resolutionIndex, decisionHash: p.decisionHash, planHash: p.planHash, goal: p.goal });
+}
+function freezeEpoch(value) {
+  const p = epochSchema.parse(value);
+  return Object.freeze({ npcResolutionIndex: p.npcResolutionIndex, marketVersion: p.marketVersion, polityVersion: p.polityVersion });
+}
+function freezeMarketEvidence(value) {
+  const p = marketEvidenceSchema.parse(value);
+  return Object.freeze({ version: p.version, stateHash: p.stateHash });
+}
+function freezeMarket(value) {
+  if (!value || !hubSchema.safeParse(value.hubId).success || typeof value.controllingGuild !== "string" || !value.controllingGuild.trim() || value.controllingGuild.length > 256 || !Number.isSafeInteger(value.taxRateBasisPoints) || value.taxRateBasisPoints < 0 || value.taxRateBasisPoints > 1e4 || !Number.isSafeInteger(value.treasuryCopper) || value.treasuryCopper < 0 || value.treasuryCopper > 1e9 || !value.stock) throw new Error("NPC_ACTION_MARKET_INVALID");
+  const stock = {};
+  for (const commodity of commodityValues) {
+    const amount = value.stock[commodity];
+    if (!Number.isSafeInteger(amount) || amount < 0 || amount > 1e6) throw new Error("NPC_ACTION_MARKET_INVALID");
+    stock[commodity] = amount;
+  }
+  return deepFreeze({ hubId: value.hubId, controllingGuild: value.controllingGuild, taxRateBasisPoints: value.taxRateBasisPoints, treasuryCopper: value.treasuryCopper, stock });
+}
+function freezeNpc(value) {
+  if (!value || !id4.safeParse(value.npcId).success || typeof value.name !== "string" || !value.name.trim() || value.name.length > 128 || !hubSchema.safeParse(value.currentHubId).success || !Number.isSafeInteger(value.wealthCopper) || value.wealthCopper < 0 || value.wealthCopper > 1e9 || !Number.isSafeInteger(value.hungerBps) || value.hungerBps < 0 || value.hungerBps > 1e4 || !Number.isSafeInteger(value.fatigueBps) || value.fatigueBps < 0 || value.fatigueBps > 1e4 || !Number.isSafeInteger(value.tradeProwessBps) || value.tradeProwessBps < 0 || value.tradeProwessBps > 2e4 || !Number.isSafeInteger(value.harvestYieldBps) || value.harvestYieldBps < 0 || value.harvestYieldBps > 2e4 || !Array.isArray(value.memory) || value.memory.length > 24 || value.memory.some((entry2) => typeof entry2 !== "string" || entry2.length > 256)) throw new Error("NPC_ACTION_NPC_INVALID");
+  return deepFreeze({ npcId: value.npcId, name: value.name, currentHubId: value.currentHubId, wealthCopper: value.wealthCopper, hungerBps: value.hungerBps, fatigueBps: value.fatigueBps, tradeProwessBps: value.tradeProwessBps, harvestYieldBps: value.harvestYieldBps, memory: [...value.memory] });
+}
+function freezeTargetEvidence(value) {
+  const parsed = targetEvidenceSchema.parse(value);
+  const market = freezeMarket(parsed.market);
+  return Object.freeze({ id: parsed.id, kind: parsed.kind, hubId: market.hubId, version: parsed.version, stateHash: merchantMarketStateHash(market), active: parsed.active });
+}
+function freezeInventory(value) {
+  const p = inventorySchema.parse(value);
+  const entries = p.entries.map((entry2) => Object.freeze({ itemId: entry2.itemId, quantity: entry2.quantity, capacity: entry2.capacity })).sort((a, b) => textOrder(a.itemId, b.itemId));
+  if (new Set(entries.map((entry2) => entry2.itemId)).size !== commodityValues.length || entries.some((entry2) => entry2.quantity > entry2.capacity)) throw new Error("NPC_ACTION_INVENTORY_INVALID");
+  return Object.freeze({ ownerId: p.ownerId, stateHash: p.stateHash, entries: Object.freeze(entries) });
+}
+function freezePolity(value) {
+  const p = politySchema.parse(value);
+  return Object.freeze({ polityId: p.polityId, version: p.version, stability: p.stability, stateHash: p.stateHash });
+}
+function merchantMarketStateHash(market) {
+  return canonicalHash3({ hubId: market.hubId, controllingGuild: market.controllingGuild, taxRateBasisPoints: market.taxRateBasisPoints, treasuryCopper: market.treasuryCopper, stock: market.stock });
+}
+function merchantInventoryStateHash(input) {
+  return canonicalHash3({ ownerId: input.ownerId, marketStateHash: merchantMarketStateHash(input.market), entries: [...input.entries].map((entry2) => ({ itemId: entry2.itemId, quantity: entry2.quantity, capacity: entry2.capacity })).sort((a, b) => textOrder(a.itemId, b.itemId)) });
+}
+function merchantPolityStateHash(input) {
+  return canonicalHash3({ polityId: input.polityId, version: input.version, stability: input.stability });
+}
+function merchantActionEffectsHash(requests) {
+  return canonicalHash3(requests);
+}
+function merchantActionReceiptHash(receipt) {
+  return canonicalHash3(receipt);
+}
+function merchantActionReceiptId(receipt) {
+  return `nar_${canonicalHash3(receipt).slice(0, 56)}`;
+}
+function npcStateHash(npc) {
+  return canonicalHash3({ npcId: npc.npcId, currentHubId: npc.currentHubId, wealthCopper: npc.wealthCopper, hungerBps: npc.hungerBps, fatigueBps: npc.fatigueBps, tradeProwessBps: npc.tradeProwessBps, harvestYieldBps: npc.harvestYieldBps, memory: [...npc.memory] });
+}
+function worldSeedHash(worldSeed) {
+  return createHash7("sha256").update(worldSeed, "utf8").digest("hex");
+}
+function sourceDecisionFrom(confirmed) {
+  if (!isConfirmedNpcDecision(confirmed) || !same(confirmed.authority, npcAuthority()) || !("lifeState" in confirmed.snapshot)) throw new Error("NPC_ACTION_CONFIRMED_SOURCE_REQUIRED");
+  const snapshot = confirmed.snapshot, plan = snapshot.lifeState.plan;
+  if (plan.goal !== snapshot.decision.goal) throw new Error("NPC_ACTION_CONFIRMED_SOURCE_REQUIRED");
+  return Object.freeze({ sourceDecision: freezeSourceDecision({ receiptId: confirmed.receiptId, receiptSha256: confirmed.receiptSha256, npcId: snapshot.npcId, resolutionIndex: snapshot.decision.resolutionIndex, decisionHash: snapshot.decision.decisionHash, planHash: plan.planHash, goal: snapshot.decision.goal }), planIsPlanned: plan.status === "planned" });
+}
+function normalizeContext(input) {
+  if (!input || typeof input.worldSeed !== "string" || !input.worldSeed.trim() || input.worldSeed.length > 256 || !Number.isSafeInteger(input.logicalIndex) || input.logicalIndex < 0 || !hubSchema.safeParse(input.homeHubId).success) throw new Error("NPC_ACTION_CONTEXT_INVALID");
+  const epoch = freezeEpoch(input.epoch);
+  const source = sourceDecisionFrom(input.confirmedDecision);
+  const npc = freezeNpc(input.npc), market = freezeMarket(input.market), marketEvidence = freezeMarketEvidence(input.marketEvidence), polity = freezePolity(input.polity), inventory = freezeInventory(input.inventory);
+  if (source.sourceDecision.npcId !== npcIdentity(input.homeHubId) || npc.npcId !== source.sourceDecision.npcId || source.sourceDecision.resolutionIndex !== epoch.npcResolutionIndex || epoch.npcResolutionIndex >= 2147483647 || input.logicalIndex !== epoch.npcResolutionIndex + 1 || npc.currentHubId !== market.hubId) throw new Error("NPC_ACTION_CONTEXT_INVALID");
+  if (input.confirmedDecision.snapshot.npcId !== npc.npcId || input.confirmedDecision.snapshot.decision.resolutionIndex !== epoch.npcResolutionIndex) throw new Error("NPC_ACTION_CONFIRMED_SOURCE_REQUIRED");
+  const marketValid = marketEvidence.version === epoch.marketVersion && marketEvidence.stateHash === merchantMarketStateHash(market);
+  const inventoryStateValid = inventory.ownerId === `market:${market.hubId}` && inventory.stateHash === merchantInventoryStateHash({ ownerId: inventory.ownerId, market, entries: inventory.entries }) && inventory.entries.every((entry2) => entry2.quantity === market.stock[entry2.itemId]);
+  const targets = input.targets.map(freezeTargetEvidence).slice().sort((a, b) => textOrder(a.id, b.id) || textOrder(a.stateHash, b.stateHash));
+  const targetIds = new Set(targets.map((target) => target.id));
+  const targetsValid = targets.length <= NPC_ACTION_GATEWAY_MAX_TARGETS && targetIds.size === targets.length && targets.every((target) => target.id === `market:${target.hubId}` && target.version === epoch.marketVersion) && targets.filter((target) => target.hubId === market.hubId).every((target) => target.stateHash === marketEvidence.stateHash);
+  const polityValid = polity.polityId === `polity:${market.hubId}` && polity.version === epoch.polityVersion && polity.stateHash === merchantPolityStateHash(polity);
+  return Object.freeze({ worldSeed: input.worldSeed, homeHubId: input.homeHubId, logicalIndex: input.logicalIndex, confirmedDecision: input.confirmedDecision, sourceDecision: source.sourceDecision, sourcePlanIsPlanned: source.planIsPlanned, epoch, npc, market, marketEvidence, marketValid, polity, polityValid, inventory, inventoryStateValid, targets: Object.freeze(targets), targetsValid });
+}
+function resolutionFor(context) {
+  return resolveLivingWorldTick({ worldSeed: context.worldSeed, resolutionIndex: context.logicalIndex, market: context.market, npc: context.npc, polityStability: context.polity.stability, preferredGoal: context.sourceDecision.goal });
+}
+function targetIdFor(resolution) {
+  return `market:${resolution.action === "caravan" && resolution.caravan.destination ? resolution.caravan.destination : resolution.market.hubId}`;
+}
+function expectedTarget(context, resolution) {
+  if (!context.targetsValid) return null;
+  const expectedHubId = resolution.action === "caravan" ? resolution.caravan.destination : resolution.market.hubId;
+  const target = context.targets.find((value) => value.id === targetIdFor(resolution)) ?? null;
+  if (!expectedHubId || !target || !target.active || target.hubId !== expectedHubId) return null;
+  return target;
+}
+function inventoryAvailable(context, resolution) {
+  const entry2 = context.inventory.entries.find((item) => item.itemId === resolution.commodity);
+  if (!entry2) return false;
+  if (resolution.action === "produce") return entry2.quantity + resolution.quantity <= entry2.capacity;
+  if (resolution.action === "consume") return entry2.quantity >= resolution.quantity && context.npc.wealthCopper >= resolution.unitPriceCopper;
+  if (resolution.action === "trade" || resolution.action === "caravan") return entry2.quantity >= resolution.quantity;
+  return true;
+}
+function blocked(context, resolution, code) {
+  return Object.freeze({ status: "blocked", code, npcId: context.npc.npcId, resolutionIndex: resolution.resolutionIndex, action: resolution.action, replanHash: canonicalHash3({ version: NPC_ACTION_GATEWAY_VERSION, code, npcId: context.npc.npcId, sourceDecision: context.sourceDecision, resolutionIndex: resolution.resolutionIndex, action: resolution.action, epoch: context.epoch, marketHash: context.marketEvidence.stateHash, polityHash: context.polity.stateHash, inventoryHash: context.inventory.stateHash }) });
+}
+function intended(context, resolution, target) {
+  const boundAuthority = npcAuthority();
+  const unsigned = { version: NPC_ACTION_GATEWAY_VERSION, authority: boundAuthority, npcId: context.npc.npcId, sourceDecision: context.sourceDecision, resolutionIndex: resolution.resolutionIndex, worldSeedSha256: worldSeedHash(context.worldSeed), expectedEpoch: context.epoch, expectedNpcHash: npcStateHash(context.npc), expectedMarketHash: context.marketEvidence.stateHash, expectedPolityHash: context.polity.stateHash, expectedInventoryHash: context.inventory.stateHash, action: resolution.action, originHubId: context.market.hubId, target, commodity: resolution.commodity, quantity: resolution.quantity, unitPriceCopper: resolution.unitPriceCopper, resolutionHash: resolution.deterministicHash };
+  const intentHash = canonicalHash3(unsigned);
+  return Object.freeze({ ...unsigned, id: `npa_${intentHash.slice(0, 56)}`, intentHash });
+}
+function parseIntent(value) {
+  try {
+    if (value.version !== NPC_ACTION_GATEWAY_VERSION || !id4.safeParse(value.id).success || !hash642.safeParse(value.intentHash).success || !id4.safeParse(value.npcId).success || !index4.safeParse(value.resolutionIndex).success || !hash642.safeParse(value.worldSeedSha256).success || !hash642.safeParse(value.expectedNpcHash).success || !hash642.safeParse(value.expectedMarketHash).success || !hash642.safeParse(value.expectedPolityHash).success || !hash642.safeParse(value.expectedInventoryHash).success || !actionValues.includes(value.action) || !hubSchema.safeParse(value.originHubId).success || !commoditySchema.safeParse(value.commodity).success || !Number.isSafeInteger(value.quantity) || value.quantity < 1 || !Number.isSafeInteger(value.unitPriceCopper) || value.unitPriceCopper < 1 || !hash642.safeParse(value.resolutionHash).success) return null;
+    const target = targetSchema.parse(value.target);
+    if (target.id !== `market:${target.hubId}`) return null;
+    return Object.freeze({ ...value, authority: authority(value.authority), sourceDecision: freezeSourceDecision(value.sourceDecision), expectedEpoch: freezeEpoch(value.expectedEpoch), target: Object.freeze({ id: target.id, kind: target.kind, hubId: target.hubId, version: target.version, stateHash: target.stateHash, active: target.active }) });
+  } catch {
+    return null;
+  }
+}
+function parseLease(value) {
+  try {
+    if (value.version !== NPC_ACTION_LEASE_VERSION || !id4.safeParse(value.id).success || !id4.safeParse(value.npcId).success || !id4.safeParse(value.intentId).success || !id4.safeParse(value.targetId).success || !/^[a-f0-9]{40}$/.test(value.sourceRevision) || !hash642.safeParse(value.lockedStateHash).success || !index4.safeParse(value.issuedAtLogicalIndex).success || !index4.safeParse(value.expiresAtLogicalIndex).success || value.expiresAtLogicalIndex < value.issuedAtLogicalIndex || !["active", "revoked", "consumed"].includes(value.state)) return null;
+    return Object.freeze({ ...value });
+  } catch {
+    return null;
+  }
+}
+function proposedLeaseFor(context, intent, target) {
+  return Object.freeze({ version: NPC_ACTION_LEASE_VERSION, id: `npl_${canonicalHash3({ version: NPC_ACTION_LEASE_VERSION, intentId: intent.id, index: context.logicalIndex }).slice(0, 56)}`, npcId: intent.npcId, intentId: intent.id, targetId: target.id, sourceRevision: intent.authority.sourceRevision, lockedStateHash: target.stateHash, issuedAtLogicalIndex: context.logicalIndex, expiresAtLogicalIndex: context.logicalIndex, state: "active" });
+}
+function planMerchantAction(input) {
+  const context = normalizeContext(input);
+  const resolution = resolutionFor(context);
+  if (!context.sourcePlanIsPlanned) return blocked(context, resolution, "SOURCE_PLAN_BLOCKED");
+  if (!context.marketValid) return blocked(context, resolution, "MARKET_STATE_MISMATCH");
+  if (!context.polityValid) return blocked(context, resolution, "POLITY_STATE_MISMATCH");
+  if (!context.inventoryStateValid) return blocked(context, resolution, "INVENTORY_STATE_MISMATCH");
+  if (!context.targetsValid) return blocked(context, resolution, "TARGET_STATE_MISMATCH");
+  const target = expectedTarget(context, resolution);
+  if (!target) return blocked(context, resolution, "TARGET_MISSING");
+  if (resolution.action === "caravan" ? !resolution.caravan.destination || !hasLivingWorldRoute(context.market.hubId, target.hubId) : target.hubId !== context.npc.currentHubId) return blocked(context, resolution, "TARGET_RANGE");
+  if (!inventoryAvailable(context, resolution)) return blocked(context, resolution, "INVENTORY_UNAVAILABLE");
+  const intent = intended(context, resolution, target);
+  return Object.freeze({ status: "ready", intent, proposedLease: proposedLeaseFor(context, intent, target), resolution });
+}
+function invalid(context, resolution, intent, code) {
+  return Object.freeze({ ...blocked(context, resolution, code), npcId: intent.npcId, resolutionIndex: intent.resolutionIndex, action: intent.action });
+}
+function lifeOpportunities(resolution, receiptId) {
+  const riskBps = resolution.caravan.ambushed ? 9e3 : Math.max(0, (100 - resolution.caravan.securityIndex) * 100);
+  const stock = resolution.market.stock[resolution.commodity];
+  const values = [
+    { id: `${receiptId}:safe`, kind: "safe_hub", regionId: resolution.market.hubId, targetId: `hub:${resolution.market.hubId}`, benefitBps: Math.max(2e3, 9e3 - riskBps), riskBps, distanceBps: 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:resource`, kind: "resource", regionId: resolution.market.hubId, targetId: `commodity:${resolution.commodity}`, benefitBps: Math.max(2e3, Math.min(1e4, 1e4 - Math.min(8e3, stock * 10))), riskBps: Math.floor(riskBps / 3), distanceBps: 500, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:social`, kind: "social", regionId: resolution.market.hubId, benefitBps: 6e3, riskBps: Math.floor(riskBps / 4), distanceBps: 250, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:reputation`, kind: "reputation", regionId: resolution.market.hubId, targetId: `polity:${resolution.market.hubId}`, benefitBps: 5500 + Math.max(0, resolution.stabilityDelta) * 500, riskBps: Math.floor(riskBps / 2), distanceBps: 500, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:market`, kind: "market", regionId: resolution.market.hubId, targetId: `market:${resolution.market.hubId}`, benefitBps: Math.min(1e4, 2500 + resolution.unitPriceCopper * 12), riskBps: Math.floor(riskBps / 3), distanceBps: 300, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:influence`, kind: "influence", regionId: resolution.caravan.destination ?? resolution.market.hubId, targetId: `polity:${resolution.caravan.destination ?? resolution.market.hubId}`, benefitBps: resolution.caravan.destination ? 8e3 : 4500, riskBps, distanceBps: resolution.caravan.destination ? 2500 : 800, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex }
+  ];
+  return deepFreeze(values);
+}
+function requestsFromValidatedAction(context, resolution, receiptId) {
+  const needEvents = [
+    { id: `${receiptId}:wealth`, need: "wealth", delta: resolution.action === "trade" || resolution.action === "caravan" ? 0.08 : resolution.action === "consume" ? -0.04 : 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:safety`, need: "safety", delta: resolution.caravan.ambushed ? -0.18 : resolution.action === "patrol" ? 0.05 : 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:resources`, need: "resources", delta: resolution.action === "produce" ? 0.07 : resolution.action === "consume" ? -0.04 : 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:belonging`, need: "belonging", delta: resolution.action === "socialize" ? 0.08 : 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:status`, need: "status", delta: resolution.action === "patrol" ? 0.03 : resolution.action === "caravan" && !resolution.caravan.ambushed ? 0.02 : 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex },
+    { id: `${receiptId}:power`, need: "power", delta: resolution.action === "caravan" && !resolution.caravan.ambushed ? 0.02 : 0, sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex }
+  ];
+  const economySignal = { id: `${receiptId}:economy`, kind: "economy", regionId: resolution.market.hubId, magnitude: Math.max(-1, Math.min(1, (resolution.taxCopper - (resolution.caravan.ambushed ? 100 : 0)) / 500)), sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex };
+  const politicsSignal = { id: `${receiptId}:politics`, kind: resolution.caravan.ambushed ? "war" : "politics", regionId: resolution.market.hubId, magnitude: Math.max(-1, Math.min(1, resolution.stabilityDelta / 10)), sourceReceiptId: receiptId, resolutionIndex: resolution.resolutionIndex };
+  const governmentType = resolution.market.hubId === "emberfall" ? "trade_republic" : resolution.market.hubId === "cinder_vault" ? "warband" : "council";
+  const npcRequest = { npcId: resolution.npc.npcId, regionId: resolution.npc.currentHubId, resolutionIndex: resolution.resolutionIndex, roleId: "merchant", needEvents, observationIds: [receiptId, `market:${resolution.market.hubId}:${resolution.commodity}:${resolution.unitPriceCopper}`], memory: resolution.nextMemory.length ? [resolution.nextMemory[resolution.nextMemory.length - 1]] : [], opportunities: lifeOpportunities(resolution, receiptId), economy: { currentHubId: resolution.npc.currentHubId, wealthCopper: resolution.npc.wealthCopper, hungerBps: resolution.npc.hungerBps, fatigueBps: resolution.npc.fatigueBps, tradeProwessBps: resolution.npc.tradeProwessBps, harvestYieldBps: resolution.npc.harvestYieldBps } };
+  return deepFreeze({ resolution, npcRequest, worldRequest: { worldSeed: context.worldSeed, regionId: resolution.market.hubId, resolutionIndex: resolution.resolutionIndex, signals: [economySignal, politicsSignal] }, polityRequest: { polityId: `polity:${resolution.market.hubId}`, governmentType, territoryIds: [resolution.market.hubId], stability: Math.max(0, Math.min(100, context.polity.stability + resolution.stabilityDelta)), activeDiplomacy: resolution.action === "caravan" ? ["trade"] : ["non_aggression"], warSignals: resolution.caravan.ambushed ? [politicsSignal] : [] }, receiptId });
+}
+function validateMerchantAction(input) {
+  const context = normalizeContext(input.context);
+  const resolution = resolutionFor(context);
+  const intent = parseIntent(input.intent);
+  if (!intent) return blocked(context, resolution, "INTENT_TAMPERED");
+  if (!context.sourcePlanIsPlanned) return invalid(context, resolution, intent, "SOURCE_PLAN_BLOCKED");
+  if (!context.marketValid) return invalid(context, resolution, intent, "MARKET_STATE_MISMATCH");
+  if (!context.polityValid) return invalid(context, resolution, intent, "POLITY_STATE_MISMATCH");
+  if (!context.inventoryStateValid) return invalid(context, resolution, intent, "INVENTORY_STATE_MISMATCH");
+  if (!context.targetsValid) return invalid(context, resolution, intent, "TARGET_STATE_MISMATCH");
+  const boundAuthority = npcAuthority();
+  if (!same(intent.authority, boundAuthority)) return invalid(context, resolution, intent, "REVISION_MISMATCH");
+  if (!same(intent.sourceDecision, context.sourceDecision)) return invalid(context, resolution, intent, "SOURCE_DECISION_MISMATCH");
+  if (intent.npcId !== context.npc.npcId || intent.resolutionIndex !== resolution.resolutionIndex || !same(intent.expectedEpoch, context.epoch) || intent.worldSeedSha256 !== worldSeedHash(context.worldSeed) || intent.expectedNpcHash !== npcStateHash(context.npc) || intent.expectedMarketHash !== context.marketEvidence.stateHash) return invalid(context, resolution, intent, "EPOCH_MISMATCH");
+  if (intent.expectedPolityHash !== context.polity.stateHash) return invalid(context, resolution, intent, "POLITY_STATE_MISMATCH");
+  if (intent.expectedInventoryHash !== context.inventory.stateHash) return invalid(context, resolution, intent, "INVENTORY_STATE_MISMATCH");
+  const target = expectedTarget(context, resolution);
+  if (!target) return invalid(context, resolution, intent, "TARGET_MISSING");
+  if (!same(intent.target, target)) return invalid(context, resolution, intent, "TARGET_STATE_MISMATCH");
+  if (resolution.action === "caravan" ? !resolution.caravan.destination || !hasLivingWorldRoute(context.market.hubId, target.hubId) : target.hubId !== context.npc.currentHubId) return invalid(context, resolution, intent, "TARGET_RANGE");
+  if (!inventoryAvailable(context, resolution)) return invalid(context, resolution, intent, "INVENTORY_UNAVAILABLE");
+  if (!same(intent, intended(context, resolution, target))) return invalid(context, resolution, intent, "INTENT_TAMPERED");
+  const lease = parseLease(input.lease);
+  if (!lease) return invalid(context, resolution, intent, "LEASE_MISSING");
+  if (lease.state === "revoked") return invalid(context, resolution, intent, "LEASE_REVOKED");
+  if (lease.state !== "active") return invalid(context, resolution, intent, "LEASE_CONFLICT");
+  if (context.logicalIndex < lease.issuedAtLogicalIndex || context.logicalIndex > lease.expiresAtLogicalIndex) return invalid(context, resolution, intent, "LEASE_EXPIRED");
+  if (!same(lease, proposedLeaseFor(context, intent, target))) return invalid(context, resolution, intent, "LEASE_CONFLICT");
+  const receiptCore = { version: NPC_ACTION_RECEIPT_VERSION, npcId: intent.npcId, sourceDecision: intent.sourceDecision, resolutionIndex: intent.resolutionIndex, intentId: intent.id, leaseId: lease.id, authority: boundAuthority, action: resolution.action, originHubId: intent.originHubId, target: intent.target, worldSeedSha256: intent.worldSeedSha256, resolutionHash: resolution.deterministicHash, expectedEpoch: intent.expectedEpoch, npcStateHash: intent.expectedNpcHash, marketStateHash: intent.expectedMarketHash, polityStateHash: intent.expectedPolityHash, inventoryStateHash: context.inventory.stateHash };
+  const receiptId = merchantActionReceiptId(receiptCore);
+  const requests = requestsFromValidatedAction(context, resolution, receiptId);
+  const unsignedReceipt = { ...receiptCore, id: receiptId, effectsHash: merchantActionEffectsHash(requests) };
+  const receipt = deepFreeze({ ...unsignedReceipt, receiptHash: merchantActionReceiptHash(unsignedReceipt) });
+  return Object.freeze({ status: "validated", intent, lease, receipt, resolution, requests });
+}
+
+// server/src/aurion/npc/semanticMemoryGraph.ts
+import { createHash as createHash8 } from "node:crypto";
+var NPC_SEMANTIC_GRAPH_VERSION = "wasd-npc-semantic-graph.v2";
+var NPC_SEMANTIC_RETRIEVAL_VERSION = "wasd-npc-semantic-retrieval.v1";
+var NPC_SEMANTIC_GRAPH_LIMITS = Object.freeze({
+  nodes: 160,
+  edges: 384,
+  provenanceRefs: 160,
+  performedActions: 16,
+  traversalDepth: 4,
+  candidates: 64,
+  results: 32,
+  startKeys: 16,
+  filterValues: 16,
+  bytes: 524288
+});
+var hashPattern = /^[a-f0-9]{64}$/;
+var revisionPattern = /^[a-f0-9]{40}$/;
+var idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+var nodeKinds = Object.freeze([
+  "actor",
+  "location",
+  "world_event",
+  "goal",
+  "action",
+  "outcome",
+  "polity",
+  "item_resource",
+  "semantic_fact",
+  "procedural_competency"
+]);
+var edgeKinds = Object.freeze([
+  "observed_at",
+  "participated_in",
+  "selected_goal",
+  "performed_action",
+  "affected",
+  "related_to",
+  "member_of",
+  "located_in",
+  "supports",
+  "contradicts",
+  "supersedes",
+  "derived_from"
+]);
+var statuses = Object.freeze(["active", "expired", "contradicted", "superseded"]);
+var provenanceKinds = Object.freeze(["decision_receipt", "action_receipt", "effect_readback", "memory_link"]);
+var verifiedPerformedActions = /* @__PURE__ */ new WeakSet();
+var verifiedGraphs = /* @__PURE__ */ new WeakSet();
+var textOrder2 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+var digest2 = (value) => createHash8("sha256").update(stableCatalogStringify(value), "utf8").digest("hex");
+var same2 = (a, b) => stableCatalogStringify(a) === stableCatalogStringify(b);
+function assertId(value, code) {
+  if (typeof value !== "string" || !idPattern.test(value)) throw new Error(code);
+}
+function assertRelationKey(value, code) {
+  if (typeof value !== "string" || value.length < 1 || value.length > 256 || !/^[A-Za-z0-9._:-]+$/.test(value)) throw new Error(code);
+}
+function assertHash(value, code) {
+  if (typeof value !== "string" || !hashPattern.test(value)) throw new Error(code);
+}
+function assertRevision(value, code) {
+  if (typeof value !== "string" || !revisionPattern.test(value)) throw new Error(code);
+}
+function assertIndex(value, code) {
+  if (!Number.isInteger(value) || value < 0 || value > 2147483647) throw new Error(code);
+}
+function deepFreeze2(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze2(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+function uniqueSorted(values) {
+  return [...new Set(values)].sort(textOrder2);
+}
+function provenanceOrder(a, b) {
+  return textOrder2(a.kind, b.kind) || textOrder2(a.id, b.id) || textOrder2(a.hash, b.hash);
+}
+function mergeProvenance(...groups) {
+  const map = /* @__PURE__ */ new Map();
+  for (const ref of groups.flat()) {
+    const key = `${ref.kind}:${ref.id}:${ref.hash}`;
+    const prior = map.get(key);
+    if (prior && !same2(prior, ref)) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_CONFLICT");
+    map.set(key, ref);
+  }
+  const result = [...map.values()].sort(provenanceOrder);
+  if (result.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_LIMIT");
+  return deepFreeze2(result);
+}
+function decisionRef(source) {
+  return deepFreeze2({
+    kind: "decision_receipt",
+    id: source.receiptId,
+    hash: source.receiptSha256,
+    logicalIndex: source.logicalIndex,
+    sourceRevision: source.authority.sourceRevision,
+    sourceSha256: source.authority.sourceSha256
+  });
+}
+function confirmedDecisionRef(source) {
+  return deepFreeze2({
+    kind: "decision_receipt",
+    id: source.receiptId,
+    hash: source.receiptSha256,
+    logicalIndex: source.snapshot.decision.resolutionIndex,
+    sourceRevision: source.authority.sourceRevision,
+    sourceSha256: source.authority.sourceSha256
+  });
+}
+function actionRef(action) {
+  return deepFreeze2({
+    kind: "action_receipt",
+    id: action.id,
+    hash: action.receiptHash,
+    logicalIndex: action.resolutionIndex,
+    sourceRevision: action.authority.sourceRevision,
+    sourceSha256: action.authority.sourceSha256
+  });
+}
+function effectRef(effect, sourceSha256, logicalIndex) {
+  return deepFreeze2({
+    kind: "effect_readback",
+    id: effect.id,
+    hash: effect.readbackHash,
+    logicalIndex,
+    sourceRevision: effect.sourceRevision,
+    sourceSha256
+  });
+}
+function linkRef(link, authority2) {
+  return deepFreeze2({
+    kind: "memory_link",
+    id: link.id,
+    hash: link.linkHash,
+    logicalIndex: link.resolutionIndex,
+    sourceRevision: authority2.sourceRevision,
+    sourceSha256: authority2.sourceSha256
+  });
+}
+function graphNodeId(npcId, kind, key, provenance) {
+  return `smn_${digest2([NPC_SEMANTIC_GRAPH_VERSION, npcId, kind, key, provenance]).slice(0, 60)}`;
+}
+function graphEdgeId(npcId, kind, relationKey, fromNodeId, toNodeId) {
+  return `sme_${digest2([NPC_SEMANTIC_GRAPH_VERSION, npcId, kind, relationKey, fromNodeId, toNodeId]).slice(0, 60)}`;
+}
+function sealNode(input, npcId) {
+  const normalized = {
+    ...input,
+    provenance: mergeProvenance(input.provenance)
+  };
+  const id5 = graphNodeId(npcId, normalized.kind, normalized.key, normalized.provenance);
+  return deepFreeze2({ ...normalized, id: id5, payloadHash: digest2(normalized) });
+}
+function sealEdge(input, npcId) {
+  const normalized = {
+    ...input,
+    provenance: mergeProvenance(input.provenance)
+  };
+  const id5 = graphEdgeId(npcId, normalized.kind, normalized.relationKey, normalized.fromNodeId, normalized.toNodeId);
+  return deepFreeze2({ ...normalized, id: id5, payloadHash: digest2(normalized) });
+}
+function statusForFact(fact, superseded) {
+  if (fact.status === "expired") return "expired";
+  if (fact.status === "conflicted") return "contradicted";
+  return superseded ? "superseded" : "active";
+}
+function statusPriority(status) {
+  return status === "active" ? 0 : status === "contradicted" ? 1 : status === "superseded" ? 2 : 3;
+}
+function nodePriority(kind) {
+  return kind === "actor" ? 0 : kind === "action" || kind === "outcome" ? 1 : kind === "semantic_fact" ? 2 : kind === "goal" || kind === "location" ? 3 : kind === "world_event" ? 4 : kind === "procedural_competency" ? 5 : 6;
+}
+function edgePriority(kind) {
+  return kind === "performed_action" ? 0 : kind === "supersedes" || kind === "contradicts" ? 1 : kind === "selected_goal" || kind === "located_in" ? 2 : kind === "affected" || kind === "derived_from" ? 3 : 4;
+}
+function semanticFactProvenance(fact) {
+  return mergeProvenance(fact.provenance.map(decisionRef));
+}
+function episodeProvenance(episode) {
+  return mergeProvenance([decisionRef(episode.source)]);
+}
+function competencyProvenance(competency) {
+  return mergeProvenance(competency.provenance.map(decisionRef));
+}
+function verifyPerformedActionEvidence(input) {
+  if (!isConfirmedNpcDecision(input.sourceDecision) || !isConfirmedNpcDecision(input.successorDecision)) {
+    throw new Error("NPC_SEMANTIC_GRAPH_CONFIRMED_DECISION_REQUIRED");
+  }
+  const authority2 = npcAuthority();
+  const action = input.actionReceipt;
+  if (action.version !== NPC_ACTION_RECEIPT_VERSION || !same2(action.authority, authority2)) throw new Error("NPC_SEMANTIC_GRAPH_ACTION_REVISION_MISMATCH");
+  assertId(action.id, "NPC_SEMANTIC_GRAPH_ACTION_RECEIPT_INVALID");
+  assertHash(action.receiptHash, "NPC_SEMANTIC_GRAPH_ACTION_RECEIPT_INVALID");
+  assertHash(action.effectsHash, "NPC_SEMANTIC_GRAPH_ACTION_RECEIPT_INVALID");
+  const { receiptHash, ...unsignedAction } = action;
+  if (receiptHash !== merchantActionReceiptHash(unsignedAction)) throw new Error("NPC_SEMANTIC_GRAPH_ACTION_RECEIPT_HASH_INVALID");
+  const { id: _id, effectsHash: _effectsHash, receiptHash: _receiptHash, ...receiptCore } = action;
+  if (action.id !== merchantActionReceiptId(receiptCore)) throw new Error("NPC_SEMANTIC_GRAPH_ACTION_RECEIPT_ID_INVALID");
+  const source = input.sourceDecision;
+  const sourcePlan = source.snapshot.lifeState.plan;
+  if (!sourcePlan || sourcePlan.status !== "planned" || action.sourceDecision.receiptId !== source.receiptId || action.sourceDecision.receiptSha256 !== source.receiptSha256 || action.sourceDecision.npcId !== source.snapshot.npcId || action.sourceDecision.resolutionIndex !== source.snapshot.decision.resolutionIndex || action.sourceDecision.decisionHash !== source.snapshot.decision.decisionHash || action.sourceDecision.planHash !== sourcePlan.planHash || action.sourceDecision.goal !== source.snapshot.decision.goal) {
+    throw new Error("NPC_SEMANTIC_GRAPH_ACTION_SOURCE_MISMATCH");
+  }
+  const successor = input.successorDecision;
+  if (successor.snapshot.npcId !== action.npcId || successor.snapshot.decision.resolutionIndex !== action.resolutionIndex) {
+    throw new Error("NPC_SEMANTIC_GRAPH_ACTION_SUCCESSOR_MISMATCH");
+  }
+  const effect = input.effectReadback;
+  for (const value of [effect.id, effect.actionReceiptId, effect.npcReceiptId, effect.worldReceiptId, effect.polityId]) assertId(value, "NPC_SEMANTIC_GRAPH_EFFECT_READBACK_INVALID");
+  for (const value of [effect.effectsHash, effect.npcDecisionHash, effect.worldReactionHash, effect.polityStateHash, effect.marketStateHash, effect.inventoryStateHash, effect.readbackHash]) assertHash(value, "NPC_SEMANTIC_GRAPH_EFFECT_READBACK_INVALID");
+  assertRevision(effect.sourceRevision, "NPC_SEMANTIC_GRAPH_EFFECT_READBACK_INVALID");
+  if (effect.actionReceiptId !== action.id || effect.effectsHash !== action.effectsHash || effect.npcReceiptId !== successor.receiptId || effect.npcDecisionHash !== successor.snapshot.decision.decisionHash || effect.sourceRevision !== authority2.sourceRevision) {
+    throw new Error("NPC_SEMANTIC_GRAPH_EFFECT_READBACK_MISMATCH");
+  }
+  const link = input.memoryLink;
+  for (const value of [link.id, link.actionReceiptId, link.effectReadbackId, link.memoryReceiptId, link.npcId]) assertId(value, "NPC_SEMANTIC_GRAPH_MEMORY_LINK_INVALID");
+  assertHash(link.linkHash, "NPC_SEMANTIC_GRAPH_MEMORY_LINK_INVALID");
+  assertIndex(link.resolutionIndex, "NPC_SEMANTIC_GRAPH_MEMORY_LINK_INVALID");
+  if (link.actionReceiptId !== action.id || link.effectReadbackId !== effect.id || link.npcId !== action.npcId || link.resolutionIndex !== action.resolutionIndex) {
+    throw new Error("NPC_SEMANTIC_GRAPH_MEMORY_LINK_MISMATCH");
+  }
+  const result = deepFreeze2({
+    sourceDecision: source,
+    successorDecision: successor,
+    actionReceipt: action,
+    effectReadback: effect,
+    memoryLink: link
+  });
+  verifiedPerformedActions.add(result);
+  return result;
+}
+function isVerifiedPerformedActionEvidence(value) {
+  return !!value && typeof value === "object" && verifiedPerformedActions.has(value);
+}
+function buildNpcSemanticMemoryGraph(input) {
+  const memory = verifyNpcMemoryEvidence(parseNpcMemoryV4(input.memory), input.memoryReceipts);
+  if (memory.lastResolutionIndex < 0 || !memory.lastReceiptId) throw new Error("NPC_SEMANTIC_GRAPH_SOURCE_MEMORY_REQUIRED");
+  const authority2 = npcAuthority();
+  const performed = [...input.performedActions ?? []];
+  if (performed.length > NPC_SEMANTIC_GRAPH_LIMITS.performedActions) throw new Error("NPC_SEMANTIC_GRAPH_ACTION_LIMIT");
+  if (performed.some((action) => !isVerifiedPerformedActionEvidence(action))) throw new Error("NPC_SEMANTIC_GRAPH_PERFORMED_ACTION_EVIDENCE_REQUIRED");
+  if (performed.some((action) => action.actionReceipt.npcId !== memory.npcId || action.actionReceipt.resolutionIndex > memory.lastResolutionIndex)) {
+    throw new Error("NPC_SEMANTIC_GRAPH_ACTION_GENERATION_MISMATCH");
+  }
+  const previous = input.previousGraph ?? null;
+  if (previous) {
+    if (!verifiedGraphs.has(previous) || previous.npcId !== memory.npcId) throw new Error("NPC_SEMANTIC_GRAPH_PREDECESSOR_VERIFICATION_REQUIRED");
+    if (previous.generation >= memory.lastResolutionIndex) throw new Error("NPC_SEMANTIC_GRAPH_GENERATION_REGRESSION");
+  }
+  const nodes = [];
+  const edges = [];
+  const nodeByIdentity = /* @__PURE__ */ new Map();
+  const allMemoryProvenance = mergeProvenance([
+    ...memory.episodic.map((e) => decisionRef(e.source)),
+    ...memory.semantic.flatMap((f) => f.provenance.map(decisionRef)),
+    ...memory.procedural.flatMap((c) => c.provenance.map(decisionRef))
+  ]);
+  const ensureIdentityNode = (kind, key, provenance, validFromIndex, validUntilIndex) => {
+    const identity = `${kind}:${key}`;
+    const existing = nodeByIdentity.get(identity);
+    if (existing) return existing;
+    const node = sealNode({ version: NPC_SEMANTIC_GRAPH_VERSION, kind, key, status: "active", validFromIndex, validUntilIndex, provenance }, memory.npcId);
+    nodeByIdentity.set(identity, node);
+    nodes.push(node);
+    return node;
+  };
+  const actor = ensureIdentityNode("actor", memory.npcId, allMemoryProvenance, 0, null);
+  const semantic = [...memory.semantic].sort((a, b) => b.validFromIndex - a.validFromIndex || textOrder2(a.id, b.id));
+  const newestEquivalent = /* @__PURE__ */ new Map();
+  const factStatus = /* @__PURE__ */ new Map();
+  for (const fact of semantic) {
+    const key = `${fact.subjectId}:${fact.predicate}:${fact.value}`;
+    const newer = newestEquivalent.get(key);
+    const status = statusForFact(fact, !!newer);
+    factStatus.set(fact.id, status);
+    if (!newer && status !== "expired" && status !== "contradicted") newestEquivalent.set(key, fact.id);
+  }
+  const factNodes = /* @__PURE__ */ new Map();
+  for (const fact of semantic) {
+    const provenance = semanticFactProvenance(fact), status = factStatus.get(fact.id);
+    const factNode = sealNode({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "semantic_fact", key: fact.id, status, validFromIndex: fact.validFromIndex, validUntilIndex: fact.validUntilIndex, provenance }, memory.npcId);
+    nodes.push(factNode);
+    factNodes.set(fact.id, factNode);
+    const kind = fact.predicate === "current_hub" ? "location" : "goal";
+    const entity = ensureIdentityNode(kind, fact.value, provenance, fact.validFromIndex, fact.validUntilIndex);
+    const relation = fact.predicate === "current_hub" ? "located_in" : "selected_goal";
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: relation, relationKey: fact.id, fromNodeId: actor.id, toNodeId: entity.id, status, validFromIndex: fact.validFromIndex, validUntilIndex: fact.validUntilIndex, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "derived_from", relationKey: fact.id, fromNodeId: factNode.id, toNodeId: entity.id, status, validFromIndex: fact.validFromIndex, validUntilIndex: fact.validUntilIndex, provenance }, memory.npcId));
+  }
+  const conflictPairs = /* @__PURE__ */ new Set();
+  for (const fact of semantic) {
+    const from = factNodes.get(fact.id);
+    for (const otherId of fact.conflictsWith) {
+      const to = factNodes.get(otherId);
+      if (!to) continue;
+      const ids = [from.id, to.id].sort(textOrder2), pair = `${ids[0]}:${ids[1]}`;
+      if (conflictPairs.has(pair)) continue;
+      conflictPairs.add(pair);
+      const other = semantic.find((value) => value.id === otherId);
+      const validFrom = Math.max(fact.validFromIndex, other.validFromIndex);
+      const validUntil = Math.min(fact.validUntilIndex, other.validUntilIndex);
+      edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "contradicts", relationKey: pair, fromNodeId: ids[0], toNodeId: ids[1], status: "active", validFromIndex: validFrom, validUntilIndex: validUntil, provenance: mergeProvenance(semanticFactProvenance(fact), semanticFactProvenance(other)) }, memory.npcId));
+    }
+  }
+  for (const latestId of newestEquivalent.values()) {
+    const latest = semantic.find((f) => f.id === latestId);
+    if (!latest) continue;
+    for (const older of semantic.filter((f) => f.id !== latest.id && f.subjectId === latest.subjectId && f.predicate === latest.predicate && f.value === latest.value && factStatus.get(f.id) === "superseded")) {
+      edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "supersedes", relationKey: `${latest.id}:${older.id}`, fromNodeId: factNodes.get(latest.id).id, toNodeId: factNodes.get(older.id).id, status: "active", validFromIndex: latest.validFromIndex, validUntilIndex: null, provenance: mergeProvenance(semanticFactProvenance(latest), semanticFactProvenance(older)) }, memory.npcId));
+    }
+  }
+  for (const episode of memory.episodic) {
+    const provenance = episodeProvenance(episode);
+    const event = ensureIdentityNode("world_event", episode.id, provenance, episode.logicalIndex, episode.expiresAtIndex);
+    const location = ensureIdentityNode("location", episode.regionId, provenance, episode.logicalIndex, episode.expiresAtIndex);
+    const goal = ensureIdentityNode("goal", episode.goal, provenance, episode.logicalIndex, episode.expiresAtIndex);
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "participated_in", relationKey: episode.id, fromNodeId: actor.id, toNodeId: event.id, status: "active", validFromIndex: episode.logicalIndex, validUntilIndex: episode.expiresAtIndex, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "observed_at", relationKey: episode.id, fromNodeId: event.id, toNodeId: location.id, status: "active", validFromIndex: episode.logicalIndex, validUntilIndex: episode.expiresAtIndex, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "selected_goal", relationKey: `episode:${episode.id}`, fromNodeId: event.id, toNodeId: goal.id, status: "active", validFromIndex: episode.logicalIndex, validUntilIndex: episode.expiresAtIndex, provenance }, memory.npcId));
+  }
+  for (const competency of memory.procedural) {
+    const provenance = competencyProvenance(competency);
+    const node = ensureIdentityNode("procedural_competency", competency.competencyId, provenance, competency.provenance[0].logicalIndex, null);
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "supports", relationKey: competency.id, fromNodeId: actor.id, toNodeId: node.id, status: "active", validFromIndex: competency.provenance[0].logicalIndex, validUntilIndex: null, provenance }, memory.npcId));
+  }
+  for (const performedAction of performed.sort((a, b) => a.actionReceipt.resolutionIndex - b.actionReceipt.resolutionIndex || textOrder2(a.actionReceipt.id, b.actionReceipt.id))) {
+    const action = performedAction.actionReceipt;
+    const provenance = mergeProvenance(
+      [confirmedDecisionRef(performedAction.sourceDecision)],
+      [actionRef(action)],
+      [effectRef(performedAction.effectReadback, authority2.sourceSha256, action.resolutionIndex)],
+      [linkRef(performedAction.memoryLink, authority2)],
+      [confirmedDecisionRef(performedAction.successorDecision)]
+    );
+    const actionNode = ensureIdentityNode("action", action.id, provenance, action.resolutionIndex, null);
+    const outcomeNode = ensureIdentityNode("outcome", `${action.id}:committed`, provenance, action.resolutionIndex, null);
+    const targetNode = ensureIdentityNode("location", action.target.hubId, provenance, action.resolutionIndex, null);
+    const polityNode = ensureIdentityNode("polity", performedAction.effectReadback.polityId, provenance, action.resolutionIndex, null);
+    const goalNode = ensureIdentityNode("goal", action.sourceDecision.goal, provenance, action.sourceDecision.resolutionIndex, null);
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "performed_action", relationKey: action.id, fromNodeId: actor.id, toNodeId: actionNode.id, status: "active", validFromIndex: action.resolutionIndex, validUntilIndex: null, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "affected", relationKey: action.id, fromNodeId: actionNode.id, toNodeId: outcomeNode.id, status: "active", validFromIndex: action.resolutionIndex, validUntilIndex: null, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "affected", relationKey: `${action.id}:target`, fromNodeId: actionNode.id, toNodeId: targetNode.id, status: "active", validFromIndex: action.resolutionIndex, validUntilIndex: null, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "affected", relationKey: `${action.id}:polity`, fromNodeId: actionNode.id, toNodeId: polityNode.id, status: "active", validFromIndex: action.resolutionIndex, validUntilIndex: null, provenance }, memory.npcId));
+    edges.push(sealEdge({ version: NPC_SEMANTIC_GRAPH_VERSION, kind: "derived_from", relationKey: `${action.id}:goal`, fromNodeId: actionNode.id, toNodeId: goalNode.id, status: "active", validFromIndex: action.resolutionIndex, validUntilIndex: null, provenance }, memory.npcId));
+  }
+  const retainedNodes = [...nodes].sort((a, b) => nodePriority(a.kind) - nodePriority(b.kind) || statusPriority(a.status) - statusPriority(b.status) || b.validFromIndex - a.validFromIndex || textOrder2(a.id, b.id)).slice(0, NPC_SEMANTIC_GRAPH_LIMITS.nodes);
+  const retainedIds = new Set(retainedNodes.map((node) => node.id));
+  const retainedEdges = edges.filter((edge) => retainedIds.has(edge.fromNodeId) && retainedIds.has(edge.toNodeId)).sort((a, b) => edgePriority(a.kind) - edgePriority(b.kind) || statusPriority(a.status) - statusPriority(b.status) || b.validFromIndex - a.validFromIndex || textOrder2(a.id, b.id)).slice(0, NPC_SEMANTIC_GRAPH_LIMITS.edges);
+  const sealGraph = (edgePrefix) => {
+    const canonicalNodes = [...retainedNodes].sort((a, b) => textOrder2(a.id, b.id));
+    const canonicalEdges = [...edgePrefix].sort((a, b) => textOrder2(a.id, b.id));
+    const unsigned = {
+      version: NPC_SEMANTIC_GRAPH_VERSION,
+      retrievalVersion: NPC_SEMANTIC_RETRIEVAL_VERSION,
+      npcId: memory.npcId,
+      generation: memory.lastResolutionIndex,
+      authority: authority2,
+      memoryHash: memory.memoryHash,
+      previousGraphHash: previous?.graphHash ?? null,
+      nodes: canonicalNodes,
+      edges: canonicalEdges
+    };
+    const graph = deepFreeze2({ ...unsigned, graphHash: digest2(unsigned) });
+    return { graph, bytes: Buffer.byteLength(stableCatalogStringify(graph), "utf8") };
+  };
+  let sealed = sealGraph(retainedEdges);
+  if (sealed.bytes > NPC_SEMANTIC_GRAPH_LIMITS.bytes) {
+    let low = 0, high = retainedEdges.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2), trial = sealGraph(retainedEdges.slice(0, mid));
+      if (trial.bytes <= NPC_SEMANTIC_GRAPH_LIMITS.bytes) low = mid;
+      else high = mid - 1;
+    }
+    sealed = sealGraph(retainedEdges.slice(0, low));
+  }
+  if (sealed.bytes > NPC_SEMANTIC_GRAPH_LIMITS.bytes) throw new Error("NPC_SEMANTIC_GRAPH_BYTE_LIMIT");
+  verifiedGraphs.add(sealed.graph);
+  return sealed.graph;
+}
+function compileNpcSemanticMemoryGraph(input) {
+  return buildNpcSemanticMemoryGraph(input);
+}
+function validateProvenance(ref) {
+  if (!ref || typeof ref !== "object") throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  const value = ref;
+  if (!provenanceKinds.includes(value.kind)) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  assertId(value.id, "NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  assertHash(value.hash, "NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  assertIndex(value.logicalIndex, "NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  assertRevision(value.sourceRevision, "NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  assertHash(value.sourceSha256, "NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+}
+function parseNode(raw, npcId) {
+  if (!raw || typeof raw !== "object") throw new Error("NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  const node = raw;
+  if (node.version !== NPC_SEMANTIC_GRAPH_VERSION || !nodeKinds.includes(node.kind) || !statuses.includes(node.status)) throw new Error("NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  assertId(node.id, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  assertId(node.key, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  assertIndex(node.validFromIndex, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  if (node.validUntilIndex !== null) {
+    assertIndex(node.validUntilIndex, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
+    if (node.validUntilIndex <= node.validFromIndex) throw new Error("NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  }
+  if (!Array.isArray(node.provenance) || !node.provenance.length || node.provenance.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  node.provenance.forEach(validateProvenance);
+  if (!same2(node.provenance, [...node.provenance].sort(provenanceOrder)) || new Set(node.provenance.map((ref) => `${ref.kind}:${ref.id}:${ref.hash}`)).size !== node.provenance.length) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_ORDER");
+  assertHash(node.payloadHash, "NPC_SEMANTIC_GRAPH_NODE_INVALID");
+  const { id: id5, payloadHash, ...payload } = node;
+  if (id5 !== graphNodeId(npcId, node.kind, node.key, node.provenance) || payloadHash !== digest2(payload)) throw new Error("NPC_SEMANTIC_GRAPH_NODE_HASH_INVALID");
+  return node;
+}
+function parseEdge(raw, npcId) {
+  if (!raw || typeof raw !== "object") throw new Error("NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  const edge = raw;
+  if (edge.version !== NPC_SEMANTIC_GRAPH_VERSION || !edgeKinds.includes(edge.kind) || !statuses.includes(edge.status)) throw new Error("NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  assertId(edge.id, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  assertRelationKey(edge.relationKey, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  assertId(edge.fromNodeId, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  assertId(edge.toNodeId, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  assertIndex(edge.validFromIndex, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  if (edge.validUntilIndex !== null) {
+    assertIndex(edge.validUntilIndex, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+    if (edge.validUntilIndex <= edge.validFromIndex) throw new Error("NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  }
+  if (!Array.isArray(edge.provenance) || !edge.provenance.length || edge.provenance.length > NPC_SEMANTIC_GRAPH_LIMITS.provenanceRefs) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_INVALID");
+  edge.provenance.forEach(validateProvenance);
+  if (!same2(edge.provenance, [...edge.provenance].sort(provenanceOrder)) || new Set(edge.provenance.map((ref) => `${ref.kind}:${ref.id}:${ref.hash}`)).size !== edge.provenance.length) throw new Error("NPC_SEMANTIC_GRAPH_PROVENANCE_ORDER");
+  assertHash(edge.payloadHash, "NPC_SEMANTIC_GRAPH_EDGE_INVALID");
+  const { id: id5, payloadHash, ...payload } = edge;
+  if (id5 !== graphEdgeId(npcId, edge.kind, edge.relationKey, edge.fromNodeId, edge.toNodeId) || payloadHash !== digest2(payload)) throw new Error("NPC_SEMANTIC_GRAPH_EDGE_HASH_INVALID");
+  return edge;
+}
+function parseNpcSemanticMemoryGraph(value) {
+  if (typeof value === "string") {
+    if (Buffer.byteLength(value, "utf8") > NPC_SEMANTIC_GRAPH_LIMITS.bytes) throw new Error("NPC_SEMANTIC_GRAPH_BYTE_LIMIT");
+    value = JSON.parse(value);
+  }
+  if (!value || typeof value !== "object") throw new Error("NPC_SEMANTIC_GRAPH_INVALID");
+  const graph = value;
+  if (graph.version !== NPC_SEMANTIC_GRAPH_VERSION || graph.retrievalVersion !== NPC_SEMANTIC_RETRIEVAL_VERSION) throw new Error("NPC_SEMANTIC_GRAPH_VERSION_INVALID");
+  assertId(graph.npcId, "NPC_SEMANTIC_GRAPH_INVALID");
+  assertIndex(graph.generation, "NPC_SEMANTIC_GRAPH_INVALID");
+  if (!same2(graph.authority, npcAuthority())) throw new Error("NPC_SEMANTIC_GRAPH_REVISION_MISMATCH");
+  assertHash(graph.memoryHash, "NPC_SEMANTIC_GRAPH_INVALID");
+  if (graph.previousGraphHash !== null) assertHash(graph.previousGraphHash, "NPC_SEMANTIC_GRAPH_INVALID");
+  if (!Array.isArray(graph.nodes) || graph.nodes.length > NPC_SEMANTIC_GRAPH_LIMITS.nodes || !Array.isArray(graph.edges) || graph.edges.length > NPC_SEMANTIC_GRAPH_LIMITS.edges) throw new Error("NPC_SEMANTIC_GRAPH_LIMIT");
+  const nodes = graph.nodes.map((node) => parseNode(node, graph.npcId));
+  const ids = new Set(nodes.map((node) => node.id));
+  if (ids.size !== nodes.length || !same2(nodes, [...nodes].sort((a, b) => textOrder2(a.id, b.id)))) throw new Error("NPC_SEMANTIC_GRAPH_NODE_ORDER");
+  const edges = graph.edges.map((edge) => parseEdge(edge, graph.npcId));
+  if (new Set(edges.map((edge) => edge.id)).size !== edges.length || !same2(edges, [...edges].sort((a, b) => textOrder2(a.id, b.id))) || edges.some((edge) => !ids.has(edge.fromNodeId) || !ids.has(edge.toNodeId))) throw new Error("NPC_SEMANTIC_GRAPH_EDGE_ORDER");
+  assertHash(graph.graphHash, "NPC_SEMANTIC_GRAPH_HASH_INVALID");
+  const { graphHash, ...unsigned } = graph;
+  if (graphHash !== digest2(unsigned)) throw new Error("NPC_SEMANTIC_GRAPH_HASH_INVALID");
+  if (Buffer.byteLength(stableCatalogStringify(graph), "utf8") > NPC_SEMANTIC_GRAPH_LIMITS.bytes) throw new Error("NPC_SEMANTIC_GRAPH_BYTE_LIMIT");
+  return deepFreeze2(graph);
+}
+function verifyNpcSemanticMemoryGraph(value, evidence) {
+  const candidate = parseNpcSemanticMemoryGraph(value);
+  const rebuilt = buildNpcSemanticMemoryGraph(evidence);
+  if (!same2(candidate, rebuilt)) throw new Error("NPC_SEMANTIC_GRAPH_SOURCE_EVIDENCE_MISMATCH");
+  verifiedGraphs.add(candidate);
+  return candidate;
+}
+function isVerifiedNpcSemanticMemoryGraph(value) {
+  return !!value && typeof value === "object" && verifiedGraphs.has(value);
+}
+function normalizeQuery(query) {
+  assertIndex(query.logicalIndex, "NPC_SEMANTIC_RETRIEVAL_QUERY_INVALID");
+  const startKeys = uniqueSorted(query.startKeys ?? []);
+  const kinds = uniqueSorted(query.nodeKinds ?? []);
+  const relations = uniqueSorted(query.edgeKinds ?? []);
+  if (startKeys.length > NPC_SEMANTIC_GRAPH_LIMITS.startKeys || kinds.length > NPC_SEMANTIC_GRAPH_LIMITS.filterValues || relations.length > NPC_SEMANTIC_GRAPH_LIMITS.filterValues || startKeys.some((value) => !idPattern.test(value)) || kinds.some((value) => !nodeKinds.includes(value)) || relations.some((value) => !edgeKinds.includes(value))) throw new Error("NPC_SEMANTIC_RETRIEVAL_QUERY_INVALID");
+  const maxDepth = query.maxDepth ?? NPC_SEMANTIC_GRAPH_LIMITS.traversalDepth;
+  const maxCandidates = query.maxCandidates ?? NPC_SEMANTIC_GRAPH_LIMITS.candidates;
+  const maxResults = query.maxResults ?? NPC_SEMANTIC_GRAPH_LIMITS.results;
+  if (!Number.isInteger(maxDepth) || maxDepth < 0 || maxDepth > NPC_SEMANTIC_GRAPH_LIMITS.traversalDepth || !Number.isInteger(maxCandidates) || maxCandidates < 1 || maxCandidates > NPC_SEMANTIC_GRAPH_LIMITS.candidates || !Number.isInteger(maxResults) || maxResults < 1 || maxResults > NPC_SEMANTIC_GRAPH_LIMITS.results || maxResults > maxCandidates) throw new Error("NPC_SEMANTIC_RETRIEVAL_BOUNDS_INVALID");
+  return deepFreeze2({ logicalIndex: query.logicalIndex, startKeys, nodeKinds: kinds, edgeKinds: relations, maxDepth, maxCandidates, maxResults });
+}
+function activeAt(status, from, until, index5) {
+  return status === "active" && index5 >= from && (until === null || index5 < until);
+}
+function retrieveNpcSemanticMemoryGraph(graphValue, queryValue) {
+  if (!verifiedGraphs.has(graphValue)) throw new Error("NPC_SEMANTIC_GRAPH_VERIFIED_SOURCE_REQUIRED");
+  const graph = parseNpcSemanticMemoryGraph(graphValue), query = normalizeQuery(queryValue);
+  if (query.logicalIndex > graph.generation) throw new Error("NPC_SEMANTIC_RETRIEVAL_QUERY_AFTER_GRAPH_GENERATION");
+  const activeNodes = graph.nodes.filter((node) => activeAt(node.status, node.validFromIndex, node.validUntilIndex, query.logicalIndex));
+  const activeById = new Map(activeNodes.map((node) => [node.id, node]));
+  const allowedEdges = graph.edges.filter((edge) => activeAt(edge.status, edge.validFromIndex, edge.validUntilIndex, query.logicalIndex) && activeById.has(edge.fromNodeId) && activeById.has(edge.toNodeId) && (!query.edgeKinds.length || query.edgeKinds.includes(edge.kind)));
+  const outgoing = /* @__PURE__ */ new Map();
+  for (const edge of allowedEdges) {
+    const list = outgoing.get(edge.fromNodeId) ?? [];
+    list.push(edge);
+    outgoing.set(edge.fromNodeId, list);
+  }
+  for (const list of outgoing.values()) list.sort((a, b) => textOrder2(a.toNodeId, b.toNodeId) || textOrder2(a.id, b.id));
+  const depths = /* @__PURE__ */ new Map();
+  const seeds = (query.startKeys.length ? activeNodes.filter((node) => query.startKeys.includes(node.key)) : activeNodes).sort((a, b) => textOrder2(a.id, b.id)).slice(0, query.maxCandidates);
+  let frontier = seeds.map((node) => node.id);
+  for (const id5 of frontier) depths.set(id5, 0);
+  for (let depth = 0; depth < query.maxDepth && frontier.length && depths.size < query.maxCandidates; depth++) {
+    const next2 = [];
+    for (const nodeId of [...frontier].sort(textOrder2)) {
+      for (const edge of outgoing.get(nodeId) ?? []) {
+        if (depths.has(edge.toNodeId)) continue;
+        depths.set(edge.toNodeId, depth + 1);
+        next2.push(edge.toNodeId);
+        if (depths.size >= query.maxCandidates) break;
+      }
+      if (depths.size >= query.maxCandidates) break;
+    }
+    frontier = uniqueSorted(next2);
+  }
+  const results = [...depths.entries()].map(([nodeId, depth]) => {
+    const node = activeById.get(nodeId);
+    const age = Math.max(0, query.logicalIndex - node.validFromIndex);
+    const recency = Math.max(0, 999 - Math.min(999, age));
+    const score = (query.startKeys.includes(node.key) ? 1e4 : 0) + (query.nodeKinds.includes(node.kind) ? 1e3 : 0) + Math.max(0, 500 - depth * 100) + recency + Math.min(99, node.provenance.length);
+    return { nodeId: node.id, kind: node.kind, key: node.key, status: "active", depth, score, payloadHash: node.payloadHash };
+  }).filter((result) => !query.nodeKinds.length || query.nodeKinds.includes(result.kind)).sort((a, b) => b.score - a.score || a.depth - b.depth || textOrder2(a.nodeId, b.nodeId)).slice(0, query.maxResults);
+  const unsigned = { version: NPC_SEMANTIC_RETRIEVAL_VERSION, graphHash: graph.graphHash, query, results };
+  return deepFreeze2({ ...unsigned, resultHash: digest2(unsigned) });
+}
 export {
+  AURION_WASD_CONTENT_VERSION,
+  AURION_WASD_RULESET_VERSION,
   AX1_LIVING_WORLD_RULESET,
+  NPC_ACTION_GATEWAY_MAX_CANDIDATES,
+  NPC_ACTION_GATEWAY_MAX_TARGETS,
+  NPC_ACTION_GATEWAY_VERSION,
+  NPC_ACTION_LEASE_VERSION,
+  NPC_ACTION_RECEIPT_VERSION,
   NPC_LIFE_MAX_OPPORTUNITIES,
   NPC_LIFE_MAX_PLAN_STEPS,
   NPC_LIFE_MAX_RELATIONSHIPS,
@@ -4983,20 +5807,38 @@ export {
   NPC_MULTI_MEMORY_LIMITS,
   NPC_MULTI_MEMORY_VERSION,
   NPC_RECEIPT_VERSION,
+  NPC_SEMANTIC_GRAPH_LIMITS,
+  NPC_SEMANTIC_GRAPH_VERSION,
+  NPC_SEMANTIC_RETRIEVAL_VERSION,
   WASD_NPC_MEMORY_RULESET,
   advanceNpcMemory,
+  buildWorldSeedDigest,
   caravanSecurityIndex,
   commitNpcMemoryV4,
+  compileNpcSemanticMemoryGraph,
+  confirmedNpcEconomy,
   createNpcLifeSnapshot,
   createNpcMemoryV4,
   createNpcSnapshot,
   decideNpcGoal,
   decodeNpcReceipt,
   deriveNpcPersonality,
+  diplomacyTypes,
   encodeNpcLifeReceipt,
   encodeNpcReceipt,
+  hasLivingWorldRoute,
+  isConfirmedNpcDecision,
+  isVerifiedNpcSemanticMemoryGraph,
+  isVerifiedPerformedActionEvidence,
   livingWorldSocialActions,
   marketPriceCopper,
+  merchantActionEffectsHash,
+  merchantActionReceiptHash,
+  merchantActionReceiptId,
+  merchantBootstrapMarkets,
+  merchantInventoryStateHash,
+  merchantMarketStateHash,
+  merchantPolityStateHash,
   normalizeNpcRequest,
   npcAuthority,
   npcEconomyLifeStateSchema,
@@ -5023,14 +5865,23 @@ export {
   parseNpcMemoryV4,
   parseNpcNeeds,
   parseNpcRelationshipEvent,
-  prepareMerchantNpcDecision,
+  parseNpcSemanticMemoryGraph,
+  planMerchantAction,
+  polityGovernmentTypes,
   projectNpcMemoryV4,
   replayNpcMemoryV4,
   resolveLivingWorldTick,
   resolveNpcLife,
   resolveNpcNeeds,
+  resolvePolityState,
+  resolveWorldReaction,
+  retrieveNpcSemanticMemoryGraph,
   socialMasteryEvidence,
   stableCatalogStringify,
+  validateMerchantAction,
   verifyConfirmedNpcDecision,
-  verifyNpcMemoryEvidence
+  verifyNpcMemoryEvidence,
+  verifyNpcSemanticMemoryGraph,
+  verifyPerformedActionEvidence,
+  worldSignalKinds
 };

@@ -24,7 +24,8 @@
   "policy": {
     "productionWritesScheduled": false,
     "ownerApprovalRequired": true,
-    "requiresFreshPlanHashBeforeApply": true
+    "requiresFreshPlanHashBeforeApply": true,
+    "futureTagsRequireNewManifest": true
   },
-  "manifestSha256": "a0b21614b132f51f38cdbc12b8fea9fa8d9bbae634ed5bfa913156916ac4e669"
+  "manifestSha256": "687ac526cee74fe5f600017a845a114aea61952c309418b993f099d0244867bc"
 }

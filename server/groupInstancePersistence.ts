@@ -8,6 +8,7 @@ import { GROUP_RULESET, groupCommandSchema, groupPartySchema, groupPlayerSchema,
 import { assertGroupRoster, groupCatalog, groupHash, groupQualification, GROUP_LEASE_MS, GROUP_QUEUE_LIMIT, issueGroupTicket, oldestCompleteGroup, resolveGroupExchange, verifyGroupTicket } from "./groupInstanceRules";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import { commitGroupCompletionMastery } from "./groupCompletionMastery";
+import { readActiveDungeonDesign, readActiveDungeonDesigns } from "./aurionAuthoringPersistence";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -87,12 +88,22 @@ async function validateQualifications(tx: Transaction, party: GroupParty, member
   }
   if (party.sourceRevision !== runtimeRevision()) throw new Error("GROUP_RUNTIME_REVISION_CHANGED_LEAVE_AND_REQUEUE");
 }
+async function dungeonCatalogEntries(tx: Transaction) {
+  const authored = await readActiveDungeonDesigns(tx);
+  const entries = [
+    ...groupCatalog.dungeons.map(dungeon => ({ id: dungeon.id, label: dungeon.label })),
+    ...authored.map(dungeon => ({ id: dungeon.dungeonId, label: dungeon.label })),
+  ];
+  const unique = new Map(entries.map(entry => [entry.id, entry] as const));
+  return [...unique.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
 async function readmodel(tx: Transaction, userId: number): Promise<GroupReadmodel> {
   const player = await readPlayer(tx, userId);
   const party = player.partyId ? await readParty(tx, player.partyId) : null;
   const members = party ? await membersOf(tx, party) : [];
   if (party && !party.roster.some(m => m.userId === userId)) throw new Error("GROUP_MEMBERSHIP_REQUIRED");
-  return groupReadmodelSchema.parse({ ruleset: GROUP_RULESET, sourceRevision: runtimeRevision(), player, qualification: await qualification(tx, player), catalog: groupCatalog.dungeons.map(d => ({ id: d.id, label: d.label })), party, readyUserIds: members.filter(m => m.ready).map(m => m.userId).sort((a, b) => a - b), enteredUserIds: members.filter(m => m.status === "entered").map(m => m.userId).sort((a, b) => a - b), ticket: party ? await readTicket(tx, party) : null });
+  return groupReadmodelSchema.parse({ ruleset: GROUP_RULESET, sourceRevision: runtimeRevision(), player, qualification: await qualification(tx, player), catalog: await dungeonCatalogEntries(tx), party, readyUserIds: members.filter(m => m.ready).map(m => m.userId).sort((a, b) => a - b), enteredUserIds: members.filter(m => m.status === "entered").map(m => m.userId).sort((a, b) => a - b), ticket: party ? await readTicket(tx, party) : null });
 }
 
 export async function readGroupForUser(userId: number) {
@@ -158,6 +169,7 @@ export async function commandGroupForUser(userId: number, raw: GroupCommand) {
       await writePlayer(tx, player);
     } else if (action.kind === "join") {
       if (player.status !== "idle" || player.partyId) throw new Error("GROUP_ALREADY_QUEUED_OR_GROUPED");
+      if (!(await dungeonCatalogEntries(tx)).some(dungeon => dungeon.id === action.dungeonId)) throw new Error("GROUP_DUNGEON_UNAVAILABLE");
       const q = await qualification(tx, player, true);
       if (q.hash !== action.qualificationHash || !q.roles.includes(action.role)) throw new Error("GROUP_ROLE_NOT_QUALIFIED");
       if (coordinator.nextOrdinal >= 2_000_000_000) throw new Error("GROUP_QUEUE_ORDINAL_EXHAUSTED");
@@ -195,7 +207,7 @@ export async function commandGroupForUser(userId: number, raw: GroupCommand) {
           if (members.every(member => member.userId === userId ? action.ready : member.ready)) {
             const worlds = await tx.select().from(aurionGlobalWorldStates).limit(2);
             if (worlds.length !== 1) throw new Error("GROUP_PERSISTED_WORLD_REQUIRED");
-            const ticket = issueGroupTicket(party, worlds[0]!);
+            const ticket = issueGroupTicket(party, worlds[0]!, await readActiveDungeonDesign(party.dungeonId, tx));
             await tx.insert(aurionGroupTickets).values({ id: ticket.id, partyId: party.id, sourceRevision, ticketJson: stableCatalogStringify(ticket), ticketHash: ticket.hash });
             party = { ...party, phase: "active", ticketId: ticket.id, bossHp: ticket.bosses[0]!.hp, health: party.roster.map(m => ({ userId: m.userId, hp: ticket.playerMaxHp })) };
           }

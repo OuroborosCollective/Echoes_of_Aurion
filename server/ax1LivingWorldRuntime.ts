@@ -1,24 +1,37 @@
-import { readConfirmedNpcState, resolveAndRecordNpc, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
-import { prepareMerchantNpcDecision, npcIdentity, type HubId, type LivingWorldSocialAction } from "./wasdNpcCapsule";
+import {
+  executeConfirmedMerchantAction,
+  type ConfirmedMerchantActionResult,
+  type EditorialConsent,
+} from "./npcActionGatewayPersistence";
+import type { HubId } from "./wasdNpcCapsule";
 
-export type LivingWorldRuntimeResult = Readonly<{
-  resolution: ReturnType<typeof prepareMerchantNpcDecision>["resolution"];
-  npc: Awaited<ReturnType<typeof resolveAndRecordNpc>>;
-  polity: Awaited<ReturnType<typeof resolveAndRecordPolity>>;
-  world: Awaited<ReturnType<typeof resolveAndRecordWorld>>;
-  socialEvidence?: ReturnType<typeof prepareMerchantNpcDecision>["socialEvidence"];
-}>;
+export type LivingWorldRuntimeResult = Extract<
+  ConfirmedMerchantActionResult,
+  { status: "committed" | "persisted" }
+>;
 
-/** Host orchestration only: confirmed state into WASD, returned requests into persistence. */
+/**
+ * AX1-facing host adapter only. The caller supplies a real persisted source
+ * decision identity; WASD plans and validates the action while Aurion owns the
+ * transaction, locks, consent, effect commit and readback.
+ */
 export async function resolveAndRecordAx1LivingWorld(input: Readonly<{
-  worldSeed: string; resolutionIndex: number; regionId: HubId;
-  social?: Readonly<{ action: LivingWorldSocialAction; sourceReceiptId: string }>;
+  worldSeed: string;
+  regionId: HubId;
+  sourceDecisionReceiptId: string;
+  consent?: EditorialConsent;
 }>): Promise<LivingWorldRuntimeResult> {
-  const prior = await readConfirmedNpcState(npcIdentity(input.regionId));
-  const prepared = prepareMerchantNpcDecision({ ...input, prior });
-  const npc = await resolveAndRecordNpc(prepared.npcRequest);
-  const world = await resolveAndRecordWorld(prepared.worldRequest);
-  const polity = await resolveAndRecordPolity(prepared.polityRequest);
-  return Object.freeze({ resolution: prepared.resolution, npc, world, polity,
-    ...(prepared.socialEvidence ? { socialEvidence: prepared.socialEvidence } : {}) });
+  const result = await executeConfirmedMerchantAction({
+    worldSeed: input.worldSeed,
+    homeHubId: input.regionId,
+    sourceDecisionReceiptId: input.sourceDecisionReceiptId,
+    ...(input.consent ? { consent: input.consent } : {}),
+  });
+  if (result.status === "blocked") {
+    throw new Error(`NPC_ACTION_GATEWAY_BLOCKED:${result.code}`);
+  }
+  if (result.status === "denied") {
+    throw new Error("NPC_ACTION_EDITORIAL_CONSENT_DENIED");
+  }
+  return result;
 }

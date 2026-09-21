@@ -8,69 +8,6 @@ const exact = z
   hash = z.string().regex(/^[a-f0-9]{64}$/);
 const resource = z.enum(["wood", "stone", "aether"]),
   version = z.enum(["legacy", "aurion_v2"]);
-
-export const memberActivityStatSchema = z.object({
-  userId: z.number().int(),
-  name: z.string(),
-  role: z.enum(["founder", "officer", "member", "applicant"]),
-  contributionPoints: z.number().int(),
-  activityCount: z.number().int(),
-  bankTransactionsCount: z.number().int(),
-});
-export type MemberActivityStat = z.infer<typeof memberActivityStatSchema>;
-
-export const activityCategoryStatSchema = z.object({
-  category: z.string(),
-  label: z.string(),
-  points: z.number().int(),
-  count: z.number().int(),
-});
-export type ActivityCategoryStat = z.infer<typeof activityCategoryStatSchema>;
-
-export const resourceAccumulationSummarySchema = z.object({
-  wood: exact,
-  stone: exact,
-  aether: exact,
-  treasuryPoints: exact,
-  lifetimeWoodDonated: exact,
-  lifetimeStoneDonated: exact,
-  lifetimeAetherDonated: exact,
-  lifetimePointsDeposited: exact,
-  totalVaultItems: z.number().int(),
-  buildingInvestmentPoints: exact,
-});
-export type ResourceAccumulationSummary = z.infer<typeof resourceAccumulationSummarySchema>;
-
-export const guildBankDashboardSummarySchema = z.object({
-  resources: resourceAccumulationSummarySchema,
-  memberStats: z.array(memberActivityStatSchema),
-  activityBreakdown: z.array(activityCategoryStatSchema),
-  totalActiveMembers: z.number().int(),
-  totalGuildContributionPoints: z.number().int(),
-  totalBankReceiptsCount: z.number().int(),
-});
-export type GuildBankDashboardSummary = z.infer<typeof guildBankDashboardSummarySchema>;
-
-export const defaultDashboardSummary: GuildBankDashboardSummary = {
-  resources: {
-    wood: "0",
-    stone: "0",
-    aether: "0",
-    treasuryPoints: "0",
-    lifetimeWoodDonated: "0",
-    lifetimeStoneDonated: "0",
-    lifetimeAetherDonated: "0",
-    lifetimePointsDeposited: "0",
-    totalVaultItems: 0,
-    buildingInvestmentPoints: "0",
-  },
-  memberStats: [],
-  activityBreakdown: [],
-  totalActiveMembers: 0,
-  totalGuildContributionPoints: 0,
-  totalBankReceiptsCount: 0,
-};
-
 export const guildBankViewSchema = z.object({
   guildId: id,
   actorUserId: z.number().int().positive(),
@@ -115,7 +52,6 @@ export const guildBankViewSchema = z.object({
       })
     )
     .max(6),
-  dashboardSummary: guildBankDashboardSummarySchema.optional().default(defaultDashboardSummary),
 });
 export type GuildBankView = z.infer<typeof guildBankViewSchema>;
 export const guildBankPlanViewSchema = z.object({

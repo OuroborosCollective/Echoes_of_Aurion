@@ -1,4 +1,4 @@
-import { QuestPlan } from '../../shared/aurionQuestContract';
+import { QuestPlan, QuestTemplateVersion, QuestTemplateVersionSchema } from '../../shared/aurionQuestContract';
 
 export interface ValidationDiagnostic {
   code: string;
@@ -17,6 +17,46 @@ export interface QuestValidationResult {
  * Performs fail-closed validation of QuestPlans before activation or live instantiation.
  */
 export class QuestValidator {
+  public static validateTemplate(raw: QuestTemplateVersion): { valid: boolean; diagnostics: ValidationDiagnostic[] } {
+    const template = QuestTemplateVersionSchema.parse(raw);
+    const diagnostics: ValidationDiagnostic[] = [];
+    const ids = template.nodes.map(node => node.id);
+    const idSet = new Set(ids);
+    if (idSet.size !== ids.length) diagnostics.push({ code: "DUPLICATE_NODE_ID", message: "Quest template contains duplicate node ids.", severity: "error" });
+    const starts = template.nodes.filter(node => node.type === "start");
+    const ends = template.nodes.filter(node => node.type === "end");
+    if (starts.length !== 1) diagnostics.push({ code: "START_NODE_COUNT", message: "Quest template must contain exactly one start node.", severity: "error" });
+    if (ends.length < 1) diagnostics.push({ code: "MISSING_END_NODE", message: "Quest template must contain at least one end node.", severity: "error" });
+    if (template.nodes.length > 50) diagnostics.push({ code: "NODE_COUNT_EXCEEDED", message: "Quest template exceeds 50 nodes.", severity: "error" });
+    const edgeIds = template.edges.map(edge => edge.id);
+    if (new Set(edgeIds).size !== edgeIds.length) diagnostics.push({ code: "DUPLICATE_EDGE_ID", message: "Quest template contains duplicate edge ids.", severity: "error" });
+    for (const edge of template.edges) {
+      if (!idSet.has(edge.fromNodeId) || !idSet.has(edge.toNodeId) || edge.fromNodeId === edge.toNodeId) diagnostics.push({ code: "INVALID_EDGE_REFERENCE", message: `Invalid quest edge ${edge.id}.`, severity: "error" });
+    }
+    if (starts.length === 1) {
+      const visited = new Set<string>();
+      const queue = [starts[0]!.id];
+      while (queue.length) {
+        const current = queue.shift()!;
+        if (visited.has(current)) continue;
+        visited.add(current);
+        for (const edge of template.edges.filter(candidate => candidate.fromNodeId === current)) if (!visited.has(edge.toNodeId)) queue.push(edge.toNodeId);
+      }
+      for (const node of template.nodes) if (!visited.has(node.id)) diagnostics.push({ code: "UNREACHABLE_NODE", message: `Quest node ${node.id} is unreachable.`, severity: "error" });
+    }
+    for (const node of template.nodes) {
+      if (node.type === "objective" && !node.objective?.eventBinding) {
+        diagnostics.push({ code: "OBJECTIVE_EVENT_BINDING_REQUIRED", message: `Quest objective ${node.id} has no confirmed Aurion event binding.`, severity: "error" });
+      }
+    }
+    const outcomeIds = template.outcomes.map(outcome => outcome.id);
+    if (new Set(outcomeIds).size !== outcomeIds.length) diagnostics.push({ code: "DUPLICATE_OUTCOME_ID", message: "Quest template contains duplicate outcome ids.", severity: "error" });
+    for (const outcome of template.outcomes) for (const reward of outcome.rewards) {
+      if (reward.amount > 1_000_000) diagnostics.push({ code: "REWARD_BOUND_EXCEEDED", message: `Reward ${reward.type} exceeds the authoring limit.`, severity: "error" });
+    }
+    return { valid: !diagnostics.some(item => item.severity === "error"), diagnostics };
+  }
+
   public static validatePlan(plan: QuestPlan): QuestValidationResult {
     const diagnostics: ValidationDiagnostic[] = [];
 

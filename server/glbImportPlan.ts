@@ -132,6 +132,7 @@ export function automaticGlbTarget(classification: GlbAssetClassification): stri
 
 function assertPurpose(classification: GlbAssetClassification, purpose: GlbImportPurpose): void {
   if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
+  if (purpose === "enemy-fallback" && classification.assetType !== "enemy") throw new Error("GLB_ENEMY_FALLBACK_ENEMY_REQUIRED");
   if (purpose === "world-environment" && (classification.assetType !== "arena" || classification.worldFamily !== "environment")) throw new Error("GLB_WORLD_ENVIRONMENT_REQUIRED");
   if (purpose === "world-nature" && (classification.assetType !== "arena" || classification.worldFamily !== "nature")) throw new Error("GLB_WORLD_NATURE_REQUIRED");
   if (purpose === "equipment" && !(["weapon", "armor"] as const).includes(classification.assetType as "weapon" | "armor") ) throw new Error("GLB_EQUIPMENT_REQUIRED");

@@ -2,13 +2,14 @@ import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import fs from "node:fs";
 import path from "node:path";
+import { operationalDate } from "../../shared/operationalClock";
 
 const LOG_DIR = path.join(process.cwd(), ".manus-logs");
 
 function readLogFile(filename: string) {
   const filePath = path.join(LOG_DIR, filename);
   if (!fs.existsSync(filePath)) return [];
-  
+
   const content = fs.readFileSync(filePath, "utf-8");
   return content.split("\n")
     .filter(line => line.trim())
@@ -31,7 +32,7 @@ function readLogFile(filename: string) {
 
 export const sessionLogRouter = router({
   getLogs: adminProcedure
-    .input(z.object({ 
+    .input(z.object({
       type: z.enum(["browserConsole", "networkRequests", "sessionReplay", "performance"]),
       limit: z.number().int().min(1).max(1000).default(100)
     }))
@@ -42,13 +43,13 @@ export const sessionLogRouter = router({
 
   triggerReplay: adminProcedure
     .input(z.object({ sessionId: z.string().optional() }))
-    .mutation(async ({ input }) => {
-      // In a real system, this would spawn a child process or a worker to re-run the session.
-      // For this implementation, we'll return a simulated success.
-      return { 
-        success: true, 
-        message: "Deterministic session replay triggered.",
-        timestamp: new Date().toISOString()
+    .mutation(async () => {
+      // No worker is wired to this endpoint yet. Report that boundary explicitly
+      // instead of manufacturing a successful replay receipt.
+      return {
+        success: false,
+        message: "SESSION_REPLAY_NOT_IMPLEMENTED: no authoritative replay worker is connected.",
+        timestamp: operationalDate().toISOString()
       };
     }),
 });

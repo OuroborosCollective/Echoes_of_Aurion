@@ -41,7 +41,6 @@ import { RuntimeFrameLoop } from './RuntimeFrameLoop';
 import { DeterministicSimulation } from '@shared/deterministicSimulation';
 import { syncManager } from './SyncManager';
 import { PartyManager } from './PartyManager';
-import { Ax1CameraDirector } from './Ax1CameraDirector';
 
 
 interface ActiveProjectile {
@@ -112,28 +111,14 @@ export class MMOEngine {
   private projectiles: ActiveProjectile[] = [];
   private aoeEffects: ActiveAoEEffect[] = [];
 
-  // 3rd-Person Orbit & Follow Camera with Ax1CameraDirector
-  public readonly cameraDirector: Ax1CameraDirector = new Ax1CameraDirector({
-    baseFov: 58,
-    lookAheadDistance: 2.2,
-    lookAheadSpeed: 4.5,
-    minGroundClearance: 0.85,
-    autoFollowDelay: 1.5,
-    autoFollowRate: 1.8,
-  });
-  public get cameraDistance(): number { return this.cameraDirector.getDistance(); }
-  public set cameraDistance(val: number) { this.cameraDirector.setTargetDistance(val); }
-  public get cameraHeight(): number { return this.cameraDirector.getState().height; }
-  public set cameraHeight(_val: number) { /* dynamically maintained by cameraDirector based on distance */ }
-  public get cameraYaw(): number { return this.cameraDirector.getYaw(); }
-  public set cameraYaw(val: number) { this.cameraDirector.setYaw(val); }
-  public get cameraPitch(): number { return this.cameraDirector.getPitch(); }
-  public set cameraPitch(val: number) { this.cameraDirector.setPitch(val); }
-  public isOrbitingCamera: boolean = false;
+  // 3rd-Person Orbit & Follow Camera
+  public cameraDistance: number = 10.5;
+  public cameraHeight: number = 4.2;
+  public cameraYaw: number = 0;
+  public cameraPitch: number = 0.28;
+  private isOrbitingCamera: boolean = false;
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
-  private lastTouchDeltaX: number = 0;
-  private lastTouchDeltaY: number = 0;
 
   // Controls Input State
   private keysPressed: Record<string, boolean> = {};
@@ -718,7 +703,6 @@ export class MMOEngine {
     if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     if (e.button === 0 || e.button === 2) {
       this.isOrbitingCamera = true;
-      this.cameraDirector.setManualOrbiting(true);
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
     }
@@ -733,33 +717,30 @@ export class MMOEngine {
     this.lastMouseX = e.clientX;
     this.lastMouseY = e.clientY;
 
-    this.cameraDirector.applyOrbitDelta(-deltaX * 0.006, deltaY * 0.004);
+    this.cameraYaw -= deltaX * 0.006;
+    this.cameraPitch = Math.max(0.1, Math.min(1.2, this.cameraPitch + deltaY * 0.004));
   };
 
   private handleMouseUp = () => {
     this.isOrbitingCamera = false;
-    this.cameraDirector.setManualOrbiting(false);
   };
 
   private handleWheel = (e: WheelEvent) => {
     if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     e.preventDefault();
-    this.cameraDirector.zoomBy(e.deltaY * 0.015);
+    this.cameraDistance = Math.max(7.0, Math.min(28.0, this.cameraDistance + e.deltaY * 0.015));
+    this.cameraHeight = this.cameraDistance * 0.55;
   };
 
   private handleTouchStart = (e: TouchEvent) => {
     if (this.controlsBlocked()) { this.releaseControlInput(); return; }
     if (e.touches.length === 1) {
       this.isOrbitingCamera = true;
-      this.cameraDirector.setManualOrbiting(true);
       this.lastMouseX = e.touches[0].clientX;
       this.lastMouseY = e.touches[0].clientY;
-      this.lastTouchDeltaX = 0;
-      this.lastTouchDeltaY = 0;
       this.lastPinchDistance = 0;
     } else if (e.touches.length === 2) {
       this.isOrbitingCamera = false;
-      this.cameraDirector.setManualOrbiting(false);
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       this.lastPinchDistance = Math.hypot(dx, dy);
@@ -774,10 +755,9 @@ export class MMOEngine {
       const deltaY = touch.clientY - this.lastMouseY;
       this.lastMouseX = touch.clientX;
       this.lastMouseY = touch.clientY;
-      this.lastTouchDeltaX = deltaX;
-      this.lastTouchDeltaY = deltaY;
 
-      this.cameraDirector.applyOrbitDelta(-deltaX * 0.008, deltaY * 0.005);
+      this.cameraYaw -= deltaX * 0.008;
+      this.cameraPitch = Math.max(0.08, Math.min(1.25, this.cameraPitch + deltaY * 0.005));
     } else if (e.touches.length === 2) {
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -785,7 +765,8 @@ export class MMOEngine {
 
       if (this.lastPinchDistance > 0) {
         const diff = this.lastPinchDistance - distance;
-        this.cameraDirector.zoomBy(diff * 0.04);
+        this.cameraDistance = Math.max(6.0, Math.min(32.0, this.cameraDistance + diff * 0.04));
+        this.cameraHeight = this.cameraDistance * 0.55;
       }
       this.lastPinchDistance = distance;
     }
@@ -793,22 +774,13 @@ export class MMOEngine {
 
   private handleTouchEnd = (e: TouchEvent) => {
     if (e.touches.length === 0) {
-      if (this.isOrbitingCamera && (Math.abs(this.lastTouchDeltaX) > 1.5 || Math.abs(this.lastTouchDeltaY) > 1.5)) {
-        this.cameraDirector.addInertia(-this.lastTouchDeltaX * 0.008, this.lastTouchDeltaY * 0.005, 0.016);
-      }
       this.isOrbitingCamera = false;
-      this.cameraDirector.setManualOrbiting(false);
       this.lastPinchDistance = 0;
-      this.lastTouchDeltaX = 0;
-      this.lastTouchDeltaY = 0;
     } else if (e.touches.length === 1) {
       this.lastPinchDistance = 0;
       this.isOrbitingCamera = true;
-      this.cameraDirector.setManualOrbiting(true);
       this.lastMouseX = e.touches[0].clientX;
       this.lastMouseY = e.touches[0].clientY;
-      this.lastTouchDeltaX = 0;
-      this.lastTouchDeltaY = 0;
     }
   };
 
@@ -1411,18 +1383,15 @@ export class MMOEngine {
       }
     });
 
-    // 4. Update 3rd Person Orbit / Follow Camera with Ax1CameraDirector
-    this.cameraDirector.update(
-      delta,
-      this.player.position,
-      this.player.facingAngle,
-      { x: moveX, z: moveZ },
-      (x, z) => this.landscape.chunkManager.getElevationAt(x, z)
-    );
-    const camPos = this.cameraDirector.getCameraPosition();
-    this.camera.position.set(camPos.x, camPos.y, camPos.z);
-    const lookAt = this.cameraDirector.getLookAt();
-    this.camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+    // 4. Update 3rd Person Orbit / Follow Camera
+    const horizDist = this.cameraDistance * Math.cos(this.cameraPitch);
+    const vertDist = this.cameraHeight + this.cameraDistance * Math.sin(this.cameraPitch);
+    const targetCamX = this.player.position.x + Math.sin(this.cameraYaw) * horizDist;
+    const targetCamY = this.player.position.y + vertDist;
+    const targetCamZ = this.player.position.z + Math.cos(this.cameraYaw) * horizDist;
+
+    this.camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), delta * 8.0);
+    this.camera.lookAt(this.player.position.x, this.player.position.y + 1.6, this.player.position.z);
 
     // 5. Update Mobs AI
     this.mobManager.update(delta, this.player.position.x, this.player.position.z, (mob, dmg) => {
@@ -1950,11 +1919,10 @@ export class MMOEngine {
     const aspect = width / height;
     if (!isFinite(aspect) || isNaN(aspect) || aspect <= 0) return;
     this.camera.aspect = aspect;
-    this.camera.fov = this.cameraDirector.computeDynamicFov(width, height);
-    const budget = renderBudget(width, height, Math.min(2.0, window.devicePixelRatio || 1), this.rendererName);
+    const budget = renderBudget(width, height, window.devicePixelRatio || 1, this.rendererName);
     this.camera.far = budget.far;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(2.0, budget.pixelRatio));
+    this.renderer.setPixelRatio(budget.pixelRatio);
     this.renderer.setSize(width, height);
   };
 }
