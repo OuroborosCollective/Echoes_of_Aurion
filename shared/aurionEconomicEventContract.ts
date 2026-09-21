@@ -46,6 +46,15 @@ function canonDeltas(values:readonly AurionEconomicResourceDelta[]):readonly Aur
   if(new Set(keys).size!==keys.length) throw new Error("ECONOMIC_RESOURCE_DELTA_DUPLICATE");
   return Object.freeze(rows);
 }
+export function economicResourceImbalances(values:readonly AurionEconomicResourceDelta[]):readonly Readonly<{resourceId:string;deltaExact:string}>[]{
+  const totals=new Map<string,bigint>();
+  for(const value of values) totals.set(value.resourceId,(totals.get(value.resourceId)??0n)+BigInt(value.deltaExact));
+  return Object.freeze([...totals.entries()]
+    .filter(([,total])=>total!==0n)
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([resourceId,total])=>Object.freeze({resourceId,deltaExact:total.toString(10)})));
+}
+
 function canonAssets(values:readonly AurionEconomicAssetTransition[]):readonly AurionEconomicAssetTransition[]{
   const rows=values.map(value=>{
     if(!ID.test(value.assetId)||value.fromOwnerId!==null&&!ID.test(value.fromOwnerId)||value.toOwnerId!==null&&!ID.test(value.toOwnerId)) throw new Error("ECONOMIC_ASSET_TRANSITION_INVALID");
