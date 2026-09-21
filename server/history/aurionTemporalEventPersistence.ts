@@ -67,7 +67,11 @@ export async function appendTemporalEvent(event:AurionTemporalEvent){
     if(event.predecessorEventIds.length){
       const rows=await tx.select().from(aurionTemporalEvents).where(inArray(aurionTemporalEvents.eventId,[...event.predecessorEventIds]));
       if(rows.length!==event.predecessorEventIds.length) throw new Error("TEMPORAL_PREDECESSOR_MISSING");
-      for(const row of rows) if(row.worldId!==event.worldId||row.validFromEpoch>event.validFromEpoch) throw new Error("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
+      for(const row of rows) if(
+        row.worldId!==event.worldId||
+        row.epoch>event.epoch||
+        row.validFromEpoch>event.validFromEpoch
+      ) throw new Error("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
     }
     await tx.insert(aurionTemporalEvents).values({
       eventId:event.eventId,worldId:event.worldId,epoch:event.epoch,domain:event.domain,validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,
