@@ -1,5 +1,6 @@
 import { WorldAssetProjection } from "./WorldAssetProjection";
 import { ConfirmedChunkProjection } from "./ConfirmedChunkProjection";
+import { WorldLoadingScreen, type WorldAssetLoadingEvidence, type WorldChunkLoadingEvidence } from "../../components/WorldLoadingScreen";
 import { AURION_CLIENT_VERIFICATION_SCHEMA, createClientVerificationReceipt } from "@shared/aurionClientVerificationContract";
 import { ConfirmedPlayerMotion } from "./ConfirmedPlayerMotion";
 import { requestConfirmedAction, WORLD_PANEL_SELECTOR, type ActionOutcome } from "./confirmedActionRequest";
@@ -105,6 +106,8 @@ export default function AurionOpenWorldRuntime() {
   const [confirmedSelection, setConfirmedSelection] = useState<PublicCharacterSelection | null>(null);
   const catalog = useGlbCatalog(Boolean(activation));
   const [modelStatus, setModelStatus] = useState("procedural");
+  const [chunkLoadingEvidence, setChunkLoadingEvidence] = useState<WorldChunkLoadingEvidence | null>(null);
+  const [worldAssetLoadingEvidence, setWorldAssetLoadingEvidence] = useState<WorldAssetLoadingEvidence | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [zoneRetryEpoch, setZoneRetryEpoch] = useState(0);
@@ -235,6 +238,9 @@ export default function AurionOpenWorldRuntime() {
     let rendererHandle: RendererHandle | undefined;
     setReadyGeneration(null);
     setRendererEvidence(null);
+    setChunkLoadingEvidence(null);
+    setWorldAssetLoadingEvidence(null);
+    setModelStatus("procedural");
     let engine: MMOEngine | undefined;
     let remotePresence: RemotePresenceProjection | undefined;
     let capture: VisibleCanvasCapture | undefined;
@@ -307,7 +313,11 @@ export default function AurionOpenWorldRuntime() {
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
         center => rpcUtils.worldAssets.regionV2.fetch(center),
-        evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); }, engine.renderer);
+        evidence => {
+          if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
+          setWorldAssetsFailed(evidence.failed > 0);
+          setWorldAssetLoadingEvidence({ version: evidence.version, planned: evidence.planned, rendered: evidence.rendered, loading: evidence.loading, failed: evidence.failed });
+        }, engine.renderer);
       delete containerRef.current.dataset.chunkProjection;
       delete containerRef.current.dataset.clientVerification;
       const chunkProjection = new ConfirmedChunkProjection(engine.scene, world.epoch,
@@ -325,7 +335,10 @@ export default function AurionOpenWorldRuntime() {
             return rpcUtils.gameplay.worldChunkProjectionV2.fetch(coordinate);
           }
         },
-        evidence => { if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence); },
+        evidence => {
+          if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence);
+          setChunkLoadingEvidence(evidence);
+        },
         async ({ job, binding, observedAtLogicalFrame }) => {
           try {
             const receipt = await createClientVerificationReceipt({ schema: AURION_CLIENT_VERIFICATION_SCHEMA, ...binding,
@@ -666,6 +679,12 @@ export default function AurionOpenWorldRuntime() {
 
   return (
     <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Open World">
+      <WorldLoadingScreen
+        rendererReady={rendererEvidence?.status === "rendering"}
+        chunks={chunkLoadingEvidence}
+        modelStatus={modelStatus}
+        worldAssets={worldAssetLoadingEvidence}
+      />
       <output data-testid="renderer-evidence" hidden>{JSON.stringify(rendererEvidence)}</output>
       <output data-testid="glb-model-status" aria-label="Charaktermodell" className="sr-only">{modelStatus}</output>
       <output ref={modelEvidenceRef} data-testid="glb-presentation" className="sr-only" />
