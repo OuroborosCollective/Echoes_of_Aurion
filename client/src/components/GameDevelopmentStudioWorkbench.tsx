@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Upload, ShieldCheck, PackageCheck } from "lucide-react";
+import { Sparkles, Upload, ShieldCheck, PackageCheck, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
 type LivePurpose = "npc-fallback" | "world-environment" | "world-nature" | "player-public" | "equipment";
+type FallbackTier = "phone" | "tablet" | "desktop";
 
 const purposes: readonly { value: LivePurpose; label: string }[] = [
   { value: "world-environment", label: "Welt / Umgebung" },
@@ -33,6 +34,9 @@ function fileBase64(file: File): Promise<string> {
 export default function GameDevelopmentStudioWorkbench() {
   const utils = trpc.useUtils();
   const [brief, setBrief] = useState("");
+  const [fallbackQuery, setFallbackQuery] = useState("");
+  const [fallbackTier, setFallbackTier] = useState<FallbackTier>("phone");
+  const [fallbackSelectedId, setFallbackSelectedId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [purpose, setPurpose] = useState<LivePurpose>("world-environment");
   const [rightsBasis, setRightsBasis] = useState<"owner-created-private" | "licensed">("owner-created-private");
@@ -41,6 +45,22 @@ export default function GameDevelopmentStudioWorkbench() {
   const [fileName, setFileName] = useState("");
   const [contentBase64, setContentBase64] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
+
+  const fallbackSource = trpc.admin.developer.os3aSource.useQuery();
+  const fallbackSearch = trpc.admin.developer.os3aSearch.useMutation({
+    onSuccess: result => {
+      const first = result.matches.find(match => !match.discoveryOnly && match.transferBudgetFit);
+      setFallbackSelectedId(first?.sourceAssetId ?? null);
+      fallbackPlan.reset();
+      fallbackApply.reset();
+    },
+  });
+  const fallbackPlan = trpc.admin.developer.os3aPlan.useMutation();
+  const fallbackApply = trpc.admin.developer.os3aApply.useMutation({
+    onSuccess: () => {
+      void utils.admin.assets.list.invalidate();
+    },
+  });
 
   const design = trpc.admin.developer.designAsset.useMutation({
     onSuccess: result => {
@@ -116,6 +136,154 @@ export default function GameDevelopmentStudioWorkbench() {
             </div>
           )}
           {design.error && <p className="text-sm text-red-300">{design.error.message}</p>}
+        </CardContent>
+      </Card>
+
+      <Card className="border-emerald-200/15 bg-slate-950/70">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-100">
+            <Search className="h-5 w-5 text-emerald-300" /> CC0-Fallback aus gepinnter OS3A-Quelle
+          </CardTitle>
+          <CardDescription>
+            Sucht nur im lokal gepinnten Metadaten-Snapshot. Erst „Plan prüfen“ lädt exakt revisionsgebundene GLB-Bytes und führt Aurion-Budget + GDS-Validierung aus. Kein Kandidat setzt sich selbst in die Welt.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          {fallbackSource.data && (
+            <div className="rounded-lg border border-emerald-200/10 bg-emerald-300/[.03] p-3 text-xs text-slate-300">
+              <p><b>{fallbackSource.data.sourceAssetCount}</b> gepinnte Kandidaten · <b>{fallbackSource.data.admissionCandidateCount}</b> passen mindestens ins Desktop-Budget · Phone {fallbackSource.data.tierCandidateCounts.phone} / Tablet {fallbackSource.data.tierCandidateCounts.tablet} / Desktop {fallbackSource.data.tierCandidateCounts.desktop} · Lizenz <code>{fallbackSource.data.license}</code></p>
+              <p className="mt-1 break-all font-mono text-[10px] text-slate-500">Registry {fallbackSource.data.registryRevision} · Models {fallbackSource.data.modelRevision}</p>
+            </div>
+          )}
+          <div className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]">
+            <div className="space-y-2">
+              <Label htmlFor="os3a-query">Fehlendes Asset suchen</Label>
+              <Input
+                id="os3a-query"
+                value={fallbackQuery}
+                onChange={event => setFallbackQuery(event.target.value)}
+                placeholder="z. B. medieval barrel, market stall, tree, crystal…"
+                maxLength={120}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="os3a-tier">Zielbudget</Label>
+              <select
+                id="os3a-tier"
+                value={fallbackTier}
+                onChange={event => {
+                  setFallbackTier(event.target.value as FallbackTier);
+                  fallbackPlan.reset();
+                  fallbackApply.reset();
+                }}
+                className="flex h-10 w-full rounded-md border border-cyan-200/20 bg-slate-950 px-3 text-sm text-slate-100"
+              >
+                <option value="phone">Phone · 8 MiB</option>
+                <option value="tablet">Tablet · 12 MiB</option>
+                <option value="desktop">Desktop · 16 MiB</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="os3a-purpose">Präsentationszweck</Label>
+              <select
+                id="os3a-purpose"
+                value={purpose}
+                onChange={event => {
+                  setPurpose(event.target.value as LivePurpose);
+                  fallbackPlan.reset();
+                  fallbackApply.reset();
+                }}
+                className="flex h-10 w-full rounded-md border border-cyan-200/20 bg-slate-950 px-3 text-sm text-slate-100"
+              >
+                {purposes.map(entry => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={fallbackQuery.trim().length < 2 || fallbackSearch.isPending}
+                onClick={() => fallbackSearch.mutate({ query: fallbackQuery.trim(), tier: fallbackTier, limit: 12 })}
+              >
+                {fallbackSearch.isPending ? "Suche…" : "Kandidaten"}
+              </Button>
+            </div>
+          </div>
+          {fallbackSearch.data && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {fallbackSearch.data.matches.map(match => {
+                const selectable = match.transferBudgetFit && !match.discoveryOnly;
+                const selected = fallbackSelectedId === match.sourceAssetId;
+                return (
+                  <button
+                    type="button"
+                    key={match.sourceAssetId}
+                    disabled={!selectable}
+                    onClick={() => {
+                      setFallbackSelectedId(match.sourceAssetId);
+                      fallbackPlan.reset();
+                      fallbackApply.reset();
+                    }}
+                    className={`rounded-lg border p-3 text-left transition ${selected ? "border-emerald-300/50 bg-emerald-300/[.07]" : "border-white/10 bg-white/[.02]"} ${selectable ? "hover:border-emerald-300/30" : "cursor-not-allowed opacity-55"}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-amber-100">{match.name}</span>
+                      <Badge variant="outline">{(match.fileSize / 1024 / 1024).toFixed(2)} MiB</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">{match.projectId} · Score {match.semanticScore}</p>
+                    {!match.transferBudgetFit && <p className="mt-1 text-xs text-red-300">Überschreitet das gewählte Transferbudget.</p>}
+                    {match.discoveryOnly && <p className="mt-1 text-xs text-amber-300">Nur Discovery: {match.discoveryNote}</p>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {fallbackSearch.data?.matches.length === 0 && <p className="text-sm text-slate-400">Kein semantischer Kandidat im gepinnten Snapshot.</p>}
+          {fallbackSelectedId && (
+            <div className="rounded-lg border border-cyan-200/10 bg-cyan-300/[.03] p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={fallbackPlan.isPending}
+                  onClick={() => fallbackPlan.mutate({ sourceAssetId: fallbackSelectedId, purpose, tier: fallbackTier })}
+                >
+                  {fallbackPlan.isPending ? "Pinned Bytes + GDS prüfen…" : "Plan prüfen"}
+                </Button>
+                <span className="text-xs text-slate-400">Purpose: <code>{purpose}</code></span>
+              </div>
+              {fallbackPlan.data && (
+                <div className="mt-3 space-y-1 text-xs">
+                  <p className="text-emerald-200">GDS Validation PASS · Budget {fallbackPlan.data.tier}</p>
+                  <p className="break-all font-mono text-[10px] text-slate-400">Fallback Plan {fallbackPlan.data.planSha256}</p>
+                  <p className="break-all font-mono text-[10px] text-slate-500">Source SHA {fallbackPlan.data.sourceSha256}</p>
+                  <Button
+                    type="button"
+                    disabled={fallbackApply.isPending}
+                    onClick={() => fallbackApply.mutate({
+                      sourceAssetId: fallbackSelectedId,
+                      purpose,
+                      tier: fallbackTier,
+                      expectedPlanSha256: fallbackPlan.data.planSha256,
+                      confirmation: "ADMIT_OS3A_FALLBACK",
+                    })}
+                    className="mt-3 bg-red-500 text-white hover:bg-red-400"
+                  >
+                    {fallbackApply.isPending ? "Admission läuft…" : "Exakten CC0-Fallback in Aurion-Katalog übernehmen"}
+                  </Button>
+                </div>
+              )}
+              {fallbackPlan.error && <p className="mt-2 text-sm text-red-300">{fallbackPlan.error.message}</p>}
+              {fallbackApply.data && (
+                <div className="mt-3 rounded-md border border-emerald-300/20 p-3 text-xs text-emerald-100">
+                  <p>Lokaler Aurion-Katalog + externe Provenienz bestätigt.</p>
+                  <p className="mt-1 break-all font-mono text-[10px]">{fallbackApply.data.admission.aurionAssetId} · {fallbackApply.data.provenance.receiptSha256}</p>
+                </div>
+              )}
+              {fallbackApply.error && <p className="mt-2 text-sm text-red-300">{fallbackApply.error.message}</p>}
+            </div>
+          )}
+          {fallbackSearch.error && <p className="text-sm text-red-300">{fallbackSearch.error.message}</p>}
         </CardContent>
       </Card>
 

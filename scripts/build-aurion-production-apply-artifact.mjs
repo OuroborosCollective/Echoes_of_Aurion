@@ -31,6 +31,7 @@ const tags = [
   "0052_aurion_effect_intent_journal",
   "0053_aurion_npc_action_gateway_v2",
   "0054_aurion_semantic_memory_graph_v2",
+  "0055_aurion_glb_external_provenance",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [

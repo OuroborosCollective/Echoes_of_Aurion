@@ -16,6 +16,8 @@ const BASE_READ_TOOLS = [
   "aurion_recovery_plan",
   "aurion_donor_ledger",
   "aurion_donor_capability_explain",
+  "aurion_admin_os3a_source",
+  "aurion_admin_os3a_search",
 ] as const;
 
 const WOLFRAM_READ_TOOLS = [
@@ -31,6 +33,8 @@ const ASSET_TOOLS = [
   "aurion_admin_glb_import",
   "aurion_admin_glb_catalog",
   "aurion_admin_glb_assign",
+  "aurion_admin_os3a_plan",
+  "aurion_admin_os3a_apply",
   "aurion_admin_gds_status",
   "aurion_admin_gds_plan",
   "aurion_admin_gds_apply",
@@ -61,6 +65,7 @@ describe("adminMcp", () => {
     expect(writable.tools.filter(tool => tool.mode === "write").map(tool => tool.name)).toEqual([
       "aurion_admin_glb_import",
       "aurion_admin_glb_assign",
+      "aurion_admin_os3a_apply",
       "aurion_admin_gds_apply",
       "aurion_admin_named_npc_visual_apply",
     ]);

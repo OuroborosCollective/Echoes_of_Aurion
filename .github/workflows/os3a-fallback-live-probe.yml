@@ -1,0 +1,70 @@
+name: OS3A Fallback Live Probe
+
+on:
+  pull_request:
+    paths:
+      - "server/openSource3dFallback.ts"
+      - "server/openSource3dFallback.test.ts"
+      - "server/glbImportStore.ts"
+      - "server/gameDevelopmentStudioProduction.ts"
+      - "server/adminMcp.ts"
+      - "server/routers.ts"
+      - "shared/os3aFallbackCatalog.json"
+      - "shared/glbPresentationBudget.ts"
+      - "shared/glbExternalProvenanceContract.ts"
+      - "scripts/os3a-fallback-live-probe.ts"
+      - "scripts/verify-os3a-fallback-source.ts"
+      - ".github/workflows/os3a-fallback-live-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-source-gds-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      OS3A_EVIDENCE_PATH: .aurion-os3a-evidence/live-probe.json
+      OS3A_SOURCE_EVIDENCE_PATH: .aurion-os3a-evidence/source-inventory.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+      - name: Bind exact source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+      - name: Install pinned Game Development Studio
+        run: node scripts/install-game-development-studio.mjs
+      - name: Install exact Aurion graph
+        run: pnpm install --frozen-lockfile
+      - name: Verify complete pinned source inventory
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .aurion-os3a-evidence
+          pnpm exec tsx scripts/verify-os3a-fallback-source.ts
+      - name: Targeted fallback regressions
+        run: |
+          pnpm exec vitest run             server/openSource3dFallback.test.ts             server/adminMcp.test.ts             client/src/xaurion/core/GlbResourceBudget.test.ts
+      - name: Live pinned source -> Aurion budget -> GDS plan
+        run: |
+          mkdir -p .aurion-os3a-evidence
+          pnpm exec tsx scripts/os3a-fallback-live-probe.ts
+      - name: Typecheck
+        run: pnpm check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: os3a-fallback-live-probe-${{ env.AURION_RELEASE_SHA }}
+          path: |
+            .aurion-os3a-evidence/source-inventory.json
+            .aurion-os3a-evidence/live-probe.json
+          if-no-files-found: error
+          retention-days: 14

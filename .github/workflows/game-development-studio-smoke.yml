@@ -9,6 +9,12 @@ on:
       - "server/gameDevelopmentStudioRuntime.test.ts"
       - "server/gameDevelopmentStudioProduction.ts"
       - "server/gameDevelopmentStudioProduction.test.ts"
+      - "server/openSource3dFallback.ts"
+      - "server/openSource3dFallback.test.ts"
+      - "shared/os3aFallbackCatalog.json"
+      - "shared/glbPresentationBudget.ts"
+      - "shared/glbExternalProvenanceContract.ts"
+      - "drizzle/0055_aurion_glb_external_provenance.sql"
       - "server/liveDeveloperGenkit.ts"
       - "server/liveDeveloperProtocol.ts"
       - "server/liveDeveloperProtocol.test.ts"
@@ -46,6 +52,7 @@ jobs:
           pnpm exec vitest run \
             server/gameDevelopmentStudioRuntime.test.ts \
             server/gameDevelopmentStudioProduction.test.ts \
+            server/openSource3dFallback.test.ts \
             server/liveDeveloperProtocol.test.ts
           pnpm check
       - name: Validate production compose with persistent GDS workspace

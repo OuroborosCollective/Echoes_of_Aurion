@@ -17,6 +17,12 @@ import {
   type GlbImportReceipt,
 } from "../shared/glbImportContract";
 import { buildGlbImportPlan } from "./glbImportPlan";
+import {
+  glbExternalProvenanceInputSchema,
+  glbExternalProvenanceReadbackSchema,
+  type GlbExternalProvenanceInput,
+  type GlbExternalProvenanceReadback,
+} from "../shared/glbExternalProvenanceContract";
 import { persistGlbBytes, readStoredGlb } from "./glbFileStore";
 import type { GlbAssetClassification } from "./glbAssetClassifier";
 import { groupGlbCatalogRows } from "./glbCatalogFamilies";
@@ -67,6 +73,63 @@ function canonicalDisplayName(displayName: string, purpose: GlbImportPurpose, cl
   return result;
 }
 
+
+function externalProvenanceReceipt(assetId: string, provenance: GlbExternalProvenanceInput): GlbExternalProvenanceReadback {
+  const identity = Object.freeze({ assetId, ...provenance });
+  return glbExternalProvenanceReadbackSchema.parse({
+    ...identity,
+    receiptSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex"),
+  });
+}
+
+const OS3A_LEDGER_PREFIX = "os3a-cc0:" as const;
+
+function provenanceLedgerFields(assetId: string, provenance: GlbExternalProvenanceInput) {
+  const expected = externalProvenanceReceipt(assetId, provenance);
+  const sourceRevision = `${provenance.registryRevision}:${provenance.modelRevision}`;
+  const sourcePath = `${provenance.projectId}:${provenance.sourceAssetId}:${provenance.sourcePath}`;
+  const migrationTag = `${OS3A_LEDGER_PREFIX}${provenance.fallbackPlanSha256}`;
+  if (sourceRevision.length > 256 || sourcePath.length > 512 || migrationTag.length > 128) throw new Error("GLB_EXTERNAL_PROVENANCE_LEDGER_BOUNDS");
+  return Object.freeze({ expected, sourceRevision, sourcePath, migrationTag });
+}
+
+function provenanceFromLedgerRow(row: RowDataPacket): GlbExternalProvenanceReadback {
+  const [registryRevision, modelRevision, extraRevision] = String(row.sourceRevision ?? "").split(":");
+  const [projectId, sourceAssetId, ...sourcePathParts] = String(row.sourcePath ?? "").split(":");
+  const migrationTag = String(row.migrationTag ?? "");
+  const sourcePath = sourcePathParts.join(":");
+  if (
+    extraRevision !== undefined ||
+    !migrationTag.startsWith(OS3A_LEDGER_PREFIX) ||
+    !/^[a-f0-9]{40}$/.test(registryRevision ?? "") ||
+    !/^[a-f0-9]{40}$/.test(modelRevision ?? "") ||
+    !projectId ||
+    !sourceAssetId ||
+    !sourcePath
+  ) throw new Error("GLB_EXTERNAL_PROVENANCE_LEDGER_INVALID");
+
+  const provenance = glbExternalProvenanceInputSchema.parse({
+    version: "aurion.glb-external-provenance.v1",
+    sourceKind: "os3a-cc0",
+    registryRepository: "ToxSam/open-source-3D-assets",
+    registryRevision,
+    modelRepository: "ToxSam/cc0-models-Polygonal-Mind",
+    modelRevision,
+    licensePath: "License.md",
+    projectId,
+    sourceAssetId,
+    sourcePath,
+    license: "CC0-1.0",
+    sourceSha256: String(row.fileHash),
+    sourceBytes: Number(row.sourceSizeBytes),
+    sourceMetadataSha256: String(row.manifestHash),
+    fallbackPlanSha256: migrationTag.slice(OS3A_LEDGER_PREFIX.length),
+  });
+  const expected = externalProvenanceReceipt(String(row.assetId), provenance);
+  if (String(row.identityHash) !== expected.receiptSha256) throw new Error("GLB_EXTERNAL_PROVENANCE_LEDGER_HASH");
+  return expected;
+}
+
 export class GlbImportStore {
   private readonly pool: Pool;
   private readonly lockName: string;
@@ -94,8 +157,9 @@ export class GlbImportStore {
     }
   }
 
-  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; fileName?: string; expectedPlanSha256?: string }): Promise<GlbImportReceipt> {
+  async ingest(actorUserId: number, input: { displayName: string; contentBase64: string; purpose?: GlbImportPurpose; fileName?: string; expectedPlanSha256?: string; externalProvenance?: GlbExternalProvenanceInput }): Promise<GlbImportReceipt> {
     const purpose = input.purpose ?? "auto";
+    const externalProvenance = input.externalProvenance ? glbExternalProvenanceInputSchema.parse(input.externalProvenance) : null;
     const plan = buildGlbImportPlan(input.contentBase64, purpose, input.fileName ?? input.displayName);
     if (input.expectedPlanSha256 && plan.planSha256 !== input.expectedPlanSha256) throw new Error("GLB_IMPORT_PLAN_CHANGED");
     const displayName = canonicalDisplayName(input.displayName, purpose, plan.classification);
@@ -135,6 +199,27 @@ export class GlbImportStore {
       const [readback] = await connection.query<RowDataPacket[]>("SELECT id, sha256, bytes, storageUrl, displayName FROM glbAssets WHERE id = ?", [assetId]);
       const row = readback[0];
       if (!row || row.sha256 !== plan.sha256 || row.bytes !== plan.bytes || row.storageUrl !== stored.url || glbPurposeFromDisplayName(String(row.displayName)) !== purpose) throw new Error("GLB_IMPORT_READBACK_FAILED");
+      if (externalProvenance) {
+        if (externalProvenance.sourceSha256 !== plan.sha256 || externalProvenance.sourceBytes !== plan.bytes) throw new Error("GLB_EXTERNAL_PROVENANCE_SOURCE_MISMATCH");
+        const ledger = provenanceLedgerFields(assetId, externalProvenance);
+        const [existingProvenance] = await connection.query<RowDataPacket[]>(
+          "SELECT g.id AS assetId, l.* FROM glbAssets g INNER JOIN aurionContentHashLedger l ON l.fileHash = g.sha256 WHERE g.id = ? AND l.contentKind = 'asset' AND l.migrationTag LIKE 'os3a-cc0:%' ORDER BY l.createdAt FOR UPDATE",
+          [assetId],
+        );
+        if (existingProvenance.length > 1) throw new Error("GLB_EXTERNAL_PROVENANCE_AMBIGUOUS");
+        if (!existingProvenance.length) {
+          const provenanceId = `os3a_${ledger.expected.receiptSha256.slice(0, 48)}`;
+          await connection.execute(
+            "INSERT INTO aurionContentHashLedger (id, sourceRevision, sourcePath, fileHash, manifestHash, migrationTag, contentKind, sourceSizeBytes, identityHash) VALUES (?, ?, ?, ?, ?, ?, 'asset', ?, ?)",
+            [provenanceId, ledger.sourceRevision, ledger.sourcePath, externalProvenance.sourceSha256, externalProvenance.sourceMetadataSha256, ledger.migrationTag, externalProvenance.sourceBytes, ledger.expected.receiptSha256],
+          );
+        }
+        const [provenanceReadback] = await connection.query<RowDataPacket[]>(
+          "SELECT g.id AS assetId, l.* FROM glbAssets g INNER JOIN aurionContentHashLedger l ON l.fileHash = g.sha256 WHERE g.id = ? AND l.contentKind = 'asset' AND l.migrationTag LIKE 'os3a-cc0:%' ORDER BY l.createdAt",
+          [assetId],
+        );
+        if (provenanceReadback.length !== 1 || JSON.stringify(provenanceFromLedgerRow(provenanceReadback[0]!)) !== JSON.stringify(ledger.expected)) throw new Error("GLB_EXTERNAL_PROVENANCE_READBACK_FAILED");
+      }
       return glbImportReceiptSchema.parse({ version: GLB_IMPORT_VERSION, assetId, sha256: row.sha256, bytes: row.bytes, storageUrl: row.storageUrl, assetType: plan.assetType, targetKey: plan.targetKey, planSha256: plan.planSha256, status, activeAssetId, deduplicated: Boolean(existing.length) });
     });
   }
@@ -268,6 +353,16 @@ export class GlbImportStore {
       const [rows] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ?", [input.assetId]);
       return rows[0];
     });
+  }
+
+  async externalProvenance(assetId: string): Promise<GlbExternalProvenanceReadback | null> {
+    if (!/^glb_[a-f0-9]{48}$/.test(assetId)) return null;
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      "SELECT g.id AS assetId, l.* FROM glbAssets g INNER JOIN aurionContentHashLedger l ON l.fileHash = g.sha256 WHERE g.id = ? AND l.contentKind = 'asset' AND l.migrationTag LIKE 'os3a-cc0:%' ORDER BY l.createdAt LIMIT 2",
+      [assetId],
+    );
+    if (rows.length > 1) throw new Error("GLB_EXTERNAL_PROVENANCE_AMBIGUOUS");
+    return rows[0] ? provenanceFromLedgerRow(rows[0]) : null;
   }
 
   async approvedBytes(sha256: string): Promise<Buffer | null> {

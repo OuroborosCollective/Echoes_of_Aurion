@@ -23,6 +23,15 @@ import { assertLocalHandle, assertLocalPassword, hashLocalPassword, normalizeLoc
 import { proposeAurionDeveloperChange, proposeGameDevAssetDesign } from "./liveDeveloperGenkit";
 import { hashGameDevAssetDesignWorkOrder } from "./liveDeveloperProtocol";
 import { applyGameDevelopmentStudioLiveAsset, gameDevelopmentStudioLiveAssetInputSchema, planGameDevelopmentStudioLiveAsset } from "./gameDevelopmentStudioProduction";
+import {
+  applyOpenSource3dFallback,
+  openSource3dFallbackSource,
+  os3aApplyInputSchema,
+  os3aPlanInputSchema,
+  os3aSearchInputSchema,
+  planOpenSource3dFallback,
+  searchOpenSource3dFallback,
+} from "./openSource3dFallback";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
@@ -443,6 +452,16 @@ export const appRouter = router({
         const workOrder = await proposeGameDevAssetDesign({ ...input, actorRole: "admin" });
         return { workOrder, workOrderSha256: hashGameDevAssetDesignWorkOrder(workOrder) };
       }),
+      os3aSource: adminProcedure.query(() => openSource3dFallbackSource()),
+      os3aSearch: adminProcedure
+        .input(os3aSearchInputSchema)
+        .mutation(({ input }) => searchOpenSource3dFallback(input)),
+      os3aPlan: adminProcedure
+        .input(os3aPlanInputSchema)
+        .mutation(({ input }) => planOpenSource3dFallback(input)),
+      os3aApply: adminProcedure
+        .input(os3aApplyInputSchema)
+        .mutation(({ ctx, input }) => applyOpenSource3dFallback(ctx.user.id, input)),
       gameDevPlan: adminProcedure
         .input(gameDevelopmentStudioLiveAssetInputSchema)
         .mutation(({ input }) => planGameDevelopmentStudioLiveAsset(input)),
