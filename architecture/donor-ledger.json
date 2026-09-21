@@ -365,15 +365,18 @@
         "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
       },
       "aurionPaths": [
+        "client/src/xaurion/core/Ax1CameraDirector.ts",
         "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx",
         "client/src/xaurion/integration/ax1SourceManifest.ts"
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
+        "client/src/xaurion/core/Ax1CameraDirector.test.ts",
         "client/src/xaurion/integration/ax1FullCutover.test.tsx"
       ],
       "runtimeEvidence": [
-        "client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx"
+        "client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx",
+        "e2e/aim291.assetShipping.spec.ts"
       ],
       "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
       "donorRuntimeRequired": false
@@ -824,6 +827,12 @@
     },
     {
       "path": "client/src/xaurion/core/ItemGlbRegistry.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/Ax1CameraDirector.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"
