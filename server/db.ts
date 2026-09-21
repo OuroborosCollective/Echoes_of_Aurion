@@ -1939,31 +1939,46 @@ export async function grantProgress(values: { userId: number; kind: "xp" | "poin
   if (!db) throw new Error("Game database is not available");
   const weaponTrack = values.kind === "weapon_xp" ? values.weaponTrack : undefined;
   if (values.kind === "weapon_xp" && !weaponTrack) throw new Error("Weapon track is required for weapon XP");
-  const previous = await db.select().from(progressionLedger).where(eq(progressionLedger.idempotencyKey, values.idempotencyKey)).limit(1);
-  if (previous[0]) {
-    if (previous[0].userId !== values.userId || previous[0].kind !== values.kind || previous[0].delta !== values.delta || previous[0].source !== values.source) throw new Error("PROGRESSION_IDEMPOTENCY_CONFLICT");
-    return { applied: false as const, profile: await getOrCreatePlayerProfile(values.userId) };
-  }
-  const profile = await getOrCreatePlayerProfile(values.userId);
-  await db.insert(progressionLedger).values({ id: newEndgameId("prog"), userId: values.userId, kind: values.kind, delta: values.delta, source: values.source, reason: values.reason, idempotencyKey: values.idempotencyKey });
-  if (values.kind === "xp") {
-    const totalXp = profile.totalXp + values.delta;
-    await db.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp) }).where(eq(playerProfiles.userId, values.userId));
-  }
-  if (values.kind === "points") {
-    await db.update(playerProfiles).set({ aurionPoints: profile.aurionPoints + values.delta, seasonPoints: profile.seasonPoints + values.delta }).where(eq(playerProfiles.userId, values.userId));
-  }
-  if (values.kind === "victory") {
-    await db.update(playerProfiles).set({ victories: profile.victories + values.delta }).where(eq(playerProfiles.userId, values.userId));
-  }
-  if (values.kind === "weapon_xp") {
-    const prior = await db.select().from(weaponMasteries).where(and(eq(weaponMasteries.userId, values.userId), eq(weaponMasteries.weaponTrack, weaponTrack!))).limit(1);
-    const xp = (prior[0]?.xp ?? 0) + values.delta;
-    const level = levelFromTotalXp(xp);
-    if (prior[0]) await db.update(weaponMasteries).set({ xp, level }).where(eq(weaponMasteries.id, prior[0].id));
-    else await db.insert(weaponMasteries).values({ id: newEndgameId("wm"), userId: values.userId, weaponTrack: weaponTrack!, xp, level });
-  }
-  return { applied: true as const, profile: await getOrCreatePlayerProfile(values.userId) };
+  return db.transaction(async tx => {
+    await tx.insert(playerProfiles).values({ userId: values.userId }).onDuplicateKeyUpdate({ set: { userId: values.userId } });
+    const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1).for("update"))[0];
+    if (!profile) throw new Error("PROGRESSION_PROFILE_REQUIRED");
+    const previous = (await tx.select().from(progressionLedger).where(eq(progressionLedger.idempotencyKey, values.idempotencyKey)).limit(1))[0];
+    if (previous) {
+      if (previous.userId !== values.userId || previous.kind !== values.kind || previous.delta !== values.delta || previous.source !== values.source) throw new Error("PROGRESSION_IDEMPOTENCY_CONFLICT");
+      return { applied: false as const, profile };
+    }
+    await tx.insert(progressionLedger).values({
+      id: newEndgameId("prog"), userId: values.userId, kind: values.kind, delta: values.delta,
+      source: values.source, reason: values.reason, idempotencyKey: values.idempotencyKey,
+    });
+    if (values.kind === "xp") {
+      const totalXp = profile.totalXp + values.delta;
+      await tx.update(playerProfiles).set({ totalXp, level: levelFromTotalXp(totalXp) }).where(eq(playerProfiles.userId, values.userId));
+    }
+    if (values.kind === "points") {
+      await tx.update(playerProfiles).set({
+        aurionPoints: profile.aurionPoints + values.delta,
+        seasonPoints: profile.seasonPoints + values.delta,
+      }).where(eq(playerProfiles.userId, values.userId));
+    }
+    if (values.kind === "victory") {
+      await tx.update(playerProfiles).set({ victories: profile.victories + values.delta }).where(eq(playerProfiles.userId, values.userId));
+    }
+    if (values.kind === "weapon_xp") {
+      const prior = (await tx.select().from(weaponMasteries).where(and(
+        eq(weaponMasteries.userId, values.userId),
+        eq(weaponMasteries.weaponTrack, weaponTrack!),
+      )).limit(1).for("update"))[0];
+      const xp = (prior?.xp ?? 0) + values.delta;
+      const level = levelFromTotalXp(xp);
+      if (prior) await tx.update(weaponMasteries).set({ xp, level }).where(eq(weaponMasteries.id, prior.id));
+      else await tx.insert(weaponMasteries).values({ id: newEndgameId("wm"), userId: values.userId, weaponTrack: weaponTrack!, xp, level });
+    }
+    const updated = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, values.userId)).limit(1))[0];
+    if (!updated) throw new Error("PROGRESSION_PROFILE_READBACK_FAILED");
+    return { applied: true as const, profile: updated };
+  });
 }
 
 export async function listWeaponMasteries(userId: number) {
