@@ -7,6 +7,30 @@ export function tradeCraftingSourceEvidenceHash(receipt:Readonly<{receiptHash:st
   return `sha256:${receipt.receiptHash}`;
 }
 
+export function lootV1SourceEvidenceHash(
+  receipt:Readonly<{
+    id:string;userId:number;expeditionKey:string;treasureClass:string;quality:string;seedDigest:string;idempotencyKey:string;
+  }>,
+  item:Readonly<{
+    id:string;sourceKind:string;lootReceiptId:string|null;baseItemKey:string;quality:string;itemLevel:number;
+    affixesJson:string;setKey:string|null;
+  }>,
+):string{
+  if(item.sourceKind!=="loot"||item.lootReceiptId!==receipt.id||item.quality!==receipt.quality) throw new Error("ECONOMIC_LOOT_V1_SOURCE_IDENTITY_INVALID");
+  return canonicalSha256({
+    schema:"aurion.economic-source.loot-v1.v1",
+    receipt:{
+      id:receipt.id,userId:receipt.userId,expeditionKey:receipt.expeditionKey,treasureClass:receipt.treasureClass,
+      quality:receipt.quality,seedDigest:receipt.seedDigest,idempotencyKey:receipt.idempotencyKey,
+    },
+    itemCreation:{
+      id:item.id,sourceKind:item.sourceKind,lootReceiptId:item.lootReceiptId,baseItemKey:item.baseItemKey,
+      quality:item.quality,itemLevel:item.itemLevel,affixesJson:item.affixesJson,setKey:item.setKey,
+      originalOwnerUserId:receipt.userId,
+    },
+  });
+}
+
 export function lootV2SourceEvidenceHash(
   receipt:Readonly<{
     id:string;userId:number;encounterReceiptId:string;itemDefinitionId:string;category:string;quality:string;
