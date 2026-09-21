@@ -20,7 +20,7 @@ const QUEST_CHAIN_REGRESSION_USER_ID = 2_146_999_992;
 
 async function cleanupQuestChainRegressionState() { await cleanupQuestRegressionUser(QUEST_CHAIN_REGRESSION_USER_ID); }
 
-async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium" | "starfall_crater") {
+async function defeatQuestEncounter(encounterKey: "asterion" | "archive" | "solarium" | "starfall_crater" | "sunwatch_bastion") {
   const encounter = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey });
 
   await expect(applyGameplayAction({
@@ -49,7 +49,7 @@ describeWithDatabase("quest chain regression E2E", () => {
   beforeEach(cleanupQuestChainRegressionState);
   afterEach(cleanupQuestChainRegressionState);
 
-  it("preserves ordered quest gates, NPC-bound turn-ins, deferred rewards, Ember Key, Starfall and dungeon access", async () => {
+  it("preserves ordered quest gates, NPC-bound turn-ins, deferred rewards, Ember Key, Starfall, Sunwatch and dungeon access", async () => {
     const db = await getDb();
     expect(db).not.toBeNull();
     if (!db) return;
@@ -60,6 +60,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "locked", false],
       ["ember_key", "locked", false],
       ["starfall_resonance", "locked", false],
+      ["sunwatch_vanguard", "locked", false],
     ]);
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
@@ -86,6 +87,7 @@ describeWithDatabase("quest chain regression E2E", () => {
     expect(afterOrun.profile).toMatchObject({ totalXp: 342, aurionPoints: 55, seasonPoints: 55, victories: 2 });
     expect(afterOrun.quests.find(quest => quest.key === "ember_key")).toMatchObject({ state: "available", readyToTurnIn: false });
     expect(afterOrun.quests.find(quest => quest.key === "starfall_resonance")).toMatchObject({ state: "locked", readyToTurnIn: false });
+    expect(afterOrun.quests.find(quest => quest.key === "sunwatch_vanguard")).toMatchObject({ state: "locked", readyToTurnIn: false });
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "ember_key" });
     const thirdBoss = await defeatQuestEncounter("solarium");
@@ -101,6 +103,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "available", false],
+      ["sunwatch_vanguard", "locked", false],
     ]);
     expect(afterKey.keys).toEqual(["ember_key"]);
     expect(afterKey.canEnterDungeon).toBe(true);
@@ -124,19 +127,43 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "completed", false],
+      ["sunwatch_vanguard", "available", false],
     ]);
     expect(completed.keys).toEqual(["ember_key"]);
     expect(completed.canEnterDungeon).toBe(true);
 
+    await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "sunwatch_vanguard" });
+    const sunwatchBoss = await defeatQuestEncounter("sunwatch_bastion");
+    expect(sunwatchBoss.resolution).toMatchObject({ completed: true, completedQuest: "sunwatch_vanguard", reward: { xp: 0, points: 0 } });
+    const beforeSunwatchTurnIn = await getGameplayProgress(QUEST_CHAIN_REGRESSION_USER_ID);
+    expect(beforeSunwatchTurnIn.quests.find(quest => quest.key === "sunwatch_vanguard")).toMatchObject({ state: "available", readyToTurnIn: true });
+    expect(beforeSunwatchTurnIn.profile).toMatchObject({ totalXp: 1202, aurionPoints: 190, seasonPoints: 190, victories: 4 });
+    const sunwatchPersistence = (await db.select().from(gameplayQuestProgress).where(and(
+      eq(gameplayQuestProgress.userId, QUEST_CHAIN_REGRESSION_USER_ID),
+      eq(gameplayQuestProgress.questKey, "sunwatch_vanguard"),
+    )).limit(1))[0];
+    expect(sunwatchPersistence).toMatchObject({ state: "ready_to_turn_in", completionSessionId: sunwatchBoss.encounter.session.id });
+    await expect(completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "sunwatch_vanguard", giver: "Lyra" })).rejects.toThrow("Dieser Questgeber kann den Auftrag nicht abschließen.");
+    const afterSunwatch = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "sunwatch_vanguard", giver: "Orun" });
+    expect(afterSunwatch.profile).toMatchObject({ totalXp: 1852, aurionPoints: 290, seasonPoints: 290, victories: 5 });
+    expect(afterSunwatch.quests.map(quest => [quest.key, quest.state, quest.readyToTurnIn])).toEqual([
+      ["astral_call", "completed", false],
+      ["archive_of_echoes", "completed", false],
+      ["ember_key", "completed", false],
+      ["starfall_resonance", "completed", false],
+      ["sunwatch_vanguard", "completed", false],
+    ]);
+    expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "sunwatch_vanguard", giver: "Orun" })).profile).toMatchObject({ totalXp: 1852, aurionPoints: 290, victories: 5 });
+
     const dungeon = await startGameplayEncounter({ userId: QUEST_CHAIN_REGRESSION_USER_ID, encounterKey: "cinder_vault" });
     expect(dungeon.session).toMatchObject({ encounterKey: "cinder_vault", status: "active", bossHp: 258 });
     const rewards = await db.select().from(progressionLedger).where(eq(progressionLedger.userId, QUEST_CHAIN_REGRESSION_USER_ID));
-    expect(rewards).toHaveLength(12);
-    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(12);
+    expect(rewards).toHaveLength(15);
+    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(15);
     expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual([
-      "points:20", "points:35", "points:60", "points:75",
-      "victory:1", "victory:1", "victory:1", "victory:1",
-      "xp:122", "xp:220", "xp:360", "xp:500",
+      "points:100", "points:20", "points:35", "points:60", "points:75",
+      "victory:1", "victory:1", "victory:1", "victory:1", "victory:1",
+      "xp:122", "xp:220", "xp:360", "xp:500", "xp:650",
     ]);
     expect(await db.select().from(gameplayDungeonKeys).where(eq(gameplayDungeonKeys.userId, QUEST_CHAIN_REGRESSION_USER_ID))).toHaveLength(1);
   }, 60_000);
