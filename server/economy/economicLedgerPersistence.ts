@@ -55,7 +55,7 @@ async function deriveTradeCrafting(tx:Tx,sourceId:string){
   const outputs=await tx.select().from(itemInstances).where(and(
     eq(itemInstances.craftingReceiptId,row.id),eq(itemInstances.sourceKind,"crafting"),
   ));
-  if(outputs.length<1||outputs.some(output=>output.ownerUserId!==row.userId)) throw new Error("ECONOMIC_CRAFTING_OUTPUT_READBACK_MISMATCH");
+  if(outputs.length<1) throw new Error("ECONOMIC_CRAFTING_OUTPUT_READBACK_MISMATCH");
   outputs.sort((a,b)=>a.craftingOutputKey.localeCompare(b.craftingOutputKey)||a.id.localeCompare(b.id));
   const assetTransitions=[
     ...inputIds.map(id=>Object.freeze({assetId:`item:legacy:${id}`,transitionKind:"consume" as const,fromOwnerId:`user:${row.userId}`,toOwnerId:null})),
@@ -63,6 +63,7 @@ async function deriveTradeCrafting(tx:Tx,sourceId:string){
   ];
   return Object.freeze({
     eventType:"economic_transition" as const,
+    sourceCreatedAt:row.createdAt,
     sourceEvidenceHash:craftingSourceEvidenceHash(normalized,outputs),
     resourceDeltas:Object.freeze([]),
     assetTransitions:Object.freeze(assetTransitions),
@@ -77,6 +78,7 @@ async function deriveLootV1(tx:Tx,sourceId:string){
   if(item.sourceKind!=="loot"||item.quality!==receipt.quality) throw new Error("ECONOMIC_LOOT_V1_RECEIPT_MISMATCH");
   return Object.freeze({
     eventType:"economic_transition" as const,
+    sourceCreatedAt:receipt.createdAt,
     sourceEvidenceHash:lootV1SourceEvidenceHash(receipt,item),
     resourceDeltas:Object.freeze([]),
     assetTransitions:Object.freeze([{
@@ -104,6 +106,7 @@ async function deriveLootV2(tx:Tx,sourceId:string){
 
   return Object.freeze({
     eventType:"economic_transition" as const,
+    sourceCreatedAt:receipt.createdAt,
     sourceEvidenceHash:lootV2SourceEvidenceHash(receipt,item),
     resourceDeltas:Object.freeze([]),
     assetTransitions:Object.freeze([{assetId:`item:aurion_v2:${item.id}`,transitionKind:"create" as const,fromOwnerId:null,toOwnerId:`user:${receipt.userId}`}]),
@@ -118,6 +121,7 @@ async function deriveMarketTransaction(tx:Tx,sourceId:string){
   }
   return Object.freeze({
     eventType:"economic_transition" as const,
+    sourceCreatedAt:row.createdAt,
     sourceEvidenceHash:marketTransactionSourceEvidenceHash(row),
     resourceDeltas:Object.freeze([
       Object.freeze({resourceId:"aurion_points",accountId:`user:${row.buyerUserId}`,deltaExact:`-${row.aurionTransferred}`}),
@@ -138,6 +142,7 @@ async function deriveSystemSale(tx:Tx,sourceId:string){
   if(!Number.isSafeInteger(row.aurionGranted)||row.aurionGranted<=0) throw new Error("ECONOMIC_SYSTEM_SALE_RECEIPT_INVALID");
   return Object.freeze({
     eventType:"economic_transition" as const,
+    sourceCreatedAt:row.createdAt,
     sourceEvidenceHash:systemSaleSourceEvidenceHash(row),
     resourceDeltas:Object.freeze([
       Object.freeze({resourceId:"aurion_points",accountId:"system:vendor",deltaExact:`-${row.aurionGranted}`}),
@@ -170,6 +175,7 @@ async function deriveProgressionPoints(tx:Tx,sourceId:string){
   if(row.kind!=="points"||!Number.isSafeInteger(row.delta)||row.delta<=0) throw new Error("ECONOMIC_PROGRESSION_POINTS_RECEIPT_INVALID");
   return Object.freeze({
     eventType:"economic_transition" as const,
+    sourceCreatedAt:row.createdAt,
     sourceEvidenceHash:progressionPointsSourceEvidenceHash(row),
     resourceDeltas:Object.freeze([
       Object.freeze({resourceId:"aurion_points",accountId:"system:progression",deltaExact:`-${row.delta}`}),
@@ -275,7 +281,7 @@ async function deriveGuildBank(tx:Tx,sourceId:string){
   }else{
     throw new Error("ECONOMIC_GUILD_OPERATION_UNSUPPORTED");
   }
-  return Object.freeze({eventType:"economic_transition" as const,sourceEvidenceHash,resourceDeltas:Object.freeze(resourceDeltas),assetTransitions:Object.freeze(assetTransitions)});
+  return Object.freeze({eventType:"economic_transition" as const,sourceCreatedAt:row.createdAt,sourceEvidenceHash,resourceDeltas:Object.freeze(resourceDeltas),assetTransitions:Object.freeze(assetTransitions)});
 }
 
 async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string){
@@ -344,6 +350,11 @@ async function readEvent(tx:Tx,id:string):Promise<AurionEconomicEvent|null>{
   });
   if(event.eventHash!==row.eventHash) throw new Error("ECONOMIC_EVENT_PERSISTED_HASH_MISMATCH");
   return event;
+}
+
+export async function readEconomicSourceProjection(sourceKind:AurionEconomicSourceKind,sourceId:string){
+  const db=await getDb(); if(!db) throw new Error("ECONOMIC_DATABASE_UNAVAILABLE");
+  return db.transaction(tx=>deriveSource(tx,sourceKind,sourceId));
 }
 
 export async function materializeEconomicSource(input:{sourceKind:AurionEconomicSourceKind;sourceId:string;temporalEventId:string}){
