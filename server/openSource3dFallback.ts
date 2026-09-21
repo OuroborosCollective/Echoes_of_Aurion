@@ -124,7 +124,8 @@ function scoreCandidate(candidate: CatalogAsset, query: string): number {
   const tokens = normalizedTokens(query);
   const name = candidate.name.toLowerCase();
   const fields = Object.fromEntries(Object.entries(candidate.attributes).map(([key, value]) => [key.toLowerCase(), value.toLowerCase()]));
-  let score = name.includes(query.toLowerCase().trim()) ? 16 : 0;
+  const nameTokens = new Set(normalizedTokens(name));
+  let score = tokens.length > 0 && tokens.every(token => nameTokens.has(token)) ? 16 : 0;
   const weighted = [
     [name, 7],
     [fields.type ?? "", 6],
@@ -135,7 +136,11 @@ function scoreCandidate(candidate: CatalogAsset, query: string): number {
     [fields.style ?? "", 2],
     [Object.values(fields).join(" "), 1],
   ] as const;
-  for (const token of tokens) for (const [field, weight] of weighted) if (field.includes(token)) score += weight;
+  for (const token of tokens) {
+    for (const [field, weight] of weighted) {
+      if (new Set(normalizedTokens(field)).has(token)) score += weight;
+    }
+  }
   return score;
 }
 
