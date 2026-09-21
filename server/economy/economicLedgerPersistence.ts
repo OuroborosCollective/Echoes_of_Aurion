@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import {
   aurionEconomicAssetTransitions,
   aurionEconomicEvents,
@@ -112,6 +112,14 @@ export async function materializeEconomicSource(input:{sourceKind:AurionEconomic
     });
     const id=eventId(candidate.eventHash);
     const event=createEconomicEvent({...candidate,eventId:id});
+    const priorBySource=(await tx.select().from(aurionEconomicEvents).where(and(
+      eq(aurionEconomicEvents.sourceKind,event.sourceKind),eq(aurionEconomicEvents.sourceId,event.sourceId),
+    )).limit(1))[0];
+    if(priorBySource){
+      const read=await readEvent(tx,priorBySource.eventId);
+      if(!read||canonicalJson(read)!==canonicalJson(event))throw new Error("ECONOMIC_SOURCE_IDEMPOTENCY_CONFLICT");
+      return Object.freeze({applied:false as const,ordinal:priorBySource.ordinal,event:read});
+    }
     const prior=(await tx.select().from(aurionEconomicEvents).where(eq(aurionEconomicEvents.eventHash,event.eventHash)).limit(1))[0];
     if(prior){
       const read=await readEvent(tx,prior.eventId);
