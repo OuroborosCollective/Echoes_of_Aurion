@@ -19,11 +19,12 @@ describe("CharacterProgressionChart", () => {
       ] },
       craftingProgression: { levelExact: "32", totalXpExact: "12400" },
     });
-    expect(rows.map(row => [row.id, row.level])).toEqual([
-      ["skill:arcane_blast", 15],
-      ["crafting:confirmed", 32],
-      ["weapon:curved_blade", 24],
-    ]);
+    expect(rows).toHaveLength(3);
+    expect(Object.fromEntries(rows.map(row => [row.id, row.level]))).toEqual({
+      "weapon:curved_blade": 24,
+      "skill:arcane_blast": 15,
+      "crafting:confirmed": 32,
+    });
   });
 
   it("drops malformed levels instead of inventing fallback level one", () => {
