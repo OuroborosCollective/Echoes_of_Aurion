@@ -1,9 +1,9 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
 
 export const AURION_ECONOMIC_EVENT_SCHEMA = "aurion.economic-event.v2" as const;
-export const aurionEconomicSourceKinds = ["trade_crafting","loot_v2"] as const;
+export const aurionEconomicSourceKinds = ["trade_crafting","loot_v2","market_transaction","system_sale","guild_bank","progression_points"] as const;
 export type AurionEconomicSourceKind = (typeof aurionEconomicSourceKinds)[number];
-export type AurionEconomicEventType = "resource_delta" | "asset_create";
+export type AurionEconomicEventType = "economic_transition";
 
 export type AurionEconomicResourceDelta = Readonly<{resourceId:string;accountId:string;deltaExact:string}>;
 export type AurionEconomicAssetTransition = Readonly<{
@@ -68,8 +68,7 @@ export function createEconomicEvent(input:Omit<AurionEconomicEvent,"schema"|"eve
   if(!HASH.test(input.sourceEvidenceHash)||!HASH.test(input.temporalEventHash)||!HASH.test(input.sourceWorldRoot)) throw new Error("ECONOMIC_HASH_INVALID");
   if(!REV.test(input.sourceRevision)||!input.rulesetVersion.trim()||input.rulesetVersion.length>64) throw new Error("ECONOMIC_SOURCE_IDENTITY_INVALID");
   const resourceDeltas=canonDeltas(input.resourceDeltas),assetTransitions=canonAssets(input.assetTransitions);
-  if(input.eventType==="resource_delta"&&(resourceDeltas.length<1||assetTransitions.length!==0)) throw new Error("ECONOMIC_RESOURCE_EVENT_SHAPE_INVALID");
-  if(input.eventType==="asset_create"&&(assetTransitions.length<1||assetTransitions.some(value=>value.transitionKind!=="create")||resourceDeltas.length!==0)) throw new Error("ECONOMIC_ASSET_EVENT_SHAPE_INVALID");
+  if(input.eventType!=="economic_transition"||(resourceDeltas.length===0&&assetTransitions.length===0)) throw new Error("ECONOMIC_EVENT_SHAPE_INVALID");
   const unsigned={schema:AURION_ECONOMIC_EVENT_SCHEMA,...input,resourceDeltas,assetTransitions};
   return Object.freeze({...unsigned,eventHash:canonicalSha256(unsigned)});
 }
