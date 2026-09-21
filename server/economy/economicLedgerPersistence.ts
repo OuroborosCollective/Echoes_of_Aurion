@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   aurionEconomicAssetTransitions,
   aurionEconomicEvents,
@@ -23,7 +23,7 @@ import { readTemporalEventById } from "../history/aurionTemporalEventPersistence
 import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
 import {
-  guildBankSourceEvidenceHash, lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, marketTransactionSourceEvidenceHash,
+  craftingSourceEvidenceHash, guildBankSourceEvidenceHash, lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, marketTransactionSourceEvidenceHash,
   progressionPointsSourceEvidenceHash, systemSaleSourceEvidenceHash, tradeCraftingSourceEvidenceHash,
 } from "./economicSourceEvidence";
 
@@ -42,13 +42,30 @@ async function deriveTradeCrafting(tx:Tx,sourceId:string){
     resultHash:row.resultHash,idempotencyKey:row.idempotencyKey,
   });
   if(normalized.receiptHash!==row.receiptHash) throw new Error("ECONOMIC_SOURCE_RECEIPT_HASH_MISMATCH");
+  if(row.operationKind!=="crafting"||row.marketContext!=="direct_self_crafting") throw new Error("ECONOMIC_TRADE_CRAFTING_SOURCE_UNSUPPORTED");
+  if(normalized.resourceDeltas.length<1||normalized.resourceDeltas.some(delta=>delta.quantityExact!=="-1")) {
+    throw new Error("ECONOMIC_CRAFTING_INPUT_EVIDENCE_INVALID");
+  }
+  const inputIds=normalized.resourceDeltas.map(delta=>delta.resourceId).sort();
+  if(new Set(inputIds).size!==inputIds.length) throw new Error("ECONOMIC_CRAFTING_INPUT_EVIDENCE_INVALID");
+  const inputs=await tx.select().from(itemInstances).where(inArray(itemInstances.id,inputIds));
+  if(inputs.length!==inputIds.length||inputs.some(item=>item.ownerUserId!==row.userId||item.status!=="consumed")) {
+    throw new Error("ECONOMIC_CRAFTING_INPUT_READBACK_MISMATCH");
+  }
+  const outputs=await tx.select().from(itemInstances).where(and(
+    eq(itemInstances.craftingReceiptId,row.id),eq(itemInstances.sourceKind,"crafting"),
+  ));
+  if(outputs.length<1||outputs.some(output=>output.ownerUserId!==row.userId)) throw new Error("ECONOMIC_CRAFTING_OUTPUT_READBACK_MISMATCH");
+  outputs.sort((a,b)=>a.craftingOutputKey.localeCompare(b.craftingOutputKey)||a.id.localeCompare(b.id));
+  const assetTransitions=[
+    ...inputIds.map(id=>Object.freeze({assetId:`item:legacy:${id}`,transitionKind:"consume" as const,fromOwnerId:`user:${row.userId}`,toOwnerId:null})),
+    ...outputs.map(output=>Object.freeze({assetId:`item:legacy:${output.id}`,transitionKind:"create" as const,fromOwnerId:null,toOwnerId:`user:${row.userId}`})),
+  ];
   return Object.freeze({
     eventType:"economic_transition" as const,
-    sourceEvidenceHash:tradeCraftingSourceEvidenceHash(normalized),
-    resourceDeltas:Object.freeze(normalized.resourceDeltas.map(delta=>Object.freeze({
-      resourceId:delta.resourceId,accountId:`character:${row.characterId}`,deltaExact:delta.quantityExact,
-    }))),
-    assetTransitions:Object.freeze([]),
+    sourceEvidenceHash:craftingSourceEvidenceHash(normalized,outputs),
+    resourceDeltas:Object.freeze([]),
+    assetTransitions:Object.freeze(assetTransitions),
   });
 }
 
