@@ -15,6 +15,7 @@ on:
       - "shared/glbPresentationBudget.ts"
       - "shared/glbExternalProvenanceContract.ts"
       - "drizzle/0055_aurion_glb_external_provenance.sql"
+      - "drizzle/0056_aurion_temporal_history_v1.sql"
       - "server/liveDeveloperGenkit.ts"
       - "server/liveDeveloperProtocol.ts"
       - "server/liveDeveloperProtocol.test.ts"
