@@ -57,4 +57,3 @@ CREATE TRIGGER `aurionEconomicResourceDeltas_no_delete` BEFORE DELETE ON `aurion
 CREATE TRIGGER `aurionEconomicAssetTransitions_no_update` BEFORE UPDATE ON `aurionEconomicAssetTransitions` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_LEDGER_APPEND_ONLY';
 --> statement-breakpoint
 CREATE TRIGGER `aurionEconomicAssetTransitions_no_delete` BEFORE DELETE ON `aurionEconomicAssetTransitions` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_LEDGER_APPEND_ONLY';
---> statement-breakpoint
