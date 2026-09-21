@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { readCompanionDataset } from "@/lib/companionLearning";
 import { PublicCharacterPicker } from "@/xaurion/components/PublicCharacterPicker";
+import { AchievementsGallery } from "@/components/AchievementsGallery";
 
 /** Aurion account portal: persisted readbacks plus the explicit immutable public appearance binding. */
 export default function Account() {
@@ -56,7 +57,11 @@ export default function Account() {
         <article className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><Sparkles className="mb-3 size-5 text-cyan-300"/><h3 className="font-semibold">Companion-Training</h3><p className="mt-1 text-xs text-slate-500">Nur Trainings-/Receipt-Metadaten. Keine Frames werden auf dieser Seite gerendert und kein Companion wird gesteuert.</p><p className="mt-4 text-sm">Lokale Beobachtungszeilen: <b>{training.total}</b></p><div className="mt-3 space-y-2">{training.sessions.map(([sessionId, summary]) => <div key={sessionId} className="rounded-xl border border-slate-700/70 p-3 text-xs"><b>{sessionId}</b><p>{summary.rows} Samples · letzter Beleg {summary.lastSampleId}</p><p>{new Date(summary.latest).toLocaleString()}</p></div>)}{training.sessions.length === 0 && <p className="text-sm text-slate-400">Auf diesem Gerät liegen noch keine Trainingssamples.</p>}</div><div className="mt-4 border-t border-slate-700/60 pt-3 text-xs text-slate-400"><p>Serverseitige Gateway-Sitzungen: {gateways.data?.length ?? 0}</p>{gateways.data?.slice(0,4).map(session => <p key={session.id}>{session.providerLabel} · {session.status}</p>)}</div></article>
       </section>
 
-      <section className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><h3 className="font-semibold">Achievements</h3><p className="mt-2 text-sm text-slate-400">Noch keine persistierte WASD-Achievement-Readprojektion verbunden. Aurion zeigt deshalb keine aus alten Questzuständen abgeleiteten Ersatz-Achievements.</p></section>
+      <AchievementsGallery
+        profile={profile}
+        progression={progression}
+        craftingProgression={crafting.data?.progression?.progression}
+      />
       <section className="rounded-2xl border border-amber-300/25 bg-amber-100/5 p-5 text-sm text-slate-300"><ShieldCheck className="mr-2 inline size-4 text-amber-200"/><b className="text-amber-100">Readonly-Grenze:</b> Aurion zeigt hier persistierte Daten. Einzige Account-Mutation auf dieser Fläche ist die explizite, einmalige öffentliche Modellbindung. Kampf, Quests, Skills, Ausrüstung, Inventarwirkungen, Crafting, Markt und Weltmutation werden nicht von dieser Website ausgelöst.</section>
     </div>
   </main>;
