@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { aurionEconomicEvents, aurionEconomicProjectionIntents } from "../../drizzle/aurionCausalitySchema";
 import { aurionGuildBankReceipts } from "../../drizzle/guildBankSchema";
 import {
+  lootDropReceipts,
   aurionLootDropReceiptsV2,
   aurionTradeCraftingReceipts,
   marketTransactionReceipts,
@@ -33,8 +34,9 @@ export async function readEconomicSourceCoverage(worldId:string){
     reason:"ECONOMIC_DATABASE_UNAVAILABLE",sources:Object.freeze([]),missingCount:0,missingSample:Object.freeze([]),coverageHash:null,
   });
   try{
-    const [tradeCrafting,loot,market,systemSales,guild,points,intents,economic]=await Promise.all([
+    const [tradeCrafting,lootV1,lootV2,market,systemSales,guild,points,intents,economic]=await Promise.all([
       db.select({id:aurionTradeCraftingReceipts.id}).from(aurionTradeCraftingReceipts).limit(SOURCE_LIMIT+1),
+      db.select({id:lootDropReceipts.id}).from(lootDropReceipts).limit(SOURCE_LIMIT+1),
       db.select({id:aurionLootDropReceiptsV2.id}).from(aurionLootDropReceiptsV2).limit(SOURCE_LIMIT+1),
       db.select({id:marketTransactionReceipts.id}).from(marketTransactionReceipts).limit(SOURCE_LIMIT+1),
       db.select({id:systemSaleReceipts.id}).from(systemSaleReceipts).limit(SOURCE_LIMIT+1),
@@ -45,12 +47,13 @@ export async function readEconomicSourceCoverage(worldId:string){
       db.select({sourceKind:aurionEconomicEvents.sourceKind,sourceId:aurionEconomicEvents.sourceId})
         .from(aurionEconomicEvents).where(eq(aurionEconomicEvents.worldId,worldId)).limit(SOURCE_LIMIT*6+1),
     ]);
-    if([tradeCrafting,loot,market,systemSales,guild,points].some(rows=>rows.length>SOURCE_LIMIT)||intents.length>SOURCE_LIMIT*6||economic.length>SOURCE_LIMIT*6){
+    if([tradeCrafting,lootV1,lootV2,market,systemSales,guild,points].some(rows=>rows.length>SOURCE_LIMIT)||intents.length>SOURCE_LIMIT*7||economic.length>SOURCE_LIMIT*7){
       throw new Error("ECONOMIC_SOURCE_COVERAGE_LIMIT_EXCEEDED");
     }
     const sources:readonly SourceSet[]=Object.freeze([
       Object.freeze({kind:"trade_crafting" as const,ids:freezeIds(tradeCrafting.map(row=>row.id))}),
-      Object.freeze({kind:"loot_v2" as const,ids:freezeIds(loot.map(row=>row.id))}),
+      Object.freeze({kind:"loot_v1" as const,ids:freezeIds(lootV1.map(row=>row.id))}),
+      Object.freeze({kind:"loot_v2" as const,ids:freezeIds(lootV2.map(row=>row.id))}),
       Object.freeze({kind:"market_transaction" as const,ids:freezeIds(market.map(row=>row.id))}),
       Object.freeze({kind:"system_sale" as const,ids:freezeIds(systemSales.map(row=>row.id))}),
       Object.freeze({kind:"guild_bank" as const,ids:freezeIds(guild.map(row=>row.id))}),
