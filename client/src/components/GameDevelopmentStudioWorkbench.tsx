@@ -158,7 +158,7 @@ export default function GameDevelopmentStudioWorkbench() {
             <Search className="h-5 w-5 text-violet-300" /> Automatische GLB-Lückenerkennung
           </CardTitle>
           <CardDescription>
-            Aurion prüft 17 kanonische, rein visuelle Kategorien. Die Auswahl ist deterministisch, Phone-Budget ist der kleinste gemeinsame Nenner und vorhandene Assignments werden niemals ersetzt.
+            Aurion prüft 18 kanonische, rein visuelle Anforderungen inklusive des direkten Asterion-Courtyard-Slots. Die Auswahl ist deterministisch, Phone-Budget ist der kleinste gemeinsame Nenner und vorhandene Assignments werden niemals ersetzt.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
