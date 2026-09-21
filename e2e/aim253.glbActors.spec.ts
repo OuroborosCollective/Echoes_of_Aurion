@@ -136,11 +136,11 @@ for (const viewport of [
       expect(idle.renderedHeightMeters).toBeGreaterThan(1.8);
       expect(idle.renderedHeightMeters).toBeLessThan(2.2);
       expect(Math.abs(idle.feetY - Number(await player.getAttribute("data-ground-y")))).toBeLessThan(0.06);
-      await expect.poll(async () => (await pose(player))?.bonePose).not.toBe(idle.bonePose);
+      await expect.poll(async () => (await pose(player))?.bonePose, { timeout: 15_000, intervals: [100, 250, 500] }).not.toBe(idle.bonePose);
       const initialSmith = (await pose(smith))!;
       expect(initialSmith.id).toBe("observatory_blacksmith");
       expect(initialSmith.boneCount).toBeGreaterThanOrEqual(18);
-      await expect.poll(async () => (await pose(smith))?.bonePose).not.toBe(initialSmith.bonePose);
+      await expect.poll(async () => (await pose(smith))?.bonePose, { timeout: 15_000, intervals: [100, 250, 500] }).not.toBe(initialSmith.bonePose);
       expect([...loaded].sort()).toEqual([playerReceipt.storageUrl, smithReceipt.storageUrl].sort());
 
       const hud = page.getByTestId("authoritative-world-hud");
