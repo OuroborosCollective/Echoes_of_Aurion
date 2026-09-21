@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import mysql from "mysql2/promise";
 import { describe, expect, it } from "vitest";
 import { aurionCausalTickReceipts, aurionGlobalStateProofs, aurionTemporalEvents } from "../../drizzle/aurionCausalitySchema";
+import { aurionQuestReceipts } from "../../drizzle/schema";
 import { createTemporalEvent } from "../../shared/aurionTemporalEventContract";
 import { getDb, resolveAndRecordGlobalWorldEpoch } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
@@ -51,12 +52,30 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
     });
     expect((await appendTemporalEvent(second)).applied).toBe(true);
 
+    const questReceiptHash="a".repeat(64);
+    await db.insert(aurionQuestReceipts).values({
+      id:"quest-receipt-wave3-2",instanceId:"quest-instance-wave3",eventSequence:1,
+      planHash:"b".repeat(64),graphHash:"c".repeat(64),previousStateHash:"d".repeat(64),resultStateHash:"e".repeat(64),
+      idempotencyKey:"wave3:quest:receipt:2",receiptHash:questReceiptHash,
+    });
+    const questEvent=createTemporalEvent({
+      eventId:"event:quest:2",worldId:WORLD_ID,epoch:2,domain:"quest",subjectIds:["quest:ember-trial"],
+      sourceReceiptHash:`sha256:${questReceiptHash}`,sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+      predecessorEventIds:[second.eventId],payload:{status:"COMPLETED",questReceiptId:"quest-receipt-wave3-2"},
+    });
+    expect((await appendTemporalEvent(questEvent)).applied).toBe(true);
+    const questExplanation=await globalCausalHistoryExplainService.explainFactAtEpoch({
+      worldId:WORLD_ID,targetFactOrEventId:questEvent.eventId,epoch:2,
+    });
+    expect(questExplanation).toMatchObject({status:"MATCH",mutationAuthority:"none",rootEvidenceReached:true});
+    expect(questExplanation.chain.map(step=>step.eventId)).toEqual(["event:quest:2","event:mine:2","event:mine:1"]);
+
     const unboundReceipt=createTemporalEvent({
       eventId:"event:receipt:unbound",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["evidence:unbound"],
       sourceReceiptHash:"sha256:"+"f".repeat(64),sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
       payload:{state:"MUST_NOT_PERSIST"},
     });
-    await expect(appendTemporalEvent(unboundReceipt)).rejects.toThrow("TEMPORAL_SOURCE_RECEIPT_UNPROVABLE");
+    await expect(appendTemporalEvent(unboundReceipt)).rejects.toThrow("TEMPORAL_SOURCE_RECEIPT_NOT_FOUND");
 
     const left=createTemporalEvent({
       eventId:"event:diamond:left",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["cause:left"],
