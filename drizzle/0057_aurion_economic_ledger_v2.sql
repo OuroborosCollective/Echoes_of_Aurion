@@ -1,15 +1,3 @@
-CREATE TABLE `aurionEconomicProjectionIntents` (
-  `intentId` varchar(96) NOT NULL,
-  `sourceKind` enum('trade_crafting','loot_v1','loot_v2','market_transaction','system_sale','guild_bank','progression_points') NOT NULL,
-  `sourceId` varchar(128) NOT NULL,
-  `sourceEvidenceHash` varchar(96) NOT NULL,
-  `intentHash` varchar(96) NOT NULL,
-  `createdAt` timestamp NOT NULL DEFAULT (now()),
-  CONSTRAINT `aurionEconomicProjectionIntents_intentId` PRIMARY KEY (`intentId`),
-  UNIQUE KEY `aurionEconomicProjectionIntents_source_uq` (`sourceKind`,`sourceId`),
-  UNIQUE KEY `aurionEconomicProjectionIntents_hash_uq` (`intentHash`)
-);
---> statement-breakpoint
 CREATE TABLE `aurionEconomicLedgerCoordinator` (
   `worldId` varchar(64) NOT NULL,
   `nextOrdinal` bigint unsigned NOT NULL DEFAULT 1,
@@ -70,6 +58,3 @@ CREATE TRIGGER `aurionEconomicAssetTransitions_no_update` BEFORE UPDATE ON `auri
 --> statement-breakpoint
 CREATE TRIGGER `aurionEconomicAssetTransitions_no_delete` BEFORE DELETE ON `aurionEconomicAssetTransitions` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_LEDGER_APPEND_ONLY';
 --> statement-breakpoint
-CREATE TRIGGER `aurionEconomicProjectionIntents_no_update` BEFORE UPDATE ON `aurionEconomicProjectionIntents` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_INTENT_APPEND_ONLY';
---> statement-breakpoint
-CREATE TRIGGER `aurionEconomicProjectionIntents_no_delete` BEFORE DELETE ON `aurionEconomicProjectionIntents` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'AURION_ECONOMIC_INTENT_APPEND_ONLY';
