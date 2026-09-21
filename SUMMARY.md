@@ -38,3 +38,5 @@
   * [Companion Memory VPS Setup](COMPANION_MEMORY_VPS_SETUP.md)
 * [Patchnotes](patchnotes/README.md)
   * [GitHub-Patchnotes-Automation](patchnotes/github-patchnotes-automation.md)
+
+- [Wave 3 Temporal History — Steps 32–34](docs/unreal-derived-wave3-temporal-history.md)

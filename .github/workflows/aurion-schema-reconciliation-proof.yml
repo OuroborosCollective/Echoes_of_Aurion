@@ -44,6 +44,7 @@ on:
       - "drizzle/0053_aurion_npc_action_gateway_v2.sql"
       - "drizzle/0054_aurion_semantic_memory_graph_v2.sql"
       - "drizzle/0055_aurion_glb_external_provenance.sql"
+      - "drizzle/0056_aurion_temporal_history_v1.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -92,6 +93,7 @@ on:
       - "drizzle/0053_aurion_npc_action_gateway_v2.sql"
       - "drizzle/0054_aurion_semantic_memory_graph_v2.sql"
       - "drizzle/0055_aurion_glb_external_provenance.sql"
+      - "drizzle/0056_aurion_temporal_history_v1.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -282,6 +284,21 @@ jobs:
             for(const statement of statements) await connection.query(statement);
           } finally { await connection.end(); }
           console.log(JSON.stringify({phase:"0055-applied",statementCount:statements.length}));
+          NODE
+
+      - name: Apply 0056 temporal history migration separately
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const sql=fs.readFileSync("drizzle/0056_aurion_temporal_history_v1.sql","utf8");
+          const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            for(const statement of statements) await connection.query(statement);
+          } finally { await connection.end(); }
+          console.log(JSON.stringify({phase:"0056-applied",statementCount:statements.length}));
           NODE
 
       - name: Prove all declared late migrations match after isolated apply

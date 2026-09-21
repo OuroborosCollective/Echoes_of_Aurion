@@ -64,6 +64,7 @@ on:
       - "drizzle/0053_aurion_npc_action_gateway_v2.sql"
       - "drizzle/0054_aurion_semantic_memory_graph_v2.sql"
       - "drizzle/0055_aurion_glb_external_provenance.sql"
+      - "drizzle/0056_aurion_temporal_history_v1.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -279,6 +280,7 @@ jobs:
             "0053_aurion_npc_action_gateway_v2",
             "0054_aurion_semantic_memory_graph_v2",
             "0055_aurion_glb_external_provenance",
+            "0056_aurion_temporal_history_v1",
           ];
           const db=await mysql.createConnection(process.env.DATABASE_URL);
           try {

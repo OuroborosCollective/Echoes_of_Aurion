@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 const HASH_LENGTH = 96;
 
@@ -172,6 +172,51 @@ export const aurionEffectDeliveryReceipts = mysqlTable("aurionEffectDeliveryRece
   uniqueIndex("aurionEffectDeliveryReceipts_effect_attempt_uq").on(table.effectId, table.attempt),
   uniqueIndex("aurionEffectDeliveryReceipts_hash_uq").on(table.deliveryReceiptHash),
   index("aurionEffectDeliveryReceipts_effect_created_idx").on(table.effectId, table.createdAt),
+]);
+
+
+
+export const aurionTemporalEvents = mysqlTable("aurionTemporalEvents", {
+  eventId: varchar("eventId", { length: 96 }).primaryKey(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  epoch: int("epoch").notNull(),
+  domain: mysqlEnum("domain", ["world","zone","quest","npc","faction","economy","ownership","social"]).notNull(),
+  validFromEpoch: int("validFromEpoch").notNull(),
+  validToEpoch: int("validToEpoch"),
+  sourceReceiptHash: varchar("sourceReceiptHash", { length: HASH_LENGTH }).notNull(),
+  sourceWorldRoot: varchar("sourceWorldRoot", { length: HASH_LENGTH }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 64 }).notNull(),
+  rulesetVersion: varchar("rulesetVersion", { length: 64 }).notNull(),
+  payloadJson: text("payloadJson").notNull(),
+  payloadHash: varchar("payloadHash", { length: HASH_LENGTH }).notNull(),
+  eventHash: varchar("eventHash", { length: HASH_LENGTH }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionTemporalEvents_event_hash_uq").on(table.eventHash),
+  index("aurionTemporalEvents_world_epoch_idx").on(table.worldId, table.epoch),
+  index("aurionTemporalEvents_world_domain_epoch_idx").on(table.worldId, table.domain, table.epoch),
+]);
+
+export const aurionTemporalEventSubjects = mysqlTable("aurionTemporalEventSubjects", {
+  eventId: varchar("eventId", { length: 96 }).notNull(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+  subjectId: varchar("subjectId", { length: 128 }).notNull(),
+  domain: mysqlEnum("domain", ["world","zone","quest","npc","faction","economy","ownership","social"]).notNull(),
+  validFromEpoch: int("validFromEpoch").notNull(),
+  validToEpoch: int("validToEpoch"),
+}, table => [
+  primaryKey({ name: "aurionTemporalEventSubjects_pk", columns: [table.eventId, table.subjectId] }),
+  index("aurionTemporalEventSubjects_world_subject_epoch_idx").on(table.worldId, table.subjectId, table.validFromEpoch),
+]);
+
+export const aurionTemporalEventPredecessors = mysqlTable("aurionTemporalEventPredecessors", {
+  eventId: varchar("eventId", { length: 96 }).notNull(),
+  predecessorEventId: varchar("predecessorEventId", { length: 96 }).notNull(),
+  worldId: varchar("worldId", { length: 64 }).notNull(),
+}, table => [
+  primaryKey({ name: "aurionTemporalEventPredecessors_pk", columns: [table.eventId, table.predecessorEventId] }),
+  index("aurionTemporalEventPredecessors_predecessor_idx").on(table.predecessorEventId),
+  index("aurionTemporalEventPredecessors_world_event_idx").on(table.worldId, table.eventId),
 ]);
 
 export const aurionGlobalStateProofs = mysqlTable("aurionGlobalStateProofs", {
