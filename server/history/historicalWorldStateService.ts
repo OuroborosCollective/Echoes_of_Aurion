@@ -30,8 +30,14 @@ export class HistoricalWorldStateService {
     const sourceGap=await verifySources(observed);
     if(sourceGap) return {...base,status:"UNPROVABLE",reason:sourceGap};
 
+    const byEventId=new Map(observed.map(event=>[event.eventId,event] as const));
     const superseded=new Set<string>();
-    for(const event of observed) for(const predecessor of event.predecessorEventIds) superseded.add(predecessor);
+    for(const successor of observed) for(const predecessorId of successor.predecessorEventIds){
+      const predecessor=byEventId.get(predecessorId);
+      if(!predecessor||predecessor.domain!==successor.domain) continue;
+      if(!predecessor.subjectIds.some(subject=>successor.subjectIds.includes(subject))) continue;
+      superseded.add(predecessorId);
+    }
     const active=observed.filter(event=>!superseded.has(event.eventId)&&(event.validToEpoch===null||event.validToEpoch>epoch));
     if(active.length===0){
       const future=candidates.some(event=>event.validFromEpoch>epoch);
