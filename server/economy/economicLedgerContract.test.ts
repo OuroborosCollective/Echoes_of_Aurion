@@ -1,5 +1,5 @@
 import { describe,expect,it } from "vitest";
-import { createEconomicEvent } from "../../shared/aurionEconomicEventContract";
+import { createEconomicEvent, economicResourceImbalances } from "../../shared/aurionEconomicEventContract";
 
 const base={
   worldId:"echoes-of-aurion-global",epoch:1,sourceKind:"trade_crafting" as const,sourceId:"receipt:1",
@@ -13,6 +13,14 @@ describe("Wave 3 Steps 35-37 economic contract",()=>{
     ],assetTransitions:[]});
     expect(event.resourceDeltas.map(value=>value.resourceId)).toEqual(["aether","wood"]);
     expect(event.eventHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+  it("detects per-resource conservation rather than allowing cross-resource cancellation",()=>{
+    expect(economicResourceImbalances([
+      {resourceId:"aurion_points",accountId:"user:1",deltaExact:"-25"},
+      {resourceId:"aurion_points",accountId:"user:2",deltaExact:"25"},
+      {resourceId:"wood",accountId:"user:1",deltaExact:"-2"},
+      {resourceId:"wood",accountId:"guild:1",deltaExact:"1"},
+    ])).toEqual([{resourceId:"wood",deltaExact:"-1"}]);
   });
   it("rejects duplicate resources and malformed asset creation",()=>{
     expect(()=>createEconomicEvent({...base,eventId:"economic:1",eventType:"economic_transition",resourceDeltas:[
