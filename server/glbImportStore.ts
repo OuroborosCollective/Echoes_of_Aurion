@@ -292,19 +292,21 @@ export class GlbImportStore {
     });
   }
 
-  async assignAutomaticFallback(actorUserId: number, input: { assetId: string; targetType: "enemy"; targetKey: "starter_spider" | "starter_beast_lod0"; expectedActiveAssetId: null }) {
+  async assignAutomaticFallback(actorUserId: number, input: { assetId: string; targetType: "enemy" | "arena"; targetKey: "starter_spider" | "starter_beast_lod0" | "asterion_courtyard"; expectedActiveAssetId: null }) {
     return this.locked(actorUserId, async connection => {
       if (input.expectedActiveAssetId !== null) throw new Error("GLB_AUTOMATIC_FALLBACK_MISSING_ONLY");
       const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
       const asset = assets[0];
-      if (!asset || asset.status !== "approved" || asset.assetType !== input.targetType) throw new Error("GLB_AUTOMATIC_FALLBACK_APPROVED_ENEMY_REQUIRED");
-      if (glbPurposeFromDisplayName(String(asset.displayName)) !== "enemy-fallback") throw new Error("GLB_AUTOMATIC_FALLBACK_PURPOSE_REQUIRED");
+      if (!asset || asset.status !== "approved" || asset.assetType !== input.targetType) throw new Error("GLB_AUTOMATIC_FALLBACK_APPROVED_ASSET_REQUIRED");
+      const expectedPurpose: GlbImportPurpose = input.targetType === "enemy" ? "enemy-fallback" : "world-environment";
+      if (glbPurposeFromDisplayName(String(asset.displayName)) !== expectedPurpose) throw new Error("GLB_AUTOMATIC_FALLBACK_PURPOSE_REQUIRED");
       if (String(asset.storageKey).startsWith("local-glb/")) {
         const bytes = await readStoredGlb(String(asset.sha256), this.storageRoot);
-        const plan = buildGlbImportPlan(bytes.toString("base64"), "enemy-fallback", String(asset.displayName));
-        if (plan.assetType !== "enemy" || plan.sha256 !== asset.sha256) throw new Error("GLB_AUTOMATIC_FALLBACK_SOURCE_IDENTITY_MISMATCH");
+        const plan = buildGlbImportPlan(bytes.toString("base64"), expectedPurpose, String(asset.displayName));
+        if (plan.assetType !== input.targetType || plan.sha256 !== asset.sha256) throw new Error("GLB_AUTOMATIC_FALLBACK_SOURCE_IDENTITY_MISMATCH");
         if (input.targetKey === "starter_spider" && plan.classification.subcategory !== "spider") throw new Error("GLB_AUTOMATIC_FALLBACK_SPIDER_REQUIRED");
         if (input.targetKey === "starter_beast_lod0" && plan.classification.subcategory === "spider") throw new Error("GLB_AUTOMATIC_FALLBACK_BEAST_REQUIRED");
+        if (input.targetKey === "asterion_courtyard" && plan.classification.worldFamily !== "environment") throw new Error("GLB_AUTOMATIC_FALLBACK_ENVIRONMENT_REQUIRED");
       }
       const [active] = await connection.query<RowDataPacket[]>(
         "SELECT id, assetId FROM glbAssignments WHERE targetType = ? AND targetKey = ? AND active = 1 ORDER BY id FOR UPDATE",
