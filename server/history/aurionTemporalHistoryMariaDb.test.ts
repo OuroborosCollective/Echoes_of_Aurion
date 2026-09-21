@@ -6,7 +6,7 @@ import { createTemporalEvent } from "../../shared/aurionTemporalEventContract";
 import { getDb, resolveAndRecordGlobalWorldEpoch } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalTickRecorder } from "../causality/tickRecorder";
-import { appendTemporalEvent } from "./aurionTemporalEventPersistence";
+import { appendTemporalEvent, readTemporalEventById } from "./aurionTemporalEventPersistence";
 import { globalHistoricalWorldStateService } from "./historicalWorldStateService";
 import { globalCausalHistoryExplainService } from "./causalHistoryExplainService";
 
@@ -122,6 +122,21 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
         rejected=String((error as {sqlMessage?:unknown}).sqlMessage ?? (error as Error).message);
       }
       expect(rejected).toContain("AURION_TEMPORAL_HISTORY_APPEND_ONLY");
+
+      const corrupt=createTemporalEvent({
+        eventId:"event:corrupt:index",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["corrupt:subject"],
+        sourceReceiptHash:secondTick.receiptHash,sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+        payload:{state:"INDEX_METADATA_MUST_MATCH"},
+      });
+      await raw.query(
+        "INSERT INTO aurionTemporalEvents (eventId,worldId,epoch,domain,validFromEpoch,validToEpoch,sourceReceiptHash,sourceWorldRoot,sourceRevision,rulesetVersion,payloadJson,payloadHash,eventHash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [corrupt.eventId,corrupt.worldId,corrupt.epoch,corrupt.domain,corrupt.validFromEpoch,corrupt.validToEpoch,corrupt.sourceReceiptHash,corrupt.sourceWorldRoot,corrupt.sourceRevision,corrupt.rulesetVersion,JSON.stringify(corrupt.payload),corrupt.payloadHash,corrupt.eventHash],
+      );
+      await raw.query(
+        "INSERT INTO aurionTemporalEventSubjects (eventId,worldId,subjectId,domain,validFromEpoch,validToEpoch) VALUES (?,?,?,?,?,?)",
+        [corrupt.eventId,"wrong-world",corrupt.subjectIds[0],corrupt.domain,corrupt.validFromEpoch,corrupt.validToEpoch],
+      );
+      await expect(readTemporalEventById(corrupt.eventId)).rejects.toThrow("TEMPORAL_STORED_SUBJECT_METADATA_MISMATCH");
 
       const overflowRows=Array.from({length:513},(_,index)=>[
         `overflow:${String(index).padStart(3,"0")}`,"overflow-world",1,"world",1,null,
