@@ -14,14 +14,14 @@ export const systemRouter = router({
     .query(() => ({
       ok: true,
     })),
-  
+
   dashboardStatus: adminProcedure
     .query(async () => {
       const statuses: Array<{ service: string; status: "UP" | "DOWN" | "MAINTAINED"; reason?: string }> = [];
-      
+
       // 1. API
       statuses.push({ service: "API (Core)", status: "UP" });
-      
+
       // 2. Database
       if (!process.env.DATABASE_URL || !isConfiguredDatabaseUrl(process.env.DATABASE_URL)) {
         statuses.push({ service: "Database (MariaDB/MySQL)", status: "MAINTAINED", reason: "DATABASE_URL environment variable is missing or improperly configured" });
