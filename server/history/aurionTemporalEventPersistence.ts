@@ -16,6 +16,15 @@ async function decodeStored(reader:TemporalReader,eventId:string):Promise<Aurion
     reader.select().from(aurionTemporalEventSubjects).where(eq(aurionTemporalEventSubjects.eventId,eventId)),
     reader.select().from(aurionTemporalEventPredecessors).where(eq(aurionTemporalEventPredecessors.eventId,eventId)),
   ]);
+  for(const subject of subjects) if(
+    subject.worldId!==row.worldId||
+    subject.domain!==row.domain||
+    subject.validFromEpoch!==row.validFromEpoch||
+    subject.validToEpoch!==row.validToEpoch
+  ) throw new Error("TEMPORAL_STORED_SUBJECT_METADATA_MISMATCH");
+  for(const predecessor of predecessors) if(predecessor.worldId!==row.worldId) {
+    throw new Error("TEMPORAL_STORED_PREDECESSOR_METADATA_MISMATCH");
+  }
   const event:AurionTemporalEvent={
     schema:"aurion.temporal.event.v1",
     eventId:row.eventId,worldId:row.worldId,epoch:row.epoch,domain:row.domain,
