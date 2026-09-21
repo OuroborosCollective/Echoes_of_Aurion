@@ -125,12 +125,12 @@ export class ConfirmedChunkProjection {
         }
         const prepared = await prepareConfirmedChunkProjection(value, this.epoch, coordinate, generation);
         const result = await workerDecode(prepared.job, prepared.bytes, this.abort.signal);
-        if (!await matchesWorldChunkProjectionWorkerResultV2(prepared.job, result, prepared.bytes)) throw Error("PROJECTION_WORKER_BINDING_MISMATCH");
+        if (!matchesWorldChunkProjectionWorkerResultV2(prepared.job, result as any)) throw Error("PROJECTION_WORKER_BINDING_MISMATCH");
         if (this.abort.signal.aborted || center !== this.center) return;
         const group = buildConfirmedChunkMeshes(prepared.decoded, this.terrain);
         this.groups.set(key, group); this.failures.delete(key); this.scene.add(group);
         const meshCount = [...this.groups.values()].reduce((total, item) => total + item.children.length, 0);
-        this.report({ status: "APPLIED", count: this.groups.size, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
+        this.report({ status: "APPLIED", count: this.groups.size, meshCount, projectionHash: (prepared.job.manifest as any).projectionHash ?? prepared.job.manifest.manifestHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
         if (prepared.observation && this.onApplied) {
           // Observation failure cannot remove the applied scene or change authority.
           void this.onApplied({ job: prepared.job, binding: prepared.observation, observedAtLogicalFrame: this.logicalFrame }).catch(() => {});

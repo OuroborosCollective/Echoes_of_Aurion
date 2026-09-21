@@ -46,7 +46,8 @@ function clearOidcTransaction(res: Response): void {
 async function handleOidcCallback(req: Request, res: Response): Promise<void> {
   const code = getQueryParam(req, "code");
   const state = getQueryParam(req, "state");
-  const transaction = parseOidcTransaction(parseCookieHeader(req.headers.cookie ?? "")[OIDC_TRANSACTION_COOKIE]);
+  const transactionCookie = parseCookieHeader(req.headers.cookie ?? "")[OIDC_TRANSACTION_COOKIE];
+  const transaction = transactionCookie ? parseOidcTransaction(transactionCookie) : null;
   clearOidcTransaction(res);
 
   if (!code || !state || !transaction || !oidcStateMatches(transaction.state, state)) {

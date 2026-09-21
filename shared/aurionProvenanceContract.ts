@@ -1,5 +1,3 @@
-export type ProvenanceObservation = "OBSERVED" | "UNVERIFIED" | "UNOBSERVABLE";
-
 export interface AurionProvenance {
   commit: string;
   sourceRevision: string;
@@ -8,12 +6,6 @@ export interface AurionProvenance {
   buildInputDigest: string;
   artifactDigest: string;
   runtimeImageDigest: string;
-  observation: {
-    sourceRevision: ProvenanceObservation;
-    buildInputDigest: ProvenanceObservation;
-    artifactDigest: ProvenanceObservation;
-    runtimeImageDigest: ProvenanceObservation;
-  };
   authority: {
     ruleset: string;
     tickHz: number;
@@ -29,3 +21,4 @@ export interface AurionProvenance {
   };
   runtimeHash: string;
 }
+

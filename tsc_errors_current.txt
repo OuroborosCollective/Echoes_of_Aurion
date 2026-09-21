@@ -1,0 +1,185 @@
+
+> echoes-of-aurion@1.0.0 check /app/applet
+> tsc --noEmit
+
+client/src/App.tsx(11,23): error TS2307: Cannot find module './pages/Community' or its corresponding type declarations.
+client/src/components/DashboardLayoutSkeleton.tsx(1,26): error TS2307: Cannot find module './ui/skeleton' or its corresponding type declarations.
+client/src/components/GlbZipBatchUpload.tsx(7,39): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/components/GuildGovernancePanel.tsx(3,59): error TS2307: Cannot find module '@shared/guildGovernanceContract' or its corresponding type declarations.
+client/src/components/ui/sidebar.tsx(13,26): error TS2307: Cannot find module '@/components/ui/skeleton' or its corresponding type declarations.
+client/src/lib/zoneMovement.ts(7,125): error TS2307: Cannot find module '@/xaurion/integration/zoneCombatBridge' or its corresponding type declarations.
+client/src/lib/zoneMovement.ts(27,435): error TS7006: Parameter 'targetEntityId' implicitly has an 'any' type.
+client/src/lib/zoneMovement.ts(27,490): error TS7006: Parameter 'skillId' implicitly has an 'any' type.
+client/src/lib/zoneMovement.ts(27,498): error TS7006: Parameter 'targetEntityId' implicitly has an 'any' type.
+client/src/pages/Community.navigation.test.tsx(3,23): error TS2307: Cannot find module './Community' or its corresponding type declarations.
+client/src/pages/ComponentShowcase.tsx(37,26): error TS2307: Cannot find module '@/components/ui/checkbox' or its corresponding type declarations.
+client/src/pages/ComponentShowcase.tsx(87,8): error TS2307: Cannot find module '@/components/ui/hover-card' or its corresponding type declarations.
+client/src/pages/ComponentShowcase.tsx(130,8): error TS2307: Cannot find module '@/components/ui/select' or its corresponding type declarations.
+client/src/pages/ComponentShowcase.tsx(140,26): error TS2307: Cannot find module '@/components/ui/skeleton' or its corresponding type declarations.
+client/src/pages/ComponentShowcase.tsx(142,24): error TS2307: Cannot find module '@/components/ui/switch' or its corresponding type declarations.
+client/src/pages/GlbUpload.tsx(20,8): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/pages/GlbUpload.tsx(99,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(118,65): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(203,41): error TS7006: Parameter 'level' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(207,23): error TS7031: Binding element 'level' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(211,56): error TS7031: Binding element 'level' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(211,63): error TS7031: Binding element 'file' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(224,42): error TS7006: Parameter 'left' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(224,48): error TS7006: Parameter 'right' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(245,19): error TS2345: Argument of type '(current: readonly Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ......' is not assignable to parameter of type 'SetStateAction<readonly Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" ...'.
+  Type '(current: readonly Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ......' is not assignable to type '(prevState: readonly Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ....'.
+    Type '(Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ... 1 more ... | null...' is not assignable to type 'readonly Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ... 1 more .....'.
+      Type 'Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ... 1 more ... | null;...' is not assignable to type 'Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ... 1 more ... | null;...'. Two different types with this name exist, but they are unrelated.
+        Type '{ result: { receipt: any; accepted?: true | undefined; fileName?: string | undefined; purpose?: GlbImportPurpose; classification?: Readonly<{ assetType: "character" | "enemy" | "weapon" | "armor" | "arena"; ... 7 more ...; worldFamily: "environment" | "nature" | null; }> | undefined; }; fileName: string; error?: str...' is not assignable to type 'Readonly<{ fileName: string; result?: Readonly<{ accepted: true; fileName: string; purpose: GlbImportPurpose; receipt: GlbImportReceipt; classification: Readonly<{ assetType: "weapon" | "armor" | "character" | "enemy" | "arena"; subcategory: string; ... 6 more ...; worldFamily: "environment" | ... 1 more ... | null;...'.
+          The types of 'result.accepted' are incompatible between these types.
+            Type 'true | undefined' is not assignable to type 'true'.
+              Type 'undefined' is not assignable to type 'true'.
+client/src/pages/GlbUpload.tsx(269,446): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(272,70): error TS7006: Parameter 'level' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(280,380): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/pages/GlbUpload.tsx(280,1081): error TS7006: Parameter 'lod' implicitly has an 'any' type.
+client/src/pages/Operations.tsx(17,37): error TS2307: Cannot find module '@/components/SessionReplayVisualizer' or its corresponding type declarations.
+client/src/pages/Operations.tsx(20,48): error TS2307: Cannot find module '@/components/GlobalStateReconciliationDashboard' or its corresponding type declarations.
+client/src/pages/Operations.tsx(21,44): error TS2307: Cannot find module '@/components/GameDevelopmentStudioWorkbench' or its corresponding type declarations.
+client/src/pages/Operations.tsx(22,38): error TS2307: Cannot find module '@/components/AurionAuthoringWorkbench' or its corresponding type declarations.
+client/src/xaurion/components/Ax1CharacterPreview.tsx(4,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/components/PublicCharacterPicker.tsx(3,38): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/core/EquipmentAttachmentSizing.ts(2,39): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/core/GLBModelManager.ts(1,152): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/core/GLBModelManager.ts(8,68): error TS2307: Cannot find module './GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/core/GLBModelManager.ts(10,95): error TS2307: Cannot find module './actorLod' or its corresponding type declarations.
+client/src/xaurion/core/GLBModelManager.ts(127,54): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/core/GLBModelManager.ts(227,58): error TS7006: Parameter 'left' implicitly has an 'any' type.
+client/src/xaurion/core/GLBModelManager.ts(227,64): error TS7006: Parameter 'right' implicitly has an 'any' type.
+client/src/xaurion/core/GLBModelManager.ts(242,36): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type 'Readonly<Record<0 | 1 | 2 | 3, number>>'.
+client/src/xaurion/core/GLBModelManager.ts(245,115): error TS7006: Parameter 'variant' implicitly has an 'any' type.
+client/src/xaurion/core/GLBModelManager.ts(246,83): error TS7006: Parameter 'variant' implicitly has an 'any' type.
+client/src/xaurion/core/MMOEngine.ts(2,32): error TS2307: Cannot find module './GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/core/MMOEngine.ts(33,33): error TS2307: Cannot find module '../world/WorldCollisionSystem' or its corresponding type declarations.
+client/src/xaurion/core/MMOEngine.ts(255,20): error TS7006: Parameter 'o' implicitly has an 'any' type.
+client/src/xaurion/core/ProceduralEquipmentVisuals.ts(1,32): error TS2307: Cannot find module './GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/core/UploadedAssetRuntime.ts(1,75): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/core/UploadedAssetRuntime.ts(23,13): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/core/UploadedAssetRuntime.ts(35,13): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/core/UploadedAssetRuntime.ts(65,31): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/core/UploadedAssetRuntime.ts(103,13): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/core/VisualItemAttachmentController.ts(1,32): error TS2307: Cannot find module './GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/core/VisualItemAttachmentController.ts(3,58): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/core/VisualItemGlbOverrideResolver.ts(1,131): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/core/VisualItemGlbOverrideResolver.ts(98,53): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/entities/OpenWorldPlayer.ts(1,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/entities/OpenWorldPlayer.ts(4,33): error TS2307: Cannot find module '../world/WorldCollisionSystem' or its corresponding type declarations.
+client/src/xaurion/entities/OpenWorldPlayer.ts(18,34): error TS2307: Cannot find module '../core/AnimatedGlbActor' or its corresponding type declarations.
+client/src/xaurion/integration/AurionOpenWorldRuntime.test.tsx(3,36): error TS2307: Cannot find module './AurionOpenWorldRuntime' or its corresponding type declarations.
+client/src/xaurion/integration/AurionPlayRoute.tsx(3,36): error TS2307: Cannot find module './AurionOpenWorldRuntime' or its corresponding type declarations.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(1,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(8,8): error TS2307: Cannot find module '@shared/confirmedEquipmentVisualProtocol' or its corresponding type declarations.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(9,58): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(138,26): error TS2339: Property 'equipmentSlot' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(151,56): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(152,54): error TS7006: Parameter 'value' implicitly has an 'any' type.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(165,27): error TS2339: Property 'itemId' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(166,28): error TS2339: Property 'version' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(167,30): error TS2339: Property 'receiptId' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(187,82): error TS2339: Property 'itemId' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(187,107): error TS2339: Property 'version' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(187,135): error TS2339: Property 'receiptId' does not exist on type 'never'.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(202,52): error TS7006: Parameter 'value' implicitly has an 'any' type.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(239,58): error TS7006: Parameter 'binding' implicitly has an 'any' type.
+client/src/xaurion/integration/EquipmentCatalogProjection.ts(249,33): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+client/src/xaurion/integration/MobCatalogProjection.ts(2,106): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/integration/MobCatalogProjection.ts(5,34): error TS2307: Cannot find module '../core/AnimatedGlbActor' or its corresponding type declarations.
+client/src/xaurion/integration/MobCatalogProjection.ts(7,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/MobCatalogProjection.ts(8,69): error TS2307: Cannot find module '../core/actorLod' or its corresponding type declarations.
+client/src/xaurion/integration/MobCatalogProjection.ts(9,45): error TS2307: Cannot find module './zoneCombatBridge' or its corresponding type declarations.
+client/src/xaurion/integration/MobCatalogProjection.ts(32,47): error TS7006: Parameter 'event' implicitly has an 'any' type.
+client/src/xaurion/integration/MobCatalogProjection.ts(36,39): error TS7006: Parameter 'e' implicitly has an 'any' type.
+client/src/xaurion/integration/NpcDecisionPanel.tsx(5,75): error TS2307: Cannot find module '@shared/npcSemanticGraphReadmodel' or its corresponding type declarations.
+client/src/xaurion/integration/NpcDecisionPanel.tsx(38,33): error TS7006: Parameter 'node' implicitly has an 'any' type.
+client/src/xaurion/integration/NpcDecisionPanel.tsx(38,79): error TS7006: Parameter 'node' implicitly has an 'any' type.
+client/src/xaurion/integration/NpcFallbackProjection.ts(1,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/NpcFallbackProjection.ts(3,65): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/integration/NpcFallbackProjection.ts(7,34): error TS2307: Cannot find module '../core/AnimatedGlbActor' or its corresponding type declarations.
+client/src/xaurion/integration/NpcFallbackProjection.ts(8,143): error TS2307: Cannot find module '../core/actorLod' or its corresponding type declarations.
+client/src/xaurion/integration/NpcFallbackProjection.ts(10,30): error TS2307: Cannot find module '../core/NpcGlbFallback' or its corresponding type declarations.
+client/src/xaurion/integration/NpcFallbackProjection.ts(220,7): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ near: number; mid: number; far: number; very_far: number; }'.
+client/src/xaurion/integration/RemotePublicAppearanceProjection.ts(1,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/RemotePublicAppearanceProjection.ts(3,79): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/integration/RemotePublicAppearanceProjection.ts(6,34): error TS2307: Cannot find module '../core/AnimatedGlbActor' or its corresponding type declarations.
+client/src/xaurion/integration/RemotePublicAppearanceProjection.ts(7,143): error TS2307: Cannot find module '../core/actorLod' or its corresponding type declarations.
+client/src/xaurion/integration/RemotePublicAppearanceProjection.ts(90,46): error TS7006: Parameter 'candidate' implicitly has an 'any' type.
+client/src/xaurion/integration/RemotePublicAppearanceProjection.ts(167,7): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ near: number; mid: number; far: number; very_far: number; }'.
+client/src/xaurion/integration/ServiceNpcProjection.ts(1,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/ServiceNpcProjection.ts(4,34): error TS2307: Cannot find module '../core/AnimatedGlbActor' or its corresponding type declarations.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(2,74): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(5,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(6,95): error TS2307: Cannot find module '../core/actorLod' or its corresponding type declarations.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(54,41): error TS7006: Parameter 'e' implicitly has an 'any' type.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(55,14): error TS7006: Parameter 'a' implicitly has an 'any' type.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(55,17): error TS7006: Parameter 'b' implicitly has an 'any' type.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(61,64): error TS7006: Parameter 'lod' implicitly has an 'any' type.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(84,63): error TS7006: Parameter 'left' implicitly has an 'any' type.
+client/src/xaurion/integration/TreeCatalogReplacement.ts(84,69): error TS7006: Parameter 'right' implicitly has an 'any' type.
+client/src/xaurion/integration/UploadedWorldCatalogProjection.ts(1,32): error TS2307: Cannot find module '../core/GlbModelLease' or its corresponding type declarations.
+client/src/xaurion/integration/UploadedWorldCatalogProjection.ts(3,40): error TS2307: Cannot find module '@shared/glbImportContract' or its corresponding type declarations.
+client/src/xaurion/integration/UploadedWorldCatalogProjection.ts(83,49): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/integration/UploadedWorldCatalogProjection.ts(126,55): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+client/src/xaurion/integration/UploadedWorldCatalogProjection.ts(175,251): error TS7006: Parameter 'lod' implicitly has an 'any' type.
+client/src/xaurion/integration/aurionAuthorityAdapter.ts(8,41): error TS2307: Cannot find module './zoneCombatBridge' or its corresponding type declarations.
+client/src/xaurion/integration/confirmedActionRequest.ts(2,79): error TS2307: Cannot find module './zoneCombatBridge' or its corresponding type declarations.
+client/src/xaurion/world/OpenWorldLandscape.ts(3,33): error TS2307: Cannot find module './WorldCollisionSystem' or its corresponding type declarations.
+client/src/xaurion/world/WorldChunkManager.ts(4,33): error TS2307: Cannot find module './WorldCollisionSystem' or its corresponding type declarations.
+server/_core/index.ts(13,36): error TS2307: Cannot find module '../gateway' or its corresponding type declarations.
+server/aurionAuthoringPersistence.ts(125,40): error TS7006: Parameter 'e' implicitly has an 'any' type.
+server/aurionLootCatalog.ts(1,118): error TS2307: Cannot find module './aurionLootProtocol' or its corresponding type declarations.
+server/aurionVisualItemAdapter.ts(17,8): error TS2307: Cannot find module './aurionLootProtocol' or its corresponding type declarations.
+server/aurionVisualItemAdapter.ts(50,29): error TS7006: Parameter 'affix' implicitly has an 'any' type.
+server/aurionVisualItemAdapter.ts(104,10): error TS7006: Parameter 'affix' implicitly has an 'any' type.
+server/aurionVisualItemAdapter.ts(105,12): error TS7006: Parameter 'left' implicitly has an 'any' type.
+server/aurionVisualItemAdapter.ts(105,18): error TS7006: Parameter 'right' implicitly has an 'any' type.
+server/autonomousNpcLifeRuntime.ts(99,11): error TS18046: 'confirmed.lifeState' is of type 'unknown'.
+server/autonomousNpcLifeRuntime.ts(99,45): error TS18046: 'result.npc.lifeState' is of type 'unknown'.
+server/autonomousNpcLifeRuntime.ts(99,79): error TS18046: 'confirmed.lifeState' is of type 'unknown'.
+server/autonomousNpcLifeRuntime.ts(100,28): error TS18046: 'confirmed.lifeState' is of type 'unknown'.
+server/autonomousNpcLifeRuntime.ts(116,23): error TS18046: 'confirmed.lifeState' is of type 'unknown'.
+server/autonomousNpcLifeRuntime.ts(118,24): error TS18046: 'confirmed.lifeState' is of type 'unknown'.
+server/causality/readbackService.ts(8,45): error TS2307: Cannot find module './causalRecoveryService' or its corresponding type declarations.
+server/causality/readbackService.ts(123,74): error TS7006: Parameter 'err' implicitly has an 'any' type.
+server/confirmedEquipmentVisualReadback.ts(9,8): error TS2307: Cannot find module '../shared/confirmedEquipmentVisualProtocol' or its corresponding type declarations.
+server/db.ts(31,40): error TS2307: Cannot find module './openWorldProtocol' or its corresponding type declarations.
+server/db.ts(44,75): error TS2307: Cannot find module './aurionLootProtocol' or its corresponding type declarations.
+server/gameDevelopmentStudioRuntime.ts(154,38): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+server/glbAssetClassifier.ts(2,39): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/glbCatalogFamilies.ts(8,8): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/glbImportPlan.ts(4,59): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/glbImportStore.ts(18,8): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/glbSmartUpload.ts(10,105): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/glbSmartUpload.ts(89,13): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+server/glbSmartUpload.ts(91,12): error TS7006: Parameter 'left' implicitly has an 'any' type.
+server/glbSmartUpload.ts(91,18): error TS7006: Parameter 'right' implicitly has an 'any' type.
+server/glbSmartUpload.ts(246,64): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+server/glbZipBatch.ts(8,8): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/glbZipUpload.ts(8,105): error TS2307: Cannot find module '../shared/glbImportContract' or its corresponding type declarations.
+server/groupInstancePersistence.ts(5,121): error TS2307: Cannot find module '../drizzle/groupInstanceSchema' or its corresponding type declarations.
+server/guildBankProtocol.ts(14,59): error TS2307: Cannot find module '@shared/guildGovernanceContract' or its corresponding type declarations.
+server/guildBankRoutes.ts(4,32): error TS2307: Cannot find module './guildBankStore' or its corresponding type declarations.
+server/guildBankRoutes.ts(23,14): error TS7019: Rest parameter 'args' implicitly has an 'any[]' type.
+server/guildBankRoutes.ts(24,15): error TS7019: Rest parameter 'args' implicitly has an 'any[]' type.
+server/guildBankRoutes.ts(25,14): error TS7019: Rest parameter 'args' implicitly has an 'any[]' type.
+server/guildGovernanceRoutes.ts(2,74): error TS2307: Cannot find module '@shared/guildGovernanceContract' or its corresponding type declarations.
+server/guildGovernanceStore.ts(15,8): error TS2307: Cannot find module '@shared/guildGovernanceContract' or its corresponding type declarations.
+server/guildGovernanceStore.ts(23,8): error TS2307: Cannot find module './guildGovernanceProtocol' or its corresponding type declarations.
+server/namedNpcVisualAssignment.ts(42,38): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+server/namedNpcVisualAssignment.ts(51,41): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+server/routers.ts(38,39): error TS2307: Cannot find module './routes/aurionAuthoringRouter' or its corresponding type declarations.
+server/routers.ts(42,34): error TS2307: Cannot find module './routes/sessionLogRouter' or its corresponding type declarations.
+server/routes/causalResonanceRouter.ts(12,8): error TS2307: Cannot find module '../causalResonanceService' or its corresponding type declarations.
+server/routes/causalityRouter.ts(185,60): error TS2307: Cannot find module '../causality/causalRecoveryService' or its corresponding type declarations.
+server/routes/causalityRouter.ts(192,60): error TS2307: Cannot find module '../causality/causalRecoveryService' or its corresponding type declarations.
+server/worldContext/evaluation.ts(8,43): error TS2307: Cannot find module './replay' or its corresponding type declarations.
+server/worldContext/service.ts(27,75): error TS2307: Cannot find module './replay' or its corresponding type declarations.
+shared/guildBankContract.ts(1,59): error TS2307: Cannot find module './guildGovernanceContract' or its corresponding type declarations.
+shared/guildGovernanceView.ts(2,35): error TS2307: Cannot find module './guildGovernanceContract' or its corresponding type declarations.
+shared/npcSemanticGraphProvenanceReadmodel.ts(1,46): error TS2307: Cannot find module './npcSemanticGraphReadmodel' or its corresponding type declarations.
+shared/npcSemanticGraphProvenanceReadmodel.ts(20,37): error TS7006: Parameter 'g' implicitly has an 'any' type.
+ ELIFECYCLE  Command failed with exit code 2.

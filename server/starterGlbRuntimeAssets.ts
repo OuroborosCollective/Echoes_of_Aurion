@@ -22,14 +22,6 @@ function runtimeSource(assignment: StarterAssignment) {
   return Object.freeze({ assetId: assignment.assetId, storageUrl: assignment.storageUrl });
 }
 
-function nearestBeastAssignment(level: number, lods: readonly StarterAssignment[]): StarterAssignment {
-  if (lods[level]) return lods[level]!;
-  return lods
-    .map((value, index) => ({ value, index }))
-    .filter(entry => entry.value !== null)
-    .sort((left, right) => Math.abs(left.index - level) - Math.abs(right.index - level) || right.index - left.index)[0]?.value ?? null;
-}
-
 export async function resolveStarterGlbRuntimeAssets(
   readAssignment: AssignmentReader = defaultAssignmentReader,
 ) {
@@ -42,16 +34,15 @@ export async function resolveStarterGlbRuntimeAssets(
     readAssignment("enemy", STARTER_GLB_TARGET_KEYS.beastLods[3]),
   ]);
 
-  const physicalBeastLods = Object.freeze([lod0, lod1, lod2, lod3] as const);
   return Object.freeze({
     schemaVersion: "aurion.starter-glb-runtime.v1" as const,
     player: runtimeSource(player),
     spider: runtimeSource(spider),
     beastLods: Object.freeze([
-      runtimeSource(nearestBeastAssignment(0, physicalBeastLods)),
-      runtimeSource(nearestBeastAssignment(1, physicalBeastLods)),
-      runtimeSource(nearestBeastAssignment(2, physicalBeastLods)),
-      runtimeSource(nearestBeastAssignment(3, physicalBeastLods)),
+      runtimeSource(lod0),
+      runtimeSource(lod1),
+      runtimeSource(lod2),
+      runtimeSource(lod3),
     ]),
   });
 }

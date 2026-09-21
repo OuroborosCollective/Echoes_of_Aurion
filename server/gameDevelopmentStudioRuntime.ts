@@ -29,10 +29,8 @@ export type GameDevelopmentStudioRuntimeReadback = Readonly<{
   sourceRevision: string;
   capabilitiesSchema: string | null;
   doctorSchema: string | null;
-  packageBuildAvailable: boolean;
-  vendorAdmitAvailable: boolean;
   providerCalls: false;
-  boundary: "human-confirmed-package-vendor-live-admission";
+  boundary: "approved-live-glb-catalog-only";
   error: string | null;
 }>;
 
@@ -40,7 +38,7 @@ function gameDevBinary(): string {
   return process.env.AURION_GAME_DEV_BIN?.trim() || "game-dev";
 }
 
-export function gameDevelopmentStudioWorkspaceRoot(): string {
+function workspaceRoot(): string {
   return process.env.AURION_GAME_DEV_WORKSPACE?.trim() || (process.env.NODE_ENV === "production" ? "/var/lib/aurion/game-dev-workspace" : path.join(tmpdir(), "aurion-game-dev-workspace"));
 }
 
@@ -64,39 +62,7 @@ function schemaName(value: GameDevJson): string | null {
   return typeof candidate === "string" && candidate.length <= 160 ? candidate : null;
 }
 
-function assertAllowedGameDevCommand(args: readonly string[]): void {
-  const exactReadOnly = args.length === 1 && (args[0] === "--version" || args[0] === "--help");
-  const command = `${args[0] ?? ""} ${args[1] ?? ""}`.trim();
-  const allowed = new Set([
-    "capabilities --output-dir",
-    "doctor --output-dir",
-    "asset inspect",
-    "asset validate",
-    "package build",
-    "package verify",
-    "vendor admit",
-  ]);
-  if (!exactReadOnly && !allowed.has(command)) throw new Error("GAME_DEV_COMMAND_NOT_ALLOWED");
-
-  const forbiddenFlags = new Set([
-    "--approve-spend",
-    "--allow-unknown-license",
-    "--allow-invalid",
-    "--allow-gpu",
-    "--allow-performance",
-  ]);
-  if (args.some(argument => forbiddenFlags.has(argument))) throw new Error("GAME_DEV_COMMAND_NOT_ALLOWED");
-
-  const workspace = path.resolve(gameDevelopmentStudioWorkspaceRoot());
-  for (const argument of args) {
-    if (!path.isAbsolute(argument)) continue;
-    const relative = path.relative(workspace, path.resolve(argument));
-    if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("GAME_DEV_PATH_OUTSIDE_WORKSPACE");
-  }
-}
-
-export async function runGameDevelopmentStudioCommand(args: readonly string[], timeout = 20_000): Promise<string> {
-  assertAllowedGameDevCommand(args);
+async function runGameDev(args: readonly string[], timeout = 20_000): Promise<string> {
   const result = await execFileAsync(gameDevBinary(), [...args], {
     env: safeRuntimeEnvironment(),
     timeout,
@@ -115,18 +81,14 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
   const required = process.env.AURION_GAME_DEV_REQUIRED === "true";
   const sourceRevision = process.env.AURION_GAME_DEV_SOURCE_REVISION?.trim().toLowerCase() || GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION;
   if (sourceRevision !== GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION) {
-    return Object.freeze({ available: false, required, version: null, sourceRevision, capabilitiesSchema: null, doctorSchema: null, packageBuildAvailable: false, vendorAdmitAvailable: false, providerCalls: false, boundary: "human-confirmed-package-vendor-live-admission", error: "GAME_DEV_SOURCE_REVISION_MISMATCH" });
+    return Object.freeze({ available: false, required, version: null, sourceRevision, capabilitiesSchema: null, doctorSchema: null, providerCalls: false, boundary: "approved-live-glb-catalog-only", error: "GAME_DEV_SOURCE_REVISION_MISMATCH" });
   }
   try {
-    await mkdir(gameDevelopmentStudioWorkspaceRoot(), { recursive: true });
-    const versionOutput = await runGameDevelopmentStudioCommand(["--version"]);
+    await mkdir(workspaceRoot(), { recursive: true });
+    const versionOutput = await runGameDev(["--version"]);
     if (!versionOutput.includes(GAME_DEVELOPMENT_STUDIO_VERSION)) throw new Error("GAME_DEV_VERSION_MISMATCH");
-    const capabilities = parseJsonOutput("CAPABILITIES", await runGameDevelopmentStudioCommand(["capabilities", "--output-dir", gameDevelopmentStudioWorkspaceRoot(), "--json"]));
-    const doctor = parseJsonOutput("DOCTOR", await runGameDevelopmentStudioCommand(["doctor", "--output-dir", gameDevelopmentStudioWorkspaceRoot(), "--json"]));
-    const help = await runGameDevelopmentStudioCommand(["--help"]);
-    const packageBuildAvailable = help.includes("game-dev package build");
-    const vendorAdmitAvailable = help.includes("game-dev vendor admit");
-    if (!packageBuildAvailable || !vendorAdmitAvailable) throw new Error("GAME_DEV_PRODUCTION_COMMANDS_MISSING");
+    const capabilities = parseJsonOutput("CAPABILITIES", await runGameDev(["capabilities", "--output-dir", workspaceRoot(), "--json"]));
+    const doctor = parseJsonOutput("DOCTOR", await runGameDev(["doctor", "--output-dir", workspaceRoot(), "--json"]));
     return Object.freeze({
       available: true,
       required,
@@ -134,10 +96,8 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
       sourceRevision,
       capabilitiesSchema: schemaName(capabilities),
       doctorSchema: schemaName(doctor),
-      packageBuildAvailable,
-      vendorAdmitAvailable,
       providerCalls: false,
-      boundary: "human-confirmed-package-vendor-live-admission",
+      boundary: "approved-live-glb-catalog-only",
       error: null,
     });
   } catch (error) {
@@ -148,10 +108,8 @@ export async function resolveGameDevelopmentStudioRuntimeReadback(): Promise<Gam
       sourceRevision,
       capabilitiesSchema: null,
       doctorSchema: null,
-      packageBuildAvailable: false,
-      vendorAdmitAvailable: false,
       providerCalls: false,
-      boundary: "human-confirmed-package-vendor-live-admission",
+      boundary: "approved-live-glb-catalog-only",
       error: error instanceof Error && /^GAME_DEV_[A-Z0-9_]+$/.test(error.message) ? error.message : "GAME_DEV_UNAVAILABLE",
     });
   }
@@ -198,7 +156,7 @@ export async function inspectApprovedAsset(operation: "inspect" | "validate", as
   const bytes = await glbImportStore().approvedBytes(asset.sha256);
   if (!bytes) throw new Error("GAME_DEV_APPROVED_ASSET_REQUIRED");
 
-  const root = gameDevelopmentStudioWorkspaceRoot();
+  const root = workspaceRoot();
   await mkdir(root, { recursive: true });
   const runDir = await mkdtemp(path.join(root, `${operation}-`));
   const filePath = path.join(runDir, `${asset.sha256}.glb`);
@@ -206,7 +164,7 @@ export async function inspectApprovedAsset(operation: "inspect" | "validate", as
   try {
     await mkdir(outputDir, { recursive: true });
     await writeFile(filePath, bytes, { flag: "wx" });
-    const result = parseJsonOutput(operation.toUpperCase(), await runGameDevelopmentStudioCommand(buildGameDevAssetArgs(operation, filePath, outputDir), 30_000));
+    const result = parseJsonOutput(operation.toUpperCase(), await runGameDev(buildGameDevAssetArgs(operation, filePath, outputDir), 30_000));
     const resultSha256 = createHash("sha256").update(JSON.stringify(result)).digest("hex");
     return Object.freeze({
       operation,

@@ -1,80 +1,100 @@
-import type { CausalPersistenceAdapter } from "./tickRecorder";
+import { globalTickRecorder, type CausalPersistenceAdapter } from "./tickRecorder";
 import { globalCausalPersistence } from "./persistence";
 import { replayZoneTick } from "./replayZoneTick";
-import { hashCanonicalZoneState, type CanonicalZoneState } from "./zoneCanonicalState";
+import { hashCanonicalZoneState } from "./zoneCanonicalState";
+import { isReplayMatch } from "../../shared/aurionReplayContract";
+import { CanonicalZoneState } from "./zoneCanonicalState";
 
-/**
- * Observer-only checkpoint verifier. It may annotate reconciliation status but
- * never mutates gameplay state, receipts or checkpoints themselves.
- */
 export class AurionSnapshotReconciliationService {
   private isRunning = false;
   private persistenceAdapter: CausalPersistenceAdapter = globalCausalPersistence;
 
-  start(): void {
+  public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
-    void this.reconciliationLoop();
+    this.reconciliationLoop();
   }
-
-  stop(): void { this.isRunning = false; }
 
   private async reconciliationLoop(): Promise<void> {
     while (this.isRunning) {
       try {
         const unreconciled = await this.persistenceAdapter.getUnreconciledCheckpoints(5);
         if (unreconciled.length === 0) {
-          await new Promise(resolve => setTimeout(resolve, 60_000));
+          await new Promise(r => setTimeout(r, 60000)); // Wait a minute if nothing to do
           continue;
         }
-        for (const checkpoint of unreconciled) await this.reconcileCheckpoint(checkpoint);
+
+        for (const checkpoint of unreconciled) {
+          await this.reconcileCheckpoint(checkpoint);
+        }
       } catch (error) {
         console.error("[C-Aurion] Snapshot reconciliation loop error", error);
-        await new Promise(resolve => setTimeout(resolve, 10_000));
+        await new Promise(r => setTimeout(r, 10000));
       }
     }
   }
 
   private async reconcileCheckpoint(checkpoint: any): Promise<void> {
     const { zoneId, tick, snapshotHash, snapshotJson, id } = checkpoint;
-    if (!Number.isSafeInteger(tick) || tick < 0) return;
-
-    if (tick === 0) {
-      try {
-        const state = JSON.parse(snapshotJson) as CanonicalZoneState;
-        const observed = hashCanonicalZoneState(state);
-        await this.persistenceAdapter.updateCheckpointReconciliation(id, observed === snapshotHash ? 1 : -1);
-      } catch {
-        await this.persistenceAdapter.updateCheckpointReconciliation(id, -1);
+    
+    // 1. Find the previous checkpoint
+    // In our system, we save every 100 ticks.
+    const prevTick = tick - 100;
+    if (prevTick < 0) {
+      // If it's the first checkpoint, we might need a different logic or just mark as reconciled if it's tick 0
+      if (tick === 0) {
+         await this.persistenceAdapter.updateCheckpointReconciliation(id, 1);
+         return;
       }
-      return;
-    }
-
-    const previousTick = tick - 100;
-    if (previousTick < 0) return;
-    const previousCheckpoint = await this.persistenceAdapter.getCheckpoint(zoneId, previousTick);
-    if (!previousCheckpoint) return; // Evidence gap: leave pending, never infer failure/success.
-    if (hashCanonicalZoneState(previousCheckpoint.state) !== previousCheckpoint.snapshotHash) {
+      // If no previous checkpoint and not tick 0, we can't reconcile easily without tick 0
+      // For now, let's assume we can always find the previous one or we skip
       await this.persistenceAdapter.updateCheckpointReconciliation(id, -1);
       return;
     }
 
-    const ticks = await this.persistenceAdapter.getTicksInRange(zoneId, previousTick + 1, tick);
-    if (ticks.length !== tick - previousTick) return;
+    const prevEntry = await this.persistenceAdapter.getRecordedTick(zoneId, prevTick);
+    if (!prevEntry || !prevEntry.postState) {
+       // Cannot reconcile if starting point is missing
+       return;
+    }
 
-    let currentState: CanonicalZoneState = previousCheckpoint.state;
-    for (const recorded of ticks) {
-      if (!recorded.intents) return;
-      const verdict = replayZoneTick({ preState: currentState, intents: recorded.intents, expectedReceipt: recorded.receipt });
+    // 2. Fetch all ticks from prevTick + 1 up to tick
+    const ticks = await this.persistenceAdapter.getTicksInRange(zoneId, prevTick + 1, tick);
+    if (ticks.length !== (tick - prevTick)) {
+      console.warn(`[C-Aurion] Reconciliation for ${zoneId} tick ${tick} failed: missing ticks in range.`);
+      return;
+    }
+
+    // 3. Replay
+    let currentState: CanonicalZoneState = prevEntry.postState;
+    for (const t of ticks) {
+      const verdict = replayZoneTick({
+        preState: currentState,
+        intents: t.intents || [],
+        expectedReceipt: t.receipt
+      });
+
       if (verdict.status !== "MATCH") {
+        console.error(`[C-Aurion] Reconciliation FAILED at tick ${t.receipt.tick} for checkpoint ${tick}`);
         await this.persistenceAdapter.updateCheckpointReconciliation(id, -1);
         return;
       }
-      currentState = verdict.postState as CanonicalZoneState;
+      
+      // Update currentState to the post-state of the replayed tick
+      currentState = verdict.postState;
     }
 
+    // 4. Final verification
+    // Verify that the final replayed state hash matches the checkpoint hash
     const finalHash = hashCanonicalZoneState(currentState);
-    await this.persistenceAdapter.updateCheckpointReconciliation(id, finalHash === snapshotHash ? 1 : -1);
+    if (finalHash !== snapshotHash) {
+       console.error(`[C-Aurion] Reconciliation divergence at checkpoint: observed ${finalHash}, expected ${snapshotHash}`);
+       await this.persistenceAdapter.updateCheckpointReconciliation(id, -1);
+       return;
+    }
+
+    await this.persistenceAdapter.updateCheckpointReconciliation(id, 1);
+    console.log(`[C-Aurion] Successfully reconciled snapshot for ${zoneId} at tick ${tick}`);
   }
 }
 

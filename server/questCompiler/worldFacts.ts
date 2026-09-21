@@ -77,10 +77,6 @@ export class WorldFactEngine {
     return fact;
   }
 
-  public getEvents(): WorldEvent[] {
-    return this.eventHistory.slice().sort((a, b) => a.sequence - b.sequence);
-  }
-
   public getFacts(): WorldFact[] {
     return Array.from(this.facts.values()).sort((a, b) => a.id.localeCompare(b.id));
   }

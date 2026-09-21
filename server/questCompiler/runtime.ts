@@ -28,10 +28,8 @@ export class QuestRuntimeEngine {
   public compileAndOfferQuest(params: {
     worldId: string;
     playerUserId: number;
+    giverNpcId: string;
     triggerEventId: string;
-    /** Legacy caller compatibility only; production offer routes never control giver binding. */
-    giverNpcId?: string;
-    requestedTemplateId?: string;
     compilerVersion?: string;
   }): { instance: QuestInstance; plan: QuestPlan } {
     const occurredAt = operationalDate(this.clock).toISOString();
@@ -42,14 +40,9 @@ export class QuestRuntimeEngine {
 
     const activeTemplates = this.templateRegistry.getActiveTemplates();
     const templateSetHash = this.templateRegistry.getTemplateSetHash();
-    const requestedPool = params.requestedTemplateId
-      ? activeTemplates.filter(template => template.templateId === params.requestedTemplateId)
-      : activeTemplates;
-    if (params.requestedTemplateId && requestedPool.length === 0) throw new Error("QUEST_TEMPLATE_NOT_ACTIVE");
 
-    // 1. Resolve eligible candidates & candidate set hash. A player may select
-    // among server-confirmed eligible templates, but never supplies seed/event truth.
-    const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(requestedPool, facts);
+    // 1. Resolve eligible candidates & candidate set hash
+    const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
     if (eligibleTemplates.length === 0) {
       throw new Error('NO_ELIGIBLE_QUEST_TEMPLATES');
     }
@@ -71,8 +64,7 @@ export class QuestRuntimeEngine {
     }
 
     // 4. Resolve semantic role bindings against world entities
-    const { boundRoles, roleBindingHash } = RoleResolver.resolveRoles(winningTemplate.roles);
-    const giverNpcId = boundRoles.find(role => role.roleName === "giver" && role.entityType === "npc")?.entityId ?? "aurion_system";
+    const { boundRoles, roleBindingHash } = RoleResolver.resolveRoles(winningTemplate.roles, undefined, params.giverNpcId);
 
     // 5. Compose QuestPlan / Graph
     const plan = QuestComposer.composePlan({
@@ -99,7 +91,7 @@ export class QuestRuntimeEngine {
       id: instanceId,
       worldId: params.worldId,
       playerUserId: params.playerUserId,
-      giverNpcId,
+      giverNpcId: params.giverNpcId,
       templateId: winningTemplate.templateId,
       templateVersion: winningTemplate.version,
       seedDigest,
@@ -117,25 +109,16 @@ export class QuestRuntimeEngine {
     return { instance, plan };
   }
 
-  public acceptQuest(instance: QuestInstance, plan: QuestPlan): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
+  public acceptQuest(instance: QuestInstance): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
     if (instance.state !== 'offered') {
       throw new Error(`CANNOT_ACCEPT_QUEST_IN_STATE:${instance.state}`);
     }
-    if (plan.planHash !== instance.planHash || plan.graphHash !== instance.graphHash) throw new Error("QUEST_ACCEPT_PLAN_MISMATCH");
-    const startNode = plan.nodes.find(node => node.id === instance.currentNodeId);
-    if (!startNode || startNode.type !== "start") throw new Error("QUEST_ACCEPT_START_NODE_REQUIRED");
-    const outgoing = plan.edges
-      .filter(edge => edge.fromNodeId === startNode.id && !edge.conditionPredicate)
-      .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id));
-    if (outgoing.length !== 1) throw new Error("QUEST_ACCEPT_START_EDGE_AMBIGUOUS");
 
     const occurredAt = operationalDate(this.clock).toISOString();
     const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const updatedInstance: QuestInstance = {
       ...instance,
       state: 'active',
-      currentNodeId: outgoing[0]!.toNodeId,
-      completedNodeIds: instance.completedNodeIds.includes(startNode.id) ? [...instance.completedNodeIds] : [...instance.completedNodeIds, startNode.id],
       updatedAt: occurredAt,
     };
 
@@ -167,15 +150,12 @@ export class QuestRuntimeEngine {
       throw new Error(`CANNOT_PROGRESS_INACTIVE_QUEST:${instance.state}`);
     }
 
-    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1_000) throw new Error("QUEST_PROGRESS_AMOUNT_INVALID");
-    const currentNode = plan.nodes.find(n => n.id === instance.currentNodeId);
-    if (!currentNode?.objective || currentNode.objective.key !== objectiveKey) throw new Error("QUEST_OBJECTIVE_KEY_MISMATCH");
-
     const occurredAt = operationalDate(this.clock).toISOString();
     const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
     const currentProgress = (instance.objectiveProgress[objectiveKey] as number) || 0;
     const newProgress = currentProgress + amount;
 
+    const currentNode = plan.nodes.find(n => n.id === instance.currentNodeId);
     let completedNode = false;
     let nextNodeId = instance.currentNodeId;
     const completedNodeIds = [...instance.completedNodeIds];
@@ -232,53 +212,6 @@ export class QuestRuntimeEngine {
     };
 
     return { updatedInstance, completedNode, receipt };
-  }
-
-  public chooseBranch(
-    instance: QuestInstance,
-    plan: QuestPlan,
-    edgeId: string
-  ): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
-    if (instance.state !== "active") throw new Error(`CANNOT_CHOOSE_INACTIVE_QUEST:${instance.state}`);
-    const node = plan.nodes.find(candidate => candidate.id === instance.currentNodeId);
-    if (!node || node.type !== "branch") throw new Error("QUEST_BRANCH_NODE_REQUIRED");
-    const edge = plan.edges.find(candidate => candidate.id === edgeId && candidate.fromNodeId === node.id);
-    if (!edge) throw new Error("QUEST_BRANCH_EDGE_INVALID");
-    if (edge.conditionPredicate) throw new Error("QUEST_BRANCH_CONDITION_UNSUPPORTED");
-
-    const occurredAt = operationalDate(this.clock).toISOString();
-    const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
-    const completedNodeIds = instance.completedNodeIds.includes(node.id)
-      ? [...instance.completedNodeIds]
-      : [...instance.completedNodeIds, node.id];
-    const updatedInstance: QuestInstance = {
-      ...instance,
-      currentNodeId: edge.toNodeId,
-      completedNodeIds,
-      updatedAt: occurredAt,
-    };
-    const resultStateHash = computeCanonicalHash("aurion.quest.instance.v1", updatedInstance);
-    const eventSequence = completedNodeIds.length + 2;
-    const receiptIdentity = computeCanonicalHash("aurion.quest.receipt.identity.v1", {
-      instanceId: instance.id,
-      edgeId,
-      eventSequence,
-      previousStateHash,
-      resultStateHash,
-    });
-    const receipt: QuestReceipt = {
-      id: `rcpt_${receiptIdentity.slice(0, 24)}`,
-      instanceId: instance.id,
-      eventSequence,
-      planHash: instance.planHash,
-      graphHash: instance.graphHash,
-      previousStateHash,
-      resultStateHash,
-      idempotencyKey: `choice:${instance.id}:${edgeId}`,
-      receiptHash: computeCanonicalHash("aurion.quest.event.v1", { previousStateHash, resultStateHash }),
-      createdAt: occurredAt,
-    };
-    return { updatedInstance, receipt };
   }
 
   public completeQuest(

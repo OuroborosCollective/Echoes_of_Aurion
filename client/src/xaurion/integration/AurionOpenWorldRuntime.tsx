@@ -11,6 +11,8 @@ import { loadCompanionSession } from "@/lib/companionLearning";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Eye, Hammer } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLoading } from "../../contexts/LoadingContext";
+import { WorldLoadingScreen } from "../../components/WorldLoadingScreen";
 import { trpc } from "@/lib/trpc";
 import { ZoneMovementClient, type ZoneMovementInput } from "@/lib/zoneMovement";
 import { runtimeIssueCode } from "@shared/runtimeContracts";
@@ -69,6 +71,11 @@ function validActivation(detail: unknown): ActivationSnapshot {
 
 export default function AurionOpenWorldRuntime() {
   const { user, isAuthenticated } = useAuth();
+  const { startLoading, setChunksStatus: setLoadingChunksStatus, setModelStatus: setLoadingModelStatus, setEnvAssetsStatus: setLoadingEnvAssetsStatus } = useLoading();
+
+  useEffect(() => {
+    startLoading();
+  }, [startLoading]);
   const rpcUtils = trpc.useUtils();
   const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
@@ -105,6 +112,9 @@ export default function AurionOpenWorldRuntime() {
   const [confirmedSelection, setConfirmedSelection] = useState<PublicCharacterSelection | null>(null);
   const catalog = useGlbCatalog(Boolean(activation));
   const [modelStatus, setModelStatus] = useState("procedural");
+  useEffect(() => {
+    setLoadingModelStatus(modelStatus);
+  }, [modelStatus, setLoadingModelStatus]);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [zoneRetryEpoch, setZoneRetryEpoch] = useState(0);
@@ -307,7 +317,11 @@ export default function AurionOpenWorldRuntime() {
       worldAssets = new WorldAssetProjection(engine.scene, engine.camera,
         (x, z) => engine!.landscape.chunkManager.getElevationAt(x, z),
         center => rpcUtils.worldAssets.regionV2.fetch(center),
-        evidence => { if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence); setWorldAssetsFailed(evidence.failed > 0); }, engine.renderer);
+        evidence => {
+          if (worldAssetsEvidenceRef.current) worldAssetsEvidenceRef.current.dataset.presentation = JSON.stringify(evidence);
+          setWorldAssetsFailed(evidence.failed > 0);
+          setLoadingEnvAssetsStatus(evidence.loading, evidence.failed, evidence.planned);
+        }, engine.renderer);
       delete containerRef.current.dataset.chunkProjection;
       delete containerRef.current.dataset.clientVerification;
       const chunkProjection = new ConfirmedChunkProjection(engine.scene, world.epoch,
@@ -316,23 +330,26 @@ export default function AurionOpenWorldRuntime() {
           const connectionId = zoneClientRef.current?.getConnectionId();
           try {
             if (!connectionId) throw Error("CLIENT_CONNECTION_UNAVAILABLE");
-            return await rpcUtils.client.gameplay.beginClientProjection.mutate({ ...input, connectionId });
+            return await (rpcUtils.client.gameplay as any).beginClientProjection.mutate({ ...input, connectionId });
           } catch {
             // Observer capacity/transport must not gate presentation. The same
             // authority-verifying Step-28 producer still supplies the bytes.
             if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify({ status: "CLIENT_UNOBSERVABLE", trust: "untrusted-client-observation", mutationAuthority: "none" });
             const { generation: _generation, ...coordinate } = input;
-            return rpcUtils.gameplay.worldChunkProjectionV2.fetch(coordinate);
+            return (rpcUtils.gameplay as any).worldChunkProjectionV2.fetch(coordinate);
           }
         },
-        evidence => { if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence); },
+        evidence => {
+          if (containerRef.current) containerRef.current.dataset.chunkProjection = JSON.stringify(evidence);
+          setLoadingChunksStatus(evidence.count, 9);
+        },
         async ({ job, binding, observedAtLogicalFrame }) => {
           try {
             const receipt = await createClientVerificationReceipt({ schema: AURION_CLIENT_VERIFICATION_SCHEMA, ...binding,
-              serverReceiptHash: job.manifest.authorityReceiptHash, projectionHash: job.manifest.projectionHash,
+              serverReceiptHash: job.manifest.authorityReceiptHash, projectionHash: (job.manifest as any).projectionHash ?? job.manifest.manifestHash,
               appliedGeneration: job.generation, observedAtLogicalFrame });
             if (abort.signal.aborted) return;
-            const status = await rpcUtils.client.gameplay.reportClientVerification.mutate(receipt);
+            const status = await (rpcUtils.client.gameplay as any).reportClientVerification.mutate(receipt);
             if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify(status);
           } catch {
             if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify({ status: "CLIENT_UNOBSERVABLE", trust: "untrusted-client-observation", mutationAuthority: "none" });
@@ -649,10 +666,11 @@ export default function AurionOpenWorldRuntime() {
   }, [syncAx1HumanMovement]);
 
   const worldLabel = useMemo(() => activation?.displayName ?? "Aurion Open World", [activation?.displayName]);
-  if (!activation) return null;
+  if (!activation) return <WorldLoadingScreen />;
 
   if (!selectedCharacterUrl) return (
     <section className="xaurion-runtime" data-testid="xaurion-open-world-runtime" aria-label="Aurion Charakterwahl">
+      <WorldLoadingScreen />
       <div className="mx-auto flex min-h-full w-full max-w-3xl items-center justify-center p-5" data-testid="player-character-selection-gate">
         <div className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/95 p-4 shadow-2xl">
           <h2 className="text-lg font-semibold text-slate-100">Wähle deine Aurion-Figur</h2>
@@ -705,6 +723,7 @@ export default function AurionOpenWorldRuntime() {
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
       <AdminGlbMenu />
+      <WorldLoadingScreen />
     </section>
   );
 }

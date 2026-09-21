@@ -49,8 +49,6 @@ export declare function marketPriceCopper(input: Readonly<{
     taxRateBasisPoints: number;
     memoryAffinityBps?: number;
 }>): number;
-/** Explicit hub topology for authority checks; this is not a physical position proof. */
-export declare function hasLivingWorldRoute(from: HubId, to: HubId): boolean;
 export declare function caravanSecurityIndex(from: HubId, to: HubId, polityStability: number, rememberedThreat: number): number;
 export declare function socialMasteryEvidence(action: LivingWorldSocialAction, sourceReceiptId: string, resolutionIndex: number): Readonly<{
     disciplineId: "diplomacy" | "council" | "sovereignty" | "stewardship";

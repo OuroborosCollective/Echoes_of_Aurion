@@ -5,392 +5,357 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1786588157749,
+      "when": 1700000000000,
       "tag": "0000_oval_fenris",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "5",
-      "when": 1786592447209,
+      "when": 1700000001000,
       "tag": "0001_shocking_doctor_octopus",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "5",
-      "when": 1786592716789,
-      "tag": "0002_previous_scream",
+      "when": 1700000002000,
+      "tag": "0003_petite_vampiro",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "5",
-      "when": 1786613296290,
-      "tag": "0003_petite_vampiro",
+      "when": 1700000003000,
+      "tag": "0004_worried_hellcat",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "5",
-      "when": 1786613362695,
-      "tag": "0004_worried_hellcat",
+      "when": 1700000004000,
+      "tag": "0005_amusing_steve_rogers",
       "breakpoints": true
     },
     {
       "idx": 5,
       "version": "5",
-      "when": 1786623485204,
-      "tag": "0005_amusing_steve_rogers",
+      "when": 1700000005000,
+      "tag": "0006_brainy_the_hand",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "5",
-      "when": 1786623761810,
-      "tag": "0006_brainy_the_hand",
+      "when": 1700000006000,
+      "tag": "0007_dazzling_loki",
       "breakpoints": true
     },
     {
       "idx": 7,
       "version": "5",
-      "when": 1786627515380,
-      "tag": "0007_dazzling_loki",
+      "when": 1700000007000,
+      "tag": "0008_condemned_wong",
       "breakpoints": true
     },
     {
       "idx": 8,
       "version": "5",
-      "when": 1786627739353,
-      "tag": "0008_condemned_wong",
+      "when": 1700000008000,
+      "tag": "0009_rainy_multiple_man",
       "breakpoints": true
     },
     {
       "idx": 9,
       "version": "5",
-      "when": 1786628557577,
-      "tag": "0009_rainy_multiple_man",
+      "when": 1700000009000,
+      "tag": "0010_hesitant_morph",
       "breakpoints": true
     },
     {
       "idx": 10,
       "version": "5",
-      "when": 1786628962626,
-      "tag": "0010_hesitant_morph",
+      "when": 1700000010000,
+      "tag": "0011_quick_domino",
       "breakpoints": true
     },
     {
       "idx": 11,
       "version": "5",
-      "when": 1786629129607,
-      "tag": "0011_quick_domino",
+      "when": 1700000011000,
+      "tag": "0012_greedy_johnny_blaze",
       "breakpoints": true
     },
     {
       "idx": 12,
       "version": "5",
-      "when": 1786672931180,
-      "tag": "0012_greedy_johnny_blaze",
+      "when": 1700000012000,
+      "tag": "0013_panoramic_agent_brand",
       "breakpoints": true
     },
     {
       "idx": 13,
       "version": "5",
-      "when": 1787352615291,
-      "tag": "0013_panoramic_agent_brand",
+      "when": 1700000013000,
+      "tag": "0015_careless_photon",
       "breakpoints": true
     },
     {
       "idx": 14,
       "version": "5",
-      "when": 1787428096901,
-      "tag": "0014_naive_supreme_intelligence",
+      "when": 1700000014000,
+      "tag": "0016_wasd_aurion_world",
       "breakpoints": true
     },
     {
       "idx": 15,
       "version": "5",
-      "when": 1787435870347,
-      "tag": "0015_careless_photon",
+      "when": 1700000015000,
+      "tag": "0017_wasd_aurion_content_seed",
       "breakpoints": true
     },
     {
       "idx": 16,
       "version": "5",
-      "when": 1787768781898,
-      "tag": "0016_wasd_aurion_world",
+      "when": 1700000016000,
+      "tag": "0018_wasd_aurion_exact_skill_progression",
       "breakpoints": true
     },
     {
       "idx": 17,
       "version": "5",
-      "when": 1787768928386,
-      "tag": "0017_wasd_aurion_content_seed",
+      "when": 1700000017000,
+      "tag": "0019_wasd_aurion_crafting_receipt_inventory",
       "breakpoints": true
     },
     {
       "idx": 18,
       "version": "5",
-      "when": 1787797466524,
-      "tag": "0018_wasd_aurion_exact_skill_progression",
+      "when": 1700000018000,
+      "tag": "0020_wasd_aurion_dialogue_quest_intents",
       "breakpoints": true
     },
     {
       "idx": 19,
       "version": "5",
-      "when": 1787805012516,
-      "tag": "0019_wasd_aurion_crafting_receipt_inventory",
+      "when": 1700000019000,
+      "tag": "0021_aurion_global_world_state",
       "breakpoints": true
     },
     {
       "idx": 20,
       "version": "5",
-      "when": 1787841103616,
-      "tag": "0020_wasd_aurion_dialogue_quest_intents",
+      "when": 1700000020000,
+      "tag": "0022_aurion_world_chunk_deltas",
       "breakpoints": true
     },
     {
       "idx": 21,
       "version": "5",
-      "when": 1787841103617,
-      "tag": "0021_aurion_global_world_state",
+      "when": 1700000021000,
+      "tag": "0023_aurion_world_presence_epochs",
       "breakpoints": true
     },
     {
       "idx": 22,
       "version": "5",
-      "when": 1787841103618,
-      "tag": "0022_aurion_world_chunk_deltas",
+      "when": 1700000022000,
+      "tag": "0024_aurion_world_epoch_reactions",
       "breakpoints": true
     },
     {
       "idx": 23,
       "version": "5",
-      "when": 1787841103619,
-      "tag": "0023_aurion_world_presence_epochs",
+      "when": 1700000023000,
+      "tag": "0025_aurion_loot_mastery_ethos",
       "breakpoints": true
     },
     {
       "idx": 24,
       "version": "5",
-      "when": 1787841103620,
-      "tag": "0024_aurion_world_epoch_reactions",
+      "when": 1700000024000,
+      "tag": "0026_aurion_faction_questline_state",
       "breakpoints": true
     },
     {
       "idx": 25,
       "version": "5",
-      "when": 1787841103621,
-      "tag": "0025_aurion_loot_mastery_ethos",
+      "when": 1700000025000,
+      "tag": "0027_aurion_faction_questline_rewards",
       "breakpoints": true
     },
     {
       "idx": 26,
       "version": "5",
-      "when": 1787841103622,
-      "tag": "0026_aurion_faction_questline_state",
+      "when": 1700000026000,
+      "tag": "0028_aurion_world_checkpoint",
       "breakpoints": true
     },
     {
       "idx": 27,
       "version": "5",
-      "when": 1787841103623,
-      "tag": "0027_aurion_faction_questline_rewards",
+      "when": 1700000027000,
+      "tag": "0029_aurion_guild_kingdom_authority",
       "breakpoints": true
     },
     {
       "idx": 28,
       "version": "5",
-      "when": 1787841103624,
-      "tag": "0028_aurion_world_checkpoint",
+      "when": 1700000028000,
+      "tag": "0030_aurion_guild_bank_economy",
       "breakpoints": true
     },
     {
       "idx": 29,
       "version": "5",
-      "when": 1788565000000,
-      "tag": "0029_aurion_guild_kingdom_authority",
+      "when": 1700000029000,
+      "tag": "0031_aurion_profession_crafting_persistence",
       "breakpoints": true
     },
     {
       "idx": 30,
       "version": "5",
-      "when": 1788566000000,
-      "tag": "0030_aurion_guild_bank_economy",
+      "when": 1700000030000,
+      "tag": "0032_aurion_group_instances",
       "breakpoints": true
     },
     {
       "idx": 31,
       "version": "5",
-      "when": 1788570000000,
-      "tag": "0031_aurion_profession_crafting_persistence",
+      "when": 1700000031000,
+      "tag": "0034_ax1_starter_equipment_receipts",
       "breakpoints": true
     },
     {
       "idx": 32,
       "version": "5",
-      "when": 1788639000000,
-      "tag": "0032_aurion_group_instances",
+      "when": 1700000032000,
+      "tag": "0035_aurion_npc_memory_quest_offers",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "5",
-      "when": 1788640800000,
-      "tag": "0033_aurion_ax1_ui_controls",
+      "when": 1700000033000,
+      "tag": "0036_aurion_faction_warfront_receipts",
       "breakpoints": true
     },
     {
       "idx": 34,
       "version": "5",
-      "when": 1788678000000,
-      "tag": "0034_ax1_starter_equipment_receipts",
+      "when": 1700000034000,
+      "tag": "0038_aurion_world_chunk_delta_conflicts",
       "breakpoints": true
     },
     {
       "idx": 35,
       "version": "5",
-      "when": 1788681600000,
-      "tag": "0035_aurion_npc_memory_quest_offers",
+      "when": 1700000035000,
+      "tag": "0039_aurion_world_epoch_materializations",
       "breakpoints": true
     },
     {
       "idx": 36,
       "version": "5",
-      "when": 1788685200000,
-      "tag": "0036_aurion_faction_warfront_receipts",
+      "when": 1700000036000,
+      "tag": "0040_aurion_progression_receipts",
       "breakpoints": true
     },
     {
       "idx": 37,
       "version": "5",
-      "when": 1788688800000,
-      "tag": "0037_aurion_trade_crafting_receipts",
+      "when": 1700000037000,
+      "tag": "0041_aurion_content_hash_ledger",
       "breakpoints": true
     },
     {
       "idx": 38,
       "version": "5",
-      "when": 1788692400000,
-      "tag": "0038_aurion_world_chunk_delta_conflicts",
+      "when": 1700000038000,
+      "tag": "0042_aurion_npc_multi_memory",
       "breakpoints": true
     },
     {
       "idx": 39,
       "version": "5",
-      "when": 1788696000000,
-      "tag": "0039_aurion_world_epoch_materializations",
+      "when": 1700000039000,
+      "tag": "0043_aurion_civilization_history",
       "breakpoints": true
     },
     {
       "idx": 40,
       "version": "5",
-      "when": 1788699600000,
-      "tag": "0040_aurion_progression_receipts",
+      "when": 1700000040000,
+      "tag": "0044_aurion_semantic_memory_graph",
       "breakpoints": true
     },
     {
       "idx": 41,
       "version": "5",
-      "when": 1788703200000,
-      "tag": "0041_aurion_content_hash_ledger",
+      "when": 1700000041000,
+      "tag": "0045_aurion_deterministic_quest_compiler",
       "breakpoints": true
     },
     {
       "idx": 42,
       "version": "5",
-      "when": 1788930000000,
-      "tag": "0042_aurion_npc_multi_memory",
+      "when": 1700000042000,
+      "tag": "0046_aurion_semantic_node_history_key",
       "breakpoints": true
     },
     {
       "idx": 43,
       "version": "5",
-      "when": 1788931000000,
-      "tag": "0043_aurion_civilization_history",
+      "when": 1700000043000,
+      "tag": "0047_aurion_world_context_capsules",
       "breakpoints": true
     },
     {
       "idx": 44,
       "version": "5",
-      "when": 1788932000000,
-      "tag": "0044_aurion_semantic_memory_graph",
+      "when": 1700000044000,
+      "tag": "0049_aurion_causal_receipt_v2",
       "breakpoints": true
     },
     {
       "idx": 45,
       "version": "5",
-      "when": 1788933000000,
-      "tag": "0045_aurion_deterministic_quest_compiler",
+      "when": 1700000045000,
+      "tag": "0050_aurion_human_ai_authoring",
       "breakpoints": true
     },
     {
       "idx": 46,
       "version": "5",
-      "when": 1788934000000,
-      "tag": "0046_aurion_semantic_node_history_key",
+      "when": 1700000046000,
+      "tag": "0051_aurion_cross_zone_handover_v2",
       "breakpoints": true
     },
     {
       "idx": 47,
       "version": "5",
-      "when": 1788935000000,
-      "tag": "0047_aurion_world_context_capsules",
+      "when": 1700000047000,
+      "tag": "0052_aurion_effect_intent_journal",
       "breakpoints": true
     },
     {
       "idx": 48,
       "version": "5",
-      "when": 1788936000000,
-      "tag": "0048_aurion_causal_evidence",
+      "when": 1700000048000,
+      "tag": "0053_aurion_npc_action_gateway_v2",
       "breakpoints": true
     },
     {
       "idx": 49,
       "version": "5",
-      "when": 1788937000000,
-      "tag": "0049_aurion_causal_receipt_v2",
+      "when": 1700000049000,
+      "tag": "0054_aurion_semantic_memory_graph_v2",
       "breakpoints": true
     },
     {
       "idx": 50,
       "version": "5",
-      "when": 1789706460000,
-      "tag": "0050_aurion_human_ai_authoring",
-      "breakpoints": true
-    },
-    {
-      "idx": 51,
-      "version": "5",
-      "when": 1789775220000,
-      "tag": "0051_aurion_cross_zone_handover_v2",
-      "breakpoints": true
-    },
-    {
-      "idx": 52,
-      "version": "5",
-      "when": 1789781160000,
-      "tag": "0052_aurion_effect_intent_journal",
-      "breakpoints": true
-    },
-    {
-      "idx": 53,
-      "version": "5",
-      "when": 1789827600000,
-      "tag": "0053_aurion_npc_action_gateway_v2",
-      "breakpoints": true
-    },
-    {
-      "idx": 54,
-      "version": "5",
-      "when": 1789842600000,
-      "tag": "0054_aurion_semantic_memory_graph_v2",
-      "breakpoints": true
-    },
-    {
-      "idx": 55,
-      "version": "5",
-      "when": 1790033800000,
+      "when": 1700000050000,
       "tag": "0055_aurion_glb_external_provenance",
       "breakpoints": true
     }

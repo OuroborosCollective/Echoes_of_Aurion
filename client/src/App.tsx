@@ -7,6 +7,7 @@ import LocalAuthPanel from "./components/LocalAuthPanel";
 import AurionCommunityHost from "./components/AurionCommunityHost";
 import { CausalBackupNotifier } from "./components/CausalBackupNotifier";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { LoadingProvider } from "./contexts/LoadingContext";
 import Account from "./pages/Account";
 import Community from "./pages/Community";
 import GlbUpload from "./pages/GlbUpload";
@@ -24,25 +25,27 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable={true}>
-        <TooltipProvider>
-          <Toaster />
-          <CausalBackupNotifier />
-          <SoundManager />
-          <LocalAuthPanel />
-          {websiteSurface && <AurionCommunityHost />}
-          <Ax1PlayNavigationBridge />
-          <Switch>
-            <Route path="/" component={Home} />
-            <Route path="/account" component={Account} />
-            <Route path="/community" component={Community} />
-            <Route path="/play" component={AurionPlayRoute} />
-            <Route path="/ops" component={Operations} />
-            <Route path="/ops/quests" component={QuestStudio} />
-            <Route path="/ops/context" component={ContextStudio} />
-            <Route path="/ops/glb-upload" component={GlbUpload} />
-            <Route component={Home} />
-          </Switch>
-        </TooltipProvider>
+        <LoadingProvider>
+          <TooltipProvider>
+            <Toaster />
+            <CausalBackupNotifier />
+            <SoundManager />
+            <LocalAuthPanel />
+            {websiteSurface && <AurionCommunityHost />}
+            <Ax1PlayNavigationBridge />
+            <Switch>
+              <Route path="/" component={Home} />
+              <Route path="/account" component={Account} />
+              <Route path="/community" component={Community} />
+              <Route path="/play" component={AurionPlayRoute} />
+              <Route path="/ops" component={Operations} />
+              <Route path="/ops/quests" component={QuestStudio} />
+              <Route path="/ops/context" component={ContextStudio} />
+              <Route path="/ops/glb-upload" component={GlbUpload} />
+              <Route component={Home} />
+            </Switch>
+          </TooltipProvider>
+        </LoadingProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

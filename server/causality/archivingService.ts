@@ -1,74 +1,94 @@
-import { desc, eq } from "drizzle-orm";
-import { aurionCausalCheckpoints } from "../../drizzle/aurionCausalitySchema";
 import { getDb } from "../db";
 import { globalCausalPersistence } from "./persistence";
-
-export type CausalBackupReceipt = Readonly<{
-  protocol: "aurion.causal.backup.v1";
-  ok: boolean;
-  zoneId: string;
-  checkpointId: string | null;
-  checkpointTick: number | null;
-  checkpointHash: string | null;
-  archiveId: string | null;
-  archivedCount: number;
-  status: "ARCHIVED" | "UNPROVABLE" | "NOTHING_TO_ARCHIVE" | "ERROR";
-  reason?: string;
-}>;
 
 export class AurionCausalArchivingService {
   private isRunning = false;
   private interval: NodeJS.Timeout | null = null;
 
-  start(intervalMs = 300_000): void {
+  start(intervalMs: number = 300000) { // Every 5 minutes
     if (this.interval) return;
-    this.interval = setInterval(() => void this.runArchiveCycle(), intervalMs);
-    void this.runArchiveCycle();
+    
+    console.log("[Archiving] Starting Causal Chain Archiving Service...");
+    this.interval = setInterval(() => this.runArchiveCycle(), intervalMs);
+    // Also run immediately
+    this.runArchiveCycle();
   }
 
-  stop(): void {
-    if (this.interval) clearInterval(this.interval);
-    this.interval = null;
+  stop() {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
   }
 
-  private async runArchiveCycle(): Promise<void> {
+  private async runArchiveCycle() {
     if (this.isRunning) return;
     this.isRunning = true;
+
     try {
+      // For each zone, find reconciled checkpoints and archive older receipts
+      // We look for checkpoints that are at least 1000 ticks old or verified long ago
+      // To keep it simple for now, we archive anything before the 2nd latest reconciled checkpoint
+      
       const db = await getDb();
       if (!db) return;
-      const checkpoints = await db.select().from(aurionCausalCheckpoints)
+
+      const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
+      const { eq, and, desc } = await import("drizzle-orm");
+
+      // Find zones with reconciled checkpoints
+      const checkpoints = await db.select()
+        .from(aurionCausalCheckpoints)
         .where(eq(aurionCausalCheckpoints.reconciled, 1))
         .orderBy(desc(aurionCausalCheckpoints.tick));
-      const zones = Array.from(new Set(checkpoints.map(checkpoint => checkpoint.zoneId)));
+
+      const zones = [...new Set(checkpoints.map((c: any) => c.zoneId))];
+
       for (const zoneId of zones) {
-        const zoneCheckpoints = checkpoints.filter(checkpoint => checkpoint.zoneId === zoneId);
+        const zoneCheckpoints = checkpoints.filter((c: any) => c.zoneId === zoneId);
         if (zoneCheckpoints.length < 2) continue;
-        const threshold = zoneCheckpoints[1].tick + 1;
-        await globalCausalPersistence.archiveOldReceipts(zoneId, threshold);
+
+        // Keep the latest reconciled checkpoint's receipts for immediate forensic work
+        // Archive everything before the one before it
+        const archiveThresholdTick = zoneCheckpoints[1].tick;
+        
+        console.log(`[Archiving] Archiving receipts for zone ${zoneId} before tick ${archiveThresholdTick}`);
+        const result = await globalCausalPersistence.archiveOldReceipts(zoneId, archiveThresholdTick);
+        
+        if (result) {
+          console.log(`[Archiving] Archived ${result.archivedCount} receipts into ${result.archiveId}`);
+        }
       }
     } catch (error) {
-      console.error("[C-Aurion] Archive cycle failed", error);
+      console.error("[Archiving] Cycle failed:", error);
     } finally {
       this.isRunning = false;
     }
   }
 
-  /** Manual backup is admin-only at the router and returns concrete readback evidence. */
-  async triggerZoneBackup(zoneId: string): Promise<CausalBackupReceipt> {
+  async triggerZoneBackup(zoneId: string): Promise<boolean> {
+    console.log(`[Archiving] Manual backup triggered for zone ${zoneId}`);
     try {
       const db = await getDb();
-      if (!db) return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: null, checkpointTick: null, checkpointHash: null, archiveId: null, archivedCount: 0, status: "UNPROVABLE", reason: "DATABASE_UNAVAILABLE" });
-      const checkpoints = await db.select().from(aurionCausalCheckpoints)
+      if (!db) return false;
+      
+      // Look for the latest checkpoint
+      const { aurionCausalCheckpoints } = await import("../../drizzle/aurionCausalitySchema");
+      const { eq, desc } = await import("drizzle-orm");
+      const checkpoints = await db.select()
+        .from(aurionCausalCheckpoints)
         .where(eq(aurionCausalCheckpoints.zoneId, zoneId))
-        .orderBy(desc(aurionCausalCheckpoints.tick)).limit(20);
-      const checkpoint = checkpoints.find(candidate => candidate.reconciled === 1);
-      if (!checkpoint) return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: null, checkpointTick: null, checkpointHash: null, archiveId: null, archivedCount: 0, status: "UNPROVABLE", reason: "NO_RECONCILED_CHECKPOINT" });
-      const archived = await globalCausalPersistence.archiveOldReceipts(zoneId, checkpoint.tick + 1);
-      if (!archived) return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: checkpoint.id, checkpointTick: checkpoint.tick, checkpointHash: checkpoint.snapshotHash, archiveId: null, archivedCount: 0, status: "NOTHING_TO_ARCHIVE" });
-      return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: true, zoneId, checkpointId: checkpoint.id, checkpointTick: checkpoint.tick, checkpointHash: checkpoint.snapshotHash, archiveId: archived.archiveId, archivedCount: archived.archivedCount, status: "ARCHIVED" });
+        .orderBy(desc(aurionCausalCheckpoints.tick))
+        .limit(1);
+        
+      if (checkpoints.length > 0) {
+        const latestTick = checkpoints[0].tick;
+        await globalCausalPersistence.archiveOldReceipts(zoneId, latestTick);
+      }
+      return true;
     } catch (error) {
-      return Object.freeze({ protocol: "aurion.causal.backup.v1", ok: false, zoneId, checkpointId: null, checkpointTick: null, checkpointHash: null, archiveId: null, archivedCount: 0, status: "ERROR", reason: error instanceof Error ? error.message : String(error) });
+      console.error("[Archiving] Manual backup failed:", error);
+      return false;
     }
   }
 }

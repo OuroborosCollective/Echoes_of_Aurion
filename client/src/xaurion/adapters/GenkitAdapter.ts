@@ -34,7 +34,7 @@ export class GenkitAdapter extends GameAdapter {
       { title:'Apex Directive: Slay Titan Ignis', objective:'Vanquish World Boss Titan Ignis the Overclocked in the South Arena', lore:'The ultimate super-heavy steam war machine has awakened in the southern crater. Assemble your weapons and strike down the Colossus of Aethelgard!', type:'kill_boss', targetMobType:'titan_boss', targetCount:1, baseGold:1200, baseXp:2000, rewardItemId:'item_legendary_blade' },
       { title:'Skies of Aethelgard: Drake Cull', objective:'Bring down 3 Aether Steam Drakes near the Void Spire', lore:'Bio-mechanical steam drakes have nested atop the southern spires, diving upon ground patrols. Secure the airspace with precision ranged fire.', type:'kill_mobs', targetMobType:'steam_drake', targetCount:3, baseGold:260, baseXp:400, rewardItemId:'item_bow_epic' },
     ] as const;
-    const selected=this.simulation.shuffled("bounty:templates", templates).slice(0,Math.min(count,templates.length));
+    const selected=this.simulation.shuffled(templates, "bounty:templates").slice(0,Math.min(count,templates.length));
     const newBounties: Quest[]=selected.map(tpl=>({ id:this.simulation.nextId("genkit_bounty"), title:tpl.title, lore:tpl.lore, description:tpl.lore, objective:tpl.objective, type:tpl.type, targetMobType:tpl.targetMobType, targetCount:tpl.targetCount, currentCount:0, rewardGold:tpl.baseGold+level*35, rewardXp:tpl.baseXp+level*50, rewardItem:tpl.rewardItemId?RPG_ITEMS_DATABASE.find(i=>i.id===tpl.rewardItemId):undefined, completed:false, giverName:'Genkit AI Bounty Matrix', giverZone:zone }));
     this.availableBounties=newBounties;
     this.onQuestPoolUpdated?.(newBounties);

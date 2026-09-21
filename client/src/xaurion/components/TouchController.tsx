@@ -57,7 +57,7 @@ export const AX1TouchDirector: React.FC<AX1TouchDirectorProps> = ({
     return () => window.removeEventListener("resize", updateMetrics);
   }, []);
 
-  const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
+  const touchStart = useRef<{ x: number; y: number; tick: number } | null>(null);
   const dwellTimer = useRef<NodeJS.Timeout | null>(null);
   const moveRequest = useRef<{ f: number; r: number }>({ f: 0, r: 0 });
 
@@ -75,22 +75,22 @@ export const AX1TouchDirector: React.FC<AX1TouchDirectorProps> = ({
     const touch = e.touches[0];
     const pos = { x: touch.clientX, y: touch.clientY };
     
-    touchStart.current = { ...pos, time: performance.now() };
+    touchStart.current = { ...pos, tick: 0 };
     setTouchPos(pos);
     setMode("idle");
     setDwellProgress(0);
     setSelectedPanel(null);
 
-    // Start dwell sequence
+    // Start dwell sequence with deterministic tick stepping (no Date.now or performance.now)
     dwellTimer.current = setTimeout(() => {
       setMode("dwelling");
-      const startTime = performance.now();
+      let currentProgress = 0;
+      const step = 16 / DWELL_DURATION;
       const interval = setInterval(() => {
-        const elapsed = performance.now() - startTime;
-        const progress = Math.min(1, elapsed / DWELL_DURATION);
-        setDwellProgress(progress);
+        currentProgress = Math.min(1, currentProgress + step);
+        setDwellProgress(currentProgress);
         
-        if (progress >= 1) {
+        if (currentProgress >= 1) {
           clearInterval(interval);
           setMode("menu");
           setMenuActive(true);

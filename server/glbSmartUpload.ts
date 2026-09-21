@@ -9,8 +9,8 @@ import { buildGlbImportPlan } from "./glbImportPlan";
 import { checkGlbStorage } from "./glbFileStore";
 import { glbImportPurposes, type GlbEquipmentSlot, type GlbImportPurpose, type GlbRuntimeCatalog } from "../shared/glbImportContract";
 import { readPlayerUi } from "./playerUiPersistence";
-import { z } from "zod";
 import { readActiveWorldDesign } from "./aurionAuthoringPersistence";
+import { z } from "zod";
 
 export const GLB_SMART_UPLOAD_PATH = "/api/admin/glb-smart-upload" as const;
 
@@ -49,7 +49,7 @@ function defaultDependencies(): GlbSmartUploadDependencies {
         return authenticateAdminGlbBearer(request);
       }
       const user = await sdk.authenticateRequest(request);
-      return user ? { id: user.id, role: user.role } : null;
+      return user ? { id: user.id, role: user.role === "admin" ? "admin" : "user" } : null;
     },
     uploadAsset: async values => {
       if (values.purpose !== "auto") {
@@ -265,8 +265,13 @@ export function registerGlbSmartUpload(app: Express): void {
     try { response.setHeader("Cache-Control", "no-store"); response.json(await glbImportStore().catalog()); }
     catch { response.status(503).json({ error: "GLB_CATALOG_UNAVAILABLE" }); }
   });
+
   app.get("/api/game/world-design", async (_request, response) => {
-    try { response.setHeader("Cache-Control", "no-store"); response.json(await readActiveWorldDesign()); }
-    catch { response.status(503).json({ error: "AUTHORING_WORLD_DESIGN_UNAVAILABLE" }); }
+    try {
+      response.setHeader("Cache-Control", "no-store");
+      response.json(await readActiveWorldDesign());
+    } catch {
+      response.status(503).json({ error: "WORLD_DESIGN_UNAVAILABLE" });
+    }
   });
 }

@@ -25,7 +25,6 @@ const MAX_GLB_BATCH_FILES = 12;
 const purposeLabels: Record<GlbImportPurpose, string> = {
   auto: "Automatisch zuordnen",
   "npc-fallback": "NPC-Fallback · niemals Spieler",
-  "enemy-fallback": "Gegner-Fallback · nur Darstellung",
   "world-environment": "Umgebung & Bauwerke",
   "world-nature": "Natur & Pflanzen",
   "player-public": "Öffentliche Spielercharaktere · einmalige Wahl",
@@ -34,7 +33,6 @@ const purposeLabels: Record<GlbImportPurpose, string> = {
 const purposeDescriptions: Record<GlbImportPurpose, string> = {
   auto: "Bestehende Aurion-Zielregeln. Ein bereits belegtes Ziel wird niemals still ersetzt.",
   "npc-fallback": "Nur bestätigte Charaktermodelle für modelllose NPCs. Kein Spielerziel und keine Gameplay-Wirkung.",
-  "enemy-fallback": "Nur visuelle Gegner-/Kreaturenmodelle. Keine Combat-, Loot-, KI- oder Spawn-Autorität.",
   "world-environment": "Häuser, Brunnen, Teleporter, Marktstände und andere statische Weltobjekte. Uploads sind Darstellung; ein Teleporter erhält dadurch keine Teleport-Logik.",
   "world-nature": "Bäume, Pflanzen, Büsche, Felsen und Naturdekoration. Die Nutzung erfolgt deterministisch als Weltprojektion ohne Gameplay-Autorität.",
   "player-public": "Animierte Charaktere, aus denen Spieler genau einmal wählen können. Die Wahl wird serverseitig gebunden und öffentlich dargestellt.",
@@ -158,7 +156,6 @@ export default function GlbUpload() {
     if (payload.purpose !== chosenPurpose) throw new Error("Der Server hat einen abweichenden Verwendungszweck bestätigt.");
     if (chosenPurpose !== "auto" && (receipt.data.targetKey !== null || receipt.data.status !== "catalog")) throw new Error("Der Server hat die katalog-only Grenze des gewählten Zwecks nicht bestätigt.");
     if (chosenPurpose === "npc-fallback" && receipt.data.assetType !== "character") throw new Error("Der Server hat keinen Charakter-NPC-Fallback bestätigt.");
-    if (chosenPurpose === "enemy-fallback" && receipt.data.assetType !== "enemy") throw new Error("Der Server hat keinen Gegner-Fallback bestätigt.");
     if (chosenPurpose === "player-public" && receipt.data.assetType !== "character") throw new Error("Der Server hat keinen öffentlichen Spielercharakter bestätigt.");
     if (chosenPurpose === "world-environment" && (receipt.data.assetType !== "arena" || payload.classification.worldFamily !== "environment")) throw new Error("Der Server hat kein Umgebungsobjekt bestätigt.");
     if (chosenPurpose === "world-nature" && (receipt.data.assetType !== "arena" || payload.classification.worldFamily !== "nature")) throw new Error("Der Server hat kein Naturmodell bestätigt.");

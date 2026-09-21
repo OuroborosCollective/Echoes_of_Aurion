@@ -213,7 +213,7 @@
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
-        "server/determinism/aurionAddressableRandom.test.ts"
+        "server/wasdCombatSourceParity.test.ts"
       ],
       "runtimeEvidence": [
         "server/causality/causalTick.test.ts"
@@ -340,18 +340,16 @@
         ]
       },
       "aurionPaths": [
-        "server/wasdSemanticGraphV2Persistence.ts",
         "server/wasdSemanticGraphPersistence.ts",
         "server/wasdNpcCapsule.ts"
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
         "server/aim292NpcSourceBoundary.test.ts",
-        "server/aim294SemanticGraphV2MariaDb.test.ts"
+        "server/aim292NpcMultiMemoryMariaDb.test.ts"
       ],
       "runtimeEvidence": [
-        "server/aim294SemanticGraphV2MariaDb.test.ts",
-        "e2e/aim292.npcMemory.spec.ts"
+        "server/aim292NpcMultiMemoryMariaDb.test.ts"
       ],
       "ownershipRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
       "donorRuntimeRequired": false
@@ -435,7 +433,7 @@
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
-        "server/aim262VisualEffects.test.ts"
+        "server/aurionVisualItemAdapter.test.ts"
       ],
       "runtimeEvidence": [
         "client/src/xaurion/integration/combatPresentation.test.ts"
@@ -581,7 +579,7 @@
         "client/src/lib/wasdAurionSceneAssets.test.ts"
       ],
       "runtimeEvidence": [
-        "server/donorLedgerVerifier.test.ts"
+        "server/glbCatalogFamilies.test.ts"
       ],
       "ownershipRevision": "f1940dee90ec527964ac90e39e4561dc6649604f",
       "donorRuntimeRequired": false
@@ -1478,12 +1476,6 @@
     },
     {
       "path": "server/wasdSemanticGraphPersistence.ts",
-      "donor": "WASD",
-      "capabilityId": "semantic-memory.provenance",
-      "role": "CAPABILITY"
-    },
-    {
-      "path": "server/wasdSemanticGraphV2Persistence.ts",
       "donor": "WASD",
       "capabilityId": "semantic-memory.provenance",
       "role": "CAPABILITY"
