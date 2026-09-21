@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { aurionEconomicEvents } from "../../drizzle/aurionCausalitySchema";
+import { aurionEconomicEvents, aurionEconomicProjectionIntents } from "../../drizzle/aurionCausalitySchema";
 import { aurionGuildBankReceipts } from "../../drizzle/guildBankSchema";
 import {
   aurionLootDropReceiptsV2,
@@ -33,17 +33,19 @@ export async function readEconomicSourceCoverage(worldId:string){
     reason:"ECONOMIC_DATABASE_UNAVAILABLE",sources:Object.freeze([]),missingCount:0,missingSample:Object.freeze([]),coverageHash:null,
   });
   try{
-    const [tradeCrafting,loot,market,systemSales,guild,points,economic]=await Promise.all([
+    const [tradeCrafting,loot,market,systemSales,guild,points,intents,economic]=await Promise.all([
       db.select({id:aurionTradeCraftingReceipts.id}).from(aurionTradeCraftingReceipts).limit(SOURCE_LIMIT+1),
       db.select({id:aurionLootDropReceiptsV2.id}).from(aurionLootDropReceiptsV2).limit(SOURCE_LIMIT+1),
       db.select({id:marketTransactionReceipts.id}).from(marketTransactionReceipts).limit(SOURCE_LIMIT+1),
       db.select({id:systemSaleReceipts.id}).from(systemSaleReceipts).limit(SOURCE_LIMIT+1),
       db.select({id:aurionGuildBankReceipts.receiptId}).from(aurionGuildBankReceipts).limit(SOURCE_LIMIT+1),
       db.select({id:progressionLedger.id}).from(progressionLedger).where(eq(progressionLedger.kind,"points")).limit(SOURCE_LIMIT+1),
+      db.select({sourceKind:aurionEconomicProjectionIntents.sourceKind,sourceId:aurionEconomicProjectionIntents.sourceId})
+        .from(aurionEconomicProjectionIntents).limit(SOURCE_LIMIT*6+1),
       db.select({sourceKind:aurionEconomicEvents.sourceKind,sourceId:aurionEconomicEvents.sourceId})
         .from(aurionEconomicEvents).where(eq(aurionEconomicEvents.worldId,worldId)).limit(SOURCE_LIMIT*6+1),
     ]);
-    if([tradeCrafting,loot,market,systemSales,guild,points].some(rows=>rows.length>SOURCE_LIMIT)||economic.length>SOURCE_LIMIT*6){
+    if([tradeCrafting,loot,market,systemSales,guild,points].some(rows=>rows.length>SOURCE_LIMIT)||intents.length>SOURCE_LIMIT*6||economic.length>SOURCE_LIMIT*6){
       throw new Error("ECONOMIC_SOURCE_COVERAGE_LIMIT_EXCEEDED");
     }
     const sources:readonly SourceSet[]=Object.freeze([
@@ -54,28 +56,41 @@ export async function readEconomicSourceCoverage(worldId:string){
       Object.freeze({kind:"guild_bank" as const,ids:freezeIds(guild.map(row=>row.id))}),
       Object.freeze({kind:"progression_points" as const,ids:freezeIds(points.map(row=>row.id))}),
     ]);
+    const intentSet=new Set(intents.map(row=>`${row.sourceKind}:${row.sourceId}`));
     const materialized=new Set(economic.map(row=>`${row.sourceKind}:${row.sourceId}`));
-    const missing:string[]=[];
-    for(const source of sources) for(const id of source.ids) if(!materialized.has(`${source.kind}:${id}`)) missing.push(`${source.kind}:${id}`);
-    missing.sort();
+    const sourceKeys=new Set(sources.flatMap(source=>source.ids.map(id=>`${source.kind}:${id}`)));
+    const missingIntents:string[]=[];
+    const missingEvents:string[]=[];
+    for(const key of [...sourceKeys].sort()){
+      if(!intentSet.has(key)) missingIntents.push(key);
+      else if(!materialized.has(key)) missingEvents.push(key);
+    }
+    const orphanIntents=[...intentSet].filter(key=>!sourceKeys.has(key)).sort();
+    const orphanEvents=[...materialized].filter(key=>!intentSet.has(key)||!sourceKeys.has(key)).sort();
     const sourceSummary=Object.freeze(sources.map(source=>Object.freeze({
       kind:source.kind,
       sourceCount:source.ids.length,
+      intentCount:source.ids.filter(id=>intentSet.has(`${source.kind}:${id}`)).length,
       materializedCount:source.ids.filter(id=>materialized.has(`${source.kind}:${id}`)).length,
       sourceDigest:canonicalSha256(source.ids),
     })));
+    const contradictions=[...orphanIntents.map(value=>`ORPHAN_INTENT:${value}`),...orphanEvents.map(value=>`ORPHAN_EVENT:${value}`)].sort();
     const coverageHash=canonicalSha256({
-      schema:"aurion.economic-source-coverage.v1",worldId,sourceSummary,
-      missingDigest:canonicalSha256(missing),
+      schema:"aurion.economic-source-coverage.v2",worldId,sourceSummary,
+      missingIntentDigest:canonicalSha256(missingIntents),missingEventDigest:canonicalSha256(missingEvents),
+      contradictionDigest:canonicalSha256(contradictions),
     });
+    const status=contradictions.length?"CONTRADICTED" as const:(missingIntents.length||missingEvents.length)?"UNPROVABLE" as const:"MATCH" as const;
     return Object.freeze({
-      mutationAuthority:"none" as const,
-      status:missing.length?"UNPROVABLE" as const:"MATCH" as const,
-      worldId,
-      reason:missing.length?"ECONOMIC_SOURCE_COVERAGE_INCOMPLETE":null,
+      mutationAuthority:"none" as const,status,worldId,
+      reason:contradictions.length?"ECONOMIC_SOURCE_COVERAGE_CONTRADICTED":status==="UNPROVABLE"?"ECONOMIC_SOURCE_COVERAGE_INCOMPLETE":null,
       sources:sourceSummary,
-      missingCount:missing.length,
-      missingSample:Object.freeze(missing.slice(0,64)),
+      missingIntentCount:missingIntents.length,
+      missingEventCount:missingEvents.length,
+      contradictionCount:contradictions.length,
+      missingIntentSample:Object.freeze(missingIntents.slice(0,64)),
+      missingEventSample:Object.freeze(missingEvents.slice(0,64)),
+      contradictionSample:Object.freeze(contradictions.slice(0,64)),
       coverageHash,
     });
   }catch(error){
