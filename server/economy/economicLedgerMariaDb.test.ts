@@ -72,7 +72,8 @@ suite("Wave 3 Steps 35-37 economic ledger, lineage and invariant audit",()=>{
     })).toMatchObject({source:"created",plan:{epoch:1}});
 
     const first=await reconcileEconomicLedger(WORLD_ID);
-    expect(first).toMatchObject({status:"MATCH",sourceCount:2,materializedCount:2,unprovableCount:0,contradictionCount:0});
+    expect(first, JSON.stringify({unprovable:first.unprovable,contradictions:first.contradictions,audit:first.audit},null,2))
+      .toMatchObject({status:"MATCH",sourceCount:2,materializedCount:2,unprovableCount:0,contradictionCount:0});
     const createdLineage=await readAssetLineage(WORLD_ID,`item:legacy:${drop.itemId}`);
     expect(createdLineage).toMatchObject({status:"MATCH",currentOwnerId:`user:${sellerUserId}`});
     expect(createdLineage.steps.map(step=>step.transitionKind)).toEqual(["create"]);
