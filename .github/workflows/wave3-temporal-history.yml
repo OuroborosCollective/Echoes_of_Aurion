@@ -1,0 +1,78 @@
+name: Wave 3 Steps 32-34 Temporal History
+
+on:
+  pull_request:
+    paths:
+      - "shared/aurionTemporalEventContract.ts"
+      - "shared/aurionTemporalQueryContract.ts"
+      - "server/history/**"
+      - "scripts/read-aurion-history.ts"
+      - "scripts/explain-aurion-history.ts"
+      - "drizzle/0056_aurion_temporal_history_v1.sql"
+      - "drizzle/aurionCausalitySchema.ts"
+      - "drizzle/meta/_journal.json"
+      - "config/aurion-migration-wave-manifest.json"
+      - "scripts/aurionProductionSchemaReconciliation.ts"
+      - ".github/workflows/wave3-temporal-history.yml"
+  push:
+    branches: [main]
+    paths:
+      - "shared/aurionTemporalEventContract.ts"
+      - "shared/aurionTemporalQueryContract.ts"
+      - "server/history/**"
+      - "drizzle/0056_aurion_temporal_history_v1.sql"
+      - ".github/workflows/wave3-temporal-history.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  temporal-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_wave3_temporal
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_wave3_temporal
+      NODE_ENV: test
+      AURION_WAVE3_TEMPORAL_E2E: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-wave3-temporal-ci-disposable-never-production
+      VITE_APP_ID: aurion-wave3-temporal-ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prove exact head and migration chain
+        run: |
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Run temporal contract and real MariaDB regression
+        run: pnpm exec vitest run shared/aurionTemporalEventContract.test.ts server/history/aurionTemporalHistoryMariaDb.test.ts --no-file-parallelism
+      - name: Read historical state through fresh CLI process
+        run: pnpm exec tsx scripts/read-aurion-history.ts --world echoes-of-aurion-global --epoch 2 --subject poi:ember-mine
+      - name: Explain causal chain through fresh CLI process
+        run: pnpm exec tsx scripts/explain-aurion-history.ts --world echoes-of-aurion-global --epoch 2 --fact event:mine:2
+      - name: TypeScript and build
+        run: |
+          pnpm check
+          pnpm build
