@@ -8,11 +8,11 @@ Wave 3 preserves the AI Studio architecture intent but replaces its in-memory hi
 
 ## Persistence
 
-Migration `0056_aurion_temporal_history_v1` creates normalized event, subject and predecessor tables. UPDATE and DELETE are rejected by database triggers. A new event is accepted only after `worldCausalRootService.read` and `replay` agree with its source root/revision/ruleset. Predecessors must already exist in the same world.
+Migration `0056_aurion_temporal_history_v1` creates normalized event, subject and predecessor tables. UPDATE and DELETE are rejected by database triggers. A new event is accepted only after `worldCausalRootService.read` and `replay` agree with its source root/revision/ruleset, and its `sourceReceiptHash` resolves to exactly one causal tick receipt contained in that replayed World Root. Domain receipts are provenance, not temporal authority, until an intrinsic authority chain is proven. Predecessors must already exist in the same world and may not originate from a later authority epoch.
 
 ## Historical reconstruction
 
-Step 33 reconstructs active facts at an epoch from persisted events. Superseded predecessors are removed only when their confirmed successor is valid at the queried epoch. Contradicting simultaneous payloads return `CONTRADICTED`; missing/corrupt/root-divergent evidence returns `UNPROVABLE`. The returned `reconstructionHash` is an evidence digest, never a World Root.
+Step 33 reconstructs active facts at an epoch from persisted events. Predecessor edges are always causal; they project as supersession only when predecessor and successor share the same domain and at least one subject. Superseded predecessors are removed only when their confirmed successor is valid at the queried epoch. Contradicting simultaneous payloads return `CONTRADICTED`; missing/corrupt/root-divergent evidence returns `UNPROVABLE`. The returned `reconstructionHash` is an evidence digest, never a World Root.
 
 ## Causal explanation
 
