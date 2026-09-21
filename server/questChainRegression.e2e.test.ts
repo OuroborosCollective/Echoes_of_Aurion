@@ -60,6 +60,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "locked", false],
       ["ember_key", "locked", false],
       ["starfall_resonance", "locked", false],
+      ["clockwork_core", "locked", false],
     ]);
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "starfall_resonance" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
@@ -72,7 +73,13 @@ describeWithDatabase("quest chain regression E2E", () => {
     await expect(completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Orun" })).rejects.toThrow("Dieser Questgeber kann den Auftrag nicht abschließen.");
     const afterLyra = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Lyra" });
     expect(afterLyra.profile).toMatchObject({ totalXp: 122, aurionPoints: 20, seasonPoints: 20, victories: 1 });
-    expect(afterLyra.quests.find(quest => quest.key === "archive_of_echoes")).toMatchObject({ state: "available", readyToTurnIn: false });
+    expect(afterLyra.quests.map(quest => [quest.key, quest.state, quest.readyToTurnIn])).toEqual([
+      ["astral_call", "completed", false],
+      ["archive_of_echoes", "available", false],
+      ["ember_key", "locked", false],
+      ["starfall_resonance", "locked", false],
+      ["clockwork_core", "locked", false],
+    ]);
     expect((await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "astral_call", giver: "Lyra" })).profile).toMatchObject({ totalXp: 122, victories: 1 });
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" });
@@ -84,8 +91,13 @@ describeWithDatabase("quest chain regression E2E", () => {
     await expect(completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes", giver: "Lyra" })).rejects.toThrow("Dieser Questgeber kann den Auftrag nicht abschließen.");
     const afterOrun = await completeGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes", giver: "Orun" });
     expect(afterOrun.profile).toMatchObject({ totalXp: 342, aurionPoints: 55, seasonPoints: 55, victories: 2 });
-    expect(afterOrun.quests.find(quest => quest.key === "ember_key")).toMatchObject({ state: "available", readyToTurnIn: false });
-    expect(afterOrun.quests.find(quest => quest.key === "starfall_resonance")).toMatchObject({ state: "locked", readyToTurnIn: false });
+    expect(afterOrun.quests.map(quest => [quest.key, quest.state, quest.readyToTurnIn])).toEqual([
+      ["astral_call", "completed", false],
+      ["archive_of_echoes", "completed", false],
+      ["ember_key", "available", false],
+      ["starfall_resonance", "locked", false],
+      ["clockwork_core", "locked", false],
+    ]);
 
     await acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "ember_key" });
     const thirdBoss = await defeatQuestEncounter("solarium");
@@ -101,6 +113,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "available", false],
+      ["clockwork_core", "locked", false],
     ]);
     expect(afterKey.keys).toEqual(["ember_key"]);
     expect(afterKey.canEnterDungeon).toBe(true);
