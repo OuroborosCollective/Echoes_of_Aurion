@@ -49,3 +49,24 @@ describe("WorldLoadingScreen", () => {
     expect(state.gates.chunks).toBe(false);
   });
 });
+
+
+  it("stops intercepting controls once renderer and character presentation are settled", () => {
+    const state = deriveWorldLoadingState({
+      ...readyProps,
+      chunks: { status: "APPLIED", count: 4, desiredCount: 9, pendingCount: 2, failedCount: 0 },
+      worldAssets: { version: "aurion-world-assets.v1", planned: 12, rendered: 7, loading: 2, failed: 0 },
+    });
+    expect(state).toMatchObject({ ready: false, blocking: false });
+
+    render(
+      <WorldLoadingScreen
+        {...readyProps}
+        chunks={{ status: "APPLIED", count: 4, desiredCount: 9, pendingCount: 2, failedCount: 0 }}
+        worldAssets={{ version: "aurion-world-assets.v1", planned: 12, rendered: 7, loading: 2, failed: 0 }}
+      />,
+    );
+    const status = screen.getByTestId("world-loading-screen");
+    expect(status.getAttribute("data-mode")).toBe("non-blocking");
+    expect(status.className).toContain("pointer-events-none");
+  });

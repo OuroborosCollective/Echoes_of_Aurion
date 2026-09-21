@@ -66,6 +66,7 @@ export function deriveWorldLoadingState(input: {
 
   return Object.freeze({
     ready: passed === 4,
+    blocking: !gates.renderer || !gates.model,
     degraded,
     passed,
     total: 4,
@@ -97,9 +98,30 @@ export function WorldLoadingScreen(props: {
     ? `${props.worldAssets.rendered} / ${props.worldAssets.planned} gerendert · ${props.worldAssets.loading} lädt${props.worldAssets.failed ? ` · ${props.worldAssets.failed} fehlgeschlagen` : ""}`
     : "Noch keine World-Asset-Evidence";
 
+  if (!state.blocking) {
+    return (
+      <div
+        data-testid="world-loading-screen"
+        data-mode="non-blocking"
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none absolute left-1/2 top-4 z-30 w-[min(92vw,32rem)] -translate-x-1/2 text-[#E5F6F0]"
+      >
+        <div className="rounded-xl border border-cyan-300/15 bg-[#06181b]/90 px-4 py-3 shadow-xl backdrop-blur-md">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-[#b9d7d0]">{state.stage}</p>
+            <span className="whitespace-nowrap font-mono text-[10px] text-[#2DE2CF]">{state.passed}/{state.total} Evidence</span>
+          </div>
+          <p className="mt-1 text-[10px] text-[#789c94]">{chunkLabel} · {assetLabel}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="world-loading-screen"
+      data-mode="blocking"
       role="status"
       aria-live="polite"
       className="absolute inset-0 z-40 flex items-center justify-center bg-[#041114]/95 px-5 text-[#E5F6F0] backdrop-blur-sm"
