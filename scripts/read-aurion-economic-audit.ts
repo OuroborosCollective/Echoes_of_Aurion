@@ -7,9 +7,8 @@ function value(flag:string){
 const worldId=value("--world");
 if(!worldId){
   console.error("usage: read-aurion-economic-audit --world <worldId>");
-  process.exitCode=64;
-}else{
-  const result=await auditEconomicLedger(worldId);
-  console.log(JSON.stringify(result));
-  process.exitCode=result.status==="MATCH"?0:result.status==="UNPROVABLE"?2:3;
+  process.exit(64);
 }
+const result=await auditEconomicLedger(worldId);
+console.log(JSON.stringify(result));
+process.exit(result.status==="MATCH"?0:result.status==="UNPROVABLE"?2:3);
