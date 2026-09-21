@@ -180,7 +180,7 @@ export const aurionEffectDeliveryReceipts = mysqlTable("aurionEffectDeliveryRece
 
 export const aurionEconomicProjectionIntents = mysqlTable("aurionEconomicProjectionIntents", {
   intentId: varchar("intentId", { length: 96 }).primaryKey(),
-  sourceKind: mysqlEnum("sourceKind", ["trade_crafting","loot_v2","market_transaction","system_sale","guild_bank","progression_points"]).notNull(),
+  sourceKind: mysqlEnum("sourceKind", ["trade_crafting","loot_v1","loot_v2","market_transaction","system_sale","guild_bank","progression_points"]).notNull(),
   sourceId: varchar("sourceId", { length: 128 }).notNull(),
   sourceEvidenceHash: varchar("sourceEvidenceHash", { length: 96 }).notNull(),
   intentHash: varchar("intentHash", { length: 96 }).notNull(),
@@ -201,7 +201,7 @@ export const aurionEconomicEvents = mysqlTable("aurionEconomicEvents", {
   epoch: int("epoch").notNull(),
   ordinal: bigint("ordinal", { mode: "bigint", unsigned: true }).notNull(),
   eventType: mysqlEnum("eventType", ["economic_transition"]).notNull(),
-  sourceKind: mysqlEnum("sourceKind", ["trade_crafting","loot_v2","market_transaction","system_sale","guild_bank","progression_points"]).notNull(),
+  sourceKind: mysqlEnum("sourceKind", ["trade_crafting","loot_v1","loot_v2","market_transaction","system_sale","guild_bank","progression_points"]).notNull(),
   sourceId: varchar("sourceId", { length: 128 }).notNull(),
   sourceEvidenceHash: varchar("sourceEvidenceHash", { length: 96 }).notNull(),
   temporalEventId: varchar("temporalEventId", { length: 96 }).notNull(),
