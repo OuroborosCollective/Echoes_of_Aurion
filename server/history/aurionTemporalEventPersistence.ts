@@ -1,10 +1,9 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { aurionTemporalEventPredecessors, aurionTemporalEventSubjects, aurionTemporalEvents } from "../../drizzle/aurionCausalitySchema";
+import { aurionCausalTickReceipts, aurionTemporalEventPredecessors, aurionTemporalEventSubjects, aurionTemporalEvents } from "../../drizzle/aurionCausalitySchema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { type AurionTemporalEvent, verifyTemporalEventIntegrity } from "../../shared/aurionTemporalEventContract";
 import { getDb } from "../db";
 import { worldCausalRootService } from "../causality/worldCausalRootService";
-import { resolveTemporalSourceReceipt } from "./temporalSourceReceiptResolver";
 
 type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type TemporalTx=Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -38,19 +37,18 @@ export async function verifyTemporalEventSource(event:AurionTemporalEvent):Promi
   if(persisted.root.worldRootHash!==event.sourceWorldRoot||persisted.root.sourceRevision!==event.sourceRevision||persisted.root.rulesetVersion!==event.rulesetVersion) {
     throw new Error("TEMPORAL_WORLD_ROOT_IDENTITY_MISMATCH");
   }
-  const source=await resolveTemporalSourceReceipt(event.sourceReceiptHash);
-  if(source.status==="UNPROVABLE") throw new Error(source.reason);
-  if(source.status==="CONTRADICTED") throw new Error(source.reason);
-  if(source.receipt.directAuthorityTick){
-    const receipt=source.receipt.directAuthorityTick;
-    if(receipt.worldId!==event.worldId||receipt.revision!==event.sourceRevision||receipt.rulesetVersion!==event.rulesetVersion) {
-      throw new Error("TEMPORAL_SOURCE_RECEIPT_IDENTITY_MISMATCH");
-    }
-    const zoneRoot=persisted.root.zoneRoots.find(value=>value.zoneId===receipt.zoneId);
-    if(!zoneRoot||receipt.tick<zoneRoot.fromTick||receipt.tick>zoneRoot.toTick) throw new Error("TEMPORAL_SOURCE_RECEIPT_OUTSIDE_WORLD_ROOT");
-  } else if(event.predecessorEventIds.length===0) {
-    throw new Error("TEMPORAL_NON_TICK_SOURCE_REQUIRES_PREDECESSOR");
+  const db=await getDb(); if(!db) throw new Error("TEMPORAL_DATABASE_UNAVAILABLE");
+  const receipts=await db.select().from(aurionCausalTickReceipts).where(and(
+    eq(aurionCausalTickReceipts.receiptHash,event.sourceReceiptHash),
+    eq(aurionCausalTickReceipts.worldId,event.worldId),
+  )).limit(2);
+  if(receipts.length!==1) throw new Error("TEMPORAL_SOURCE_RECEIPT_UNPROVABLE");
+  const receipt=receipts[0]!;
+  if(receipt.revision!==event.sourceRevision||receipt.rulesetVersion!==event.rulesetVersion) {
+    throw new Error("TEMPORAL_SOURCE_RECEIPT_IDENTITY_MISMATCH");
   }
+  const zoneRoot=persisted.root.zoneRoots.find(value=>value.zoneId===receipt.zoneId);
+  if(!zoneRoot||receipt.tick<zoneRoot.fromTick||receipt.tick>zoneRoot.toTick) throw new Error("TEMPORAL_SOURCE_RECEIPT_OUTSIDE_WORLD_ROOT");
   const replay=await worldCausalRootService.replay(event.worldId,event.epoch);
   if(replay.status!=="MATCH"||replay.worldRootHash!==event.sourceWorldRoot) throw new Error("TEMPORAL_WORLD_ROOT_REPLAY_MISMATCH");
 }
