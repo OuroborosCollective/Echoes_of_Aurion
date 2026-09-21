@@ -87,7 +87,7 @@ export async function canConnectToDatabase(timeoutMs = 1000): Promise<boolean> {
 }
 
 let _db: ReturnType<typeof drizzle> | null = null;
-type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
+export type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
