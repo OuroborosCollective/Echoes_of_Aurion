@@ -6,17 +6,24 @@ import {
   aurionEconomicResourceDeltas,
 } from "../../drizzle/aurionCausalitySchema";
 import {
+  aurionGuildBankReceipts,
+  aurionGuildItemCustodyLedger,
+  aurionGuildResourceLedger,
+  aurionGuildTreasuryLedger,
+} from "../../drizzle/guildBankSchema";
+import {
   itemInstances, lootDropReceipts, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts,
   marketTransactionReceipts, progressionLedger, systemSaleReceipts,
 } from "../../drizzle/schema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { createEconomicEvent, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
 import { getDb } from "../db";
+import { guildBankHash } from "../guildBankProtocol";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
 import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
 import {
-  lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, marketTransactionSourceEvidenceHash,
+  guildBankSourceEvidenceHash, lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, marketTransactionSourceEvidenceHash,
   progressionPointsSourceEvidenceHash, systemSaleSourceEvidenceHash, tradeCraftingSourceEvidenceHash,
 } from "./economicSourceEvidence";
 
@@ -128,6 +135,18 @@ async function deriveSystemSale(tx:Tx,sourceId:string){
   });
 }
 
+function positiveExact(value:unknown,label:string):string{
+  const text=String(value);
+  if(!/^[1-9][0-9]*$/.test(text)) throw new Error(`${label}_INVALID`);
+  return text;
+}
+
+function guildAssetId(version:string,itemId:string):string{
+  if(version==="legacy") return `item:legacy:${itemId}`;
+  if(version==="aurion_v2") return `item:aurion_v2:${itemId}`;
+  throw new Error("ECONOMIC_GUILD_ITEM_VERSION_INVALID");
+}
+
 async function deriveProgressionPoints(tx:Tx,sourceId:string){
   const row=(await tx.select().from(progressionLedger).where(eq(progressionLedger.id,sourceId)).limit(1))[0];
   if(!row) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
@@ -143,6 +162,105 @@ async function deriveProgressionPoints(tx:Tx,sourceId:string){
   });
 }
 
+async function deriveGuildBank(tx:Tx,sourceId:string){
+  const row=(await tx.select().from(aurionGuildBankReceipts).where(eq(aurionGuildBankReceipts.receiptId,sourceId)).limit(1))[0];
+  if(!row) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
+  let result:Record<string,unknown>;
+  try{
+    const parsed=JSON.parse(row.resultJson) as unknown;
+    if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)) throw new Error("shape");
+    result=parsed as Record<string,unknown>;
+  }catch{throw new Error("ECONOMIC_GUILD_RESULT_JSON_INVALID");}
+  if(guildBankHash(result)!==row.resultHash) throw new Error("ECONOMIC_GUILD_RESULT_HASH_MISMATCH");
+  const sourceEvidenceHash=guildBankSourceEvidenceHash(row);
+  const guildTreasury=`guild:${row.guildId}:treasury`;
+  const resourceDeltas:Array<{resourceId:string;accountId:string;deltaExact:string}>=[];
+  const assetTransitions:Array<{assetId:string;transitionKind:"create"|"transfer"|"consume";fromOwnerId:string|null;toOwnerId:string|null}>=[];
+
+  if(row.operation==="deposit_points"||row.operation==="withdraw_points"){
+    const amount=positiveExact(result.amountExact,"ECONOMIC_GUILD_AMOUNT");
+    const ledger=await tx.select().from(aurionGuildTreasuryLedger).where(eq(aurionGuildTreasuryLedger.receiptId,row.receiptId)).limit(2);
+    if(ledger.length!==1) throw new Error("ECONOMIC_GUILD_TREASURY_LEDGER_UNPROVABLE");
+    const entry=ledger[0]!;
+    const expectedDirection=row.operation==="deposit_points"?"credit":"debit";
+    const expectedReason=row.operation==="deposit_points"?"player_deposit":"player_withdrawal";
+    if(entry.guildId!==row.guildId||entry.actorUserId!==row.actorUserId||entry.direction!==expectedDirection||entry.reason!==expectedReason||String(entry.amount)!==amount||
+      String(entry.balanceBefore)!==String(result.treasuryBeforeExact)||String(entry.balanceAfter)!==String(result.treasuryAfterExact)) {
+      throw new Error("ECONOMIC_GUILD_TREASURY_LEDGER_MISMATCH");
+    }
+    if(row.operation==="deposit_points"){
+      resourceDeltas.push({resourceId:"aurion_points",accountId:`user:${row.actorUserId}`,deltaExact:`-${amount}`});
+      resourceDeltas.push({resourceId:"aurion_points",accountId:guildTreasury,deltaExact:amount});
+    }else{
+      resourceDeltas.push({resourceId:"aurion_points",accountId:guildTreasury,deltaExact:`-${amount}`});
+      resourceDeltas.push({resourceId:"aurion_points",accountId:`user:${row.actorUserId}`,deltaExact:amount});
+    }
+  }else if(row.operation==="deposit_item"||row.operation==="withdraw_item"){
+    const version=String(result.itemRecordVersion);
+    const itemId=String(result.itemId);
+    const assetId=guildAssetId(version,itemId);
+    const ledger=await tx.select().from(aurionGuildItemCustodyLedger).where(eq(aurionGuildItemCustodyLedger.receiptId,row.receiptId)).limit(2);
+    if(ledger.length!==1) throw new Error("ECONOMIC_GUILD_CUSTODY_LEDGER_UNPROVABLE");
+    const entry=ledger[0]!;
+    const expectedEvent=row.operation==="deposit_item"?"deposit":"withdrawal";
+    if(entry.guildId!==row.guildId||entry.actorUserId!==row.actorUserId||entry.eventType!==expectedEvent||entry.itemRecordVersion!==version||entry.itemId!==itemId) {
+      throw new Error("ECONOMIC_GUILD_CUSTODY_LEDGER_MISMATCH");
+    }
+    if(row.operation==="deposit_item"){
+      if(entry.previousOwnerUserId!==row.actorUserId||entry.resultingOwnerUserId!==null) throw new Error("ECONOMIC_GUILD_CUSTODY_LEDGER_MISMATCH");
+      assetTransitions.push({assetId,transitionKind:"transfer",fromOwnerId:`user:${row.actorUserId}`,toOwnerId:`guild:${row.guildId}:custody`});
+    }else{
+      if(entry.resultingOwnerUserId!==row.actorUserId) throw new Error("ECONOMIC_GUILD_CUSTODY_LEDGER_MISMATCH");
+      const deposits=await tx.select().from(aurionGuildItemCustodyLedger).where(and(
+        eq(aurionGuildItemCustodyLedger.custodyId,entry.custodyId),
+        eq(aurionGuildItemCustodyLedger.eventType,"deposit"),
+      )).limit(2);
+      if(deposits.length!==1||deposits[0]!.guildId!==row.guildId||deposits[0]!.itemRecordVersion!==version||deposits[0]!.itemId!==itemId) {
+        throw new Error("ECONOMIC_GUILD_CUSTODY_ORIGIN_UNPROVABLE");
+      }
+      assetTransitions.push({assetId,transitionKind:"transfer",fromOwnerId:`guild:${row.guildId}:custody`,toOwnerId:`user:${row.actorUserId}`});
+    }
+  }else if(row.operation==="donate_resource_item"){
+    const version=String(result.itemRecordVersion),itemId=String(result.itemId),resourceKey=String(result.resourceKey);
+    const amount=positiveExact(result.amountExact,"ECONOMIC_GUILD_RESOURCE_AMOUNT");
+    const ledger=await tx.select().from(aurionGuildResourceLedger).where(eq(aurionGuildResourceLedger.sourceReceiptId,row.receiptId)).limit(2);
+    if(ledger.length!==1) throw new Error("ECONOMIC_GUILD_RESOURCE_LEDGER_UNPROVABLE");
+    const entry=ledger[0]!;
+    if(entry.guildId!==row.guildId||entry.resourceKey!==resourceKey||entry.direction!=="credit"||String(entry.amount)!==amount||
+      entry.sourceItemRecordVersion!==version||entry.sourceItemId!==itemId||String(entry.balanceBefore)!==String(result.balanceBeforeExact)||String(entry.balanceAfter)!==String(result.balanceAfterExact)) {
+      throw new Error("ECONOMIC_GUILD_RESOURCE_LEDGER_MISMATCH");
+    }
+    assetTransitions.push({assetId:guildAssetId(version,itemId),transitionKind:"consume",fromOwnerId:`user:${row.actorUserId}`,toOwnerId:null});
+    resourceDeltas.push({resourceId:`guild_resource:${resourceKey}`,accountId:"system:guild_conversion",deltaExact:`-${amount}`});
+    resourceDeltas.push({resourceId:`guild_resource:${resourceKey}`,accountId:`guild:${row.guildId}:resources`,deltaExact:amount});
+  }else if(row.operation==="upgrade_building"){
+    const treasury=await tx.select().from(aurionGuildTreasuryLedger).where(eq(aurionGuildTreasuryLedger.receiptId,row.receiptId)).limit(2);
+    if(treasury.length!==1||treasury[0]!.guildId!==row.guildId||treasury[0]!.direction!=="debit"||treasury[0]!.reason!=="building_upgrade") {
+      throw new Error("ECONOMIC_GUILD_BUILDING_TREASURY_UNPROVABLE");
+    }
+    const costs=result.costExact as Record<string,unknown>;
+    const points=positiveExact(costs?.points,"ECONOMIC_GUILD_BUILDING_POINTS");
+    if(String(treasury[0]!.amount)!==points) throw new Error("ECONOMIC_GUILD_BUILDING_TREASURY_MISMATCH");
+    resourceDeltas.push({resourceId:"aurion_points",accountId:guildTreasury,deltaExact:`-${points}`});
+    resourceDeltas.push({resourceId:"aurion_points",accountId:"system:building",deltaExact:points});
+    const resources=await tx.select().from(aurionGuildResourceLedger).where(eq(aurionGuildResourceLedger.sourceReceiptId,row.receiptId)).limit(4);
+    const byKey=new Map(resources.map(entry=>[entry.resourceKey,entry] as const));
+    for(const key of ["wood","stone","aether"] as const){
+      const raw=String(costs?.[key]??"0");
+      if(!/^(0|[1-9][0-9]*)$/.test(raw)) throw new Error("ECONOMIC_GUILD_BUILDING_RESOURCE_INVALID");
+      const entry=byKey.get(key);
+      if(!entry||entry.guildId!==row.guildId||entry.direction!=="debit"||String(entry.amount)!==raw) throw new Error("ECONOMIC_GUILD_BUILDING_RESOURCE_MISMATCH");
+      if(raw!=="0"){
+        resourceDeltas.push({resourceId:`guild_resource:${key}`,accountId:`guild:${row.guildId}:resources`,deltaExact:`-${raw}`});
+        resourceDeltas.push({resourceId:`guild_resource:${key}`,accountId:"system:building",deltaExact:raw});
+      }
+    }
+  }else{
+    throw new Error("ECONOMIC_GUILD_OPERATION_UNSUPPORTED");
+  }
+  return Object.freeze({eventType:"economic_transition" as const,sourceEvidenceHash,resourceDeltas:Object.freeze(resourceDeltas),assetTransitions:Object.freeze(assetTransitions)});
+}
+
 async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string){
   if(kind==="trade_crafting") return deriveTradeCrafting(tx,sourceId);
   if(kind==="loot_v1") return deriveLootV1(tx,sourceId);
@@ -150,6 +268,7 @@ async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string)
   if(kind==="market_transaction") return deriveMarketTransaction(tx,sourceId);
   if(kind==="system_sale") return deriveSystemSale(tx,sourceId);
   if(kind==="progression_points") return deriveProgressionPoints(tx,sourceId);
+  if(kind==="guild_bank") return deriveGuildBank(tx,sourceId);
   throw new Error("ECONOMIC_SOURCE_KIND_UNSUPPORTED");
 }
 
