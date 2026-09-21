@@ -51,6 +51,13 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
     });
     expect((await appendTemporalEvent(second)).applied).toBe(true);
 
+    const backwards=createTemporalEvent({
+      eventId:"event:backwards:1",worldId:WORLD_ID,epoch:1,domain:"world",subjectIds:["cause:backwards"],validFromEpoch:2,
+      sourceReceiptHash:firstTick.receiptHash,sourceWorldRoot:firstRoot.worldRootHash,sourceRevision:firstRoot.sourceRevision,rulesetVersion:firstRoot.rulesetVersion,
+      predecessorEventIds:[second.eventId],payload:{state:"MUST_NOT_PERSIST"},
+    });
+    await expect(appendTemporalEvent(backwards)).rejects.toThrow("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
+
     const unboundReceipt=createTemporalEvent({
       eventId:"event:receipt:unbound",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["evidence:unbound"],
       sourceReceiptHash:"sha256:"+"f".repeat(64),sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
@@ -99,6 +106,12 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
     const convergent=await globalCausalHistoryExplainService.explainFactAtEpoch({worldId:WORLD_ID,targetFactOrEventId:merge.eventId,epoch:2});
     expect(convergent).toMatchObject({status:"MATCH",mutationAuthority:"none",rootEvidenceReached:true});
     expect(convergent.chain.map(step=>step.eventId)).toEqual(["event:diamond:merge","event:diamond:left","event:diamond:right","event:mine:1"]);
+
+    const worldWide=await globalHistoricalWorldStateService.reconstructStateAtEpoch({worldId:WORLD_ID,epoch:2});
+    expect(worldWide).toMatchObject({status:"MATCH",mutationAuthority:"none"});
+    expect(worldWide.facts.some(fact=>fact.eventId===first.eventId&&fact.subjectId==="poi:ember-mine")).toBe(false);
+    expect(worldWide.facts.some(fact=>fact.eventId===first.eventId&&fact.subjectId==="faction:iron-vanguard")).toBe(false);
+    expect(worldWide.facts.some(fact=>fact.eventId===merge.eventId&&fact.subjectId==="cause:merge")).toBe(true);
 
     const raw=await mysql.createConnection(process.env.DATABASE_URL!);
     try {
