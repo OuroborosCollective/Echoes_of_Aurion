@@ -82,7 +82,7 @@ export function WorldLoadingScreen(props: {
   worldAssets: WorldAssetLoadingEvidence | null;
 }) {
   const state = deriveWorldLoadingState(props);
-  if (state.ready) return null;
+  if (state.ready && !state.degraded) return null;
 
   const chunkLabel = props.chunks
     ? `${props.chunks.count} bestätigt / ${props.chunks.desiredCount} erwartet${props.chunks.failedCount ? ` · ${props.chunks.failedCount} fail-closed` : ""}`

@@ -70,3 +70,19 @@ describe("WorldLoadingScreen", () => {
     expect(status.getAttribute("data-mode")).toBe("non-blocking");
     expect(status.className).toContain("pointer-events-none");
   });
+
+
+it("keeps degraded fallback evidence visible without blocking controls", () => {
+  render(
+    <WorldLoadingScreen
+      rendererReady
+      chunks={{ status: "UNPROVABLE", count: 8, desiredCount: 9, pendingCount: 0, failedCount: 1 }}
+      modelStatus="failed"
+      worldAssets={{ version: null, planned: 0, rendered: 0, loading: 0, failed: 1 }}
+    />,
+  );
+  const status = screen.getByTestId("world-loading-screen");
+  expect(status.getAttribute("data-mode")).toBe("non-blocking");
+  expect(status.className).toContain("pointer-events-none");
+  expect(screen.getByText("Welt bereit mit transparentem Präsentations-Fallback.")).toBeDefined();
+});
