@@ -39,13 +39,13 @@ export class HistoricalWorldStateService {
     if(requiredWorldRoot&&!active.some(event=>event.sourceWorldRoot===requiredWorldRoot)) return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:"WORLD_ROOT_MISMATCH"};
 
     const bySubject=new Map<string,string>();
-    for(const event of active) for(const subject of event.subjectIds){
+    for(const event of active) for(const subject of (subjectId?event.subjectIds.filter(value=>value===subjectId):event.subjectIds)){
       const key=`${event.domain}::${subject}`,payload=canonicalJson(event.payload),existing=bySubject.get(key);
       if(existing!==undefined&&existing!==payload) return {...base,status:"CONTRADICTED",activeEventsCount:active.length,reason:`CONTRADICTING_FACTS_FOR_SUBJECT:${key}`};
       bySubject.set(key,payload);
     }
     const facts:TemporalFactRecord[]=[];
-    for(const event of active) for(const subject of event.subjectIds) facts.push(Object.freeze({
+    for(const event of active) for(const subject of (subjectId?event.subjectIds.filter(value=>value===subjectId):event.subjectIds)) facts.push(Object.freeze({
       factId:`fact_${event.eventId}_${canonicalSha256(subject).slice(-12)}`,eventId:event.eventId,eventHash:event.eventHash,subjectId:subject,domain:event.domain,
       validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,state:event.payload,evidenceReceiptHash:event.sourceReceiptHash,
       sourceWorldRoot:event.sourceWorldRoot,sourceRevision:event.sourceRevision,rulesetVersion:event.rulesetVersion,predecessorEventIds:event.predecessorEventIds,
