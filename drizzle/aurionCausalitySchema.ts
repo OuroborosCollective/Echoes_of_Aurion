@@ -202,9 +202,8 @@ export const aurionEconomicEvents = mysqlTable("aurionEconomicEvents", {
 }, table => [
   uniqueIndex("aurionEconomicEvents_world_ordinal_uq").on(table.worldId, table.ordinal),
   uniqueIndex("aurionEconomicEvents_event_hash_uq").on(table.eventHash),
-  uniqueIndex("aurionEconomicEvents_source_temporal_uq").on(table.sourceKind, table.sourceId, table.temporalEventId),
+  uniqueIndex("aurionEconomicEvents_source_uq").on(table.sourceKind, table.sourceId),
   index("aurionEconomicEvents_world_epoch_idx").on(table.worldId, table.epoch),
-  index("aurionEconomicEvents_source_idx").on(table.sourceKind, table.sourceId),
 ]);
 
 export const aurionEconomicResourceDeltas = mysqlTable("aurionEconomicResourceDeltas", {
