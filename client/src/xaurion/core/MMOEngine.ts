@@ -113,14 +113,22 @@ export class MMOEngine {
   private aoeEffects: ActiveAoEEffect[] = [];
 
   // 3rd-Person Orbit & Follow Camera with Ax1CameraDirector
-  public readonly cameraDirector: Ax1CameraDirector = new Ax1CameraDirector({
-    baseFov: 58,
-    lookAheadDistance: 2.2,
-    lookAheadSpeed: 4.5,
-    minGroundClearance: 0.85,
-    autoFollowDelay: 1.5,
-    autoFollowRate: 1.8,
-  });
+  public readonly cameraDirector: Ax1CameraDirector = (() => {
+    const director = new Ax1CameraDirector({
+      baseFov: 58,
+      lookAheadDistance: 2.2,
+      lookAheadSpeed: 4.5,
+      minGroundClearance: 0.85,
+      autoFollowDelay: 1.5,
+      autoFollowRate: 1.8,
+    });
+    // Aurion movement is intentionally camera-relative. Autonomous yaw following
+    // would therefore change the authoritative movement intent without new user
+    // orbit input. Keep look-ahead/zoom/terrain smoothing, but only user input may
+    // rotate the production camera while cameraYaw participates in intent mapping.
+    director.autoFollowEnabled = false;
+    return director;
+  })();
   public get cameraDistance(): number { return this.cameraDirector.getDistance(); }
   public set cameraDistance(val: number) { this.cameraDirector.setTargetDistance(val); }
   public get cameraHeight(): number { return this.cameraDirector.getState().height; }
