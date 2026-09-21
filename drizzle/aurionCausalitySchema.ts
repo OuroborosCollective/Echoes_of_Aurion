@@ -178,18 +178,6 @@ export const aurionEffectDeliveryReceipts = mysqlTable("aurionEffectDeliveryRece
 
 
 
-export const aurionEconomicProjectionIntents = mysqlTable("aurionEconomicProjectionIntents", {
-  intentId: varchar("intentId", { length: 96 }).primaryKey(),
-  sourceKind: mysqlEnum("sourceKind", ["trade_crafting","loot_v1","loot_v2","market_transaction","system_sale","guild_bank","progression_points"]).notNull(),
-  sourceId: varchar("sourceId", { length: 128 }).notNull(),
-  sourceEvidenceHash: varchar("sourceEvidenceHash", { length: 96 }).notNull(),
-  intentHash: varchar("intentHash", { length: 96 }).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [
-  uniqueIndex("aurionEconomicProjectionIntents_source_uq").on(table.sourceKind, table.sourceId),
-  uniqueIndex("aurionEconomicProjectionIntents_hash_uq").on(table.intentHash),
-]);
-
 export const aurionEconomicLedgerCoordinator = mysqlTable("aurionEconomicLedgerCoordinator", {
   worldId: varchar("worldId", { length: 64 }).primaryKey(),
   nextOrdinal: bigint("nextOrdinal", { mode: "bigint", unsigned: true }).default(1n).notNull(),
