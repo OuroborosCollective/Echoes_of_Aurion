@@ -36,7 +36,7 @@ CREATE TABLE `aurionEconomicEvents` (
   UNIQUE KEY `aurionEconomicEvents_world_ordinal_uq` (`worldId`,`ordinal`),
   UNIQUE KEY `aurionEconomicEvents_event_hash_uq` (`eventHash`),
   UNIQUE KEY `aurionEconomicEvents_source_uq` (`sourceKind`,`sourceId`),
-  KEY `aurionEconomicEvents_world_epoch_idx` (`worldId`,`epoch`),
+  KEY `aurionEconomicEvents_world_epoch_idx` (`worldId`,`epoch`)
 );
 --> statement-breakpoint
 CREATE TABLE `aurionEconomicResourceDeltas` (
