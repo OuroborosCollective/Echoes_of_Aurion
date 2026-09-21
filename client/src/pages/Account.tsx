@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { readCompanionDataset } from "@/lib/companionLearning";
 import { PublicCharacterPicker } from "@/xaurion/components/PublicCharacterPicker";
 import { AchievementsGallery } from "@/components/AchievementsGallery";
+import { CharacterProgressionChart } from "@/components/CharacterProgressionChart";
 
 /** Aurion account portal: persisted readbacks plus the explicit immutable public appearance binding. */
 export default function Account() {
@@ -45,6 +46,12 @@ export default function Account() {
       <section className="rounded-3xl border border-cyan-300/20 bg-[#0b2024]/90 p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold tracking-[.2em] text-cyan-300">ACCOUNT</p><h2 className="mt-2 font-serif text-3xl text-amber-100">{user?.name ?? `Explorer ${user?.id}`}</h2><p className="mt-2 text-sm text-slate-300">Aurion verwaltet Sitzung, Community und persistente Daten. Diese Seite verändert keine Spielregeln; nur die ausdrücklich bestätigte einmalige öffentliche Modellwahl darf persistiert werden.</p></div><button type="button" disabled={loading} onClick={() => void logout().then(() => { window.location.href = "/"; })} className="min-h-11 rounded-xl border border-slate-500/50 px-4"><LogOut className="mr-2 inline size-4"/>Abmelden</button></div></section>
 
       <PublicCharacterPicker />
+
+      <CharacterProgressionChart
+        profile={profile}
+        progression={progression}
+        craftingProgression={crafting.data?.progression?.progression}
+      />
 
       <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-2xl border border-slate-500/35 bg-black/20 p-5"><UserRound className="mb-3 size-5 text-cyan-300"/><h3 className="font-semibold">Charakterstand</h3>{profile ? <div className="mt-3 space-y-1 text-sm text-slate-300"><p>Archetyp <b className="text-white">klassenlos</b></p><p>Progressionspfade <b className="text-white">{progression?.tracks.length ?? 0}</b></p><p>Siege <b className="text-white">{profile.victories}</b></p><p>Aurion <b className="text-white">{profile.aurionPoints}</b></p><p className="pt-2 text-xs text-slate-500">Aggregiertes Charakterlevel und Gesamt-EP werden hier nicht aus Legacy-Aurion abgeleitet. Sie erscheinen erst nach Bindung eines kanonischen WASD-Snapshots.</p></div> : <p className="mt-3 text-sm text-slate-400">Kein bestätigter Charakter-Readback verfügbar.</p>}</article>
