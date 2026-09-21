@@ -7,7 +7,7 @@ import {
 } from "../../drizzle/aurionCausalitySchema";
 import {
   itemInstances, lootDropReceipts, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts,
-  marketTransactionReceipts, systemSaleReceipts,
+  marketTransactionReceipts, progressionLedger, systemSaleReceipts,
 } from "../../drizzle/schema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { createEconomicEvent, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
@@ -17,7 +17,7 @@ import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
 import {
   lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, marketTransactionSourceEvidenceHash,
-  systemSaleSourceEvidenceHash, tradeCraftingSourceEvidenceHash,
+  progressionPointsSourceEvidenceHash, systemSaleSourceEvidenceHash, tradeCraftingSourceEvidenceHash,
 } from "./economicSourceEvidence";
 
 type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -128,12 +128,28 @@ async function deriveSystemSale(tx:Tx,sourceId:string){
   });
 }
 
+async function deriveProgressionPoints(tx:Tx,sourceId:string){
+  const row=(await tx.select().from(progressionLedger).where(eq(progressionLedger.id,sourceId)).limit(1))[0];
+  if(!row) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
+  if(row.kind!=="points"||!Number.isSafeInteger(row.delta)||row.delta<=0) throw new Error("ECONOMIC_PROGRESSION_POINTS_RECEIPT_INVALID");
+  return Object.freeze({
+    eventType:"economic_transition" as const,
+    sourceEvidenceHash:progressionPointsSourceEvidenceHash(row),
+    resourceDeltas:Object.freeze([
+      Object.freeze({resourceId:"aurion_points",accountId:"system:progression",deltaExact:`-${row.delta}`}),
+      Object.freeze({resourceId:"aurion_points",accountId:`user:${row.userId}`,deltaExact:String(row.delta)}),
+    ]),
+    assetTransitions:Object.freeze([]),
+  });
+}
+
 async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string){
   if(kind==="trade_crafting") return deriveTradeCrafting(tx,sourceId);
   if(kind==="loot_v1") return deriveLootV1(tx,sourceId);
   if(kind==="loot_v2") return deriveLootV2(tx,sourceId);
   if(kind==="market_transaction") return deriveMarketTransaction(tx,sourceId);
   if(kind==="system_sale") return deriveSystemSale(tx,sourceId);
+  if(kind==="progression_points") return deriveProgressionPoints(tx,sourceId);
   throw new Error("ECONOMIC_SOURCE_KIND_UNSUPPORTED");
 }
 
