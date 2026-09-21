@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { aurionEconomicProjectionIntents } from "../../drizzle/aurionCausalitySchema";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 import type { AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
-import { getDb } from "../db";
+import type { DatabaseTransaction } from "../db";
 
 const ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH=/^sha256:[a-f0-9]{64}$/;
@@ -32,9 +32,7 @@ export function buildEconomicProjectionIntent(input:Readonly<{
   });
 }
 
-type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
-type Tx=Parameters<Parameters<Database["transaction"]>[0]>[0];
-type IntentWriter=Pick<Tx,"select"|"insert">;
+type IntentWriter=Pick<DatabaseTransaction,"select"|"insert">;
 
 export async function appendEconomicProjectionIntentInTransaction(
   tx:IntentWriter,
