@@ -32,6 +32,11 @@ import {
   planOpenSource3dFallback,
   searchOpenSource3dFallback,
 } from "./openSource3dFallback";
+import {
+  automaticGlbFallbackReconcileInputSchema,
+  reconcileAutomaticGlbFallback,
+  scanAutomaticGlbFallback,
+} from "./automaticGlbFallback";
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import type { ZoneId } from "./zoneProtocol";
 import { WORLD_CHUNK_BASE_REVISION, WORLD_CHUNK_COORDINATE_LIMIT } from "./worldChunkProtocol";
@@ -462,6 +467,11 @@ export const appRouter = router({
       os3aApply: adminProcedure
         .input(os3aApplyInputSchema)
         .mutation(({ ctx, input }) => applyOpenSource3dFallback(ctx.user.id, input)),
+      os3aGapScan: adminProcedure
+        .query(() => scanAutomaticGlbFallback()),
+      os3aGapReconcile: adminProcedure
+        .input(automaticGlbFallbackReconcileInputSchema)
+        .mutation(({ ctx, input }) => reconcileAutomaticGlbFallback(ctx.user.id, input)),
       gameDevPlan: adminProcedure
         .input(gameDevelopmentStudioLiveAssetInputSchema)
         .mutation(({ input }) => planGameDevelopmentStudioLiveAsset(input)),

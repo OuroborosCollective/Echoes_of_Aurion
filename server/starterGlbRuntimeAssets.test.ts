@@ -29,6 +29,20 @@ describe("starter GLB runtime assignment readback", () => {
     ]);
   });
 
+
+  it("reuses the nearest real beast GLB when optional physical LODs are absent", async () => {
+    const result = await resolveStarterGlbRuntimeAssets(async (_type, key) => key === STARTER_GLB_TARGET_KEYS.beastLods[0]
+      ? { assetId: "asset_beast_lod0", storageUrl: "https://assets.example/beast-lod0.glb" }
+      : null);
+
+    expect(result.beastLods.map(asset => asset?.assetId)).toEqual([
+      "asset_beast_lod0",
+      "asset_beast_lod0",
+      "asset_beast_lod0",
+      "asset_beast_lod0",
+    ]);
+  });
+
   it("represents missing approved assignments as null instead of inventing assets", async () => {
     const result = await resolveStarterGlbRuntimeAssets(async (_type, key) => key === STARTER_GLB_TARGET_KEYS.spider
       ? { assetId: "asset_spider", storageUrl: "https://assets.example/spider.glb" }

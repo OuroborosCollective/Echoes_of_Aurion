@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
-type LivePurpose = "npc-fallback" | "world-environment" | "world-nature" | "player-public" | "equipment";
+type LivePurpose = "npc-fallback" | "enemy-fallback" | "world-environment" | "world-nature" | "player-public" | "equipment";
 type FallbackTier = "phone" | "tablet" | "desktop";
 
 const purposes: readonly { value: LivePurpose; label: string }[] = [
   { value: "world-environment", label: "Welt / Umgebung" },
   { value: "world-nature", label: "Natur" },
   { value: "npc-fallback", label: "NPC-Fallback" },
+  { value: "enemy-fallback", label: "Gegner-Fallback" },
   { value: "player-public", label: "Öffentlicher Spieler-Avatar" },
   { value: "equipment", label: "Ausrüstung" },
 ];
@@ -47,9 +48,21 @@ export default function GameDevelopmentStudioWorkbench() {
   const [fileError, setFileError] = useState<string | null>(null);
 
   const fallbackSource = trpc.admin.developer.os3aSource.useQuery();
+  const fallbackGapScan = trpc.admin.developer.os3aGapScan.useQuery();
+  const fallbackGapReconcile = trpc.admin.developer.os3aGapReconcile.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.admin.assets.list.invalidate(),
+        fallbackGapScan.refetch(),
+      ]);
+    },
+  });
   const fallbackSearch = trpc.admin.developer.os3aSearch.useMutation({
     onSuccess: result => {
-      const first = result.matches.find(match => !match.discoveryOnly && match.transferBudgetFit);
+      const first = result.matches.find(match =>
+        match.transferBudgetFit
+        && (!match.discoveryOnly || (purpose === "enemy-fallback" && match.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE"))
+      );
       setFallbackSelectedId(first?.sourceAssetId ?? null);
       fallbackPlan.reset();
       fallbackApply.reset();
@@ -139,6 +152,64 @@ export default function GameDevelopmentStudioWorkbench() {
         </CardContent>
       </Card>
 
+      <Card className="border-violet-200/15 bg-slate-950/70">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-100">
+            <Search className="h-5 w-5 text-violet-300" /> Automatische GLB-Lückenerkennung
+          </CardTitle>
+          <CardDescription>
+            Aurion prüft 18 kanonische, rein visuelle Anforderungen inklusive des direkten Asterion-Courtyard-Slots. Die Auswahl ist deterministisch, Phone-Budget ist der kleinste gemeinsame Nenner und vorhandene Assignments werden niemals ersetzt.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          {fallbackGapScan.data && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{fallbackGapScan.data.satisfiedCount}/{fallbackGapScan.data.requirementCount} bereits versorgt</Badge>
+                <Badge variant="outline">{fallbackGapScan.data.missingCount} Lücken</Badge>
+                <Badge variant="outline">missing-only</Badge>
+                <Badge variant="outline">Phone-Budget</Badge>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {fallbackGapScan.data.gaps.map(gap => (
+                  <div key={gap.id} className="rounded-lg border border-violet-200/10 bg-violet-300/[.025] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-amber-100">{gap.label}</span>
+                      <Badge variant="outline">{gap.status}</Badge>
+                    </div>
+                    {gap.selectedCandidate && gap.status !== "SATISFIED" && (
+                      <p className="mt-1 text-xs text-slate-400">
+                        → {gap.selectedCandidate.name} · Score {gap.selectedCandidate.semanticScore} · Abstand {gap.selectedCandidate.scoreMargin}
+                      </p>
+                    )}
+                    {gap.assignmentTarget && <p className="mt-1 font-mono text-[10px] text-slate-500">{gap.assignmentTarget}</p>}
+                  </div>
+                ))}
+              </div>
+              {fallbackGapScan.data.missingCount > 0 && (
+                <Button
+                  type="button"
+                  disabled={fallbackGapReconcile.isPending}
+                  onClick={() => fallbackGapReconcile.mutate({ confirmation: "RECONCILE_MISSING_VISUAL_FALLBACKS" })}
+                  className="bg-violet-500 text-white hover:bg-violet-400"
+                >
+                  {fallbackGapReconcile.isPending ? "Deterministische Prüfung + Admission läuft…" : "Alle sicheren visuellen Lücken automatisch füllen"}
+                </Button>
+              )}
+            </>
+          )}
+          {fallbackGapScan.isLoading && <p className="text-slate-400">Visuelle Lücken werden gelesen…</p>}
+          {fallbackGapScan.error && <p className="text-red-300">{fallbackGapScan.error.message}</p>}
+          {fallbackGapReconcile.data && (
+            <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/[.03] p-3 text-xs">
+              <p className="text-emerald-200">{fallbackGapReconcile.data.actions.length} Lücken gefüllt · {fallbackGapReconcile.data.remaining.length} verbleibend · überschrieben: nein</p>
+              <p className="mt-1 break-all font-mono text-[10px] text-slate-500">Receipt {fallbackGapReconcile.data.receiptSha256}</p>
+            </div>
+          )}
+          {fallbackGapReconcile.error && <p className="text-red-300">{fallbackGapReconcile.error.message}</p>}
+        </CardContent>
+      </Card>
+
       <Card className="border-emerald-200/15 bg-slate-950/70">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-amber-100">
@@ -212,7 +283,8 @@ export default function GameDevelopmentStudioWorkbench() {
           {fallbackSearch.data && (
             <div className="grid gap-2 md:grid-cols-2">
               {fallbackSearch.data.matches.map(match => {
-                const selectable = match.transferBudgetFit && !match.discoveryOnly;
+                const selectable = match.transferBudgetFit
+                  && (!match.discoveryOnly || (purpose === "enemy-fallback" && match.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE"));
                 const selected = fallbackSelectedId === match.sourceAssetId;
                 return (
                   <button

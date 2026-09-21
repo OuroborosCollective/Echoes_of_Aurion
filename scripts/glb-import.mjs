@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const MAX_BYTES = 24 * 1024 * 1024;
-const PURPOSES = ['auto', 'npc-fallback', 'world-environment', 'world-nature', 'player-public', 'equipment'];
+const PURPOSES = ['auto', 'npc-fallback', 'enemy-fallback', 'world-environment', 'world-nature', 'player-public', 'equipment'];
 export async function readAsset(filename) {
   if (!/\.glb$/i.test(filename)) throw new Error('GLB_EXTENSION_REQUIRED');
   const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -39,6 +39,7 @@ export async function importAsset(filename, token, { dryRun = false, purpose = '
   if (plan.version !== 'aurion.glb-import.v1' || plan.purpose !== purpose || plan.sha256 !== sha256 || plan.bytes !== bytes.length || !/^[a-f0-9]{64}$/.test(plan.planSha256)) throw new Error('GLB_PLAN_READBACK_FAILED');
   if (purpose !== 'auto' && plan.targetKey !== null) throw new Error('GLB_PURPOSE_TARGET_INVALID');
   if (purpose === 'npc-fallback' && plan.assetType !== 'character') throw new Error('GLB_NPC_FALLBACK_PLAN_INVALID');
+  if (purpose === 'enemy-fallback' && plan.assetType !== 'enemy') throw new Error('GLB_ENEMY_FALLBACK_PLAN_INVALID');
   if (purpose === 'player-public' && plan.assetType !== 'character') throw new Error('GLB_PUBLIC_PLAYER_PLAN_INVALID');
   if (purpose === 'world-environment' && (plan.assetType !== 'arena' || plan.worldFamily !== 'environment')) throw new Error('GLB_WORLD_ENVIRONMENT_PLAN_INVALID');
   if (purpose === 'world-nature' && (plan.assetType !== 'arena' || plan.worldFamily !== 'nature')) throw new Error('GLB_WORLD_NATURE_PLAN_INVALID');

@@ -39,6 +39,7 @@ export function buildLiveDeveloperGuardrails() {
 
 const GAME_DEV_DESIGN_PURPOSES = [
   "npc-fallback",
+  "enemy-fallback",
   "world-environment",
   "world-nature",
   "player-public",

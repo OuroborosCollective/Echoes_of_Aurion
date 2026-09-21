@@ -16,6 +16,7 @@ import {
 
 const LIVE_GAME_DEV_PURPOSES = [
   "npc-fallback",
+  "enemy-fallback",
   "world-environment",
   "world-nature",
   "player-public",

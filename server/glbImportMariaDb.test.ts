@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { GlbImportStore } from "./glbImportStore";
 import { buildGlbImportPlan } from "./glbImportPlan";
-import { testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
+import { testAnimatedEnemyGlb, testAnimatedPlayerGlb, testGlb } from "./glbImportFixtures";
 
 const enabled = process.env.AURION_GLB_DB_TEST === "1";
 describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () => {
@@ -70,6 +70,48 @@ describe.skipIf(!enabled)("GLB import with real MariaDB and durable files", () =
       npcId: "lyra",
       expectedActiveAssetId: "glb_wrong000",
     })).rejects.toThrow("GLB_ASSIGNMENT_CHANGED");
+  }, 45_000);
+
+  it("assigns an approved enemy fallback only into an empty starter target and never overwrites it", async () => {
+    const bytes = testAnimatedEnemyGlb("Aurion_Spider_Monster");
+    const contentBase64 = bytes.toString("base64");
+    const plan = buildGlbImportPlan(contentBase64, "enemy-fallback", "Aurion_Spider_Monster.glb");
+    expect(plan).toMatchObject({ assetType: "enemy", subcategory: "spider", targetKey: null });
+    const receipt = await store.ingest(admin, {
+      displayName: "OS3A spider fallback",
+      fileName: "Aurion_Spider_Monster.glb",
+      contentBase64,
+      purpose: "enemy-fallback",
+      expectedPlanSha256: plan.planSha256,
+    });
+    expect(receipt.status).toBe("catalog");
+
+    await expect(store.assignAutomaticFallback(member, {
+      assetId: receipt.assetId,
+      targetType: "enemy",
+      targetKey: "starter_spider",
+      expectedActiveAssetId: null,
+    })).rejects.toThrow("GLB_ADMIN_REQUIRED");
+
+    const assigned = await store.assignAutomaticFallback(admin, {
+      assetId: receipt.assetId,
+      targetType: "enemy",
+      targetKey: "starter_spider",
+      expectedActiveAssetId: null,
+    });
+    expect(assigned).toMatchObject({ assetId: receipt.assetId, targetKey: "starter_spider", active: 1, changed: true });
+
+    await expect(store.assignAutomaticFallback(admin, {
+      assetId: receipt.assetId,
+      targetType: "enemy",
+      targetKey: "starter_spider",
+      expectedActiveAssetId: null,
+    })).rejects.toThrow("GLB_AUTOMATIC_FALLBACK_TARGET_ALREADY_FILLED");
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT assetId, targetKey, active FROM glbAssignments WHERE targetType='enemy' AND targetKey='starter_spider' AND active=1",
+    );
+    expect(rows).toEqual([expect.objectContaining({ assetId: receipt.assetId, targetKey: "starter_spider", active: 1 })]);
   }, 45_000);
 
   it("persists immutable external fallback provenance atomically with the admitted local GLB", async () => {

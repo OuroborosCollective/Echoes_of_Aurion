@@ -3,6 +3,7 @@ import { createPool, type Pool, type PoolConnection, type RowDataPacket } from "
 import { operationalDate } from "../shared/operationalClock";
 import { isConfiguredDatabaseUrl } from "./db";
 import {
+  ENEMY_FALLBACK_DISPLAY_PREFIX,
   EQUIPMENT_DISPLAY_PREFIX,
   GLB_IMPORT_VERSION,
   NPC_FALLBACK_DISPLAY_PREFIX,
@@ -29,6 +30,7 @@ import { groupGlbCatalogRows } from "./glbCatalogFamilies";
 
 const PURPOSE_PREFIXES = [
   NPC_FALLBACK_DISPLAY_PREFIX,
+  ENEMY_FALLBACK_DISPLAY_PREFIX,
   WORLD_ENVIRONMENT_DISPLAY_PREFIX,
   WORLD_NATURE_DISPLAY_PREFIX,
   PUBLIC_PLAYER_DISPLAY_PREFIX,
@@ -46,7 +48,7 @@ function stripPurposePrefix(displayName: string): string {
   for (const prefix of PURPOSE_PREFIXES) {
     if (!trimmed.startsWith(prefix)) continue;
     const remainder = trimmed.slice(prefix.length).trim();
-    if (prefix === EQUIPMENT_DISPLAY_PREFIX || prefix === WORLD_ENVIRONMENT_DISPLAY_PREFIX || prefix === WORLD_NATURE_DISPLAY_PREFIX) {
+    if (prefix === ENEMY_FALLBACK_DISPLAY_PREFIX || prefix === EQUIPMENT_DISPLAY_PREFIX || prefix === WORLD_ENVIRONMENT_DISPLAY_PREFIX || prefix === WORLD_NATURE_DISPLAY_PREFIX) {
       const parts = remainder.split(" · ");
       return parts.length > 1 ? parts.slice(1).join(" · ").trim() : remainder;
     }
@@ -59,7 +61,9 @@ function canonicalDisplayName(displayName: string, purpose: GlbImportPurpose, cl
   const base = stripPurposePrefix(displayName);
   const prefix = purpose === "npc-fallback"
     ? NPC_FALLBACK_DISPLAY_PREFIX
-    : purpose === "world-environment"
+    : purpose === "enemy-fallback"
+      ? `${ENEMY_FALLBACK_DISPLAY_PREFIX}${classification.subcategory} · `
+      : purpose === "world-environment"
       ? `${WORLD_ENVIRONMENT_DISPLAY_PREFIX}${classification.subcategory} · `
       : purpose === "world-nature"
         ? `${WORLD_NATURE_DISPLAY_PREFIX}${classification.subcategory} · `
@@ -285,6 +289,39 @@ export class GlbImportStore {
       await connection.execute("UPDATE glbAssignments SET active = 0 WHERE targetType = ? AND targetKey = ? AND active = 1", [input.targetType, input.targetKey]);
       await connection.execute("INSERT INTO glbAssignments (id, assetId, targetType, targetKey, active, assignedByUserId) VALUES (?, ?, ?, ?, 1, ?)", [id, asset.id, input.targetType, input.targetKey, actorUserId]);
       return { assetId: asset.id, targetKey: input.targetKey, active: 1 };
+    });
+  }
+
+  async assignAutomaticFallback(actorUserId: number, input: { assetId: string; targetType: "enemy" | "arena"; targetKey: "starter_spider" | "starter_beast_lod0" | "asterion_courtyard"; expectedActiveAssetId: null }) {
+    return this.locked(actorUserId, async connection => {
+      if (input.expectedActiveAssetId !== null) throw new Error("GLB_AUTOMATIC_FALLBACK_MISSING_ONLY");
+      const [assets] = await connection.query<RowDataPacket[]>("SELECT * FROM glbAssets WHERE id = ? FOR UPDATE", [input.assetId]);
+      const asset = assets[0];
+      if (!asset || asset.status !== "approved" || asset.assetType !== input.targetType) throw new Error("GLB_AUTOMATIC_FALLBACK_APPROVED_ASSET_REQUIRED");
+      const expectedPurpose: GlbImportPurpose = input.targetType === "enemy" ? "enemy-fallback" : "world-environment";
+      if (glbPurposeFromDisplayName(String(asset.displayName)) !== expectedPurpose) throw new Error("GLB_AUTOMATIC_FALLBACK_PURPOSE_REQUIRED");
+      if (String(asset.storageKey).startsWith("local-glb/")) {
+        const bytes = await readStoredGlb(String(asset.sha256), this.storageRoot);
+        const plan = buildGlbImportPlan(bytes.toString("base64"), expectedPurpose, String(asset.displayName));
+        if (plan.assetType !== input.targetType || plan.sha256 !== asset.sha256) throw new Error("GLB_AUTOMATIC_FALLBACK_SOURCE_IDENTITY_MISMATCH");
+        if (input.targetKey === "starter_spider" && plan.classification.subcategory !== "spider") throw new Error("GLB_AUTOMATIC_FALLBACK_SPIDER_REQUIRED");
+        if (input.targetKey === "starter_beast_lod0" && plan.classification.subcategory === "spider") throw new Error("GLB_AUTOMATIC_FALLBACK_BEAST_REQUIRED");
+        if (input.targetKey === "asterion_courtyard" && plan.classification.worldFamily !== "environment") throw new Error("GLB_AUTOMATIC_FALLBACK_ENVIRONMENT_REQUIRED");
+      }
+      const [active] = await connection.query<RowDataPacket[]>(
+        "SELECT id, assetId FROM glbAssignments WHERE targetType = ? AND targetKey = ? AND active = 1 ORDER BY id FOR UPDATE",
+        [input.targetType, input.targetKey],
+      );
+      if (active.length > 1) throw new Error("GLB_ASSIGNMENT_DRIFT");
+      if (active.length) throw new Error("GLB_AUTOMATIC_FALLBACK_TARGET_ALREADY_FILLED");
+      const assignmentId = `assign_${createHash("sha256").update(`auto-fallback:${input.targetType}:${input.targetKey}:${asset.sha256}`).digest("hex").slice(0, 48)}`;
+      await connection.execute(
+        "INSERT INTO glbAssignments (id, assetId, targetType, targetKey, active, assignedByUserId) VALUES (?, ?, ?, ?, 1, ?)",
+        [assignmentId, asset.id, input.targetType, input.targetKey, actorUserId],
+      );
+      const [readback] = await connection.query<RowDataPacket[]>("SELECT assetId, targetKey, active FROM glbAssignments WHERE id = ?", [assignmentId]);
+      if (readback[0]?.assetId !== asset.id || readback[0]?.targetKey !== input.targetKey || Number(readback[0]?.active) !== 1) throw new Error("GLB_AUTOMATIC_FALLBACK_ASSIGNMENT_READBACK_FAILED");
+      return Object.freeze({ assetId: String(asset.id), targetKey: input.targetKey, active: 1 as const, changed: true as const });
     });
   }
 

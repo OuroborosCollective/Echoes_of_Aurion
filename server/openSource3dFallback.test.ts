@@ -3,6 +3,7 @@ import {
   OS3A_FALLBACK_CONFIRMATION,
   openSource3dFallbackSource,
   os3aApplyInputSchema,
+  os3aPlanInputSchema,
   searchOpenSource3dFallback,
 } from "./openSource3dFallback";
 
@@ -20,6 +21,8 @@ describe("pinned OS3A fallback catalog", () => {
       transferOversizeCount: 10,
       tierCandidateCounts: { phone: 336, tablet: 344, desktop: 355 },
       discoveryOnlyCount: 60,
+      enemyFallbackCandidateCount: 60,
+      enemyFallbackTierCandidateCounts: { phone: 60, tablet: 60, desktop: 60 },
       runtimeDependency: false,
       gameplayAuthority: "none",
       worldPlacementAuthority: "none",
@@ -49,11 +52,13 @@ describe("pinned OS3A fallback catalog", () => {
     expect(first.matches.every(match => match.transferBudgetBytes === 8 * 1024 * 1024)).toBe(true);
   });
 
-  it("keeps rigged XYZ creatures discovery-only until Aurion owns a dedicated enemy fallback lane", () => {
+  it("keeps XYZ provenance flagged while allowing only the dedicated enemy fallback lane to consume it", () => {
     const result = searchOpenSource3dFallback({ query: "creature animal", tier: "desktop", limit: 24 });
     const xyz = result.matches.filter(match => match.projectId === "pm-xyz");
     expect(xyz.length).toBeGreaterThan(0);
     expect(xyz.every(match => match.discoveryOnly && match.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE")).toBe(true);
+    expect(() => os3aPlanInputSchema.parse({ sourceAssetId: "xyz-037", purpose: "world-nature", tier: "phone" })).not.toThrow();
+    expect(os3aPlanInputSchema.parse({ sourceAssetId: "xyz-037", purpose: "enemy-fallback", tier: "phone" }).purpose).toBe("enemy-fallback");
   });
 
   it("requires the exact named confirmation on admission", () => {
