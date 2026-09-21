@@ -5,14 +5,14 @@ import {
   aurionEconomicLedgerCoordinator,
   aurionEconomicResourceDeltas,
 } from "../../drizzle/aurionCausalitySchema";
-import { aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts } from "../../drizzle/schema";
+import { itemInstances, lootDropReceipts, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts } from "../../drizzle/schema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { createEconomicEvent, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
 import { getDb } from "../db";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
 import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
-import { lootV2SourceEvidenceHash, tradeCraftingSourceEvidenceHash } from "./economicSourceEvidence";
+import { lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, tradeCraftingSourceEvidenceHash } from "./economicSourceEvidence";
 
 type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Tx=Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -36,6 +36,25 @@ async function deriveTradeCrafting(tx:Tx,sourceId:string){
       resourceId:delta.resourceId,accountId:`character:${row.characterId}`,deltaExact:delta.quantityExact,
     }))),
     assetTransitions:Object.freeze([]),
+  });
+}
+
+async function deriveLootV1(tx:Tx,sourceId:string){
+  const receipt=(await tx.select().from(lootDropReceipts).where(eq(lootDropReceipts.id,sourceId)).limit(1))[0];
+  if(!receipt) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
+  const item=(await tx.select().from(itemInstances).where(eq(itemInstances.lootReceiptId,receipt.id)).limit(1))[0];
+  if(!item) throw new Error("ECONOMIC_LOOT_V1_ITEM_MISSING");
+  if(item.sourceKind!=="loot"||item.quality!==receipt.quality) throw new Error("ECONOMIC_LOOT_V1_RECEIPT_MISMATCH");
+  return Object.freeze({
+    eventType:"economic_transition" as const,
+    sourceEvidenceHash:lootV1SourceEvidenceHash(receipt,item),
+    resourceDeltas:Object.freeze([]),
+    assetTransitions:Object.freeze([{
+      assetId:`item:legacy:${item.id}`,
+      transitionKind:"create" as const,
+      fromOwnerId:null,
+      toOwnerId:`user:${receipt.userId}`,
+    }]),
   });
 }
 
@@ -63,6 +82,7 @@ async function deriveLootV2(tx:Tx,sourceId:string){
 
 async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string){
   if(kind==="trade_crafting") return deriveTradeCrafting(tx,sourceId);
+  if(kind==="loot_v1") return deriveLootV1(tx,sourceId);
   if(kind==="loot_v2") return deriveLootV2(tx,sourceId);
   throw new Error("ECONOMIC_SOURCE_KIND_UNSUPPORTED");
 }
