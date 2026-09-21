@@ -78,6 +78,22 @@ export function createEconomicEvent(input:Omit<AurionEconomicEvent,"schema"|"eve
   if(!REV.test(input.sourceRevision)||!input.rulesetVersion.trim()||input.rulesetVersion.length>64) throw new Error("ECONOMIC_SOURCE_IDENTITY_INVALID");
   const resourceDeltas=canonDeltas(input.resourceDeltas),assetTransitions=canonAssets(input.assetTransitions);
   if(input.eventType!=="economic_transition"||(resourceDeltas.length===0&&assetTransitions.length===0)) throw new Error("ECONOMIC_EVENT_SHAPE_INVALID");
-  const unsigned={schema:AURION_ECONOMIC_EVENT_SCHEMA,...input,resourceDeltas,assetTransitions};
+  const unsigned={
+    schema:AURION_ECONOMIC_EVENT_SCHEMA,
+    eventId:input.eventId,
+    worldId:input.worldId,
+    epoch:input.epoch,
+    eventType:input.eventType,
+    sourceKind:input.sourceKind,
+    sourceId:input.sourceId,
+    sourceEvidenceHash:input.sourceEvidenceHash,
+    temporalEventId:input.temporalEventId,
+    temporalEventHash:input.temporalEventHash,
+    sourceWorldRoot:input.sourceWorldRoot,
+    sourceRevision:input.sourceRevision,
+    rulesetVersion:input.rulesetVersion,
+    resourceDeltas,
+    assetTransitions,
+  };
   return Object.freeze({...unsigned,eventHash:canonicalSha256(unsigned)});
 }
