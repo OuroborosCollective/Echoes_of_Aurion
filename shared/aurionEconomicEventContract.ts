@@ -1,7 +1,7 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
 
 export const AURION_ECONOMIC_EVENT_SCHEMA = "aurion.economic-event.v2" as const;
-export const aurionEconomicSourceKinds = ["trade_crafting","loot_v2","market_transaction","system_sale","guild_bank","progression_points"] as const;
+export const aurionEconomicSourceKinds = ["trade_crafting","loot_v1","loot_v2","market_transaction","system_sale","guild_bank","progression_points"] as const;
 export type AurionEconomicSourceKind = (typeof aurionEconomicSourceKinds)[number];
 export type AurionEconomicEventType = "economic_transition";
 
