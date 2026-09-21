@@ -30,7 +30,7 @@ async function deriveTradeCrafting(tx:Tx,sourceId:string){
   });
   if(normalized.receiptHash!==row.receiptHash) throw new Error("ECONOMIC_SOURCE_RECEIPT_HASH_MISMATCH");
   return Object.freeze({
-    eventType:"resource_delta" as const,
+    eventType:"economic_transition" as const,
     sourceEvidenceHash:`sha256:${row.receiptHash}`,
     resourceDeltas:Object.freeze(normalized.resourceDeltas.map(delta=>Object.freeze({
       resourceId:delta.resourceId,accountId:`character:${row.characterId}`,deltaExact:delta.quantityExact,
@@ -58,7 +58,7 @@ async function deriveLootV2(tx:Tx,sourceId:string){
     item:{id:item.id,ownerUserId:item.ownerUserId,lootReceiptId:item.lootReceiptId,baseItemDefinitionId:item.baseItemDefinitionId,category:item.category,
       quality:item.quality,itemLevelExact:item.itemLevelExact,setId:item.setId??null,itemPower:item.itemPower,deterministicHash:item.deterministicHash}};
   return Object.freeze({
-    eventType:"asset_create" as const,
+    eventType:"economic_transition" as const,
     sourceEvidenceHash:sourceHash(evidence),
     resourceDeltas:Object.freeze([]),
     assetTransitions:Object.freeze([{assetId:item.id,transitionKind:"create" as const,fromOwnerId:null,toOwnerId:`user:${receipt.userId}`}]),
