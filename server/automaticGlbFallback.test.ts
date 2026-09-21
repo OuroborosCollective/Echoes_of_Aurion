@@ -41,8 +41,8 @@ describe("automatic GLB fallback reconciliation", () => {
     const first = await scanAutomaticGlbFallback({ catalog: async () => catalog([]), search });
     const second = await scanAutomaticGlbFallback({ catalog: async () => catalog([]), search });
     expect(first).toEqual(second);
-    expect(first.requirementCount).toBe(17);
-    expect(first.missingCount).toBe(17);
+    expect(first.requirementCount).toBe(18);
+    expect(first.missingCount).toBe(18);
     expect(first.policy).toMatchObject({ mode: "BATCH_AUTOMATIC_MISSING_ONLY", overwriteExisting: false, targetTier: "phone" });
     expect(first.gaps.every(gap => gap.selectedCandidate?.sourceAssetId === "candidate-b")).toBe(true);
     expect(first.gaps.every(gap => gap.selectedCandidate?.scoreMargin === 2)).toBe(true);
