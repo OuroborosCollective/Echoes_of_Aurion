@@ -4,6 +4,7 @@ import {
   aurionEconomicEvents,
   aurionEconomicLedgerCoordinator,
   aurionEconomicResourceDeltas,
+  aurionTemporalEvents,
 } from "../../drizzle/aurionCausalitySchema";
 import {
   aurionGuildBankReceipts,
@@ -16,10 +17,10 @@ import {
   marketTransactionReceipts, progressionLedger, systemSaleReceipts,
 } from "../../drizzle/schema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
-import { createEconomicEvent, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
+import { createEconomicEvent, economicResourceImbalances, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
 import { getDb } from "../db";
 import { guildBankHash } from "../guildBankProtocol";
-import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
+import { readTemporalEventById, verifyTemporalEventSource } from "../history/aurionTemporalEventPersistence";
 import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
 import {
@@ -31,6 +32,11 @@ type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Tx=Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 function eventId(hash:string){return `economic:${hash.slice("sha256:".length,72)}`;}
+function timestampMs(value:Date,label:string){
+  const ms=value.getTime();
+  if(!Number.isFinite(ms)) throw new Error(`${label}_INVALID`);
+  return ms;
+}
 
 async function deriveTradeCrafting(tx:Tx,sourceId:string){
   const row=(await tx.select().from(aurionTradeCraftingReceipts).where(eq(aurionTradeCraftingReceipts.id,sourceId)).limit(1))[0];
@@ -363,7 +369,14 @@ export async function materializeEconomicSource(input:{sourceKind:AurionEconomic
     const temporal=await readTemporalEventById(input.temporalEventId);
     if(!temporal)throw new Error("ECONOMIC_TEMPORAL_EVENT_MISSING");
     if(temporal.domain!=="economy"&&temporal.domain!=="ownership")throw new Error("ECONOMIC_TEMPORAL_DOMAIN_INVALID");
+    await verifyTemporalEventSource(temporal);
+    const temporalRows=await tx.select({eventHash:aurionTemporalEvents.eventHash,createdAt:aurionTemporalEvents.createdAt})
+      .from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId,input.temporalEventId)).limit(2);
+    if(temporalRows.length!==1||temporalRows[0]!.eventHash!==temporal.eventHash) throw new Error("ECONOMIC_TEMPORAL_READBACK_MISMATCH");
     const source=await deriveSource(tx,input.sourceKind,input.sourceId);
+    if(timestampMs(temporalRows[0]!.createdAt,"ECONOMIC_TEMPORAL_CREATED_AT")<timestampMs(source.sourceCreatedAt,"ECONOMIC_SOURCE_CREATED_AT")){
+      throw new Error("ECONOMIC_TEMPORAL_PRECEDES_SOURCE");
+    }
     const payload=temporal.payload as Record<string,unknown>;
     if(payload.sourceKind!==input.sourceKind||payload.sourceId!==input.sourceId||payload.sourceEvidenceHash!==source.sourceEvidenceHash)throw new Error("ECONOMIC_TEMPORAL_SOURCE_BINDING_MISMATCH");
 
@@ -379,6 +392,8 @@ export async function materializeEconomicSource(input:{sourceKind:AurionEconomic
     });
     const id=eventId(candidate.eventHash);
     const event=createEconomicEvent({...candidate,eventId:id});
+    const imbalances=economicResourceImbalances(event.resourceDeltas);
+    if(imbalances.length) throw new Error(`ECONOMIC_RESOURCE_CONSERVATION_VIOLATION:${imbalances.map(v=>`${v.resourceId}=${v.deltaExact}`).join(",")}`);
     const priorBySource=(await tx.select().from(aurionEconomicEvents).where(and(
       eq(aurionEconomicEvents.sourceKind,event.sourceKind),eq(aurionEconomicEvents.sourceId,event.sourceId),
     )).limit(1))[0];
