@@ -73,7 +73,7 @@ export default function GlbZipBatchUpload({ fallbackPurpose, disabled = false, o
     <CardContent className="space-y-4 text-sm">
       <div className="rounded-lg border border-amber-300/15 bg-amber-300/[.03] p-3 text-xs leading-5 text-slate-300">
         <p><b>Empfohlenes Schema für gemischte Archive:</b> <code>npc-fallback/Female_Ranger_LOD0.glb</code>, <code>equipment/Steel_Sword.glb</code>, <code>world-nature/Ancient_Oak_LOD1.glb</code>.</p>
-        <p className="mt-1">Erlaubte Top-Level-Ordner sind <code>auto</code>, <code>npc-fallback</code>, <code>world-environment</code>, <code>world-nature</code>, <code>player-public</code> und <code>equipment</code>. Flache ZIPs ohne Purpose-Ordner verwenden die oben ausgewählte Kategorie. Gleiche Basisnamen mit <code>LOD0</code>…<code>LOD3</code> werden automatisch als Familie erkannt.</p>
+        <p className="mt-1">Erlaubte Top-Level-Ordner sind <code>auto</code>, <code>npc-fallback</code>, <code>enemy-fallback</code>, <code>world-environment</code>, <code>world-nature</code>, <code>player-public</code> und <code>equipment</code>. Flache ZIPs ohne Purpose-Ordner verwenden die oben ausgewählte Kategorie. Gleiche Basisnamen mit <code>LOD0</code>…<code>LOD3</code> werden automatisch als Familie erkannt.</p>
         <p className="mt-1">Nur GLBs sind erlaubt; Pfad-Traversal, Symlinks, verschlüsselte/ZIP64-Archive, unbekannte Kompression, doppelte Pfade/LOD-Stufen und einzelne GLBs über 24 MiB werden vor der Aufnahme abgewiesen.</p>
       </div>
       <div className="space-y-2">
