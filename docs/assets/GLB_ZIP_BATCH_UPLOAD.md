@@ -20,7 +20,7 @@ equipment/Steel_Sword.glb
 world-nature/Ancient_Oak_LOD0.glb
 ```
 
-Supported directories are `auto`, `npc-fallback`, `world-environment`, `world-nature`, `player-public`, and `equipment`.
+Supported directories are `auto`, `npc-fallback`, `enemy-fallback`, `world-environment`, `world-nature`, `player-public`, and `equipment`.
 
 The filename remains classification evidence. Physical GLBs with the same normalized display basename and explicit `LOD0`…`LOD3` are grouped by the existing runtime catalog only after their server classification tuple agrees.
 
