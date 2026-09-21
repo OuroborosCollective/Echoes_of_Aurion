@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import mysql from "mysql2/promise";
 import { describe, expect, it } from "vitest";
 import { aurionCausalTickReceipts, aurionGlobalStateProofs, aurionTemporalEvents } from "../../drizzle/aurionCausalitySchema";
 import { createTemporalEvent } from "../../shared/aurionTemporalEventContract";
@@ -65,7 +66,17 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
     expect(explanation).toMatchObject({status:"MATCH",mutationAuthority:"none",rootEvidenceReached:true});
     expect(explanation.chain.map(step=>step.eventId)).toEqual(["event:mine:2","event:mine:1"]);
 
-    await expect(db.update(aurionTemporalEvents).set({payloadHash:"sha256:"+"0".repeat(64)}).where(eq(aurionTemporalEvents.eventId,first.eventId)))
-      .rejects.toThrow(/AURION_TEMPORAL_HISTORY_APPEND_ONLY/);
+    const raw=await mysql.createConnection(process.env.DATABASE_URL!);
+    try {
+      let rejected="";
+      try {
+        await raw.query("UPDATE aurionTemporalEvents SET payloadHash=? WHERE eventId=?", ["sha256:"+"0".repeat(64), first.eventId]);
+      } catch(error) {
+        rejected=String((error as {sqlMessage?:unknown}).sqlMessage ?? (error as Error).message);
+      }
+      expect(rejected).toContain("AURION_TEMPORAL_HISTORY_APPEND_ONLY");
+    } finally {
+      await raw.end();
+    }
   },60_000);
 });
