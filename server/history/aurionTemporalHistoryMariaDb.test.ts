@@ -6,7 +6,7 @@ import { createTemporalEvent } from "../../shared/aurionTemporalEventContract";
 import { getDb, resolveAndRecordGlobalWorldEpoch } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalTickRecorder } from "../causality/tickRecorder";
-import { appendTemporalEvent } from "./aurionTemporalEventPersistence";
+import { appendTemporalEvent, readTemporalEventById } from "./aurionTemporalEventPersistence";
 import { globalHistoricalWorldStateService } from "./historicalWorldStateService";
 import { globalCausalHistoryExplainService } from "./causalHistoryExplainService";
 
@@ -51,6 +51,39 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
     });
     expect((await appendTemporalEvent(second)).applied).toBe(true);
 
+    const backwards=createTemporalEvent({
+      eventId:"event:backwards:1",worldId:WORLD_ID,epoch:1,domain:"world",subjectIds:["cause:backwards"],validFromEpoch:2,
+      sourceReceiptHash:firstTick.receiptHash,sourceWorldRoot:firstRoot.worldRootHash,sourceRevision:firstRoot.sourceRevision,rulesetVersion:firstRoot.rulesetVersion,
+      predecessorEventIds:[second.eventId],payload:{state:"MUST_NOT_PERSIST"},
+    });
+    await expect(appendTemporalEvent(backwards)).rejects.toThrow("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
+
+    const unboundReceipt=createTemporalEvent({
+      eventId:"event:receipt:unbound",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["evidence:unbound"],
+      sourceReceiptHash:"sha256:"+"f".repeat(64),sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+      payload:{state:"MUST_NOT_PERSIST"},
+    });
+    await expect(appendTemporalEvent(unboundReceipt)).rejects.toThrow("TEMPORAL_SOURCE_RECEIPT_UNPROVABLE");
+
+    const left=createTemporalEvent({
+      eventId:"event:diamond:left",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["cause:left"],
+      sourceReceiptHash:secondTick.receiptHash,sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+      predecessorEventIds:[first.eventId],payload:{branch:"left"},
+    });
+    const right=createTemporalEvent({
+      eventId:"event:diamond:right",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["cause:right"],
+      sourceReceiptHash:secondTick.receiptHash,sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+      predecessorEventIds:[first.eventId],payload:{branch:"right"},
+    });
+    const merge=createTemporalEvent({
+      eventId:"event:diamond:merge",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["cause:merge"],
+      sourceReceiptHash:secondTick.receiptHash,sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+      predecessorEventIds:[left.eventId,right.eventId],payload:{state:"merged"},
+    });
+    expect((await appendTemporalEvent(left)).applied).toBe(true);
+    expect((await appendTemporalEvent(right)).applied).toBe(true);
+    expect((await appendTemporalEvent(merge)).applied).toBe(true);
+
     const atOne=await globalHistoricalWorldStateService.reconstructStateAtEpoch({worldId:WORLD_ID,epoch:1,subjectId:"poi:ember-mine"});
     expect(atOne).toMatchObject({status:"MATCH",mutationAuthority:"none"});
     expect(atOne.facts).toHaveLength(1);
@@ -66,6 +99,20 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
     expect(explanation).toMatchObject({status:"MATCH",mutationAuthority:"none",rootEvidenceReached:true});
     expect(explanation.chain.map(step=>step.eventId)).toEqual(["event:mine:2","event:mine:1"]);
 
+    const factExplanation=await globalCausalHistoryExplainService.explainFactAtEpoch({worldId:WORLD_ID,targetFactOrEventId:atTwo.facts[0]!.factId,epoch:2});
+    expect(factExplanation).toMatchObject({status:"MATCH",mutationAuthority:"none",rootEvidenceReached:true});
+    expect(factExplanation.chain.map(step=>step.eventId)).toEqual(["event:mine:2","event:mine:1"]);
+
+    const convergent=await globalCausalHistoryExplainService.explainFactAtEpoch({worldId:WORLD_ID,targetFactOrEventId:merge.eventId,epoch:2});
+    expect(convergent).toMatchObject({status:"MATCH",mutationAuthority:"none",rootEvidenceReached:true});
+    expect(convergent.chain.map(step=>step.eventId)).toEqual(["event:diamond:merge","event:diamond:left","event:diamond:right","event:mine:1"]);
+
+    const worldWide=await globalHistoricalWorldStateService.reconstructStateAtEpoch({worldId:WORLD_ID,epoch:2});
+    expect(worldWide).toMatchObject({status:"MATCH",mutationAuthority:"none"});
+    expect(worldWide.facts.some(fact=>fact.eventId===first.eventId&&fact.subjectId==="poi:ember-mine")).toBe(false);
+    expect(worldWide.facts.some(fact=>fact.eventId===first.eventId&&fact.subjectId==="faction:iron-vanguard")).toBe(false);
+    expect(worldWide.facts.some(fact=>fact.eventId===merge.eventId&&fact.subjectId==="cause:merge")).toBe(true);
+
     const raw=await mysql.createConnection(process.env.DATABASE_URL!);
     try {
       let rejected="";
@@ -75,8 +122,36 @@ describeWave3("Wave 3 Steps 32-34 persisted temporal history",()=>{
         rejected=String((error as {sqlMessage?:unknown}).sqlMessage ?? (error as Error).message);
       }
       expect(rejected).toContain("AURION_TEMPORAL_HISTORY_APPEND_ONLY");
+
+      const corrupt=createTemporalEvent({
+        eventId:"event:corrupt:index",worldId:WORLD_ID,epoch:2,domain:"world",subjectIds:["corrupt:subject"],
+        sourceReceiptHash:secondTick.receiptHash,sourceWorldRoot:secondRoot.worldRootHash,sourceRevision:secondRoot.sourceRevision,rulesetVersion:secondRoot.rulesetVersion,
+        payload:{state:"INDEX_METADATA_MUST_MATCH"},
+      });
+      await raw.query(
+        "INSERT INTO aurionTemporalEvents (eventId,worldId,epoch,domain,validFromEpoch,validToEpoch,sourceReceiptHash,sourceWorldRoot,sourceRevision,rulesetVersion,payloadJson,payloadHash,eventHash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [corrupt.eventId,corrupt.worldId,corrupt.epoch,corrupt.domain,corrupt.validFromEpoch,corrupt.validToEpoch,corrupt.sourceReceiptHash,corrupt.sourceWorldRoot,corrupt.sourceRevision,corrupt.rulesetVersion,JSON.stringify(corrupt.payload),corrupt.payloadHash,corrupt.eventHash],
+      );
+      await raw.query(
+        "INSERT INTO aurionTemporalEventSubjects (eventId,worldId,subjectId,domain,validFromEpoch,validToEpoch) VALUES (?,?,?,?,?,?)",
+        [corrupt.eventId,"wrong-world",corrupt.subjectIds[0],corrupt.domain,corrupt.validFromEpoch,corrupt.validToEpoch],
+      );
+      await expect(readTemporalEventById(corrupt.eventId)).rejects.toThrow("TEMPORAL_STORED_SUBJECT_METADATA_MISMATCH");
+
+      const overflowRows=Array.from({length:513},(_,index)=>[
+        `overflow:${String(index).padStart(3,"0")}`,"overflow-world",1,"world",1,null,
+        "sha256:"+"1".repeat(64),"sha256:"+"2".repeat(64),releaseSha!,"wave3-overflow-test","{}",
+        "sha256:"+"3".repeat(64),`sha256:${index.toString(16).padStart(64,"0")}`,
+      ]);
+      const placeholders=overflowRows.map(()=>"(?,?,?,?,?,?,?,?,?,?,?,?,?)").join(",");
+      await raw.query(
+        `INSERT INTO aurionTemporalEvents (eventId,worldId,epoch,domain,validFromEpoch,validToEpoch,sourceReceiptHash,sourceWorldRoot,sourceRevision,rulesetVersion,payloadJson,payloadHash,eventHash) VALUES ${placeholders}`,
+        overflowRows.flat(),
+      );
+      const overflow=await globalHistoricalWorldStateService.reconstructStateAtEpoch({worldId:"overflow-world",epoch:1});
+      expect(overflow).toMatchObject({status:"UNPROVABLE",reason:"TEMPORAL_HISTORY_LIMIT_EXCEEDED"});
     } finally {
       await raw.end();
     }
-  },60_000);
+  },90_000);
 });

@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { aurionTemporalEventPredecessors, aurionTemporalEventSubjects, aurionTemporalEvents } from "../../drizzle/aurionCausalitySchema";
+import { aurionCausalTickReceipts, aurionTemporalEventPredecessors, aurionTemporalEventSubjects, aurionTemporalEvents } from "../../drizzle/aurionCausalitySchema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { type AurionTemporalEvent, verifyTemporalEventIntegrity } from "../../shared/aurionTemporalEventContract";
 import { getDb } from "../db";
@@ -16,6 +16,15 @@ async function decodeStored(reader:TemporalReader,eventId:string):Promise<Aurion
     reader.select().from(aurionTemporalEventSubjects).where(eq(aurionTemporalEventSubjects.eventId,eventId)),
     reader.select().from(aurionTemporalEventPredecessors).where(eq(aurionTemporalEventPredecessors.eventId,eventId)),
   ]);
+  for(const subject of subjects) if(
+    subject.worldId!==row.worldId||
+    subject.domain!==row.domain||
+    subject.validFromEpoch!==row.validFromEpoch||
+    subject.validToEpoch!==row.validToEpoch
+  ) throw new Error("TEMPORAL_STORED_SUBJECT_METADATA_MISMATCH");
+  for(const predecessor of predecessors) if(predecessor.worldId!==row.worldId) {
+    throw new Error("TEMPORAL_STORED_PREDECESSOR_METADATA_MISMATCH");
+  }
   const event:AurionTemporalEvent={
     schema:"aurion.temporal.event.v1",
     eventId:row.eventId,worldId:row.worldId,epoch:row.epoch,domain:row.domain,
@@ -37,6 +46,18 @@ export async function verifyTemporalEventSource(event:AurionTemporalEvent):Promi
   if(persisted.root.worldRootHash!==event.sourceWorldRoot||persisted.root.sourceRevision!==event.sourceRevision||persisted.root.rulesetVersion!==event.rulesetVersion) {
     throw new Error("TEMPORAL_WORLD_ROOT_IDENTITY_MISMATCH");
   }
+  const db=await getDb(); if(!db) throw new Error("TEMPORAL_DATABASE_UNAVAILABLE");
+  const receipts=await db.select().from(aurionCausalTickReceipts).where(and(
+    eq(aurionCausalTickReceipts.receiptHash,event.sourceReceiptHash),
+    eq(aurionCausalTickReceipts.worldId,event.worldId),
+  )).limit(2);
+  if(receipts.length!==1) throw new Error("TEMPORAL_SOURCE_RECEIPT_UNPROVABLE");
+  const receipt=receipts[0]!;
+  if(receipt.revision!==event.sourceRevision||receipt.rulesetVersion!==event.rulesetVersion) {
+    throw new Error("TEMPORAL_SOURCE_RECEIPT_IDENTITY_MISMATCH");
+  }
+  const zoneRoot=persisted.root.zoneRoots.find(value=>value.zoneId===receipt.zoneId);
+  if(!zoneRoot||receipt.tick<zoneRoot.fromTick||receipt.tick>zoneRoot.toTick) throw new Error("TEMPORAL_SOURCE_RECEIPT_OUTSIDE_WORLD_ROOT");
   const replay=await worldCausalRootService.replay(event.worldId,event.epoch);
   if(replay.status!=="MATCH"||replay.worldRootHash!==event.sourceWorldRoot) throw new Error("TEMPORAL_WORLD_ROOT_REPLAY_MISMATCH");
 }
@@ -55,7 +76,11 @@ export async function appendTemporalEvent(event:AurionTemporalEvent){
     if(event.predecessorEventIds.length){
       const rows=await tx.select().from(aurionTemporalEvents).where(inArray(aurionTemporalEvents.eventId,[...event.predecessorEventIds]));
       if(rows.length!==event.predecessorEventIds.length) throw new Error("TEMPORAL_PREDECESSOR_MISSING");
-      for(const row of rows) if(row.worldId!==event.worldId||row.validFromEpoch>event.validFromEpoch) throw new Error("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
+      for(const row of rows) if(
+        row.worldId!==event.worldId||
+        row.epoch>event.epoch||
+        row.validFromEpoch>event.validFromEpoch
+      ) throw new Error("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
     }
     await tx.insert(aurionTemporalEvents).values({
       eventId:event.eventId,worldId:event.worldId,epoch:event.epoch,domain:event.domain,validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,
@@ -84,7 +109,8 @@ export async function readTemporalEventsForWorld(worldId:string,limit=512):Promi
   const db=await getDb(); if(!db) throw new Error("TEMPORAL_DATABASE_UNAVAILABLE");
   return db.transaction(async tx=>{
     const rows=await tx.select({eventId:aurionTemporalEvents.eventId}).from(aurionTemporalEvents)
-      .where(eq(aurionTemporalEvents.worldId,worldId)).orderBy(asc(aurionTemporalEvents.epoch),asc(aurionTemporalEvents.eventId)).limit(limit);
+      .where(eq(aurionTemporalEvents.worldId,worldId)).orderBy(asc(aurionTemporalEvents.epoch),asc(aurionTemporalEvents.eventId)).limit(limit+1);
+    if(rows.length>limit) throw new Error("TEMPORAL_HISTORY_LIMIT_EXCEEDED");
     const out=[] as AurionTemporalEvent[];
     for(const row of rows){const event=await decodeStored(tx,row.eventId);if(event) out.push(event);}
     return Object.freeze(out);
@@ -97,7 +123,8 @@ export async function readTemporalEventsForSubject(worldId:string,subjectId:stri
   return db.transaction(async tx=>{
     const rows=await tx.select({eventId:aurionTemporalEventSubjects.eventId}).from(aurionTemporalEventSubjects)
       .where(and(eq(aurionTemporalEventSubjects.worldId,worldId),eq(aurionTemporalEventSubjects.subjectId,subjectId)))
-      .orderBy(asc(aurionTemporalEventSubjects.validFromEpoch),asc(aurionTemporalEventSubjects.eventId)).limit(limit);
+      .orderBy(asc(aurionTemporalEventSubjects.validFromEpoch),asc(aurionTemporalEventSubjects.eventId)).limit(limit+1);
+    if(rows.length>limit) throw new Error("TEMPORAL_HISTORY_LIMIT_EXCEEDED");
     const out=[] as AurionTemporalEvent[];
     for(const row of rows){const event=await decodeStored(tx,row.eventId);if(event) out.push(event);}
     return Object.freeze(out);

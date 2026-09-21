@@ -19,21 +19,36 @@ export class HistoricalWorldStateService {
     const {worldId,epoch,subjectId,domain,requiredWorldRoot}=query;
     const base={mutationAuthority:"none" as const,worldId,epoch,subjectId,domain,facts:Object.freeze([] as TemporalFactRecord[]),activeEventsCount:0};
     if(!Number.isSafeInteger(epoch)||epoch<1) return {...base,status:"UNPROVABLE",reason:"INVALID_EPOCH_QUERY"};
-    let candidates=subjectId?await readTemporalEventsForSubject(worldId,subjectId):await readTemporalEventsForWorld(worldId);
+    let candidates:readonly AurionTemporalEvent[];
+    try{
+      candidates=subjectId?await readTemporalEventsForSubject(worldId,subjectId):await readTemporalEventsForWorld(worldId);
+    }catch(error){
+      return {...base,status:"UNPROVABLE",reason:error instanceof Error?error.message:String(error)};
+    }
     if(domain) candidates=candidates.filter(event=>event.domain===domain);
     const observed=candidates.filter(event=>event.validFromEpoch<=epoch);
     const sourceGap=await verifySources(observed);
     if(sourceGap) return {...base,status:"UNPROVABLE",reason:sourceGap};
 
+    const byEventId=new Map(observed.map(event=>[event.eventId,event] as const));
     const superseded=new Set<string>();
-    for(const event of observed) for(const predecessor of event.predecessorEventIds) superseded.add(predecessor);
+    for(const successor of observed) for(const predecessorId of successor.predecessorEventIds){
+      const predecessor=byEventId.get(predecessorId);
+      if(!predecessor||predecessor.domain!==successor.domain) continue;
+      if(!predecessor.subjectIds.some(subject=>successor.subjectIds.includes(subject))) continue;
+      superseded.add(predecessorId);
+    }
     const active=observed.filter(event=>!superseded.has(event.eventId)&&(event.validToEpoch===null||event.validToEpoch>epoch));
     if(active.length===0){
       const future=candidates.some(event=>event.validFromEpoch>epoch);
       return {...base,status:"UNPROVABLE",reason:future?"QUERY_EPOCH_BEFORE_CREATION":"NO_TEMPORAL_EVIDENCE_FOUND"};
     }
     const gaps:string[]=[];
-    for(const event of active) for(const predecessor of event.predecessorEventIds) if(!await readTemporalEventById(predecessor)) gaps.push(`MISSING_PREDECESSOR:${event.eventId}->${predecessor}`);
+    try{
+      for(const event of active) for(const predecessor of event.predecessorEventIds) if(!await readTemporalEventById(predecessor)) gaps.push(`MISSING_PREDECESSOR:${event.eventId}->${predecessor}`);
+    }catch(error){
+      return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:error instanceof Error?error.message:String(error)};
+    }
     if(gaps.length) return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:"TEMPORAL_EVIDENCE_GAP",unprovableGaps:Object.freeze(gaps.sort())};
 
     if(requiredWorldRoot&&!active.some(event=>event.sourceWorldRoot===requiredWorldRoot)) return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:"WORLD_ROOT_MISMATCH"};
