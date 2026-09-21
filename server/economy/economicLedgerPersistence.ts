@@ -145,7 +145,8 @@ export async function readEconomicEvents(worldId:string,limit=2048){
   const db=await getDb();if(!db)throw new Error("ECONOMIC_DATABASE_UNAVAILABLE");
   return db.transaction(async tx=>{
     const rows=await tx.select({eventId:aurionEconomicEvents.eventId}).from(aurionEconomicEvents)
-      .where(eq(aurionEconomicEvents.worldId,worldId)).orderBy(asc(aurionEconomicEvents.ordinal)).limit(limit);
+      .where(eq(aurionEconomicEvents.worldId,worldId)).orderBy(asc(aurionEconomicEvents.ordinal)).limit(limit+1);
+    if(rows.length>limit) throw new Error("ECONOMIC_HISTORY_LIMIT_EXCEEDED");
     const result:AurionEconomicEvent[]=[];
     for(const row of rows){const event=await readEvent(tx,row.eventId);if(event)result.push(event);}
     return Object.freeze(result);
