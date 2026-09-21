@@ -363,45 +363,74 @@ export async function readEconomicSourceProjection(sourceKind:AurionEconomicSour
   return db.transaction(tx=>deriveSource(tx,sourceKind,sourceId));
 }
 
+async function resolveBoundEconomicSource(
+  tx:Tx,
+  input:{sourceKind:AurionEconomicSourceKind;sourceId:string;temporalEventId:string},
+){
+  const temporal=await readTemporalEventById(input.temporalEventId);
+  if(!temporal)throw new Error("ECONOMIC_TEMPORAL_EVENT_MISSING");
+  if(temporal.domain!=="economy"&&temporal.domain!=="ownership")throw new Error("ECONOMIC_TEMPORAL_DOMAIN_INVALID");
+  await verifyTemporalEventSource(temporal);
+  const source=await deriveSource(tx,input.sourceKind,input.sourceId);
+  const anchors=await tx.select({createdAt:aurionCausalTickReceipts.createdAt})
+    .from(aurionCausalTickReceipts).where(and(
+      eq(aurionCausalTickReceipts.receiptHash,temporal.sourceReceiptHash),
+      eq(aurionCausalTickReceipts.worldId,temporal.worldId),
+    )).limit(2);
+  if(anchors.length!==1) throw new Error("ECONOMIC_TEMPORAL_ANCHOR_UNPROVABLE");
+  if(timestampMs(anchors[0]!.createdAt,"ECONOMIC_ANCHOR_CREATED_AT")<=timestampMs(source.sourceCreatedAt,"ECONOMIC_SOURCE_CREATED_AT")){
+    throw new Error("ECONOMIC_TEMPORAL_PRECEDES_SOURCE");
+  }
+  const payload=temporal.payload as Record<string,unknown>;
+  if(
+    payload.sourceKind!==input.sourceKind||
+    payload.sourceId!==input.sourceId||
+    payload.sourceEvidenceHash!==source.sourceEvidenceHash||
+    payload.sourceCreatedAt!==source.sourceCreatedAt.toISOString()
+  ) throw new Error("ECONOMIC_TEMPORAL_SOURCE_BINDING_MISMATCH");
+  return Object.freeze({temporal,source});
+}
+
+function buildBoundEconomicEvent(
+  input:{sourceKind:AurionEconomicSourceKind;sourceId:string},
+  bound:Awaited<ReturnType<typeof resolveBoundEconomicSource>>,
+){
+  const pending=createEconomicEvent({
+    eventId:"economic:pending",worldId:bound.temporal.worldId,epoch:bound.temporal.epoch,eventType:bound.source.eventType,
+    sourceKind:input.sourceKind,sourceId:input.sourceId,sourceEvidenceHash:bound.source.sourceEvidenceHash,
+    temporalEventId:bound.temporal.eventId,temporalEventHash:bound.temporal.eventHash,sourceWorldRoot:bound.temporal.sourceWorldRoot,
+    sourceRevision:bound.temporal.sourceRevision,rulesetVersion:bound.temporal.rulesetVersion,
+    resourceDeltas:bound.source.resourceDeltas,assetTransitions:bound.source.assetTransitions,
+  });
+  const event=createEconomicEvent({...pending,eventId:eventId(pending.eventHash)});
+  const imbalances=economicResourceImbalances(event.resourceDeltas);
+  if(imbalances.length) throw new Error(`ECONOMIC_RESOURCE_CONSERVATION_VIOLATION:${imbalances.map(v=>`${v.resourceId}=${v.deltaExact}`).join(",")}`);
+  return event;
+}
+
+export async function verifyEconomicMaterializedEvent(event:AurionEconomicEvent){
+  const db=await getDb();if(!db)throw new Error("ECONOMIC_DATABASE_UNAVAILABLE");
+  return db.transaction(async tx=>{
+    const bound=await resolveBoundEconomicSource(tx,{
+      sourceKind:event.sourceKind,sourceId:event.sourceId,temporalEventId:event.temporalEventId,
+    });
+    const expected=buildBoundEconomicEvent({sourceKind:event.sourceKind,sourceId:event.sourceId},bound);
+    if(canonicalJson(expected)!==canonicalJson(event)) throw new Error("ECONOMIC_SOURCE_PROVENANCE_MISMATCH");
+    return Object.freeze({status:"MATCH" as const,sourceEvidenceHash:bound.source.sourceEvidenceHash,temporalEventHash:bound.temporal.eventHash});
+  });
+}
+
 export async function materializeEconomicSource(input:{sourceKind:AurionEconomicSourceKind;sourceId:string;temporalEventId:string}){
   const db=await getDb();if(!db)throw new Error("ECONOMIC_DATABASE_UNAVAILABLE");
   return db.transaction(async tx=>{
-    const temporal=await readTemporalEventById(input.temporalEventId);
-    if(!temporal)throw new Error("ECONOMIC_TEMPORAL_EVENT_MISSING");
-    if(temporal.domain!=="economy"&&temporal.domain!=="ownership")throw new Error("ECONOMIC_TEMPORAL_DOMAIN_INVALID");
-    await verifyTemporalEventSource(temporal);
-    const source=await deriveSource(tx,input.sourceKind,input.sourceId);
-    const anchors=await tx.select({createdAt:aurionCausalTickReceipts.createdAt})
-      .from(aurionCausalTickReceipts).where(and(
-        eq(aurionCausalTickReceipts.receiptHash,temporal.sourceReceiptHash),
-        eq(aurionCausalTickReceipts.worldId,temporal.worldId),
-      )).limit(2);
-    if(anchors.length!==1) throw new Error("ECONOMIC_TEMPORAL_ANCHOR_UNPROVABLE");
-    if(timestampMs(anchors[0]!.createdAt,"ECONOMIC_ANCHOR_CREATED_AT")<=timestampMs(source.sourceCreatedAt,"ECONOMIC_SOURCE_CREATED_AT")){
-      throw new Error("ECONOMIC_TEMPORAL_PRECEDES_SOURCE");
-    }
-    const payload=temporal.payload as Record<string,unknown>;
-    if(
-      payload.sourceKind!==input.sourceKind||
-      payload.sourceId!==input.sourceId||
-      payload.sourceEvidenceHash!==source.sourceEvidenceHash||
-      payload.sourceCreatedAt!==source.sourceCreatedAt.toISOString()
-    ) throw new Error("ECONOMIC_TEMPORAL_SOURCE_BINDING_MISMATCH");
-
+    const bound=await resolveBoundEconomicSource(tx,input);
+    const temporal=bound.temporal;
     await tx.insert(aurionEconomicLedgerCoordinator).values({worldId:temporal.worldId,nextOrdinal:1n})
       .onDuplicateKeyUpdate({set:{worldId:temporal.worldId}});
     const coordinator=(await tx.select().from(aurionEconomicLedgerCoordinator).where(eq(aurionEconomicLedgerCoordinator.worldId,temporal.worldId)).limit(1).for("update"))[0];
     if(!coordinator)throw new Error("ECONOMIC_COORDINATOR_MISSING");
 
-    const candidate=createEconomicEvent({
-      eventId:"economic:pending",worldId:temporal.worldId,epoch:temporal.epoch,eventType:source.eventType,sourceKind:input.sourceKind,sourceId:input.sourceId,
-      sourceEvidenceHash:source.sourceEvidenceHash,temporalEventId:temporal.eventId,temporalEventHash:temporal.eventHash,sourceWorldRoot:temporal.sourceWorldRoot,
-      sourceRevision:temporal.sourceRevision,rulesetVersion:temporal.rulesetVersion,resourceDeltas:source.resourceDeltas,assetTransitions:source.assetTransitions,
-    });
-    const id=eventId(candidate.eventHash);
-    const event=createEconomicEvent({...candidate,eventId:id});
-    const imbalances=economicResourceImbalances(event.resourceDeltas);
-    if(imbalances.length) throw new Error(`ECONOMIC_RESOURCE_CONSERVATION_VIOLATION:${imbalances.map(v=>`${v.resourceId}=${v.deltaExact}`).join(",")}`);
+    const event=buildBoundEconomicEvent({sourceKind:input.sourceKind,sourceId:input.sourceId},bound);
     const priorBySource=(await tx.select().from(aurionEconomicEvents).where(and(
       eq(aurionEconomicEvents.sourceKind,event.sourceKind),eq(aurionEconomicEvents.sourceId,event.sourceId),
     )).limit(1))[0];
