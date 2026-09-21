@@ -1,6 +1,6 @@
 CREATE TABLE `aurionEconomicProjectionIntents` (
   `intentId` varchar(96) NOT NULL,
-  `sourceKind` enum('trade_crafting','loot_v2','market_transaction','system_sale','guild_bank','progression_points') NOT NULL,
+  `sourceKind` enum('trade_crafting','loot_v1','loot_v2','market_transaction','system_sale','guild_bank','progression_points') NOT NULL,
   `sourceId` varchar(128) NOT NULL,
   `sourceEvidenceHash` varchar(96) NOT NULL,
   `intentHash` varchar(96) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE `aurionEconomicEvents` (
   `epoch` int NOT NULL,
   `ordinal` bigint unsigned NOT NULL,
   `eventType` enum('economic_transition') NOT NULL,
-  `sourceKind` enum('trade_crafting','loot_v2','market_transaction','system_sale','guild_bank','progression_points') NOT NULL,
+  `sourceKind` enum('trade_crafting','loot_v1','loot_v2','market_transaction','system_sale','guild_bank','progression_points') NOT NULL,
   `sourceId` varchar(128) NOT NULL,
   `sourceEvidenceHash` varchar(96) NOT NULL,
   `temporalEventId` varchar(96) NOT NULL,
