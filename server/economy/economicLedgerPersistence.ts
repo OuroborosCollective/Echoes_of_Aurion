@@ -5,14 +5,20 @@ import {
   aurionEconomicLedgerCoordinator,
   aurionEconomicResourceDeltas,
 } from "../../drizzle/aurionCausalitySchema";
-import { itemInstances, lootDropReceipts, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts } from "../../drizzle/schema";
+import {
+  itemInstances, lootDropReceipts, aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionTradeCraftingReceipts,
+  marketTransactionReceipts, systemSaleReceipts,
+} from "../../drizzle/schema";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
 import { createEconomicEvent, type AurionEconomicEvent, type AurionEconomicSourceKind } from "../../shared/aurionEconomicEventContract";
 import { getDb } from "../db";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
 import { parseStoredDeterministicLootResult } from "../aurionVisualItemAdapter";
 import { normalizeTradeCraftingReceipt } from "../tradeCraftingReceiptPersistence";
-import { lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, tradeCraftingSourceEvidenceHash } from "./economicSourceEvidence";
+import {
+  lootV1SourceEvidenceHash, lootV2SourceEvidenceHash, marketTransactionSourceEvidenceHash,
+  systemSaleSourceEvidenceHash, tradeCraftingSourceEvidenceHash,
+} from "./economicSourceEvidence";
 
 type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Tx=Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -80,10 +86,54 @@ async function deriveLootV2(tx:Tx,sourceId:string){
   });
 }
 
+async function deriveMarketTransaction(tx:Tx,sourceId:string){
+  const row=(await tx.select().from(marketTransactionReceipts).where(eq(marketTransactionReceipts.id,sourceId)).limit(1))[0];
+  if(!row) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
+  if(!Number.isSafeInteger(row.aurionTransferred)||row.aurionTransferred<=0||row.sellerUserId===row.buyerUserId) {
+    throw new Error("ECONOMIC_MARKET_RECEIPT_INVALID");
+  }
+  return Object.freeze({
+    eventType:"economic_transition" as const,
+    sourceEvidenceHash:marketTransactionSourceEvidenceHash(row),
+    resourceDeltas:Object.freeze([
+      Object.freeze({resourceId:"aurion_points",accountId:`user:${row.buyerUserId}`,deltaExact:`-${row.aurionTransferred}`}),
+      Object.freeze({resourceId:"aurion_points",accountId:`user:${row.sellerUserId}`,deltaExact:String(row.aurionTransferred)}),
+    ]),
+    assetTransitions:Object.freeze([{
+      assetId:`item:legacy:${row.itemId}`,
+      transitionKind:"transfer" as const,
+      fromOwnerId:`user:${row.sellerUserId}`,
+      toOwnerId:`user:${row.buyerUserId}`,
+    }]),
+  });
+}
+
+async function deriveSystemSale(tx:Tx,sourceId:string){
+  const row=(await tx.select().from(systemSaleReceipts).where(eq(systemSaleReceipts.id,sourceId)).limit(1))[0];
+  if(!row) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
+  if(!Number.isSafeInteger(row.aurionGranted)||row.aurionGranted<=0) throw new Error("ECONOMIC_SYSTEM_SALE_RECEIPT_INVALID");
+  return Object.freeze({
+    eventType:"economic_transition" as const,
+    sourceEvidenceHash:systemSaleSourceEvidenceHash(row),
+    resourceDeltas:Object.freeze([
+      Object.freeze({resourceId:"aurion_points",accountId:"system:vendor",deltaExact:`-${row.aurionGranted}`}),
+      Object.freeze({resourceId:"aurion_points",accountId:`user:${row.sellerUserId}`,deltaExact:String(row.aurionGranted)}),
+    ]),
+    assetTransitions:Object.freeze([{
+      assetId:`item:legacy:${row.itemId}`,
+      transitionKind:"consume" as const,
+      fromOwnerId:`user:${row.sellerUserId}`,
+      toOwnerId:null,
+    }]),
+  });
+}
+
 async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string){
   if(kind==="trade_crafting") return deriveTradeCrafting(tx,sourceId);
   if(kind==="loot_v1") return deriveLootV1(tx,sourceId);
   if(kind==="loot_v2") return deriveLootV2(tx,sourceId);
+  if(kind==="market_transaction") return deriveMarketTransaction(tx,sourceId);
+  if(kind==="system_sale") return deriveSystemSale(tx,sourceId);
   throw new Error("ECONOMIC_SOURCE_KIND_UNSUPPORTED");
 }
 
