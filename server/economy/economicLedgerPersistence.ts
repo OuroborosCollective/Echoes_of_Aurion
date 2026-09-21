@@ -43,7 +43,7 @@ async function deriveLootV2(tx:Tx,sourceId:string){
   const receipt=(await tx.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.id,sourceId)).limit(1))[0];
   if(!receipt) throw new Error("ECONOMIC_SOURCE_RECEIPT_MISSING");
   const item=(await tx.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.lootReceiptId,receipt.id)).limit(1))[0];
-  if(!item||item.ownerUserId!==receipt.userId) throw new Error("ECONOMIC_LOOT_ITEM_MISSING");
+  if(!item) throw new Error("ECONOMIC_LOOT_ITEM_MISSING");
   const resolved=parseStoredDeterministicLootResult(receipt.resolvedJson);
   if(
     receipt.itemDefinitionId!==resolved.itemDefinitionId||receipt.category!==resolved.category||receipt.quality!==resolved.quality||
@@ -57,7 +57,7 @@ async function deriveLootV2(tx:Tx,sourceId:string){
     eventType:"economic_transition" as const,
     sourceEvidenceHash:lootV2SourceEvidenceHash(receipt,item),
     resourceDeltas:Object.freeze([]),
-    assetTransitions:Object.freeze([{assetId:item.id,transitionKind:"create" as const,fromOwnerId:null,toOwnerId:`user:${receipt.userId}`}]),
+    assetTransitions:Object.freeze([{assetId:`item:aurion_v2:${item.id}`,transitionKind:"create" as const,fromOwnerId:null,toOwnerId:`user:${receipt.userId}`}]),
   });
 }
 
@@ -65,6 +65,45 @@ async function deriveSource(tx:Tx,kind:AurionEconomicSourceKind,sourceId:string)
   if(kind==="trade_crafting") return deriveTradeCrafting(tx,sourceId);
   if(kind==="loot_v2") return deriveLootV2(tx,sourceId);
   throw new Error("ECONOMIC_SOURCE_KIND_UNSUPPORTED");
+}
+
+async function assertAssetTransitionAllowed(
+  tx:Tx,
+  worldId:string,
+  transition:AurionEconomicEvent["assetTransitions"][number],
+):Promise<void>{
+  const rows=await tx.select({
+    transitionKind:aurionEconomicAssetTransitions.transitionKind,
+    fromOwnerId:aurionEconomicAssetTransitions.fromOwnerId,
+    toOwnerId:aurionEconomicAssetTransitions.toOwnerId,
+    ordinal:aurionEconomicEvents.ordinal,
+  }).from(aurionEconomicAssetTransitions)
+    .innerJoin(aurionEconomicEvents,eq(aurionEconomicEvents.eventId,aurionEconomicAssetTransitions.eventId))
+    .where(and(
+      eq(aurionEconomicEvents.worldId,worldId),
+      eq(aurionEconomicAssetTransitions.assetId,transition.assetId),
+    ))
+    .orderBy(asc(aurionEconomicEvents.ordinal))
+    .limit(2049);
+  if(rows.length>2048) throw new Error("ECONOMIC_ASSET_LINEAGE_LIMIT_EXCEEDED");
+  let created=false,owner:string|null=null,consumed=false;
+  for(const row of rows){
+    if(row.transitionKind==="create"){
+      if(created||consumed||row.fromOwnerId!==null||row.toOwnerId===null) throw new Error("ECONOMIC_ASSET_LINEAGE_CORRUPT");
+      created=true;owner=row.toOwnerId;
+    }else if(row.transitionKind==="transfer"){
+      if(!created||consumed||owner!==row.fromOwnerId||row.toOwnerId===null) throw new Error("ECONOMIC_ASSET_LINEAGE_CORRUPT");
+      owner=row.toOwnerId;
+    }else{
+      if(!created||consumed||owner!==row.fromOwnerId||row.toOwnerId!==null) throw new Error("ECONOMIC_ASSET_LINEAGE_CORRUPT");
+      owner=null;consumed=true;
+    }
+  }
+  if(transition.transitionKind==="create"){
+    if(created) throw new Error("ECONOMIC_ASSET_DUPLICATE_CREATE");
+    return;
+  }
+  if(!created||consumed||owner!==transition.fromOwnerId) throw new Error("ECONOMIC_ASSET_OWNERSHIP_MISMATCH");
 }
 
 async function readEvent(tx:Tx,id:string):Promise<AurionEconomicEvent|null>{
@@ -121,10 +160,7 @@ export async function materializeEconomicSource(input:{sourceKind:AurionEconomic
       if(!read||canonicalJson(read)!==canonicalJson(event))throw new Error("ECONOMIC_EVENT_IDEMPOTENCY_CONFLICT");
       return Object.freeze({applied:false as const,ordinal:prior.ordinal,event:read});
     }
-    for(const transition of event.assetTransitions){
-      const existing=await tx.select().from(aurionEconomicAssetTransitions).where(eq(aurionEconomicAssetTransitions.assetId,transition.assetId)).limit(1);
-      if(existing.length)throw new Error("ECONOMIC_ASSET_DUPLICATE_CREATE");
-    }
+    for(const transition of event.assetTransitions) await assertAssetTransitionAllowed(tx,event.worldId,transition);
     const ordinal=coordinator.nextOrdinal;
     await tx.insert(aurionEconomicEvents).values({
       eventId:event.eventId,worldId:event.worldId,epoch:event.epoch,ordinal,eventType:event.eventType,sourceKind:event.sourceKind,sourceId:event.sourceId,
