@@ -27,10 +27,11 @@ export function lootV2SourceEvidenceHash(
       resolvedJson:receipt.resolvedJson,contextHash:receipt.contextHash,deterministicHash:receipt.deterministicHash,
       ruleSetVersion:receipt.ruleSetVersion,contentVersion:receipt.contentVersion,idempotencyKey:receipt.idempotencyKey,
     },
-    item:{
-      id:item.id,ownerUserId:item.ownerUserId,lootReceiptId:item.lootReceiptId,baseItemDefinitionId:item.baseItemDefinitionId,
+    itemCreation:{
+      id:item.id,lootReceiptId:item.lootReceiptId,baseItemDefinitionId:item.baseItemDefinitionId,
       category:item.category,equipmentSlot:item.equipmentSlot,quality:item.quality,itemLevelExact:item.itemLevelExact,
-      affixesJson:item.affixesJson,setId:item.setId,itemPower:item.itemPower,deterministicHash:item.deterministicHash,status:item.status,
+      affixesJson:item.affixesJson,setId:item.setId,itemPower:item.itemPower,deterministicHash:item.deterministicHash,
+      originalOwnerUserId:receipt.userId,
     },
   });
 }
