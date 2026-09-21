@@ -5,6 +5,10 @@ on:
     paths:
       - "server/openSource3dFallback.ts"
       - "server/openSource3dFallback.test.ts"
+      - "server/automaticGlbFallback.ts"
+      - "server/automaticGlbFallback.test.ts"
+      - "server/starterGlbRuntimeAssets.ts"
+      - "server/starterGlbRuntimeAssets.test.ts"
       - "server/glbImportStore.ts"
       - "server/gameDevelopmentStudioProduction.ts"
       - "server/adminMcp.ts"
@@ -53,7 +57,12 @@ jobs:
           pnpm exec tsx scripts/verify-os3a-fallback-source.ts
       - name: Targeted fallback regressions
         run: |
-          pnpm exec vitest run             server/openSource3dFallback.test.ts             server/adminMcp.test.ts             client/src/xaurion/core/GlbResourceBudget.test.ts
+          pnpm exec vitest run \
+            server/openSource3dFallback.test.ts \
+            server/automaticGlbFallback.test.ts \
+            server/starterGlbRuntimeAssets.test.ts \
+            server/adminMcp.test.ts \
+            client/src/xaurion/core/GlbResourceBudget.test.ts
       - name: Live pinned source -> Aurion budget -> GDS plan
         run: |
           mkdir -p .aurion-os3a-evidence
