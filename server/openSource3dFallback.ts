@@ -13,9 +13,10 @@ import {
   type GameDevelopmentStudioLivePlan,
 } from "./gameDevelopmentStudioProduction";
 import { glbImportStore } from "./glbImportStore";
+import { buildGlbImportPlan } from "./glbImportPlan";
 
 export const OS3A_FALLBACK_CONFIRMATION = "ADMIT_OS3A_FALLBACK" as const;
-const PLAN_PURPOSES = ["npc-fallback", "world-environment", "world-nature", "player-public", "equipment"] as const;
+const PLAN_PURPOSES = ["npc-fallback", "enemy-fallback", "world-environment", "world-nature", "player-public", "equipment"] as const;
 const TIERS = ["phone", "tablet", "desktop"] as const;
 const SOURCE_PATH = /^projects\/[A-Za-z0-9._ /-]+\.glb$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -187,10 +188,16 @@ function arrayBuffer(bytes: Buffer): ArrayBuffer {
 export function openSource3dFallbackSource() {
   const discoveryOnly = sourceCatalog.assets.filter(asset => asset.discoveryOnly).length;
   const classified = sourceCatalog.assets.filter(asset => !asset.discoveryOnly);
+  const enemyFallback = sourceCatalog.assets.filter(asset => asset.discoveryOnly && asset.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE");
   const tierCandidateCounts = Object.freeze({
     phone: classified.filter(asset => asset.fileSize <= assetBudgets.phone.assetBytes).length,
     tablet: classified.filter(asset => asset.fileSize <= assetBudgets.tablet.assetBytes).length,
     desktop: classified.filter(asset => asset.fileSize <= assetBudgets.desktop.assetBytes).length,
+  });
+  const enemyFallbackTierCandidateCounts = Object.freeze({
+    phone: enemyFallback.filter(asset => asset.fileSize <= assetBudgets.phone.assetBytes).length,
+    tablet: enemyFallback.filter(asset => asset.fileSize <= assetBudgets.tablet.assetBytes).length,
+    desktop: enemyFallback.filter(asset => asset.fileSize <= assetBudgets.desktop.assetBytes).length,
   });
   return Object.freeze({
     schemaVersion: sourceCatalog.schemaVersion,
@@ -206,6 +213,8 @@ export function openSource3dFallbackSource() {
     transferOversizeCount: classified.length - tierCandidateCounts.desktop,
     tierCandidateCounts,
     discoveryOnlyCount: discoveryOnly,
+    enemyFallbackCandidateCount: enemyFallback.length,
+    enemyFallbackTierCandidateCounts,
     collections: Object.freeze([...sourceCatalog.projectIds]),
     runtimeDependency: false as const,
     gameplayAuthority: "none" as const,
@@ -253,9 +262,15 @@ export function searchOpenSource3dFallback(rawInput: Os3aSearchInput) {
   });
 }
 
-export async function downloadOpenSource3dCandidate(sourceAssetId: string, tier: AssetTier, fetcher: Fetcher = fetch): Promise<Readonly<{ candidate: CatalogAsset; bytes: Buffer; sha256: string; url: string }>> {
+export async function downloadOpenSource3dCandidate(
+  sourceAssetId: string,
+  tier: AssetTier,
+  fetcher: Fetcher = fetch,
+  allowDedicatedEnemyFallback = false,
+): Promise<Readonly<{ candidate: CatalogAsset; bytes: Buffer; sha256: string; url: string }>> {
   const candidate = candidateById(sourceAssetId);
-  if (candidate.discoveryOnly) throw new Error(candidate.discoveryNote ?? "OS3A_DISCOVERY_ONLY");
+  const dedicatedEnemyCandidate = candidate.discoveryOnly && candidate.discoveryNote === "RIGGED_CREATURE_REQUIRES_DEDICATED_ENEMY_FALLBACK_LANE";
+  if (candidate.discoveryOnly && !(allowDedicatedEnemyFallback && dedicatedEnemyCandidate)) throw new Error(candidate.discoveryNote ?? "OS3A_DISCOVERY_ONLY");
   const limits = assetBudgets[tier];
   if (candidate.fileSize > limits.assetBytes) throw new Error("OS3A_TRANSFER_BUDGET_EXCEEDED");
   const url = pinnedModelUrl(candidate);
@@ -300,7 +315,7 @@ function budgetEvidence(bytes: Buffer, tier: AssetTier) {
 
 async function resolveOpenSource3dFallbackPlan(rawInput: Os3aPlanInput, deps: Os3aFallbackDependencies = {}) {
   const input = os3aPlanInputSchema.parse(rawInput);
-  const downloaded = await downloadOpenSource3dCandidate(input.sourceAssetId, input.tier, deps.fetcher ?? fetch);
+  const downloaded = await downloadOpenSource3dCandidate(input.sourceAssetId, input.tier, deps.fetcher ?? fetch, input.purpose === "enemy-fallback");
   const budget = budgetEvidence(downloaded.bytes, input.tier);
   const metadataIdentity = Object.freeze({
     catalogSchemaVersion: sourceCatalog.schemaVersion,
@@ -314,8 +329,9 @@ async function resolveOpenSource3dFallbackPlan(rawInput: Os3aPlanInput, deps: Os
   });
   const sourceMetadataSha256 = canonicalSha256(metadataIdentity);
   const liveAsset = assetInput(downloaded.candidate, input.purpose, downloaded.bytes.toString("base64"));
+  const aurionPreview = buildGlbImportPlan(liveAsset.contentBase64, input.purpose, liveAsset.fileName);
   const gameDevPlan = await (deps.gameDevPlanner ?? planGameDevelopmentStudioLiveAsset)(liveAsset);
-  if (gameDevPlan.sourceSha256 !== downloaded.sha256) throw new Error("OS3A_GDS_SOURCE_IDENTITY_MISMATCH");
+  if (gameDevPlan.sourceSha256 !== downloaded.sha256 || gameDevPlan.aurionPlanSha256 !== aurionPreview.planSha256) throw new Error("OS3A_GDS_SOURCE_IDENTITY_MISMATCH");
   if (!gameDevPlan.validationPassed) throw new Error("OS3A_GDS_VALIDATION_BLOCKED");
   const identity = Object.freeze({
     schemaVersion: "aurion.os3a-fallback-plan.v1" as const,
@@ -329,6 +345,13 @@ async function resolveOpenSource3dFallbackPlan(rawInput: Os3aPlanInput, deps: Os
     sourceSha256: downloaded.sha256,
     sourceBytes: downloaded.bytes.length,
     purpose: input.purpose,
+    classification: Object.freeze({
+      assetType: aurionPreview.assetType,
+      subcategory: aurionPreview.subcategory,
+      equipmentSlot: aurionPreview.equipmentSlot,
+      worldFamily: aurionPreview.worldFamily,
+      lod: aurionPreview.classification.lod,
+    }),
     tier: input.tier,
     budget,
     gameDevPlanSha256: gameDevPlan.planSha256,
