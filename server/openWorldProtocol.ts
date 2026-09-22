@@ -165,8 +165,10 @@ function propsForZone(zoneId: OpenWorldZoneKey): OpenWorldSnapshot["props"] {
 }
 
 export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZoneKey {
-  if (input.activeQuest === "clockwork_core" || input.completed.includes("clockwork_core")) return "clockwork_woods";
-  if (input.activeQuest === "sunwatch_vanguard" || input.completed.includes("starfall_resonance")) return "sunwatch_bastion";
+  if (input.activeQuest === "clockwork_core") return "clockwork_woods";
+  if (input.activeQuest === "sunwatch_vanguard") return "sunwatch_bastion";
+  if (input.completed.includes("clockwork_core")) return "clockwork_woods";
+  if (input.completed.includes("starfall_resonance")) return "sunwatch_bastion";
   if (input.completed.includes("ember_key")) return "starfall_crater";
   if (input.canEnterDungeon) return "cinder_vault";
   if (input.completed.includes("archive_of_echoes")) return "emberfall";
