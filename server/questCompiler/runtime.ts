@@ -14,6 +14,7 @@ import { CandidateResolver } from './candidateResolver';
 import { RoleResolver } from './roleResolver';
 import { QuestComposer } from './composer';
 import { QuestValidator } from './validator';
+import { QuestDomainCommandSchema, type QuestDomainCommand } from '../../shared/aurionQuestDomainCommandContract';
 
 /**
  * AIM-298: Aurion Authoritative Quest Runtime Engine.
@@ -125,6 +126,60 @@ export class QuestRuntimeEngine {
     };
 
     return { instance, plan };
+  }
+
+  public executeDomainCommand(
+    command: QuestDomainCommand,
+    instance: QuestInstance,
+    plan: QuestPlan,
+  ) {
+    const parsed = QuestDomainCommandSchema.parse(command);
+    const { commandId, ...identityPayload } = parsed;
+    const expectedCommandId = computeCanonicalHash('aurion.quest.command.v1', identityPayload);
+    if (commandId !== expectedCommandId) {
+      throw new Error("QUEST_DOMAIN_COMMAND_IDENTITY_MISMATCH");
+    }
+    if (parsed.instanceId !== instance.id) {
+      throw new Error("QUEST_DOMAIN_COMMAND_INSTANCE_MISMATCH");
+    }
+    if (parsed.planHash !== instance.planHash || parsed.graphHash !== instance.graphHash) {
+      throw new Error("QUEST_DOMAIN_COMMAND_PLAN_MISMATCH");
+    }
+    if (computeQuestStateHash(instance) !== parsed.expectedStateHash) {
+      throw new Error("QUEST_DOMAIN_COMMAND_STALE_STATE");
+    }
+    if (parsed.kind === "accept" && parsed.eventSequence !== 1) {
+      throw new Error("QUEST_DOMAIN_COMMAND_ACCEPT_SEQUENCE_INVALID");
+    }
+
+    switch (parsed.kind) {
+      case "accept":
+        return { kind: parsed.kind, ...this.acceptQuest(instance, plan) } as const;
+      case "progress":
+        return {
+          kind: parsed.kind,
+          ...this.progressObjective(instance, plan, parsed.objectiveKey, parsed.amount, {
+            eventSequence: parsed.eventSequence,
+            idempotencyKey: parsed.idempotencyKey,
+          }),
+        } as const;
+      case "choice":
+        return {
+          kind: parsed.kind,
+          ...this.chooseBranch(instance, plan, parsed.edgeId, {
+            eventSequence: parsed.eventSequence,
+            idempotencyKey: parsed.idempotencyKey,
+          }),
+        } as const;
+      case "complete":
+        return {
+          kind: parsed.kind,
+          ...this.completeQuest(instance, plan, {
+            eventSequence: parsed.eventSequence,
+            idempotencyKey: parsed.idempotencyKey,
+          }),
+        } as const;
+    }
   }
 
   public acceptQuest(instance: QuestInstance, plan: QuestPlan): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
