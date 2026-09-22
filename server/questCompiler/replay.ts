@@ -108,14 +108,6 @@ export class QuestReplayEngine {
         'UNPROVABLE',
       );
     }
-    if (computeQuestStateHash(instance) === '') {
-      return finish(
-        replayUnprovable(context, verified, 'QUEST_STATE_HASH_UNCOMPUTABLE'),
-        'UNPROVABLE',
-        plan.graphHash,
-        'UNPROVABLE',
-      );
-    }
     verified.push('SOURCE_TUPLE');
 
     const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
