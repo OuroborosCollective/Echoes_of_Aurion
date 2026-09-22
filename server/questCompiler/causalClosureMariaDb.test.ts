@@ -276,10 +276,13 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     const temporal = await readTemporalEventById(closure.temporalEvent.eventId);
     expect(temporal.eventHash).toBe(closure.temporalEvent.eventHash);
     expect(temporal.sourceReceiptHash).toBe(closure.anchor.causalReceiptHash);
+    const temporalPayload = temporal.payload as { worldEvent?: { id?: string; payloadHash?: string; data?: { anchorHash?: string } } };
+    expect(temporalPayload.worldEvent?.id).toBe(closure.worldEvent.id);
+    expect(temporalPayload.worldEvent?.payloadHash).toBe(closure.worldEvent.payloadHash);
+    expect(temporalPayload.worldEvent?.data?.anchorHash).toBe(closure.anchor.anchorHash);
 
     const effectRows = await db.select().from(aurionEffectIntents).where(eq(aurionEffectIntents.authorityReceiptHash, closure.anchor.causalReceiptHash));
-    expect(effectRows.filter(row => row.effectId === closure.effectIntents[0]?.effectId)).toHaveLength(1);
-    expect(effectRows.filter(row => row.effectId === closure.effectIntents[1]?.effectId)).toHaveLength(1);
+    expect(effectRows.map(row => row.effectId).sort()).toEqual(closure.effectIntents.map(effect => effect.effectId).sort());
 
     const temporalRows = await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, closure.temporalEvent.eventId));
     expect(temporalRows).toHaveLength(1);
