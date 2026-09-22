@@ -60,6 +60,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "locked", false],
       ["ember_key", "locked", false],
       ["starfall_resonance", "locked", false],
+      ["clockwork_core", "locked", false],
       ["sunwatch_vanguard", "locked", false],
     ]);
     await expect(acceptGameplayQuest({ userId: QUEST_CHAIN_REGRESSION_USER_ID, questKey: "archive_of_echoes" })).rejects.toThrow("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
@@ -110,6 +111,7 @@ describeWithDatabase("quest chain regression E2E", () => {
       ["archive_of_echoes", "completed", false],
       ["ember_key", "completed", false],
       ["starfall_resonance", "available", false],
+      ["clockwork_core", "locked", false],
       ["sunwatch_vanguard", "locked", false],
     ]);
     expect(afterKey.keys).toEqual(["ember_key"]);
@@ -186,7 +188,7 @@ describeWithDatabase("quest chain regression E2E", () => {
     expect(dungeon.session).toMatchObject({ encounterKey: "cinder_vault", status: "active", bossHp: 258 });
     const rewards = await db.select().from(progressionLedger).where(eq(progressionLedger.userId, QUEST_CHAIN_REGRESSION_USER_ID));
     expect(rewards).toHaveLength(18);
-    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(15);
+    expect(new Set(rewards.map(reward => reward.idempotencyKey)).size).toBe(18);
     expect(rewards.map(reward => `${reward.kind}:${reward.delta}`).sort()).toEqual([
       "points:100", "points:100", "points:20", "points:35", "points:60", "points:75",
       "victory:1", "victory:1", "victory:1", "victory:1", "victory:1", "victory:1",
