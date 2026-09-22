@@ -280,7 +280,7 @@ jobs:
           test "$(sudo stat -c '%U:%G:%a' "$backup_file")" = "root:root:600"
           sudo gzip -t "$backup_file"
           rows="$(docker exec -e MYSQL_PWD="$AURION_APPLY_TEST_ROOT_PASSWORD" "$AURION_APPLY_TEST_DB" mariadb --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM __drizzle_migrations" "$AURION_APPLY_TEST_DATABASE")"
-          test "$rows" -eq 58
+          test "$rows" -eq 59
 
       - name: Prove applied ledger triggers reject real updates and deletes
         run: |
