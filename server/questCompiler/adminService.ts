@@ -120,7 +120,15 @@ export class AdminQuestStudioService {
     if (!instance) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${instanceId}`);
     const plan = await this.persistenceEngine.getPlan(instance.planHash);
     if (!plan) throw new Error(`QUEST_PLAN_NOT_FOUND:${instance.planHash}`);
-    return this.replayEngine.replayInstance(instance, plan, this.worldFactEngine.getFacts(), instance.planHash);
+    const receipts = await this.persistenceEngine.getReceiptsForInstance(instanceId);
+    return this.replayEngine.replayInstance(
+      instance,
+      plan,
+      this.worldFactEngine.getFacts(),
+      instance.planHash,
+      instance.worldStateRevision,
+      { receipts },
+    );
   }
 
   public async createDraftProposal(params: {
