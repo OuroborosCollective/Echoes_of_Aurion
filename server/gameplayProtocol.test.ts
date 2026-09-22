@@ -8,6 +8,7 @@ describe("Aurion quest and action protocol", () => {
     expect(resolveQuestState({ key: "archive_of_echoes", level: 2, completed: ["astral_call"], active: null })).toBe("available");
     expect(resolveQuestState({ key: "ember_key", level: 3, completed: ["astral_call", "archive_of_echoes"], active: null })).toBe("available");
     expect(resolveQuestState({ key: "clockwork_core", level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], active: null })).toBe("available");
+    expect(resolveQuestState({ key: "sunwatch_vanguard", level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], active: null })).toBe("available");
   });
 
   it("opens the first dungeon only with quest and key", () => {
