@@ -215,7 +215,7 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     const realReceipts = await db.select().from(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.worldId, WORLD_ID));
     expect(realReceipts.some(row => row.inputJson?.includes(completionCommand.commandId))).toBe(true);
 
-    // 5. Resolve and persist the causal closure.
+    // 5. Resolve the exact real causal tick and build the closure.
     const anchor = await resolveQuestCausalAnchor({
       instance: progressedCommitted.updatedInstance,
       plan: offered.plan,
@@ -229,17 +229,8 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
       receipt: completion.receipt,
       anchor: anchor.anchor,
     });
-    const committed = await persistence.commitObjectiveTransition({
-      instanceId: progressedCommitted.updatedInstance.id,
-      expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
-      idempotencyKey: completionCommand.idempotencyKey,
-      receipt: completion.receipt,
-      updatedInstance: completion.updatedInstance,
-      causalClosure: closure,
-    });
-    expect(committed.replayed).toBe(false);
 
-    // 6. Rollback proof must run before the first successful completion so the quest is still active.
+    // 6. Atomic rollback: receipt + anchor + temporal + earlier effect must all disappear.
     const poisonedClosure = {
       ...closure,
       effectIntents: Object.freeze([
@@ -253,16 +244,12 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
       eventSequence: 3,
       idempotencyKey: `complete:${offered.instance.id}:rollback`,
     };
-    const rollbackInstance = {
-      ...completion.updatedInstance,
-      updatedAt: "2026-01-01T00:00:03.000Z",
-    } as QuestInstance;
     await expect(persistence.commitObjectiveTransition({
       instanceId: progressedCommitted.updatedInstance.id,
       expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
       idempotencyKey: rollbackReceipt.idempotencyKey,
       receipt: rollbackReceipt,
-      updatedInstance: rollbackInstance,
+      updatedInstance: completion.updatedInstance,
       causalClosure: poisonedClosure,
     })).rejects.toThrow("EFFECT_AUTHORITY_RECEIPT_UNPROVABLE");
 
@@ -271,10 +258,22 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     expect(await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, poisonedClosure.temporalEvent.eventId))).toHaveLength(0);
     expect(await db.select().from(aurionEffectIntents).where(eq(aurionEffectIntents.effectId, poisonedClosure.effectIntents.at(-1)!.effectId))).toHaveLength(0);
 
-    // 7. Physical readback of every authority after the successful commit.
-     const storedAnchor = await readQuestCausalAnchorByReceiptId(completion.receipt.id);
+    // 7. Successful atomic commit after the rollback proof.
+    const committed = await persistence.commitObjectiveTransition({
+      instanceId: progressedCommitted.updatedInstance.id,
+      expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
+      idempotencyKey: completionCommand.idempotencyKey,
+      receipt: completion.receipt,
+      updatedInstance: completion.updatedInstance,
+      causalClosure: closure,
+    });
+    expect(committed.replayed).toBe(false);
+
+    // 8. Physical readback of every authority and replay verification.
+    const storedAnchor = await readQuestCausalAnchorByReceiptId(completion.receipt.id);
     expect(storedAnchor.anchorHash).toBe(closure.anchor.anchorHash);
     expect(storedAnchor.causalReceiptHash).toBe(closure.anchor.causalReceiptHash);
+    await expect(readQuestCausalAnchorByReceiptId(`missing:${completion.receipt.id}`)).rejects.toThrow("QUEST_CAUSAL_ANCHOR_UNPROVABLE");
 
     const temporal = await readTemporalEventById(closure.temporalEvent.eventId);
     expect(temporal.eventHash).toBe(closure.temporalEvent.eventHash);
@@ -287,7 +286,7 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     const temporalRows = await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, closure.temporalEvent.eventId));
     expect(temporalRows).toHaveLength(1);
 
-    // 8. Exact duplicate retry = one durable closure.
+    // 9. Exact duplicate retry = one durable closure.
     const replayed = await persistence.commitObjectiveTransition({
       instanceId: progressedCommitted.updatedInstance.id,
       expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
@@ -299,35 +298,5 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     expect(replayed.replayed).toBe(true);
     expect(await db.select().from(aurionQuestCausalAnchors).where(eq(aurionQuestCausalAnchors.questReceiptId, completion.receipt.id))).toHaveLength(1);
     expect(await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, closure.temporalEvent.eventId))).toHaveLength(1);
-
-    // 8. Poison one effect after the anchor/temporal inserts are logically in flight.
-    const poisonedClosure = {
-      ...closure,
-      effectIntents: Object.freeze([
-        ...closure.effectIntents.slice(0, -1),
-        { ...closure.effectIntents.at(-1)!, authorityReceiptHash: "sha256:" + "0".repeat(64) },
-      ]),
-    };
-    const rollbackReceipt = {
-      ...completion.receipt,
-      id: `rcpt_${completion.receipt.id}_rollback`,
-      eventSequence: 4,
-      idempotencyKey: `complete:${offered.instance.id}:rollback`,
-    };
-    const rollbackInstance = {
-      ...completion.updatedInstance,
-      updatedAt: "2026-01-01T00:00:03.000Z",
-    } as QuestInstance;
-    await expect(persistence.commitObjectiveTransition({
-      instanceId: progressedCommitted.updatedInstance.id,
-      expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
-      idempotencyKey: rollbackReceipt.idempotencyKey,
-      receipt: rollbackReceipt,
-      updatedInstance: rollbackInstance,
-      causalClosure: poisonedClosure,
-    })).rejects.toThrow("EFFECT_AUTHORITY_RECEIPT_UNPROVABLE");
-
-    expect(await db.select().from(aurionQuestReceipts).where(eq(aurionQuestReceipts.id, rollbackReceipt.id))).toHaveLength(0);
-    expect(await db.select().from(aurionQuestCausalAnchors).where(eq(aurionQuestCausalAnchors.questReceiptId, rollbackReceipt.id))).toHaveLength(0);
   });
 });
