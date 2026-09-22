@@ -154,6 +154,7 @@ async function findRealCausalReceipt(
         if (scanned > MAX_RECEIPTS_PER_RANGE) throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_SCAN_LIMIT");
         for (const row of rows) {
           if (!intentMatchesStored(row, command, source, questId)) continue;
+          if (row.tick < zoneRoot.fromTick || row.tick > zoneRoot.toTick) continue;
           matches.push({ receipt: decodeReceipt(row), epoch: proof.epoch, sourceWorldRoot: persisted.root.worldRootHash });
           if (matches.length > 1) throw new Error("QUEST_CAUSAL_ANCHOR_MULTIPLE_MATCHES");
         }
@@ -280,6 +281,10 @@ export async function readQuestCausalAnchorByReceiptId(questReceiptId: string): 
   const root = await worldCausalRootService.read(anchor.worldId, anchor.epoch);
   if (!root || root.status !== "VERIFIED" || root.root?.worldRootHash !== anchor.sourceWorldRoot) {
     throw new Error("QUEST_CAUSAL_ANCHOR_WORLD_ROOT_UNPROVABLE");
+  }
+  const zoneRoot = root.root.zoneRoots.find(value => value.zoneId === anchor.zoneId);
+  if (!zoneRoot || anchor.tick < zoneRoot.fromTick || anchor.tick > zoneRoot.toTick) {
+    throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_OUTSIDE_WORLD_ROOT");
   }
   const replay = await worldCausalRootService.replay(anchor.worldId, anchor.epoch);
   if (replay.status !== "MATCH" || replay.worldRootHash !== anchor.sourceWorldRoot) {
