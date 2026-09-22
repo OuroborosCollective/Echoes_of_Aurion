@@ -288,9 +288,6 @@ export class QuestPersistenceEngine {
     if (input.receipt.idempotencyKey !== input.idempotencyKey || input.receipt.instanceId !== input.instanceId) {
       throw new Error("QUEST_RECEIPT_IDENTITY_MISMATCH");
     }
-    if (computeQuestStateHash(input.updatedInstance) !== input.receipt.resultStateHash) {
-      throw new Error("QUEST_RESULT_STATE_HASH_MISMATCH");
-    }
     if (!this.verifyReceiptIntegrity(input.receipt)) throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${input.receipt.id}`);
     return this.withInstanceLock(input.instanceId, async () => {
       const db = await getDb();
@@ -324,6 +321,9 @@ export class QuestPersistenceEngine {
           input.updatedInstance.graphHash !== current.graphHash
         ) {
           throw new Error("QUEST_RUNTIME_STALE_STATE");
+        }
+        if (computeQuestStateHash(input.updatedInstance) !== input.receipt.resultStateHash) {
+          throw new Error("QUEST_RESULT_STATE_HASH_MISMATCH");
         }
         const lastSequence = [...this.receipts.values()]
           .filter(receipt => receipt.instanceId === input.instanceId)
