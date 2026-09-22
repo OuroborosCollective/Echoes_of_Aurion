@@ -6,7 +6,7 @@ import { getDb } from "../db";
 import { worldCausalRootService } from "../causality/worldCausalRootService";
 
 type Database=NonNullable<Awaited<ReturnType<typeof getDb>>>;
-type TemporalTx=Parameters<Parameters<Database["transaction"]>[0]>[0];
+export type TemporalTx=Parameters<Parameters<Database["transaction"]>[0]>[0];
 type TemporalReader=Pick<TemporalTx,"select">;
 
 async function decodeStored(reader:TemporalReader,eventId:string):Promise<AurionTemporalEvent|null>{
@@ -62,41 +62,41 @@ export async function verifyTemporalEventSource(event:AurionTemporalEvent):Promi
   if(replay.status!=="MATCH"||replay.worldRootHash!==event.sourceWorldRoot) throw new Error("TEMPORAL_WORLD_ROOT_REPLAY_MISMATCH");
 }
 
+export async function appendTemporalEventInTransaction(tx: TemporalTx, event: AurionTemporalEvent){
+  const prior=await decodeStored(tx,event.eventId);
+  if(prior){
+    if(prior.eventHash!==event.eventHash||canonicalJson(prior)!==canonicalJson(event)) throw new Error("TEMPORAL_EVENT_ID_CONFLICT");
+    return Object.freeze({applied:false as const,event:prior});
+  }
+  if(event.predecessorEventIds.length){
+    const rows=await tx.select().from(aurionTemporalEvents).where(inArray(aurionTemporalEvents.eventId,[...event.predecessorEventIds]));
+    if(rows.length!==event.predecessorEventIds.length) throw new Error("TEMPORAL_PREDECESSOR_MISSING");
+    for(const row of rows) if(row.worldId!==event.worldId||row.epoch>event.epoch||row.validFromEpoch>event.validFromEpoch) {
+      throw new Error("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
+    }
+  }
+  await tx.insert(aurionTemporalEvents).values({
+    eventId:event.eventId,worldId:event.worldId,epoch:event.epoch,domain:event.domain,validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,
+    sourceReceiptHash:event.sourceReceiptHash,sourceWorldRoot:event.sourceWorldRoot,sourceRevision:event.sourceRevision,rulesetVersion:event.rulesetVersion,
+    payloadJson:canonicalJson(event.payload),payloadHash:event.payloadHash,eventHash:event.eventHash,
+  });
+  await tx.insert(aurionTemporalEventSubjects).values(event.subjectIds.map(subjectId=>({
+    eventId:event.eventId,worldId:event.worldId,subjectId,domain:event.domain,validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,
+  })));
+  if(event.predecessorEventIds.length) await tx.insert(aurionTemporalEventPredecessors).values(event.predecessorEventIds.map(predecessorEventId=>({
+    eventId:event.eventId,predecessorEventId,worldId:event.worldId,
+  })));
+  const stored=await decodeStored(tx,event.eventId);
+  if(!stored||stored.eventHash!==event.eventHash||canonicalJson(stored)!==canonicalJson(event)) throw new Error("TEMPORAL_EVENT_READBACK_MISMATCH");
+  return Object.freeze({applied:true as const,event:stored});
+}
+
 export async function appendTemporalEvent(event:AurionTemporalEvent){
   const integrity=verifyTemporalEventIntegrity(event);
   if(!integrity.valid) throw new Error(`TEMPORAL_EVENT_INVALID:${integrity.reason??"UNKNOWN"}`);
   await verifyTemporalEventSource(event);
   const db=await getDb(); if(!db) throw new Error("TEMPORAL_DATABASE_UNAVAILABLE");
-  return db.transaction(async tx=>{
-    const prior=await decodeStored(tx,event.eventId);
-    if(prior){
-      if(prior.eventHash!==event.eventHash||canonicalJson(prior)!==canonicalJson(event)) throw new Error("TEMPORAL_EVENT_ID_CONFLICT");
-      return Object.freeze({applied:false as const,event:prior});
-    }
-    if(event.predecessorEventIds.length){
-      const rows=await tx.select().from(aurionTemporalEvents).where(inArray(aurionTemporalEvents.eventId,[...event.predecessorEventIds]));
-      if(rows.length!==event.predecessorEventIds.length) throw new Error("TEMPORAL_PREDECESSOR_MISSING");
-      for(const row of rows) if(
-        row.worldId!==event.worldId||
-        row.epoch>event.epoch||
-        row.validFromEpoch>event.validFromEpoch
-      ) throw new Error("TEMPORAL_PREDECESSOR_IDENTITY_INVALID");
-    }
-    await tx.insert(aurionTemporalEvents).values({
-      eventId:event.eventId,worldId:event.worldId,epoch:event.epoch,domain:event.domain,validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,
-      sourceReceiptHash:event.sourceReceiptHash,sourceWorldRoot:event.sourceWorldRoot,sourceRevision:event.sourceRevision,rulesetVersion:event.rulesetVersion,
-      payloadJson:canonicalJson(event.payload),payloadHash:event.payloadHash,eventHash:event.eventHash,
-    });
-    await tx.insert(aurionTemporalEventSubjects).values(event.subjectIds.map(subjectId=>({
-      eventId:event.eventId,worldId:event.worldId,subjectId,domain:event.domain,validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,
-    })));
-    if(event.predecessorEventIds.length) await tx.insert(aurionTemporalEventPredecessors).values(event.predecessorEventIds.map(predecessorEventId=>({
-      eventId:event.eventId,predecessorEventId,worldId:event.worldId,
-    })));
-    const stored=await decodeStored(tx,event.eventId);
-    if(!stored||stored.eventHash!==event.eventHash||canonicalJson(stored)!==canonicalJson(event)) throw new Error("TEMPORAL_EVENT_READBACK_MISMATCH");
-    return Object.freeze({applied:true as const,event:stored});
-  });
+  return db.transaction(tx=>appendTemporalEventInTransaction(tx,event));
 }
 
 export async function readTemporalEventById(eventId:string):Promise<AurionTemporalEvent|null>{
