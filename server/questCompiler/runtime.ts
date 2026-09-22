@@ -250,7 +250,7 @@ export class QuestRuntimeEngine {
     if (edge.conditionPredicate) throw new Error("QUEST_BRANCH_CONDITION_UNSUPPORTED");
 
     const occurredAt = operationalDate(this.clock).toISOString();
-    const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
+    const previousStateHash = computeQuestStateHash(instance);
     const completedNodeIds = instance.completedNodeIds.includes(node.id)
       ? [...instance.completedNodeIds]
       : [...instance.completedNodeIds, node.id];
@@ -260,7 +260,7 @@ export class QuestRuntimeEngine {
       completedNodeIds,
       updatedAt: occurredAt,
     };
-    const resultStateHash = computeCanonicalHash("aurion.quest.instance.v1", updatedInstance);
+    const resultStateHash = computeQuestStateHash(updatedInstance);
     const eventSequence = options?.eventSequence ?? completedNodeIds.length + 2;
     const receiptIdentity = computeCanonicalHash("aurion.quest.receipt.identity.v1", {
       instanceId: instance.id,
