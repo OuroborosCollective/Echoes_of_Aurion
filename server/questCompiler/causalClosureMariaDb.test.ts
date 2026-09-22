@@ -23,7 +23,7 @@ import {
   readEncounterCompletionEvidence,
 } from "../encounterCompletionEvidence";
 import { cleanupQuestRegressionUser } from "../questRegressionFixture";
-import { applyGameplayAction, getDb, startGameplayEncounter } from "../db";
+import { acceptGameplayQuest, applyGameplayAction, getDb, startGameplayEncounter } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalTickRecorder } from "../causality/tickRecorder";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
@@ -45,7 +45,8 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     expect(db).not.toBeNull();
     if (!db) return;
 
-    // 1. Real durable encounter-completion evidence.
+    // 1. Activate the existing legacy quest authority, then produce real durable encounter evidence.
+    await acceptGameplayQuest({ userId: TEST_USER_ID, questKey: "astral_call" });
     const encounter = await startGameplayEncounter({ userId: TEST_USER_ID, encounterKey: "asterion" });
     for (const sequence of [1, 2, 3]) {
       const applied = await applyGameplayAction({
