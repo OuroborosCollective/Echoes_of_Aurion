@@ -29,7 +29,7 @@ CREATE TABLE `aurionQuestCausalAnchors` (
   CONSTRAINT `aurionQuestCausalAnchors_id` PRIMARY KEY (`id`),
   UNIQUE KEY `aurionQuestCausalAnchors_receipt_uq` (`questReceiptId`),
   UNIQUE KEY `aurionQuestCausalAnchors_anchor_uq` (`anchorHash`),
-  UNIQUE KEY `aurionQuestCausalAnchors_causal_receipt_uq` (`causalReceiptHash`),
+  KEY `aurionQuestCausalAnchors_causal_receipt_idx` (`causalReceiptHash`),
   KEY `aurionQuestCausalAnchors_world_epoch_idx` (`worldId`,`epoch`),
   KEY `aurionQuestCausalAnchors_world_source_idx` (`worldId`,`sourceEvidenceId`)
 );
