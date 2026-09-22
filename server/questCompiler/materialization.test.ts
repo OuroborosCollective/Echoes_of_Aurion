@@ -79,6 +79,26 @@ describe("Quest domain command materialization (AIM-298 #459)", () => {
     expect(a.schemaVersion).toBe("aurion.quest-domain-command.v1");
   });
 
+  it("carries the canonical accept idempotency key into the runtime receipt", () => {
+    const { instance, plan } = fixture();
+    const idempotencyKey = "accept:" + instance.id;
+    const command = materializeQuestDomainCommand(instance, plan, {
+      kind: "accept",
+      instanceId: instance.id,
+      planHash: instance.planHash,
+      graphHash: instance.graphHash,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey,
+      eventSequence: 1,
+    });
+    const runtime = new QuestRuntimeEngine(new WorldFactEngine(), new QuestTemplateRegistry());
+    const result = runtime.executeDomainCommand(command, instance, plan);
+
+    expect(result.kind).toBe("accept");
+    expect(result.receipt.idempotencyKey).toBe(idempotencyKey);
+    expect(result.receipt.eventSequence).toBe(1);
+  });
+
   it("changes identity when a command-semantic input changes", () => {
     const { instance, plan } = fixture();
     const expectedStateHash = computeQuestStateHash(instance);
