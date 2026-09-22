@@ -275,8 +275,8 @@ export const appRouter = router({
     })).query(({ input }) => db.getWorldChunkWindow({ center: { x: input.chunkX, z: input.chunkZ }, tier: input.tier, afterSequences: input.afterSequences?.map(cursor => ({ coordinate: { x: cursor.chunkX, z: cursor.chunkZ }, afterSequence: cursor.afterSequence })) })),
     issueZoneTicket: protectedProcedure.input(z.object({ zoneId: z.literal("observatory_threshold"), clientBuild: z.string().trim().min(3).max(120).regex(/^[A-Za-z0-9._-]+$/) })).mutation(({ ctx, input }) => db.issueZoneConnectionTicket({ userId: ctx.user.id, zoneId: input.zoneId as ZoneId, clientBuild: input.clientBuild })),
     consumeZoneTicket: publicProcedure.input(z.object({ ticket: z.string().trim().min(32).max(128), zoneId: z.literal("observatory_threshold") })).mutation(({ input }) => db.consumeZoneConnectionTicket({ ticket: input.ticket, zoneId: input.zoneId as ZoneId })),
-    acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "sunwatch_vanguard"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
-    completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "sunwatch_vanguard"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(async ({ ctx, input }) => {
+    acceptQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard"]) })).mutation(({ ctx, input }) => db.acceptGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey })),
+    completeQuest: protectedProcedure.input(z.object({ questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard"]), giver: z.enum(["Lyra", "Orun"]) })).mutation(async ({ ctx, input }) => {
       const result = await db.completeGameplayQuest({ userId: ctx.user.id, questKey: input.questKey as QuestKey, giver: input.giver });
       
       // Trigger causal backup on quest completion
@@ -286,13 +286,13 @@ export const appRouter = router({
 
       return result;
     }),
-    startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
+    startEncounter: protectedProcedure.input(z.object({ encounterKey: z.enum(["asterion", "archive", "solarium", "cinder_vault", "starfall_crater", "rootgear_foundry", "sunwatch_bastion"]) })).mutation(({ ctx, input }) => db.startGameplayEncounter({ userId: ctx.user.id, encounterKey: input.encounterKey as EncounterKey })),
     act: protectedProcedure.input(z.object({ sessionId: z.string().min(8).max(64), sequence: z.number().int().positive(), command: z.string().trim().length(1), source: z.enum(["human", "gateway"]) })).mutation(({ ctx, input }) => db.applyGameplayAction({ userId: ctx.user.id, ...input })),
     interpretNpcDialogue: protectedProcedure.input(z.object({ npcId: z.enum(["lyra", "orun"]), text: z.string().trim().min(1).max(280), idempotencyKey: z.string().trim().min(12).max(128) })).mutation(({ ctx, input }) => interpretAndRecordDialogue({ userId: ctx.user.id, npcId: input.npcId, text: input.text, trust: 0.6, threat: 0.1, idempotencyKey: input.idempotencyKey })),
     requestQuestActionFromDialogue: protectedProcedure.input(z.object({
       dialogueReceiptId: z.string().trim().min(8).max(64),
       actionKind: z.enum(["offer_quest", "request_turn_in"]),
-      questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "sunwatch_vanguard"]),
+      questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard"]),
       idempotencyKey: z.string().trim().min(16).max(128),
     })).mutation(({ ctx, input }) => db.requestQuestActionFromDialogue({
       userId: ctx.user.id,
@@ -426,12 +426,12 @@ export const appRouter = router({
       })).mutation(({ ctx, input }) => db.resolveAndRecordGlobalWorldEpoch({ requestedByUserId: ctx.user.id, idempotencyKey: input.idempotencyKey })),
       resolve: adminProcedure.input(z.object({
         worldSeed: z.string().trim().min(3).max(160),
-        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "sunwatch_bastion"]),
+        regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]),
         resolutionIndex: z.number().int().min(0),
         signals: z.array(z.object({
           id: z.string().trim().min(3).max(96),
           kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]),
-          regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "sunwatch_bastion"]),
+          regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]),
           magnitude: z.number().min(-1).max(1),
           sourceReceiptId: z.string().trim().min(3).max(128),
           resolutionIndex: z.number().int().min(0),
@@ -443,7 +443,7 @@ export const appRouter = router({
         territoryIds: z.array(z.string().trim().min(2).max(96)).min(1).max(32),
         stability: z.number().min(0).max(1),
         activeDiplomacy: z.array(z.enum(["alliance", "trade", "non_aggression", "tribute", "sanction"])).max(5),
-        warSignals: z.array(z.object({ id: z.string().trim().min(3).max(96), kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]), regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "sunwatch_bastion"]), magnitude: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
+        warSignals: z.array(z.object({ id: z.string().trim().min(3).max(96), kind: z.enum(["weather", "ecology", "hazard", "resonance", "economy", "politics", "war", "player_event"]), regionId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]), magnitude: z.number().min(-1).max(1), sourceReceiptId: z.string().trim().min(3).max(128), resolutionIndex: z.number().int().min(0) })).max(128),
       })).mutation(({ input }) => resolveAndRecordPolity(input)),
     }),
     developer: router({
