@@ -269,6 +269,14 @@ export class QuestPersistenceEngine {
     }
   }
 
+  public verifyReceiptIntegrity(receipt: QuestReceipt): boolean {
+    const expected = computeCanonicalHash("aurion.quest.event.v1", {
+      previousStateHash: receipt.previousStateHash,
+      resultStateHash: receipt.resultStateHash,
+    });
+    return receipt.receiptHash === expected;
+  }
+
   public async commitObjectiveTransition(input: {
     instanceId: string;
     expectedStateHash: string;
@@ -276,6 +284,8 @@ export class QuestPersistenceEngine {
     receipt: QuestReceipt;
     updatedInstance: QuestInstance;
   }): Promise<{ updatedInstance: QuestInstance; receipt: QuestReceipt; replayed: boolean }> {
+    if (!input.idempotencyKey || input.idempotencyKey.length > 128) throw new Error("QUEST_IDEMPOTENCY_KEY_INVALID");
+    if (!this.verifyReceiptIntegrity(input.receipt)) throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${input.receipt.id}`);
     return this.withInstanceLock(input.instanceId, async () => {
       const db = await getDb();
       if (!db) {
@@ -370,6 +380,7 @@ export class QuestPersistenceEngine {
 
   public async saveReceipt(raw: QuestReceipt): Promise<void> {
     const receipt = QuestReceiptSchema.parse(raw);
+    if (!this.verifyReceiptIntegrity(receipt)) throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${receipt.id}`);
     this.receipts.set(receipt.id, receipt);
     const db = await getDb();
     if (!db) return;
