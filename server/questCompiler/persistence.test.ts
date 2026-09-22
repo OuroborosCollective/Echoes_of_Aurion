@@ -23,8 +23,8 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     updatedAt: "2026-09-22T00:00:00.000Z",
   };
 
-  function transition() {
-    const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
+  function transition(sourceInstance: QuestInstance = instance) {
+    const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", sourceInstance);
     const updatedInstance: QuestInstance = {
       ...instance,
       objectiveProgress: { investigate: 1 },
@@ -75,8 +75,9 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
 
   it("rejects a stale expected state hash without creating a second receipt", async () => {
     const persistence = new QuestPersistenceEngine();
-    await persistence.saveInstance(instance);
-    const first = transition();
+    const staleInstance = { ...instance, id: "qi_test_458_stale" };
+    await persistence.saveInstance(staleInstance);
+    const first = transition(staleInstance);
     await persistence.commitObjectiveTransition({
       instanceId: instance.id,
       expectedStateHash: first.previousStateHash,
