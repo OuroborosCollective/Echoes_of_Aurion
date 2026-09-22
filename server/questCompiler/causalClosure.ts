@@ -1,4 +1,5 @@
-import { canonicalSha256, computeCanonicalHash } from "../../shared/aurionCanonicalHash";
+import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
+import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
 import {
   createEffectIntent,
   type AurionEffectIntent,
