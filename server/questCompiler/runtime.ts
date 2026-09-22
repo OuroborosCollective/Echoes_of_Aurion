@@ -161,7 +161,8 @@ export class QuestRuntimeEngine {
     instance: QuestInstance,
     plan: QuestPlan,
     objectiveKey: string,
-    amount: number
+    amount: number,
+    options?: { eventSequence?: number; idempotencyKey?: string }
   ): { updatedInstance: QuestInstance; completedNode: boolean; receipt: QuestReceipt } {
     if (instance.state !== 'active') {
       throw new Error(`CANNOT_PROGRESS_INACTIVE_QUEST:${instance.state}`);
@@ -204,7 +205,7 @@ export class QuestRuntimeEngine {
     };
 
     const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
-    const eventSequence = instance.completedNodeIds.length + 2;
+    const eventSequence = options?.eventSequence ?? instance.completedNodeIds.length + 2;
 
     const receiptIdentity = computeCanonicalHash(
       'aurion.quest.receipt.identity.v1',
@@ -213,6 +214,7 @@ export class QuestRuntimeEngine {
         objectiveKey,
         newProgress,
         eventSequence,
+        idempotencyKey: options?.idempotencyKey ?? `progress:${instance.id}:${objectiveKey}:${newProgress}`,
         previousStateHash,
         resultStateHash,
       }
@@ -226,7 +228,7 @@ export class QuestRuntimeEngine {
       graphHash: instance.graphHash,
       previousStateHash,
       resultStateHash,
-      idempotencyKey: `progress:${instance.id}:${objectiveKey}:${newProgress}`,
+      idempotencyKey: options?.idempotencyKey ?? `progress:${instance.id}:${objectiveKey}:${newProgress}`,
       receiptHash: computeCanonicalHash('aurion.quest.event.v1', { previousStateHash, resultStateHash }),
       createdAt: occurredAt,
     };

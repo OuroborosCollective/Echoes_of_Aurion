@@ -91,6 +91,8 @@ export const appRouter = router({
         await adminQuestService.applyConfirmedObjectiveEvent(ctx.user.id, {
           source: "group_instance",
           event: "cleared",
+          sourceEventId: result.receiptId,
+          sourceEventSequence: result.result.party.instanceRevision,
           targetId: result.result.party.id,
           payload: { dungeonId: result.result.party.dungeonId },
         });
@@ -259,6 +261,8 @@ export const appRouter = router({
         await adminQuestService.applyConfirmedObjectiveEvent(ctx.user.id, {
           source: "world_chunk_delta",
           event: result.delta.kind,
+          sourceEventId: result.delta.id,
+          sourceEventSequence: result.delta.sequence,
           targetId: result.delta.targetId,
           payload: result.delta.payload,
         });

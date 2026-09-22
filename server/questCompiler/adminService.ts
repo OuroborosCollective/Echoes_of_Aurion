@@ -266,12 +266,39 @@ export class AdminQuestStudioService {
   public async applyConfirmedObjectiveEvent(userId: number, event: {
     source: "world_chunk_delta" | "group_instance";
     event: "resource_depleted" | "structure_placed" | "structure_removed" | "road_built" | "cleared";
+    sourceEventId: string;
+    sourceEventSequence: number;
     targetId?: string;
     payload?: Record<string, string | number | boolean>;
   }) {
-    const active = await this.persistenceEngine.listInstances({ playerUserId: userId, state: "active" });
-    const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean }> = [];
-    for (const instance of active) {
+    if (!event.sourceEventId || !Number.isSafeInteger(event.sourceEventSequence) || event.sourceEventSequence < 0) {
+      throw new Error("QUEST_SOURCE_EVENT_IDENTITY_REQUIRED");
+    }
+    const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
+    const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean; replayed: boolean }> = [];
+    for (const listedInstance of instances) {
+      const sourceIdempotencyKey = computeCanonicalHash("aurion.quest.event.v1", {
+        source: event.source,
+        sourceEventId: event.sourceEventId,
+        sourceEventSequence: event.sourceEventSequence,
+        event: event.event,
+        targetId: event.targetId ?? null,
+        payload: event.payload ?? {},
+        instanceId: listedInstance.id,
+      });
+      const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(sourceIdempotencyKey);
+      if (prior) {
+        updates.push({
+          instanceId: prior.instanceId,
+          receiptId: prior.id,
+          completedNode: false,
+          replayed: true,
+        });
+        continue;
+      }
+
+      const instance = await this.persistenceEngine.getInstance(listedInstance.id);
+      if (!instance || instance.state !== "active") continue;
       const plan = await this.persistenceEngine.getPlan(instance.planHash);
       if (!plan) continue;
       const node = plan.nodes.find(candidate => candidate.id === instance.currentNodeId);
@@ -284,10 +311,36 @@ export class AdminQuestStudioService {
           : event.payload?.[binding.matchField];
         if (String(actual ?? "") !== binding.matchValue) continue;
       }
-      const result = this.runtimeEngine.progressObjective(instance, plan, objective.key, 1);
-      await this.persistenceEngine.saveReceipt(result.receipt);
-      await this.persistenceEngine.saveInstance(result.updatedInstance);
-      updates.push({ instanceId: instance.id, receiptId: result.receipt.id, completedNode: result.completedNode });
+
+      const expectedStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
+      const priorReceipts = await this.persistenceEngine.getReceiptsForInstance(instance.id);
+      const eventSequence = (priorReceipts.at(-1)?.eventSequence ?? 0) + 1;
+      const idempotencyKey = computeCanonicalHash("aurion.quest.event.v1", {
+        source: event.source,
+        sourceEventId: event.sourceEventId,
+        sourceEventSequence: event.sourceEventSequence,
+        event: event.event,
+        targetId: event.targetId ?? null,
+        payload: event.payload ?? {},
+        instanceId: instance.id,
+      });
+      const result = this.runtimeEngine.progressObjective(instance, plan, objective.key, 1, {
+        eventSequence,
+        idempotencyKey,
+      });
+      const committed = await this.persistenceEngine.commitObjectiveTransition({
+        instanceId: instance.id,
+        expectedStateHash,
+        idempotencyKey,
+        receipt: result.receipt,
+        updatedInstance: result.updatedInstance,
+      });
+      updates.push({
+        instanceId: instance.id,
+        receiptId: committed.receipt.id,
+        completedNode: result.completedNode,
+        replayed: committed.replayed,
+      });
     }
     return Object.freeze(updates);
   }
