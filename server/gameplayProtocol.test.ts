@@ -7,6 +7,8 @@ describe("Aurion quest and action protocol", () => {
     expect(resolveQuestState({ key: "archive_of_echoes", level: 2, completed: [], active: null })).toBe("locked");
     expect(resolveQuestState({ key: "archive_of_echoes", level: 2, completed: ["astral_call"], active: null })).toBe("available");
     expect(resolveQuestState({ key: "ember_key", level: 3, completed: ["astral_call", "archive_of_echoes"], active: null })).toBe("available");
+    expect(resolveQuestState({ key: "clockwork_core", level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], active: null })).toBe("available");
+    expect(resolveQuestState({ key: "sunwatch_vanguard", level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], active: null })).toBe("available");
   });
 
   it("opens the first dungeon only with quest and key", () => {
@@ -24,6 +26,7 @@ describe("Aurion quest and action protocol", () => {
   it("keeps boss health and damage calculation in the canonical encounter contract", () => {
     expect(getEncounter("asterion")).toMatchObject({ maxBossHp: 112, questKey: "astral_call" });
     expect(getEncounter("cinder_vault")).toMatchObject({ maxBossHp: 258, requiresDungeonKey: "ember_key" });
+    expect(getEncounter("rootgear_foundry")).toMatchObject({ maxBossHp: 400, questKey: "clockwork_core" });
     expect(damageForMcpAction("run")).toBe(0);
     expect(damageForMcpAction("attack")).toBe(17);
     expect(damageForMcpAction("skill_9")).toBe(43);

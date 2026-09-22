@@ -34,7 +34,7 @@ const playerResponseSchema = playerReadbackSchema.extend({
   .pipe(playerReadbackSchema);
 
 export const questReadbackSchema = z.object({ quests: z.array(z.object({
-  key: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "sunwatch_vanguard"]), giver: z.enum(["Lyra", "Orun"]), title: z.string(), objective: z.string(),
+  key: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard"]), giver: z.enum(["Lyra", "Orun"]), title: z.string(), objective: z.string(),
   requiredLevel: natural.positive(), state: z.enum(["locked", "available", "active", "completed"]), readyToTurnIn: z.boolean(),
 })), keys: z.array(z.string()) });
 export const worldReadbackSchema = z.object({ globalWorld: z.object({ worldSeed: z.string().min(1), epoch: natural, deterministicHash: z.string().regex(/^fnv1a-[0-9a-f]{8}$/) }) });
