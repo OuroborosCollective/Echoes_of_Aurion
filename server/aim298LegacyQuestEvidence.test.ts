@@ -6,6 +6,7 @@ import {
 } from "../shared/aurionLegacyQuestBridgeContract";
 import { getLegacyQuestBridge, listLegacyQuestBridges } from "./legacyQuestBridge";
 import { deriveEncounterCompletionEvidence } from "./encounterCompletionEvidence";
+import { matchesQuestObjectiveEvent } from "./questCompiler/eventBindingMatcher";
 import { encounterActionIdentity } from "./encounterIdentity";
 import { aurionEncounters, damageForMcpAction } from "./gameplayProtocol";
 import { gameplayActionReceipts, gameplaySessions } from "../drizzle/schema";
@@ -132,6 +133,32 @@ describe("AIM-298 legacy quest bridge", () => {
       session: session(),
       receipts: [action(1), action(2), action(2)],
     })).toThrow("NON_CONTIGUOUS_ACTION_CHAIN");
+  });
+
+  it("matches only a bound encounter completion with intact evidence identity", () => {
+    const evidence = deriveEncounterCompletionEvidence({
+      session: session(),
+      receipts: [action(1), action(2), action(3)],
+    });
+    const objective = {
+      key: "boss_defeated",
+      targetValue: 1,
+      eventBinding: {
+        source: "encounter" as const,
+        event: "completed" as const,
+        matchField: "encounterKey" as const,
+        matchValue: "asterion" as const,
+      },
+    };
+    expect(matchesQuestObjectiveEvent(objective, evidence)).toBe(true);
+    expect(matchesQuestObjectiveEvent(
+      { ...objective, eventBinding: { ...objective.eventBinding, matchValue: "archive" as const } },
+      evidence,
+    )).toBe(false);
+    expect(matchesQuestObjectiveEvent(
+      objective,
+      { ...evidence, evidenceHash: "0".repeat(64) },
+    )).toBe(false);
   });
 
   it("rejects falsified action semantics and damage", () => {
