@@ -253,6 +253,8 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
 
     expect(await db.select().from(aurionQuestReceipts).where(eq(aurionQuestReceipts.id, rollbackReceipt.id))).toHaveLength(0);
     expect(await db.select().from(aurionQuestCausalAnchors).where(eq(aurionQuestCausalAnchors.questReceiptId, rollbackReceipt.id))).toHaveLength(0);
+    const rollbackState = await persistence.getInstanceById(progressedCommitted.updatedInstance.id);
+    expect(rollbackState?.state).toBe("active");
     expect(await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, poisonedClosure.temporalEvent.eventId))).toHaveLength(0);
     expect(await db.select().from(aurionEffectIntents).where(eq(aurionEffectIntents.effectId, poisonedClosure.effectIntents.at(-1)!.effectId))).toHaveLength(0);
 
