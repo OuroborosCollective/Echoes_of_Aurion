@@ -13,6 +13,7 @@ import { type AurionCausalTickReceipt, computeReceiptHash } from "../../shared/a
 import { getDb } from "../db";
 import { worldCausalRootService } from "../causality/worldCausalRootService";
 import { canonicalJson } from "../../shared/aurionCanonicalHash";
+import { readEncounterCompletionEvidence } from "../encounterCompletionEvidence";
 import type { AurionZoneIntent, AurionQuestHandInIntent } from "../../shared/aurionZoneIntentContract";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -175,6 +176,16 @@ export async function resolveQuestCausalAnchor(input: {
     throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_PLAN_MISMATCH");
   }
   sourceMatches(input.instance, input.plan, input.command);
+  if (input.command.sourceEvidenceId.startsWith("evt_encounter_complete_")) {
+    const sessionId = input.command.sourceEvidenceId.slice("evt_encounter_complete_".length);
+    const evidence = await readEncounterCompletionEvidence(input.instance.playerUserId, sessionId);
+    if (evidence.eventId !== input.command.sourceEvidenceId || evidence.evidenceHash !== input.command.sourceEvidenceDigest) {
+      throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_IDENTITY_MISMATCH");
+    }
+  } else {
+    throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_UNPROVABLE");
+  }
+
   const db = await getDb();
   if (!db) throw new Error("QUEST_CAUSAL_DATABASE_UNAVAILABLE");
 
