@@ -28,7 +28,7 @@ export const QuestCausalAnchorSchema = z.object({
   candidateSetHash: z.string().regex(/^[a-f0-9]{64}$/),
   seedDigest: z.string().regex(/^[a-f0-9]{64}$/),
   roleBindingHash: z.string().regex(/^[a-f0-9]{64}$/),
-  commandId: HASH,
+  commandId: BARE_HASH,
   planHash: z.string().regex(/^[a-f0-9]{64}$/),
   graphHash: z.string().regex(/^[a-f0-9]{64}$/),
   previousStateHash: z.string().regex(/^[a-f0-9]{64}$/),
