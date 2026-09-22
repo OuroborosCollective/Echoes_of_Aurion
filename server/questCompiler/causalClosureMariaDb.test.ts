@@ -75,13 +75,22 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
 
     // 2. Canonical quest compiler state; persistence stays the existing authority.
     const facts = new WorldFactEngine();
+    facts.recordEvent({
+      id: `evt_caravan_fixture_${TEST_USER_ID}`,
+      type: "CARAVAN_ATTACKED",
+      source: "quest.e2e",
+      data: {
+        caravanId: `caravan_${TEST_USER_ID}`,
+        merchantId: "npc_merchant_kaelen",
+        playerUserId: String(TEST_USER_ID),
+      },
+    });
     const trigger = facts.recordEvent({
       id: evidence.eventId,
       type: "ENCOUNTER_COMPLETED",
       source: "gameplay.encounter",
       data: {
         encounterKey: "asterion",
-        status: "damaged",
         playerUserId: TEST_USER_ID,
         evidenceHash: evidence.evidenceHash,
       },
