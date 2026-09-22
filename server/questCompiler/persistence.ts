@@ -392,6 +392,28 @@ export class QuestPersistenceEngine {
     }
   }
 
+  public async getReceiptByIdempotencyKey(idempotencyKey: string): Promise<QuestReceipt | undefined> {
+    const db = await getDb();
+    if (!db) return Array.from(this.receipts.values()).find(receipt => receipt.idempotencyKey === idempotencyKey);
+    const row = (await db.select().from(aurionQuestReceipts)
+      .where(eq(aurionQuestReceipts.idempotencyKey, idempotencyKey)).limit(1))[0];
+    if (!row) return undefined;
+    const receipt = QuestReceiptSchema.parse({
+      id: row.id,
+      instanceId: row.instanceId,
+      eventSequence: row.eventSequence,
+      planHash: row.planHash,
+      graphHash: row.graphHash,
+      previousStateHash: row.previousStateHash,
+      resultStateHash: row.resultStateHash,
+      idempotencyKey: row.idempotencyKey,
+      receiptHash: row.receiptHash,
+      createdAt: row.createdAt.toISOString(),
+    });
+    this.receipts.set(receipt.id, receipt);
+    return receipt;
+  }
+
   public async getReceiptsForInstance(instanceId: string): Promise<QuestReceipt[]> {
     const db = await getDb();
     if (!db) return Array.from(this.receipts.values()).filter(r => r.instanceId === instanceId).sort((a,b)=>a.eventSequence-b.eventSequence);
