@@ -73,6 +73,51 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     expect((await persistence.getReceiptsForInstance(instance.id))).toHaveLength(1);
   });
 
+  it("rejects a receipt whose result hash does not match the persisted next state", async () => {
+    const persistence = new QuestPersistenceEngine();
+    await persistence.saveInstance(instance);
+    const first = transition();
+    const tampered = {
+      ...first,
+      receipt: {
+        ...first.receipt,
+        resultStateHash: computeQuestStateHash({
+          ...first.updatedInstance,
+          objectiveProgress: { investigate: 99 },
+        }),
+        receiptHash: computeCanonicalHash("aurion.quest.event.v1", {
+          previousStateHash: first.previousStateHash,
+          resultStateHash: computeQuestStateHash({
+            ...first.updatedInstance,
+            objectiveProgress: { investigate: 99 },
+          }),
+        }),
+      },
+    };
+
+    await expect(persistence.commitObjectiveTransition({
+      instanceId: instance.id,
+      expectedStateHash: first.previousStateHash,
+      idempotencyKey: first.receipt.idempotencyKey,
+      receipt: tampered.receipt,
+      updatedInstance: first.updatedInstance,
+    })).rejects.toThrow("QUEST_RESULT_STATE_HASH_MISMATCH");
+    expect(await persistence.getReceiptsForInstance(instance.id)).toHaveLength(0);
+  });
+
+  it("rejects a receipt whose instance or idempotency identity is inconsistent", async () => {
+    const persistence = new QuestPersistenceEngine();
+    await persistence.saveInstance(instance);
+    const first = transition();
+    await expect(persistence.commitObjectiveTransition({
+      instanceId: instance.id,
+      expectedStateHash: first.previousStateHash,
+      idempotencyKey: first.receipt.idempotencyKey,
+      receipt: { ...first.receipt, instanceId: "different-instance" },
+      updatedInstance: first.updatedInstance,
+    })).rejects.toThrow("QUEST_RECEIPT_IDENTITY_MISMATCH");
+  });
+
   it("rejects a stale expected state hash without creating a second receipt", async () => {
     const persistence = new QuestPersistenceEngine();
     const staleInstance = { ...instance, id: "qi_test_458_stale" };
