@@ -373,6 +373,9 @@ export class AdminQuestStudioService {
         instance,
         plan,
       );
+      if (result.kind !== "progress") {
+        throw new Error("QUEST_DOMAIN_COMMAND_KIND_MISMATCH");
+      }
       const committed = await this.persistenceEngine.commitObjectiveTransition({
         instanceId: instance.id,
         expectedStateHash,
