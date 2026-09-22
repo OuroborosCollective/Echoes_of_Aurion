@@ -453,35 +453,6 @@ export class AdminQuestStudioService {
       (max, receipt) => Math.max(max, receipt.eventSequence),
       0,
     ) + 1;
-    const result = this.runtimeEngine.executeDomainCommand(
-      materializeQuestDomainCommand(instance, plan, {
-        kind: "complete",
-        instanceId: instance.id,
-        planHash: instance.planHash,
-        graphHash: instance.graphHash,
-        expectedStateHash: computeQuestStateHash(instance),
-        idempotencyKey,
-        eventSequence: nextSequence,
-        ...source,
-      }),
-      instance,
-      plan,
-    );
-    const resolvedAnchor = await resolveQuestCausalAnchor({
-      instance,
-      plan,
-      command: materializeQuestDomainCommand(instance, plan, {
-        kind: "complete",
-        instanceId: instance.id,
-        planHash: instance.planHash,
-        graphHash: instance.graphHash,
-        expectedStateHash: computeQuestStateHash(instance),
-        idempotencyKey,
-        eventSequence: nextSequence,
-        ...source,
-      }),
-      receipt: result.receipt,
-    });
     const completionCommand = materializeQuestDomainCommand(instance, plan, {
       kind: "complete",
       instanceId: instance.id,
@@ -491,6 +462,17 @@ export class AdminQuestStudioService {
       idempotencyKey,
       eventSequence: nextSequence,
       ...source,
+    });
+    const result = this.runtimeEngine.executeDomainCommand(
+      completionCommand,
+      instance,
+      plan,
+    );
+    const resolvedAnchor = await resolveQuestCausalAnchor({
+      instance,
+      plan,
+      command: completionCommand,
+      receipt: result.receipt,
     });
     const closure = buildQuestCausalClosure({
       instance,
@@ -508,9 +490,6 @@ export class AdminQuestStudioService {
       causalClosure: closure,
     });
     return {
-      updatedInstance: committed.updatedInstance,
-      receipt: committed.receipt,
-      replayed: committed.replayed,
       updatedInstance: committed.updatedInstance,
       receipt: committed.receipt,
       replayed: committed.replayed,
