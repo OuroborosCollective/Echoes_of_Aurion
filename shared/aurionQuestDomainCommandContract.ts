@@ -7,7 +7,7 @@ const REVISION = z.string().regex(/^[a-f0-9]{40}$/);
 
 const commandIdentitySchema = z.object({
   schemaVersion: z.literal(AURION_QUEST_DOMAIN_COMMAND_SCHEMA),
-  commandId: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  commandId: z.string().regex(/^[a-f0-9]{64}$/),
   instanceId: z.string().min(1).max(128),
   planHash: HASH64,
   graphHash: HASH64,
