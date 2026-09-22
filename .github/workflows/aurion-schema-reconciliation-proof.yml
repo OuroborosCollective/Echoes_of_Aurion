@@ -328,7 +328,7 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const sql=fs.readFileSync("drizzle/0058_aurion_quest_causal_anchor.sql","utf8");
-          const statements=sql.split(/\s*-->|\s*statement-breakpoint\s*/).join("\n").split(/;(?=\s*(?:$|CREATE|ALTER|DROP))/i).map(s=>s.trim()).filter(Boolean);
+          const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try { for(const statement of statements) await connection.query(statement); } finally { await connection.end(); }
           console.log(JSON.stringify({phase:"0058-applied",statementCount:statements.length}));
