@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   causalCheckpointPersistenceId,
   causalReceiptPersistenceId,
+  replayRunPersistenceId,
 } from "./persistence";
 
 describe("causal persistence identities", () => {
+  it("keeps replay-run storage IDs bounded independently of world and zone name length", () => {
+    const ids = Array.from({ length: 128 }, () => replayRunPersistenceId());
+    expect(ids.every(id => /^run_[a-f0-9]{32}$/.test(id))).toBe(true);
+    expect(Math.max(...ids.map(id => id.length))).toBe(36);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
   it("keeps receipt IDs deterministic and within varchar(64) for maximum persisted identities", () => {
     const identity = {
       worldId: "w".repeat(64),
