@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 import {
+  computeEncounterCompletionEvidenceHash,
   encounterCompletionEvidenceSchema,
   type EncounterCompletionEvidence,
 } from "../shared/aurionLegacyQuestBridgeContract";
@@ -12,10 +13,6 @@ type GameplaySessionRow = typeof gameplaySessions.$inferSelect;
 type GameplayActionReceiptRow = typeof gameplayActionReceipts.$inferSelect;
 
 const completionDomain = "aurion.encounter.completion.v1" as const;
-
-function buildEvidenceHash(identity: Omit<EncounterCompletionEvidence, "evidenceHash">): string {
-  return computeCanonicalHash(completionDomain, identity);
-}
 
 export function deriveEncounterCompletionEvidence(input: {
   session: GameplaySessionRow;
@@ -97,7 +94,7 @@ export function deriveEncounterCompletionEvidence(input: {
 
   return Object.freeze(encounterCompletionEvidenceSchema.parse({
     ...identity,
-    evidenceHash: buildEvidenceHash(identity),
+    evidenceHash: computeEncounterCompletionEvidenceHash(identity),
   }));
 }
 
