@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
+import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import { WorldFactEngine } from "./worldFacts";
 import { QuestTemplateRegistry } from "./templateRegistry";
 import { QuestRuntimeEngine } from "./runtime";
@@ -22,6 +22,43 @@ describe("Quest domain command materialization (AIM-298 #459)", () => {
     });
     return { instance, plan };
   }
+
+  it("keeps the command hash domain fixed by a known vector", () => {
+    const payload = {
+      schemaVersion: "aurion.quest-domain-command.v1",
+      kind: "accept",
+      instanceId: "qi_fixed_vector",
+      planHash: "a".repeat(64),
+      graphHash: "b".repeat(64),
+      expectedStateHash: "c".repeat(64),
+      idempotencyKey: "accept:qi_fixed_vector",
+      eventSequence: 1,
+    };
+
+    expect(computeCanonicalHash("aurion.quest.command.v1", payload))
+      .toBe("36b07a3042287855a809ca9098885c9672bd2f07c808804b7f7940c53b4a423f");
+  });
+
+  it("rejects command kinds without an authoritative runtime handler", () => {
+    const { instance, plan } = fixture();
+    const command = {
+      schemaVersion: "aurion.quest-domain-command.v1",
+      commandId: "0".repeat(64),
+      kind: "not_a_real_command",
+      instanceId: instance.id,
+      planHash: instance.planHash,
+      graphHash: instance.graphHash,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey: "invalid-command",
+      eventSequence: 1,
+    };
+
+    expect(() => materializeQuestDomainCommand(
+      instance,
+      plan,
+      command as never,
+    )).toThrow();
+  });
 
   it("derives the same command identity from the same canonical inputs", () => {
     const { instance, plan } = fixture();
