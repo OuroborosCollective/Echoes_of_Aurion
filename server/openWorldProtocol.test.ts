@@ -86,6 +86,17 @@ describe("open-world protocol", () => {
     expect(buildOpenWorldSnapshot(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true })).primaryEncounter).toMatchObject({ id: "sunwatch-commander", encounterKey: "sunwatch_bastion" });
   });
 
+  it("keeps an active Sunwatch quest routed to Sunwatch after Clockwork completion", () => {
+    const snapshot = buildOpenWorldSnapshot(snapshotInput({
+      level: 5,
+      completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core"],
+      activeQuest: "sunwatch_vanguard",
+      canEnterDungeon: true,
+    }));
+    expect(snapshot.zoneId).toBe("sunwatch_bastion");
+    expect(snapshot.primaryEncounter).toMatchObject({ encounterKey: "sunwatch_bastion" });
+  });
+
   it("projects the Clockwork Woods tier-5 zone from confirmed progression", () => {
     const snapshot = buildOpenWorldSnapshot(snapshotInput({
       level: 5,
