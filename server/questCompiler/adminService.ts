@@ -7,7 +7,7 @@ import {
   type QuestTemplateVersion,
   type WorldFact,
 } from "../../shared/aurionQuestContract";
-import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
+import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import { type AuthoringReceipt } from "../../shared/aurionAuthoringContract";
 import { QuestPublishPlanSchema, type QuestPublishPlan } from "./questPublishContract";
 import { OperationalClock, hostOperationalClock, operationalDate } from "../../shared/operationalClock";
@@ -257,10 +257,23 @@ export class AdminQuestStudioService {
 
   public async acceptQuest(userId: number, instanceId: string) {
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
+    const idempotencyKey = `accept:${instance.id}`;
+    const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(idempotencyKey);
+    if (prior) {
+      if (prior.instanceId !== instance.id) throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+      if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
+      return { updatedInstance: instance, receipt: prior };
+    }
     const result = this.runtimeEngine.acceptQuest(instance, plan);
-    await this.persistenceEngine.saveReceipt(result.receipt);
-    await this.persistenceEngine.saveInstance(result.updatedInstance);
-    return result;
+    return (await this.persistenceEngine.commitObjectiveTransition({
+      instanceId: instance.id,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey,
+      receipt: result.receipt,
+      updatedInstance: result.updatedInstance,
+    })).replayed
+      ? { updatedInstance: await this.persistenceEngine.getInstance(instance.id) ?? result.updatedInstance, receipt: result.receipt }
+      : result;
   }
 
   public async applyConfirmedObjectiveEvent(userId: number, event: {
@@ -312,7 +325,7 @@ export class AdminQuestStudioService {
         if (String(actual ?? "") !== binding.matchValue) continue;
       }
 
-      const expectedStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
+      const expectedStateHash = computeQuestStateHash(instance);
       const priorReceipts = await this.persistenceEngine.getReceiptsForInstance(instance.id);
       const eventSequence = (priorReceipts.at(-1)?.eventSequence ?? 0) + 1;
       const idempotencyKey = computeCanonicalHash("aurion.quest.event.v1", {
@@ -347,19 +360,66 @@ export class AdminQuestStudioService {
 
   public async chooseQuestBranch(userId: number, instanceId: string, edgeId: string) {
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
-    const result = this.runtimeEngine.chooseBranch(instance, plan, edgeId);
-    await this.persistenceEngine.saveReceipt(result.receipt);
-    await this.persistenceEngine.saveInstance(result.updatedInstance);
-    return result;
+    const idempotencyKey = `choice:${instance.id}:${edgeId}`;
+    const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(idempotencyKey);
+    if (prior) {
+      if (prior.instanceId !== instance.id || prior.idempotencyKey !== idempotencyKey) throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+      if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
+      return { updatedInstance: instance, receipt: prior };
+    }
+    const nextSequence = (await this.persistenceEngine.getReceiptsForInstance(instance.id)).reduce(
+      (max, receipt) => Math.max(max, receipt.eventSequence),
+      0,
+    ) + 1;
+    const result = this.runtimeEngine.chooseBranch(instance, plan, edgeId, {
+      eventSequence: nextSequence,
+      idempotencyKey,
+    });
+    const committed = await this.persistenceEngine.commitObjectiveTransition({
+      instanceId: instance.id,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey,
+      receipt: result.receipt,
+      updatedInstance: result.updatedInstance,
+    });
+    return { updatedInstance: committed.updatedInstance, receipt: committed.receipt };
   }
 
   public async completeQuest(userId: number, instanceId: string) {
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
     const current = plan.nodes.find(node => node.id === instance.currentNodeId);
     if (!current || current.type !== "end") throw new Error("QUEST_END_NODE_REQUIRED");
-    const result = this.runtimeEngine.completeQuest(instance, plan);
-    await this.persistenceEngine.saveReceipt(result.receipt);
-    await this.persistenceEngine.saveInstance(result.updatedInstance);
-    return result;
+    const idempotencyKey = `complete:${instance.id}`;
+    const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(idempotencyKey);
+    if (prior) {
+      if (prior.instanceId !== instance.id || prior.idempotencyKey !== idempotencyKey) throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+      if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
+      return {
+        updatedInstance: instance,
+        receipt: prior,
+        replayed: true as const,
+      };
+    }
+    const nextSequence = (await this.persistenceEngine.getReceiptsForInstance(instance.id)).reduce(
+      (max, receipt) => Math.max(max, receipt.eventSequence),
+      0,
+    ) + 1;
+    const result = this.runtimeEngine.completeQuest(instance, plan, {
+      eventSequence: nextSequence,
+      idempotencyKey,
+    });
+    const committed = await this.persistenceEngine.commitObjectiveTransition({
+      instanceId: instance.id,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey,
+      receipt: result.receipt,
+      updatedInstance: result.updatedInstance,
+    });
+    return {
+      ...result,
+      updatedInstance: committed.updatedInstance,
+      receipt: committed.receipt,
+      replayed: committed.replayed,
+    };
   }
 }
