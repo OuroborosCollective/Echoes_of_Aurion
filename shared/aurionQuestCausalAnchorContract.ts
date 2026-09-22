@@ -42,10 +42,7 @@ export function computeQuestCausalAnchorHash(
   value: Omit<QuestCausalAnchor, "anchorHash">,
 ): string {
   const normalized = QuestCausalAnchorSchema.omit({ anchorHash: true }).parse(value);
-  return canonicalSha256({
-    schema: AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
-    ...normalized,
-  });
+  return canonicalSha256(normalized);
 }
 
 export function createQuestCausalAnchor(
