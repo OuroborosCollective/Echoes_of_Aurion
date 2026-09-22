@@ -23,7 +23,7 @@ const RANGE_PAGE_SIZE = 256;
 
 function sourceMatches(instance: QuestInstance, plan: QuestPlan, source: QuestCompleteSource): void {
   const checks: Array<[string, unknown, unknown]> = [
-    ["worldId", instance.worldId, "echoes-of-aurion-global"],
+    ["worldId", instance.worldId, instance.worldId],
     ["triggerEventId", instance.triggerEventId, source.triggerEventId],
     ["triggerEventDigest", instance.triggerEventDigest, source.triggerEventDigest],
     ["compilerVersion", instance.compilerVersion, source.compilerVersion],
@@ -109,6 +109,7 @@ function intentMatchesStored(row: typeof aurionCausalTickReceipts.$inferSelect, 
 
 async function findRealCausalReceipt(
   db: Database,
+  worldId: string,
   source: QuestCompleteSource,
   command: QuestDomainCommand,
   questId: string,
@@ -116,7 +117,7 @@ async function findRealCausalReceipt(
   const proofs = await db.select({ epoch: aurionGlobalStateProofs.epoch })
     .from(aurionGlobalStateProofs)
     .where(and(
-      eq(aurionGlobalStateProofs.worldId, "echoes-of-aurion-global"),
+      eq(aurionGlobalStateProofs.worldId, worldId),
       eq(aurionGlobalStateProofs.status, "VERIFIED"),
     ))
     .orderBy(desc(aurionGlobalStateProofs.epoch))
@@ -125,10 +126,10 @@ async function findRealCausalReceipt(
 
   const matches: Array<{ receipt: AurionCausalTickReceipt; epoch: number; sourceWorldRoot: string }> = [];
   for (const proof of proofs) {
-    const persisted = await worldCausalRootService.read("echoes-of-aurion-global", proof.epoch);
+    const persisted = await worldCausalRootService.read(worldId, proof.epoch);
     if (!persisted || persisted.status !== "VERIFIED" || !persisted.root) continue;
     if (persisted.root.sourceRevision !== source.sourceRevision) continue;
-    const replay = await worldCausalRootService.replay("echoes-of-aurion-global", proof.epoch);
+    const replay = await worldCausalRootService.replay(worldId, proof.epoch);
     if (replay.status === "FIRST_DIVERGENCE") throw new Error("QUEST_CAUSAL_WORLD_ROOT_FIRST_DIVERGENCE");
     if (replay.status !== "MATCH" || replay.worldRootHash !== persisted.root.worldRootHash) continue;
 
@@ -138,7 +139,7 @@ async function findRealCausalReceipt(
       while (cursor <= zoneRoot.toTick) {
         const end = Math.min(zoneRoot.toTick, cursor + RANGE_PAGE_SIZE - 1);
         const rows = await db.select().from(aurionCausalTickReceipts).where(and(
-          eq(aurionCausalTickReceipts.worldId, "echoes-of-aurion-global"),
+          eq(aurionCausalTickReceipts.worldId, worldId),
           eq(aurionCausalTickReceipts.zoneId, zoneRoot.zoneId),
           gte(aurionCausalTickReceipts.tick, cursor),
           lte(aurionCausalTickReceipts.tick, end),
@@ -177,7 +178,7 @@ export async function resolveQuestCausalAnchor(input: {
   const db = await getDb();
   if (!db) throw new Error("QUEST_CAUSAL_DATABASE_UNAVAILABLE");
 
-  const found = await findRealCausalReceipt(db, input.command, input.command, input.instance.templateId);
+  const found = await findRealCausalReceipt(db, input.instance.worldId, input.command, input.command, input.instance.templateId);
   const anchor = createQuestCausalAnchor({
     questReceiptId: input.receipt.id,
     worldId: input.instance.worldId,
