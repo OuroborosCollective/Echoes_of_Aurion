@@ -1,4 +1,4 @@
-import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
+import { canonicalSha256, computeCanonicalHash } from "../../shared/aurionCanonicalHash";
 import {
   createEffectIntent,
   type AurionEffectIntent,
@@ -61,7 +61,7 @@ export function buildQuestCausalClosure(input: {
     id: `evt_quest_complete_${eventIdentity.slice(0, 56)}`,
     sequence: input.anchor.tick,
     type: "QUEST_COMPLETED_REVENGE",
-    payloadHash: canonicalSha256(worldEventData),
+    payloadHash: computeCanonicalHash("aurion.world.event.v1", worldEventData),
     source: "aurion_quest_runtime",
     data: worldEventData,
     timestamp: input.receipt.createdAt,
