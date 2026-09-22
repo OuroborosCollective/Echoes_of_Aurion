@@ -19,6 +19,7 @@ import { QuestReplayEngine } from "./replay";
 import { QuestValidator } from "./validator";
 import { CandidateResolver } from "./candidateResolver";
 import { authoringHash, createQuestPublishReceipt } from "../aurionAuthoringPersistence";
+import { materializeQuestDomainCommand } from "./materialization";
 
 export interface AdminQuestStudioStatus {
   compilerVersion: string;
@@ -272,7 +273,19 @@ export class AdminQuestStudioService {
       if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
       return { updatedInstance: instance, receipt: prior };
     }
-    const result = this.runtimeEngine.acceptQuest(instance, plan);
+    const result = this.runtimeEngine.executeDomainCommand(
+      materializeQuestDomainCommand(instance, plan, {
+        kind: "accept",
+        instanceId: instance.id,
+        planHash: instance.planHash,
+        graphHash: instance.graphHash,
+        expectedStateHash: computeQuestStateHash(instance),
+        idempotencyKey,
+        eventSequence: 1,
+      }),
+      instance,
+      plan,
+    );
     return (await this.persistenceEngine.commitObjectiveTransition({
       instanceId: instance.id,
       expectedStateHash: computeQuestStateHash(instance),
@@ -345,10 +358,21 @@ export class AdminQuestStudioService {
         payload: event.payload ?? {},
         instanceId: instance.id,
       });
-      const result = this.runtimeEngine.progressObjective(instance, plan, objective.key, 1, {
-        eventSequence,
-        idempotencyKey,
-      });
+      const result = this.runtimeEngine.executeDomainCommand(
+        materializeQuestDomainCommand(instance, plan, {
+          kind: "progress",
+          instanceId: instance.id,
+          planHash: instance.planHash,
+          graphHash: instance.graphHash,
+          expectedStateHash,
+          idempotencyKey,
+          eventSequence,
+          objectiveKey: objective.key,
+          amount: 1,
+        }),
+        instance,
+        plan,
+      );
       const committed = await this.persistenceEngine.commitObjectiveTransition({
         instanceId: instance.id,
         expectedStateHash,
@@ -379,10 +403,20 @@ export class AdminQuestStudioService {
       (max, receipt) => Math.max(max, receipt.eventSequence),
       0,
     ) + 1;
-    const result = this.runtimeEngine.chooseBranch(instance, plan, edgeId, {
-      eventSequence: nextSequence,
-      idempotencyKey,
-    });
+    const result = this.runtimeEngine.executeDomainCommand(
+      materializeQuestDomainCommand(instance, plan, {
+        kind: "choice",
+        instanceId: instance.id,
+        planHash: instance.planHash,
+        graphHash: instance.graphHash,
+        expectedStateHash: computeQuestStateHash(instance),
+        idempotencyKey,
+        eventSequence: nextSequence,
+        edgeId,
+      }),
+      instance,
+      plan,
+    );
     const committed = await this.persistenceEngine.commitObjectiveTransition({
       instanceId: instance.id,
       expectedStateHash: computeQuestStateHash(instance),
@@ -412,10 +446,19 @@ export class AdminQuestStudioService {
       (max, receipt) => Math.max(max, receipt.eventSequence),
       0,
     ) + 1;
-    const result = this.runtimeEngine.completeQuest(instance, plan, {
-      eventSequence: nextSequence,
-      idempotencyKey,
-    });
+    const result = this.runtimeEngine.executeDomainCommand(
+      materializeQuestDomainCommand(instance, plan, {
+        kind: "complete",
+        instanceId: instance.id,
+        planHash: instance.planHash,
+        graphHash: instance.graphHash,
+        expectedStateHash: computeQuestStateHash(instance),
+        idempotencyKey,
+        eventSequence: nextSequence,
+      }),
+      instance,
+      plan,
+    );
     const committed = await this.persistenceEngine.commitObjectiveTransition({
       instanceId: instance.id,
       expectedStateHash: computeQuestStateHash(instance),
