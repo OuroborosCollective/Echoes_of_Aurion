@@ -50,6 +50,26 @@ export interface CanonicalQuestSummary {
   updatedAtTick: number;
 }
 
+export interface CanonicalZoneQuestInstance {
+  instanceId: string;
+  templateId: string;
+  templateVersion: number;
+  worldId: string;
+  playerUserId: number;
+  giverNpcId: string;
+  seedDigest: string;
+  planHash: string;
+  graphHash: string;
+  currentNodeId: string;
+  completedNodeIds: string[];
+  boundRoles: Array<Record<string, unknown>>;
+  state: "offered" | "active" | "completed" | "failed" | "quarantined";
+  objectiveProgress: Record<string, string | number | boolean>;
+  updatedAtTick: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CanonicalTransferPayload {
   schema: "aurion.transfer.payload.v1";
   entityId: string;
@@ -68,6 +88,7 @@ export interface CanonicalZoneState {
   mobs: CanonicalMobState[];
   resources: CanonicalResourceState[];
   questSummaries: CanonicalQuestSummary[];
+  questInstances?: CanonicalZoneQuestInstance[];
 }
 
 /**
@@ -89,6 +110,16 @@ export function sortCanonicalZoneState(state: CanonicalZoneState): CanonicalZone
     mobs: state.mobs.map(mob => ({ ...mob })).sort((a, b) => a.entityId < b.entityId ? -1 : a.entityId > b.entityId ? 1 : 0),
     resources: state.resources.map(resource => ({ ...resource })).sort((a, b) => a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0),
     questSummaries: (state.questSummaries || []).map(quest => ({ ...quest })).sort((a, b) => a.userId - b.userId || (a.questId < b.questId ? -1 : a.questId > b.questId ? 1 : 0)),
+    ...(state.questInstances
+      ? {
+          questInstances: state.questInstances.map(quest => ({
+            ...quest,
+            completedNodeIds: [...quest.completedNodeIds].sort(),
+            boundRoles: quest.boundRoles.map(role => ({ ...role })),
+            objectiveProgress: Object.fromEntries(Object.entries(quest.objectiveProgress).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
+          })).sort((a, b) => a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0),
+        }
+      : {}),
   };
 }
 

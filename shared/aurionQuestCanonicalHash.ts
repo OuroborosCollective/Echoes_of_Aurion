@@ -10,6 +10,7 @@ export type HashDomain =
   | 'aurion.quest.seed.v1'
   | 'aurion.quest.plan.v1'
   | 'aurion.quest.instance.v1'
+  | 'aurion.quest.instance-state.v1'
   | 'aurion.quest.event.v1'
   | 'aurion.quest.replay.v1'
   | 'aurion.world.fact.v1'
@@ -53,6 +54,18 @@ export function computeCanonicalHash(domain: HashDomain, payload: unknown): stri
 /**
  * Computes a deterministic seed digest tuple from world state, compiler, and candidate inputs.
  */
+/**
+ * Canonical logical quest-state identity. Temporal metadata is intentionally excluded
+ * so retries/replays of the same logical state remain identical across wall-clock time.
+ */
+export function computeQuestStateHash(instance: unknown): string {
+  if (!instance || typeof instance !== 'object' || Array.isArray(instance)) {
+    throw new Error('AURION_QUEST_STATE_INVALID');
+  }
+  const { createdAt: _createdAt, updatedAt: _updatedAt, ...logicalState } = instance as Record<string, unknown>;
+  return computeCanonicalHash('aurion.quest.instance-state.v1', logicalState);
+}
+
 export function computeSeedDigest(inputs: {
   worldId: string;
   worldStateRevision: number;

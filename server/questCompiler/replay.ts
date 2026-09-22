@@ -3,9 +3,10 @@ import {
   QuestPlan,
   QuestReplayReceipt,
   QuestReplayReceiptSchema,
+  QuestReceipt,
   WorldFact,
 } from '../../shared/aurionQuestContract';
-import { computeCanonicalHash } from '../../shared/aurionQuestCanonicalHash';
+import { computeCanonicalHash, computeQuestStateHash } from '../../shared/aurionQuestCanonicalHash';
 import {
   replayFirstDivergence,
   replayMatch,
@@ -42,6 +43,7 @@ export class QuestReplayEngine {
     facts: WorldFact[] | null,
     expectedPlanHash: string,
     worldStateSequence?: number,
+    options?: { receipts?: readonly QuestReceipt[] },
   ): QuestReplayReceipt {
     const replayTimestamp = operationalDate(this.clock).toISOString();
     const sequence = worldStateSequence ?? (facts ? latestFactSequence(facts) : 0);
@@ -58,13 +60,13 @@ export class QuestReplayEngine {
 
     const sourceTuple = {
       worldId: instance.worldId,
-      worldStateRevision: sequence,
-      triggerEventId: 'trig_replay',
-      compilerVersion: '1.0.0',
-      templateSetHash,
-      candidateSetHash: plan.candidateSetHash,
+      worldStateRevision: instance.worldStateRevision ?? sequence,
+      triggerEventId: instance.triggerEventId ?? 'trig_replay',
+      compilerVersion: instance.compilerVersion ?? '1.0.0',
+      templateSetHash: instance.templateSetHash ?? templateSetHash,
+      candidateSetHash: instance.candidateSetHash ?? plan.candidateSetHash,
       seedDigest: instance.seedDigest,
-      roleBindingHash: plan.roleBindingHash,
+      roleBindingHash: instance.roleBindingHash ?? plan.roleBindingHash,
       expectedPlanHash,
     };
 
@@ -96,6 +98,17 @@ export class QuestReplayEngine {
         'UNPROVABLE',
       );
     }
+
+    if (!instance.triggerEventId || !instance.triggerEventDigest || !instance.sourceRevision || !instance.compilerVersion ||
+        instance.worldStateRevision === undefined || !instance.templateSetHash || !instance.candidateSetHash || !instance.roleBindingHash) {
+      return finish(
+        replayUnprovable(context, verified, 'QUEST_SOURCE_TUPLE_INCOMPLETE'),
+        'UNPROVABLE',
+        plan.graphHash,
+        'UNPROVABLE',
+      );
+    }
+    verified.push('SOURCE_TUPLE');
 
     const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
     if (candidateSetHash !== plan.candidateSetHash) {
@@ -160,6 +173,62 @@ export class QuestReplayEngine {
       return finish(replayVerdict, replayedPlan.planHash, replayedPlan.graphHash, outcomeHash);
     }
     verified.push('PLAN_HASH');
+
+    if (options?.receipts) {
+      let expectedSequence = 1;
+      let previousResultHash: string | null = null;
+      for (const receipt of options.receipts) {
+        if (receipt.instanceId !== instance.id || receipt.planHash !== expectedPlanHash || receipt.graphHash !== replayedPlan.graphHash) {
+          const verdict = replayFirstDivergence(context, verified, {
+            stage: 'RUNTIME_EVENTS',
+            expected: 'receipt_bound_to_instance_plan',
+            observed: receipt.instanceId + ':' + receipt.planHash + ':' + receipt.graphHash,
+            diffDetails: 'Persisted quest receipt is not bound to the replayed instance/plan.',
+          });
+          return finish(verdict, replayedPlan.planHash, replayedPlan.graphHash, 'N/A');
+        }
+        if (receipt.eventSequence !== expectedSequence) {
+          const verdict = replayFirstDivergence(context, verified, {
+            stage: 'RUNTIME_EVENTS',
+            expected: String(expectedSequence),
+            observed: String(receipt.eventSequence),
+            diffDetails: 'Persisted quest receipt sequence is not contiguous.',
+          });
+          return finish(verdict, replayedPlan.planHash, replayedPlan.graphHash, 'N/A');
+        }
+        if (previousResultHash !== null && receipt.previousStateHash !== previousResultHash) {
+          const verdict = replayFirstDivergence(context, verified, {
+            stage: 'RUNTIME_EVENTS',
+            expected: previousResultHash,
+            observed: receipt.previousStateHash,
+            expectedHash: previousResultHash,
+            observedHash: receipt.previousStateHash,
+          });
+          return finish(verdict, replayedPlan.planHash, replayedPlan.graphHash, 'N/A');
+        }
+        previousResultHash = receipt.resultStateHash;
+        expectedSequence += 1;
+      }
+      if (instance.state === 'completed') {
+        const last = options.receipts.at(-1);
+        if (!last || last.resultStateHash !== computeQuestStateHash(instance)) {
+          return finish(
+            replayUnprovable(context, verified, 'QUEST_FINAL_STATE_RECEIPT_MISSING_OR_MISMATCH'),
+            replayedPlan.planHash,
+            replayedPlan.graphHash,
+            'UNPROVABLE',
+          );
+        }
+      }
+      verified.push('RUNTIME_EVENTS');
+    } else if (instance.state === 'completed') {
+      return finish(
+        replayUnprovable(context, verified, 'QUEST_RUNTIME_RECEIPTS_MISSING'),
+        replayedPlan.planHash,
+        replayedPlan.graphHash,
+        'UNPROVABLE',
+      );
+    }
 
     const outcomeHash = computeCanonicalHash('aurion.quest.replay.v1', replayedPlan.outcomes);
     return finish(

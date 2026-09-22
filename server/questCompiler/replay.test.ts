@@ -42,6 +42,7 @@ describe('QuestReplayEngine (AIM-298)', () => {
       reason: null,
     });
     expect(result.replayVerdict.verifiedStages).toEqual([
+      'SOURCE_TUPLE',
       'CANDIDATE_SET',
       'TEMPLATE_SELECTION',
       'ROLE_BINDING',
@@ -76,6 +77,7 @@ describe('QuestReplayEngine (AIM-298)', () => {
     expect(result.replayVerdict.status).toBe('FIRST_DIVERGENCE');
     expect(result.replayVerdict.firstDivergentStage).toBe('PLAN_HASH');
     expect(result.replayVerdict.verifiedStages).toEqual([
+      'SOURCE_TUPLE',
       'CANDIDATE_SET',
       'TEMPLATE_SELECTION',
       'ROLE_BINDING',
