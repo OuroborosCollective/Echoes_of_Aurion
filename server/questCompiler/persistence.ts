@@ -285,6 +285,12 @@ export class QuestPersistenceEngine {
     updatedInstance: QuestInstance;
   }): Promise<{ updatedInstance: QuestInstance; receipt: QuestReceipt; replayed: boolean }> {
     if (!input.idempotencyKey || input.idempotencyKey.length > 128) throw new Error("QUEST_IDEMPOTENCY_KEY_INVALID");
+    if (input.receipt.idempotencyKey !== input.idempotencyKey || input.receipt.instanceId !== input.instanceId) {
+      throw new Error("QUEST_RECEIPT_IDENTITY_MISMATCH");
+    }
+    if (computeQuestStateHash(input.updatedInstance) !== input.receipt.resultStateHash) {
+      throw new Error("QUEST_RESULT_STATE_HASH_MISMATCH");
+    }
     if (!this.verifyReceiptIntegrity(input.receipt)) throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${input.receipt.id}`);
     return this.withInstanceLock(input.instanceId, async () => {
       const db = await getDb();
@@ -293,7 +299,12 @@ export class QuestPersistenceEngine {
           receipt.instanceId === input.instanceId && receipt.idempotencyKey === input.idempotencyKey
         );
         if (replay) {
-          if (replay.receiptHash !== input.receipt.receiptHash || replay.resultStateHash !== input.receipt.resultStateHash) {
+          if (
+            replay.receiptHash !== input.receipt.receiptHash ||
+            replay.resultStateHash !== input.receipt.resultStateHash ||
+            replay.planHash !== input.receipt.planHash ||
+            replay.graphHash !== input.receipt.graphHash
+          ) {
             throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
           }
           const current = this.instances.get(input.instanceId);
@@ -303,7 +314,15 @@ export class QuestPersistenceEngine {
         const current = this.instances.get(input.instanceId);
         if (!current) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
         const currentHash = computeQuestStateHash(current);
-        if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
+        if (
+          currentHash !== input.expectedStateHash ||
+          input.receipt.previousStateHash !== currentHash ||
+          input.updatedInstance.id !== current.id ||
+          input.updatedInstance.worldId !== current.worldId ||
+          input.updatedInstance.playerUserId !== current.playerUserId ||
+          input.updatedInstance.planHash !== current.planHash ||
+          input.updatedInstance.graphHash !== current.graphHash
+        ) {
           throw new Error("QUEST_RUNTIME_STALE_STATE");
         }
         const lastSequence = [...this.receipts.values()]
@@ -323,7 +342,13 @@ export class QuestPersistenceEngine {
         const replayRow = (await tx.select().from(aurionQuestReceipts)
           .where(eq(aurionQuestReceipts.idempotencyKey, input.idempotencyKey)).limit(1))[0];
         if (replayRow) {
-          if (replayRow.instanceId !== input.instanceId || replayRow.receiptHash !== input.receipt.receiptHash || replayRow.resultStateHash !== input.receipt.resultStateHash) {
+          if (
+            replayRow.instanceId !== input.instanceId ||
+            replayRow.receiptHash !== input.receipt.receiptHash ||
+            replayRow.resultStateHash !== input.receipt.resultStateHash ||
+            replayRow.planHash !== input.receipt.planHash ||
+            replayRow.graphHash !== input.receipt.graphHash
+          ) {
             throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
           }
           const instance = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
