@@ -85,6 +85,22 @@ describe("Quest domain command materialization (AIM-298 #459)", () => {
     })).toThrow("QUEST_MATERIALIZATION_PLAN_MISMATCH");
   });
 
+  it("rejects a supplied plan whose own hashes drift from the instance", () => {
+    const { instance, plan } = fixture();
+    const expectedStateHash = computeQuestStateHash(instance);
+    const driftedPlan = { ...plan, planHash: "0".repeat(64) };
+
+    expect(() => materializeQuestDomainCommand(instance, driftedPlan, {
+      kind: "accept",
+      instanceId: instance.id,
+      planHash: instance.planHash,
+      graphHash: instance.graphHash,
+      expectedStateHash,
+      idempotencyKey: "accept:" + instance.id,
+      eventSequence: 1,
+    })).toThrow("QUEST_MATERIALIZATION_PLAN_MISMATCH");
+  });
+
   it("rejects stale logical state instead of materializing against old truth", () => {
     const { instance, plan } = fixture();
     expect(() => materializeQuestDomainCommand(instance, plan, {
