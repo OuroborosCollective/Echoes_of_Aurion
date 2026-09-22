@@ -20,6 +20,9 @@ import { QuestValidator } from "./validator";
 import { CandidateResolver } from "./candidateResolver";
 import { authoringHash, createQuestPublishReceipt } from "../aurionAuthoringPersistence";
 import { materializeQuestDomainCommand } from "./materialization";
+import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
+import { resolveQuestCausalAnchor } from "./causalAnchor";
+import { buildQuestCausalClosure } from "./causalClosure";
 
 export interface AdminQuestStudioStatus {
   compilerVersion: string;
@@ -430,7 +433,8 @@ export class AdminQuestStudioService {
     return { updatedInstance: committed.updatedInstance, receipt: committed.receipt };
   }
 
-  public async completeQuest(userId: number, instanceId: string) {
+  public async completeQuest(userId: number, instanceId: string, source?: QuestCompleteSource) {
+    if (!source) throw new Error("QUEST_CAUSAL_SOURCE_REQUIRED");
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
     const current = plan.nodes.find(node => node.id === instance.currentNodeId);
     if (!current || current.type !== "end") throw new Error("QUEST_END_NODE_REQUIRED");
@@ -458,19 +462,55 @@ export class AdminQuestStudioService {
         expectedStateHash: computeQuestStateHash(instance),
         idempotencyKey,
         eventSequence: nextSequence,
+        ...source,
       }),
       instance,
       plan,
     );
+    const resolvedAnchor = await resolveQuestCausalAnchor({
+      instance,
+      plan,
+      command: materializeQuestDomainCommand(instance, plan, {
+        kind: "complete",
+        instanceId: instance.id,
+        planHash: instance.planHash,
+        graphHash: instance.graphHash,
+        expectedStateHash: computeQuestStateHash(instance),
+        idempotencyKey,
+        eventSequence: nextSequence,
+        ...source,
+      }),
+      receipt: result.receipt,
+    });
+    const completionCommand = materializeQuestDomainCommand(instance, plan, {
+      kind: "complete",
+      instanceId: instance.id,
+      planHash: instance.planHash,
+      graphHash: instance.graphHash,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey,
+      eventSequence: nextSequence,
+      ...source,
+    });
+    const closure = buildQuestCausalClosure({
+      instance,
+      plan,
+      command: completionCommand,
+      receipt: result.receipt,
+      anchor: resolvedAnchor.anchor,
+    });
     const committed = await this.persistenceEngine.commitObjectiveTransition({
       instanceId: instance.id,
       expectedStateHash: computeQuestStateHash(instance),
       idempotencyKey,
       receipt: result.receipt,
       updatedInstance: result.updatedInstance,
+      causalClosure: closure,
     });
     return {
-      ...result,
+      updatedInstance: committed.updatedInstance,
+      receipt: committed.receipt,
+      replayed: committed.replayed,
       updatedInstance: committed.updatedInstance,
       receipt: committed.receipt,
       replayed: committed.replayed,
