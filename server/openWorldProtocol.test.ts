@@ -21,7 +21,7 @@ describe("open-world protocol", () => {
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes"], activeQuest: "ember_key", canEnterDungeon: false }))).toBe("emberfall");
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 4, completed: ["astral_call", "archive_of_echoes"], activeQuest: null, canEnterDungeon: true }))).toBe("cinder_vault");
     expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true }))).toBe("starfall_crater");
-    expect(zoneForOpenWorldProgress(snapshotInput({ level: 6, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: null, canEnterDungeon: true }))).toBe("clockwork_woods");
+    expect(zoneForOpenWorldProgress(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true }))).toBe("sunwatch_bastion");
   });
 
   it("returns an immutable display snapshot with only explicitly confirmed skill receipts", () => {
@@ -75,13 +75,40 @@ describe("open-world protocol", () => {
     expect(lyra?.autonomy.goal).toBe("expand_influence");
     expect(lyra?.autonomy.decisionHash).toHaveLength(64);
     expect(snapshot.polity).toMatchObject({ polityId: "asterion_compact", governmentType: "council" });
-    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "clockwork_woods", "emberfall", "observatory_threshold", "starfall_crater", "windhollow"]);
+    expect(snapshot.polity.territoryIds).toEqual(["cinder_vault", "emberfall", "observatory_threshold", "starfall_crater", "sunwatch_bastion", "windhollow"]);
     expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 
   it("exposes only the encounter unlocked by confirmed active quest or dungeon access", () => {
     expect(buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false })).primaryEncounter).toBeNull();
     expect(buildOpenWorldSnapshot(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true })).primaryEncounter).toMatchObject({ encounterKey: "cinder_vault" });
+    expect(buildOpenWorldSnapshot(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true })).primaryEncounter).toMatchObject({ id: "sunwatch-commander", encounterKey: "sunwatch_bastion" });
+  });
+
+  it("projects the harvested Sunwatch Bastion, Orun objective and POIs from confirmed progression", () => {
+    const snapshot = buildOpenWorldSnapshot(snapshotInput({
+      level: 5,
+      completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"],
+      activeQuest: "sunwatch_vanguard",
+      canEnterDungeon: true,
+    }));
+    expect(snapshot).toMatchObject({
+      zoneId: "sunwatch_bastion",
+      zoneTier: 5,
+      displayName: "Sonnenwacht-Bastion",
+      primaryEncounter: { id: "sunwatch-commander", label: "Sonnenwacht-Kommandant", encounterKey: "sunwatch_bastion" },
+    });
+    expect(snapshot.pointsOfInterest).toEqual([
+      { id: "sunwatch-return", kind: "portal", state: "available", label: "Rückkehrstein Sonnenwacht" },
+      { id: "orun-sunwatch", kind: "npc", state: "available", label: "Orun, Archivhüter" },
+      { id: "sunwatch-commander", kind: "encounter", state: "available", label: "Sonnenwacht-Kommandant" },
+    ]);
+    expect(snapshot.npcs.find(npc => npc.id === "orun")?.memory.quest[0]).toContain("Errichte den Vorposten");
+    expect(snapshot.npcs.find(npc => npc.id === "lyra")?.memory.local[0]).toContain("Sonnenwacht");
+    expect(snapshot.props).toEqual([{ kind: "starpath_marker", tileX: 4, tileZ: 4, rotationY: 0, scale: 1 }]);
+    expect(snapshot.terrain.tiles.every(tile => ["earth", "starpath", "starpath_crossing"].includes(tile.surface))).toBe(true);
+    expect(snapshot.world.reaction.signalIds).toContain("hazard:sunwatch_bastion");
+    expect(JSON.stringify(snapshot)).not.toContain("private key");
   });
 
   it("returns the Wolfram-budgeted read-only terrain layout without gameplay rewards", () => {
