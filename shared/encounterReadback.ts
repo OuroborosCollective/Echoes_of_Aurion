@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const encounterKeys = ["asterion", "archive", "solarium", "cinder_vault", "starfall_crater", "rootgear_foundry", "sunwatch_bastion"] as const;
+export const encounterKeys = ["asterion", "archive", "solarium", "cinder_vault", "starfall_crater", "sunwatch_bastion", "rootgear_foundry"] as const;
 export const encounterKeySchema = z.enum(encounterKeys);
 export type EncounterKey = z.infer<typeof encounterKeySchema>;
 const positive = z.number().int().positive().max(2_147_483_647);
