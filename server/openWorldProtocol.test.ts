@@ -82,7 +82,30 @@ describe("open-world protocol", () => {
   it("exposes only the encounter unlocked by confirmed active quest or dungeon access", () => {
     expect(buildOpenWorldSnapshot(snapshotInput({ level: 1, completed: [], activeQuest: null, canEnterDungeon: false })).primaryEncounter).toBeNull();
     expect(buildOpenWorldSnapshot(snapshotInput({ level: 3, completed: ["astral_call", "archive_of_echoes", "ember_key"], activeQuest: null, canEnterDungeon: true })).primaryEncounter).toMatchObject({ encounterKey: "cinder_vault" });
+    expect(buildOpenWorldSnapshot(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "clockwork_core", canEnterDungeon: true })).primaryEncounter).toMatchObject({ id: "rootgear-foundry", encounterKey: "rootgear_foundry" });
     expect(buildOpenWorldSnapshot(snapshotInput({ level: 5, completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"], activeQuest: "sunwatch_vanguard", canEnterDungeon: true })).primaryEncounter).toMatchObject({ id: "sunwatch-commander", encounterKey: "sunwatch_bastion" });
+  });
+
+  it("projects the Clockwork Woods tier-5 zone from confirmed progression", () => {
+    const snapshot = buildOpenWorldSnapshot(snapshotInput({
+      level: 5,
+      completed: ["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance"],
+      activeQuest: "clockwork_core",
+      canEnterDungeon: true,
+    }));
+    expect(snapshot).toMatchObject({
+      zoneId: "clockwork_woods",
+      zoneTier: 5,
+      displayName: "Clockwork Woods",
+      primaryEncounter: { id: "rootgear-foundry", label: "Rootgear-Kernwächter", encounterKey: "rootgear_foundry" },
+    });
+    expect(snapshot.pointsOfInterest).toEqual([
+      { id: "clockwork-return", kind: "portal", state: "available", label: "Rückkehrstein Clockwork Woods" },
+      { id: "orun-clockwork", kind: "npc", state: "available", label: "Orun, Archivhüter" },
+      { id: "rootgear-foundry", kind: "encounter", state: "available", label: "Rootgear-Kernwächter" },
+    ]);
+    expect(snapshot.world.reaction.signalIds).toContain("hazard:clockwork_woods");
+    expect(snapshot.terrain.tiles.every(tile => ["earth", "starpath", "starpath_crossing"].includes(tile.surface))).toBe(true);
   });
 
   it("projects the harvested Sunwatch Bastion, Orun objective and POIs from confirmed progression", () => {
