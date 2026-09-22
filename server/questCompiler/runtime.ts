@@ -2,7 +2,6 @@ import {
   QuestInstance,
   QuestPlan,
   QuestReceipt,
-  QuestRuntimeEvent,
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash, computeQuestStateHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
 import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
