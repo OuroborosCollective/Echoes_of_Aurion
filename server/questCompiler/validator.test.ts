@@ -56,6 +56,20 @@ describe("QuestValidator (AIM-298)", () => {
     expect(result.diagnostics).toHaveLength(0);
   });
 
+  it("accepts the new canonical encounter-completion event binding", () => {
+    const template = structuredClone(DEFAULT_SEED_TEMPLATES[0]!);
+    const objective = template.nodes.find(node => node.type === "objective")!.objective!;
+    objective.eventBinding = {
+      source: "encounter",
+      event: "completed",
+      matchField: "encounterKey",
+      matchValue: "asterion",
+    };
+    const result = QuestValidator.validateTemplate(template);
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toHaveLength(0);
+  });
+
   it("rejects unreachable and over-bounded authored templates fail-closed", () => {
     const template = structuredClone(DEFAULT_SEED_TEMPLATES[0]!);
     const objective = template.nodes.find(node => node.type === "objective")!.objective!;
