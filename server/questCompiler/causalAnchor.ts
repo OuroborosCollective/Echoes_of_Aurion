@@ -25,6 +25,7 @@ function sourceMatches(instance: QuestInstance, plan: QuestPlan, source: QuestCo
   const checks: Array<[string, unknown, unknown]> = [
     ["worldId", instance.worldId, "echoes-of-aurion-global"],
     ["triggerEventId", instance.triggerEventId, source.triggerEventId],
+    ["triggerEventDigest", instance.triggerEventDigest, source.triggerEventDigest],
     ["compilerVersion", instance.compilerVersion, source.compilerVersion],
     ["sourceRevision", instance.sourceRevision, source.sourceRevision],
     ["templateSetHash", instance.templateSetHash, source.templateSetHash],
@@ -46,7 +47,7 @@ function sourceMatches(instance: QuestInstance, plan: QuestPlan, source: QuestCo
   }
 }
 
-function sameHandIn(intent: AurionQuestHandInIntent, command: QuestDomainCommand, source: QuestCompleteSource): boolean {
+function sameHandIn(intent: AurionQuestHandInIntent, command: QuestDomainCommand, source: QuestCompleteSource, questId: string): boolean {
   if (command.kind !== "complete") return false;
   const expected: Record<string, unknown> = {
     instanceId: command.instanceId,
@@ -69,7 +70,7 @@ function sameHandIn(intent: AurionQuestHandInIntent, command: QuestDomainCommand
   for (const [key, value] of Object.entries(expected)) {
     if ((intent as Record<string, unknown>)[key] !== value) return false;
   }
-  return intent.questId === command.instanceId;
+  return intent.questId === questId;
 }
 
 function decodeReceipt(row: typeof aurionCausalTickReceipts.$inferSelect): AurionCausalTickReceipt {
@@ -95,7 +96,7 @@ function decodeReceipt(row: typeof aurionCausalTickReceipts.$inferSelect): Aurio
   return receipt;
 }
 
-function intentMatchesStored(row: typeof aurionCausalTickReceipts.$inferSelect, command: QuestDomainCommand, source: QuestCompleteSource): boolean {
+function intentMatchesStored(row: typeof aurionCausalTickReceipts.$inferSelect, command: QuestDomainCommand, source: QuestCompleteSource, questId: string): boolean {
   if (!row.inputJson || command.kind !== "complete") return false;
   let intents: AurionZoneIntent[];
   try {
@@ -103,13 +104,14 @@ function intentMatchesStored(row: typeof aurionCausalTickReceipts.$inferSelect, 
   } catch {
     throw new Error("QUEST_CAUSAL_INTENT_EVIDENCE_CORRUPT");
   }
-  return intents.some(intent => intent.type === "quest_hand_in" && sameHandIn(intent as AurionQuestHandInIntent, command, source));
+  return intents.some(intent => intent.type === "quest_hand_in" && sameHandIn(intent as AurionQuestHandInIntent, command, source, questId));
 }
 
 async function findRealCausalReceipt(
   db: Database,
   source: QuestCompleteSource,
   command: QuestDomainCommand,
+  questId: string,
 ): Promise<{ receipt: AurionCausalTickReceipt; epoch: number; sourceWorldRoot: string } > {
   const proofs = await db.select({ epoch: aurionGlobalStateProofs.epoch })
     .from(aurionGlobalStateProofs)
@@ -146,7 +148,7 @@ async function findRealCausalReceipt(
         scanned += rows.length;
         if (scanned > MAX_RECEIPTS_PER_RANGE) throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_SCAN_LIMIT");
         for (const row of rows) {
-          if (!intentMatchesStored(row, command, source)) continue;
+          if (!intentMatchesStored(row, command, source, questId)) continue;
           matches.push({ receipt: decodeReceipt(row), epoch: proof.epoch, sourceWorldRoot: persisted.root.worldRootHash });
           if (matches.length > 1) throw new Error("QUEST_CAUSAL_ANCHOR_MULTIPLE_MATCHES");
         }
@@ -175,7 +177,7 @@ export async function resolveQuestCausalAnchor(input: {
   const db = await getDb();
   if (!db) throw new Error("QUEST_CAUSAL_DATABASE_UNAVAILABLE");
 
-  const found = await findRealCausalReceipt(db, input.command, input.command);
+  const found = await findRealCausalReceipt(db, input.command, input.command, input.instance.templateId);
   const anchor = createQuestCausalAnchor({
     questReceiptId: input.receipt.id,
     worldId: input.instance.worldId,
