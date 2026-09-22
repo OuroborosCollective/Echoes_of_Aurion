@@ -66,8 +66,9 @@ export function computeEncounterCompletionEvidenceHash(
 
 export function verifyEncounterCompletionEvidenceIdentity(value: EncounterCompletionEvidence): boolean {
   const normalized = encounterCompletionEvidenceSchema.parse(value);
+  const { evidenceHash, ...identity } = normalized;
   return normalized.eventId === `evt_encounter_complete_${normalized.sessionId}`
-    && normalized.evidenceHash === computeEncounterCompletionEvidenceHash(
-      encounterCompletionEvidenceIdentitySchema.parse(normalized),
+    && evidenceHash === computeEncounterCompletionEvidenceHash(
+      encounterCompletionEvidenceIdentitySchema.parse(identity),
     );
 }
