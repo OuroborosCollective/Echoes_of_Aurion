@@ -11,7 +11,7 @@ import {
   type QuestReceipt,
   type QuestTemplateVersion,
 } from "../../shared/aurionQuestContract";
-import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
+import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import { persistAuthoringReceipt } from "../aurionAuthoringPersistence";
 import type { AuthoringReceipt } from "../../shared/aurionAuthoringContract";
 import { getDb } from "../db";
@@ -292,7 +292,7 @@ export class QuestPersistenceEngine {
         }
         const current = this.instances.get(input.instanceId);
         if (!current) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
-        const currentHash = computeCanonicalHash("aurion.quest.instance.v1", current);
+        const currentHash = computeQuestStateHash(current);
         if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
           throw new Error("QUEST_RUNTIME_STALE_STATE");
         }
@@ -335,7 +335,7 @@ export class QuestPersistenceEngine {
         }
 
         const current = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
-        const currentHash = computeCanonicalHash("aurion.quest.instance.v1", current);
+        const currentHash = computeQuestStateHash(current);
         if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
           throw new Error("QUEST_RUNTIME_STALE_STATE");
         }
