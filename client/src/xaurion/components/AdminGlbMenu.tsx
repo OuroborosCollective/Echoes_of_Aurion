@@ -96,16 +96,18 @@ export const AdminGlbMenu: React.FC = () => {
   return (
     <>
       {/* Floating Admin Button */}
-      <div className="fixed bottom-4 left-4 z-[1000]">
+      <div className="fixed top-3 left-16 z-40">
         <button 
           onClick={() => {
             if (!isOpen) soundSynth.playUiOpen();
             else soundSynth.playUiClose();
             setIsOpen(!isOpen);
           }}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-sky-500 bg-black/80 text-sky-400 shadow-lg hover:bg-sky-500 hover:text-white transition-all"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-500/70 bg-black/85 text-sky-400 shadow-lg hover:bg-sky-500 hover:text-white transition-all backdrop-blur-md"
+          title="GLB Core Admin"
+          aria-label="GLB Core Admin"
         >
-          <Shield size={20} />
+          <Shield size={16} />
         </button>
       </div>
 

@@ -4,7 +4,7 @@
  * partnership legible. It records only the game's own events in this browser.
  */
 
-export type LedgerKind = "connection" | "system" | "command" | "combat" | "warning";
+export type LedgerKind = "connection" | "system" | "command" | "combat" | "warning" | "dialogue";
 
 export type LedgerEntry = {
   id: string;
@@ -22,7 +22,7 @@ function safeRead(): LedgerEntry[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(LEDGER_KEY) ?? "[]");
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((value): value is LedgerEntry => Boolean(value) && typeof value === "object" && ["id", "at", "title", "detail"].every(key => typeof value[key] === "string") && ["connection", "system", "command", "combat", "warning"].includes(value.kind)).slice(-28);
+    return parsed.filter((value): value is LedgerEntry => Boolean(value) && typeof value === "object" && ["id", "at", "title", "detail"].every(key => typeof value[key] === "string") && ["connection", "system", "command", "combat", "warning", "dialogue"].includes(value.kind)).slice(-28);
   } catch {
     return [];
   }
@@ -30,6 +30,14 @@ function safeRead(): LedgerEntry[] {
 
 export function readLedger(): LedgerEntry[] {
   return safeRead();
+}
+
+export function recordNpcDialogue(speaker: string, dialogue: string): LedgerEntry[] {
+  return appendLedger({
+    kind: "dialogue",
+    title: speaker,
+    detail: dialogue,
+  });
 }
 
 export function appendLedger(

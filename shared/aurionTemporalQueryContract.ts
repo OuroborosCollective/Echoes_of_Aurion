@@ -1,67 +1,62 @@
-import type { AurionTemporalDomain } from "./aurionTemporalEventContract";
+import type { AurionTemporalDomain, AurionTemporalEvent } from "./aurionTemporalEventContract";
 
 export type TemporalQueryStatus = "MATCH" | "UNPROVABLE" | "CONTRADICTED";
 
 export interface TemporalStateQuery {
-  worldId:string;
-  epoch:number;
-  subjectId?:string;
-  domain?:AurionTemporalDomain;
-  requiredWorldRoot?:string;
+  worldId: string;
+  epoch: number;
+  subjectId?: string;
+  domain?: AurionTemporalDomain;
+  requiredWorldRoot?: string;
 }
 
 export interface TemporalFactRecord {
-  factId:string;
-  eventId:string;
-  eventHash:string;
-  subjectId:string;
-  domain:AurionTemporalDomain;
-  validFromEpoch:number;
-  validToEpoch:number|null;
-  state:Readonly<Record<string,unknown>>;
-  evidenceReceiptHash:string;
-  sourceWorldRoot:string;
-  sourceRevision:string;
-  rulesetVersion:string;
-  predecessorEventIds:readonly string[];
+  factId: string;
+  eventId: string;
+  subjectId: string;
+  domain: AurionTemporalDomain;
+  validFromEpoch: number;
+  validToEpoch: number | null;
+  state: Record<string, unknown>;
+  payload?: Record<string, unknown>;
+  evidenceReceiptHash: string;
+  sourceWorldRoot: string;
+  predecessorEventIds: string[];
 }
 
 export interface HistoricalStateReconstructionResult {
-  mutationAuthority:"none";
-  status:TemporalQueryStatus;
-  worldId:string;
-  epoch:number;
-  subjectId?:string;
-  domain?:AurionTemporalDomain;
-  facts:readonly TemporalFactRecord[];
-  activeEventsCount:number;
-  reason?:string;
-  unprovableGaps?:readonly string[];
-  reconstructionHash?:string;
+  status: TemporalQueryStatus;
+  worldId: string;
+  epoch: number;
+  subjectId?: string;
+  domain?: AurionTemporalDomain;
+  facts: TemporalFactRecord[];
+  activeEventsCount: number;
+  reason?: string;
+  unprovableGaps?: string[];
+  reconstructedWorldRoot?: string;
 }
 
 export interface CausalExplainStep {
-  stepIndex:number;
-  eventId:string;
-  eventHash:string;
-  domain:AurionTemporalDomain;
-  epoch:number;
-  subjectIds:readonly string[];
-  sourceReceiptHash:string;
-  sourceWorldRoot:string;
-  sourceRevision:string;
-  rulesetVersion:string;
-  predecessorEventIds:readonly string[];
-  payload:Readonly<Record<string,unknown>>;
+  stepIndex: number;
+  eventId: string;
+  domain: AurionTemporalDomain;
+  epoch: number;
+  subjectIds: string[];
+  description: string;
+  sourceReceiptHash: string;
+  receiptHash?: string;
+  sourceWorldRoot: string;
+  predecessorEventIds: string[];
+  payload: Record<string, unknown>;
 }
 
 export interface CausalExplainResult {
-  mutationAuthority:"none";
-  status:TemporalQueryStatus;
-  targetFact:string;
-  targetEpoch:number;
-  chain:readonly CausalExplainStep[];
-  rootEvidenceReached:boolean;
-  reason?:string;
-  dagCycleDetected?:boolean;
+  status: TemporalQueryStatus;
+  targetFact: string;
+  targetEpoch: number;
+  chain: CausalExplainStep[];
+  rootEvidenceReached: boolean;
+  reason?: string;
+  dagCycleDetected?: boolean;
 }

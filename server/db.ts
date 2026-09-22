@@ -1655,6 +1655,12 @@ export async function acceptGameplayQuest(values: { userId: number; questKey: Qu
   const quest = progress.quests.find(candidate => candidate.key === values.questKey);
   if (!quest || quest.state !== "available") throw new Error("Diese Quest ist für den aktuellen Fortschritt nicht verfügbar.");
   await db.insert(gameplayQuestProgress).values({ id: newEndgameId("quest"), userId: values.userId, questKey: values.questKey, state: "active" });
+  try {
+    const { adminQuestStudioService } = await import("./questCompiler/adminService");
+    await adminQuestStudioService.bridgeGameplayAcceptQuest({ userId: values.userId, questKey: values.questKey });
+  } catch (err) {
+    console.warn("[QuestRuntimeEngineBridge] Bridge accept error:", err);
+  }
   return getGameplayProgress(values.userId);
 }
 
@@ -1743,6 +1749,16 @@ export async function completeGameplayQuest(values: { userId: number; questKey: 
     });
   }
   const item = dropResult.itemId ? (await db.select().from(itemInstances).where(eq(itemInstances.id, dropResult.itemId)).limit(1))[0] : undefined;
+  try {
+    const { adminQuestStudioService } = await import("./questCompiler/adminService");
+    await adminQuestStudioService.bridgeGameplayCompleteQuest({
+      userId: values.userId,
+      questKey: values.questKey,
+      giver: values.giver,
+    });
+  } catch (err) {
+    console.warn("[QuestRuntimeEngineBridge] Bridge complete error:", err);
+  }
   return { ...(await getGameplayProgress(values.userId)), questDrop: item ? { id: item.id, baseItemKey: item.baseItemKey, quality: item.quality, itemLevel: item.itemLevel, setKey: item.setKey } : null };
 }
 

@@ -1,76 +1,193 @@
+import {
+  type AurionTemporalEvent,
+  type AurionTemporalDomain,
+} from "../../shared/aurionTemporalEventContract";
+import {
+  type HistoricalStateReconstructionResult,
+  type TemporalFactRecord,
+  type TemporalStateQuery,
+} from "../../shared/aurionTemporalQueryContract";
+import { AurionTemporalEventIndex, globalTemporalEventIndex } from "./aurionTemporalEventIndex";
 import { canonicalJson, canonicalSha256 } from "../../shared/aurionCanonicalHash";
-import type { AurionTemporalEvent } from "../../shared/aurionTemporalEventContract";
-import type { HistoricalStateReconstructionResult, TemporalFactRecord, TemporalStateQuery } from "../../shared/aurionTemporalQueryContract";
-import { readTemporalEventById, readTemporalEventsForSubject, readTemporalEventsForWorld, verifyTemporalEventSource } from "./aurionTemporalEventPersistence";
-
-async function verifySources(events:readonly AurionTemporalEvent[]):Promise<string|null>{
-  const seen=new Set<string>();
-  for(const event of events){
-    const key=`${event.worldId}:${event.epoch}:${event.sourceWorldRoot}`;
-    if(seen.has(key)) continue;
-    seen.add(key);
-    try{await verifyTemporalEventSource(event);}catch(error){return error instanceof Error?error.message:String(error);}
-  }
-  return null;
-}
 
 export class HistoricalWorldStateService {
-  async reconstructStateAtEpoch(query:TemporalStateQuery):Promise<HistoricalStateReconstructionResult>{
-    const {worldId,epoch,subjectId,domain,requiredWorldRoot}=query;
-    const base={mutationAuthority:"none" as const,worldId,epoch,subjectId,domain,facts:Object.freeze([] as TemporalFactRecord[]),activeEventsCount:0};
-    if(!Number.isSafeInteger(epoch)||epoch<1) return {...base,status:"UNPROVABLE",reason:"INVALID_EPOCH_QUERY"};
-    let candidates:readonly AurionTemporalEvent[];
-    try{
-      candidates=subjectId?await readTemporalEventsForSubject(worldId,subjectId):await readTemporalEventsForWorld(worldId);
-    }catch(error){
-      return {...base,status:"UNPROVABLE",reason:error instanceof Error?error.message:String(error)};
-    }
-    if(domain) candidates=candidates.filter(event=>event.domain===domain);
-    const observed=candidates.filter(event=>event.validFromEpoch<=epoch);
-    const sourceGap=await verifySources(observed);
-    if(sourceGap) return {...base,status:"UNPROVABLE",reason:sourceGap};
+  constructor(private readonly index: AurionTemporalEventIndex = globalTemporalEventIndex) {}
 
-    const byEventId=new Map(observed.map(event=>[event.eventId,event] as const));
-    const superseded=new Set<string>();
-    for(const successor of observed) for(const predecessorId of successor.predecessorEventIds){
-      const predecessor=byEventId.get(predecessorId);
-      if(!predecessor||predecessor.domain!==successor.domain) continue;
-      if(!predecessor.subjectIds.some(subject=>successor.subjectIds.includes(subject))) continue;
-      superseded.add(predecessorId);
-    }
-    const active=observed.filter(event=>!superseded.has(event.eventId)&&(event.validToEpoch===null||event.validToEpoch>epoch));
-    if(active.length===0){
-      const future=candidates.some(event=>event.validFromEpoch>epoch);
-      return {...base,status:"UNPROVABLE",reason:future?"QUERY_EPOCH_BEFORE_CREATION":"NO_TEMPORAL_EVIDENCE_FOUND"};
-    }
-    const gaps:string[]=[];
-    try{
-      for(const event of active) for(const predecessor of event.predecessorEventIds) if(!await readTemporalEventById(predecessor)) gaps.push(`MISSING_PREDECESSOR:${event.eventId}->${predecessor}`);
-    }catch(error){
-      return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:error instanceof Error?error.message:String(error)};
-    }
-    if(gaps.length) return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:"TEMPORAL_EVIDENCE_GAP",unprovableGaps:Object.freeze(gaps.sort())};
+  /**
+   * Reconstruct historical state for a query at a specific logical epoch.
+   * Deterministic, zero guesswork, strictly evidence-bound.
+   */
+  async reconstructStateAtEpoch(query: TemporalStateQuery): Promise<HistoricalStateReconstructionResult> {
+    const { worldId, epoch, subjectId, domain, requiredWorldRoot } = query;
 
-    if(requiredWorldRoot&&!active.some(event=>event.sourceWorldRoot===requiredWorldRoot)) return {...base,status:"UNPROVABLE",activeEventsCount:active.length,reason:"WORLD_ROOT_MISMATCH"};
-
-    const bySubject=new Map<string,string>();
-    for(const event of active) for(const subject of (subjectId?event.subjectIds.filter(value=>value===subjectId):event.subjectIds)){
-      const key=`${event.domain}::${subject}`,payload=canonicalJson(event.payload),existing=bySubject.get(key);
-      if(existing!==undefined&&existing!==payload) return {...base,status:"CONTRADICTED",activeEventsCount:active.length,reason:`CONTRADICTING_FACTS_FOR_SUBJECT:${key}`};
-      bySubject.set(key,payload);
+    if (!Number.isInteger(epoch) || epoch < 0) {
+      return {
+        status: "UNPROVABLE",
+        worldId,
+        epoch,
+        subjectId,
+        domain,
+        facts: [],
+        activeEventsCount: 0,
+        reason: "INVALID_EPOCH_QUERY",
+      };
     }
-    const facts:TemporalFactRecord[]=[];
-    for(const event of active) for(const subject of (subjectId?event.subjectIds.filter(value=>value===subjectId):event.subjectIds)) facts.push(Object.freeze({
-      factId:`fact_${event.eventId}_${canonicalSha256(subject).slice(-12)}`,eventId:event.eventId,eventHash:event.eventHash,subjectId:subject,domain:event.domain,
-      validFromEpoch:event.validFromEpoch,validToEpoch:event.validToEpoch,state:event.payload,evidenceReceiptHash:event.sourceReceiptHash,
-      sourceWorldRoot:event.sourceWorldRoot,sourceRevision:event.sourceRevision,rulesetVersion:event.rulesetVersion,predecessorEventIds:event.predecessorEventIds,
+
+    // Retrieve candidate events
+    let candidateEvents: AurionTemporalEvent[];
+    if (subjectId) {
+      candidateEvents = await this.index.getEventsForSubject(worldId, subjectId);
+    } else {
+      candidateEvents = await this.index.getEventsForWorld(worldId);
+    }
+
+    if (domain) {
+      candidateEvents = candidateEvents.filter(ev => ev.domain === domain);
+    }
+
+    // Determine which events have been superseded by confirmed successors valid at or before query epoch
+    const supersededEventIds = new Set<string>();
+    for (const candidate of candidateEvents) {
+      if (candidate.validFromEpoch <= epoch) {
+        for (const predId of candidate.predecessorEventIds) {
+          supersededEventIds.add(predId);
+        }
+      }
+    }
+
+    // Filter events valid at query epoch:
+    // validFromEpoch <= epoch AND not superseded at or before epoch AND (validToEpoch === null OR validToEpoch > epoch)
+    const activeEvents = candidateEvents.filter(
+      ev =>
+        ev.validFromEpoch <= epoch &&
+        !supersededEventIds.has(ev.eventId) &&
+        (ev.validToEpoch === null || ev.validToEpoch > epoch)
+    );
+
+    // If query was for a specific subject and no events exist at or before epoch
+    if (activeEvents.length === 0) {
+      // Check if there are future events for this subject to distinguish between never-existed vs not-yet-created
+      const futureEvents = candidateEvents.filter(ev => ev.validFromEpoch > epoch);
+      return {
+        status: "UNPROVABLE",
+        worldId,
+        epoch,
+        subjectId,
+        domain,
+        facts: [],
+        activeEventsCount: 0,
+        reason: futureEvents.length > 0 ? "QUERY_EPOCH_BEFORE_CREATION" : "NO_TEMPORAL_EVIDENCE_FOUND",
+      };
+    }
+
+    // Check for evidence gaps / missing predecessors
+    const allWorldEvents = await this.index.getEventsForWorld(worldId);
+    const worldEventIds = new Set(allWorldEvents.map(e => e.eventId));
+    const unprovableGaps: string[] = [];
+
+    for (const ev of activeEvents) {
+      for (const predId of ev.predecessorEventIds) {
+        if (!worldEventIds.has(predId)) {
+          unprovableGaps.push(`MISSING_PREDECESSOR:${predId}`);
+        }
+      }
+    }
+
+    if (unprovableGaps.length > 0) {
+      return {
+        status: "UNPROVABLE",
+        worldId,
+        epoch,
+        subjectId,
+        domain,
+        facts: [],
+        activeEventsCount: activeEvents.length,
+        reason: "TEMPORAL_EVIDENCE_GAP",
+        unprovableGaps,
+      };
+    }
+
+    // Check for contradictions: mutually conflicting facts for same subject and fact key
+    const factsBySubjectKey = new Map<string, { event: AurionTemporalEvent; payloadJson: string }>();
+    for (const ev of activeEvents) {
+      for (const subj of ev.subjectIds) {
+        const key = `${ev.domain}::${subj}`;
+        const payloadJson = canonicalJson(ev.payload);
+        const existing = factsBySubjectKey.get(key);
+        if (existing) {
+          if (existing.payloadJson !== payloadJson) {
+            // Two different payloads valid at the same epoch for the exact same domain & subject
+            return {
+              status: "CONTRADICTED",
+              worldId,
+              epoch,
+              subjectId,
+              domain,
+              facts: [],
+              activeEventsCount: activeEvents.length,
+              reason: `CONTRADICTING_FACTS_FOR_SUBJECT:${key}`,
+            };
+          }
+        } else {
+          factsBySubjectKey.set(key, { event: ev, payloadJson });
+        }
+      }
+    }
+
+    // Check required world root if specified
+    if (requiredWorldRoot) {
+      const matchingRoots = activeEvents.filter(e => e.sourceWorldRoot === requiredWorldRoot);
+      if (matchingRoots.length === 0) {
+        return {
+          status: "UNPROVABLE",
+          worldId,
+          epoch,
+          subjectId,
+          domain,
+          facts: [],
+          activeEventsCount: activeEvents.length,
+          reason: "WORLD_ROOT_MISMATCH",
+        };
+      }
+    }
+
+    // Build fact records
+    const facts: TemporalFactRecord[] = activeEvents.map(ev => ({
+      factId: `fact_${ev.eventId}`,
+      eventId: ev.eventId,
+      subjectId: ev.subjectIds[0] ?? "world",
+      domain: ev.domain,
+      validFromEpoch: ev.validFromEpoch,
+      validToEpoch: ev.validToEpoch,
+      state: { ...ev.payload },
+      payload: { ...ev.payload },
+      evidenceReceiptHash: ev.sourceReceiptHash,
+      sourceWorldRoot: ev.sourceWorldRoot,
+      predecessorEventIds: [...ev.predecessorEventIds],
     }));
-    facts.sort((a,b)=>a.domain.localeCompare(b.domain)||a.subjectId.localeCompare(b.subjectId)||a.eventId.localeCompare(b.eventId));
-    const reconstructionHash=canonicalSha256({schema:"aurion.temporal.reconstruction.v1",worldId,epoch,facts:facts.map(f=>({
-      eventId:f.eventId,eventHash:f.eventHash,subjectId:f.subjectId,domain:f.domain,state:f.state,evidenceReceiptHash:f.evidenceReceiptHash,sourceWorldRoot:f.sourceWorldRoot,
-    }))});
-    return {mutationAuthority:"none",status:"MATCH",worldId,epoch,subjectId,domain,facts:Object.freeze(facts),activeEventsCount:active.length,reconstructionHash};
+
+    // Deterministically compute reconstructed world root from sorted facts
+    const factsDigest = canonicalSha256(
+      facts.map(f => ({
+        factId: f.factId,
+        domain: f.domain,
+        subjectId: f.subjectId,
+        state: f.state,
+        receipt: f.evidenceReceiptHash,
+      }))
+    );
+
+    return {
+      status: "MATCH",
+      worldId,
+      epoch,
+      subjectId,
+      domain,
+      facts,
+      activeEventsCount: activeEvents.length,
+      reconstructedWorldRoot: factsDigest,
+    };
   }
 }
 
-export const globalHistoricalWorldStateService=new HistoricalWorldStateService();
+export const globalHistoricalWorldStateService = new HistoricalWorldStateService();

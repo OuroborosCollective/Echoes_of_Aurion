@@ -1118,3 +1118,10 @@ Next safe step: Merge only after the final exact-head/Memory readback remains co
 Change: Replaced the aurionReplayRuns.id writer's world/zone/tick/UUID concatenation with a bounded run_ + 32-hex-character UUID persistence identity; replay dimensions remain explicit persisted columns, so no schema widening or migration is required.
 Insight: A varchar(96) contract was already sufficient for the table; the defect was the unbounded composition of human-readable dimensions into the primary key. Persistence identity should remain bounded independently of variable world/zone names while canonical evidence fields stay explicit.
 Evidence: Live echoes-of-aurion-aurion-1 logs on main 035bfa299fe4a58387d21842d9e65a7ea9f57060 showed ER_DATA_TOO_LONG for a 98-character replay ID against aurionReplayRuns.id varchar(96); the proposed ID is exactly 36 characters and a regression test generates 128 unique bounded IDs. Exact-head CI, deployment, and post-deploy runtime readback remain required before this change is considered production-fixed.
+
+### 2026-09-22 — NPC Dialogue History Persistence & Command Console Ledger UI
+Status: VERIFIED client & ledger integration
+Change: Created `NpcDialogueLedger` component integrating with the canonical `ledger-list` and `command-console` UI styles, supporting dialogue filtering, scrollback of previous interactions, live event updates, reset, and export. Extended `ledger.ts` to support `"dialogue"` entries with `recordNpcDialogue()`, and wired dialogue persistence into `NPCDialogueModal` and `Ax1WorldSurfaces`.
+Insight: NPC interactions persist locally in sequence-indexed ledger records without altering deterministic server simulation or introducing unverified authority.
+Evidence: Vitest unit tests in `client/src/components/NpcDialogueLedger.test.tsx` and `client/src/lib/deterministicIdentity.test.ts` pass (6/6 tests passing); `vite build` completed cleanly in 21.98s.
+

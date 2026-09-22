@@ -338,3 +338,12 @@ export function createQuestPublishReceipt(input: {
     resultHash: input.resultHash,
   });
 }
+
+export async function getGlbCatalogSafe(): Promise<{ entries: any[]; revision: string }> {
+  try {
+    return await glbImportStore().catalog();
+  } catch {
+    return { entries: [], revision: "fallback-0" };
+  }
+}
+

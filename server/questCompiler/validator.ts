@@ -18,7 +18,18 @@ export interface QuestValidationResult {
  */
 export class QuestValidator {
   public static validateTemplate(raw: QuestTemplateVersion): { valid: boolean; diagnostics: ValidationDiagnostic[] } {
-    const template = QuestTemplateVersionSchema.parse(raw);
+    const parse = QuestTemplateVersionSchema.safeParse(raw);
+    if (!parse.success) {
+      return {
+        valid: false,
+        diagnostics: parse.error.errors.map(err => ({
+          code: "SCHEMA_VALIDATION_ERROR",
+          message: `${err.path.join(".")}: ${err.message}`,
+          severity: "error" as const,
+        })),
+      };
+    }
+    const template = parse.data;
     const diagnostics: ValidationDiagnostic[] = [];
     const ids = template.nodes.map(node => node.id);
     const idSet = new Set(ids);
@@ -49,6 +60,45 @@ export class QuestValidator {
         diagnostics.push({ code: "OBJECTIVE_EVENT_BINDING_REQUIRED", message: `Quest objective ${node.id} has no confirmed Aurion event binding.`, severity: "error" });
       }
     }
+
+    // Role definitions check
+    if (!template.roles || template.roles.length === 0) {
+      diagnostics.push({ code: "MISSING_ROLES", message: "Quest template must define at least one role.", severity: "error" });
+    }
+
+    // Cycle detection (DAG check)
+    const adj = new Map<string, string[]>();
+    for (const node of template.nodes) adj.set(node.id, []);
+    for (const edge of template.edges) {
+      if (adj.has(edge.fromNodeId)) adj.get(edge.fromNodeId)!.push(edge.toNodeId);
+    }
+    const color = new Map<string, number>(); // 0: unvisited, 1: visiting, 2: visited
+    let hasCycle = false;
+    const dfs = (u: string) => {
+      color.set(u, 1);
+      for (const v of adj.get(u) || []) {
+        const c = color.get(v) || 0;
+        if (c === 1) {
+          hasCycle = true;
+          return;
+        }
+        if (c === 0) {
+          dfs(v);
+          if (hasCycle) return;
+        }
+      }
+      color.set(u, 2);
+    };
+    for (const node of template.nodes) {
+      if ((color.get(node.id) || 0) === 0) {
+        dfs(node.id);
+        if (hasCycle) break;
+      }
+    }
+    if (hasCycle) {
+      diagnostics.push({ code: "CYCLE_DETECTED", message: "Quest graph contains a cycle.", severity: "error" });
+    }
+
     const outcomeIds = template.outcomes.map(outcome => outcome.id);
     if (new Set(outcomeIds).size !== outcomeIds.length) diagnostics.push({ code: "DUPLICATE_OUTCOME_ID", message: "Quest template contains duplicate outcome ids.", severity: "error" });
     for (const outcome of template.outcomes) for (const reward of outcome.rewards) {
@@ -125,6 +175,82 @@ export class QuestValidator {
         message: 'Plan has zero bound roles.',
         severity: 'warning',
       });
+    }
+
+    // 6. Check outcomes and validate against undeclared effects
+    if (!plan.outcomes || plan.outcomes.length === 0) {
+      diagnostics.push({
+        code: 'MISSING_OUTCOMES',
+        message: 'Quest plan must contain at least one outcome.',
+        severity: 'error',
+      });
+    } else {
+      const outcomeIds = plan.outcomes.map(o => o.id);
+      if (new Set(outcomeIds).size !== outcomeIds.length) {
+        diagnostics.push({
+          code: 'DUPLICATE_OUTCOME_ID',
+          message: 'Quest plan contains duplicate outcome ids.',
+          severity: 'error',
+        });
+      }
+
+      const ALLOWED_EFFECT_TYPES = new Set(['assert_fact', 'retract_fact', 'emit_event', 'grant_reward']);
+      const ALLOWED_REWARD_TYPES = new Set(['xp', 'gold', 'item', 'reputation', 'standing']);
+
+      for (const outcome of plan.outcomes) {
+        for (const reward of outcome.rewards) {
+          if (!ALLOWED_REWARD_TYPES.has(reward.type)) {
+            diagnostics.push({
+              code: 'UNDECLARED_EFFECT',
+              message: `Undeclared reward type: ${reward.type}`,
+              severity: 'error',
+            });
+          }
+          if (reward.amount <= 0 || reward.amount > 1_000_000) {
+            diagnostics.push({
+              code: 'REWARD_BOUND_EXCEEDED',
+              message: `Reward ${reward.type} has invalid amount ${reward.amount}.`,
+              severity: 'error',
+            });
+          }
+        }
+        for (const effect of outcome.factEffects) {
+          if (!ALLOWED_EFFECT_TYPES.has(effect.effectType)) {
+            diagnostics.push({
+              code: 'UNDECLARED_EFFECT',
+              message: `Undeclared effect type: ${effect.effectType}`,
+              severity: 'error',
+            });
+          }
+          if ((effect.effectType === 'assert_fact' || effect.effectType === 'retract_fact') && (!effect.targetSubject || !effect.predicate)) {
+            diagnostics.push({
+              code: 'MISSING_AUTHORITATIVE_HANDLER',
+              message: `Missing subject or predicate for fact effect ${effect.effectType}.`,
+              severity: 'error',
+            });
+          }
+        }
+      }
+
+      for (const node of plan.nodes) {
+        const allNodeEffects = [...(node.actionsOnEnter || []), ...(node.actionsOnExit || [])];
+        for (const effect of allNodeEffects) {
+          if (!ALLOWED_EFFECT_TYPES.has(effect.effectType)) {
+            diagnostics.push({
+              code: 'UNDECLARED_EFFECT',
+              message: `Undeclared node action effect type: ${effect.effectType}`,
+              severity: 'error',
+            });
+          }
+          if ((effect.effectType === 'assert_fact' || effect.effectType === 'retract_fact') && (!effect.targetSubject || !effect.predicate)) {
+            diagnostics.push({
+              code: 'MISSING_AUTHORITATIVE_HANDLER',
+              message: `Missing subject or predicate for node effect ${effect.effectType}.`,
+              severity: 'error',
+            });
+          }
+        }
+      }
     }
 
     const hasErrors = diagnostics.some(d => d.severity === 'error');

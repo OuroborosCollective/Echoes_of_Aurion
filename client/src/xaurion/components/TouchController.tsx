@@ -132,25 +132,13 @@ export const AX1TouchDirector: React.FC<AX1TouchDirectorProps> = ({
       return;
     }
 
+    // If moving exceeds threshold and we were dwelling, cancel dwell
     if (dist > metrics.moveThreshold) {
-      if (mode !== "moving") {
-        if (dwellTimer.current) {
-          clearTimeout(dwellTimer.current);
-          if ((dwellTimer.current as any)._interval) clearInterval((dwellTimer.current as any)._interval);
-        }
-        setMode("moving");
-        setDwellProgress(0);
+      if (dwellTimer.current) {
+        clearTimeout(dwellTimer.current);
+        if ((dwellTimer.current as any)._interval) clearInterval((dwellTimer.current as any)._interval);
       }
-
-      // Subtract dead zone for a smoother transition from stationary to moving
-      const effectiveDist = Math.max(0, dist - metrics.deadZone);
-      const scale = Math.min(1, effectiveDist / (metrics.maxDist - metrics.deadZone));
-      
-      const f = -dy / dist * scale;
-      const r = dx / dist * scale;
-      
-      moveRequest.current = { f, r };
-      onMove(f, r);
+      setDwellProgress(0);
     }
   };
 
@@ -165,19 +153,13 @@ export const AX1TouchDirector: React.FC<AX1TouchDirectorProps> = ({
         onOpenPanel(selectedPanel);
         setMenuActive(false);
       }
-      // If we didn't select anything, keep menu open for manual tap or dismiss?
-      // User says "nicht sofort wieder weg" in previous prompt, 
-      // but "persists until release" in current.
-      // We'll close on release if selected, otherwise keep for a moment.
       if (!selectedPanel) {
-        // Keep active for manual selection if they just let go
         setMode("menu");
       } else {
         setMode("idle");
         setTouchPos(null);
       }
     } else {
-      if (mode === "moving") onMove(0, 0);
       setMode("idle");
       setTouchPos(null);
     }

@@ -21,8 +21,8 @@ function v2Fixture(suffix: string) {
     socket,
     combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
   });
-  const preState = zone.getCanonicalZoneState();
   zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 1, z: 0 } });
+  const preState = zone.getCanonicalZoneState();
   const intents = [...zone.getPendingIntents()];
   zone.tick();
   const receipt = zone.getLatestReceipt();
@@ -112,8 +112,8 @@ describe("Blocker 5 causal receipt v2", () => {
       socket,
       combatProfile: { combatLevel: 5, maxHealth: 500, weaponBonus: 10, weaponTrack: "blade" },
     });
-    const preState = zone.getCanonicalZoneState();
     zone.submitMovement(connectionId, { type: "move", clientSeq: 1, input: { x: 0, z: -1 } });
+    const preState = zone.getCanonicalZoneState();
     const intents = [...zone.getPendingIntents()];
     zone.tick();
     const receipt = zone.getLatestReceipt();

@@ -5,7 +5,6 @@ export const glbTargetTypes = ["character", "enemy", "weapon", "armor", "arena"]
 export const glbImportPurposes = [
   "auto",
   "npc-fallback",
-  "enemy-fallback",
   "world-environment",
   "world-nature",
   "player-public",
@@ -22,7 +21,6 @@ export type GlbLodLevel = (typeof glbLodLevels)[number];
 /** Server-authored catalog markers. They encode visual authority only; none of
  * these prefixes grants gameplay state, inventory ownership or interaction. */
 export const NPC_FALLBACK_DISPLAY_PREFIX = "NPC Fallback · " as const;
-export const ENEMY_FALLBACK_DISPLAY_PREFIX = "Enemy Fallback · " as const;
 export const WORLD_ENVIRONMENT_DISPLAY_PREFIX = "World Environment · " as const;
 export const WORLD_NATURE_DISPLAY_PREFIX = "World Nature · " as const;
 export const PUBLIC_PLAYER_DISPLAY_PREFIX = "Player Public · " as const;
@@ -30,7 +28,6 @@ export const EQUIPMENT_DISPLAY_PREFIX = "Equipment · " as const;
 
 export function glbPurposeFromDisplayName(displayName: string): GlbImportPurpose {
   if (displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX)) return "npc-fallback";
-  if (displayName.startsWith(ENEMY_FALLBACK_DISPLAY_PREFIX)) return "enemy-fallback";
   if (displayName.startsWith(WORLD_ENVIRONMENT_DISPLAY_PREFIX)) return "world-environment";
   if (displayName.startsWith(WORLD_NATURE_DISPLAY_PREFIX)) return "world-nature";
   if (displayName.startsWith(PUBLIC_PLAYER_DISPLAY_PREFIX)) return "player-public";
@@ -46,7 +43,6 @@ export function glbEquipmentSlotFromDisplayName(displayName: string): GlbEquipme
 
 export function glbSubcategoryFromDisplayName(displayName: string): string | null {
   const purpose = glbPurposeFromDisplayName(displayName);
-  if (purpose === "enemy-fallback") return displayName.slice(ENEMY_FALLBACK_DISPLAY_PREFIX.length).split(" · ", 1)[0] || null;
   if (purpose === "world-environment") return displayName.slice(WORLD_ENVIRONMENT_DISPLAY_PREFIX.length).split(" · ", 1)[0] || null;
   if (purpose === "world-nature") return displayName.slice(WORLD_NATURE_DISPLAY_PREFIX.length).split(" · ", 1)[0] || null;
   if (purpose === "equipment") return glbEquipmentSlotFromDisplayName(displayName);

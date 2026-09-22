@@ -4,6 +4,7 @@ import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import type { ConfirmedCombatMetrics } from "../integration/combatPresentation";
 import { AX1_VISIBLE_SOURCE_REVISION } from "../integration/ax1SourceManifest";
 import { Ax1ProjectionModal, type Ax1ProjectionState, UnknownValue } from "./Ax1ProjectionModal";
+import { NpcDialogueLedger } from "@/components/NpcDialogueLedger";
 
 export type Ax1WorldPoi = Readonly<{ 
   id: string; 
@@ -89,10 +90,16 @@ export const HomesteadBuilderModal = (props: { open: boolean; onClose: () => voi
 
 export function NPCDialogueModal({ open, onClose, contacts, state }: { open: boolean; onClose: () => void; contacts: ReactNode; state: Ax1ProjectionState }) {
   return <Ax1ProjectionModal open={open} onClose={onClose} id="dialogue" title="Dialoge & Beziehungen" eyebrow="AX1 Arelorian Lingua" state={state}>
-    <div className="grid gap-4 md:grid-cols-[1fr_1.4fr]"><SurfaceCards entries={[
-      { title: "Semantische Beobachtung", value: state === "confirmed" ? "Receipt-gebunden" : undefined, note: "Lingua kann Kontext beschreiben, aber keine Beziehung oder Preise mutieren.", icon: <Languages size={14} /> },
-      { title: "NPC-Antwort", value: state === "confirmed" ? "Bestätigter Readback" : undefined, note: "Entscheidung und Memory werden serverseitig gelesen.", icon: <ScrollText size={14} /> },
-    ]} /><section className="ax1-projection-card"><h4>Bestätigte Kontakte</h4><div className="mt-3">{contacts}</div></section></div>
+    <div className="grid gap-4 md:grid-cols-[1fr_1.4fr]">
+      <div className="space-y-4">
+        <SurfaceCards entries={[
+          { title: "Semantische Beobachtung", value: state === "confirmed" ? "Receipt-gebunden" : undefined, note: "Lingua kann Kontext beschreiben, aber keine Beziehung oder Preise mutieren.", icon: <Languages size={14} /> },
+          { title: "NPC-Antwort", value: state === "confirmed" ? "Bestätigter Readback" : undefined, note: "Entscheidung und Memory werden serverseitig gelesen.", icon: <ScrollText size={14} /> },
+        ]} />
+        <NpcDialogueLedger initialFilter="dialogue" className="!relative !top-0 !right-0 !w-full !max-w-full" />
+      </div>
+      <section className="ax1-projection-card"><h4>Bestätigte Kontakte</h4><div className="mt-3">{contacts}</div></section>
+    </div>
   </Ax1ProjectionModal>;
 }
 

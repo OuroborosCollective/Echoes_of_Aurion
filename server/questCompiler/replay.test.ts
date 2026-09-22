@@ -42,10 +42,14 @@ describe('QuestReplayEngine (AIM-298)', () => {
       reason: null,
     });
     expect(result.replayVerdict.verifiedStages).toEqual([
+      'SOURCE_SCOPE',
+      'TEMPLATE_SET',
       'CANDIDATE_SET',
       'TEMPLATE_SELECTION',
+      'SEED_DIGEST',
       'ROLE_BINDING',
       'PLAN_HASH',
+      'SEMANTIC_OUTCOME',
     ]);
     expect(result.replayedPlanHash).toBe(plan.planHash);
   });
@@ -76,8 +80,11 @@ describe('QuestReplayEngine (AIM-298)', () => {
     expect(result.replayVerdict.status).toBe('FIRST_DIVERGENCE');
     expect(result.replayVerdict.firstDivergentStage).toBe('PLAN_HASH');
     expect(result.replayVerdict.verifiedStages).toEqual([
+      'SOURCE_SCOPE',
+      'TEMPLATE_SET',
       'CANDIDATE_SET',
       'TEMPLATE_SELECTION',
+      'SEED_DIGEST',
       'ROLE_BINDING',
     ]);
     expect(result.firstDivergenceDetails).toContain('PlanHash divergence');
@@ -112,5 +119,109 @@ describe('QuestReplayEngine (AIM-298)', () => {
       expectedHash: null,
       observedHash: null,
     });
+  });
+
+  it('detects FIRST_DIVERGENCE when runtime event sequence breaks', () => {
+    const factEngine = new WorldFactEngine();
+    factEngine.recordEvent({
+      id: 'evt_init',
+      type: 'CARAVAN_ATTACKED',
+      source: 'test',
+      data: { caravanId: 'c1', merchantId: 'npc_merchant_kaelen', playerUserId: '1' },
+    });
+    const registry = new QuestTemplateRegistry();
+    const runtime = new QuestRuntimeEngine(factEngine, registry);
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1',
+      playerUserId: 1,
+      giverNpcId: 'npc_merchant_kaelen',
+      triggerEventId: 'evt_init',
+    });
+
+    const receipts = [
+      {
+        id: 'rcpt_1',
+        instanceId: instance.id,
+        eventSequence: 1,
+        planHash: plan.planHash,
+        graphHash: plan.graphHash,
+        previousStateHash: 'hash_pre_1',
+        resultStateHash: 'hash_res_1',
+        idempotencyKey: 'key_1',
+        receiptHash: 'rcpt_hash_1',
+        createdAt: '2026-09-22T00:00:00.000Z',
+      },
+      {
+        id: 'rcpt_2',
+        instanceId: instance.id,
+        eventSequence: 3, // Skipped sequence 2!
+        planHash: plan.planHash,
+        graphHash: plan.graphHash,
+        previousStateHash: 'hash_res_1',
+        resultStateHash: 'hash_res_2',
+        idempotencyKey: 'key_2',
+        receiptHash: 'rcpt_hash_2',
+        createdAt: '2026-09-22T00:00:01.000Z',
+      },
+    ];
+
+    const replayEngine = new QuestReplayEngine(registry);
+    const result = replayEngine.replayInstance(instance, plan, factEngine.getFacts(), plan.planHash, undefined, { receipts });
+
+    expect(result.verdict).toBe('FIRST_DIVERGENCE');
+    expect(result.replayVerdict.firstDivergentStage).toBe('RUNTIME_EVENTS');
+    expect(result.firstDivergenceDetails).toContain('EventSequence mismatch');
+  });
+
+  it('detects FIRST_DIVERGENCE when runtime state hash chain breaks', () => {
+    const factEngine = new WorldFactEngine();
+    factEngine.recordEvent({
+      id: 'evt_init',
+      type: 'CARAVAN_ATTACKED',
+      source: 'test',
+      data: { caravanId: 'c1', merchantId: 'npc_merchant_kaelen', playerUserId: '1' },
+    });
+    const registry = new QuestTemplateRegistry();
+    const runtime = new QuestRuntimeEngine(factEngine, registry);
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1',
+      playerUserId: 1,
+      giverNpcId: 'npc_merchant_kaelen',
+      triggerEventId: 'evt_init',
+    });
+
+    const receipts = [
+      {
+        id: 'rcpt_1',
+        instanceId: instance.id,
+        eventSequence: 1,
+        planHash: plan.planHash,
+        graphHash: plan.graphHash,
+        previousStateHash: 'hash_pre_1',
+        resultStateHash: 'hash_res_1',
+        idempotencyKey: 'key_1',
+        receiptHash: 'rcpt_hash_1',
+        createdAt: '2026-09-22T00:00:00.000Z',
+      },
+      {
+        id: 'rcpt_2',
+        instanceId: instance.id,
+        eventSequence: 2,
+        planHash: plan.planHash,
+        graphHash: plan.graphHash,
+        previousStateHash: 'broken_hash_does_not_match_res_1',
+        resultStateHash: 'hash_res_2',
+        idempotencyKey: 'key_2',
+        receiptHash: 'rcpt_hash_2',
+        createdAt: '2026-09-22T00:00:01.000Z',
+      },
+    ];
+
+    const replayEngine = new QuestReplayEngine(registry);
+    const result = replayEngine.replayInstance(instance, plan, factEngine.getFacts(), plan.planHash, undefined, { receipts });
+
+    expect(result.verdict).toBe('FIRST_DIVERGENCE');
+    expect(result.replayVerdict.firstDivergentStage).toBe('RUNTIME_EVENTS');
+    expect(result.firstDivergenceDetails).toContain('State hash chain break');
   });
 });

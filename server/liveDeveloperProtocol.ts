@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
 
 export const LIVE_DEVELOPER_CHANGE_KINDS = ["world", "quest", "npc_behavior", "content_model"] as const;
@@ -33,46 +32,5 @@ export function buildLiveDeveloperGuardrails() {
     "Use only the supplied change kind and the allowed add/adjust operation actions.",
     "Keep all gameplay changes bounded to Aurion world content, quest content, NPC behavior, or content-model specifications.",
     "Every proposal must require human review before any application.",
-  ].join(" ");
-}
-
-
-const GAME_DEV_DESIGN_PURPOSES = [
-  "npc-fallback",
-  "enemy-fallback",
-  "world-environment",
-  "world-nature",
-  "player-public",
-  "equipment",
-] as const;
-
-export const GameDevAssetDesignWorkOrderSchema = z.object({
-  title: z.string().trim().min(6).max(120),
-  suggestedDisplayName: z.string().trim().min(3).max(120),
-  suggestedPurpose: z.enum(GAME_DEV_DESIGN_PURPOSES),
-  designIntent: z.string().trim().min(24).max(800),
-  acceptanceCriteria: z.array(z.string().trim().min(6).max(180)).min(1).max(8),
-  riskNotes: z.array(z.string().trim().min(4).max(180)).max(8),
-  requiresHumanReview: z.literal(true),
-}).strict();
-
-export type GameDevAssetDesignWorkOrder = z.infer<typeof GameDevAssetDesignWorkOrderSchema>;
-
-export function validateGameDevAssetDesignWorkOrder(value: unknown): GameDevAssetDesignWorkOrder {
-  return GameDevAssetDesignWorkOrderSchema.parse(value);
-}
-
-export function hashGameDevAssetDesignWorkOrder(value: unknown): string {
-  const workOrder = validateGameDevAssetDesignWorkOrder(value);
-  return createHash("sha256").update(JSON.stringify(workOrder)).digest("hex");
-}
-
-export function buildGameDevAssetDesignGuardrails(): string {
-  return [
-    "Design one bounded presentation asset work order for Echoes of Aurion.",
-    "Do not claim or infer a license; licensing is entered and confirmed separately by the human operator.",
-    "Do not execute tools, spend provider funds, edit code, mutate databases, or claim that an asset is live.",
-    "Choose only a presentation purpose and acceptance criteria; gameplay authority remains outside the asset.",
-    "Every work order requires a human review and an independent Game Development Studio validation/admission step.",
   ].join(" ");
 }

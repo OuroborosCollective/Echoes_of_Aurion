@@ -88,6 +88,22 @@ export function applyMobCombatState(current: MobRuntimeState, values: { health: 
   return Object.freeze({ ...current, health, stamina, nextAttackTick, state: health === 0 ? "dead" : current.state, targetEntityId: health === 0 ? null : current.targetEntityId });
 }
 
+export function restoreMobRuntimeState(
+  current: MobRuntimeState,
+  values: { x: number; z: number; health: number; state: ZoneMobState; targetEntityId: string | null; lastAttackTick?: number }
+): MobRuntimeState {
+  const health = Math.max(0, Math.min(current.maxHealth, Math.floor(values.health)));
+  const nextAttackTick = values.lastAttackTick === undefined ? current.nextAttackTick : Math.max(0, Math.floor(values.lastAttackTick));
+  return Object.freeze({
+    ...current,
+    position: Object.freeze({ x: values.x, z: values.z }),
+    state: values.state,
+    targetEntityId: values.targetEntityId,
+    health,
+    nextAttackTick,
+  });
+}
+
 export function publicMobSnapshot(state: MobRuntimeState): ConfirmedZoneMob {
   return Object.freeze({ entityId: state.definition.entityId, archetype: state.definition.archetype, level: state.definition.level, state: state.state, position: Object.freeze({ x: state.position.x, z: state.position.z }), targetEntityId: state.targetEntityId, isBoss: state.definition.isBoss, isElite: state.definition.isElite, health: state.health, maxHealth: state.maxHealth });
 }

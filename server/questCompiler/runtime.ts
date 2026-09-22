@@ -7,6 +7,7 @@ import {
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
 import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
+import { activeProvenance } from '../aurionProvenance';
 import { WorldFactEngine } from './worldFacts';
 import { QuestTemplateRegistry } from './templateRegistry';
 import { CandidateResolver } from './candidateResolver';
@@ -94,6 +95,7 @@ export class QuestRuntimeEngine {
     const instanceId = `qi_${params.playerUserId}_${winningTemplate.templateId}_${seedDigest.slice(0, 8)}`;
 
     const startNode = plan.nodes.find(n => n.type === 'start') || plan.nodes[0]!;
+    const triggerEvent = this.worldFactEngine.getEvents().find(e => e.id === params.triggerEventId);
 
     const instance: QuestInstance = {
       id: instanceId,
@@ -110,6 +112,11 @@ export class QuestRuntimeEngine {
       boundRoles,
       state: 'offered',
       objectiveProgress: {},
+      triggerEventId: params.triggerEventId,
+      triggerEventDigest: triggerEvent?.payloadHash,
+      compilerVersion,
+      sourceRevision: activeProvenance.sourceRevision,
+      worldStateRevision: worldStateRev,
       createdAt: occurredAt,
       updatedAt: occurredAt,
     };
@@ -117,14 +124,20 @@ export class QuestRuntimeEngine {
     return { instance, plan };
   }
 
-  public acceptQuest(instance: QuestInstance, plan: QuestPlan): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
+  public acceptQuest(instance: QuestInstance, plan?: QuestPlan): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
     if (instance.state !== 'offered') {
       throw new Error(`CANNOT_ACCEPT_QUEST_IN_STATE:${instance.state}`);
     }
-    if (plan.planHash !== instance.planHash || plan.graphHash !== instance.graphHash) throw new Error("QUEST_ACCEPT_PLAN_MISMATCH");
-    const startNode = plan.nodes.find(node => node.id === instance.currentNodeId);
+    const template = this.templateRegistry.getTemplate(instance.templateId, instance.templateVersion);
+    const nodes = plan ? plan.nodes : (template?.nodes ?? []);
+    const edges = plan ? plan.edges : (template?.edges ?? []);
+
+    if (plan && (plan.planHash !== instance.planHash || plan.graphHash !== instance.graphHash)) {
+      throw new Error("QUEST_ACCEPT_PLAN_MISMATCH");
+    }
+    const startNode = nodes.find(node => node.id === instance.currentNodeId);
     if (!startNode || startNode.type !== "start") throw new Error("QUEST_ACCEPT_START_NODE_REQUIRED");
-    const outgoing = plan.edges
+    const outgoing = edges
       .filter(edge => edge.fromNodeId === startNode.id && !edge.conditionPredicate)
       .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id));
     if (outgoing.length !== 1) throw new Error("QUEST_ACCEPT_START_EDGE_AMBIGUOUS");

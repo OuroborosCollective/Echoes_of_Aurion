@@ -1,5 +1,11 @@
 import { deadlineAfter, hostOperationalClock, operationalNow, type OperationalClock } from "../shared/operationalClock";
-import type { GuildBankView } from "@shared/guildBankView";
+import type {
+  GuildBankDashboardSummary,
+  GuildBankView,
+  MemberActivityStat,
+  ActivityCategoryStat,
+  ResourceAccumulationSummary,
+} from "@shared/guildBankView";
 import { isConfiguredDatabaseUrl } from "./db";
 import { createPool, type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 import {
@@ -203,6 +209,169 @@ export type GuildBankReadback = Readonly<Pick<GuildBankView,"allowedOperations"|
   goals: ReturnType<typeof deriveGuildBankGoals>;
 }>;
 
+async function readDashboardSummary(
+  connection: PoolConnection,
+  guildId: string,
+  accountBalance: string | number | bigint,
+  resourceBalances: Readonly<Record<GuildResourceKey, bigint>>,
+  heldItemsCount: number
+): Promise<GuildBankDashboardSummary> {
+  const [memberRows] = await connection.query<RowDataPacket[]>(
+    "SELECT gm.userId, gm.role, COALESCE(u.name, CONCAT('Explorer #', gm.userId)) AS name FROM guildMemberships gm LEFT JOIN users u ON u.id = gm.userId WHERE gm.guildId = ? AND gm.status = 'active' ORDER BY gm.joinedAt ASC LIMIT 100",
+    [guildId]
+  );
+
+  let contributions: RowDataPacket[] = [];
+  try {
+    const [cRows] = await connection.query<RowDataPacket[]>(
+      "SELECT userId, activityKey, SUM(points) AS totalPoints, COUNT(*) AS entryCount FROM guildContributionLedger WHERE guildId = ? GROUP BY userId, activityKey",
+      [guildId]
+    );
+    contributions = cRows;
+  } catch {
+    // fallback if table query fails
+  }
+
+  let receiptStats: RowDataPacket[] = [];
+  try {
+    const [rRows] = await connection.query<RowDataPacket[]>(
+      "SELECT actorUserId AS userId, operation, COUNT(*) AS txCount FROM aurionGuildBankReceipts WHERE guildId = ? GROUP BY actorUserId, operation",
+      [guildId]
+    );
+    receiptStats = rRows;
+  } catch {}
+
+  let resourceLedgerStats: RowDataPacket[] = [];
+  try {
+    const [rlRows] = await connection.query<RowDataPacket[]>(
+      "SELECT resourceKey, SUM(amount) AS totalDonated FROM aurionGuildResourceLedger WHERE guildId = ? AND direction = 'credit' GROUP BY resourceKey",
+      [guildId]
+    );
+    resourceLedgerStats = rlRows;
+  } catch {}
+
+  let treasuryLedgerStats: RowDataPacket[] = [];
+  try {
+    const [tlRows] = await connection.query<RowDataPacket[]>(
+      "SELECT direction, reason, SUM(amount) AS totalAmount FROM aurionGuildTreasuryLedger WHERE guildId = ? GROUP BY direction, reason",
+      [guildId]
+    );
+    treasuryLedgerStats = tlRows;
+  } catch {}
+
+  let lifetimeWood = 0n;
+  let lifetimeStone = 0n;
+  let lifetimeAether = 0n;
+  for (const row of resourceLedgerStats) {
+    const amount = BigInt(row.totalDonated || 0);
+    if (row.resourceKey === "wood") lifetimeWood = amount;
+    else if (row.resourceKey === "stone") lifetimeStone = amount;
+    else if (row.resourceKey === "aether") lifetimeAether = amount;
+  }
+  if (lifetimeWood < resourceBalances.wood) lifetimeWood = resourceBalances.wood;
+  if (lifetimeStone < resourceBalances.stone) lifetimeStone = resourceBalances.stone;
+  if (lifetimeAether < resourceBalances.aether) lifetimeAether = resourceBalances.aether;
+
+  let lifetimePointsDeposited = 0n;
+  let buildingInvestmentPoints = 0n;
+  for (const row of treasuryLedgerStats) {
+    const amount = BigInt(row.totalAmount || 0);
+    if (row.direction === "credit" && row.reason === "player_deposit") {
+      lifetimePointsDeposited += amount;
+    } else if (row.reason === "building_upgrade") {
+      buildingInvestmentPoints += amount;
+    }
+  }
+  const currentTreasury = BigInt(accountBalance);
+  if (lifetimePointsDeposited < currentTreasury) lifetimePointsDeposited = currentTreasury;
+
+  const memberPointsMap = new Map<number, { points: number; count: number }>();
+  const categoryMap = new Map<string, { points: number; count: number }>();
+  let totalContributionPoints = 0;
+
+  for (const row of contributions) {
+    const uid = Number(row.userId);
+    const pts = Number(row.totalPoints || 0);
+    const cnt = Number(row.entryCount || 0);
+    const existing = memberPointsMap.get(uid) || { points: 0, count: 0 };
+    memberPointsMap.set(uid, { points: existing.points + pts, count: existing.count + cnt });
+    totalContributionPoints += pts;
+
+    const cat = String(row.activityKey || "general");
+    const catExisting = categoryMap.get(cat) || { points: 0, count: 0 };
+    categoryMap.set(cat, { points: catExisting.points + pts, count: catExisting.count + cnt });
+  }
+
+  const memberBankTxMap = new Map<number, number>();
+  let totalBankReceiptsCount = 0;
+  for (const row of receiptStats) {
+    const uid = Number(row.userId);
+    const cnt = Number(row.txCount || 0);
+    memberBankTxMap.set(uid, (memberBankTxMap.get(uid) || 0) + cnt);
+    totalBankReceiptsCount += cnt;
+  }
+
+  const memberStats: MemberActivityStat[] = memberRows.map(row => {
+    const uid = Number(row.userId);
+    const contrib = memberPointsMap.get(uid) || { points: 0, count: 0 };
+    const bankTxs = memberBankTxMap.get(uid) || 0;
+    return {
+      userId: uid,
+      name: String(row.name || `Explorer #${uid}`),
+      role: row.role as "founder" | "officer" | "member" | "applicant",
+      contributionPoints: contrib.points,
+      activityCount: contrib.count,
+      bankTransactionsCount: bankTxs,
+    };
+  });
+
+  const categoryLabels: Record<string, string> = {
+    expedition: "Expeditionen",
+    quest: "Quests",
+    resource_donation: "Ressourcenspenden",
+    combat: "Kampf & Dungeons",
+    crafting: "Handwerk & Schmiede",
+    world_event: "Weltereignisse",
+    defense: "Gildenverteidigung",
+  };
+
+  const activityBreakdown: ActivityCategoryStat[] = Array.from(categoryMap.entries()).map(([key, data]) => ({
+    category: key,
+    label: categoryLabels[key] || key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+    points: data.points,
+    count: data.count,
+  }));
+
+  if (activityBreakdown.length === 0) {
+    activityBreakdown.push(
+      { category: "expedition", label: "Expeditionen", points: 0, count: 0 },
+      { category: "resource_donation", label: "Ressourcenspenden", points: 0, count: totalBankReceiptsCount },
+      { category: "combat", label: "Kampf & Dungeons", points: 0, count: 0 },
+      { category: "crafting", label: "Handwerk & Bau", points: 0, count: 0 }
+    );
+  }
+
+  return {
+    resources: {
+      wood: resourceBalances.wood.toString(),
+      stone: resourceBalances.stone.toString(),
+      aether: resourceBalances.aether.toString(),
+      treasuryPoints: revisionOf(accountBalance),
+      lifetimeWoodDonated: lifetimeWood.toString(),
+      lifetimeStoneDonated: lifetimeStone.toString(),
+      lifetimeAetherDonated: lifetimeAether.toString(),
+      lifetimePointsDeposited: lifetimePointsDeposited.toString(),
+      totalVaultItems: heldItemsCount,
+      buildingInvestmentPoints: buildingInvestmentPoints.toString(),
+    },
+    memberStats,
+    activityBreakdown,
+    totalActiveMembers: memberRows.length,
+    totalGuildContributionPoints: totalContributionPoints,
+    totalBankReceiptsCount,
+  };
+}
+
 export class GuildBankStore {
   constructor(private readonly pool: Pool, private readonly clock: OperationalClock = hostOperationalClock) {}
 
@@ -403,6 +572,7 @@ export class GuildBankStore {
       const [territoryRows] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS rowCount FROM aurionGuildTerritories WHERE guildId = ? AND state = 'active'", [member.guildId]);
       const totalBuildingLevels = buildingRows.reduce((sum, row) => sum + BigInt(row.level), 0n);
       const goals = deriveGuildBankGoals({ treasuryBalanceExact: revisionOf(account.balance), activeTerritoriesExact: String(territoryRows[0]?.rowCount ?? 0), heldItemsExact: String(held.length), totalBuildingLevelsExact: totalBuildingLevels.toString() });
+      const dashboardSummary = await readDashboardSummary(connection, member.guildId, account.balance, balances, held.length);
       const buildingOptions=Object.values(guildBuildingDefinitions).map(definition=>{
         const levelExact=revisionOf(buildingRows.find(row=>row.buildingId===definition.id)?.level??"0");
         const next=BigInt(levelExact)<BigInt(definition.maximumLevelExact)?resolveGuildBuildingUpgrade(definition.id,levelExact):null;
@@ -421,6 +591,7 @@ export class GuildBankStore {
         buildings: Object.freeze(buildingRows.map(row => Object.freeze({ buildingId: row.buildingId, levelExact: revisionOf(row.level), projection: Object.freeze(parseJson<Record<string, unknown>>(row.projectionJson)) }))),
         alliances: Object.freeze(alliances.map(row => Object.freeze({ targetGuildId: row.targetGuildId, pactType: row.pactType }))),
         goals,
+        dashboardSummary,
       });
     await connection.commit();
     return readback;

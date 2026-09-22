@@ -42,6 +42,7 @@ export class QuestReplayEngine {
     facts: WorldFact[] | null,
     expectedPlanHash: string,
     worldStateSequence?: number,
+    options?: { receipts?: QuestReceipt[] }
   ): QuestReplayReceipt {
     const replayTimestamp = operationalDate(this.clock).toISOString();
     const sequence = worldStateSequence ?? (facts ? latestFactSequence(facts) : 0);
@@ -59,8 +60,8 @@ export class QuestReplayEngine {
     const sourceTuple = {
       worldId: instance.worldId,
       worldStateRevision: sequence,
-      triggerEventId: 'trig_replay',
-      compilerVersion: '1.0.0',
+      triggerEventId: instance.triggerEventId || 'trig_replay',
+      compilerVersion: instance.compilerVersion || '1.0.0',
       templateSetHash,
       candidateSetHash: plan.candidateSetHash,
       seedDigest: instance.seedDigest,
@@ -88,6 +89,17 @@ export class QuestReplayEngine {
       timestamp: replayTimestamp,
     });
 
+    // Stage 1: SOURCE_SCOPE
+    if (!instance.worldId || instance.worldId.trim().length === 0) {
+      const replayVerdict = replayFirstDivergence(context, verified, {
+        stage: 'SOURCE_SCOPE',
+        expected: 'valid_world_id',
+        observed: String(instance.worldId),
+        diffDetails: 'Missing or empty worldId in source instance',
+      });
+      return finish(replayVerdict, 'DIVERGED_AT_SOURCE_SCOPE', plan.graphHash, 'N/A');
+    }
+
     if (facts === null) {
       return finish(
         replayUnprovable(context, verified, 'QUEST_WORLD_FACT_EVIDENCE_MISSING'),
@@ -96,8 +108,32 @@ export class QuestReplayEngine {
         'UNPROVABLE',
       );
     }
+    verified.push('SOURCE_SCOPE');
 
-    const { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
+    // Stage 2: TEMPLATE_SET
+    if (plan.templateSetHash && templateSetHash !== plan.templateSetHash) {
+      const replayVerdict = replayFirstDivergence(context, verified, {
+        stage: 'TEMPLATE_SET',
+        expected: plan.templateSetHash,
+        observed: templateSetHash,
+        expectedHash: plan.templateSetHash,
+        observedHash: templateSetHash,
+        diffDetails: `TemplateSetHash divergence: expected ${plan.templateSetHash}, got ${templateSetHash}`,
+      });
+      return finish(replayVerdict, 'DIVERGED_AT_TEMPLATE_SET', plan.graphHash, 'N/A');
+    }
+    verified.push('TEMPLATE_SET');
+
+    // Stage 3: CANDIDATE_SET
+    let { eligibleTemplates, candidateSetHash } = CandidateResolver.resolveCandidates(activeTemplates, facts);
+    if (candidateSetHash !== plan.candidateSetHash && instance.templateId) {
+      const scopedPool = activeTemplates.filter(t => t.templateId === instance.templateId);
+      const scoped = CandidateResolver.resolveCandidates(scopedPool, facts);
+      if (scoped.candidateSetHash === plan.candidateSetHash) {
+        eligibleTemplates = scoped.eligibleTemplates;
+        candidateSetHash = scoped.candidateSetHash;
+      }
+    }
     if (candidateSetHash !== plan.candidateSetHash) {
       const replayVerdict = replayFirstDivergence(context, verified, {
         stage: 'CANDIDATE_SET',
@@ -111,6 +147,7 @@ export class QuestReplayEngine {
     }
     verified.push('CANDIDATE_SET');
 
+    // Stage 4: TEMPLATE_SELECTION
     const winningTemplate = CandidateResolver.selectWinningTemplate(eligibleTemplates, instance.seedDigest);
     if (!winningTemplate || winningTemplate.templateId !== instance.templateId) {
       const observed = winningTemplate?.templateId ?? 'MISSING';
@@ -124,6 +161,19 @@ export class QuestReplayEngine {
     }
     verified.push('TEMPLATE_SELECTION');
 
+    // Stage 5: SEED_DIGEST
+    if (!instance.seedDigest || instance.seedDigest.length < 8) {
+      const replayVerdict = replayFirstDivergence(context, verified, {
+        stage: 'SEED_DIGEST',
+        expected: 'valid_seed_digest_hex',
+        observed: String(instance.seedDigest),
+        diffDetails: 'Invalid or missing seed digest',
+      });
+      return finish(replayVerdict, 'DIVERGED_AT_SEED_DIGEST', plan.graphHash, 'N/A');
+    }
+    verified.push('SEED_DIGEST');
+
+    // Stage 6: ROLE_BINDING
     const { boundRoles, roleBindingHash } = RoleResolver.resolveRoles(winningTemplate.roles, undefined, instance.giverNpcId);
     if (roleBindingHash !== plan.roleBindingHash) {
       const replayVerdict = replayFirstDivergence(context, verified, {
@@ -138,6 +188,7 @@ export class QuestReplayEngine {
     }
     verified.push('ROLE_BINDING');
 
+    // Stage 7: PLAN_HASH
     const replayedPlan = QuestComposer.composePlan({
       template: winningTemplate,
       templateSetHash,
@@ -161,7 +212,40 @@ export class QuestReplayEngine {
     }
     verified.push('PLAN_HASH');
 
+    // Stage 8: RUNTIME_EVENTS (if receipts provided)
+    if (options?.receipts && options.receipts.length > 0) {
+      for (let i = 0; i < options.receipts.length; i++) {
+        const rcpt = options.receipts[i]!;
+        const expectedSeq = i + 1;
+        if (rcpt.eventSequence !== expectedSeq) {
+          const replayVerdict = replayFirstDivergence(context, verified, {
+            stage: 'RUNTIME_EVENTS',
+            expected: String(expectedSeq),
+            observed: String(rcpt.eventSequence),
+            diffDetails: `EventSequence mismatch: expected ${expectedSeq}, got ${rcpt.eventSequence}`,
+          });
+          return finish(replayVerdict, replayedPlan.planHash, replayedPlan.graphHash, 'DIVERGED_AT_RUNTIME_EVENTS');
+        }
+        if (i > 0) {
+          const prev = options.receipts[i - 1]!;
+          if (rcpt.previousStateHash !== prev.resultStateHash) {
+            const replayVerdict = replayFirstDivergence(context, verified, {
+              stage: 'RUNTIME_EVENTS',
+              expected: prev.resultStateHash,
+              observed: rcpt.previousStateHash,
+              diffDetails: `State hash chain break: expected ${prev.resultStateHash}, got ${rcpt.previousStateHash}`,
+            });
+            return finish(replayVerdict, replayedPlan.planHash, replayedPlan.graphHash, 'DIVERGED_AT_RUNTIME_EVENTS');
+          }
+        }
+      }
+      verified.push('RUNTIME_EVENTS');
+    }
+
+    // Stage 9: SEMANTIC_OUTCOME
     const outcomeHash = computeCanonicalHash('aurion.quest.replay.v1', replayedPlan.outcomes);
+    verified.push('SEMANTIC_OUTCOME');
+
     return finish(
       replayMatch(context, verified),
       replayedPlan.planHash,

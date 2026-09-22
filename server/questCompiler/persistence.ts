@@ -10,6 +10,7 @@ import {
   type QuestPlan,
   type QuestReceipt,
   type QuestTemplateVersion,
+  type WorldEvent,
 } from "../../shared/aurionQuestContract";
 import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
 import { persistAuthoringReceipt } from "../aurionAuthoringPersistence";
@@ -30,6 +31,7 @@ export class QuestPersistenceEngine {
   private templates = new Map<string, QuestTemplateVersion>();
   private proposals = new Map<string, QuestAdminProposal>();
   private instanceLocks = new Map<string, Promise<void>>();
+  private worldEvents = new Map<string, WorldEvent>();
 
   private templateKey(templateId: string, version: number) { return `${templateId}:v${version}`; }
 
@@ -63,6 +65,21 @@ export class QuestPersistenceEngine {
     } else {
       await db.update(aurionQuestTemplateVersions).set({ active: template.active, quarantined: template.quarantined })
         .where(and(eq(aurionQuestTemplateVersions.templateId, template.templateId), eq(aurionQuestTemplateVersions.version, template.version)));
+    }
+  }
+
+  public async setQuarantined(templateId: string, version: number, quarantined: boolean): Promise<void> {
+    const key = this.templateKey(templateId, version);
+    const existing = this.templates.get(key);
+    if (existing) {
+      existing.quarantined = quarantined;
+      existing.active = !quarantined;
+    }
+    const db = await getDb();
+    if (db) {
+      await db.update(aurionQuestTemplateVersions)
+        .set({ quarantined, active: !quarantined })
+        .where(and(eq(aurionQuestTemplateVersions.templateId, templateId), eq(aurionQuestTemplateVersions.version, version)));
     }
   }
 
@@ -269,6 +286,14 @@ export class QuestPersistenceEngine {
     }
   }
 
+  public verifyReceiptIntegrity(receipt: QuestReceipt): boolean {
+    const expectedHash = computeCanonicalHash("aurion.quest.event.v1", {
+      previousStateHash: receipt.previousStateHash,
+      resultStateHash: receipt.resultStateHash,
+    });
+    return receipt.receiptHash === expectedHash;
+  }
+
   public async commitObjectiveTransition(input: {
     instanceId: string;
     expectedStateHash: string;
@@ -276,6 +301,9 @@ export class QuestPersistenceEngine {
     receipt: QuestReceipt;
     updatedInstance: QuestInstance;
   }): Promise<{ updatedInstance: QuestInstance; receipt: QuestReceipt; replayed: boolean }> {
+    if (!this.verifyReceiptIntegrity(input.receipt)) {
+      throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${input.receipt.id}`);
+    }
     return this.withInstanceLock(input.instanceId, async () => {
       const db = await getDb();
       if (!db) {
@@ -370,6 +398,9 @@ export class QuestPersistenceEngine {
 
   public async saveReceipt(raw: QuestReceipt): Promise<void> {
     const receipt = QuestReceiptSchema.parse(raw);
+    if (!this.verifyReceiptIntegrity(receipt)) {
+      throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${receipt.id}`);
+    }
     this.receipts.set(receipt.id, receipt);
     const db = await getDb();
     if (!db) return;
@@ -428,5 +459,58 @@ export class QuestPersistenceEngine {
       receiptHash: row.receiptHash,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  public async saveQuestCompletion(input: {
+    instance: QuestInstance;
+    receipt: QuestReceipt;
+    emittedWorldEvent: WorldEvent;
+  }): Promise<void> {
+    const instance = QuestInstanceSchema.parse(input.instance);
+    const receipt = QuestReceiptSchema.parse(input.receipt);
+    if (!this.verifyReceiptIntegrity(receipt)) {
+      throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${receipt.id}`);
+    }
+
+    this.instances.set(instance.id, instance);
+    this.receipts.set(receipt.id, receipt);
+    this.worldEvents.set(input.emittedWorldEvent.id, input.emittedWorldEvent);
+
+    const db = await getDb();
+    if (!db) return;
+
+    await db.transaction(async tx => {
+      await tx.insert(aurionQuestReceipts).values({
+        id: receipt.id,
+        instanceId: receipt.instanceId,
+        eventSequence: receipt.eventSequence,
+        planHash: receipt.planHash,
+        graphHash: receipt.graphHash,
+        previousStateHash: receipt.previousStateHash,
+        resultStateHash: receipt.resultStateHash,
+        idempotencyKey: receipt.idempotencyKey,
+        receiptHash: receipt.receiptHash,
+      }).onDuplicateKeyUpdate({ set: { receiptHash: receipt.receiptHash } });
+
+      const row = {
+        id: instance.id,
+        worldId: instance.worldId,
+        playerUserId: instance.playerUserId,
+        giverNpcId: instance.giverNpcId,
+        templateId: instance.templateId,
+        templateVersion: instance.templateVersion,
+        seedDigest: instance.seedDigest,
+        planHash: instance.planHash,
+        graphHash: instance.graphHash,
+        currentNodeId: instance.currentNodeId,
+        state: instance.state,
+        instanceJson: JSON.stringify(instance),
+      };
+      await tx.insert(aurionQuestInstances).values(row).onDuplicateKeyUpdate({ set: row });
+    });
+  }
+
+  public getEmittedWorldEvents(): WorldEvent[] {
+    return Array.from(this.worldEvents.values()).sort((a, b) => a.sequence - b.sequence);
   }
 }

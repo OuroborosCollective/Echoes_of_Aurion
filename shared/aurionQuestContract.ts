@@ -186,6 +186,11 @@ export const QuestInstanceSchema = z.object({
   boundRoles: z.array(BoundRoleSchema),
   state: z.enum(['offered', 'active', 'completed', 'failed', 'quarantined']),
   objectiveProgress: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
+  triggerEventId: z.string().optional(),
+  triggerEventDigest: z.string().optional(),
+  compilerVersion: z.string().optional(),
+  sourceRevision: z.string().optional(),
+  worldStateRevision: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

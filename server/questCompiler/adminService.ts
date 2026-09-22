@@ -105,6 +105,18 @@ export class AdminQuestStudioService {
     return this.worldFactEngine.getFacts();
   }
 
+  public getPersistenceEngine(): QuestPersistenceEngine {
+    return this.persistenceEngine;
+  }
+
+  public getWorldFactEngine(): WorldFactEngine {
+    return this.worldFactEngine;
+  }
+
+  public getTemplateRegistry(): QuestTemplateRegistry {
+    return this.templateRegistry;
+  }
+
   public async getTemplates(): Promise<QuestTemplateVersion[]> {
     await this.ensureHydrated();
     return this.templateRegistry.getActiveTemplates();
@@ -191,11 +203,19 @@ export class AdminQuestStudioService {
     return QuestPublishPlanSchema.parse({ ...identity, planHash: authoringHash(identity) });
   }
 
-  public async publishProposal(actorUserId: number, proposalId: string, expectedPlanHash: string): Promise<{
+  public async publishProposal(
+    actorUserId: number,
+    proposalId: string,
+    expectedPlanHash: string,
+    options?: { actorRole?: string }
+  ): Promise<{
     receipt: AuthoringReceipt;
     templateSetHash: string;
     template: QuestTemplateVersion;
   }> {
+    if (options?.actorRole !== undefined) {
+      this.assertAdmin(options.actorRole);
+    }
     const plan = await this.planPublishProposal(proposalId);
     if (plan.planHash !== expectedPlanHash) throw new Error("QUEST_PUBLISH_PLAN_CHANGED");
     const proposal = await this.persistenceEngine.getProposal(proposalId);
@@ -212,6 +232,84 @@ export class AdminQuestStudioService {
     await this.persistenceEngine.publishProposal({ proposal, template: plan.template, receipt, payload: plan });
     this.templateRegistry.registerTemplate(plan.template);
     return { receipt, templateSetHash: this.templateRegistry.getTemplateSetHash(), template: plan.template };
+  }
+
+  public assertAdmin(role?: string): void {
+    if (role !== "admin") {
+      throw new Error("QUEST_ADMIN_FORBIDDEN");
+    }
+  }
+
+  public async quarantineTemplate(params: {
+    actorUserId: number;
+    actorRole?: string;
+    templateId: string;
+    version: number;
+    quarantined: boolean;
+  }): Promise<{ templateId: string; version: number; quarantined: boolean }> {
+    this.assertAdmin(params.actorRole);
+    await this.ensureHydrated();
+    const updated = this.templateRegistry.setQuarantined(params.templateId, params.version, params.quarantined);
+    if (!updated) {
+      throw new Error(`QUEST_TEMPLATE_NOT_FOUND:${params.templateId}:v${params.version}`);
+    }
+    await this.persistenceEngine.setQuarantined(params.templateId, params.version, params.quarantined);
+    return { templateId: params.templateId, version: params.version, quarantined: params.quarantined };
+  }
+
+  public async publishTemplate(params: {
+    actorUserId: number;
+    actorRole?: string;
+    template: QuestTemplateVersion;
+  }): Promise<{ template: QuestTemplateVersion; templateSetHash: string; templateHash: string }> {
+    this.assertAdmin(params.actorRole);
+    await this.ensureHydrated();
+    const validation = QuestValidator.validateTemplate(params.template);
+    if (!validation.valid) {
+      throw new Error(`QUEST_TEMPLATE_VALIDATION_FAILED:${JSON.stringify(validation.diagnostics)}`);
+    }
+    await this.persistenceEngine.saveTemplateVersion(params.template);
+    this.templateRegistry.registerTemplate(params.template);
+    const templateHash = computeCanonicalHash("aurion.quest.template.v1", params.template);
+    return {
+      template: params.template,
+      templateSetHash: this.templateRegistry.getTemplateSetHash(),
+      templateHash,
+    };
+  }
+
+  public async updateTemplate(params: {
+    actorUserId: number;
+    actorRole?: string;
+    templateId: string;
+    template: Omit<QuestTemplateVersion, "templateId" | "version"> & { version?: number };
+  }): Promise<{ template: QuestTemplateVersion; templateSetHash: string; templateHash: string }> {
+    this.assertAdmin(params.actorRole);
+    await this.ensureHydrated();
+    const existing = (await this.persistenceEngine.listTemplateVersions()).filter(t => t.templateId === params.templateId);
+    const currentMaxVersion = existing.reduce((max, t) => Math.max(max, t.version), 0);
+    const nextVersion = currentMaxVersion > 0 ? currentMaxVersion + 1 : (params.template.version ?? 1);
+
+    const updatedTemplate: QuestTemplateVersion = QuestTemplateVersionSchema.parse({
+      ...params.template,
+      templateId: params.templateId,
+      version: nextVersion,
+    });
+
+    const validation = QuestValidator.validateTemplate(updatedTemplate);
+    if (!validation.valid) {
+      throw new Error(`QUEST_TEMPLATE_VALIDATION_FAILED:${JSON.stringify(validation.diagnostics)}`);
+    }
+
+    await this.persistenceEngine.saveTemplateVersion(updatedTemplate);
+    this.templateRegistry.registerTemplate(updatedTemplate);
+    const templateHash = computeCanonicalHash("aurion.quest.template.v1", updatedTemplate);
+
+    return {
+      template: updatedTemplate,
+      templateSetHash: this.templateRegistry.getTemplateSetHash(),
+      templateHash,
+    };
   }
 
   public async availableQuests() {
@@ -358,8 +456,91 @@ export class AdminQuestStudioService {
     const current = plan.nodes.find(node => node.id === instance.currentNodeId);
     if (!current || current.type !== "end") throw new Error("QUEST_END_NODE_REQUIRED");
     const result = this.runtimeEngine.completeQuest(instance, plan);
-    await this.persistenceEngine.saveReceipt(result.receipt);
-    await this.persistenceEngine.saveInstance(result.updatedInstance);
+    await this.persistenceEngine.saveQuestCompletion({
+      instance: result.updatedInstance,
+      receipt: result.receipt,
+      emittedWorldEvent: result.emittedWorldEvent,
+    });
     return result;
+  }
+
+  public async bridgeGameplayAcceptQuest(input: {
+    userId: number;
+    questKey: string;
+  }): Promise<{ instance: QuestInstance; receipt: QuestReceipt } | null> {
+    await this.ensureHydrated();
+    const templateId = `tpl_${input.questKey}`;
+    const template = this.templateRegistry.getTemplate(templateId, 1);
+    if (!template) return null;
+
+    const triggerEventId = `evt_bridge_accept_${input.questKey}_${input.userId}`;
+    this.worldFactEngine.recordEvent({
+      id: triggerEventId,
+      type: 'GAMEPLAY_QUEST_TRIGGERED',
+      source: 'aurion_gameplay_bridge',
+      data: {
+        facts: [
+          { subject: 'gameplayQuestKey', predicate: 'gameplayQuestKey', value: input.questKey },
+        ],
+      },
+    });
+
+    const existing = (await this.persistenceEngine.listInstances({ playerUserId: input.userId }))
+      .find(i => i.templateId === templateId && (i.state === 'active' || i.state === 'completed'));
+    if (existing) return null;
+
+    const { instance, plan } = this.runtimeEngine.compileAndOfferQuest({
+      worldId: 'world_main',
+      playerUserId: input.userId,
+      requestedTemplateId: templateId,
+      triggerEventId,
+    });
+
+    await this.persistenceEngine.savePlan(plan);
+    await this.persistenceEngine.saveInstance(instance);
+
+    const accepted = this.runtimeEngine.acceptQuest(instance, plan);
+    await this.persistenceEngine.saveReceipt(accepted.receipt);
+    await this.persistenceEngine.saveInstance(accepted.updatedInstance);
+
+    return { instance: accepted.updatedInstance, receipt: accepted.receipt };
+  }
+
+  public async bridgeGameplayCompleteQuest(input: {
+    userId: number;
+    questKey: string;
+    giver: string;
+  }): Promise<{ instance: QuestInstance; receipt: QuestReceipt } | null> {
+    await this.ensureHydrated();
+    const templateId = `tpl_${input.questKey}`;
+    const instance = (await this.persistenceEngine.listInstances({ playerUserId: input.userId }))
+      .find(i => i.templateId === templateId && i.state === 'active');
+    if (!instance) return null;
+
+    const plan = await this.persistenceEngine.getPlan(instance.planHash);
+    if (!plan) return null;
+
+    const endNode = plan.nodes.find(n => n.type === 'end');
+    if (!endNode) return null;
+
+    let currentInstance = instance;
+    if (currentInstance.currentNodeId !== endNode.id) {
+      const updatedInstance: QuestInstance = {
+        ...currentInstance,
+        currentNodeId: endNode.id,
+        completedNodeIds: [...currentInstance.completedNodeIds, currentInstance.currentNodeId],
+      };
+      await this.persistenceEngine.saveInstance(updatedInstance);
+      currentInstance = updatedInstance;
+    }
+
+    const completed = this.runtimeEngine.completeQuest(currentInstance, plan);
+    await this.persistenceEngine.saveQuestCompletion({
+      instance: completed.updatedInstance,
+      receipt: completed.receipt,
+      emittedWorldEvent: completed.emittedWorldEvent,
+    });
+
+    return { instance: completed.updatedInstance, receipt: completed.receipt };
   }
 }

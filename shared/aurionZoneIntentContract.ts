@@ -1,52 +1,77 @@
-import { canonicalJson, canonicalSha256 } from "./aurionCanonicalHash";
+import { canonicalSha256 } from "./aurionCanonicalHash";
 
-export type AurionZoneIntentKind =
-  | "move"
-  | "attack"
-  | "skill"
-  | "resource_interact"
-  | "mob_trigger"
-  | "quest_accept"
-  | "quest_hand_in";
+export type AurionZoneIntentKind = "move" | "attack" | "skill" | "resource_interact" | "mob_trigger" | "quest_accept" | "quest_hand_in";
 
-type OperationalIntentMetadata = {
+export interface AurionQuestAcceptIntent {
+  type: "quest_accept";
   connectionId: string;
   entityId: string;
   clientSeq: number;
-  /** Arrival order is diagnostic transport metadata, never canonical gameplay truth. */
   arrivalSeq: number;
+  questId: string;
   timestamp?: number;
-};
+}
 
-export interface AurionQuestAcceptIntent extends OperationalIntentMetadata {
-  type: "quest_accept";
-  questId: string;
-}
-export interface AurionQuestHandInIntent extends OperationalIntentMetadata {
+export interface AurionQuestHandInIntent {
   type: "quest_hand_in";
+  connectionId: string;
+  entityId: string;
+  clientSeq: number;
+  arrivalSeq: number;
   questId: string;
+  timestamp?: number;
 }
-export interface AurionMoveIntent extends OperationalIntentMetadata {
+
+export interface AurionMoveIntent {
   type: "move";
+  connectionId: string;
+  entityId: string;
+  clientSeq: number;
+  arrivalSeq: number;
   input: { x: number; z: number };
+  timestamp?: number;
 }
-export interface AurionAttackIntent extends OperationalIntentMetadata {
+
+export interface AurionAttackIntent {
   type: "attack";
+  connectionId: string;
+  entityId: string;
+  clientSeq: number;
+  arrivalSeq: number;
   targetEntityId: string;
+  timestamp?: number;
 }
-export interface AurionSkillIntent extends OperationalIntentMetadata {
+
+export interface AurionSkillIntent {
   type: "skill";
+  connectionId: string;
+  entityId: string;
+  clientSeq: number;
+  arrivalSeq: number;
   skillId: string;
   targetEntityId: string;
+  timestamp?: number;
 }
-export interface AurionResourceInteractIntent extends OperationalIntentMetadata {
+
+export interface AurionResourceInteractIntent {
   type: "resource_interact";
+  connectionId: string;
+  entityId: string;
+  clientSeq: number;
+  arrivalSeq: number;
   nodeId: string;
+  timestamp?: number;
 }
-export interface AurionMobTriggerIntent extends OperationalIntentMetadata {
+
+export interface AurionMobTriggerIntent {
   type: "mob_trigger";
+  connectionId: string;
+  entityId: string;
+  clientSeq: number;
+  arrivalSeq: number;
   mobEntityId: string;
   triggerType: string;
+  timestamp?: number;
 }
 
 export type AurionZoneIntent =
@@ -64,56 +89,61 @@ export interface CanonicalIntentQueueEntry {
   validationHash: string;
 }
 
-function assertIntentIdentity(intent: AurionZoneIntent): void {
-  if (!intent.entityId.trim()) throw new Error("AURION_INTENT_ENTITY_REQUIRED");
-  if (!Number.isSafeInteger(intent.clientSeq) || intent.clientSeq < 0)
-    throw new Error("AURION_INTENT_CLIENT_SEQUENCE_INVALID");
-  if (!Number.isSafeInteger(intent.arrivalSeq) || intent.arrivalSeq < 0)
-    throw new Error("AURION_INTENT_ARRIVAL_SEQUENCE_INVALID");
-}
-
 /**
- * Canonical gameplay form. Connection identity, wall time and arrival scheduling
- * are deliberately omitted. They may be retained in transport diagnostics only.
- */
-export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, unknown> {
-  assertIntentIdentity(intent);
-  const base = { type: intent.type, entityId: intent.entityId, clientSeq: intent.clientSeq };
-  switch (intent.type) {
-    case "move":
-      return { ...base, input: { x: intent.input.x, z: intent.input.z } };
-    case "attack":
-      return { ...base, targetEntityId: intent.targetEntityId };
-    case "skill":
-      return { ...base, skillId: intent.skillId, targetEntityId: intent.targetEntityId };
-    case "resource_interact":
-      return { ...base, nodeId: intent.nodeId };
-    case "mob_trigger":
-      return { ...base, mobEntityId: intent.mobEntityId, triggerType: intent.triggerType };
-    case "quest_accept":
-    case "quest_hand_in":
-      return { ...base, questId: intent.questId };
-  }
-}
-
-/**
- * Order depends only on logical actor sequence and canonical payload, never on
- * network arrival timing. Identical logical inputs therefore order identically
- * even when their packets arrive in a different scheduling order.
+ * Pure, stable sorting function for zone intents.
+ * 1. entityId binary ascending
+ * 2. clientSeq ascending
+ * 3. type binary ascending
  */
 export function orderCanonicalZoneIntents(intents: readonly AurionZoneIntent[]): AurionZoneIntent[] {
-  return [...intents].sort((left, right) => {
-    assertIntentIdentity(left);
-    assertIntentIdentity(right);
-    if (left.entityId !== right.entityId) return left.entityId < right.entityId ? -1 : 1;
-    if (left.clientSeq !== right.clientSeq) return left.clientSeq - right.clientSeq;
-    if (left.type !== right.type) return left.type < right.type ? -1 : 1;
-    const leftPayload = canonicalJson(sanitizeIntentForHash(left));
-    const rightPayload = canonicalJson(sanitizeIntentForHash(right));
-    return leftPayload < rightPayload ? -1 : leftPayload > rightPayload ? 1 : 0;
+  return [...intents].sort((a, b) => {
+    if (a.entityId !== b.entityId) return a.entityId < b.entityId ? -1 : 1;
+    if (a.clientSeq !== b.clientSeq) return a.clientSeq - b.clientSeq;
+    if (a.type !== b.type) return a.type < b.type ? -1 : 1;
+    return 0;
   });
 }
 
-export function hashCanonicalIntents(intents: readonly AurionZoneIntent[]): string {
-  return canonicalSha256(orderCanonicalZoneIntents(intents).map(sanitizeIntentForHash));
+/**
+ * Returns a canonical representation stripped of transient socket references.
+ */
+export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, unknown> {
+  const base = {
+    type: intent.type,
+    entityId: intent.entityId,
+    clientSeq: intent.clientSeq,
+    arrivalSeq: intent.arrivalSeq,
+  };
+  if (intent.type === "move") {
+    const move = intent as AurionMoveIntent;
+    return { ...base, input: { x: move.input.x, z: move.input.z } };
+  }
+  if (intent.type === "attack") {
+    const attack = intent as AurionAttackIntent;
+    return { ...base, targetEntityId: attack.targetEntityId };
+  }
+  if (intent.type === "skill") {
+    const skill = intent as AurionSkillIntent;
+    return { ...base, skillId: skill.skillId, targetEntityId: skill.targetEntityId };
+  }
+  if (intent.type === "resource_interact") {
+    const res = intent as AurionResourceInteractIntent;
+    return { ...base, nodeId: res.nodeId };
+  }
+  if (intent.type === "quest_accept") {
+    const q = intent as AurionQuestAcceptIntent;
+    return { ...base, questId: q.questId };
+  }
+  if (intent.type === "quest_hand_in") {
+    const q = intent as AurionQuestHandInIntent;
+    return { ...base, questId: q.questId };
+  }
+  return base;
 }
+
+export function hashCanonicalIntents(intents: readonly AurionZoneIntent[]): string {
+  const ordered = orderCanonicalZoneIntents(intents);
+  const sanitized = ordered.map(sanitizeIntentForHash);
+  return canonicalSha256(sanitized);
+}
+

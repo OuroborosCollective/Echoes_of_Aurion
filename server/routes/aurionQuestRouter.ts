@@ -48,7 +48,20 @@ export const aurionQuestRouter = router({
       expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/),
       confirmation: z.literal("PUBLISH_QUEST_TEMPLATE"),
     }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash)),
+    .mutation(({ ctx, input }) => adminQuestService.publishProposal(ctx.user.id, input.proposalId, input.expectedPlanHash, { actorRole: ctx.user.role })),
+  quarantine: adminProcedure
+    .input(z.object({
+      templateId: z.string().min(3).max(96),
+      version: z.number().int().positive(),
+      quarantined: z.boolean(),
+    }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.quarantineTemplate({
+      actorUserId: ctx.user.id,
+      actorRole: ctx.user.role,
+      templateId: input.templateId,
+      version: input.version,
+      quarantined: input.quarantined,
+    })),
   available: protectedProcedure.query(() => adminQuestService.availableQuests()),
   myInstances: protectedProcedure.query(({ ctx }) => adminQuestService.listInstances({ playerUserId: ctx.user.id })),
   details: protectedProcedure

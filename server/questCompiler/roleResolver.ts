@@ -11,6 +11,8 @@ export const DEFAULT_AURION_ENTITIES: WorldEntity[] = [
   { id: 'npc_merchant_kaelen', name: 'Merchant Kaelen', type: 'npc' },
   { id: 'npc_scout_elena', name: 'Scout Elena', type: 'npc' },
   { id: 'npc_bandit_leader_vark', name: 'Bandit Leader Vark', type: 'npc' },
+  { id: 'npc_lyra', name: 'Lyra', type: 'npc' },
+  { id: 'npc_orun', name: 'Orun', type: 'npc' },
   { id: 'loc_caravan_road', name: 'Caravan Road Crossroads', type: 'location' },
   { id: 'loc_bandit_hideout', name: 'Bandit Hideout', type: 'location' },
   { id: 'item_damaged_manifest', name: 'Damaged Cargo Manifest', type: 'item' },
@@ -60,8 +62,9 @@ export class RoleResolver {
       }
 
       // Filter matching entity types
+      const predicates = role.predicates || [];
       const candidates = entities
-        .filter(e => e.type === role.entityType && role.predicates.every(predicate => rolePredicateMatches(e, predicate)))
+        .filter(e => e.type === role.entityType && predicates.every(predicate => rolePredicateMatches(e, predicate)))
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (candidates.length > 0) {

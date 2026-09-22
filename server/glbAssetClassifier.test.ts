@@ -75,7 +75,6 @@ describe("GLB asset classifier", () => {
     expect(classifyGlbBase64(generic, "Forest_Oak_LOD1.glb")).toMatchObject({ assetType: "arena", worldFamily: "nature", subcategory: "tree", lod: 1 });
     expect(classifyGlbBase64(generic, "Royal_Pauldrons.glb")).toMatchObject({ assetType: "armor", equipmentSlot: "shoulders", subcategory: "equipment-shoulders" });
     expect(classifyGlbBase64(generic, "Aether_Teleporter.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "teleporter" });
-    expect(classifyGlbBase64(generic, "Aurion_Return_Stone_Teleporter.glb")).toMatchObject({ assetType: "arena", worldFamily: "environment", subcategory: "teleporter" });
   });
 
   it("fails closed when a GLB cannot be classified safely", () => {

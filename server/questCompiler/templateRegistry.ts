@@ -1,17 +1,12 @@
 import { QuestTemplateVersion } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash } from '../../shared/aurionQuestCanonicalHash';
 
-/**
- * AIM-298: Aurion Quest Template Version Registry.
- * Manages active, validated quest templates with immutable versioning and template set hashing.
- */
-
-export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
+export const BASE_DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
   {
     templateId: 'tpl_caravan_investigation',
     version: 1,
-    title: 'Caravan Ambush Investigation',
-    description: 'Investigate the damaged merchant caravan and restore trust in the local district.',
+    title: 'Investigate the Shattered Caravan',
+    description: 'A merchant caravan was ambushed on the northern road. Investigate the wreckage and recover the cargo manifest.',
     prerequisiteFacts: [
       { subjectField: 'status', operator: 'eq', expectedValue: 'damaged' },
     ],
@@ -24,46 +19,42 @@ export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
       {
         id: 'node_start',
         type: 'start',
-        title: 'Report to Merchant',
+        title: 'Speak with Merchant Kaelen',
         requirements: [],
         actionsOnEnter: [],
         actionsOnExit: [],
         narrativeKey: 'narrative.caravan_investigation.start',
       },
       {
-        id: 'node_investigate',
+        id: 'node_crates',
         type: 'objective',
-        title: 'Inspect Damaged Cargo',
+        title: 'Recover Caravan Crates',
         requirements: [],
-        objective: { key: 'cargo_inspected', targetValue: 3, description: 'Examine 3 cargo boxes' },
+        objective: { key: 'recover_crates', targetValue: 3, description: 'Examine the shattered cart and recover the supply crates' },
         actionsOnEnter: [],
-        actionsOnExit: [
-          { targetSubject: 'attackers.identified', predicate: 'status', value: true, effectType: 'assert_fact' },
-        ],
-        narrativeKey: 'narrative.caravan_investigation.cargo',
+        actionsOnExit: [],
+        narrativeKey: 'narrative.caravan_investigation.crates',
       },
       {
         id: 'node_end',
         type: 'end',
-        title: 'Report Findings to Giver',
+        title: 'Return to Merchant Kaelen',
         requirements: [],
         actionsOnEnter: [],
-        actionsOnExit: [
-          { targetSubject: 'merchant_kaelen.trust.player_1', predicate: 'trust', value: 'restored', effectType: 'assert_fact' },
-        ],
+        actionsOnExit: [],
         narrativeKey: 'narrative.caravan_investigation.end',
       },
     ],
     edges: [
-      { id: 'edge_1', fromNodeId: 'node_start', toNodeId: 'node_investigate', priority: 1 },
-      { id: 'edge_2', fromNodeId: 'node_investigate', toNodeId: 'node_end', priority: 1 },
+      { id: 'edge_1', fromNodeId: 'node_start', toNodeId: 'node_crates', priority: 1 },
+      { id: 'edge_2', fromNodeId: 'node_crates', toNodeId: 'node_end', priority: 1 },
     ],
     outcomes: [
       {
         id: 'outcome_success',
-        semanticFlag: 'merchant_trust_restored',
+        semanticFlag: 'caravan_ambush_investigated',
         factEffects: [
-          { targetSubject: 'merchant_kaelen.trust.player_1', predicate: 'trust', value: 'restored', effectType: 'assert_fact' },
+          { targetSubject: 'attackers.identified', predicate: 'status', value: true, effectType: 'assert_fact' },
         ],
         rewards: [
           { type: 'xp', amount: 500 },
@@ -143,6 +134,89 @@ export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
   },
 ];
 
+const GAMEPLAY_QUEST_DEFINITIONS: Array<{
+  key: string;
+  title: string;
+  description: string;
+  giver: string;
+}> = [
+  { key: 'astral_call', title: 'Der Ruf der Sternwarte', description: 'Besiege den Asterion-Sentinel und bringe Lyra einen Resonanzsplitter.', giver: 'npc_lyra' },
+  { key: 'archive_of_echoes', title: 'Das Archiv der Echos', description: 'Sichere die versunkene Archivhalle und entschlüssele die Echo-Tafel.', giver: 'npc_orun' },
+  { key: 'ember_key', title: 'Schlüssel aus der letzten Flamme', description: 'Stabilisiere das Solarium. Der Glutschlüssel öffnet den ersten Dungeon.', giver: 'npc_lyra' },
+  { key: 'starfall_resonance', title: 'Resonanz des Sternenfalls', description: 'Untersuche den Einschlagkrater und besiege den Sternenfall-Wächter.', giver: 'npc_lyra' },
+  { key: 'clockwork_core', title: 'Das Herz des Uhrwerks', description: 'Dringe in die Clockwork Woods ein und besiege den Rootgear Foundry-Kernwächter.', giver: 'npc_orun' },
+  { key: 'sunwatch_vanguard', title: 'Vorhut der Sonnenwacht', description: 'Errichte einen Vorposten in der Sonnenwacht-Bastion und sichere das Gebiet.', giver: 'npc_orun' },
+];
+
+export const GAMEPLAY_SEED_TEMPLATES: QuestTemplateVersion[] = GAMEPLAY_QUEST_DEFINITIONS.map(def => ({
+  templateId: `tpl_${def.key}`,
+  version: 1,
+  title: def.title,
+  description: def.description,
+  prerequisiteFacts: [
+    { subjectField: 'gameplayQuestKey', operator: 'eq', expectedValue: def.key },
+  ],
+  roles: [
+    { roleName: 'giver', entityType: 'npc', optional: false, predicates: [{ subjectField: 'id', operator: 'eq', expectedValue: def.giver }] },
+    { roleName: 'location', entityType: 'location', optional: false, predicates: [] },
+  ],
+  nodes: [
+    {
+      id: 'node_start',
+      type: 'start',
+      title: `Start: ${def.title}`,
+      requirements: [],
+      actionsOnEnter: [],
+      actionsOnExit: [],
+      narrativeKey: `narrative.gameplay.${def.key}.start`,
+    },
+    {
+      id: 'node_objective',
+      type: 'objective',
+      title: def.title,
+      requirements: [],
+      objective: { key: `${def.key}_objective`, targetValue: 1, description: def.description },
+      actionsOnEnter: [],
+      actionsOnExit: [],
+      narrativeKey: `narrative.gameplay.${def.key}.objective`,
+    },
+    {
+      id: 'node_end',
+      type: 'end',
+      title: `Turn In: ${def.title}`,
+      requirements: [],
+      actionsOnEnter: [],
+      actionsOnExit: [],
+      narrativeKey: `narrative.gameplay.${def.key}.end`,
+    },
+  ],
+  edges: [
+    { id: 'edge_start_obj', fromNodeId: 'node_start', toNodeId: 'node_objective', priority: 1 },
+    { id: 'edge_obj_end', fromNodeId: 'node_objective', toNodeId: 'node_end', priority: 1 },
+  ],
+  outcomes: [
+    {
+      id: `outcome_${def.key}`,
+      semanticFlag: `gameplay_quest_${def.key}_completed`,
+      factEffects: [
+        { targetSubject: `quest.${def.key}.completed`, predicate: 'completed', value: true, effectType: 'assert_fact' },
+      ],
+      rewards: [
+        { type: 'xp', amount: 200 },
+      ],
+      narrativeKey: `narrative.gameplay.${def.key}.outcome`,
+    },
+  ],
+  maxCompositionDepth: 10,
+  active: true,
+  quarantined: false,
+}));
+
+export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
+  ...BASE_DEFAULT_SEED_TEMPLATES,
+  ...GAMEPLAY_SEED_TEMPLATES,
+];
+
 export class QuestTemplateRegistry {
   private templates: Map<string, QuestTemplateVersion> = new Map();
 
@@ -158,8 +232,18 @@ export class QuestTemplateRegistry {
   }
 
   public getActiveTemplates(): QuestTemplateVersion[] {
-    return Array.from(this.templates.values())
-      .filter(t => t.active && !t.quarantined)
+    const active = Array.from(this.templates.values())
+      .filter(t => t.active && !t.quarantined);
+
+    const latestByTemplateId = new Map<string, QuestTemplateVersion>();
+    for (const tpl of active) {
+      const existing = latestByTemplateId.get(tpl.templateId);
+      if (!existing || tpl.version > existing.version) {
+        latestByTemplateId.set(tpl.templateId, tpl);
+      }
+    }
+
+    return Array.from(latestByTemplateId.values())
       .sort((a, b) => `${a.templateId}:v${a.version}`.localeCompare(`${b.templateId}:v${b.version}`));
   }
 

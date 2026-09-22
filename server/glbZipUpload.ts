@@ -37,7 +37,7 @@ async function authenticateGlbZipUploader(request: Request): Promise<Authenticat
     return authenticateAdminGlbBearer(request);
   }
   const user = await sdk.authenticateRequest(request);
-  return user ? { id: user.id, role: user.role } : null;
+  return user ? { id: user.id, role: user.role === "admin" ? "admin" : "user" } : null;
 }
 
 function defaultDependencies(): GlbZipUploadDependencies {
