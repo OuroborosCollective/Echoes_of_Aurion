@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { computeCanonicalHash } from "./aurionQuestCanonicalHash";
 import { encounterKeySchema } from "./encounterReadback";
 
 export const legacyQuestKeys = [
@@ -57,7 +58,16 @@ export type EncounterCompletionEvidence = z.infer<typeof encounterCompletionEvid
 
 export const encounterCompletionEvidenceIdentitySchema = encounterCompletionEvidenceSchema.omit({ evidenceHash: true });
 
+export function computeEncounterCompletionEvidenceHash(
+  identity: z.infer<typeof encounterCompletionEvidenceIdentitySchema>,
+): string {
+  return computeCanonicalHash("aurion.encounter.completion.v1", identity);
+}
+
 export function verifyEncounterCompletionEvidenceIdentity(value: EncounterCompletionEvidence): boolean {
   const normalized = encounterCompletionEvidenceSchema.parse(value);
-  return normalized.eventId === `evt_encounter_complete_${normalized.sessionId}`;
+  return normalized.eventId === `evt_encounter_complete_${normalized.sessionId}`
+    && normalized.evidenceHash === computeEncounterCompletionEvidenceHash(
+      encounterCompletionEvidenceIdentitySchema.parse(normalized),
+    );
 }
