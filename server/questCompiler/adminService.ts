@@ -274,9 +274,29 @@ export class AdminQuestStudioService {
     if (!event.sourceEventId || !Number.isSafeInteger(event.sourceEventSequence) || event.sourceEventSequence < 0) {
       throw new Error("QUEST_SOURCE_EVENT_IDENTITY_REQUIRED");
     }
-    const active = await this.persistenceEngine.listInstances({ playerUserId: userId, state: "active" });
+    const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
     const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean; replayed: boolean }> = [];
-    for (const listedInstance of active) {
+    for (const listedInstance of instances) {
+      const sourceIdempotencyKey = computeCanonicalHash("aurion.quest.runtime.event.v1", {
+        source: event.source,
+        sourceEventId: event.sourceEventId,
+        sourceEventSequence: event.sourceEventSequence,
+        event: event.event,
+        targetId: event.targetId ?? null,
+        payload: event.payload ?? {},
+        instanceId: listedInstance.id,
+      });
+      const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(sourceIdempotencyKey);
+      if (prior) {
+        updates.push({
+          instanceId: prior.instanceId,
+          receiptId: prior.id,
+          completedNode: false,
+          replayed: true,
+        });
+        continue;
+      }
+
       const instance = await this.persistenceEngine.getInstance(listedInstance.id);
       if (!instance || instance.state !== "active") continue;
       const plan = await this.persistenceEngine.getPlan(instance.planHash);
@@ -303,7 +323,6 @@ export class AdminQuestStudioService {
         targetId: event.targetId ?? null,
         payload: event.payload ?? {},
         instanceId: instance.id,
-        objectiveKey: objective.key,
       });
       const result = this.runtimeEngine.progressObjective(instance, plan, objective.key, 1, {
         eventSequence,
