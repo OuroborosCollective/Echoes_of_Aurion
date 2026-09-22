@@ -277,7 +277,7 @@ export class AdminQuestStudioService {
     const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
     const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean; replayed: boolean }> = [];
     for (const listedInstance of instances) {
-      const sourceIdempotencyKey = computeCanonicalHash("aurion.quest.runtime.event.v1", {
+      const sourceIdempotencyKey = computeCanonicalHash("aurion.quest.event.v1", {
         source: event.source,
         sourceEventId: event.sourceEventId,
         sourceEventSequence: event.sourceEventSequence,
@@ -315,7 +315,7 @@ export class AdminQuestStudioService {
       const expectedStateHash = computeCanonicalHash("aurion.quest.instance.v1", instance);
       const priorReceipts = await this.persistenceEngine.getReceiptsForInstance(instance.id);
       const eventSequence = (priorReceipts.at(-1)?.eventSequence ?? 0) + 1;
-      const idempotencyKey = computeCanonicalHash("aurion.quest.runtime.event.v1", {
+      const idempotencyKey = computeCanonicalHash("aurion.quest.event.v1", {
         source: event.source,
         sourceEventId: event.sourceEventId,
         sourceEventSequence: event.sourceEventSequence,
