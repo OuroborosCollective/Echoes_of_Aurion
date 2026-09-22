@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
+import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import type { QuestInstance, QuestReceipt } from "../../shared/aurionQuestContract";
 import { QuestPersistenceEngine } from "./persistence";
 
@@ -24,13 +24,13 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
   };
 
   function transition(sourceInstance: QuestInstance = instance) {
-    const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", sourceInstance);
+    const previousStateHash = computeQuestStateHash(sourceInstance);
     const updatedInstance: QuestInstance = {
       ...sourceInstance,
       objectiveProgress: { investigate: 1 },
       updatedAt: "2026-09-22T00:00:01.000Z",
     };
-    const resultStateHash = computeCanonicalHash("aurion.quest.instance.v1", updatedInstance);
+    const resultStateHash = computeQuestStateHash(updatedInstance);
     const receipt: QuestReceipt = {
       id: "rcpt_test_458",
       instanceId: sourceInstance.id,
