@@ -1129,11 +1129,6 @@ Erkenntnis: Materialization ist nur sicher, wenn Command-Identität, Planbindung
 Evidence: Functional exact head `7282318827c1d51be4d961c660b1d5005948dc42`; PR #473. Exact-head Local Test Pack `35783639385` PASS; Runtime Candidate `35783637386` PASS; Runtime Container Proof `35783637490` PASS; AIM-292 real MariaDB/restart/readback `35783637431` PASS; WASD capsule rebuild `35783637431` PASS; Android `35783637719` PASS. Merge remains gated on final Memory.md head readback and post-merge main verification.
 
 
-### 2026-09-23 — AIM-298 legacy QuestKey and encounter evidence (#475)
-Änderung: Die sechs bestehenden Aurion-QuestKeys wurden verlustfrei über den vorhandenen Gameplay-Katalog an ihre kanonischen Encounter gebunden. Der Quest-Contract unterstützt nun `encounter.completed`; Encounter-Abschluss-Evidence wird ausschließlich aus den bestehenden persistenten `gameplaySessions` und append-only `gameplayActionReceipts` rekonstruiert, deterministisch gehasht und fail-closed auf Sequenz-, Action-, Damage-, Boss-HP- und Evidence-Integrität geprüft.
-Erkenntnis: Für #465 darf keine künstliche QuestKey→Template-Konvertierung oder zweiter Event-Store entstehen. Die sichere Bridge ist eine read-only, revisionierbare Projektion aus der bestehenden Gameplay-Authority; erst diese nachweisbare Encounter-Evidence kann später in den kanonischen Quest-Matcher eingeführt werden.
-Evidence: Exact functional head `08815516f81f7c5ebb95afb2c6bf6f727070ec98`. Exact-head Runtime Candidate `106969664890` PASS; Runtime Container Proof `106969664297` PASS; exact-offline-pack `106969664443` PASS; WASD capsule rebuild `106969736257` PASS; real MariaDB receipts/restart/AX1 projection `106969736564` PASS; Android debug APK `106969664066` PASS. PR #476 remains gated on the fresh post-Memory exact-head readback and merge verification.
-
 ### 2026-09-23 — Lossless legacy quest and encounter evidence boundary (#475)
 Status: VERIFIED integration head; merge gated by exact-head readback
 Task: Preserve the six established legacy QuestKeys while introducing a canonical, replayable encounter-completion evidence boundary for the later #465 gameplay-authority migration.
