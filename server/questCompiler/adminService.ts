@@ -268,7 +268,7 @@ export class AdminQuestStudioService {
     const idempotencyKey = `accept:${instance.id}`;
     const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(idempotencyKey);
     if (prior) {
-      if (prior.instanceId !== instance.id) throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+      if (prior.instanceId !== instance.id || prior.idempotencyKey !== idempotencyKey) throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
       if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
       return { updatedInstance: instance, receipt: prior };
     }
