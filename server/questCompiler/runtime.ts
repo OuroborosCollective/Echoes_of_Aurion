@@ -182,6 +182,19 @@ export class QuestRuntimeEngine {
           ...this.completeQuest(instance, plan, {
             eventSequence: parsed.eventSequence,
             idempotencyKey: parsed.idempotencyKey,
+            source: {
+              triggerEventId: parsed.triggerEventId,
+              triggerEventDigest: parsed.triggerEventDigest,
+              sourceEvidenceId: parsed.sourceEvidenceId,
+              sourceEvidenceDigest: parsed.sourceEvidenceDigest,
+              sourceLogicalRevision: parsed.sourceLogicalRevision,
+              compilerVersion: parsed.compilerVersion,
+              sourceRevision: parsed.sourceRevision,
+              templateSetHash: parsed.templateSetHash,
+              candidateSetHash: parsed.candidateSetHash,
+              seedDigest: parsed.seedDigest,
+              roleBindingHash: parsed.roleBindingHash,
+            },
           }),
         } as const;
     }
