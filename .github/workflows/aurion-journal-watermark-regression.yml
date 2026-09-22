@@ -213,7 +213,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 59) throw new Error("expected 58 journal rows after bounded apply");
+            if (Number(rows[0]?.rowCount) !== 59) throw new Error("expected 59 journal rows after bounded apply");
             if (Number(rows[0]?.maxCreatedAt) !== expectedWatermark) throw new Error("legacy historical watermark was rewritten");
           } finally {
             await connection.end();
