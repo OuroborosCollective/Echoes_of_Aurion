@@ -311,8 +311,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import mysql from "mysql2/promise";
-          const sql=fs.readFileSync("drizzle/0057_aurion_economic_ledger_v2.sql"
-      - "drizzle/0058_aurion_quest_causal_anchor.sql","utf8");
+          const sql=fs.readFileSync("drizzle/0057_aurion_economic_ledger_v2.sql","utf8");
           const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try {
