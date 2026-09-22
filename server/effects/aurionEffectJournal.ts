@@ -17,7 +17,7 @@ import { getDb } from "../db";
 import { operationalDate } from "../../shared/operationalClock";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
-type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+export type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 export type PersistedAurionEffectIntent = AurionEffectIntent & Readonly<{
   deliveryState: AurionEffectDeliveryState;
@@ -60,7 +60,7 @@ function parseIntentRow(row: typeof aurionEffectIntents.$inferSelect): Persisted
 }
 
 export class AurionEffectJournal {
-  async recordIntent(input: {
+  async recordIntentInTransaction(tx: DatabaseTransaction, input: {
     authorityReceiptHash: string;
     effectType: string;
     subjectId: string;
@@ -68,46 +68,53 @@ export class AurionEffectJournal {
     payload: Readonly<Record<string, unknown>>;
   }): Promise<PersistedAurionEffectIntent> {
     const intent = createEffectIntent(input);
+    const [authorityReceipt] = await tx.select({ receiptHash: aurionCausalTickReceipts.receiptHash })
+      .from(aurionCausalTickReceipts)
+      .where(eq(aurionCausalTickReceipts.receiptHash, intent.authorityReceiptHash))
+      .limit(1);
+    if (!authorityReceipt) throw new Error("EFFECT_AUTHORITY_RECEIPT_UNPROVABLE");
+
+    await tx.insert(aurionEffectIntents).values({
+      effectId: intent.effectId,
+      authorityReceiptHash: intent.authorityReceiptHash,
+      effectType: intent.effectType,
+      subjectId: intent.subjectId,
+      ordinal: intent.ordinal,
+      payloadHash: intent.payloadHash,
+      payloadJson: JSON.stringify(intent.payload),
+      deliveryState: "PENDING",
+      attemptCount: 0,
+    }).onDuplicateKeyUpdate({ set: { effectId: intent.effectId } });
+
+    const [row] = await tx.select().from(aurionEffectIntents)
+      .where(eq(aurionEffectIntents.effectId, intent.effectId))
+      .limit(1)
+      .for("update");
+    if (!row) throw new Error("EFFECT_INTENT_PERSISTENCE_FAILED");
+    const persisted = parseIntentRow(row);
+    if (
+      persisted.authorityReceiptHash !== intent.authorityReceiptHash ||
+      persisted.effectType !== intent.effectType ||
+      persisted.subjectId !== intent.subjectId ||
+      persisted.ordinal !== intent.ordinal ||
+      persisted.payloadHash !== intent.payloadHash ||
+      JSON.stringify(persisted.payload) !== JSON.stringify(intent.payload)
+    ) {
+      throw new Error("EFFECT_INTENT_IDEMPOTENCY_CONFLICT");
+    }
+    return persisted;
+  }
+
+  async recordIntent(input: {
+    authorityReceiptHash: string;
+    effectType: string;
+    subjectId: string;
+    ordinal: number;
+    payload: Readonly<Record<string, unknown>>;
+  }): Promise<PersistedAurionEffectIntent> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
-
-    return db.transaction(async tx => {
-      const [authorityReceipt] = await tx.select({ receiptHash: aurionCausalTickReceipts.receiptHash })
-        .from(aurionCausalTickReceipts)
-        .where(eq(aurionCausalTickReceipts.receiptHash, intent.authorityReceiptHash))
-        .limit(1);
-      if (!authorityReceipt) throw new Error("EFFECT_AUTHORITY_RECEIPT_UNPROVABLE");
-
-      await tx.insert(aurionEffectIntents).values({
-        effectId: intent.effectId,
-        authorityReceiptHash: intent.authorityReceiptHash,
-        effectType: intent.effectType,
-        subjectId: intent.subjectId,
-        ordinal: intent.ordinal,
-        payloadHash: intent.payloadHash,
-        payloadJson: JSON.stringify(intent.payload),
-        deliveryState: "PENDING",
-        attemptCount: 0,
-      }).onDuplicateKeyUpdate({ set: { effectId: intent.effectId } });
-
-      const [row] = await tx.select().from(aurionEffectIntents)
-        .where(eq(aurionEffectIntents.effectId, intent.effectId))
-        .limit(1)
-        .for("update");
-      if (!row) throw new Error("EFFECT_INTENT_PERSISTENCE_FAILED");
-      const persisted = parseIntentRow(row);
-      if (
-        persisted.authorityReceiptHash !== intent.authorityReceiptHash ||
-        persisted.effectType !== intent.effectType ||
-        persisted.subjectId !== intent.subjectId ||
-        persisted.ordinal !== intent.ordinal ||
-        persisted.payloadHash !== intent.payloadHash ||
-        JSON.stringify(persisted.payload) !== JSON.stringify(intent.payload)
-      ) {
-        throw new Error("EFFECT_INTENT_IDEMPOTENCY_CONFLICT");
-      }
-      return persisted;
-    });
+    return db.transaction(tx => this.recordIntentInTransaction(tx, input));
   }
 
   async readIntent(effectId: string): Promise<PersistedAurionEffectIntent | null> {
