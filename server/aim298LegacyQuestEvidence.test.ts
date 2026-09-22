@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 import {
   computeEncounterCompletionEvidenceHash,
   encounterCompletionEvidenceSchema,
