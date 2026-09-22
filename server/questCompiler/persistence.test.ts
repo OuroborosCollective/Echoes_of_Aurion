@@ -48,7 +48,7 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
 
   it("commits one event exactly once and returns the persisted receipt on retry", async () => {
     const persistence = new QuestPersistenceEngine();
-    persistence.seedEphemeral({} as never, instance);
+    await persistence.saveInstance(instance);
     const first = transition();
 
     const committed = await persistence.commitObjectiveTransition({
@@ -75,7 +75,7 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
 
   it("rejects a stale expected state hash without creating a second receipt", async () => {
     const persistence = new QuestPersistenceEngine();
-    persistence.seedEphemeral({} as never, instance);
+    await persistence.saveInstance(instance);
     const first = transition();
     await persistence.commitObjectiveTransition({
       instanceId: instance.id,
