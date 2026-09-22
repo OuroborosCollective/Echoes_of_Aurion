@@ -29,7 +29,6 @@ import { appendTemporalEventInTransaction, verifyTemporalEventSource } from "../
 import { globalAurionEffectJournal } from "../effects/aurionEffectJournal";
 
 async function persistCausalClosure(tx: Parameters<Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]>[0], closure: QuestCausalClosure): Promise<void> {
-  await verifyTemporalEventSource(closure.temporalEvent);
   const [causalReceipt] = await tx.select().from(aurionCausalTickReceipts)
     .where(and(
       eq(aurionCausalTickReceipts.worldId, closure.anchor.worldId),
@@ -51,13 +50,32 @@ async function persistCausalClosure(tx: Parameters<Parameters<NonNullable<Awaite
     .limit(1))[0];
   if (anchorRow) {
     if (
-      anchorRow.anchorHash !== closure.anchor.anchorHash ||
+      anchorRow.id !== `qca_${closure.anchor.anchorHash.slice("sha256:".length)}` ||
+      anchorRow.questReceiptId !== closure.anchor.questReceiptId ||
+      anchorRow.worldId !== closure.anchor.worldId ||
+      anchorRow.epoch !== closure.anchor.epoch ||
+      anchorRow.zoneId !== closure.anchor.zoneId ||
+      anchorRow.tick !== closure.anchor.tick ||
       anchorRow.causalReceiptHash !== closure.anchor.causalReceiptHash ||
+      anchorRow.sourceWorldRoot !== closure.anchor.sourceWorldRoot ||
+      anchorRow.sourceRevision !== closure.anchor.sourceRevision ||
+      anchorRow.rulesetVersion !== closure.anchor.rulesetVersion ||
+      anchorRow.sourceEvidenceId !== closure.anchor.sourceEvidenceId ||
+      anchorRow.sourceEvidenceDigest !== closure.anchor.sourceEvidenceDigest ||
+      anchorRow.sourceLogicalRevision !== closure.anchor.sourceLogicalRevision ||
+      anchorRow.triggerEventId !== closure.anchor.triggerEventId ||
+      anchorRow.triggerEventDigest !== closure.anchor.triggerEventDigest ||
+      anchorRow.compilerVersion !== closure.anchor.compilerVersion ||
+      anchorRow.templateSetHash !== closure.anchor.templateSetHash ||
+      anchorRow.candidateSetHash !== closure.anchor.candidateSetHash ||
+      anchorRow.seedDigest !== closure.anchor.seedDigest ||
+      anchorRow.roleBindingHash !== closure.anchor.roleBindingHash ||
       anchorRow.commandId !== closure.anchor.commandId ||
       anchorRow.planHash !== closure.anchor.planHash ||
+      anchorRow.graphHash !== closure.anchor.graphHash ||
+      anchorRow.previousStateHash !== closure.anchor.previousStateHash ||
       anchorRow.resultStateHash !== closure.anchor.resultStateHash ||
-      anchorRow.sourceWorldRoot !== closure.anchor.sourceWorldRoot ||
-      anchorRow.sourceRevision !== closure.anchor.sourceRevision
+      anchorRow.anchorHash !== closure.anchor.anchorHash
     ) throw new Error("QUEST_CAUSAL_ANCHOR_PERSISTED_CONFLICT");
   } else {
     await tx.insert(aurionQuestCausalAnchors).values({
@@ -379,6 +397,7 @@ export class QuestPersistenceEngine {
     if (input.updatedInstance.state === "completed" && !input.causalClosure) {
       throw new Error("QUEST_CAUSAL_CLOSURE_REQUIRED");
     }
+    if (input.causalClosure) await verifyTemporalEventSource(input.causalClosure.temporalEvent);
     return this.withInstanceLock(input.instanceId, async () => {
       const db = await getDb();
       if (!db) {
