@@ -3,7 +3,6 @@ import {
   QuestPlan,
   QuestReceipt,
   QuestRuntimeEvent,
-  WorldEvent,
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash, computeQuestStateHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
 import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
@@ -15,6 +14,7 @@ import { RoleResolver } from './roleResolver';
 import { QuestComposer } from './composer';
 import { QuestValidator } from './validator';
 import { QuestDomainCommandSchema, type QuestDomainCommand } from '../../shared/aurionQuestDomainCommandContract';
+import type { QuestCompleteSource } from '../../shared/aurionQuestDomainCommandContract';
 
 /**
  * AIM-298: Aurion Authoritative Quest Runtime Engine.
@@ -362,8 +362,8 @@ export class QuestRuntimeEngine {
   public completeQuest(
     instance: QuestInstance,
     plan: QuestPlan,
-    options?: { eventSequence?: number; idempotencyKey?: string }
-  ): { updatedInstance: QuestInstance; receipt: QuestReceipt; emittedWorldEvent: WorldEvent } {
+    options?: { eventSequence?: number; idempotencyKey?: string; source?: QuestCompleteSource }
+  ): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
     if (instance.state !== 'active') {
       throw new Error(`CANNOT_COMPLETE_QUEST_IN_STATE:${instance.state}`);
     }
@@ -378,19 +378,17 @@ export class QuestRuntimeEngine {
 
     const resultStateHash = computeQuestStateHash(updatedInstance);
 
-    // Apply outcomes & emit canonical WorldEvent
-    const primaryOutcome = plan.outcomes[0];
-    const { event } = this.worldFactEngine.recordEvent({
-      id: `evt_quest_complete_${instance.id}`,
-      type: 'QUEST_COMPLETED_REVENGE',
-      source: 'aurion_quest_runtime',
-      data: {
-        instanceId: instance.id,
-        playerUserId: String(instance.playerUserId),
-        merchantId: 'merchant_kaelen',
-        semanticFlag: primaryOutcome?.semanticFlag || 'completed',
-      },
-    });
+    if (!options?.source) throw new Error("QUEST_CAUSAL_SOURCE_REQUIRED");
+    if (
+      options.source.sourceRevision !== instance.sourceRevision ||
+      options.source.triggerEventId !== instance.triggerEventId ||
+      options.source.compilerVersion !== instance.compilerVersion ||
+      options.source.templateSetHash !== instance.templateSetHash ||
+      options.source.candidateSetHash !== instance.candidateSetHash ||
+      options.source.seedDigest !== instance.seedDigest ||
+      options.source.roleBindingHash !== instance.roleBindingHash ||
+      (instance.worldStateRevision !== undefined && options.source.sourceLogicalRevision !== instance.worldStateRevision)
+    ) throw new Error("QUEST_CAUSAL_SOURCE_IDENTITY_MISMATCH");
 
     const eventSequence = options?.eventSequence ?? instance.completedNodeIds.length + 3;
     const idempotencyKey = options?.idempotencyKey ?? `complete:${instance.id}`;
@@ -414,6 +412,6 @@ export class QuestRuntimeEngine {
       createdAt: occurredAt,
     };
 
-    return { updatedInstance, receipt, emittedWorldEvent: event };
+    return { updatedInstance, receipt };
   }
 }
