@@ -306,15 +306,16 @@ export class QuestPersistenceEngine {
       }
 
       return db.transaction(async tx => {
+        const instanceRow = (await tx.select().from(aurionQuestInstances)
+          .where(eq(aurionQuestInstances.id, input.instanceId)).for("update").limit(1))[0];
+        if (!instanceRow) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
+
         const replayRow = (await tx.select().from(aurionQuestReceipts)
           .where(eq(aurionQuestReceipts.idempotencyKey, input.idempotencyKey)).limit(1))[0];
         if (replayRow) {
           if (replayRow.instanceId !== input.instanceId || replayRow.receiptHash !== input.receipt.receiptHash || replayRow.resultStateHash !== input.receipt.resultStateHash) {
             throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
           }
-          const instanceRow = (await tx.select().from(aurionQuestInstances)
-            .where(eq(aurionQuestInstances.id, input.instanceId)).limit(1))[0];
-          if (!instanceRow) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
           const instance = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
           const receipt = QuestReceiptSchema.parse({
             id: replayRow.id,
@@ -333,9 +334,6 @@ export class QuestPersistenceEngine {
           return { updatedInstance: instance, receipt, replayed: true };
         }
 
-        const instanceRow = (await tx.select().from(aurionQuestInstances)
-          .where(eq(aurionQuestInstances.id, input.instanceId)).for("update").limit(1))[0];
-        if (!instanceRow) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
         const current = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
         const currentHash = computeCanonicalHash("aurion.quest.instance.v1", current);
         if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
