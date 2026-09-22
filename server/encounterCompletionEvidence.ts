@@ -1,3 +1,4 @@
+import { and, asc, eq } from "drizzle-orm";
 import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 import {
   encounterCompletionEvidenceSchema,
@@ -5,6 +6,7 @@ import {
 } from "../shared/aurionLegacyQuestBridgeContract";
 import { gameplayActionReceipts, gameplaySessions } from "../drizzle/schema";
 import { damageForMcpAction, mcpActionFromCommand } from "./gameplayProtocol";
+import { getDb } from "./db";
 
 type GameplaySessionRow = typeof gameplaySessions.$inferSelect;
 type GameplayActionReceiptRow = typeof gameplayActionReceipts.$inferSelect;
@@ -99,12 +101,28 @@ export function deriveEncounterCompletionEvidence(input: {
   }));
 }
 
-export async function readEncounterCompletionEvidence(db: {
-  select: Function;
-}, userId: number, sessionId: string): Promise<EncounterCompletionEvidence> {
-  const sessions = await db.select().from(gameplaySessions).where(
-    (gameplaySessions.id as any).eq ? (gameplaySessions.id as any).eq(sessionId) : undefined,
-  );
-  void sessions;
-  throw new Error("ENCOUNTER_COMPLETION_READ_ADAPTER_REQUIRES_DB_TRANSACTION");
+/**
+ * Read-only adapter over the existing durable gameplay session/action receipt authority.
+ * No event row is created here; completion evidence is deterministically reconstructed.
+ */
+export async function readEncounterCompletionEvidence(userId: number, sessionId: string): Promise<EncounterCompletionEvidence> {
+  if (!Number.isSafeInteger(userId) || userId < 1) throw new Error("ENCOUNTER_COMPLETION_UNPROVABLE:USER_INVALID");
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(sessionId)) throw new Error("ENCOUNTER_COMPLETION_UNPROVABLE:SESSION_ID_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("ENCOUNTER_COMPLETION_DATABASE_UNAVAILABLE");
+
+  return db.transaction(async tx => {
+    const session = (await tx.select().from(gameplaySessions).where(and(
+      eq(gameplaySessions.id, sessionId),
+      eq(gameplaySessions.userId, userId),
+    )).limit(1))[0];
+    if (!session) throw new Error("ENCOUNTER_COMPLETION_UNPROVABLE:SESSION_NOT_FOUND");
+
+    const receipts = await tx.select().from(gameplayActionReceipts).where(and(
+      eq(gameplayActionReceipts.sessionId, sessionId),
+      eq(gameplayActionReceipts.userId, userId),
+    )).orderBy(asc(gameplayActionReceipts.sequence));
+
+    return deriveEncounterCompletionEvidence({ session, receipts });
+  });
 }
