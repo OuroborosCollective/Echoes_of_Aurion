@@ -35,6 +35,25 @@ describe("AIM-298 runtime integrity hardening", () => {
     expect(computeQuestStateHash(a.instance)).toBe(computeQuestStateHash(b.instance));
   });
 
+  it("serializes concurrent identical quest accepts to one durable receipt", async () => {
+    const service = new AdminQuestStudioService(fixedOperationalClock(1_750_000_000_000));
+    const offered = await service.offerQuest({
+      playerUserId: 7002,
+      templateId: "tpl_caravan_investigation",
+    });
+
+    const [a, b] = await Promise.all([
+      service.acceptQuest(7002, offered.instance.id),
+      service.acceptQuest(7002, offered.instance.id),
+    ]);
+
+    expect(a.receipt.id).toBe(b.receipt.id);
+    expect(new Set([a.receipt.id, b.receipt.id]).size).toBe(1);
+    expect(await service.getPersistenceEngine().getReceiptsForInstance(offered.instance.id)).toHaveLength(1);
+    expect(a.updatedInstance.state).toBe("active");
+    expect(b.updatedInstance.state).toBe("active");
+  });
+
   it("does not append the same canonical world event twice", () => {
     const engine = new WorldFactEngine();
     const first = engine.recordEvent({
