@@ -316,7 +316,7 @@ export const aurionQuestCausalAnchors = mysqlTable("aurionQuestCausalAnchors", {
 }, table => [
   uniqueIndex("aurionQuestCausalAnchors_receipt_uq").on(table.questReceiptId),
   uniqueIndex("aurionQuestCausalAnchors_anchor_uq").on(table.anchorHash),
-  uniqueIndex("aurionQuestCausalAnchors_causal_receipt_uq").on(table.causalReceiptHash),
+  index("aurionQuestCausalAnchors_causal_receipt_idx").on(table.causalReceiptHash),
   index("aurionQuestCausalAnchors_world_epoch_idx").on(table.worldId, table.epoch),
   index("aurionQuestCausalAnchors_world_source_idx").on(table.worldId, table.sourceEvidenceId),
 ]);
