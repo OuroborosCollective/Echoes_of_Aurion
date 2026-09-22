@@ -6,7 +6,6 @@ import {
   aurionQuestCausalAnchors,
   aurionTemporalEvents,
 } from "../../drizzle/aurionCausalitySchema";
-import { aurionQuestInstances, aurionQuestReceipts } from "../../drizzle/schema";
 import { computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import type { QuestInstance } from "../../shared/aurionQuestContract";
 import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
@@ -39,18 +38,7 @@ function testSocket() {
 
 describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
   beforeEach(() => cleanupQuestRegressionUser(TEST_USER_ID));
-  afterEach(async () => {
-    await cleanupQuestRegressionUser(TEST_USER_ID);
-    const db = await getDb();
-    if (!db) return;
-    const instances = await db.select({ id: aurionQuestInstances.id }).from(aurionQuestInstances).where(eq(aurionQuestInstances.playerUserId, TEST_USER_ID));
-    for (const instance of instances) {
-      const receipts = await db.select({ id: aurionQuestReceipts.id }).from(aurionQuestReceipts).where(eq(aurionQuestReceipts.instanceId, instance.id));
-      for (const receipt of receipts) await db.delete(aurionQuestCausalAnchors).where(eq(aurionQuestCausalAnchors.questReceiptId, receipt.id));
-      await db.delete(aurionQuestReceipts).where(eq(aurionQuestReceipts.instanceId, instance.id));
-      await db.delete(aurionQuestInstances).where(eq(aurionQuestInstances.id, instance.id));
-    }
-  });
+  afterEach(() => cleanupQuestRegressionUser(TEST_USER_ID));
 
   it("persists one real causal anchor/temporal/effect closure, retries idempotently, and rolls back a poisoned effect", async () => {
     const db = await getDb();
