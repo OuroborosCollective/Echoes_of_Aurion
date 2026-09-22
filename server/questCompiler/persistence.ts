@@ -29,6 +29,7 @@ export class QuestPersistenceEngine {
   private receipts = new Map<string, QuestReceipt>();
   private templates = new Map<string, QuestTemplateVersion>();
   private proposals = new Map<string, QuestAdminProposal>();
+  private instanceLocks = new Map<string, Promise<void>>();
 
   private templateKey(templateId: string, version: number) { return `${templateId}:v${version}`; }
 
@@ -252,6 +253,121 @@ export class QuestPersistenceEngine {
     if (filter?.playerUserId !== undefined) rows = rows.filter(row => row.playerUserId === filter.playerUserId);
     if (filter?.state !== undefined) rows = rows.filter(row => row.state === filter.state);
     return rows.map(row => QuestInstanceSchema.parse(JSON.parse(row.instanceJson)));
+  }
+
+  private async withInstanceLock<T>(instanceId: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.instanceLocks.get(instanceId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>(resolve => { release = resolve; });
+    this.instanceLocks.set(instanceId, current);
+    await previous;
+    try {
+      return await work();
+    } finally {
+      release();
+      if (this.instanceLocks.get(instanceId) === current) this.instanceLocks.delete(instanceId);
+    }
+  }
+
+  public async commitObjectiveTransition(input: {
+    instanceId: string;
+    expectedStateHash: string;
+    idempotencyKey: string;
+    receipt: QuestReceipt;
+    updatedInstance: QuestInstance;
+  }): Promise<{ updatedInstance: QuestInstance; receipt: QuestReceipt; replayed: boolean }> {
+    return this.withInstanceLock(input.instanceId, async () => {
+      const db = await getDb();
+      if (!db) {
+        const replay = [...this.receipts.values()].find(receipt =>
+          receipt.instanceId === input.instanceId && receipt.idempotencyKey === input.idempotencyKey
+        );
+        if (replay) {
+          if (replay.receiptHash !== input.receipt.receiptHash || replay.resultStateHash !== input.receipt.resultStateHash) {
+            throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+          }
+          const current = this.instances.get(input.instanceId);
+          if (!current) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
+          return { updatedInstance: current, receipt: replay, replayed: true };
+        }
+        const current = this.instances.get(input.instanceId);
+        if (!current) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
+        const currentHash = computeCanonicalHash("aurion.quest.instance.v1", current);
+        if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
+          throw new Error("QUEST_RUNTIME_STALE_STATE");
+        }
+        const lastSequence = [...this.receipts.values()]
+          .filter(receipt => receipt.instanceId === input.instanceId)
+          .reduce((max, receipt) => Math.max(max, receipt.eventSequence), 0);
+        if (input.receipt.eventSequence !== lastSequence + 1) throw new Error("QUEST_RUNTIME_SEQUENCE_CONFLICT");
+        this.instances.set(input.instanceId, input.updatedInstance);
+        this.receipts.set(input.receipt.id, input.receipt);
+        return { updatedInstance: input.updatedInstance, receipt: input.receipt, replayed: false };
+      }
+
+      return db.transaction(async tx => {
+        const replayRow = (await tx.select().from(aurionQuestReceipts)
+          .where(eq(aurionQuestReceipts.idempotencyKey, input.idempotencyKey)).limit(1))[0];
+        if (replayRow) {
+          if (replayRow.instanceId !== input.instanceId || replayRow.receiptHash !== input.receipt.receiptHash || replayRow.resultStateHash !== input.receipt.resultStateHash) {
+            throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+          }
+          const instanceRow = (await tx.select().from(aurionQuestInstances)
+            .where(eq(aurionQuestInstances.id, input.instanceId)).limit(1))[0];
+          if (!instanceRow) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
+          const instance = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
+          const receipt = QuestReceiptSchema.parse({
+            id: replayRow.id,
+            instanceId: replayRow.instanceId,
+            eventSequence: replayRow.eventSequence,
+            planHash: replayRow.planHash,
+            graphHash: replayRow.graphHash,
+            previousStateHash: replayRow.previousStateHash,
+            resultStateHash: replayRow.resultStateHash,
+            idempotencyKey: replayRow.idempotencyKey,
+            receiptHash: replayRow.receiptHash,
+            createdAt: replayRow.createdAt.toISOString(),
+          });
+          this.instances.set(instance.id, instance);
+          this.receipts.set(receipt.id, receipt);
+          return { updatedInstance: instance, receipt, replayed: true };
+        }
+
+        const instanceRow = (await tx.select().from(aurionQuestInstances)
+          .where(eq(aurionQuestInstances.id, input.instanceId)).for("update").limit(1))[0];
+        if (!instanceRow) throw new Error(`QUEST_INSTANCE_NOT_FOUND:${input.instanceId}`);
+        const current = QuestInstanceSchema.parse(JSON.parse(instanceRow.instanceJson));
+        const currentHash = computeCanonicalHash("aurion.quest.instance.v1", current);
+        if (currentHash !== input.expectedStateHash || input.receipt.previousStateHash !== currentHash) {
+          throw new Error("QUEST_RUNTIME_STALE_STATE");
+        }
+        const lastReceipt = (await tx.select().from(aurionQuestReceipts)
+          .where(eq(aurionQuestReceipts.instanceId, input.instanceId))
+          .orderBy(desc(aurionQuestReceipts.eventSequence)).limit(1))[0];
+        const nextSequence = (lastReceipt?.eventSequence ?? 0) + 1;
+        if (input.receipt.eventSequence !== nextSequence) throw new Error("QUEST_RUNTIME_SEQUENCE_CONFLICT");
+
+        await tx.insert(aurionQuestReceipts).values({
+          id: input.receipt.id,
+          instanceId: input.receipt.instanceId,
+          eventSequence: input.receipt.eventSequence,
+          planHash: input.receipt.planHash,
+          graphHash: input.receipt.graphHash,
+          previousStateHash: input.receipt.previousStateHash,
+          resultStateHash: input.receipt.resultStateHash,
+          idempotencyKey: input.receipt.idempotencyKey,
+          receiptHash: input.receipt.receiptHash,
+        });
+        await tx.update(aurionQuestInstances).set({
+          currentNodeId: input.updatedInstance.currentNodeId,
+          state: input.updatedInstance.state,
+          instanceJson: JSON.stringify(input.updatedInstance),
+        }).where(eq(aurionQuestInstances.id, input.instanceId));
+        this.instances.set(input.instanceId, input.updatedInstance);
+        this.receipts.set(input.receipt.id, input.receipt);
+        return { updatedInstance: input.updatedInstance, receipt: input.receipt, replayed: false };
+      });
+    });
   }
 
   public async saveReceipt(raw: QuestReceipt): Promise<void> {
