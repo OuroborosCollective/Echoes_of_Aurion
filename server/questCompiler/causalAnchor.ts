@@ -9,6 +9,8 @@ import {
   AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
   createQuestCausalAnchor,
   type QuestCausalAnchor,
+  QuestCausalAnchorSchema,
+  verifyQuestCausalAnchor,
 } from "../../shared/aurionQuestCausalAnchorContract";
 import { type AurionCausalTickReceipt, computeReceiptHash } from "../../shared/aurionCausalTickContract";
 import { getDb } from "../db";
@@ -25,7 +27,6 @@ const RANGE_PAGE_SIZE = 256;
 
 function sourceMatches(instance: QuestInstance, plan: QuestPlan, source: QuestCompleteSource): void {
   const checks: Array<[string, unknown, unknown]> = [
-    ["worldId", instance.worldId, instance.worldId],
     ["triggerEventId", instance.triggerEventId, source.triggerEventId],
     ["triggerEventDigest", instance.triggerEventDigest, source.triggerEventDigest],
     ["compilerVersion", instance.compilerVersion, source.compilerVersion],
@@ -37,6 +38,7 @@ function sourceMatches(instance: QuestInstance, plan: QuestPlan, source: QuestCo
     ["planHash", instance.planHash, plan.planHash],
     ["graphHash", instance.graphHash, plan.graphHash],
   ];
+  if (!instance.worldId.trim()) throw new Error("QUEST_CAUSAL_SOURCE_WORLD_ID_INVALID");
   for (const [name, actual, expected] of checks) {
     if (actual !== undefined && actual !== expected) throw new Error(`QUEST_CAUSAL_SOURCE_${name.toUpperCase()}_MISMATCH`);
   }
@@ -220,6 +222,70 @@ export async function resolveQuestCausalAnchor(input: {
   });
 
   return Object.freeze({ anchor, receipt: found.receipt });
+}
+
+export async function readQuestCausalAnchorByReceiptId(questReceiptId: string): Promise<QuestCausalAnchor> {
+  if (!questReceiptId.trim()) throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_ID_INVALID");
+  const db = await getDb();
+  if (!db) throw new Error("QUEST_CAUSAL_DATABASE_UNAVAILABLE");
+  const row = (await db.select().from(aurionQuestCausalAnchors)
+    .where(eq(aurionQuestCausalAnchors.questReceiptId, questReceiptId))
+    .limit(1))[0];
+  if (!row) throw new Error("QUEST_CAUSAL_ANCHOR_UNPROVABLE");
+
+  const anchor = QuestCausalAnchorSchema.parse({
+    schema: AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
+    questReceiptId: row.questReceiptId,
+    worldId: row.worldId,
+    epoch: row.epoch,
+    zoneId: row.zoneId,
+    tick: row.tick,
+    causalReceiptHash: row.causalReceiptHash,
+    sourceWorldRoot: row.sourceWorldRoot,
+    sourceRevision: row.sourceRevision,
+    rulesetVersion: row.rulesetVersion,
+    sourceEvidenceId: row.sourceEvidenceId,
+    sourceEvidenceDigest: row.sourceEvidenceDigest,
+    sourceLogicalRevision: row.sourceLogicalRevision,
+    triggerEventId: row.triggerEventId,
+    triggerEventDigest: row.triggerEventDigest,
+    compilerVersion: row.compilerVersion,
+    templateSetHash: row.templateSetHash,
+    candidateSetHash: row.candidateSetHash,
+    seedDigest: row.seedDigest,
+    roleBindingHash: row.roleBindingHash,
+    commandId: row.commandId,
+    planHash: row.planHash,
+    graphHash: row.graphHash,
+    previousStateHash: row.previousStateHash,
+    resultStateHash: row.resultStateHash,
+    anchorHash: row.anchorHash,
+  });
+  if (!verifyQuestCausalAnchor(anchor)) throw new Error("QUEST_CAUSAL_ANCHOR_PERSISTED_HASH_MISMATCH");
+
+  const persisted = (await db.select().from(aurionCausalTickReceipts)
+    .where(and(
+      eq(aurionCausalTickReceipts.worldId, anchor.worldId),
+      eq(aurionCausalTickReceipts.receiptHash, anchor.causalReceiptHash),
+    )).limit(1))[0];
+  if (!persisted) throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_UNPROVABLE");
+  if (
+    persisted.zoneId !== anchor.zoneId ||
+    persisted.tick !== anchor.tick ||
+    persisted.revision !== anchor.sourceRevision ||
+    persisted.rulesetVersion !== anchor.rulesetVersion
+  ) throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_IDENTITY_MISMATCH");
+  decodeReceipt(persisted);
+
+  const root = await worldCausalRootService.read(anchor.worldId, anchor.epoch);
+  if (!root || root.status !== "VERIFIED" || root.root?.worldRootHash !== anchor.sourceWorldRoot) {
+    throw new Error("QUEST_CAUSAL_ANCHOR_WORLD_ROOT_UNPROVABLE");
+  }
+  const replay = await worldCausalRootService.replay(anchor.worldId, anchor.epoch);
+  if (replay.status !== "MATCH" || replay.worldRootHash !== anchor.sourceWorldRoot) {
+    throw new Error("QUEST_CAUSAL_ANCHOR_WORLD_ROOT_DIVERGENCE");
+  }
+  return anchor;
 }
 
 export function verifyQuestCausalAnchorAgainstCommand(anchor: QuestCausalAnchor, command: QuestDomainCommand, receipt: QuestReceipt): void {
