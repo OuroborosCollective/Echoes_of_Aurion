@@ -25,6 +25,6 @@ export const QuestDomainCommandSchema = z.discriminatedUnion("kind", [
     edgeId: z.string().trim().min(1).max(96),
   }),
   commandIdentitySchema.extend({ kind: z.literal("complete") }),
-]).strict();
+]);
 
 export type QuestDomainCommand = z.infer<typeof QuestDomainCommandSchema>;
