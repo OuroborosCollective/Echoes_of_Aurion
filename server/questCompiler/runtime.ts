@@ -7,6 +7,7 @@ import {
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash, computeQuestStateHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
 import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
+import { activeProvenance } from '../aurionProvenance';
 import { WorldFactEngine } from './worldFacts';
 import { QuestTemplateRegistry } from './templateRegistry';
 import { CandidateResolver } from './candidateResolver';
@@ -94,6 +95,7 @@ export class QuestRuntimeEngine {
     const instanceId = `qi_${params.playerUserId}_${winningTemplate.templateId}_${seedDigest.slice(0, 8)}`;
 
     const startNode = plan.nodes.find(n => n.type === 'start') || plan.nodes[0]!;
+    const triggerEvent = this.worldFactEngine.getEvents().find(event => event.id === params.triggerEventId);
 
     const instance: QuestInstance = {
       id: instanceId,
