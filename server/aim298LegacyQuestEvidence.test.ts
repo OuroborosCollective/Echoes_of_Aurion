@@ -5,11 +5,13 @@ import {
   verifyEncounterCompletionEvidenceIdentity,
 } from "../shared/aurionLegacyQuestBridgeContract";
 import { getLegacyQuestBridge, listLegacyQuestBridges } from "./legacyQuestBridge";
-import { deriveEncounterCompletionEvidence } from "./encounterCompletionEvidence";
+import { deriveEncounterCompletionEvidence, readEncounterCompletionEvidence } from "./encounterCompletionEvidence";
 import { matchesQuestObjectiveEvent } from "./questCompiler/eventBindingMatcher";
 import { encounterActionIdentity } from "./encounterIdentity";
 import { aurionEncounters, damageForMcpAction } from "./gameplayProtocol";
 import { gameplayActionReceipts, gameplaySessions } from "../drizzle/schema";
+import { cleanupQuestRegressionUser } from "./questRegressionFixture";
+import { applyGameplayAction, getDb, startGameplayEncounter } from "./db";
 
 type SessionRow = typeof gameplaySessions.$inferSelect;
 type ActionRow = typeof gameplayActionReceipts.$inferSelect;
@@ -44,6 +46,58 @@ function action(sequence: number, overrides: Partial<ActionRow> = {}): ActionRow
     ...overrides,
   };
 }
+
+
+const describeWithDatabase = process.env.AURION_ENCOUNTER_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
+const REAL_DB_EVIDENCE_USER_ID = 2_146_999_989;
+
+describeWithDatabase("AIM-298 durable encounter evidence", () => {
+  beforeEach(() => cleanupQuestRegressionUser(REAL_DB_EVIDENCE_USER_ID));
+  afterEach(() => cleanupQuestRegressionUser(REAL_DB_EVIDENCE_USER_ID));
+
+  it("reconstructs the canonical completion evidence from real MariaDB rows", async () => {
+    const db = await getDb();
+    expect(db).not.toBeNull();
+    if (!db) return;
+
+    const encounter = await startGameplayEncounter({
+      userId: REAL_DB_EVIDENCE_USER_ID,
+      encounterKey: "asterion",
+    });
+    for (const sequence of [1, 2, 3]) {
+      const result = await applyGameplayAction({
+        userId: REAL_DB_EVIDENCE_USER_ID,
+        sessionId: encounter.session.id,
+        sequence,
+        command: "9",
+        source: "human",
+      });
+      expect(result.completed).toBe(sequence === 3);
+    }
+
+    const rows = await db.select().from(gameplayActionReceipts);
+    const sessionRows = await db.select().from(gameplaySessions);
+    expect(rows.filter(row => row.sessionId === encounter.session.id && row.userId === REAL_DB_EVIDENCE_USER_ID)).toHaveLength(3);
+    expect(sessionRows.find(row => row.id === encounter.session.id)).toMatchObject({
+      status: "completed",
+      bossHp: 0,
+      nextSequence: 4,
+    });
+
+    const evidence = await readEncounterCompletionEvidence(
+      REAL_DB_EVIDENCE_USER_ID,
+      encounter.session.id,
+    );
+    expect(evidence).toMatchObject({
+      encounterKey: "asterion",
+      completionSequence: 3,
+      actionCount: 3,
+      finalBossHp: 0,
+      maxBossHp: 112,
+    });
+    expect(verifyEncounterCompletionEvidenceIdentity(evidence)).toBe(true);
+  });
+});
 
 describe("AIM-298 legacy quest bridge", () => {
   it("represents all six established QuestKeys without changing their source semantics", () => {
