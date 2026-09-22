@@ -180,7 +180,7 @@ describe("AIM-298 legacy quest bridge", () => {
   it("rejects missing or duplicated sequence evidence", () => {
     expect(() => deriveEncounterCompletionEvidence({
       session: session(),
-      receipts: [action(1), action(3)],
+      receipts: [action(1), action(3), action(4)],
     })).toThrow("NON_CONTIGUOUS_ACTION_CHAIN");
 
     expect(() => deriveEncounterCompletionEvidence({
