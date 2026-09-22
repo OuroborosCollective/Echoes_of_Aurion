@@ -20,7 +20,12 @@ export function materializeQuestDomainCommand(
   if (instance.id !== input.instanceId) {
     throw new Error("QUEST_MATERIALIZATION_INSTANCE_MISMATCH");
   }
-  if (instance.planHash !== input.planHash || instance.graphHash !== input.graphHash) {
+  if (
+    instance.planHash !== input.planHash ||
+    instance.graphHash !== input.graphHash ||
+    plan.planHash !== instance.planHash ||
+    plan.graphHash !== instance.graphHash
+  ) {
     throw new Error("QUEST_MATERIALIZATION_PLAN_MISMATCH");
   }
 
