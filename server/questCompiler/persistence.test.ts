@@ -26,20 +26,20 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
   function transition(sourceInstance: QuestInstance = instance) {
     const previousStateHash = computeCanonicalHash("aurion.quest.instance.v1", sourceInstance);
     const updatedInstance: QuestInstance = {
-      ...instance,
+      ...sourceInstance,
       objectiveProgress: { investigate: 1 },
       updatedAt: "2026-09-22T00:00:01.000Z",
     };
     const resultStateHash = computeCanonicalHash("aurion.quest.instance.v1", updatedInstance);
     const receipt: QuestReceipt = {
       id: "rcpt_test_458",
-      instanceId: instance.id,
+      instanceId: sourceInstance.id,
       eventSequence: 1,
-      planHash: instance.planHash,
-      graphHash: instance.graphHash,
+      planHash: sourceInstance.planHash,
+      graphHash: sourceInstance.graphHash,
       previousStateHash,
       resultStateHash,
-      idempotencyKey: "event:test-source-1:instance:qi_test_458:objective:investigate",
+      idempotencyKey: `event:test-source-1:instance:${sourceInstance.id}:objective:investigate`,
       receiptHash: computeCanonicalHash("aurion.quest.event.v1", { previousStateHash, resultStateHash }),
       createdAt: "2026-09-22T00:00:01.000Z",
     };
@@ -79,22 +79,22 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
     await persistence.saveInstance(staleInstance);
     const first = transition(staleInstance);
     await persistence.commitObjectiveTransition({
-      instanceId: instance.id,
+      instanceId: staleInstance.id,
       expectedStateHash: first.previousStateHash,
       idempotencyKey: first.receipt.idempotencyKey,
       receipt: first.receipt,
       updatedInstance: first.updatedInstance,
     });
 
-    const staleReceipt = { ...first.receipt, id: "rcpt_stale_458", eventSequence: 2, idempotencyKey: "event:test-source-2:instance:qi_test_458:objective:investigate" };
+    const staleReceipt = { ...first.receipt, id: "rcpt_stale_458", eventSequence: 2, idempotencyKey: `event:test-source-2:instance:${staleInstance.id}:objective:investigate` };
     await expect(persistence.commitObjectiveTransition({
-      instanceId: instance.id,
+      instanceId: staleInstance.id,
       expectedStateHash: first.previousStateHash,
       idempotencyKey: staleReceipt.idempotencyKey,
       receipt: staleReceipt,
       updatedInstance: { ...first.updatedInstance, objectiveProgress: { investigate: 2 } },
     })).rejects.toThrow("QUEST_RUNTIME_STALE_STATE");
 
-    expect((await persistence.getReceiptsForInstance(instance.id))).toHaveLength(1);
+    expect((await persistence.getReceiptsForInstance(staleInstance.id))).toHaveLength(1);
   });
 });
