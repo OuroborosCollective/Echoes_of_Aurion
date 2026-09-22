@@ -68,9 +68,9 @@ export const QuestObjectiveRequirementSchema = z.object({
   targetValue: z.union([z.number(), z.string(), z.boolean()]),
   description: z.string().optional(),
   eventBinding: z.object({
-    source: z.enum(["world_chunk_delta", "group_instance"]),
-    event: z.enum(["resource_depleted", "structure_placed", "structure_removed", "road_built", "cleared"]),
-    matchField: z.enum(["targetId", "resourceKind", "assetKey", "dungeonId"]).nullable().default(null),
+    source: z.enum(["world_chunk_delta", "group_instance", "encounter"]),
+    event: z.enum(["resource_depleted", "structure_placed", "structure_removed", "road_built", "cleared", "completed"]),
+    matchField: z.enum(["targetId", "resourceKind", "assetKey", "dungeonId", "encounterKey"]).nullable().default(null),
     matchValue: z.string().min(1).max(128).nullable().default(null),
   }).strict().optional(),
 });
