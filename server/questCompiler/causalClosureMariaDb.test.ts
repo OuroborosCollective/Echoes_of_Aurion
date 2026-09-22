@@ -8,14 +8,13 @@ import {
 } from "../../drizzle/aurionCausalitySchema";
 import { aurionQuestInstances, aurionQuestReceipts } from "../../drizzle/schema";
 import { computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
-import type { QuestInstance, QuestPlan } from "../../shared/aurionQuestContract";
+import type { QuestInstance } from "../../shared/aurionQuestContract";
 import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
 import {
   readQuestCausalAnchorByReceiptId,
   resolveQuestCausalAnchor,
 } from "./causalAnchor";
 import { buildQuestCausalClosure } from "./causalClosure";
-import { AdminQuestStudioService } from "./adminService";
 import { QuestPersistenceEngine } from "./persistence";
 import { QuestRuntimeEngine } from "./runtime";
 import { QuestTemplateRegistry } from "./templateRegistry";
@@ -28,7 +27,6 @@ import { cleanupQuestRegressionUser } from "../questRegressionFixture";
 import { applyGameplayAction, getDb, startGameplayEncounter } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalTickRecorder } from "../causality/tickRecorder";
-import { resolveAndRecordGlobalWorldEpoch } from "../db";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
 
 const describeReal = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_QUEST_CAUSAL_E2E === "1" && process.env.AURION_ENCOUNTER_E2E === "1" ? describe : describe.skip;
@@ -241,8 +239,40 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     });
     expect(committed.replayed).toBe(false);
 
-    // 6. Physical readback of every authority.
-    const storedAnchor = await readQuestCausalAnchorByReceiptId(completion.receipt.id);
+    // 6. Rollback proof must run before the first successful completion so the quest is still active.
+    const poisonedClosure = {
+      ...closure,
+      effectIntents: Object.freeze([
+        ...closure.effectIntents.slice(0, -1),
+        { ...closure.effectIntents.at(-1)!, authorityReceiptHash: "sha256:" + "0".repeat(64) },
+      ]),
+    };
+    const rollbackReceipt = {
+      ...completion.receipt,
+      id: `rcpt_${completion.receipt.id}_rollback`,
+      eventSequence: 3,
+      idempotencyKey: `complete:${offered.instance.id}:rollback`,
+    };
+    const rollbackInstance = {
+      ...completion.updatedInstance,
+      updatedAt: "2026-01-01T00:00:03.000Z",
+    } as QuestInstance;
+    await expect(persistence.commitObjectiveTransition({
+      instanceId: progressedCommitted.updatedInstance.id,
+      expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
+      idempotencyKey: rollbackReceipt.idempotencyKey,
+      receipt: rollbackReceipt,
+      updatedInstance: rollbackInstance,
+      causalClosure: poisonedClosure,
+    })).rejects.toThrow("EFFECT_AUTHORITY_RECEIPT_UNPROVABLE");
+
+    expect(await db.select().from(aurionQuestReceipts).where(eq(aurionQuestReceipts.id, rollbackReceipt.id))).toHaveLength(0);
+    expect(await db.select().from(aurionQuestCausalAnchors).where(eq(aurionQuestCausalAnchors.questReceiptId, rollbackReceipt.id))).toHaveLength(0);
+    expect(await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, poisonedClosure.temporalEvent.eventId))).toHaveLength(0);
+    expect(await db.select().from(aurionEffectIntents).where(eq(aurionEffectIntents.effectId, poisonedClosure.effectIntents.at(-1)!.effectId))).toHaveLength(0);
+
+    // 7. Physical readback of every authority after the successful commit.
+     const storedAnchor = await readQuestCausalAnchorByReceiptId(completion.receipt.id);
     expect(storedAnchor.anchorHash).toBe(closure.anchor.anchorHash);
     expect(storedAnchor.causalReceiptHash).toBe(closure.anchor.causalReceiptHash);
 
@@ -257,7 +287,7 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     const temporalRows = await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, closure.temporalEvent.eventId));
     expect(temporalRows).toHaveLength(1);
 
-    // 7. Exact duplicate retry = one durable closure.
+    // 8. Exact duplicate retry = one durable closure.
     const replayed = await persistence.commitObjectiveTransition({
       instanceId: progressedCommitted.updatedInstance.id,
       expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
