@@ -6,6 +6,7 @@ import {
 import { type QuestInstance, type QuestPlan, type QuestReceipt } from "../../shared/aurionQuestContract";
 import { type QuestCompleteSource, type QuestDomainCommand } from "../../shared/aurionQuestDomainCommandContract";
 import {
+  AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
   createQuestCausalAnchor,
   type QuestCausalAnchor,
 } from "../../shared/aurionQuestCausalAnchorContract";
@@ -69,7 +70,7 @@ function sameHandIn(intent: AurionQuestHandInIntent, command: QuestDomainCommand
     roleBindingHash: source.roleBindingHash,
   };
   for (const [key, value] of Object.entries(expected)) {
-    if ((intent as Record<string, unknown>)[key] !== value) return false;
+    if ((intent as unknown as Record<string, unknown>)[key] !== value) return false;
   }
   return intent.questId === questId;
 }
@@ -191,6 +192,7 @@ export async function resolveQuestCausalAnchor(input: {
 
   const found = await findRealCausalReceipt(db, input.instance.worldId, input.command, input.command, input.instance.templateId);
   const anchor = createQuestCausalAnchor({
+    schema: AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
     questReceiptId: input.receipt.id,
     worldId: input.instance.worldId,
     epoch: found.epoch,
