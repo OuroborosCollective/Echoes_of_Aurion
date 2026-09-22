@@ -6,13 +6,16 @@ import {
 import { type QuestInstance, type QuestPlan } from "../../shared/aurionQuestContract";
 import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 
-type MaterializationInput =
-  Omit<QuestDomainCommand, "commandId" | "schemaVersion">;
+export type QuestDomainCommandInput =
+  | Omit<Extract<QuestDomainCommand, { kind: "accept" }>, "commandId" | "schemaVersion">
+  | Omit<Extract<QuestDomainCommand, { kind: "progress" }>, "commandId" | "schemaVersion">
+  | Omit<Extract<QuestDomainCommand, { kind: "choice" }>, "commandId" | "schemaVersion">
+  | Omit<Extract<QuestDomainCommand, { kind: "complete" }>, "commandId" | "schemaVersion">;
 
 export function materializeQuestDomainCommand(
   instance: QuestInstance,
   plan: QuestPlan,
-  input: MaterializationInput,
+  input: QuestDomainCommandInput,
 ): QuestDomainCommand {
   if (instance.id !== input.instanceId) {
     throw new Error("QUEST_MATERIALIZATION_INSTANCE_MISMATCH");
