@@ -22,7 +22,6 @@ import { QuestTemplateRegistry } from "./templateRegistry";
 import { WorldFactEngine } from "./worldFacts";
 import { materializeQuestDomainCommand } from "./materialization";
 import {
-  deriveEncounterCompletionEvidence,
   readEncounterCompletionEvidence,
 } from "../encounterCompletionEvidence";
 import { cleanupQuestRegressionUser } from "../questRegressionFixture";
@@ -32,7 +31,7 @@ import { globalTickRecorder } from "../causality/tickRecorder";
 import { resolveAndRecordGlobalWorldEpoch } from "../db";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
 
-const describeReal = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_QUEST_CAUSAL_E2E === "1" ? describe : describe.skip;
+const describeReal = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_QUEST_CAUSAL_E2E === "1" && process.env.AURION_ENCOUNTER_E2E === "1" ? describe : describe.skip;
 const TEST_USER_ID = 2_146_999_991;
 const WORLD_ID = "echoes-of-aurion-global";
 
