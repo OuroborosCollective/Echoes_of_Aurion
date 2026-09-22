@@ -26,8 +26,7 @@ export class WorldFactEngine {
       if (
         existing.type !== event.type ||
         existing.source !== event.source ||
-        existing.payloadHash !== payloadHash ||
-        JSON.stringify(existing.data ?? {}) !== JSON.stringify(event.data ?? {})
+        existing.payloadHash !== payloadHash
       ) {
         throw new Error('WORLD_EVENT_ID_CONFLICT:' + event.id);
       }
@@ -97,8 +96,7 @@ export class WorldFactEngine {
         existing.sequence !== event.sequence ||
         existing.type !== event.type ||
         existing.source !== event.source ||
-        existing.payloadHash !== event.payloadHash ||
-        JSON.stringify(existing.data ?? {}) !== JSON.stringify(event.data ?? {})
+        existing.payloadHash !== event.payloadHash
       ) {
         throw new Error('WORLD_EVENT_ID_CONFLICT:' + event.id);
       }
