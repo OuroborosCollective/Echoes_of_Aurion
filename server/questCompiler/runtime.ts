@@ -154,7 +154,13 @@ export class QuestRuntimeEngine {
 
     switch (parsed.kind) {
       case "accept":
-        return { kind: parsed.kind, ...this.acceptQuest(instance, plan) } as const;
+        return {
+          kind: parsed.kind,
+          ...this.acceptQuest(instance, plan, {
+            eventSequence: parsed.eventSequence,
+            idempotencyKey: parsed.idempotencyKey,
+          }),
+        } as const;
       case "progress":
         return {
           kind: parsed.kind,
@@ -182,7 +188,11 @@ export class QuestRuntimeEngine {
     }
   }
 
-  public acceptQuest(instance: QuestInstance, plan: QuestPlan): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
+  public acceptQuest(
+    instance: QuestInstance,
+    plan: QuestPlan,
+    options?: { eventSequence?: number; idempotencyKey?: string },
+  ): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
     if (instance.state !== 'offered') {
       throw new Error(`CANNOT_ACCEPT_QUEST_IN_STATE:${instance.state}`);
     }
@@ -209,12 +219,12 @@ export class QuestRuntimeEngine {
     const receipt: QuestReceipt = {
       id: `rcpt_${instance.id}_accept`,
       instanceId: instance.id,
-      eventSequence: 1,
+      eventSequence: options?.eventSequence ?? 1,
       planHash: instance.planHash,
       graphHash: instance.graphHash,
       previousStateHash,
       resultStateHash,
-      idempotencyKey: `accept:${instance.id}`,
+      idempotencyKey: options?.idempotencyKey ?? `accept:${instance.id}`,
       receiptHash: computeCanonicalHash('aurion.quest.event.v1', { previousStateHash, resultStateHash }),
       createdAt: occurredAt,
     };
