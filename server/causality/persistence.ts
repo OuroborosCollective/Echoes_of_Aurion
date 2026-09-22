@@ -24,6 +24,12 @@ import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry }
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
+// Replay-run IDs are persistence identities only; canonical run dimensions remain
+// explicit columns. Keep the storage key bounded independently of world/zone names.
+export function replayRunPersistenceId(): string {
+  return `run_${randomUUID().replaceAll("-", "")}`;
+}
+
 function compactCausalPersistenceId(
   prefix: "rcpt" | "chk",
   identity: { worldId: string; zoneId: string; tick: number },
@@ -116,7 +122,7 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     await db.insert(aurionReplayRuns).values({
-      id: `run_${run.worldId}_${run.zoneId}_${run.fromTick}_${run.toTick}_${randomUUID()}`,
+      id: replayRunPersistenceId(),
       worldId: run.worldId, zoneId: run.zoneId, fromTick: run.fromTick, toTick: run.toTick,
       sourceRevision: run.sourceRevision, runtimeRuleset: run.runtimeRuleset, status: run.status,
       firstDivergentStage: run.firstDivergentStage, expectedHash: run.expectedHash, observedHash: run.observedHash,
