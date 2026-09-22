@@ -5,7 +5,7 @@ import {
   QuestRuntimeEvent,
   WorldEvent,
 } from '../../shared/aurionQuestContract';
-import { computeCanonicalHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
+import { computeCanonicalHash, computeQuestStateHash, computeSeedDigest } from '../../shared/aurionQuestCanonicalHash';
 import { OperationalClock, hostOperationalClock, operationalDate } from '../../shared/operationalClock';
 import { WorldFactEngine } from './worldFacts';
 import { QuestTemplateRegistry } from './templateRegistry';
@@ -130,7 +130,7 @@ export class QuestRuntimeEngine {
     if (outgoing.length !== 1) throw new Error("QUEST_ACCEPT_START_EDGE_AMBIGUOUS");
 
     const occurredAt = operationalDate(this.clock).toISOString();
-    const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
+    const previousStateHash = computeQuestStateHash(instance);
     const updatedInstance: QuestInstance = {
       ...instance,
       state: 'active',
@@ -139,7 +139,7 @@ export class QuestRuntimeEngine {
       updatedAt: occurredAt,
     };
 
-    const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
+    const resultStateHash = computeQuestStateHash(updatedInstance);
 
     const receipt: QuestReceipt = {
       id: `rcpt_${instance.id}_accept`,
@@ -173,7 +173,7 @@ export class QuestRuntimeEngine {
     if (!currentNode?.objective || currentNode.objective.key !== objectiveKey) throw new Error("QUEST_OBJECTIVE_KEY_MISMATCH");
 
     const occurredAt = operationalDate(this.clock).toISOString();
-    const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
+    const previousStateHash = computeQuestStateHash(instance);
     const currentProgress = (instance.objectiveProgress[objectiveKey] as number) || 0;
     const newProgress = currentProgress + amount;
 
@@ -204,7 +204,7 @@ export class QuestRuntimeEngine {
       updatedAt: occurredAt,
     };
 
-    const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
+    const resultStateHash = computeQuestStateHash(updatedInstance);
     const eventSequence = options?.eventSequence ?? instance.completedNodeIds.length + 2;
 
     const receiptIdentity = computeCanonicalHash(
@@ -239,7 +239,8 @@ export class QuestRuntimeEngine {
   public chooseBranch(
     instance: QuestInstance,
     plan: QuestPlan,
-    edgeId: string
+    edgeId: string,
+    options?: { eventSequence?: number; idempotencyKey?: string }
   ): { updatedInstance: QuestInstance; receipt: QuestReceipt } {
     if (instance.state !== "active") throw new Error(`CANNOT_CHOOSE_INACTIVE_QUEST:${instance.state}`);
     const node = plan.nodes.find(candidate => candidate.id === instance.currentNodeId);
@@ -260,7 +261,7 @@ export class QuestRuntimeEngine {
       updatedAt: occurredAt,
     };
     const resultStateHash = computeCanonicalHash("aurion.quest.instance.v1", updatedInstance);
-    const eventSequence = completedNodeIds.length + 2;
+    const eventSequence = options?.eventSequence ?? completedNodeIds.length + 2;
     const receiptIdentity = computeCanonicalHash("aurion.quest.receipt.identity.v1", {
       instanceId: instance.id,
       edgeId,
@@ -276,7 +277,7 @@ export class QuestRuntimeEngine {
       graphHash: instance.graphHash,
       previousStateHash,
       resultStateHash,
-      idempotencyKey: `choice:${instance.id}:${edgeId}`,
+      idempotencyKey: options?.idempotencyKey ?? `choice:${instance.id}:${edgeId}`,
       receiptHash: computeCanonicalHash("aurion.quest.event.v1", { previousStateHash, resultStateHash }),
       createdAt: occurredAt,
     };
@@ -285,21 +286,22 @@ export class QuestRuntimeEngine {
 
   public completeQuest(
     instance: QuestInstance,
-    plan: QuestPlan
+    plan: QuestPlan,
+    options?: { eventSequence?: number; idempotencyKey?: string }
   ): { updatedInstance: QuestInstance; receipt: QuestReceipt; emittedWorldEvent: WorldEvent } {
     if (instance.state !== 'active') {
       throw new Error(`CANNOT_COMPLETE_QUEST_IN_STATE:${instance.state}`);
     }
 
     const occurredAt = operationalDate(this.clock).toISOString();
-    const previousStateHash = computeCanonicalHash('aurion.quest.instance.v1', instance);
+    const previousStateHash = computeQuestStateHash(instance);
     const updatedInstance: QuestInstance = {
       ...instance,
       state: 'completed',
       updatedAt: occurredAt,
     };
 
-    const resultStateHash = computeCanonicalHash('aurion.quest.instance.v1', updatedInstance);
+    const resultStateHash = computeQuestStateHash(updatedInstance);
 
     // Apply outcomes & emit canonical WorldEvent
     const primaryOutcome = plan.outcomes[0];
@@ -315,15 +317,24 @@ export class QuestRuntimeEngine {
       },
     });
 
-    const receipt: QuestReceipt = {
-      id: `rcpt_${instance.id}_complete`,
+    const eventSequence = options?.eventSequence ?? instance.completedNodeIds.length + 3;
+    const idempotencyKey = options?.idempotencyKey ?? `complete:${instance.id}`;
+    const receiptIdentity = computeCanonicalHash('aurion.quest.receipt.identity.v1', {
       instanceId: instance.id,
-      eventSequence: instance.completedNodeIds.length + 3,
+      eventSequence,
+      previousStateHash,
+      resultStateHash,
+      idempotencyKey,
+    });
+    const receipt: QuestReceipt = {
+      id: `rcpt_${receiptIdentity.slice(0, 24)}`,
+      instanceId: instance.id,
+      eventSequence,
       planHash: instance.planHash,
       graphHash: instance.graphHash,
       previousStateHash,
       resultStateHash,
-      idempotencyKey: `complete:${instance.id}`,
+      idempotencyKey,
       receiptHash: computeCanonicalHash('aurion.quest.event.v1', { previousStateHash, resultStateHash }),
       createdAt: occurredAt,
     };
