@@ -73,6 +73,7 @@ export default function AurionOpenWorldRuntime() {
   const { user, isAuthenticated } = useAuth();
   const rpcUtils = trpc.useUtils();
   const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
+  const runtimePerformanceEvidenceRef = useRef<HTMLOutputElement>(null);
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
@@ -415,6 +416,56 @@ export default function AurionOpenWorldRuntime() {
     };
   }, [activation, selectedCharacterUrl, requestAuthoritativeAction, requestAuthoritativeMount, recoveryEpoch,
     worldSnapshot.data?.globalWorld?.epoch, worldSnapshot.data?.globalWorld?.worldSeed]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!readyGeneration || !engine || !runtimePerformanceEvidenceRef.current) return;
+    let disposed = false;
+    let raf = 0;
+    let previous = performance.now();
+    const frameTimes: number[] = [];
+    let maxRenderCalls = 0;
+    let maxTriangles = 0;
+    const sample = (now: number) => {
+      if (disposed) return;
+      const delta = now - previous;
+      previous = now;
+      if (Number.isFinite(delta) && delta > 0 && delta < 1_000) {
+        frameTimes.push(delta);
+        if (frameTimes.length > 180) frameTimes.shift();
+      }
+      const renderInfo = engine.renderer.info?.render;
+      if (renderInfo) {
+        maxRenderCalls = Math.max(maxRenderCalls, renderInfo.calls ?? 0);
+        maxTriangles = Math.max(maxTriangles, renderInfo.triangles ?? 0);
+      }
+      if (frameTimes.length >= 120 && runtimePerformanceEvidenceRef.current) {
+        const sorted = [...frameTimes].sort((a, b) => a - b);
+        const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))] ?? 0;
+        runtimePerformanceEvidenceRef.current.dataset.evidence = JSON.stringify({
+          schemaVersion: 1,
+          backend: engine.renderer ? "three-runtime" : "unknown",
+          samples: frameTimes.length,
+          frameTimeMs: {
+            p50: at(0.5),
+            p95: at(0.95),
+            p99: at(0.99),
+          },
+          render: {
+            maxCallsPerFrame: maxRenderCalls,
+            maxTrianglesPerFrame: maxTriangles,
+          },
+          interpretation: "Real active /play renderer readback. Browser timing/SwiftShader evidence is not native mobile GPU proof."
+        });
+      }
+      raf = requestAnimationFrame(sample);
+    };
+    raf = requestAnimationFrame(sample);
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [readyGeneration]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -775,6 +826,7 @@ export default function AurionOpenWorldRuntime() {
 
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
+      <output ref={runtimePerformanceEvidenceRef} data-testid="runtime-performance-evidence" hidden />
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
