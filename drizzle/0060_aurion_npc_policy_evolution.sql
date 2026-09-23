@@ -9,7 +9,6 @@ CREATE TABLE `aurionNpcPolicyVersions` (
   `createdAt` timestamp NOT NULL DEFAULT (now()),
   CONSTRAINT `aurionNpcPolicyVersions_id` PRIMARY KEY (`id`),
   UNIQUE KEY `aurionNpcPolicyVersions_npc_ver_uq` (`npcId`,`version`),
-  UNIQUE KEY `aurionNpcPolicyVersions_npc_hash_uq` (`npcId`,`policyHash`),
   KEY `aurionNpcPolicyVersions_npc_idx` (`npcId`)
 );
 --> statement-breakpoint
