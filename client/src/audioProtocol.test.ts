@@ -3,7 +3,7 @@ import { audioCueForCreature, audioCueForFootstep, audioCueForWeapon, isAudioEve
 
 describe("Aurion audio protocol", () => {
   it("maps every supported surface to a movement cue deterministically", () => {
-    expect(["earth", "sand", "grass", "stone", "wood", "water"].map(audioCueForFootstep)).toEqual([
+    expect(["earth", "sand", "grass", "stone", "wood", "water"].map(surface => audioCueForFootstep(surface))).toEqual([
       { cue: "movement.footstep.earth", category: "movement", surface: "earth", gait: "walk", stride: 0 },
       { cue: "movement.footstep.sand", category: "movement", surface: "sand", gait: "walk", stride: 0 },
       { cue: "movement.footstep.grass", category: "movement", surface: "grass", gait: "walk", stride: 0 },
