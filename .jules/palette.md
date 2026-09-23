@@ -21,3 +21,6 @@
 ## 2024-09-22 - [AIChatBox Accessibility Improvement]
 **Learning:** Icon-only buttons used for form submissions in reusable components like `AIChatBox` often lack visual tooltips and screen reader context, making them difficult to use for both sighted mouse/keyboard users and assistive technology users. Text areas without explicit labels also need `aria-label` attributes to ensure context is announced.
 **Action:** Always verify that input fields without explicit `<label>` tags have `aria-label` attributes, and ensure icon-only buttons include both an `aria-label` for screen readers and a `title` attribute to provide a visual tooltip.
+## 2026-09-23 - Disabled Loading States
+**Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
+**Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
