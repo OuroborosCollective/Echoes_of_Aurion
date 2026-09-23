@@ -68,12 +68,12 @@ describe("AIM-296 measurable BVH performance evidence", () => {
     nativeMesh = new THREE.Mesh(nativeGeometry, new THREE.MeshBasicMaterial());
     acceleratedMesh = new THREE.Mesh(acceleratedGeometry, new THREE.MeshBasicMaterial());
     acceleratedMesh.raycast = acceleratedRaycast;
-    acceleratedGeometry.computeBoundsTree();
+    computeBoundsTree.call(acceleratedGeometry);
     workload = rays(1024);
   });
 
   afterAll(() => {
-    acceleratedMesh.geometry.disposeBoundsTree();
+    disposeBoundsTree.call(acceleratedMesh.geometry);
     nativeMesh.geometry.dispose();
     nativeMesh.material.dispose();
     acceleratedMesh.geometry.dispose();
