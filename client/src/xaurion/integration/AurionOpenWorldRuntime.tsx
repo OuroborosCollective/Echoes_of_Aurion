@@ -74,6 +74,7 @@ export default function AurionOpenWorldRuntime() {
   const rpcUtils = trpc.useUtils();
   const worldAssetsEvidenceRef = useRef<HTMLOutputElement>(null);
   const runtimePerformanceEvidenceRef = useRef<HTMLOutputElement>(null);
+  const explorationMemoryEvidenceRef = useRef<HTMLOutputElement>(null);
   const [worldAssetsFailed, setWorldAssetsFailed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MMOEngine | null>(null);
@@ -359,6 +360,24 @@ export default function AurionOpenWorldRuntime() {
             if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify(status);
           } catch {
             if (!abort.signal.aborted && containerRef.current) containerRef.current.dataset.clientVerification = JSON.stringify({ status: "CLIENT_UNOBSERVABLE", trust: "untrusted-client-observation", mutationAuthority: "none" });
+          }
+        },
+        async ({ job, observedAtLogicalFrame }) => {
+          try {
+            if (abort.signal.aborted) return;
+            const result = await rpcUtils.gameplay.recordExplorationDiscovery.mutate({
+              epoch: world.epoch,
+              chunkX: job.manifest.coordinate.x,
+              chunkZ: job.manifest.coordinate.z,
+              observedAtLogicalFrame,
+            });
+            if (!abort.signal.aborted && explorationMemoryEvidenceRef.current) {
+              explorationMemoryEvidenceRef.current.dataset.readback = JSON.stringify(result);
+            }
+          } catch {
+            if (!abort.signal.aborted && explorationMemoryEvidenceRef.current) {
+              explorationMemoryEvidenceRef.current.dataset.readback = JSON.stringify({ status: "UNPROVABLE", mutationAuthority: "none" });
+            }
           }
         });
       abort.signal.addEventListener("abort", () => chunkProjection.dispose(), { once: true });
@@ -827,6 +846,7 @@ export default function AurionOpenWorldRuntime() {
       {!webglError && nearbySmith && <button className="ax1-npc-prompt" aria-label="Schmied ansprechen" onClick={requestWorldInteraction}><Hammer size={18} /> Schmied ansprechen <kbd>F</kbd></button>}
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
       <output ref={runtimePerformanceEvidenceRef} data-testid="runtime-performance-evidence" hidden />
+      <output ref={explorationMemoryEvidenceRef} data-testid="exploration-memory-evidence" hidden />
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
       {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
