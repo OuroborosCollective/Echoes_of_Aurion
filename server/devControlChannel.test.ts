@@ -81,9 +81,11 @@ describe("Aurion dev control fixture runtime", () => {
   });
 
   it("executes a deterministic encounter seed and rejects idempotency reuse with different arguments", () => {
+    const reset = executeReset("observatory_threshold", "dev-reset-key-00000002", "CONFIRM_DEV_ZONE_RESET");
     const first = executeSeed("observatory_threshold", "boss_encounter", "dev-seed-key-00000001");
     const retry = executeSeed("observatory_threshold", "boss_encounter", "dev-seed-key-00000001");
     expect(first).toEqual(retry);
+    expect(first.stateHash).not.toBe(reset.stateHash);
     expect(first.status).toBe("SEEDED");
     expect(first.selectedEntityIds).toEqual(["mob_6"]);
     expect(() => executeSeed("observatory_threshold", "starter_encounter", "dev-seed-key-00000001"))
