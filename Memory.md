@@ -397,8 +397,7 @@ Learned: A CI-only CLI is not an ingame dependency; live tooling needs immutable
 Open: Post-merge immutable deployment and public/PatchMon readback must establish the live revision before claiming production-green.
 Next safe step: Merge #330 under owner authorization, then read back main and the deployed gameDevelopmentStudio health identity.
 
-### 2026-09-14 — Quaternius shared-skeleton asset family draft
-Status: PARTIAL — repository/runtime contract verified; owner GLBs not admitted live.
+### 2026-09-14 — Quaternius shared-skeleton asset family draftStatus: PARTIAL — repository/runtime contract verified; owner GLBs not admitted live.
 Task: Prepare the CC0 Quaternius base/outfit packs for classless Aurion NPC/equipment presentation.
 Decisions: Bind rigged equipment only to exact ordered `quaternius-universal-65-v1`; preserve receipt/gameplay authority; treat a newer autonomous NPC mutable row as valid only when monotone and bound to its own immutable decision receipt.
 Touched surfaces: Shared rig/classifier/import plan, equipment projection, owner-asset provenance and AIM-292 readback contract.
@@ -797,8 +796,7 @@ Decisions:
 - **Archival Dashboard**: Added a "Causal Cold Storage" card to the operations UI to monitor archival health and storage efficiency.
 Touched surfaces: `drizzle/aurionCausalitySchema.ts`, `server/causality/persistence.ts`, `server/causality/tickRecorder.ts`, `server/causality/archivingService.ts`, `server/routes/causalityRouter.ts`, `server/_core/index.ts`, `client/src/components/CausalityDashboard.tsx`, `Memory.md`.
 Evidence: `compile_applet` successful; DDL executed for archival table; background service active and verified via server startup logs.
-Learned: Cold storage is essential for maintaining query performance in high-tick-rate simulations, transforming an infinite causal log into a manageable sequence of verified batches.
-### 2026-09-16 — Cross-Zone Causal Synchronization (Step 17)
+Learned: Cold storage is essential for maintaining query performance in high-tick-rate simulations, transforming an infinite causal log into a manageable sequence of verified batches.### 2026-09-16 — Cross-Zone Causal Synchronization (Step 17)
 Status: INTEGRATED; inter-zone protocol active
 Task: Implement Step 17 (Cross-Zone Causal Synchronization) for deterministic entity handover.
 Decisions:
@@ -1175,3 +1173,11 @@ Next safe step: Re-run the normal exact-head gates on this Memory-appended head,
 Änderung: Die bislang offenen AIM-298-Gates wurden gegen den aktuellen main-Stand technisch reconciled. Quest-Idempotency erhielt explizite Regressionen für parallele identische Transitions und widersprüchliche Wiederverwendung eines Idempotency-Keys; Quest-Replay verlangt nun unabhängiges Trigger-Event-Readback und erkennt Source-Digest-/Source-Revision-Abweichungen als FIRST_DIVERGENCE statt aus gespeichertem JSON ein MATCH abzuleiten; Admin-Quest-Replay speist die tatsächliche Source-Event-Menge ein; der Narrative-Adapter bekam einen Prompt-Injection-/Mutation-Isolations-Test.
 Erkenntnis: Persistierte Quest-Daten sind allein kein ausreichender Replay-Beweis. MATCH muss an verifizierte Quell-Evidence gebunden bleiben; Narrative-, MCP- und Authoring-Flächen bleiben abgeleitete bzw. typed plan→confirm Oberflächen und dürfen keine zweite Gameplay-Authority erzeugen.
 Evidence: Exact PR head 678c4816a09c175de854452c318fb1a5b3e367e9; Local Test Pack 35819284601 PASS (inkl. AIM-298 quest causal closure, replay, migration/readback, typecheck und full repository regression); Runtime Candidate 35819284546 PASS; Runtime Container Proof 35819284493 PASS. Gezielte Änderungen/Tests sind auf demselben Head enthalten. Kein zweiter Quest-Compiler/Event-Store/Effect-Store und kein AWAEM/Swarm/Love-Monitor wurde eingeführt.
+
+### 2026-09-23 — Unified mobile movement modes (#479)
+Status: VERIFIED integration; fresh post-memory exact-head verification required before merge.
+Änderung: AX1 erhält einen versionierten, persistierten Mobile-Movement-Modus `joystick | touch_to_move` über den bestehenden Player-UI-Control-Pfad. Ein einziger MobileMovementController ersetzt den Legacy-Touch-Owner; Touch-to-Move akzeptiert ausschließlich Welt-Canvas-Taps, projiziert gegen das bestehende Ground-Mesh und speist die unveränderte serverautoritative Bewegungs-Intent-Kette. Migration 0059 wurde in Schema-Apply, Reconciliation, Watermark, Root-/Zone-Proofs und MariaDB-Regressionsfixtures vollständig nachgezogen.
+Erkenntnis: Mobile Eingabe bleibt sicher, wenn UX-Modus und Tap-Projektion reine Input-/Presentation-Flächen sind und die tatsächliche Bewegung weiterhin durch dieselbe kanonische Server-Authority läuft; Schema-Membership muss gleichzeitig in Journal, Apply, Readback und allen Proof-Gates konsistent sein.
+Evidence: Pre-Memory exact head `1a123fcf6c944666ebeaa93abf37051e2432896d`; alle 23 zugehörigen PR-Workflow-Runs sind PASS, einschließlich Root Schema Apply/Reconciliation, Schema Reconciliation, Journal Watermark, Zone Bootstrap, Local Test Pack, Runtime Candidate, Runtime Container Proof, Android, AIM-259, AIM-262, AIM-286, AIM-290, AIM-291, AIM-292, AIM-293 und AIM-294. PR #493 bleibt offen, mergeable und ready-for-review.
+Open: Der Memory-Append erzeugt einen neuen Branch-Head; deshalb sind danach Exact-Head-CI und finaler main-Readback noch erforderlich.
+Next safe step: Exact-Head-Welle auf dem Memory-Head abwarten, dann PR #493 nur bei weiterhin vollständigem Grün mergen und Merge-Commit/main unabhängig readbacken.
