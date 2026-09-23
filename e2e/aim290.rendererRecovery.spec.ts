@@ -197,9 +197,12 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
     expect(await chunks(page)).toMatchObject({ status: "APPLIED", worldRootHash: projection.worldRootHash });
     expect((await chunks(page)).meshCount).toBeGreaterThan(0);
-    const observerState = await clientObservation(page);\n    expect(["CLIENT_UNOBSERVABLE", "CLIENT_VERIFIED"]).toContain(observerState?.status);\n    expect(observerState).toMatchObject({ mutationAuthority: "none" });\n    if (observerState?.status === "CLIENT_VERIFIED") expect(observerState.generation).toBeLessThanOrEqual(9);
+    const observerState = await clientObservation(page);
+    expect(["CLIENT_UNOBSERVABLE", "CLIENT_VERIFIED"]).toContain(observerState?.status);
+    expect(observerState).toMatchObject({ mutationAuthority: "none" });
+    if (observerState?.status === "CLIENT_VERIFIED") expect(observerState.generation).toBeLessThanOrEqual(9);
     await page.screenshot({ path: testInfo.outputPath("observer-unavailable-projection-intact.png") });
     console.info("STEP29_OBSERVER_UNAVAILABLE", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, projection: await chunks(page), observation: await clientObservation(page) }));
-    await page.unroute("**/api/trpc/gameplay.beginClientProjection*");
+    await page.unroute("**/api/trpc/client.gameplay.beginClientProjection*");
   });
 }
