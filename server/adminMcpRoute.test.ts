@@ -27,6 +27,25 @@ async function withAdminMcpApp<T>(run: (baseUrl: string) => Promise<T>): Promise
   }
 }
 
+
+async function withDevControlApp<T>(run: (baseUrl: string) => Promise<T>): Promise<T> {
+  const app = express();
+  app.use(express.json());
+  registerAdminMcp(app);
+  const server = createServer(app);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected TCP test server address");
+  try {
+    return await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+}
+
 afterEach(() => vi.unstubAllEnvs());
 
 describe("adminMcp HTTP resource", () => {
@@ -69,7 +88,7 @@ describe("pre-alpha dev control HTTP boundary", () => {
   it("accepts an authenticated local MCP tools/list request on the real dev endpoint", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
-    await withAdminMcpApp(async baseUrl => {
+    await withDevControlApp(async baseUrl => {
       const response = await fetch(`${baseUrl}/dev/admin-mcp`, {
         method: "POST",
         headers: {
@@ -87,26 +106,26 @@ describe("pre-alpha dev control HTTP boundary", () => {
         "aurion_dev_seed_test_encounter",
         "aurion_dev_get_fixture_readback",
       ]);
-    }, { host: "127.0.0.1:3000", forwardedHost: "" });
+    } );
   });
 
   it("requires an explicitly configured dev token even on loopback", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "");
-    await withAdminMcpApp(async baseUrl => {
+    await withDevControlApp(async baseUrl => {
       const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`);
       expect(response.status).toBe(401);
       await expect(response.json()).resolves.toMatchObject({
         error: "dev_control_authentication_required",
         reason: "dev_token_not_configured",
       });
-    }, { host: "127.0.0.1:3000", forwardedHost: "" });
+    } );
   });
 
   it("exposes metadata only on authenticated loopback in development", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
-    await withAdminMcpApp(async baseUrl => {
+    await withDevControlApp(async baseUrl => {
       const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`, {
         headers: { authorization: "Bearer 0123456789abcdef0123456789abcdef" },
       });
@@ -124,13 +143,13 @@ describe("pre-alpha dev control HTTP boundary", () => {
         "git_mutation",
         "vps_access",
       ]));
-    }, { host: "127.0.0.1:3000", forwardedHost: "" });
+    } );
   });
 
   it("rejects a public host even with a valid dev token", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
-    await withAdminMcpApp(async baseUrl => {
+    await withDevControlApp(async baseUrl => {
       const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`, {
         headers: { authorization: "Bearer 0123456789abcdef0123456789abcdef" },
       });
