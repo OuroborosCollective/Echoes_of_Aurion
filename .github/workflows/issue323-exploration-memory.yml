@@ -1,0 +1,58 @@
+name: Issue 323 Exploration Memory E2E
+on:
+  pull_request:
+    paths:
+      - "server/explorationMemoryPersistence.ts"
+      - "server/explorationMemoryPersistence.test.ts"
+      - "shared/explorationMemoryProtocol.ts"
+      - "drizzle/schema.ts"
+      - "drizzle/0061_aurion_exploration_memory.sql"
+      - "drizzle/meta/_journal.json"
+      - "config/aurion-migration-wave-manifest.json"
+      - "server/routers.ts"
+      - "client/src/xaurion/integration/ConfirmedChunkProjection.ts"
+      - "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx"
+      - ".github/workflows/issue323-exploration-memory.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+permissions:
+  contents: read
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_exploration_memory_test
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_exploration_memory_test
+      NODE_ENV: test
+      AURION_EXPLORATION_MEMORY_E2E: "1"
+      AURION_WORLD_EPOCH_E2E: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: pnpm verify:migrations
+      - run: pnpm exec drizzle-kit migrate
+      - run: pnpm check
+      - run: pnpm exec vitest run server/explorationMemoryPersistence.test.ts server/worldEpochReaction.e2e.test.ts --reporter=verbose
