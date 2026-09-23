@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import {
   aurionCausalTickReceipts,
   aurionGlobalStateProofs,
+  aurionQuestCausalAnchors,
 } from "../../drizzle/aurionCausalitySchema";
 import { type QuestInstance, type QuestPlan, type QuestReceipt } from "../../shared/aurionQuestContract";
 import { type QuestCompleteSource, type QuestDomainCommand } from "../../shared/aurionQuestDomainCommandContract";
