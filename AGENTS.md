@@ -20,6 +20,13 @@ Aurion website/Admin/MCP must perform effectful mutations through typed, validat
 
 A test that requires a second non-Aurion gameplay authority is stale and should be updated to target canonical Aurion contracts.
 
+## Evidence Flywheel
+
+For every non-trivial integration, use the evidence flywheel: freeze the exact revision, establish a real baseline, execute only through the existing Aurion authority, classify the first causal failure, patch the smallest canonical owner, rerun the original and neighboring regressions, and independently read back the affected boundary.
+
+Evaluation must never be made green by lowering thresholds, skipping flaky cases, moving expected outputs solely to pass, or treating model/agent self-grading as independent verification.
+
+For effectful actions, preserve Action Preview → authority/scope → approval where required → typed command → real effect → causal Action Receipt → independent readback. Approval is authorization, not evidence of execution; asynchronous effects must reject stale/revoked authority.
 ## Evidence and merge discipline
 
 - Green is accepted only at the layer actually read back.
