@@ -26,8 +26,8 @@ vi.mock("../components/Ax1CharacterPreview", () => ({
 }));
 
 const confirmed = { profile: { userId: 7, aurionPoints: 23, victories: 2, selectedClass: "unbound" }, progression: { characterId: "char-7", tracks: [{ trackKind: "weapon", trackId: "greatsword.two_handed.v3", characterId: "char-7", levelExact: "17", resultReceiptId: "result-00000001", sourceReceiptId: "source-00000001", receiptHash: "b".repeat(64) }] }, inventory: [] };
-const uiState = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, hotbar: ["1", "2", "3", "4", "5"] }, items: [], equipment: [] };
-const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onAction={fixtures.onAction} />);
+const uiState = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" as const }, items: [], equipment: [] };
+const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onTouchMoveDestination={vi.fn()} onAction={fixtures.onAction} />);
 
 describe("server-backed Aurion HUD", () => {
   beforeEach(() => {
