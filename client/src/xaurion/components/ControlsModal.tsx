@@ -2,7 +2,7 @@ import { Gamepad2, Hand, Swords, X } from "lucide-react";
 import type { ControlSettings, MovementMode, SkillCommand } from "@shared/playerUiProtocol";
 import { Ax1Modal } from "./Ax1Modal";
 import { Ax1SkillBook } from "./Ax1SkillBook";
-export function ControlsModal({ open, onClose, settings, pending, message, onBind, onAutoLoot, onAnalytics, onStartAuto }: {
+export function ControlsModal({ open, onClose, settings, pending, message, onBind, onAutoLoot, onAnalytics, onMovementMode, onStartAuto }: {
   open: boolean; onClose: () => void; settings?: ControlSettings; pending: boolean; message?: string;
   onBind: (slot: number, command: SkillCommand) => void; onAutoLoot: () => void; onAnalytics: () => void; onMovementMode: (mode: MovementMode) => void; onStartAuto: () => void;
 }) {
