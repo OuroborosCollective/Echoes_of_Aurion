@@ -5,5 +5,6 @@ export const aurionPlayerUiSettings = mysqlTable("aurionPlayerUiSettings", {
   revision: int("revision").notNull().default(0),
   autoLoot: int("autoLoot").notNull().default(1),
   analyticsConsent: int("analyticsConsent").notNull().default(0),
-  hotbarJson: text("hotbarJson").notNull(),\n  movementMode: varchar("movementMode", { length: 32 }).notNull().default("joystick"),
+  hotbarJson: text("hotbarJson").notNull(),
+  movementMode: varchar("movementMode", { length: 32 }).notNull().default("joystick"),
 });
