@@ -3,6 +3,7 @@ import {
   devControlCapabilities,
   isAllowedDevControlHost,
   isDevControlChannelEnabled,
+  isLoopbackRemoteAddress,
   isLocalDevHostname,
   resolveDevAdminToken,
   verifyDevControlAuthorization,
@@ -40,6 +41,10 @@ describe("Aurion dev control protocol", () => {
     expect(isAllowedDevControlHost("localhost:3000", "localhost")).toBe(true);
     expect(isAllowedDevControlHost("localhost:3000", "arelogic.space")).toBe(false);
     expect(isAllowedDevControlHost("localhost:3000", "127.0.0.1, arelogic.space")).toBe(false);
+    expect(isLoopbackRemoteAddress("127.0.0.1")).toBe(true);
+    expect(isLoopbackRemoteAddress("::1")).toBe(true);
+    expect(isLoopbackRemoteAddress("::ffff:127.0.0.1")).toBe(true);
+    expect(isLoopbackRemoteAddress("10.0.0.8")).toBe(false);
   });
 
   it("advertises only typed bounded development authority", () => {
