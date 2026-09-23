@@ -43,7 +43,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
       latestProjectionHash:updated.latestProjectionHash,
       sourceRevision:updated.sourceRevision,memoryHash:updated.memoryHash,
     }).where(eq(aurionExplorationMemoryProjections.id,"exp_test"));
-    const read=await readExplorationMemory(1,"aurion-global-world",1);
+    const read=await readExplorationMemory(1,"echoes-of-aurion-global",1);
     expect(read.records).toHaveLength(1);
     expect(read.records[0]?.firstDiscoveryReceiptHash).toBe(first.firstDiscoveryReceiptHash);
     expect(read.records[0]?.latestConfirmedVisitSequence).toBe(20);
