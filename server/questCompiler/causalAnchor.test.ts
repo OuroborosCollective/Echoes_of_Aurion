@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createQuestCausalAnchor, verifyQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
+import { AURION_QUEST_CAUSAL_ANCHOR_SCHEMA, createQuestCausalAnchor, verifyQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
 
 const hex = (n: string) => n.repeat(64);
 
 describe("Quest causal anchor contract", () => {
   it("round-trips deterministically and rejects tampering", () => {
     const anchor = createQuestCausalAnchor({
+      schema: AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
       questReceiptId: "rcpt_quest_1",
       worldId: "echoes-of-aurion-global",
       epoch: 7,
