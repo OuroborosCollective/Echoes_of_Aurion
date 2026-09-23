@@ -420,8 +420,10 @@ export class AdminQuestStudioService {
       offeredPlan = existingPlan;
     } else {
       const offered = await this.offerQuest({ playerUserId: userId, templateId });
+      const plan = await this.persistenceEngine.getPlan(offered.planHash);
+      if (!plan) throw new Error("QUEST_LEGACY_PLAN_NOT_FOUND");
       offeredInstance = offered.instance;
-      offeredPlan = offered.plan;
+      offeredPlan = plan;
     }
     if (offeredInstance.state === "offered") await this.acceptQuest(userId, offeredInstance.id);
     const { getGameplayProgress } = await import("../db");
