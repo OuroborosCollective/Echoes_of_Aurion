@@ -62,3 +62,54 @@ describe("adminMcp HTTP resource", () => {
     });
   });
 });
+
+
+describe("pre-alpha dev control HTTP boundary", () => {
+  it("requires an explicitly configured dev token even on loopback", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "");
+    await withAdminMcpApp(async baseUrl => {
+      const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`);
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toMatchObject({
+        error: "dev_control_authentication_required",
+        reason: "dev_token_not_configured",
+      });
+    }, { host: "127.0.0.1:3000", forwardedHost: "" });
+  });
+
+  it("exposes metadata only on authenticated loopback in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
+    await withAdminMcpApp(async baseUrl => {
+      const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`, {
+        headers: { authorization: "Bearer 0123456789abcdef0123456789abcdef" },
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.protocol).toBe("aurion.dev-control.v1");
+      expect(body.tools).toEqual([
+        { name: "aurion_dev_inspect_environment", mode: "read" },
+        { name: "aurion_dev_test_zone_reset", mode: "write" },
+        { name: "aurion_dev_seed_test_encounter", mode: "write" },
+      ]);
+      expect(body.unavailable).toEqual(expect.arrayContaining([
+        "raw_sql_execution",
+        "raw_shell_execution",
+        "git_mutation",
+        "vps_access",
+      ]));
+    }, { host: "127.0.0.1:3000", forwardedHost: "" });
+  });
+
+  it("rejects a public host even with a valid dev token", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
+    await withAdminMcpApp(async baseUrl => {
+      const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`, {
+        headers: { authorization: "Bearer 0123456789abcdef0123456789abcdef" },
+      });
+      expect(response.status).toBe(403);
+    }, { host: "arelogic.space", forwardedHost: "" });
+  });
+});
