@@ -27,10 +27,10 @@ suite("AIM-295 NPC self-evolution policy custody & transaction-gated rollback", 
   async function cleanup() {
     if (!isolated) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     // Clean up our specific test tables
-    await pool.query("DELETE FROM aurionNpcPolicyRollbackReceipts WHERE npcId = ?", [npcId]);
-    await pool.query("DELETE FROM aurionNpcPolicyMutationReceipts WHERE npcId = ?", [npcId]);
-    await pool.query("DELETE FROM aurionNpcPolicyActivePointers WHERE npcId = ?", [npcId]);
-    await pool.query("DELETE FROM aurionNpcPolicyVersions WHERE npcId = ?", [npcId]);
+    await pool.query("TRUNCATE TABLE aurionNpcPolicyRollbackReceipts");
+    await pool.query("TRUNCATE TABLE aurionNpcPolicyMutationReceipts");
+    await pool.query("TRUNCATE TABLE aurionNpcPolicyActivePointers");
+    await pool.query("TRUNCATE TABLE aurionNpcPolicyVersions");
   }
 
   beforeAll(async () => {
