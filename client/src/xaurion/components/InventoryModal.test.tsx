@@ -7,7 +7,7 @@ import { projectConfirmedAx1Inventory } from "./InventoryModal";
 const readback: PlayerUiReadback = {
   version: "aurion-ax1-ui.v1",
   userId: 7,
-  settings: { revision: 3, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"] },
+  settings: { revision: 3, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" },
   items: [
     { id: "blade-1", version: "legacy", name: "Confirmed Blade", definition: "blade", levelExact: "12", quality: "rare", slot: "main_hand", status: "owned", stats: { attack: 9 }, receiptId: "receipt-blade" },
     { id: "belt-1", version: "legacy", name: "Confirmed Belt", definition: "belt", levelExact: "4", quality: "magic", slot: "belt", status: "equipped", stats: { armor: 2 }, receiptId: "receipt-belt" },
