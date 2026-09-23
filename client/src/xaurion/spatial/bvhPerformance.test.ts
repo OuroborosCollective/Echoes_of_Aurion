@@ -100,8 +100,10 @@ describe("AIM-296 measurable BVH performance evidence", () => {
       (raycaster as THREE.Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
       acceleratedRaycast.call(acceleratedMesh, raycaster, accelerated);
       expect(accelerated.length).toBeLessThanOrEqual(1);
+      expect(accelerated.length > 0).toBe(baseline.length > 0);
       if (baseline.length > 0 && accelerated.length > 0) {
-        expect(accelerated[0]!.distance).toBeCloseTo(baseline[0]!.distance, 3);
+        const nativeNearest = Math.min(...baseline.map(hit => hit.distance));
+        expect(accelerated[0]!.distance).toBeCloseTo(nativeNearest, 3);
       }
     }
 
