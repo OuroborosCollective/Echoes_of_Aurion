@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createServer } from "node:http";
 import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerAdminMcp } from "./adminMcp";
@@ -151,9 +152,13 @@ describe("pre-alpha dev control HTTP boundary", () => {
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
     await withDevControlApp(async baseUrl => {
       const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`, {
-        headers: { authorization: "Bearer 0123456789abcdef0123456789abcdef" },
+        headers: {
+          host: "arelogic.space",
+          authorization: "Bearer 0123456789abcdef0123456789abcdef",
+        },
       });
       expect(response.status).toBe(403);
-    }, { host: "arelogic.space", forwardedHost: "" });
+    }, );
+
   });
 });
