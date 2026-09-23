@@ -4,7 +4,7 @@ import type { Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { isAllowedZoneOrigin, parseZoneAttack, parseZoneHello, parseZoneMove, parseZoneSkill, ZONE_TICK_MS, type ZoneReject } from "./zoneProtocol";
 import { WORLD_PRESENCE_REFRESH_MS } from "./worldPresenceProtocol";
-import { ZoneRegistry, type ZoneCombatProfile } from "./zoneRuntime";
+import { globalZoneRegistry, ZoneRegistry, type ZoneCombatProfile } from "./zoneRuntime";
 import { ZonePresenceLifecycle } from "./zonePresenceLifecycle";
 import { ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 
@@ -18,7 +18,7 @@ function parseMessage(data:WebSocket.RawData):unknown{if(typeof data==="string")
 function rejectZoneInput(socket:WebSocket,code:ZoneReject["code"]):void{socket.send(JSON.stringify({type:"reject",code} satisfies ZoneReject));}
 
 /** `/v1/ws` is the live AX1/WASD gameplay transport. tRPC/MCP legacy encounter routes are not consulted. */
-export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=new ZoneRegistry(),consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink){
+export function registerZoneGateway(server:HttpServer,registry:ZoneRegistry=globalZoneRegistry,consumeTicket:ZoneTicketConsumer,worldPresence?:WorldPresenceSink,fixedTick?:ZoneFixedTickSink){
   if(fixedTick&&(!Number.isSafeInteger(fixedTick.intervalTicks)||fixedTick.intervalTicks<1))throw new Error("ZONE_FIXED_TICK_INTERVAL_INVALID");
   const wss=new WebSocketServer({noServer:true,maxPayload:MAX_MESSAGE_BYTES});const observationConnections=new Set<string>();const presenceObservers=new Set<()=>void>();let gatewayTick=0;let fixedTickChain:Promise<void>=Promise.resolve();let isTicking=false;
   const tickTimer=setInterval(async()=>{
