@@ -111,7 +111,7 @@ export const QuestEdgeSchema = z.object({
 export type QuestEdge = z.infer<typeof QuestEdgeSchema>;
 
 export const QuestRewardSchema = z.object({
-  type: z.enum(['xp', 'gold', 'item', 'reputation', 'standing']),
+  type: z.enum(['xp', 'gold', 'item', 'reputation', 'standing', 'aurion_points', 'season_points', 'victory']),
   amount: z.number().int().positive(),
   targetId: z.string().optional(),
 });

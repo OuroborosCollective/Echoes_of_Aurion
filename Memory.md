@@ -1161,3 +1161,13 @@ Evidence: Integration branch was rebased to current main 8f9d6edec792d666d8e1897
 Learned: The flywheel is safe as orchestration/documentation only when all gameplay and evidence truth remains inside Aurion's existing canonical authorities; CI evidence and runtime/readback evidence remain distinct boundaries.
 Open: This Memory append changes the exact branch head, so normal exact-head CI and final main readback remain required.
 Next safe step: Re-run the normal exact-head gates on this Memory-appended head, then merge and read back main.
+
+
+### 2026-09-23 — Legacy QuestKey canonical runtime migration (#465)
+- **Status:** VERIFIED implementation; merge gated on final exact-head runtime evidence.
+- **Task:** Route the six established gameplay QuestKeys through the canonical AIM-298 quest compiler/causal runtime without creating a second compiler, event store, or gameplay truth path.
+- **Decisions:** Added lossless canonical legacy templates; hydrated compiler trigger facts from persisted dialogue-command receipts; routed legacy tRPC accept/complete mutations through `AdminQuestStudioService`; encounter completion advances the canonical objective; completion emits the real `quest_hand_in` intent through the live zone registry before #477 causal closure; existing `gameplay.*` finalization remains only as a post-closure compatibility projection.
+- **Touched:** `shared/aurionQuestContract.ts`, `server/questCompiler/legacyQuestTemplate.ts`, `server/questCompiler/legacyQuestRuntime.test.ts`, `server/questCompiler/roleResolver.ts`, `server/questCompiler/adminService.ts`, `server/questCompiler/materialization.test.ts`, `server/routers.ts`, `server/zoneRuntime.ts`, `server/zoneGateway.ts`.
+- **Evidence:** Current exact head `5cc6488b07fca4de6668864e4be86689dace005d`; `prove` green including type contract, focused contracts, full regression and production bundle; exact-offline pack has passed schema/replay/causal-root/cross-zone/effect-journal/headless-oracle/AIM-298/typecheck/repository-regression gates; source-replay-and-lifecycle and MariaDB graph/provenance gates green. Final `real-group-instance` runtime gate was still executing at append time.
+- **Learning:** Legacy gameplay semantics can be preserved as a canonical adapter/read-model projection when the original QuestKey values, encounter bindings, reward values and authoritative receipts remain lossless; production mutation ownership stays in the canonical quest runtime.
+- **Next safe step:** Fresh exact-head CI after this Memory append, then independent main readback and merge; do not add another Memory entry for this work block.

@@ -321,6 +321,20 @@ export class AuthoritativeMovementZone {
     if (!this.isReplay) this.broadcastSnapshot();
   }
 
+  connectionIdForUser(userId: number): string | undefined {
+    return this.peersByEntityId.get(`player:${userId}`)?.connectionId;
+  }
+
+  nextClientSequenceForUser(userId: number): number {
+    const peer = this.peersByEntityId.get(`player:${userId}`);
+    if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
+    return peer.lastReceivedClientSeq + 1;
+  }
+
+  nextArrivalSequence(): number {
+    return this.arrivalSequence + 1;
+  }
+
   positionForConnection(connectionId: string): ZonePosition | undefined {
     const position = this.peers.get(connectionId)?.position;
     return position ? { ...position } : undefined;
@@ -730,3 +744,5 @@ export class ZoneRegistry {
     for (const zone of this.sortedZones) zone.tick();
   }
 }
+
+export const globalZoneRegistry = new ZoneRegistry();
