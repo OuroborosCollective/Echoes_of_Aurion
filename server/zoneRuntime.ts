@@ -345,6 +345,7 @@ export class AuthoritativeMovementZone {
 
   /** Development-only reset of the isolated authoritative fixture runtime. */
   resetDevelopmentFixture(): void {
+    if (process.env.NODE_ENV === "production") throw new Error("ZONE_FIXTURE_PRODUCTION_FORBIDDEN");
     this.peers.clear();
     this.peersByEntityId.clear();
     this.pendingIntents = [];
