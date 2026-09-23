@@ -45,7 +45,7 @@ const ax1WorldHudSchema = worldReadbackSchema.extend({
   })).max(64),
 });
 
-export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction, onInteract }: {
+export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction, onInteract, onTouchMoveDestination }: {
   userId: number;
   connected: boolean;
   position?: { x: number; z: number };
