@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, check, float, index, int, mediumtext, mysqlEnum, mysqlTable, primaryKey, bigint, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1897,7 +1897,7 @@ export const aurionExplorationMemoryProjections = mysqlTable("aurionExplorationM
   chunkX: int("chunkX").notNull(),
   chunkZ: int("chunkZ").notNull(),
   firstDiscoveryReceiptHash: varchar("firstDiscoveryReceiptHash", { length: 71 }).notNull(),
-  latestConfirmedVisitSequence: int("latestConfirmedVisitSequence").notNull(),
+  latestConfirmedVisitSequence: bigint("latestConfirmedVisitSequence", { mode: "number", unsigned: true }).notNull(),
   latestProjectionHash: varchar("latestProjectionHash", { length: 71 }).notNull(),
   sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
   memoryHash: varchar("memoryHash", { length: 71 }).notNull(),
