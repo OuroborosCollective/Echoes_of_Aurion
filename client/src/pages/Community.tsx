@@ -79,16 +79,19 @@ export default function Community() {
             type="button"
             aria-haspopup="dialog"
             disabled={!isAuthenticated || loading}
+            aria-busy={loading}
             aria-describedby={
               !isAuthenticated ? "community-auth-required" : undefined
             }
             onClick={() => openCommunity("chat")}
             title={
-              !isAuthenticated
-                ? "Nur für angemeldete Explorer verfügbar"
-                : undefined
+              loading
+                ? "Ladevorgang läuft..."
+                : !isAuthenticated
+                  ? "Nur für angemeldete Explorer verfügbar"
+                  : undefined
             }
-            className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-50 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
+            className="group rounded-2xl border border-slate-500/35 bg-black/20 p-5 text-left disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100 transition-all"
           >
             <MessageCircle className="mb-3 size-5 text-cyan-300 transition-transform motion-safe:group-hover:scale-110 group-disabled:motion-safe:group-hover:scale-100" />
             <b>Signalraum</b>
