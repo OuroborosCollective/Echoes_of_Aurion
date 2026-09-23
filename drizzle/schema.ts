@@ -1887,6 +1887,28 @@ export const aurionWorldContextEvalRuns = mysqlTable("aurionWorldContextEvalRuns
 
 
 
+
+/** Persistent per-user exploration memory derived only from confirmed chunk projections. */
+export const aurionExplorationMemoryProjections = mysqlTable("aurionExplorationMemoryProjections", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  userId: int("userId").notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  worldEpoch: int("worldEpoch").notNull(),
+  chunkX: int("chunkX").notNull(),
+  chunkZ: int("chunkZ").notNull(),
+  firstDiscoveryReceiptHash: varchar("firstDiscoveryReceiptHash", { length: 71 }).notNull(),
+  latestConfirmedVisitSequence: int("latestConfirmedVisitSequence").notNull(),
+  latestProjectionHash: varchar("latestProjectionHash", { length: 71 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  memoryHash: varchar("memoryHash", { length: 71 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("aurionExplorationMemoryProjections_owner_chunk_uq").on(table.userId, table.worldId, table.worldEpoch, table.chunkX, table.chunkZ),
+  index("aurionExplorationMemoryProjections_world_idx").on(table.worldId, table.worldEpoch, table.chunkX, table.chunkZ),
+  index("aurionExplorationMemoryProjections_user_idx").on(table.userId, table.worldEpoch),
+]);
+
 /** Human+AI authoring versions remain Aurion-owned and immutable per version. */
 export const aurionWorldDesignVersions = mysqlTable("aurionWorldDesignVersions", {
   id: varchar("id", { length: 128 }).primaryKey(),
