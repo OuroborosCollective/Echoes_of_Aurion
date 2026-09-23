@@ -533,6 +533,7 @@ export default function AurionOpenWorldRuntime() {
               if (event.damage > 0) window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "ui-error" } }));
             }
           },
+        });
         zoneClientRef.current?.close();
         zoneClientRef.current = client;
         client.connect(ticket);
