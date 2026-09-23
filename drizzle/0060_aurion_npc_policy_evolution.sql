@@ -21,7 +21,7 @@ CREATE TABLE `aurionNpcPolicyActivePointers` (
   `npcId` varchar(96) NOT NULL,
   `activeVersionId` varchar(128) NOT NULL,
   `activePolicyHash` varchar(64) NOT NULL,
-  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE (now()),
+  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT `aurionNpcPolicyActivePointers_npcId` PRIMARY KEY (`npcId`)
 );
 --> statement-breakpoint
