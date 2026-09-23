@@ -278,12 +278,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   });
 
   return <div className="aurion-authority-hud ax1-authority-shell" data-testid="authoritative-world-hud">
-    <MobileMovementController
-      mode={ui.data?.settings.movementMode ?? "joystick"}
-      onMove={onMove}
-      onDestination={({ screenX, screenY }) => onTouchMoveDestination(screenX, screenY)}
-      enabled={panel === null && !groupOpen && !pending && connected}
-    />
     <GameHUD
       playerName={explorerView.name}
       playerIcon={explorerView.icon}
