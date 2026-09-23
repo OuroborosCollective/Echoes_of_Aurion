@@ -84,18 +84,9 @@ export async function commitNpcPolicyMutation(
   }
 
   if (receipt.verdict === "accepted") {
-    // Verify previous version matches active pointer exactly (Fail closed on stale active pointer)
-    const expectedPrevVersion = activePointer ? (await tx.select().from(aurionNpcPolicyVersions).where(eq(aurionNpcPolicyVersions.id, activePointer.activeVersionId)).limit(1))[0]?.version ?? 0 : 0;
-    const expectedPrevHash = activePointer?.activePolicyHash ?? null;
-
-    if (receipt.previousVersion !== null && receipt.previousVersion !== expectedPrevVersion) {
-      throw new Error("MUTATION_STALE_PREVIOUS_VERSION");
-    }
-    if (receipt.previousPolicyHash !== expectedPrevHash) {
-      throw new Error("MUTATION_STALE_PREVIOUS_HASH");
-    }
-
-    // Fail closed if two mutations try to target the exact same previous version (concurrency block)
+    // The target version is globally unique within an NPC history. Resolve this conflict
+    // before predecessor checks so a second receipt targeting an already committed version
+    // is reported as the concurrency failure it actually represents.
     const existingVersion = (await tx.select().from(aurionNpcPolicyVersions)
       .where(and(
         eq(aurionNpcPolicyVersions.npcId, receipt.npcId),
@@ -104,6 +95,23 @@ export async function commitNpcPolicyMutation(
 
     if (existingVersion) {
       throw new Error("MUTATION_CONCURRENT_DUPLICATE_VERSION");
+    }
+
+    // Verify previous version and hash against the active pointer exactly. A first
+    // mutation must explicitly carry null predecessor fields; an established history
+    // must carry both current predecessor values.
+    const expectedPrevVersion = activePointer
+      ? (await tx.select().from(aurionNpcPolicyVersions)
+        .where(eq(aurionNpcPolicyVersions.id, activePointer.activeVersionId))
+        .limit(1))[0]?.version ?? 0
+      : null;
+    const expectedPrevHash = activePointer?.activePolicyHash ?? null;
+
+    if (receipt.previousVersion !== expectedPrevVersion) {
+      throw new Error("MUTATION_STALE_PREVIOUS_VERSION");
+    }
+    if (receipt.previousPolicyHash !== expectedPrevHash) {
+      throw new Error("MUTATION_STALE_PREVIOUS_HASH");
     }
 
     // Insert new immutable policy version row
