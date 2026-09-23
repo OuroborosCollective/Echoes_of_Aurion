@@ -832,6 +832,20 @@ export class MMOEngine {
     );
   }
 
+  public projectTouchDestination(screenX: number, screenY: number): { x: number; y: number; z: number } | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || screenX < rect.left || screenX > rect.right || screenY < rect.top || screenY > rect.bottom) return null;
+    const mouse = new THREE.Vector2(
+      ((screenX - rect.left) / rect.width) * 2 - 1,
+      -((screenY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, this.camera);
+    const hit = raycaster.intersectObject(this.landscape.groundMesh, false)[0];
+    if (!hit) return null;
+    return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+  }
+
   public performAdminRaycast(screenX: number, screenY: number): any {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
