@@ -190,7 +190,7 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     // from the unchanged, authenticated Step-28 authority-verifying endpoint.
     await optional.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await page.evaluate(() => sessionStorage.setItem("aurion:renderer", "webgl2"));
-    await page.route("**/api/trpc/gameplay.beginClientProjection*", route => route.abort("failed"));
+    await page.route("**/api/trpc/client.gameplay.beginClientProjection*", route => route.abort("failed"));
     const withoutObserver = await enterAx1(page);
     expect(withoutObserver.snapshot.globalWorld.epoch).toBe(projection.epoch);
     expect(withoutObserver.snapshot.globalWorld.deterministicHash).toBe(optional.snapshot.globalWorld.deterministicHash);
