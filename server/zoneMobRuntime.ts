@@ -95,5 +95,27 @@ export class ZoneMobRuntime {
     return Object.freeze(this.orderedEntityIds.map(entityId => publicMobSnapshot(this.states.get(entityId)!)));
   }
   stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
+
+  /** Development-only fixture reset using the same canonical mob definitions as live runtime. */
+  resetDevelopmentFixture(tick: number): void {
+    if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("ZONE_MOB_FIXTURE_TICK_INVALID");
+    for (const definition of observatoryMobDefinitions) {
+      this.states.set(definition.entityId, initialMobRuntimeState(definition, tick));
+    }
+  }
+
+  /** Development-only bounded encounter selection over existing canonical mobs. */
+  seedDevelopmentEncounter(fixtureType: "starter_encounter" | "boss_encounter" | "npc_dialogue_fixture"): readonly string[] {
+    const ids = fixtureType === "boss_encounter"
+      ? ["mob_6"]
+      : fixtureType === "npc_dialogue_fixture"
+        ? ["mob_1", "mob_2"]
+        : ["mob_1", "mob_2", "mob_3"];
+    return Object.freeze(ids.map(entityId => {
+      if (!this.states.has(entityId)) throw new Error("ZONE_MOB_FIXTURE_ID_INVALID");
+      return entityId;
+    }));
+  }
+
   orderedStates(): readonly MobRuntimeState[] { return Object.freeze(this.orderedEntityIds.map(entityId => this.states.get(entityId)!)); }
 }
