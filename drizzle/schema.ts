@@ -1663,7 +1663,6 @@ export const aurionNpcPolicyVersions = mysqlTable("aurionNpcPolicyVersions", {
 }, table => [
   index("aurionNpcPolicyVersions_npc_idx").on(table.npcId),
   uniqueIndex("aurionNpcPolicyVersions_npc_ver_uq").on(table.npcId, table.version),
-  uniqueIndex("aurionNpcPolicyVersions_npc_hash_uq").on(table.npcId, table.policyHash),
 ]);
 
 export const aurionNpcPolicyActivePointers = mysqlTable("aurionNpcPolicyActivePointers", {
