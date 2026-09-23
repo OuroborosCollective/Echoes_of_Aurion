@@ -65,6 +65,31 @@ describe("adminMcp HTTP resource", () => {
 
 
 describe("pre-alpha dev control HTTP boundary", () => {
+
+  it("accepts an authenticated local MCP tools/list request on the real dev endpoint", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
+    await withAdminMcpApp(async baseUrl => {
+      const response = await fetch(`${baseUrl}/dev/admin-mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer 0123456789abcdef0123456789abcdef",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.id).toBe(1);
+      expect(body.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+        "aurion_dev_inspect_environment",
+        "aurion_dev_test_zone_reset",
+        "aurion_dev_seed_test_encounter",
+        "aurion_dev_get_fixture_readback",
+      ]);
+    }, { host: "127.0.0.1:3000", forwardedHost: "" });
+  });
+
   it("requires an explicitly configured dev token even on loopback", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "");
