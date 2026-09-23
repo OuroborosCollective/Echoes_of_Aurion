@@ -3,6 +3,7 @@ import {
   QuestTemplateVersionSchema,
   type QuestAdminProposal,
   type QuestInstance,
+  type QuestPlan,
   type QuestReplayReceipt,
   type QuestTemplateVersion,
   type WorldFact,
