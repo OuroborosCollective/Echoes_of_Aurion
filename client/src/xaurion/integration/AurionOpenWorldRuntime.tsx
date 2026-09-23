@@ -208,6 +208,7 @@ export default function AurionOpenWorldRuntime() {
       setRecoveryEpoch(0);
       setWebglError(null);
       setConfirmedPosition(undefined);
+      confirmedPositionRef.current = null;
       setRemotePlayers([]);
       setActivation(validActivation((event as CustomEvent<unknown>).detail));
     };
@@ -290,6 +291,7 @@ export default function AurionOpenWorldRuntime() {
         recoveryAttempts.current++;
         recoveryCause.current = (error as Error).message;
         setConfirmedPosition(undefined);
+      confirmedPositionRef.current = null;
         setRendererEvidence(null);
         setRecoveryEpoch(value => value + 1);
       } else setWebglError(runtimeIssueCode(error));
