@@ -21,9 +21,10 @@ export const explorationMemoryRecordSchema = z.strictObject({
   memoryHash: sha256,
 });
 export type ExplorationMemoryRecord = Readonly<z.infer<typeof explorationMemoryRecordSchema>>;
+export type ExplorationMemoryRecordInput = Omit<ExplorationMemoryRecord, "memoryHash" | "schema">;
 
-export function hashExplorationMemoryRecord(input: Omit<ExplorationMemoryRecord, "memoryHash">): Promise<string> {
-  const value = explorationMemoryRecordSchema.omit({ memoryHash: true }).parse(input);
+export function hashExplorationMemoryRecord(input: ExplorationMemoryRecordInput): Promise<string> {
+  const value = explorationMemoryRecordSchema.omit({ memoryHash: true }).parse({ schema: EXPLORATION_MEMORY_SCHEMA, ...input });
   return hashWorldChunkProjectionPayload(new TextEncoder().encode(JSON.stringify([
     EXPLORATION_MEMORY_SCHEMA,
     value.userId,
@@ -38,7 +39,7 @@ export function hashExplorationMemoryRecord(input: Omit<ExplorationMemoryRecord,
   ])));
 }
 
-export function createExplorationMemoryRecord(input: Omit<ExplorationMemoryRecord, "memoryHash">): Promise<ExplorationMemoryRecord> {
+export function createExplorationMemoryRecord(input: ExplorationMemoryRecordInput): Promise<ExplorationMemoryRecord> {
   return hashExplorationMemoryRecord(input).then(memoryHash => Object.freeze(
     explorationMemoryRecordSchema.parse({ ...input, memoryHash })
   ));
