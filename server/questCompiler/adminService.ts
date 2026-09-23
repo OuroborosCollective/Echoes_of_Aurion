@@ -140,7 +140,7 @@ export class AdminQuestStudioService {
       this.worldFactEngine.getFacts(),
       instance.planHash,
       instance.worldStateRevision,
-      { receipts },
+      { receipts, sourceEvents: this.worldFactEngine.getEvents() },
     );
   }
 
