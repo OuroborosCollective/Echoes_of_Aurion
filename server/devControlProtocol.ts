@@ -27,6 +27,14 @@ export function isAllowedDevControlHost(host: string | undefined, forwardedHost:
   return true;
 }
 
+export function isLoopbackRemoteAddress(address: string | undefined): boolean {
+  if (!address || typeof address !== "string") return false;
+  const normalized = address.trim().toLowerCase();
+  return normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "::ffff:127.0.0.1";
+}
+
 export function isDevControlChannelEnabled(environment: NodeJS.ProcessEnv): boolean {
   if (environment.NODE_ENV === "production") return false;
   const flag = environment.AURION_DEV_CONTROL_CHANNEL ?? environment.AURION_DEV_CONTROL_ENABLED;
