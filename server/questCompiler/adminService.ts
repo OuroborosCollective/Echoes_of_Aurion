@@ -410,11 +410,19 @@ export class AdminQuestStudioService {
     await this.hydrateDialogueTrigger(authority.dialogueCommandReceiptId, userId, questKey);
     const existing = (await this.persistenceEngine.listInstances({ playerUserId: userId }))
       .find(instance => instance.templateId === templateId && ["offered", "active"].includes(instance.state));
-    const offered = existing
-      ? { instance: existing, plan: await this.persistenceEngine.getPlan(existing.planHash) }
-      : await this.offerQuest({ playerUserId: userId, templateId });
-    if (!offered.plan) throw new Error("QUEST_LEGACY_PLAN_NOT_FOUND");
-    if (offered.instance.state === "offered") await this.acceptQuest(userId, offered.instance.id);
+    let offeredInstance: QuestInstance;
+    let offeredPlan: QuestPlan;
+    if (existing) {
+      const existingPlan = await this.persistenceEngine.getPlan(existing.planHash);
+      if (!existingPlan) throw new Error("QUEST_LEGACY_PLAN_NOT_FOUND");
+      offeredInstance = existing;
+      offeredPlan = existingPlan;
+    } else {
+      const offered = await this.offerQuest({ playerUserId: userId, templateId });
+      offeredInstance = offered.instance;
+      offeredPlan = offered.plan;
+    }
+    if (offeredInstance.state === "offered") await this.acceptQuest(userId, offeredInstance.id);
     const { getGameplayProgress } = await import("../db");
     return getGameplayProgress(userId);
   }
@@ -488,6 +496,7 @@ export class AdminQuestStudioService {
       eventSequence: nextSequence,
       ...source,
     });
+    if (completionCommand.kind !== "complete") throw new Error("QUEST_LEGACY_COMPLETION_COMMAND_KIND_MISMATCH");
     zone.enqueueIntent({
       type: "quest_hand_in",
       connectionId,
