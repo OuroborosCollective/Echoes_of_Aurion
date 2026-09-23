@@ -58,6 +58,7 @@ function fixtureReadback(operation: string, idempotencyKey: string, selectedEnti
 }
 
 export function executeReset(zoneId: string, idempotencyKey: string, confirmation: "CONFIRM_DEV_ZONE_RESET"): FixtureResult {
+  if (!isDevControlChannelEnabled(process.env)) throw new Error("DEV_CONTROL_CHANNEL_DISABLED");
   if (zoneId !== DEV_FIXTURE_ZONE_ID) throw new Error("DEV_CONTROL_ZONE_NOT_ALLOWED");
   if (confirmation !== "CONFIRM_DEV_ZONE_RESET") throw new Error("DEV_CONTROL_CONFIRMATION_REQUIRED");
   const command = { schema: "aurion.dev-zone-reset-command.v1", operation: "reset", zoneId, idempotencyKey };
@@ -81,6 +82,7 @@ export function executeSeed(
   fixtureType: "starter_encounter" | "boss_encounter" | "npc_dialogue_fixture",
   idempotencyKey: string,
 ): FixtureResult {
+  if (!isDevControlChannelEnabled(process.env)) throw new Error("DEV_CONTROL_CHANNEL_DISABLED");
   if (zoneId !== DEV_FIXTURE_ZONE_ID) throw new Error("DEV_CONTROL_ZONE_NOT_ALLOWED");
   const command = { schema: "aurion.dev-seed-encounter-command.v1", operation: "seed", zoneId, fixtureType, idempotencyKey };
   const commandHash = canonicalSha256(command);
