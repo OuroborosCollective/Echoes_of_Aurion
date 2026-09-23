@@ -5,6 +5,7 @@ import {
   QuestReplayReceiptSchema,
   QuestReceipt,
   WorldFact,
+  WorldEvent,
 } from '../../shared/aurionQuestContract';
 import { computeCanonicalHash, computeQuestStateHash } from '../../shared/aurionQuestCanonicalHash';
 import {
@@ -43,7 +44,7 @@ export class QuestReplayEngine {
     facts: WorldFact[] | null,
     expectedPlanHash: string,
     worldStateSequence?: number,
-    options?: { receipts?: readonly QuestReceipt[] },
+    options?: { receipts?: readonly QuestReceipt[]; sourceEvents?: readonly WorldEvent[] },
   ): QuestReplayReceipt {
     const replayTimestamp = operationalDate(this.clock).toISOString();
     const sequence = worldStateSequence ?? (facts ? latestFactSequence(facts) : 0);
@@ -107,6 +108,57 @@ export class QuestReplayEngine {
         plan.graphHash,
         'UNPROVABLE',
       );
+    }
+
+    // A persisted instance may only reach MATCH when its trigger event is independently
+    // read back. Stored JSON/state alone is not authoritative evidence.
+    if (!options?.sourceEvents) {
+      return finish(
+        replayUnprovable(context, verified, 'QUEST_SOURCE_EVENT_EVIDENCE_MISSING'),
+        'UNPROVABLE',
+        plan.graphHash,
+        'UNPROVABLE',
+      );
+    }
+    const triggerEvent = options.sourceEvents.find(event => event.id === instance.triggerEventId);
+    if (!triggerEvent) {
+      return finish(
+        replayUnprovable(context, verified, 'QUEST_TRIGGER_EVENT_UNPROVABLE'),
+        'UNPROVABLE',
+        plan.graphHash,
+        'UNPROVABLE',
+      );
+    }
+    if (triggerEvent.payloadHash !== instance.triggerEventDigest) {
+      const replayVerdict = replayFirstDivergence(context, verified, {
+        stage: 'SOURCE_EVENT',
+        expected: instance.triggerEventDigest,
+        observed: triggerEvent.payloadHash,
+        expectedHash: instance.triggerEventDigest,
+        observedHash: triggerEvent.payloadHash,
+        diffDetails: 'Trigger event digest divergence: expected ' + instance.triggerEventDigest + ', got ' + triggerEvent.payloadHash,
+      });
+      return finish(replayVerdict, 'DIVERGED_AT_SOURCE_EVENT', plan.graphHash, 'N/A');
+    }
+    if (triggerEvent.sequence > instance.worldStateRevision) {
+      const replayVerdict = replayFirstDivergence(context, verified, {
+        stage: 'SOURCE_EVENT',
+        expected: String(instance.worldStateRevision),
+        observed: String(triggerEvent.sequence),
+        diffDetails: 'Trigger event sequence ' + triggerEvent.sequence + ' exceeds persisted world-state revision ' + instance.worldStateRevision + '.',
+      });
+      return finish(replayVerdict, 'DIVERGED_AT_SOURCE_EVENT', plan.graphHash, 'N/A');
+    }
+    if (instance.sourceRevision !== activeProvenance.sourceRevision) {
+      const replayVerdict = replayFirstDivergence(context, verified, {
+        stage: 'SOURCE_REVISION',
+        expected: instance.sourceRevision,
+        observed: activeProvenance.sourceRevision,
+        expectedHash: instance.sourceRevision,
+        observedHash: activeProvenance.sourceRevision,
+        diffDetails: 'Source revision divergence: persisted ' + instance.sourceRevision + ', active ' + activeProvenance.sourceRevision,
+      });
+      return finish(replayVerdict, 'DIVERGED_AT_SOURCE_REVISION', plan.graphHash, 'N/A');
     }
     verified.push('SOURCE_TUPLE');
 
