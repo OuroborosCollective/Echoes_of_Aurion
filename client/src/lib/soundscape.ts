@@ -40,6 +40,8 @@ const CUES: Partial<Record<AudioCueId, CueSpec>> = {
   "combat.attack.sharp": { frequency: 920, duration: 0.09, type: "sawtooth", gain: 0.52, slide: 260, noise: true },
   "combat.attack.pointed": { frequency: 630, duration: 0.12, type: "square", gain: 0.48, slide: 170, noise: true },
   "combat.attack.blunt": { frequency: 92, duration: 0.16, type: "triangle", gain: 0.65, slide: 55, noise: true },
+  "combat.swing.blade": { frequency: 260, duration: 0.16, type: "sawtooth", gain: 0.48, slide: 520, noise: true },
+  "combat.impact.blade": { frequency: 170, duration: 0.12, type: "square", gain: 0.58, slide: 72, noise: true },
   "combat.creature.wolf.attack": { frequency: 156, duration: 0.28, type: "sawtooth", gain: 0.56, slide: 92, noise: true },
   "combat.creature.human.attack": { frequency: 196, duration: 0.16, type: "square", gain: 0.5, slide: 118, noise: true },
   "combat.creature.monster.attack": { frequency: 83, duration: 0.34, type: "sawtooth", gain: 0.64, slide: 46, noise: true, detune: -18 },
@@ -51,11 +53,13 @@ const CUES: Partial<Record<AudioCueId, CueSpec>> = {
   "movement.footstep.stone": { frequency: 540, duration: 0.06, type: "square", gain: 0.27, noise: true },
   "movement.footstep.wood": { frequency: 145, duration: 0.08, type: "triangle", gain: 0.3, noise: true },
   "movement.footstep.water": { frequency: 260, duration: 0.12, type: "sine", gain: 0.25, noise: true },
+  "movement.footstep.sand": { frequency: 118, duration: 0.075, type: "triangle", gain: 0.26, noise: true },
   "movement.run.earth": { frequency: 84, duration: 0.11, type: "triangle", gain: 0.38, noise: true },
   "movement.run.grass": { frequency: 155, duration: 0.09, type: "sine", gain: 0.29, noise: true },
   "movement.run.stone": { frequency: 480, duration: 0.08, type: "square", gain: 0.34, noise: true },
   "movement.run.wood": { frequency: 132, duration: 0.1, type: "triangle", gain: 0.36, noise: true },
   "movement.run.water": { frequency: 230, duration: 0.15, type: "sine", gain: 0.31, noise: true },
+  "movement.run.sand": { frequency: 105, duration: 0.11, type: "triangle", gain: 0.33, noise: true },
   "resource.harvest.plant": { frequency: 380, duration: 0.16, type: "triangle", gain: 0.35, slide: 160, noise: true },
   "resource.harvest.wood": { frequency: 104, duration: 0.18, type: "square", gain: 0.62, slide: 68, noise: true },
   "resource.mine.ore": { frequency: 760, duration: 0.14, type: "square", gain: 0.5, slide: 390, noise: true },
@@ -144,14 +148,18 @@ export class AurionSoundscape {
     if (!spec) return;
     const bus = this.buses.get(busFor(event.cue)) ?? this.master;
     if (!bus) return;
+    const surfaceModifier: Record<AudioSurface, number> = { earth: 0.92, sand: 0.82, grass: 0.72, stone: 1.25, wood: 1.05, water: 0.58 };
+    const impactSurface = event.cue === "combat.impact.blade" && "surface" in event ? event.surface : undefined;
+    const frequency = spec.frequency * (impactSurface ? surfaceModifier[impactSurface] : 1);
+    const gainScale = impactSurface === "water" ? 0.85 : impactSurface === "grass" ? 0.9 : 1;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
     oscillator.type = spec.type;
-    oscillator.frequency.setValueAtTime(spec.frequency, now);
+    oscillator.frequency.setValueAtTime(frequency, now);
     if (spec.detune) oscillator.detune.setValueAtTime(spec.detune, now);
     if (spec.slide) oscillator.frequency.exponentialRampToValueAtTime(spec.slide, now + spec.duration);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(spec.gain, now + Math.min(0.018, spec.duration / 4));
+    gain.gain.exponentialRampToValueAtTime(spec.gain * gainScale, now + Math.min(0.018, spec.duration / 4));
     gain.gain.exponentialRampToValueAtTime(0.0001, now + spec.duration);
     oscillator.connect(gain).connect(bus);
     oscillator.start(now);
