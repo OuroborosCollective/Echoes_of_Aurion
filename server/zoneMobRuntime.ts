@@ -32,20 +32,27 @@ export function resolveMobCollisionMovement(from: Readonly<{ x: number; z: numbe
 /** Aurion-hosted mob runtime; donor formulas remain historical provenance. */
 export class ZoneMobRuntime {
   private readonly states = new Map<string, MobRuntimeState>();
-  private readonly orderedEntityIds: string[];
+  private readonly _orderedStates: MobRuntimeState[];
+  private readonly entityIdToIndex = new Map<string, number>();
 
   constructor() {
     for (const definition of observatoryMobDefinitions) this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
-    this.orderedEntityIds = Array.from(this.states.keys()).sort();
+    const orderedEntityIds = Array.from(this.states.keys()).sort();
+    this._orderedStates = orderedEntityIds.map(entityId => this.states.get(entityId)!);
+    for (let i = 0; i < orderedEntityIds.length; i++) {
+      this.entityIdToIndex.set(orderedEntityIds[i], i);
+    }
   }
 
   tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
     let changed = false;
-    for (const entityId of this.orderedEntityIds) {
-      const current = this.states.get(entityId)!;
+    for (let i = 0; i < this._orderedStates.length; i++) {
+      const current = this._orderedStates[i];
+      const entityId = current.definition.entityId;
       const before = publicMobSnapshot(current);
       const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
       this.states.set(entityId, next);
+      this._orderedStates[i] = next;
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }
     return changed;
@@ -56,6 +63,10 @@ export class ZoneMobRuntime {
     if (!current) return undefined;
     const next = applyMobCombatState(current, values);
     this.states.set(entityId, next);
+    const index = this.entityIdToIndex.get(entityId);
+    if (index !== undefined) {
+      this._orderedStates[index] = next;
+    }
     return next;
   }
 
@@ -88,12 +99,20 @@ export class ZoneMobRuntime {
       nextAttackTick: mob.nextAttackTick,
     });
     this.states.set(mob.entityId, next);
+    const index = this.entityIdToIndex.get(mob.entityId);
+    if (index !== undefined) {
+      this._orderedStates[index] = next;
+    }
     return next;
   }
 
   snapshot(): readonly ConfirmedZoneMob[] {
-    return Object.freeze(this.orderedEntityIds.map(entityId => publicMobSnapshot(this.states.get(entityId)!)));
+    const out = new Array<ConfirmedZoneMob>(this._orderedStates.length);
+    for (let i = 0; i < this._orderedStates.length; i++) {
+      out[i] = publicMobSnapshot(this._orderedStates[i]);
+    }
+    return Object.freeze(out);
   }
   stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
-  orderedStates(): readonly MobRuntimeState[] { return Object.freeze(this.orderedEntityIds.map(entityId => this.states.get(entityId)!)); }
+  orderedStates(): readonly MobRuntimeState[] { return this._orderedStates; }
 }

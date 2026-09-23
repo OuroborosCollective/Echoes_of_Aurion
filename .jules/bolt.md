@@ -24,3 +24,6 @@
 ## 2025-02-13 - Optimize pathfinding and threat matrix lookups
 **Learning:** High-frequency game loop code (like A* pathfinding and ThreatMatrix target selection) suffers significantly from calling `Array.from(map.values()).sort(...)` due to continuous O(N) array allocation overhead and O(N log N) sorting costs.
 **Action:** Replace `Array.from().sort()` with linear `for...of` iteration over Map entries or values to find minimum/maximum targets, achieving O(N) time complexity. Pre-cache any string generation (like grid coordinates) inside the Map values to further eliminate string concatenation overhead during the scan.
+## 2024-05-18 - Optimize ZoneMobRuntime array allocations and map lookups
+**Learning:** In high-frequency game loops (e.g. server ticks), avoid dynamic array allocations (like `Array.from()` and `.map()`) and Map `.get()` lookups inside loop bodies to prevent garbage collection latency.
+**Action:** Maintain explicitly cached arrays with static keys populated during initialization (e.g. `_orderedStates` and `entityIdToIndex`), and update these explicitly when modifying internal state instead of relying on $O(N)$ linear mapping during high frequency functions like `snapshot()`.
