@@ -527,8 +527,9 @@ export default function AurionOpenWorldRuntime() {
           onCombat: event => {
             if (!current()) return;
             if (event.attackerEntityId === "player:" + user.id) {
-              const impactSurface = event.hit
-                ? resolveAudioSurfaceAtPosition(terrainAudioRef.current, confirmedPositionRef.current ? { x: confirmedPositionRef.current.x / 1000, z: confirmedPositionRef.current.z / 1000 } : null) ?? undefined
+              const confirmed = confirmedPositionRef.current;
+              const impactSurface = event.hit && confirmed
+                ? resolveAudioSurfaceAtPosition(terrainAudioRef.current, { x: confirmed.x / 1000, z: confirmed.z / 1000 }) ?? undefined
                 : undefined;
               for (const audioEvent of surfaceAudioRef.current.combat({ sequence: event.sequence, hit: event.hit }, impactSurface)) {
                 window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: audioEvent }));
