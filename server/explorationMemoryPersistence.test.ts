@@ -1,6 +1,6 @@
 import { createPool } from "mysql2/promise";
 import { afterAll,beforeAll,beforeEach,describe,expect,it } from "vitest";
-import { and,eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, resolveAndRecordGlobalWorldEpoch, recordWorldChunkDelta } from "./db";
 import { aurionExplorationMemoryProjections } from "../drizzle/schema";
 import { createExplorationMemoryRecord } from "../shared/explorationMemoryProtocol";
@@ -24,7 +24,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
   it("derives stable memory hashes and never rewrites first discovery provenance",async()=>{
     const db=await getDb(); if(!db) throw new Error("Database not initialized");
     const first=await createExplorationMemoryRecord({
-      userId:1,worldId:"aurion-global-world",worldEpoch:1,chunkX:0,chunkZ:0,
+      userId:1,worldId:"echoes-of-aurion-global",worldEpoch:1,chunkX:0,chunkZ:0,
       firstDiscoveryReceiptHash:"sha256:"+"1".repeat(64),latestConfirmedVisitSequence:10,
       latestProjectionHash:"sha256:"+"2".repeat(64),sourceRevision:"a".repeat(40),
     });
@@ -72,6 +72,11 @@ suite("Issue 323 Phase H exploration memory",()=>{
       idempotencyKey: "exploration-memory-e2e:epoch:0001",
       now: new Date("2026-01-01T00:00:00.000Z"),
     });
+    const epochResult = await resolveAndRecordGlobalWorldEpoch({
+      requestedByUserId: userId,
+      idempotencyKey: "exploration-memory-e2e:epoch:0002",
+      now: new Date("2026-01-01T00:00:01.000Z"),
+    });
 
     const first = await recordExplorationDiscovery(userId, {
       epoch: 1,
@@ -86,7 +91,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
     expect(first.memory.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
 
     const replay = await recordExplorationDiscovery(userId, {
-      epoch: 1,
+      epoch,
       chunkX: chunk.x,
       chunkZ: chunk.z,
       observedAtLogicalFrame: 9,
@@ -95,7 +100,7 @@ suite("Issue 323 Phase H exploration memory",()=>{
     expect(replay.memory.firstDiscoveryReceiptHash).toBe(first.memory.firstDiscoveryReceiptHash);
     expect(replay.memory.latestConfirmedVisitSequence).toBe(10);
 
-    const read = await readExplorationMemory(userId, worldId, 1);
+    const read = await readExplorationMemory(userId, worldId, epoch);
     expect(read.records).toHaveLength(1);
     expect(read.records[0]).toEqual(first.memory);
   });
