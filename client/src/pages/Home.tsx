@@ -194,7 +194,6 @@ export default function Home() {
           aria-haspopup="dialog"
           onClick={() => openCommunity("assets")}
           className="group flex items-center justify-center min-h-12 rounded-xl border border-slate-500/40 bg-white/5 px-3 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-cyan-300 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 transition-all"
-          aria-label="GLB-Einreichung öffnen"
         >
           <Box className="mr-2 inline size-4 transition-transform motion-safe:group-hover:scale-110" />
           Asset-Katalog

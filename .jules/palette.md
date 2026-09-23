@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-10-24 - [Accessible Button Properties]
+**Learning:** Do not use `aria-label` when a button already has descriptive text inside. When managing loading states, update both `disabled:opacity-*` for consistent affordance, `aria-busy` for screen readers, and `title` to act as a tooltip for visual context.
+**Action:** Always check the child text of elements before adding `aria-label` to prevent overwriting the native accessible content, and provide cohesive interactive affordances across visual, tooltip, and semantic levels.
