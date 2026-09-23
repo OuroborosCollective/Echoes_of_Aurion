@@ -1,0 +1,115 @@
+name: AIM-279 High-Density Runtime Evidence
+on:
+  pull_request:
+    paths:
+      - "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx"
+      - "client/src/xaurion/spatial/HighDensityPerformanceGate.ts"
+      - "client/src/xaurion/spatial/HighDensityPerformanceGate.test.ts"
+      - "e2e/aim279.highDensityEvidence.spec.ts"
+      - "playwright.aim279.config.ts"
+      - ".github/workflows/aim279-high-density-evidence.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx"
+      - "client/src/xaurion/spatial/HighDensityPerformanceGate.ts"
+      - "e2e/aim279.highDensityEvidence.spec.ts"
+      - "playwright.aim279.config.ts"
+permissions:
+  contents: read
+jobs:
+  deterministic-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: pnpm check
+      - run: pnpm exec vitest run client/src/xaurion/spatial/HighDensityPerformanceGate.test.ts --reporter=verbose
+  browser-runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [phone, tablet, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_aim279_browser_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim279_browser_test
+      AURION_UI_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-ci-aim279-browser-key-never-production
+      VITE_APP_ID: aurion-isolated-aim279-browser-test
+      AURION_ALLOWED_ORIGINS: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - run: pnpm verify:migrations && pnpm exec drizzle-kit migrate
+      - run: pnpm check
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Start exact built runtime
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/aurion-aim279-browser-server.log 2>&1 &
+          echo $! >/tmp/aurion-aim279-browser-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aurion-aim279-browser-server.log
+          exit 1
+      - name: Run exact viewport evidence
+        env:
+          AIM279_PROFILE: ${{ matrix.profile }}
+        run: pnpm exec playwright test --config=playwright.aim279.config.ts --grep "on ${AIM279_PROFILE}$"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim279-runtime-evidence-${{ matrix.profile }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-aim279-report/
+            /tmp/aurion-aim279-browser-server.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Stop exact built runtime
+        if: always()
+        run: |
+          if test -f /tmp/aurion-aim279-browser-server.pid; then
+            kill "$(cat /tmp/aurion-aim279-browser-server.pid)" 2>/dev/null || true
+          fi
