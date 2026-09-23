@@ -25,16 +25,16 @@ describe("Aurion surface audio", () => {
 
   it("resolves fixed terrain vectors deterministically", () => {
     expect(resolveAudioSurfaceAtPosition(terrain, { x: -15.9, z: -15.9 })).toBe("grass");
-    expect(resolveAudioSurfaceAtPosition(terrain, { x: -7.9, z: -15.9 })).toBe("grass");
-    expect(resolveAudioSurfaceAtPosition(terrain, { x: 0.1, z: -15.9 })).toBe("stone");
-    expect(resolveAudioSurfaceAtPosition(terrain, { x: 4.1, z: -15.9 })).toBe("water");
+    expect(resolveAudioSurfaceAtPosition(terrain, { x: -11.9, z: -15.9 })).toBe("grass");
+    expect(resolveAudioSurfaceAtPosition(terrain, { x: -7.9, z: -15.9 })).toBe("stone");
+    expect(resolveAudioSurfaceAtPosition(terrain, { x: -3.9, z: -15.9 })).toBe("water");
     expect(resolveAudioSurfaceAtPosition(terrain, { x: 20, z: 20 })).toBeNull();
   });
 
   it("emits no duplicate footstep for sub-cadence confirmed movement", () => {
     const cadence = new ConfirmedFootstepCadence();
     expect(cadence.advance({ position: { x: 0, z: 0 }, tick: 1, terrain })).toBeNull();
-    expect(cadence.advance({ position: { x: 0.8, z: 0 }, tick: 11, terrain })?.cue).toBeNull();
+    expect(cadence.advance({ position: { x: 0.8, z: 0 }, tick: 11, terrain })).toBeNull();
     expect(cadence.advance({ position: { x: 1.7, z: 0 }, tick: 21, terrain })?.cue).toBe("movement.footstep.grass");
   });
 
