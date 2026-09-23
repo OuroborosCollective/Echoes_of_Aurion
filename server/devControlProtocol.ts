@@ -8,26 +8,31 @@ const DEV_TOKEN_MIN_LENGTH = 32;
 
 export function isLocalDevHostname(host: string | undefined): boolean {
   if (!host || typeof host !== "string") return false;
-  const direct = host.split(",", 1)[0]?.trim().toLowerCase() ?? "";
-  return direct === "localhost" ||
-    direct.startsWith("localhost:") ||
-    direct === "127.0.0.1" ||
-    direct.startsWith("127.0.0.1:") ||
-    direct === "::1" ||
-    direct === "[::1]" ||
-    direct.startsWith("[::1]:");
+  const values = host.split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
+  if (values.length === 0) return false;
+  return values.every(value =>
+    value === "localhost" ||
+    value.startsWith("localhost:") ||
+    value === "127.0.0.1" ||
+    value.startsWith("127.0.0.1:") ||
+    value === "::1" ||
+    value === "[::1]" ||
+    value.startsWith("[::1]:")
+  );
 }
 
 export function isAllowedDevControlHost(host: string | undefined, forwardedHost: string | undefined): boolean {
+  if (!isLocalDevHostname(host)) return false;
   if (forwardedHost && !isLocalDevHostname(forwardedHost)) return false;
-  return isLocalDevHostname(host);
+  return true;
 }
 
 export function isDevControlChannelEnabled(environment: NodeJS.ProcessEnv): boolean {
   if (environment.NODE_ENV === "production") return false;
   const flag = environment.AURION_DEV_CONTROL_CHANNEL ?? environment.AURION_DEV_CONTROL_ENABLED;
   if (flag === "false" || flag === "0") return false;
-  return environment.NODE_ENV === "development" || environment.NODE_ENV === "test" || flag === "true" || flag === "1";
+  if (environment.NODE_ENV === "development" || environment.NODE_ENV === "test") return true;
+  return flag === "true" || flag === "1";
 }
 
 export function resolveDevAdminToken(environment: NodeJS.ProcessEnv): string | null {
@@ -81,6 +86,10 @@ export function devControlCapabilities() {
       "unauthenticated_production_admin",
       "raw_world_delta_write",
       "npc_reward_mutation",
+      "production_asset_write",
+      "production_authoring_write",
+      "quest_publish",
     ]),
+    truthBoundary: "Development fixture operations execute only against an isolated AuthoritativeMovementZone instance and never the global live ZoneRegistry.",
   });
 }
