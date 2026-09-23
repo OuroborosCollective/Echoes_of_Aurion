@@ -434,7 +434,7 @@ export default function AurionOpenWorldRuntime() {
         frameTimes.push(delta);
         if (frameTimes.length > 180) frameTimes.shift();
       }
-      const renderInfo = engine.renderer.info?.render;
+      const renderInfo = engine.renderer?.info?.render;
       if (renderInfo) {
         maxRenderCalls = Math.max(maxRenderCalls, renderInfo.calls ?? 0);
         maxTriangles = Math.max(maxTriangles, renderInfo.triangles ?? 0);
