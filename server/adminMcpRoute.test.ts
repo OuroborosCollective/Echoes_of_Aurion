@@ -94,6 +94,7 @@ describe("pre-alpha dev control HTTP boundary", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          accept: "application/json, text/event-stream",
           authorization: "Bearer 0123456789abcdef0123456789abcdef",
         },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
@@ -153,7 +154,7 @@ describe("pre-alpha dev control HTTP boundary", () => {
     await withDevControlApp(async baseUrl => {
       const response = await fetch(`${baseUrl}/.well-known/aurion-dev-control`, {
         headers: {
-          host: "arelogic.space",
+          "x-forwarded-host": "arelogic.space",
           authorization: "Bearer 0123456789abcdef0123456789abcdef",
         },
       });
