@@ -72,6 +72,7 @@ import {
   chatGptTickReceipt,
   chatGptTickReplay,
 } from "./chatgptCausalityBridge";
+import { registerDevControlChannel } from "./devControlChannel";
 
 type AdminActor = {
   userId: number;
@@ -391,6 +392,7 @@ function sendUnauthorized(response: Response, settings: AurionAdminMcpSettings) 
 }
 
 export function registerAdminMcp(app: Express) {
+  registerDevControlChannel(app);
   app.use(AURION_ADMIN_MCP_PATH, (request, response, next) => {
     const approvedHost = resolveApprovedGatewayHost(request.headers.host, request.header("x-forwarded-host"));
     if (!approvedHost) {
