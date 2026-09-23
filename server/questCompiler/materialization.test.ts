@@ -193,7 +193,21 @@ describe("Quest domain command materialization (AIM-298 #459)", () => {
       edgeId: "edge_choice",
     });
     const complete = materializeQuestDomainCommand(instance, plan, {
-      ...common, kind: "complete", idempotencyKey: "complete:" + instance.id, eventSequence: 3,
+      ...common,
+      kind: "complete",
+      idempotencyKey: "complete:" + instance.id,
+      eventSequence: 3,
+      triggerEventId: instance.triggerEventId!,
+      triggerEventDigest: instance.triggerEventDigest!,
+      sourceEvidenceId: "evt_encounter_complete_materialization",
+      sourceEvidenceDigest: "d".repeat(64),
+      sourceLogicalRevision: instance.worldStateRevision!,
+      compilerVersion: instance.compilerVersion!,
+      sourceRevision: instance.sourceRevision!,
+      templateSetHash: instance.templateSetHash!,
+      candidateSetHash: instance.candidateSetHash!,
+      seedDigest: instance.seedDigest!,
+      roleBindingHash: instance.roleBindingHash!,
     });
 
     expect(accept.kind).toBe("accept");

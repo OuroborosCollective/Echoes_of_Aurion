@@ -22,7 +22,111 @@ import {
   aurionQuestReceipts,
   aurionQuestTemplateVersions,
 } from "../../drizzle/schema";
+import { aurionQuestCausalAnchors, aurionCausalTickReceipts } from "../../drizzle/aurionCausalitySchema";
+import { type QuestCausalClosure } from "./causalClosure";
+import { createQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
+import { appendTemporalEventInTransaction, verifyTemporalEventSource } from "../history/aurionTemporalEventPersistence";
+import { globalAurionEffectJournal } from "../effects/aurionEffectJournal";
 
+async function persistCausalClosure(tx: Parameters<Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]>[0], closure: QuestCausalClosure): Promise<void> {
+  const [causalReceipt] = await tx.select().from(aurionCausalTickReceipts)
+    .where(and(
+      eq(aurionCausalTickReceipts.worldId, closure.anchor.worldId),
+      eq(aurionCausalTickReceipts.receiptHash, closure.anchor.causalReceiptHash),
+    )).limit(1);
+  if (!causalReceipt ||
+      causalReceipt.zoneId !== closure.anchor.zoneId ||
+      causalReceipt.tick !== closure.anchor.tick ||
+      causalReceipt.revision !== closure.anchor.sourceRevision ||
+      causalReceipt.rulesetVersion !== closure.anchor.rulesetVersion) {
+    throw new Error("QUEST_CAUSAL_ANCHOR_RECEIPT_IDENTITY_MISMATCH");
+  }
+
+  const anchorWithoutHash = { ...closure.anchor };
+  delete (anchorWithoutHash as { anchorHash?: string }).anchorHash;
+  const normalizedAnchor = createQuestCausalAnchor(anchorWithoutHash);
+  const anchorRow = (await tx.select().from(aurionQuestCausalAnchors)
+    .where(eq(aurionQuestCausalAnchors.questReceiptId, closure.anchor.questReceiptId))
+    .limit(1))[0];
+  if (anchorRow) {
+    if (
+      anchorRow.id !== `qca_${closure.anchor.anchorHash.slice("sha256:".length)}` ||
+      anchorRow.questReceiptId !== closure.anchor.questReceiptId ||
+      anchorRow.worldId !== closure.anchor.worldId ||
+      anchorRow.epoch !== closure.anchor.epoch ||
+      anchorRow.zoneId !== closure.anchor.zoneId ||
+      anchorRow.tick !== closure.anchor.tick ||
+      anchorRow.causalReceiptHash !== closure.anchor.causalReceiptHash ||
+      anchorRow.sourceWorldRoot !== closure.anchor.sourceWorldRoot ||
+      anchorRow.sourceRevision !== closure.anchor.sourceRevision ||
+      anchorRow.rulesetVersion !== closure.anchor.rulesetVersion ||
+      anchorRow.sourceEvidenceId !== closure.anchor.sourceEvidenceId ||
+      anchorRow.sourceEvidenceDigest !== closure.anchor.sourceEvidenceDigest ||
+      anchorRow.sourceLogicalRevision !== closure.anchor.sourceLogicalRevision ||
+      anchorRow.triggerEventId !== closure.anchor.triggerEventId ||
+      anchorRow.triggerEventDigest !== closure.anchor.triggerEventDigest ||
+      anchorRow.compilerVersion !== closure.anchor.compilerVersion ||
+      anchorRow.templateSetHash !== closure.anchor.templateSetHash ||
+      anchorRow.candidateSetHash !== closure.anchor.candidateSetHash ||
+      anchorRow.seedDigest !== closure.anchor.seedDigest ||
+      anchorRow.roleBindingHash !== closure.anchor.roleBindingHash ||
+      anchorRow.commandId !== closure.anchor.commandId ||
+      anchorRow.planHash !== closure.anchor.planHash ||
+      anchorRow.graphHash !== closure.anchor.graphHash ||
+      anchorRow.previousStateHash !== closure.anchor.previousStateHash ||
+      anchorRow.resultStateHash !== closure.anchor.resultStateHash ||
+      anchorRow.anchorHash !== closure.anchor.anchorHash
+    ) throw new Error("QUEST_CAUSAL_ANCHOR_PERSISTED_CONFLICT");
+  } else {
+    await tx.insert(aurionQuestCausalAnchors).values({
+      id: `qca_${closure.anchor.anchorHash.slice("sha256:".length)}`,
+      questReceiptId: closure.anchor.questReceiptId,
+      worldId: closure.anchor.worldId,
+      epoch: closure.anchor.epoch,
+      zoneId: closure.anchor.zoneId,
+      tick: closure.anchor.tick,
+      causalReceiptHash: closure.anchor.causalReceiptHash,
+      sourceWorldRoot: closure.anchor.sourceWorldRoot,
+      sourceRevision: closure.anchor.sourceRevision,
+      rulesetVersion: closure.anchor.rulesetVersion,
+      sourceEvidenceId: closure.anchor.sourceEvidenceId,
+      sourceEvidenceDigest: closure.anchor.sourceEvidenceDigest,
+      sourceLogicalRevision: closure.anchor.sourceLogicalRevision,
+      triggerEventId: closure.anchor.triggerEventId,
+      triggerEventDigest: closure.anchor.triggerEventDigest,
+      compilerVersion: closure.anchor.compilerVersion,
+      templateSetHash: closure.anchor.templateSetHash,
+      candidateSetHash: closure.anchor.candidateSetHash,
+      seedDigest: closure.anchor.seedDigest,
+      roleBindingHash: closure.anchor.roleBindingHash,
+      commandId: closure.anchor.commandId,
+      planHash: closure.anchor.planHash,
+      graphHash: closure.anchor.graphHash,
+      previousStateHash: closure.anchor.previousStateHash,
+      resultStateHash: closure.anchor.resultStateHash,
+      anchorHash: normalizedAnchor.anchorHash,
+    });
+  }
+
+  await appendTemporalEventInTransaction(tx, closure.temporalEvent);
+  for (const intent of closure.effectIntents) {
+    await globalAurionEffectJournal.recordIntentInTransaction(tx, {
+      authorityReceiptHash: intent.authorityReceiptHash,
+      effectType: intent.effectType,
+      subjectId: intent.subjectId,
+      ordinal: intent.ordinal,
+      payload: intent.payload,
+    });
+  }
+
+  const persistedAnchor = (await tx.select().from(aurionQuestCausalAnchors)
+    .where(eq(aurionQuestCausalAnchors.questReceiptId, closure.anchor.questReceiptId))
+    .limit(1))[0];
+  if (!persistedAnchor || persistedAnchor.anchorHash !== closure.anchor.anchorHash) {
+    throw new Error("QUEST_CAUSAL_ANCHOR_READBACK_MISMATCH");
+  }
+}
+ 
 export class QuestPersistenceEngine {
   private instances = new Map<string, QuestInstance>();
   private plans = new Map<string, QuestPlan>();
@@ -283,15 +387,21 @@ export class QuestPersistenceEngine {
     idempotencyKey: string;
     receipt: QuestReceipt;
     updatedInstance: QuestInstance;
+    causalClosure?: QuestCausalClosure;
   }): Promise<{ updatedInstance: QuestInstance; receipt: QuestReceipt; replayed: boolean }> {
     if (!input.idempotencyKey || input.idempotencyKey.length > 128) throw new Error("QUEST_IDEMPOTENCY_KEY_INVALID");
     if (input.receipt.idempotencyKey !== input.idempotencyKey || input.receipt.instanceId !== input.instanceId) {
       throw new Error("QUEST_RECEIPT_IDENTITY_MISMATCH");
     }
     if (!this.verifyReceiptIntegrity(input.receipt)) throw new Error(`QUEST_RECEIPT_TAMPER_DETECTED:${input.receipt.id}`);
+    if (input.updatedInstance.state === "completed" && !input.causalClosure) {
+      throw new Error("QUEST_CAUSAL_CLOSURE_REQUIRED");
+    }
+    if (input.causalClosure) await verifyTemporalEventSource(input.causalClosure.temporalEvent);
     return this.withInstanceLock(input.instanceId, async () => {
       const db = await getDb();
       if (!db) {
+        if (input.causalClosure) throw new Error("QUEST_CAUSAL_DATABASE_REQUIRED_FOR_CLOSURE");
         const replay = [...this.receipts.values()].find(receipt =>
           receipt.instanceId === input.instanceId && receipt.idempotencyKey === input.idempotencyKey
         );
@@ -364,6 +474,7 @@ export class QuestPersistenceEngine {
             receiptHash: replayRow.receiptHash,
             createdAt: replayRow.createdAt.toISOString(),
           });
+          if (input.causalClosure) await persistCausalClosure(tx, input.causalClosure);
           this.instances.set(instance.id, instance);
           this.receipts.set(receipt.id, receipt);
           return { updatedInstance: instance, receipt, replayed: true };
@@ -396,6 +507,7 @@ export class QuestPersistenceEngine {
           state: input.updatedInstance.state,
           instanceJson: JSON.stringify(input.updatedInstance),
         }).where(eq(aurionQuestInstances.id, input.instanceId));
+        if (input.causalClosure) await persistCausalClosure(tx, input.causalClosure);
         this.instances.set(input.instanceId, input.updatedInstance);
         this.receipts.set(input.receipt.id, input.receipt);
         return { updatedInstance: input.updatedInstance, receipt: input.receipt, replayed: false };

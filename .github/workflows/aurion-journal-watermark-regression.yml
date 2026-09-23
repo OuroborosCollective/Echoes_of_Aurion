@@ -130,7 +130,7 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
-          const lastLate = journal.entries.find(entry => entry.tag === "0057_aurion_economic_ledger_v2");
+          const lastLate = journal.entries.find(entry => entry.tag === "0058_aurion_quest_causal_anchor");
           if (!lastLate || !Number.isSafeInteger(Number(lastLate.when))) throw new Error("late journal timestamp missing");
           const legacyWatermark = Number(lastLate.when) + 10_000_000;
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
@@ -159,7 +159,7 @@ jobs:
           (cd dist-production-apply && sha256sum --strict -c checksums.sha256)
           node dist-production-apply/deploy/verify-aurion-production-schema-apply-artifact.mjs dist-production-apply "$GITHUB_SHA"
 
-      - name: Apply 0021 through 0057 despite the legacy watermark
+      - name: Apply 0021 through 0058 despite the legacy watermark
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
           AURION_SCHEMA_APPLY_ROOT: ${{ github.workspace }}/dist-production-apply
@@ -192,6 +192,7 @@ jobs:
             "0055_aurion_glb_external_provenance",
             "0056_aurion_temporal_history_v1",
             "0057_aurion_economic_ledger_v2",
+            "0058_aurion_quest_causal_anchor",
           ];
           if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
           if (receipt.preflight?.absentCount !== tags.length || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
@@ -200,7 +201,7 @@ jobs:
           if (receipt.repairedJournalTags?.length !== 0) throw new Error("unexpected journal repair on clean 0020 prefix");
           NODE
 
-      - name: Prove all 58 journal rows exist while the historical watermark is untouched
+      - name: Prove all 59 journal rows exist while the historical watermark is untouched
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
         run: |
@@ -212,7 +213,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 58) throw new Error("expected 58 journal rows after bounded apply");
+            if (Number(rows[0]?.rowCount) !== 59) throw new Error("expected 59 journal rows after bounded apply");
             if (Number(rows[0]?.maxCreatedAt) !== expectedWatermark) throw new Error("legacy historical watermark was rewritten");
           } finally {
             await connection.end();
@@ -238,7 +239,7 @@ jobs:
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [rows] = await connection.query("SELECT COUNT(*) AS rowCount, MAX(`created_at`) AS maxCreatedAt FROM `__drizzle_migrations`");
-            if (Number(rows[0]?.rowCount) !== 58 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
+            if (Number(rows[0]?.rowCount) !== 59 || Number(rows[0]?.maxCreatedAt) !== expectedWatermark) {
               throw new Error("retry changed historical journal state");
             }
           } finally {

@@ -23,6 +23,7 @@ export const lateAurionMigrationTags = [
   "0055_aurion_glb_external_provenance",
   "0056_aurion_temporal_history_v1",
   "0057_aurion_economic_ledger_v2",
+  "0058_aurion_quest_causal_anchor",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
