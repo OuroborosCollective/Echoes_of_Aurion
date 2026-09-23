@@ -115,6 +115,7 @@ export default function AurionOpenWorldRuntime() {
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [zoneRetryEpoch, setZoneRetryEpoch] = useState(0);
   const [currentClassId, setCurrentClassId] = useState<CharacterClassId>("knight");
+  const confirmedPositionRef = useRef<{ x: number; z: number } | null>(null);
   const [confirmedPosition, setConfirmedPosition] = useState<{ x: number; z: number }>();
   const [remotePlayers, setRemotePlayers] = useState<readonly ConfirmedZonePresence[]>([]);
   const [celebration, setCelebration] = useState(0);
@@ -510,6 +511,7 @@ export default function AurionOpenWorldRuntime() {
               setRemotePlayers(remotePresenceRef.current?.presences ?? []);
             } catch (error) { engine.onRuntimeError?.(error); return; }
             setConfirmedPosition({ ...self.position });
+            confirmedPositionRef.current = { ...self.position };
             motionRef.current?.project(self.position, snapshot.tick);
             const movementCue = surfaceAudioRef.current.advanceMovement({
               position: { x: self.position.x / 1000, z: self.position.z / 1000 },
@@ -524,7 +526,7 @@ export default function AurionOpenWorldRuntime() {
             if (!current()) return;
             if (event.attackerEntityId === "player:" + user.id) {
               const impactSurface = event.hit
-                ? resolveAudioSurfaceAtPosition(terrainAudioRef.current, engineRef.current?.player.position ?? { x: 0, z: 0 }) ?? undefined
+                ? resolveAudioSurfaceAtPosition(terrainAudioRef.current, confirmedPositionRef.current ? { x: confirmedPositionRef.current.x / 1000, z: confirmedPositionRef.current.z / 1000 } : null) ?? undefined
                 : undefined;
               for (const audioEvent of surfaceAudioRef.current.combat({ sequence: event.sequence, hit: event.hit }, impactSurface)) {
                 window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: audioEvent }));
