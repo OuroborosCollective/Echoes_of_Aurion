@@ -41,6 +41,6 @@ export function hashExplorationMemoryRecord(input: ExplorationMemoryRecordInput)
 
 export function createExplorationMemoryRecord(input: ExplorationMemoryRecordInput): Promise<ExplorationMemoryRecord> {
   return hashExplorationMemoryRecord(input).then(memoryHash => Object.freeze(
-    explorationMemoryRecordSchema.parse({ ...input, memoryHash })
+    explorationMemoryRecordSchema.parse({ ...input, schema: EXPLORATION_MEMORY_SCHEMA, memoryHash })
   ));
 }
