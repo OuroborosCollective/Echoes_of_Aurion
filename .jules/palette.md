@@ -18,3 +18,6 @@
 ## 2026-09-15 - Landing and Community ARIA Improvements
 **Learning:** Buttons that trigger dialog overlays (like the community and account panels) lacked semantic structure, and disabled states didn't fully account for loading transitions, causing poor screen reader experiences.
 **Action:** Applied `aria-haspopup="dialog"` to buttons opening the Aurion panels and integrated `loading` states with `disabled` properties during initialization, extending `aria-busy` for explicit wait indications.
+## 2024-09-22 - [AIChatBox Accessibility Improvement]
+**Learning:** Icon-only buttons used for form submissions in reusable components like `AIChatBox` often lack visual tooltips and screen reader context, making them difficult to use for both sighted mouse/keyboard users and assistive technology users. Text areas without explicit labels also need `aria-label` attributes to ensure context is announced.
+**Action:** Always verify that input fields without explicit `<label>` tags have `aria-label` attributes, and ensure icon-only buttons include both an `aria-label` for screen readers and a `title` attribute to provide a visual tooltip.
