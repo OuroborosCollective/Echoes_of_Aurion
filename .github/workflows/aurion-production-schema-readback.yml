@@ -160,9 +160,8 @@ jobs:
             "0057_aurion_economic_ledger_v2",
             "0058_aurion_quest_causal_anchor",
             "0059_aurion_mobile_movement_mode",
-                "0060_aurion_npc_policy_evolution",
-                  "0061_aurion_exploration_memory",
-                "0060_aurion_npc_policy_evolution",
+            "0060_aurion_npc_policy_evolution",
+            "0061_aurion_exploration_memory",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
