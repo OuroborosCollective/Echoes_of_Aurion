@@ -412,18 +412,14 @@ export class AdminQuestStudioService {
     const existing = (await this.persistenceEngine.listInstances({ playerUserId: userId }))
       .find(instance => instance.templateId === templateId && ["offered", "active"].includes(instance.state));
     let offeredInstance: QuestInstance;
-    let offeredPlan: QuestPlan;
     if (existing) {
       const existingPlan = await this.persistenceEngine.getPlan(existing.planHash);
       if (!existingPlan) throw new Error("QUEST_LEGACY_PLAN_NOT_FOUND");
       offeredInstance = existing;
-      offeredPlan = existingPlan;
     } else {
       const offered = await this.offerQuest({ playerUserId: userId, templateId });
-      const plan = await this.persistenceEngine.getPlan(offered.planHash);
-      if (!plan) throw new Error("QUEST_LEGACY_PLAN_NOT_FOUND");
+      if (!(await this.persistenceEngine.getPlan(offered.planHash))) throw new Error("QUEST_LEGACY_PLAN_NOT_FOUND");
       offeredInstance = offered.instance;
-      offeredPlan = plan;
     }
     if (offeredInstance.state === "offered") await this.acceptQuest(userId, offeredInstance.id);
     const { getGameplayProgress } = await import("../db");
