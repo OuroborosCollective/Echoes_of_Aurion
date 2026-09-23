@@ -77,7 +77,7 @@ describe("Aurion dev control fixture runtime", () => {
     expect(first.authoritativeRuntime).toBe("AuthoritativeMovementZone");
     expect(first.persistenceMutation).toBe("none");
     expect(first.tick).toBe(0);
-    expect(first.stateHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.stateHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it("executes a deterministic encounter seed and rejects idempotency reuse with different arguments", () => {
@@ -96,7 +96,7 @@ describe("Aurion dev control fixture runtime", () => {
     const zone = new AuthoritativeMovementZone("observatory_threshold");
     zone.resetDevelopmentFixture();
     const state = zone.getCanonicalZoneState();
-    expect(hashCanonicalZoneState(state)).toMatch(/^[a-f0-9]{64}$/);
+    expect(hashCanonicalZoneState(state)).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(state.worldId).toBeDefined();
     expect(state.players).toHaveLength(0);
   });
