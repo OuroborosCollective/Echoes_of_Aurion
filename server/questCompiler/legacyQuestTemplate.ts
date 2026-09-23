@@ -1,5 +1,6 @@
 import type { QuestTemplateVersion } from "../../shared/aurionQuestContract";
-import { listLegacyQuestBridges, type LegacyQuestBridge } from "../legacyQuestBridge";
+import { listLegacyQuestBridges } from "../legacyQuestBridge";
+import type { LegacyQuestBridge } from "../../shared/aurionLegacyQuestBridgeContract";
 
 const giverNpcId = (giver: LegacyQuestBridge["giver"]): "lyra" | "orun" => giver.toLowerCase() as "lyra" | "orun";
 
