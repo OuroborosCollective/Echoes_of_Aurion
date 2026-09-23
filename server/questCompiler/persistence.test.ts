@@ -142,4 +142,68 @@ describe("QuestPersistenceEngine continuous runtime commit (AIM-298)", () => {
 
     expect((await persistence.getReceiptsForInstance(staleInstance.id))).toHaveLength(1);
   });
+  it("serializes concurrent identical transitions to one durable receipt", async () => {
+    const persistence = new QuestPersistenceEngine();
+    const concurrentInstance = { ...instance, id: "qi_test_458_concurrent" };
+    await persistence.saveInstance(concurrentInstance);
+    const first = transition(concurrentInstance);
+
+    const [a, b] = await Promise.all([
+      persistence.commitObjectiveTransition({
+        instanceId: concurrentInstance.id,
+        expectedStateHash: first.previousStateHash,
+        idempotencyKey: first.receipt.idempotencyKey,
+        receipt: first.receipt,
+        updatedInstance: first.updatedInstance,
+      }),
+      persistence.commitObjectiveTransition({
+        instanceId: concurrentInstance.id,
+        expectedStateHash: first.previousStateHash,
+        idempotencyKey: first.receipt.idempotencyKey,
+        receipt: first.receipt,
+        updatedInstance: first.updatedInstance,
+      }),
+    ]);
+
+    expect([a.replayed, b.replayed].sort()).toEqual([false, true]);
+    expect((await persistence.getReceiptsForInstance(concurrentInstance.id))).toHaveLength(1);
+  });
+
+  it("fails closed when an idempotency key is reused with changed receipt payload", async () => {
+    const persistence = new QuestPersistenceEngine();
+    const conflictInstance = { ...instance, id: "qi_test_458_conflict" };
+    await persistence.saveInstance(conflictInstance);
+    const first = transition(conflictInstance);
+    await persistence.commitObjectiveTransition({
+      instanceId: conflictInstance.id,
+      expectedStateHash: first.previousStateHash,
+      idempotencyKey: first.receipt.idempotencyKey,
+      receipt: first.receipt,
+      updatedInstance: first.updatedInstance,
+    });
+
+    const conflictingResultState = computeQuestStateHash({
+      ...first.updatedInstance,
+      objectiveProgress: { investigate: 99 },
+    });
+    const conflictingReceipt = {
+      ...first.receipt,
+      id: "rcpt_conflicting_payload",
+      resultStateHash: conflictingResultState,
+      receiptHash: computeCanonicalHash("aurion.quest.event.v1", {
+        previousStateHash: first.previousStateHash,
+        resultStateHash: conflictingResultState,
+      }),
+    };
+
+    await expect(persistence.commitObjectiveTransition({
+      instanceId: conflictInstance.id,
+      expectedStateHash: first.previousStateHash,
+      idempotencyKey: first.receipt.idempotencyKey,
+      receipt: conflictingReceipt,
+      updatedInstance: first.updatedInstance,
+    })).rejects.toThrow("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
+
+    expect((await persistence.getReceiptsForInstance(conflictInstance.id))).toHaveLength(1);
+  });
 });
