@@ -98,6 +98,7 @@ export class ZoneMobRuntime {
 
   /** Development-only fixture reset using the same canonical mob definitions as live runtime. */
   resetDevelopmentFixture(tick: number): void {
+    if (process.env.NODE_ENV === "production") throw new Error("ZONE_MOB_FIXTURE_PRODUCTION_FORBIDDEN");
     if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("ZONE_MOB_FIXTURE_TICK_INVALID");
     for (const definition of observatoryMobDefinitions) {
       this.states.set(definition.entityId, initialMobRuntimeState(definition, tick));
