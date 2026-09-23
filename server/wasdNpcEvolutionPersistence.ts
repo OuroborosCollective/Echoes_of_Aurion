@@ -74,10 +74,12 @@ export async function commitNpcPolicyMutation(
     .where(eq(aurionNpcPolicyMutationReceipts.id, receipt.mutationReceiptId)).limit(1))[0];
 
   if (existingReceipt) {
-    // If it's a perfect duplicate, treat it as idempotent and return
-    if (existingReceipt.npcId === receipt.npcId && existingReceipt.verdict === receipt.verdict) {
-      return;
-    }
+    const candidateHash = npcHash(stableCatalogStringify({ ...receipt, payload: undefined }));
+    const identityMatches =
+      existingReceipt.npcId === receipt.npcId &&
+      existingReceipt.verdict === receipt.verdict &&
+      existingReceipt.receiptHash === candidateHash;
+    if (identityMatches) return;
     throw new Error("CONFLICTING_DUPLICATE_RECEIPT");
   }
 
