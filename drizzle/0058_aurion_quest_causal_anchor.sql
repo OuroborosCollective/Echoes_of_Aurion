@@ -3,7 +3,7 @@ CREATE TABLE `aurionQuestCausalAnchors` (
   `questReceiptId` varchar(128) NOT NULL,
   `worldId` varchar(64) NOT NULL,
   `epoch` int NOT NULL,
-  `zoneId` varchar(64) NOT NULL,
+  `zoneId` varchar(128) NOT NULL,
   `tick` int NOT NULL,
   `causalReceiptHash` varchar(96) NOT NULL,
   `sourceWorldRoot` varchar(96) NOT NULL,
