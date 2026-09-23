@@ -47,6 +47,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   gameplay: {
     openWorld: { useQuery: () => ({ data: fixture.worldData }) },
     issueZoneTicket: { useMutation: () => ({ mutate: (_: unknown, reply: typeof fixture.tickets[number]) => fixture.tickets.push(reply) }) },
+    recordExplorationDiscovery: { useMutation: () => ({ mutateAsync: vi.fn(async () => ({ status: "VERIFIED", memory: null })) }) },
     acceptQuest: { useMutation: () => ({}) },
   },
 } }));
