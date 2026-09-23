@@ -86,6 +86,34 @@ describe("adminMcp HTTP resource", () => {
 
 describe("pre-alpha dev control HTTP boundary", () => {
 
+  it("hard-disables the real dev HTTP endpoint in production even with a valid token", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
+    await withDevControlApp(async baseUrl => {
+      const response = await fetch(`${baseUrl}/dev/admin-mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: "Bearer 0123456789abcdef0123456789abcdef",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      });
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: "dev_control_channel_disabled_in_production",
+      });
+
+      const metadata = await fetch(`${baseUrl}/.well-known/aurion-dev-control`);
+      expect(metadata.status).toBe(403);
+      await expect(metadata.json()).resolves.toMatchObject({
+        error: "dev_control_channel_disabled_in_production",
+      });
+    });
+  });
+
+
+
   it("accepts an authenticated local MCP tools/list request on the real dev endpoint", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AURION_DEV_ADMIN_TOKEN", "0123456789abcdef0123456789abcdef");
