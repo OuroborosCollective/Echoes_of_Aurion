@@ -17,7 +17,7 @@ describe('AurionAuthorityHud Responsiveness', () => {
         // Set window width to mobile
         vi.stubGlobal('innerWidth', 375);
         
-        render(<AurionAuthorityHud userId={7} connected onMove={vi.fn()} onAction={vi.fn()} />);
+        render(<AurionAuthorityHud userId={7} connected onMove={vi.fn()} onTouchMoveDestination={vi.fn()} onAction={vi.fn()} />);
         
         const hud = screen.getByRole("region", { name: "Serverbestätigter Charakter" });
         expect(hud).toBeDefined();
