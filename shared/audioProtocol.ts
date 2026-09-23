@@ -8,7 +8,7 @@ export const AURION_AUDIO_PROTOCOL_VERSION = "aurion-audio.v1" as const;
 
 export type AudioCategory = "ambient" | "interaction" | "combat" | "movement" | "progression" | "resource" | "crafting";
 export type AudioBiome = "tower" | "plains" | "forest" | "cave" | "city" | "wetland" | "stone_ruins" | "cinder_vault" | "boss";
-export type AudioSurface = "earth" | "grass" | "stone" | "wood" | "water";
+export type AudioSurface = "earth" | "sand" | "grass" | "stone" | "wood" | "water";
 export type AudioWeapon = "blade" | "staff" | "spear" | "focus" | "sharp" | "pointed" | "blunt";
 export type AudioNpcVoice = "masculine" | "feminine" | "neutral";
 export type AudioCreature = "wolf" | "human" | "monster";
@@ -38,6 +38,8 @@ export type AudioCueId =
   | "combat.attack.sharp"
   | "combat.attack.pointed"
   | "combat.attack.blunt"
+  | "combat.swing.blade"
+  | "combat.impact.blade"
   | "combat.creature.wolf.attack"
   | "combat.creature.human.attack"
   | "combat.creature.monster.attack"
@@ -49,11 +51,13 @@ export type AudioCueId =
   | "movement.footstep.stone"
   | "movement.footstep.wood"
   | "movement.footstep.water"
+  | "movement.footstep.sand"
   | "movement.run.earth"
   | "movement.run.grass"
   | "movement.run.stone"
   | "movement.run.wood"
   | "movement.run.water"
+  | "movement.run.sand"
   | "resource.harvest.plant"
   | "resource.harvest.wood"
   | "resource.mine.ore"
@@ -68,14 +72,22 @@ export type AudioEvent =
   | { readonly cue: "combat.magic"; readonly category: "combat"; readonly element?: "resonance" | "fire" | "frost" | "void" }
   | { readonly cue: "combat.spell.heal" | "combat.spell.buff"; readonly category: "combat"; readonly spell: "heal" | "buff" }
   | { readonly cue: "combat.attack.blade" | "combat.attack.staff" | "combat.attack.spear" | "combat.attack.focus" | "combat.attack.sharp" | "combat.attack.pointed" | "combat.attack.blunt"; readonly category: "combat"; readonly weapon: AudioWeapon }
+  | { readonly cue: "combat.swing.blade"; readonly category: "combat"; readonly weapon: "blade"; readonly phase: "swing" }
+  | { readonly cue: "combat.impact.blade"; readonly category: "combat"; readonly weapon: "blade"; readonly phase: "impact"; readonly surface?: AudioSurface }
   | { readonly cue: "combat.creature.wolf.attack" | "combat.creature.human.attack" | "combat.creature.monster.attack" | "combat.creature.wolf.death" | "combat.creature.human.death" | "combat.creature.monster.death"; readonly category: "combat"; readonly creature: AudioCreature; readonly action: "attack" | "death" }
-  | { readonly cue: "movement.footstep.earth" | "movement.footstep.grass" | "movement.footstep.stone" | "movement.footstep.wood" | "movement.footstep.water" | "movement.run.earth" | "movement.run.grass" | "movement.run.stone" | "movement.run.wood" | "movement.run.water"; readonly category: "movement"; readonly surface: AudioSurface; readonly stride?: number }
+  | { readonly cue: "movement.footstep.earth" | "movement.footstep.grass" | "movement.footstep.stone" | "movement.footstep.wood" | "movement.footstep.water" | "movement.footstep.sand" | "movement.run.earth" | "movement.run.grass" | "movement.run.stone" | "movement.run.wood" | "movement.run.water" | "movement.run.sand"; readonly category: "movement"; readonly surface: AudioSurface; readonly gait?: "walk" | "run"; readonly stride?: number }
   | { readonly cue: "resource.harvest.plant" | "resource.harvest.wood" | "resource.mine.ore"; readonly category: "resource"; readonly resource: AudioGatheringAction }
   | { readonly cue: "crafting.workbench.saw"; readonly category: "crafting"; readonly station: "workbench" }
   | { readonly cue: "progression.level_up"; readonly category: "progression"; readonly level: number };
 
-export function audioCueForFootstep(surface: AudioSurface): AudioEvent {
-  return { cue: `movement.footstep.${surface}`, category: "movement", surface } as AudioEvent;
+export function audioCueForFootstep(surface: AudioSurface, gait: "walk" | "run" = "walk", stride = 0): AudioEvent {
+  return { cue: `movement.${gait === "run" ? "run" : "footstep"}.${surface}`, category: "movement", surface, gait, stride } as AudioEvent;
+}
+
+export function audioCueForSword(phase: "swing" | "impact", surface?: AudioSurface): AudioEvent {
+  return phase === "swing"
+    ? { cue: "combat.swing.blade", category: "combat", weapon: "blade", phase }
+    : { cue: "combat.impact.blade", category: "combat", weapon: "blade", phase, ...(surface ? { surface } : {}) };
 }
 
 export function audioCueForWeapon(weapon: AudioWeapon): AudioEvent {
