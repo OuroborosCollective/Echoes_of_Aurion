@@ -25,6 +25,23 @@ export interface AurionQuestAcceptIntent extends OperationalIntentMetadata {
 export interface AurionQuestHandInIntent extends OperationalIntentMetadata {
   type: "quest_hand_in";
   questId: string;
+  /** Canonical quest completion provenance. The causal receipt hash is intentionally absent to avoid self-reference. */
+  instanceId?: string;
+  commandId?: string;
+  planHash?: string;
+  graphHash?: string;
+  expectedStateHash?: string;
+  triggerEventId?: string;
+  triggerEventDigest?: string;
+  sourceEvidenceId?: string;
+  sourceEvidenceDigest?: string;
+  sourceLogicalRevision?: number;
+  compilerVersion?: string;
+  sourceRevision?: string;
+  templateSetHash?: string;
+  candidateSetHash?: string;
+  seedDigest?: string;
+  roleBindingHash?: string;
 }
 export interface AurionMoveIntent extends OperationalIntentMetadata {
   type: "move";
@@ -91,8 +108,30 @@ export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, 
     case "mob_trigger":
       return { ...base, mobEntityId: intent.mobEntityId, triggerType: intent.triggerType };
     case "quest_accept":
-    case "quest_hand_in":
       return { ...base, questId: intent.questId };
+    case "quest_hand_in": {
+      const provenance = intent as AurionQuestHandInIntent;
+      return {
+        ...base,
+        questId: provenance.questId,
+        ...(provenance.instanceId !== undefined ? { instanceId: provenance.instanceId } : {}),
+        ...(provenance.commandId !== undefined ? { commandId: provenance.commandId } : {}),
+        ...(provenance.planHash !== undefined ? { planHash: provenance.planHash } : {}),
+        ...(provenance.graphHash !== undefined ? { graphHash: provenance.graphHash } : {}),
+        ...(provenance.expectedStateHash !== undefined ? { expectedStateHash: provenance.expectedStateHash } : {}),
+        ...(provenance.triggerEventId !== undefined ? { triggerEventId: provenance.triggerEventId } : {}),
+        ...(provenance.triggerEventDigest !== undefined ? { triggerEventDigest: provenance.triggerEventDigest } : {}),
+        ...(provenance.sourceEvidenceId !== undefined ? { sourceEvidenceId: provenance.sourceEvidenceId } : {}),
+        ...(provenance.sourceEvidenceDigest !== undefined ? { sourceEvidenceDigest: provenance.sourceEvidenceDigest } : {}),
+        ...(provenance.sourceLogicalRevision !== undefined ? { sourceLogicalRevision: provenance.sourceLogicalRevision } : {}),
+        ...(provenance.compilerVersion !== undefined ? { compilerVersion: provenance.compilerVersion } : {}),
+        ...(provenance.sourceRevision !== undefined ? { sourceRevision: provenance.sourceRevision } : {}),
+        ...(provenance.templateSetHash !== undefined ? { templateSetHash: provenance.templateSetHash } : {}),
+        ...(provenance.candidateSetHash !== undefined ? { candidateSetHash: provenance.candidateSetHash } : {}),
+        ...(provenance.seedDigest !== undefined ? { seedDigest: provenance.seedDigest } : {}),
+        ...(provenance.roleBindingHash !== undefined ? { roleBindingHash: provenance.roleBindingHash } : {}),
+      };
+    }
   }
 }
 

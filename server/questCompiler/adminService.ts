@@ -20,6 +20,9 @@ import { QuestValidator } from "./validator";
 import { CandidateResolver } from "./candidateResolver";
 import { authoringHash, createQuestPublishReceipt } from "../aurionAuthoringPersistence";
 import { materializeQuestDomainCommand } from "./materialization";
+import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
+import { readQuestCausalAnchorByReceiptId, resolveQuestCausalAnchor } from "./causalAnchor";
+import { buildQuestCausalClosure } from "./causalClosure";
 
 export interface AdminQuestStudioStatus {
   compilerVersion: string;
@@ -430,7 +433,8 @@ export class AdminQuestStudioService {
     return { updatedInstance: committed.updatedInstance, receipt: committed.receipt };
   }
 
-  public async completeQuest(userId: number, instanceId: string) {
+  public async completeQuest(userId: number, instanceId: string, source?: QuestCompleteSource) {
+    if (!source) throw new Error("QUEST_CAUSAL_SOURCE_REQUIRED");
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
     const current = plan.nodes.find(node => node.id === instance.currentNodeId);
     if (!current || current.type !== "end") throw new Error("QUEST_END_NODE_REQUIRED");
@@ -439,6 +443,12 @@ export class AdminQuestStudioService {
     if (prior) {
       if (prior.instanceId !== instance.id || prior.idempotencyKey !== idempotencyKey) throw new Error("QUEST_RECEIPT_IDEMPOTENCY_CONFLICT");
       if (computeQuestStateHash(instance) !== prior.resultStateHash) throw new Error("QUEST_RECEIPT_READBACK_MISMATCH");
+      const anchor = await readQuestCausalAnchorByReceiptId(prior.id);
+      if (
+        anchor.planHash !== prior.planHash ||
+        anchor.graphHash !== prior.graphHash ||
+        anchor.resultStateHash !== prior.resultStateHash
+      ) throw new Error("QUEST_CAUSAL_ANCHOR_REPLAY_BINDING_MISMATCH");
       return {
         updatedInstance: instance,
         receipt: prior,
@@ -449,28 +459,43 @@ export class AdminQuestStudioService {
       (max, receipt) => Math.max(max, receipt.eventSequence),
       0,
     ) + 1;
+    const completionCommand = materializeQuestDomainCommand(instance, plan, {
+      kind: "complete",
+      instanceId: instance.id,
+      planHash: instance.planHash,
+      graphHash: instance.graphHash,
+      expectedStateHash: computeQuestStateHash(instance),
+      idempotencyKey,
+      eventSequence: nextSequence,
+      ...source,
+    });
     const result = this.runtimeEngine.executeDomainCommand(
-      materializeQuestDomainCommand(instance, plan, {
-        kind: "complete",
-        instanceId: instance.id,
-        planHash: instance.planHash,
-        graphHash: instance.graphHash,
-        expectedStateHash: computeQuestStateHash(instance),
-        idempotencyKey,
-        eventSequence: nextSequence,
-      }),
+      completionCommand,
       instance,
       plan,
     );
+    const resolvedAnchor = await resolveQuestCausalAnchor({
+      instance,
+      plan,
+      command: completionCommand,
+      receipt: result.receipt,
+    });
+    const closure = buildQuestCausalClosure({
+      instance,
+      plan,
+      command: completionCommand,
+      receipt: result.receipt,
+      anchor: resolvedAnchor.anchor,
+    });
     const committed = await this.persistenceEngine.commitObjectiveTransition({
       instanceId: instance.id,
       expectedStateHash: computeQuestStateHash(instance),
       idempotencyKey,
       receipt: result.receipt,
       updatedInstance: result.updatedInstance,
+      causalClosure: closure,
     });
     return {
-      ...result,
       updatedInstance: committed.updatedInstance,
       receipt: committed.receipt,
       replayed: committed.replayed,

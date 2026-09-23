@@ -64,14 +64,27 @@ describe('QuestRuntimeEngine temporal determinism and receipt identity (AIM-298)
     );
 
     // 5. Complete
-    const { updatedInstance: completedInstance, receipt: completeReceipt, emittedWorldEvent } = runtime.completeQuest(
+    const source = {
+      triggerEventId: progressedInstance2.triggerEventId!,
+      triggerEventDigest: progressedInstance2.triggerEventDigest!,
+      sourceEvidenceId: progressedInstance2.triggerEventId!,
+      sourceEvidenceDigest: progressedInstance2.triggerEventDigest!,
+      sourceLogicalRevision: progressedInstance2.worldStateRevision!,
+      compilerVersion: progressedInstance2.compilerVersion!,
+      sourceRevision: progressedInstance2.sourceRevision!,
+      templateSetHash: progressedInstance2.templateSetHash!,
+      candidateSetHash: progressedInstance2.candidateSetHash!,
+      seedDigest: progressedInstance2.seedDigest,
+      roleBindingHash: progressedInstance2.roleBindingHash!,
+    };
+    const { updatedInstance: completedInstance, receipt: completeReceipt } = runtime.completeQuest(
       progressedInstance2,
-      plan
+      plan,
+      { source }
     );
     expect(completedInstance.state).toBe('completed');
     expect(completedInstance.updatedAt).toBe(expectedIso);
     expect(completeReceipt.createdAt).toBe(expectedIso);
-    expect(emittedWorldEvent.type).toBe('QUEST_COMPLETED_REVENGE');
   });
 
   it('produces byte-identical results and hashes across 100 consecutive executions with same clock', () => {

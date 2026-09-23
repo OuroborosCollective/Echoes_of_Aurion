@@ -10,6 +10,7 @@ on:
       - "scripts/read-aurion-economic-audit.ts"
       - "scripts/reconcile-aurion-economic-ledger.ts"
       - "drizzle/0057_aurion_economic_ledger_v2.sql"
+      - "drizzle/0058_aurion_quest_causal_anchor.sql"
       - "drizzle/aurionCausalitySchema.ts"
       - "drizzle/meta/_journal.json"
       - "config/aurion-migration-wave-manifest.json"
@@ -22,6 +23,7 @@ on:
       - "server/economy/**"
       - "server/db.ts"
       - "drizzle/0057_aurion_economic_ledger_v2.sql"
+      - "drizzle/0058_aurion_quest_causal_anchor.sql"
       - ".github/workflows/wave3-economic-ledger.yml"
 
 permissions:

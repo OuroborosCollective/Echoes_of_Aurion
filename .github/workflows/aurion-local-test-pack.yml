@@ -148,6 +148,14 @@ jobs:
           zone_id="$(cat .aurion-local-test-pack/evidence/wave2-step25-zone-id.txt)"
           pnpm exec tsx scripts/oracle-aurion-zone.ts --zone "$zone_id" --from-tick 3 --to-tick 4 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step25-oracle-readback.log
 
+      - name: Verify AIM-298 quest causal closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          env -u DATABASE_URL pnpm exec vitest run server/questCompiler/causalAnchor.test.ts server/questCompiler/causalClosure.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/aim298-quest-causal-contract.log
+          NODE_ENV=test AURION_ENCOUNTER_E2E=1 AURION_QUEST_CAUSAL_E2E=1 pnpm exec vitest run server/questCompiler/causalClosureMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/aim298-quest-causal-mariadb.log
+
       - name: Verify milestone gate evidence contract
         shell: bash
         run: |
