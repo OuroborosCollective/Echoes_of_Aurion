@@ -334,6 +334,19 @@ jobs:
           console.log(JSON.stringify({phase:"0058-applied",statementCount:statements.length}));
           NODE
 
+      - name: Apply 0059 mobile movement mode migration separately
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const sql=fs.readFileSync("drizzle/0059_aurion_mobile_movement_mode.sql","utf8");
+          const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try { for(const statement of statements) await connection.query(statement); } finally { await connection.end(); }
+          console.log(JSON.stringify({phase:"0059-applied",statementCount:statements.length}));
+          NODE
+
       - name: Prove all declared late migrations match after isolated apply
         run: |
           set -euo pipefail
