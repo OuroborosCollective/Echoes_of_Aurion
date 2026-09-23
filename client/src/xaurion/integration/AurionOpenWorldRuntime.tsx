@@ -169,6 +169,7 @@ export default function AurionOpenWorldRuntime() {
   const characterAppearance = trpc.assetSubmissions.characterAppearance.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated });
   const selectedCharacterUrl = characterAppearance.data?.storageUrl ?? confirmedSelection?.storageUrl ?? null;
   const issueZoneTicket = trpc.gameplay.issueZoneTicket.useMutation();
+  const recordExplorationDiscovery = trpc.gameplay.recordExplorationDiscovery.useMutation();
   const controlsQuery = trpc.player.ui.useQuery(undefined, { enabled: Boolean(activation) && isAuthenticated, staleTime: 15_000, refetchInterval: 10_000 });
   const controlsRef = useRef<ControlSettings | null>(null);
   const controls = playerUiReadbackSchema.safeParse(controlsQuery.data);
@@ -365,7 +366,7 @@ export default function AurionOpenWorldRuntime() {
         async ({ job, observedAtLogicalFrame }) => {
           try {
             if (abort.signal.aborted) return;
-            const result = await rpcUtils.gameplay.recordExplorationDiscovery.mutate({
+            const result = await recordExplorationDiscovery.mutateAsync({
               epoch: world.epoch,
               chunkX: job.manifest.coordinate.x,
               chunkZ: job.manifest.coordinate.z,
