@@ -29,12 +29,12 @@ suite("Issue 323 Phase H exploration memory",()=>{
       latestProjectionHash:"sha256:"+"2".repeat(64),sourceRevision:"a".repeat(40),
     });
     await db.insert(aurionExplorationMemoryProjections).values({
-      id:"exp_test",userId:1,worldId:"aurion-global-world",worldEpoch:1,chunkX:0,chunkZ:0,
+      id:"exp_test",userId:1,worldId:"echoes-of-aurion-global",worldEpoch:1,chunkX:0,chunkZ:0,
       firstDiscoveryReceiptHash:first.firstDiscoveryReceiptHash,latestConfirmedVisitSequence:first.latestConfirmedVisitSequence,
       latestProjectionHash:first.latestProjectionHash,sourceRevision:first.sourceRevision,memoryHash:first.memoryHash
     });
     const updated=await createExplorationMemoryRecord({
-      userId:1,worldId:"aurion-global-world",worldEpoch:1,chunkX:0,chunkZ:0,
+      userId:1,worldId:"echoes-of-aurion-global",worldEpoch:1,chunkX:0,chunkZ:0,
       firstDiscoveryReceiptHash:first.firstDiscoveryReceiptHash,latestConfirmedVisitSequence:20,
       latestProjectionHash:"sha256:"+"3".repeat(64),sourceRevision:"b".repeat(40),
     });
@@ -67,19 +67,15 @@ suite("Issue 323 Phase H exploration memory",()=>{
       payload: { xMm: 1000, zMm: 1000, assetKey: "aurion_tripo_starpath_marker" },
     });
 
-    await resolveAndRecordGlobalWorldEpoch({
+    const epochResult = await resolveAndRecordGlobalWorldEpoch({
       requestedByUserId: userId,
       idempotencyKey: "exploration-memory-e2e:epoch:0001",
       now: new Date("2026-01-01T00:00:00.000Z"),
     });
-    const epochResult = await resolveAndRecordGlobalWorldEpoch({
-      requestedByUserId: userId,
-      idempotencyKey: "exploration-memory-e2e:epoch:0002",
-      now: new Date("2026-01-01T00:00:01.000Z"),
-    });
+    const epoch = epochResult.plan.epoch;
 
     const first = await recordExplorationDiscovery(userId, {
-      epoch: 1,
+      epoch,
       chunkX: chunk.x,
       chunkZ: chunk.z,
       observedAtLogicalFrame: 10,
