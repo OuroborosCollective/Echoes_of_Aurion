@@ -5,6 +5,8 @@ import { getDb, resolveAndRecordGlobalWorldEpoch, recordWorldChunkDelta } from "
 import { aurionExplorationMemoryProjections } from "../drizzle/schema";
 import { createExplorationMemoryRecord } from "../shared/explorationMemoryProtocol";
 import { recordExplorationDiscovery, readExplorationMemory } from "./explorationMemoryPersistence";
+import { MariaDBCausalPersistenceAdapter } from "./causality/persistence";
+import { AuthoritativeMovementZone } from "./zoneRuntime";
 
 const suite=process.env.AURION_EXPLORATION_MEMORY_E2E==="1"&&process.env.DATABASE_URL?describe:describe.skip;
 
@@ -56,6 +58,19 @@ suite("Issue 323 Phase H exploration memory",()=>{
     const worldId = "echoes-of-aurion-global";
     const chunk = { x: 777702, z: -777702 };
     const userId = 2146999970;
+
+    const causalZone = new AuthoritativeMovementZone("observatory_threshold" as any);
+    causalZone.join({
+      userId: userId + 1,
+      socket: { readyState: 1, OPEN: 1, send: () => {}, close: () => {} } as any,
+      combatProfile: { combatLevel: 7, maxHealth: 600, weaponBonus: 15, weaponTrack: "blade" },
+    });
+    const causalIntents = [...causalZone.getPendingIntents()];
+    causalZone.tick();
+    const causalReceipt = causalZone.getLatestReceipt();
+    if (!causalReceipt) throw new Error("CAUSAL_RECEIPT_EXPECTED");
+    const causalAdapter = new MariaDBCausalPersistenceAdapter();
+    await causalAdapter.saveReceipt(causalReceipt, causalIntents);
 
     await recordWorldChunkDelta({
       actorUserId: userId,
