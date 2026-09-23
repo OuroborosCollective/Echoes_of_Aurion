@@ -37,7 +37,8 @@ function rowToRecord(row: typeof aurionExplorationMemoryProjections.$inferSelect
 
 async function verifyRow(row: typeof aurionExplorationMemoryProjections.$inferSelect): Promise<ExplorationMemoryRecord> {
   const value = rowToRecord(row);
-  const expected = await hashExplorationMemoryRecord({ ...value, memoryHash: undefined as never });
+  const { memoryHash: _memoryHash, ...base } = value;
+  const expected = await hashExplorationMemoryRecord(base);
   if (expected !== row.memoryHash) throw new Error("EXPLORATION_MEMORY_HASH_MISMATCH");
   return Object.freeze(value);
 }
