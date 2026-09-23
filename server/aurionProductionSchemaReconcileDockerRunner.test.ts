@@ -124,6 +124,7 @@ function makeArtifact() {
   "0058_aurion_quest_causal_anchor",
     "0059_aurion_mobile_movement_mode",
     "0060_aurion_npc_policy_evolution",
+    "0061_aurion_exploration_memory",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
