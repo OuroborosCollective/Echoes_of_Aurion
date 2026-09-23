@@ -421,6 +421,13 @@
       "when": 1790158181170,
       "tag": "0059_aurion_mobile_movement_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "5",
+      "when": 1790158182000,
+      "tag": "0060_aurion_npc_policy_evolution",
+      "breakpoints": true
     }
   ]
 }

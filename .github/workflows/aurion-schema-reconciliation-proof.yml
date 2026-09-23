@@ -47,6 +47,8 @@ on:
       - "drizzle/0056_aurion_temporal_history_v1.sql"
       - "drizzle/0057_aurion_economic_ledger_v2.sql"
       - "drizzle/0058_aurion_quest_causal_anchor.sql"
+      - "drizzle/0060_aurion_npc_policy_evolution.sql"
+      - "drizzle/0060_aurion_npc_policy_evolution.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -347,6 +349,18 @@ jobs:
           console.log(JSON.stringify({phase:"0059-applied",statementCount:statements.length}));
           NODE
 
+      - name: Apply 0060 NPC policy evolution migration separately
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const sql=fs.readFileSync("drizzle/0060_aurion_npc_policy_evolution.sql","utf8");
+          const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try { for(const statement of statements) await connection.query(statement); } finally { await connection.end(); }
+          console.log(JSON.stringify({phase:"0060-applied",statementCount:statements.length}));
+          NODE
       - name: Prove all declared late migrations match after isolated apply
         run: |
           set -euo pipefail

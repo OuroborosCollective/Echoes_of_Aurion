@@ -1,0 +1,37 @@
+name: AIM-296 BVH Benchmark
+on:
+  pull_request:
+    paths:
+      - "client/src/xaurion/spatial/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/aim296-bvh-benchmark.yml"
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - run: pnpm check
+      - run: pnpm exec vitest run client/src/xaurion/spatial/bvhPerformance.test.ts --reporter=verbose
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim296-bvh-performance-${{ github.event.pull_request.head.sha }}
+          path: aim296-bvh-performance-receipt.json
+          if-no-files-found: error
+          retention-days: 30
