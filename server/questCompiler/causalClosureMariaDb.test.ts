@@ -23,7 +23,7 @@ import {
   readEncounterCompletionEvidence,
 } from "../encounterCompletionEvidence";
 import { cleanupQuestRegressionUser } from "../questRegressionFixture";
-import { acceptGameplayQuest, applyGameplayAction, getDb, startGameplayEncounter } from "../db";
+import { acceptGameplayQuest, applyGameplayAction, getDb, resolveAndRecordGlobalWorldEpoch, startGameplayEncounter } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalTickRecorder } from "../causality/tickRecorder";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
