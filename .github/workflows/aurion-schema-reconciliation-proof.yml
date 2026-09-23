@@ -48,7 +48,6 @@ on:
       - "drizzle/0057_aurion_economic_ledger_v2.sql"
       - "drizzle/0058_aurion_quest_causal_anchor.sql"
       - "drizzle/0060_aurion_npc_policy_evolution.sql"
-      - "drizzle/0060_aurion_npc_policy_evolution.sql"
       - "drizzle/0061_aurion_exploration_memory.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
