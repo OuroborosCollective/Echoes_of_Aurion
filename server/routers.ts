@@ -50,6 +50,7 @@ import { CompanionMemoryStore } from "./companionMemory";
 import { globalCausalArchivingService } from "./causality/archivingService";
 import { readConfirmedProgressionTracks } from "./progressionReceiptPersistence";
 import { civilizationHistoryRouter } from "./civilizationHistoryRouter";
+import { readExplorationMemory, recordExplorationDiscovery } from "./explorationMemoryPersistence";
 import { desc, eq } from "drizzle-orm";
 import { 
   getConfirmedNpcPolicy, 
@@ -212,6 +213,8 @@ export const appRouter = router({
     npcActions: protectedProcedure.query(({ ctx }) => readConfirmedNpcActionPacket(ctx.user.id)),
     npcSemanticGraph: protectedProcedure.query(({ ctx }) => readConfirmedNpcSemanticGraphPacket(ctx.user.id)),
     npcProjectionProvenance: protectedProcedure.query(({ ctx }) => readConfirmedNpcProjectionProvenancePacket(ctx.user.id)),
+    explorationMemory: protectedProcedure.input(z.strictObject({ worldEpoch: z.number().int().min(1) })).query(({ ctx, input }) => readExplorationMemory(ctx.user.id, db.GLOBAL_WORLD_ID, input.worldEpoch)),
+    recordExplorationDiscovery: protectedProcedure.input(z.strictObject({ epoch: z.number().int().min(1), chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), observedAtLogicalFrame: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) })).mutation(({ ctx, input }) => recordExplorationDiscovery(ctx.user.id, input)),
     relationshipStanding: protectedProcedure.query(({ ctx }) => db.getRelationshipStanding(ctx.user.id)),
     currentEncounter: protectedProcedure.query(({ ctx }) => db.getCurrentGameplayEncounter(ctx.user.id)),
     wasdCoverage: protectedProcedure.query(() => readWasdAurionCoverage()),
