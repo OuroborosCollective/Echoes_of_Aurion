@@ -423,8 +423,16 @@ export class AdminQuestStudioService {
     await assertQuestNpcAuthority({ userId, questKey, kind: "complete", ...(clientGiver ? { clientGiver } : {}) });
     const templateId = `tpl_legacy_${questKey}`;
     const instance = (await this.persistenceEngine.listInstances({ playerUserId: userId }))
-      .find(candidate => candidate.templateId === templateId && candidate.state === "active");
+      .find(candidate => candidate.templateId === templateId && ["active", "completed"].includes(candidate.state));
     if (!instance) throw new Error("QUEST_CANONICAL_INSTANCE_REQUIRED");
+
+    // A completed canonical instance may only be projecting the compatibility
+    // read model after a lost response; never re-run the causal closure.
+    if (instance.state === "completed") {
+      const { completeGameplayQuest } = await import("../db");
+      return completeGameplayQuest({ userId, questKey, giver: getLegacyQuestBridge(questKey).giver });
+    }
+
     const plan = await this.persistenceEngine.getPlan(instance.planHash);
     if (!plan) throw new Error("QUEST_PLAN_NOT_FOUND");
 
