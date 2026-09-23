@@ -11,6 +11,7 @@ import {
   devControlCapabilities,
   isAllowedDevControlHost,
   isDevControlChannelEnabled,
+  isLoopbackRemoteAddress,
   verifyDevControlAuthorization,
 } from "./devControlProtocol";
 import { hashCanonicalZoneState } from "./causality/zoneCanonicalState";
@@ -157,7 +158,8 @@ function authorize(request: Request, response: Response): boolean {
     response.status(403).json({ error: "dev_control_channel_disabled_in_production" });
     return false;
   }
-  if (!isAllowedDevControlHost(request.headers.host, request.header("x-forwarded-host"))) {
+  if (!isAllowedDevControlHost(request.headers.host, request.header("x-forwarded-host")) ||
+      !isLoopbackRemoteAddress(request.socket.remoteAddress)) {
     response.status(403).json({ error: "dev_control_channel_forbidden_host" });
     return false;
   }
