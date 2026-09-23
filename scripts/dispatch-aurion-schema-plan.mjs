@@ -7,7 +7,7 @@ const tags = ["0021_aurion_global_world_state", "0022_aurion_world_chunk_deltas"
 
 export function validateSchemaDispatchPlan({ manifest, expectedSha, planSha256, ledgerRunId }) {
   if (!/^[a-f0-9]{40}$/.test(expectedSha ?? "") || !/^[a-f0-9]{64}$/.test(planSha256 ?? "") || !/^[1-9][0-9]*$/.test(ledgerRunId ?? "")) throw new Error("SCHEMA_DISPATCH_IDENTITY_INVALID");
-  if (manifest?.waveId !== "aurion-production-0021-0058" || manifest.schemaVersion !== "aurion.migration-wave-manifest.v2" || manifest.policy?.ownerApprovalRequired !== true || manifest.policy?.productionWritesScheduled !== false || manifest.migrations?.map(entry => entry.tag).join(",") !== tags.join(",")) throw new Error("SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED");
+  if (manifest?.waveId !== "aurion-production-0021-0059" || manifest.schemaVersion !== "aurion.migration-wave-manifest.v2" || manifest.policy?.ownerApprovalRequired !== true || manifest.policy?.productionWritesScheduled !== false || manifest.migrations?.map(entry => entry.tag).join(",") !== tags.join(",")) throw new Error("SCHEMA_DISPATCH_WAVE_NOT_AUTHORIZED");
 }
 
 export async function dispatchSchemaPlan(input, { request, pause, attempts = 260 }) {
