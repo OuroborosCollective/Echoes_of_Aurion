@@ -195,7 +195,6 @@ jobs:
             "0058_aurion_quest_causal_anchor",
             "0059_aurion_mobile_movement_mode",
             "0060_aurion_npc_policy_evolution",
-            "0060_aurion_npc_policy_evolution",
           ];
           if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
           if (receipt.preflight?.absentCount !== tags.length || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");
@@ -204,7 +203,7 @@ jobs:
           if (receipt.repairedJournalTags?.length !== 0) throw new Error("unexpected journal repair on clean 0020 prefix");
           NODE
 
-      - name: Prove all 60 journal rows exist while the historical watermark is untouched
+      - name: Prove all 61 journal rows exist while the historical watermark is untouched
         env:
           DATABASE_URL: mysql://root:aurion-watermark-proof@127.0.0.1:33306/aurion_journal_watermark
         run: |
