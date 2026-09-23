@@ -120,7 +120,7 @@ export class ZoneMobRuntime {
         state: "patrolling",
         targetEntityId: null,
         idleUntilTick: 0,
-        nextAttackTick: tick,
+        nextAttackTick: current.nextAttackTick,
       });
       this.states.set(entityId, seeded);
       return entityId;
