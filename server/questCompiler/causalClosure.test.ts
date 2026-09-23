@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeCanonicalHash } from "../../shared/aurionQuestCanonicalHash";
-import { createQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
+import { AURION_QUEST_CAUSAL_ANCHOR_SCHEMA, createQuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
 import { buildQuestCausalClosure } from "./causalClosure";
 import type { QuestInstance, QuestPlan, QuestReceipt } from "../../shared/aurionQuestContract";
 import type { QuestDomainCommand } from "../../shared/aurionQuestDomainCommandContract";
@@ -100,6 +100,7 @@ describe("Quest causal closure", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
     } as QuestReceipt;
     const anchor = createQuestCausalAnchor({
+      schema: AURION_QUEST_CAUSAL_ANCHOR_SCHEMA,
       questReceiptId: receipt.id,
       worldId: instance.worldId,
       epoch: 2,
