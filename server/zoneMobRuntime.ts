@@ -112,7 +112,16 @@ export class ZoneMobRuntime {
         ? ["mob_1", "mob_2"]
         : ["mob_1", "mob_2", "mob_3"];
     return Object.freeze(ids.map(entityId => {
-      if (!this.states.has(entityId)) throw new Error("ZONE_MOB_FIXTURE_ID_INVALID");
+      const current = this.states.get(entityId);
+      if (!current) throw new Error("ZONE_MOB_FIXTURE_ID_INVALID");
+      const seeded: MobRuntimeState = Object.freeze({
+        ...current,
+        state: "patrolling",
+        targetEntityId: null,
+        idleUntilTick: 0,
+        nextAttackTick: tick,
+      });
+      this.states.set(entityId, seeded);
       return entityId;
     }));
   }
