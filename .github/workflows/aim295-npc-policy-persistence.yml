@@ -46,7 +46,41 @@ jobs:
       - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
       - run: pnpm check
       - run: pnpm verify:migrations
-      - run: pnpm exec drizzle-kit migrate
+      - name: Apply complete migration journal
+        run: pnpm exec drizzle-kit migrate
+      - name: Diagnose migration failure
+        if: failure()
+        run: |
+          set +e
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const journal=JSON.parse(fs.readFileSync("drizzle/meta/_journal.json","utf8"));
+          const conn=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const tags=journal.entries.map(e=>e.tag);
+            for (const tag of tags) {
+              const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
+              const statements=sql.split(/\\s*-->\\s*statement-breakpoint\\s*/).map(s=>s.trim()).filter(Boolean);
+              for (let i=0;i<statements.length;i++) {
+                try { await conn.query(statements[i]); }
+                catch (error) {
+                  console.error(JSON.stringify({
+                    recordType:"aurion_migration_diagnostic",
+                    tag,
+                    statementIndex:i,
+                    errorCode:error?.code ?? null,
+                    sqlState:error?.sqlState ?? null,
+                    errno:error?.errno ?? null,
+                    message:String(error?.message ?? error),
+                  },null,2));
+                  process.exit(17);
+                }
+              }
+            }
+          } finally { await conn.end(); }
+          NODE
+          exit 17
       - name: Schema readback
         run: |
           set -euo pipefail
