@@ -343,6 +343,35 @@ export class AuthoritativeMovementZone {
   combatSnapshot() { return this.combatants(); }
   resourceSnapshot() { return this.resourceRuntime.snapshot(this.tickNumber); }
 
+  /** Development-only reset of the isolated authoritative fixture runtime. */
+  resetDevelopmentFixture(): void {
+    if (process.env.NODE_ENV === "production") throw new Error("ZONE_FIXTURE_PRODUCTION_FORBIDDEN");
+    this.peers.clear();
+    this.peersByEntityId.clear();
+    this.pendingIntents = [];
+    this.arrivalSequence = 0;
+    this.tickNumber = 0;
+    this.snapshotSeq = 0;
+    this.combatSequence = 0;
+    this.inputAcknowledgementPending = false;
+    this.movedLastTick = false;
+    this.previousReceiptHash = null;
+    this.lastReceipt = null;
+    this.questSummaries.clear();
+    this.cachedQuestSummaries = [];
+    this.questSummariesDirty = true;
+    this.sortedPeers = [];
+    this.sortedPeersByEntityId = [];
+    this.sortedPeersDirty = true;
+    this.mobRuntime.resetDevelopmentFixture(this.tickNumber);
+    this.resourceRuntime.resetDevelopmentFixture();
+  }
+
+  /** Development-only bounded encounter fixture selection over canonical mobs. */
+  seedDevelopmentEncounter(fixtureType: "starter_encounter" | "boss_encounter" | "npc_dialogue_fixture"): readonly string[] {
+    return this.mobRuntime.seedDevelopmentEncounter(fixtureType);
+  }
+
   private admitSequence(peer: PresencePeer, clientSeq: number): boolean {
     if (!Number.isSafeInteger(clientSeq) || clientSeq <= peer.lastReceivedClientSeq) return false;
     peer.lastReceivedClientSeq = clientSeq;

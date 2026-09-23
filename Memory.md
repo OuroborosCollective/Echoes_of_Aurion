@@ -1207,3 +1207,14 @@ Evidence: Fresh branch from main df58afd9c013125aa348255e081c99b133d21dfb; isola
 Learned: Exploration memory is a derived readmodel, not local visibility truth; missing authoritative chunk evidence remains UNPROVABLE.
 Open: exact-head CI, then manual merge and independent main/runtime readback.
 Next safe step: merge only after all gates are green and read back the resulting main revision.
+
+
+### 2026-09-24 — Hardened local pre-alpha dev control channel (#482)
+Status: VERIFIED implementation; final exact-head merge evidence pending.
+Task: Replace the incomplete AI-Studio dev-control proposal with a bounded, real local MCP channel over the current Aurion runtime.
+Decisions: Keep production `/admin-mcp` OAuth/OIDC authority unchanged; `/dev/admin-mcp` is non-production only, loopback-host and loopback-socket restricted, requires an explicitly configured dev token, uses only typed fixture operations, and has defense-in-depth production guards inside the runtime. Reset/seed operate on an isolated `AuthoritativeMovementZone` using canonical mob/resource runtime implementations, canonical state hashing and idempotency; no SQL/shell/Git/VPS/raw world writes.
+Touched surfaces: `server/devControlProtocol.ts`, `server/devControlChannel.ts`, `server/zoneRuntime.ts`, `server/zoneMobRuntime.ts`, `server/zoneResourceRuntime.ts`, `server/adminMcp.ts`, `server/adminMcpRoute.test.ts`, `server/devControlChannel.test.ts`, `AURION_ADMIN_MCP_CONTRACT.md`.
+Evidence: PR #501 exact head before this Memory append `0df711ff3293c47a6953c7141ba50d223cd035c0`; current relevant gates on that head: Runtime Candidate PASS, Runtime Container Proof PASS, Local Test Pack PASS, AIM-292 PASS, AIM-240 PASS, AIM-265 PASS, OS3A PASS. The only remaining AIM-259 run is a broader group-instance regression outside this issue's dev-control scope and was explicitly not used as Issue-482 success evidence. Earlier failures were fixed from actual CI logs: a TypeScript fixture-hook error, incorrect HTTP test harness host simulation, missing MCP `Accept` header, and an incorrect canonical hash-format assertion.
+Learned: A safe developer control plane can test real Aurion runtime behavior without becoming a second production authority when its network boundary, token, typed tool surface, isolated runtime instance and evidence boundary are enforced independently.
+Open: This Memory append creates a new commit, so the post-memory exact-head gates and final main readback are still required.
+Next safe step: Run the fresh exact-head wave, then merge PR #501 only if all required/relevant gates remain green; independently read back main and close #482 from the merged evidence.

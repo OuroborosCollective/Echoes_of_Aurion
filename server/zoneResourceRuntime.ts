@@ -137,6 +137,16 @@ export class ZoneResourceRuntime {
     return "accepted";
   }
 
+  /** Development-only reset using the same canonical resource definitions as the live runtime. */
+  public resetDevelopmentFixture(): void {
+    for (const state of this.orderedStates) {
+      state.remaining = state.capacity;
+      state.depleted = false;
+      state.respawnAtTick = null;
+    }
+    this.revision = 1;
+  }
+
   /** Advances deterministic respawn state to the supplied authoritative zone tick. */
   public tick(currentTick: number): boolean {
     if (!Number.isSafeInteger(currentTick) || currentTick < 0) {
