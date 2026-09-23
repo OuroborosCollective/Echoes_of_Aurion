@@ -1193,3 +1193,8 @@ Status: MERGED and independently read back on main.
 Änderung: Der versionierte Audio-Pfad ergänzt deterministische Oberflächen-Cues für Schwertkampf und Schritte; Terrain wird aus dem server-projizierten World-State aufgelöst, Lauf-/Gehkadenz ausschließlich aus bestätigten Positionen und Ticks abgeleitet und bestätigte Combat-Sequenzen werden exakt einmal verarbeitet. Audio bleibt reine Presentation und erzeugt keine Gameplay-Authority oder zweite Terrain-Truth.
 Erkenntnis: Deterministische Audio-Projektion ist belastbar, wenn alle Gameplay-relevanten Inputs aus bestätigter Server-Evidence stammen und der Audio-Orchestrator nur als idempotente Presentation-Schicht arbeitet.
 Evidence: Exact reconciled PR head 6dfdc956e638c396c4cf56118c4c08c195514bc5; 10/10 exact-head workflows PASS; PR #494 merged as 8e4bcd6245b456674ceb6394cf3c23ea3f113578; main independently reads back at the same merge SHA. No second gameplay authority or terrain truth introduced.
+
+### 2026-09-23 — Closure proof integration #497
+Änderung: AIM-295 Persistenz-/Rollback-Verträge, AIM-296 BVH-Benchmark und AIM-279 High-Density-Runtime-Evidence wurden gegen den aktuellen Aurion-Stand reconciled; Schema-/Root-/Runtime-Proofs wurden auf demselben Revision-Head verifiziert.
+Erkenntnis: Ein grüner Abschluss ist erst belastbar, wenn Code-Contract, isolierte MariaDB-/Runtime-Evidence und die unabhängigen Repository-/Browser-Gates denselben exakten Head belegen.
+Evidence: PR #497 exact head 24493bafa705ccde905df46b852e1279aeb44209; 25/25 GitHub Actions successful, 0 failures. AIM-296 receipt: median 262.09x speedup, p95 8.26ms accelerated vs 1401.22ms native, parity 32/32, 0 failures; AIM-279 produced verified desktop/tablet/phone artifacts.
