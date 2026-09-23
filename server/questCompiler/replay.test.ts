@@ -26,7 +26,7 @@ describe('QuestReplayEngine (AIM-298)', () => {
     });
 
     const replayEngine = new QuestReplayEngine(registry);
-    const result = replayEngine.replayInstance(instance, plan, factEngine.getFacts(), plan.planHash);
+    const result = replayEngine.replayInstance(instance, plan, factEngine.getFacts(), plan.planHash, undefined, { sourceEvents: factEngine.getEvents() });
 
     expect(result.verdict).toBe('MATCH');
     expect(result.replayVerdict).toMatchObject({
@@ -71,7 +71,7 @@ describe('QuestReplayEngine (AIM-298)', () => {
     });
 
     const replayEngine = new QuestReplayEngine(registry);
-    const result = replayEngine.replayInstance(instance, plan, factEngine.getFacts(), 'tampered_expected_hash');
+    const result = replayEngine.replayInstance(instance, plan, factEngine.getFacts(), 'tampered_expected_hash', undefined, { sourceEvents: factEngine.getEvents() });
 
     expect(result.verdict).toBe('FIRST_DIVERGENCE');
     expect(result.replayVerdict.status).toBe('FIRST_DIVERGENCE');
@@ -114,5 +114,75 @@ describe('QuestReplayEngine (AIM-298)', () => {
       expectedHash: null,
       observedHash: null,
     });
+  });
+  it('rejects a persisted instance when the source event is missing', () => {
+    const factEngine = new WorldFactEngine();
+    const trigger = factEngine.recordEvent({
+      id: 'evt_source_missing',
+      type: 'CARAVAN_ATTACKED',
+      source: 'test',
+      data: { caravanId: 'c3', merchantId: 'npc_merchant_kaelen', playerUserId: '1' },
+    }).event;
+
+    const registry = new QuestTemplateRegistry();
+    const runtime = new QuestRuntimeEngine(factEngine, registry);
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1',
+      playerUserId: 1,
+      triggerEventId: trigger.id,
+    });
+
+    const result = new QuestReplayEngine(registry).replayInstance(
+      instance, plan, factEngine.getFacts(), plan.planHash, undefined, { sourceEvents: [] },
+    );
+    expect(result.verdict).toBe('UNPROVABLE');
+    expect(result.replayVerdict.reason).toBe('QUEST_TRIGGER_EVENT_UNPROVABLE');
+  });
+
+  it('detects source-event digest tampering instead of returning MATCH', () => {
+    const factEngine = new WorldFactEngine();
+    const trigger = factEngine.recordEvent({
+      id: 'evt_source_tamper',
+      type: 'CARAVAN_ATTACKED',
+      source: 'test',
+      data: { caravanId: 'c4', merchantId: 'npc_merchant_kaelen', playerUserId: '1' },
+    }).event;
+
+    const registry = new QuestTemplateRegistry();
+    const runtime = new QuestRuntimeEngine(factEngine, registry);
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1',
+      playerUserId: 1,
+      triggerEventId: trigger.id,
+    });
+
+    const tamperedInstance = { ...instance, triggerEventDigest: '0'.repeat(64) };
+    const result = new QuestReplayEngine(registry).replayInstance(
+      tamperedInstance, plan, factEngine.getFacts(), plan.planHash, undefined, { sourceEvents: factEngine.getEvents() },
+    );
+    expect(result.verdict).toBe('FIRST_DIVERGENCE');
+    expect(result.replayVerdict.firstDivergentStage).toBe('SOURCE_EVENT');
+  });
+
+  it('returns UNPROVABLE when source-event readback is not supplied', () => {
+    const factEngine = new WorldFactEngine();
+    factEngine.recordEvent({
+      id: 'evt_no_source_option',
+      type: 'CARAVAN_ATTACKED',
+      source: 'test',
+      data: { caravanId: 'c5', merchantId: 'npc_merchant_kaelen', playerUserId: '1' },
+    });
+    const registry = new QuestTemplateRegistry();
+    const runtime = new QuestRuntimeEngine(factEngine, registry);
+    const { instance, plan } = runtime.compileAndOfferQuest({
+      worldId: 'world_1',
+      playerUserId: 1,
+      triggerEventId: 'evt_no_source_option',
+    });
+    const result = new QuestReplayEngine(registry).replayInstance(
+      instance, plan, factEngine.getFacts(), plan.planHash,
+    );
+    expect(result.verdict).toBe('UNPROVABLE');
+    expect(result.replayVerdict.reason).toBe('QUEST_SOURCE_EVENT_EVIDENCE_MISSING');
   });
 });
