@@ -64,6 +64,7 @@ on:
       - "drizzle/0057_aurion_economic_ledger_v2.sql"
       - "drizzle/0058_aurion_quest_causal_anchor.sql"
       - "drizzle/0059_aurion_mobile_movement_mode.sql"
+      - "drizzle/0060_aurion_npc_policy_evolution.sql"
   push:
     branches: [main]
     paths:
