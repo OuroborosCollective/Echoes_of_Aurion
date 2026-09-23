@@ -313,6 +313,7 @@ export default function AurionOpenWorldRuntime() {
         : currentWorld;
       if (disposed) return;
       if (!world || typeof world.worldSeed !== "string" || typeof world.epoch !== "number") throw new Error("WORLD_CONTEXT_REQUIRED");
+      const confirmedWorldEpoch = world.epoch;
       let preference = new URLSearchParams(window.location.search).get("renderer");
       if (!preference) { try { preference = sessionStorage.getItem("aurion:renderer"); } catch { /* Default WebGL2 remains available. */ } }
       const requested = recoveryEpoch > 0 ? "webgl2" : preference === "webgpu" ? "webgpu" : "webgl2";
@@ -367,7 +368,7 @@ export default function AurionOpenWorldRuntime() {
           try {
             if (abort.signal.aborted) return;
             const result = await recordExplorationDiscovery.mutateAsync({
-              epoch: world.epoch,
+              epoch: confirmedWorldEpoch,
               chunkX: job.manifest.coordinate.x,
               chunkZ: job.manifest.coordinate.z,
               observedAtLogicalFrame,
