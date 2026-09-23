@@ -36,6 +36,7 @@ const tags = [
   "0058_aurion_quest_causal_anchor",
   "0059_aurion_mobile_movement_mode",
   "0060_aurion_npc_policy_evolution",
+  "0061_aurion_exploration_memory",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [
