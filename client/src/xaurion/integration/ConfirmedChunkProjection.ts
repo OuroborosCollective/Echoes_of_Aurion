@@ -8,6 +8,7 @@ import { clientObservationIdentifier } from "@shared/aurionClientVerificationCon
 
 const observationSchema = z.strictObject({ connectionId: clientObservationIdentifier, clientSessionId: clientObservationIdentifier });
 export type AppliedChunkObservation = { job: WorldChunkProjectionWorkerJobV2; binding: z.infer<typeof observationSchema>; observedAtLogicalFrame: number };
+export type VerifiedChunkApplication = { job: WorldChunkProjectionWorkerJobV2; observedAtLogicalFrame: number };
 
 const envelope = z.strictObject({ status: z.literal("VERIFIED"), epoch: z.number().int().min(1),
   sourceRevision: z.string().regex(/^[a-f0-9]{40}$/), membership: z.enum(["COMMITTED_CHUNK_RECEIPT", "GENERATOR_AND_EMPTY_STREAM"]),
@@ -84,7 +85,7 @@ export class ConfirmedChunkProjection {
     private terrain: (x: number, z: number) => number,
     private fetch: (input: { epoch: number; chunkX: number; chunkZ: number; generation: number }) => Promise<unknown>,
     private report: (evidence: { status: string; count: number; desiredCount: number; pendingCount: number; failedCount: number; meshCount?: number; projectionHash?: string; worldRootHash?: string }) => void,
-    private onApplied?: (observation: AppliedChunkObservation) => Promise<void>) {}
+    private onApplied?: (observation: AppliedChunkObservation) => Promise<void>, private onVerifiedApplied?: (application: VerifiedChunkApplication) => Promise<void>) {}
 
   update(position: { x: number; z: number }, deltaSeconds = 0) {
     if (this.abort.signal.aborted || this.epoch < 1 || !Number.isFinite(deltaSeconds) || deltaSeconds < 0) return;
@@ -131,6 +132,7 @@ export class ConfirmedChunkProjection {
         this.groups.set(key, group); this.failures.delete(key); this.scene.add(group);
         const meshCount = [...this.groups.values()].reduce((total, item) => total + item.children.length, 0);
         this.report({ status: "APPLIED", count: this.groups.size, desiredCount: this.desired.length, pendingCount: this.pending.size, failedCount: [...this.failures.values()].filter(value => value.terminal).length, meshCount, projectionHash: prepared.job.manifest.projectionHash, worldRootHash: prepared.job.manifest.worldCausalRoot });
+        if (this.onVerifiedApplied) void this.onVerifiedApplied({ job: prepared.job, observedAtLogicalFrame: this.logicalFrame }).catch(() => {});
         if (prepared.observation && this.onApplied) {
           // Observation failure cannot remove the applied scene or change authority.
           void this.onApplied({ job: prepared.job, binding: prepared.observation, observedAtLogicalFrame: this.logicalFrame }).catch(() => {});
