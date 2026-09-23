@@ -41,7 +41,7 @@ describe("Aurion surface audio", () => {
   it("uses run cadence above the deterministic confirmed-speed threshold", () => {
     const cadence = new ConfirmedFootstepCadence();
     cadence.advance({ position: { x: -15.9, z: -15.9 }, tick: 1, terrain });
-    const first = cadence.advance({ position: { x: -13.4, z: -15.9 }, tick: 11, terrain });
+    const first = cadence.advance({ position: { x: -11.4, z: -15.9 }, tick: 11, terrain });
     expect(first?.cue).toBe("movement.run.grass");
   });
 
