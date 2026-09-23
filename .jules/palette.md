@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-05-18 - Avoid over-labeling interactive elements
+**Learning:** Applying `aria-label` to buttons that already contain accessible text content (like a visible title or author name span) completely overwrites that text for screen readers. This is an accessibility anti-pattern.
+**Action:** Only apply `aria-label` to strictly icon-only buttons or interactive elements that lack any visible, descriptive text content. For icon-only buttons, also provide a `title` attribute to show a tooltip for sighted users on hover.
