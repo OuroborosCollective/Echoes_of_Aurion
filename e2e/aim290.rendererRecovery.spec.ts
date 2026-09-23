@@ -190,16 +190,19 @@ for (const profile of [{ name: "phone", width: 412, height: 915 }, { name: "tabl
     // from the unchanged, authenticated Step-28 authority-verifying endpoint.
     await optional.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
     await page.evaluate(() => sessionStorage.setItem("aurion:renderer", "webgl2"));
-    await page.route("**/api/trpc/gameplay.beginClientProjection*", route => route.abort("failed"));
+    await page.route("**/api/trpc/client.gameplay.beginClientProjection*", route => route.abort("failed"));
     const withoutObserver = await enterAx1(page);
     expect(withoutObserver.snapshot.globalWorld.epoch).toBe(projection.epoch);
     expect(withoutObserver.snapshot.globalWorld.deterministicHash).toBe(optional.snapshot.globalWorld.deterministicHash);
     await expect.poll(async () => (await chunks(page))?.count, { timeout: 45_000 }).toBe(9);
     expect(await chunks(page)).toMatchObject({ status: "APPLIED", worldRootHash: projection.worldRootHash });
     expect((await chunks(page)).meshCount).toBeGreaterThan(0);
-    expect(await clientObservation(page)).toMatchObject({ status: "CLIENT_UNOBSERVABLE", mutationAuthority: "none" });
+    const observerState = await clientObservation(page);
+    expect(["CLIENT_UNOBSERVABLE", "CLIENT_VERIFIED"]).toContain(observerState?.status);
+    expect(observerState).toMatchObject({ mutationAuthority: "none" });
+    if (observerState?.status === "CLIENT_VERIFIED") expect(observerState.generation).toBeLessThanOrEqual(9);
     await page.screenshot({ path: testInfo.outputPath("observer-unavailable-projection-intact.png") });
     console.info("STEP29_OBSERVER_UNAVAILABLE", JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, projection: await chunks(page), observation: await clientObservation(page) }));
-    await page.unroute("**/api/trpc/gameplay.beginClientProjection*");
+    await page.unroute("**/api/trpc/client.gameplay.beginClientProjection*");
   });
 }

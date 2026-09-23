@@ -1198,3 +1198,12 @@ Evidence: Exact reconciled PR head 6dfdc956e638c396c4cf56118c4c08c195514bc5; 10/
 Änderung: AIM-295 Persistenz-/Rollback-Verträge, AIM-296 BVH-Benchmark und AIM-279 High-Density-Runtime-Evidence wurden gegen den aktuellen Aurion-Stand reconciled; Schema-/Root-/Runtime-Proofs wurden auf demselben Revision-Head verifiziert.
 Erkenntnis: Ein grüner Abschluss ist erst belastbar, wenn Code-Contract, isolierte MariaDB-/Runtime-Evidence und die unabhängigen Repository-/Browser-Gates denselben exakten Head belegen.
 Evidence: PR #497 exact head 24493bafa705ccde905df46b852e1279aeb44209; 25/25 GitHub Actions successful, 0 failures. AIM-296 receipt: median 262.09x speedup, p95 8.26ms accelerated vs 1401.22ms native, parity 32/32, 0 failures; AIM-279 produced verified desktop/tablet/phone artifacts.
+### 2026-09-23 — Issue 323 Phase H exploration memory
+Status: VERIFIED candidate; exact-head CI and post-merge main readback pending.
+Task: Persistent exploration memory derived only from verified chunk projections.
+Decisions: First-discovery provenance is immutable; visit sequence is monotone; memory hashes bind world/epoch/chunk/projection/source revision; AX1 emits discovery only after verified chunk application.
+Touched surfaces: exploration memory protocol/persistence/tests, tRPC read/write, confirmed chunk hook, migration 0061, migration manifests and schema-proof gates.
+Evidence: Fresh branch from main df58afd9c013125aa348255e081c99b133d21dfb; isolated MariaDB E2E and exact-head workflow added; no client/renderer exploration authority introduced.
+Learned: Exploration memory is a derived readmodel, not local visibility truth; missing authoritative chunk evidence remains UNPROVABLE.
+Open: exact-head CI, then manual merge and independent main/runtime readback.
+Next safe step: merge only after all gates are green and read back the resulting main revision.

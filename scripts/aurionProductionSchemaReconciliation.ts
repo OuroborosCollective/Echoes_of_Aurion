@@ -26,6 +26,7 @@ export const lateAurionMigrationTags = [
   "0058_aurion_quest_causal_anchor",
   "0059_aurion_mobile_movement_mode",
   "0060_aurion_npc_policy_evolution",
+  "0061_aurion_exploration_memory",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
