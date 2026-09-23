@@ -21,3 +21,6 @@
 ## 2026-09-15 - Array Allocation Overhead in Zone Canonical State Snapshot
 **Learning:** In high-frequency game loops, calling `Array.from().sort()` repeatedly (e.g. to serialize `skillCooldownUntilTick` maps or `questSummaries`) on every `getCanonicalZoneState()` call causes unnecessary array creations and mappings, inducing GC pressure. Sorting is already handled centrally in `sortCanonicalZoneState`.
 **Action:** Replaced dynamic `Array.from().sort()` in `getCanonicalZoneState` with a dirty-flagged array cache (`cachedQuestSummaries`) and direct `for...of` Map iteration (for `skillCooldowns`), eliminating per-tick array mapping overhead.
+## 2025-02-13 - Optimize pathfinding and threat matrix lookups
+**Learning:** High-frequency game loop code (like A* pathfinding and ThreatMatrix target selection) suffers significantly from calling `Array.from(map.values()).sort(...)` due to continuous O(N) array allocation overhead and O(N log N) sorting costs.
+**Action:** Replace `Array.from().sort()` with linear `for...of` iteration over Map entries or values to find minimum/maximum targets, achieving O(N) time complexity. Pre-cache any string generation (like grid coordinates) inside the Map values to further eliminate string concatenation overhead during the scan.
