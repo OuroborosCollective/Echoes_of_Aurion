@@ -760,12 +760,6 @@
       "role": "SUPPORT"
     },
     {
-      "path": "client/src/xaurion/components/TouchController.tsx",
-      "donor": "AX1",
-      "capabilityId": "client.input-zone-bridge",
-      "role": "SUPPORT"
-    },
-    {
       "path": "client/src/xaurion/components/VirtualJoystick.tsx",
       "donor": "AX1",
       "capabilityId": "client.input-zone-bridge",
@@ -1543,6 +1537,12 @@
       "path": "vendor/wasd-npc/ax1LivingWorldProtocol.d.ts",
       "donor": "WASD",
       "capabilityId": "npc.mob-fsm",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/MobileMovementController.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"
     },
     {
