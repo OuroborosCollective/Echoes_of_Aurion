@@ -25,6 +25,7 @@ const tags = [
   "0056_aurion_temporal_history_v1",
   "0057_aurion_economic_ledger_v2",
   "0058_aurion_quest_causal_anchor",
+  "0059_aurion_mobile_movement_mode",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 

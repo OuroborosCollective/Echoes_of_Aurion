@@ -6,7 +6,7 @@ describe("confirmed equipment visual projection", () => {
     const ui = {
       version: "aurion-ax1-ui.v1",
       userId: 17,
-      settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"] },
+      settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" },
       items: [
         { id: "weapon-1", version: "aurion_v2", name: "Blade", definition: "blade-v2", levelExact: "1", quality: "normal", slot: "main_hand", status: "equipped", stats: { attack: 1 }, receiptId: "receipt-weapon" },
         { id: "helm-1", version: "legacy", name: "Helm", definition: "helm", levelExact: "1", quality: "normal", slot: "head", status: "equipped", stats: {}, receiptId: "receipt-helm" },

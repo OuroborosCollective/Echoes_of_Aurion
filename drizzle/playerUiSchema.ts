@@ -1,4 +1,4 @@
-import { int, mysqlTable, text } from "drizzle-orm/mysql-core";
+import { int, mysqlTable, text, varchar } from "drizzle-orm/mysql-core";
 
 export const aurionPlayerUiSettings = mysqlTable("aurionPlayerUiSettings", {
   userId: int("userId").primaryKey(),
@@ -6,4 +6,5 @@ export const aurionPlayerUiSettings = mysqlTable("aurionPlayerUiSettings", {
   autoLoot: int("autoLoot").notNull().default(1),
   analyticsConsent: int("analyticsConsent").notNull().default(0),
   hotbarJson: text("hotbarJson").notNull(),
+  movementMode: varchar("movementMode", { length: 32 }).notNull().default("joystick"),
 });

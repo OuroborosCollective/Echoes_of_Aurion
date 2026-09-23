@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AX1TouchDirector } from "../components/TouchController";
+import { MobileMovementController } from "../components/MobileMovementController";
 import { trpc } from "@/lib/trpc";
 import { z } from "zod";
-import { playerUiReadbackSchema, aurionControlSkills, type SkillCommand } from "@shared/playerUiProtocol";
+import { playerUiReadbackSchema, aurionControlSkills, type MovementMode, type SkillCommand } from "@shared/playerUiProtocol";
 import { groupReadmodelSchema } from "@shared/groupInstanceProtocol";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import { InventoryModal } from "../components/InventoryModal";
@@ -11,7 +11,6 @@ import { QuestLogModal } from "../components/QuestLogModal";
 import { CraftingModal } from "../components/CraftingModal";
 import { ControlsModal } from "../components/ControlsModal";
 import { GameHUD } from "../components/GameHUD";
-import { VirtualJoystick } from "../components/VirtualJoystick";
 import { ClassSelectModal, DeterminismDebugOverlay, GuildManagementModal, HomesteadBuilderModal, MiniMap, NPCDialogueModal, NPCEconomyModal, ResearchModal, TerritoryPoliticsModal, WorldMapModal, type Ax1ConfirmedWorld } from "../components/Ax1WorldSurfaces";
 import { NpcDecisionPanel } from "./NpcDecisionPanel";
 import { NpcStandingPanel } from "./NpcStandingPanel";
@@ -46,7 +45,7 @@ const ax1WorldHudSchema = worldReadbackSchema.extend({
   })).max(64),
 });
 
-export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction, onInteract }: {
+export function AurionAuthorityHud({ userId, connected, position, remotePlayers = [], onMove, onAction, onInteract, onTouchMoveDestination }: {
   userId: number;
   connected: boolean;
   position?: { x: number; z: number };
@@ -54,6 +53,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   onMove: (forward: number, right: number) => void;
   onAction: (command: AurionGameplayCommand, automated?: boolean) => Promise<ActionOutcome>;
   onInteract?: () => void;
+  onTouchMoveDestination: (screenX: number, screenY: number) => void;
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [message, setMessage] = useState("");
@@ -141,6 +141,11 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     if (previousSlot >= 0) hotbar[previousSlot] = hotbar[slot]!;
     hotbar[slot] = command;
     void act(() => saveControls.mutateAsync({ ...settings, hotbar }), uiFresh);
+  };
+  const setMovementMode = (movementMode: MovementMode) => {
+    const settings = ui.data?.settings;
+    if (!settings || settings.movementMode === movementMode) return;
+    void act(() => saveControls.mutateAsync({ ...settings, movementMode }), uiFresh);
   };
   const toggleLoot = () => {
     const settings = ui.data?.settings;
@@ -273,11 +278,6 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   });
 
   return <div className="aurion-authority-hud ax1-authority-shell" data-testid="authoritative-world-hud">
-    <AX1TouchDirector 
-      onMove={onMove}
-      onOpenPanel={handleOpenPanel}
-      enabled={panel === null && !groupOpen && !pending}
-    />
     <GameHUD
       playerName={explorerView.name}
       playerIcon={explorerView.icon}
@@ -309,7 +309,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
         logs: combatMetrics.logs,
       }}
       miniMap={<MiniMap world={worldProjection} position={position} remotePlayers={remotePlayers} state={world.state} onOpen={() => openPanel("map")} />}
-      movementControl={<VirtualJoystick onMove={onMove} />}
+      movementControl={<MobileMovementController mode={ui.data?.settings.movementMode ?? "joystick"} onMove={onMove} onDestination={({ screenX, screenY }) => onTouchMoveDestination(screenX, screenY)} enabled={panel === null && !groupOpen && !pending && connected} />}
       feedback={panel === null ? message : undefined}
       onMenuOpenChange={setExpandedMenu}
       onOpenCharacter={() => openPanel("character")}
@@ -397,6 +397,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
         if (!settings) return;
         void act(() => saveControls.mutateAsync({ ...settings, analyticsConsent: !settings.analyticsConsent }), uiFresh);
       }}
+      onMovementMode={setMovementMode}
       onStartAuto={() => { openPanel(null); setStartAfterClose(true); }}
     />
     <WorldMapModal
