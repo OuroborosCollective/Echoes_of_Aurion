@@ -1544,6 +1544,12 @@
       "donor": "WASD",
       "capabilityId": "npc.mob-fsm",
       "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/components/MobileMovementController.tsx",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
     }
   ],
   "surfaceInventoryRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
