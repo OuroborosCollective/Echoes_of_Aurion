@@ -116,3 +116,31 @@ Der gewünschte Gerätevertrag lautet damit:
 `ChatGPT / n8n / Sovereign → HTTPS Admin MCP → Aurion Services → serverseitiges GDS → Receipt/Readback`
 
 Ein lokaler PC oder Desktop-Connector ist nicht Teil dieses Pfads.
+
+---
+
+## Local Pre-Alpha Development Control Channel (`dev/prealpha`)
+
+This is a **development-only, loopback-only, token-authenticated test-control side channel**. It is not a second production admin authority.
+
+### Hard invariants
+
+1. `NODE_ENV=production` always disables both `/dev/admin-mcp` and `/.well-known/aurion-dev-control`, regardless of any enable flag or token.
+2. Both endpoints require a loopback Host and reject non-loopback or public `X-Forwarded-Host` values.
+3. Both endpoints require an explicitly configured `AURION_DEV_ADMIN_TOKEN` or `AURION_DEV_ADMIN_SECRET`; there is no built-in/default token.
+4. The production `/admin-mcp` route remains unchanged and OAuth/OIDC protected.
+5. The dev channel exposes only typed development fixture operations and observational readback. Production asset-, quest-, world-authoring- and other write tools remain on the OAuth-protected admin channel.
+6. Generic SQL, shell, Git, VPS access and untyped state injection are unavailable.
+
+### Bounded fixture contract
+
+- `aurion_dev_inspect_environment` returns observed environment/authentication configuration status without secrets.
+- `aurion_dev_test_zone_reset` is restricted to the existing `observatory_threshold` zone implementation and requires an idempotency key plus `CONFIRM_DEV_ZONE_RESET`.
+- `aurion_dev_seed_test_encounter` selects from existing canonical mob definitions and requires an idempotency key.
+- `aurion_dev_get_fixture_readback` returns the canonical state hash and selected fixture identity.
+
+The fixture runtime uses the same `AuthoritativeMovementZone`, `ZoneMobRuntime` and canonical-state hashing used by Aurion's live implementation, but it is an isolated development instance and is never the global live `ZoneRegistry`. Fixture operations do not persist production gameplay state.
+
+### Evidence boundary
+
+A successful dev-control response proves only that the isolated development fixture performed the requested bounded operation and that its resulting canonical state can be read back. It does not claim production gameplay success, deployment success, schema success or live-world mutation.
