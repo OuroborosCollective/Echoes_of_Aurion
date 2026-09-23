@@ -33,15 +33,15 @@ describe("Aurion surface audio", () => {
 
   it("emits no duplicate footstep for sub-cadence confirmed movement", () => {
     const cadence = new ConfirmedFootstepCadence();
-    expect(cadence.advance({ position: { x: 0, z: 0 }, tick: 1, terrain })).toBeNull();
-    expect(cadence.advance({ position: { x: 0.8, z: 0 }, tick: 11, terrain })).toBeNull();
-    expect(cadence.advance({ position: { x: 1.7, z: 0 }, tick: 21, terrain })?.cue).toBe("movement.footstep.grass");
+    expect(cadence.advance({ position: { x: -15.9, z: -15.9 }, tick: 1, terrain })).toBeNull();
+    expect(cadence.advance({ position: { x: -15.1, z: -15.9 }, tick: 11, terrain })).toBeNull();
+    expect(cadence.advance({ position: { x: -14.2, z: -15.9 }, tick: 21, terrain })?.cue).toBe("movement.footstep.grass");
   });
 
   it("uses run cadence above the deterministic confirmed-speed threshold", () => {
     const cadence = new ConfirmedFootstepCadence();
-    cadence.advance({ position: { x: 0, z: 0 }, tick: 1, terrain });
-    const first = cadence.advance({ position: { x: 2.5, z: 0 }, tick: 11, terrain });
+    cadence.advance({ position: { x: -15.9, z: -15.9 }, tick: 1, terrain });
+    const first = cadence.advance({ position: { x: -13.4, z: -15.9 }, tick: 11, terrain });
     expect(first?.cue).toBe("movement.run.grass");
   });
 
