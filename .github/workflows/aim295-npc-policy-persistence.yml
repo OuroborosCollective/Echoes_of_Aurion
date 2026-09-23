@@ -1,0 +1,57 @@
+name: AIM-295 NPC Policy Persistence
+on:
+  pull_request:
+    paths:
+      - "server/wasdNpcEvolutionPersistence.ts"
+      - "server/wasdNpcEvolutionPersistence.test.ts"
+      - "drizzle/**"
+      - "scripts/drizzleMigrationChain.ts"
+      - ".github/workflows/aim295-npc-policy-persistence.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+permissions:
+  contents: read
+jobs:
+  persistence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_npc_policy_test
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_npc_policy_test
+      AURION_NPC_E2E: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - run: pnpm check
+      - run: pnpm verify:migrations
+      - run: pnpm exec drizzle-kit migrate
+      - name: Schema readback
+        run: |
+          set -euo pipefail
+          mariadb --host 127.0.0.1 --port 3306 --user root --password=auriontest aurion_npc_policy_test -e "
+            SHOW TABLES LIKE 'aurionNpcPolicy%';
+            SHOW TRIGGERS LIKE 'aurionNpcPolicy%';
+          "
+      - run: pnpm exec vitest run server/drizzleMigrationChain.test.ts server/wasdNpcEvolutionPersistence.test.ts --reporter=verbose
