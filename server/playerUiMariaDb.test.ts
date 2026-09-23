@@ -40,12 +40,18 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
   afterAll(async () => { if (pool) { if (isolated) await clean(); await pool.end(); } });
   it("persists optimistic-revision controls and rejects a competing stale save", async () => {
     const settings = (await readPlayerUi(owner)).settings;
-    expect(settings).toEqual({ revision: 0, autoLoot: true, analyticsConsent: false, hotbar: defaultHotbar });
-    const outcomes = await Promise.allSettled([savePlayerControls(owner, { ...settings, autoLoot: false }), savePlayerControls(owner, { ...settings, hotbar: ["9", "8", "7", "6", "5"] })]);
+    expect(settings).toEqual({ revision: 0, autoLoot: true, analyticsConsent: false, hotbar: defaultHotbar, movementMode: "joystick" });
+    const outcomes = await Promise.allSettled([savePlayerControls(owner, { ...settings, autoLoot: false }), savePlayerControls(owner, { ...settings, movementMode: "touch_to_move" })]);
     expect(outcomes.filter(v => v.status === "fulfilled")).toHaveLength(1);
     expect(outcomes.filter(v => v.status === "rejected")).toHaveLength(1);
     expect((await readPlayerUi(owner)).settings.revision).toBe(1);
     expect((await (await getDb())!.select().from(aurionPlayerUiSettings).where(eq(aurionPlayerUiSettings.userId, owner)))).toHaveLength(1);
+  });
+  it("persists a movement mode change through a fresh MariaDB readback", async () => {
+    const settings = (await readPlayerUi(owner)).settings;
+    const saved = await savePlayerControls(owner, { ...settings, movementMode: "touch_to_move" });
+    expect(saved.settings.movementMode).toBe("touch_to_move");
+    expect((await readPlayerUi(owner)).settings.movementMode).toBe("touch_to_move");
   });
   it("collects each legacy and V2 item exactly once without changing its reward provenance", async () => {
     const initial = await readPlayerUi(owner);

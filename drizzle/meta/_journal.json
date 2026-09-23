@@ -414,6 +414,13 @@
       "when": 1790119020000,
       "tag": "0058_aurion_quest_causal_anchor",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1790158181170,
+      "tag": "0059_aurion_mobile_movement_mode",
+      "breakpoints": true
     }
   ]
 }

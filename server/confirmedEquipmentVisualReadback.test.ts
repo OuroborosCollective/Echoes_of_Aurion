@@ -26,7 +26,7 @@ function ui(readback = resolved()): PlayerUiReadback {
   return {
     version: "aurion-ax1-ui.v1",
     userId: 17,
-    settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"] },
+    settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" },
     items: [
       { id: "v2-item-00000001", version: "aurion_v2", name: "weapon spear", definition: readback.itemDefinitionId, levelExact: readback.itemLevelExact, quality: readback.quality, slot: "main_hand", status: "equipped", stats: {}, receiptId: "v2-receipt-0001" },
       { id: "legacy-item-0001", version: "legacy", name: "Legacy Helm", definition: "legacy_helm", levelExact: "1", quality: "normal", slot: "head", status: "equipped", stats: {}, receiptId: "legacy-receipt" },

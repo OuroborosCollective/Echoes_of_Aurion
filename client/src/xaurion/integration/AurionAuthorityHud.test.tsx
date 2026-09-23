@@ -26,8 +26,8 @@ vi.mock("../components/Ax1CharacterPreview", () => ({
 }));
 
 const confirmed = { profile: { userId: 7, aurionPoints: 23, victories: 2, selectedClass: "unbound" }, progression: { characterId: "char-7", tracks: [{ trackKind: "weapon", trackId: "greatsword.two_handed.v3", characterId: "char-7", levelExact: "17", resultReceiptId: "result-00000001", sourceReceiptId: "source-00000001", receiptHash: "b".repeat(64) }] }, inventory: [] };
-const uiState = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, hotbar: ["1", "2", "3", "4", "5"] }, items: [], equipment: [] };
-const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onAction={fixtures.onAction} />);
+const uiState = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" as const }, items: [], equipment: [] };
+const mount = () => render(<AurionAuthorityHud userId={7} connected onMove={fixtures.onMove} onTouchMoveDestination={vi.fn()} onAction={fixtures.onAction} />);
 
 describe("server-backed Aurion HUD", () => {
   beforeEach(() => {
@@ -165,7 +165,7 @@ describe("server-backed Aurion HUD", () => {
   it("keeps equip blocked through mutation and the subsequent server readback", async () => {
     const item = { id: "fixture_item", version: "legacy", name: "Aurionspeer", definition: "aurion_spear", levelExact: "1", quality: "normal", slot: "main_hand", status: "owned", stats: {}, receiptId: "fixture_receipt" };
     fixtures.player.data = confirmed;
-    const state = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, hotbar: ["1", "2", "3", "4", "5"] }, items: [item], equipment: [] };
+    const state = { version: "aurion-ax1-ui.v1", userId: 7, settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: ["1", "2", "3", "4", "5"], movementMode: "joystick" }, items: [item], equipment: [] };
     fixtures.ui.data = state;
     let resolveRead!: (value: unknown) => void;
     fixtures.ui.refetch.mockImplementation(() => new Promise(resolve => { resolveRead = resolve; }));

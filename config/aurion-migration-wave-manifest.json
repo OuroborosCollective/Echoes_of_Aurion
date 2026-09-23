@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0058",
+  "waveId": "aurion-production-0021-0059",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -153,6 +153,10 @@
     },
     {
       "tag": "0058_aurion_quest_causal_anchor",
+      "source": "aurion"
+    },
+    {
+      "tag": "0059_aurion_mobile_movement_mode",
       "source": "aurion"
     }
   ],

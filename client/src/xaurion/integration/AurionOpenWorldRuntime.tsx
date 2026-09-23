@@ -89,6 +89,7 @@ export default function AurionOpenWorldRuntime() {
   const keysRef = useRef(new Set<string>());
   const demonstratedMovementRef = useRef("0:0");
   const virtualInputRef = useRef({ forward: 0, right: 0 });
+  const touchDestinationRef = useRef<{ x: number; z: number } | null>(null);
   const serviceNpcRef = useRef<ServiceNpcProjection | null>(null);
   const modelEvidenceRef = useRef<HTMLOutputElement>(null);
   const npcEvidenceRef = useRef<HTMLOutputElement>(null);
@@ -278,6 +279,7 @@ export default function AurionOpenWorldRuntime() {
       engineRef.current = null;
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
+      touchDestinationRef.current = null;
       zoneConnectedRef.current = false;
       setZoneStatus("closed");
       const recoverable = error instanceof Error && ["WEBGL_CONTEXT_LOST", "WEBGPU_DEVICE_LOST", "WEBGPU_RENDER_ERROR"].includes(error.message);
@@ -555,12 +557,37 @@ export default function AurionOpenWorldRuntime() {
     if (document.querySelector(WORLD_PANEL_SELECTOR)) {
       keysRef.current.clear();
       virtualInputRef.current = { forward: 0, right: 0 };
+      touchDestinationRef.current = null;
       engine.setVirtualMovement(0, 0);
       sendAuthoritativeMovement({ x: 0, z: 0 });
       return;
     }
+
     const keys = keysRef.current;
     const virtual = virtualInputRef.current;
+    const keyboardOrStickActive = keys.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01;
+    const destination = touchDestinationRef.current;
+    if (!keyboardOrStickActive && destination) {
+      const dx = destination.x - engine.player.position.x;
+      const dz = destination.z - engine.player.position.z;
+      if (Math.hypot(dx, dz) <= 0.9) {
+        touchDestinationRef.current = null;
+        engine.setVirtualMovement(0, 0);
+        sendAuthoritativeMovement({ x: 0, z: 0 });
+        return;
+      }
+      const length = Math.hypot(dx, dz);
+      const worldX = dx / length;
+      const worldZ = dz / length;
+      const yaw = engine.cameraYaw;
+      const forward = worldX * (-Math.sin(yaw)) + worldZ * (-Math.cos(yaw));
+      const right = worldX * Math.cos(yaw) + worldZ * (-Math.sin(yaw));
+      engine.setVirtualMovement(forward, right);
+      sendAuthoritativeMovement(ax1MovementToAurionIntent(yaw, forward, right));
+      return;
+    }
+
+    if (keyboardOrStickActive) touchDestinationRef.current = null;
     const forward = virtual.forward + (keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0);
     const right = virtual.right + (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
     engine.setVirtualMovement(forward, right);
@@ -634,7 +661,7 @@ export default function AurionOpenWorldRuntime() {
     };
     const cameraFollowTimer = window.setInterval(() => {
       const virtual = virtualInputRef.current;
-      if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01) syncAx1HumanMovement();
+      if (keysRef.current.size > 0 || Math.abs(virtual.forward) > 0.01 || Math.abs(virtual.right) > 0.01 || touchDestinationRef.current) syncAx1HumanMovement();
     }, 100);
     const panels = new MutationObserver(() => { if (document.querySelector(WORLD_PANEL_SELECTOR)) { releaseMovement(); engineRef.current?.releaseControlInput(); } });
     panels.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state", "data-aurion-panel", "data-opened-from-world"] });
@@ -658,6 +685,18 @@ export default function AurionOpenWorldRuntime() {
 
   const handleVirtualMove = useCallback((forward: number, right: number) => {
     virtualInputRef.current = { forward, right };
+    syncAx1HumanMovement();
+  }, [syncAx1HumanMovement]);
+
+  const handleTouchMoveDestination = useCallback((screenX: number, screenY: number) => {
+    const engine = engineRef.current;
+    if (!engine || !zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return;
+    const point = engine.projectTouchDestination(screenX, screenY);
+    if (!point) return;
+    touchDestinationRef.current = { x: point.x, z: point.z };
+    window.dispatchEvent(new CustomEvent("aurion:touch-move-intent", {
+      detail: { authority: "server", source: "ax1-touch-to-move", x: point.x, z: point.z },
+    }));
     syncAx1HumanMovement();
   }, [syncAx1HumanMovement]);
 
@@ -722,7 +761,7 @@ export default function AurionOpenWorldRuntime() {
       <output ref={worldAssetsEvidenceRef} data-testid="world-assets-evidence" hidden />
       {worldAssetsFailed && <p className="aurion-authority-hud__feedback" role="status">Ein Teil der Umgebung konnte nicht geladen werden. Öffne die Welt erneut, um es noch einmal zu versuchen.</p>}
       {zoneStatus === "rejected" && <p className="aurion-authority-hud__feedback" role="status">Die Verbindung wurde nicht bestätigt. Lade die Seite neu, um die aktuelle Spielversion zu verbinden.</p>}
-      {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
+      {!webglError && user?.id && <AurionAuthorityHud userId={user.id} connected={zoneStatus === "connected"} position={confirmedPosition} remotePlayers={remotePlayers} onMove={handleVirtualMove} onTouchMoveDestination={handleTouchMoveDestination} onAction={requestAuthoritativeAction} onInteract={requestWorldInteraction} />}
       <AdminGlbMenu />
     </section>
   );
