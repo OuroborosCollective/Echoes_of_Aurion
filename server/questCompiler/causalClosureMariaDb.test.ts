@@ -6,6 +6,7 @@ import {
   aurionQuestCausalAnchors,
   aurionTemporalEvents,
 } from "../../drizzle/aurionCausalitySchema";
+import { aurionQuestReceipts } from "../../drizzle/schema";
 import { computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import type { QuestInstance } from "../../shared/aurionQuestContract";
 import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
