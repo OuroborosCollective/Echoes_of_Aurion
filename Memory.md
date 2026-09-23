@@ -1150,3 +1150,14 @@ Evidence: Exact technical head before this Memory append was `ccd4ed7a972032ff7f
 Learned: The remaining quest authority gap is closed at the integration boundary only when the real causal receipt is independently replay-verifiable and the anchor, temporal event and effects share one transactional persistence boundary; green derived tests alone are insufficient.
 Open: The Memory append intentionally creates a new branch head, so the fresh post-memory exact-head CI and final merge/main readback are still required.
 Next safe step: Run the full exact-head verification on the Memory-appended head, then mark PR #478 ready and merge only after all gates remain green; afterwards verify main and close #477 from the merged evidence.
+
+
+### 2026-09-23 — Aurion Evidence Flywheel (#483)
+Status: VERIFIED integration evidence; exact-head recheck after this append required before merge
+Task: Add a vendor-neutral evidence-first improvement method to Aurion without introducing another gameplay, persistence, receipt, approval or truth authority.
+Decisions: Freeze exact revision; establish real baseline; execute only through canonical Aurion authority; classify the first causal failure; repair the smallest owner; rerun original and neighboring regressions; independently read back the affected boundary; preserve Action Preview → authority/scope → approval where required → typed command → real effect → causal receipt → readback. Never lower thresholds, skip failures, self-grade, or turn missing evidence into success.
+Touched surfaces: AGENTS.md; docs/agent-knowledgebase/skill-archive/aurion-evidence-flywheel/SKILL.md; docs/architecture/AURION_EVIDENCE_FLYWHEEL.v1.md; scripts/evidence_flywheel_skill_contract_test.py; Memory.md.
+Evidence: Integration branch was rebased to current main 8f9d6edec792d666d8e189766c8b0fb361e4490b with source head 19134fb33e3fa3338d1769a0d6f04c3e7496130a; the initial exact-head wave passed Migration Ops Skill, Runtime Container Proof, Runtime Candidate and Android while the Local Test Pack completed its full repository regression successfully. Archive provenance SHA-256: dbfb60b5e0fbd84c2fbf16c1ae3d527cfb3782e7455d896a9e6749781e5c8787.
+Learned: The flywheel is safe as orchestration/documentation only when all gameplay and evidence truth remains inside Aurion's existing canonical authorities; CI evidence and runtime/readback evidence remain distinct boundaries.
+Open: This Memory append changes the exact branch head, so normal exact-head CI and final main readback remain required.
+Next safe step: Re-run the normal exact-head gates on this Memory-appended head, then merge and read back main.
