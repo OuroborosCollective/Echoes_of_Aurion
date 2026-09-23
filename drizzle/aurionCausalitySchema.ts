@@ -290,7 +290,7 @@ export const aurionQuestCausalAnchors = mysqlTable("aurionQuestCausalAnchors", {
   questReceiptId: varchar("questReceiptId", { length: 128 }).notNull(),
   worldId: varchar("worldId", { length: 64 }).notNull(),
   epoch: int("epoch").notNull(),
-  zoneId: varchar("zoneId", { length: 64 }).notNull(),
+  zoneId: varchar("zoneId", { length: 128 }).notNull(),
   tick: int("tick").notNull(),
   causalReceiptHash: varchar("causalReceiptHash", { length: HASH_LENGTH }).notNull(),
   sourceWorldRoot: varchar("sourceWorldRoot", { length: HASH_LENGTH }).notNull(),
