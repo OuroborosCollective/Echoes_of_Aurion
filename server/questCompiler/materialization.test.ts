@@ -20,7 +20,13 @@ describe("Quest domain command materialization (AIM-298 #459)", () => {
       playerUserId: 42,
       triggerEventId: "evt_materialization",
     });
-    return { instance, plan };
+    return {
+      instance: {
+        ...instance,
+        sourceRevision: "a".repeat(40),
+      },
+      plan,
+    };
   }
 
   it("keeps the command hash domain fixed by a known vector", () => {
