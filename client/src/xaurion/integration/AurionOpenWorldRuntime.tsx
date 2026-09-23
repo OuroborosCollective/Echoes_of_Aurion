@@ -27,6 +27,7 @@ import { ServiceNpcProjection } from "./ServiceNpcProjection";
 import { AdminGlbMenu } from "../components/AdminGlbMenu";
 import { useAdminStore } from "../core/AdminService";
 import { soundSynth } from "../audio/SoundSynthesizer";
+import { AurionSurfaceAudioOrchestrator, resolveAudioSurfaceAtPosition, type SurfaceAudioTerrain } from "../audio/AurionSurfaceAudioResolver";
 import { aurionAssets } from "@/lib/aurionAssets";
 import { ax1MovementToAurionIntent, bindAurionAuthorityProjection, type AurionGameplayCommand } from "./aurionAuthorityAdapter";
 import type { CharacterClassId } from "../types";
@@ -90,6 +91,8 @@ export default function AurionOpenWorldRuntime() {
   const demonstratedMovementRef = useRef("0:0");
   const virtualInputRef = useRef({ forward: 0, right: 0 });
   const touchDestinationRef = useRef<{ x: number; z: number } | null>(null);
+  const surfaceAudioRef = useRef(new AurionSurfaceAudioOrchestrator());
+  const terrainAudioRef = useRef<SurfaceAudioTerrain | null>(null);
   const serviceNpcRef = useRef<ServiceNpcProjection | null>(null);
   const modelEvidenceRef = useRef<HTMLOutputElement>(null);
   const npcEvidenceRef = useRef<HTMLOutputElement>(null);
@@ -113,6 +116,7 @@ export default function AurionOpenWorldRuntime() {
   const [zoneStatus, setZoneStatus] = useState<"idle" | "connecting" | "connected" | "closed" | "rejected">("idle");
   const [zoneRetryEpoch, setZoneRetryEpoch] = useState(0);
   const [currentClassId, setCurrentClassId] = useState<CharacterClassId>("knight");
+  const confirmedPositionRef = useRef<{ x: number; z: number } | null>(null);
   const [confirmedPosition, setConfirmedPosition] = useState<{ x: number; z: number }>();
   const [remotePlayers, setRemotePlayers] = useState<readonly ConfirmedZonePresence[]>([]);
   const [celebration, setCelebration] = useState(0);
@@ -167,6 +171,7 @@ export default function AurionOpenWorldRuntime() {
   const controlsRef = useRef<ControlSettings | null>(null);
   const controls = playerUiReadbackSchema.safeParse(controlsQuery.data);
   controlsRef.current = controls.success && controls.data.userId === user?.id && !controlsQuery.isError && !controlsQuery.isStale ? controls.data.settings : null;
+  terrainAudioRef.current = worldSnapshot.data?.terrain ?? null;
 
   const requestAuthoritativeAction = useCallback(async (command: AurionGameplayCommand, automated = false): Promise<ActionOutcome> => {
     if (!zoneConnectedRef.current || document.hidden || document.querySelector(WORLD_PANEL_SELECTOR)) return { confirmed: false, completed: false, message: "Aktion bei geöffnetem Menü oder ohne Verbindung angehalten." };
@@ -204,6 +209,7 @@ export default function AurionOpenWorldRuntime() {
       setRecoveryEpoch(0);
       setWebglError(null);
       setConfirmedPosition(undefined);
+      confirmedPositionRef.current = null;
       setRemotePlayers([]);
       setActivation(validActivation((event as CustomEvent<unknown>).detail));
     };
@@ -287,6 +293,7 @@ export default function AurionOpenWorldRuntime() {
         recoveryAttempts.current++;
         recoveryCause.current = (error as Error).message;
         setConfirmedPosition(undefined);
+        confirmedPositionRef.current = null;
         setRendererEvidence(null);
         setRecoveryEpoch(value => value + 1);
       } else setWebglError(runtimeIssueCode(error));
@@ -508,21 +515,29 @@ export default function AurionOpenWorldRuntime() {
               setRemotePlayers(remotePresenceRef.current?.presences ?? []);
             } catch (error) { engine.onRuntimeError?.(error); return; }
             setConfirmedPosition({ ...self.position });
+            confirmedPositionRef.current = { ...self.position };
             motionRef.current?.project(self.position, snapshot.tick);
+            const movementCue = surfaceAudioRef.current.advanceMovement({
+              position: { x: self.position.x / 1000, z: self.position.z / 1000 },
+              tick: snapshot.tick,
+              terrain: terrainAudioRef.current,
+            });
+            if (movementCue) window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: movementCue }));
             boundEngine.start();
             window.dispatchEvent(new CustomEvent("aurion:zone-snapshot", { detail: { userId: user.id, position: self.position } }));
           },
           onCombat: event => {
             if (!current()) return;
-            if (event.attackerEntityId === `player:${user.id}`) {
-              window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "combat-swing" } }));
-              if (event.hit) {
-                window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "combat-hit" } }));
+            if (event.attackerEntityId === "player:" + user.id) {
+              const confirmed = confirmedPositionRef.current;
+              const impactSurface = event.hit && confirmed
+                ? resolveAudioSurfaceAtPosition(terrainAudioRef.current, { x: confirmed.x / 1000, z: confirmed.z / 1000 }) ?? undefined
+                : undefined;
+              for (const audioEvent of surfaceAudioRef.current.combat({ sequence: event.sequence, hit: event.hit }, impactSurface)) {
+                window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: audioEvent }));
               }
-            } else if (event.defenderEntityId === `player:${user.id}`) {
-              if (event.damage > 0) {
-                window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "ui-error" } }));
-              }
+            } else if (event.defenderEntityId === "player:" + user.id) {
+              if (event.damage > 0) window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { kind: "ui-error" } }));
             }
           },
         });
@@ -537,6 +552,7 @@ export default function AurionOpenWorldRuntime() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       zoneConnectedRef.current = false;
       motionRef.current?.stop();
+      surfaceAudioRef.current.reset();
       client?.close();
       if (zoneClientRef.current === client) zoneClientRef.current = null;
     };
