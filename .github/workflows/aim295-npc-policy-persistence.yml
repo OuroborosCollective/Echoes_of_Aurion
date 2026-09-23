@@ -84,8 +84,28 @@ jobs:
       - name: Schema readback
         run: |
           set -euo pipefail
-          mariadb --host 127.0.0.1 --port 3306 --user root --password=auriontest aurion_npc_policy_test -e "
-            SHOW TABLES LIKE 'aurionNpcPolicy%';
-            SHOW TRIGGERS LIKE 'aurionNpcPolicy%';
-          "
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const db=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [tables] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND TABLE_NAME LIKE 'aurionNpcPolicy%' ORDER BY TABLE_NAME");
+            const [triggers] = await db.query("SELECT TRIGGER_NAME,EVENT_MANIPULATION,ACTION_TIMING FROM information_schema.triggers WHERE trigger_schema=DATABASE() AND EVENT_OBJECT_TABLE LIKE 'aurionNpcPolicy%' ORDER BY TRIGGER_NAME");
+            const tableNames=tables.map(row=>String(row.TABLE_NAME));
+            const expected=[
+              "aurionNpcPolicyVersions",
+              "aurionNpcPolicyActivePointers",
+              "aurionNpcPolicyMutationReceipts",
+              "aurionNpcPolicyRollbackReceipts",
+            ];
+            if(expected.some(name=>!tableNames.includes(name))) throw new Error("AIM295_POLICY_TABLE_READBACK_MISSING");
+            if(triggers.length < 6) throw new Error("AIM295_POLICY_TRIGGER_READBACK_INCOMPLETE");
+            console.log(JSON.stringify({
+              recordType:"aurion_aim295_schema_readback",
+              tableNames,
+              triggerCount:triggers.length,
+            },null,2));
+          } finally {
+            await db.end();
+          }
+          NODE
       - run: pnpm exec vitest run server/drizzleMigrationChain.test.ts server/wasdNpcEvolutionPersistence.test.ts --reporter=verbose
