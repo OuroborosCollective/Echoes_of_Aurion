@@ -428,6 +428,13 @@
       "when": 1790158182000,
       "tag": "0060_aurion_npc_policy_evolution",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1790158183000,
+      "tag": "0061_aurion_exploration_memory",
+      "breakpoints": true
     }
   ]
 }
