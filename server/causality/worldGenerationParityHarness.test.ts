@@ -131,7 +131,7 @@ async function buildInput() {
     grammar,
     chunkCoordinate: CHUNK,
     anchorId: "anchor:parity-house",
-    sourceCausalRoot: confirmed.receipt.worldRootHash,
+    sourceCausalRoot: confirmed.worldRootHash,
     sourceRevision: SOURCE_REVISION,
   });
 
