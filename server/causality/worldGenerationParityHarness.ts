@@ -258,8 +258,6 @@ function baseEvidence(
     productionRuntimeIdentity: input.runtime,
     sourceIntelligence: source,
     sourceIntelligenceStatus: source.status,
-    determinismHash: "sha256:" + "0".repeat(64),
-    artifactIntegrityHash: "sha256:" + "0".repeat(64),
     timing: timing(input.timing),
     artifactChecksums: Object.freeze(checksums),
     createdAt: input.createdAt ?? "UNVERIFIED",
