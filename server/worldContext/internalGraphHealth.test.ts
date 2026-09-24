@@ -77,7 +77,7 @@ describe("internal WorldContext structural health", () => {
         ...baseGraph.relations,
         {
           kind: "supports" as const,
-          fromNodeId: "smn_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          fromNodeId: "smn_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           toNodeId: "smn_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
           status: "active" as const,
         },
