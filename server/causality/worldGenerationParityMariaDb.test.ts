@@ -20,6 +20,7 @@ import {
 } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalCausalPersistence } from "./persistence";
+import { worldCausalRootService } from "./worldCausalRootService";
 import { globalTickRecorder } from "./tickRecorder";
 import { StructureObservationRuntime, projectStructureObservation } from "../structureObservationRuntime";
 import type { DeterministicStructureGrammar } from "../../shared/deterministicStructureGrammarProtocol";
@@ -175,6 +176,20 @@ suite("AIM-510 world generation parity real MariaDB", () => {
       now: new Date("2026-01-01T00:00:00.000Z"),
     })).plan.epoch;
 
+    const confirmed = await worldCausalRootService.readChunk(WORLD_ID, epoch, CHUNK);
+    expect(confirmed.status).toBe("VERIFIED");
+    if (confirmed.status !== "VERIFIED") throw new Error(confirmed.reason);
+
+    const generation = compileDeterministicStructureGrammar({
+      worldId: WORLD_ID,
+      worldSeedHash: confirmed.state.universe.worldSeedHash,
+      grammar,
+      chunkCoordinate: CHUNK,
+      anchorId: "aim510-anchor-house",
+      sourceCausalRoot: confirmed.worldRootHash,
+      sourceRevision: RELEASE,
+    });
+
     const observationRuntime = new StructureObservationRuntime();
     const observation = await observationRuntime.observe({
       worldId: WORLD_ID,
@@ -202,15 +217,6 @@ suite("AIM-510 world generation parity real MariaDB", () => {
 
     const receipts = await globalCausalPersistence.getTicksInRange(ZONE, 3, 4);
     const gameplayEvidence = buildGameplayEvidenceFromReceipts(receipts.map(entry => entry.receipt), 3, 4);
-    const generation = compileDeterministicStructureGrammar({
-      worldId: observation.identity.worldId,
-      worldSeedHash: observation.identity.worldSeedHash,
-      grammar,
-      chunkCoordinate: CHUNK,
-      anchorId: observation.identity.anchorId,
-      sourceCausalRoot: observation.identity.sourceCausalRoot,
-      sourceRevision: RELEASE,
-    });
 
     const result = verifyWorldGenerationParity({
       runId: "aim510-real-mariadb",
