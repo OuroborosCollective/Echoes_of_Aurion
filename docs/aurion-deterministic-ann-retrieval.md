@@ -20,6 +20,14 @@ The ANN index is:
 - discarded/rebuilt after process restart;
 - identified by source-root and index hashes.
 
+## Internal-only boundary
+
+This capability is intentionally **not an external API**.
+
+There is no public tRPC route, public HTTP endpoint, external MCP tool, provider callback or cloud vector-store write for ANN retrieval. The internal service entrypoint is named `internalSemanticSearch` and is not registered in `server/routes/aurionContextRouter.ts`.
+
+Wolfram is treated only as an optional analysis aid for synthetic/opaque graph structure. Live canonical WorldContext text, runtime state, secrets and persistence rows are never sent to Wolfram by this integration.
+
 A candidate is never returned from the ANN layer unless its source ID and source hash still match the canonical source set used to build the index.
 
 ## Determinism
