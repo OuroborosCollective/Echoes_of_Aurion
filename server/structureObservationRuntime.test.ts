@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { type StructureObservationRequest } from "@shared/structureObservationProtocol";
+import {
+  AURION_STRUCTURE_OBSERVATION_PROTOCOL,
+  type StructureObservationRequest,
+} from "@shared/structureObservationProtocol";
 import {
   createCanonicalChunkReceipt,
   type CanonicalChunkReceipt,
