@@ -161,7 +161,7 @@ jobs:
         run: |
           set -euo pipefail
           node --test scripts/aurion-milestone-gate-evidence.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/milestone-evidence-contract.log
-      - name: Verify deterministic structure grammar
+      - name: Verify deterministic structure grammar and world-generation evidence gate
         shell: bash
         run: |
           set -euo pipefail
@@ -169,7 +169,9 @@ jobs:
             server/deterministicStructureGrammarCompiler.test.ts \
             server/causality/worldGenerationEvidence.test.ts \
             server/causality/worldGenerationParityHarness.test.ts \
-            --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/structure-grammar-and-world-generation-parity.log
+            server/causality/worldGenerationEvidenceGate.test.ts \
+            scripts/atlas/worldGenerationAtlasAdmission.test.ts \
+            --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/structure-grammar-and-world-generation-evidence-gate.log
       - name: Typecheck and classless regressions
         shell: bash
         run: |
