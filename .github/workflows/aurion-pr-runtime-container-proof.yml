@@ -242,6 +242,25 @@ jobs:
             aurion-generated-world-atlas-input.json \
             aurion-generated-world-atlas-plan-505.json
           test -s aurion-generated-world-atlas-plan-505.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const plan = JSON.parse(fs.readFileSync("aurion-generated-world-atlas-plan-505.json", "utf8"));
+          if (plan.schemaVersion !== "aurion.generated-world-atlas-plan.v1") throw new Error("GENERATED_ATLAS_PLAN_SCHEMA");
+          if (plan.consumer !== "ATLAS_BUILD") throw new Error("GENERATED_ATLAS_PLAN_CONSUMER");
+          if (!/^sha256:[a-f0-9]{64}$/.test(plan.admissionHash)) throw new Error("GENERATED_ATLAS_PLAN_ADMISSION_HASH");
+          if (!/^sha256:[a-f0-9]{64}$/.test(plan.plan?.planHash)) throw new Error("GENERATED_ATLAS_PLAN_PLAN_HASH");
+          if (plan.plan?.sourceManifestHash !== "sha256:" + process.env.MANIFEST_SHA256) throw new Error("GENERATED_ATLAS_PLAN_MANIFEST_BINDING");
+          const placementCount = plan.plan?.groups?.reduce((n, group) => n + group.pages.reduce((p, page) => p + page.placements.length, 0), 0) ?? 0;
+          if (placementCount !== 1) throw new Error("GENERATED_ATLAS_PLAN_PLACEMENT_COUNT");
+          console.log(JSON.stringify({
+            recordType: "aurion_generated_world_atlas_plan_readback",
+            planSchema: plan.schemaVersion,
+            admissionHash: plan.admissionHash,
+            planHash: plan.plan.planHash,
+            sourceManifestHash: plan.plan.sourceManifestHash,
+            placementCount
+          }));
+          NODE
 
           docker run --detach --name "${app}" --network "${network}" \
             --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
@@ -345,5 +364,7 @@ jobs:
             aurion-world-generation-parity-510.json
             aurion-world-generation-parity-510.csv
             aurion-world-generation-atlas-admission-563.json
+            aurion-generated-world-atlas-input.json
+            aurion-generated-world-atlas-plan-505.json
           if-no-files-found: error
           retention-days: 30
