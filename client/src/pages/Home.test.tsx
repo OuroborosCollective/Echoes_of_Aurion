@@ -13,7 +13,7 @@ describe("Home", () => {
     expect(screen.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /SPIEL BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
-    expect(screen.getByRole("button", { name: "GLB-Einreichung öffnen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Asset-Katalog" })).toBeTruthy();
     expect(screen.queryByText(/Markt|Crafting|Boss|Questgeber/i)).toBeNull();
   });
 
