@@ -183,9 +183,11 @@ export function GameHUD(props: GameHUDProps) {
       id="game-hud-root"
       data-testid="ax1-game-hud"
       data-source="ax1-f24-visible-shell"
-      className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
+      data-layout-contract="ax1-hud-layout.v1"
+      data-gesture-owner="presentation"
+      className="xaurion-game-hud ax1-hud-layout absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
     >
-      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
+      <div className="xaurion-hud-frame absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
         <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
           <section
             id="player-unit-frame"
@@ -346,7 +348,7 @@ export function GameHUD(props: GameHUDProps) {
         </div>
       </div>
 
-      <div className="pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
+      <div className="xaurion-hud-bottom-frame pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
         <button type="button" onClick={props.onOpenChat} className="flex items-center gap-1.5 rounded-full border border-gray-800 bg-black/80 px-2.5 py-1.5 text-xs font-mono text-[#fbbf24] backdrop-blur-md shadow hover:border-[#b8860b]"><MessageSquare className="h-3.5 w-3.5" /> Realm Chat</button>
         <div>{props.movementControl}</div>
       </div>
