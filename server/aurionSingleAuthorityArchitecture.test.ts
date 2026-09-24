@@ -58,7 +58,7 @@ describe("Aurion single-authority architecture", () => {
     expect(entry).not.toContain("`/play` | AX1");
     expect(app).toContain("one canonical game/runtime owned by Aurion");
     expect(home).toContain("Eine Welt, die");
-    expect(home).toContain("Self-Acting NPCs");
+    expect(home).toContain("SELF-ACTING NPCs");
     expect(home).toContain("EVOLUTIONÄRE ÖKOSYSTEME");
     expect(home).toContain("Kämpfe, Skills, Loot und Progression");
     expect(home).toContain("Erinnerungen werden zu Handlung");
