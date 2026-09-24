@@ -91,6 +91,12 @@ describe("StructureObservationRuntime", () => {
     expect(first.identity.protocol).toBe(AURION_STRUCTURE_OBSERVATION_PROTOCOL);
     expect(first.materialization.state).toBe("BASE_GRAMMAR");
     expect(first.materialization.primitives).toHaveLength(1);
+    expect(first.materialization.footprint.primitives).toEqual([{
+      id: "root:root/primitive",
+      positionMm: { x: 0, y: 0, z: 0 },
+      sizeMm: { x: 2_000, y: 2_500, z: 3_000 },
+      rotationDiscrete: { x: 0, y: 0, z: 0 },
+    }]);
     expect(first.cacheHit).toBe(false);
 
     const second = await runtime.observe(request());
@@ -164,6 +170,7 @@ describe("StructureObservationRuntime", () => {
     if (materialized.status !== "VERIFIED") throw new Error(materialized.reason);
     expect(materialized.materialization.state).toBe("DELTA_OVERRIDE");
     expect(materialized.materialization.primitives).toHaveLength(0);
+    expect(materialized.materialization.footprint.deltaOverridePositionMm).toEqual({ x: 1_200, z: 2_300 });
     expect(materialized.materialization.deltaOverride).toMatchObject({
       source: "structure_placed_delta",
       targetId: "unit-house",
