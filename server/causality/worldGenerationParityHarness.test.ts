@@ -277,6 +277,8 @@ describe("AIM-510 world generation parity harness", () => {
     expect(result.evidence.firstDivergenceBoundary).toBe("AUTHORITY_STAGE");
     expect(result.evidence.firstDivergenceStage).toBe("PLAYER_ACTION");
     expect(result.evidence.firstDivergenceTick).toBe(2);
+    expect(result.evidence.firstDivergenceExpectedHash).toBe("sha256:" + "4".repeat(64));
+    expect(result.evidence.firstDivergenceObservedHash).toBe("sha256:" + "5".repeat(64));
   });
 
   it("keeps CAG/source-intelligence optional and still produces a MATCH", async () => {
