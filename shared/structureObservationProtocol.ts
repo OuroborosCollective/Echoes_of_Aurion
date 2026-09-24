@@ -8,6 +8,7 @@ export const STRUCTURE_OBSERVATION_CACHE_MAX_ENTRIES = 256 as const;
 
 const identifier = z.string().trim().min(1).max(128);
 const sha256 = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+const bareSha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const revision = z.string().regex(/^[a-f0-9]{40}$/);
 const coordinate = z.strictObject({
   x: z.number().int(),
@@ -117,6 +118,7 @@ export type StructureObservationReceipt = Readonly<{
   sourceRevision: string;
   sourceCausalRoot: string;
   confirmedChunkHash: string;
+  /** Exact #512 compiler fingerprint; #512 currently emits a bare SHA-256 hex digest. */
   recipeHash: string;
   materializationHash: string;
   previousReceiptHash: string | null;
@@ -136,7 +138,7 @@ export const structureObservationReceiptSchema = z.strictObject({
   sourceRevision: revision,
   sourceCausalRoot: sha256,
   confirmedChunkHash: sha256,
-  recipeHash: sha256,
+  recipeHash: bareSha256,
   materializationHash: sha256,
   previousReceiptHash: sha256.nullable(),
   receiptHash: sha256,
