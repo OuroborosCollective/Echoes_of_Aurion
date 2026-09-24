@@ -17,7 +17,7 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
       idx: 49,
       tag: "0049_aurion_causal_receipt_v2",
     });
-    expect(journal.entries).toHaveLength(63);
+    expect(journal.entries).toHaveLength(64);
     expect(journal.entries.at(-1)).toMatchObject({ idx: 63, tag: "0063_aurion_npc_information_ecology" });
     expect(manifest.waveId).toBe("aurion-production-0021-0063");
     expect(manifest.migrations.some((migration: { tag: string }) => migration.tag === "0049_aurion_causal_receipt_v2")).toBe(true);
