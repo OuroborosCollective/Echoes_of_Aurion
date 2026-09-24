@@ -101,6 +101,15 @@ jobs:
           test "$(wc -c < return-stone-live.glb | tr -d ' ')" = "${RETURN_STONE_BYTES}"
           printf '%s  %s\n' "${RETURN_STONE_SHA256}" return-stone-live.glb | sha256sum --strict -c -
 
+      - name: Verify world-generation evidence gate contracts
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run \
+            server/causality/worldGenerationEvidenceGate.test.ts \
+            scripts/atlas/worldGenerationAtlasAdmission.test.ts \
+            --reporter=verbose
+          git diff --check
+
       - name: Build and boot exact immutable candidate container
         run: |
           set -euo pipefail
