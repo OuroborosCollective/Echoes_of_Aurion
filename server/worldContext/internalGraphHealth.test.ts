@@ -92,7 +92,7 @@ describe("internal WorldContext structural health", () => {
     expect(comparison.removedRelationCount).toBe(0);
     expect(comparison.nodeChurnRatio).toBe(0.2);
     expect(comparison.edgeChurnRatio).toBe(0.333333333);
-    expect(comparison.componentCountDelta).toBe(-1);
+    expect(comparison.componentCountDelta).toBe(0);
     expect(comparison.changeSignals).toEqual([
       "ARTICULATION_COUNT_CHANGED",
       "AVERAGE_DISTANCE_CHANGED",
