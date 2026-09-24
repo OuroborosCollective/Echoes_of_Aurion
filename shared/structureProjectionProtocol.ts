@@ -3,6 +3,9 @@ import { canonicalSha256 } from "./aurionCanonicalHash";
 import {
   AURION_STRUCTURE_MATERIALIZATION_PROTOCOL,
   structureObservationIdentitySchema,
+  structureObservationCollisionDescriptorSchema,
+  structureObservationFootprintSchema,
+  structureObservationPresentationDescriptorSchema,
   type StructureMaterialization,
   type StructureObservationIdentity,
 } from "./structureObservationProtocol";
@@ -14,6 +17,7 @@ export const AURION_STRUCTURE_NETWORK_PROJECTION_PROTOCOL = "aurion.structure-ne
 export const AURION_STRUCTURE_AX1_PROJECTION_PROTOCOL = "aurion.structure-ax1-projection.v1" as const;
 
 const sha256 = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+const bareSha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const revision = z.string().regex(/^[a-f0-9]{40}$/);
 const identifier = z.string().trim().min(1).max(128);
 const coordinate = z.strictObject({ x: z.number().int(), z: z.number().int() });
@@ -80,13 +84,13 @@ export const structureProjectionContractSchema = z.strictObject({
   protocol: z.literal(AURION_STRUCTURE_PROJECTION_PROTOCOL),
   observationKey: sha256,
   identity: structureObservationIdentitySchema,
-  recipeHash: z.string().min(1).max(128),
+  recipeHash: bareSha256,
   materializationHash: sha256,
-  footprint: z.unknown(),
-  collision: z.unknown(),
-  presentation: z.unknown(),
+  footprint: structureObservationFootprintSchema,
+  collision: structureObservationCollisionDescriptorSchema,
+  presentation: structureObservationPresentationDescriptorSchema,
   collisionProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_COLLISION_PROJECTION_PROTOCOL), observationKey: sha256, confirmedChunkAuthorityStateHash: sha256, footprint: z.unknown(), collision: z.unknown() }),
-  npcProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_NPC_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, grammarId: identifier, grammarVersion: identifier, confirmedChunkAuthorityStateHash: sha256, sourceCausalRoot: sha256, sourceRevision: revision, recipeHash: z.string().min(1).max(128), materializationHash: sha256 }),
+  npcProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_NPC_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, grammarId: identifier, grammarVersion: identifier, confirmedChunkAuthorityStateHash: sha256, sourceCausalRoot: sha256, sourceRevision: revision, recipeHash: bareSha256, materializationHash: sha256 }),
   networkProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_NETWORK_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, recipeHash: z.string().min(1).max(128), materializationHash: sha256, footprint: z.unknown() }),
   ax1Projection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_AX1_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, grammarId: identifier, grammarVersion: identifier, recipeHash: z.string().min(1).max(128), materializationHash: sha256, presentation: z.unknown() }),
   projectionHash: sha256,
