@@ -43,7 +43,7 @@ export const npcInformationSourceSchema = z.strictObject({
 
 export type NpcInformationSource = Readonly<z.infer<typeof npcInformationSourceSchema>>;
 
-export const npcInformationReceiptSchema = z.strictObject({
+const npcInformationReceiptBaseSchema = z.strictObject({
   id: identifier,
   factId: identifier,
   worldId: identifier,
@@ -68,7 +68,9 @@ export const npcInformationReceiptSchema = z.strictObject({
   expiresAtIndex: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
   previousReceiptId: identifier.nullable(),
   receiptHash: z.string().regex(/^[a-f0-9]{64}$/),
-}).transform(value => Object.freeze(value));
+});
+
+export const npcInformationReceiptSchema = npcInformationReceiptBaseSchema.transform(value => Object.freeze(value));
 
 export type NpcInformationReceipt = Readonly<z.output<typeof npcInformationReceiptSchema>>;
 
@@ -91,7 +93,7 @@ function hashHex(value: unknown): string {
 }
 
 function makeReceipt(value: Omit<NpcInformationReceipt, "id" | "receiptHash">): NpcInformationReceipt {
-  const parsed = npcInformationReceiptSchema.omit({ id: true, receiptHash: true }).parse(value);
+  const parsed = npcInformationReceiptBaseSchema.omit({ id: true, receiptHash: true }).parse(value);
   const id = "nei_" + hashHex({
     domain: "aurion.npc-information-receipt-id.v1",
     value: parsed,
