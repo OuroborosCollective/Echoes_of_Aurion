@@ -1264,3 +1264,9 @@ Status: VERIFIED scheduler slice; production NPC resolver ownership remains unch
 Change: Added bounded FULL/REDUCED/STRATEGIC/DORMANT cadence evaluation plus shared #515 structure-observation evidence input and deterministic evidence hashing; no wall-clock, second structure generator, second materializer or persistence migration.
 Insight: Cadence changes when confirmed NPC inputs are evaluated, never whether a confirmed structure exists; dormant catch-up is epoch-based and budgeted.
 Evidence: Exact implementation head before this Memory append `947f4e2952d86729754000400b6dd30ab7804056` passed Runtime Container Proof #860, Runtime Candidate #861, Local Test Pack #1392, AIM-292 #1219 and Android #1874. This append creates a new head; post-memory exact-head verification is required before merge.
+
+### 2026-09-24 — Deterministic Interest Management (#489)
+Status: VERIFIED implementation; PR #560 awaits final post-memory gates.
+Change: Added an explicit simulation/network/persistence/presentation interest contract and deterministic planner that reuses the existing world-chunk rings and consumes only confirmed #515 structure projections; network relevance is limited to active+preload, persistence remains evidence-read-only, and no interest path can create/delete world truth.
+Insight: Viewport, HLOD, cache eviction and network filtering change dissemination/projection only; the same confirmed observationKey remains the structure identity, while measurable desktop relevance is 1 simulation + 9 near-network + 1 persistence chunk versus 25 presentation chunks.
+Evidence: Exact implementation head `27201e506293f62c17172a689b3628eb8949353e` passed Runtime Container Proof #867 (6/6 targeted files, 26/26 tests), Runtime Candidate #868, Local Test Pack #1400, AIM-292 #1227 and Android #1882. This Memory append creates a new head; fresh post-memory exact-head gates and main readback are required before merge.
