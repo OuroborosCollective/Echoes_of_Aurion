@@ -49,6 +49,19 @@ describe("Aurion single-authority architecture", () => {
     });
   });
 
+  it("protects the project license boundary from a permissive MIT project license", () => {
+    const license = read("LICENSE.md");
+    const notice = read("NOTICE.md");
+
+    expect(license).toContain("Ouroboros Collective");
+    expect(license).toContain("Thomas Markgraf");
+    expect(license).toContain("Keine kommerzielle Nutzung ohne Lizenz");
+    expect(license).toContain("Private Nutzung und Spielen");
+    expect(license).not.toMatch(/^MIT License$/m);
+    expect(notice).toContain("Echoes of Aurion is not distributed under the MIT License.");
+    expect(notice).toContain("only to their respective third-party components");
+  });
+
   it("makes /play an Aurion-owned route and the homepage a game-first landing page", () => {
     const entry = read("docs/account-first-entry.md");
     const app = read("client/src/App.tsx");
