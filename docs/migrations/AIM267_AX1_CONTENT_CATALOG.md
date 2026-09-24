@@ -1,8 +1,12 @@
 ---
-description: Revisionsgebundener AX1 Content-/Visual-Katalog ohne Gameplay-Authority.
+description: Historischer AX1 Content-/Visual-Katalog; keine aktuelle Authority.
 ---
 
-# AIM-267 — Final `-ax1` Content Catalog
+# AIM-267 — historische AX1-Content-Provenienz
+
+## ⚠️ Historisch — nicht normativ
+
+Der Katalog dokumentiert die Herkunft eines bereits migrierten Content-/Visual-Bestands. Aurion ist der einzige aktive Owner; AX1 und WASD tragen keine aktuelle Runtime-, Gameplay- oder Entscheidungs-Authority.
 
 Source: `OuroborosCollective/-ax1@d356881538dae23c3aa97364a5596d48b6ac3079`  
 Normative gameplay rules: **WASD**  
