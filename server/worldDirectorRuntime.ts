@@ -6,7 +6,7 @@ import {
 } from "../shared/worldPressureProtocol";
 import type { GlobalWorldPlan } from "./globalWorldProtocol";
 import type { AurionCausalTickReceipt } from "../shared/aurionCausalTickContract";
-import { readLatestWorldDirectorReceipt, persistWorldDirectorDecision } from "./worldDirectorPersistence";
+import { readLatestWorldDirectorReceipt, readWorldDirectorReceiptAt, persistWorldDirectorDecision } from "./worldDirectorPersistence";
 
 export async function resolveAndRecordWorldDirector(input: {
   causalReceipt: AurionCausalTickReceipt;
@@ -20,15 +20,19 @@ export async function resolveAndRecordWorldDirector(input: {
   if (!/^[a-f0-9]{40}$/.test(input.causalReceipt.sourceRevision)) throw new Error("WORLD_DIRECTOR_SOURCE_REVISION_INVALID");
   if (input.worldPlan.epoch !== input.causalReceipt.tick) throw new Error("WORLD_DIRECTOR_EPOCH_TICK_MISMATCH");
 
-  const sourceRootHash = input.sourceRootHash ?? input.worldPlan.deterministicHash;
+  const canonicalSourceRootHash = input.causalReceipt.postStateHash;
+  if (input.sourceRootHash !== undefined && input.sourceRootHash !== canonicalSourceRootHash) {
+    throw new Error("WORLD_DIRECTOR_SOURCE_ROOT_CONFLICT");
+  }
   const field = buildWorldPressureField({
+
     worldPlan: input.worldPlan,
     worldRevision: input.causalReceipt.sourceRevision,
     logicalTick: input.causalReceipt.tick,
-    sourceRootHash,
+    sourceRootHash: canonicalSourceRootHash,
   });
-  const candidates = deriveWorldDirectorCandidates(field, input.worldPlan);
-  const previous = await readLatestWorldDirectorReceipt(field.worldId, input.zoneId);
+  const existing = await readWorldDirectorReceiptAt(field.worldId, input.zoneId, field.logicalTick);
+  const previous = await readLatestWorldDirectorReceipt(field.worldId, input.zoneId, field.logicalTick);
   const previousReceiptHash = previous?.receiptHash ?? null;
   const decision = decideWorldDirectors({
     field,
@@ -39,8 +43,13 @@ export async function resolveAndRecordWorldDirector(input: {
     maxIntents: input.maxIntents,
   });
 
-  if (previous && previous.logicalTick === decision.logicalTick) {
-    if (previous.decisionHash !== decision.decisionHash || previous.causalReceiptHash !== decision.causalReceiptHash) {
+  if (existing) {
+    if (
+      existing.decisionHash !== decision.decisionHash ||
+      existing.causalReceiptHash !== decision.causalReceiptHash ||
+      existing.sourceRevision !== decision.sourceRevision ||
+      existing.sourceRootHash !== decision.sourceRootHash
+    ) {
       throw new Error("WORLD_DIRECTOR_REPLAY_CONFLICT");
     }
     return { decision, source: "persisted" };
