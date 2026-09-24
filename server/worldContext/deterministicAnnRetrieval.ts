@@ -244,6 +244,9 @@ export class DeterministicHnswIndex {
       return;
     }
 
+    // Register before connecting so symmetric edges can resolve the new node.
+    this.nodes.set(id, node);
+
     let entry = this.entryPoint;
     for (let currentLevel = this.maxLevel; currentLevel > level; currentLevel -= 1) {
       entry = this.greedyNearest(node.quantized, entry, currentLevel);
