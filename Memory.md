@@ -1252,3 +1252,9 @@ Status: VERIFIED implementation; stacked PR #516 awaits merge into #512.
 Change: Added confirmed-evidence-gated lazy structure observation, deterministic #512 recipe materialization, delta precedence, projection-only footprint/collision/presentation descriptors, ephemeral cache reconstruction and real MariaDB readback; no second world authority or migration was introduced.
 Insight: A structure can remain compactly represented by cause + confirmed evidence and be materialized only on observation; cache loss, viewport/streaming and CAG availability do not alter its causal identity.
 Evidence: Exact implementation head `50cce1ce9367a5572ef87c680c4be1260088efa5` passed PR Runtime Container Proof run `36003657837` / #853 including real isolated MariaDB AIM-514 (`STEP514_REAL_MARIADB status=VERIFIED`, identical observation/materialization hashes after cache eviction), PR Runtime Candidate #854, and Aurion Local Test Pack #1383 with full repository regression success.
+
+### 2026-09-24 — Shared Structure Projection Contract (#515)
+Status: VERIFIED implementation; PR #543 awaits final post-memory gates.
+Change: Added one canonical projection contract over the verified #514 observation for Collision, NPC, Network and AX1, with bounded footprint/collision/presentation descriptors, shared observation/causal identity and deterministic projection hashing; no new generator, world authority, persistence authority or CAG dependency.
+Insight: Consumers can project the same confirmed structure without rebuilding the grammar or treating cache/LOD/renderer state as truth; observationKey remains the shared causal identity while each consumer receives only its permitted projection fields.
+Evidence: Pre-memory exact-head PR #543 passed Runtime Container Proof #856, Runtime Candidate #857, Local Test Pack #1387, AIM-292 #1214 and Android #1869. This Memory append creates a new head; post-memory gates and final main readback are still required before merge.
