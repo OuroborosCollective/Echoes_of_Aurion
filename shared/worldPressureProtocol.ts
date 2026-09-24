@@ -1,5 +1,17 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
-import type { GlobalWorldPlan, GlobalWorldSector } from "../server/globalWorldProtocol";
+
+type GlobalWorldSectorLikeLike = {
+  id: string;
+  settlement: { population: number; capacity: number };
+  resources: { food: number; water: number; ore: number; drought: number; forestHealth: number };
+  polity: { conflictPressure: number; stability: number };
+};
+
+type GlobalWorldPlanLikeLike = {
+  epoch: number;
+  deterministicHash: string;
+  sectors: readonly GlobalWorldSectorLikeLike[];
+};
 
 export const WORLD_PRESSURE_SCHEMA = "aurion.world-pressure.v1" as const;
 export const WORLD_PRESSURE_RULESET_VERSION = "aurion.world-pressure.rules.v1" as const;
@@ -87,7 +99,7 @@ function toBps(value: number): number {
   return Math.max(0, Math.min(10_000, Math.round(value * 10_000)));
 }
 
-function sectorPressureDimensions(sector: GlobalWorldSector): Omit<WorldPressureRegion, "regionId" | "totalBps"> {
+function sectorPressureDimensions(sector: GlobalWorldSectorLike): Omit<WorldPressureRegion, "regionId" | "totalBps"> {
   const populationPressure = toBps(sector.settlement.population / Math.max(1, sector.settlement.capacity));
   const foodPressure = toBps(1 - sector.resources.food);
   const waterPressure = toBps(1 - sector.resources.water);
@@ -107,7 +119,7 @@ function sectorPressureDimensions(sector: GlobalWorldSector): Omit<WorldPressure
 }
 
 export function buildWorldPressureField(input: {
-  worldPlan: GlobalWorldPlan;
+  worldPlan: GlobalWorldPlanLike;
   worldRevision: string;
   logicalTick: number;
   sourceRootHash?: string;
@@ -160,7 +172,7 @@ export function buildWorldPressureField(input: {
 
 export function deriveWorldDirectorCandidates(
   field: WorldPressureField,
-  worldPlan: GlobalWorldPlan,
+  worldPlan: GlobalWorldPlanLike,
 ): readonly WorldDirectorCandidate[] {
   const sectors = [...worldPlan.sectors].sort((a, b) => a.id.localeCompare(b.id));
   const candidates: WorldDirectorCandidate[] = [];
