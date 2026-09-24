@@ -1,11 +1,12 @@
 import type { GameDevelopmentStudioRuntimeReadback } from "./gameDevelopmentStudioRuntime";
+import { isDevControlChannelEnabled } from "./devControlProtocol";
 
 export type DevGdsStatusConfirmation = "CONFIRM_DEV_GDS_STATUS";
 export type DevGdsInspectConfirmation = "CONFIRM_DEV_GDS_INSPECT";
 export type DevGdsValidateConfirmation = "CONFIRM_DEV_GDS_VALIDATE";
 
 function assertDevGdsEnabled(): void {
-  if (process.env.NODE_ENV === "production") throw new Error("DEV_CONTROL_CHANNEL_DISABLED");
+  if (!isDevControlChannelEnabled(process.env)) throw new Error("DEV_CONTROL_CHANNEL_DISABLED");
 }
 
 async function loadRuntime(): Promise<typeof import("./gameDevelopmentStudioRuntime")> {

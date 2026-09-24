@@ -82,12 +82,8 @@ export function devControlCapabilities() {
     }),
     tools: Object.freeze([
       { name: "aurion_dev_inspect_environment", mode: "read" },
-      { name: "aurion_dev_gds_status", mode: "read" },
-      { name: "aurion_dev_gds_inspect_approved_asset", mode: "read" },
-      { name: "aurion_dev_gds_validate_approved_asset", mode: "read" },
       { name: "aurion_dev_test_zone_reset", mode: "write" },
       { name: "aurion_dev_seed_test_encounter", mode: "write" },
-      { name: "aurion_dev_get_fixture_readback", mode: "read" },
     ]),
     unavailable: Object.freeze([
       "raw_sql_execution",

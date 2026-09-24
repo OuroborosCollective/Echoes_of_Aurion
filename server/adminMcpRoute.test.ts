@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import { createServer } from "node:http";
 import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerAdminMcp } from "./adminMcp";
@@ -132,6 +131,9 @@ describe("pre-alpha dev control HTTP boundary", () => {
       expect(body.id).toBe(1);
       expect(body.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
         "aurion_dev_inspect_environment",
+        "aurion_dev_gds_status",
+        "aurion_dev_gds_inspect_approved_asset",
+        "aurion_dev_gds_validate_approved_asset",
         "aurion_dev_test_zone_reset",
         "aurion_dev_seed_test_encounter",
         "aurion_dev_get_fixture_readback",
@@ -164,8 +166,12 @@ describe("pre-alpha dev control HTTP boundary", () => {
       expect(body.protocol).toBe("aurion.dev-control.v1");
       expect(body.tools).toEqual([
         { name: "aurion_dev_inspect_environment", mode: "read" },
+        { name: "aurion_dev_gds_status", mode: "read" },
+        { name: "aurion_dev_gds_inspect_approved_asset", mode: "read" },
+        { name: "aurion_dev_gds_validate_approved_asset", mode: "read" },
         { name: "aurion_dev_test_zone_reset", mode: "write" },
         { name: "aurion_dev_seed_test_encounter", mode: "write" },
+        { name: "aurion_dev_get_fixture_readback", mode: "read" },
       ]);
       expect(body.unavailable).toEqual(expect.arrayContaining([
         "raw_sql_execution",

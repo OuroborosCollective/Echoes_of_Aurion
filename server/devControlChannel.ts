@@ -15,11 +15,6 @@ import {
   verifyDevControlAuthorization,
 } from "./devControlProtocol";
 import { hashCanonicalZoneState } from "./causality/zoneCanonicalState";
-import {
-  executeGdsInspectApprovedAsset,
-  executeGdsStatus,
-  executeGdsValidateApprovedAsset,
-} from "./devControlGdsBridge";
 
 const DEV_FIXTURE_ZONE_ID = "observatory_threshold" as const;
 const MAX_IDEMPOTENCY_ENTRIES = 256;
@@ -130,32 +125,6 @@ export function createDevControlMcpServer() {
     operationalTimestamp: operationalNow(),
     truth: "observed_environment_only",
   }));
-
-  server.registerTool("aurion_dev_gds_status", {
-    title: "Inspect Game Development Studio runtime",
-    description: "Runs the pinned server-owned Game Development Studio readiness readback. No provider calls and no production write authority.",
-    inputSchema: z.object({
-      confirmation: z.literal("CONFIRM_DEV_GDS_STATUS"),
-    }).strict(),
-  }, async input => content(await executeGdsStatus(input.confirmation)));
-
-  server.registerTool("aurion_dev_gds_inspect_approved_asset", {
-    title: "Inspect approved asset with Game Development Studio",
-    description: "Inspects an already-approved Aurion GLB through the pinned server-owned Game Development Studio runtime. No provider calls and no live mutation.",
-    inputSchema: z.object({
-      assetId: z.string().min(8).max(64),
-      confirmation: z.literal("CONFIRM_DEV_GDS_INSPECT"),
-    }).strict(),
-  }, async input => content(await executeGdsInspectApprovedAsset(input.assetId, input.confirmation)));
-
-  server.registerTool("aurion_dev_gds_validate_approved_asset", {
-    title: "Validate approved asset with Game Development Studio",
-    description: "Validates an already-approved Aurion GLB through the pinned server-owned Game Development Studio runtime. No provider calls and no live mutation.",
-    inputSchema: z.object({
-      assetId: z.string().min(8).max(64),
-      confirmation: z.literal("CONFIRM_DEV_GDS_VALIDATE"),
-    }).strict(),
-  }, async input => content(await executeGdsValidateApprovedAsset(input.assetId, input.confirmation)));
 
   server.registerTool("aurion_dev_test_zone_reset", {
     title: "Reset bounded development zone",
