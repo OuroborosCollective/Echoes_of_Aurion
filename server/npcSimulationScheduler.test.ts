@@ -92,13 +92,13 @@ describe("AIM-485 deterministic multi-timescale scheduler", () => {
     const scheduler = new NpcSimulationScheduler();
     const first = scheduler.plan({ npcId: "npc-1", mode: "REDUCED", currentTick: 1, epoch: 1 });
     const second = scheduler.plan({ npcId: "npc-1", mode: "REDUCED", currentTick: 9, epoch: 1 });
-    const third = scheduler.plan({ npcId: "npc-1", mode: "REDUCED", currentTick: 10, epoch: 1 });
-    const fourth = scheduler.plan({ npcId: "npc-1", mode: "REDUCED", currentTick: 20, epoch: 1 });
+    const third = scheduler.plan({ npcId: "npc-1", mode: "REDUCED", currentTick: 11, epoch: 1 });
+    const fourth = scheduler.plan({ npcId: "npc-1", mode: "REDUCED", currentTick: 21, epoch: 1 });
     expect(first.evaluation.evaluateNow).toBe(true);
     expect(second.evaluation.evaluateNow).toBe(false);
     expect(third.evaluation.evaluateNow).toBe(true);
     expect(fourth.evaluation.evaluateNow).toBe(true);
-    expect(scheduler.readback("npc-1")).toMatchObject({ lastEvaluationTick: 20 });
+    expect(scheduler.readback("npc-1")).toMatchObject({ lastEvaluationTick: 21 });
   });
 
   it("reproduces dormant catch-up from confirmed epoch evidence", () => {
