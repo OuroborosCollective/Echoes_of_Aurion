@@ -11,7 +11,7 @@ export type AurionAx1ContentCatalog = Readonly<{
   source: readonly ["OuroborosCollective/-ax1", typeof AURION_AX1_CONTENT_SOURCE_REVISION];
   normativeRules: readonly ["OuroborosCollective/Wasd", string];
   targetBaseline: readonly ["OuroborosCollective/Echoes_of_Aurion", string];
-  authority: Readonly<{ definitionsOnly: true; liveState: false; progressionCap: null; mutation: "wasd_aurion_receipts" }>;
+  authority: Readonly<{ definitionsOnly: true; liveState: false; progressionCap: null; mutation: "aurion_receipts" }>;
   professions: readonly Readonly<{ id: string; sourceId: string; category: "crafting" | "gathering" | "civic"; label: string; mastery: CatalogMasteryTuple; unbounded: true }>[];
   activities: readonly Readonly<{ id: string; professionId: string; kind: "gather" | "process" | "civic"; output: readonly [string, string]; sourceHint: readonly [number, string, string, string]; mastery: readonly CatalogMasteryTuple[] }>[];
   recipes: readonly Readonly<{ id: string; professionId: string; label: string; ingredients: readonly (readonly [string, string])[]; output: readonly [string, string]; sourceHint: readonly [string, number]; mastery: readonly CatalogMasteryTuple[] }>[];
@@ -83,7 +83,7 @@ export function validateAurionAx1ContentCatalog(value: unknown): AurionAx1Conten
   if (value.schemaVersion !== 1 || value.contentVersion !== AURION_AX1_CONTENT_VERSION) throw new Error("unsupported content catalog version");
   if (!Array.isArray(value.source) || value.source[0] !== "OuroborosCollective/-ax1" || value.source[1] !== AURION_AX1_CONTENT_SOURCE_REVISION) throw new Error("content source mismatch");
   record(value.authority, "authority");
-  if (value.authority.definitionsOnly !== true || value.authority.liveState !== false || value.authority.progressionCap !== null || value.authority.mutation !== "wasd_aurion_receipts") throw new Error("content authority mismatch");
+  if (value.authority.definitionsOnly !== true || value.authority.liveState !== false || value.authority.progressionCap !== null || value.authority.mutation !== "aurion_receipts") throw new Error("content authority mismatch");
   const forbiddenPath = forbidden(value);
   if (forbiddenPath) throw new Error(`live-state key forbidden: ${forbiddenPath}`);
 
