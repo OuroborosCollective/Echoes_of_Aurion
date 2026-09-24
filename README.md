@@ -78,6 +78,14 @@ AX1 und WASD sind historische Provenienzquellen beziehungsweise bereits migriert
 
 Die verbindliche technische Definition steht in [ARCHITECTURE_OWNERSHIP.md](ARCHITECTURE_OWNERSHIP.md).
 
+## Lizenz und Nutzung
+
+**© Ouroboros Collective / Thomas Markgraf. Alle Rechte vorbehalten.**
+
+Private, nichtkommerzielle Nutzung und Spielen sind grundsätzlich gestattet. Öffentliche Veröffentlichung, Weitergabe, kommerzielle Nutzung, Distribution oder Veröffentlichung eigener Bearbeitungen des Projekts sind ohne ausdrücklich ausgestellte Nutzungslizenz von Ouroboros Collective nicht gestattet. Drittbestandteile können abweichenden Lizenzbedingungen unterliegen.
+
+Die vollständigen [Lizenz- und Nutzungsbedingungen](LICENSE.md) sind verbindlich.
+
 ## Technische Dokumentation
 
 - [Architektur — Aurion Single Authority](ARCHITECTURE_OWNERSHIP.md)
