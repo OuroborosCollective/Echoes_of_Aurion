@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { aurionWorldDirectorReceipts } from "../drizzle/schema";
 import { getDb } from "./db";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
@@ -32,8 +32,28 @@ function receiptId(decision: WorldDirectorDecision, zoneId: string): string {
   }).slice(7, 63)}`;
 }
 
-function computeStoredReceiptHash(input: Omit<StoredWorldDirectorReceipt, "receiptHash">): string {
-  return canonicalSha256(input);
+function storedReceiptHashPayload(row: StoredWorldDirectorReceipt | Record<string, any>) {
+  return {
+    id: row.id,
+    schemaVersion: row.schemaVersion,
+    worldId: row.worldId,
+    worldEpoch: row.worldEpoch,
+    zoneId: row.zoneId,
+    logicalTick: row.logicalTick,
+    sourceRevision: row.sourceRevision,
+    sourceRootHash: row.sourceRootHash,
+    causalReceiptHash: row.causalReceiptHash,
+    seedDigest: row.seedDigest,
+    previousReceiptHash: row.previousReceiptHash ?? null,
+    candidateSetHash: row.candidateSetHash,
+    decisionHash: row.decisionHash,
+    rulesetVersion: row.rulesetVersion,
+    decisionJson: row.decisionJson,
+  };
+}
+
+function computeStoredReceiptHash(input: StoredWorldDirectorReceipt | Record<string, unknown>): string {
+  return canonicalSha256(storedReceiptHashPayload(input));
 }
 
 function verifyStoredReceipt(row: StoredWorldDirectorReceipt): void {
@@ -95,11 +115,35 @@ export async function persistWorldDirectorDecision(input: {
   return stored;
 }
 
-export async function readLatestWorldDirectorReceipt(worldId: string, zoneId: string): Promise<StoredWorldDirectorReceipt | null> {
+export async function readWorldDirectorReceiptAt(worldId: string, zoneId: string, logicalTick: number): Promise<StoredWorldDirectorReceipt | null> {
   const db = await getDb();
   if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
   const [row] = await db.select().from(aurionWorldDirectorReceipts)
-    .where(and(eq(aurionWorldDirectorReceipts.worldId, worldId), eq(aurionWorldDirectorReceipts.zoneId, zoneId)))
+    .where(and(
+      eq(aurionWorldDirectorReceipts.worldId, worldId),
+      eq(aurionWorldDirectorReceipts.zoneId, zoneId),
+      eq(aurionWorldDirectorReceipts.logicalTick, logicalTick),
+    )).limit(1);
+  if (!row) return null;
+  const stored = row as StoredWorldDirectorReceipt;
+  verifyStoredReceipt(stored);
+  return stored;
+}
+
+export async function readLatestWorldDirectorReceipt(
+  worldId: string,
+  zoneId: string,
+  beforeLogicalTick?: number,
+): Promise<StoredWorldDirectorReceipt | null> {
+  const db = await getDb();
+  if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
+  const conditions = [
+    eq(aurionWorldDirectorReceipts.worldId, worldId),
+    eq(aurionWorldDirectorReceipts.zoneId, zoneId),
+  ];
+  if (beforeLogicalTick !== undefined) conditions.push(lt(aurionWorldDirectorReceipts.logicalTick, beforeLogicalTick));
+  const [row] = await db.select().from(aurionWorldDirectorReceipts)
+    .where(and(...conditions))
     .orderBy(desc(aurionWorldDirectorReceipts.logicalTick)).limit(1);
   if (!row) return null;
   const stored = row as StoredWorldDirectorReceipt;
