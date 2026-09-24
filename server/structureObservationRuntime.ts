@@ -212,7 +212,7 @@ function buildMaterialization(
     deltaOverridePositionMm: override ? override.positionMm : null,
   });
   const materializationEnvelope = {
-    protocol: "aurion.structure.materialization.v1" as const,
+    protocol: "aurion.structure-materialization.v1" as const,
     observationKey: key,
     recipeHash: compilation.deterministicFingerprint,
     state: override ? "DELTA_OVERRIDE" : "BASE_GRAMMAR",
