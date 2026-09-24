@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createPool, type Pool } from "mysql2/promise";
+import { eq } from "drizzle-orm";
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   aurionActiveCivilizations,
