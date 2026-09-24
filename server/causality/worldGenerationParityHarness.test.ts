@@ -59,7 +59,7 @@ function confirmedChunk(overrides: Partial<CanonicalChunkReceipt> = {}) {
   return {
     status: "VERIFIED" as const,
     membership: "GENERATOR_AND_EMPTY_STREAM" as const,
-    worldRootHash: pair.receipt.worldRootHash,
+    worldRootHash: canonicalSha256({ domain: "parity-test-world-root", worldId: WORLD_ID, epoch: 1, chunk: CHUNK }),
     receipt: Object.freeze({ ...pair.receipt, ...overrides }),
     state: pair.state,
   };
