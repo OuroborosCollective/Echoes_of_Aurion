@@ -39,7 +39,7 @@ const enabled = process.env.NODE_ENV === "test"
   && Boolean(process.env.DATABASE_URL);
 const suite = enabled ? describe : describe.skip;
 const WORLD_ID = GLOBAL_WORLD_ID;
-const ZONE = "observatory_threshold:world-generation-parity-510";
+const ZONE = "observatory_threshold";
 const CHUNK = { x: 777503, z: -777503 };
 const USER_ID = 2_146_999_971;
 const RELEASE = process.env.AURION_RELEASE_SHA ?? "";
