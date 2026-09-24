@@ -13,9 +13,8 @@ function publish(status: PlayStatus): void {
 }
 
 /**
- * AX1 owns the transition from the Aurion portal into the game route.
- * Aurion may present the website and authenticated account, but it never
- * constructs a gameplay snapshot or invents a fallback arena.
+ * Legacy-named compatibility bridge. Aurion owns play launch, world state and
+ * gameplay; this bridge forwards player intent and renders confirmed Aurion state.
  */
 export default function Ax1PlayNavigationBridge() {
   const [location, navigate] = useLocation();
@@ -26,19 +25,19 @@ export default function Ax1PlayNavigationBridge() {
     const launch = () => {
       if (location === "/play" || inFlight.current) return;
       inFlight.current = true;
-      publish({ state: "launching", message: "AX1 lädt den WASD-bestätigten Weltvertrag." });
+      publish({ state: "launching", message: "Aurion lädt den bestätigten Weltvertrag." });
       enterOpenWorld.mutate(undefined, {
         onSuccess: snapshot => {
           inFlight.current = false;
           if (!persistConfirmedPlayLaunch(snapshot)) {
-            publish({ state: "failed", message: "Der WASD-Weltvertrag konnte nicht revisionssicher gebunden werden." });
+            publish({ state: "failed", message: "Der Aurion-Weltvertrag konnte nicht revisionssicher gebunden werden." });
             return;
           }
           navigate("/play");
         },
         onError: () => {
           inFlight.current = false;
-          publish({ state: "failed", message: "Der WASD-Weltvertrag ist derzeit nicht verfügbar." });
+          publish({ state: "failed", message: "Der Aurion-Weltvertrag ist derzeit nicht verfügbar." });
         },
       });
     };
