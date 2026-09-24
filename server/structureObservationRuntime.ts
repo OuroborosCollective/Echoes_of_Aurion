@@ -4,6 +4,7 @@ import {
   STRUCTURE_OBSERVATION_CACHE_MAX_ENTRIES,
   structureObservationRequestSchema,
   structureObservationIdentitySchema,
+  structureObservationReceiptSchema,
   type StructureMaterialization,
   type StructureObservationDeltaOverride,
   type StructureObservationIdentity,
@@ -54,7 +55,7 @@ export function structureObservationIdentity(input: {
     sourceRevision: input.confirmedChunk.receipt.sourceRevision,
     sourceCausalRoot: input.confirmedChunk.worldRootHash,
   };
-  return Object.freeze(identity);
+  return Object.freeze(structureObservationIdentitySchema.parse(identity));
 }
 
 function observationKey(identity: StructureObservationIdentity): string {
@@ -113,6 +114,14 @@ async function readConfirmedDeltaPrefix(
       afterId,
       limit: Math.min(100, remaining),
     });
+    if (
+      page.worldId !== worldId ||
+      page.chunkX !== coordinate.x ||
+      page.chunkZ !== coordinate.z ||
+      page.baseRevision !== expectedBaseRevision
+    ) {
+      throw new Error("OBSERVATION_DELTA_PAGE_SCOPE_MISMATCH");
+    }
     const rows = page.deltas.map(canonicalDeltaFromRow);
     for (const delta of rows) {
       if (delta.sequence !== result.length + 1) throw new Error("OBSERVATION_DELTA_SEQUENCE_GAP");
@@ -259,13 +268,13 @@ function receipt(
     materializationHash: materialization.materializationHash,
     previousReceiptHash: null,
   };
-  return Object.freeze({
+  return Object.freeze(structureObservationReceiptSchema.parse({
     ...unsigned,
     receiptHash: canonicalSha256({
       domain: "aurion.structure-observation-receipt.v1",
       receipt: unsigned,
     }),
-  });
+  }));
 }
 
 export function materializeConfirmedStructure(input: {
@@ -364,13 +373,6 @@ export class StructureObservationRuntime {
       });
     }
 
-    if (
-      confirmedChunk.receipt.worldId !== parsedRequest.worldId ||
-      confirmedChunk.receipt.epoch !== parsedRequest.epoch ||
-      confirmedChunk.receipt.sourceRevision !== confirmedChunk.state.materialized.base.worldId
-    ) {
-      // The third comparison is intentionally replaced below; keep evidence validation explicit.
-    }
     if (
       confirmedChunk.receipt.worldId !== parsedRequest.worldId ||
       confirmedChunk.receipt.epoch !== parsedRequest.epoch ||
