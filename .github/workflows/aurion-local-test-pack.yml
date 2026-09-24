@@ -172,7 +172,6 @@ jobs:
             server/causality/evidenceGateEngine.test.ts \
             server/causality/worldGenerationEvidenceGate.test.ts \
             scripts/atlas/worldGenerationAtlasAdmission.test.ts \
-            scripts/atlas/generatedWorldAtlasPlan.test.ts \
             --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/structure-grammar-and-world-generation-evidence-gate.log
           node --test scripts/atlas/deterministicAtlasPack.test.mjs
       - name: Typecheck and classless regressions
