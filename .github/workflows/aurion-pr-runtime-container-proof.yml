@@ -51,7 +51,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
           pnpm install --frozen-lockfile
           pnpm check
-          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts --reporter=verbose
+          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts --reporter=verbose
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
           node --test scripts/aurion-build-input-manifest.test.mjs
