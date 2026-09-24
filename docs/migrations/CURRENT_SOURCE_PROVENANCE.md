@@ -14,8 +14,8 @@ Diese Seite ist der aktuelle Einstieg für Source-Reconciliation. Ältere `AIM23
 
 | Repository                             | Rolle                                                                                    |
 | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `OuroborosCollective/-ax1`             | kanonisches Hauptspiel, Gameplayvertrag, Welt-/Contentstruktur, Runtime, UI und Renderer |
-| `OuroborosCollective/Wasd`             | ausführende deterministische Logik- und Simulationsschicht für AX1                       |
+| `OuroborosCollective/-ax1`             | damaliges Hauptspiel, Gameplay-/Content- und Runtime-Provenienz | **historisch** — kein Owner
+| `OuroborosCollective/Wasd`             | damalige deterministische Logik-/Simulations-Provenienz | **historisch** — kein Owner
 | `OuroborosCollective/Echoes_of_Aurion` | Host, Website/Auth/Community, Persistenz, Transport und Readmodels                       |
 
 ## Historischer AX1-Cutover-Pin
@@ -37,9 +37,9 @@ Ein historischer Pin bleibt Evidence für den damaligen Import. Neue Arbeit muss
 
 Jedes Source-Delta wird genau einer Behandlung zugeordnet:
 
-* **AX1 game contract** — fachliche Identität, Content und Spielvertrag gehören zu AX1;
-* **WASD execution** — die deterministische Ausführung des AX1-Vertrags gehört nach WASD;
-* **AX1 direct/adapt** — Runtime/UI/Renderer/Visual Content;
+* **Historisch: AX1 game contract** — die damalige fachliche Identität und Content-Struktur stammten aus AX1;
+* **Historisch: WASD execution** — die damalige deterministische Ausführung wurde aus WASD übernommen;
+* **Historisch: AX1 direct/adapt** — Runtime/UI/Renderer/Visual Content;
 * **Aurion persistence/transport** — Speicherung/Readback bereits bestätigter Evidence;
 * **dev-only** — Debug/Preview ohne Production-Truth;
 * **reject** — zweite Authority, clientbestimmte Mutation, unseeded Gameplayrandomness, parallele Persistenz oder sonstige Architekturverletzung.
