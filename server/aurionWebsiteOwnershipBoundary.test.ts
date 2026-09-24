@@ -9,16 +9,15 @@ function mutationSurfaces(text: string): string[] {
 }
 
 describe("Aurion website ownership boundary", () => {
-  it("keeps Home as portal-only and AX1 as the explicit /play owner", () => {
+  it("keeps Home as the game-first landing page and Aurion as the explicit /play owner", () => {
     const home = source("client/src/pages/Home.tsx");
     const app = source("client/src/App.tsx");
 
     expect(home).not.toContain("MissionState");
     expect(home).not.toContain("AurionOpenWorldRuntime");
-    expect(home).not.toContain("gameplay.");
-    expect(home).not.toContain("crafting.");
-    expect(home).not.toContain("market.");
-    expect(home).not.toContain("groups.");
+    expect(home).toContain("PERSISTENT 3D MMORPG // LIVING WORLD");
+    expect(home).toContain("SELF-ACTING NPCs");
+    expect(home).toContain("EVOLUTIONÄRE ÖKOSYSTEME");
     expect(mutationSurfaces(home)).toEqual([]);
 
     expect(app).toContain('<Route path="/play" component={AurionPlayRoute} />');
@@ -78,12 +77,12 @@ describe("Aurion website ownership boundary", () => {
     }
   });
 
-  it("keeps Aurion as sole authority while AX1 presents and WASD supplies deterministic algorithms", () => {
+  it("keeps Aurion as the sole authority and legacy identities as provenance only", () => {
     const contract = source("ARCHITECTURE_OWNERSHIP.md");
-    expect(contract).toContain("**Echoes of Aurion** | **Sole Canonical Truth & Authority**");
-    expect(contract).toContain("**AX1** | **Client Projection & Presentation**");
-    expect(contract).toContain("**WASD** | **Donor / Algorithmic Reference**");
-    expect(contract).toContain("WASD ist die integrierte deterministische Regel-, Berechnungs- und Simulationsreferenz unter Aurion-Verträgen");
+    expect(contract).toContain("**Kanonischer Endzustand.** Echoes of Aurion ist der einzige kanonische Wahrheitsträger");
+    expect(contract).toContain("**AX1** | **historische Provenienz**");
+    expect(contract).toContain("**WASD** | **historische Provenienz**");
+    expect(contract).toContain("Historische WASD-Algorithmen");
     expect(contract).toContain("Aurion Website, Admin UI, Admin MCP, Datenbankhelper, Worker oder Service Cells dürfen nicht");
   });
 });
