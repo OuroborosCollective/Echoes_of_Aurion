@@ -3,10 +3,10 @@ import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { createStructureProjectionContract } from "../shared/structureProjectionProtocol";
 import { interestMetrics, planInterestManagement } from "./interestManagementPlanner";
 
-function structureProjection(chunkCoordinate: { x: number; z: number }, structureId: string) {
+function structureProjection(chunkCoordinate: { x: number; z: number }, structureId: string, worldId = "echoes-of-aurion-global") {
   const identity = {
     protocol: "aurion.structure-observation.v1" as const,
-    worldId: "echoes-of-aurion-global",
+    worldId,
     epoch: 9,
     chunkCoordinate,
     structureId,
@@ -179,21 +179,14 @@ describe("AIM-489 interest management", () => {
     expect(plan.structureRequirements[0]?.observationKey).toBe(farStructure.observationKey);
   });
   it("rejects a structure projection from another world instead of leaking it into relevance", () => {
-    const foreign = structureProjection({ x: 0, z: 0 }, "foreign-house");
-    const foreignWorld = {
-      ...foreign,
-      identity: {
-        ...foreign.identity,
-        worldId: "other-world",
-      },
-    };
+    const foreign = structureProjection({ x: 0, z: 0 }, "foreign-house", "other-world");
     expect(() => planInterestManagement({
       worldId: "echoes-of-aurion-global",
       canonicalStateHash: canonicalSha256({ state: "confirmed-6" }),
       center: { x: 0, z: 0 },
       tier: "phone",
       cached: [],
-      confirmedStructureProjections: [foreignWorld as typeof foreign],
+      confirmedStructureProjections: [foreign],
     })).toThrow("INTEREST_STRUCTURE_WORLD_SCOPE_MISMATCH");
   });
 
