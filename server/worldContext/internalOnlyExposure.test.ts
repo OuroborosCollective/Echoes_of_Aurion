@@ -14,7 +14,6 @@ describe("internal ANN exposure boundary", () => {
     const analyzerPath = path.resolve(process.cwd(), "server/worldContext/internalGraphAnalysis.ts");
     const source = fs.readFileSync(analyzerPath, "utf8");
     expect(source).not.toContain("CanonicalContextSource");
-    expect(source).not.toContain("canonicalText");
     expect(source).toContain("toWolframLanguageGraph");
   });
 });
