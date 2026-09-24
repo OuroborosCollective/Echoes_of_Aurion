@@ -33,6 +33,11 @@ export function computeWorldGenerationDeterminismHash(
     receiptRootHash: evidence.receiptRootHash,
     oracleVerdict: evidence.oracleVerdict,
     oracleResultHash: evidence.oracleResultHash,
+    firstDivergenceBoundary: evidence.firstDivergenceBoundary,
+    firstDivergenceStage: evidence.firstDivergenceStage,
+    firstDivergenceTick: evidence.firstDivergenceTick,
+    firstDivergenceExpectedHash: evidence.firstDivergenceExpectedHash,
+    firstDivergenceObservedHash: evidence.firstDivergenceObservedHash,
     sourceIntelligence: evidence.sourceIntelligence.status === "SUCCEEDED_VERIFIED"
       ? {
           status: evidence.sourceIntelligence.status,
