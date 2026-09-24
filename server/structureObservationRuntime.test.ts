@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  AURION_STRUCTURE_GRAMMAR_PROTOCOL,
-  type StructureObservationRequest,
-} from "@shared/structureObservationProtocol";
+import { type StructureObservationRequest } from "@shared/structureObservationProtocol";
 import {
   createCanonicalChunkReceipt,
   type CanonicalChunkReceipt,
 } from "@shared/aurionChunkStateContract";
-import { generateBaseWorldChunk, createWorldChunkDelta, type WorldChunkDelta } from "@shared/worldChunkProtocol";
+import { createWorldChunkDelta } from "@shared/worldChunkProtocol";
 import { canonicalSha256 } from "@shared/aurionCanonicalHash";
 import { StructureObservationRuntime, materializeConfirmedStructure } from "./structureObservationRuntime";
 
