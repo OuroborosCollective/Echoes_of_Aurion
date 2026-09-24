@@ -13,7 +13,7 @@ import {
   aurionWorldEpochRequests,
   aurionWorldPresenceLeases,
 } from "../../drizzle/schema";
-import { aurionCausalTickReceipts, aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
+import { aurionCausalCheckpoints, aurionCausalTickReceipts, aurionGlobalStateProofs } from "../../drizzle/aurionCausalitySchema";
 import {
   getDb,
   recordWorldChunkDelta,
@@ -97,6 +97,7 @@ async function cleanup(pool: Pool): Promise<void> {
   await db.delete(aurionWorldEpochRequests).where(eq(aurionWorldEpochRequests.worldId, WORLD_ID));
   await db.delete(aurionGlobalWorldEpochReceipts).where(eq(aurionGlobalWorldEpochReceipts.worldId, WORLD_ID));
   await db.delete(aurionGlobalStateProofs).where(eq(aurionGlobalStateProofs.worldId, WORLD_ID));
+  await db.delete(aurionCausalCheckpoints).where(eq(aurionCausalCheckpoints.zoneId, ZONE));
   await db.delete(aurionCausalTickReceipts).where(eq(aurionCausalTickReceipts.zoneId, ZONE));
   await db.delete(aurionGlobalWorldStates).where(eq(aurionGlobalWorldStates.worldId, WORLD_ID));
 }
