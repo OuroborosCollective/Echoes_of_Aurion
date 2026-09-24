@@ -91,6 +91,14 @@ function safeScaled(value: number, scaleFixed: number, field: string): number {
   return number;
 }
 
+function safeMultiplyInteger(left: number, right: number, field: string): number {
+  assertSafeInteger(left, field);
+  assertSafeInteger(right, field);
+  const result = BigInt(left) * BigInt(right);
+  if (result < -BigInt(SAFE_INTEGER) || result > BigInt(SAFE_INTEGER)) fail("SAFE_INTEGER_OVERFLOW", `${field} exceeds safe integer range`);
+  return Number(result);
+}
+
 function validatePrimitive(primitive: StructureGrammarPrimitive, path: string): void {
   if (!["box", "cylinder", "wedge"].includes(primitive.kind)) fail("INVALID_GRAMMAR", `${path}.primitive.kind is unsupported`);
   for (const axis of ["x", "y", "z"] as const) assertPositiveSafeInteger(primitive.sizeMm[axis], `${path}.primitive.sizeMm.${axis}`);
@@ -167,6 +175,13 @@ function validateGrammar(grammar: DeterministicStructureGrammar): Map<string, St
   if (!rules.has(grammar.rootRuleId)) fail("RULE_NOT_FOUND", `root rule not found: ${grammar.rootRuleId}`);
   for (const rule of rules.values()) validateCalls(rule.body, rules);
   return rules;
+}
+
+function canonicalGrammar(grammar: DeterministicStructureGrammar): DeterministicStructureGrammar {
+  return {
+    ...grammar,
+    rules: [...grammar.rules].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  };
 }
 
 function validateCalls(node: StructureGrammarNode, rules: ReadonlyMap<string, StructureGrammarRule>): void {
@@ -256,12 +271,13 @@ export function compileDeterministicStructureGrammar(
   assertPositiveSafeInteger(minSizeMm, "minSizeMm");
 
   const rules = validateGrammar(input.grammar);
+  const inputGrammar = canonicalGrammar(input.grammar);
   const inputEnvelope = {
     protocol: AURION_STRUCTURE_GRAMMAR_PROTOCOL,
     compilerVersion: AURION_STRUCTURE_GRAMMAR_COMPILER_VERSION,
     worldId: input.worldId,
     worldSeedHash: input.worldSeedHash,
-    grammar: input.grammar,
+    grammar: inputGrammar,
     chunkCoordinate: input.chunkCoordinate,
     anchorId: input.anchorId,
     sourceCausalRoot: input.sourceCausalRoot,
@@ -325,9 +341,9 @@ export function compileDeterministicStructureGrammar(
       for (let index = 0; index < node.count; index += 1) {
         const repeatedState: MutableTransform = {
           positionMm: {
-            x: safeAdd(state.positionMm.x, safeScaled(offset.x, index, "repeat.offset.x"), "repeat.positionMm.x"),
-            y: safeAdd(state.positionMm.y, safeScaled(offset.y, index, "repeat.offset.y"), "repeat.positionMm.y"),
-            z: safeAdd(state.positionMm.z, safeScaled(offset.z, index, "repeat.offset.z"), "repeat.positionMm.z"),
+            x: safeAdd(state.positionMm.x, safeMultiplyInteger(offset.x, index, "repeat.offset.x"), "repeat.positionMm.x"),
+            y: safeAdd(state.positionMm.y, safeMultiplyInteger(offset.y, index, "repeat.offset.y"), "repeat.positionMm.y"),
+            z: safeAdd(state.positionMm.z, safeMultiplyInteger(offset.z, index, "repeat.offset.z"), "repeat.positionMm.z"),
           },
           rotationDiscrete: { ...state.rotationDiscrete },
           scaleFixed: { ...state.scaleFixed },
