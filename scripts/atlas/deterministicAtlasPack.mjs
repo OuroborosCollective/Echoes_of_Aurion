@@ -44,6 +44,11 @@ function sha256(value) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function compareText(a, b) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 function placementScore(free, width, height, rotated) {
   const leftoverHoriz = Math.abs(free.width - width);
   const leftoverVert = Math.abs(free.height - height);
@@ -265,11 +270,11 @@ export function buildDeterministicAtlasPlan(input) {
       localityBucket: source.localityBucket,
     });
   }).sort((a, b) =>
-    a.compatibilityClass.localeCompare(b.compatibilityClass, "en") ||
-    a.localityBucket.localeCompare(b.localityBucket, "en") ||
-    a.contentSha256.localeCompare(b.contentSha256, "en") ||
-    a.assetId.localeCompare(b.assetId, "en") ||
-    a.path.localeCompare(b.path, "en")
+    compareText(a.compatibilityClass, b.compatibilityClass) ||
+    compareText(a.localityBucket, b.localityBucket) ||
+    compareText(a.contentSha256, b.contentSha256) ||
+    compareText(a.assetId, b.assetId) ||
+    compareText(a.path, b.path)
   );
 
   const config = Object.freeze({
@@ -301,8 +306,8 @@ export function buildDeterministicAtlasPlan(input) {
 
   const groups = [...grouped.values()]
     .sort((a, b) =>
-      a.compatibilityClass.localeCompare(b.compatibilityClass, "en") ||
-      a.localityBucket.localeCompare(b.localityBucket, "en")
+      compareText(a.compatibilityClass, b.compatibilityClass) ||
+      compareText(a.localityBucket, b.localityBucket)
     )
     .map(group => {
       const dedupe = new Map();
@@ -332,16 +337,16 @@ export function buildDeterministicAtlasPlan(input) {
           })).slice(0, 24);
           return {
             regionId,
-            sourceAssetIds: [...entry.sourceAssetIds].sort((a, b) => a.localeCompare(b, "en")),
-            sourcePaths: [...entry.sourcePaths].sort((a, b) => a.localeCompare(b, "en")),
+            sourceAssetIds: [...entry.sourceAssetIds].sort(compareText),
+            sourcePaths: [...entry.sourcePaths].sort(compareText),
             contentSha256: entry.contentSha256,
             width: first.width,
             height: first.height,
           };
         })
         .sort((a, b) =>
-          a.contentSha256.localeCompare(b.contentSha256, "en") ||
-          a.regionId.localeCompare(b.regionId, "en")
+          compareText(a.contentSha256, b.contentSha256) ||
+          compareText(a.regionId, b.regionId)
         );
 
       const pages = packUniqueItems(uniqueItems, config);
