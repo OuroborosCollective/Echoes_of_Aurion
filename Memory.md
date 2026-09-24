@@ -1282,3 +1282,13 @@ Status: VERIFIED implementation; PR #564 requires post-memory exact-head gates b
 Change: Added the reusable read-only #510 parity Evidence Gate, bound #505 Atlas admission to it, and routed World-Generation admission through the shared AIM-175 Evidence Gate Engine aggregation primitive.
 Insight: AIM-175 owns generic deterministic ADMIT/HOLD aggregation and admission receipts; #563 owns only World-Generation policy. No second Evidence Gate engine or World-Truth authority is introduced.
 Evidence: Pre-memory reconciliation head `b28ba87731dabe84a67d0c148739e81484d59385` passed Runtime Container Proof #904, Runtime Candidate #905, Local Test Pack #1439, AIM-292 #1266, Android #1920 and Causal Chaos #299. This Memory edit creates a new head; fresh post-memory exact-head gates and final main readback are required before merge.
+
+### 2026-09-25 — Deterministic Generated-World Atlas Plan (#505)
+
+Status: VERIFIED implementation; post-memory exact-head gates required before merge.
+
+Change: Added a deterministic, read-only MaxRects atlas planning stage and bound generated-world atlas planning to the merged #563 World-Generation Evidence Gate. The planner canonicalizes source order, preserves semantic-group-safe content dedupe/provenance, and emits deterministic multipage placement plans. No world mutation, gameplay/collision mutation, materialization authority, CAG authority, or LLM dependency was introduced.
+
+Insight: #563 MATCH evidence can now deterministically admit the #505 presentation/build plan before atlas consumption. The runtime proof uses the actual committed `aurion-surface-atlas.webp` bytes and verifies its SHA-256 against the committed manifest before creating the plan, while the plan itself binds the manifest-byte hash and #563 admission hash.
+
+Evidence: Pre-memory exact implementation head `9236e8801d1cff1692363b829954bac3ab4c970f`; Runtime Candidate #953 PASS; Runtime Container Proof #952 PASS; Local Test Pack #1489 PASS; Android #1969 PASS. Container readback emitted `aurion_generated_world_atlas_plan_readback` with plan `sha256:198e2ca7d8b097e1372f62b8e61e29fcab91e1887955dc9695ed7a54ee5c4083`, admission `sha256:2dd86be9e150b2b0949cca2bcc9e9a40f8a027e06647f12a720eb41bf2242335`, manifest `sha256:9497f62c0432f6ef4306899c70ee58712966331ed2f245a87ca2cae707e9a53f`, and placementCount `1`.
