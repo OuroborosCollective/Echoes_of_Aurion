@@ -2,6 +2,8 @@ import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import {
   AURION_STRUCTURE_OBSERVATION_PROTOCOL,
   STRUCTURE_OBSERVATION_CACHE_MAX_ENTRIES,
+  structureObservationRequestSchema,
+  structureObservationIdentitySchema,
   type StructureMaterialization,
   type StructureObservationDeltaOverride,
   type StructureObservationIdentity,
@@ -88,6 +90,7 @@ async function readConfirmedDeltaPrefix(
   reader: DeltaPageReader,
   worldId: string,
   coordinate: { x: number; z: number },
+  expectedBaseRevision: number,
   throughSequence: number,
 ): Promise<readonly WorldChunkDelta[]> {
   chunkCoordinateSchema.parse(coordinate);
@@ -105,7 +108,7 @@ async function readConfirmedDeltaPrefix(
       worldId,
       chunkX: coordinate.x,
       chunkZ: coordinate.z,
-      expectedBaseRevision: 1,
+      expectedBaseRevision,
       afterSequence,
       afterId,
       limit: Math.min(100, remaining),
@@ -191,13 +194,25 @@ function buildMaterialization(
   const primitiveKinds = Array.from(
     new Set(primitives.map(primitive => primitive.primitive)),
   ).sort();
+  const footprint = Object.freeze({
+    protocol: "aurion.structure-footprint.v1" as const,
+    semantics: "projection-only" as const,
+    primitives: Object.freeze(primitives.map(primitive => Object.freeze({
+      id: primitive.id,
+      positionMm: Object.freeze({ x: primitive.positionMm.x, z: primitive.positionMm.z }),
+      sizeMm: Object.freeze({ x: primitive.sizeMm.x, z: primitive.sizeMm.z }),
+      rotationDiscrete: Object.freeze({ ...primitive.rotationDiscrete }),
+    }))),
+    deltaOverridePositionMm: override ? override.positionMm : null,
+  });
   const materializationEnvelope = {
-    protocol: "aurion.structure.materialization.v1",
+    protocol: "aurion.structure.materialization.v1" as const,
     observationKey: key,
     recipeHash: compilation.deterministicFingerprint,
     state: override ? "DELTA_OVERRIDE" : "BASE_GRAMMAR",
     primitives,
     deltaOverride: override,
+    footprint,
     collision: {
       protocol: "aurion.structure-collision-descriptor.v1",
       semantics: "projection-only" as const,
@@ -336,10 +351,11 @@ export class StructureObservationRuntime {
   }
 
   public async observe(request: StructureObservationRequest): Promise<StructureObservationResult> {
+    const parsedRequest = structureObservationRequestSchema.parse(request);
     const confirmedChunk = await this.readChunk(
-      request.worldId,
-      request.epoch,
-      request.chunkCoordinate,
+      parsedRequest.worldId,
+      parsedRequest.epoch,
+      parsedRequest.chunkCoordinate,
     );
     if (confirmedChunk.status !== "VERIFIED") {
       return Object.freeze({
@@ -348,7 +364,22 @@ export class StructureObservationRuntime {
       });
     }
 
-    const identity = structureObservationIdentity({ request, confirmedChunk });
+    if (
+      confirmedChunk.receipt.worldId !== parsedRequest.worldId ||
+      confirmedChunk.receipt.epoch !== parsedRequest.epoch ||
+      confirmedChunk.receipt.sourceRevision !== confirmedChunk.state.materialized.base.worldId
+    ) {
+      // The third comparison is intentionally replaced below; keep evidence validation explicit.
+    }
+    if (
+      confirmedChunk.receipt.worldId !== parsedRequest.worldId ||
+      confirmedChunk.receipt.epoch !== parsedRequest.epoch ||
+      confirmedChunk.receipt.coordinate.x !== parsedRequest.chunkCoordinate.x ||
+      confirmedChunk.receipt.coordinate.z !== parsedRequest.chunkCoordinate.z
+    ) {
+      return Object.freeze({ status: "UNPROVABLE", reason: "OBSERVATION_CONFIRMED_CHUNK_SCOPE_MISMATCH" });
+    }
+    const identity = structureObservationIdentity({ request: parsedRequest, confirmedChunk });
     const key = observationKey(identity);
     const cached = this.cache.get(key);
     if (cached) {
@@ -361,8 +392,9 @@ export class StructureObservationRuntime {
     try {
       confirmedDeltas = await readConfirmedDeltaPrefix(
         this.readDeltas,
-        request.worldId,
-        request.chunkCoordinate,
+        parsedRequest.worldId,
+        parsedRequest.chunkCoordinate,
+        confirmedChunk.state.universe.baseRevision,
         confirmedChunk.receipt.throughSequence,
       );
     } catch (error) {
@@ -373,7 +405,7 @@ export class StructureObservationRuntime {
     }
 
     const result = materializeConfirmedStructure({
-      request,
+      request: parsedRequest,
       confirmedChunk,
       confirmedDeltas,
     });
