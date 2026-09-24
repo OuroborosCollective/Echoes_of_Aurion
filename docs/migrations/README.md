@@ -23,6 +23,7 @@ Eine Migration darf niemals „Integration“ mit „Ownership“ verwechseln. W
 - `AIM268_GUILD_KINGDOM_AUTHORITY.md` — Guild/Kingdom Ownership-Ziel.
 - `AIM269_GUILD_BANK_ECONOMY.md` — Bank/Custody/Economy Ownership-Ziel.
 - `AIM292_NPC_MULTI_MEMORY.md` — gebundene WASD-NPC-Quelle, transaktionale vierteilige Erinnerung und AX1-Readmodel.
+- `aim487_npc_information_ecology.md` — deterministische NPC-Information mit Provenienz-, Konflikt-, Trust- und Ablaufsemantik.
 
 ## Historische Ledgers
 
