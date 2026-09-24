@@ -107,8 +107,8 @@ jobs:
           pnpm exec vitest run \
             server/causality/worldGenerationEvidenceGate.test.ts \
             scripts/atlas/worldGenerationAtlasAdmission.test.ts \
-            scripts/atlas/generatedWorldAtlasPlan.test.ts \
             --reporter=verbose
+          node --import tsx --test scripts/atlas/generatedWorldAtlasPlan.test.ts
           node --test scripts/atlas/deterministicAtlasPack.test.mjs
           git diff --check
 
