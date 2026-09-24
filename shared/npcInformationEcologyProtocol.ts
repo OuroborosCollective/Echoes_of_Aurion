@@ -132,7 +132,7 @@ function assertSource(source: NpcInformationSource): NpcInformationSource {
 
 function assertIndex(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(\`NPC_INFORMATION_\${field.toUpperCase()}_INVALID\`);
+    throw new Error(`NPC_INFORMATION_${field.toUpperCase()}_INVALID`);
   }
 }
 
@@ -197,7 +197,7 @@ export function transitionNpcInformation(previous: NpcInformationReceipt, input:
   const prior = npcInformationReceiptSchema.parse(previous);
   const status = npcInformationStatusSchema.parse(input.status);
   if (!allowedTransitions[prior.status].includes(status)) {
-    throw new Error(\`NPC_INFORMATION_TRANSITION_NOT_ALLOWED:\${prior.status}->\${status}\`);
+    throw new Error(`NPC_INFORMATION_TRANSITION_NOT_ALLOWED:${prior.status}->${status}`);
   }
   assertIndex(input.logicalIndex, "logical_index");
   if (input.logicalIndex <= prior.logicalIndex) throw new Error("NPC_INFORMATION_LOGICAL_ORDER_INVALID");
