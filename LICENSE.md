@@ -47,7 +47,7 @@ Diese Bestandteile werden durch diese Erklärung nicht weiter eingeschränkt, so
 ## 7. Rechteinhaber
 
 **Ouroboros Collective**  
-**Thomas Markgraf**  
+**Thomas Markgraf**
 Alle Rechte vorbehalten.
 
 Für kommerzielle Nutzung, öffentliche Distribution, Veröffentlichung von Bearbeitungen oder weitergehende Nutzungsrechte ist eine **separat ausgestellte schriftliche Nutzungslizenz** erforderlich.
