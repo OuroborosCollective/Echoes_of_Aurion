@@ -31,8 +31,9 @@ import {
   AURION_CAUSAL_TICK_SCHEMA_V2,
 } from "../../shared/aurionCausalTickContract";
 import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
-import { verifyWorldGenerationParity } from "./worldGenerationParityHarness";
+import { buildGameplayEvidenceFromReceipts, verifyWorldGenerationParity } from "./worldGenerationParityHarness";
 import { sha256Bytes } from "./worldGenerationEvidenceHash";
+import { compileDeterministicStructureGrammar } from "../deterministicStructureGrammarCompiler";
 import type { WorldGenerationRuntimeIdentity } from "./worldGenerationEvidenceContract";
 
 const enabled = process.env.NODE_ENV === "test"
@@ -195,7 +196,8 @@ suite("AIM-510 world generation parity real MariaDB", () => {
     const projection = projectStructureObservation(observation);
     expect(projection.projectionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
 
-    const oracle = await (new (await import("./headlessCausalOracle")).AurionHeadlessCausalOracle()).replayRange({
+    const { AurionHeadlessCausalOracle } = await import("./headlessCausalOracle");
+    const oracle = await (new AurionHeadlessCausalOracle()).replayRange({
       zoneId: ZONE,
       fromTick: 3,
       toTick: 4,
@@ -203,26 +205,20 @@ suite("AIM-510 world generation parity real MariaDB", () => {
     expect(oracle.status).toBe("MATCH");
 
     const receipts = await globalCausalPersistence.getTicksInRange(ZONE, 3, 4);
-    const gameplay = verifyWorldGenerationParity;
-    void gameplay;
-
-    const { buildGameplayEvidenceFromReceipts } = await import("./worldGenerationParityHarness");
     const gameplayEvidence = buildGameplayEvidenceFromReceipts(receipts.map(entry => entry.receipt), 3, 4);
+    const generation = compileDeterministicStructureGrammar({
+      worldId: observation.identity.worldId,
+      worldSeedHash: observation.identity.worldSeedHash,
+      grammar,
+      chunkCoordinate: CHUNK,
+      anchorId: observation.identity.anchorId,
+      sourceCausalRoot: observation.identity.sourceCausalRoot,
+      sourceRevision: RELEASE,
+    });
 
     const result = verifyWorldGenerationParity({
       runId: "aim510-real-mariadb",
-      generation: await (async () => {
-        const { compileDeterministicStructureGrammar } = await import("../deterministicStructureGrammarCompiler");
-        return compileDeterministicStructureGrammar({
-          worldId: observation.identity.worldId,
-          worldSeedHash: observation.identity.worldSeedHash,
-          grammar,
-          chunkCoordinate: CHUNK,
-          anchorId: observation.identity.anchorId,
-          sourceCausalRoot: observation.identity.sourceCausalRoot,
-          sourceRevision: RELEASE,
-        });
-      })(),
+      generation,
       observation,
       projection,
       runtime: identity,
