@@ -242,7 +242,7 @@ jobs:
             aurion-generated-world-atlas-input.json \
             aurion-generated-world-atlas-plan-505.json
           test -s aurion-generated-world-atlas-plan-505.json
-          node --input-type=module <<'NODE'
+          MANIFEST_SHA256="${manifest_sha256}" node --input-type=module <<'NODE'
           import fs from "node:fs";
           const plan = JSON.parse(fs.readFileSync("aurion-generated-world-atlas-plan-505.json", "utf8"));
           if (plan.schemaVersion !== "aurion.generated-world-atlas-plan.v1") throw new Error("GENERATED_ATLAS_PLAN_SCHEMA");
