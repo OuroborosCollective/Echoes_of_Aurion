@@ -66,6 +66,7 @@ on:
       - "drizzle/0059_aurion_mobile_movement_mode.sql"
       - "drizzle/0060_aurion_npc_policy_evolution.sql"
       - "drizzle/0061_aurion_exploration_memory.sql"
+      - "drizzle/0062_aurion_world_director.sql"
   push:
     branches: [main]
     paths:

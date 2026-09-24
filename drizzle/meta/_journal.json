@@ -435,6 +435,13 @@
       "when": 1790158183000,
       "tag": "0061_aurion_exploration_memory",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790235000000,
+      "tag": "0062_aurion_world_director",
+      "breakpoints": true
     }
   ]
 }

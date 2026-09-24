@@ -1958,3 +1958,30 @@ export const aurionAuthoringReceipts = mysqlTable("aurionAuthoringReceipts", {
   index("aurionAuthoringReceipts_target_idx").on(table.kind, table.targetId),
   index("aurionAuthoringReceipts_plan_idx").on(table.planHash),
 ]);
+
+/** AIM-484: append-only deterministic World Director decision receipts. */
+export const aurionWorldDirectorReceipts = mysqlTable("aurionWorldDirectorReceipts", {
+  id: varchar("id", { length: 128 }).primaryKey(),
+  schemaVersion: varchar("schemaVersion", { length: 64 }).notNull(),
+  worldId: varchar("worldId", { length: 96 }).notNull(),
+  worldEpoch: int("worldEpoch").notNull(),
+  zoneId: varchar("zoneId", { length: 128 }).notNull(),
+  logicalTick: int("logicalTick").notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceRootHash: varchar("sourceRootHash", { length: 160 }).notNull(),
+  causalReceiptHash: varchar("causalReceiptHash", { length: 96 }).notNull(),
+  seedDigest: varchar("seedDigest", { length: 96 }).notNull(),
+  previousReceiptHash: varchar("previousReceiptHash", { length: 96 }),
+  candidateSetHash: varchar("candidateSetHash", { length: 96 }).notNull(),
+  decisionHash: varchar("decisionHash", { length: 96 }).notNull(),
+  rulesetVersion: varchar("rulesetVersion", { length: 96 }).notNull(),
+  decisionJson: text("decisionJson").notNull(),
+  receiptHash: varchar("receiptHash", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionWorldDirectorReceipts_world_zone_tick_uq").on(table.worldId, table.zoneId, table.logicalTick),
+  uniqueIndex("aurionWorldDirectorReceipts_receipt_uq").on(table.receiptHash),
+  index("aurionWorldDirectorReceipts_world_zone_idx").on(table.worldId, table.zoneId),
+  index("aurionWorldDirectorReceipts_causal_idx").on(table.causalReceiptHash),
+  index("aurionWorldDirectorReceipts_decision_idx").on(table.decisionHash),
+]);

@@ -49,6 +49,7 @@ on:
       - "drizzle/0058_aurion_quest_causal_anchor.sql"
       - "drizzle/0060_aurion_npc_policy_evolution.sql"
       - "drizzle/0061_aurion_exploration_memory.sql"
+      - "drizzle/0062_aurion_world_director.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -372,6 +373,19 @@ jobs:
           const connection=await mysql.createConnection(process.env.DATABASE_URL);
           try { for(const statement of statements) await connection.query(statement); } finally { await connection.end(); }
           console.log(JSON.stringify({phase:"0061-applied",statementCount:statements.length}));
+          NODE
+
+      - name: Apply 0062 world director migration separately
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import mysql from "mysql2/promise";
+          const sql=fs.readFileSync("drizzle/0062_aurion_world_director.sql","utf8");
+          const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+          const connection=await mysql.createConnection(process.env.DATABASE_URL);
+          try { for(const statement of statements) await connection.query(statement); } finally { await connection.end(); }
+          console.log(JSON.stringify({phase:"0062-applied",statementCount:statements.length}));
           NODE
 
       - name: Prove all declared late migrations match after isolated apply
