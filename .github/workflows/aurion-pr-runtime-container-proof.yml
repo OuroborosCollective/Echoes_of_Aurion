@@ -196,14 +196,18 @@ jobs:
           test -s aurion-world-generation-atlas-admission-563.json
 
           source_sha256="$(sha256sum client/src/xaurion/world/assets/aurion-surface-atlas.webp | awk '{print $1}')"
-          manifest_sha256="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("client/src/xaurion/world/assets/aurion-surface-atlas.json","utf8")); process.stdout.write(String(m.sha256))')"
-          test "${source_sha256}" = "${manifest_sha256}"
+          manifest_asset_sha256="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("client/src/xaurion/world/assets/aurion-surface-atlas.json","utf8")); process.stdout.write(String(m.sha256))')"
+          manifest_sha256="$(sha256sum client/src/xaurion/world/assets/aurion-surface-atlas.json | awk '{print $1}')"
+          test "${source_sha256}" = "${manifest_asset_sha256}"
+          test -n "${manifest_sha256}" && [[ "${manifest_sha256}" =~ ^[a-f0-9]{64}$ ]]
           source_bytes="$(wc -c < client/src/xaurion/world/assets/aurion-surface-atlas.webp | tr -d " ")"
-          SOURCE_SHA256="${source_sha256}" SOURCE_BYTES="${source_bytes}" node --input-type=module <<'NODE'
+          SOURCE_SHA256="${source_sha256}" SOURCE_BYTES="${source_bytes}" MANIFEST_SHA256="${manifest_sha256}" node --input-type=module <<'NODE'
           import fs from "node:fs";
           const hash = process.env.SOURCE_SHA256;
+          const manifestSha256 = process.env.MANIFEST_SHA256;
           const bytes = Number(process.env.SOURCE_BYTES);
           if (!/^[a-f0-9]{64}$/.test(hash ?? "")) throw new Error("REAL_ATLAS_SOURCE_SHA_INVALID");
+          if (!/^[a-f0-9]{64}$/.test(manifestSha256 ?? "")) throw new Error("REAL_ATLAS_MANIFEST_SHA_INVALID");
           if (!Number.isSafeInteger(bytes) || bytes < 1) throw new Error("REAL_ATLAS_SOURCE_BYTES_INVALID");
           const input = {
             schemaVersion: "aurion.deterministic-atlas-plan.v1",
@@ -214,7 +218,7 @@ jobs:
             padding: 1,
             gutter: 1,
             rotationAllowed: false,
-            sourceManifestHash: "sha256:" + hash,
+            sourceManifestHash: "sha256:" + process.env.MANIFEST_SHA256,
             sourceInputs: [{
               assetId: "aurion-surface-atlas",
               path: "client/src/xaurion/world/assets/aurion-surface-atlas.webp",
