@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { StructureGrammarCompilation } from "../../shared/deterministicStructureGrammarProtocol";
-import type { AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
+import { computeReceiptHash, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import type { AurionHeadlessCausalOracleResult } from "../../shared/aurionHeadlessCausalOracleContract";
 
 export const AURION_WORLD_GENERATION_PARITY_SCHEMA = "aurion.world-generation.parity.v1" as const;
@@ -325,6 +325,9 @@ export function createGameplayEvidence(
         receipt.rulesetVersion !== firstIdentityRuleset ||
         receipt.schema !== firstIdentitySchema) {
       throw new Error("WORLD_GENERATION_GAMEPLAY_IDENTITY_MISMATCH");
+    }
+    if (computeReceiptHash(receipt) !== receipt.receiptHash) {
+      throw new Error("WORLD_GENERATION_GAMEPLAY_RECEIPT_HASH_INVALID");
     }
     if (index > 0 && receipt.previousReceiptHash !== selected[index - 1]!.receiptHash) {
       throw new Error("WORLD_GENERATION_GAMEPLAY_RECEIPT_CHAIN_INVALID");
