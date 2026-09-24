@@ -154,11 +154,11 @@ describe("AIM-489 interest management", () => {
     expect(b).toEqual(a);
     expect(interestMetrics(a)).toMatchObject({
       simulationChunks: 1,
-      networkChunks: 25,
+      networkChunks: 9,
       persistenceChunks: 1,
       presentationChunks: 25,
       structureRequirements: 2,
-      networkVsAllVisibleRatioBps: 10_000,
+      networkVsAllVisibleRatioBps: 3_600,
     });
   });
 
