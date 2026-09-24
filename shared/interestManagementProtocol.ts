@@ -4,7 +4,8 @@ import {
   WORLD_CHUNK_INTEREST_VERSION,
   type WorldChunkInterestPlan,
 } from "./worldChunkInterestProtocol";
-import type { WorldChunkCoordinate, WorldChunkStreamingTier } from "./worldChunkProtocol";
+import type { WorldChunkCoordinate } from "./worldChunkProtocol";
+import type { WorldChunkStreamingTier } from "./worldChunkStreamingProtocol";
 import type { StructureProjectionContract } from "./structureProjectionProtocol";
 
 export const AURION_INTEREST_MANAGEMENT_PROTOCOL = "aurion.interest-management.v1" as const;
