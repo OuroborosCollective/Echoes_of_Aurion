@@ -9,6 +9,13 @@ on:
       - "server/gameDevelopmentStudioRuntime.test.ts"
       - "server/gameDevelopmentStudioProduction.ts"
       - "server/gameDevelopmentStudioProduction.test.ts"
+      - "server/devControlGdsBridge.ts"
+      - "server/devControlGdsBridge.test.ts"
+      - "server/devControlGdsBridge.runtime.test.ts"
+      - "server/devControlChannel.ts"
+      - "server/devControlChannel.test.ts"
+      - "server/devControlProtocol.ts"
+      - "server/adminMcpRoute.test.ts"
       - "server/openSource3dFallback.ts"
       - "server/openSource3dFallback.test.ts"
       - "shared/os3aFallbackCatalog.json"
@@ -56,7 +63,7 @@ jobs:
             server/gameDevelopmentStudioRuntime.test.ts \
             server/gameDevelopmentStudioProduction.test.ts \
             server/openSource3dFallback.test.ts \
-            server/liveDeveloperProtocol.test.ts
+            server/liveDeveloperProtocol.test.ts             server/devControlGdsBridge.test.ts             server/devControlGdsBridge.runtime.test.ts             server/devControlGdsBridge.realGds.test.ts
           pnpm check
       - name: Validate production compose with persistent GDS workspace
         env:
