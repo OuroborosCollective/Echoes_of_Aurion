@@ -54,7 +54,6 @@ type FloatVector = readonly number[];
 type Node = {
   id: string;
   sourceHash: string;
-  vector: Float64Array;
   quantized: Int8Array;
   level: number;
   neighbors: string[][];
@@ -231,7 +230,6 @@ export class DeterministicHnswIndex {
     const node: Node = {
       id,
       sourceHash,
-      vector,
       quantized: quantize(vector, this.quantizationScale),
       level,
       neighbors: Array.from({ length: level + 1 }, () => []),
@@ -343,15 +341,23 @@ export class DeterministicHnswIndex {
     return best.sort(compareDistance);
   }
 
-  private exactResults(query: Float64Array, ids: readonly string[], k: number): AnnSearchResult[] {
+  private exactResults(
+    query: Float64Array,
+    ids: readonly string[],
+    k: number,
+    exactTexts: ReadonlyMap<string, string>,
+  ): AnnSearchResult[] {
     return ids.map((sourceId) => {
       const node = this.nodes.get(sourceId)!;
+      const exactText = exactTexts.get(sourceId);
+      if (exactText === undefined) throw new Error(`AURION_ANN_EXACT_SOURCE_MISSING:${sourceId}`);
+      const exactVector = deterministicTextVector(exactText, this.config.dimensions);
       return {
         rank: 0,
         sourceId,
         sourceHash: node.sourceHash,
         approximateSimilarity: 1 - approxCosineDistance(quantize(query, this.quantizationScale), node.quantized),
-        exactSimilarity: 1 - cosineDistance(query, node.vector),
+        exactSimilarity: 1 - cosineDistance(query, exactVector),
       };
     })
       .sort((a, b) => {
@@ -363,7 +369,11 @@ export class DeterministicHnswIndex {
       .map((item, index) => Object.freeze({ ...item, rank: index + 1 }));
   }
 
-  public search(queryText: string, k: number): {
+  public search(
+    queryText: string,
+    k: number,
+    exactTexts: ReadonlyMap<string, string>,
+  ): {
     candidates: readonly AnnSearchResult[];
     exact: readonly AnnSearchResult[];
   } {
@@ -392,7 +402,7 @@ export class DeterministicHnswIndex {
     });
     return {
       candidates: Object.freeze(candidateSet),
-      exact: Object.freeze(this.exactResults(query, candidateIds, k)),
+      exact: Object.freeze(this.exactResults(query, candidateIds, k, exactTexts)),
     };
   }
 }
@@ -457,7 +467,12 @@ export function searchCanonicalContextSources(
     config,
   );
   const { indexVersion, indexHash } = index.getIndexMetadata(sourceRootHash);
-  const { candidates, exact } = index.search(queryText, Math.min(config.efSearch, Math.max(requestedK, 8)));
+  const exactTexts = new Map(verifiedSources.map((source) => [source.sourceId, source.canonicalText] as const));
+  const { candidates, exact } = index.search(
+    queryText,
+    Math.min(config.efSearch, Math.max(requestedK, 8)),
+    exactTexts,
+  );
 
   const exactById = new Map(exact.map((item) => [item.sourceId, item]));
   const results = exact.slice(0, requestedK);
