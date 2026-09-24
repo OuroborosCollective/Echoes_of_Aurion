@@ -93,13 +93,9 @@ export class AurionWorldContextService {
   }
 
   /**
-   * Searches already-confirmed World Context sources through the deterministic
-   * ANN projection. The index is acceleration-only; exact re-score and source
-   * hash readback remain mandatory.
-   */
-  /**
    * Internal structural diagnostics for the already-verified Semantic Graph.
    * This never exposes canonical graph text and is not registered as a route/tool.
+   * ANN retrieval remains a separate acceleration-only service method below.
    */
   public async internalAnalyzeSemanticGraphForDiagnostics(userId: number) {
     const packet = await readConfirmedNpcSemanticGraphPacket(userId);
