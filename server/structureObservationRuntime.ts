@@ -15,6 +15,10 @@ import {
 import { compileDeterministicStructureGrammar } from "./deterministicStructureGrammarCompiler";
 import type { StructureGrammarCompilation } from "../shared/deterministicStructureGrammarProtocol";
 import {
+  createStructureProjectionContract,
+  type StructureProjectionContract,
+} from "../shared/structureProjectionProtocol";
+import {
   chunkCoordinateSchema,
   type CanonicalChunkReceipt,
 } from "../shared/aurionChunkStateContract";
@@ -272,6 +276,19 @@ function receipt(
       receipt: unsigned,
     }),
   }));
+}
+
+export function projectStructureObservation(
+  observation: StructureObservationResult,
+): StructureProjectionContract {
+  if (observation.status !== "VERIFIED") {
+    throw new Error("STRUCTURE_PROJECTION_REQUIRES_VERIFIED_OBSERVATION");
+  }
+  return createStructureProjectionContract({
+    identity: observation.identity,
+    recipeHash: observation.recipeHash,
+    materialization: observation.materialization,
+  });
 }
 
 export function materializeConfirmedStructure(input: {
