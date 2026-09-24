@@ -124,6 +124,9 @@ describe("AIM-563 World-Generation Evidence Gate", () => {
     });
     expect(result.verdict).toBe("ADMIT");
     expect(result.reason).toBeNull();
+    expect(result.engine.schema).toBe("aurion.evidence-gate-engine.v1");
+    expect(result.engine.verdict).toBe("ADMIT");
+    expect(result.engine.checks.every(check => check.pass)).toBe(true);
     expect(result.evidenceDeterminismHash).toBe(value.determinismHash);
     expect(result.evidenceArtifactIntegrityHash).toBe(value.artifactIntegrityHash);
     expect(result.admissionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
