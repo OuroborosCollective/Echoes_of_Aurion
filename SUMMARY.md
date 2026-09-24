@@ -1,9 +1,9 @@
 # Table of contents
 
-* [Aarelogic · Echoes of Aurion](README.md)
+* [Echoes of Aurion — Living World](README.md)
 * [Architektur — Aurion Single Authority](ARCHITECTURE_OWNERSHIP.md)
 * [Technische Dokumentation](docs/README.md)
-  * [Account-zentrierter Aurion-Einstieg](docs/account-first-entry.md)
+  * [Spieler-Einstieg — Living World](docs/account-first-entry.md)
   * [Naturkollision und weltweite Bewegung](docs/world-nature-collision.md)
   * [Balancing](docs/balancing/README.md)
     * [AIM-265 — Balancing v2 (historische Provenienz)](docs/balancing/AIM265_BALANCING_V2.md)
