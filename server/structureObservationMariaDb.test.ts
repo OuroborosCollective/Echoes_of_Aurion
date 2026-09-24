@@ -63,7 +63,7 @@ suite("AIM-514 real lazy structure observation", () => {
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
-    if (url.hostname !== "127.0.0.1" || !url.pathname.endsWith("_test")) {
+    if (!["127.0.0.1", "mariadb"].includes(url.hostname) || !url.pathname.endsWith("_test")) {
       throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     }
     pool = createPool(process.env.DATABASE_URL!);
