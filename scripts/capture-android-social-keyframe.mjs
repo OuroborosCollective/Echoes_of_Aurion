@@ -14,7 +14,7 @@ try {
   await page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true }).first().waitFor({ state: "visible", timeout: 60_000 });
   await page.getByRole("button", { name: "Forum", exact: true }).waitFor({ state: "visible", timeout: 60_000 });
   await page.getByRole("button", { name: "Events", exact: true }).waitFor({ state: "visible", timeout: 60_000 });
-  await page.getByRole("button", { name: "GLB-Einreichung öffnen", exact: true }).waitFor({ state: "visible", timeout: 60_000 });
+  await page.getByRole("button", { name: "Asset-Katalog", exact: true }).waitFor({ state: "visible", timeout: 60_000 });
   if (await page.locator("canvas").count()) throw new Error("Aurion portal must not mount a gameplay canvas.");
   if (await page.getByText(/ARENA 1\/4|WELT \/ QUESTS|Aurion-Expanse/i).count()) throw new Error("Legacy gameplay chrome is visible on the Aurion portal.");
   if (await page.getByRole("button", { name: /Angriff|Auto-Angriff|Begegnungen/i }).count()) throw new Error("Gameplay controls are visible on the Aurion portal.");
