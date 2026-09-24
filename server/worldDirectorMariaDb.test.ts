@@ -18,7 +18,7 @@ describeReal("AIM-484 World Director — real MariaDB", () => {
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
-    if (url.hostname !== "127.0.0.1" || url.pathname !== "/aurion_group_test") {
+    if (!["127.0.0.1", "localhost", "mariadb"].includes(url.hostname) || url.pathname !== "/aurion_group_test") {
       throw new Error("ISOLATED_WORLD_DIRECTOR_DATABASE_REQUIRED");
     }
     pool = createPool(process.env.DATABASE_URL!);
