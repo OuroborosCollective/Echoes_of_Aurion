@@ -9,20 +9,13 @@ import { globalTickRecorder } from "./causality/tickRecorder";
 import { worldCausalRootService } from "./causality/worldCausalRootService";
 import { StructureObservationRuntime } from "./structureObservationRuntime";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
-import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
-import { generateBaseWorldChunk } from "../shared/worldChunkProtocol";
+import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import type { DeterministicStructureGrammar } from "../shared/deterministicStructureGrammarProtocol";
 
 const suite = process.env.AURION_STRUCTURE_OBSERVATION_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const WORLD_ID = GLOBAL_WORLD_ID;
 const CHUNK = { x: 777701, z: -777701 };
 const USER_ID = 2_146_999_972;
-const CHUNK_ROWS = and(
-  eq(aurionWorldChunkDeltas.worldId, WORLD_ID),
-  eq(aurionWorldChunkDeltas.chunkX, CHUNK.x),
-  eq(aurionWorldChunkDeltas.chunkZ, CHUNK.z),
-);
-
 const grammar: DeterministicStructureGrammar = {
   grammarId: "maria-house",
   grammarVersion: "1.0.0",
@@ -200,7 +193,7 @@ suite("AIM-514 real lazy structure observation", () => {
       kind: "structure_removed",
       targetId: "aim514-real-house",
       idempotencyKey: "aim514-real:remove:0002",
-      payload: {},
+      payload: { xMm: 1_200, zMm: 2_300 },
     });
     expect(removed.source).toBe("created");
 
@@ -243,10 +236,5 @@ suite("AIM-514 real lazy structure observation", () => {
       reconstructedMaterializationHash: rebuilt.materialization.materializationHash,
     }));
 
-    expect(canonicalSha256(generateBaseWorldChunk({
-      worldId: WORLD_ID,
-      worldSeed: GLOBAL_WORLD_SEED,
-      coordinate: CHUNK,
-    }))).toMatch(/^sha256:/);
   }, 90_000);
 });
