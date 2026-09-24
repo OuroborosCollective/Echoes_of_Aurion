@@ -1282,3 +1282,14 @@ Status: VERIFIED implementation; PR #564 requires post-memory exact-head gates b
 Change: Added the reusable read-only #510 parity Evidence Gate, bound #505 Atlas admission to it, and routed World-Generation admission through the shared AIM-175 Evidence Gate Engine aggregation primitive.
 Insight: AIM-175 owns generic deterministic ADMIT/HOLD aggregation and admission receipts; #563 owns only World-Generation policy. No second Evidence Gate engine or World-Truth authority is introduced.
 Evidence: Pre-memory reconciliation head `b28ba87731dabe84a67d0c148739e81484d59385` passed Runtime Container Proof #904, Runtime Candidate #905, Local Test Pack #1439, AIM-292 #1266, Android #1920 and Causal Chaos #299. This Memory edit creates a new head; fresh post-memory exact-head gates and final main readback are required before merge.
+
+### 2026-09-24 — NPC Information Ecology (#487)
+Status: VERIFIED implementation candidate; exact-head CI and real MariaDB/runtime readback pending.
+Task: Add deterministic NPC information propagation over already-confirmed NPC/world evidence without creating a second gameplay or Semantic Graph V2 authority.
+Decisions: Use a separate append-only information receipt log; lifecycle is experienced → remembered → communicated → corroborated/contradicted → trusted/uncertain → expired; communication identity is deterministic; conflicting values remain separate fact lineages; expiry uses logical index; CAG/LLM/renderer output is not a fact source.
+Touched surfaces: \`shared/npcInformationEcologyProtocol.ts\`, \`server/npcInformationPropagation.ts\`, isolated MariaDB regression, migration 0063, migration journal, GitBook-synced migration documentation and runtime proof workflow.
+Evidence: Deterministic unit coverage now proves identity, communication idempotency, conflict preservation, fixed-point trust, logical expiry, world scope, provenance and consumer filtering; the MariaDB suite is bound to an isolated migrated database and a real NPC runtime fixture. No Semantic Graph V2 schema or WASD resolver ownership was changed.
+Learned: Information ecology can remain restart-reconstructible and provenance-safe when every transition is an immutable receipt that retains its original source evidence.
+Open: Exact-head CI, real MariaDB proof, runtime image/readback and post-merge main verification.
+Next safe step: Create the Draft PR from the exact branch head and use CI results as the remaining runtime/evidence gate.
+
