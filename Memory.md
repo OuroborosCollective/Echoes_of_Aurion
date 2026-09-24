@@ -1258,3 +1258,9 @@ Status: VERIFIED implementation; PR #543 awaits final post-memory gates.
 Change: Added one canonical projection contract over the verified #514 observation for Collision, NPC, Network and AX1, with bounded footprint/collision/presentation descriptors, shared observation/causal identity and deterministic projection hashing; no new generator, world authority, persistence authority or CAG dependency.
 Insight: Consumers can project the same confirmed structure without rebuilding the grammar or treating cache/LOD/renderer state as truth; observationKey remains the shared causal identity while each consumer receives only its permitted projection fields.
 Evidence: Pre-memory exact-head PR #543 passed Runtime Container Proof #856, Runtime Candidate #857, Local Test Pack #1387, AIM-292 #1214 and Android #1869. This Memory append creates a new head; post-memory gates and final main readback are still required before merge.
+
+### 2026-09-24 — Deterministic multi-timescale NPC cadence (#485)
+Status: VERIFIED scheduler slice; production NPC resolver ownership remains unchanged.
+Change: Added bounded FULL/REDUCED/STRATEGIC/DORMANT cadence evaluation plus shared #515 structure-observation evidence input and deterministic evidence hashing; no wall-clock, second structure generator, second materializer or persistence migration.
+Insight: Cadence changes when confirmed NPC inputs are evaluated, never whether a confirmed structure exists; dormant catch-up is epoch-based and budgeted.
+Evidence: Exact implementation head before this Memory append `947f4e2952d86729754000400b6dd30ab7804056` passed Runtime Container Proof #860, Runtime Candidate #861, Local Test Pack #1392, AIM-292 #1219 and Android #1874. This append creates a new head; post-memory exact-head verification is required before merge.
