@@ -15,5 +15,10 @@ describe("internal ANN exposure boundary", () => {
     const source = fs.readFileSync(analyzerPath, "utf8");
     expect(source).not.toContain("CanonicalContextSource");
     expect(source).toContain("toWolframLanguageGraph");
+
+    const adminMcpPath = path.resolve(process.cwd(), "server/adminMcp.ts");
+    const adminMcpSource = fs.readFileSync(adminMcpPath, "utf8");
+    expect(adminMcpSource).not.toContain("runInternalWolframStructuralProbe");
+    expect(adminMcpSource).not.toContain("internalAnalyzeSemanticGraphForDiagnostics");
   });
 });
