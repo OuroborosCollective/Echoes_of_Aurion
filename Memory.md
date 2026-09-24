@@ -1218,3 +1218,10 @@ Evidence: PR #501 exact head before this Memory append `0df711ff3293c47a6953c714
 Learned: A safe developer control plane can test real Aurion runtime behavior without becoming a second production authority when its network boundary, token, typed tool surface, isolated runtime instance and evidence boundary are enforced independently.
 Open: This Memory append creates a new commit, so the post-memory exact-head gates and final main readback are still required.
 Next safe step: Run the fresh exact-head wave, then merge PR #501 only if all required/relevant gates remain green; independently read back main and close #482 from the merged evidence.
+
+
+### 2026-09-24 — Aurion↔GDS local pre-alpha bridge (#507)
+Status: VERIFIED implementation; post-memory exact-head evidence required before merge.
+Change: Connected the existing loopback/token-gated `dev/prealpha` control channel to Aurion's pinned Game Development Studio runtime via bounded read-only status/approved-asset inspect/validate tools. Production `/admin-mcp`, OAuth/OIDC authority, package-build/vendor/live-ingest write lane, provider credentials, SQL/shell/Git/VPS access remain unchanged.
+Insight: GDS remains the asset/render/performance lane; Aurion remains gameplay/simulation/persistence/receipt authority. A real shared development path is safe when the boundary is typed, server-owned, non-production, loopback-restricted and independently evidenced.
+Evidence: Exact implementation head before this Memory append `8f5dca31172943a69e6de625e5bac13565c38bf0` passed Game Development Studio Smoke, AIM-265, AIM-240, Aurion PR Runtime Candidate, Aurion PR Runtime Container Proof, AIM-292 and Aurion Local Test Pack. GDS Smoke also executed the pinned `game-dev` 1.0.2 runtime and the real bridge readback. Full repository regression passed.
