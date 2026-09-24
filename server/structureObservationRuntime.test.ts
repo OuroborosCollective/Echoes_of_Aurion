@@ -96,8 +96,8 @@ describe("StructureObservationRuntime", () => {
     expect(first.materialization.primitives).toHaveLength(1);
     expect(first.materialization.footprint.primitives).toEqual([{
       id: "root:root/primitive",
-      positionMm: { x: 0, y: 0, z: 0 },
-      sizeMm: { x: 2_000, y: 2_500, z: 3_000 },
+      positionMm: { x: 0, z: 0 },
+      sizeMm: { x: 2_000, z: 3_000 },
       rotationDiscrete: { x: 0, y: 0, z: 0 },
     }]);
     expect(first.cacheHit).toBe(false);
