@@ -29,7 +29,7 @@ function coordinates(plan: WorldChunkInterestPlan): {
   return {
     simulation: Object.freeze(plan.active.map(entry => Object.freeze({ ...entry.coordinate }))),
     network: Object.freeze(
-      [...plan.active, ...plan.preload, ...plan.far].map(entry =>
+      [...plan.active, ...plan.preload].map(entry =>
         Object.freeze({ ...entry.coordinate }),
       ),
     ),
@@ -46,6 +46,7 @@ function requiredProjectionForRing(
 }
 
 function structureRequirements(input: {
+  worldId: string;
   interest: WorldChunkInterestPlan;
   projections: readonly StructureProjectionContract[];
 }): readonly StructureInterestRequirement[] {
@@ -57,6 +58,9 @@ function structureRequirements(input: {
   const deduped = new Map<string, StructureInterestRequirement>();
   for (const projection of input.projections) {
     assertStructureProjectionContract(projection);
+    if (projection.identity.worldId !== input.worldId) {
+      throw new Error("INTEREST_STRUCTURE_WORLD_SCOPE_MISMATCH");
+    }
     const ring = rings.get(simulationChunkKey(projection.identity.chunkCoordinate));
     if (!ring) continue;
     const mode = requiredProjectionForRing(ring);
@@ -125,6 +129,7 @@ export function planInterestManagement(input: {
   });
   const chunkSets = coordinates(interest);
   const requirements = structureRequirements({
+    worldId: input.worldId,
     interest,
     projections: input.confirmedStructureProjections ?? [],
   });
