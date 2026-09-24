@@ -25,23 +25,6 @@ export const aurionContextRouter = router({
       return capsules;
     }),
 
-  semanticSearch: adminProcedure
-    .input(
-      z.object({
-        worldId: z.string().default("world_aurion_prime"),
-        worldRevision: z.string().min(1),
-        logicalTick: z.number().int().nonnegative(),
-        actorId: z.string().min(1),
-        purpose: worldContextPurposeSchema,
-        subjectIds: z.array(z.string()).optional(),
-        queryText: z.string().min(1).max(2000),
-        limit: z.number().int().min(1).max(32).default(8),
-      })
-    )
-    .query(async ({ input }) => {
-      return aurionWorldContextService.semanticSearch(input);
-    }),
-
   getCapsule: publicProcedure
     .input(z.object({ capsuleId: z.string() }))
     .query(async ({ input }) => {
