@@ -8,7 +8,7 @@ for (const viewport of [
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet./i })).toBeVisible();
     const account = page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true });
     await expect(account).toBeVisible();
     const accountBox = await account.boundingBox();
