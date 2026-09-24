@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canonicalSha256 } from "./aurionCanonicalHash";
 import {
   WORLD_CHUNK_INTEREST_VERSION,
   type WorldChunkInterestPlan,
@@ -112,29 +113,6 @@ export function validateInterestManagementPlan(
   value: unknown,
 ): InterestManagementPlan {
   return interestManagementPlanSchema.parse(value);
-}
-
-function canonicalSha256(value: unknown): string {
-  const canonical = (input: unknown): string => {
-    if (input === null || typeof input !== "object") return JSON.stringify(input);
-    if (Array.isArray(input)) return `[${input.map(canonical).join(",")}]`;
-    const record = input as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
-  };
-  let hash = 0x811c9dc5;
-  const text = canonical(value);
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  const first = (hash >>> 0).toString(16).padStart(8, "0");
-  let second = 0x9e3779b9;
-  for (let index = text.length - 1; index >= 0; index -= 1) {
-    second ^= text.charCodeAt(index);
-    second = Math.imul(second, 0x85ebca6b);
-  }
-  const tail = (second >>> 0).toString(16).padStart(8, "0");
-  return `sha256:${first}${tail}${first}${tail}${first}${tail}${first}${tail}`;
 }
 
 export function buildInterestManagementPlanHashInput(
