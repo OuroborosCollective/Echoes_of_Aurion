@@ -17,6 +17,7 @@ describe("Aurion dev-control ↔ real Game Development Studio runtime", () => {
     const executable = path.join(root, "game-dev-fixture.mjs");
     const audit = path.join(root, "audit.json");
     fs.writeFileSync(executable, [
+      '#!/usr/bin/env node',
       'import fs from "node:fs";',
       'import path from "node:path";',
       'const audit = path.resolve(new URL(".", import.meta.url).pathname, "audit.json");',
