@@ -8,7 +8,7 @@ test("shipping decoder is pinned to the installed Three.js runtime", async () =>
   const threeVersion = packageJson.dependencies.three;
   const typesVersion = packageJson.devDependencies["@types/three"];
 
-  expect(threeVersion).toMatch(/^0\\.186\\.0$/);
+  expect(threeVersion).toMatch(/^0\.186\.0$/);
   expect(typesVersion).toBe(threeVersion);
   expect(shipping.decoder.threeVersion).toBe(threeVersion);
 });
