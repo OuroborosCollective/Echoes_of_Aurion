@@ -85,7 +85,8 @@ describe("deterministic semantic ANN retrieval", () => {
       ...DEFAULT_ANN_CONFIG,
       efSearch: 64,
     });
-    const actual = index.search("red crystal northern", 2).exact.map((item) => item.sourceId);
+    const exactTexts = new Map(items.map((item) => [item.id, item.text] as const));
+    const actual = index.search("red crystal northern", 2, exactTexts).exact.map((item) => item.sourceId);
 
     const query = deterministicTextVector("red crystal northern", 96);
     const expected = items.map((item) => ({
