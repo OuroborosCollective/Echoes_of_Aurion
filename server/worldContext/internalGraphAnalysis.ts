@@ -188,7 +188,7 @@ export function toWolframLanguageGraph(analysis: InternalGraphAnalysis, graph: P
 
   return [
     `(* ${AURION_INTERNAL_GRAPH_ANALYSIS_VERSION} *)`,
-    `Graph[${JSON.stringify(edges.map((edge) => edge.replace(/^DirectedEdge\[/, "").replace(/\]$/, "")))}]`,
+    `Graph[{${edges.join(", ")}}, VertexLabels -> "Name"]`,
     `(* nodeCount=${analysis.nodeCount}; edgeCount=${analysis.edgeCount}; resultHash=${analysis.resultHash} *)`,
   ].join("\n");
 }
