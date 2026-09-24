@@ -136,7 +136,7 @@ jobs:
           echo "Running AIM-484 against the isolated migrated MariaDB readback database"
           docker run --rm \
             --network "${network}" \
-            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace,readonly" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace" \
             --workdir /workspace \
             --env NODE_ENV=test \
             --env AURION_WORLD_DIRECTOR_E2E=1 \
