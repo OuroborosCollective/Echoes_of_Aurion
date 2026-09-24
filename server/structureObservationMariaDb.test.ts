@@ -144,7 +144,7 @@ suite("AIM-514 real lazy structure observation", () => {
     expect(first.identity.confirmedChunkAuthorityStateHash).toBe(confirmed.state.authorityStateHash);
     expect(first.identity.sourceRevision).toBe(release);
     expect(first.identity.sourceCausalRoot).toBe(confirmed.worldRootHash);
-    expect(first.recipeHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(first.recipeHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.materialization.materializationHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.receipt.confirmedChunkHash).toBe(confirmed.state.authorityStateHash);
     expect(first.receipt.receiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
