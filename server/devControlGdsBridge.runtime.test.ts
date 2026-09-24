@@ -14,19 +14,19 @@ describe("Aurion dev-control ↔ real Game Development Studio runtime", () => {
     vi.stubEnv("AURION_GAME_DEV_SOURCE_REVISION", GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION);
 
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "aurion-dev-gds-bridge-"));
-    const executable = path.join(root, "game-dev-fixture.mjs");
+    const executable = path.join(root, "game-dev-fixture.cjs");
     const audit = path.join(root, "audit.json");
     fs.writeFileSync(executable, [
       '#!/usr/bin/env node',
-      'import fs from "node:fs";',
-      'import path from "node:path";',
-      'const audit = path.resolve(new URL(".", import.meta.url).pathname, "audit.json");',
+      'const fs = require("node:fs");',
+      'const path = require("node:path");',
+      'const audit = path.join(__dirname, "audit.json");',
       'fs.writeFileSync(audit, JSON.stringify({ tripo: process.env.TRIPO_API_KEY ?? null, leonardo: process.env.LEONARDO_API_KEY ?? null }));',
       'const args = process.argv.slice(2);',
       'if (args[0] === "--version") { console.log("game-dev __VERSION__"); process.exit(0); }',
       'if (args[0] === "capabilities") { console.log(JSON.stringify({ schema: "game_dev.capabilities.v1" })); process.exit(0); }',
       'if (args[0] === "doctor") { console.log(JSON.stringify({ schema: "game_dev.doctor.v1" })); process.exit(0); }',
-      'if (args[0] === "--help") { console.log("game-dev package build <model.glb>\\ngame-dev vendor admit <package>"); process.exit(0); }',
+      'if (args[0] === "--help") { console.log("game-dev package build\\ngame-dev vendor admit"); process.exit(0); }',
       'process.exit(9);'
     ].join("\\n").replace("__VERSION__", GAME_DEVELOPMENT_STUDIO_VERSION), "utf8");
     fs.chmodSync(executable, 0o755);
