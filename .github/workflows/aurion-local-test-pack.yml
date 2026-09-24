@@ -169,6 +169,7 @@ jobs:
             server/deterministicStructureGrammarCompiler.test.ts \
             server/causality/worldGenerationEvidence.test.ts \
             server/causality/worldGenerationParityHarness.test.ts \
+            server/causality/evidenceGateEngine.test.ts \
             server/causality/worldGenerationEvidenceGate.test.ts \
             scripts/atlas/worldGenerationAtlasAdmission.test.ts \
             --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/structure-grammar-and-world-generation-evidence-gate.log
