@@ -91,7 +91,7 @@ export class AurionWorldContextService {
    * ANN projection. The index is acceleration-only; exact re-score and source
    * hash readback remain mandatory.
    */
-  public async semanticSearch(input: {
+  public async internalSemanticSearch(input: {
     worldId: string;
     worldRevision: string;
     logicalTick: number;
