@@ -1,5 +1,4 @@
 import {
-  canonicalWorldGenerationHash,
   worldGenerationParityEvidenceSchema,
   type WorldGenerationParityEvidence,
   type WorldGenerationRuntimeIdentity,
@@ -10,6 +9,11 @@ import {
   verifyWorldGenerationArtifactIntegrityHash,
   verifyWorldGenerationDeterminismHash,
 } from "./worldGenerationEvidenceHash";
+import {
+  evaluateEvidenceGateEngine,
+  type EvidenceGateCheck,
+  type EvidenceGateEngineResult,
+} from "./evidenceGateEngine";
 
 export const AURION_WORLD_GENERATION_EVIDENCE_GATE = "aurion.world-generation.evidence-gate.v1" as const;
 
@@ -53,6 +57,7 @@ export type WorldGenerationEvidenceGateAdmission = Readonly<{
   reason: WorldGenerationEvidenceGateReason | null;
   evidenceDeterminismHash: string;
   evidenceArtifactIntegrityHash: string;
+  engine: EvidenceGateEngineResult;
   admissionHash: string;
   expected: Readonly<{
     worldId: string | null;
@@ -79,13 +84,8 @@ function identityMatches(
     identity.rulesetVersion === rulesetVersion;
 }
 
-function admission(
-  input: WorldGenerationEvidenceGateInput,
-  evidence: WorldGenerationParityEvidence,
-  verdict: "ADMIT" | "HOLD",
-  reason: WorldGenerationEvidenceGateReason | null,
-): WorldGenerationEvidenceGateAdmission {
-  const expected = Object.freeze({
+function expectedContext(input: WorldGenerationEvidenceGateInput) {
+  return Object.freeze({
     worldId: input.expectedWorldId ?? null,
     sourceRevision: input.expectedSourceRevision ?? null,
     runtimeRevision: input.expectedRuntimeRevision ?? null,
@@ -93,28 +93,34 @@ function admission(
     causalTickSchema: input.expectedCausalTickSchema ?? null,
     rulesetVersion: input.expectedRulesetVersion ?? null,
   });
+}
+
+function admission(
+  input: WorldGenerationEvidenceGateInput,
+  evidence: WorldGenerationParityEvidence,
+  checks: readonly EvidenceGateCheck[],
+): WorldGenerationEvidenceGateAdmission {
+  const expected = expectedContext(input);
+  const engine = evaluateEvidenceGateEngine({
+    consumer: input.consumer,
+    checks,
+  });
   const evidenceDeterminismHash = computeWorldGenerationDeterminismHash({
     ...evidence,
     determinismHash: undefined as never,
     artifactIntegrityHash: undefined as never,
   } as never);
   const evidenceArtifactIntegrityHash = computeWorldGenerationArtifactIntegrityHash(evidence.artifactChecksums);
+
   return Object.freeze({
     schema: AURION_WORLD_GENERATION_EVIDENCE_GATE,
-    verdict,
+    verdict: engine.verdict,
     consumer: input.consumer,
-    reason,
+    reason: engine.firstFailure as WorldGenerationEvidenceGateReason | null,
     evidenceDeterminismHash,
     evidenceArtifactIntegrityHash,
-    admissionHash: canonicalWorldGenerationHash({
-      schema: AURION_WORLD_GENERATION_EVIDENCE_GATE,
-      consumer: input.consumer,
-      verdict,
-      reason,
-      evidenceDeterminismHash,
-      evidenceArtifactIntegrityHash,
-      expected,
-    }),
+    engine,
+    admissionHash: engine.admissionHash,
     expected,
   });
 }
@@ -125,87 +131,95 @@ export function evaluateWorldGenerationEvidenceGate(
 ): WorldGenerationEvidenceGateAdmission {
   const parsed = worldGenerationParityEvidenceSchema.safeParse(value);
   if (!parsed.success) {
-    const fallback = value as Partial<WorldGenerationParityEvidence>;
+    const engine = evaluateEvidenceGateEngine({
+      consumer: input.consumer,
+      checks: [{ id: "schema", pass: false, reason: "SCHEMA_INVALID" }],
+    });
     return Object.freeze({
       schema: AURION_WORLD_GENERATION_EVIDENCE_GATE,
       verdict: "HOLD",
       consumer: input.consumer,
       reason: "SCHEMA_INVALID",
-      evidenceDeterminismHash: typeof fallback.determinismHash === "string" ? fallback.determinismHash : "sha256:" + "0".repeat(64),
-      evidenceArtifactIntegrityHash: typeof fallback.artifactIntegrityHash === "string" ? fallback.artifactIntegrityHash : "sha256:" + "0".repeat(64),
-      admissionHash: canonicalWorldGenerationHash({
-        schema: AURION_WORLD_GENERATION_EVIDENCE_GATE,
-        consumer: input.consumer,
-        verdict: "HOLD",
-        reason: "SCHEMA_INVALID",
-      }),
-      expected: Object.freeze({
-        worldId: input.expectedWorldId ?? null,
-        sourceRevision: input.expectedSourceRevision ?? null,
-        runtimeRevision: input.expectedRuntimeRevision ?? null,
-        runtimeImageDigest: input.expectedRuntimeImageDigest ?? null,
-        causalTickSchema: input.expectedCausalTickSchema ?? null,
-        rulesetVersion: input.expectedRulesetVersion ?? null,
-      }),
+      evidenceDeterminismHash: "sha256:" + "0".repeat(64),
+      evidenceArtifactIntegrityHash: "sha256:" + "0".repeat(64),
+      engine,
+      admissionHash: engine.admissionHash,
+      expected: expectedContext(input),
     });
   }
 
   const evidence = parsed.data;
-  const fallbackAdmission = (reason: WorldGenerationEvidenceGateReason) =>
-    admission(input, evidence, "HOLD", reason);
+  const checks: EvidenceGateCheck[] = [];
 
-  if (evidence.status !== "MATCH") return fallbackAdmission("STATUS_NOT_MATCH");
-  if ((input.requireOracleMatch ?? true) &&
-      (evidence.oracleVerdict !== "MATCH" || evidence.oracleResultHash === null)) {
-    return fallbackAdmission("ORACLE_NOT_MATCH");
-  }
-  if (!verifyWorldGenerationDeterminismHash(evidence)) return fallbackAdmission("DETERMINISM_HASH_INVALID");
-  if ((input.requireArtifactIntegrity ?? true) && !verifyWorldGenerationArtifactIntegrityHash(evidence)) {
-    return fallbackAdmission("ARTIFACT_INTEGRITY_INVALID");
-  }
+  const add = (id: string, pass: boolean, reason: WorldGenerationEvidenceGateReason) =>
+    checks.push({ id, pass, reason: pass ? null : reason });
 
-  if (input.expectedWorldId !== undefined && evidence.worldId !== input.expectedWorldId) {
-    return fallbackAdmission("WORLD_ID_MISMATCH");
-  }
-  if (input.expectedSourceRevision !== undefined && evidence.sourceRevision !== input.expectedSourceRevision) {
-    return fallbackAdmission("SOURCE_REVISION_MISMATCH");
-  }
-  if (input.expectedRuntimeRevision !== undefined && evidence.runtimeRevision !== input.expectedRuntimeRevision) {
-    return fallbackAdmission("RUNTIME_REVISION_MISMATCH");
-  }
-  if (input.expectedRuntimeImageDigest !== undefined && evidence.runtimeImageDigest !== input.expectedRuntimeImageDigest) {
-    return fallbackAdmission("IMAGE_DIGEST_MISMATCH");
-  }
-  if (input.expectedCausalTickSchema !== undefined && evidence.causalTickSchema !== input.expectedCausalTickSchema) {
-    return fallbackAdmission("CAUSAL_SCHEMA_MISMATCH");
-  }
-  if (input.expectedRulesetVersion !== undefined && evidence.rulesetVersion !== input.expectedRulesetVersion) {
-    return fallbackAdmission("RULESET_MISMATCH");
-  }
+  add("status_match", evidence.status === "MATCH", "STATUS_NOT_MATCH");
+  add(
+    "oracle_match",
+    (input.requireOracleMatch ?? true)
+      ? evidence.oracleVerdict === "MATCH" && evidence.oracleResultHash !== null
+      : true,
+    "ORACLE_NOT_MATCH",
+  );
+  add(
+    "determinism_hash",
+    verifyWorldGenerationDeterminismHash(evidence),
+    "DETERMINISM_HASH_INVALID",
+  );
+  add(
+    "artifact_integrity",
+    (input.requireArtifactIntegrity ?? true)
+      ? verifyWorldGenerationArtifactIntegrityHash(evidence)
+      : true,
+    "ARTIFACT_INTEGRITY_INVALID",
+  );
 
-  if (!identityMatches(
-    evidence.referenceRuntimeIdentity,
-    evidence.sourceRevision,
-    evidence.runtimeRevision,
-    evidence.runtimeImageDigest,
-    evidence.causalTickSchema,
-    evidence.rulesetVersion,
-  )) {
-    return fallbackAdmission("REFERENCE_RUNTIME_MISMATCH");
+  if (input.expectedWorldId !== undefined) {
+    add("expected_world", evidence.worldId === input.expectedWorldId, "WORLD_ID_MISMATCH");
   }
-
-  if (!identityMatches(
-    evidence.productionRuntimeIdentity,
-    evidence.sourceRevision,
-    evidence.runtimeRevision,
-    evidence.runtimeImageDigest,
-    evidence.causalTickSchema,
-    evidence.rulesetVersion,
-  )) {
-    return fallbackAdmission("PRODUCTION_RUNTIME_MISMATCH");
+  if (input.expectedSourceRevision !== undefined) {
+    add("expected_source_revision", evidence.sourceRevision === input.expectedSourceRevision, "SOURCE_REVISION_MISMATCH");
+  }
+  if (input.expectedRuntimeRevision !== undefined) {
+    add("expected_runtime_revision", evidence.runtimeRevision === input.expectedRuntimeRevision, "RUNTIME_REVISION_MISMATCH");
+  }
+  if (input.expectedRuntimeImageDigest !== undefined) {
+    add("expected_runtime_image", evidence.runtimeImageDigest === input.expectedRuntimeImageDigest, "IMAGE_DIGEST_MISMATCH");
+  }
+  if (input.expectedCausalTickSchema !== undefined) {
+    add("expected_causal_schema", evidence.causalTickSchema === input.expectedCausalTickSchema, "CAUSAL_SCHEMA_MISMATCH");
+  }
+  if (input.expectedRulesetVersion !== undefined) {
+    add("expected_ruleset", evidence.rulesetVersion === input.expectedRulesetVersion, "RULESET_MISMATCH");
   }
 
-  return admission(input, evidence, "ADMIT", null);
+  add(
+    "reference_runtime_identity",
+    identityMatches(
+      evidence.referenceRuntimeIdentity,
+      evidence.sourceRevision,
+      evidence.runtimeRevision,
+      evidence.runtimeImageDigest,
+      evidence.causalTickSchema,
+      evidence.rulesetVersion,
+    ),
+    "REFERENCE_RUNTIME_MISMATCH",
+  );
+  add(
+    "production_runtime_identity",
+    identityMatches(
+      evidence.productionRuntimeIdentity,
+      evidence.sourceRevision,
+      evidence.runtimeRevision,
+      evidence.runtimeImageDigest,
+      evidence.causalTickSchema,
+      evidence.rulesetVersion,
+    ),
+    "PRODUCTION_RUNTIME_MISMATCH",
+  );
+
+  return admission(input, evidence, checks);
 }
 
 export function assertWorldGenerationEvidenceGate(
