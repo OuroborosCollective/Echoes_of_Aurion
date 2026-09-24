@@ -124,8 +124,19 @@ function causalReceipts(): AurionCausalTickReceipt[] {
 }
 
 async function buildInput() {
+  const confirmed = confirmedChunk();
+  const generation = compileDeterministicStructureGrammar({
+    worldId: WORLD_ID,
+    worldSeedHash: confirmed.state.materialized.worldSeedHash,
+    grammar,
+    chunkCoordinate: CHUNK,
+    anchorId: "anchor:parity-house",
+    sourceCausalRoot: confirmed.receipt.worldRootHash,
+    sourceRevision: SOURCE_REVISION,
+  });
+
   const observationRuntime = new StructureObservationRuntime({
-    causalRootService: { readChunk: async () => confirmedChunk() } as any,
+    causalRootService: { readChunk: async () => confirmed } as any,
     deltaPageReader: async () => ({
       worldId: WORLD_ID,
       chunkX: CHUNK.x,
@@ -146,16 +157,6 @@ async function buildInput() {
     grammar,
   });
   if (observation.status !== "VERIFIED") throw new Error(observation.reason);
-
-  const generation = compileDeterministicStructureGrammar({
-    worldId: WORLD_ID,
-    worldSeedHash: observation.identity.worldSeedHash,
-    grammar,
-    chunkCoordinate: CHUNK,
-    anchorId: observation.identity.anchorId,
-    sourceCausalRoot: observation.identity.sourceCausalRoot,
-    sourceRevision: SOURCE_REVISION,
-  });
 
   const projection = projectStructureObservation(observation);
   const receipts = causalReceipts();
