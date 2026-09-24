@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import test from "node:test";
+import assert from "node:assert/strict";
 import {
   worldGenerationParityEvidenceSchema,
   type WorldGenerationParityEvidenceInput,
@@ -149,57 +150,61 @@ const atlas = {
   ],
 };
 
-describe("#505 generated-world atlas plan integration", () => {
-  it("requires #563 admission before building the presentation plan", () => {
-    const output = buildGeneratedWorldAtlasPlan({
-      evidence: evidence(),
-      gateContext,
-      atlas,
-    });
-
-    expect(output.schemaVersion).toBe("aurion.generated-world-atlas-plan.v1");
-    expect(output.consumer).toBe("ATLAS_BUILD");
-    expect(output.admissionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(output.plan.planHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(output.plan.groups).toHaveLength(1);
-    expect(output.plan.groups[0]?.dedupeGroups).toHaveLength(2);
+test("#505 requires #563 admission before building the presentation plan", () => {
+  const output = buildGeneratedWorldAtlasPlan({
+    evidence: evidence(),
+    gateContext,
+    atlas,
   });
 
-  it("is insensitive to source input order after #563 admission", () => {
-    const first = buildGeneratedWorldAtlasPlan({
-      evidence: evidence(),
-      gateContext,
-      atlas,
-    });
-    const second = buildGeneratedWorldAtlasPlan({
-      evidence: evidence(),
-      gateContext,
-      atlas: {
-        ...atlas,
-        sourceInputs: [...atlas.sourceInputs].reverse(),
-      },
-    });
+  assert.equal(output.schemaVersion, "aurion.generated-world-atlas-plan.v1");
+  assert.equal(output.consumer, "ATLAS_BUILD");
+  assert.match(output.admissionHash, /^sha256:[a-f0-9]{64}$/);
+  assert.match(output.plan.planHash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(output.plan.groups.length, 1);
+  assert.equal(output.plan.groups[0]?.dedupeGroups.length, 2);
+});
 
-    expect(second.plan.planHash).toBe(first.plan.planHash);
-    expect(second.admissionHash).toBe(first.admissionHash);
+test("#505 is insensitive to source input order after #563 admission", () => {
+  const first = buildGeneratedWorldAtlasPlan({
+    evidence: evidence(),
+    gateContext,
+    atlas,
+  });
+  const second = buildGeneratedWorldAtlasPlan({
+    evidence: evidence(),
+    gateContext,
+    atlas: {
+      ...atlas,
+      sourceInputs: [...atlas.sourceInputs].reverse(),
+    },
   });
 
-  it("fails closed before packing when parity evidence is not MATCH", () => {
-    expect(() => buildGeneratedWorldAtlasPlan({
+  assert.equal(second.plan.planHash, first.plan.planHash);
+  assert.equal(second.admissionHash, first.admissionHash);
+});
+
+test("#505 fails closed before packing when parity evidence is not MATCH", () => {
+  assert.throws(
+    () => buildGeneratedWorldAtlasPlan({
       evidence: evidence({ status: "FIRST_DIVERGENCE" }),
       gateContext,
       atlas,
-    })).toThrow("ATLAS_WORLD_GENERATION_EVIDENCE_GATE_STATUS_NOT_MATCH");
-  });
+    }),
+    /ATLAS_WORLD_GENERATION_EVIDENCE_GATE_STATUS_NOT_MATCH/,
+  );
+});
 
-  it("fails closed when exact runtime identity drifts", () => {
-    expect(() => buildGeneratedWorldAtlasPlan({
+test("#505 fails closed when exact runtime identity drifts", () => {
+  assert.throws(
+    () => buildGeneratedWorldAtlasPlan({
       evidence: evidence(),
       gateContext: {
         ...gateContext,
         expectedRuntimeImageDigest: hash("f"),
       },
       atlas,
-    })).toThrow("ATLAS_WORLD_GENERATION_EVIDENCE_GATE_IMAGE_DIGEST_MISMATCH");
-  });
+    }),
+    /ATLAS_WORLD_GENERATION_EVIDENCE_GATE_IMAGE_DIGEST_MISMATCH/,
+  );
 });
