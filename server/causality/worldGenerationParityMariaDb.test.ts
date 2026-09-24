@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createPool, type Pool } from "mysql2/promise";
-import { and, eq } from "drizzle-orm";
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   aurionActiveCivilizations,
@@ -10,7 +8,6 @@ import {
   aurionGlobalWorldStates,
   aurionRuinOrigins,
   aurionSettlementRebirthCandidates,
-  aurionWorldChunkDeltas,
   aurionWorldEpochReactions,
   aurionWorldEpochRequests,
   aurionWorldPresenceLeases,
@@ -24,7 +21,6 @@ import {
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalCausalPersistence } from "./persistence";
 import { globalTickRecorder } from "./tickRecorder";
-import { worldCausalRootService } from "./worldCausalRootService";
 import { StructureObservationRuntime, projectStructureObservation } from "../structureObservationRuntime";
 import type { DeterministicStructureGrammar } from "../../shared/deterministicStructureGrammarProtocol";
 import {
