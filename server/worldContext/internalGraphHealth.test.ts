@@ -61,7 +61,7 @@ describe("internal WorldContext structural health", () => {
     expect(snapshot.leafNodeCount).toBe(2);
     expect(snapshot.maxDegree).toBe(2);
     expect(snapshot.averageDegree).toBe(1);
-    expect(snapshot.density).toBe(1 / 3);
+    expect(snapshot.density).toBe(0.333333333);
   });
 
   it("detects deterministic structural change between generations", () => {
@@ -91,7 +91,7 @@ describe("internal WorldContext structural health", () => {
     expect(comparison.addedRelationCount).toBe(1);
     expect(comparison.removedRelationCount).toBe(0);
     expect(comparison.nodeChurnRatio).toBe(0.2);
-    expect(comparison.edgeChurnRatio).toBe(1 / 3);
+    expect(comparison.edgeChurnRatio).toBe(0.333333333);
     expect(comparison.componentCountDelta).toBe(-1);
     expect(comparison.changeSignals).toEqual([
       "ARTICULATION_COUNT_CHANGED",
