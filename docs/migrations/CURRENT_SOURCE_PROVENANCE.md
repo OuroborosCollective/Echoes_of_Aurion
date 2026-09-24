@@ -1,6 +1,10 @@
 ---
-description: Aktuelle Source-Provenienz für WASD-, AX1- und Aurion-Integration.
+description: Historische Source-Provenienz für bereits in Aurion migrierte AX1-/WASD-Bausteine.
 ---
+
+## ⚠️ Historisch — nicht normativ
+
+Seit dem aktuellen Aurion-Endzustand gilt: **Aurion ist der einzige Owner und Wahrheitsträger.** Die in diesem Dokument genannten AX1-/WASD-Repositories, Revisionen und Rollen beschreiben ausschließlich damalige Herkunft und Migrationsstände. Sie tragen keine aktuelle Wahrheit, keine Gameplay-Pflicht und keine Runtime-Authority. Bereits migrierter Code gehört Aurion.
 
 # Aktuelle Source-Provenienz
 
@@ -14,7 +18,7 @@ Diese Seite ist der aktuelle Einstieg für Source-Reconciliation. Ältere `AIM23
 | `OuroborosCollective/Wasd`             | ausführende deterministische Logik- und Simulationsschicht für AX1                       |
 | `OuroborosCollective/Echoes_of_Aurion` | Host, Website/Auth/Community, Persistenz, Transport und Readmodels                       |
 
-## Aktueller AX1-Cutover-Pin
+## Historischer AX1-Cutover-Pin
 
 * vollständige sichtbare AX1-Quelle: `f24e3bbb452bd6991c8365fc7827ce6dbcc16d95`;
 * AX1 NPC-/Lingua-/Economy-Engine-Basis: `cf9cd7a9e197a110724d4f517655a63168ed63e0` (in `f24e3bbb…` in diesen Modulen unverändert);
@@ -27,7 +31,7 @@ Die bisherige Migration hat unter anderem folgende revisionsgebundene Punkte ver
 * AX1 finaler Source-Head: `d356881538dae23c3aa97364a5596d48b6ac3079`;
 * ältere WASD-Audit-/Normativ-Pins sind in den jeweiligen Source-Ledgers dokumentiert.
 
-Ein historischer Pin bleibt Evidence für den damaligen Import. Vor neuer Integration muss der aktuelle WASD-/AX1-Head erneut gelesen und bewusst gebunden werden.
+Ein historischer Pin bleibt Evidence für den damaligen Import. Neue Arbeit muss nicht in AX1 oder WASD ausgeführt oder von deren aktuellem Head abhängig gemacht werden.
 
 ## Reconciliation-Regel
 
@@ -40,9 +44,9 @@ Jedes Source-Delta wird genau einer Behandlung zugeordnet:
 * **dev-only** — Debug/Preview ohne Production-Truth;
 * **reject** — zweite Authority, clientbestimmte Mutation, unseeded Gameplayrandomness, parallele Persistenz oder sonstige Architekturverletzung.
 
-## Keine implizite Authority
+## Keine Legacy-Authority
 
-Ein Modul wird nicht zum Aurion-Owner, nur weil die Integration derzeit in `server/` oder MariaDB liegt. Wenn dort fachliche Gameplaylogik enthalten ist, ist sie Migrationsschuld und wird bei Berührung an den AX1-Spielvertrag und seine WASD-Ausführung gebunden.
+Ein Modul wird nicht zu einem zweiten Owner, nur weil sein Dateiname `ax1*` oder `wasd*` enthält. Bereits migrierte fachliche Logik ist Aurion-Logik. Historische Source-Identität bleibt Provenienz und wird nicht zur aktuellen Authority.
 
 ## Evidence
 
