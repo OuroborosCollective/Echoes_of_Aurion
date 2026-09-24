@@ -9,7 +9,7 @@ import {
 } from "@shared/aurionChunkStateContract";
 import { createWorldChunkDelta } from "@shared/worldChunkProtocol";
 import { canonicalSha256 } from "@shared/aurionCanonicalHash";
-import { StructureObservationRuntime, materializeConfirmedStructure } from "./structureObservationRuntime";
+import { projectStructureObservation, StructureObservationRuntime, materializeConfirmedStructure } from "./structureObservationRuntime";
 
 const WORLD_ID = "echoes-of-aurion-global";
 const WORLD_SEED = "issue-514-unit-seed";
@@ -100,6 +100,12 @@ describe("StructureObservationRuntime", () => {
       sizeMm: { x: 2_000, z: 3_000 },
       rotationDiscrete: { x: 0, y: 0, z: 0 },
     }]);
+    const projection = projectStructureObservation(first);
+    expect(projection.observationKey).toBe(first.observationKey);
+    expect(projection.npcProjection.observationKey).toBe(first.observationKey);
+    expect(projection.networkProjection.observationKey).toBe(first.observationKey);
+    expect(projection.ax1Projection.observationKey).toBe(first.observationKey);
+    expect(projection.projectionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.cacheHit).toBe(false);
 
     const second = await runtime.observe(request());
