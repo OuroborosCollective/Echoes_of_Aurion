@@ -1,4 +1,4 @@
-import { canonicalWorldGenerationHash } from "./worldGenerationEvidenceContract";
+import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 
 export const AURION_EVIDENCE_GATE_ENGINE_SCHEMA = "aurion.evidence-gate-engine.v1" as const;
 
@@ -45,7 +45,7 @@ export function evaluateEvidenceGateEngine(input: Readonly<{
     consumer: input.consumer,
     checks,
     firstFailure,
-    admissionHash: canonicalWorldGenerationHash({
+    admissionHash: canonicalSha256({
       schema: AURION_EVIDENCE_GATE_ENGINE_SCHEMA,
       consumer: input.consumer,
       verdict,
