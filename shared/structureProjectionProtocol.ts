@@ -89,10 +89,10 @@ export const structureProjectionContractSchema = z.strictObject({
   footprint: structureObservationFootprintSchema,
   collision: structureObservationCollisionDescriptorSchema,
   presentation: structureObservationPresentationDescriptorSchema,
-  collisionProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_COLLISION_PROJECTION_PROTOCOL), observationKey: sha256, confirmedChunkAuthorityStateHash: sha256, footprint: z.unknown(), collision: z.unknown() }),
+  collisionProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_COLLISION_PROJECTION_PROTOCOL), observationKey: sha256, confirmedChunkAuthorityStateHash: sha256, footprint: structureObservationFootprintSchema, collision: structureObservationCollisionDescriptorSchema }),
   npcProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_NPC_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, grammarId: identifier, grammarVersion: identifier, confirmedChunkAuthorityStateHash: sha256, sourceCausalRoot: sha256, sourceRevision: revision, recipeHash: bareSha256, materializationHash: sha256 }),
-  networkProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_NETWORK_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, recipeHash: z.string().min(1).max(128), materializationHash: sha256, footprint: z.unknown() }),
-  ax1Projection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_AX1_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, grammarId: identifier, grammarVersion: identifier, recipeHash: z.string().min(1).max(128), materializationHash: sha256, presentation: z.unknown() }),
+  networkProjection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_NETWORK_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, recipeHash: bareSha256, materializationHash: sha256, footprint: structureObservationFootprintSchema }),
+  ax1Projection: z.strictObject({ protocol: z.literal(AURION_STRUCTURE_AX1_PROJECTION_PROTOCOL), observationKey: sha256, worldId: identifier, chunkCoordinate: coordinate, structureId: identifier, anchorId: identifier, grammarId: identifier, grammarVersion: identifier, recipeHash: bareSha256, materializationHash: sha256, presentation: structureObservationPresentationDescriptorSchema }),
   projectionHash: sha256,
 });
 
