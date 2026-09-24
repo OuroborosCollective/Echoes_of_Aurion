@@ -2,14 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import {
   BookOpen,
-  Box,
-  CalendarDays,
   Compass,
   MessageCircle,
   ShieldCheck,
   Sparkles,
   Swords,
-  UserRound,
   UsersRound,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
