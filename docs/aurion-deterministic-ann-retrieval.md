@@ -55,3 +55,21 @@ Those capabilities can be added later behind the same truth boundary once actual
 ## Safety and evidence
 
 No runtime state is inferred from the index itself. A source-hash mismatch fails closed. No mock database, external embedding provider or wall-clock randomness is involved in the retrieval path.
+
+
+## WorldContext structural diagnostics
+
+The same internal graph projection now has a deterministic structural-health layer. It reports measurements instead of a composite score:
+
+- node/relation counts and unique undirected connectivity;
+- connected-component count, isolated nodes, leaf count and maximum/average degree;
+- graph density, articulation-node count and finite graph distance;
+- self-loop and duplicate-undirected-pair integrity observations.
+
+`compareInternalSemanticGraphGenerations(...)` compares two verified graph generations by exact node/relation identity and emits reproducible change signals for node/edge churn, fragmentation, isolation growth, density shifts, articulation changes and distance changes. Thresholds are fixed constants and are evidence signals, not gameplay decisions.
+
+The WorldContext service returns the structural snapshot alongside its existing internal graph diagnostics. The comparison primitive remains server-internal and has no public route or MCP registration.
+
+This layer is rebuildable and read-only. It does not write graph truth, gameplay state or persistence and does not replace the existing semantic-graph verification/readback path.
+
+The Wolfram CAG integration remains optional and explicit: `toWolframLanguageGraph(...)` supplies only the opaque graph topology to Wolfram-compatible analysis. No live source text, provider secrets, persistence rows or mutable gameplay state are transported by the structural diagnostics layer.
