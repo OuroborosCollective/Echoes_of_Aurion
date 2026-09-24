@@ -200,6 +200,11 @@ export const worldGenerationCausalGameplayEvidenceSchema = z.strictObject({
   receiptRootHash: SHA,
 }).refine(value => value.toTick >= value.fromTick, "WORLD_GENERATION_RANGE_INVALID");
 
+export type WorldGenerationParityEvidenceInput = Omit<
+  WorldGenerationParityEvidence,
+  "determinismHash" | "artifactIntegrityHash"
+>;
+
 export const worldGenerationParityEvidenceSchema = z.strictObject({
   schema: z.literal(AURION_WORLD_GENERATION_PARITY_SCHEMA),
   mutationAuthority: z.literal("none"),
