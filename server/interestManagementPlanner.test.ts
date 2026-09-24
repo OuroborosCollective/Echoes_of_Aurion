@@ -178,4 +178,23 @@ describe("AIM-489 interest management", () => {
     expect(JSON.stringify(plan)).not.toContain("delete");
     expect(plan.structureRequirements[0]?.observationKey).toBe(farStructure.observationKey);
   });
+  it("rejects a structure projection from another world instead of leaking it into relevance", () => {
+    const foreign = structureProjection({ x: 0, z: 0 }, "foreign-house");
+    const foreignWorld = {
+      ...foreign,
+      identity: {
+        ...foreign.identity,
+        worldId: "other-world",
+      },
+    };
+    expect(() => planInterestManagement({
+      worldId: "echoes-of-aurion-global",
+      canonicalStateHash: canonicalSha256({ state: "confirmed-6" }),
+      center: { x: 0, z: 0 },
+      tier: "phone",
+      cached: [],
+      confirmedStructureProjections: [foreignWorld as typeof foreign],
+    })).toThrow("INTEREST_STRUCTURE_WORLD_SCOPE_MISMATCH");
+  });
+
 });
