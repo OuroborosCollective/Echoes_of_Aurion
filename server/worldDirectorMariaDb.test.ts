@@ -25,7 +25,6 @@ describeReal("AIM-484 World Director — real MariaDB", () => {
   });
 
   afterAll(async () => {
-    await pool?.query("DELETE FROM aurionWorldDirectorReceipts WHERE zoneId=?", [zoneId]);
     await pool?.end();
   });
 
@@ -65,7 +64,7 @@ describeReal("AIM-484 World Director — real MariaDB", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.sourceRevision).toBe(causalReceipt!.sourceRevision);
     expect(rows[0]?.causalReceiptHash).toBe(causalReceipt!.receiptHash);
-    expect(rows[0]?.sourceRootHash).toBe(worldPlan.deterministicHash);
+    expect(rows[0]?.sourceRootHash).toBe(causalReceipt!.postStateHash);
     expect(rows[0]?.decisionHash).toBe(result.decision.decisionHash);
     expect(rows[0]?.receiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
 
