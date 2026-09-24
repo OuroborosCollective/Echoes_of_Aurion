@@ -127,7 +127,7 @@ async function buildInput() {
   const confirmed = confirmedChunk();
   const generation = compileDeterministicStructureGrammar({
     worldId: WORLD_ID,
-    worldSeedHash: confirmed.state.materialized.worldSeedHash,
+    worldSeedHash: confirmed.state.universe.worldSeedHash,
     grammar,
     chunkCoordinate: CHUNK,
     anchorId: "anchor:parity-house",
