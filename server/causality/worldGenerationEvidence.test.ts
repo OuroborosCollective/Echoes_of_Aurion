@@ -85,7 +85,8 @@ describe("AIM-510 world generation evidence contract", () => {
     expect(gameplay.toTick).toBe(2);
     expect(gameplay.receiptRootHash).toMatch(/^sha256:[a-f0-9]{64}$/);
 
-    const broken = { ...second, previousReceiptHash: digest("f") };
+    const brokenUnsigned = { ...second, previousReceiptHash: digest("f") };
+    const broken = { ...brokenUnsigned, receiptHash: computeReceiptHash(brokenUnsigned) };
     expect(() => createGameplayEvidence([first, broken], 1, 2))
       .toThrow("WORLD_GENERATION_GAMEPLAY_RECEIPT_CHAIN_INVALID");
 
