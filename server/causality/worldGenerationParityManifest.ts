@@ -34,6 +34,7 @@ export type WorldGenerationParityManifestRow = Readonly<{
   reference_replay_ms: number;
   persistence_ms: number;
   evidence_write_ms: number;
+  serialization_ms: number;
 }>;
 
 const COLUMNS = [
@@ -70,6 +71,7 @@ const COLUMNS = [
   "reference_replay_ms",
   "persistence_ms",
   "evidence_write_ms",
+  "serialization_ms",
 ] as const;
 
 export function toWorldGenerationParityManifestRow(
@@ -109,6 +111,7 @@ export function toWorldGenerationParityManifestRow(
     reference_replay_ms: evidence.timing.referenceReplayMs,
     persistence_ms: evidence.timing.persistenceMs,
     evidence_write_ms: evidence.timing.evidenceWriteMs,
+    serialization_ms: evidence.timing.serializationMs,
   });
 }
 
