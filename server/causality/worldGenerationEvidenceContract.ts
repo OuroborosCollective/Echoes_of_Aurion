@@ -312,12 +312,20 @@ export function createGameplayEvidence(
   for (let index = 0; index < selected.length; index += 1) {
     const receipt = selected[index]!;
     if (receipt.tick !== fromTick + index) throw new Error("WORLD_GENERATION_GAMEPLAY_TICK_ORDER_INVALID");
+    if (receipt.worldId !== firstIdentityWorldId || receipt.zoneId !== firstIdentityZoneId || receipt.sourceRevision !== firstIdentityRevision || receipt.rulesetVersion !== firstIdentityRuleset || receipt.schema !== firstIdentitySchema) {
+      throw new Error("WORLD_GENERATION_GAMEPLAY_IDENTITY_MISMATCH");
+    }
     if (index > 0 && receipt.previousReceiptHash !== selected[index - 1]!.receiptHash) {
       throw new Error("WORLD_GENERATION_GAMEPLAY_RECEIPT_CHAIN_INVALID");
     }
   }
 
   const first = selected[0]!;
+  const firstIdentityWorldId = first.worldId;
+  const firstIdentityZoneId = first.zoneId;
+  const firstIdentityRevision = first.sourceRevision;
+  const firstIdentityRuleset = first.rulesetVersion;
+  const firstIdentitySchema = first.schema;
   const stageRows = selected.map(receipt => ({
     tick: receipt.tick,
     schema: receipt.schema,
