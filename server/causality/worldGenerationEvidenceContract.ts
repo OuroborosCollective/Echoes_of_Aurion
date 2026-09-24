@@ -122,6 +122,8 @@ export type WorldGenerationParityEvidence = Readonly<{
   firstDivergenceBoundary: WorldGenerationParityBoundary | null;
   firstDivergenceStage: string | null;
   firstDivergenceTick: number | null;
+  firstDivergenceExpectedHash: string | null;
+  firstDivergenceObservedHash: string | null;
   referenceRuntimeIdentity: WorldGenerationRuntimeIdentity;
   productionRuntimeIdentity: WorldGenerationRuntimeIdentity;
   sourceIntelligence: WorldGenerationSourceIntelligence;
@@ -255,6 +257,8 @@ export const worldGenerationParityEvidenceSchema = z.strictObject({
   ]).nullable(),
   firstDivergenceStage: IDENTIFIER.nullable(),
   firstDivergenceTick: z.number().int().positive().nullable(),
+  firstDivergenceExpectedHash: SHA.nullable(),
+  firstDivergenceObservedHash: SHA.nullable(),
   referenceRuntimeIdentity: worldGenerationRuntimeIdentitySchema,
   productionRuntimeIdentity: worldGenerationRuntimeIdentitySchema,
   sourceIntelligence: worldGenerationSourceIntelligenceSchema,
