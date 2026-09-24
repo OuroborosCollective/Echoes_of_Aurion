@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as db from "./db";
+import { executeGdsStatus } from "./devControlGdsBridge";
 import { issueGlbAgentSession } from "./glbAgentSession";
 import {
   GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION,
@@ -128,6 +129,29 @@ describe("live Game Development Studio runtime boundary", () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+
+
+
+  it.runIf(fs.existsSync(path.resolve(".game-dev/runtime/node_modules/.bin/game-dev")))("proves the dev-control bridge against the installed pinned Game Development Studio binary", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AURION_GAME_DEV_REQUIRED", "true");
+    vi.stubEnv("AURION_GAME_DEV_SOURCE_REVISION", GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION);
+    vi.stubEnv("AURION_GAME_DEV_BIN", path.resolve(".game-dev/runtime/node_modules/.bin/game-dev"));
+    vi.stubEnv("AURION_GAME_DEV_WORKSPACE", path.resolve(".game-dev/workspace"));
+
+    await expect(executeGdsStatus("CONFIRM_DEV_GDS_STATUS")).resolves.toMatchObject({
+      available: true,
+      required: true,
+      version: GAME_DEVELOPMENT_STUDIO_VERSION,
+      sourceRevision: GAME_DEVELOPMENT_STUDIO_SOURCE_REVISION,
+      capabilitiesSchema: "game_dev.result.v1",
+      doctorSchema: "game_dev.result.v1",
+      packageBuildAvailable: true,
+      vendorAdmitAvailable: true,
+      providerCalls: false,
+      error: null,
+    });
   });
 
   it("fails closed on a mismatched staged source revision", async () => {
