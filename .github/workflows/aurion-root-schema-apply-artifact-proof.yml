@@ -246,7 +246,7 @@ jobs:
           if(r.recordType!=="aurion_production_schema_apply"||r.databaseCredentialReturned!==false||r.overallState!=="APPLY_FAILED"||r.failureStage!=="VERIFY_GITHUB_ACTIONS_OIDC"||r.errorClass!=="GITHUB_ACTIONS_OIDC_INVALID"||r.backup?.created!==false) process.exit(2);
           NODE
 
-      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0062
+      - name: Prove fixed runner creates a backup, restores it in isolation and applies exactly 0021 through 0063
         run: |
           set -euo pipefail
           set +e
