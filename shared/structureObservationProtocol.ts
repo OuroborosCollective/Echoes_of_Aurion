@@ -79,6 +79,17 @@ export type StructureObservationPresentationDescriptor = Readonly<{
   primitiveKinds: readonly StructuralPrimitive["primitive"][];
 }>;
 
+export type StructureObservationFootprint = Readonly<{
+  protocol: "aurion.structure-footprint.v1";
+  semantics: "projection-only";
+  primitiveBounds: readonly Readonly<{
+    id: string;
+    minMm: Readonly<{ x: number; z: number }>;
+    maxMm: Readonly<{ x: number; z: number }>;
+  }>[];
+  deltaOverridePositionMm: Readonly<{ x: number; z: number }> | null;
+}>;
+
 export type StructureMaterialization = Readonly<{
   protocol: typeof AURION_STRUCTURE_MATERIALIZATION_PROTOCOL;
   observationKey: string;
@@ -86,6 +97,7 @@ export type StructureMaterialization = Readonly<{
   state: StructureObservationState;
   primitives: readonly StructureObservationPrimitive[];
   deltaOverride: StructureObservationDeltaOverride | null;
+  footprint: StructureObservationFootprint;
   collision: StructureObservationCollisionDescriptor;
   presentation: StructureObservationPresentationDescriptor;
   materializationHash: string;
