@@ -28,6 +28,11 @@ import { replayWorldContextCapsule, type WorldContextReplayVerdict } from "./rep
 import { compactStructuredEpisode, type EpisodeCompactionInput } from "./episodeCompactor";
 import { runWorldContextEvaluationSuite, type ContextEvaluationMetrics } from "./evaluation";
 import { IMPORTANCE_POLICY_VERSION } from "./importancePolicy";
+import { collectCanonicalSources } from "./sourceAdapter";
+import {
+  searchCanonicalContextSources,
+  type AnnRetrievalReceipt,
+} from "./deterministicAnnRetrieval";
 
 export class AurionWorldContextService {
   /**
@@ -84,6 +89,51 @@ export class AurionWorldContextService {
   /**
    * Reads a persisted capsule and its receipt by ID.
    */
+  /**
+   * Searches already-confirmed World Context sources through the deterministic
+   * ANN projection. The index is acceleration-only; exact re-score and source
+   * hash readback remain mandatory.
+   */
+  public async semanticSearch(input: {
+    worldId: string;
+    worldRevision: string;
+    logicalTick: number;
+    actorId: string;
+    purpose: WorldContextPurpose;
+    subjectIds?: readonly string[];
+    queryText: string;
+    limit?: number;
+  }): Promise<{
+    receipt: AnnRetrievalReceipt;
+    sources: readonly CanonicalContextSource[];
+  }> {
+    const budget: WorldContextBudget = {
+      maxEstimatedTokens: 32_000,
+      maxUtf8Bytes: 256_000,
+      tokenizerId: "aurion-default-v1",
+    };
+    const queryDraft = {
+      schemaVersion: "aurion.world-context-query.v1" as const,
+      worldId: input.worldId,
+      worldRevision: input.worldRevision,
+      logicalTick: input.logicalTick,
+      actorId: input.actorId,
+      purpose: input.purpose,
+      subjectIds: input.subjectIds ? [...input.subjectIds] : [],
+      policyVersion: IMPORTANCE_POLICY_VERSION,
+      budget,
+    };
+    const query: WorldContextQuery = {
+      ...queryDraft,
+      queryHash: hashWorldContextQuery(queryDraft),
+    };
+    const sources = await collectCanonicalSources({
+      tx: null,
+      query,
+    });
+    return searchCanonicalContextSources(sources, input.queryText, input.limit ?? 8);
+  }
+
   public async getCapsule(capsuleId: string) {
     const db = await getDb();
     if (!db) return null;
