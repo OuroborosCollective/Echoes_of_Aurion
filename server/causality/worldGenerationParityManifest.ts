@@ -19,6 +19,8 @@ export type WorldGenerationParityManifestRow = Readonly<{
   first_divergence_boundary: string;
   first_divergence_stage: string;
   first_divergence_tick: string;
+  first_divergence_expected_hash: string;
+  first_divergence_observed_hash: string;
   input_root_hash: string;
   post_state_root_hash: string;
   receipt_root_hash: string;
@@ -53,6 +55,8 @@ const COLUMNS = [
   "first_divergence_boundary",
   "first_divergence_stage",
   "first_divergence_tick",
+  "first_divergence_expected_hash",
+  "first_divergence_observed_hash",
   "input_root_hash",
   "post_state_root_hash",
   "receipt_root_hash",
@@ -90,6 +94,8 @@ export function toWorldGenerationParityManifestRow(
     first_divergence_boundary: evidence.firstDivergenceBoundary ?? "",
     first_divergence_stage: evidence.firstDivergenceStage ?? "",
     first_divergence_tick: evidence.firstDivergenceTick === null ? "" : String(evidence.firstDivergenceTick),
+    first_divergence_expected_hash: evidence.firstDivergenceExpectedHash ?? "",
+    first_divergence_observed_hash: evidence.firstDivergenceObservedHash ?? "",
     input_root_hash: evidence.inputRootHash,
     post_state_root_hash: evidence.postStateRootHash,
     receipt_root_hash: evidence.receiptRootHash,
