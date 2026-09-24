@@ -277,7 +277,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     return skill ? [{ command, name: skill.name, icon: skill.icon, color: skill.color }] : [];
   });
 
-  return <div className="aurion-authority-hud ax1-authority-shell" data-testid="authoritative-world-hud">
+  return <div className="aurion-authority-hud ax1-authority-shell" data-testid="authoritative-world-hud" data-layout-contract="ax1-hud-layout.v1" data-gesture-owner="presentation">
     <GameHUD
       playerName={explorerView.name}
       playerIcon={explorerView.icon}
