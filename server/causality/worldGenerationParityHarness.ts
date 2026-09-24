@@ -7,6 +7,7 @@ import {
   AURION_WORLD_GENERATION_PARITY_SCHEMA,
   createGameplayEvidence,
   dependencyRootFromCompilation,
+  canonicalWorldGenerationHash,
   type WorldGenerationCausalGameplayEvidence,
   type WorldGenerationParityBoundary,
   type WorldGenerationParityEvidence,
@@ -251,6 +252,8 @@ function baseEvidence(
     firstDivergenceBoundary: null,
     firstDivergenceStage: null,
     firstDivergenceTick: null,
+    firstDivergenceExpectedHash: null,
+    firstDivergenceObservedHash: null,
     referenceRuntimeIdentity: runtimeReference,
     productionRuntimeIdentity: input.runtime,
     sourceIntelligence: source,
@@ -278,12 +281,15 @@ function withDivergence(
   unsigned: WorldGenerationParityEvidenceInput,
   divergence: { boundary: WorldGenerationParityBoundary; stage: string; tick: number; expected: string; observed: string },
 ): WorldGenerationParityEvidence {
+  const hashValue = (value: string) => /^sha256:[a-f0-9]{64}$/.test(value) ? value : canonicalWorldGenerationHash(value);
   const next: WorldGenerationParityEvidenceInput = {
     ...unsigned,
     status: "FIRST_DIVERGENCE",
     firstDivergenceBoundary: divergence.boundary,
     firstDivergenceStage: divergence.stage,
     firstDivergenceTick: divergence.tick,
+    firstDivergenceExpectedHash: hashValue(divergence.expected),
+    firstDivergenceObservedHash: hashValue(divergence.observed),
   };
   return finalizeEvidence(next);
 }
