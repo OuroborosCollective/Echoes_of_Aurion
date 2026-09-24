@@ -14,7 +14,7 @@ const sourceDefinitions = [
 
 const compareText = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
 
-/** AX1 owns visible/content identity and calibrated content parameters, never state transitions. */
+/** Legacy-migrated content projection. Aurion owns the active mob definitions; AX1 naming is provenance only. */
 export const observatoryMobDefinitions: readonly MobDefinition[] = Object.freeze(sourceDefinitions.map(([archetype, level, x, z, isBoss, isElite], index) => {
   const projection = ax1MobCombatProjection(archetype, level);
   return Object.freeze({
