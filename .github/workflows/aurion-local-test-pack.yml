@@ -161,6 +161,11 @@ jobs:
         run: |
           set -euo pipefail
           node --test scripts/aurion-milestone-gate-evidence.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/milestone-evidence-contract.log
+      - name: Verify deterministic structure grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/deterministicStructureGrammarCompiler.test.ts --reporter=verbose 2>&1 | tee .aurion-local-test-pack/evidence/structure-grammar.log
       - name: Typecheck and classless regressions
         shell: bash
         run: |
