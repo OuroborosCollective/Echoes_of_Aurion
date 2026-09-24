@@ -61,7 +61,7 @@ jobs:
             const tags=journal.entries.map(e=>e.tag);
             for (const tag of tags) {
               const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
-              const statements=sql.split(/\\s*-->\\s*statement-breakpoint\\s*/).map(s=>s.trim()).filter(Boolean);
+              const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
               for (let i=0;i<statements.length;i++) {
                 try { await conn.query(statements[i]); }
                 catch (error) {
