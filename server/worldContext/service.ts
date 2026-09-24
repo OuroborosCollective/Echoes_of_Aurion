@@ -38,6 +38,7 @@ import {
   searchCanonicalContextSources,
   type AnnRetrievalReceipt,
 } from "./deterministicAnnRetrieval";
+import { buildInternalGraphStructuralSnapshot } from "./internalGraphHealth";
 
 export class AurionWorldContextService {
   /**
@@ -111,6 +112,7 @@ export class AurionWorldContextService {
           graphHash: graph.graphHash,
           provenanceStatus: graph.provenanceStatus,
           analysis,
+          structuralHealth: buildInternalGraphStructuralSnapshot(graph),
           wolframLanguageGraph: toWolframLanguageGraph(analysis, graph),
         });
       }),
