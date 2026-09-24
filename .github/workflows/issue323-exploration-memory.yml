@@ -7,6 +7,7 @@ on:
       - "shared/explorationMemoryProtocol.ts"
       - "drizzle/schema.ts"
       - "drizzle/0061_aurion_exploration_memory.sql"
+      - "drizzle/0062_aurion_world_director.sql"
       - "drizzle/meta/_journal.json"
       - "config/aurion-migration-wave-manifest.json"
       - "server/routers.ts"
