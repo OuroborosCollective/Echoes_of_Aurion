@@ -64,6 +64,14 @@ describe("server-backed Aurion HUD", () => {
     expect(screen.getByRole("button", { name: "Weltatlas" }).getAttribute("title")).toBe("Weltatlas [M]");
   });
 
+  it("closes the open panel when Escape is pressed", () => {
+    mount();
+    fireEvent.keyDown(window, { key: "i" });
+    expect(screen.getByRole("dialog", { name: "Inventar & Paperdoll-Rüstkammer" })).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("leaves typing, browser shortcuts and other dialogs in control of their keys", () => {
     const { container } = mount();
     fireEvent.keyDown(window, { key: "i", ctrlKey: true });
