@@ -136,6 +136,8 @@ describe("AIM-510 world generation evidence contract", () => {
       firstDivergenceBoundary: null,
       firstDivergenceStage: null,
       firstDivergenceTick: null,
+      firstDivergenceExpectedHash: null,
+      firstDivergenceObservedHash: null,
       referenceRuntimeIdentity: {
         sourceRevision: revision,
         runtimeRevision: revision,
