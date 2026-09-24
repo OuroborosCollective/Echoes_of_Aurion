@@ -87,9 +87,6 @@ export class AurionWorldContextService {
   }
 
   /**
-   * Reads a persisted capsule and its receipt by ID.
-   */
-  /**
    * Searches already-confirmed World Context sources through the deterministic
    * ANN projection. The index is acceleration-only; exact re-score and source
    * hash readback remain mandatory.
@@ -134,6 +131,9 @@ export class AurionWorldContextService {
     return searchCanonicalContextSources(sources, input.queryText, input.limit ?? 8);
   }
 
+  /**
+   * Reads a persisted capsule and its receipt by ID.
+   */
   public async getCapsule(capsuleId: string) {
     const db = await getDb();
     if (!db) return null;
