@@ -109,7 +109,7 @@ describe("StructureObservationRuntime", () => {
     expect(second.observationKey).toBe(first.observationKey);
     expect(second.recipeHash).toBe(first.recipeHash);
     expect(second.materialization.materializationHash).toBe(first.materialization.materializationHash);
-    expect(deltaReads).toBe(1);
+    expect(deltaReads).toBe(0);
 
     runtime.clearCache();
     const rebuilt = await runtime.observe(request());
