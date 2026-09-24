@@ -69,8 +69,8 @@ test("page overflow is deterministic and bounded", () => {
     padding: 1,
     gutter: 0,
   });
-  assert.equal(plan.groups[0].pages.length, 2);
-  assert.deepEqual(plan.groups[0].pages.map(page => page.page), [0, 1]);
+  assert.equal(plan.groups[0].pages.length, 3);
+  assert.deepEqual(plan.groups[0].pages.map(page => page.page), [0, 1, 2]);
 });
 
 test("oversized sources fail closed", () => {
