@@ -139,13 +139,19 @@ function averageFiniteDistance(adj: Map<string, Set<string>>): number {
 
 /**
  * Read-only structural analysis over the already-verified public graph packet.
- * No canonicalText, persistence row, gameplay state or source authority is copied.
+ * No source text, persistence row, gameplay state or source authority is copied.
  */
 export function analyzeInternalSemanticGraph(graph: PublicNpcSemanticGraph): InternalGraphAnalysis {
-  const adj = adjacency(graph);
-  const relationKindCounts: Record<string, number> = {};
-  for (const edge of graph.relations) relationKindCounts[edge.kind] = (relationKindCounts[edge.kind] ?? 0) + 1;
+  const relationKindCounts = Object.fromEntries(
+    Object.entries(
+      graph.relations.reduce<Record<string, number>>((counts, edge) => {
+        counts[edge.kind] = (counts[edge.kind] ?? 0) + 1;
+        return counts;
+      }, {}),
+    ).sort(([a], [b]) => compare(a, b)),
+  );
 
+  const adj = adjacency(graph);
   const degreeByNode = [...adj.entries()]
     .map(([nodeId, peers]) => ({ nodeId, degree: peers.size }))
     .sort((a, b) => b.degree - a.degree || compare(a.nodeId, b.nodeId));
@@ -177,18 +183,18 @@ export function analyzeInternalSemanticGraph(graph: PublicNpcSemanticGraph): Int
 
 /**
  * Internal analysis format only. It intentionally contains opaque node IDs and
- * relation kinds, never canonical graph text or mutable gameplay state.
+ * relation kinds, never source text or mutable gameplay state.
  */
 export function toWolframLanguageGraph(analysis: InternalGraphAnalysis, graph: PublicNpcSemanticGraph): string {
   const safeNodes = new Set(graph.nodes.map((node) => node.nodeId));
   const edges = graph.relations
     .filter((edge) => safeNodes.has(edge.fromNodeId) && safeNodes.has(edge.toNodeId))
     .sort((a, b) => compare(a.fromNodeId, b.fromNodeId) || compare(a.toNodeId, b.toNodeId) || compare(a.kind, b.kind))
-    .map((edge) => `DirectedEdge["${edge.fromNodeId}", "${edge.toNodeId}"]`);
+    .map((edge) => "DirectedEdge[\"" + edge.fromNodeId + "\", \"" + edge.toNodeId + "\"]");
 
   return [
-    `(* ${AURION_INTERNAL_GRAPH_ANALYSIS_VERSION} *)`,
-    `Graph[{${edges.join(", ")}}, VertexLabels -> "Name"]`,
-    `(* nodeCount=${analysis.nodeCount}; edgeCount=${analysis.edgeCount}; resultHash=${analysis.resultHash} *)`,
+    "(* " + AURION_INTERNAL_GRAPH_ANALYSIS_VERSION + " *)",
+    "Graph[{" + edges.join(", ") + "}, VertexLabels -> \"Name\"]",
+    "(* nodeCount=" + analysis.nodeCount + "; edgeCount=" + analysis.edgeCount + "; resultHash=" + analysis.resultHash + " *)",
   ].join("\n");
 }
