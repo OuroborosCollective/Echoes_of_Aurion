@@ -51,7 +51,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
           pnpm install --frozen-lockfile
           pnpm check
-          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts --reporter=verbose
+          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts --reporter=verbose
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
           node --test scripts/aurion-build-input-manifest.test.mjs
@@ -133,16 +133,28 @@ jobs:
             node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             ./node_modules/.bin/drizzle-kit migrate
 
-          echo "Running AIM-484 against the isolated migrated MariaDB readback database"
+          echo "Running AIM-484 and AIM-514 against the isolated migrated MariaDB readback database"
           docker run --rm \
             --network "${network}" \
             --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace" \
             --workdir /workspace \
             --env NODE_ENV=test \
+            --env AURION_RELEASE_SHA="${EXPECTED_HEAD}" \
             --env AURION_WORLD_DIRECTOR_E2E=1 \
             --env "DATABASE_URL=mysql://aurion_runtime:${password}@mariadb:3306/aurion_group_test" \
             node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             ./node_modules/.bin/vitest run server/worldDirectorMariaDb.test.ts --reporter=verbose
+
+          docker run --rm \
+            --network "${network}" \
+            --mount "type=bind,source=${GITHUB_WORKSPACE},destination=/workspace" \
+            --workdir /workspace \
+            --env NODE_ENV=test \
+            --env AURION_RELEASE_SHA="${EXPECTED_HEAD}" \
+            --env AURION_STRUCTURE_OBSERVATION_E2E=1 \
+            --env "DATABASE_URL=mysql://aurion_runtime:${password}@mariadb:3306/aurion_group_test" \
+            node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
+            ./node_modules/.bin/vitest run server/structureObservationMariaDb.test.ts --reporter=verbose
 
           docker build --pull=false --build-arg "AURION_RELEASE_SHA=${EXPECTED_HEAD}" --tag "${image}" dist-traefik-runtime
           image_id="$(docker image inspect --format '{{.Id}}' "${image}")"
