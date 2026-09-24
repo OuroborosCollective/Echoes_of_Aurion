@@ -28,6 +28,11 @@ import { replayWorldContextCapsule, type WorldContextReplayVerdict } from "./rep
 import { compactStructuredEpisode, type EpisodeCompactionInput } from "./episodeCompactor";
 import { runWorldContextEvaluationSuite, type ContextEvaluationMetrics } from "./evaluation";
 import { IMPORTANCE_POLICY_VERSION } from "./importancePolicy";
+import { readConfirmedNpcSemanticGraphPacket } from "../wasdSemanticGraphV2Persistence";
+import {
+  analyzeInternalSemanticGraph,
+  toWolframLanguageGraph,
+} from "./internalGraphAnalysis";
 import { collectCanonicalSources } from "./sourceAdapter";
 import {
   searchCanonicalContextSources,
@@ -91,6 +96,27 @@ export class AurionWorldContextService {
    * ANN projection. The index is acceleration-only; exact re-score and source
    * hash readback remain mandatory.
    */
+  /**
+   * Internal structural diagnostics for the already-verified Semantic Graph.
+   * This never exposes canonical graph text and is not registered as a route/tool.
+   */
+  public async internalAnalyzeSemanticGraphForDiagnostics(userId: number) {
+    const packet = await readConfirmedNpcSemanticGraphPacket(userId);
+    return Object.freeze(
+      packet.graphs.map((graph) => {
+        const analysis = analyzeInternalSemanticGraph(graph);
+        return Object.freeze({
+          npcId: graph.npcId,
+          generation: graph.generation,
+          graphHash: graph.graphHash,
+          provenanceStatus: graph.provenanceStatus,
+          analysis,
+          wolframLanguageGraph: toWolframLanguageGraph(analysis, graph),
+        });
+      }),
+    );
+  }
+
   public async internalSemanticSearch(input: {
     worldId: string;
     worldRevision: string;
