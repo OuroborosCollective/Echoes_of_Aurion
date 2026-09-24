@@ -145,16 +145,13 @@ function latestStructureDelta(
   deltas: readonly WorldChunkDelta[],
   structureId: string,
 ): WorldChunkDelta | undefined {
-  let latest: WorldChunkDelta | undefined;
-  for (const delta of deltas) {
-    if (
+  return Array.from(deltas)
+    .filter(delta =>
       delta.targetId === structureId &&
-      (delta.kind === "structure_placed" || delta.kind === "structure_removed")
-    ) {
-      latest = delta;
-    }
-  }
-  return latest;
+      (delta.kind === "structure_placed" || delta.kind === "structure_removed"),
+    )
+    .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id))
+    .at(-1);
 }
 
 function deltaOverride(delta: WorldChunkDelta): StructureObservationDeltaOverride {
