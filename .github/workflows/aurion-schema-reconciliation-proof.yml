@@ -197,6 +197,8 @@ jobs:
               const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
               const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
               for(const statement of statements) await connection.query(statement);
+          const directorStatements=directorSql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
+          try { for(const statement of directorStatements) await connection.query(statement); } finally {}
             }
           } finally { await connection.end(); }
           console.log(JSON.stringify({phase:"pre-0051-compatibility",appliedTags:tags}));
