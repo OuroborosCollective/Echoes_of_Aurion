@@ -15,6 +15,7 @@ import {
   type WorldGenerationSourceIntelligence,
   type WorldGenerationTiming,
   worldGenerationParityEvidenceSchema,
+  worldGenerationCausalGameplayEvidenceSchema,
   worldGenerationRuntimeIdentitySchema,
   worldGenerationSourceIntelligenceSchema,
   worldGenerationTimingSchema,
