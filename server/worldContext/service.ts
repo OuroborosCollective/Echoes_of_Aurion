@@ -28,6 +28,17 @@ import { replayWorldContextCapsule, type WorldContextReplayVerdict } from "./rep
 import { compactStructuredEpisode, type EpisodeCompactionInput } from "./episodeCompactor";
 import { runWorldContextEvaluationSuite, type ContextEvaluationMetrics } from "./evaluation";
 import { IMPORTANCE_POLICY_VERSION } from "./importancePolicy";
+import { readConfirmedNpcSemanticGraphPacket } from "../wasdSemanticGraphV2Persistence";
+import {
+  analyzeInternalSemanticGraph,
+  toWolframLanguageGraph,
+} from "./internalGraphAnalysis";
+import { collectCanonicalSources } from "./sourceAdapter";
+import {
+  searchCanonicalContextSources,
+  type AnnRetrievalReceipt,
+} from "./deterministicAnnRetrieval";
+import { buildInternalGraphStructuralSnapshot } from "./internalGraphHealth";
 
 export class AurionWorldContextService {
   /**
@@ -79,6 +90,69 @@ export class AurionWorldContextService {
     }
 
     return { capsule, capsuleId };
+  }
+
+  /**
+   * Internal structural diagnostics for the already-verified Semantic Graph.
+   * This never exposes canonical graph text and is not registered as a route/tool.
+   * ANN retrieval remains a separate acceleration-only service method below.
+   */
+  public async internalAnalyzeSemanticGraphForDiagnostics(userId: number) {
+    const packet = await readConfirmedNpcSemanticGraphPacket(userId);
+    return Object.freeze(
+      packet.graphs.map((graph) => {
+        const analysis = analyzeInternalSemanticGraph(graph);
+        return Object.freeze({
+          npcId: graph.npcId,
+          generation: graph.generation,
+          graphHash: graph.graphHash,
+          provenanceStatus: graph.provenanceStatus,
+          analysis,
+          structuralHealth: buildInternalGraphStructuralSnapshot(graph),
+          wolframLanguageGraph: toWolframLanguageGraph(analysis, graph),
+        });
+      }),
+    );
+  }
+
+  public async internalSemanticSearch(input: {
+    worldId: string;
+    worldRevision: string;
+    logicalTick: number;
+    actorId: string;
+    purpose: WorldContextPurpose;
+    subjectIds?: readonly string[];
+    queryText: string;
+    limit?: number;
+  }): Promise<{
+    receipt: AnnRetrievalReceipt;
+    sources: readonly CanonicalContextSource[];
+  }> {
+    const budget: WorldContextBudget = {
+      maxEstimatedTokens: 32_000,
+      maxUtf8Bytes: 256_000,
+      tokenizerId: "aurion-default-v1",
+    };
+    const queryDraft = {
+      schemaVersion: "aurion.world-context-query.v1" as const,
+      worldId: input.worldId,
+      worldRevision: input.worldRevision,
+      logicalTick: input.logicalTick,
+      actorId: input.actorId,
+      purpose: input.purpose,
+      subjectIds: input.subjectIds ? [...input.subjectIds] : [],
+      policyVersion: IMPORTANCE_POLICY_VERSION,
+      budget,
+    };
+    const query: WorldContextQuery = {
+      ...queryDraft,
+      queryHash: hashWorldContextQuery(queryDraft),
+    };
+    const sources = await collectCanonicalSources({
+      tx: null,
+      query,
+    });
+    return searchCanonicalContextSources(sources, input.queryText, input.limit ?? 8);
   }
 
   /**
