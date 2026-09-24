@@ -82,10 +82,11 @@ export type StructureObservationPresentationDescriptor = Readonly<{
 export type StructureObservationFootprint = Readonly<{
   protocol: "aurion.structure-footprint.v1";
   semantics: "projection-only";
-  primitiveBounds: readonly Readonly<{
+  primitives: readonly Readonly<{
     id: string;
-    minMm: Readonly<{ x: number; z: number }>;
-    maxMm: Readonly<{ x: number; z: number }>;
+    positionMm: Readonly<{ x: number; z: number }>;
+    sizeMm: Readonly<{ x: number; z: number }>;
+    rotationDiscrete: Readonly<{ x: number; y: number; z: number }>;
   }>[];
   deltaOverridePositionMm: Readonly<{ x: number; z: number }> | null;
 }>;
