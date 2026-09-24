@@ -176,7 +176,7 @@ jobs:
             node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
             ./node_modules/.bin/vitest run server/causality/worldGenerationParityMariaDb.test.ts --reporter=verbose
           test -s aurion-world-generation-parity-510.json
-          node scripts/verify-aurion-world-generation-parity.ts aurion-world-generation-parity-510.json --require-match > aurion-world-generation-parity-510.csv
+          pnpm exec tsx scripts/verify-aurion-world-generation-parity.ts aurion-world-generation-parity-510.json --require-match > aurion-world-generation-parity-510.csv
           EXPECTED_IMAGE_ID="${image_id}" node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const evidence = JSON.parse(fs.readFileSync('aurion-world-generation-parity-510.json', 'utf8'));
