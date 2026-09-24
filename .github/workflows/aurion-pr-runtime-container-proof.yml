@@ -51,7 +51,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
           pnpm install --frozen-lockfile
           pnpm check
-          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts server/npcSimulationScheduler.test.ts server/structureProjectionProtocol.test.ts server/interestManagementPlanner.test.ts server/causality/worldGenerationEvidence.test.ts server/causality/worldGenerationParityHarness.test.ts server/causality/evidenceGateEngine.test.ts server/causality/worldGenerationEvidenceGate.test.ts scripts/atlas/worldGenerationAtlasAdmission.test.ts --reporter=verbose
+          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts server/npcSimulationScheduler.test.ts server/structureProjectionProtocol.test.ts server/interestManagementPlanner.test.ts server/causality/worldGenerationEvidence.test.ts server/causality/worldGenerationParityHarness.test.ts server/causality/evidenceGateEngine.test.ts server/causality/worldGenerationEvidenceGate.test.ts scripts/atlas/worldGenerationAtlasAdmission.test.ts scripts/atlas/generatedWorldAtlasPlan.test.ts --reporter=verbose
+          node --test scripts/atlas/deterministicAtlasPack.test.mjs
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
           node --test scripts/aurion-build-input-manifest.test.mjs
@@ -193,6 +194,50 @@ jobs:
           AURION_EXPECTED_RULESET_VERSION=aurion.zone.rules.v2 \
           pnpm exec tsx scripts/atlas/verifyWorldGenerationAtlasAdmission.ts aurion-world-generation-parity-510.json > aurion-world-generation-atlas-admission-563.json
           test -s aurion-world-generation-atlas-admission-563.json
+
+          source_sha256="$(sha256sum client/src/xaurion/world/assets/aurion-surface-atlas.webp | awk '{print $1}')"
+          manifest_sha256="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("client/src/xaurion/world/assets/aurion-surface-atlas.json","utf8")); process.stdout.write(String(m.sha256))')"
+          test "${source_sha256}" = "${manifest_sha256}"
+          source_bytes="$(wc -c < client/src/xaurion/world/assets/aurion-surface-atlas.webp | tr -d " ")"
+          SOURCE_SHA256="${source_sha256}" SOURCE_BYTES="${source_bytes}" node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const hash = process.env.SOURCE_SHA256;
+          const bytes = Number(process.env.SOURCE_BYTES);
+          if (!/^[a-f0-9]{64}$/.test(hash ?? "")) throw new Error("REAL_ATLAS_SOURCE_SHA_INVALID");
+          if (!Number.isSafeInteger(bytes) || bytes < 1) throw new Error("REAL_ATLAS_SOURCE_BYTES_INVALID");
+          const input = {
+            schemaVersion: "aurion.deterministic-atlas-plan.v1",
+            atlasId: "generated-world-real-surface-seed",
+            family: "generated-world-surface",
+            pageWidth: 2048,
+            pageHeight: 2048,
+            padding: 1,
+            gutter: 1,
+            rotationAllowed: false,
+            sourceManifestHash: "sha256:" + hash,
+            sourceInputs: [{
+              assetId: "aurion-surface-atlas",
+              path: "client/src/xaurion/world/assets/aurion-surface-atlas.webp",
+              contentSha256: hash,
+              width: 1024,
+              height: 1024,
+              compatibilityClass: "basecolor-srgb",
+              localityBucket: "surface-global"
+            }]
+          };
+          fs.writeFileSync("aurion-generated-world-atlas-input.json", JSON.stringify(input, null, 2) + "\n");
+          NODE
+          AURION_EXPECTED_WORLD_ID=echoes-of-aurion-global \
+          AURION_EXPECTED_SOURCE_REVISION="${EXPECTED_HEAD}" \
+          AURION_EXPECTED_RUNTIME_REVISION="${EXPECTED_HEAD}" \
+          AURION_EXPECTED_RUNTIME_IMAGE_DIGEST="${image_id}" \
+          AURION_EXPECTED_CAUSAL_TICK_SCHEMA=aurion.causal.tick.v2 \
+          AURION_EXPECTED_RULESET_VERSION=aurion.zone.rules.v2 \
+          pnpm exec tsx scripts/atlas/buildGeneratedWorldAtlasPlan.ts \
+            aurion-world-generation-parity-510.json \
+            aurion-generated-world-atlas-input.json \
+            aurion-generated-world-atlas-plan-505.json
+          test -s aurion-generated-world-atlas-plan-505.json
 
           docker run --detach --name "${app}" --network "${network}" \
             --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
