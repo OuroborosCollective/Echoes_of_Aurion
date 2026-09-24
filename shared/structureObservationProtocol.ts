@@ -80,6 +80,35 @@ export type StructureObservationPresentationDescriptor = Readonly<{
   primitiveKinds: readonly StructuralPrimitive["primitive"][];
 }>;
 
+const safeInteger = z.number().int().max(Number.MAX_SAFE_INTEGER).min(-Number.MAX_SAFE_INTEGER);
+const primitiveKind = z.enum(["box", "cylinder", "wedge"]);
+
+export const structureObservationFootprintSchema = z.strictObject({
+  protocol: z.literal("aurion.structure-footprint.v1"),
+  semantics: z.literal("projection-only"),
+  primitives: z.array(z.strictObject({
+    id: identifier,
+    positionMm: z.strictObject({ x: safeInteger, z: safeInteger }),
+    sizeMm: z.strictObject({ x: positiveInteger, z: positiveInteger }),
+    rotationDiscrete: z.strictObject({ x: safeInteger, y: safeInteger, z: safeInteger }),
+  })).max(4096),
+  deltaOverridePositionMm: z.strictObject({ x: safeInteger, z: safeInteger }).nullable(),
+});
+
+export const structureObservationCollisionDescriptorSchema = z.strictObject({
+  protocol: z.literal("aurion.structure-collision-descriptor.v1"),
+  semantics: z.literal("projection-only"),
+  primitiveIds: z.array(identifier).max(4096),
+  deltaOverride: z.boolean(),
+});
+
+export const structureObservationPresentationDescriptorSchema = z.strictObject({
+  protocol: z.literal("aurion.structure-presentation-descriptor.v1"),
+  semantics: z.literal("presentation-only"),
+  assetKeys: z.array(identifier).max(4096),
+  primitiveKinds: z.array(primitiveKind).max(16),
+});
+
 export type StructureObservationFootprint = Readonly<{
   protocol: "aurion.structure-footprint.v1";
   semantics: "projection-only";
