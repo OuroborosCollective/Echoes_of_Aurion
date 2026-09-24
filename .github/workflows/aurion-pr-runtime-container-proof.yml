@@ -51,7 +51,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
           pnpm install --frozen-lockfile
           pnpm check
-          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts server/npcSimulationScheduler.test.ts server/structureProjectionProtocol.test.ts server/interestManagementPlanner.test.ts server/causality/worldGenerationEvidence.test.ts server/causality/worldGenerationParityHarness.test.ts --reporter=verbose
+          pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts server/npcSimulationScheduler.test.ts server/structureProjectionProtocol.test.ts server/interestManagementPlanner.test.ts server/causality/worldGenerationEvidence.test.ts server/causality/worldGenerationParityHarness.test.ts server/causality/worldGenerationEvidenceGate.test.ts scripts/atlas/worldGenerationAtlasAdmission.test.ts --reporter=verbose
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
           node --test scripts/aurion-build-input-manifest.test.mjs
@@ -185,6 +185,15 @@ jobs:
           if (evidence.runtimeImageDigest !== process.env.EXPECTED_IMAGE_ID) throw new Error('WORLD_GENERATION_PARITY_IMAGE_MISMATCH');
           NODE
 
+          AURION_EXPECTED_WORLD_ID=echoes-of-aurion-global \
+          AURION_EXPECTED_SOURCE_REVISION="${EXPECTED_HEAD}" \
+          AURION_EXPECTED_RUNTIME_REVISION="${EXPECTED_HEAD}" \
+          AURION_EXPECTED_RUNTIME_IMAGE_DIGEST="${image_id}" \
+          AURION_EXPECTED_CAUSAL_TICK_SCHEMA=aurion.causal.tick.v2 \
+          AURION_EXPECTED_RULESET_VERSION=aurion.zone.rules.v2 \
+          pnpm exec tsx scripts/atlas/verifyWorldGenerationAtlasAdmission.ts aurion-world-generation-parity-510.json > aurion-world-generation-atlas-admission-563.json
+          test -s aurion-world-generation-atlas-admission-563.json
+
           docker run --detach --name "${app}" --network "${network}" \
             --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
             -e AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb \
@@ -286,5 +295,6 @@ jobs:
             dist-traefik-runtime/checksums.sha256
             aurion-world-generation-parity-510.json
             aurion-world-generation-parity-510.csv
+            aurion-world-generation-atlas-admission-563.json
           if-no-files-found: error
           retention-days: 30
