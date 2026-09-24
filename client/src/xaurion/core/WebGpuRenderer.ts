@@ -17,7 +17,7 @@ export async function createWebGpuRenderer(): Promise<RendererHandle> {
   try { await renderer.init(); if (lost) throw new Error("WEBGPU_DEVICE_LOST"); }
   catch (error) { renderer.dispose(); throw error; }
   const gpu = "isWebGPUBackend" in renderer.backend && renderer.backend.isWebGPUBackend === true;
-  // r185 exposes the initialized device at runtime, but @types/three omits it.
+  // r186 exposes the initialized device at runtime, but @types/three omits it.
   const device = (renderer.backend as typeof renderer.backend & {
     device?: { lost: Promise<unknown>; adapterInfo?: { description?: string } };
   }).device;
