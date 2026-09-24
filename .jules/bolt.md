@@ -24,3 +24,6 @@
 ## 2025-02-13 - Optimize pathfinding and threat matrix lookups
 **Learning:** High-frequency game loop code (like A* pathfinding and ThreatMatrix target selection) suffers significantly from calling `Array.from(map.values()).sort(...)` due to continuous O(N) array allocation overhead and O(N log N) sorting costs.
 **Action:** Replace `Array.from().sort()` with linear `for...of` iteration over Map entries or values to find minimum/maximum targets, achieving O(N) time complexity. Pre-cache any string generation (like grid coordinates) inside the Map values to further eliminate string concatenation overhead during the scan.
+## 2026-09-17 - Array Allocation Overhead in O(1) Lookups
+**Learning:** Found a performance bottleneck where a high-frequency function (`nearestAggroTarget` in `server/wasdMobFsmProtocol.ts`) was using `.filter(...).slice().sort(...)[0]` to find the minimum distance target, resulting in continuous O(N) array allocation overhead and O(N log N) sorting costs.
+**Action:** Replaced dynamic `Array.from().sort()`/`.filter().sort()` chains with linear `for...of` iteration over array/map entries to find minimum/maximum targets, achieving O(N) time complexity without garbage collection penalty.
