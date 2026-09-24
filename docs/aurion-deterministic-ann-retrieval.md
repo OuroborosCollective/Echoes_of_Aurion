@@ -1,0 +1,49 @@
+# Aurion Deterministic ANN Retrieval V1
+
+## Purpose
+
+Aurion now has a rebuildable semantic retrieval acceleration layer for canonical World Context sources.
+
+The design intentionally borrows the useful production pattern from HNSW/ScaNN without making the index a source of truth:
+
+`canonical sources -> deterministic feature vector -> Int8 quantized HNSW candidate routing -> exact cosine re-score -> canonical source readback`
+
+## Authority boundary
+
+MariaDB/runtime receipts and the existing canonical World Context source adapters remain authoritative.
+
+The ANN index is:
+- rebuildable;
+- in-memory;
+- derived only from already hash-verified canonical sources;
+- incapable of mutating gameplay, world state, quests, NPC state or persistence;
+- discarded/rebuilt after process restart;
+- identified by source-root and index hashes.
+
+A candidate is never returned from the ANN layer unless its source ID and source hash still match the canonical source set used to build the index.
+
+## Determinism
+
+The vectorizer uses Unicode NFKC normalization, deterministic token/bigram feature hashing and L2 normalization. HNSW levels are derived from SHA-256 of the stable source ID rather than runtime RNG.
+
+Approximate routing uses symmetric Int8 scalar quantization. Final ranking uses exact floating-point cosine similarity over the same deterministic feature vectors.
+
+The receipt exposes:
+- source root hash;
+- index version/hash;
+- query hash;
+- ANN candidate-set hash;
+- exact result hash;
+- exact-rescore flag.
+
+The existing World Context capsule selection path is intentionally unchanged by this first integration. This keeps the new acceleration surface additive until live workload measurements establish acceptable recall/latency.
+
+## Operational limits
+
+This is a first deterministic local ANN layer, not a claim of billion-scale production performance. It does not yet implement trained ScaNN anisotropic codebooks, external vector storage, distributed sharding or persistent index snapshots.
+
+Those capabilities can be added later behind the same truth boundary once actual Aurion workloads justify them.
+
+## Safety and evidence
+
+No runtime state is inferred from the index itself. A source-hash mismatch fails closed. No mock database, external embedding provider or wall-clock randomness is involved in the retrieval path.
