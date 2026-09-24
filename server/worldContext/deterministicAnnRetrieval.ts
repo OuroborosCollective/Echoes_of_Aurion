@@ -49,7 +49,7 @@ export type AnnRetrievalReceipt = Readonly<{
   results: readonly AnnSearchResult[];
 }>;
 
-type FloatVector = readonly number[];
+type FloatVector = ArrayLike<number>;
 
 type Node = {
   id: string;
