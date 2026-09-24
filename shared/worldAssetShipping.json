@@ -526,7 +526,7 @@
   },
   "bundleSha256": "a5ed9f586e70876777e74c193057996d21a9775a77f0355779d9d4e3638c9294",
   "decoder": {
-    "threeVersion": "0.185.1",
+    "threeVersion": "0.186.0",
     "files": [
       {
         "name": "basis_transcoder.js",

@@ -14,7 +14,7 @@ Eine Generation besitzt Renderer, Abbruchsignal, Frame-Loops, GLB-/NPC-Projektio
 
 Context-/Device-Loss beendet die alte Generation einschließlich Inputs, Verbindungen und Projektionen. Recovery liest einen frischen authentifizierten Weltkontext, verwendet WebGL2, erstellt eine neue Engine und baut Asset-/Manifest-Projektionen erneut aus den bestätigten Quellen auf. Alte Tickets, Snapshots und verspätete Initialisierungen dürfen diese Generation nicht ersetzen. Pro Weltbesuch sind höchstens zwei automatische Wiederherstellungen erlaubt; weitere Fehler halten die Welt sichtbar an.
 
-Das tatsächliche `GPUDevice.lost`-Promise wird zusätzlich zum Three.js-Callback beobachtet. Three.js 0.185.1 unterdrückt dort den Grund `destroyed`; für eine noch aktive AX1-Generation ist auch dieser Verlust ein Wiederherstellungsgrund. Reguläres Aufräumen markiert die Generation zuerst als beendet und löst keinen Neustart aus.
+Das tatsächliche `GPUDevice.lost`-Promise wird zusätzlich zum Three.js-Callback beobachtet. Three.js 0.186.0 unterdrückt dort den Grund `destroyed`; für eine noch aktive AX1-Generation ist auch dieser Verlust ein Wiederherstellungsgrund. Reguläres Aufräumen markiert die Generation zuerst als beendet und löst keinen Neustart aus.
 
 Die Material-Emission nutzt denselben externen Präsentationstakt und denselben Puls wie zuvor, über `emissiveIntensity` statt GLSL-`onBeforeCompile`. WebGPU-Partikel verwenden instanzierte TSL-Sprites mit den bestehenden Positions-, Farb-, Größen- und Alpha-Puffern. Die 18 Quellgeneratoren bleiben unverändert. Renderzeit, Materialintensität und Backend bestimmen keinen WASD-Tick und keinen Welt-/NPC-/Gameplayhash.
 
@@ -32,4 +32,11 @@ CI-SwiftShader ist echte Software-Rendering-Evidence; sie beweist keine Hardware
 - [Chromium SwiftShader-Verwendung](https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md)
 - [Chrome WebGPU-Prüfung im Headless-Browser](https://developer.chrome.com/blog/supercharge-web-ai-testing)
 
-Die konkrete Implementierung wurde gegen den gepinnten Three.js-Quellcode `0.185.1` geprüft.
+Die konkrete Implementierung wurde gegen den gepinnten Three.js-Quellcode `0.186.0` geprüft.
+
+
+## r186-Revalidierung
+
+Der Renderer-Pfad wird auf Three.js r186 / `three@0.186.0` und `@types/three@0.186.0` gepinnt. Die 185→186-Migration betrifft im Aurion-Bestand insbesondere die Umbenennungen/Entfernungen rund um `LightProbeGrid`, `PCFSoftShadowMap` für `WebGPURenderer`, `Source`/TextureSource und die geänderte In-Place-Semantik von `BufferGeometryUtils.toTrianglesDrawMode()`. Diese Flächen wurden gegen den aktuellen Repository-Bestand geprüft; der bestehende Rendererpfad verwendet keine der genannten problematischen APIs.
+
+Die r186-Abnahme muss trotzdem erneut über die bestehenden echten AIM-290 Browser-/Runtime-Lanes erfolgen. Insbesondere zählen nur ein tatsächlich initialisiertes WebGPU-Backend, realer `GPUDevice.lost`-/Context-Loss und der anschließende generationsgebundene WebGL2-Rebuild als Runtime-Evidence. Ein erfolgreicher Typecheck oder ein Software-Renderer-Lauf ersetzt diesen Nachweis nicht.
