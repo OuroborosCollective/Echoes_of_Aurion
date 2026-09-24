@@ -53,8 +53,12 @@ describe("Aurion dev control protocol", () => {
     expect(caps.channel).toBe("dev/prealpha");
     expect(caps.tools.map(tool => tool.name)).toEqual([
       "aurion_dev_inspect_environment",
+      "aurion_dev_gds_status",
+      "aurion_dev_gds_inspect_approved_asset",
+      "aurion_dev_gds_validate_approved_asset",
       "aurion_dev_test_zone_reset",
       "aurion_dev_seed_test_encounter",
+      "aurion_dev_get_fixture_readback",
     ]);
     expect(caps.unavailable).toEqual(expect.arrayContaining([
       "raw_sql_execution",

@@ -144,3 +144,20 @@ The fixture runtime uses the same `AuthoritativeMovementZone`, `ZoneMobRuntime` 
 ### Evidence boundary
 
 A successful dev-control response proves only that the isolated development fixture performed the requested bounded operation and that its resulting canonical state can be read back. It does not claim production gameplay success, deployment success, schema success or live-world mutation.
+
+
+### GDS bridge on the local Pre-Alpha channel
+
+Der lokale `dev/prealpha`-Kanal darf die bereits gepinnte Game Development Studio-Lane nur über servereigene, begrenzte Readbacks anbinden:
+
+- `aurion_dev_gds_status` — überprüft den gepinnten GDS Runtime-Status.
+- `aurion_dev_gds_inspect_approved_asset` — inspiziert ausschließlich bereits von Aurion bestätigte GLBs.
+- `aurion_dev_gds_validate_approved_asset` — validiert ausschließlich bereits von Aurion bestätigte GLBs.
+
+Diese drei Werkzeuge verwenden dieselbe serverseitige GDS-Runner-/Allowlist-Grenze wie die bestehende GDS-Production-Lane. Provider-Credentials werden nicht vererbt oder ausgegeben; Provider-Aufrufe bleiben deaktiviert. GDS-Package-Build, Vendor-Admit und Live-Aurion-Ingest bleiben ausschließlich auf der bestehenden OAuth-/Plan→Confirm-Write-Lane.
+
+Der Ablauf für die gemeinsame Entwicklung lautet damit:
+
+`GDS asset/evidence → Aurion approved/live readback → dev/prealpha GDS inspect/validate → isolierte Aurion fixture → canonical state hash/readback`
+
+GDS bleibt für Asset-, Render- und Performance-Evidence zuständig. Aurion bleibt Gameplay-, Simulations-, Persistenz- und Receipt-Authority.
