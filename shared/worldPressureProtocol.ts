@@ -1,16 +1,16 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
 
-type GlobalWorldSectorLikeLike = {
+type GlobalWorldSectorLike = {
   id: string;
   settlement: { population: number; capacity: number };
   resources: { food: number; water: number; ore: number; drought: number; forestHealth: number };
   polity: { conflictPressure: number; stability: number };
 };
 
-type GlobalWorldPlanLikeLike = {
+type GlobalWorldPlanLike = {
   epoch: number;
   deterministicHash: string;
-  sectors: readonly GlobalWorldSectorLikeLike[];
+  sectors: readonly GlobalWorldSectorLike[];
 };
 
 export const WORLD_PRESSURE_SCHEMA = "aurion.world-pressure.v1" as const;
@@ -195,7 +195,7 @@ export function deriveWorldDirectorCandidates(
       candidates.push({
         id: `director:${region.regionId}:supply`,
         kind: "supply_intervention",
-        sourceRegionId: region.id,
+        sourceRegionId: region.regionId,
         targetRegionId: neighbor.id,
         magnitudeBps: region.resourceBps,
         rationaleCode: "RESOURCE_SHORTAGE",
