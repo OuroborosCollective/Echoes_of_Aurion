@@ -25,12 +25,12 @@ export async function resolveAndRecordWorldDirector(input: {
     throw new Error("WORLD_DIRECTOR_SOURCE_ROOT_CONFLICT");
   }
   const field = buildWorldPressureField({
-
     worldPlan: input.worldPlan,
     worldRevision: input.causalReceipt.sourceRevision,
     logicalTick: input.causalReceipt.tick,
     sourceRootHash: canonicalSourceRootHash,
   });
+  const candidates = deriveWorldDirectorCandidates(field, input.worldPlan);
   const existing = await readWorldDirectorReceiptAt(field.worldId, input.zoneId, field.logicalTick);
   const previous = await readLatestWorldDirectorReceipt(field.worldId, input.zoneId, field.logicalTick);
   const previousReceiptHash = previous?.receiptHash ?? null;
