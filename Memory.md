@@ -2,7 +2,7 @@
 
 > Project-local, append-only integration memory for `OuroborosCollective/Echoes_of_Aurion`.
 > Historical bootstrap created 2026-09-09 from retrievable repository/conversation evidence.
-> Keep WASD source authority and Sovereign Studio ATO strictly separate from Aurion host/persistence/presentation truth.
+> Historical bootstrap only: the former split-owner model is superseded by the Aurion Single Authority reset recorded in the latest entry below.
 
 ## Operating contract
 
@@ -10,7 +10,7 @@
 2. After each completed work block append exactly one entry before merge.
 3. Record task, decisions, touched surfaces, tests/evidence, learned result, open points and next safe step.
 4. Append-only; corrections are new entries.
-5. Aurion may host, persist, transport and present confirmed truth, but it must not silently replace WASD gameplay authority.
+5. Aurion is the single owner and truth source for all active gameplay, world, NPC, logic, decisions, databases, persistence, receipts and projections; AX1/WASD are historical provenance only.
 6. Runtime claims require exact revision, immutable build/image identity, schema/readback evidence and PatchMon/container health where applicable.
 7. Browser/software-renderer evidence is not native GPU/device proof unless a native device was actually measured.
 8. No fake snapshots, mock DB state, ad-hoc raw-SQL shortcuts or workflow tricks may stand in for production truth.
@@ -1282,3 +1282,13 @@ Status: VERIFIED implementation; PR #564 requires post-memory exact-head gates b
 Change: Added the reusable read-only #510 parity Evidence Gate, bound #505 Atlas admission to it, and routed World-Generation admission through the shared AIM-175 Evidence Gate Engine aggregation primitive.
 Insight: AIM-175 owns generic deterministic ADMIT/HOLD aggregation and admission receipts; #563 owns only World-Generation policy. No second Evidence Gate engine or World-Truth authority is introduced.
 Evidence: Pre-memory reconciliation head `b28ba87731dabe84a67d0c148739e81484d59385` passed Runtime Container Proof #904, Runtime Candidate #905, Local Test Pack #1439, AIM-292 #1266, Android #1920 and Causal Chaos #299. This Memory edit creates a new head; fresh post-memory exact-head gates and final main readback are required before merge.
+
+### 2026-09-24 — Aurion Single Authority + Living World Player Entry
+Status: VERIFIED repository architecture rewrite; runtime regression pending.
+Task: Remove obsolete shared-owner assumptions and establish Aurion as the sole active truth/logic/data authority while replacing the technical portal homepage with a player-first Living World introduction.
+Decisions: Aurion owns all active world, gameplay, NPC, quest, combat, progression, loot, crafting, economy, memory, information ecology, databases, receipts, account, community and operations logic. AX1/WASD names and source hashes may remain only as migration provenance; they carry no current authority, runtime duty or external dependency. Client and renderer are Aurion projections/input surfaces. The homepage now presents Living World, self-acting NPCs, memory/rumor, deterministic ecosystems, combat and consequence-driven quest flow.
+Touched surfaces: ARCHITECTURE_OWNERSHIP.md, AGENTS.md, CONTRIBUTING.md, README.md, docs/README.md, docs/account-first-entry.md, docs/migrations/README.md, historical migration markers, client homepage/launch bridge language, migrated catalog authority metadata, active AX1 source manifest and Aurion authority MCP documentation.
+Evidence: Exact GitHub commits on branch refactor/aurion-single-authority-living-world-home include the canonical architecture rewrite, player-first README/Home.tsx, removal of the active `ax1-gameplay` authority marker, migrated catalog authority=aurion_receipts, and a dedicated single-authority regression test. No production merge was performed.
+Learned: Historical provenance and current ownership must be separated explicitly; source repository names, file prefixes and hashes do not confer authority once code is migrated into Aurion.
+Open: Run TypeScript/targeted regression and exact-head runtime/readback gates; then independently review the remaining legacy wording found by the new architecture guard before merge.
+Next safe step: Open a Draft PR from the exact branch head and use real CI/runtime evidence to close remaining wording or compatibility regressions.
