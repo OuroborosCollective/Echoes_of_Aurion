@@ -16,6 +16,14 @@ const revision = "a".repeat(40);
 const digest = "sha256:" + "1".repeat(64);
 const hash = (hex: string) => "sha256:" + hex.repeat(64).slice(0, 64);
 
+const runtimeIdentity = {
+  sourceRevision: revision,
+  runtimeRevision: revision,
+  runtimeImageDigest: digest,
+  causalTickSchema: "aurion.causal.tick.v2",
+  rulesetVersion: "aurion.zone.rules.v2",
+} as const;
+
 function unsigned(overrides: Partial<WorldGenerationParityEvidenceInput> = {}): WorldGenerationParityEvidenceInput {
   return {
     schema: "aurion.world-generation.parity.v1",
@@ -55,20 +63,8 @@ function unsigned(overrides: Partial<WorldGenerationParityEvidenceInput> = {}): 
     firstDivergenceTick: null,
     firstDivergenceExpectedHash: null,
     firstDivergenceObservedHash: null,
-    referenceRuntimeIdentity: {
-      sourceRevision: revision,
-      runtimeRevision: revision,
-      runtimeImageDigest: digest,
-      causalTickSchema: "aurion.causal.tick.v2",
-      rulesetVersion: "aurion.zone.rules.v2",
-    },
-    productionRuntimeIdentity: {
-      sourceRevision: revision,
-      runtimeRevision: revision,
-      runtimeImageDigest: digest,
-      causalTickSchema: "aurion.causal.tick.v2",
-      rulesetVersion: "aurion.zone.rules.v2",
-    },
+    referenceRuntimeIdentity: runtimeIdentity,
+    productionRuntimeIdentity: runtimeIdentity,
     sourceIntelligence: {
       status: "NOT_CONFIGURED",
       parserVersion: null,
@@ -183,7 +179,7 @@ describe("AIM-563 World-Generation Evidence Gate", () => {
   it("holds reference or production runtime identity drift even without consumer expectations", () => {
     const reference = evidence({
       referenceRuntimeIdentity: {
-        ...evidence().referenceRuntimeIdentity,
+        ...runtimeIdentity,
         runtimeRevision: "b".repeat(40),
       },
     });
@@ -192,7 +188,7 @@ describe("AIM-563 World-Generation Evidence Gate", () => {
 
     const production = evidence({
       productionRuntimeIdentity: {
-        ...evidence().productionRuntimeIdentity,
+        ...runtimeIdentity,
         runtimeRevision: "b".repeat(40),
       },
     });
