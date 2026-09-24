@@ -84,6 +84,7 @@ type PresencePeer = {
   weaponTrack: WasdZoneCombatProfile["weaponTrack"];
   skillCooldownUntilTick: Map<Ax1BladeSkillId, number>;
   lastCombatSequence: number;
+  presence: ZonePresence;
 };
 
 type AttackResult = "accepted" | "stale" | "missing" | "invalid_target" | "invalid_skill" | "cooldown" | "out_of_range" | "dead";
@@ -115,6 +116,8 @@ export class AuthoritativeMovementZone {
   private movedLastTick = false;
   private sortedPeers: PresencePeer[] = [];
   private sortedPeersByEntityId: PresencePeer[] = [];
+  // ⚡ Bolt: Cache array and objects to avoid GC overhead from allocations per tick
+  private sortedPresences: ZonePresence[] = [];
   private sortedPeersDirty = false;
   private pendingIntents: AurionZoneIntent[] = [];
   private arrivalSequence = 0;
@@ -250,6 +253,7 @@ export class AuthoritativeMovementZone {
         weaponTrack: player.weaponTrack as WasdZoneCombatProfile["weaponTrack"],
         skillCooldownUntilTick: cooldowns,
         lastCombatSequence: player.lastCombatSequence,
+        presence: { entityId: `player:${player.userId}`, userId: player.userId, position: { x: player.x, z: player.z }, lastAcceptedClientSeq: player.lastAcceptedClientSeq },
       };
       this.peers.set(connectionId, peer);
       this.peersByEntityId.set(player.entityId, peer);
@@ -291,6 +295,7 @@ export class AuthoritativeMovementZone {
       weaponTrack: profile.weaponTrack,
       skillCooldownUntilTick: new Map<Ax1BladeSkillId, number>(),
       lastCombatSequence: 0,
+      presence: { entityId, userId: values.userId, position: { x: 0, z: 0 }, lastAcceptedClientSeq: 0 },
     };
     this.peers.set(connectionId, peer);
     this.peersByEntityId.set(entityId, peer);
@@ -705,12 +710,19 @@ export class AuthoritativeMovementZone {
     if (!this.sortedPeersDirty) return;
     this.sortedPeers = Array.from(this.peers.values()).sort((a, b) => compareBinary(a.connectionId, b.connectionId));
     this.sortedPeersByEntityId = Array.from(this.peers.values()).sort((a, b) => compareBinary(`player:${a.userId}`, `player:${b.userId}`));
+    this.sortedPresences = this.sortedPeersByEntityId.map(peer => peer.presence);
     this.sortedPeersDirty = false;
   }
 
   private presences(): ZonePresence[] {
     this.refreshPeerOrder();
-    return this.sortedPeersByEntityId.map(peer => ({ entityId: `player:${peer.userId}`, userId: peer.userId, position: peer.position, lastAcceptedClientSeq: peer.lastAcceptedClientSeq }));
+    // ⚡ Bolt: Iterate over cached objects to avoid creating new ZonePresence objects on every tick
+    for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
+      const peer = this.sortedPeersByEntityId[i];
+      peer.presence.position = peer.position;
+      peer.presence.lastAcceptedClientSeq = peer.lastAcceptedClientSeq;
+    }
+    return this.sortedPresences;
   }
 
   private combatants(): readonly ConfirmedZoneCombatant[] {
