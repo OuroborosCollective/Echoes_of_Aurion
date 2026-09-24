@@ -81,7 +81,6 @@ export type StructureObservationPresentationDescriptor = Readonly<{
 }>;
 
 const safeInteger = z.number().int().max(Number.MAX_SAFE_INTEGER).min(-Number.MAX_SAFE_INTEGER);
-const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const primitiveKind = z.enum(["box", "cylinder", "wedge"]);
 
 export const structureObservationFootprintSchema = z.strictObject({
