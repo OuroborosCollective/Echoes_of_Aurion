@@ -1,136 +1,89 @@
 ---
-description: Produktzentrale, Architektur und Betrieb für Echoes of Aurion.
+description: Echoes of Aurion — persistentes 3D-MMORPG mit lebendiger, deterministischer Welt.
 ---
 
-# Aarelogic · Echoes of Aurion
+# Echoes of Aurion
 
-## Echoes of Aurion
+**Ein persistentes 3D-MMORPG, in dem die Welt nicht auf dich wartet.**
 
-**Die Aarelogic-Plattform für ein persistentes 3D-MMORPG.**
+Aurion ist die gemeinsame Welt, das Regelwerk, der Simulator und die Erinnerung des Spiels. Alles, was im Spiel wirklich passiert — Weltzustand, NPC-Entscheidungen, Kämpfe, Quests, Loot, Fortschritt, Wirtschaft, Beziehungen und dauerhafte Konsequenzen — entsteht in der kanonischen Aurion-Runtime und wird als bestätigte, nachvollziehbare Spielgeschichte gespeichert.
 
-Website, Spielruntime und Gameplay folgen klaren Verantwortungsgrenzen. So bleiben Produkt, Betrieb und Spielregeln nachvollziehbar.
+Die besondere Idee ist eine **Living World**: NPCs sollen nicht bloß auf Skriptpunkte reagieren. Sie beobachten bestätigte Ereignisse, entwickeln Bedürfnisse und Erfahrungen, erinnern sich, kommunizieren Informationen, verändern ihre Pläne und reagieren auf eine Welt, die sich gleichzeitig weiterentwickelt. Dadurch entsteht Spielfluss aus Ursachen und Konsequenzen statt aus einer festen Abfolge von Questmarkern.
 
-<table data-view="cards"><thead><tr><th>Bereich</th><th data-card-target data-type="content-ref">Ziel</th></tr></thead><tbody><tr><td><strong>Technische Dokumentation</strong><br>Architektur, Verträge und aktuelle Integrationsarbeit.</td><td><a href="docs/">docs</a></td></tr><tr><td><strong>Betrieb</strong><br>Deployments, Infrastruktur und mobile Builds.</td><td><a href="CONTAINER_RUNTIME_DEPLOYMENT.md">CONTAINER_RUNTIME_DEPLOYMENT.md</a></td></tr><tr><td><strong>Patchnotes</strong><br>Nachvollziehbare Änderungen aus gemergten Pull Requests.</td><td><a href="patchnotes/">patchnotes</a></td></tr><tr><td><strong>Präsentation</strong><br>Audio, Companion Memory und Side-Channels.</td><td><a href="AURION_AUDIO_SYSTEM.md">AURION_AUDIO_SYSTEM.md</a></td></tr></tbody></table>
+## Das Spiel in einem Satz
 
-### Plattform
+**Erkunde eine persistente Welt, kämpfe, sammle, baue, handle und entscheide — während deterministische, selbständig handelnde NPCs und Ökosysteme auf deine Aktionen reagieren und ihre eigenen Geschichten weiterführen.**
 
-{% columns %}
-{% column %}
-#### Aurion
+## Gameplay-Features
 
-Website, Account, Community und bestätigte Persistenz.
-{% endcolumn %}
+| Feature | Was du erlebst |
+| --- | --- |
+| **Living World** | Die Welt läuft weiter: Ressourcen, Konflikte, Populationen, Märkte, Fraktionen und lokale Ereignisse beeinflussen sich gegenseitig. |
+| **Self-Acting NPCs** | NPCs verfolgen Bedürfnisse und Ziele, treffen nachvollziehbare Entscheidungen und reagieren auf bestätigte Ereignisse statt nur auf vorgefertigte Dialogschalter. |
+| **Erinnerung & Gerüchte** | Erfahrungen werden zu Erinnerungen, Informationen werden zwischen NPCs weitergegeben und widersprüchliche Berichte bleiben nachvollziehbar, statt magisch zu einer einzigen Wahrheit verschmolzen zu werden. |
+| **Deterministischer Spielfluss** | Gleiche Weltursachen und gleiche Eingaben führen reproduzierbar zur gleichen Zustandsentwicklung. Zufall ist nur dort erlaubt, wo er explizit Teil eines kontrollierten Aurion-Vertrags ist. |
+| **Combat & Progression** | Kämpfe, Skills, Meisterschaften, Loot und Fortschritt greifen in dieselbe persistente Welt ein und erzeugen bestätigte Folgen. |
+| **Crafting & Economy** | Sammeln, Verarbeiten, Handwerk, Handel und lokale Ressourcen bilden einen spielbaren Kreislauf, der sich mit der Welt entwickelt. |
+| **Quests & Konsequenzen** | Aufgaben sind Teil der Weltgeschichte. Entscheidungen und Ergebnisse werden zu realen, persistenten Ereignissen. |
+| **Persistente Abenteuer** | Welt-, Charakter- und Progressionszustände werden über die Aurion-Datenhaltung rekonstruierbar erhalten. |
 
-{% column %}
-#### AX1
+## Der Living-World-Kreislauf
 
-`/play`, Renderer, Eingaben und visuelle Spieloberfläche.
-{% endcolumn %}
-{% endcolumns %}
-
-#### WASD
-
-Deterministische Berechnungs- und Algorithmenreferenz unter Aurion-Verträgen.
-
-<a href="ARCHITECTURE_OWNERSHIP.md" class="button primary" data-icon="arrow-right">Architektur ansehen</a>
-
-***
-
-### Technische Referenz
-
-Seit dem Architektur-Reset (AIM-298) sind Website, Spielruntime und Gameplayregeln strikt und widerspruchsfrei zugeordnet.
-
-{% hint style="info" %}
-Die verbindliche Zuständigkeitsmatrix steht in [Architektur-Ownership: Aurion · AX1 · WASD](ARCHITECTURE_OWNERSHIP.md). Bei Widerspruch mit älteren Dokumenten gilt diese Matrix.
-{% endhint %}
-
-#### Architektur in einem Satz
-
-**Aurion ist die einzige kanonische Gameplay-, Quest-, NPC-, Welt- und Persistenz-Authority; AX1 betreibt `/play`, Renderer, HUD und Spieloberfläche; WASD dient als integrierte deterministische Berechnungs- und Regelreferenz.**
-
-| System     | Verantwortung                                                                                                                                       |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Aurion** | Einzige kanonische Wahrheit: Gameplay, Quests, NPCs, Welt/Chunks, Progression, Loot, Crafting, Landing Page, Account/Auth, Community, MariaDB, Receipts, Readmodels |
-| **AX1**    | `/play`, 3D-Runtime, Kamera, HUD, Eingaben, Animationen, visuelle/contentbezogene Projektion                                                        |
-| **WASD**   | Deterministische Algorithmen-, Berechnungs- und Regelreferenz (nativ in Aurion integriert)                                                          |
-
-Aurion führt Gameplay und Quests autoritativ über typisierte Kommandos und deterministische Receipts aus; AX1 rendert und projiziert bestätigten State; WASD stellt die mathematischen und regeltechnischen Algorithmen bereit.
-
-#### Website
-
-Die Aurion-Website trägt:
-
-* Registrierung, Login, Session und Accountverwaltung;
-* Community und Forum;
-* Community-Events;
-* Asset-/GLB-Governance und Operations;
-* read-only Charakterdaten wie Level, Skill-/Masterystände, Gildenzugehörigkeit, Inventar, Ausrüstung, Achievements bei vorhandener bestätigter Projektion und Companion-Trainingsmetadaten.
-
-Die Website darf diese Gameplaydaten **nicht verändern**. Es gibt dort keine Quest-, Combat-, Loot-, Crafting-, Progressions-, Equipment-, Economy-, Dungeon-, Housing- oder Guild-/Kingdom-Gameplay-Authority.
-
-#### Spiel
-
-`/play` gehört AX1. AX1 nimmt Eingaben an und rendert bestätigte Zustände. Lokale Animation, Prediction oder UI-Zustand ist niemals alleinige Gameplay-Evidence.
-
-Gameplayänderungen folgen der Kette:
-
-```
-AX1 intent
-→ WASD deterministic rule / logical tick
-→ confirmed result + receipt
-→ Aurion persistence/transport
-→ AX1 read-only projection
+```text
+BEOBACHTEN
+    ↓
+BEDÜRFNIS / ERFAHRUNG
+    ↓
+ENTSCHEIDUNG
+    ↓
+AKTION
+    ↓
+WELTKONSEQUENZ
+    ↓
+ERINNERUNG / INFORMATION
+    ↓
+NEUE BEOBACHTUNG
+    ↺
 ```
 
-Wo ein WASD-Vertrag noch nicht vollständig migriert ist, gilt fail-closed: keine Aurion-Ersatzregel.
+Das ist der Kern des Spielflusses: Ein Ereignis endet nicht zwingend dort, wo der Spieler die Animation gesehen hat. Seine Wirkung kann später an anderer Stelle wieder auftauchen — bei einem anderen NPC, in einer Quest, im Handel, in einer Fraktion oder in der nächsten Generation von Entscheidungen.
 
-#### Persistenz
+## Was macht die Welt glaubwürdig?
 
-MariaDB hält Account-/Communitydaten sowie bestätigte Gameplay-Evidence und Readmodels. Kritische Gameplay-Outcomes müssen ihre Herkunft über WASD-Receipt, Source-/Ruleset-Version oder eine gleichwertige revisionsgebundene Provenienz belegen.
+Aurion behandelt die Welt nicht als dekorative Bühne. **Bestätigte Zustände sind Ursache, nicht nur Darstellung.** Deshalb werden Logik, Entscheidungen, Datenbankzustand und Receipts gemeinsam geführt.
 
-Persistenz ist nicht Gameplay-Ownership.
+Client und Renderer dürfen die Welt zeigen, Eingaben erfassen und Präsentation betreiben. Sie erzeugen keine alternative Spielwahrheit.
 
-#### Assets
+Historische AX1- und WASD-Bausteine sind weitgehend in Aurion übernommen. Ihre alten Projektgrenzen, Source-Pins und Dateinamen können als Provenienz erhalten bleiben; sie sind jedoch keine aktuellen Owner und keine separaten Runtime-Systeme.
 
-Aurion verwaltet Upload, Quarantäne, Review, SHA-256/Bytes, Sichtbarkeit und visuelle Asset-Zuweisungen. AX1 rendert freigegebene Assets. WASD bestimmt Stats, Collision-, Spawn-, Item-, Mob- und sonstige Gameplaysemantik.
+## Einstieg
 
-Ein GLB kann deshalb niemals durch seine Metadaten Schaden, HP, Drops oder Regeln festlegen.
+**Noch nicht angemeldet?** Erstelle deinen Zugang und erkunde die Spielsysteme.
 
-#### Companion Learning
+**Bereits registriert?** Betritt direkt die bestätigte Open-World-Session.
 
-Companion-Lernvorgänge dürfen im Spiel über AX1 aufgezeichnet und als Evidence gespeichert werden. Die Aurion-Accountseite darf Trainings-/Sample-/Receipt-Metadaten anzeigen, aber keinen Companion steuern und kein Gameplay aus Trainingsdaten erzeugen.
+Die Startseite im Client ist deshalb keine technische Portalübersicht mehr, sondern die **Spieler-Einstiegsseite**: Atmosphäre, Gameplay, Living World und der Weg ins Spiel stehen im Mittelpunkt.
 
-#### Determinismus und Balancing
+## Architektur
 
-WASD ist die normative Regelquelle. Reproduzierbare Simulation, Tick-/Sequence-Semantik, RNG, Progressionskurven und Gameplay-Balancing werden dort versioniert.
+Aurion ist der **einzige Owner und Wahrheitsträger**:
 
-Wolfram/CAG kann Formeln analysieren und falsifizieren. Es ist ein Analysewerkzeug, keine Runtime-Authority.
+- World, Simulation, Tick/Epoch, NPCs und Gameplay
+- Quests, Combat, Loot, Progression, Crafting und Economy
+- Memory, Information Ecology und Semantic Memory
+- MariaDB, Receipts, Readmodels und Runtime-State
+- Account, Community, Assets und Operations
 
-#### Evidence
+AX1 und WASD sind historische Provenienzquellen beziehungsweise bereits migrierte Implementierungsbausteine. GDS, CAG, Wolfram und LLMs sind Werkzeuge für Analyse, Authoring, Prüfung oder Präsentation und niemals eine zusätzliche Spielwahrheit.
 
-Eine grüne Ebene beweist nur sich selbst:
+Die verbindliche technische Definition steht in [ARCHITECTURE_OWNERSHIP.md](ARCHITECTURE_OWNERSHIP.md).
 
-* Website-Health beweist den Aurion-Host;
-* DB-Readback beweist Persistenz;
-* AX1-Animation beweist Präsentation;
-* WASD-Receipt/Reducer beweist Gameplayregel/-zustand;
-* Browser-E2E beweist die sichtbare Zusammenschaltung, wenn alle Quellen revisionsgleich gebunden sind.
+## Technische Dokumentation
 
-Dateiexistenz, PR-Status, Linear-Status oder ein gesunder Container allein sind kein vollständiger Produktionsnachweis.
+- [Architektur — Aurion Single Authority](ARCHITECTURE_OWNERSHIP.md)
+- [Dokumentationsindex](docs/)
+- [Deployment & Runtime](CONTAINER_RUNTIME_DEPLOYMENT.md)
+- [Audio-System](AURION_AUDIO_SYSTEM.md)
+- [Historische Migrationsprovenienz](docs/migrations/README.md)
 
-#### Aktuelle Arbeitsregeln
-
-* Keine Fake-/Mock-Wahrheit in Production-Pfaden.
-* Keine Aurion-Gameplay-Abkürzungen über Website, Admin, MCP oder SQL.
-* Alte Arena-/Encounter-/Aurion-Quest-/Aurion-Progressionspfade gelten als Legacy-Migrationsschuld.
-* Nach jeder Integration: relevante Regressionen + Runtime-/DB-/Browser-Readback.
-* Jede Migrationslane endet mit Merge, `main`-Readback und **0 offenen PRs**, bevor die nächste beginnt.
-
-#### Dokumentation
-
-* [Architektur-Ownership](ARCHITECTURE_OWNERSHIP.md) — normative Grenze.
-* [Dokumentationsindex](docs/) — aktuelle technische Dokumente.
-* [WASD Normative Ruleset](docs/migrations/AIM252_WASD_NORMATIVE_RULESET.md) — Gameplay-Quellenbindung.
-* [AX1 Source Reconciliation](docs/migrations/AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md) — revisionsgebundene Engine-/Content-Provenienz.
-
-Datiertes `guardian/`- und `qa/`-Material ist historische Evidence. Es beschreibt den Stand seiner jeweiligen Revision und ist keine aktuelle Architekturdefinition.
+Datiertes Guardian-/QA-Material beschreibt den Stand seiner jeweiligen Revision und ist keine aktuelle Architekturdefinition.
