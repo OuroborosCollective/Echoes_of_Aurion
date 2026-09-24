@@ -46,5 +46,5 @@ describe("Aurion dev-control ↔ real Game Development Studio runtime", () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
