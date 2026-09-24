@@ -9,10 +9,8 @@ import {
   type StructureObservationRequest,
   type StructureObservationResult,
 } from "../shared/structureObservationProtocol";
-import {
-  compileDeterministicStructureGrammar,
-  type StructureGrammarCompilation,
-} from "./deterministicStructureGrammarCompiler";
+import { compileDeterministicStructureGrammar } from "./deterministicStructureGrammarCompiler";
+import type { StructureGrammarCompilation } from "../shared/deterministicStructureGrammarProtocol";
 import {
   chunkCoordinateSchema,
   type CanonicalChunkReceipt,
