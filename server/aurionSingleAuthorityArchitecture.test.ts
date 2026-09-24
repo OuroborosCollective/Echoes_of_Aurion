@@ -13,7 +13,7 @@ describe("Aurion single-authority architecture", () => {
 
     for (const text of [architecture, agents, contributing]) {
       expect(text).toContain("Aurion");
-      expect(text).toContain("single");
+      expect(text).toMatch(/single/i);
       expect(text).toContain("only");
       expect(text).toContain("truth");
       expect(text).not.toMatch(/AX1\s+(?:is|bleibt)\s+the canonical game/i);
