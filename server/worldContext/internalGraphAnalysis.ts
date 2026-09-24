@@ -161,8 +161,14 @@ export function analyzeInternalSemanticGraph(graph: PublicNpcSemanticGraph): Int
   const graphHash = sha256(canonical({
     graphHash: graph.graphHash,
     resultHash: graph.resultHash,
-    nodes: graph.nodes.map((node) => [node.nodeId, node.kind, node.payloadHash]),
-    relations: graph.relations.map((edge) => [edge.kind, edge.fromNodeId, edge.toNodeId]),
+    nodes: [...graph.nodes]
+      .map((node) => [node.nodeId, node.kind, node.payloadHash] as const)
+      .sort(([a], [b]) => compare(a, b)),
+    relations: [...graph.relations]
+      .map((edge) => [edge.kind, edge.fromNodeId, edge.toNodeId] as const)
+      .sort(([ak, af, at], [bk, bf, bt]) =>
+        compare(ak, bk) || compare(af, bf) || compare(at, bt),
+      ),
   }));
   const draft = {
     schemaVersion: AURION_INTERNAL_GRAPH_ANALYSIS_VERSION,
