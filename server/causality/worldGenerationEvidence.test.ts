@@ -88,6 +88,10 @@ describe("AIM-510 world generation evidence contract", () => {
     const broken = { ...second, previousReceiptHash: digest("f") };
     expect(() => createGameplayEvidence([first, broken], 1, 2))
       .toThrow("WORLD_GENERATION_GAMEPLAY_RECEIPT_CHAIN_INVALID");
+
+    const forged = { ...second, postStateHash: digest("e") };
+    expect(() => createGameplayEvidence([first, forged], 1, 2))
+      .toThrow("WORLD_GENERATION_GAMEPLAY_RECEIPT_HASH_INVALID");
     expect(() => createGameplayEvidence([first], 1, 2))
       .toThrow("WORLD_GENERATION_GAMEPLAY_RECEIPT_GAP");
   });
