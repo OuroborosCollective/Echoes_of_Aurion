@@ -163,6 +163,7 @@ jobs:
             "0060_aurion_npc_policy_evolution",
             "0061_aurion_exploration_memory",
             "0062_aurion_world_director",
+            "0063_aurion_npc_information_ecology",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
