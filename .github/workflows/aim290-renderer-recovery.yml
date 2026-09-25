@@ -105,7 +105,7 @@ jobs:
       - name: Prove backend parity and actual context and device loss
         env:
           AIM290_VIEWPORT: ${{ matrix.viewport }}
-        run: pnpm exec playwright test --config=playwright.aim290.config.ts --grep "on $AIM290_VIEWPORT$"
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" pnpm exec playwright test --config=playwright.aim290.config.ts --grep "on $AIM290_VIEWPORT$"
 
       - uses: actions/upload-artifact@v4
         if: always()
