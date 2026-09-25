@@ -201,7 +201,7 @@ export function GameHUD(props: GameHUDProps) {
     <div
       id="game-hud-root"
       data-testid="ax1-game-hud"
-      data-source="ax1-f26-visible-shell"
+      data-source="ax1-f24-visible-shell"
       className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
     >
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
@@ -294,12 +294,12 @@ export function GameHUD(props: GameHUDProps) {
 
         <div className="pointer-events-auto flex max-w-[94vw] flex-col items-end gap-1.5">
           <nav aria-label="Schnellnavigation" className="flex max-w-[94vw] flex-wrap justify-end gap-1.5 rounded-[6px] border border-slate-700/80 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
-            <HudNavButton label="Char" shortcut="C" title="Charakter [C]" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
-            <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
-            <HudNavButton label="Craft" title="Handwerk" onClick={() => closeMenu(props.onOpenCrafting)}><Hammer /></HudNavButton>
-            <HudNavButton label="Quests" shortcut="J" title="Aufträge [J]" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></HudNavButton>
-            <HudNavButton label="Party" title="Gruppe" badge={props.party?.length} onClick={() => closeMenu(props.onOpenParty)}><Users /></HudNavButton>
-            <HudNavButton label="Map" shortcut="M" title="Weltatlas [M]" onClick={() => closeMenu(props.onOpenMap)}><MapIcon /></HudNavButton>
+            <HudNavButton label="Char" shortcut="C" title="Charakter [C]" ariaLabel="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
+            <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" ariaLabel="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
+            <HudNavButton label="Craft" title="Handwerk" ariaLabel="Handwerk" onClick={() => closeMenu(props.onOpenCrafting)}><Hammer /></HudNavButton>
+            <HudNavButton label="Quests" shortcut="J" title="Aufträge [J]" ariaLabel="Aufträge" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></HudNavButton>
+            <HudNavButton label="Party" title="Gruppe" ariaLabel="Gruppe" badge={props.party?.length} onClick={() => closeMenu(props.onOpenParty)}><Users /></HudNavButton>
+            <HudNavButton label="Map" shortcut="M" title="Weltatlas [M]" ariaLabel="Weltatlas" onClick={() => closeMenu(props.onOpenMap)}><MapIcon /></HudNavButton>
             <HudNavButton label={menuExpanded ? "Schließen" : "Mehr"} shortcut="/" title="Weitere Menüs" active={menuExpanded} ariaLabel="Weitere Menüs" onClick={() => setMenuExpanded(value => !value)}><Menu /></HudNavButton>
           </nav>
 
