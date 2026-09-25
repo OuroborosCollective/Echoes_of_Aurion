@@ -45,6 +45,9 @@ import { clientVerificationRegistry } from "./causality/clientVerificationRegist
 import { globalAssuranceService } from "./causality/assuranceService";
 import { clientObservationIdentifier } from "../shared/aurionClientVerificationContract";
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
+import { resolveNpcUtilityScores, type NpcUtilityScoredCandidate } from "./npcUtilityPlanner";
+import { buildPlannerContext, type NpcSnapshotInput } from "../shared/npcUtilityPlannerDebug";
+import { decodeOwnedNpcPacket } from "../shared/npcSnapshotProtocol";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
 import { globalCausalArchivingService } from "./causality/archivingService";
@@ -212,6 +215,28 @@ export const appRouter = router({
     npcMultiMemory: protectedProcedure.query(({ ctx }) => readConfirmedNpcMultiMemoryPacket(ctx.user.id)),
     npcActions: protectedProcedure.query(({ ctx }) => readConfirmedNpcActionPacket(ctx.user.id)),
     npcSemanticGraph: protectedProcedure.query(({ ctx }) => readConfirmedNpcSemanticGraphPacket(ctx.user.id)),
+    npcUtilityScores: protectedProcedure.query(async ({ ctx }) => {
+      const packet = readConfirmedNpcPacket(ctx.user.id);
+      if (!packet) return Object.freeze({ npcs: [] as ReadonlyArray<{ npcId: string; resolutionIndex: number; goal: string; scored: readonly NpcUtilityScoredCandidate[] }> });
+      let decoded: ReturnType<typeof decodeOwnedNpcPacket> | null = null;
+      try {
+        decoded = decodeOwnedNpcPacket(packet, ctx.user.id);
+      } catch {
+        decoded = null;
+      }
+      if (!decoded || decoded.npcs.length === 0) return Object.freeze({ npcs: [] as ReadonlyArray<{ npcId: string; resolutionIndex: number; goal: string; scored: readonly NpcUtilityScoredCandidate[] }> });
+      const results = decoded.npcs.map((npc: NpcSnapshotInput) => {
+        const context = buildPlannerContext({
+          npcId: npc.npcId,
+          resolutionIndex: npc.resolutionIndex,
+          goal: npc.goal,
+          needs: npc.needs,
+        });
+        const scored = resolveNpcUtilityScores(context);
+        return Object.freeze({ npcId: npc.npcId, resolutionIndex: npc.resolutionIndex, goal: npc.goal, scored });
+      });
+      return Object.freeze({ npcs: results });
+    }),
     npcProjectionProvenance: protectedProcedure.query(({ ctx }) => readConfirmedNpcProjectionProvenancePacket(ctx.user.id)),
     explorationMemory: protectedProcedure.input(z.strictObject({ worldEpoch: z.number().int().min(1) })).query(({ ctx, input }) => readExplorationMemory(ctx.user.id, db.GLOBAL_WORLD_ID, input.worldEpoch)),
     recordExplorationDiscovery: protectedProcedure.input(z.strictObject({ epoch: z.number().int().min(1), chunkX: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), chunkZ: z.number().int().min(-WORLD_CHUNK_COORDINATE_LIMIT).max(WORLD_CHUNK_COORDINATE_LIMIT), observedAtLogicalFrame: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) })).mutation(({ ctx, input }) => recordExplorationDiscovery(ctx.user.id, input)),

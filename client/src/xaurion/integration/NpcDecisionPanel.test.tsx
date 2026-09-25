@@ -7,9 +7,10 @@ const fixture=vi.hoisted(()=>({
  memory:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
  actions:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
  graph:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
+ utility:{data:undefined as unknown,isError:false,isStale:false,refetch:vi.fn()},
 }));
-vi.mock("@/lib/trpc",()=>({trpc:{gameplay:{npcActions:{useQuery:()=>fixture.actions},npcMultiMemory:{useQuery:()=>fixture.memory},npcSemanticGraph:{useQuery:()=>fixture.graph},npcSnapshots:{useQuery:()=>fixture.query}}}}));
-beforeEach(()=>{fixture.query.data=undefined;fixture.query.isError=false;fixture.memory.data=undefined;fixture.memory.isError=false;fixture.actions.data=undefined;fixture.actions.isError=false;fixture.graph.data=undefined;fixture.graph.isError=false;});
+vi.mock("@/lib/trpc",()=>({trpc:{gameplay:{npcActions:{useQuery:()=>fixture.actions},npcMultiMemory:{useQuery:()=>fixture.memory},npcSemanticGraph:{useQuery:()=>fixture.graph},npcSnapshots:{useQuery:()=>fixture.query},npcUtilityScores:{useQuery:()=>fixture.utility}}}}));
+beforeEach(()=>{fixture.query.data=undefined;fixture.query.isError=false;fixture.memory.data=undefined;fixture.memory.isError=false;fixture.actions.data=undefined;fixture.actions.isError=false;fixture.graph.data=undefined;fixture.graph.isError=false;fixture.utility.data=undefined;fixture.utility.isError=false;});
 describe("confirmed NPC decision panel",()=>{
  it("shows confirmed decisions and rejects a corrupt or foreign packet without partial display",()=>{
   const data=btoa(String.fromCharCode(...encodeNpcSnapshot([{npcId:"lyra",regionId:"observatory_threshold",resolutionIndex:2,goal:"trade",needs:{safety:0,resources:0,belonging:0,status:0,wealth:1,power:0},memoryCount:1,decisionHash:"12".repeat(32)}])));

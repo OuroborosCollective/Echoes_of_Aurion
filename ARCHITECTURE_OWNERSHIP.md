@@ -19,8 +19,8 @@ description: Kanonische Truth-Boundary und Single-Owner-Architektur für Echoes 
 | MariaDB, Receipts, Readmodels | **Aurion** | kanonische Datenhaltung und Rekonstruktion |
 | Account, Auth, Community, Ops, Asset-Governance | **Aurion** | Produkt- und Betriebsautorität |
 | Client, Renderer, HUD, Animation, VFX | **Aurion-Runtime** | Darstellung eines bestätigten Aurion-Zustands; keine zweite Wahrheit |
-| AX1 | **historische Provenienz** | kein Owner, kein Live-System, keine Runtime-Pflicht |
-| WASD | **historische Provenienz** | kein Owner, kein Live-System, keine Runtime-Pflicht |
+| **AX1** | **historische Provenienz** | kein Owner, kein Live-System, keine Runtime-Pflicht |
+| **WASD** | **historische Provenienz** | kein Owner, kein Live-System, keine Runtime-Pflicht |
 | GDS, CAG, Wolfram, LLMs, externe Tools | **Aurion unter Analyse-/Authoring-Grenzen** | liefern Vorschläge, Assets oder Analyse, niemals kanonische Spielwahrheit |
 
 ## Kanonische Kausalkette
@@ -121,6 +121,7 @@ Ein grüner Legacy-Check kann daher nie einen kanonischen Aurion-Readback ersetz
 - **Keine Rückdelegation an AX1 oder WASD.**
 - **Keine neue zweite Wahrheitsschicht.**
 - **Keine Fake-/Mock-Evidence als Produktionsnachweis.**
+- **Aurion is the only source of truth.** Aurion Website, Admin UI, Admin MCP, Datenbankhelper, Worker oder Service Cells dürfen nicht als zweite Wahrheitsschicht fungieren.
 
 ## Arbeits- und Merge-Gate
 

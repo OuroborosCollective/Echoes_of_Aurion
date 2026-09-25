@@ -550,7 +550,10 @@
         "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
       },
       "aurionPaths": [
-        "client/src/xaurion/integration/NpcDecisionPanel.tsx"
+        "client/src/xaurion/integration/NpcDecisionPanel.tsx",
+        "client/src/xaurion/integration/NpcUtilityPlannerDebugPanel.tsx",
+        "client/src/xaurion/integration/NpcUtilityChartPanel.tsx",
+        "client/src/xaurion/integration/NpcSpatialHeatmap.tsx"
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
@@ -1048,9 +1051,27 @@
       "role": "CAPABILITY"
     },
     {
+      "path": "client/src/xaurion/integration/NpcUtilityPlannerDebugPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "npc.decision-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcUtilityChartPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "npc.decision-projection",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/NpcFallbackProjection.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcSpatialHeatmap.tsx",
+      "donor": "AX1",
+      "capabilityId": "npc.decision-projection",
       "role": "SUPPORT"
     },
     {

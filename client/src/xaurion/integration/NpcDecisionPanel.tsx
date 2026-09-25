@@ -4,6 +4,7 @@ import { decodeOwnedNpcMultiMemory, type PublicNpcMultiMemory } from "@shared/np
 import { decodeOwnedNpcActions, type PublicNpcAction } from "@shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs, type PublicNpcSemanticGraph } from "@shared/npcSemanticGraphReadmodel";
 import { projectOwnedNpcProjectionProvenance, type PublicNpcProjectionProvenance } from "@shared/npcSemanticGraphProvenanceReadmodel";
+import { NpcUtilityPlannerDebugPanel } from "./NpcUtilityPlannerDebugPanel";
 const goals: Record<PublicNpcSnapshot["goal"],string> = {seek_safety:"Sicherheit suchen",gather_resources:"Ressourcen sammeln",socialize:"Gemeinschaft suchen",gain_reputation:"Ansehen gewinnen",trade:"Handel treiben",expand_influence:"Einfluss ausbauen"};
 const names: Record<string,string> = {lyra:"Lyra",orun:"Orun",ax1_merchant_observatory_threshold:"Valen",ax1_merchant_windhollow:"Elowen",ax1_merchant_emberfall:"Torin",ax1_merchant_cinder_vault:"Kael"};
 function NpcActionPanel({userId}:{userId:number}) {
@@ -86,5 +87,6 @@ export function NpcDecisionPanel({userId}:{userId:number}) {
     <NpcMemoryPanel userId={userId}/>
     <NpcActionPanel userId={userId}/>
     <NpcSemanticGraphPanel userId={userId}/>
+    <NpcUtilityPlannerDebugPanel userId={userId}/>
   </section>;
 }

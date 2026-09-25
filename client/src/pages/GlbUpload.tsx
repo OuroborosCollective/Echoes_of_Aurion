@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, FileBox, Layers3, ShieldAlert, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, FileBox, Layers3, Loader2, ShieldAlert, Upload, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   glbImportReceiptSchema,
@@ -19,6 +19,7 @@ import {
   type GlbRuntimeCatalog,
 } from "@shared/glbImportContract";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 const MAX_GLB_BYTES = 24 * 1024 * 1024;
 const MAX_GLB_BATCH_FILES = 12;
@@ -92,6 +93,96 @@ function validateFile(file: File): string | null {
   if (file.size < 12 || file.size > MAX_GLB_BYTES) return "Die GLB-Datei muss zwischen 12 Byte und 24 MiB groß sein.";
   return null;
 }
+function validateGlbMagicBytes(file: File): Promise<string | null> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("Die GLB-Datei konnte nicht gelesen werden.");
+    reader.onload = () => {
+      const buffer = reader.result;
+      if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 12) { resolve("Die GLB-Datei ist zu klein für einen gültigen Binär-Header."); return; }
+      const view = new DataView(buffer);
+      const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+      if (magic !== "glTF") { resolve("Die Datei besitzt keinen gültigen GLB-Magic-Header (glTF)."); return; }
+      const version = view.getUint32(4, true);
+      if (version !== 2) { resolve(`Nur GLB-Version 2 wird unterstützt (gefunden: ${version}).`); return; }
+      resolve(null);
+    };
+    reader.readAsArrayBuffer(file.slice(0, 12));
+  });
+}
+/**
+ * Validate the GLB binary chunk structure for catalog grouping compatibility.
+ * Reads the full header + first chunk to verify:
+ *  - Total file length matches the header-declared length.
+ *  - At least one JSON chunk exists with chunk type 0x4E4F534A ("JSON").
+ *  - The JSON chunk parses and contains the minimal glTF fields required for
+ *    catalog classification: `asset` and at least one of `scenes`/`nodes`/`meshes`.
+ * Returns a German error message or null if valid.
+ */
+function validateGlbStructure(file: File): Promise<string | null> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("Die GLB-Datei konnte nicht gelesen werden.");
+    reader.onload = () => {
+      const buffer = reader.result;
+      if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 20) {
+        resolve("Die GLB-Datei ist zu klein für eine gültige Chunk-Struktur.");
+        return;
+      }
+      const view = new DataView(buffer);
+      // Header: magic(4) + version(4) + length(4) = 12 bytes
+      const declaredLength = view.getUint32(8, true);
+      if (declaredLength !== file.size) {
+        resolve(`Die deklarierte Dateilänge (${declaredLength} Byte) stimmt nicht mit der tatsächlichen Dateigröße (${file.size} Byte) überein.`);
+        return;
+      }
+      if (file.size < 20) {
+        resolve("Die GLB-Datei enthält keinen gültigen Chunk-Header.");
+        return;
+      }
+      // First chunk: chunkLength(4) + chunkType(4) + chunkData
+      const chunkLength = view.getUint32(12, true);
+      const chunkType = view.getUint32(16, true);
+      // JSON chunk type = 0x4E4F534A ("JSON" in little-endian)
+      if (chunkType !== 0x4e4f534a) {
+        resolve("Die GLB-Datei besitzt keinen gültigen JSON-Chunk als ersten Chunk (erwartet: JSON).");
+        return;
+      }
+      const chunkDataStart = 20;
+      const chunkDataEnd = chunkDataStart + chunkLength;
+      if (chunkDataEnd > file.size) {
+        resolve(`Der JSON-Chunk (${chunkLength} Byte) reicht über das Dateiende hinaus.`);
+        return;
+      }
+      // Read and parse the JSON chunk
+      const jsonBytes = new Uint8Array(buffer, chunkDataStart, chunkLength);
+      let gltfJson: Record<string, unknown>;
+      try {
+        const decoder = new TextDecoder("utf-8");
+        const jsonStr = decoder.decode(jsonBytes).replace(/\0+$/, "");
+        gltfJson = JSON.parse(jsonStr);
+      } catch {
+        resolve("Der JSON-Chunk der GLB-Datei konnte nicht geparsed werden. Die Datei ist möglicherweise beschädigt.");
+        return;
+      }
+      // Validate minimal glTF structure for catalog grouping
+      if (!gltfJson.asset || typeof gltfJson.asset !== "object") {
+        resolve("Die GLB-Datei besitzt kein gültiges glTF-Asset-Feld. Dieses ist für die Katalog-Gruppierung erforderlich.");
+        return;
+      }
+      const hasSceneStructure =
+        (Array.isArray(gltfJson.scenes) && gltfJson.scenes.length > 0) ||
+        (Array.isArray(gltfJson.nodes) && gltfJson.nodes.length > 0) ||
+        (Array.isArray(gltfJson.meshes) && gltfJson.meshes.length > 0);
+      if (!hasSceneStructure) {
+        resolve("Die GLB-Datei enthält keine Szenen, Knoten oder Meshes. Ein Modell ohne Geometrie kann nicht katalogisiert werden.");
+        return;
+      }
+      resolve(null);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
 function lodClassifyingFileName(fileName: string, level: GlbLodLevel): string {
   const base = fileName.replace(/\.glb$/i, "").replace(/(?:^|[_ -])lod[_ -]?[0-3](?:$|[_ -])/ig, "_").replace(/[_ -]+$/g, "");
   return `${base || "aurion_model"}_LOD${level}.glb`;
@@ -111,12 +202,15 @@ export default function GlbUpload() {
   const [catalog, setCatalog] = useState<GlbRuntimeCatalog | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
   const [agentSession, setAgentSession] = useState<{ token: string; expiresAt: string } | null>(null);
   const [sessionBusy, setSessionBusy] = useState(false);
   const [lodBusy, setLodBusy] = useState(false);
   const [lodExistingAssetId, setLodExistingAssetId] = useState("");
   const [lodFamilyName, setLodFamilyName] = useState("");
   const [lodFiles, setLodFiles] = useState<LodFiles>({});
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<Readonly<{ checked: number; purged: number }> | null>(null);
   const selectedLodFamily = useMemo(() => catalog?.entries.find(entry => entry.assetId === lodExistingAssetId) ?? null, [catalog, lodExistingAssetId]);
 
   const refreshCatalog = async (signal?: AbortSignal) => {
@@ -135,6 +229,18 @@ export default function GlbUpload() {
     return () => controller.abort();
   }, [user?.id, user?.role]);
 
+  const reconcileCatalog = async () => {
+    setReconcileBusy(true); setReconcileResult(null);
+    try {
+      const response = await fetch("/api/admin/glb-import/reconcile", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } });
+      const body = await response.json().catch(() => null) as Readonly<{ checked: number; purged: number; purgedAssetIds?: readonly string[] }> | null;
+      if (!response.ok || !body) throw new Error(body && typeof body === "object" && "error" in body ? String((body as { error: string }).error) : "Bereinigung fehlgeschlagen.");
+      setReconcileResult({ checked: body.checked, purged: body.purged });
+      await refreshCatalog();
+    } catch (reconcileError) { setError(reconcileError instanceof Error ? reconcileError.message : "Bereinigung fehlgeschlagen."); }
+    finally { setReconcileBusy(false); }
+  };
+
   const createAgentSession = async () => {
     setSessionBusy(true); setAgentSession(null);
     try {
@@ -147,10 +253,10 @@ export default function GlbUpload() {
   };
 
   const uploadOne = async (file: File, chosenName: string, chosenPurpose = purpose, contentBase64?: string, fileName = file.name): Promise<SmartUploadResult> => {
-    const response = await fetch("/api/admin/glb-smart-upload", {
-      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: chosenName, fileName, purpose: chosenPurpose, contentBase64: contentBase64 ?? await readFileAsBase64(file) }),
-    });
+    const send = async () => fetch("/api/admin/glb-smart-upload", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: chosenName, fileName, purpose: chosenPurpose, contentBase64: contentBase64 ?? await readFileAsBase64(file) }), });
+    let response: Response;
+    try { response = await send(); }
+    catch { response = await send(); }
     const payload = await response.json().catch(() => null) as (SmartUploadResult & { error?: string }) | null;
     if (!response.ok || !payload?.accepted) throw new Error(payload?.error || `Upload wurde mit HTTP ${response.status} abgelehnt.`);
     const receipt = glbImportReceiptSchema.safeParse(payload.receipt);
@@ -169,21 +275,28 @@ export default function GlbUpload() {
   const uploadFiles = async (files: readonly File[]) => {
     if (!files.length || busyRef.current || !catalog || storageError) return;
     if (files.length > MAX_GLB_BATCH_FILES) { setError(`Pro Durchlauf dürfen höchstens ${MAX_GLB_BATCH_FILES} GLB-Dateien hochgeladen werden.`); return; }
-    busyRef.current = true; setBusy(true); setError(null); setOutcomes([]);
+    busyRef.current = true; setBusy(true); setError(null); setOutcomes([]); setUploadProgress({ current: 0, total: files.length, fileName: "" });
     const singleOverride = files.length === 1 ? displayName.trim() : "";
     try {
-      for (const file of files) {
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        setUploadProgress({ current: index, total: files.length, fileName: file.name });
         const validationError = validateFile(file);
         if (validationError) { setOutcomes(current => [...current, { fileName: file.name, error: validationError }]); continue; }
+        const magicError = await validateGlbMagicBytes(file);
+        if (magicError) { setOutcomes(current => [...current, { fileName: file.name, error: magicError }]); continue; }
+        const structureError = await validateGlbStructure(file);
+        if (structureError) { setOutcomes(current => [...current, { fileName: file.name, error: structureError }]); continue; }
         const chosenName = (singleOverride || defaultDisplayName(file.name)).slice(0, 120);
         if (chosenName.length < 3) { setOutcomes(current => [...current, { fileName: file.name, error: "Der Anzeigename ist zu kurz." }]); continue; }
         try {
           const result = await uploadOne(file, chosenName);
           setOutcomes(current => [...current, { fileName: file.name, result }]);
           if (files.length === 1) setDisplayName(chosenName);
+          await refreshCatalog();
         } catch (uploadError) { setOutcomes(current => [...current, { fileName: file.name, error: uploadError instanceof Error ? uploadError.message : "Der GLB-Upload ist fehlgeschlagen." }]); }
       }
-    } finally { busyRef.current = false; setBusy(false); await refreshCatalog(); }
+    } finally { busyRef.current = false; setBusy(false); setUploadProgress(null); await refreshCatalog(); }
   };
 
   const preflightLod = async (level: GlbLodLevel, file: File, familyPurpose: GlbImportPurpose): Promise<LodPreflight> => {
@@ -227,6 +340,7 @@ export default function GlbUpload() {
       for (const item of preflight.sort((left, right) => left.level - right.level)) {
         const result = await uploadOne(item.file, `${baseName} LOD${item.level}`, familyPurpose, item.contentBase64, item.fileName);
         setOutcomes(current => [...current, { fileName: `LOD${item.level} · ${item.file.name}`, result }]);
+        await refreshCatalog();
       }
       setLodFiles({});
       if (!existing) setLodFamilyName(baseName);
@@ -257,13 +371,14 @@ export default function GlbUpload() {
     <div className="mx-auto max-w-4xl space-y-5 pb-10">
       <header><p className="text-xs tracking-[.24em] text-cyan-300">AURION // ASSET INTAKE</p><h1 className="mt-2 text-3xl font-semibold text-amber-100">GLB automatisch einsortieren</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">Modelle hochladen, serverseitig erkennen und ausschließlich innerhalb des gewählten Darstellungszwecks verwenden.</p></header>
       <p className="text-sm text-muted-foreground">Katalog-Zwecke verändern keine Quest-, Händler-, Kampf-, Inventar- oder Teleportlogik. Ausrüstung ist Mesh-Autorität, keine Item-Autorität.</p>
-      <div role="status" className="rounded-xl border border-cyan-200/15 p-4 text-sm">{storageError ? <><span className="text-red-200">{storageError}</span><Button variant="outline" className="ml-3" onClick={() => void refreshCatalog()}>Erneut prüfen</Button></> : catalog ? <span className="text-emerald-200">Dateispeicher bereit · {catalog.entries.length} logische Katalogmodelle</span> : "Dateispeicher wird geprüft…"}</div>
+      <div role="status" className="rounded-xl border border-cyan-200/15 p-4 text-sm">{storageError ? <><span className="text-red-200">{storageError}</span><Button variant="outline" className="ml-3" onClick={() => void refreshCatalog()}>Erneut prüfen</Button></> : catalog ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-emerald-200">Dateispeicher bereit · {catalog.entries.length} logische Katalogmodelle</span><Button variant="outline" size="sm" disabled={reconcileBusy || busy || lodBusy} onClick={() => void reconcileCatalog()}>{reconcileBusy ? "Katalog wird bereinigt…" : "Katalog bereinigen"}</Button></div> : "Dateispeicher wird geprüft…"}</div>
+      {reconcileResult && <div className="rounded-lg border border-cyan-200/15 bg-cyan-400/[.03] p-3 text-sm text-cyan-100">{reconcileResult.purged > 0 ? `${reconcileResult.purged} fehlerhafte(s) Modell(e) entfernt · ${reconcileResult.checked} geprüft` : `Katalog ist sauber · ${reconcileResult.checked} Modell(e) geprüft`}</div>}
 
       <Card className="border-cyan-200/15 bg-slate-950/75"><CardHeader><CardTitle className="flex items-center gap-2 text-amber-100"><Upload className="h-5 w-5" />GLB aufnehmen</CardTitle><CardDescription>Bis zu {MAX_GLB_BATCH_FILES} Dateien pro Durchlauf, jeweils maximal 24 MiB. Unklare Modelle werden einzeln abgelehnt.</CardDescription></CardHeader><CardContent className="space-y-4">
         <div className="space-y-2"><Label htmlFor="smartGlbPurpose">Kategorie / Verwendungszweck</Label><select id="smartGlbPurpose" value={purpose} disabled={busy || lodBusy} onChange={event => setPurpose(event.target.value as GlbImportPurpose)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">{(Object.keys(purposeLabels) as GlbImportPurpose[]).map(value => <option key={value} value={value}>{purposeLabels[value]}</option>)}</select><p className="text-xs leading-5 text-slate-400">{purposeDescriptions[purpose]}</p></div>
         <div className="space-y-2"><Label htmlFor="smartGlbName">Anzeigename (optional bei Einzeldatei)</Label><Input id="smartGlbName" value={displayName} maxLength={120} onChange={event => setDisplayName(event.target.value)} placeholder="Bei mehreren Dateien wird der Dateiname verwendet" /></div>
         <label htmlFor="smartGlbFile" className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-cyan-300/30 bg-cyan-400/[.035] p-6 text-center transition-colors hover:bg-cyan-400/[.06]" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void uploadFiles(Array.from(event.dataTransfer.files)); }}><FileBox className="h-8 w-8 text-cyan-300" /><div><p className="font-medium text-amber-50">GLBs hier ablegen oder gemeinsam auswählen</p><p className="mt-1 text-xs text-slate-400">Dateiname und GLB-Inhalt werden gemeinsam klassifiziert; der Server bestätigt jeden Zweck separat.</p></div><Input id="smartGlbFile" type="file" multiple accept=".glb,model/gltf-binary" disabled={busy || lodBusy || !catalog || Boolean(storageError)} className="max-w-sm" onChange={event => { void uploadFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} /></label>
-        {busy && <p className="text-sm text-cyan-100">GLBs werden nacheinander gelesen, geprüft, klassifiziert und gespeichert…</p>}{error && <p role="alert" className="rounded-lg border border-red-300/20 bg-red-400/[.06] p-3 text-sm text-red-200">{error}</p>}
+        {busy && uploadProgress && <div className="space-y-2"><div className="flex items-center gap-2 text-sm text-cyan-100"><Loader2 className="h-4 w-4 animate-spin" /><span>Datei {uploadProgress.current + 1} von {uploadProgress.total}: {uploadProgress.fileName} wird gelesen, geprüft und gespeichert…</span></div><Progress value={(uploadProgress.current / uploadProgress.total) * 100} className="h-1.5" /></div>}{error && <p role="alert" className="rounded-lg border border-red-300/20 bg-red-400/[.06] p-3 text-sm text-red-200">{error}</p>}
       </CardContent></Card>
 
       <GlbZipBatchUpload fallbackPurpose={purpose} disabled={busy || lodBusy || !catalog || Boolean(storageError)} onComplete={() => refreshCatalog()} />

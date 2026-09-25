@@ -51,11 +51,31 @@ function mockSuccessfulFetch() {
 }
 
 function glbFile(name: string) {
-  return new File(
-    [new Uint8Array([0x67, 0x6c, 0x54, 0x46, 2, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0])],
-    name,
-    { type: "model/gltf-binary" },
-  );
+  // Build a minimal valid GLB with a JSON chunk containing the required glTF
+  // structure for catalog grouping (asset + scenes/nodes/meshes).
+  const jsonStr = JSON.stringify({ asset: { version: "2.0" }, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0 }], meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }] });
+  const jsonBytes = new TextEncoder().encode(jsonStr);
+  // Pad JSON chunk to 4-byte alignment with spaces
+  const paddedLen = jsonBytes.length + ((4 - (jsonBytes.length % 4)) % 4);
+  const jsonPadded = new Uint8Array(paddedLen);
+  jsonPadded.set(jsonBytes);
+  for (let i = jsonBytes.length; i < paddedLen; i++) jsonPadded[i] = 0x20; // space padding
+
+  // GLB layout: header(12) + chunkHeader(8) + jsonChunk(paddedLen)
+  const totalLength = 12 + 8 + paddedLen;
+  const bytes = new Uint8Array(totalLength);
+  const view = new DataView(bytes.buffer);
+  // Header
+  view.setUint32(0, 0x46546c67, true); // "glTF" magic (little-endian)
+  view.setUint32(4, 2, true); // version
+  view.setUint32(8, totalLength, true); // length
+  // JSON chunk header
+  view.setUint32(12, paddedLen, true); // chunk length
+  view.setUint32(16, 0x4e4f534a, true); // "JSON" chunk type
+  // JSON chunk data
+  bytes.set(jsonPadded, 20);
+
+  return new File([bytes], name, { type: "model/gltf-binary" });
 }
 
 describe("GLB upload website runtime", () => {
