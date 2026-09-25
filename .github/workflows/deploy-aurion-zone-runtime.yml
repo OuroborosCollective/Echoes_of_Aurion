@@ -97,7 +97,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -118,6 +118,7 @@ jobs:
           [[ "${{ needs.migration-ledger.outputs.plan_sha256 }}" =~ ^[a-f0-9]{64}$ ]]
           pnpm check
           pnpm test
+          node --check scripts/build-aurion-sbom.mjs
           node --test \
             scripts/dispatch-aurion-schema-plan.test.mjs \
             scripts/aurion-build-input-manifest.test.mjs \
@@ -399,6 +400,30 @@ jobs:
           bootstrap_image_id="$(docker image inspect --format '{{.Id}}' "$bootstrap_image")"
           [[ "$bootstrap_image_id" =~ ^sha256:[a-f0-9]{64}$ ]]
 
+      - name: Build deterministic SPDX runtime SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          AURION_SBOM_OUTPUT=aurion-runtime.spdx.json node scripts/build-aurion-sbom.mjs
+          test -s aurion-runtime.spdx.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { createHash } from "node:crypto";
+          const sbom=JSON.parse(fs.readFileSync("aurion-runtime.spdx.json","utf8"));
+          if(sbom.spdxVersion!=="SPDX-2.3"||sbom.SPDXID!=="SPDXRef-DOCUMENT"||!Array.isArray(sbom.packages)||sbom.packages.length===0) throw new Error("SBOM_INVALID");
+          const digest=`sha256:${createHash("sha256").update(fs.readFileSync("aurion-runtime.spdx.json")).digest("hex")}`;
+          fs.writeFileSync("aurion-runtime-sbom.sha256",`${digest.slice(7)}  aurion-runtime.spdx.json\n`);
+          fs.writeFileSync("aurion-runtime-sbom.identity.json",JSON.stringify({
+            schemaVersion:1,
+            recordType:"aurion.runtime-sbom.identity.v1",
+            sourceRevision:process.env.GITHUB_SHA,
+            sbomDigest:digest,
+            packageCount:sbom.packages.length,
+            documentNamespace:sbom.documentNamespace
+          },null,2)+"\n");
+          NODE
+          sha256sum --strict -c aurion-runtime-sbom.sha256
+
       - name: Prepare canonical release artifact attestation predicate
         shell: bash
         run: |
@@ -411,12 +436,16 @@ jobs:
           const runtime=JSON.parse(fs.readFileSync("dist-traefik-runtime/manifest.json","utf8"));
           const build=JSON.parse(fs.readFileSync("dist-traefik-runtime/build-input-manifest.json","utf8"));
           if(runtime.revision!==process.env.GITHUB_SHA||runtime.buildInputDigest!==build.buildInputDigest) throw new Error("BUILD_INPUT_IDENTITY_MISMATCH");
+          const sbomDigest=sha256("aurion-runtime.spdx.json");
+          const sbomIdentity=JSON.parse(fs.readFileSync("aurion-runtime-sbom.identity.json","utf8"));
+          if(sbomIdentity.sourceRevision!==process.env.GITHUB_SHA||sbomIdentity.sbomDigest!==sbomDigest) throw new Error("SBOM_IDENTITY_MISMATCH");
           const predicate=buildArtifactAttestationPredicate({
             sourceRevision:process.env.GITHUB_SHA,
             buildInputDigest:runtime.buildInputDigest,
             artifactDigest:sha256("dist-traefik-runtime/checksums.sha256"),
             releaseArchiveDigest:sha256("aurion-traefik-runtime-release.tgz"),
             secretScanReceiptDigest:`sha256:${runtime.secretScan?.receiptSha256 ?? ""}`,
+            sbomDigest:`sha256:${createHash("sha256").update(fs.readFileSync("aurion-runtime.spdx.json")).digest("hex")}`,
             secretValuesReturned:runtime.secretScan?.secretValuesReturned,
             workflow:".github/workflows/deploy-aurion-zone-runtime.yml",
             workflowRunId:process.env.GITHUB_RUN_ID,
@@ -480,6 +509,7 @@ jobs:
             attestationUrl:process.env.ATTESTATION_URL,
             bundleSha256:`sha256:${createHash("sha256").update(bundle).digest("hex")}`,
             releaseArchiveDigest:predicate.releaseArchiveDigest,
+            sbomDigest:predicate.sbomDigest,
             verified:true,
             tamperRejected:true,
           };
@@ -510,6 +540,9 @@ jobs:
             aurion-release-artifact-subject.sha256
             aurion-release-artifact-attestation.sigstore.json
             aurion-release-artifact-attestation.json
+            aurion-runtime.spdx.json
+            aurion-runtime-sbom.sha256
+            aurion-runtime-sbom.identity.json
           if-no-files-found: error
           retention-days: 30
 
