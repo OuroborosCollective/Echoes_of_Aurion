@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "recordType": "aurion_game_development_studio_runtime",
+  "ok": true,
+  "package": "@theisegoria/game-development-studio",
+  "sourceRepository": "https://github.com/theisegoria/game-development-studio.git",
+  "sourceRevision": "96a0b4f34b979279ab983e9547af43133e85f310",
+  "version": "1.0.2",
+  "node": "22.22.1",
+  "runtimeDirectory": ".game-dev/runtime",
+  "outputDirectory": ".game-dev/workspace",
+  "capabilitiesSchema": "game_dev.result.v1",
+  "doctorSchema": "game_dev.result.v1",
+  "providerCalls": false
+}
