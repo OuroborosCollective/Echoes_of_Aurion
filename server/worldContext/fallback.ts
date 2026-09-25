@@ -16,6 +16,64 @@ export interface ExpandWorldContextSourcesInput {
   availableSources?: readonly CanonicalContextSource[];
 }
 
+type PersistedCapsuleSourceRow = {
+  sourceId: string;
+  sourceHash: string;
+  kind: string;
+  evidenceClass: string;
+  worldId: string;
+  logicalSequence: number;
+};
+
+export function reconstructPersistedSelectedSource(
+  capsuleJson: string,
+  row: PersistedCapsuleSourceRow,
+): CanonicalContextSource | null {
+  let storedCapsule: {
+    selected?: Array<{
+      canonicalText?: string;
+      sourceRefs?: Array<{
+        sourceId: string;
+        sourceHash: string;
+        kind: string;
+        evidenceClass: string;
+        worldId: string;
+        actorIds: string[];
+        logicalSequence: number;
+      }>;
+    }>;
+  };
+  try {
+    storedCapsule = JSON.parse(capsuleJson);
+  } catch {
+    return null;
+  }
+
+  const match = storedCapsule.selected
+    ?.flatMap(entry =>
+      (entry.sourceRefs ?? []).map(ref => ({ ref, canonicalText: entry.canonicalText ?? "" })),
+    )
+    .find(entry => entry.ref.sourceId === row.sourceId);
+
+  if (!match || !match.canonicalText) return null;
+  if (
+    match.ref.sourceHash !== row.sourceHash ||
+    match.ref.worldId !== row.worldId ||
+    match.ref.logicalSequence !== row.logicalSequence
+  ) return null;
+
+  return {
+    sourceId: match.ref.sourceId,
+    sourceHash: match.ref.sourceHash,
+    kind: match.ref.kind as CanonicalContextSource["kind"],
+    evidenceClass: match.ref.evidenceClass as CanonicalContextSource["evidenceClass"],
+    worldId: match.ref.worldId,
+    actorIds: [...match.ref.actorIds],
+    logicalSequence: match.ref.logicalSequence,
+    canonicalText: match.canonicalText,
+  };
+}
+
 /**
  * Reversibly expands requested source entries from a WorldContextCapsule.
  * Fails closed if the capsule hash does not match or if sources cannot be verified.
@@ -100,28 +158,11 @@ export async function expandWorldContextSources(
 
     // The persisted capsule contains the authoritative selected entry text and source refs.
     // Never synthesize placeholder content: expansion must remain reversible and provenance-bound.
-    const storedCapsule = JSON.parse(receipt.capsuleJson) as {
-      selected: Array<{
-        canonicalText: string;
-        sourceRefs: Array<{
-          sourceId: string;
-          sourceHash: string;
-          kind: string;
-          evidenceClass: string;
-          worldId: string;
-          actorIds: string[];
-          logicalSequence: number;
-        }>;
-      }>;
-    };
-    const selectedBySourceId = new Map(
-      storedCapsule.selected.flatMap(entry =>
-        entry.sourceRefs.map(ref => [
-          ref.sourceId,
-          { ref, canonicalText: entry.canonicalText },
-        ] as const)
-      )
-    );
+    const selectedBySourceId = new Map<string, CanonicalContextSource>();
+    for (const row of sourceRows) {
+      const reconstructed = reconstructPersistedSelectedSource(receipt.capsuleJson, row);
+      if (reconstructed) selectedBySourceId.set(row.sourceId, reconstructed);
+    }
 
     const foundIds = new Set(sourceRows.map(r => r.sourceId));
     for (const id of input.requestedSourceIds) {
@@ -129,8 +170,7 @@ export async function expandWorldContextSources(
         unprovable.push(id);
         continue;
       }
-      const selected = selectedBySourceId.get(id);
-      if (!selected) {
+      if (!selectedBySourceId.has(id)) {
         // Omitted-source linkage proves the identity was considered, but the capsule
         // itself intentionally does not contain enough raw text to reconstruct it.
         unprovable.push(id);
@@ -139,32 +179,7 @@ export async function expandWorldContextSources(
 
     for (const r of sourceRows) {
       const selected = selectedBySourceId.get(r.sourceId);
-      if (!selected) continue;
-
-      if (
-        selected.ref.sourceHash !== r.sourceHash ||
-        selected.ref.worldId !== r.worldId ||
-        selected.ref.logicalSequence !== r.logicalSequence
-      ) {
-        return {
-          capsuleId: input.capsuleId,
-          capsuleHash: input.expectedCapsuleHash,
-          expandedSources: [],
-          unprovableSources: [...input.requestedSourceIds],
-          status: "UNPROVABLE",
-        };
-      }
-
-      expanded.push({
-        sourceId: selected.ref.sourceId,
-        sourceHash: selected.ref.sourceHash,
-        kind: selected.ref.kind as CanonicalContextSource["kind"],
-        evidenceClass: selected.ref.evidenceClass as CanonicalContextSource["evidenceClass"],
-        worldId: selected.ref.worldId,
-        actorIds: [...selected.ref.actorIds],
-        logicalSequence: selected.ref.logicalSequence,
-        canonicalText: selected.canonicalText,
-      });
+      if (selected) expanded.push(selected);
     }
 
     const status =
