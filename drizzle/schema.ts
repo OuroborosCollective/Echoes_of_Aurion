@@ -1634,6 +1634,41 @@ export const aurionSemanticGraphProvenanceV2 = mysqlTable("aurionSemanticGraphPr
 ]);
 
 /** Rebuildable deterministic readmodel only. It is checked against the verified graph before use. */
+/** AIM-487: append-only verified NPC information ecology receipts; separate from Semantic Graph V2 authority. */
+export const aurionNpcInformationReceipts = mysqlTable("aurionNpcInformationReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  factId: varchar("factId", { length: 64 }).notNull(),
+  worldId: varchar("worldId", { length: 128 }).notNull(),
+  ownerNpcId: varchar("ownerNpcId", { length: 128 }).notNull(),
+  subjectId: varchar("subjectId", { length: 128 }).notNull(),
+  predicate: varchar("predicate", { length: 128 }).notNull(),
+  value: varchar("value", { length: 255 }).notNull(),
+  claimKey: varchar("claimKey", { length: 71 }).notNull(),
+  status: mysqlEnum("status", ["experienced","remembered","communicated","corroborated","contradicted","trusted","uncertain","expired"]).notNull(),
+  confidenceBps: int("confidenceBps").notNull(),
+  witnessNpcId: varchar("witnessNpcId", { length: 128 }).notNull(),
+  communicatedByNpcId: varchar("communicatedByNpcId", { length: 128 }),
+  communicationReceiptId: varchar("communicationReceiptId", { length: 128 }),
+  relatedFactId: varchar("relatedFactId", { length: 64 }),
+  sourceKind: mysqlEnum("sourceKind", ["npc_decision_receipt","npc_memory_receipt","npc_action_receipt","world_receipt","quest_receipt","semantic_graph_receipt"]).notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 128 }).notNull(),
+  sourceReceiptHash: varchar("sourceReceiptHash", { length: 71 }).notNull(),
+  sourceRevision: varchar("sourceRevision", { length: 40 }).notNull(),
+  sourceSha256: varchar("sourceSha256", { length: 71 }).notNull(),
+  sourceCausalRoot: varchar("sourceCausalRoot", { length: 71 }).notNull(),
+  logicalIndex: int("logicalIndex").notNull(),
+  expiresAtIndex: int("expiresAtIndex"),
+  previousReceiptId: varchar("previousReceiptId", { length: 128 }),
+  receiptHash: varchar("receiptHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcInformationReceipts_receipt_uq").on(table.receiptHash),
+  uniqueIndex("aurionNpcInformationReceipts_communication_uq").on(table.communicationReceiptId),
+  index("aurionNpcInformationReceipts_owner_idx").on(table.ownerNpcId, table.logicalIndex),
+  index("aurionNpcInformationReceipts_fact_idx").on(table.factId, table.logicalIndex),
+  index("aurionNpcInformationReceipts_claim_idx").on(table.worldId, table.claimKey, table.logicalIndex),
+]);
+
 export const aurionSemanticGraphIndexV2 = mysqlTable("aurionSemanticGraphIndexV2", {
   id: varchar("id", { length: 64 }).primaryKey(),
   graphReceiptId: varchar("graphReceiptId", { length: 64 }).notNull(),
