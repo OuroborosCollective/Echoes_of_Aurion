@@ -49,6 +49,17 @@ describe("server-backed Aurion HUD", () => {
     expect(screen.queryByText(/LV |🪙|100\/100|Sir_Galahad/)).toBeNull();
   });
 
+  it("exposes the canonical responsive layout and gesture ownership without changing gameplay truth", () => {
+    const { container } = mount();
+    const shell = container.querySelector("[data-testid=\"authoritative-world-hud\"]");
+    expect(shell?.getAttribute("data-layout-contract")).toBe("ax1-hud-layout.v1");
+    expect(shell?.getAttribute("data-gesture-owner")).toBe("presentation");
+
+    const menu = screen.getByRole("button", { name: "Charakter" });
+    expect(menu.getAttribute("aria-label")).toBe("Charakter");
+    expect(menu.getAttribute("title")).toBe("Charakter [C]");
+  });
+
   it("toggles every panel shortcut once and stops movement on opening", () => {
     mount();
     for (const [key, name] of [["i", "Inventar & Paperdoll-Rüstkammer"], ["b", "Inventar & Paperdoll-Rüstkammer"], ["c", "Charakter & Skills"], ["m", "Weltatlas"], ["j", "Quest-Buch & Lore-Chroniken"], ["q", "Quest-Buch & Lore-Chroniken"]]) {

@@ -106,6 +106,17 @@ for (const viewport of [{ name: "phone", width: 412, height: 915 }, { name: "tab
       expect(await selected.json()).toMatchObject({ visibility: "public", immutable: true });
 
       const hud = page.getByTestId("authoritative-world-hud");
+      await expect(hud).toHaveAttribute("data-layout-contract", "ax1-hud-layout.v1");
+      await expect(hud).toHaveAttribute("data-gesture-owner", "presentation");
+      const hudRoot = page.getByTestId("ax1-game-hud");
+      await expect(hudRoot).toHaveAttribute("data-layout-contract", "ax1-hud-layout.v1");
+      await expect(hudRoot).toHaveAttribute("data-gesture-owner", "presentation");
+      const hudBox = await hudRoot.boundingBox();
+      expect(hudBox).not.toBeNull();
+      expect(hudBox!.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(hudBox!.height).toBeLessThanOrEqual(viewport.height + 1);
+
+
       await expect(runtime.getByText("BEWEGUNG VERBUNDEN", { exact: true })).toBeVisible({ timeout: 45_000 });
       await expect.poll(() => selfEntityId, { timeout: 20_000 }).toMatch(/^player:[1-9][0-9]*$/);
       await expect.poll(() => latestPresences.some(p => p.entityId === selfEntityId), { timeout: 20_000 }).toBe(true);

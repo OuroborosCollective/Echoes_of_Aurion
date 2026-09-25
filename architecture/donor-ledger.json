@@ -982,6 +982,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/integration/ax1HudLayoutContract.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/integration/AurionGroupFinder.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
