@@ -5,7 +5,6 @@ export interface OTelCausalReceiptReference {
   worldId: string;
   zoneId: string;
   tick: number;
-  receiptId: string;
   receiptHash: string;
   sourceRevision: string;
 }
@@ -138,13 +137,12 @@ export function recordOtelCausalReceiptReference(reference: OTelCausalReceiptRef
   if (process.env.OTEL_ENABLED !== "true") return;
   if (!REVISION.test(reference.sourceRevision)) return;
   if (!HEX_64.test(reference.receiptHash)) return;
-  if (!reference.worldId || !reference.zoneId || !reference.receiptId) return;
+  if (!reference.worldId || !reference.zoneId) return;
 
   const referenceHash = digest(JSON.stringify({
     worldId: reference.worldId,
     zoneId: reference.zoneId,
     tick: reference.tick,
-    receiptId: reference.receiptId,
     receiptHash: reference.receiptHash,
     sourceRevision: reference.sourceRevision,
   }));
