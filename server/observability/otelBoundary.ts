@@ -42,7 +42,7 @@ export function buildOtlpTracePayload(record: OTelHttpTelemetryRecord): Record<s
     throw new Error("OTEL_SOURCE_REVISION_INVALID");
   }
   const durationNs = Math.max(0, Math.round(record.durationMs * 1_000_000));
-  const nowNs = BigInt(Date.now()) * 1_000_000n;
+  const nowNs = BigInt(Math.round(performance.timeOrigin * 1_000_000 + performance.now() * 1_000_000));
   const traceId = randomBytes(16).toString("hex");
   const spanId = randomBytes(8).toString("hex");
 
