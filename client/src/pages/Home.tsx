@@ -145,7 +145,7 @@ export default function Home() {
               PERSISTENT 3D MMORPG // LIVING WORLD
             </p>
             <h2 className="mt-5 max-w-4xl font-serif text-5xl leading-[0.98] text-amber-100 sm:text-7xl">
-              Eine Welt, die
+              Eine Welt, die{" "}
               <span className="block text-cyan-200">nicht auf dich wartet.</span>
             </h2>
             <p className="mt-7 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
@@ -342,6 +342,18 @@ export default function Home() {
               </article>
             );
           })}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 sm:px-8">
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => openCommunity("assets")}
+            className="min-h-12 rounded-xl border border-cyan-200/20 bg-white/5 px-6 font-semibold text-slate-100 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+          >
+            Asset-Katalog
+          </button>
         </div>
       </section>
 

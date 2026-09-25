@@ -3,7 +3,7 @@
 ## Base44 dev environment
 
 - `docker-compose.base44.yml` runs the app from cloned source via `pnpm dev` (single-origin: Express on port 3000 serves both the tRPC API and Vite middleware).
-- The pnpm lockfile is out of sync with package.json, so `--no-frozen-lockfile` is required.
+- The pnpm lockfile is in sync with package.json.
 - Database (MySQL), Redis, and external APIs (Gemini, Wolfram, Firebase) are all **optional** — the app boots without them. DB-dependent services simply don't start if `DATABASE_URL` is unset.
 - Vite middleware already sets `allowedHosts: true`, so no host/origin allowlist changes are needed.
 - No external secrets are required to boot.
@@ -15,8 +15,8 @@ Before editing gameplay, UI, persistence, routes, tests, issues or documentation
 The binding architecture is deliberately simple:
 
 - **Aurion** is the single and only canonical owner of all gameplay, world, NPC, quest, combat, progression, loot, crafting, economy, group, guild, housing, persistence, database, transport, receipt, account, community, asset-governance and operations truth.
-- **AX1** is a legacy donor/provenance project. Its historical source may remain for provenance or migrated code lineage, but AX1 has no current authority, no separate runtime duty and no second game-state truth.
-- **WASD** is a legacy donor/provenance project. Historical algorithms may remain embedded as migrated implementation code, but WASD has no current authority, no separate runtime duty and no second gameplay truth.
+- **AX1** is a legacy donor/provenance project. Its historical source may remain for provenance or migrated code lineage, but AX1 has no active authority, no separate runtime duty and no second game-state truth.
+- **WASD** is a legacy donor/provenance project. Historical algorithms may remain embedded as migrated implementation code, but WASD has no active authority, no separate runtime duty and no second gameplay truth.
 - **GDS, CAG, Wolfram, LLMs and other tools** may analyze, author, inspect or propose. They never become a gameplay, world or persistence authority.
 
 Once AX1/WASD code has been migrated into this repository, the active implementation is Aurion-owned. File names, exported identifiers and historical source hashes do not create a second owner.
@@ -35,7 +35,7 @@ For effectful actions, preserve Action Preview → Aurion authority/scope → ap
 
 ## Legacy source handling
 
-Historical AX1/WASD revisions may be pinned when they explain provenance or reproducibility. They must be labeled as historical source identity, never as current authority.
+Historical AX1/WASD revisions may be pinned when they explain provenance or reproducibility. They must be labeled as historical source identity, never as an active authority.
 
 Do not:
 
