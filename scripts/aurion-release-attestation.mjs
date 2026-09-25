@@ -30,6 +30,7 @@ export function buildArtifactAttestationPredicate(input){
     artifactDigest:requiredDigest(input.artifactDigest,"ARTIFACT_DIGEST"),
     releaseArchiveDigest:requiredDigest(input.releaseArchiveDigest,"RELEASE_ARCHIVE_DIGEST"),
     secretScanReceiptDigest:requiredDigest(input.secretScanReceiptDigest,"SECRET_SCAN_RECEIPT_DIGEST"),
+    sbomDigest:requiredDigest(input.sbomDigest,"SBOM_DIGEST"),
     secretValuesReturned:input.secretValuesReturned,
     artifactName:"aurion-traefik-runtime-release.tgz",
     workflow:input.workflow,
