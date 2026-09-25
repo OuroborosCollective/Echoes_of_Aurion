@@ -5,20 +5,8 @@ export default defineConfig({
   timeout: 240_000, workers: 1, retries: 0,
   reporter: [["list"], ["html", { outputFolder: "playwright-aim290-report", open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:3000", browserName: "chromium", channel: "chromium", headless: false,
-    launchOptions: { args: [
-      "--enable-gpu",
-      "--use-gl=angle",
-      "--use-angle=vulkan",
-      "--use-vulkan=swiftshader",
-      "--enable-unsafe-webgpu",
-      "--use-webgpu-adapter=swiftshader",
-      "--use-gpu-in-tests",
-      "--enable-accelerated-2d-canvas",
-      "--enable-features=Vulkan",
-      "--disable-vulkan-surface",
-      "--disable-dev-shm-usage"
-    ] },
+    baseURL: "http://127.0.0.1:3000", browserName: "chromium", headless: true,
+    launchOptions: { args: ["--use-angle=swiftshader", "--use-vulkan=swiftshader", "--enable-unsafe-swiftshader", "--enable-unsafe-webgpu", "--enable-features=Vulkan", "--disable-vulkan-surface", "--disable-dev-shm-usage"] },
     screenshot: "only-on-failure", trace: "retain-on-failure",
   },
 });
