@@ -253,9 +253,7 @@ export default function GlbUpload() {
   };
 
   const uploadOne = async (file: File, chosenName: string, chosenPurpose = purpose, contentBase64?: string, fileName = file.name): Promise<SmartUploadResult> => {
-    const payload64 = contentBase64 ?? await readFileAsBase64(file);
-    const requestBody = JSON.stringify({ displayName: chosenName, fileName, purpose: chosenPurpose, contentBase64: payload64 });
-    const send = async () => fetch("/api/admin/glb-smart-upload", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: requestBody });
+    const send = async () => fetch("/api/admin/glb-smart-upload", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: chosenName, fileName, purpose: chosenPurpose, contentBase64: contentBase64 ?? await readFileAsBase64(file) }), });
     let response: Response;
     try { response = await send(); }
     catch { response = await send(); }

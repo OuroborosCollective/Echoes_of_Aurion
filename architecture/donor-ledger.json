@@ -550,7 +550,9 @@
         "catalogPath": "client/src/xaurion/integration/ax1SourceManifest.ts"
       },
       "aurionPaths": [
-        "client/src/xaurion/integration/NpcDecisionPanel.tsx"
+        "client/src/xaurion/integration/NpcDecisionPanel.tsx",
+        "client/src/xaurion/integration/NpcUtilityPlannerDebugPanel.tsx",
+        "client/src/xaurion/integration/NpcUtilityChartPanel.tsx"
       ],
       "status": "AURION_OWNED",
       "parityEvidence": [
@@ -1046,6 +1048,18 @@
       "donor": "AX1",
       "capabilityId": "npc.decision-projection",
       "role": "CAPABILITY"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcUtilityPlannerDebugPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "npc.decision-projection",
+      "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/integration/NpcUtilityChartPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "npc.decision-projection",
+      "role": "SUPPORT"
     },
     {
       "path": "client/src/xaurion/integration/NpcFallbackProjection.ts",

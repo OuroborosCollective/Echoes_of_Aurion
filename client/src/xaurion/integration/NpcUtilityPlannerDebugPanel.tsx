@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
+import { NpcUtilityChartPanel } from "./NpcUtilityChartPanel";
 
 const goalLabels: Record<string, string> = {
   seek_safety: "Sicherheit",
@@ -179,6 +180,7 @@ export function NpcUtilityPlannerDebugPanel({ userId }: { userId: number }) {
                   <NpcUtilityScoreCard key={npc.npcId} npc={npc} />
                 ))}
               </div>
+              <NpcUtilityChartPanel npcs={npcs} />
             </>
           )}
         </>
