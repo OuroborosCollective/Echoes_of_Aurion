@@ -1310,3 +1310,20 @@ Change: Added the deterministic `aurion.generated-structure.presentation-provena
 Insight: #505 can consume generated-structure presentation data without interpreting or replacing #512/#514 truth. The real MariaDB parity path now proves the provenance is derived from the actual confirmed observation/materialization/projection chain before atlas consumption; atlas packing remains presentation/build-only.
 
 Evidence: Pre-memory exact implementation head `4a60364a64ad31b8df98a0dba99f744e62e164a2`; Runtime Candidate #957 PASS; Runtime Container Proof #956 PASS; Local Test Pack #1494 PASS; Android #1974 PASS; Causal Chaos #318 PASS; AIM-292 #1307 PASS. Real container readback emitted `AIM505_REAL_PRESENTATION_PROVENANCE` with observationKey `sha256:24f52e4b658893426d43a6eca23871f73ea5cb8261fcf6b0ea6f046493f65dbe`, recipeHash `55df16b82523fc7704c1617bebfb5e6412709f80e0f8898a546b357e8b3ca122`, materializationHash `sha256:656641216a2b5f7ba0e0b1a3d386055e112c270f22d157b903a63b78c1814396`, provenanceHash `sha256:2e0dd5eb196e709f40d214045cf6c2b7b72a9dac5feb807c67a4b3b7f63fa8be`, and assetKeys `["aurion_confirmed_house"]`.
+
+### 2026-09-25 — AIM-299 World Context Capsule closure (#356)
+
+Status: VERIFIED implementation + exact-head evidence; ready for merge.
+
+Task: Close the final AIM-299 evidence gap for persisted WorldContextCapsule expansion.
+
+Decisions: Keep the existing deterministic query/source-selection, canonical hashing, replay MATCH/FIRST_DIVERGENCE/UNPROVABLE semantics, episode compaction, Context Studio, evaluation and NPC dialogue consumer. Replace the persisted DB expansion placeholder with provenance-checked reconstruction from the canonical capsule JSON; omitted/unrecoverable source text fails closed instead of being synthesized.
+
+Touched surfaces: server/worldContext/fallback.ts, server/worldContext/fallback.test.ts.
+
+Evidence: PR #577 exact head d2fd41c949dbb3de15c9ab7a18a51f8cb40be61c passed the exact-head immutable runtime candidate (run 36150180059), exact-head container health (run 36150180051), AIM-292 MariaDB/source rebuild (run 36150180108) and exact offline pack (run 36150180124); no current-head failures remained. No production DB mutation was performed for this repair.
+
+Learned: A reversible evidence contract must return the original canonical source content and actor provenance; a synthetic placeholder is data loss even when source IDs/hashes remain intact.
+
+Open: Post-merge readback only.
+Next safe step: Merge with the exact verified head and confirm #356 is closed from the merged main revision.
