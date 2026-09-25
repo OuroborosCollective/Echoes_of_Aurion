@@ -1344,3 +1344,20 @@ Learned: The safest telemetry boundary is protocol-level observation of already-
 
 Open: Post-merge readback; independent AIM-265 catalog drift remains outside #142.
 Next safe step: Merge the exact verified head and confirm #142 closed from main.
+
+### 2026-09-25 — Runtime supply-chain SBOM completion (#141)
+
+Status: VERIFIED runtime supply-chain block; APK lane intentionally deferred.
+
+Task: Complete the non-APK remainder of #141 with deterministic runtime SBOM, attestation binding and release action immutability.
+
+Decisions: Generate SPDX 2.3 from the real production dependency graph with deterministic ordering and exact source-revision identity; bind the SBOM SHA-256 into the signed release predicate; pin external release actions to immutable commit SHAs; document the implemented controls in an SLSA-oriented matrix without claiming an unsupported conformance level.
+
+Touched surfaces: scripts/build-aurion-sbom.mjs, scripts/aurion-release-attestation.mjs, scripts/aurion-release-attestation.test.mjs, .github/workflows/deploy-aurion-zone-runtime.yml, docs/supply-chain/SLSA_1.2_Aurion_Control_Matrix.md.
+
+Evidence: Exact implementation head a703866ce46f1f7db9e8d9380c5d4b044396b67b passed Verify/build, exact runtime candidate, exact container health, offline pack, schema bootstrap, backup/recovery/apply, historical provenance, and proof gates with 0 failures and 0 pending. The initial SBOM runner exposed a real ENOBUFS condition from the dependency-tree output; the explicit 64 MiB buffer fix produced the final PASS. No production DB mutation was performed.
+
+Learned: Supply-chain evidence must bind the exact finalized runtime artifact and its SBOM, while attestation and runner trust remain separate; large real dependency graphs also require explicit output-buffer bounds.
+
+Open: APK build/attestation path remains deferred by current scope; #141 must stay open until that lane is completed.
+Next safe step: Merge the verified runtime-SBOM block and track the deferred APK lane separately.
