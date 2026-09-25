@@ -71,3 +71,15 @@ test("SBOM digest is mandatory and must be a SHA-256 identity",()=> {
     workflowRunId:"1",
   }),/SBOM_DIGEST_INVALID/);
 });
+
+test("production release workflow contains only immutable external action pins",async()=>{
+  const fs=(await import("node:fs")).default;
+  const workflow=fs.readFileSync(".github/workflows/deploy-aurion-zone-runtime.yml","utf8");
+  for(const line of workflow.split("\n")){
+    const match=line.match(/uses:\s+([^\s]+)/);
+    if(!match) continue;
+    const ref=match[1];
+    if(ref.startsWith("./")) continue;
+    assert.match(ref,/^[^@\s]+@[a-f0-9]{40}$/,"un-pinned external action: "+ref);
+  }
+});
