@@ -126,13 +126,26 @@ test("#505 derives provenance from the canonical #515 projection", () => {
 });
 
 test("#505 provenance changes when the presentation asset lineage changes", () => {
-  const base = buildGeneratedStructurePresentationProvenance(projection());
-  const changed = buildGeneratedStructurePresentationProvenance({
-    ...projection(),
+  const baseProjection = projection();
+  const base = buildGeneratedStructurePresentationProvenance(baseProjection);
+  const changedEnvelope = {
+    ...baseProjection,
     presentation: {
-      ...projection().presentation,
+      ...baseProjection.presentation,
       assetKeys: ["house_wall", "house_door"],
     },
+    ax1Projection: {
+      ...baseProjection.ax1Projection,
+      presentation: {
+        ...baseProjection.ax1Projection.presentation,
+        assetKeys: ["house_wall", "house_door"],
+      },
+    },
+  };
+  const { projectionHash: _ignored, ...changedUnsigned } = changedEnvelope;
+  const changed = buildGeneratedStructurePresentationProvenance({
+    ...changedUnsigned,
+    projectionHash: canonicalSha256({ domain: "aurion.structure-projection.v1", envelope: changedUnsigned }),
   });
   assert.notEqual(changed.provenanceHash, base.provenanceHash);
   assert.notEqual(changed.presentation.assetKeys, base.presentation.assetKeys);
