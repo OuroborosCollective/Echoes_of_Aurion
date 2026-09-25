@@ -51,7 +51,26 @@ export function initialMobRuntimeState(definition: MobDefinition, tick = 0): Mob
 
 export function nearestAggroTarget(definition: MobDefinition, position: WasdMobPosition, presences: readonly ConfirmedZonePresence[]): ConfirmedZonePresence | null {
   const limit = wasdMobAggroRadiusFixed(definition), limitSquared = limit * limit;
-  return presences.filter(presence => distanceSquared(position, presence.position) <= limitSquared).slice().sort((left, right) => distanceSquared(position, left.position) - distanceSquared(position, right.position) || compareText(left.entityId, right.entityId))[0] ?? null;
+  let nearest: ConfirmedZonePresence | null = null;
+  let minDistanceSquared = Infinity;
+
+  // Use a linear O(N) scan to find the nearest target instead of allocating an array and sorting it (O(N log N)).
+  // This eliminates significant garbage collection latency during high-frequency server ticks.
+  for (const presence of presences) {
+    const distSq = distanceSquared(position, presence.position);
+    if (distSq <= limitSquared) {
+      if (distSq < minDistanceSquared) {
+        minDistanceSquared = distSq;
+        nearest = presence;
+      } else if (distSq === minDistanceSquared && nearest) {
+        if (compareText(presence.entityId, nearest.entityId) < 0) {
+          nearest = presence;
+        }
+      }
+    }
+  }
+
+  return nearest;
 }
 
 export function resolveMobFsmTick(input: Readonly<{ current: MobRuntimeState; presences: readonly ConfirmedZonePresence[]; tick: number; resolveMovement?: (from: WasdMobPosition, desired: WasdMobPosition) => WasdMobPosition }>): MobRuntimeState {

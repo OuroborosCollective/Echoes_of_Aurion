@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
  * server/src/core/determinism/AREDeterminism.ts.
  *
  * Aurion does not own these gameplay semantics; it only hosts this pinned port
- * so the runtime can execute the WASD rule without a cross-repository network call.
+ * The deterministic algorithm is now hosted inside Aurion; this historical WASD identity is retained for provenance and parity.
  */
 export const WASD_GAMEPLAY_SOURCE_REVISION = "328240450d33490637f8cc4ae87d3fbeecca27c9" as const;
 export const WASD_ARE_DETERMINISM_SOURCE_PATH = "server/src/core/determinism/AREDeterminism.ts" as const;

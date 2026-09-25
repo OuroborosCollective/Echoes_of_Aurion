@@ -57,7 +57,7 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     await dialog.getByLabel("Rufname", { exact: true }).fill("glb_zip_browser_admin");
     await dialog.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-glb-zip-test-only!");
     await dialog.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
-    await expect(page.getByRole("heading", { name: /Willkommen zurück/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet./ })).toBeVisible();
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_zip_browser_admin'");
 
     await page.goto("/ops/glb-upload");

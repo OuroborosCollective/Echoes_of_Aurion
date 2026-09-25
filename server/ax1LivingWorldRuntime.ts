@@ -11,9 +11,8 @@ export type LivingWorldRuntimeResult = Extract<
 >;
 
 /**
- * AX1-facing host adapter only. The caller supplies a real persisted source
- * decision identity; WASD plans and validates the action while Aurion owns the
- * transaction, locks, consent, effect commit and readback.
+ * Legacy-named compatibility adapter. Aurion validates, executes and persists the
+ * living-world action; historical source identities are provenance only.
  */
 export async function resolveAndRecordAx1LivingWorld(input: Readonly<{
   worldSeed: string;

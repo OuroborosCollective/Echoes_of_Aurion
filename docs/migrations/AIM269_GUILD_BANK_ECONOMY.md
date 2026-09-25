@@ -2,6 +2,10 @@
 description: Aktueller Ownership-Vertrag für Gildenbank und Staatsökonomie.
 ---
 
+## ⚠️ Historische Evidence — nicht aktueller Owner-Vertrag
+
+Die folgenden Ownership-/Source-Aussagen dokumentieren den damaligen Migrationsstand. Im aktuellen Endzustand ist **Aurion der einzige Owner und Wahrheitsträger**. Bereits migrierte Logik ist Aurion-Code; AX1 und WASD sind keine Live-Authority und keine Runtime-Pflicht.
+
 # AIM-269 — WASD Guild Bank/Economy · Aurion Custody/Ledger
 
 Die vorhandene Migration `0030_aurion_guild_bank_economy` ist eine Persistenz-/Custody-Fläche. **Bank-, Treasury-, Resource-, Building- und Economy-Regeln gehören WASD.**

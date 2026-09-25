@@ -106,7 +106,7 @@ describe("AIM-239 xaurion integration boundary", () => {
     const home = read("client/src/pages/Home.tsx");
     const soundscape = read("client/src/lib/soundscape.ts");
     const db = read("server/db.ts");
-    expect(home).toContain("AURION // WEBSITE · COMMUNITY · DATENHALTUNG");
+    expect(home).toContain("PERSISTENT 3D MMORPG // LIVING WORLD");
     expect(home).not.toContain("TowerHomePanel");
     expect(home).not.toContain("MissionState");
     expect(soundscape).toContain("AurionSoundscape");

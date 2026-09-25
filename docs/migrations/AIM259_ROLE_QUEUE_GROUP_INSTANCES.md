@@ -2,6 +2,10 @@
 description: Aktueller Ownership-Vertrag für Party-, Queue- und Dungeon-Instanzen.
 ---
 
+## ⚠️ Historische Evidence — nicht aktueller Owner-Vertrag
+
+Die folgenden Ownership-/Source-Aussagen dokumentieren den damaligen Migrationsstand. Im aktuellen Endzustand ist **Aurion der einzige Owner und Wahrheitsträger**. Bereits migrierte Logik ist Aurion-Code; AX1 und WASD sind keine Live-Authority und keine Runtime-Pflicht.
+
 # AIM-259 — WASD Party/Queue/Dungeon · AX1 UI · Aurion Persistenz
 
 Dieses Dokument ersetzt die frühere Beschreibung, nach der Aurion selbst Gruppen matcht, Heal/Strike berechnet oder Instanzen simuliert.

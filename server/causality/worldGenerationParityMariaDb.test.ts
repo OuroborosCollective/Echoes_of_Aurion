@@ -32,6 +32,7 @@ import { GLOBAL_WORLD_ID } from "../../shared/worldIdentity";
 import { buildGameplayEvidenceFromReceipts, verifyWorldGenerationParity } from "./worldGenerationParityHarness";
 import { sha256Bytes } from "./worldGenerationEvidenceHash";
 import { compileDeterministicStructureGrammar } from "../deterministicStructureGrammarCompiler";
+import { buildGeneratedStructurePresentationProvenance } from "../../scripts/atlas/generatedStructurePresentationProvenance";
 import type { WorldGenerationRuntimeIdentity } from "./worldGenerationEvidenceContract";
 
 const enabled = process.env.NODE_ENV === "test"
@@ -209,6 +210,12 @@ suite("AIM-510 world generation parity real MariaDB", () => {
     const projection = projectStructureObservation(observation);
     expect(projection.projectionHash).toMatch(/^sha256:[a-f0-9]{64}$/);
 
+    const presentationProvenance = buildGeneratedStructurePresentationProvenance(projection);
+    expect(presentationProvenance.observationKey).toBe(observation.observationKey);
+    expect(presentationProvenance.recipeHash).toBe(observation.recipeHash);
+    expect(presentationProvenance.materializationHash).toBe(observation.materialization.materializationHash);
+    expect(presentationProvenance.sourceRevision).toBe(RELEASE);
+
     const { AurionHeadlessCausalOracle } = await import("./headlessCausalOracle");
     const oracle = await (new AurionHeadlessCausalOracle()).replayRange({
       zoneId: ZONE,
@@ -245,6 +252,18 @@ suite("AIM-510 world generation parity real MariaDB", () => {
 
     const evidencePath = process.env.AURION_WORLD_GENERATION_PARITY_EVIDENCE_PATH?.trim();
     if (evidencePath) writeFileSync(evidencePath, JSON.stringify(result.evidence, null, 2) + "\n", "utf8");
+
+    console.info("AIM505_REAL_PRESENTATION_PROVENANCE", JSON.stringify({
+      protocol: presentationProvenance.protocol,
+      projectionHash: presentationProvenance.projectionHash,
+      observationKey: presentationProvenance.observationKey,
+      recipeHash: presentationProvenance.recipeHash,
+      materializationHash: presentationProvenance.materializationHash,
+      sourceRevision: presentationProvenance.sourceRevision,
+      confirmedChunkAuthorityStateHash: presentationProvenance.confirmedChunkAuthorityStateHash,
+      assetKeys: presentationProvenance.presentation.assetKeys,
+      provenanceHash: presentationProvenance.provenanceHash,
+    }));
 
     console.info("AIM510_REAL_MARIADB", JSON.stringify({
       status: result.evidence.status,

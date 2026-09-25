@@ -1,4 +1,4 @@
-// Compatibility facade only. AX1 owns content in ax1MobContent; WASD owns all FSM laws.
+// Legacy compatibility facade. Active mob content and FSM behavior are Aurion-owned; AX1/WASD names remain only for migrated provenance.
 export { observatoryMobDefinitions } from "./ax1MobContent";
 export {
   WASD_MOB_FSM_RULESET,

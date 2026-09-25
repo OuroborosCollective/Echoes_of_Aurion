@@ -1,9 +1,8 @@
 import type { ZoneMobArchetype } from "../shared/zoneMobContract";
 
 /**
- * Read-only projection of combat-facing content from OuroborosCollective/-ax1.
- * AX1 owns the game surface/scaffolding; it does NOT resolve authoritative hits.
- * Gameplay transitions are resolved by the pinned WASD reducer.
+ * Legacy-named combat content/provenance projection. Aurion owns combat state,
+ * rules and transitions; historical AX1/WASD identities are retained only as source provenance.
  */
 export const AX1_GAME_SOURCE_REVISION = "d356881538dae23c3aa97364a5596d48b6ac3079" as const;
 export const AX1_MOB_SOURCE_PATH = "src/entities/MobManager.ts" as const;
