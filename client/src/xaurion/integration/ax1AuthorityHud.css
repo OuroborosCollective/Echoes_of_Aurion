@@ -214,3 +214,13 @@
   .xaurion-runtime .ax1-authority-shell .ax1-combat-cluster,
   .xaurion-runtime .ax1-authority-shell .ax1-combat-metrics{backdrop-filter:none}
 }
+
+@media (max-width:420px){
+  .ax1-combat-cluster-phone{
+    width:276px!important;
+    max-width:calc(100vw - 132px)!important;
+    min-width:0!important;
+    box-sizing:border-box!important;
+    margin-left:auto!important;
+  }
+}
