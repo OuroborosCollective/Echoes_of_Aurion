@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 export const AURION_DETERMINISTIC_ATLAS_ARTIFACT_SCHEMA =
@@ -190,8 +191,10 @@ export async function buildDeterministicAtlasArtifact(plan, outputDirectory) {
     pages: generated,
   };
   const manifestHash = `sha256:${sha256Bytes(canonicalBytes(artifactManifestUnsigned))}`;
+  const browserVersion = browser.version();
   const manifest = Object.freeze({
     ...artifactManifestUnsigned,
+    browserVersion,
     manifestHash,
   });
   await mkdir(outputDirectory, { recursive: true });
