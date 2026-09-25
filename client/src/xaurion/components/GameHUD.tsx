@@ -182,6 +182,18 @@ export function GameHUD(props: GameHUDProps) {
     action();
   };
 
+  const playerProjectionState =
+    props.playerState === "live" ? "Confirmed" :
+    props.playerState === "stale" ? "Stale" :
+    props.playerState === "error" ? "Unavailable" :
+    "Waiting";
+
+  const worldProjectionState =
+    props.worldState === "live" ? "Confirmed" :
+    props.worldState === "stale" ? "Stale" :
+    props.worldState === "error" ? "Unavailable" :
+    "Waiting";
+
 
   return (
     <div
