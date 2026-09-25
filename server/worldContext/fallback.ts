@@ -16,6 +16,64 @@ export interface ExpandWorldContextSourcesInput {
   availableSources?: readonly CanonicalContextSource[];
 }
 
+type PersistedCapsuleSourceRow = {
+  sourceId: string;
+  sourceHash: string;
+  kind: string;
+  evidenceClass: string;
+  worldId: string;
+  logicalSequence: number;
+};
+
+export function reconstructPersistedSelectedSource(
+  capsuleJson: string,
+  row: PersistedCapsuleSourceRow,
+): CanonicalContextSource | null {
+  let storedCapsule: {
+    selected?: Array<{
+      canonicalText?: string;
+      sourceRefs?: Array<{
+        sourceId: string;
+        sourceHash: string;
+        kind: string;
+        evidenceClass: string;
+        worldId: string;
+        actorIds: string[];
+        logicalSequence: number;
+      }>;
+    }>;
+  };
+  try {
+    storedCapsule = JSON.parse(capsuleJson);
+  } catch {
+    return null;
+  }
+
+  const match = storedCapsule.selected
+    ?.flatMap(entry =>
+      (entry.sourceRefs ?? []).map(ref => ({ ref, canonicalText: entry.canonicalText ?? "" })),
+    )
+    .find(entry => entry.ref.sourceId === row.sourceId);
+
+  if (!match || !match.canonicalText) return null;
+  if (
+    match.ref.sourceHash !== row.sourceHash ||
+    match.ref.worldId !== row.worldId ||
+    match.ref.logicalSequence !== row.logicalSequence
+  ) return null;
+
+  return {
+    sourceId: match.ref.sourceId,
+    sourceHash: match.ref.sourceHash,
+    kind: match.ref.kind as CanonicalContextSource["kind"],
+    evidenceClass: match.ref.evidenceClass as CanonicalContextSource["evidenceClass"],
+    worldId: match.ref.worldId,
+    actorIds: [...match.ref.actorIds],
+    logicalSequence: match.ref.logicalSequence,
+    canonicalText: match.canonicalText,
+  };
+}
+
 /**
  * Reversibly expands requested source entries from a WorldContextCapsule.
  * Fails closed if the capsule hash does not match or if sources cannot be verified.
@@ -98,25 +156,30 @@ export async function expandWorldContextSources(
         )
       );
 
-    const foundIds = new Set(sourceRows.map(r => r.sourceId));
+    // The persisted capsule contains the authoritative selected entry text and source refs.
+    // Never synthesize placeholder content: expansion must remain reversible and provenance-bound.
+    const selectedBySourceId = new Map<string, CanonicalContextSource>();
+    for (const row of sourceRows) {
+      const reconstructed = reconstructPersistedSelectedSource(receipt.capsuleJson, row);
+      if (reconstructed) selectedBySourceId.set(row.sourceId, reconstructed);
+    }
 
+    const foundIds = new Set(sourceRows.map(r => r.sourceId));
     for (const id of input.requestedSourceIds) {
       if (!foundIds.has(id)) {
+        unprovable.push(id);
+        continue;
+      }
+      if (!selectedBySourceId.has(id)) {
+        // Omitted-source linkage proves the identity was considered, but the capsule
+        // itself intentionally does not contain enough raw text to reconstruct it.
         unprovable.push(id);
       }
     }
 
     for (const r of sourceRows) {
-      expanded.push({
-        sourceId: r.sourceId,
-        sourceHash: r.sourceHash,
-        kind: r.kind as any,
-        evidenceClass: r.evidenceClass as any,
-        worldId: r.worldId,
-        actorIds: [],
-        logicalSequence: r.logicalSequence,
-        canonicalText: `[Expanded Source ${r.sourceId}] Kind: ${r.kind}, Seq: ${r.logicalSequence}`,
-      });
+      const selected = selectedBySourceId.get(r.sourceId);
+      if (selected) expanded.push(selected);
     }
 
     const status =
