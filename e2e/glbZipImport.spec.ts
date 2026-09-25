@@ -74,6 +74,7 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });
     const input = page.locator("#glbZipFile");
     await expect(input).toBeEnabled();
+    await input.scrollIntoViewIfNeeded();
     const lod0 = testAnimatedPlayerGlb("Zip_Character_Female_Ranger_LOD0");
     const lod1 = testAnimatedPlayerGlb("Zip_Character_Female_Ranger_LOD1");
     expect(lod0.equals(lod1)).toBe(false);
@@ -89,7 +90,8 @@ test("admin ZIP upload preflights, unpacks and groups LOD GLBs through the real 
     expect(body).toMatchObject({ accepted: true, fileCount: 2, familyCount: 1 });
     expect(body.entries.map((entry: any) => entry.lodLevel)).toEqual([0, 1]);
     expect(body.entries.every((entry: any) => entry.purpose === "npc-fallback")).toBe(true);
-    await expect(page.getByText("2 GLBs · 1 logische Familien aufgenommen")).toBeVisible();
+    await page.getByTestId("glb-upload-scroll-region").evaluate(element => element.scrollTo({ top: element.scrollHeight }));
+    await expect(page.getByText("2 GLBs · 1 logische Familien aufgenommen")).toBeVisible({ timeout: 15_000 });
 
     const catalogResponse = await page.request.get("/api/game/glb-catalog");
     expect(catalogResponse.status()).toBe(200);

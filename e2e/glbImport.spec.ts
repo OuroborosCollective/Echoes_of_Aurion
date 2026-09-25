@@ -28,6 +28,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     const scrollRegion = page.getByTestId('glb-upload-scroll-region');
     await expect(scrollRegion).toBeVisible();
     await expect(page.locator('#smartGlbFile')).toBeEnabled();
+    await expect(page.getByRole("status")).toContainText("Dateispeicher bereit", { timeout: 15_000 });
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     const scrollMetrics = await scrollRegion.evaluate(element => {
       const overflowY = getComputedStyle(element).overflowY;
@@ -79,6 +80,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // The short-lived agent credential still has its own cryptographic regression;
     // this browser lane only proves that the authenticated product can issue it.
     const sessionReply = page.waitForResponse(r => r.url().endsWith('/api/admin/glb-import/agent-session'));
+    await page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true }).scrollIntoViewIfNeeded();
     await page.getByRole('button', { name: 'Import-Zugang für eine Stunde erstellen', exact: true }).click();
     const sessionResponse = await sessionReply; expect(sessionResponse.status()).toBe(200);
 
@@ -86,6 +88,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     // used by the owner's standardized male/female uploads.
     const publicBytes = testAnimatedPlayerGlb('Aurion_Public_Player');
     const publicSha256 = createHash('sha256').update(publicBytes).digest('hex');
+    await page.getByLabel('Kategorie / Verwendungszweck').scrollIntoViewIfNeeded();
     await page.getByLabel('Kategorie / Verwendungszweck').selectOption('player-public');
     await page.getByLabel('Anzeigename (optional bei Einzeldatei)').fill('Browser public avatar');
     const publicReply = page.waitForResponse(r => r.url().endsWith('/api/admin/glb-smart-upload') && r.request().method() === 'POST');

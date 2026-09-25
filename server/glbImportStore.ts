@@ -392,6 +392,29 @@ export class GlbImportStore {
     });
   }
 
+  /** Reconcile the catalog: verify every approved local-glb asset's stored
+   * bytes still match their recorded SHA-256. Assets whose file is missing or
+   * whose digest has drifted are marked "rejected" and their assignments
+   * deactivated, keeping the published catalog clean. */
+  async reconcile(actorUserId: number): Promise<Readonly<{ checked: number; purged: number; purgedAssetIds: readonly string[] }>> {
+    return this.locked(actorUserId, async connection => {
+      const [rows] = await connection.query<RowDataPacket[]>(
+        "SELECT id, sha256 FROM glbAssets WHERE status = 'approved' AND storageKey LIKE 'local-glb/%'",
+      );
+      const purgedAssetIds: string[] = [];
+      for (const row of rows) {
+        try {
+          await readStoredGlb(String(row.sha256), this.storageRoot);
+        } catch {
+          await connection.execute("UPDATE glbAssets SET status = 'rejected', reviewedByUserId = ?, reviewedAt = ? WHERE id = ?", [actorUserId, operationalDate(), String(row.id)]);
+          await connection.execute("UPDATE glbAssignments SET active = 0 WHERE assetId = ?", [String(row.id)]);
+          purgedAssetIds.push(String(row.id));
+        }
+      }
+      return Object.freeze({ checked: rows.length, purged: purgedAssetIds.length, purgedAssetIds: Object.freeze([...purgedAssetIds]) });
+    });
+  }
+
   async externalProvenance(assetId: string): Promise<GlbExternalProvenanceReadback | null> {
     if (!/^glb_[a-f0-9]{48}$/.test(assetId)) return null;
     const [rows] = await this.pool.query<RowDataPacket[]>(

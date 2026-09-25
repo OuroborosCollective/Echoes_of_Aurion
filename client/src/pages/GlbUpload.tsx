@@ -136,6 +136,8 @@ export default function GlbUpload() {
   const [lodExistingAssetId, setLodExistingAssetId] = useState("");
   const [lodFamilyName, setLodFamilyName] = useState("");
   const [lodFiles, setLodFiles] = useState<LodFiles>({});
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<Readonly<{ checked: number; purged: number }> | null>(null);
   const selectedLodFamily = useMemo(() => catalog?.entries.find(entry => entry.assetId === lodExistingAssetId) ?? null, [catalog, lodExistingAssetId]);
 
   const refreshCatalog = async (signal?: AbortSignal) => {
@@ -153,6 +155,18 @@ export default function GlbUpload() {
     const controller = new AbortController(); void refreshCatalog(controller.signal);
     return () => controller.abort();
   }, [user?.id, user?.role]);
+
+  const reconcileCatalog = async () => {
+    setReconcileBusy(true); setReconcileResult(null);
+    try {
+      const response = await fetch("/api/admin/glb-import/reconcile", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } });
+      const body = await response.json().catch(() => null) as Readonly<{ checked: number; purged: number; purgedAssetIds?: readonly string[] }> | null;
+      if (!response.ok || !body) throw new Error(body && typeof body === "object" && "error" in body ? String((body as { error: string }).error) : "Bereinigung fehlgeschlagen.");
+      setReconcileResult({ checked: body.checked, purged: body.purged });
+      await refreshCatalog();
+    } catch (reconcileError) { setError(reconcileError instanceof Error ? reconcileError.message : "Bereinigung fehlgeschlagen."); }
+    finally { setReconcileBusy(false); }
+  };
 
   const createAgentSession = async () => {
     setSessionBusy(true); setAgentSession(null);
@@ -284,7 +298,8 @@ export default function GlbUpload() {
     <div className="mx-auto max-w-4xl space-y-5 pb-10">
       <header><p className="text-xs tracking-[.24em] text-cyan-300">AURION // ASSET INTAKE</p><h1 className="mt-2 text-3xl font-semibold text-amber-100">GLB automatisch einsortieren</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">Modelle hochladen, serverseitig erkennen und ausschließlich innerhalb des gewählten Darstellungszwecks verwenden.</p></header>
       <p className="text-sm text-muted-foreground">Katalog-Zwecke verändern keine Quest-, Händler-, Kampf-, Inventar- oder Teleportlogik. Ausrüstung ist Mesh-Autorität, keine Item-Autorität.</p>
-      <div role="status" className="rounded-xl border border-cyan-200/15 p-4 text-sm">{storageError ? <><span className="text-red-200">{storageError}</span><Button variant="outline" className="ml-3" onClick={() => void refreshCatalog()}>Erneut prüfen</Button></> : catalog ? <span className="text-emerald-200">Dateispeicher bereit · {catalog.entries.length} logische Katalogmodelle</span> : "Dateispeicher wird geprüft…"}</div>
+      <div role="status" className="rounded-xl border border-cyan-200/15 p-4 text-sm">{storageError ? <><span className="text-red-200">{storageError}</span><Button variant="outline" className="ml-3" onClick={() => void refreshCatalog()}>Erneut prüfen</Button></> : catalog ? <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-emerald-200">Dateispeicher bereit · {catalog.entries.length} logische Katalogmodelle</span><Button variant="outline" size="sm" disabled={reconcileBusy || busy || lodBusy} onClick={() => void reconcileCatalog()}>{reconcileBusy ? "Katalog wird bereinigt…" : "Katalog bereinigen"}</Button></div> : "Dateispeicher wird geprüft…"}</div>
+      {reconcileResult && <div className="rounded-lg border border-cyan-200/15 bg-cyan-400/[.03] p-3 text-sm text-cyan-100">{reconcileResult.purged > 0 ? `${reconcileResult.purged} fehlerhafte(s) Modell(e) entfernt · ${reconcileResult.checked} geprüft` : `Katalog ist sauber · ${reconcileResult.checked} Modell(e) geprüft`}</div>}
 
       <Card className="border-cyan-200/15 bg-slate-950/75"><CardHeader><CardTitle className="flex items-center gap-2 text-amber-100"><Upload className="h-5 w-5" />GLB aufnehmen</CardTitle><CardDescription>Bis zu {MAX_GLB_BATCH_FILES} Dateien pro Durchlauf, jeweils maximal 24 MiB. Unklare Modelle werden einzeln abgelehnt.</CardDescription></CardHeader><CardContent className="space-y-4">
         <div className="space-y-2"><Label htmlFor="smartGlbPurpose">Kategorie / Verwendungszweck</Label><select id="smartGlbPurpose" value={purpose} disabled={busy || lodBusy} onChange={event => setPurpose(event.target.value as GlbImportPurpose)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">{(Object.keys(purposeLabels) as GlbImportPurpose[]).map(value => <option key={value} value={value}>{purposeLabels[value]}</option>)}</select><p className="text-xs leading-5 text-slate-400">{purposeDescriptions[purpose]}</p></div>

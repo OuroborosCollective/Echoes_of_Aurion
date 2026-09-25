@@ -228,6 +228,7 @@ export function registerGlbSmartUpload(app: Express): void {
     return glbImportStore().enableLodFamily(user.id, input.assetId);
   }));
   app.post("/api/admin/glb-import/assign", adminRoute(async (request, user) => glbImportStore().assign(user.id, z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }).strict().parse(request.body))));
+  app.post("/api/admin/glb-import/reconcile", adminRoute(async (_request, user) => glbImportStore().reconcile(user.id)));
 
   app.get("/api/game/public-player-characters", playerRoute(async (_request, user) => {
     const catalog = await glbImportStore().catalog();
