@@ -14,6 +14,7 @@ import {
   AX1_PLAY_REQUEST_EVENT,
   AX1_PLAY_STATUS_EVENT,
 } from "@/xaurion/integration/Ax1PlayNavigationBridge";
+import "./homeCinematic.css";
 
 type CommunityPanel = "chat" | "forum" | "events" | "assets";
 
@@ -83,8 +84,8 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="aurion-app min-h-screen overflow-hidden bg-[#061317] text-slate-100">
-      <header className="brand-bar sticky top-0 z-20 border-b border-white/5 backdrop-blur-xl">
+    <main className="aurion-app aurion-cinematic-home min-h-screen overflow-hidden text-slate-100">
+      <header className="brand-bar cinematic-nav sticky top-0 z-20 border-b border-white/5 backdrop-blur-xl">
         <div className="brand-lockup">
           <span role="img" aria-label="Aurion Siegel" className="brand-sigil">
             <i />
@@ -137,14 +138,17 @@ export default function Home() {
         </nav>
       </header>
 
-      <section className="relative border-b border-white/5">
+      <section className="cinematic-hero relative border-b border-white/5">
+        <div aria-hidden="true" className="cinematic-hero__art" />
+        <div aria-hidden="true" className="cinematic-hero__aether" />
+        <div aria-hidden="true" className="cinematic-hero__vignette" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_18%,rgba(34,211,238,.20),transparent_34%),radial-gradient(circle_at_15%_65%,rgba(251,191,36,.10),transparent_30%)]" />
-        <div className="relative mx-auto grid max-w-7xl gap-10 px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:pb-28">
-          <div>
+        <div className="relative mx-auto grid max-w-7xl cinematic-hero-grid gap-10 px-5 pb-20 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:pb-28">
+          <div className="cinematic-hero__copy">
             <p className="text-xs font-semibold tracking-[0.28em] text-cyan-300">
               PERSISTENT 3D MMORPG // LIVING WORLD
             </p>
-            <h2 className="mt-5 max-w-4xl font-serif text-5xl leading-[0.98] text-amber-100 sm:text-7xl">
+            <h2 className="cinematic-hero__title mt-5 max-w-4xl font-serif text-5xl leading-[0.98] text-amber-100 sm:text-7xl">
               Eine Welt, die{" "}
               <span className="block text-cyan-200">nicht auf dich wartet.</span>
             </h2>
@@ -227,7 +231,7 @@ export default function Home() {
 
           <div
             id="living-world"
-            className="relative mx-auto w-full max-w-xl lg:max-w-none"
+            className="cinematic-world-panel relative mx-auto w-full max-w-xl lg:max-w-none"
           >
             <div className="rounded-[2rem] border border-cyan-200/15 bg-[#0b2024]/85 p-3 shadow-2xl shadow-black/30">
               <div className="relative min-h-[430px] overflow-hidden rounded-[1.55rem] border border-white/5 bg-[radial-gradient(circle_at_70%_25%,rgba(34,211,238,.22),transparent_26%),linear-gradient(155deg,#102a2e,#071317_58%,#0c1720)] p-6 sm:min-h-[500px]">
@@ -296,7 +300,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="gameplay" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24">
+      <section id="gameplay" className="cinematic-showcase mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24">
         <div className="max-w-3xl">
           <p className="text-xs font-semibold tracking-[0.26em] text-cyan-300">
             GAMEPLAY // SYSTEME STATT KULISSE
@@ -312,13 +316,13 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="cinematic-feature-grid mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {gameplayFeatures.map((feature) => {
             const Icon = feature.icon;
             return (
               <article
                 key={feature.title}
-                className="group rounded-[1.7rem] border border-white/8 bg-white/[0.035] p-6 transition-all hover:-translate-y-1 hover:border-cyan-200/20 hover:bg-white/[0.055]"
+                className="cinematic-feature group rounded-[1.7rem] border border-white/8 bg-white/[0.035] p-6 transition-all hover:-translate-y-1 hover:border-cyan-200/20 hover:bg-white/[0.055]"
               >
                 <div className="flex items-center justify-between">
                   <Icon className="size-6 text-cyan-200" />
@@ -357,7 +361,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="border-y border-white/5 bg-white/[0.018]">
+      <section className="cinematic-process border-y border-white/5 bg-white/[0.018]">
         <div className="mx-auto grid max-w-7xl gap-8 px-5 py-16 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:items-center lg:py-20">
           <div>
             <p className="text-xs font-semibold tracking-[0.26em] text-cyan-300">
@@ -385,7 +389,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
+      <section className="cinematic-cta mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
         <div className="rounded-[2rem] border border-cyan-200/15 bg-[#0b2024]/80 p-7 sm:p-10">
           <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
