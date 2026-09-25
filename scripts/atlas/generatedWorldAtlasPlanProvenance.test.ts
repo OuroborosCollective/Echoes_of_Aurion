@@ -247,7 +247,11 @@ test("#505 refuses an atlas when presentation provenance drifts from parity evid
   const projection = buildProjection();
   const provenance = buildGeneratedStructurePresentationProvenance(projection);
   const evidence = buildEvidence(provenance);
-  const changedEvidence = { ...evidence, materializationHash: hash("different") };
+  const changedUnsigned = { ...evidence, materializationHash: hash("different") };
+  const changedEvidence = worldGenerationParityEvidenceSchema.parse({
+    ...changedUnsigned,
+    determinismHash: computeWorldGenerationDeterminismHash(changedUnsigned),
+  });
 
   assert.throws(
     () => buildGeneratedWorldAtlasPlan({
