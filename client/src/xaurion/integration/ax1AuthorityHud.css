@@ -182,7 +182,7 @@
 }
 @media (max-width:420px){
   .xaurion-runtime .ax1-authority-shell .ax1-combat-cluster{
-    width:calc(100vw - 132px);
+    width:276px;
     max-width:calc(100vw - 132px);
     min-width:0;
     box-sizing:border-box;
