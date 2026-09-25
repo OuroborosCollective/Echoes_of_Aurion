@@ -65,4 +65,22 @@ describe("Home", () => {
       }
     });
   });
+
+  it("exposes the living-cinematic presentation hooks without changing the play/auth contract", async () => {
+    render(<RealClientHarness><Home /></RealClientHarness>);
+    await waitFor(() => {
+      const root = document.querySelector(".aurion-cinematic-home");
+      const hero = document.querySelector(".cinematic-hero");
+      expect(root).toBeTruthy();
+      expect(hero).toBeTruthy();
+      expect(document.querySelector(".cinematic-hero__art")).toBeTruthy();
+      expect(document.querySelector(".cinematic-hero__aether")).toBeTruthy();
+      expect(document.querySelector(".cinematic-hero__vignette")).toBeTruthy();
+      expect(document.querySelector(".cinematic-world-panel")).toBeTruthy();
+      expect(document.querySelector(".cinematic-feature-grid")).toBeTruthy();
+      expect(document.querySelector(".cinematic-process")).toBeTruthy();
+      expect(document.querySelector(".cinematic-cta")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet\./i })).toBeTruthy();
+    });
+  });
 });

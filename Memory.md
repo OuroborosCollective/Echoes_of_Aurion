@@ -1361,3 +1361,13 @@ Learned: Supply-chain evidence must bind the exact finalized runtime artifact an
 
 Open: APK build/attestation path remains deferred by current scope; #141 must stay open until that lane is completed.
 Next safe step: Merge the verified runtime-SBOM block and track the deferred APK lane separately.
+### 2026-09-25 — Living cinematic public website (#585)
+Status: VERIFIED exact-head CI; merge-ready.
+Task: Replace the conventional Aurion portal homepage presentation with a materially cinematic game-facing web composition while leaving play/auth/runtime authority unchanged.
+Decisions: Keep the public site as presentation-only; add full-viewport atmospheric layers, pulsing Aether-like visual motion, stronger editorial/game-launch hierarchy, focused CTA treatment, responsive behavior, reduced-motion safeguards and forced-colors fallback. No gameplay, readback, mutation, database, CAG/Wolfram authority or authentication path changed.
+Touched surfaces: client/src/pages/Home.tsx, client/src/pages/Home.test.tsx, client/src/pages/homeCinematic.css.
+Evidence: Exact PR head fd3d8f33ea1d4913d28c164cab0c19d6eaf5f6cd passed Aurion PR Runtime Candidate #1000, Aurion PR Runtime Container Proof #999, Aurion Local Test Pack #1546, AIM-262 deterministic visual regression #1152; Companion learning #583 and AIM-240 GLB Upload Regression #1216 also passed on the same exact head. PR #585 has no review threads and is mergeable.
+Learned: A theme/token change alone was too subtle; the visible transformation required a dedicated presentation layer on the actual Home DOM with explicit cinematic hooks. That layer must remain independent from gameplay authority.
+Open: Post-merge main readback only.
+Next safe step: Merge #585, confirm merged main revision, then build the in-game HUD UX slice from the updated main baseline.
+
