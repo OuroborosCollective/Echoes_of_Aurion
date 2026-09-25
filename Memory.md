@@ -1310,3 +1310,20 @@ Change: Added the deterministic `aurion.generated-structure.presentation-provena
 Insight: #505 can consume generated-structure presentation data without interpreting or replacing #512/#514 truth. The real MariaDB parity path now proves the provenance is derived from the actual confirmed observation/materialization/projection chain before atlas consumption; atlas packing remains presentation/build-only.
 
 Evidence: Pre-memory exact implementation head `4a60364a64ad31b8df98a0dba99f744e62e164a2`; Runtime Candidate #957 PASS; Runtime Container Proof #956 PASS; Local Test Pack #1494 PASS; Android #1974 PASS; Causal Chaos #318 PASS; AIM-292 #1307 PASS. Real container readback emitted `AIM505_REAL_PRESENTATION_PROVENANCE` with observationKey `sha256:24f52e4b658893426d43a6eca23871f73ea5cb8261fcf6b0ea6f046493f65dbe`, recipeHash `55df16b82523fc7704c1617bebfb5e6412709f80e0f8898a546b357e8b3ca122`, materializationHash `sha256:656641216a2b5f7ba0e0b1a3d386055e112c270f22d157b903a63b78c1814396`, provenanceHash `sha256:2e0dd5eb196e709f40d214045cf6c2b7b72a9dac5feb807c67a4b3b7f63fa8be`, and assetKeys `["aurion_confirmed_house"]`.
+
+### 2026-09-25 — OpenTelemetry observer boundary (#142)
+
+Status: VERIFIED implementation + exact-head functional evidence; ready for merge.
+
+Task: Complete the Aurion OpenTelemetry side-channel boundary without granting telemetry gameplay or persistence authority.
+
+Decisions: Use a local OTLP/HTTP observer boundary instead of importing OTel into canonical gameplay reducers. Redact opaque/numeric route identities, emit bounded source-revision metadata and hash-only references for causal receipts actually observed by readback, fail open on disabled/unconfigured collectors and collector errors, and keep telemetry outside authorization, mutation and persistence decisions.
+
+Touched surfaces: server/observability/otelBoundary.ts, server/observability/otelBoundary.test.ts, server/_core/index.ts, server/causality/readbackService.ts.
+
+Evidence: Exact head 13c42c25b67c3c7c61fa0ece184b479a8feb8e54 passed the OTel-relevant full offline pack (run 36151138440), exact-head runtime candidate (run 36151138674), exact-head container proof (run 36151138453), real MariaDB/readback + browser proof (run 36151138679), causal chaos (run 36151138657), and the client/runtime/typecheck/build regressions; 14 current checks passed and the only failed check, AIM-265 independent exact replay, reports pre-existing docs/balancing/aim265-candidate.json catalog SHA drift unrelated to telemetry. No telemetry dependency was added to canonical gameplay reducers and no production gameplay/persistence mutation was introduced.
+
+Learned: The safest telemetry boundary is protocol-level observation of already-confirmed evidence; it should carry hashes/references, never invent receipts, and its availability must be irrelevant to the request/truth path.
+
+Open: Post-merge readback; independent AIM-265 catalog drift remains outside #142.
+Next safe step: Merge the exact verified head and confirm #142 closed from main.
