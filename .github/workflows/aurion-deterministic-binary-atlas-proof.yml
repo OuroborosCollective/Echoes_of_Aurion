@@ -1,0 +1,108 @@
+name: Aurion deterministic binary atlas proof
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/atlas/**"
+      - "client/src/xaurion/world/assets/aurion-surface-atlas.webp"
+      - "client/src/xaurion/world/assets/aurion-surface-atlas.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  binary-atlas:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pinned Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify exact source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
+          pnpm check
+
+      - name: Verify deterministic atlas planning and binary compositor
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/atlas/deterministicAtlasPack.test.mjs scripts/atlas/buildDeterministicAtlasArtifact.test.mjs
+
+      - name: Build the actual committed surface atlas plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .evidence/atlas
+          node scripts/atlas/deterministicAtlasPack.mjs             scripts/atlas/fixtures/aurion-surface-binary-plan.json             .evidence/atlas/plan.json
+
+      - name: Composite the actual committed surface atlas twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/atlas/buildDeterministicAtlasArtifact.mjs             .evidence/atlas/plan.json             .evidence/atlas/build-a
+          node scripts/atlas/buildDeterministicAtlasArtifact.mjs             .evidence/atlas/plan.json             .evidence/atlas/build-b
+          cmp --silent             .evidence/atlas/build-a/atlas-000.png             .evidence/atlas/build-b/atlas-000.png
+
+      - name: Verify actual source and output hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(sha256sum client/src/xaurion/world/assets/aurion-surface-atlas.webp | awk '{print $1}')"
+          manifest_sha="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("client/src/xaurion/world/assets/aurion-surface-atlas.json","utf8")); process.stdout.write(m.sha256)')"
+          test "${source_sha}" = "${manifest_sha}"
+          page_sha_a="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(".evidence/atlas/build-a/manifest.json","utf8")); process.stdout.write(m.pages[0].sha256)')"
+          page_sha_b="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(".evidence/atlas/build-b/manifest.json","utf8")); process.stdout.write(m.pages[0].sha256)')"
+          test "${page_sha_a}" = "${page_sha_b}"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const plan = JSON.parse(fs.readFileSync(".evidence/atlas/plan.json", "utf8"));
+          const buildA = JSON.parse(fs.readFileSync(".evidence/atlas/build-a/manifest.json", "utf8"));
+          const buildB = JSON.parse(fs.readFileSync(".evidence/atlas/build-b/manifest.json", "utf8"));
+          if (buildA.planHash !== plan.planHash || buildB.planHash !== plan.planHash) throw new Error("ATLAS_PLAN_BINDING_MISMATCH");
+          if (buildA.manifestHash !== buildB.manifestHash) throw new Error("ATLAS_MANIFEST_NONDETERMINISTIC");
+          if (buildA.browserVersion !== buildB.browserVersion) throw new Error("ATLAS_BROWSER_TOOLCHAIN_MISMATCH");
+          if (buildA.pages.length !== 1 || buildA.pages[0].placementCount !== 1) throw new Error("ATLAS_OUTPUT_SHAPE_MISMATCH");
+          fs.writeFileSync(".evidence/atlas/binary-readback.json", JSON.stringify({
+            recordType: "aurion_deterministic_binary_atlas_readback",
+            sourceRevision: process.env.EXPECTED_HEAD,
+            planHash: plan.planHash,
+            browserVersion: buildA.browserVersion,
+            manifestHash: buildA.manifestHash,
+            page: buildA.pages[0],
+            sourceManifestHash: buildA.buildInputManifestHash,
+          }, null, 2) + "\n");
+          NODE
+
+      - name: Publish deterministic binary atlas evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurion-deterministic-binary-atlas-evidence
+          path: .evidence/atlas/
+          if-no-files-found: error

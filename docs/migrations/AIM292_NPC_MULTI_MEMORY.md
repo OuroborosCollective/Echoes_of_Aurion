@@ -1,10 +1,14 @@
 ---
-description: WASD-eigene NPC-Regeln, vier begrenzte Speicherklassen und bestätigte MariaDB-/AX1-Projektionen.
+description: Historischer NPC-Migrationsnachweis; die aktive NPC-Logik und Persistenz gehören vollständig Aurion.
 ---
+
+## ⚠️ Historisch — nicht normativ
+
+AIM-292 dokumentiert einen früheren Migrationsstand. Aussagen über WASD als Besitzer von NPC-Regeln oder AX1 als aktiven Besitzer von Projektionen sind historische Provenienz. Im heutigen Endzustand besitzt Aurion die gesamte NPC-, Memory-, Information-, Entscheidungs- und Persistenzlogik.
 
 # AIM-292 — Bestätigtes NPC-Gedächtnis
 
-WASD besitzt die NPC-Bedürfnisse, Zielwahl, Lebensplanung, Händlerentscheidungen und Speicherregeln. Aurion speichert ihre bestätigten Ausgaben in MariaDB und liefert authentifizierte Readmodels. AX1 zeigt diese Daten im Kontaktfenster an.
+Historisch dokumentierte WASD-Regeln umfassten NPC-Bedürfnisse, Zielwahl, Lebensplanung, Händlerentscheidungen und Speicherregeln. Diese Logik ist inzwischen als migrierte Aurion-Implementierung aktiv; Aurion speichert ihre bestätigten Ausgaben in MariaDB und liefert authentifizierte Readmodels. AX1 zeigt diese Daten im Kontaktfenster an.
 
 ## Revisionsgebundene Regelquelle
 

@@ -80,7 +80,7 @@ for (const viewport of [
       await first.runtime.getByRole("button", { name: "ZUR STERNWARTE", exact: true }).click();
       await expect(page.getByTestId("xaurion-open-world-runtime")).toHaveCount(0);
       await expect(page).toHaveURL("http://127.0.0.1:3000/");
-      await expect(page.getByRole("heading", { name: /Willkommen zurück/ })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet./ })).toBeVisible();
       await expect.poll(async () => {
         const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS active FROM aurionWorldPresenceLeases WHERE userId=? AND disconnectedAt IS NULL", [latestPresence!.userId]);
         return Number(rows[0].active);

@@ -5,7 +5,7 @@ import { wasdAurionCatalogSummary, wasdAurionSourceCatalog, wasdAurionSourceRevi
 
 /**
  * Legacy world/dialogue contracts remain migration debt.
- * NPC rules are bound to the immutable WASD source capsule.
+ * NPC rules are owned and executed by Aurion; historical WASD source identity is retained only for provenance.
  */
 export const AURION_WASD_RULESET_VERSION = "aurion-wasd-rules-v1";
 export const AURION_WASD_CONTENT_VERSION = "aurion-wasd-content-v1";

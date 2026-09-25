@@ -20,7 +20,7 @@ function payload(row: Omit<MemoryRow,"createdAt">) {
     memoryHash:row.memoryHash, memoryJson:row.memoryJson };
 }
 
-/** Storage envelope verification only. All memory semantics are checked by the WASD capsule. */
+/** Storage envelope verification for the Aurion-owned NPC memory contract; historical WASD identity is provenance only. */
 function decodeMemoryRow(row: MemoryRow): NpcMemoryV4 {
   const memory = parseNpcMemoryV4(row.memoryJson);
   if (row.id !== storageId(row.sourceDecisionReceiptId) || row.receiptHash !== npcHash(payload(row)) ||
@@ -61,7 +61,7 @@ export async function readPreviousNpcMultiMemory(tx: NpcTransaction, npcId: stri
   return verifiedReadback(tx,row);
 }
 
-/** Persist and read back the WASD reducer output in the caller's same NPC transaction. */
+/** Persist and read back the Aurion-owned deterministic NPC result in the same transaction. */
 export async function appendNpcMultiMemory(tx: NpcTransaction, source: DecisionRow, previous: ConfirmedNpcMultiMemory | null): Promise<ConfirmedNpcMultiMemory> {
   const confirmed = verifyConfirmedNpcDecision(source.observationIdsJson,{...source,receiptId:source.id});
   const result = commitNpcMemoryV4(previous?.memory ?? createNpcMemoryV4(source.npcId),confirmed);

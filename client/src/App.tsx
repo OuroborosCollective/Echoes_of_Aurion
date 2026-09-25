@@ -1,4 +1,4 @@
-/** Echoes of Aurion — Aurion hosts portal/auth/community; AX1 owns `/play`. */
+/** Echoes of Aurion — one canonical game/runtime owned by Aurion; `/play` renders confirmed Aurion state. */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, useLocation } from "wouter";

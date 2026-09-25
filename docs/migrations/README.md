@@ -1,34 +1,38 @@
 ---
-description: Index und Regeln für aktuelle AX1/WASD/Aurion-Migrationsdokumente.
+description: Historische AX1/WASD-Provenienz und Aurion-Migrationsnachweise.
 ---
 
 # Migrationsdokumentation
 
 Alle Migrationsdokumente unterliegen [ARCHITECTURE_OWNERSHIP.md](../../ARCHITECTURE_OWNERSHIP.md).
 
-## Verbindliche Zuordnung
+## Aktueller Grundsatz
 
-- **WASD**: Gameplayregeln und Simulation.
-- **AX1**: Spielruntime, UI, Renderer, Input und Presentation Content.
-- **Aurion**: Host, Auth/Account, Community/Forum/Events, Assets/Ops, MariaDB-Persistenz, Transport und read-only Readmodels.
+**Aurion ist der einzige Owner.**
 
-Eine Migration darf niemals „Integration“ mit „Ownership“ verwechseln. Wenn eine historische Migration eine fachliche Regel in Aurion implementiert hat, ist diese Implementierung Migrationsschuld und bei Berührung auf WASD zurückzuführen.
+AX1 und WASD sind historische Donor-/Provenienzquellen. Bereits übernommener Code ist Bestandteil der Aurion-Runtime und folgt ausschließlich Aurion-Verträgen, Aurion-Persistenz, Aurion-Receipts und Aurion-Readback.
 
-## Aktuelle Verträge
+Eine Migration überträgt Code und Herkunft — **keine aktuelle Authority**.
 
-- `AIM252_WASD_NORMATIVE_RULESET.md` — normative Gameplayquelle.
-- `AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md` — revisionsgebundene AX1-Source-Provenienz.
-- `AIM267_AX1_CONTENT_CATALOG.md` — Content-/Asset-Katalog; keine Gameplayregel.
-- `AIM259_ROLE_QUEUE_GROUP_INSTANCES.md` — Group/Dungeon Ownership-Ziel.
-- `AIM268_GUILD_KINGDOM_AUTHORITY.md` — Guild/Kingdom Ownership-Ziel.
-- `AIM269_GUILD_BANK_ECONOMY.md` — Bank/Custody/Economy Ownership-Ziel.
-- `AIM292_NPC_MULTI_MEMORY.md` — gebundene WASD-NPC-Quelle, transaktionale vierteilige Erinnerung und AX1-Readmodel.
-- `aim487_npc_information_ecology.md` — deterministische NPC-Information mit Provenienz-, Konflikt-, Trust- und Ablaufsemantik.
+## Aktive Verträge
 
-## Historische Ledgers
+- [Architektur: Aurion Single Authority](../../ARCHITECTURE_OWNERSHIP.md) — verbindliche Truth-Boundary.
+- [Aktuelle Source-Provenienz](CURRENT_SOURCE_PROVENANCE.md) — Herkunftsnachweis für bereits migrierte Bausteine.
+- Weitere AIM-Dokumente dürfen technische Migrationsdetails, historische Revisionen, Hashes und Regressionen dokumentieren.
 
-Ältere `WASD_AURION_*`, `AIM239_*_2026-09-04`, Audit- und Automatisierungsdokumente dürfen als Provenienz im Repository bleiben. Sie sind **nicht normativ** und werden nicht in der aktuellen GitBook-Navigation veröffentlicht.
+## Historische Dokumente
 
-## Abschlussregel
+AIM-252, AIM-239, AIM-259, AIM-267, AIM-268, AIM-269 und AIM-292 enthalten teilweise ältere Ownership-/Source-Formulierungen. Sie bleiben als historische Evidence erhalten, sind aber **nicht normativ**.
 
-Eine Lane endet erst nach passender Evidence, Merge, `main`-Readback und 0 offenen PRs. Danach darf die nächste Lane beginnen.
+Wenn ein historisches Dokument beschreibt, dass WASD Gameplayregeln besitzt oder AX1 ein kanonischer Game-Owner ist, ist das lediglich der damalige Migrationsstand.
+
+## Regel bei Widerspruch
+
+Bei einem Widerspruch gilt in dieser Reihenfolge:
+
+1. aktueller Aurion-Code und seine Tests,
+2. [ARCHITECTURE_OWNERSHIP.md](../../ARCHITECTURE_OWNERSHIP.md),
+3. aktueller Runtime-/DB-Readback,
+4. erst danach historische Source-/Migrationsevidence als Provenienz.
+
+Keine Legacy-Quelle erhält daraus neue Rechte oder Pflichten.

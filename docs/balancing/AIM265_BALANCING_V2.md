@@ -2,6 +2,10 @@
 description: Reproduzierbare Balancing-Analyse für WASD-Regelparameter.
 ---
 
+## ⚠️ Historische Evidence — nicht aktueller Owner-Vertrag
+
+Die folgenden Ownership-/Source-Aussagen dokumentieren den damaligen Migrationsstand. Im aktuellen Endzustand ist **Aurion der einzige Owner und Wahrheitsträger**. Bereits migrierte Logik ist Aurion-Code; AX1 und WASD sind keine Live-Authority und keine Runtime-Pflicht.
+
 # AIM-265 — WASD Balancing v2
 
 Diese Lane berechnet **Kandidaten für WASD-Regeln**. Sie definiert keine Aurion-Gameplay-Physik.
