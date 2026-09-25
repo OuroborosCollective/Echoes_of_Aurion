@@ -24,3 +24,7 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+
+## 2026-09-25 - Tactile Feedback and Disabled States
+**Learning:** Interactive elements should always use tactile feedback classes (`motion-safe:hover:-translate-y-0.5`, `motion-safe:active:scale-95`) and disabled states should use `disabled:opacity-60`, `disabled:cursor-not-allowed`, `aria-busy`, and `title` with loading text, while disabling tactile feedback via `disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100`.
+**Action:** Apply these specific classes and ARIA attributes systematically across all buttons to ensure consistent visual affordance and accessibility.
