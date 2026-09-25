@@ -52,6 +52,10 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm check
           pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts server/npcSimulationScheduler.test.ts server/structureProjectionProtocol.test.ts server/interestManagementPlanner.test.ts server/causality/worldGenerationEvidence.test.ts server/causality/worldGenerationParityHarness.test.ts server/causality/evidenceGateEngine.test.ts server/causality/worldGenerationEvidenceGate.test.ts scripts/atlas/worldGenerationAtlasAdmission.test.ts --reporter=verbose
+          node --import tsx --test scripts/atlas/generatedWorldAtlasPlan.test.ts
+          node --import tsx --test scripts/atlas/generatedStructurePresentationProvenance.test.ts
+          node --import tsx --test scripts/atlas/generatedWorldAtlasPlanProvenance.test.ts
+          node --test scripts/atlas/deterministicAtlasPack.test.mjs
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
           node --test scripts/aurion-build-input-manifest.test.mjs
@@ -194,6 +198,73 @@ jobs:
           pnpm exec tsx scripts/atlas/verifyWorldGenerationAtlasAdmission.ts aurion-world-generation-parity-510.json > aurion-world-generation-atlas-admission-563.json
           test -s aurion-world-generation-atlas-admission-563.json
 
+          source_sha256="$(sha256sum client/src/xaurion/world/assets/aurion-surface-atlas.webp | awk '{print $1}')"
+          manifest_asset_sha256="$(node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("client/src/xaurion/world/assets/aurion-surface-atlas.json","utf8")); process.stdout.write(String(m.sha256))')"
+          manifest_sha256="$(sha256sum client/src/xaurion/world/assets/aurion-surface-atlas.json | awk '{print $1}')"
+          test "${source_sha256}" = "${manifest_asset_sha256}"
+          test -n "${manifest_sha256}" && [[ "${manifest_sha256}" =~ ^[a-f0-9]{64}$ ]]
+          source_bytes="$(wc -c < client/src/xaurion/world/assets/aurion-surface-atlas.webp | tr -d " ")"
+          SOURCE_SHA256="${source_sha256}" SOURCE_BYTES="${source_bytes}" MANIFEST_SHA256="${manifest_sha256}" node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const hash = process.env.SOURCE_SHA256;
+          const manifestSha256 = process.env.MANIFEST_SHA256;
+          const bytes = Number(process.env.SOURCE_BYTES);
+          if (!/^[a-f0-9]{64}$/.test(hash ?? "")) throw new Error("REAL_ATLAS_SOURCE_SHA_INVALID");
+          if (!/^[a-f0-9]{64}$/.test(manifestSha256 ?? "")) throw new Error("REAL_ATLAS_MANIFEST_SHA_INVALID");
+          if (!Number.isSafeInteger(bytes) || bytes < 1) throw new Error("REAL_ATLAS_SOURCE_BYTES_INVALID");
+          const input = {
+            schemaVersion: "aurion.deterministic-atlas-plan.v1",
+            atlasId: "generated-world-real-surface-seed",
+            family: "generated-world-surface",
+            pageWidth: 2048,
+            pageHeight: 2048,
+            padding: 1,
+            gutter: 1,
+            rotationAllowed: false,
+            sourceManifestHash: "sha256:" + process.env.MANIFEST_SHA256,
+            sourceInputs: [{
+              assetId: "aurion-surface-atlas",
+              path: "client/src/xaurion/world/assets/aurion-surface-atlas.webp",
+              contentSha256: hash,
+              width: 1024,
+              height: 1024,
+              compatibilityClass: "basecolor-srgb",
+              localityBucket: "surface-global"
+            }]
+          };
+          fs.writeFileSync("aurion-generated-world-atlas-input.json", JSON.stringify(input, null, 2) + "\n");
+          NODE
+          AURION_EXPECTED_WORLD_ID=echoes-of-aurion-global \
+          AURION_EXPECTED_SOURCE_REVISION="${EXPECTED_HEAD}" \
+          AURION_EXPECTED_RUNTIME_REVISION="${EXPECTED_HEAD}" \
+          AURION_EXPECTED_RUNTIME_IMAGE_DIGEST="${image_id}" \
+          AURION_EXPECTED_CAUSAL_TICK_SCHEMA=aurion.causal.tick.v2 \
+          AURION_EXPECTED_RULESET_VERSION=aurion.zone.rules.v2 \
+          pnpm exec tsx scripts/atlas/buildGeneratedWorldAtlasPlan.ts \
+            aurion-world-generation-parity-510.json \
+            aurion-generated-world-atlas-input.json \
+            aurion-generated-world-atlas-plan-505.json
+          test -s aurion-generated-world-atlas-plan-505.json
+          MANIFEST_SHA256="${manifest_sha256}" node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const plan = JSON.parse(fs.readFileSync("aurion-generated-world-atlas-plan-505.json", "utf8"));
+          if (plan.schemaVersion !== "aurion.generated-world-atlas-plan.v1") throw new Error("GENERATED_ATLAS_PLAN_SCHEMA");
+          if (plan.consumer !== "ATLAS_BUILD") throw new Error("GENERATED_ATLAS_PLAN_CONSUMER");
+          if (!/^sha256:[a-f0-9]{64}$/.test(plan.admissionHash)) throw new Error("GENERATED_ATLAS_PLAN_ADMISSION_HASH");
+          if (!/^sha256:[a-f0-9]{64}$/.test(plan.plan?.planHash)) throw new Error("GENERATED_ATLAS_PLAN_PLAN_HASH");
+          if (plan.plan?.sourceManifestHash !== "sha256:" + process.env.MANIFEST_SHA256) throw new Error("GENERATED_ATLAS_PLAN_MANIFEST_BINDING");
+          const placementCount = plan.plan?.groups?.reduce((n, group) => n + group.pages.reduce((p, page) => p + page.placements.length, 0), 0) ?? 0;
+          if (placementCount !== 1) throw new Error("GENERATED_ATLAS_PLAN_PLACEMENT_COUNT");
+          console.log(JSON.stringify({
+            recordType: "aurion_generated_world_atlas_plan_readback",
+            planSchema: plan.schemaVersion,
+            admissionHash: plan.admissionHash,
+            planHash: plan.plan.planHash,
+            sourceManifestHash: plan.plan.sourceManifestHash,
+            placementCount
+          }));
+          NODE
+
           docker run --detach --name "${app}" --network "${network}" \
             --mount "type=volume,source=${volume},destination=/var/lib/aurion/glb" \
             -e AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb \
@@ -296,5 +367,7 @@ jobs:
             aurion-world-generation-parity-510.json
             aurion-world-generation-parity-510.csv
             aurion-world-generation-atlas-admission-563.json
+            aurion-generated-world-atlas-input.json
+            aurion-generated-world-atlas-plan-505.json
           if-no-files-found: error
           retention-days: 30

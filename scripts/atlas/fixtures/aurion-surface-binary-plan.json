@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "aurion.deterministic-atlas-plan.v1",
+  "atlasId": "aurion-surface-binary-proof",
+  "family": "basecolor-srgb",
+  "pageWidth": 1024,
+  "pageHeight": 1024,
+  "padding": 2,
+  "gutter": 2,
+  "rotationAllowed": false,
+  "sourceManifestHash": "sha256:7eabc5834403745f59eae5867e40d756b015fa1c000000000000000000000000",
+  "sourceInputs": [
+    {
+      "assetId": "aurion-surface-atlas",
+      "path": "client/src/xaurion/world/assets/aurion-surface-atlas.webp",
+      "contentSha256": "f329e8e1224416e38967f888d40d4459bf8b359001370a432cb270c13f1f3f35",
+      "width": 1024,
+      "height": 1024,
+      "compatibilityClass": "basecolor-srgb",
+      "localityBucket": "surface-global"
+    }
+  ]
+}

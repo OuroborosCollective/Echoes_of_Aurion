@@ -108,6 +108,10 @@ jobs:
             server/causality/worldGenerationEvidenceGate.test.ts \
             scripts/atlas/worldGenerationAtlasAdmission.test.ts \
             --reporter=verbose
+          node --import tsx --test scripts/atlas/generatedWorldAtlasPlan.test.ts
+          node --import tsx --test scripts/atlas/generatedStructurePresentationProvenance.test.ts
+          node --import tsx --test scripts/atlas/generatedWorldAtlasPlanProvenance.test.ts
+          node --test scripts/atlas/deterministicAtlasPack.test.mjs
           git diff --check
 
       - name: Build and boot exact immutable candidate container
