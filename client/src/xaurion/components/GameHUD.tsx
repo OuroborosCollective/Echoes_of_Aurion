@@ -230,10 +230,19 @@ export function GameHUD(props: GameHUDProps) {
                   {props.progressionCount ?? "—"} bestätigte Pfade · {props.victories ?? "—"} Siege
                 </span>
               </div>
-              <div className="relative h-2.5 sm:h-3 overflow-hidden rounded-md border border-amber-900/60 bg-black/90">
+              <div className="relative h-2.5 sm:h-3 overflow-hidden rounded-[3px] border border-amber-900/60 bg-black/90">
                 <span className="absolute inset-0 flex items-center justify-between gap-2 px-1 text-[5px] sm:text-[8px] font-mono font-bold text-amber-200">
                   <span className="truncate">{props.mastery?.name ?? "Waffenpfad ausstehend"}</span>
                   <span className="shrink-0">{props.mastery ? `Stufe ${props.mastery.level}` : props.playerStateLabel}</span>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-emerald-300/25 bg-emerald-950/30 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-emerald-200">
+                  <CheckCircle2 className="h-3 w-3" aria-hidden /> Player · {playerProjectionState}
+                </span>
+                <span className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-cyan-300/20 bg-cyan-950/25 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-cyan-200">
+                  {props.worldState === "live" ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : props.worldState === "stale" ? <History className="h-3 w-3" aria-hidden /> : <Clock3 className="h-3 w-3" aria-hidden />}
+                  World · {worldProjectionState}
                 </span>
               </div>
               <span data-testid="confirmed-remote-player-count" className="sr-only">
