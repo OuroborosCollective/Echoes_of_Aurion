@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, FileBox, Layers3, ShieldAlert, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, FileBox, Layers3, Loader2, ShieldAlert, Upload, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   glbImportReceiptSchema,
@@ -19,6 +19,7 @@ import {
   type GlbRuntimeCatalog,
 } from "@shared/glbImportContract";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 const MAX_GLB_BYTES = 24 * 1024 * 1024;
 const MAX_GLB_BATCH_FILES = 12;
@@ -92,6 +93,23 @@ function validateFile(file: File): string | null {
   if (file.size < 12 || file.size > MAX_GLB_BYTES) return "Die GLB-Datei muss zwischen 12 Byte und 24 MiB groß sein.";
   return null;
 }
+function validateGlbMagicBytes(file: File): Promise<string | null> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("Die GLB-Datei konnte nicht gelesen werden.");
+    reader.onload = () => {
+      const buffer = reader.result;
+      if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 12) { resolve("Die GLB-Datei ist zu klein für einen gültigen Binär-Header."); return; }
+      const view = new DataView(buffer);
+      const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+      if (magic !== "glTF") { resolve("Die Datei besitzt keinen gültigen GLB-Magic-Header (glTF)."); return; }
+      const version = view.getUint32(4, true);
+      if (version !== 2) { resolve(`Nur GLB-Version 2 wird unterstützt (gefunden: ${version}).`); return; }
+      resolve(null);
+    };
+    reader.readAsArrayBuffer(file.slice(0, 12));
+  });
+}
 function lodClassifyingFileName(fileName: string, level: GlbLodLevel): string {
   const base = fileName.replace(/\.glb$/i, "").replace(/(?:^|[_ -])lod[_ -]?[0-3](?:$|[_ -])/ig, "_").replace(/[_ -]+$/g, "");
   return `${base || "aurion_model"}_LOD${level}.glb`;
@@ -111,6 +129,7 @@ export default function GlbUpload() {
   const [catalog, setCatalog] = useState<GlbRuntimeCatalog | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
   const [agentSession, setAgentSession] = useState<{ token: string; expiresAt: string } | null>(null);
   const [sessionBusy, setSessionBusy] = useState(false);
   const [lodBusy, setLodBusy] = useState(false);
@@ -147,10 +166,12 @@ export default function GlbUpload() {
   };
 
   const uploadOne = async (file: File, chosenName: string, chosenPurpose = purpose, contentBase64?: string, fileName = file.name): Promise<SmartUploadResult> => {
-    const response = await fetch("/api/admin/glb-smart-upload", {
-      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: chosenName, fileName, purpose: chosenPurpose, contentBase64: contentBase64 ?? await readFileAsBase64(file) }),
-    });
+    const payload64 = contentBase64 ?? await readFileAsBase64(file);
+    const requestBody = JSON.stringify({ displayName: chosenName, fileName, purpose: chosenPurpose, contentBase64: payload64 });
+    const send = async () => fetch("/api/admin/glb-smart-upload", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: requestBody });
+    let response: Response;
+    try { response = await send(); }
+    catch { response = await send(); }
     const payload = await response.json().catch(() => null) as (SmartUploadResult & { error?: string }) | null;
     if (!response.ok || !payload?.accepted) throw new Error(payload?.error || `Upload wurde mit HTTP ${response.status} abgelehnt.`);
     const receipt = glbImportReceiptSchema.safeParse(payload.receipt);
@@ -169,21 +190,26 @@ export default function GlbUpload() {
   const uploadFiles = async (files: readonly File[]) => {
     if (!files.length || busyRef.current || !catalog || storageError) return;
     if (files.length > MAX_GLB_BATCH_FILES) { setError(`Pro Durchlauf dürfen höchstens ${MAX_GLB_BATCH_FILES} GLB-Dateien hochgeladen werden.`); return; }
-    busyRef.current = true; setBusy(true); setError(null); setOutcomes([]);
+    busyRef.current = true; setBusy(true); setError(null); setOutcomes([]); setUploadProgress({ current: 0, total: files.length, fileName: "" });
     const singleOverride = files.length === 1 ? displayName.trim() : "";
     try {
-      for (const file of files) {
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        setUploadProgress({ current: index, total: files.length, fileName: file.name });
         const validationError = validateFile(file);
         if (validationError) { setOutcomes(current => [...current, { fileName: file.name, error: validationError }]); continue; }
+        const magicError = await validateGlbMagicBytes(file);
+        if (magicError) { setOutcomes(current => [...current, { fileName: file.name, error: magicError }]); continue; }
         const chosenName = (singleOverride || defaultDisplayName(file.name)).slice(0, 120);
         if (chosenName.length < 3) { setOutcomes(current => [...current, { fileName: file.name, error: "Der Anzeigename ist zu kurz." }]); continue; }
         try {
           const result = await uploadOne(file, chosenName);
           setOutcomes(current => [...current, { fileName: file.name, result }]);
           if (files.length === 1) setDisplayName(chosenName);
+          await refreshCatalog();
         } catch (uploadError) { setOutcomes(current => [...current, { fileName: file.name, error: uploadError instanceof Error ? uploadError.message : "Der GLB-Upload ist fehlgeschlagen." }]); }
       }
-    } finally { busyRef.current = false; setBusy(false); await refreshCatalog(); }
+    } finally { busyRef.current = false; setBusy(false); setUploadProgress(null); await refreshCatalog(); }
   };
 
   const preflightLod = async (level: GlbLodLevel, file: File, familyPurpose: GlbImportPurpose): Promise<LodPreflight> => {
@@ -227,6 +253,7 @@ export default function GlbUpload() {
       for (const item of preflight.sort((left, right) => left.level - right.level)) {
         const result = await uploadOne(item.file, `${baseName} LOD${item.level}`, familyPurpose, item.contentBase64, item.fileName);
         setOutcomes(current => [...current, { fileName: `LOD${item.level} · ${item.file.name}`, result }]);
+        await refreshCatalog();
       }
       setLodFiles({});
       if (!existing) setLodFamilyName(baseName);
@@ -263,7 +290,7 @@ export default function GlbUpload() {
         <div className="space-y-2"><Label htmlFor="smartGlbPurpose">Kategorie / Verwendungszweck</Label><select id="smartGlbPurpose" value={purpose} disabled={busy || lodBusy} onChange={event => setPurpose(event.target.value as GlbImportPurpose)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">{(Object.keys(purposeLabels) as GlbImportPurpose[]).map(value => <option key={value} value={value}>{purposeLabels[value]}</option>)}</select><p className="text-xs leading-5 text-slate-400">{purposeDescriptions[purpose]}</p></div>
         <div className="space-y-2"><Label htmlFor="smartGlbName">Anzeigename (optional bei Einzeldatei)</Label><Input id="smartGlbName" value={displayName} maxLength={120} onChange={event => setDisplayName(event.target.value)} placeholder="Bei mehreren Dateien wird der Dateiname verwendet" /></div>
         <label htmlFor="smartGlbFile" className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-cyan-300/30 bg-cyan-400/[.035] p-6 text-center transition-colors hover:bg-cyan-400/[.06]" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void uploadFiles(Array.from(event.dataTransfer.files)); }}><FileBox className="h-8 w-8 text-cyan-300" /><div><p className="font-medium text-amber-50">GLBs hier ablegen oder gemeinsam auswählen</p><p className="mt-1 text-xs text-slate-400">Dateiname und GLB-Inhalt werden gemeinsam klassifiziert; der Server bestätigt jeden Zweck separat.</p></div><Input id="smartGlbFile" type="file" multiple accept=".glb,model/gltf-binary" disabled={busy || lodBusy || !catalog || Boolean(storageError)} className="max-w-sm" onChange={event => { void uploadFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} /></label>
-        {busy && <p className="text-sm text-cyan-100">GLBs werden nacheinander gelesen, geprüft, klassifiziert und gespeichert…</p>}{error && <p role="alert" className="rounded-lg border border-red-300/20 bg-red-400/[.06] p-3 text-sm text-red-200">{error}</p>}
+        {busy && uploadProgress && <div className="space-y-2"><div className="flex items-center gap-2 text-sm text-cyan-100"><Loader2 className="h-4 w-4 animate-spin" /><span>Datei {uploadProgress.current + 1} von {uploadProgress.total}: {uploadProgress.fileName} wird gelesen, geprüft und gespeichert…</span></div><Progress value={(uploadProgress.current / uploadProgress.total) * 100} className="h-1.5" /></div>}{error && <p role="alert" className="rounded-lg border border-red-300/20 bg-red-400/[.06] p-3 text-sm text-red-200">{error}</p>}
       </CardContent></Card>
 
       <GlbZipBatchUpload fallbackPurpose={purpose} disabled={busy || lodBusy || !catalog || Boolean(storageError)} onComplete={() => refreshCatalog()} />
