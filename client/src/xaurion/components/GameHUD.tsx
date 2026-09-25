@@ -238,20 +238,21 @@ export function GameHUD(props: GameHUDProps) {
                   <span className="shrink-0">{props.mastery ? `Stufe ${props.mastery.level}` : props.playerStateLabel}</span>
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-emerald-300/25 bg-emerald-950/30 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-emerald-200">
-                  <CheckCircle2 className="h-3 w-3" aria-hidden /> Player · {playerProjectionState}
-                </span>
-                <span className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-cyan-300/20 bg-cyan-950/25 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-cyan-200">
-                  {props.worldState === "live" ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : props.worldState === "stale" ? <History className="h-3 w-3" aria-hidden /> : <Clock3 className="h-3 w-3" aria-hidden />}
-                  World · {worldProjectionState}
-                </span>
-              </div>
               <span data-testid="confirmed-remote-player-count" className="sr-only">
                 {props.connected ? `${props.remotePlayerCount} andere Explorer verbunden` : "Mitspieler werden verbunden"}
               </span>
             </div>
           </section>
+
+          <div className="flex max-w-[88vw] flex-wrap items-center gap-1" aria-label="Projection state">
+            <span className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-emerald-300/25 bg-emerald-950/30 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-emerald-200">
+              <CheckCircle2 className="h-3 w-3" aria-hidden /> Player · {playerProjectionState}
+            </span>
+            <span className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-cyan-300/20 bg-cyan-950/25 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-cyan-200">
+              {props.worldState === "live" ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : props.worldState === "stale" ? <History className="h-3 w-3" aria-hidden /> : <Clock3 className="h-3 w-3" aria-hidden />}
+              World · {worldProjectionState}
+            </span>
+          </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex w-fit items-center gap-1 sm:gap-1.5 rounded-lg border border-gray-800 bg-black/70 px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-mono text-gray-300 backdrop-blur-sm">
@@ -292,7 +293,7 @@ export function GameHUD(props: GameHUDProps) {
           )}
         </div>
 
-        <div className="pointer-events-auto flex max-w-[94vw] flex-col items-end gap-1.5">
+        <div className="pointer-events-auto min-w-0 max-w-none flex flex-col items-end gap-1.5">
           <nav aria-label="Schnellnavigation" className="flex max-w-[94vw] flex-wrap justify-end gap-1.5 rounded-[6px] border border-slate-700/80 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
             <HudNavButton label="Char" shortcut="C" title="Charakter [C]" ariaLabel="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
             <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" ariaLabel="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
@@ -485,7 +486,7 @@ export function GameHUD(props: GameHUDProps) {
         </div>
 
         <div className="ax1-combat-cluster flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-[6px] border border-amber-300/25 bg-black/78 p-1.5 shadow-2xl backdrop-blur-xl">
-          <button type="button" disabled={props.actionsDisabled} onClick={props.onAttack} className="relative min-h-14 min-w-14 h-14 w-14 sm:h-16 sm:w-16 rounded-[6px] border border-amber-400 bg-gradient-to-br from-amber-600/30 to-black text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-90" title="Angriff [R]">
+          <button type="button" disabled={props.actionsDisabled} onClick={props.onAttack} className="relative min-h-14 min-w-14 h-14 w-14 sm:h-16 sm:w-16 rounded-[6px] border border-amber-400 bg-gradient-to-br from-amber-600/30 to-black text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-90" title="Angriff [R]" aria-label="Angriff [R]">
             <Swords className="mx-auto h-6 w-6" /><kbd className="absolute -left-1 -top-1 rounded bg-black px-1 text-[8px] text-amber-300">R</kbd><span className="block text-[7px] font-bold">ANGRIFF</span>
           </button>
           {props.hotbar.map((skill, index) => <button type="button" key={`${skill.command}:${index}`} disabled={props.actionsDisabled} onClick={() => props.onCastSkill(skill.command)} className="relative min-h-11 min-w-11 h-11 w-11 sm:h-12 sm:w-12 rounded-[5px] border border-gray-700 bg-black/70 hover:border-[#fbbf24] active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300" title={skill.name} aria-label={`${skill.name} · Hotbar ${index + 1}`}>
