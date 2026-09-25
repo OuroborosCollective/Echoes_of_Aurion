@@ -71,6 +71,7 @@ on:
       - "drizzle/0060_aurion_npc_policy_evolution.sql"
       - "drizzle/0061_aurion_exploration_memory.sql"
       - "drizzle/0062_aurion_world_director.sql"
+      - "drizzle/0063_aurion_npc_information_ecology.sql"
       - "drizzle/0001_shocking_doctor_octopus.sql"
       - "drizzle/0009_rainy_multiple_man.sql"
       - "drizzle/0019_wasd_aurion_crafting_receipt_inventory.sql"
@@ -267,7 +268,7 @@ jobs:
           if(r.overallState!=="RECONCILIATION_REQUIRED"||r.summary.absentCount!==JSON.parse(fs.readFileSync("config/aurion-migration-wave-manifest.json","utf8")).migrations.length) throw new Error("expected the complete declared late migration wave");
           console.log(JSON.stringify({sourceRevision:r.sourceRevision,overallState:r.overallState,summary:r.summary}));
           NODE
-      - name: Apply 0021 through 0062 only inside ephemeral proof database
+      - name: Apply 0021 through 0063 inside ephemeral proof database
         run: |
           set -euo pipefail
           root_database_url="mysql://root:${AURION_RECONCILE_TEST_ROOT_PASSWORD}@mariadb:3306/${AURION_RECONCILE_TEST_DATABASE}"
@@ -293,6 +294,7 @@ jobs:
             "0060_aurion_npc_policy_evolution",
             "0061_aurion_exploration_memory",
             "0062_aurion_world_director",
+            "0063_aurion_npc_information_ecology",
           ];
           const db=await mysql.createConnection(process.env.DATABASE_URL);
           try {
