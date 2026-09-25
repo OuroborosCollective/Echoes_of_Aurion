@@ -302,20 +302,48 @@ export function GameHUD(props: GameHUDProps) {
           </nav>
 
           {menuExpanded && (
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-1 rounded-xl border border-cyan-500/30 bg-black/90 p-1.5 backdrop-blur-xl shadow-2xl">
-              <MenuButton title="Steuerung" onClick={() => closeMenu(props.onOpenControls)}><Gamepad2 /></MenuButton>
-              <MenuButton title="Disziplinen" onClick={() => closeMenu(props.onOpenDisciplines)}><Swords /></MenuButton>
-              <MenuButton title="Dungeons" onClick={() => closeMenu(props.onOpenDungeonFinder)}><ShieldCheck /></MenuButton>
-              <MenuButton title="Companion" onClick={() => closeMenu(props.onOpenCompanion)}><Sparkles /></MenuButton>
-              <MenuButton title="Chat" onClick={() => closeMenu(props.onOpenChat)}><MessageSquare /></MenuButton>
-              <MenuButton title="Gilde" onClick={() => closeMenu(props.onOpenGuild)}><Crown /></MenuButton>
-              <MenuButton title="Ökonomie" onClick={() => closeMenu(props.onOpenEconomy)}><Coins /></MenuButton>
-              <MenuButton title="NPC" onClick={() => closeMenu(props.onOpenDialogue)}><Languages /></MenuButton>
-              <MenuButton title="Territorium" onClick={() => closeMenu(props.onOpenTerritory)}><Landmark /></MenuButton>
-              <MenuButton title="Homestead" onClick={() => closeMenu(props.onOpenHomestead)}><Hammer /></MenuButton>
-              <MenuButton title="Evidence" onClick={() => closeMenu(props.onOpenDeterminism)}><Activity /></MenuButton>
-              <MenuButton title="Research" onClick={() => closeMenu(props.onOpenResearch)}><Sparkles /></MenuButton>
-            </div>
+            <section
+              role="dialog"
+              aria-label="Weitere Menüs"
+              className="ax1-command-deck w-[min(460px,94vw)] rounded-[6px] border border-cyan-300/20 bg-[linear-gradient(180deg,rgba(9,14,18,.98),rgba(3,7,10,.98))] p-2 shadow-2xl backdrop-blur-2xl"
+            >
+              <div className="mb-2 flex items-center justify-between border-b border-slate-800 pb-2">
+                <div>
+                  <p className="font-serif text-base font-semibold text-stone-100">Aurion Command Deck</p>
+                  <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-stone-500">UI focus · World input held</p>
+                </div>
+                <span className="rounded-[3px] border border-cyan-300/20 px-1.5 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-cyan-200">Expanded</span>
+              </div>
+
+              <CommandSection title="Character & Progression">
+                <MenuButton title="Steuerung" onClick={() => closeMenu(props.onOpenControls)}><Gamepad2 /></MenuButton>
+                <MenuButton title="Disziplinen" onClick={() => closeMenu(props.onOpenDisciplines)}><Swords /></MenuButton>
+                <MenuButton title="Companion" onClick={() => closeMenu(props.onOpenCompanion)}><Sparkles /></MenuButton>
+              </CommandSection>
+
+              <CommandSection title="World & Adventure">
+                <MenuButton title="Dungeons" onClick={() => closeMenu(props.onOpenDungeonFinder)}><ShieldCheck /></MenuButton>
+                <MenuButton title="NPC" onClick={() => closeMenu(props.onOpenDialogue)}><Languages /></MenuButton>
+                <MenuButton title="Territorium" onClick={() => closeMenu(props.onOpenTerritory)}><Landmark /></MenuButton>
+                <MenuButton title="Homestead" onClick={() => closeMenu(props.onOpenHomestead)}><Hammer /></MenuButton>
+                <MenuButton title="Research" onClick={() => closeMenu(props.onOpenResearch)}><Sparkles /></MenuButton>
+              </CommandSection>
+
+              <CommandSection title="Social & Holdings">
+                <MenuButton title="Chat" onClick={() => closeMenu(props.onOpenChat)}><MessageSquare /></MenuButton>
+                <MenuButton title="Kontakte" onClick={() => closeMenu(props.onOpenContacts)}><Users /></MenuButton>
+                <MenuButton title="Gilde" onClick={() => closeMenu(props.onOpenGuild)}><Crown /></MenuButton>
+                <MenuButton title="Ökonomie" onClick={() => closeMenu(props.onOpenEconomy)}><Coins /></MenuButton>
+              </CommandSection>
+
+              <CommandSection title="Evidence">
+                <MenuButton title="Evidence" onClick={() => closeMenu(props.onOpenDeterminism)}><Activity /></MenuButton>
+              </CommandSection>
+
+              <p className="mt-2 border-t border-slate-800 pt-2 text-[8px] leading-relaxed text-stone-600">
+                Menü geöffnet · World-Actions gesperrt · Mutationen bleiben bis zum bestätigten Readback Pending.
+              </p>
+            </section>
           )}
 
           <div className="origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
@@ -446,8 +474,28 @@ function HudNavButton({
   );
 }
 
+function CommandSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mb-2 last:mb-0" aria-label={title}>
+      <h3 className="mb-1 px-1 text-[8px] font-semibold uppercase tracking-[0.15em] text-stone-600">{title}</h3>
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">{children}</div>
+    </section>
+  );
+}
+
 function MenuButton({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
-  return <button type="button" onClick={onClick} title={title} aria-label={title} className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-800 bg-black/75 text-cyan-300 hover:border-cyan-400 [&_svg]:h-4 [&_svg]:w-4">{children}</button>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-[4px] border border-slate-800 bg-black/65 px-2 text-cyan-200 transition-colors hover:border-cyan-300/50 hover:bg-slate-900/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 [&_svg]:h-4 [&_svg]:w-4"
+    >
+      {children}
+      <span className="truncate text-[8px] font-semibold text-stone-300">{title}</span>
+    </button>
+  );
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {
