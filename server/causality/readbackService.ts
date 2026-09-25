@@ -3,6 +3,7 @@ import { operationalDate } from "../../shared/operationalClock";
 import { replayZoneTick } from "./replayZoneTick";
 import { globalTickRecorder, type RecordedTickEntry, type CausalPersistenceAdapter } from "./tickRecorder";
 import { globalCausalPersistence } from "./persistence";
+import { recordOtelCausalReceiptReference } from "../observability/otelBoundary";
 
 export interface ReadbackVerificationReceipt {
   zoneId: string;
@@ -70,6 +71,16 @@ export class AurionCausalReadbackService {
     }
 
     this.recordVerification({ zoneId, tick: nextTick, verdict, verifiedAt: operationalDate() });
+    // Export only the receipt that was actually observed by the causal readback service.
+    // OTel receives a bounded hash reference; it cannot author or mutate gameplay truth.
+    recordOtelCausalReceiptReference({
+      worldId: evidenceReceipt.worldId,
+      zoneId: evidenceReceipt.zoneId,
+      tick: evidenceReceipt.tick,
+      receiptId: evidenceReceipt.receiptId,
+      receiptHash: evidenceReceipt.receiptHash,
+      sourceRevision: evidenceReceipt.sourceRevision,
+    });
     this.lastObservedTickByZone.set(zoneId, nextTick);
 
     if (entry && this.persistenceAdapter) {
