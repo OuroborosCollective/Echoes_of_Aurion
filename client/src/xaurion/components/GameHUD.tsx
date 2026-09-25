@@ -194,6 +194,9 @@ export function GameHUD(props: GameHUDProps) {
     props.worldState === "error" ? "Unavailable" :
     "Waiting";
 
+  const primaryObjective = props.objectives.find(objective => objective.kind === "primary");
+  const nearbyObjectives = props.objectives.filter(objective => objective.kind !== "primary");
+
 
   return (
     <div
@@ -348,53 +351,121 @@ export function GameHUD(props: GameHUDProps) {
 
           <div className="origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
 
-          <section className="w-36 sm:w-64 rounded-xl border border-[#b8860b]/40 bg-black/85 p-1.5 sm:p-2 backdrop-blur-md shadow-2xl">
-            <button type="button" onClick={() => setObjectivesCollapsed(value => !value)} className="flex w-full items-center justify-between border-b border-gray-800/80 pb-1 text-[10px] font-serif font-bold uppercase tracking-wider text-[#b8860b]">
-              <span className="flex items-center gap-1"><Award className="h-3 w-3 text-[#fbbf24]" /> Ziele ({props.objectives.length})</span>
-              {objectivesCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-            </button>
-            {!objectivesCollapsed && <div className="max-h-60 space-y-1 overflow-y-auto pt-1.5">
-              {props.objectives.length ? props.objectives.map(objective => {
-                const effectClass = activeEffects.get(objective.id) === 'shake' ? 'shake-highlight' : activeEffects.get(objective.id) === 'pulse' ? 'pulse-highlight' : '';
-                return (
-                <Collapsible key={objective.id}>
-                  <CollapsibleTrigger asChild>
-                    <button type="button" className={`block w-full rounded-lg border p-1.5 text-left transition-all ${objective.kind === "primary" ? "border-purple-500/40 bg-purple-950/20" : "border-gray-800/80 bg-black/60 hover:border-amber-500/40"} ${effectClass}`}>
-                      <b className="block truncate text-[10px] text-gray-100">{objective.label}</b>
-                      <span className="block line-clamp-2 text-[8px] text-gray-400">{objective.detail}</span>
-                      {objective.progress !== undefined && (
-                          <div className="mt-1.5 flex items-center gap-2">
-                             <div className="h-1.5 flex-1 rounded-full bg-stone-900">
-                                <div className={`h-full rounded-full bg-amber-500 transition-all duration-500 ease-out ${activeEffects.get(objective.id) === 'pulse' ? 'flash-meter' : ''}`} style={{ width: `${objective.progress * 100}%` }} />
-                             </div>
-                             <span className="text-[8px] text-amber-500 font-mono">{Math.round(objective.progress * 100)}%</span>
-                          </div>
+          <section className="ax1-objective-tracker w-[min(340px,78vw)] rounded-[6px] border border-amber-300/20 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Award className="h-3.5 w-3.5 text-amber-200" aria-hidden />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100">World Objectives</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setObjectivesCollapsed(value => !value)}
+                className="flex min-h-9 min-w-9 items-center justify-center rounded-[4px] text-stone-400 hover:bg-white/5 hover:text-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                aria-label={objectivesCollapsed ? "Ziele öffnen" : "Ziele schließen"}
+                aria-expanded={!objectivesCollapsed}
+              >
+                {objectivesCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {!objectivesCollapsed && (
+              <div className="pt-1.5">
+                {primaryObjective ? (
+                  <section
+                    className={`rounded-[5px] border border-amber-300/35 bg-amber-950/20 p-3 ${activeEffects.get(primaryObjective.id) ? "pulse-highlight" : ""}`}
+                    aria-label="Hauptziel"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-amber-300">PRIMARY · SERVER PROJECTION</span>
+                      {primaryObjective.completed ? (
+                        <span className="inline-flex items-center gap-1 rounded-[3px] border border-emerald-300/25 px-1.5 py-1 font-mono text-[8px] uppercase text-emerald-200">
+                          <CheckCircle2 className="h-3 w-3" aria-hidden /> Confirmed
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-stone-600">Active</span>
                       )}
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="px-1.5 py-1 text-[9px] text-gray-300">
-                    {objective.subtasks && objective.subtasks.length > 0 && (
-                        <ul className="list-disc pl-3">
-                            {objective.subtasks.map((task, i) => <li key={i}>{task}</li>)}
-                        </ul>
-                    )}
-                    {objective.lore && <p className="italic text-gray-400 mt-1">{objective.lore}</p>}
-                  </CollapsibleContent>
-                </Collapsible>
-              )}) : <p className="p-1 text-[10px] italic text-gray-500">{props.worldState === "live" ? "Keine bestätigten aktiven Ziele." : props.worldStateLabel}</p>}
-            </div>}
-            
-            {completedLedger.length > 0 && (
-                <div className="mt-2 border-t border-gray-800 pt-2">
-                    <p className="text-[9px] font-bold uppercase text-gray-500 mb-1">Zuletzt bestätigt:</p>
-                    <div className="max-h-20 overflow-y-auto space-y-1">
-                        {completedLedger.map(obj => (
-                            <div key={obj.id} className="text-[8px] text-emerald-500 flex items-center gap-1">
-                                <ShieldCheck className="h-3 w-3" /> {obj.label}
-                            </div>
-                        ))}
                     </div>
-                </div>
+                    <h2 className="mt-1 font-serif text-[18px] font-semibold leading-tight text-stone-100">{primaryObjective.label}</h2>
+                    <p className="mt-1 text-[10px] leading-relaxed text-stone-400">{primaryObjective.detail}</p>
+                    {primaryObjective.progress !== undefined ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-[2px] bg-black/70">
+                          <div className="h-full bg-gradient-to-r from-amber-700 to-amber-300" style={{ width: `${primaryObjective.progress * 100}%` }} />
+                        </div>
+                        <span className="font-mono text-[9px] text-amber-200">{Math.round(primaryObjective.progress * 100)}%</span>
+                      </div>
+                    ) : null}
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="text-[8px] text-stone-600">World state · {worldProjectionState}</span>
+                      <button
+                        type="button"
+                        onClick={props.onOpenQuests}
+                        className="min-h-9 rounded-[4px] px-2 text-[9px] font-semibold text-stone-300 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                      >
+                        Journal <kbd className="ml-1 rounded border border-slate-700 px-1 py-0.5 font-mono text-[8px] text-stone-500">J</kbd>
+                      </button>
+                    </div>
+                  </section>
+                ) : (
+                  <div className="rounded-[5px] border border-dashed border-slate-700 bg-black/35 p-3 text-[10px] text-stone-500">
+                    {props.worldState === "live" ? "Keine bestätigten aktiven Hauptziele." : props.worldStateLabel}
+                  </div>
+                )}
+
+                {nearbyObjectives.length > 0 ? (
+                  <section className="mt-1.5 rounded-[5px] border border-slate-800 bg-black/45" aria-label="Nearby objectives">
+                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                      <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-500">Nearby · {nearbyObjectives.length}</span>
+                      <span className="font-mono text-[8px] text-stone-700">POI</span>
+                    </div>
+                    <div className="divide-y divide-slate-800">
+                      {nearbyObjectives.slice(0, 4).map(objective => {
+                        const effectClass = activeEffects.get(objective.id) === "shake"
+                          ? "shake-highlight"
+                          : activeEffects.get(objective.id) === "pulse"
+                            ? "pulse-highlight"
+                            : "";
+                        return (
+                          <Collapsible key={objective.id}>
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                className={`flex min-h-10 w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber-300 ${effectClass}`}
+                                aria-label={`${objective.label} · ${objective.kind}`}
+                              >
+                                <span className="h-1.5 w-1.5 shrink-0 rotate-45 border border-stone-600" aria-hidden />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[10px] font-medium text-stone-200">{objective.label}</span>
+                                  <span className="block truncate text-[9px] text-stone-600">{objective.detail}</span>
+                                </span>
+                                {objective.completed ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-stone-700" aria-hidden />}
+                              </button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="px-2.5 pb-2 text-[9px] text-stone-400">
+                              {objective.subtasks?.length ? (
+                                <ul className="list-disc space-y-0.5 pl-4">{objective.subtasks.map((task, i) => <li key={i}>{task}</li>)}</ul>
+                              ) : null}
+                              {objective.lore ? <p className="mt-1 italic">{objective.lore}</p> : null}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+
+                {completedLedger.length > 0 ? (
+                  <section className="mt-1.5 border-t border-slate-800 pt-1.5" aria-label="Recently confirmed objectives">
+                    <p className="mb-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-600">Recently confirmed</p>
+                    {completedLedger.slice(0, 3).map(obj => (
+                      <div key={obj.id} className="flex items-center gap-1 text-[9px] text-emerald-300">
+                        <ShieldCheck className="h-3 w-3" aria-hidden />
+                        <span className="truncate">{obj.label}</span>
+                      </div>
+                    ))}
+                  </section>
+                ) : null}
+              </div>
             )}
           </section>
         </div>
