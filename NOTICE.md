@@ -18,8 +18,10 @@ The MIT/Apache/LGPL/ISC and other licenses listed below apply **only to their re
 | **three-mesh-bvh** | 0.9.15 | https://github.com/gkjohnson/three-mesh-bvh | MIT | Copyright (c) 2018 Garrett Johnson | Räumliche Beschleunigungsstrukturen, Raycasting, Kollisionserkennung |
 | **React** | ^18.3.1 | https://github.com/facebook/react | MIT | Copyright (c) Meta Platforms, Inc. and affiliates | Deklarative UI-Bibliothek für Web & HUD |
 | **React DOM** | ^18.3.1 | https://github.com/facebook/react | MIT | Copyright (c) Meta Platforms, Inc. and affiliates | DOM-Rendering-Schicht für React |
-| **Capacitor Core** | ^6.0.0 | https://github.com/ionic-team/capacitor | MIT | Copyright (c) 2017-present Drifty Co. | Cross-Platform Mobile Bridge |
-| **Capacitor Android** | ^6.0.0 | https://github.com/ionic-team/capacitor | MIT | Copyright (c) 2017-present Drifty Co. | Android-Native Integration & Packaging |
+
+
+
+
 | **Radix UI Primitives** | Various | https://github.com/radix-ui/primitives | MIT | Copyright (c) 2022 WorkOS | Barrierefreie UI-Komponenten und Primitives |
 | **Drizzle ORM** | ^0.38.0 | https://github.com/drizzle-team/drizzle-orm | Apache-2.0 / MIT | Copyright (c) 2023 Drizzle Team | Typensichere ORM für MariaDB-Persistenz |
 | **MariaDB Connector** | ^3.3.0 | https://github.com/mariadb-corporation/mariadb-connector-nodejs | LGPL-2.1 | Copyright (c) MariaDB Corporation Ab | Datenbanktreiber für MariaDB-Verbindungen |
@@ -36,7 +38,8 @@ The MIT/Apache/LGPL/ISC and other licenses listed below apply **only to their re
 
 ## Auszüge maßgeblicher Lizenztexte
 
-### MIT License (Three.js, React, Capacitor, three-mesh-bvh, Zod, Radix UI)
+### MIT License (Three.js, React, three-mesh-bvh, Zod, Radix UI)
+
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

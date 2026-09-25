@@ -16,8 +16,6 @@
     "verify:migrations": "tsx scripts/verify-drizzle-migration-chain.ts",
     "build:itch": "pnpm verify:release-assets && vite build --config vite.itch.config.ts && node scripts/package-itch-assets.mjs",
     "package:itch": "pnpm build:itch && cd dist/itch && zip -r ../echoes-of-aurion-itch.zip .",
-    "android:sync": "pnpm build:itch && node scripts/prepare-android.mjs",
-    "android:apk:debug": "pnpm android:sync && cd android && ./gradlew assembleDebug --no-daemon",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
@@ -29,8 +27,6 @@
     "verify:donor-ledger": "node scripts/build-aurion-donor-ledger.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.0",
-    "@capacitor/core": "^8.5.0",
     "@genkit-ai/google-genai": "^1.42.0",
     "@hookform/resolvers": "^5.2.2",
     "@modelcontextprotocol/express": "^2.0.0",
@@ -111,7 +107,6 @@
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
-    "@capacitor/cli": "^8.5.0",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
