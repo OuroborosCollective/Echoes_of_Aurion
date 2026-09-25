@@ -46,7 +46,7 @@ import { globalAssuranceService } from "./causality/assuranceService";
 import { clientObservationIdentifier } from "../shared/aurionClientVerificationContract";
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { resolveNpcUtilityScores, type NpcUtilityScoredCandidate } from "./npcUtilityPlanner";
-import { buildDebugPlannerContext, type DebugNpcSnapshot } from "../shared/npcUtilityPlannerDebug";
+import { buildPlannerContext, type NpcSnapshotInput } from "../shared/npcUtilityPlannerDebug";
 import { decodeOwnedNpcPacket } from "../shared/npcSnapshotProtocol";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
@@ -225,8 +225,8 @@ export const appRouter = router({
         decoded = null;
       }
       if (!decoded || decoded.npcs.length === 0) return Object.freeze({ npcs: [] as ReadonlyArray<{ npcId: string; resolutionIndex: number; goal: string; scored: readonly NpcUtilityScoredCandidate[] }> });
-      const results = decoded.npcs.map((npc: DebugNpcSnapshot) => {
-        const context = buildDebugPlannerContext({
+      const results = decoded.npcs.map((npc: NpcSnapshotInput) => {
+        const context = buildPlannerContext({
           npcId: npc.npcId,
           resolutionIndex: npc.resolutionIndex,
           goal: npc.goal,
