@@ -291,15 +291,15 @@ export function GameHUD(props: GameHUDProps) {
         </div>
 
         <div className="pointer-events-auto flex max-w-[64vw] flex-col items-end gap-1.5">
-          <div className="flex max-w-full flex-wrap justify-end gap-1">
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCharacter)} title="Charakter [C]" aria-label="Charakter"><UserRound className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenInventory)} title="Inventar [I/B]" aria-label="Inventar"><Package className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenCrafting)} title="Handwerk" aria-label="Handwerk"><Hammer className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenQuests)} title="Aufträge [J]" aria-label="Aufträge"><ScrollText className="h-4 w-4" /></button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenParty)} title="Gruppe" aria-label="Gruppe"><Users className="h-4 w-4" />{props.party?.length ? <span className="absolute -right-1 -top-1 rounded-full bg-sky-500 px-1 text-[8px] font-bold text-black">{props.party.length}</span> : null}</button>
-            <button type="button" className={iconButton} onClick={() => closeMenu(props.onOpenMap)} title="Weltatlas [M]" aria-label="Weltatlas"><MapIcon className="h-4 w-4" /></button>
-            <button type="button" className={`${iconButton} ${menuExpanded ? "border-cyan-400 text-cyan-300" : ""}`} onClick={() => setMenuExpanded(value => !value)} aria-expanded={menuExpanded} aria-label="Weitere Menüs"><Menu className="h-4 w-4" /></button>
-          </div>
+          <nav aria-label="Schnellnavigation" className="flex max-w-[94vw] flex-wrap justify-end gap-1.5 rounded-[6px] border border-slate-700/80 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+            <HudNavButton label="Char" shortcut="C" title="Charakter [C]" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
+            <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
+            <HudNavButton label="Craft" title="Handwerk" onClick={() => closeMenu(props.onOpenCrafting)}><Hammer /></HudNavButton>
+            <HudNavButton label="Quests" shortcut="J" title="Aufträge [J]" onClick={() => closeMenu(props.onOpenQuests)}><ScrollText /></HudNavButton>
+            <HudNavButton label="Party" title="Gruppe" badge={props.party?.length} onClick={() => closeMenu(props.onOpenParty)}><Users /></HudNavButton>
+            <HudNavButton label="Map" shortcut="M" title="Weltatlas [M]" onClick={() => closeMenu(props.onOpenMap)}><MapIcon /></HudNavButton>
+            <HudNavButton label={menuExpanded ? "Schließen" : "Mehr"} shortcut="/" title="Weitere Menüs" active={menuExpanded} ariaLabel="Weitere Menüs" onClick={() => setMenuExpanded(value => !value)}><Menu /></HudNavButton>
+          </nav>
 
           {menuExpanded && (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-1 rounded-xl border border-cyan-500/30 bg-black/90 p-1.5 backdrop-blur-xl shadow-2xl">
@@ -408,6 +408,41 @@ export function GameHUD(props: GameHUDProps) {
 
       {props.feedback && <p className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
     </div>
+  );
+}
+
+function HudNavButton({
+  label,
+  shortcut,
+  title,
+  onClick,
+  children,
+  active = false,
+  badge,
+  ariaLabel
+}: {
+  label: string;
+  shortcut?: string;
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+  active?: boolean;
+  badge?: number;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel ?? title}
+      aria-current={active ? "page" : undefined}
+      className={`${iconButton} ${active ? "border-cyan-200/60 bg-cyan-950/35 text-cyan-100" : ""}`}
+    >
+      <span className="relative"><span className="[&_svg]:h-4 [&_svg]:w-4">{children}</span>{typeof badge === "number" && badge > 0 ? <span className="absolute -right-3 -top-2 min-w-4 rounded-full bg-sky-300 px-1 text-center font-mono text-[8px] font-bold text-slate-950">{badge}</span> : null}</span>
+      <span className="text-[8px] font-semibold leading-none text-stone-300">{label}</span>
+      {shortcut ? <kbd className="absolute right-1 top-0.5 font-mono text-[7px] text-stone-500">{shortcut}</kbd> : null}
+    </button>
   );
 }
 
