@@ -1,0 +1,34 @@
+# Base44 development compose — runs the app from cloned source with live reload.
+# Single-origin: Express on port 3000 serves both the tRPC API and the Vite
+# dev middleware (see server/_core/vite.ts). Database, Redis and external APIs
+# are all optional for booting.
+services:
+  app:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Bind-mount the cloned source so edits hot-reload without rebuilds.
+      - .:/app
+      # Keep installed dependencies out of the host bind-mount.
+      - aurion_node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3000
+      # Vite >= 6.1 appends this to allowedHosts (the middleware setup already
+      # sets allowedHosts: true, but pass it for completeness).
+      - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+      - BASE44_PUBLIC_HOST_SUFFIX
+      - BASE44_SANDBOX_HOST_DOMAIN
+    env_file:
+      - /run/base44/app.env
+    command: >
+      sh -c "corepack enable pnpm &&
+             pnpm install --no-frozen-lockfile &&
+             pnpm dev"
+    restart: unless-stopped
+
+volumes:
+  aurion_node_modules:

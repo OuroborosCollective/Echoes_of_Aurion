@@ -1,5 +1,13 @@
 # Echoes of Aurion — Agent Instructions
 
+## Base44 dev environment
+
+- `docker-compose.base44.yml` runs the app from cloned source via `pnpm dev` (single-origin: Express on port 3000 serves both the tRPC API and Vite middleware).
+- The pnpm lockfile is out of sync with package.json, so `--no-frozen-lockfile` is required.
+- Database (MySQL), Redis, and external APIs (Gemini, Wolfram, Firebase) are all **optional** — the app boots without them. DB-dependent services simply don't start if `DATABASE_URL` is unset.
+- Vite middleware already sets `allowedHosts: true`, so no host/origin allowlist changes are needed.
+- No external secrets are required to boot.
+
 ## Non-negotiable architecture ownership
 
 Before editing gameplay, UI, persistence, routes, tests, issues or documentation, read [ARCHITECTURE_OWNERSHIP.md](ARCHITECTURE_OWNERSHIP.md).
