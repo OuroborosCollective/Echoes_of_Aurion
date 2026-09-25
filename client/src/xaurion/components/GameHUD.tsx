@@ -485,7 +485,7 @@ export function GameHUD(props: GameHUDProps) {
           <button type="button" onClick={props.onOpenParty} className={`${utilityButton} border-sky-500/60 bg-black/85 text-sky-300`} title="Gruppe"><ShieldCheck className="h-4 w-4" /><span>GROUP</span></button>
         </div>
 
-        <div className="ax1-combat-cluster flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-[6px] border border-amber-300/25 bg-black/78 p-1.5 shadow-2xl backdrop-blur-xl">
+        <div className="ax1-combat-cluster ax1-combat-cluster-phone flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-[6px] border border-amber-300/25 bg-black/78 p-1.5 shadow-2xl backdrop-blur-xl">
           <button type="button" disabled={props.actionsDisabled} onClick={props.onAttack} className="relative min-h-14 min-w-14 h-14 w-14 sm:h-16 sm:w-16 rounded-[6px] border border-amber-400 bg-gradient-to-br from-amber-600/30 to-black text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-90" title="Angriff [R]" aria-label="Angriff [R]">
             <Swords className="mx-auto h-6 w-6" /><kbd className="absolute -left-1 -top-1 rounded bg-black px-1 text-[8px] text-amber-300">R</kbd><span className="block text-[7px] font-bold">ANGRIFF</span>
           </button>
