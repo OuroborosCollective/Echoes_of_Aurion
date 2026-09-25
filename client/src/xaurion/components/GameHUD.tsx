@@ -269,7 +269,7 @@ export function GameHUD(props: GameHUDProps) {
 
           {props.party && props.party.length > 0 && (
             <section className="w-40 sm:w-52 rounded-xl border border-sky-900/60 bg-black/80 p-1.5 backdrop-blur-md shadow-lg">
-              <button type="button" onClick={() => setPartyCollapsed(value => !value)} className="flex w-full items-center justify-between border-b border-gray-800/80 pb-1 text-[9px] font-serif font-bold uppercase tracking-wider text-sky-400">
+              <button type="button" onClick={() => setPartyCollapsed(value => !value)} className="flex min-h-11 w-full items-center justify-between border-b border-gray-800/80 pb-1 text-[9px] font-serif font-bold uppercase tracking-wider text-sky-400" aria-expanded={!partyCollapsed} aria-label={partyCollapsed ? "Party öffnen" : "Party schließen"}>
                 <span className="flex items-center gap-1"><Users className="h-3 w-3" /> Party ({props.party.length})</span>
                 {partyCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
               </button>
@@ -498,8 +498,8 @@ export function GameHUD(props: GameHUDProps) {
       <button type="button" onClick={() => setCombatOpen(value => !value)} className="ax1-combat-metrics pointer-events-auto absolute right-2 top-[42%] sm:right-4 rounded-[5px] border border-cyan-300/25 bg-black/78 px-2.5 py-2 text-[9px] font-mono text-cyan-200 backdrop-blur-xl shadow-xl" aria-expanded={combatOpen}>
         <Swords className="mx-auto mb-0.5 h-4 w-4" /> DPS {props.combat.eventCount ? props.combat.currentDps : "—"}
       </button>
-      {combatOpen && <section id="dps-meter-modal" className="pointer-events-auto absolute right-14 top-[24%] z-30 w-72 sm:w-80 max-w-[calc(100vw-72px)] rounded-[6px] border border-amber-500/40 bg-black/92 p-3 shadow-2xl backdrop-blur-xl font-mono">
-        <div className="flex items-center justify-between border-b border-gray-800 pb-2"><b className="text-[10px] tracking-wider text-amber-200">BESTÄTIGTE COMBAT METRICS</b><button type="button" onClick={() => setCombatOpen(false)} className="text-gray-400">✕</button></div>
+      {combatOpen && <section id="dps-meter-modal" role="dialog" aria-label="Bestätigte Combat Metrics" className="pointer-events-auto absolute right-14 top-[24%] z-30 w-72 sm:w-80 max-w-[calc(100vw-72px)] rounded-[6px] border border-amber-500/40 bg-black/92 p-3 shadow-2xl backdrop-blur-xl font-mono">
+        <div className="flex items-center justify-between border-b border-gray-800 pb-2"><b className="text-[10px] tracking-wider text-amber-200">BESTÄTIGTE COMBAT METRICS</b><button type="button" onClick={() => setCombatOpen(false)} aria-label="Combat Metrics schließen" className="flex h-10 w-10 items-center justify-center rounded-[4px] text-gray-400 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">✕</button></div>
         <div className="grid grid-cols-3 gap-1.5 py-2 text-center"><Metric label="DPS" value={props.combat.eventCount ? props.combat.currentDps : "—"} /><Metric label="PEAK" value={props.combat.eventCount ? props.combat.peakDps : "—"} /><Metric label="DTPS" value={props.combat.eventCount ? props.combat.currentDtps : "—"} /></div>
         <div className="max-h-36 space-y-1 overflow-y-auto text-[8px]">{props.combat.logs.length ? props.combat.logs.slice(0, 8).map(log => <div key={log.id} className="flex gap-1 rounded border border-stone-800 bg-black/60 px-2 py-1"><i className="shrink-0 text-gray-500">T{log.tick}</i><span className="flex-1 text-gray-300">{log.text}</span><b className="text-amber-300">{log.value}</b></div>) : <p className="py-3 text-center italic text-gray-600">Noch keine bestätigten Combat-Events.</p>}</div>
       </section>}
