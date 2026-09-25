@@ -1,0 +1,792 @@
+/* Aurion Living Cinematic — public-site presentation layer
+ * Presentation only. No gameplay/readback/authority logic lives here.
+ */
+.aurion-cinematic-home {
+  --aurion-ink: #05070a;
+  --aurion-ink-2: #090e14;
+  --aurion-gold: #d8b45f;
+  --aurion-gold-bright: #f1d98d;
+  --aurion-teal: #62d0c4;
+  --aurion-teal-bright: #a0fff3;
+  --aurion-fg: #f7f2e8;
+  --aurion-muted: #aaa79f;
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% -10%, rgb(98 208 196 / 10%), transparent 32%),
+    radial-gradient(circle at 12% 30%, rgb(216 180 95 / 7%), transparent 28%),
+    var(--aurion-ink);
+}
+
+.aurion-cinematic-home::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: .62;
+  background:
+    linear-gradient(112deg, transparent 0 49.6%, rgb(98 208 196 / 4%) 49.7% 49.9%, transparent 50%),
+    linear-gradient(68deg, transparent 0 74%, rgb(216 180 95 / 3%) 74.1% 74.25%, transparent 74.4%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 1.2%) 0 1px, transparent 1px 5px);
+  mix-blend-mode: screen;
+}
+
+.aurion-cinematic-home .brand-bar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  min-height: 76px;
+  padding: 12px clamp(18px, 4vw, 56px);
+  border-bottom: 1px solid rgb(247 242 232 / 8%) !important;
+  background:
+    linear-gradient(180deg, rgb(5 7 10 / 92%), rgb(5 7 10 / 65%)),
+    radial-gradient(circle at 14% 0%, rgb(98 208 196 / 10%), transparent 30%);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.aurion-cinematic-home .brand-bar::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(98 208 196 / 50%), rgb(216 180 95 / 50%), transparent);
+  opacity: .78;
+}
+
+.aurion-cinematic-home .brand-sigil {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(216 180 95 / 62%);
+  background: radial-gradient(circle, rgb(216 180 95 / 18%), rgb(98 208 196 / 5%) 60%, transparent 72%);
+  box-shadow: 0 0 28px rgb(98 208 196 / 12%), inset 0 0 24px rgb(216 180 95 / 8%);
+}
+
+.aurion-cinematic-home .brand-kicker {
+  color: rgb(98 208 196 / 78%) !important;
+  letter-spacing: .22em !important;
+}
+
+.aurion-cinematic-home .brand-lockup h1 {
+  color: var(--aurion-fg);
+  text-shadow: 0 0 24px rgb(216 180 95 / 10%);
+}
+
+.aurion-cinematic-home .brand-lockup h1 span {
+  color: var(--aurion-gold);
+  opacity: .62;
+}
+
+.aurion-cinematic-home .brand-bar nav a {
+  position: relative;
+  color: rgb(247 242 232 / 74%);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 700;
+  transition: color .2s ease, text-shadow .2s ease;
+}
+
+.aurion-cinematic-home .brand-bar nav a::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -8px;
+  left: 0;
+  height: 1px;
+  transform: scaleX(0);
+  transform-origin: center;
+  background: linear-gradient(90deg, transparent, var(--aurion-teal), transparent);
+  transition: transform .24s ease;
+}
+
+.aurion-cinematic-home .brand-bar nav a:hover,
+.aurion-cinematic-home .brand-bar nav a:focus-visible {
+  color: var(--aurion-fg) !important;
+  text-shadow: 0 0 14px rgb(98 208 196 / 35%);
+}
+
+.aurion-cinematic-home .brand-bar nav a:hover::after,
+.aurion-cinematic-home .brand-bar nav a:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.aurion-cinematic-home .cinematic-hero {
+  position: relative;
+  min-height: min(960px, calc(100svh - 76px));
+  overflow: hidden;
+  border-bottom: 0 !important;
+  background:
+    radial-gradient(circle at 72% 42%, rgb(98 208 196 / 13%), transparent 25%),
+    radial-gradient(circle at 83% 68%, rgb(216 180 95 / 11%), transparent 22%),
+    linear-gradient(180deg, #05070a 0%, #070b10 46%, #040608 100%);
+}
+
+.aurion-cinematic-home .cinematic-hero__art {
+  position: absolute;
+  inset: -12% -8% -10% 32%;
+  z-index: 0;
+  transform: translate3d(0, 0, 0) scale(1.02);
+  background:
+    radial-gradient(ellipse at 57% 45%, transparent 0 13%, rgb(216 180 95 / 8%) 14%, transparent 22%),
+    radial-gradient(ellipse at 69% 38%, transparent 0 19%, rgb(98 208 196 / 8%) 20%, transparent 27%),
+    radial-gradient(ellipse at 63% 61%, rgb(98 208 196 / 7%), transparent 25%),
+    conic-gradient(from 214deg at 64% 49%, transparent 0 10%, rgb(98 208 196 / 10%) 12%, transparent 19%, rgb(216 180 95 / 8%) 24%, transparent 33%, rgb(98 208 196 / 6%) 41%, transparent 50%, rgb(216 180 95 / 7%) 64%, transparent 70%),
+    linear-gradient(135deg, transparent 0 46%, rgb(255 255 255 / 2%) 46.2% 46.6%, transparent 46.8% 100%);
+  filter: blur(.2px) saturate(120%);
+  opacity: .92;
+  animation: aurion-art-breathe 10s ease-in-out infinite;
+}
+
+.aurion-cinematic-home .cinematic-hero__art::before {
+  content: "";
+  position: absolute;
+  inset: 10% 8% 14% 8%;
+  border: 1px solid rgb(216 180 95 / 12%);
+  clip-path: polygon(6% 10%, 76% 0, 100% 32%, 88% 100%, 18% 88%, 0 47%);
+  box-shadow: 0 0 70px rgb(98 208 196 / 8%), inset 0 0 70px rgb(216 180 95 / 4%);
+}
+
+.aurion-cinematic-home .cinematic-hero__aether {
+  position: absolute;
+  inset: 8% -8% 6% 36%;
+  z-index: 1;
+  opacity: .72;
+  background:
+    linear-gradient(124deg, transparent 0 18%, rgb(98 208 196 / 16%) 18.1% 18.25%, transparent 18.4% 42%, rgb(98 208 196 / 12%) 42.1% 42.25%, transparent 42.4% 74%, rgb(216 180 95 / 13%) 74.1% 74.25%, transparent 74.4%),
+    linear-gradient(58deg, transparent 0 29%, rgb(98 208 196 / 10%) 29.1% 29.25%, transparent 29.4% 63%, rgb(216 180 95 / 9%) 63.1% 63.2%, transparent 63.35%),
+    repeating-linear-gradient(112deg, transparent 0 34px, rgb(98 208 196 / 4%) 35px 36px, transparent 37px 96px);
+  mix-blend-mode: screen;
+  filter: blur(.25px);
+  mask-image: radial-gradient(ellipse at 62% 48%, #000 0 39%, transparent 78%);
+  animation: aurion-aether-drift 16s linear infinite;
+}
+
+.aurion-cinematic-home .cinematic-hero__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(90deg, #05070a 0%, rgb(5 7 10 / 84%) 18%, rgb(5 7 10 / 32%) 53%, transparent 79%, #05070a 100%),
+    linear-gradient(180deg, rgb(5 7 10 / 36%), transparent 25%, transparent 72%, rgb(5 7 10 / 78%));
+  pointer-events: none;
+}
+
+.aurion-cinematic-home .cinematic-hero > .relative {
+  z-index: 4;
+  width: min(1540px, calc(100% - 48px));
+  min-height: min(960px, calc(100svh - 76px));
+  padding: clamp(54px, 7vw, 100px) 0 clamp(46px, 6vw, 88px);
+  gap: clamp(24px, 5vw, 92px);
+  grid-template-columns: minmax(0, .92fr) minmax(420px, .78fr);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy {
+  position: relative;
+  max-width: 760px;
+  align-self: center;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy::before {
+  content: "LIVE WORLD // AURION";
+  position: absolute;
+  top: -34px;
+  left: 0;
+  color: rgb(98 208 196 / 64%);
+  font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: .22em;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy > p:first-child {
+  color: var(--aurion-gold-bright) !important;
+  text-shadow: 0 0 22px rgb(216 180 95 / 18%);
+}
+
+.aurion-cinematic-home .cinematic-hero__title {
+  max-width: 9.5ch;
+  margin-top: 20px !important;
+  color: var(--aurion-fg) !important;
+  font-size: clamp(4.4rem, 8.6vw, 9rem) !important;
+  line-height: .82 !important;
+  letter-spacing: -.055em;
+  text-wrap: balance;
+  text-shadow: 0 12px 50px rgb(0 0 0 / 50%), 0 0 36px rgb(216 180 95 / 7%);
+}
+
+.aurion-cinematic-home .cinematic-hero__title span {
+  color: var(--aurion-teal-bright) !important;
+  text-shadow: 0 0 34px rgb(98 208 196 / 24%);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy > p:not(:first-child) {
+  color: rgb(247 242 232 / 72%) !important;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy > p.mt-7 {
+  max-width: 660px;
+  font-size: clamp(17px, 1.7vw, 22px);
+  line-height: 1.8;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy > p.mt-4 {
+  max-width: 610px;
+  font-size: 13px;
+  color: rgb(170 167 159 / 74%) !important;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 {
+  position: relative;
+  margin-top: 38px;
+  padding-top: 24px;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-9::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(420px, 80%);
+  height: 1px;
+  background: linear-gradient(90deg, var(--aurion-teal), rgb(216 180 95 / 55%), transparent);
+  box-shadow: 0 0 18px rgb(98 208 196 / 25%);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 button,
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 a {
+  min-height: 54px;
+  border-radius: 2px !important;
+  padding-inline: 22px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 button:first-child {
+  color: #101007 !important;
+  background: linear-gradient(110deg, #f4d583, #c8a24f) !important;
+  box-shadow: 0 10px 35px rgb(216 180 95 / 18%), 0 0 0 1px rgb(241 217 141 / 35%);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 a {
+  border: 1px solid rgb(98 208 196 / 30%) !important;
+  background: linear-gradient(180deg, rgb(98 208 196 / 9%), rgb(98 208 196 / 3%)) !important;
+  box-shadow: inset 0 0 18px rgb(98 208 196 / 4%);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 button:hover,
+.aurion-cinematic-home .cinematic-hero__copy .mt-9 a:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-10.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid rgb(247 242 232 / 10%);
+  border-bottom: 1px solid rgb(247 242 232 / 10%);
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div {
+  min-height: 116px;
+  padding: 18px 16px;
+  border: 0 !important;
+  border-right: 1px solid rgb(247 242 232 / 10%) !important;
+  border-radius: 0 !important;
+  background: linear-gradient(180deg, rgb(255 255 255 / 2%), transparent) !important;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div:last-child {
+  border-right: 0 !important;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div > p:first-child {
+  color: var(--aurion-gold) !important;
+  font: 700 27px/1 Georgia, "Times New Roman", serif;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div > p:nth-child(2) {
+  color: rgb(98 208 196 / 65%) !important;
+  font: 800 9px/1.2 ui-monospace, monospace;
+  letter-spacing: .14em;
+}
+
+.aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div > p:last-child {
+  color: rgb(247 242 232 / 78%) !important;
+  font-size: 14px;
+}
+
+.aurion-cinematic-home .cinematic-world-panel {
+  position: relative;
+  align-self: stretch;
+  display: grid;
+  place-items: stretch;
+}
+
+.aurion-cinematic-home .cinematic-world-panel > div {
+  min-height: min(650px, 72svh) !important;
+  border-radius: 4px !important;
+  border: 1px solid rgb(98 208 196 / 24%) !important;
+  background:
+    radial-gradient(circle at 62% 30%, rgb(98 208 196 / 14%), transparent 18%),
+    radial-gradient(circle at 72% 72%, rgb(216 180 95 / 10%), transparent 22%),
+    linear-gradient(150deg, rgb(11 19 25 / 95%), rgb(4 10 14 / 88%)) !important;
+  box-shadow:
+    0 38px 100px rgb(0 0 0 / 44%),
+    inset 0 0 60px rgb(98 208 196 / 4%);
+  overflow: hidden;
+}
+
+.aurion-cinematic-home .cinematic-world-panel > div::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgb(216 180 95 / 13%);
+  clip-path: polygon(0 10%, 86% 0, 100% 12%, 100% 88%, 74% 100%, 9% 96%, 0 77%);
+  pointer-events: none;
+}
+
+.aurion-cinematic-home .cinematic-world-panel > div::after {
+  content: "";
+  position: absolute;
+  inset: auto 6% 7%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(98 208 196 / 50%), rgb(216 180 95 / 40%), transparent);
+  box-shadow: 0 0 20px rgb(98 208 196 / 28%);
+  animation: aurion-pulse-line 2.8s ease-in-out infinite;
+}
+
+.aurion-cinematic-home .cinematic-world-panel [class*="rounded-[1.55rem]"] {
+  border-radius: 0 !important;
+  border: 0 !important;
+  background:
+    radial-gradient(circle at 70% 20%, rgb(98 208 196 / 16%), transparent 26%),
+    linear-gradient(160deg, rgb(15 32 39 / 88%), rgb(3 10 14 / 93%) 68%, rgb(18 15 10 / 92%)) !important;
+}
+
+.aurion-cinematic-home .cinematic-world-panel .text-cyan-300 {
+  color: var(--aurion-teal-bright) !important;
+  letter-spacing: .18em;
+}
+
+.aurion-cinematic-home .cinematic-world-panel .font-serif {
+  color: var(--aurion-gold-bright) !important;
+  font-size: clamp(2.2rem, 4.4vw, 4.2rem) !important;
+  line-height: .92 !important;
+  text-shadow: 0 18px 50px rgb(0 0 0 / 48%);
+}
+
+.aurion-cinematic-home .cinematic-world-panel .sm\:grid-cols-2 {
+  align-items: end;
+}
+
+.aurion-cinematic-home .cinematic-world-panel .rounded-2xl {
+  border-radius: 2px !important;
+  border-color: rgb(247 242 232 / 8%) !important;
+  background: linear-gradient(180deg, rgb(255 255 255 / 4%), rgb(255 255 255 / 1%)) !important;
+  box-shadow: inset 0 0 26px rgb(98 208 196 / 3%);
+}
+
+.aurion-cinematic-home .cinematic-world-panel .rounded-full {
+  border-radius: 0 !important;
+}
+
+.aurion-cinematic-home .cinematic-showcase {
+  position: relative;
+  border-top: 0 !important;
+  background:
+    radial-gradient(circle at 80% 0%, rgb(98 208 196 / 7%), transparent 28%),
+    linear-gradient(180deg, #05070a 0%, #070b10 100%);
+}
+
+.aurion-cinematic-home .cinematic-showcase::before {
+  content: "SYSTEMS // WORLD // CONSEQUENCE";
+  position: absolute;
+  top: 38px;
+  right: clamp(24px, 5vw, 72px);
+  color: rgb(98 208 196 / 40%);
+  font: 800 9px/1 ui-monospace, monospace;
+  letter-spacing: .18em;
+}
+
+.aurion-cinematic-home .cinematic-showcase > div:first-child h3,
+.aurion-cinematic-home .cinematic-process h3,
+.aurion-cinematic-home .cinematic-cta h3 {
+  color: var(--aurion-fg) !important;
+  font-size: clamp(2.7rem, 5vw, 5.8rem) !important;
+  line-height: .92 !important;
+  letter-spacing: -.04em;
+  text-wrap: balance;
+}
+
+.aurion-cinematic-home .cinematic-showcase > div:first-child p,
+.aurion-cinematic-home .cinematic-process > div:first-child p {
+  color: var(--aurion-teal) !important;
+}
+
+.aurion-cinematic-home .cinematic-showcase .cinematic-feature-grid {
+  display: grid;
+  gap: 0 !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid rgb(247 242 232 / 9%);
+  border-bottom: 1px solid rgb(247 242 232 / 9%);
+}
+
+.aurion-cinematic-home .cinematic-feature {
+  position: relative;
+  min-height: 420px;
+  padding: 28px 26px 30px !important;
+  border: 0 !important;
+  border-right: 1px solid rgb(247 242 232 / 9%) !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 2%), transparent 28%),
+    radial-gradient(circle at 72% 18%, rgb(98 208 196 / 5%), transparent 24%) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  transition: background .3s ease, transform .3s ease;
+}
+
+.aurion-cinematic-home .cinematic-feature:last-child {
+  border-right: 0 !important;
+}
+
+.aurion-cinematic-home .cinematic-feature::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 26px;
+  width: 34%;
+  height: 1px;
+  background: linear-gradient(90deg, var(--aurion-gold), transparent);
+  transition: width .3s ease;
+}
+
+.aurion-cinematic-home .cinematic-feature::after {
+  content: "AURION";
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  color: rgb(247 242 232 / 4%);
+  font: 900 38px/1 Georgia, serif;
+  letter-spacing: .04em;
+}
+
+.aurion-cinematic-home .cinematic-feature:hover {
+  transform: translateY(-4px);
+  background:
+    linear-gradient(180deg, rgb(98 208 196 / 5%), transparent 32%),
+    radial-gradient(circle at 68% 18%, rgb(216 180 95 / 7%), transparent 28%) !important;
+}
+
+.aurion-cinematic-home .cinematic-feature:hover::before {
+  width: 70%;
+}
+
+.aurion-cinematic-home .cinematic-feature .h-28 {
+  height: 150px !important;
+  border-radius: 0 !important;
+  border: 1px solid rgb(247 242 232 / 7%) !important;
+  background:
+    repeating-linear-gradient(118deg, transparent 0 22px, rgb(98 208 196 / 6%) 23px 24px, transparent 25px 48px),
+    radial-gradient(circle at 68% 38%, rgb(98 208 196 / 12%), transparent 30%),
+    radial-gradient(circle at 30% 72%, rgb(216 180 95 / 9%), transparent 22%) !important;
+}
+
+.aurion-cinematic-home .cinematic-feature .h-28 > div {
+  opacity: .85;
+}
+
+.aurion-cinematic-home .cinematic-feature h4 {
+  color: var(--aurion-fg) !important;
+  font-size: clamp(22px, 2.2vw, 30px);
+  line-height: 1.02;
+}
+
+.aurion-cinematic-home .cinematic-feature > p {
+  color: rgb(170 167 159 / 80%) !important;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.aurion-cinematic-home .cinematic-process {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 50%, rgb(98 208 196 / 7%), transparent 22%),
+    linear-gradient(180deg, #05070a, #080d13);
+}
+
+.aurion-cinematic-home .cinematic-process::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(125deg, transparent 0 49%, rgb(98 208 196 / 6%) 49.2% 49.5%, transparent 50%),
+    linear-gradient(55deg, transparent 0 63%, rgb(216 180 95 / 5%) 63.2% 63.5%, transparent 64%);
+  pointer-events: none;
+}
+
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div {
+  min-height: 150px;
+  border-radius: 0 !important;
+  border: 0 !important;
+  border-left: 1px solid rgb(247 242 232 / 12%) !important;
+  background: linear-gradient(180deg, rgb(255 255 255 / 2%), transparent) !important;
+  position: relative;
+}
+
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div:first-child {
+  border-left: 0 !important;
+}
+
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div::after {
+  content: "";
+  position: absolute;
+  top: 22px;
+  right: 18px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--aurion-teal);
+  box-shadow: 0 0 12px rgb(98 208 196 / 35%);
+  transform: rotate(45deg);
+  animation: aurion-node-pulse 2.2s ease-in-out infinite;
+}
+
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div:nth-child(2)::after { animation-delay: .25s; }
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div:nth-child(3)::after { animation-delay: .5s; }
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div:nth-child(4)::after { animation-delay: .75s; }
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div:nth-child(5)::after { animation-delay: 1s; }
+
+.aurion-cinematic-home .cinematic-process .sm\:grid-cols-5 > div p:first-child {
+  color: var(--aurion-gold) !important;
+}
+
+.aurion-cinematic-home .cinematic-cta {
+  position: relative;
+  min-height: 460px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 62%, rgb(98 208 196 / 11%), transparent 30%),
+    radial-gradient(circle at 28% 40%, rgb(216 180 95 / 8%), transparent 24%),
+    #05070a;
+}
+
+.aurion-cinematic-home .cinematic-cta::before {
+  content: "";
+  position: absolute;
+  inset: 8% 10%;
+  border: 1px solid rgb(216 180 95 / 14%);
+  clip-path: polygon(7% 0, 92% 5%, 100% 49%, 93% 100%, 8% 96%, 0 54%);
+  box-shadow: inset 0 0 55px rgb(98 208 196 / 3%);
+  pointer-events: none;
+}
+
+.aurion-cinematic-home .cinematic-cta > div {
+  position: relative;
+  z-index: 2;
+  width: min(1220px, calc(100% - 48px));
+  padding-block: 72px;
+}
+
+.aurion-cinematic-home .cinematic-cta h3 {
+  max-width: 980px;
+}
+
+.aurion-cinematic-home .cinematic-cta button {
+  min-height: 58px;
+  border-radius: 2px !important;
+  color: #101007 !important;
+  background: linear-gradient(110deg, #f2d586, #c79e4b) !important;
+  box-shadow: 0 16px 50px rgb(216 180 95 / 20%);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.aurion-cinematic-home footer {
+  background: #030507;
+  border-top-color: rgb(247 242 232 / 8%) !important;
+}
+
+.aurion-cinematic-home footer p,
+.aurion-cinematic-home footer a {
+  color: rgb(170 167 159 / 70%) !important;
+}
+
+.aurion-cinematic-home footer a:hover {
+  color: var(--aurion-fg) !important;
+}
+
+@keyframes aurion-art-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.02); opacity: .8; }
+  50% { transform: translate3d(-1.2%, 1%, 0) scale(1.045); opacity: 1; }
+}
+
+@keyframes aurion-aether-drift {
+  from { transform: translate3d(-1.5%, 0, 0); opacity: .48; }
+  50% { opacity: .82; }
+  to { transform: translate3d(1.5%, 0, 0); opacity: .48; }
+}
+
+@keyframes aurion-pulse-line {
+  0%, 100% { opacity: .25; transform: scaleX(.72); }
+  50% { opacity: .9; transform: scaleX(1); }
+}
+
+@keyframes aurion-node-pulse {
+  0%, 100% { opacity: .4; transform: rotate(45deg) scale(.8); }
+  50% { opacity: 1; transform: rotate(45deg) scale(1.35); }
+}
+
+@media (max-width: 980px) {
+  .aurion-cinematic-home .cinematic-hero {
+    min-height: auto;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__art {
+    inset: -2% -10% 18% 14%;
+    opacity: .65;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__aether {
+    inset: 8% -12% 20% 18%;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__vignette {
+    background:
+      linear-gradient(180deg, #05070a 0%, rgb(5 7 10 / 52%) 26%, rgb(5 7 10 / 68%) 64%, #05070a 100%);
+  }
+
+  .aurion-cinematic-home .cinematic-hero > .relative {
+    width: min(100% - 32px, 760px);
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding-block: 76px 60px;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__copy {
+    padding-top: 26px;
+  }
+
+  .aurion-cinematic-home .cinematic-world-panel {
+    min-height: 500px;
+  }
+
+  .aurion-cinematic-home .cinematic-world-panel > div {
+    min-height: 500px !important;
+  }
+
+  .aurion-cinematic-home .cinematic-feature-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .aurion-cinematic-home .cinematic-feature {
+    min-height: 320px;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgb(247 242 232 / 10%) !important;
+  }
+
+  .aurion-cinematic-home .cinematic-feature:last-child {
+    border-bottom: 0 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .aurion-cinematic-home .brand-bar {
+    min-height: 68px;
+    padding: 10px 14px;
+  }
+
+  .aurion-cinematic-home .brand-bar nav {
+    gap: 8px !important;
+  }
+
+  .aurion-cinematic-home .brand-bar nav a {
+    font-size: 9px;
+    letter-spacing: .06em;
+  }
+
+  .aurion-cinematic-home .cinematic-hero > .relative {
+    width: calc(100% - 24px);
+    padding-block: 58px 44px;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__title {
+    max-width: 8.8ch;
+    font-size: clamp(3.25rem, 16vw, 5.7rem) !important;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__copy .mt-9 {
+    margin-top: 28px;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__copy .mt-9 button,
+  .aurion-cinematic-home .cinematic-hero__copy .mt-9 a {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__copy .mt-10.grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div {
+    min-height: 86px;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgb(247 242 232 / 10%) !important;
+  }
+
+  .aurion-cinematic-home .cinematic-hero__copy .mt-10.grid > div:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .aurion-cinematic-home .cinematic-world-panel {
+    min-height: 420px;
+  }
+
+  .aurion-cinematic-home .cinematic-world-panel > div {
+    min-height: 420px !important;
+  }
+
+  .aurion-cinematic-home .cinematic-feature {
+    padding: 24px 18px !important;
+  }
+
+  .aurion-cinematic-home .cinematic-feature .h-28 {
+    height: 124px !important;
+  }
+
+  .aurion-cinematic-home .cinematic-cta {
+    min-height: 420px;
+  }
+
+  .aurion-cinematic-home .cinematic-cta > div {
+    width: calc(100% - 24px);
+    padding-block: 54px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurion-cinematic-home *,
+  .aurion-cinematic-home *::before,
+  .aurion-cinematic-home *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .aurion-cinematic-home .brand-bar::after,
+  .aurion-cinematic-home .cinematic-hero__art,
+  .aurion-cinematic-home .cinematic-hero__aether,
+  .aurion-cinematic-home .cinematic-hero__vignette,
+  .aurion-cinematic-home .cinematic-cta::before {
+    display: none;
+  }
+}
