@@ -77,9 +77,9 @@ export class AurionCausalReadbackService {
       worldId: evidenceReceipt.worldId,
       zoneId: evidenceReceipt.zoneId,
       tick: evidenceReceipt.tick,
-      receiptId: evidenceReceipt.receiptId,
+      receiptId: evidenceReceipt.id,
       receiptHash: evidenceReceipt.receiptHash,
-      sourceRevision: evidenceReceipt.sourceRevision,
+      sourceRevision: evidenceReceipt.revision,
     });
     this.lastObservedTickByZone.set(zoneId, nextTick);
 
