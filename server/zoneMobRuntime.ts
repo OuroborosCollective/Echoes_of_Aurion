@@ -33,10 +33,29 @@ export function resolveMobCollisionMovement(from: Readonly<{ x: number; z: numbe
 export class ZoneMobRuntime {
   private readonly states = new Map<string, MobRuntimeState>();
   private readonly orderedEntityIds: string[];
+  private readonly cachedOrderedStates: MobRuntimeState[] = [];
+  private readonly cachedSnapshot: ConfirmedZoneMob[] = [];
+  private readonly entityIdToIndex = new Map<string, number>();
+
+  private setState(entityId: string, state: MobRuntimeState, publicSnapshot?: ConfirmedZoneMob) {
+    this.states.set(entityId, state);
+    const index = this.entityIdToIndex.get(entityId);
+    if (index !== undefined) {
+      this.cachedOrderedStates[index] = state;
+      this.cachedSnapshot[index] = publicSnapshot || publicMobSnapshot(state);
+    }
+  }
 
   constructor() {
     for (const definition of observatoryMobDefinitions) this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
     this.orderedEntityIds = Array.from(this.states.keys()).sort();
+    for (let i = 0; i < this.orderedEntityIds.length; i++) {
+      const entityId = this.orderedEntityIds[i];
+      const state = this.states.get(entityId)!;
+      this.entityIdToIndex.set(entityId, i);
+      this.cachedOrderedStates.push(state);
+      this.cachedSnapshot.push(publicMobSnapshot(state));
+    }
   }
 
   tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
@@ -45,8 +64,9 @@ export class ZoneMobRuntime {
       const current = this.states.get(entityId)!;
       const before = publicMobSnapshot(current);
       const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
-      this.states.set(entityId, next);
-      if (!sameMob(before, publicMobSnapshot(next))) changed = true;
+      const nextPublic = publicMobSnapshot(next);
+      this.setState(entityId, next, nextPublic);
+      if (!sameMob(before, nextPublic)) changed = true;
     }
     return changed;
   }
@@ -55,7 +75,7 @@ export class ZoneMobRuntime {
     const current = this.states.get(entityId);
     if (!current) return undefined;
     const next = applyMobCombatState(current, values);
-    this.states.set(entityId, next);
+    this.setState(entityId, next);
     return next;
   }
 
@@ -87,13 +107,11 @@ export class ZoneMobRuntime {
       stamina: mob.stamina,
       nextAttackTick: mob.nextAttackTick,
     });
-    this.states.set(mob.entityId, next);
+    this.setState(mob.entityId, next);
     return next;
   }
 
-  snapshot(): readonly ConfirmedZoneMob[] {
-    return Object.freeze(this.orderedEntityIds.map(entityId => publicMobSnapshot(this.states.get(entityId)!)));
-  }
+  snapshot(): readonly ConfirmedZoneMob[] { return Object.freeze([...this.cachedSnapshot]); }
   stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
 
   /** Development-only fixture reset using the same canonical mob definitions as live runtime. */
@@ -101,7 +119,7 @@ export class ZoneMobRuntime {
     if (process.env.NODE_ENV === "production") throw new Error("ZONE_MOB_FIXTURE_PRODUCTION_FORBIDDEN");
     if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("ZONE_MOB_FIXTURE_TICK_INVALID");
     for (const definition of observatoryMobDefinitions) {
-      this.states.set(definition.entityId, initialMobRuntimeState(definition, tick));
+      this.setState(definition.entityId, initialMobRuntimeState(definition, tick));
     }
   }
 
@@ -122,10 +140,10 @@ export class ZoneMobRuntime {
         idleUntilTick: 0,
         nextAttackTick: current.nextAttackTick,
       });
-      this.states.set(entityId, seeded);
+      this.setState(entityId, seeded);
       return entityId;
     }));
   }
 
-  orderedStates(): readonly MobRuntimeState[] { return Object.freeze(this.orderedEntityIds.map(entityId => this.states.get(entityId)!)); }
+  orderedStates(): readonly MobRuntimeState[] { return Object.freeze([...this.cachedOrderedStates]); }
 }
