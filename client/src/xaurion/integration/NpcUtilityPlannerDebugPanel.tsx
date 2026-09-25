@@ -1,6 +1,12 @@
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { NpcUtilityChartPanel } from "./NpcUtilityChartPanel";
+import { NpcSpatialHeatmap } from "./NpcSpatialHeatmap";
+import {
+  NPC_UTILITY_CRITICAL_HIGH_BPS,
+  NPC_UTILITY_CRITICAL_LOW_BPS,
+  classifyUtilityScore,
+} from "@shared/npcUtilityThresholds";
 
 const goalLabels: Record<string, string> = {
   seek_safety: "Sicherheit",
@@ -114,20 +120,39 @@ function NpcUtilityScoreCard({ npc }: { npc: { npcId: string; resolutionIndex: n
   const blocked = npc.scored.filter(c => c.constraintStatus === "blocked");
   const maxScore = eligible.length > 0 ? Math.max(...eligible.map(c => c.scoreBps)) : 0;
   const winner = eligible[0] ?? null;
+  const winnerScore = winner?.scoreBps ?? 0;
+  const threshold = classifyUtilityScore(winnerScore);
 
   return (
-    <article data-testid="npc-utility-score-card" data-npc-id={npc.npcId} className="space-y-3">
+    <article data-testid="npc-utility-score-card" data-npc-id={npc.npcId} data-threshold={threshold} className={`space-y-3 rounded-lg p-3 ${threshold === "critical_low" ? "border border-red-500/40 bg-red-500/[.04]" : threshold === "critical_high" ? "border border-amber-400/40 bg-amber-400/[.04]" : ""}`}>
       <div className="flex items-center justify-between">
-        <b className="text-amber-100">{npcNames[npc.npcId] ?? npc.npcId}</b>
+        <div className="flex items-center gap-2">
+          <b className="text-amber-100">{npcNames[npc.npcId] ?? npc.npcId}</b>
+          {threshold === "critical_low" && (
+            <span data-testid="threshold-badge-low" className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+              ⚠ Kritisch niedrig
+            </span>
+          )}
+          {threshold === "critical_high" && (
+            <span data-testid="threshold-badge-high" className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+              ⚠ Kritisch hoch
+            </span>
+          )}
+        </div>
         <span className="text-xs text-slate-400">
           Ziel: {goalLabels[npc.goal] ?? npc.goal} · Tick {npc.resolutionIndex}
         </span>
       </div>
       {winner && (
-        <div className="rounded-lg border border-amber-300/30 bg-amber-400/[.06] p-2 text-sm">
+        <div className={`rounded-lg border p-2 text-sm ${threshold === "critical_low" ? "border-red-500/30 bg-red-500/[.06]" : threshold === "critical_high" ? "border-amber-400/30 bg-amber-400/[.06]" : "border-amber-300/30 bg-amber-400/[.06]"}`}>
           <span className="text-amber-200">Gewinner: </span>
           <b className="text-amber-100">{actionLabels[winner.action] ?? winner.action}</b>
           <span className="ml-2 font-mono text-xs text-amber-300">{winner.scoreBps.toLocaleString("de-DE")} BPS</span>
+          {threshold !== "stable" && (
+            <span className="ml-2 text-[10px] text-slate-400">
+              Schwellen: ≤{NPC_UTILITY_CRITICAL_LOW_BPS.toLocaleString("de-DE")} / ≥{NPC_UTILITY_CRITICAL_HIGH_BPS.toLocaleString("de-DE")} BPS
+            </span>
+          )}
         </div>
       )}
       <div className="space-y-2">
@@ -181,6 +206,7 @@ export function NpcUtilityPlannerDebugPanel({ userId }: { userId: number }) {
                 ))}
               </div>
               <NpcUtilityChartPanel npcs={npcs} />
+              <NpcSpatialHeatmap npcs={npcs} />
             </>
           )}
         </>

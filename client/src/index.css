@@ -374,3 +374,8 @@ kbd { min-width: 27px; height: 27px; display: inline-grid; place-items: center; 
 .flash-meter {
   animation: flash-objective-meter 1s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+@keyframes heatmap-pulse {
+  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
