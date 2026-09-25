@@ -150,7 +150,7 @@ suite("AIM-487 real MariaDB information ecology", () => {
     await expect(recordExperiencedNpcInformation({ ...input, source: { ...verifiedSource, sourceReceiptHash: "sha256:" + "f".repeat(64) } })).rejects.toThrow("SOURCE_READBACK_MISMATCH");
     await expect(recordExperiencedNpcInformation({ ...input, worldId: "other-world", source: verifiedSource })).rejects.toThrow("SOURCE_READBACK_MISMATCH");
     await expect(recordExperiencedNpcInformation({ ...input, value: "invented-event", source: verifiedSource })).rejects.toThrow("SOURCE_READBACK_MISMATCH");
-    await expect(recordExperiencedNpcInformation({ ...input, source: { ...verifiedSource, sourceKind: "world_receipt" } })).rejects.toThrow("SOURCE_VERIFIER_REQUIRED");
+    await expect(recordExperiencedNpcInformation({ ...input, source: { ...verifiedSource, sourceKind: "world_receipt" } })).rejects.toThrow("SOURCE_READBACK_MISMATCH");
     const admitted = await recordExperiencedNpcInformation({ ...input, source: verifiedSource });
     await expect(recordNpcInformationTransition({ previousReceiptId: admitted.id, status: "communicated", logicalIndex: 11, confidenceBps: admitted.confidenceBps, ownerNpcId: receiverNpcId })).rejects.toThrow("TRANSITION_AUTHORITY_INVALID");
     await expect(recordNpcInformationTransition({ previousReceiptId: admitted.id, status: "remembered", logicalIndex: 11, confidenceBps: 1 })).rejects.toThrow("TRANSITION_AUTHORITY_INVALID");

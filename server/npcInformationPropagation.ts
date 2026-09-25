@@ -1,5 +1,13 @@
 import { and, desc, eq } from "drizzle-orm";
-import { aurionNpcDecisionReceipts, aurionNpcInformationReceipts } from "../drizzle/schema";
+import {
+  aurionNpcActionReceipts,
+  aurionNpcDecisionReceipts,
+  aurionNpcInformationReceipts,
+  aurionNpcMemoryReceiptsV4,
+  aurionQuestReceipts,
+  aurionSemanticGraphReceiptsV2,
+  aurionWorldResolutions,
+} from "../drizzle/schema";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { getDb } from "./db";
 import { AURION_WORLD_CHECKPOINT_WORLD_ID } from "./worldCheckpointProtocol";
@@ -14,6 +22,7 @@ import {
   transitionNpcInformation,
   type NpcInformationReceipt,
   type NpcInformationSource,
+  type NpcInformationSourceKind,
 } from "../shared/npcInformationEcologyProtocol";
 
 type InformationRow = typeof aurionNpcInformationReceipts.$inferSelect;
@@ -76,15 +85,103 @@ async function readReceiptById(tx: NpcTransaction, id: string): Promise<NpcInfor
   return assertStored(row);
 }
 
+const sourceVerifiers: Record<NpcInformationSourceKind, (tx: NpcTransaction, receipt: NpcInformationReceipt) => Promise<void>> = {
+  npc_decision_receipt: verifyNpcDecisionSource,
+  npc_memory_receipt: verifyNpcMemorySource,
+  npc_action_receipt: verifyNpcActionSource,
+  world_receipt: verifyWorldResolutionSource,
+  quest_receipt: verifyQuestSource,
+  semantic_graph_receipt: verifySemanticGraphSource,
+};
+
 async function verifyExperiencedSource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
   // A caller-provided evidenceClass is only a claim. Bind it to a committed Aurion receipt.
-  // Other source kinds must receive their own typed verifier before they can be admitted.
-  if (receipt.sourceKind !== "npc_decision_receipt") throw new Error("NPC_INFORMATION_SOURCE_VERIFIER_REQUIRED");
+  // Each source kind has its own typed verifier that readbacks the committed receipt.
+  const verifier = sourceVerifiers[receipt.sourceKind];
+  if (!verifier) throw new Error("NPC_INFORMATION_SOURCE_VERIFIER_REQUIRED");
+  await verifier(tx, receipt);
+}
+
+async function verifyNpcDecisionSource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
   const decision = (await tx.select().from(aurionNpcDecisionReceipts)
     .where(eq(aurionNpcDecisionReceipts.id, receipt.sourceReceiptId)).limit(1))[0];
   if (!decision || receipt.worldId !== AURION_WORLD_CHECKPOINT_WORLD_ID || decision.npcId !== receipt.witnessNpcId ||
       receipt.subjectId !== decision.npcId || receipt.predicate !== "npc_decision" || receipt.value !== decision.goal ||
       `sha256:${decision.decisionHash}` !== receipt.sourceReceiptHash ||
+      receipt.sourceCausalRoot !== receipt.sourceReceiptHash) {
+    throw new Error("NPC_INFORMATION_SOURCE_READBACK_MISMATCH");
+  }
+}
+
+async function verifyNpcMemorySource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
+  const memory = (await tx.select().from(aurionNpcMemoryReceiptsV4)
+    .where(eq(aurionNpcMemoryReceiptsV4.id, receipt.sourceReceiptId)).limit(1))[0];
+  if (!memory || receipt.worldId !== AURION_WORLD_CHECKPOINT_WORLD_ID ||
+      memory.npcId !== receipt.witnessNpcId ||
+      receipt.subjectId !== memory.npcId ||
+      receipt.predicate !== "npc_memory" ||
+      receipt.value !== memory.memoryHash ||
+      `sha256:${memory.receiptHash}` !== receipt.sourceReceiptHash ||
+      memory.sourceRevision !== receipt.sourceRevision ||
+      `sha256:${memory.sourceSha256}` !== receipt.sourceSha256 ||
+      receipt.sourceCausalRoot !== receipt.sourceReceiptHash) {
+    throw new Error("NPC_INFORMATION_SOURCE_READBACK_MISMATCH");
+  }
+}
+
+async function verifyNpcActionSource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
+  const action = (await tx.select().from(aurionNpcActionReceipts)
+    .where(eq(aurionNpcActionReceipts.id, receipt.sourceReceiptId)).limit(1))[0];
+  if (!action || receipt.worldId !== AURION_WORLD_CHECKPOINT_WORLD_ID ||
+      action.npcId !== receipt.witnessNpcId ||
+      receipt.subjectId !== action.npcId ||
+      receipt.predicate !== "npc_action" ||
+      receipt.value !== action.effectsHash ||
+      `sha256:${action.receiptHash}` !== receipt.sourceReceiptHash ||
+      action.sourceRevision !== receipt.sourceRevision ||
+      `sha256:${action.sourceSha256}` !== receipt.sourceSha256 ||
+      receipt.sourceCausalRoot !== receipt.sourceReceiptHash) {
+    throw new Error("NPC_INFORMATION_SOURCE_READBACK_MISMATCH");
+  }
+}
+
+async function verifyWorldResolutionSource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
+  const world = (await tx.select().from(aurionWorldResolutions)
+    .where(eq(aurionWorldResolutions.id, receipt.sourceReceiptId)).limit(1))[0];
+  if (!world || receipt.worldId !== AURION_WORLD_CHECKPOINT_WORLD_ID ||
+      receipt.subjectId !== world.regionId ||
+      receipt.predicate !== "world_resolution" ||
+      receipt.value !== world.reactionHash ||
+      `sha256:${world.reactionHash}` !== receipt.sourceReceiptHash ||
+      receipt.sourceCausalRoot !== receipt.sourceReceiptHash) {
+    throw new Error("NPC_INFORMATION_SOURCE_READBACK_MISMATCH");
+  }
+}
+
+async function verifyQuestSource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
+  const quest = (await tx.select().from(aurionQuestReceipts)
+    .where(eq(aurionQuestReceipts.id, receipt.sourceReceiptId)).limit(1))[0];
+  if (!quest || receipt.worldId !== AURION_WORLD_CHECKPOINT_WORLD_ID ||
+      receipt.subjectId !== quest.instanceId ||
+      receipt.predicate !== "quest_event" ||
+      receipt.value !== quest.resultStateHash ||
+      `sha256:${quest.receiptHash}` !== receipt.sourceReceiptHash ||
+      receipt.sourceCausalRoot !== receipt.sourceReceiptHash) {
+    throw new Error("NPC_INFORMATION_SOURCE_READBACK_MISMATCH");
+  }
+}
+
+async function verifySemanticGraphSource(tx: NpcTransaction, receipt: NpcInformationReceipt): Promise<void> {
+  const graph = (await tx.select().from(aurionSemanticGraphReceiptsV2)
+    .where(eq(aurionSemanticGraphReceiptsV2.id, receipt.sourceReceiptId)).limit(1))[0];
+  if (!graph || receipt.worldId !== AURION_WORLD_CHECKPOINT_WORLD_ID ||
+      graph.npcId !== receipt.witnessNpcId ||
+      receipt.subjectId !== graph.npcId ||
+      receipt.predicate !== "semantic_graph" ||
+      receipt.value !== graph.graphHash ||
+      `sha256:${graph.receiptHash}` !== receipt.sourceReceiptHash ||
+      graph.sourceRevision !== receipt.sourceRevision ||
+      `sha256:${graph.sourceSha256}` !== receipt.sourceSha256 ||
       receipt.sourceCausalRoot !== receipt.sourceReceiptHash) {
     throw new Error("NPC_INFORMATION_SOURCE_READBACK_MISMATCH");
   }
