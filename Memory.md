@@ -2,7 +2,7 @@
 
 > Project-local, append-only integration memory for `OuroborosCollective/Echoes_of_Aurion`.
 > Historical bootstrap created 2026-09-09 from retrievable repository/conversation evidence.
-> Keep WASD source authority and Sovereign Studio ATO strictly separate from Aurion host/persistence/presentation truth.
+> Historical bootstrap only: the former split-owner model is superseded by the Aurion Single Authority reset recorded in the latest entry below.
 
 ## Operating contract
 
@@ -10,7 +10,7 @@
 2. After each completed work block append exactly one entry before merge.
 3. Record task, decisions, touched surfaces, tests/evidence, learned result, open points and next safe step.
 4. Append-only; corrections are new entries.
-5. Aurion may host, persist, transport and present confirmed truth, but it must not silently replace WASD gameplay authority.
+5. Aurion is the single owner and truth source for all active gameplay, world, NPC, logic, decisions, databases, persistence, receipts and projections; AX1/WASD are historical provenance only.
 6. Runtime claims require exact revision, immutable build/image identity, schema/readback evidence and PatchMon/container health where applicable.
 7. Browser/software-renderer evidence is not native GPU/device proof unless a native device was actually measured.
 8. No fake snapshots, mock DB state, ad-hoc raw-SQL shortcuts or workflow tricks may stand in for production truth.
@@ -1282,3 +1282,31 @@ Status: VERIFIED implementation; PR #564 requires post-memory exact-head gates b
 Change: Added the reusable read-only #510 parity Evidence Gate, bound #505 Atlas admission to it, and routed World-Generation admission through the shared AIM-175 Evidence Gate Engine aggregation primitive.
 Insight: AIM-175 owns generic deterministic ADMIT/HOLD aggregation and admission receipts; #563 owns only World-Generation policy. No second Evidence Gate engine or World-Truth authority is introduced.
 Evidence: Pre-memory reconciliation head `b28ba87731dabe84a67d0c148739e81484d59385` passed Runtime Container Proof #904, Runtime Candidate #905, Local Test Pack #1439, AIM-292 #1266, Android #1920 and Causal Chaos #299. This Memory edit creates a new head; fresh post-memory exact-head gates and final main readback are required before merge.
+
+### 2026-09-24 — Aurion Single Authority + Living World Player Entry
+Status: VERIFIED repository architecture rewrite; runtime regression pending.
+Task: Remove obsolete shared-owner assumptions and establish Aurion as the sole active truth/logic/data authority while replacing the technical portal homepage with a player-first Living World introduction.
+Decisions: Aurion owns all active world, gameplay, NPC, quest, combat, progression, loot, crafting, economy, memory, information ecology, databases, receipts, account, community and operations logic. AX1/WASD names and source hashes may remain only as migration provenance; they carry no current authority, runtime duty or external dependency. Client and renderer are Aurion projections/input surfaces. The homepage now presents Living World, self-acting NPCs, memory/rumor, deterministic ecosystems, combat and consequence-driven quest flow.
+Touched surfaces: ARCHITECTURE_OWNERSHIP.md, AGENTS.md, CONTRIBUTING.md, README.md, docs/README.md, docs/account-first-entry.md, docs/migrations/README.md, historical migration markers, client homepage/launch bridge language, migrated catalog authority metadata, active AX1 source manifest and Aurion authority MCP documentation.
+Evidence: Exact GitHub commits on branch refactor/aurion-single-authority-living-world-home include the canonical architecture rewrite, player-first README/Home.tsx, removal of the active `ax1-gameplay` authority marker, migrated catalog authority=aurion_receipts, and a dedicated single-authority regression test. No production merge was performed.
+Learned: Historical provenance and current ownership must be separated explicitly; source repository names, file prefixes and hashes do not confer authority once code is migrated into Aurion.
+Open: Run TypeScript/targeted regression and exact-head runtime/readback gates; then independently review the remaining legacy wording found by the new architecture guard before merge.
+Next safe step: Open a Draft PR from the exact branch head and use real CI/runtime evidence to close remaining wording or compatibility regressions.
+### 2026-09-25 — Deterministic Generated-World Atlas Plan (#505)
+
+Status: VERIFIED implementation; post-memory exact-head gates required before merge.
+
+Change: Added a deterministic, read-only MaxRects atlas planning stage and bound generated-world atlas planning to the merged #563 World-Generation Evidence Gate. The planner canonicalizes source order, preserves semantic-group-safe content dedupe/provenance, and emits deterministic multipage placement plans. No world mutation, gameplay/collision mutation, materialization authority, CAG authority, or LLM dependency was introduced.
+
+Insight: #563 MATCH evidence can now deterministically admit the #505 presentation/build plan before atlas consumption. The runtime proof uses the actual committed `aurion-surface-atlas.webp` bytes and verifies its SHA-256 against the committed manifest before creating the plan, while the plan itself binds the manifest-byte hash and #563 admission hash.
+
+Evidence: Pre-memory exact implementation head `9236e8801d1cff1692363b829954bac3ab4c970f`; Runtime Candidate #953 PASS; Runtime Container Proof #952 PASS; Local Test Pack #1489 PASS; Android #1969 PASS. Container readback emitted `aurion_generated_world_atlas_plan_readback` with plan `sha256:198e2ca7d8b097e1372f62b8e61e29fcab91e1887955dc9695ed7a54ee5c4083`, admission `sha256:2dd86be9e150b2b0949cca2bcc9e9a40f8a027e06647f12a720eb41bf2242335`, manifest `sha256:9497f62c0432f6ef4306899c70ee58712966331ed2f245a87ca2cae707e9a53f`, and placementCount `1`.\n
+### 2026-09-25 — Generated-Structure Presentation Provenance Bridge (#505)
+
+Status: VERIFIED implementation; post-memory exact-head gates required before merge.
+
+Change: Added the deterministic `aurion.generated-structure.presentation-provenance.v1` bridge from the canonical #515 structure projection into the #505 atlas planning lane. The bridge preserves observationKey, recipeHash, materializationHash, sourceRevision, sourceCausalRoot, confirmed chunk authority hash and presentation asset lineage, then hashes that envelope deterministically. The atlas planner now refuses admitted world-generation evidence when the supplied #515 presentation lineage drifts.
+
+Insight: #505 can consume generated-structure presentation data without interpreting or replacing #512/#514 truth. The real MariaDB parity path now proves the provenance is derived from the actual confirmed observation/materialization/projection chain before atlas consumption; atlas packing remains presentation/build-only.
+
+Evidence: Pre-memory exact implementation head `4a60364a64ad31b8df98a0dba99f744e62e164a2`; Runtime Candidate #957 PASS; Runtime Container Proof #956 PASS; Local Test Pack #1494 PASS; Android #1974 PASS; Causal Chaos #318 PASS; AIM-292 #1307 PASS. Real container readback emitted `AIM505_REAL_PRESENTATION_PROVENANCE` with observationKey `sha256:24f52e4b658893426d43a6eca23871f73ea5cb8261fcf6b0ea6f046493f65dbe`, recipeHash `55df16b82523fc7704c1617bebfb5e6412709f80e0f8898a546b357e8b3ca122`, materializationHash `sha256:656641216a2b5f7ba0e0b1a3d386055e112c270f22d157b903a63b78c1814396`, provenanceHash `sha256:2e0dd5eb196e709f40d214045cf6c2b7b72a9dac5feb807c67a4b3b7f63fa8be`, and assetKeys `["aurion_confirmed_house"]`.

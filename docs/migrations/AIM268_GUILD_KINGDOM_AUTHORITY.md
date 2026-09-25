@@ -2,6 +2,10 @@
 description: Aktueller Ownership-Vertrag für Gilden- und Königreichs-Gameplay.
 ---
 
+## ⚠️ Historische Evidence — nicht aktueller Owner-Vertrag
+
+Die folgenden Ownership-/Source-Aussagen dokumentieren den damaligen Migrationsstand. Im aktuellen Endzustand ist **Aurion der einzige Owner und Wahrheitsträger**. Bereits migrierte Logik ist Aurion-Code; AX1 und WASD sind keine Live-Authority und keine Runtime-Pflicht.
+
 # AIM-268 — WASD Guild/Kingdom Gameplay · Aurion Persistenz
 
 Die ursprüngliche Migration normalisierte Gilden-/Kingdom-Daten in MariaDB. **Diese Persistenz macht Aurion nicht zur Gameplay-Authority.**

@@ -4,55 +4,45 @@
 
 Before editing gameplay, UI, persistence, routes, tests, issues or documentation, read [ARCHITECTURE_OWNERSHIP.md](ARCHITECTURE_OWNERSHIP.md).
 
-The binding ownership reset (AIM-298) is:
+The binding architecture is deliberately simple:
 
-- **Aurion** = single canonical gameplay, quest, NPC, world, website, auth/account, community, asset/ops governance, MariaDB persistence, transport, receipts, and readmodels.
-- **AX1** = das kanonische Hauptspiel: Gameplay-Identität und -Verträge, `/play`, Welt-/Contentstruktur, Renderer, HUD, Input und Animation.
-- **WASD** = ausführende Logik-, Berechnungs- und Integrationsreferenz unter Aurion-Verträgen. WASD ist kein separater Gameplay-Owner und besitzt keine eigene Server-Wahrheit.
+- **Aurion** is the single and only canonical owner of all gameplay, world, NPC, quest, combat, progression, loot, crafting, economy, group, guild, housing, persistence, database, transport, receipt, account, community, asset-governance and operations truth.
+- **AX1** is a legacy donor/provenance project. Its historical source may remain for provenance or migrated code lineage, but AX1 has no current authority, no separate runtime duty and no second game-state truth.
+- **WASD** is a legacy donor/provenance project. Historical algorithms may remain embedded as migrated implementation code, but WASD has no current authority, no separate runtime duty and no second gameplay truth.
+- **GDS, CAG, Wolfram, LLMs and other tools** may analyze, author, inspect or propose. They never become a gameplay, world or persistence authority.
 
-For migration, schema, reconciliation, production-readback, or Aurion cross-repository evidence work, also read `docs/agent-knowledgebase/skill-archive/aurion-migration-ops/SKILL.md` and use its guard/receipt contracts instead of ad-hoc SQL, SSH, or unverifiable workflow shortcuts.
+Once AX1/WASD code has been migrated into this repository, the active implementation is Aurion-owned. File names, exported identifiers and historical source hashes do not create a second owner.
 
-All quest, world event, NPC memory, progression, loot, crafting, economy, group/dungeon, mob, world/chunk, housing, and guild/kingdom rules are authoritatively compiled, validated, persisted, and executed by **Aurion**.
+Aurion is the sole source of truth. Client/rendering layers consume confirmed Aurion state; they do not create canonical state.
 
-Aurion is the single source of truth. AX1 renders and interacts with Aurion state, while WASD algorithms are integrated natively inside Aurion rather than running as a secondary authority sidecar.
-
-Aurion website/Admin/MCP must perform effectful mutations through typed, validated Aurion commands and receipts.
-
-A test that requires a second non-Aurion gameplay authority is stale and should be updated to target canonical Aurion contracts.
+A test that requires a second non-Aurion gameplay authority is stale and should be rewritten to target the canonical Aurion contract.
 
 ## Evidence Flywheel
 
-For every non-trivial integration, use the evidence flywheel: freeze the exact revision, establish a real baseline, execute only through the existing Aurion authority, classify the first causal failure, patch the smallest canonical owner, rerun the original and neighboring regressions, and independently read back the affected boundary.
+For every non-trivial integration, use the evidence flywheel: freeze the exact revision, establish a real baseline, execute through canonical Aurion authority, classify the first causal failure, patch the smallest canonical Aurion owner, rerun the original and neighboring regressions, and independently read back the affected boundary.
 
 Evaluation must never be made green by lowering thresholds, skipping flaky cases, moving expected outputs solely to pass, or treating model/agent self-grading as independent verification.
 
-For effectful actions, preserve Action Preview → authority/scope → approval where required → typed command → real effect → causal Action Receipt → independent readback. Approval is authorization, not evidence of execution; asynchronous effects must reject stale/revoked authority.
+For effectful actions, preserve Action Preview → Aurion authority/scope → approval where required → typed Aurion command → real effect → causal Action Receipt → independent readback. Approval is authorization, not evidence of execution.
+
+## Legacy source handling
+
+Historical AX1/WASD revisions may be pinned when they explain provenance or reproducibility. They must be labeled as historical source identity, never as current authority.
+
+Do not:
+
+- wait for a legacy repository to make a gameplay decision;
+- reintroduce a legacy database or service dependency;
+- describe AX1/WASD as owners of active rules or runtime duties;
+- create a second state machine merely because a legacy module exists;
+- treat historical source hashes as live decision inputs.
+
 ## Evidence and merge discipline
 
 - Green is accepted only at the layer actually read back.
-- Website health, DB health, AX1 visuals and WASD gameplay evidence are separate boundaries.
+- Aurion runtime/database/receipt evidence is canonical.
+- Client visuals prove presentation of Aurion state, not independent truth.
+- Legacy source hashes prove provenance only.
 - No mock/stub/preview result may stand in for production truth.
 - After an integration/fix, run the relevant regression and runtime/readback checks.
-- Finish a migration lane by merging, reading `main`, and confirming **0 open PRs** before opening the next lane.
-
-<!-- gitbook-agent-instructions:start -->
-
-## GitBook Documentation Editing
-
-This repository contains documentation synced with GitBook via Git Sync.
-
-Before editing GitBook-synced Markdown, YAML, or asset files, make sure the GitBook skill is available and up to date in your local agent environment. Prefer installing or updating it with:
-
-```bash
-npx skills add gitbookio/gitbook-skills
-```
-
-This command may add or update local agent skill files. Use them only as local agent instructions; do not commit those installed skill files or any tool-generated agent configuration unless the user explicitly asks for it.
-
-If `npx` is unavailable, load the skill from:
-
-https://gitbook.com/docs/skill.md
-
-When making changes, preserve GitBook sync metadata such as frontmatter, `SUMMARY.md`, `gitbook-docs.yaml`, `.gitbook/`, and asset links unless the requested edit explicitly requires changing them.
-
-<!-- gitbook-agent-instructions:end -->
+- Follow the repository's exact-head Memory.md → integration → evidence → merge → main-readback workflow.

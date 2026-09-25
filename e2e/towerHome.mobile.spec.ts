@@ -8,7 +8,7 @@ for (const viewport of [
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet./i })).toBeVisible();
     const account = page.getByRole("button", { name: "KONTO ANLEGEN / ANMELDEN", exact: true });
     await expect(account).toBeVisible();
     const accountBox = await account.boundingBox();
@@ -16,7 +16,7 @@ for (const viewport of [
     expect(accountBox!.width).toBeGreaterThanOrEqual(44);
     expect(accountBox!.height).toBeGreaterThanOrEqual(44);
 
-    for (const name of ["Community", "Forum", "Events", "Asset-Katalog", "Anmelden"]) {
+    for (const name of ["Community", "Anmelden"]) {
       const control = page.getByRole(name === "Community" ? "link" : "button", { name, exact: true });
       await expect(control).toBeVisible();
       const box = await control.boundingBox();
@@ -25,6 +25,7 @@ for (const viewport of [
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
     }
 
+    await expect(page.getByRole("link", { name: "GAMEPLAY ENTDECKEN", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toHaveCount(0);
     await expect(page.getByText(/SPIELSTART VORBEREITEN|AX1 OPEN WORLD STARTEN|LOADOUT VORBEREITEN|IN DIE OPEN WORLD/i)).toHaveCount(0);
     await expect(page.locator("canvas")).toHaveCount(0);

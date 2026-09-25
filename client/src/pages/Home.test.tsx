@@ -10,11 +10,11 @@ describe("Home", () => {
     window.history.replaceState({}, "", "/");
     render(<RealClientHarness><Home /></RealClientHarness>);
     await waitFor(() => expect(screen.getAllByRole("button", { name: /KONTO ANLEGEN \/ ANMELDEN/i }).length).toBeGreaterThan(0));
-    expect(screen.getByRole("heading", { name: /Dein Zugang zu Echoes of Aurion/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Eine Welt, die nicht auf dich wartet\./i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /SPIEL BETRETEN/i })).toBeNull();
     expect(document.querySelector("canvas")).toBeNull();
-    expect(screen.getByRole("button", { name: "GLB-Einreichung öffnen" })).toBeTruthy();
-    expect(screen.queryByText(/Markt|Crafting|Boss|Questgeber/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Asset-Katalog" })).toBeTruthy();
+    expect(screen.getByText("NPCs mit eigenem Leben")).toBeTruthy();
   });
 
   it("opens only the account authentication contract from the account CTA", async () => {

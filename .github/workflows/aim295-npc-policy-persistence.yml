@@ -56,12 +56,20 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const journal=JSON.parse(fs.readFileSync("drizzle/meta/_journal.json","utf8"));
-          const conn=await mysql.createConnection(process.env.DATABASE_URL);
+          const diagnosticDatabase="aurion_npc_policy_migration_diagnostic";
+          const admin=await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            await admin.query("DROP DATABASE IF EXISTS \`aurion_npc_policy_migration_diagnostic\`");
+            await admin.query("CREATE DATABASE \`aurion_npc_policy_migration_diagnostic\`");
+          } finally { await admin.end(); }
+          const sourceUrl=new URL(process.env.DATABASE_URL);
+          sourceUrl.pathname="/aurion_npc_policy_migration_diagnostic";
+          const conn=await mysql.createConnection(sourceUrl.toString());
           try {
             const tags=journal.entries.map(e=>e.tag);
             for (const tag of tags) {
               const sql=fs.readFileSync(`drizzle/${tag}.sql`,"utf8");
-              const statements=sql.split(/\\s*-->\\s*statement-breakpoint\\s*/).map(s=>s.trim()).filter(Boolean);
+              const statements=sql.split(/\s*-->\s*statement-breakpoint\s*/).map(s=>s.trim()).filter(Boolean);
               for (let i=0;i<statements.length;i++) {
                 try { await conn.query(statements[i]); }
                 catch (error) {
@@ -78,6 +86,12 @@ jobs:
                 }
               }
             }
+            console.error(JSON.stringify({
+              recordType:"aurion_migration_diagnostic",
+              status:"replay_succeeded",
+              diagnosticDatabase,
+              migrationCount:tags.length,
+            },null,2));
           } finally { await conn.end(); }
           NODE
           exit 17

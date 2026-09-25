@@ -2,6 +2,14 @@
 
 Echoes of Aurion incorporates or references open source software and creative assets subject to third-party licenses. This document provides attribution and licensing notices in compliance with applicable terms.
 
+## Project License / Rights Notice
+
+**Echoes of Aurion is not distributed under the MIT License.** The project-level rights and permitted uses are defined in [`LICENSE.md`](LICENSE.md). Private, noncommercial use and playing are permitted as described there; commercial use, public distribution, publication of modifications, and other uses requiring authorization need an expressly issued license from Ouroboros Collective.
+
+The MIT/Apache/LGPL/ISC and other licenses listed below apply **only to their respective third-party components** and do not grant those rights to the original Echoes of Aurion project as a whole.
+
+---
+
 ## Third-Party Component Inventory
 
 | Komponente | Version | Quelle / Repository | Lizenz | Copyright / Urheber | Verwendung |

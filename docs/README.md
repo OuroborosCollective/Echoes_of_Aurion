@@ -4,51 +4,44 @@ description: Kanonischer Index der aktuellen technischen Dokumentation.
 
 # Technische Dokumentation
 
-Die aktuelle Dokumentation folgt der Ownership-Matrix aus [Architektur-Ownership](../ARCHITECTURE_OWNERSHIP.md).
+Die aktuelle Dokumentation folgt der Single-Owner-Architektur aus [ARCHITECTURE_OWNERSHIP](../ARCHITECTURE_OWNERSHIP.md).
 
 ## Kanonisch
 
-1. [Architektur-Ownership: Aurion · AX1 · WASD](../ARCHITECTURE_OWNERSHIP.md)
-2. [AIM-252 — WASD Normative Ruleset](migrations/AIM252_WASD_NORMATIVE_RULESET.md)
-3. [Finale AX1 Source Reconciliation](migrations/AIM239_AX1_RECONCILIATION_MATRIX_2026-09-05.md)
-4. [AX1 Content Catalog](migrations/AIM267_AX1_CONTENT_CATALOG.md)
-5. [Naturkollision und weltweite Bewegung](world-nature-collision.md)
-6. [Balancing v2](balancing/AIM265_BALANCING_V2.md)
+1. [Architektur — Aurion Single Authority](../ARCHITECTURE_OWNERSHIP.md)
+2. [Naturkollision und weltweite Bewegung](world-nature-collision.md)
+3. [Balancing v2](balancing/AIM265_BALANCING_V2.md)
+4. [Kanonischer World Causal Root](aurion-world-causal-root.md)
+5. [Cross-Zone Handover V2](aurion-cross-zone-handover-v2.md)
+6. [Effect Intent Journal](aurion-effect-intent-journal.md)
+7. [Headless Causal Oracle V2](aurion-headless-causal-oracle-v2.md)
 
-## Bereichseigentümer
+## Aktive Architektur
 
-### Aurion
+**Aurion ist der einzige Owner und Wahrheitsträger.**
 
-Dokumentiert werden dürfen Auth/Account, Community/Forum/Events, Assets/Ops, Deployments, MariaDB, Receipts und read-only Readmodels. Aurion-Dokumentation darf keinen Gameplay-Owner definieren.
+Aurion besitzt und führt die aktive Spielwelt, Gameplay- und NPC-Logik, Quests, Combat, Progression, Loot, Crafting, Economy, Gruppen, Fraktionen, Memory, Information Ecology, Datenbanken, Receipts, Readmodels, Account, Community, Assets und Operations.
 
-### AX1
+Client, Renderer und UI sind Projektion und Eingabeoberfläche der bestätigten Aurion-Wahrheit.
 
-Dokumentiert `/play`, Rendering, HUD, Eingaben, Animationen, Asset-/Content-Projektion und visuelle Performance.
+AX1 und WASD sind historische Provenienzquellen beziehungsweise bereits migrierte Implementierungsbausteine. Ihre alten Repositories, Revisionen und Dateinamen sind keine aktuelle Authority und erzeugen keine Runtime-Pflichten.
 
-### WASD
+CAG, Wolfram, LLMs und externe Tools können analysieren, authoren oder prüfen; ihre Ergebnisse sind niemals selbst kanonische Spielwahrheit.
 
-Dokumentiert und besitzt die normativen Regeln für Bewegung, Combat, Quests, Progression, Loot, Crafting, Economy, Gruppen/Dungeons, NPC/Mobs, Welt/Chunks, Housing, Guild/Kingdom und Balancing.
+## Historische Evidence
 
-## Historical evidence
+Datiertes Material unter `guardian/`, `qa/` und `docs/migrations/` darf für Herkunft, Migrationsverlauf und Fehlerhistorie erhalten bleiben. Alte Owner-/Authority-Formulierungen sind **historische Aussagen**, nicht aktuelle Arbeitsanweisungen.
 
-Datiertes Material in `guardian/`, `qa/` sowie ältere revisionsgebundene Audit-/Ledger-Dateien kann für Provenienz und Fehlerhistorie erhalten bleiben. Es ist **nicht normativ** und wird nicht mehr als primäre GitBook-Navigation veröffentlicht.
-
-Bei Widerspruch gilt:
+Bei einem Widerspruch gilt:
 
 ```text
-current code/runtime evidence
-+ ARCHITECTURE_OWNERSHIP.md
-+ current WASD rule binding
-> historical report / old migration note
+aktueller Aurion-Code
+→ aktuelle Aurion-Tests
+→ Runtime-/DB-/Receipt-Readback
+→ ARCHITECTURE_OWNERSHIP.md
+→ historische Provenienz
 ```
 
 ## Dokumentationsregel
 
-Neue Dokumente müssen klar sagen, ob sie
-
-- normative Architektur,
-- aktuelle Implementierung,
-- revisionsgebundene Evidence oder
-- historische Evidence
-
-beschreiben. Undatierte alte Produktpläne oder TODO-Listen werden nicht als Dokumentation weitergeführt.
+Neue Dokumente müssen ausdrücklich kennzeichnen, ob sie aktuelle Aurion-Architektur, aktuelle Aurion-Implementierung, revisionsgebundene Evidence oder historische Provenienz beschreiben. Historische Migrationsnamen dürfen nicht als aktuelle Ownerbezeichnungen verwendet werden.

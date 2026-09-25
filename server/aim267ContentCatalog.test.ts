@@ -8,7 +8,7 @@ describe("AIM-267 final -ax1 content catalog", () => {
   it("pins a deterministic definitions-only catalog", () => {
     expect(catalog.contentVersion).toBe(AURION_AX1_CONTENT_VERSION);
     expect(catalog.source[1]).toBe(AURION_AX1_CONTENT_SOURCE_REVISION);
-    expect(catalog.authority).toEqual({ definitionsOnly: true, liveState: false, progressionCap: null, mutation: "wasd_aurion_receipts" });
+    expect(catalog.authority).toEqual({ definitionsOnly: true, liveState: false, progressionCap: null, mutation: "aurion_receipts" });
     expect(aurionAx1ContentDigest(catalog)).toBe(catalog.catalogSha256);
   });
 

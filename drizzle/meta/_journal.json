@@ -442,6 +442,13 @@
       "when": 1790235000000,
       "tag": "0062_aurion_world_director",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790279000000,
+      "tag": "0063_aurion_npc_information_ecology",
+      "breakpoints": true
     }
   ]
 }
