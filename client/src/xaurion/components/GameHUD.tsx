@@ -4,8 +4,11 @@ import { Ax1HpMeter } from "./Ax1HpMeter";
 import {
   Activity,
   Award,
+  Ban,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock3,
   Coins,
   Compass,
   Crown,
@@ -19,6 +22,7 @@ import {
   MessageSquare,
   Package,
   Repeat,
+  History,
   ScrollText,
   ShieldCheck,
   Sparkles,
@@ -123,8 +127,8 @@ export interface GameHUDProps {
   onCastSkill: (command: string) => void;
 }
 
-const iconButton = "w-11 h-11 sm:w-10 sm:h-10 rounded-xl bg-black/80 border border-gray-800 hover:border-[#b8860b] text-[#fbbf24] flex items-center justify-center transition-all cursor-pointer backdrop-blur-md active:scale-95 shadow relative";
-const utilityButton = "w-10 h-10 sm:w-11 sm:h-11 rounded-full border flex flex-col items-center justify-center text-[9px] font-mono font-bold backdrop-blur-md shadow-lg active:scale-90 transition-transform cursor-pointer";
+const iconButton = "group relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[5px] border border-slate-700/80 bg-black/75 px-1.5 text-amber-200 shadow-lg backdrop-blur-md transition-colors hover:border-amber-300/70 hover:bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300";
+const utilityButton = "flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-[5px] border px-2 text-[9px] font-mono font-bold shadow-lg backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300";
 
 export function GameHUD(props: GameHUDProps) {
   const [menuExpanded, setMenuExpanded] = useState(false);
@@ -178,11 +182,12 @@ export function GameHUD(props: GameHUDProps) {
     action();
   };
 
+
   return (
     <div
       id="game-hud-root"
       data-testid="ax1-game-hud"
-      data-source="ax1-f24-visible-shell"
+      data-source="ax1-f26-visible-shell"
       className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
     >
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
