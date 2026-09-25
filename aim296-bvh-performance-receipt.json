@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "recordType": "aurion_aim296_bvh_performance",
+  "benchmark": {
+    "geometry": "TorusKnotGeometry(16,5,256,48)",
+    "workloadRays": 1024,
+    "warmupMs": {
+      "native": 2950.5154439999997,
+      "accelerated": 31.07611799999995
+    },
+    "samplesMs": {
+      "native": [
+        2844.079799,
+        2876.2338390000004,
+        2841.2175960000004,
+        2817.0757510000003,
+        3332.4101690000007,
+        3296.8577430000005,
+        2789.152138999998
+      ],
+      "accelerated": [
+        22.09364299999652,
+        14.413187999998627,
+        14.691444000000047,
+        8.918548999998166,
+        8.420115000000806,
+        8.384076999998797,
+        8.373883000000205
+      ]
+    },
+    "nativeMedianMs": 2844.079799,
+    "acceleratedMedianMs": 8.918548999998166,
+    "nativeP95Ms": 3332.4101690000007,
+    "acceleratedP95Ms": 22.09364299999652,
+    "speedupRatio": 318.8949008409984,
+    "parityCases": 32,
+    "parityFailures": 0
+  },
+  "runner": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuCount": 4,
+    "node": "v22.22.1",
+    "interpretation": "Deterministic CI CPU benchmark; not native mobile GPU performance."
+  }
+}
