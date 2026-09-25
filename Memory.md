@@ -1327,3 +1327,20 @@ Learned: A reversible evidence contract must return the original canonical sourc
 
 Open: Post-merge readback only.
 Next safe step: Merge with the exact verified head and confirm #356 is closed from the merged main revision.
+
+### 2026-09-25 — OpenTelemetry observer boundary (#142)
+
+Status: VERIFIED implementation + exact-head functional evidence; ready for merge.
+
+Task: Complete the Aurion OpenTelemetry side-channel boundary without granting telemetry gameplay or persistence authority.
+
+Decisions: Use a local OTLP/HTTP observer boundary instead of importing OTel into canonical gameplay reducers. Redact opaque/numeric route identities, emit bounded source-revision metadata and hash-only references for causal receipts actually observed by readback, fail open on disabled/unconfigured collectors and collector errors, and keep telemetry outside authorization, mutation and persistence decisions.
+
+Touched surfaces: server/observability/otelBoundary.ts, server/observability/otelBoundary.test.ts, server/_core/index.ts, server/causality/readbackService.ts.
+
+Evidence: Exact head 13c42c25b67c3c7c61fa0ece184b479a8feb8e54 passed the OTel-relevant full offline pack (run 36151138440), exact-head runtime candidate (run 36151138674), exact-head container proof (run 36151138453), real MariaDB/readback + browser proof (run 36151138679), causal chaos (run 36151138657), and the client/runtime/typecheck/build regressions; 14 current checks passed and the only failed check, AIM-265 independent exact replay, reports pre-existing docs/balancing/aim265-candidate.json catalog SHA drift unrelated to telemetry. No telemetry dependency was added to canonical gameplay reducers and no production gameplay/persistence mutation was introduced.
+
+Learned: The safest telemetry boundary is protocol-level observation of already-confirmed evidence; it should carry hashes/references, never invent receipts, and its availability must be irrelevant to the request/truth path.
+
+Open: Post-merge readback; independent AIM-265 catalog drift remains outside #142.
+Next safe step: Merge the exact verified head and confirm #142 closed from main.
