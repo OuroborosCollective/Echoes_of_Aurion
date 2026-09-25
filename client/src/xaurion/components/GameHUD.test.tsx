@@ -105,7 +105,7 @@ describe("GameHUD", () => {
 
     expect(screen.getByText("Player · Stale")).toBeTruthy();
     expect(screen.getByText("World · Unavailable")).toBeTruthy();
-    expect(screen.getByLabelText("Serverbestätigter Charakter")).toHaveAttribute("data-state", "stale");
+    expect(screen.getByLabelText("Serverbestätigter Charakter").getAttribute("data-state")).toBe("stale");
   });
 
   it("keeps frequent actions visible and groups lower-frequency systems in the command deck", async () => {
@@ -115,7 +115,7 @@ describe("GameHUD", () => {
     expect(screen.getByRole("button", { name: "Charakter [C]" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Inventar [I/B]" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Weitere Menüs" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Gilde", exact: true })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Gilde" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
     expect(screen.getByRole("dialog", { name: "Weitere Menüs" })).toBeTruthy();
