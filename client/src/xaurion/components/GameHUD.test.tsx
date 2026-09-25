@@ -112,8 +112,8 @@ describe("GameHUD", () => {
     const props = baseProps();
     render(<GameHUD {...props} />);
 
-    expect(screen.getByRole("button", { name: "Charakter [C]" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Inventar [I/B]" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Charakter" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Inventar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Weitere Menüs" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Gilde" })).toBeNull();
 
