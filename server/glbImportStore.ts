@@ -24,9 +24,10 @@ import {
   type GlbExternalProvenanceInput,
   type GlbExternalProvenanceReadback,
 } from "../shared/glbExternalProvenanceContract";
-import { persistGlbBytes, readStoredGlb } from "./glbFileStore";
+import { persistGlbBytes, readStoredGlb, glbStorageRoot } from "./glbFileStore";
 import type { GlbAssetClassification } from "./glbAssetClassifier";
 import { groupGlbCatalogRows } from "./glbCatalogFamilies";
+import { validateGlbStructure, removeOrphanedGlbFiles } from "./glbCatalogReconcile";
 
 const PURPOSE_PREFIXES = [
   NPC_FALLBACK_DISPLAY_PREFIX,
@@ -392,11 +393,14 @@ export class GlbImportStore {
     });
   }
 
-  /** Reconcile the catalog: verify every approved local-glb asset's stored
-   * bytes still match their recorded SHA-256. Assets whose file is missing or
-   * whose digest has drifted are marked "rejected" and their assignments
-   * deactivated, keeping the published catalog clean. */
-  async reconcile(actorUserId: number): Promise<Readonly<{ checked: number; purged: number; purgedAssetIds: readonly string[] }>> {
+  /** Reconcile the catalog for durable data consistency:
+   *  1. Every approved local-glb asset's stored bytes must still match its
+   *     recorded SHA-256 AND pass structural GLB validation. Assets whose
+   *     file is missing, whose digest has drifted, or whose binary structure
+   *     is corrupt are marked "rejected" and their assignments deactivated.
+   *  2. Content-addressed `.glb` files on disk with no database record at all
+   *     (orphaned files from failed imports or manual tampering) are removed. */
+  async reconcile(actorUserId: number): Promise<Readonly<{ checked: number; purged: number; purgedAssetIds: readonly string[]; orphanedFilesRemoved: number; orphanedFiles: readonly string[] }>> {
     return this.locked(actorUserId, async connection => {
       const [rows] = await connection.query<RowDataPacket[]>(
         "SELECT id, sha256 FROM glbAssets WHERE status = 'approved' AND storageKey LIKE 'local-glb/%'",
@@ -404,14 +408,37 @@ export class GlbImportStore {
       const purgedAssetIds: string[] = [];
       for (const row of rows) {
         try {
-          await readStoredGlb(String(row.sha256), this.storageRoot);
+          const bytes = await readStoredGlb(String(row.sha256), this.storageRoot);
+          validateGlbStructure(bytes);
         } catch {
           await connection.execute("UPDATE glbAssets SET status = 'rejected', reviewedByUserId = ?, reviewedAt = ? WHERE id = ?", [actorUserId, operationalDate(), String(row.id)]);
           await connection.execute("UPDATE glbAssignments SET active = 0 WHERE assetId = ?", [String(row.id)]);
           purgedAssetIds.push(String(row.id));
         }
       }
-      return Object.freeze({ checked: rows.length, purged: purgedAssetIds.length, purgedAssetIds: Object.freeze([...purgedAssetIds]) });
+
+      // Collect every SHA-256 recorded in the database (any status) so that
+      // files belonging to archived or rejected assets are not treated as orphans.
+      const [allRows] = await connection.query<RowDataPacket[]>(
+        "SELECT sha256 FROM glbAssets WHERE storageKey LIKE 'local-glb/%'",
+      );
+      const knownSha256s = new Set(allRows.map(row => String(row.sha256)));
+
+      let orphanedFiles: readonly string[] = [];
+      try {
+        const root = this.storageRoot ?? glbStorageRoot();
+        orphanedFiles = await removeOrphanedGlbFiles(root, knownSha256s);
+      } catch {
+        // Storage root not configured or inaccessible — skip filesystem sweep.
+      }
+
+      return Object.freeze({
+        checked: rows.length,
+        purged: purgedAssetIds.length,
+        purgedAssetIds: Object.freeze([...purgedAssetIds]),
+        orphanedFilesRemoved: orphanedFiles.length,
+        orphanedFiles: Object.freeze([...orphanedFiles]),
+      });
     });
   }
 
