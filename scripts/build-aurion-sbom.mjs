@@ -6,7 +6,7 @@ const outputPath = process.env.AURION_SBOM_OUTPUT || "aurion-runtime.spdx.json";
 const sourceRevision = process.env.GITHUB_SHA || execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 if (!/^[a-f0-9]{40}$/.test(sourceRevision)) throw new Error("SBOM_SOURCE_REVISION_INVALID");
 
-const tree = JSON.parse(execFileSync("pnpm", ["list", "--prod", "--json", "--depth", "Infinity"], { encoding: "utf8" }));
+const tree = JSON.parse(execFileSync("pnpm", ["list", "--prod", "--json", "--depth", "Infinity"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
 const roots = Array.isArray(tree) ? tree : [tree];
 
 function packageId(name, version) {
