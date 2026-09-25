@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@theisegoria/game-development-studio": "file:../../../tmp/aurion-game-dev-ikFCGE/source/theisegoria-game-development-studio-1.0.2.tgz"
+  }
+}
