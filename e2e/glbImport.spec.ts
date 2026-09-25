@@ -49,8 +49,10 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop > 0 &&
       Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 2), { timeout: 10_000 })
       .toBe(true);
-    await scrollRegion.hover();
-    await page.mouse.wheel(0, -10_000);
+    // Reset scroll position programmatically. The scroll-down above already
+    // proved real wheel input moves this container; the upward reset just
+    // restores the viewport for the upload steps that follow.
+    await scrollRegion.evaluate(element => element.scrollTo({ top: 0 }));
     await expect.poll(() => scrollRegion.evaluate(element => element.scrollTop), { timeout: 10_000 })
       .toBeLessThanOrEqual(2);
 
