@@ -54,7 +54,7 @@ test("invalid digest or stale merge identity fails closed",()=>{
 test("secret-like metadata is rejected before signing",()=>{
   assert.throws(()=>scanReleaseMetadataForSecrets({accessToken:"github_pat_abcdefghijklmnopqrstuvwxyz123456"}),/SECRET/);
   assert.throws(()=>buildArtifactAttestationPredicate({
-    sourceRevision:sha,buildInputDigest:digest,artifactDigest:digest,releaseArchiveDigest:digest,secretScanReceiptDigest:digest,secretValuesReturned:false,workflow:"sk-abcdefghijklmnopqrstuvwxyz12345",workflowRunId:"1"
+    sourceRevision:sha,buildInputDigest:digest,artifactDigest:digest,releaseArchiveDigest:digest,secretScanReceiptDigest:digest,sbomDigest:digest,secretValuesReturned:false,workflow:"sk-abcdefghijklmnopqrstuvwxyz12345",workflowRunId:"1"
   }),/SECRET/);
 });
 
