@@ -110,6 +110,79 @@ function validateGlbMagicBytes(file: File): Promise<string | null> {
     reader.readAsArrayBuffer(file.slice(0, 12));
   });
 }
+/**
+ * Validate the GLB binary chunk structure for catalog grouping compatibility.
+ * Reads the full header + first chunk to verify:
+ *  - Total file length matches the header-declared length.
+ *  - At least one JSON chunk exists with chunk type 0x4E4F534A ("JSON").
+ *  - The JSON chunk parses and contains the minimal glTF fields required for
+ *    catalog classification: `asset` and at least one of `scenes`/`nodes`/`meshes`.
+ * Returns a German error message or null if valid.
+ */
+function validateGlbStructure(file: File): Promise<string | null> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("Die GLB-Datei konnte nicht gelesen werden.");
+    reader.onload = () => {
+      const buffer = reader.result;
+      if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 20) {
+        resolve("Die GLB-Datei ist zu klein für eine gültige Chunk-Struktur.");
+        return;
+      }
+      const view = new DataView(buffer);
+      // Header: magic(4) + version(4) + length(4) = 12 bytes
+      const declaredLength = view.getUint32(8, true);
+      if (declaredLength !== file.size) {
+        resolve(`Die deklarierte Dateilänge (${declaredLength} Byte) stimmt nicht mit der tatsächlichen Dateigröße (${file.size} Byte) überein.`);
+        return;
+      }
+      if (file.size < 20) {
+        resolve("Die GLB-Datei enthält keinen gültigen Chunk-Header.");
+        return;
+      }
+      // First chunk: chunkLength(4) + chunkType(4) + chunkData
+      const chunkLength = view.getUint32(12, true);
+      const chunkType = view.getUint32(16, true);
+      // JSON chunk type = 0x4E4F534A ("JSON" in little-endian)
+      if (chunkType !== 0x4e4f534a) {
+        resolve("Die GLB-Datei besitzt keinen gültigen JSON-Chunk als ersten Chunk (erwartet: JSON).");
+        return;
+      }
+      const chunkDataStart = 20;
+      const chunkDataEnd = chunkDataStart + chunkLength;
+      if (chunkDataEnd > file.size) {
+        resolve(`Der JSON-Chunk (${chunkLength} Byte) reicht über das Dateiende hinaus.`);
+        return;
+      }
+      // Read and parse the JSON chunk
+      const jsonBytes = new Uint8Array(buffer, chunkDataStart, chunkLength);
+      let gltfJson: Record<string, unknown>;
+      try {
+        const decoder = new TextDecoder("utf-8");
+        const jsonStr = decoder.decode(jsonBytes).replace(/\0+$/, "");
+        gltfJson = JSON.parse(jsonStr);
+      } catch {
+        resolve("Der JSON-Chunk der GLB-Datei konnte nicht geparsed werden. Die Datei ist möglicherweise beschädigt.");
+        return;
+      }
+      // Validate minimal glTF structure for catalog grouping
+      if (!gltfJson.asset || typeof gltfJson.asset !== "object") {
+        resolve("Die GLB-Datei besitzt kein gültiges glTF-Asset-Feld. Dieses ist für die Katalog-Gruppierung erforderlich.");
+        return;
+      }
+      const hasSceneStructure =
+        (Array.isArray(gltfJson.scenes) && gltfJson.scenes.length > 0) ||
+        (Array.isArray(gltfJson.nodes) && gltfJson.nodes.length > 0) ||
+        (Array.isArray(gltfJson.meshes) && gltfJson.meshes.length > 0);
+      if (!hasSceneStructure) {
+        resolve("Die GLB-Datei enthält keine Szenen, Knoten oder Meshes. Ein Modell ohne Geometrie kann nicht katalogisiert werden.");
+        return;
+      }
+      resolve(null);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
 function lodClassifyingFileName(fileName: string, level: GlbLodLevel): string {
   const base = fileName.replace(/\.glb$/i, "").replace(/(?:^|[_ -])lod[_ -]?[0-3](?:$|[_ -])/ig, "_").replace(/[_ -]+$/g, "");
   return `${base || "aurion_model"}_LOD${level}.glb`;
@@ -214,6 +287,8 @@ export default function GlbUpload() {
         if (validationError) { setOutcomes(current => [...current, { fileName: file.name, error: validationError }]); continue; }
         const magicError = await validateGlbMagicBytes(file);
         if (magicError) { setOutcomes(current => [...current, { fileName: file.name, error: magicError }]); continue; }
+        const structureError = await validateGlbStructure(file);
+        if (structureError) { setOutcomes(current => [...current, { fileName: file.name, error: structureError }]); continue; }
         const chosenName = (singleOverride || defaultDisplayName(file.name)).slice(0, 120);
         if (chosenName.length < 3) { setOutcomes(current => [...current, { fileName: file.name, error: "Der Anzeigename ist zu kurz." }]); continue; }
         try {

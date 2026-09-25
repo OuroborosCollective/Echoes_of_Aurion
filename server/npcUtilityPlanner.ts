@@ -175,8 +175,130 @@ function compareScored(
 }
 
 // ---------------------------------------------------------------------------
+// Scored candidate — for debug/inspection views
+// ---------------------------------------------------------------------------
+
+export type NpcUtilityScoredCandidate = Readonly<{
+  id: string;
+  action: NpcUtilityCandidate["action"];
+  goal: NpcUtilityCandidate["goal"];
+  needPressureBps: number;
+  benefitBps: number;
+  riskBps: number;
+  costBps: number;
+  /** Final utility score in BPS, clamped to [0, 40000]. */
+  scoreBps: number;
+  /** Breakdown of the score components for the debug view. */
+  scoreBreakdown: Readonly<{
+    pressureTerm: number;
+    benefitTerm: number;
+    riskTerm: number;
+    costTerm: number;
+    personalityBonus: number;
+    goalPersistenceBonus: number;
+  }>;
+  constraintStatus: "eligible" | "blocked";
+  constraintCode: string | null;
+  declarationIndex: number;
+}>;
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolve all candidates with their individual scores and constraint status.
+ *
+ * Unlike `resolveNpcUtilityDecision` which returns only the winner, this
+ * function returns every candidate with its computed score, score breakdown,
+ * and constraint evaluation result. It is intended for debug/inspection views
+ * that need to show the full decision landscape in real time.
+ *
+ * The function is pure and deterministic: same inputs → same outputs.
+ */
+export function resolveNpcUtilityScores(
+  context: NpcUtilityPlannerContext,
+): readonly NpcUtilityScoredCandidate[] {
+  // Reuse the same validation as resolveNpcUtilityDecision by calling it.
+  // If the context is invalid, it throws — same contract.
+  resolveNpcUtilityDecision(context);
+
+  const results: NpcUtilityScoredCandidate[] = [];
+
+  for (let i = 0; i < context.candidates.length; i++) {
+    const candidate = context.candidates[i];
+    const constraint = evaluateConstraints(candidate, context);
+
+    let scoreBps = 0;
+    let breakdown = {
+      pressureTerm: 0,
+      benefitTerm: 0,
+      riskTerm: 0,
+      costTerm: 0,
+      personalityBonus: 0,
+      goalPersistenceBonus: 0,
+    };
+
+    if (constraint.status === "eligible") {
+      const pressureTerm = candidate.needPressureBps * 2;
+      const benefitTerm = candidate.benefitBps;
+      const riskTerm = candidate.riskBps;
+      const costTerm = candidate.costBps;
+
+      let personalityBonus = 0;
+      const pb = context.personalityBonusBps?.[candidate.goal];
+      if (pb !== undefined) {
+        personalityBonus = assertBps(pb, "PERSONALITY_BONUS");
+      }
+
+      let goalPersistenceBonus = 0;
+      if (context.currentGoal !== undefined && candidate.goal === context.currentGoal) {
+        const gpb = context.goalPersistenceBonusBps ?? 0;
+        if (gpb !== 0) {
+          goalPersistenceBonus = assertBps(gpb, "GOAL_PERSISTENCE_BONUS");
+        }
+      }
+
+      breakdown = {
+        pressureTerm,
+        benefitTerm,
+        riskTerm,
+        costTerm,
+        personalityBonus,
+        goalPersistenceBonus,
+      };
+
+      scoreBps = clampScore(
+        pressureTerm + benefitTerm - riskTerm - costTerm + personalityBonus + goalPersistenceBonus,
+      );
+    }
+
+    results.push(
+      Object.freeze({
+        id: candidate.id,
+        action: candidate.action,
+        goal: candidate.goal,
+        needPressureBps: candidate.needPressureBps,
+        benefitBps: candidate.benefitBps,
+        riskBps: candidate.riskBps,
+        costBps: candidate.costBps,
+        scoreBps,
+        scoreBreakdown: Object.freeze(breakdown),
+        constraintStatus: constraint.status,
+        constraintCode: constraint.code,
+        declarationIndex: i,
+      }),
+    );
+  }
+
+  // Sort by score descending, then declaration order ascending (same as winner selection).
+  return Object.freeze(
+    results.sort((a, b) => {
+      if (b.scoreBps !== a.scoreBps) return b.scoreBps - a.scoreBps;
+      return a.declarationIndex - b.declarationIndex;
+    }),
+  );
+}
 
 /**
  * Resolve a deterministic NPC utility decision from the given context.
