@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2026-09-16 - Escape key to close panels
+**Learning:** Players expect standard QoL features like closing active UI panels (Inventory, Quests, Character, etc.) using the Escape key.
+**Action:** Implemented a global keyboard listener in `AurionAuthorityHud.tsx` to detect `Escape` keypresses. When triggered while a panel is open, it calls `openPanel(null)` and prevents default behavior to safely close the UI without side effects.
