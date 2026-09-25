@@ -139,7 +139,7 @@ describe("GameHUD", () => {
   it("keeps gameplay controls touch-safe and self-describing", () => {
     render(<GameHUD {...baseProps()} />);
 
-    const attack = screen.getByTitle("Angriff [F]");
+    const attack = screen.getByTitle("Angriff [R]");
     expect(attack.className).toContain("min-h-14");
     expect(attack.className).toContain("min-w-14");
 
