@@ -31,6 +31,7 @@ import { globalSnapshotReconciliationService } from "../causality/snapshotReconc
 import { globalCausalArchivingService } from "../causality/archivingService";
 import { globalStateReconciliationService } from "../causality/globalStateReconciliationService";
 import { globalAssuranceService } from "../causality/assuranceService";
+import { createOtelHttpMiddleware } from "../observability/otelBoundary";
 
 function isPortAvailable(port:number):Promise<boolean>{return new Promise(resolve=>{const server=net.createServer();server.listen(port,()=>server.close(()=>resolve(true)));server.on("error",()=>resolve(false));});}
 async function findAvailablePort(startPort:number=3000):Promise<number>{for(let port=startPort;port<startPort+20;port++)if(await isPortAvailable(port))return port;throw new Error(`No available port found starting from ${startPort}`);}
@@ -58,6 +59,9 @@ async function startServer(){
   }
   const autonomousNpcLife = createAutonomousNpcLifeRuntime({ enabled: databaseConnected });
   const app=express();
+  // OTLP/HTTP is a fail-open observer. It never participates in request authorization,
+  // gameplay mutation, persistence decisions or response generation.
+  app.use(createOtelHttpMiddleware());
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
   if(process.env.NODE_ENV==="production")app.set("trust proxy",parseInt(process.env.TRUST_PROXY_HOPS||"1",10));const server=createServer(app);
   app.use((req,res,next)=>{const origin=allowedCorsOrigin(req.headers.origin);if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Access-Control-Allow-Credentials","true");res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization, X-Requested-With");res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");res.setHeader("Vary","Origin");}if(req.method==="OPTIONS"){if(!origin)return res.status(403).end();return res.status(204).end();}next();});
