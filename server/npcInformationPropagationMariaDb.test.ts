@@ -80,7 +80,7 @@ suite("AIM-487 real MariaDB information ecology", () => {
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
-    if (url.hostname !== "127.0.0.1" || !url.pathname.endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    if (!["127.0.0.1", "mariadb"].includes(url.hostname) || !url.pathname.endsWith("_test")) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
     pool = createPool(process.env.DATABASE_URL!);
     const [rows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name");
     if (rows[0]?.name !== url.pathname.slice(1)) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
