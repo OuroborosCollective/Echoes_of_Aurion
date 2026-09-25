@@ -9,8 +9,8 @@ description: Aurion Admin MCP für read-only Evidence sowie explizit gescopte Pl
 `/admin-mcp` ist Aurions **remote ChatGPT-/Automation-Control-Plane mit default read-only Authority**. Schreibaktionen existieren nur als getrennt gescopte, typisierte Plan→Confirm-Verträge. Es ist keine rohe Game-Master-, Shell-, SQL- oder VPS-Konsole.
 
 - **Aurion** besitzt Gameplayregeln, Simulation, World-/Quest-/Dungeon-Truth und Persistenz.
-- **AX1** rendert bestätigte Aurion-Wahrheit und besitzt Presentation/UI/Input, aber keine Gameplay-Authority.
-- **WASD** ist historische Donor-/Migrationsquelle, keine Live-Authority.
+- **Client/Renderer** rendert bestätigte Aurion-Wahrheit und nimmt User-Intents an, aber besitzt keine Gameplay-Authority.
+- **AX1/WASD** sind historische Donor-/Migrationsbezeichner ohne aktuelle Authority oder Runtime-Pflicht.
 - Aurion Admin MCP darf bestätigte Readmodels lesen und ausschließlich die unten dokumentierten gescopten Plan→Confirm-Writes auslösen.
 
 ## Aktuelle Toolklasse
@@ -19,7 +19,7 @@ Ohne Write-Scope sind ausschließlich read-only Werkzeuge zulässig, zum Beispie
 
 - Capability-/Scope-Readback;
 - Account-/Community-/Asset-/Ops-Readbacks;
-- read-only Welt-/Player-Zusammenfassungen aus **bereits persistierten WASD-Receipts**;
+- read-only Welt-/Player-Zusammenfassungen aus **bereits persistierten Aurion-Receipts**; historische WASD-Herkunft darf innerhalb eines Receipts nur als Provenienz erscheinen;
 - Runtime-/Schema-/Evidence-Status ohne Mutation.
 
 Ein World Overview ist eine Anzeige gespeicherter bestätigter Evidence. Die World-Authority liegt bereits bei Aurion selbst; der MCP-Readback erzeugt keine neue Authority.
@@ -58,7 +58,7 @@ Rohe DB-, Shell-, Git-, VPS-, Reward-, Combat- oder World-Delta-Writes bleiben v
 
 ## Evidence
 
-Ein erfolgreicher Admin-MCP-Readback beweist nur die gelesene Aurion-Evidencefläche. Er beweist keinen korrekten WASD-Gameplayzustand, solange dieser nicht separat durch WASD-/Runtime-Evidence gebunden ist.
+Ein erfolgreicher Admin-MCP-Readback beweist nur die gelesene Aurion-Evidencefläche. Kanonische Gameplay-Evidence wird durch Aurion-Runtime, Aurion-Receipts und Aurion-Readback belegt.
 
 ## Regressionen
 
@@ -160,4 +160,4 @@ Der Ablauf für die gemeinsame Entwicklung lautet damit:
 
 `GDS asset/evidence → Aurion approved/live readback → dev/prealpha GDS inspect/validate → isolierte Aurion fixture → canonical state hash/readback`
 
-GDS bleibt für Asset-, Render- und Performance-Evidence zuständig. Aurion bleibt Gameplay-, Simulations-, Persistenz- und Receipt-Authority.
+GDS bleibt für Asset-, Render- und Performance-Evidence zuständig. Aurion bleibt die einzige Gameplay-, Simulations-, Persistenz- und Receipt-Authority.

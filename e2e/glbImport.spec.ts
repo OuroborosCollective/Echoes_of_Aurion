@@ -19,7 +19,7 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     await dialog.getByLabel('Rufname', { exact: true }).fill('glb_browser_admin');
     await dialog.getByLabel('Passwort', { exact: true }).fill('Aurion-isolated-glb-test-only!');
     await dialog.getByRole('button', { name: 'Aurion-Konto erstellen', exact: true }).click();
-    await expect(page.getByRole('heading', { name: /Willkommen zurück/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Eine Welt, die nicht auf dich wartet./ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'SPIEL BETRETEN', exact: true })).toBeVisible();
     expect((await page.request.get('/api/admin/glb-import/status')).status()).toBe(403);
     await pool.execute("UPDATE users u JOIN localCredentials c ON c.userId=u.id SET u.role='admin' WHERE c.handle='glb_browser_admin'");

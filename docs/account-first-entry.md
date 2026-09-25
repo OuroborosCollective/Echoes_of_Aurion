@@ -1,54 +1,43 @@
 ---
-description: Aktueller Account- und Portalfluss ohne Aurion-Gameplay-Authority.
+description: Aktueller Spieler-Einstieg in die Aurion-Living-World.
 ---
 
-# Konto-zentrierter Aurion-Einstieg
+# Spieler-Einstieg — Echoes of Aurion
 
-Aurion ist vor dem Spiel das **Portal**, nicht der Spielkern.
+Die Startseite ist eine **Spieler-Einstiegsseite**, keine separate Portalarchitektur. Aurion besitzt den gesamten aktiven Produktfluss.
 
 ## Route ownership
 
-| Route/Fläche | Owner | Zweck |
+| Route/Fläche | Kanonischer Owner | Zweck |
 | --- | --- | --- |
-| `/` | Aurion | Landing, Login/Account, Communitynavigation, bewusster Spielstart |
-| `/account` | Aurion | Account + read-only persistierte Charakter-/Companiondaten |
-| `/community` | Aurion | Community, Forum und Community-Events |
-| `/play` | AX1 | eigentliche Spielruntime |
+| `/` | Aurion | Spielbeschreibung, Gameplay, Living World, Zugang und Spielstart |
+| `/account` | Aurion | Account und bestätigte Readmodels |
+| `/community` | Aurion | Community, Forum und Events |
+| `/play` | Aurion | kanonische Spielruntime; Client/Renderer projiziert bestätigten Aurion-State |
 
-WASD bleibt die Gameplayregelquelle für alles, was nach dem Start im Spiel passiert.
+AX1 ist hier keine Runtime-Authority. Der aktuelle Client enthält historische AX1-Namen aus der Migration, aber sie tragen keine Wahrheit oder Pflicht. WASD ist ebenfalls keine aktive Regelinstanz; bereits migrierte deterministische Logik läuft als Aurion-Code.
 
 ## Einstieg
 
-1. Gast sieht Aurion Landing Page und Accountzugang.
-2. Anmeldung/Registrierung erzeugt nur Auth-/Accountstate.
-3. Ein expliziter Startwunsch navigiert in die AX1-`/play`-Runtime.
-4. AX1 erzeugt Intents; WASD entscheidet Gameplayzustand.
-5. Rückkehr beendet die Spielruntime und führt zurück zum Aurion-Portal.
+1. Gäste sehen die Gameplay- und Living-World-Beschreibung und können Zugang anlegen.
+2. Authentifizierung erzeugt ausschließlich bestätigten Aurion-Account-/Session-State.
+3. Ein Startwunsch löst einen Aurion-Spielstart aus.
+4. Der Client sendet ausschließlich Intents und rendert bestätigte Aurion-Ergebnisse.
+5. Alle dauerhaften Folgen bleiben in Aurion-State, Aurion-Receipts und Aurion-Persistenz.
 
-Auth darf nie als Nebeneffekt Combat-, Quest-, Progressions- oder World-State erzeugen.
+## Living World
 
-## Accountseite
+Die Einstiegsseite stellt die zentralen Spielsysteme dar:
 
-Die Accountseite darf bestätigte persistierte Daten anzeigen:
+- selbständig handelnde NPCs;
+- Bedürfnisse, Ziele und deterministische Entscheidungen;
+- Erfahrung, Erinnerung, Kommunikation und begrenztes Vertrauen;
+- Ressourcen, Handwerk, Handel und verknüpfte Ökosysteme;
+- Quests und World Events als persistente Ursachen;
+- Konsequenzen, die später weitere Entscheidungen auslösen.
 
-- Level und Gesamtfortschritt;
-- Skill-/Mastery-Stände;
-- Gildenzugehörigkeit;
-- Inventar und Ausrüstung;
-- Achievements nur bei vorhandener bestätigter WASD-Projektion;
-- Companion-Trainings-/Sample-/Receipt-Metadaten.
+Die Produktbeschreibung darf keine historische AX1-/WASD-Ownership als Gameplay-Versprechen darstellen.
 
-Sie darf **keine** Gameplaymutation anbieten. Insbesondere kein Equip, Craft, Loot, Quest, Progression, Combat, Market, Dungeon, Housing oder Guild-/Kingdom-Gameplay.
+## Account
 
-## Community
-
-Community- und Forum-Schreibrechte sind echte Aurion-Ownership. Community-Event-Metadaten dürfen geschrieben werden. Gameplayfolgen eines Events benötigen dagegen einen separaten WASD-Regelvertrag.
-
-## Acceptance
-
-- Gast kann keinen Gameplayzustand über Websitecalls erzeugen;
-- Login verändert nur Account/Session;
-- `/play` mountet AX1, nicht `Home.tsx`-Gameplay;
-- Account-/Communityseiten besitzen keine Gameplaymutationsrouten;
-- read-only Daten zeigen nur persistierte bestätigte Evidence;
-- fehlende/stale Daten werden ehrlich als nicht verfügbar/stale dargestellt.
+Die Accountseite zeigt nur bestätigte Aurion-Readmodels. Sie ist keine zweite Gameplay- oder Datenbankautorität.

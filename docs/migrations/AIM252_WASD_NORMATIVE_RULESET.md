@@ -1,10 +1,14 @@
 ---
-description: Normativer WASD-Regelvertrag für die AX1/Aurion-Integration.
+description: Historischer WASD-Regelvertrag aus der früheren AX1/Aurion-Migration; nicht normativ.
 ---
 
-# AIM-252 — WASD Normative Ruleset
+# AIM-252 — historische WASD-Provenienz
 
 Status: **normativer Gameplay- und Determinismusvertrag**.
+
+## ⚠️ Superseded by Aurion Single Authority
+
+Dieses Dokument ist **historische Evidence**. Die früheren Aussagen über WASD als normative Gameplayquelle und AX1 als kanonische Runtime gelten nicht mehr. Heute besitzt Aurion die gesamte aktive Gameplay-, Entscheidungs-, Datenbank- und Persistenzhoheit; migrierte WASD-Algorithmen sind Aurion-Code mit historischer Provenienz.
 
 Dieses Dokument konkretisiert [ARCHITECTURE_OWNERSHIP.md](../../ARCHITECTURE_OWNERSHIP.md). Bei Widerspruch mit älteren Migrationsledgers oder abgeschlossenen AIM-Berichten gilt die aktuelle Ownership-Matrix.
 
