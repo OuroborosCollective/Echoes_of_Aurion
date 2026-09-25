@@ -53,6 +53,8 @@ jobs:
           pnpm check
           pnpm exec vitest run shared/worldPressureProtocol.test.ts server/worldDirectorRuntime.test.ts server/deterministicStructureGrammarCompiler.test.ts server/structureObservationRuntime.test.ts server/npcSimulationScheduler.test.ts server/structureProjectionProtocol.test.ts server/interestManagementPlanner.test.ts server/causality/worldGenerationEvidence.test.ts server/causality/worldGenerationParityHarness.test.ts server/causality/evidenceGateEngine.test.ts server/causality/worldGenerationEvidenceGate.test.ts scripts/atlas/worldGenerationAtlasAdmission.test.ts --reporter=verbose
           node --import tsx --test scripts/atlas/generatedWorldAtlasPlan.test.ts
+          node --import tsx --test scripts/atlas/generatedStructurePresentationProvenance.test.ts
+          node --import tsx --test scripts/atlas/generatedWorldAtlasPlanProvenance.test.ts
           node --test scripts/atlas/deterministicAtlasPack.test.mjs
           export AURION_RELEASE_SHA="${EXPECTED_HEAD}"
           pnpm build:runtime-artifact
