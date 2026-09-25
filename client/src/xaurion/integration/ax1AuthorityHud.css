@@ -216,9 +216,17 @@
 }
 
 @media (max-width:420px){
+  .ax1-combat-lane{
+    left:120px!important;
+    right:8px!important;
+    max-width:none!important;
+    width:auto!important;
+    min-width:0!important;
+    box-sizing:border-box!important;
+  }
   .ax1-combat-cluster-phone{
-    width:276px!important;
-    max-width:calc(100vw - 132px)!important;
+    width:100%!important;
+    max-width:none!important;
     min-width:0!important;
     box-sizing:border-box!important;
     margin-left:auto!important;
