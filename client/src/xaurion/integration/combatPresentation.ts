@@ -24,6 +24,8 @@ export type ConfirmedCombatLogEntry = Readonly<{
   crit: boolean;
 }>;
 
+export type ConfirmedDpsSample = Readonly<{ second: number; dps: number; dtps: number }>;
+
 export type ConfirmedCombatMetrics = Readonly<{
   totalDamage: number;
   totalDamageTaken: number;
@@ -36,6 +38,8 @@ export type ConfirmedCombatMetrics = Readonly<{
   firstTick: number | null;
   lastTick: number | null;
   logs: readonly ConfirmedCombatLogEntry[];
+  /** Per-second DPS/DTPS series across the combat span, for the dashboard chart. */
+  dpsSeries: readonly ConfirmedDpsSample[];
 }>;
 
 export function projectConfirmedCombatPresentation(
@@ -96,6 +100,7 @@ export function reduceConfirmedCombatMetrics(values: readonly ConfirmedCombatPre
     firstTick: null,
     lastTick: null,
     logs: Object.freeze([]),
+    dpsSeries: Object.freeze([]),
   });
 
   const outgoing = canonical.filter(event => event.direction === "outgoing");
@@ -121,6 +126,24 @@ export function reduceConfirmedCombatMetrics(values: readonly ConfirmedCombatPre
     direction: event.direction,
     crit: event.crit,
   })));
+  const perSecond = new Map<number, { dps: number; dtps: number }>();
+  for (const event of outgoing) {
+    const second = Math.floor((event.tick - firstTick) * ZONE_TICK_MS / 1000);
+    const bucket = perSecond.get(second) ?? { dps: 0, dtps: 0 };
+    bucket.dps += event.damage;
+    perSecond.set(second, bucket);
+  }
+  for (const event of incoming) {
+    const second = Math.floor((event.tick - firstTick) * ZONE_TICK_MS / 1000);
+    const bucket = perSecond.get(second) ?? { dps: 0, dtps: 0 };
+    bucket.dtps += event.damage;
+    perSecond.set(second, bucket);
+  }
+  const lastSecond = Math.floor((lastTick - firstTick) * ZONE_TICK_MS / 1000);
+  const dpsSeries = Object.freeze(Array.from({ length: lastSecond + 1 }, (_, second) => {
+    const bucket = perSecond.get(second);
+    return Object.freeze({ second, dps: bucket?.dps ?? 0, dtps: bucket?.dtps ?? 0 });
+  }));
   return Object.freeze({
     totalDamage,
     totalDamageTaken,
@@ -133,5 +156,6 @@ export function reduceConfirmedCombatMetrics(values: readonly ConfirmedCombatPre
     firstTick,
     lastTick,
     logs,
+    dpsSeries,
   });
 }

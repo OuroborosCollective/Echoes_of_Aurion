@@ -307,6 +307,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
         peakDps: combatMetrics.peakDps,
         currentDtps: combatMetrics.currentDtps,
         logs: combatMetrics.logs,
+        dpsSeries: combatMetrics.dpsSeries,
       }}
       miniMap={<MiniMap world={worldProjection} position={position} remotePlayers={remotePlayers} state={world.state} onOpen={() => openPanel("map")} />}
       movementControl={<MobileMovementController mode={ui.data?.settings.movementMode ?? "joystick"} onMove={onMove} onDestination={({ screenX, screenY }) => onTouchMoveDestination(screenX, screenY)} enabled={panel === null && !groupOpen && !pending && connected} />}

@@ -30,6 +30,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export type Ax1HudPartyMember = Readonly<{
@@ -96,6 +97,7 @@ export interface GameHUDProps {
     peakDps: number | string;
     currentDtps: number | string;
     logs: readonly Ax1HudCombatLog[];
+    dpsSeries?: readonly { second: number; dps: number; dtps: number }[];
   }>;
   miniMap: ReactNode;
   movementControl: ReactNode;
@@ -512,6 +514,29 @@ export function GameHUD(props: GameHUDProps) {
       {combatOpen && <section id="dps-meter-modal" role="dialog" aria-label="Bestätigte Combat Metrics" className="pointer-events-auto absolute right-14 top-[24%] z-30 w-72 sm:w-80 max-w-[calc(100vw-72px)] rounded-[6px] border border-amber-500/40 bg-black/92 p-3 shadow-2xl backdrop-blur-xl font-mono">
         <div className="flex items-center justify-between border-b border-gray-800 pb-2"><b className="text-[10px] tracking-wider text-amber-200">BESTÄTIGTE COMBAT METRICS</b><button type="button" onClick={() => setCombatOpen(false)} aria-label="Combat Metrics schließen" className="flex h-10 w-10 items-center justify-center rounded-[4px] text-gray-400 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">✕</button></div>
         <div className="grid grid-cols-3 gap-1.5 py-2 text-center"><Metric label="DPS" value={props.combat.eventCount ? props.combat.currentDps : "—"} /><Metric label="PEAK" value={props.combat.eventCount ? props.combat.peakDps : "—"} /><Metric label="DTPS" value={props.combat.eventCount ? props.combat.currentDtps : "—"} /></div>
+        {props.combat.dpsSeries && props.combat.dpsSeries.length > 1 && (
+          <div className="mb-1 mt-1">
+            <p className="mb-0.5 text-[7px] uppercase tracking-wider text-stone-500">DPS-Verlauf</p>
+            <div className="h-24 w-full rounded border border-stone-800 bg-black/40 p-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={[...props.combat.dpsSeries]} margin={{ top: 2, right: 4, bottom: 0, left: -20 }}>
+                  <defs>
+                    <linearGradient id="dpsGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#fbbf24" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#1f2937" strokeDasharray="2 2" vertical={false} />
+                  <XAxis dataKey="second" tick={{ fontSize: 7, fill: "#6b7280" }} tickLine={false} axisLine={false} unit="s" />
+                  <YAxis tick={{ fontSize: 7, fill: "#6b7280" }} tickLine={false} axisLine={false} width={22} />
+                  <Tooltip contentStyle={{ fontSize: 9, background: "#000", border: "1px solid #374151", borderRadius: 4 }} labelFormatter={(v) => `Sek ${v}`} />
+                  <Area type="monotone" dataKey="dps" name="DPS" stroke="#fbbf24" fill="url(#dpsGrad)" strokeWidth={1.5} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="dtps" name="DTPS" stroke="#ef4444" fill="transparent" strokeWidth={1} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
         <div className="max-h-36 space-y-1 overflow-y-auto text-[8px]">{props.combat.logs.length ? props.combat.logs.slice(0, 8).map(log => <div key={log.id} className="flex gap-1 rounded border border-stone-800 bg-black/60 px-2 py-1"><i className="shrink-0 text-gray-500">T{log.tick}</i><span className="flex-1 text-gray-300">{log.text}</span><b className="text-amber-300">{log.value}</b></div>) : <p className="py-3 text-center italic text-gray-600">Noch keine bestätigten Combat-Events.</p>}</div>
       </section>}
 
