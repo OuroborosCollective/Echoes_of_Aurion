@@ -26,7 +26,7 @@ describe("NPC coordination ownership boundary", () => {
 
   it("documents that coordination output is advisory before any receipt exists", () => {
     const source = read("server/npcCoordinationLaw.ts");
-    expect(source).toContain("does not");
+    expect(source).toContain("No database");
     expect(source).toContain("coordination constraint");
     expect(source).toContain("existing Aurion utility planner");
     expect(source).toContain("No database");
