@@ -262,7 +262,7 @@ export const appRouter = router({
       }
       const entries = decoded.npcs.map((npc: NpcSnapshotInput) => ({
         actorId: npc.npcId,
-        scopeKey: `region:${npc.regionId}`,
+        scopeKey: `region:${npc.regionId ?? npc.npcId}`,
         context: buildPlannerContext({
           npcId: npc.npcId,
           resolutionIndex: npc.resolutionIndex,
