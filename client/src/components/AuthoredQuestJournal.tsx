@@ -49,8 +49,10 @@ export function AuthoredQuestJournal() {
             <b className="text-cyan-200">{template.title}</b>
             <p className="mt-1 text-slate-400">{template.description}</p>
             <button
-              className="ax1-primary mt-2"
+              className="ax1-primary mt-2 transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
               disabled={busy}
+              aria-busy={busy}
+              title={busy ? "Wird geladen..." : undefined}
               onClick={async () => {
                 const offered = await offer.mutateAsync({ templateId: template.templateId });
                 await refresh(offered.instance.id);
@@ -66,7 +68,8 @@ export function AuthoredQuestJournal() {
         {(instances.data ?? []).map(instance => (
           <button
             key={instance.id}
-            className="w-full rounded-xl border border-slate-700 bg-black/40 p-3 text-left text-xs"
+            className={`w-full rounded-xl border p-3 text-left text-xs transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 ${selectedId === instance.id ? "border-amber-400 bg-black/60" : "border-slate-700 bg-black/40"}`}
+            aria-pressed={selectedId === instance.id}
             onClick={() => setSelectedId(instance.id)}
           >
             <span className="flex items-center gap-2 text-cyan-200">
@@ -97,8 +100,10 @@ export function AuthoredQuestJournal() {
           </div>
 
           {selected.instance.state === "offered" && <button
-            className="ax1-primary"
+            className="ax1-primary transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
             disabled={busy}
+            aria-busy={busy}
+            title={busy ? "Wird geladen..." : undefined}
             onClick={async () => { await accept.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); }}
           >Quest annehmen</button>}
 
@@ -106,15 +111,19 @@ export function AuthoredQuestJournal() {
             <p className="flex items-center gap-2 text-xs text-cyan-300"><GitBranch size={13} /> Entscheidung</p>
             {choices.map(edge => <button
               key={edge.id}
-              className="ax1-primary mr-2"
+              className="ax1-primary mr-2 transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
               disabled={busy || Boolean(edge.conditionPredicate)}
+              aria-busy={busy}
+              title={busy ? "Wird geladen..." : Boolean(edge.conditionPredicate) ? "Bedingung nicht erfüllt" : undefined}
               onClick={async () => { await choose.mutateAsync({ instanceId: selected.instance.id, edgeId: edge.id }); await refresh(selected.instance.id); }}
             >{edge.choiceLabel ?? edge.id}</button>)}
           </div>}
 
           {selected.instance.state === "active" && currentNode?.type === "end" && <button
-            className="ax1-primary"
+            className="ax1-primary transition-all motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
             disabled={busy}
+            aria-busy={busy}
+            title={busy ? "Wird geladen..." : undefined}
             onClick={async () => { await complete.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); }}
           >Quest abschließen</button>}
         </>}
