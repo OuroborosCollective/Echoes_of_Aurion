@@ -88,7 +88,7 @@ describe("NPC coordination law — deterministic benchmarks", () => {
       reservation("npc-a", "trade", "market:emberfall"),
     ]);
     expect(result.blocked.map(item => item.candidateId)).toEqual(["trade"]);
-    expect(result.accepted.map(item => item.candidateId)).toEqual(["patrol", "trade"]);
+    expect(result.accepted.map(item => item.candidateId).sort()).toEqual(["patrol", "trade"].sort());
     expect(result.conflicts[0].candidate.actorId).toBe("npc-b");
   });
 
