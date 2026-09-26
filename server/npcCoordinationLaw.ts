@@ -39,7 +39,7 @@ export const AURION_NPC_COORDINATION_RESEARCH_LAW: CoordinationLaw = Object.free
   allowedActionPairs: [],
   disallowedActionPairs: [["patrol", "patrol"]],
   tieBreakVersion: 1,
-});
+} as const);
 
 function asCoordinationCandidate(
   actorId: string,
