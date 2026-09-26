@@ -33,10 +33,10 @@
   * [Traefik Deployment](TRAEFIK_DEPLOYMENT.md)
   * [VPS Deployment](VPS_DEPLOYMENT.md)
   * [Produktions-DB](PRODUCTION_DATABASE_CONNECTION.md)
-  * [Android APK Build](ANDROID_BUILD.md)
+  * [Android APK Build](container_runtime_deployment/android-apk-build.md)
 * [Presentation & Side-Channels](AURION_AUDIO_SYSTEM.md)
   * [Companion Memory VPS Setup](COMPANION_MEMORY_VPS_SETUP.md)
 * [Patchnotes](patchnotes/README.md)
   * [GitHub-Patchnotes-Automation](patchnotes/github-patchnotes-automation.md)
-
-- [Wave 3 Temporal History — Steps 32–34](docs/unreal-derived-wave3-temporal-history.md)
+* [Wave 3 Temporal History — Steps 32–34](docs/unreal-derived-wave3-temporal-history.md)
+* [Deterministic Socioeconomic Impact-Wave Graph](deterministic-socioeconomic-impact-wave-graph.md)
