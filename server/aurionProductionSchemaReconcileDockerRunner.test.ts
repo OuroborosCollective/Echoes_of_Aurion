@@ -320,11 +320,11 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(runner).toContain("environmentMountedReadOnly:true");
   });
 
-  it("keeps the backup/recovery/apply core migration allowlists aligned through 0063", () => {
+  it("keeps the backup/recovery/apply core migration allowlists aligned through 0064", () => {
     const core = read("deploy/aurion-production-schema-apply-core");
     expect((core.match(/0063_aurion_npc_information_ecology/g) ?? [])).toHaveLength(2);
     expect((core.match(/0064_aurion_world_entity_foundation/g) ?? [])).toHaveLength(2);
     expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n    ];');
-    expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology"]');
+    expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation"]');
   });
 });
