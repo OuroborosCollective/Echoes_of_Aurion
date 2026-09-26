@@ -108,22 +108,6 @@ export function resolveNpcUtilityWithCoordination(
   });
 }
 
-export function coordinationEvidenceFingerprint(
-  result: CoordinatedNpcUtilityResult,
-): string {
-  return coordinationLawHash({
-    lawId: "evidence-fingerprint",
-    lawVersion: 1,
-    scope: "region",
-    allowedActionPairs: [],
-    disallowedActionPairs: [],
-    tieBreakVersion: 1,
-  }) && coordinationCandidateSetHash([
-    ...result.coordination.accepted,
-    ...result.coordination.blocked,
-  ]);
-}
-
 /**
  * Returns the hash inputs needed to attach coordination evidence to an existing
  * gateway receipt without creating a new persistence/effect authority.
