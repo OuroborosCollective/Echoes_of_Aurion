@@ -6,6 +6,11 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "scripts/atlas/**"
+      - "shared/aurionCanonicalHash.ts"
+      - "shared/structureProjectionProtocol.ts"
+      - "server/causality/worldGenerationEvidenceGate.ts"
+      - "server/causality/worldGenerationEvidenceContract.ts"
+      - "server/causality/worldGenerationEvidenceHash.ts"
       - "client/src/xaurion/world/assets/aurion-surface-atlas.webp"
       - "client/src/xaurion/world/assets/aurion-surface-atlas.json"
       - "package.json"
@@ -54,6 +59,16 @@ jobs:
         run: |
           set -euo pipefail
           node --test scripts/atlas/deterministicAtlasPack.test.mjs scripts/atlas/buildDeterministicAtlasArtifact.test.mjs
+
+      - name: Verify generated-world atlas admission and provenance contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx --test \
+            scripts/atlas/generatedWorldAtlasPlan.test.ts \
+            scripts/atlas/generatedWorldAtlasPlanProvenance.test.ts \
+            scripts/atlas/worldGenerationAtlasAdmission.test.ts \
+            scripts/atlas/generatedStructurePresentationProvenance.test.ts
 
       - name: Build the actual committed surface atlas plan
         shell: bash

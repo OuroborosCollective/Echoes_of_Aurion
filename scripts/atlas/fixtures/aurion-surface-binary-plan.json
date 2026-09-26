@@ -4,10 +4,10 @@
   "family": "basecolor-srgb",
   "pageWidth": 1024,
   "pageHeight": 1024,
-  "padding": 2,
-  "gutter": 2,
+  "padding": 0,
+  "gutter": 0,
   "rotationAllowed": false,
-  "sourceManifestHash": "sha256:7eabc5834403745f59eae5867e40d756b015fa1c000000000000000000000000",
+  "sourceManifestHash": "sha256:a43333c8de0793db374dd843214b94ca87b3a08db620317a194230ee69d751a8",
   "sourceInputs": [
     {
       "assetId": "aurion-surface-atlas",
