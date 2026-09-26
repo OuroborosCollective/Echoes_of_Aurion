@@ -186,7 +186,7 @@ function canonicalReservations(reservations: readonly CoordinationReservation[])
     a.actorId.localeCompare(b.actorId)
     || a.scopeKey.localeCompare(b.scopeKey)
     || a.action.localeCompare(b.action)
-    || a.candidateId?.localeCompare(b.candidateId ?? "") ?? 0
+    || (a.candidateId ?? "").localeCompare(b.candidateId ?? "")
   );
   if (normalized.length > NPC_COORDINATION_MAX_RESERVATIONS) throw new Error("NPC_COORDINATION_RESERVATIONS_OVERFLOW");
   return Object.freeze(normalized);
