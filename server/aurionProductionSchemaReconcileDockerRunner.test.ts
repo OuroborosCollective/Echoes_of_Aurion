@@ -127,6 +127,7 @@ function makeArtifact() {
     "0061_aurion_exploration_memory",
     "0062_aurion_world_director",
     "0063_aurion_npc_information_ecology",
+    "0064_aurion_world_entity_foundation",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
@@ -322,7 +323,8 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
   it("keeps the backup/recovery/apply core migration allowlists aligned through 0063", () => {
     const core = read("deploy/aurion-production-schema-apply-core");
     expect((core.match(/0063_aurion_npc_information_ecology/g) ?? [])).toHaveLength(2);
-    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n    ];');
+    expect((core.match(/0064_aurion_world_entity_foundation/g) ?? [])).toHaveLength(2);
+    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n    ];');
     expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology"]');
   });
 });
