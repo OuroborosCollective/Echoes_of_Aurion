@@ -1,5 +1,5 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
-import type { NpcUtilityActionId } from "./npcUtilityPlannerProtocol";
+import { NPC_UTILITY_ACTION_KEYS, type NpcUtilityActionId } from "./npcUtilityPlannerProtocol";
 
 export const NPC_COORDINATION_LAW_VERSION = "aurion-npc-coordination-law.v1" as const;
 export const NPC_COORDINATION_MAX_CANDIDATES = 128;
@@ -64,6 +64,10 @@ export type CoordinationUtilityFloorCertificate = Readonly<{
   }>[];
 }>;
 
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function text(value: unknown, field: string, max = 128): string {
   if (typeof value !== "string" || value.length < 1 || value.length > max) {
     throw new Error(`NPC_COORDINATION_${field}_INVALID`);
@@ -95,10 +99,13 @@ function normalizePairs(
   const normalized = pairs.map(pair => {
     if (pair.length !== 2) throw new Error("NPC_COORDINATION_ACTION_PAIR_INVALID");
     const [left, right] = pair;
+    if (!NPC_UTILITY_ACTION_KEYS.includes(left) || !NPC_UTILITY_ACTION_KEYS.includes(right)) {
+      throw new Error("NPC_COORDINATION_ACTION_PAIR_ACTION_INVALID");
+    }
     const key = pairKey(left, right);
     const [first, second] = left < right ? [left, right] : [right, left];
     return Object.freeze([first, second] as const);
-  }).sort((a, b) => pairKey(a[0], a[1]).localeCompare(pairKey(b[0], b[1])));
+  }).sort((a, b) => compareText(pairKey(a[0], a[1]), pairKey(b[0], b[1])));
   const seen = new Set<string>();
   for (const pair of normalized) {
     const key = pairKey(pair[0], pair[1]);
@@ -166,10 +173,10 @@ function validateReservation(reservation: CoordinationReservation): Coordination
 
 function canonicalCandidates(candidates: readonly CoordinationCandidate[]): readonly CoordinationCandidate[] {
   const normalized = candidates.map(validateCandidate).sort((a, b) =>
-    a.actorId.localeCompare(b.actorId)
-    || a.scopeKey.localeCompare(b.scopeKey)
-    || a.candidateId.localeCompare(b.candidateId)
-    || a.action.localeCompare(b.action)
+    compareText(a.actorId, b.actorId)
+    || compareText(a.scopeKey, b.scopeKey)
+    || compareText(a.candidateId, b.candidateId)
+    || compareText(a.action, b.action)
   );
   if (normalized.length > NPC_COORDINATION_MAX_CANDIDATES) throw new Error("NPC_COORDINATION_CANDIDATES_OVERFLOW");
   const seen = new Set<string>();
@@ -183,10 +190,10 @@ function canonicalCandidates(candidates: readonly CoordinationCandidate[]): read
 
 function canonicalReservations(reservations: readonly CoordinationReservation[]): readonly CoordinationReservation[] {
   const normalized = reservations.map(validateReservation).sort((a, b) =>
-    a.actorId.localeCompare(b.actorId)
-    || a.scopeKey.localeCompare(b.scopeKey)
-    || a.action.localeCompare(b.action)
-    || (a.candidateId ?? "").localeCompare(b.candidateId ?? "")
+    compareText(a.actorId, b.actorId)
+    || compareText(a.scopeKey, b.scopeKey)
+    || compareText(a.action, b.action)
+    || compareText(a.candidateId ?? "", b.candidateId ?? "")
   );
   if (normalized.length > NPC_COORDINATION_MAX_RESERVATIONS) throw new Error("NPC_COORDINATION_RESERVATIONS_OVERFLOW");
   return Object.freeze(normalized);
@@ -260,9 +267,9 @@ export function filterCoordinationCandidates(
     accepted: Object.freeze(accepted),
     blocked: Object.freeze(blocked),
     conflicts: Object.freeze(conflicts.sort((a, b) =>
-      a.candidate.actorId.localeCompare(b.candidate.actorId)
-      || a.candidate.candidateId.localeCompare(b.candidate.candidateId)
-      || a.reservation.actorId.localeCompare(b.reservation.actorId)
+      compareText(a.candidate.actorId, b.candidate.actorId)
+      || compareText(a.candidate.candidateId, b.candidate.candidateId)
+      || compareText(a.reservation.actorId, b.reservation.actorId)
     )),
     reservationsHash: coordinationReservationsHash(normalizedReservations),
   });
