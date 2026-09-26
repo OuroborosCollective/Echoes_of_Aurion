@@ -209,8 +209,8 @@ export function GameHUD(props: GameHUDProps) {
       aria-live="polite"
       className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
     >
-      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
-        <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
+      <div className="ax1-hud-top-bar absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
+        <div className="ax1-hud-left-col pointer-events-auto flex min-w-0 flex-col gap-1.5">
           <section
             id="player-unit-frame"
             aria-label="Serverbestätigter Charakter"
@@ -303,7 +303,7 @@ export function GameHUD(props: GameHUDProps) {
           )}
         </div>
 
-        <div className="pointer-events-auto min-w-0 max-w-none flex flex-col items-end gap-1.5">
+        <div className="ax1-hud-right-col pointer-events-auto min-w-0 max-w-none flex flex-col items-end gap-1.5">
           <nav aria-label="Schnellnavigation" className="flex max-w-[94vw] flex-wrap justify-end gap-1.5 rounded-[6px] border border-slate-700/80 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
             <HudNavButton label="Char" shortcut="C" title="Charakter [C]" ariaLabel="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
             <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" ariaLabel="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
@@ -481,7 +481,7 @@ export function GameHUD(props: GameHUDProps) {
         </div>
       </div>
 
-      <div className="pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
+      <div className="ax1-hud-bottom-left pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
         <button type="button" onClick={props.onOpenChat} className="flex items-center gap-1.5 rounded-full border border-gray-800 bg-black/80 px-2.5 py-1.5 text-xs font-mono text-[#fbbf24] backdrop-blur-md shadow hover:border-[#b8860b]"><MessageSquare className="h-3.5 w-3.5" /> Realm Chat</button>
         <div>{props.movementControl}</div>
       </div>
@@ -515,7 +515,7 @@ export function GameHUD(props: GameHUDProps) {
         <div className="max-h-36 space-y-1 overflow-y-auto text-[8px]">{props.combat.logs.length ? props.combat.logs.slice(0, 8).map(log => <div key={log.id} className="flex gap-1 rounded border border-stone-800 bg-black/60 px-2 py-1"><i className="shrink-0 text-gray-500">T{log.tick}</i><span className="flex-1 text-gray-300">{log.text}</span><b className="text-amber-300">{log.value}</b></div>) : <p className="py-3 text-center italic text-gray-600">Noch keine bestätigten Combat-Events.</p>}</div>
       </section>}
 
-      {props.feedback && <p className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
+      {props.feedback && <p className="ax1-hud-feedback pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
     </div>
   );
 }

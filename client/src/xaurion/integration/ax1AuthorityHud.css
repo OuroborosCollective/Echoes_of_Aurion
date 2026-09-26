@@ -269,3 +269,137 @@
 .xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="exploration"] .ax1-combat-metrics:focus-visible{
   opacity:1;
 }
+
+/* ──────────────────────────────────────────────────────────────
+ * AIM-584 Mobile responsive refinement
+ * Stacks the top section vertically on small screens, eliminates
+ * overlapping surfaces, and aligns breakpoints consistently.
+ * Layout restructure only — no functionality removed.
+ * Breakpoints: 720px (tablet/phone), 420px (small phone),
+ * 380px (very small phone), landscape (max-height:500px).
+ * ────────────────────────────────────────────────────────────── */
+
+/* ≤720px — stack top section, full-width nav, reposition combat metrics */
+@media (max-width:720px){
+  /* Top bar: stack columns vertically instead of side-by-side */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-top-bar{
+    flex-direction:column;
+    gap:4px;
+  }
+  /* Left column: player frame + states + zone, compact and full width */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-left-col{
+    max-width:100%;
+  }
+  /* Right column: stretch to full width so nav and objectives don't collide */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col{
+    width:100%;
+    align-items:stretch;
+  }
+  /* Nav bar: wrap to 2 rows naturally, left-aligned */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav{
+    width:100%;
+    justify-content:flex-start;
+  }
+  /* Minimap: keep compact and right-aligned in stacked layout */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > div:last-of-type{
+    align-self:flex-end;
+  }
+  /* Objective tracker: full width, no collision with player frame */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    width:100%;
+    max-width:100%;
+    max-height:30vh;
+  }
+  /* Command deck: full width in stacked layout */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-command-deck{
+    width:100%;
+  }
+  /* Combat metrics: move to left side, above bottom controls, no overlap */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    top:auto !important;
+    bottom:148px;
+    right:auto;
+    left:8px;
+    transform:none;
+  }
+  /* DPS meter modal: bottom sheet style, no overlap with top content */
+  #dps-meter-modal{
+    right:8px !important;
+    left:8px !important;
+    top:auto !important;
+    bottom:72px !important;
+    width:auto !important;
+    max-width:none !important;
+    max-height:40vh;
+    overflow-y:auto;
+  }
+  /* Feedback: lift above bottom controls */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-feedback{
+    bottom:170px;
+  }
+  /* Bottom-left: tighter spacing */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-bottom-left{
+    bottom:max(8px,env(safe-area-inset-bottom));
+    left:8px;
+    gap:6px;
+  }
+}
+
+/* ≤420px — further compaction for small phones */
+@media (max-width:420px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-top-bar{
+    padding:4px;
+  }
+  /* Nav buttons: compact 36px on very small screens */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav button{
+    min-width:36px;
+    min-height:36px;
+  }
+  /* Utility buttons: tighter gap to fit in one row */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-lane > div:first-child{
+    gap:4px;
+  }
+  /* Combat metrics: minimal, just icon + DPS number */
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    padding:4px 6px;
+    font-size:8px;
+  }
+}
+
+/* ≤380px — last-resort compaction for very narrow devices */
+@media (max-width:380px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav button{
+    min-width:32px;
+    min-height:32px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    bottom:140px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-feedback{
+    bottom:160px;
+  }
+}
+
+/* Landscape mobile — restore side-by-side top, hide secondary panels */
+@media (max-height:500px) and (orientation:landscape){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-top-bar{
+    flex-direction:row;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    display:none;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    bottom:auto;
+    top:46%;
+    left:auto;
+    right:8px;
+  }
+  #dps-meter-modal{
+    right:48px !important;
+    left:auto !important;
+    bottom:auto !important;
+    top:20% !important;
+    width:280px !important;
+    max-width:calc(100vw - 56px);
+  }
+}
