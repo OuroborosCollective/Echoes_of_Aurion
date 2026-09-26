@@ -84,6 +84,8 @@ export type NpcSnapshotInput = Readonly<{
   resolutionIndex: number;
   goal: NpcUtilityGoalId;
   needs: Readonly<Record<NpcUtilityNeedId, number>>;
+  /** Optional confirmed region identity used only as a coordination scope projection. */
+  regionId?: string;
 }>;
 
 // ---------------------------------------------------------------------------
