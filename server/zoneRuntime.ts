@@ -150,12 +150,15 @@ export class AuthoritativeMovementZone {
 
   getCanonicalZoneState(): CanonicalZoneState {
     this.refreshPeerOrder();
-    const players: CanonicalPlayerState[] = this.sortedPeersByEntityId.map(peer => {
+
+    const players = new Array<CanonicalPlayerState>(this.sortedPeersByEntityId.length);
+    for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
+      const peer = this.sortedPeersByEntityId[i];
       const skillCooldowns: Record<string, number> = {};
       for (const [skillId, tick] of peer.skillCooldownUntilTick) {
         skillCooldowns[skillId] = tick;
       }
-      return {
+      players[i] = {
         entityId: `player:${peer.userId}`,
         userId: peer.userId,
         x: peer.position.x,
@@ -172,30 +175,42 @@ export class AuthoritativeMovementZone {
         lastCombatSequence: peer.lastCombatSequence,
         skillCooldowns,
       };
-    });
-    const mobs: CanonicalMobState[] = this.mobRuntime.orderedStates().map(mob => ({
-      entityId: mob.definition.entityId,
-      mobId: mob.definition.entityId,
-      archetype: mob.definition.archetype,
-      x: mob.position.x,
-      z: mob.position.z,
-      health: mob.health,
-      maxHealth: mob.maxHealth,
-      stamina: mob.stamina,
-      state: mob.state,
-      targetEntityId: mob.targetEntityId,
-      idleUntilTick: mob.idleUntilTick,
-      patrolIndex: mob.patrolIndex,
-      nextAttackTick: mob.nextAttackTick,
-    }));
+    }
+
+    const orderedMobStates = this.mobRuntime.orderedStates();
+    const mobs = new Array<CanonicalMobState>(orderedMobStates.length);
+    for (let i = 0; i < orderedMobStates.length; i++) {
+      const mob = orderedMobStates[i];
+      mobs[i] = {
+        entityId: mob.definition.entityId,
+        mobId: mob.definition.entityId,
+        archetype: mob.definition.archetype,
+        x: mob.position.x,
+        z: mob.position.z,
+        health: mob.health,
+        maxHealth: mob.maxHealth,
+        stamina: mob.stamina,
+        state: mob.state,
+        targetEntityId: mob.targetEntityId,
+        idleUntilTick: mob.idleUntilTick,
+        patrolIndex: mob.patrolIndex,
+        nextAttackTick: mob.nextAttackTick,
+      };
+    }
+
     const resourceSnapshot = this.resourceRuntime.snapshot(this.tickNumber);
-    const resources: CanonicalResourceState[] = resourceSnapshot.nodes.map(node => ({
-      nodeId: node.nodeId,
-      resourceType: "ecology_node",
-      state: node.depleted ? "depleted" : "ready",
-      respawnTick: node.respawnAtTick ?? 0,
-      remainingGathers: node.remaining,
-    }));
+    const resources = new Array<CanonicalResourceState>(resourceSnapshot.nodes.length);
+    for (let i = 0; i < resourceSnapshot.nodes.length; i++) {
+      const node = resourceSnapshot.nodes[i];
+      resources[i] = {
+        nodeId: node.nodeId,
+        resourceType: "ecology_node",
+        state: node.depleted ? "depleted" : "ready",
+        respawnTick: node.respawnAtTick ?? 0,
+        remainingGathers: node.remaining,
+      };
+    }
+
     return sortCanonicalZoneState({
       schema: "aurion.zone.state.v1",
       worldId: WORLD_ID,
