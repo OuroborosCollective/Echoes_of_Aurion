@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-09-26 - Loading state attributes on CTA buttons
+**Learning:** CTA buttons that transition into disabled loading states must maintain appropriate accessibility attributes (like `aria-busy`) and should cancel motion-safe transitions (using classes like `disabled:motion-safe:hover:translate-y-0`) to ensure consistent UX while blocked.
+**Action:** Always verify that disabled buttons include `aria-busy`, contextual `title` text for loading states, and cancellation of interactive hover/active transforms.
