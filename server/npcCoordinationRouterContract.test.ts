@@ -8,13 +8,15 @@ describe("NPC coordination runtime query boundary", () => {
     const router = read("server/routers.ts");
     const start = router.indexOf("npcCoordinationPreview:");
     expect(start).toBeGreaterThan(0);
-    const tail = router.slice(start, start + 7_500);
-    expect(tail).toContain("protectedProcedure.query");
-    expect(tail).toContain("readConfirmedNpcPacket");
-    expect(tail).toContain("resolveNpcUtilityDecisionsWithCoordination");
-    expect(tail).toContain('mutationAuthority: "none"');
-    expect(tail).not.toContain(".mutation(");
-    expect(tail).not.toContain("executeConfirmedMerchantAction");
+    const end = router.indexOf("npcProjectionProvenance:", start);
+    expect(end).toBeGreaterThan(start);
+    const section = router.slice(start, end);
+    expect(section).toContain("protectedProcedure.query");
+    expect(section).toContain("readConfirmedNpcPacket");
+    expect(section).toContain("resolveNpcUtilityDecisionsWithCoordination");
+    expect(section).toContain('mutationAuthority: "none"');
+    expect(section).not.toContain(".mutation(");
+    expect(section).not.toContain("executeConfirmedMerchantAction");
   });
 
   it("keeps the actual action gateway outside the coordination preview", () => {
