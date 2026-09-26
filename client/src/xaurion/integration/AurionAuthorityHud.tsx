@@ -336,6 +336,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onToggleAutoAttack={() => { if (autoActive) auto.stop(); else auto.start(); }}
       onAttack={() => { void onAction("F"); }}
       onCastSkill={command => { void onAction(command as AurionGameplayCommand); }}
+      pending={pending}
+      context={panel === "dialogue" ? "dialogue" : panel !== null ? "management" : autoActive ? "combat" : "exploration"}
     />
 
     {groupOpen && <AurionGroupFinder open mode={groupMode} onClose={() => setGroupOpen(false)} />}

@@ -232,3 +232,40 @@
     margin-left:auto!important;
   }
 }
+
+/* AIM-584 Adaptive Density: context-first reduction, deterministic and stable.
+ * Presentation-only; no authority, readback or gameplay decisions.
+ */
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="combat"] .ax1-objective-tracker{
+  opacity:.72;
+}
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="combat"] .ax1-combat-metrics{
+  box-shadow:0 0 16px rgba(216,180,95,.12),0 12px 30px rgba(0,0,0,.32);
+}
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="dialogue"] .ax1-combat-cluster,
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="dialogue"] .ax1-combat-metrics,
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="dialogue"] .ax1-objective-tracker{
+  opacity:.28;
+  pointer-events:none;
+  transition:opacity 400ms ease;
+}
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="dialogue"] .ax1-utility-actions{
+  opacity:.4;
+  pointer-events:none;
+}
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="management"] .ax1-objective-tracker,
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="management"] .ax1-combat-cluster,
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="management"] .ax1-combat-metrics,
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="management"] .ax1-utility-actions{
+  opacity:.12;
+  pointer-events:none;
+  transition:opacity 300ms ease;
+}
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="exploration"] .ax1-combat-metrics{
+  opacity:.7;
+  transition:opacity 300ms ease;
+}
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="exploration"] .ax1-combat-metrics:hover,
+.xaurion-runtime .ax1-authority-shell .xaurion-game-hud[data-density="exploration"] .ax1-combat-metrics:focus-visible{
+  opacity:1;
+}
