@@ -1,0 +1,101 @@
+name: AIM-588 NPC Coordination Laws
+
+on:
+  pull_request:
+    paths:
+      - "shared/npcCoordinationLawProtocol.ts"
+      - "shared/npcUtilityPlannerProtocol.ts"
+      - "server/npcCoordinationLaw.ts"
+      - "server/npcCoordinationLaw.test.ts"
+      - "server/npcCoordinationBenchmark.test.ts"
+      - "server/npcCoordinationGatewayBoundary.test.ts"
+      - "server/npcCoordinationRouterContract.test.ts"
+      - "server/npcUtilityPlanner.ts"
+      - "shared/npcUtilityPlannerDebug.ts"
+      - "server/routers.ts"
+      - ".github/workflows/aim588-npc-coordination.yml"
+  push:
+    branches: [main]
+    paths:
+      - "shared/npcCoordinationLawProtocol.ts"
+      - "server/npcCoordinationLaw.ts"
+      - "server/npcCoordination*.test.ts"
+      - "server/routers.ts"
+      - ".github/workflows/aim588-npc-coordination.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim588-npc-coordination-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-coordination:
+    name: Deterministic coordination constraint and benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Verify exact revision
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck and targeted regression suite
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm vitest run --no-file-parallelism             server/npcCoordinationLaw.test.ts             server/npcCoordinationBenchmark.test.ts             server/npcCoordinationGatewayBoundary.test.ts             server/npcCoordinationRouterContract.test.ts             server/npcUtilityPlanner.test.ts
+          git diff --check
+
+  gateway-readback:
+    name: Existing NPC gateway boundary and MariaDB regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: proof
+          MARIADB_DATABASE: aurion_aim588_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pproof --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:proof@127.0.0.1:3306/aurion_aim588_test
+      AURION_NPC_ACTION_E2E: "1"
+      AURION_NPC_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply exact-head schema and verify gateway provenance
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          node scripts/verify-wasd-npc.mjs
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+          pnpm exec vitest run --no-file-parallelism             server/aim293NpcActionGatewayContract.test.ts             server/aim293NpcActionGatewayMariaDb.test.ts             server/aim245LivingWorld.test.ts             server/npcCoordinationGatewayBoundary.test.ts
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
