@@ -12,7 +12,7 @@ describe("NPC coordination runtime query boundary", () => {
     expect(tail).toContain("protectedProcedure.query");
     expect(tail).toContain("readConfirmedNpcPacket");
     expect(tail).toContain("resolveNpcUtilityDecisionsWithCoordination");
-    expect(tail).toContain("mutationAuthority: "none"");
+    expect(tail).toContain('mutationAuthority: "none"');
     expect(tail).not.toContain(".mutation(");
     expect(tail).not.toContain("executeConfirmedMerchantAction");
   });
