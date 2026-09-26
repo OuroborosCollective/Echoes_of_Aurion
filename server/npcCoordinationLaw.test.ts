@@ -148,7 +148,7 @@ describe("NPC coordination law protocol — determinism", () => {
     ];
     const constrained = [
       unconstrained[0],
-      candidate({ actorId: "npc:a", candidateId: "patrol", action: "patrol", utilityScoreBps: 6_000 }),
+      candidate({ actorId: "npc:a", candidateId: "patrol", action: "patrol", utilityScoreBps: 8_500 }),
       candidate({ actorId: "npc:b", candidateId: "patrol", action: "patrol", utilityScoreBps: 8_500 }),
     ];
     expect(coordinationUtilityFloorCertificate(unconstrained, constrained, 8_000)).toEqual({
