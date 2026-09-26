@@ -31,24 +31,24 @@ const vals = (rows) => rows.map((r) => `(${r.join(", ")})`).join(",\n  ");
 const professions = catalog.professions.map((p) => [
   esc(p.id), esc(p.sourceId), esc(p.category), esc(p.label),
   esc(p.mastery.join(":")), p.unbounded === false ? "false" : "true",
-  json(p), esc(sourceCatalog), esc(contentVersion), hash(p), "1",
+  json(p), esc(sourceCatalog), esc(contentVersion), esc(hash(p)), "1",
 ]);
 
 const activities = catalog.activities.map((a) => [
   esc(a.id), esc(a.professionId), esc(a.kind),
   esc(a.output[0]), esc(a.output[1]),
-  json(a), esc(sourceCatalog), esc(contentVersion), hash(a), "1",
+  json(a), esc(sourceCatalog), esc(contentVersion), esc(hash(a)), "1",
 ]);
 
 const recipes = catalog.recipes.map((r) => [
   esc(r.id), esc(r.professionId), esc(r.label),
   esc(r.output[0]),
-  json(r), esc(sourceCatalog), esc(contentVersion), hash(r), "1",
+  json(r), esc(sourceCatalog), esc(contentVersion), esc(hash(r)), "1",
 ]);
 
 const worldBosses = catalog.worldBosses.map((b) => [
   esc(b.id), esc(b.label), esc(b.zone), esc(b.respawnTicksExact),
-  json(b), esc(sourceCatalog), esc(contentVersion), hash(b), "1",
+  json(b), esc(sourceCatalog), esc(contentVersion), esc(hash(b)), "1",
 ]);
 
 const out = [];
