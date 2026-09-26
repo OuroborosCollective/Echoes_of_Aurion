@@ -33,10 +33,27 @@ export function resolveMobCollisionMovement(from: Readonly<{ x: number; z: numbe
 export class ZoneMobRuntime {
   private readonly states = new Map<string, MobRuntimeState>();
   private readonly orderedEntityIds: string[];
+  private readonly cachedOrderedStates: MobRuntimeState[] = [];
+  private readonly entityIdToIndex = new Map<string, number>();
 
   constructor() {
-    for (const definition of observatoryMobDefinitions) this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
+    for (const definition of observatoryMobDefinitions) {
+      this.states.set(definition.entityId, initialMobRuntimeState(definition, 0));
+    }
     this.orderedEntityIds = Array.from(this.states.keys()).sort();
+    for (let i = 0; i < this.orderedEntityIds.length; i++) {
+      const entityId = this.orderedEntityIds[i];
+      this.entityIdToIndex.set(entityId, i);
+      this.cachedOrderedStates.push(this.states.get(entityId)!);
+    }
+  }
+
+  private updateState(entityId: string, next: MobRuntimeState): void {
+    this.states.set(entityId, next);
+    const index = this.entityIdToIndex.get(entityId);
+    if (index !== undefined) {
+      this.cachedOrderedStates[index] = next;
+    }
   }
 
   tick(presences: readonly ConfirmedZonePresence[], tick: number, frozenEntityIds: ReadonlySet<string> = NO_FROZEN_MOBS): boolean {
@@ -45,7 +62,7 @@ export class ZoneMobRuntime {
       const current = this.states.get(entityId)!;
       const before = publicMobSnapshot(current);
       const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
-      this.states.set(entityId, next);
+      this.updateState(entityId, next);
       if (!sameMob(before, publicMobSnapshot(next))) changed = true;
     }
     return changed;
@@ -55,7 +72,7 @@ export class ZoneMobRuntime {
     const current = this.states.get(entityId);
     if (!current) return undefined;
     const next = applyMobCombatState(current, values);
-    this.states.set(entityId, next);
+    this.updateState(entityId, next);
     return next;
   }
 
@@ -87,12 +104,16 @@ export class ZoneMobRuntime {
       stamina: mob.stamina,
       nextAttackTick: mob.nextAttackTick,
     });
-    this.states.set(mob.entityId, next);
+    this.updateState(mob.entityId, next);
     return next;
   }
 
   snapshot(): readonly ConfirmedZoneMob[] {
-    return Object.freeze(this.orderedEntityIds.map(entityId => publicMobSnapshot(this.states.get(entityId)!)));
+    const snapshotArray = new Array<ConfirmedZoneMob>(this.cachedOrderedStates.length);
+    for (let i = 0; i < this.cachedOrderedStates.length; i++) {
+      snapshotArray[i] = publicMobSnapshot(this.cachedOrderedStates[i]);
+    }
+    return Object.freeze(snapshotArray);
   }
   stateFor(entityId: string): MobRuntimeState | undefined { return this.states.get(entityId); }
 
@@ -101,7 +122,7 @@ export class ZoneMobRuntime {
     if (process.env.NODE_ENV === "production") throw new Error("ZONE_MOB_FIXTURE_PRODUCTION_FORBIDDEN");
     if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("ZONE_MOB_FIXTURE_TICK_INVALID");
     for (const definition of observatoryMobDefinitions) {
-      this.states.set(definition.entityId, initialMobRuntimeState(definition, tick));
+      this.updateState(definition.entityId, initialMobRuntimeState(definition, tick));
     }
   }
 
@@ -122,10 +143,10 @@ export class ZoneMobRuntime {
         idleUntilTick: 0,
         nextAttackTick: current.nextAttackTick,
       });
-      this.states.set(entityId, seeded);
+      this.updateState(entityId, seeded);
       return entityId;
     }));
   }
 
-  orderedStates(): readonly MobRuntimeState[] { return Object.freeze(this.orderedEntityIds.map(entityId => this.states.get(entityId)!)); }
+  orderedStates(): readonly MobRuntimeState[] { return this.cachedOrderedStates; }
 }
