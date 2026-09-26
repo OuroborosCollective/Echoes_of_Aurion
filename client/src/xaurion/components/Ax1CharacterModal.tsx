@@ -89,7 +89,7 @@ export const Ax1CharacterModal: React.FC<CharacterModalProps> = ({
           </div>}
 
           {activeTab === 'mastery' && <div className="space-y-6">
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {Object.values(stats.weaponMasteries || {}).map((wep) => <button type="button" key={wep.type} onClick={() => setSelectedWeaponTab(wep.type)} className={`p-3 rounded-xl border flex flex-col items-center ${selectedWeaponTab === wep.type ? 'bg-black/90 border-[#fbbf24]' : 'bg-black/50 border-gray-800'}`}>
                 <span className="text-2xl">{wep.icon}</span><span className="text-xs">{wep.name}</span>
               </button>)}
