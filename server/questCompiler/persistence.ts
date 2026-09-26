@@ -402,9 +402,13 @@ export class QuestPersistenceEngine {
       const db = await getDb();
       if (!db) {
         if (input.causalClosure) throw new Error("QUEST_CAUSAL_DATABASE_REQUIRED_FOR_CLOSURE");
-        const replay = [...this.receipts.values()].find(receipt =>
-          receipt.instanceId === input.instanceId && receipt.idempotencyKey === input.idempotencyKey
-        );
+        let replay: QuestReceipt | undefined;
+        for (const receipt of this.receipts.values()) {
+          if (receipt.instanceId === input.instanceId && receipt.idempotencyKey === input.idempotencyKey) {
+            replay = receipt;
+            break;
+          }
+        }
         if (replay) {
           if (
             replay.receiptHash !== input.receipt.receiptHash ||
@@ -435,9 +439,12 @@ export class QuestPersistenceEngine {
         if (computeQuestStateHash(input.updatedInstance) !== input.receipt.resultStateHash) {
           throw new Error("QUEST_RESULT_STATE_HASH_MISMATCH");
         }
-        const lastSequence = [...this.receipts.values()]
-          .filter(receipt => receipt.instanceId === input.instanceId)
-          .reduce((max, receipt) => Math.max(max, receipt.eventSequence), 0);
+        let lastSequence = 0;
+        for (const receipt of this.receipts.values()) {
+          if (receipt.instanceId === input.instanceId) {
+            lastSequence = Math.max(lastSequence, receipt.eventSequence);
+          }
+        }
         if (input.receipt.eventSequence !== lastSequence + 1) throw new Error("QUEST_RUNTIME_SEQUENCE_CONFLICT");
         this.instances.set(input.instanceId, input.updatedInstance);
         this.receipts.set(input.receipt.id, input.receipt);
@@ -540,7 +547,12 @@ export class QuestPersistenceEngine {
 
   public async getReceiptByIdempotencyKey(idempotencyKey: string): Promise<QuestReceipt | undefined> {
     const db = await getDb();
-    if (!db) return Array.from(this.receipts.values()).find(receipt => receipt.idempotencyKey === idempotencyKey);
+    if (!db) {
+      for (const receipt of this.receipts.values()) {
+        if (receipt.idempotencyKey === idempotencyKey) return receipt;
+      }
+      return undefined;
+    }
     const row = (await db.select().from(aurionQuestReceipts)
       .where(eq(aurionQuestReceipts.idempotencyKey, idempotencyKey)).limit(1))[0];
     if (!row) return undefined;
@@ -562,7 +574,13 @@ export class QuestPersistenceEngine {
 
   public async getReceiptsForInstance(instanceId: string): Promise<QuestReceipt[]> {
     const db = await getDb();
-    if (!db) return Array.from(this.receipts.values()).filter(r => r.instanceId === instanceId).sort((a,b)=>a.eventSequence-b.eventSequence);
+    if (!db) {
+      const result: QuestReceipt[] = [];
+      for (const receipt of this.receipts.values()) {
+        if (receipt.instanceId === instanceId) result.push(receipt);
+      }
+      return result.sort((a, b) => a.eventSequence - b.eventSequence);
+    }
     const rows = await db.select().from(aurionQuestReceipts).where(eq(aurionQuestReceipts.instanceId, instanceId)).orderBy(aurionQuestReceipts.eventSequence);
     return rows.map(row => QuestReceiptSchema.parse({
       id: row.id,
