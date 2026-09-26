@@ -86,7 +86,7 @@ describe("NPC coordination law protocol — determinism", () => {
   it("never applies a pair rule across different scopes or the same actor", () => {
     const values = [
       candidate({ actorId: "npc:b", candidateId: "trade", action: "trade", scopeKey: "region:cinder", utilityScoreBps: 8_000 }),
-      candidate({ actorId: "npc:a", candidateId: "trade", action: "trade", utilityScoreBps: 8_000 }),
+      candidate({ actorId: "npc:a", candidateId: "trade", action: "trade", scopeKey: "region:cinder", utilityScoreBps: 8_000 }),
     ];
     const result = filterCoordinationCandidates(values, law, [
       reservation({ actorId: "npc:a", action: "trade", scopeKey: "region:emberfall" }),
