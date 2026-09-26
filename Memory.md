@@ -1387,3 +1387,13 @@ Learned: The remaining visual regression was a real phone geometry contract: the
 
 Open: Post-memory exact-head revalidation and merged-main readback.
 Next safe step: Re-run the same exact-head gates for the memory-bearing revision, then merge #587 with the verified head and confirm main readback.
+
+### 2026-09-26 — PR #604 In-world HUD + Aurion world-entity foundation
+Status: MERGED + post-merge readback verified.
+
+Change: Integrated PR #604 into `main` after repairing the real 0064 migration-contract drift, restoring the 0063 reconciliation apply order, adding the separate 0064 proof step, correcting the 0064 seed SHA-256 SQL quoting, and aligning migration journal/manifest, reconciliation/apply artifacts and regression gates through 0064. HUD changes remain presentation/input only; 0064 remains definition-only content infrastructure.
+
+Insight: A migration extension is only complete when journal, manifest, dispatcher, artifact builders, proof workflows and executable seed serialization agree; a green-looking partial contract is not sufficient evidence.
+
+Evidence: Exact PR head `585eba19b755ccf9d9dbbf0b7fc24c673c4e5a10` passed 30/30 current GitHub check-runs, including exact-head runtime/container, real MariaDB rollback/readback, reconciliation, apply/backup/restore, browser/asset and regression lanes. Squash merge `cb6aa2a4ca4d487250054838677e0d0a8e0e3840` is the verified `main` head after merge readback. No production schema mutation was performed by this integration.
+
