@@ -1397,3 +1397,12 @@ Insight: A migration extension is only complete when journal, manifest, dispatch
 
 Evidence: Exact PR head `585eba19b755ccf9d9dbbf0b7fc24c673c4e5a10` passed 30/30 current GitHub check-runs, including exact-head runtime/container, real MariaDB rollback/readback, reconciliation, apply/backup/restore, browser/asset and regression lanes. Squash merge `cb6aa2a4ca4d487250054838677e0d0a8e0e3840` is the verified `main` head after merge readback. No production schema mutation was performed by this integration.
 
+### 2026-09-26 — PR #605 / Issue #588 deterministic NPC coordination laws
+Status: VERIFIED exact-head implementation + runtime/readback evidence; merge-ready.
+
+Change: Added Aurion-native, LLM-free coordination constraints as a pure layer around the existing deterministic NPC utility planner: versioned law/candidate/reservation hashes, symmetric pair constraints, typed `coordination_blocked`, integer alpha utility-floor certificate, multi-NPC canonical preview and protected read-only `gameplay.npcCoordinationPreview`. No new persistence/effect authority and no WASD vendor artifact mutation.
+
+Insight: The coordination law must constrain admissibility against explicit reservations, while the existing utility planner remains responsible for final candidate scoring/tie-break; this prevents a second planner from silently becoming gameplay authority. The research proof is an offline utility-floor certificate, not a runtime LLM/RL dependency.
+
+Evidence: Exact final head `3a7da6bc613188a92fa437bf2ee16077bdeae4bd` passed 20/20 executable current GitHub checks, including the dedicated AIM-588 deterministic coordination benchmark suite, exact-head runtime/container, real MariaDB gateway/readback, reconciliation, offline-pack, browser/asset/world and replay/regression lanes; only Supabase Preview was skipped by workflow configuration. PatchMon runtime was independently healthy with 4/4 expected containers running/healthy and no boundary violations. No production database mutation was performed.
+
