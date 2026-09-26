@@ -32,6 +32,17 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
     expect(AURION_ACTIVE_CAUSAL_TICK_SCHEMA).toBe(AURION_CAUSAL_TICK_SCHEMA_V2);
   });
 
+  it("keeps generated 0064 seed hashes valid SQL string literals", () => {
+    const generator = readFileSync("scripts/seed-aurion-world-foundation.mjs", "utf8");
+    const seed = readFileSync("drizzle/seed_0064_aurion_world_foundation.sql", "utf8");
+    expect(generator).toContain("esc(hash(p))");
+    expect(generator).toContain("esc(hash(a))");
+    expect(generator).toContain("esc(hash(r))");
+    expect(generator).toContain("esc(hash(b))");
+    expect(seed).not.toMatch(/, [0-9a-f]{64}, 1\)/);
+    expect(seed.match(/, '[0-9a-f]{64}', 1\)/g)?.length).toBeGreaterThan(0);
+  });
+
   it("keeps 0048 immutable while 0049 is additive", () => {
     const base = readFileSync("drizzle/0048_aurion_causal_evidence.sql", "utf8");
     const next = readFileSync("drizzle/0049_aurion_causal_receipt_v2.sql", "utf8");
