@@ -40,6 +40,7 @@ const tags = [
   "0061_aurion_exploration_memory",
   "0062_aurion_world_director",
   "0063_aurion_npc_information_ecology",
+  "0064_aurion_world_entity_foundation",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [
