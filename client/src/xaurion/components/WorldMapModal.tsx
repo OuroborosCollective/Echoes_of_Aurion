@@ -30,7 +30,7 @@ export const WorldMapModal: React.FC<{
   const filteredPois = p.pois.filter(poi => filter === 'all' || poi.kind === filter);
 
   return (
-    <div className="fixed inset-0 z-[130] grid place-items-center bg-black/80 p-4">
+    <div className="fixed inset-0 z-[130] grid place-items-center bg-black/80 p-3 sm:p-4">
       {isTeleporting && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm">
             <div className="text-center text-cyan-400 font-mono">
@@ -39,7 +39,7 @@ export const WorldMapModal: React.FC<{
             </div>
         </div>
       )}
-      <section className="w-full max-w-5xl rounded-2xl border border-amber-400/30 bg-[#0d1519] p-5 text-white">
+      <section className="w-full max-w-5xl max-h-[90dvh] overflow-y-auto rounded-2xl border border-amber-400/30 bg-[#0d1519] p-4 sm:p-5 text-white">
         <header className="flex justify-between">
           <div>
             <b>REALM ATLAS // DYNAMIC WORLD</b>
@@ -56,7 +56,7 @@ export const WorldMapModal: React.FC<{
           </div>
         </header>
 
-        <div className="relative mt-4 aspect-[16/9] overflow-hidden rounded-xl border border-cyan-900 bg-[radial-gradient(circle_at_center,#15333a,#071014_65%)]">
+        <div className="relative mt-4 aspect-[16/9] sm:aspect-[16/9] max-h-[60dvh] overflow-hidden rounded-xl border border-cyan-900 bg-[radial-gradient(circle_at_center,#15333a,#071014_65%)]">
           {chunks.map(c => (
             <div key={c.chunkKey} title={c.landmarkName} className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-cyan-300/50 bg-cyan-900/60" style={{ left: `${pos(c.centerX)}%`, top: `${pos(c.centerZ)}%` }} />
           ))}
