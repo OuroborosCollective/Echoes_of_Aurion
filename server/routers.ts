@@ -47,6 +47,7 @@ import { clientObservationIdentifier } from "../shared/aurionClientVerificationC
 import { readConfirmedNpcPacket, interpretAndRecordDialogue, resolveAndRecordPolity, resolveAndRecordWorld } from "./wasdAurionRuntime";
 import { resolveNpcUtilityScores, type NpcUtilityScoredCandidate } from "./npcUtilityPlanner";
 import { buildPlannerContext, type NpcSnapshotInput } from "../shared/npcUtilityPlannerDebug";
+import { AURION_NPC_COORDINATION_RESEARCH_LAW, coordinationLawHash, resolveNpcUtilityDecisionsWithCoordination } from "./npcCoordinationLaw";
 import { decodeOwnedNpcPacket } from "../shared/npcSnapshotProtocol";
 import { readWasdAurionCoverage } from "./wasdAurionProtocol";
 import { CompanionMemoryStore } from "./companionMemory";
@@ -236,6 +237,52 @@ export const appRouter = router({
         return Object.freeze({ npcId: npc.npcId, resolutionIndex: npc.resolutionIndex, goal: npc.goal, scored });
       });
       return Object.freeze({ npcs: results });
+    }),
+    npcCoordinationPreview: protectedProcedure.query(async ({ ctx }) => {
+      const packet = readConfirmedNpcPacket(ctx.user.id);
+      if (!packet) {
+        return Object.freeze({
+          lawHash: coordinationLawHash(AURION_NPC_COORDINATION_RESEARCH_LAW),
+          mutationAuthority: "none" as const,
+          npcs: [],
+        });
+      }
+      let decoded: ReturnType<typeof decodeOwnedNpcPacket> | null = null;
+      try {
+        decoded = decodeOwnedNpcPacket(packet, ctx.user.id);
+      } catch {
+        decoded = null;
+      }
+      if (!decoded || decoded.npcs.length === 0) {
+        return Object.freeze({
+          lawHash: coordinationLawHash(AURION_NPC_COORDINATION_RESEARCH_LAW),
+          mutationAuthority: "none" as const,
+          npcs: [],
+        });
+      }
+      const entries = decoded.npcs.map((npc: NpcSnapshotInput) => ({
+        actorId: npc.npcId,
+        scopeKey: `region:${npc.regionId}`,
+        context: buildPlannerContext({
+          npcId: npc.npcId,
+          resolutionIndex: npc.resolutionIndex,
+          goal: npc.goal,
+          needs: npc.needs,
+        }),
+      }));
+      const coordinated = resolveNpcUtilityDecisionsWithCoordination(entries, AURION_NPC_COORDINATION_RESEARCH_LAW);
+      return Object.freeze({
+        lawHash: coordinated[0]?.lawHash ?? coordinationLawHash(AURION_NPC_COORDINATION_RESEARCH_LAW),
+        mutationAuthority: "none" as const,
+        npcs: coordinated.map(result => Object.freeze({
+          npcId: result.actorId,
+          scopeKey: result.scopeKey,
+          resolutionIndex: result.decision.resolutionIndex,
+          decision: result.decision,
+          coordination: result.coordination,
+          scored: result.scored,
+        })),
+      });
     }),
     npcProjectionProvenance: protectedProcedure.query(({ ctx }) => readConfirmedNpcProjectionProvenancePacket(ctx.user.id)),
     explorationMemory: protectedProcedure.input(z.strictObject({ worldEpoch: z.number().int().min(1) })).query(({ ctx, input }) => readExplorationMemory(ctx.user.id, db.GLOBAL_WORLD_ID, input.worldEpoch)),
