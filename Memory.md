@@ -1371,3 +1371,19 @@ Learned: A theme/token change alone was too subtle; the visible transformation r
 Open: Post-merge main readback only.
 Next safe step: Merge #585, confirm merged main revision, then build the in-game HUD UX slice from the updated main baseline.
 
+
+### 2026-09-26 — In-world HUD UX hierarchy (#587)
+Status: VERIFIED exact-head runtime/regression evidence; merge-ready pending post-memory revalidation.
+
+Task: Rebuild the Aurion in-world HUD around task-relevant hierarchy while preserving presentation-only authority boundaries and existing accessibility/geometry contracts.
+
+Decisions: Make frequent navigation self-describing, group secondary commands into domain sections, surface explicit Confirmed/Stale/Unavailable/Waiting projection states, keep one primary objective with a compact nearby-objective layer, preserve canonical accessible names, and enforce touch-safe combat/navigation separation on phone layouts. The HUD remains presentation/input only; no gameplay truth, persistence, readback authority, CAG/Wolfram truth or authentication ownership moved into the client.
+
+Touched surfaces: client/src/xaurion/components/GameHUD.tsx, client/src/xaurion/components/GameHUD.test.tsx, client/src/xaurion/integration/ax1AuthorityHud.css, .github/workflows/aim290-renderer-recovery.yml, playwright.aim290.config.ts.
+
+Evidence: Pre-memory exact head 388bfe2669776dcf072cbd37beaf5b28d1c0dbda passed Aurion PR Runtime Candidate #1021, Aurion PR Runtime Container Proof #1020, AIM-240 GLB Upload Regression #1237, AIM 262 deterministic visual regression #1174, Aurion Local Test Pack #1568, AIM-292 Confirmed NPC Multi-Memory #1366, AIM 259 real group instance regression #1264, AIM-291 Asset Shipping #693, and AIM-290 Renderer and Recovery #686. AIM-290 passed real WebGPU initialization/recovery across phone, tablet and desktop after the Linux CI lane was explicitly provisioned with Mesa/Vulkan dependencies and headed Chromium under Xvfb. No gameplay/persistence authority was introduced.
+
+Learned: The remaining visual regression was a real phone geometry contract: the combat action cluster had to clear the movement control by a positive margin, not merely touch its boundary. Binding a dedicated combat lane to the actual HUD DOM and reserving a 124 px left boundary resolved the contract without weakening the test. WebGPU evidence also belongs to the CI environment contract; repeated desktop-only failures were resolved by provisioning the tested Linux software-rendering stack rather than changing the renderer assertion.
+
+Open: Post-memory exact-head revalidation and merged-main readback.
+Next safe step: Re-run the same exact-head gates for the memory-bearing revision, then merge #587 with the verified head and confirm main readback.
