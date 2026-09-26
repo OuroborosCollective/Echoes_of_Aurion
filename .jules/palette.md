@@ -24,3 +24,6 @@
 ## 2026-09-23 - Disabled Loading States
 **Learning:** Disabled portal actions need explicit loading semantics and contextual titles so assistive technology can distinguish authentication gating from an in-progress load.
 **Action:** Keep `aria-busy`, loading-aware `title`, disabled opacity, and motion-safe disabled interaction states aligned across Home and Community.
+## 2024-05-19 - AuthoredQuestJournal Tactile and ARIA Feedback
+**Learning:** Quest instances lists and actions needed better visual navigation (like `aria-pressed` for selected lists) and clear tactile disabled/busy states to prevent user confusion when loading data.
+**Action:** Always include `aria-pressed` along with styling for selectable list states. Apply full tactile feedback combined with `aria-busy` and explicit `title` strings to give assistive technology contexts for loading or disabled logic states.
