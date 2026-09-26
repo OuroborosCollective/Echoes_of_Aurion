@@ -40,3 +40,4 @@
   * [GitHub-Patchnotes-Automation](patchnotes/github-patchnotes-automation.md)
 * [Wave 3 Temporal History — Steps 32–34](docs/unreal-derived-wave3-temporal-history.md)
 * [Deterministic Socioeconomic Impact-Wave Graph](deterministic-socioeconomic-impact-wave-graph.md)
+* [MMORPG Research Integration Wave — 26.09.2026](mmorpg-research-integration-wave-26.09.2026.md)
