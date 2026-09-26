@@ -164,6 +164,7 @@ jobs:
             "0061_aurion_exploration_memory",
             "0062_aurion_world_director",
             "0063_aurion_npc_information_ecology",
+            "0064_aurion_world_entity_foundation",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
