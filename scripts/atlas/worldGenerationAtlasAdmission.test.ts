@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import test from "node:test";
+import assert from "node:assert/strict";
 import {
   worldGenerationParityEvidenceSchema,
   type WorldGenerationParityEvidenceInput,
@@ -104,26 +105,24 @@ const context = {
   expectedRulesetVersion: identity.rulesetVersion,
 };
 
-describe("#505 generated-world atlas admission", () => {
-  it("admits only verified #510 MATCH evidence", () => {
-    const result = evaluateGeneratedWorldAtlasInput(createEvidence(), context);
-    expect(result.verdict).toBe("ADMIT");
-    expect(result.consumer).toBe("ATLAS_BUILD");
-    expect(() => assertGeneratedWorldAtlasInput(createEvidence(), context)).not.toThrow();
-  });
+test("#505 generated-world atlas admission admits only verified #510 MATCH evidence", () => {
+  const result = evaluateGeneratedWorldAtlasInput(createEvidence(), context);
+  assert.equal(result.verdict, "ADMIT");
+  assert.equal(result.consumer, "ATLAS_BUILD");
+  assert.doesNotThrow(() => assertGeneratedWorldAtlasInput(createEvidence(), context));
+});
 
-  it("holds an evidence mismatch before any atlas build is allowed", () => {
-    const result = evaluateGeneratedWorldAtlasInput(createEvidence({ status: "FIRST_DIVERGENCE" }), context);
-    expect(result.verdict).toBe("HOLD");
-    expect(result.reason).toBe("STATUS_NOT_MATCH");
-  });
+test("#505 holds an evidence mismatch before any atlas build is allowed", () => {
+  const result = evaluateGeneratedWorldAtlasInput(createEvidence({ status: "FIRST_DIVERGENCE" }), context);
+  assert.equal(result.verdict, "HOLD");
+  assert.equal(result.reason, "STATUS_NOT_MATCH");
+});
 
-  it("holds exact runtime-image drift", () => {
-    const result = evaluateGeneratedWorldAtlasInput(createEvidence(), {
-      ...context,
-      expectedRuntimeImageDigest: hash("9"),
-    });
-    expect(result.verdict).toBe("HOLD");
-    expect(result.reason).toBe("IMAGE_DIGEST_MISMATCH");
+test("#505 holds exact runtime-image drift", () => {
+  const result = evaluateGeneratedWorldAtlasInput(createEvidence(), {
+    ...context,
+    expectedRuntimeImageDigest: hash("9"),
   });
+  assert.equal(result.verdict, "HOLD");
+  assert.equal(result.reason, "IMAGE_DIGEST_MISMATCH");
 });

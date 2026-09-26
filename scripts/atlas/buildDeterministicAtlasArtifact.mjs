@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
+import { chromium } from "@playwright/test";
 
 export const AURION_DETERMINISTIC_ATLAS_ARTIFACT_SCHEMA =
   "aurion.deterministic-atlas-artifact.v1";
