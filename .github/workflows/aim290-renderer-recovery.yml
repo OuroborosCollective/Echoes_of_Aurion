@@ -87,6 +87,11 @@ jobs:
       - name: Build exact production application
         run: pnpm build
 
+      - name: Install Linux WebGPU software stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xauth libvulkan1 mesa-vulkan-drivers
+
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -105,7 +110,7 @@ jobs:
       - name: Prove backend parity and actual context and device loss
         env:
           AIM290_VIEWPORT: ${{ matrix.viewport }}
-        run: pnpm exec playwright test --config=playwright.aim290.config.ts --grep "on $AIM290_VIEWPORT$"
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" pnpm exec playwright test --config=playwright.aim290.config.ts --grep "on $AIM290_VIEWPORT$"
 
       - uses: actions/upload-artifact@v4
         if: always()
