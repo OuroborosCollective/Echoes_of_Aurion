@@ -158,4 +158,94 @@ describe("GameHUD", () => {
     fireEvent.click(screen.getByRole("button", { name: "Weitere Menüs" }));
     await waitFor(() => expect(props.onMenuOpenChange).toHaveBeenLastCalledWith(false));
   });
+
+  it("shows a PENDING state badge with redundant label when a mutation is in flight", () => {
+    const props = baseProps();
+    props.pending = true;
+    render(<GameHUD {...props} />);
+
+    const badge = screen.getByTestId("pending-state-badge");
+    expect(badge.textContent).toContain("Pending");
+    expect(badge.textContent).toContain("Mutation");
+  });
+
+  it("hides the PENDING badge when no mutation is in flight", () => {
+    render(<GameHUD {...baseProps()} />);
+    expect(screen.queryByTestId("pending-state-badge")).toBeNull();
+  });
+
+  it("sets the data-density attribute from the context prop", () => {
+    const props = baseProps();
+    props.context = "combat";
+    const { rerender } = render(<GameHUD {...props} />);
+    expect(screen.getByTestId("ax1-game-hud").getAttribute("data-density")).toBe("combat");
+
+    props.context = "dialogue";
+    rerender(<GameHUD {...props} />);
+    expect(screen.getByTestId("ax1-game-hud").getAttribute("data-density")).toBe("dialogue");
+  });
+
+  it("defaults to exploration density when no context is given", () => {
+    render(<GameHUD {...baseProps()} />);
+    expect(screen.getByTestId("ax1-game-hud").getAttribute("data-density")).toBe("exploration");
+  });
+
+  it("gives every interactive utility button an accessible label (no hover-only knowledge)", () => {
+    render(<GameHUD {...baseProps()} />);
+
+    const labelled = [
+      "Auto-Loot umschalten",
+      "Interaktion",
+      "Auto-Angriff umschalten",
+      "Steuerung öffnen",
+      "Gruppe öffnen",
+      "Combat Metrics öffnen",
+      "Angriff [R]",
+    ];
+    for (const name of labelled) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  it("exposes an aria-live region for state announcements", () => {
+    render(<GameHUD {...baseProps()} />);
+    expect(screen.getByTestId("ax1-game-hud").getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("keeps all touch targets at or above 44px minimum", () => {
+    render(<GameHUD {...baseProps()} />);
+
+    const attack = screen.getByTitle("Angriff [R]");
+    expect(attack.className).toContain("min-h-14");
+
+    const interact = screen.getByRole("button", { name: "Interaktion" });
+    expect(interact.className).toContain("min-h-11");
+
+    const autoLoot = screen.getByRole("button", { name: "Auto-Loot umschalten" });
+    expect(autoLoot.className).toContain("min-h-11");
+  });
+
+  it("suppresses combat actions when actions are disabled", () => {
+    const props = baseProps();
+    props.actionsDisabled = true;
+    render(<GameHUD {...props} />);
+
+    expect(screen.getByTitle("Angriff [R]")).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Interaktion" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Auto-Angriff umschalten" })).toHaveProperty("disabled", true);
+  });
+
+  it("renders exactly one primary objective section", () => {
+    render(<GameHUD {...baseProps()} />);
+    const primarySections = screen.getAllByRole("region", { name: "Hauptziel" });
+    expect(primarySections).toHaveLength(1);
+  });
+
+  it("keeps the navigation drawer discoverable via the More button", () => {
+    render(<GameHUD {...baseProps()} />);
+    const more = screen.getByRole("button", { name: "Weitere Menüs" });
+    expect(more).toBeTruthy();
+    fireEvent.click(more);
+    expect(screen.getByRole("dialog", { name: "Weitere Menüs" })).toBeTruthy();
+  });
 });

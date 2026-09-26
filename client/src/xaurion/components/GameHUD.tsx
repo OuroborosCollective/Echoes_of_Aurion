@@ -22,6 +22,7 @@ import {
   Package,
   Repeat,
   History,
+  Hourglass,
   ScrollText,
   ShieldCheck,
   Sparkles,
@@ -29,6 +30,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export type Ax1HudPartyMember = Readonly<{
@@ -95,6 +97,7 @@ export interface GameHUDProps {
     peakDps: number | string;
     currentDtps: number | string;
     logs: readonly Ax1HudCombatLog[];
+    dpsSeries?: readonly { second: number; dps: number; dtps: number }[];
   }>;
   miniMap: ReactNode;
   movementControl: ReactNode;
@@ -124,6 +127,8 @@ export interface GameHUDProps {
   onToggleAutoAttack: () => void;
   onAttack: () => void;
   onCastSkill: (command: string) => void;
+  pending?: boolean;
+  context?: "exploration" | "combat" | "dialogue" | "management";
 }
 
 const iconButton = "group relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-[5px] border border-slate-700/80 bg-black/75 px-1.5 text-amber-200 shadow-lg backdrop-blur-md transition-colors hover:border-amber-300/70 hover:bg-black/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300";
@@ -202,10 +207,12 @@ export function GameHUD(props: GameHUDProps) {
       id="game-hud-root"
       data-testid="ax1-game-hud"
       data-source="ax1-f24-visible-shell"
+      data-density={props.context ?? "exploration"}
+      aria-live="polite"
       className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
     >
-      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
-        <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
+      <div className="ax1-hud-top-bar absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
+        <div className="ax1-hud-left-col pointer-events-auto flex min-w-0 flex-col gap-1.5">
           <section
             id="player-unit-frame"
             aria-label="Serverbestätigter Charakter"
@@ -252,6 +259,11 @@ export function GameHUD(props: GameHUDProps) {
               {props.worldState === "live" ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : props.worldState === "stale" ? <History className="h-3 w-3" aria-hidden /> : <Clock3 className="h-3 w-3" aria-hidden />}
               World · {worldProjectionState}
             </span>
+            {props.pending && (
+              <span data-testid="pending-state-badge" className="inline-flex min-h-6 items-center gap-1 rounded-[3px] border border-amber-300/30 bg-amber-950/40 px-1.5 font-mono text-[8px] uppercase tracking-[0.08em] text-amber-200">
+                <Hourglass className="h-3 w-3 animate-pulse" aria-hidden /> Mutation · Pending
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -293,7 +305,7 @@ export function GameHUD(props: GameHUDProps) {
           )}
         </div>
 
-        <div className="pointer-events-auto min-w-0 max-w-none flex flex-col items-end gap-1.5">
+        <div className="ax1-hud-right-col pointer-events-auto min-w-0 max-w-none flex flex-col items-end gap-1.5">
           <nav aria-label="Schnellnavigation" className="flex max-w-[94vw] flex-wrap justify-end gap-1.5 rounded-[6px] border border-slate-700/80 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
             <HudNavButton label="Char" shortcut="C" title="Charakter [C]" ariaLabel="Charakter" onClick={() => closeMenu(props.onOpenCharacter)}><UserRound /></HudNavButton>
             <HudNavButton label="Inventar" shortcut="I" title="Inventar [I/B]" ariaLabel="Inventar" onClick={() => closeMenu(props.onOpenInventory)}><Package /></HudNavButton>
@@ -471,18 +483,18 @@ export function GameHUD(props: GameHUDProps) {
         </div>
       </div>
 
-      <div className="pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
+      <div className="ax1-hud-bottom-left pointer-events-auto absolute bottom-2 left-2 sm:bottom-4 sm:left-4 flex flex-col items-start gap-2">
         <button type="button" onClick={props.onOpenChat} className="flex items-center gap-1.5 rounded-full border border-gray-800 bg-black/80 px-2.5 py-1.5 text-xs font-mono text-[#fbbf24] backdrop-blur-md shadow hover:border-[#b8860b]"><MessageSquare className="h-3.5 w-3.5" /> Realm Chat</button>
         <div>{props.movementControl}</div>
       </div>
 
       <div className="ax1-combat-lane pointer-events-auto absolute bottom-2 right-2 sm:bottom-4 sm:right-4 flex max-w-[72vw] flex-col items-end gap-2">
         <div className="flex flex-wrap justify-end gap-1.5">
-          <button type="button" disabled={props.controlsDisabled} onClick={props.onToggleAutoLoot} aria-pressed={props.autoLoot} className={`${utilityButton} ${props.autoLoot ? "border-emerald-400 bg-emerald-950/80 text-emerald-300" : "border-gray-700 bg-black/80 text-gray-500"}`} title="Auto-Loot"><Sparkles className="h-4 w-4" /><span>A-LOOT</span></button>
-          <button type="button" disabled={props.actionsDisabled} onClick={props.onInteract} className={`${utilityButton} border-amber-400/70 bg-black/85 text-amber-300`} title="Interaktion [F]"><Hand className="h-4 w-4" /><span>ACTION</span></button>
-          <button type="button" disabled={props.actionsDisabled} onClick={props.onToggleAutoAttack} aria-pressed={props.autoAttack} className={`${utilityButton} ${props.autoAttack ? "border-red-400 bg-red-950/80 text-red-300" : "border-gray-700 bg-black/80 text-gray-300"}`} title="Auto-Angriff"><Repeat className="h-4 w-4" /><span>{props.autoAttack ? "AUTO AN" : "AUTO"}</span></button>
-          <button type="button" onClick={props.onOpenControls} className={`${utilityButton} border-cyan-500/60 bg-black/85 text-cyan-300`} title="Steuerung"><Gamepad2 className="h-4 w-4" /><span>CTRL</span></button>
-          <button type="button" onClick={props.onOpenParty} className={`${utilityButton} border-sky-500/60 bg-black/85 text-sky-300`} title="Gruppe"><ShieldCheck className="h-4 w-4" /><span>GROUP</span></button>
+          <button type="button" disabled={props.controlsDisabled} onClick={props.onToggleAutoLoot} aria-pressed={props.autoLoot} aria-label="Auto-Loot umschalten" className={`${utilityButton} ${props.autoLoot ? "border-emerald-400 bg-emerald-950/80 text-emerald-300" : "border-gray-700 bg-black/80 text-gray-500"}`} title="Auto-Loot"><Sparkles className="h-4 w-4" /><span>A-LOOT</span></button>
+          <button type="button" disabled={props.actionsDisabled} onClick={props.onInteract} aria-label="Interaktion" className={`${utilityButton} border-amber-400/70 bg-black/85 text-amber-300`} title="Interaktion [F]"><Hand className="h-4 w-4" /><span>ACTION</span></button>
+          <button type="button" disabled={props.actionsDisabled} onClick={props.onToggleAutoAttack} aria-pressed={props.autoAttack} aria-label="Auto-Angriff umschalten" className={`${utilityButton} ${props.autoAttack ? "border-red-400 bg-red-950/80 text-red-300" : "border-gray-700 bg-black/80 text-gray-300"}`} title="Auto-Angriff"><Repeat className="h-4 w-4" /><span>{props.autoAttack ? "AUTO AN" : "AUTO"}</span></button>
+          <button type="button" onClick={props.onOpenControls} aria-label="Steuerung öffnen" className={`${utilityButton} border-cyan-500/60 bg-black/85 text-cyan-300`} title="Steuerung"><Gamepad2 className="h-4 w-4" /><span>CTRL</span></button>
+          <button type="button" onClick={props.onOpenParty} aria-label="Gruppe öffnen" className={`${utilityButton} border-sky-500/60 bg-black/85 text-sky-300`} title="Gruppe"><ShieldCheck className="h-4 w-4" /><span>GROUP</span></button>
         </div>
 
         <div className="ax1-combat-cluster ax1-combat-cluster-phone flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-[6px] border border-amber-300/25 bg-black/78 p-1.5 shadow-2xl backdrop-blur-xl">
@@ -496,16 +508,39 @@ export function GameHUD(props: GameHUDProps) {
         <div className="h-1 w-full max-w-xs overflow-hidden rounded-full border border-gray-800 bg-black/90"><div className={`h-full ${props.connected ? "bg-gradient-to-r from-amber-600 to-yellow-400" : "bg-gray-700"}`} style={{ width: typeof props.mastery?.xpPercent === "number" ? `${props.mastery.xpPercent * 100}%` : (props.connected ? "100%" : "15%") }} /></div>
       </div>
 
-      <button type="button" onClick={() => setCombatOpen(value => !value)} className="ax1-combat-metrics pointer-events-auto absolute right-2 top-[42%] sm:right-4 rounded-[5px] border border-cyan-300/25 bg-black/78 px-2.5 py-2 text-[9px] font-mono text-cyan-200 backdrop-blur-xl shadow-xl" aria-expanded={combatOpen}>
+      <button type="button" onClick={() => setCombatOpen(value => !value)} aria-label="Combat Metrics öffnen" className="ax1-combat-metrics pointer-events-auto absolute right-2 top-[42%] sm:right-4 rounded-[5px] border border-cyan-300/25 bg-black/78 px-2.5 py-2 text-[9px] font-mono text-cyan-200 backdrop-blur-xl shadow-xl" aria-expanded={combatOpen}>
         <Swords className="mx-auto mb-0.5 h-4 w-4" /> DPS {props.combat.eventCount ? props.combat.currentDps : "—"}
       </button>
       {combatOpen && <section id="dps-meter-modal" role="dialog" aria-label="Bestätigte Combat Metrics" className="pointer-events-auto absolute right-14 top-[24%] z-30 w-72 sm:w-80 max-w-[calc(100vw-72px)] rounded-[6px] border border-amber-500/40 bg-black/92 p-3 shadow-2xl backdrop-blur-xl font-mono">
         <div className="flex items-center justify-between border-b border-gray-800 pb-2"><b className="text-[10px] tracking-wider text-amber-200">BESTÄTIGTE COMBAT METRICS</b><button type="button" onClick={() => setCombatOpen(false)} aria-label="Combat Metrics schließen" className="flex h-10 w-10 items-center justify-center rounded-[4px] text-gray-400 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">✕</button></div>
         <div className="grid grid-cols-3 gap-1.5 py-2 text-center"><Metric label="DPS" value={props.combat.eventCount ? props.combat.currentDps : "—"} /><Metric label="PEAK" value={props.combat.eventCount ? props.combat.peakDps : "—"} /><Metric label="DTPS" value={props.combat.eventCount ? props.combat.currentDtps : "—"} /></div>
+        {props.combat.dpsSeries && props.combat.dpsSeries.length > 1 && (
+          <div className="mb-1 mt-1">
+            <p className="mb-0.5 text-[7px] uppercase tracking-wider text-stone-500">DPS-Verlauf</p>
+            <div className="h-24 w-full rounded border border-stone-800 bg-black/40 p-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={[...props.combat.dpsSeries]} margin={{ top: 2, right: 4, bottom: 0, left: -20 }}>
+                  <defs>
+                    <linearGradient id="dpsGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#fbbf24" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#1f2937" strokeDasharray="2 2" vertical={false} />
+                  <XAxis dataKey="second" tick={{ fontSize: 7, fill: "#6b7280" }} tickLine={false} axisLine={false} unit="s" />
+                  <YAxis tick={{ fontSize: 7, fill: "#6b7280" }} tickLine={false} axisLine={false} width={22} />
+                  <Tooltip contentStyle={{ fontSize: 9, background: "#000", border: "1px solid #374151", borderRadius: 4 }} labelFormatter={(v) => `Sek ${v}`} />
+                  <Area type="monotone" dataKey="dps" name="DPS" stroke="#fbbf24" fill="url(#dpsGrad)" strokeWidth={1.5} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="dtps" name="DTPS" stroke="#ef4444" fill="transparent" strokeWidth={1} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
         <div className="max-h-36 space-y-1 overflow-y-auto text-[8px]">{props.combat.logs.length ? props.combat.logs.slice(0, 8).map(log => <div key={log.id} className="flex gap-1 rounded border border-stone-800 bg-black/60 px-2 py-1"><i className="shrink-0 text-gray-500">T{log.tick}</i><span className="flex-1 text-gray-300">{log.text}</span><b className="text-amber-300">{log.value}</b></div>) : <p className="py-3 text-center italic text-gray-600">Noch keine bestätigten Combat-Events.</p>}</div>
       </section>}
 
-      {props.feedback && <p className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
+      {props.feedback && <p className="ax1-hud-feedback pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 rounded-lg border border-cyan-500/30 bg-black/85 px-3 py-1.5 text-xs text-cyan-100 shadow-xl" role="status">{props.feedback}</p>}
     </div>
   );
 }

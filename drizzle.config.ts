@@ -16,6 +16,7 @@ export default defineConfig({
     "./drizzle/playerUiSchema.ts",
     "./drizzle/ax1StarterEquipmentSchema.ts",
     "./drizzle/aurionCausalitySchema.ts",
+    "./drizzle/aurionWorldFoundationSchema.ts",
   ],
   out: "./drizzle",
   dialect: "mysql",

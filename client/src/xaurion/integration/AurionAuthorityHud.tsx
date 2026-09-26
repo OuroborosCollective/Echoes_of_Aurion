@@ -307,6 +307,7 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
         peakDps: combatMetrics.peakDps,
         currentDtps: combatMetrics.currentDtps,
         logs: combatMetrics.logs,
+        dpsSeries: combatMetrics.dpsSeries,
       }}
       miniMap={<MiniMap world={worldProjection} position={position} remotePlayers={remotePlayers} state={world.state} onOpen={() => openPanel("map")} />}
       movementControl={<MobileMovementController mode={ui.data?.settings.movementMode ?? "joystick"} onMove={onMove} onDestination={({ screenX, screenY }) => onTouchMoveDestination(screenX, screenY)} enabled={panel === null && !groupOpen && !pending && connected} />}
@@ -336,6 +337,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       onToggleAutoAttack={() => { if (autoActive) auto.stop(); else auto.start(); }}
       onAttack={() => { void onAction("F"); }}
       onCastSkill={command => { void onAction(command as AurionGameplayCommand); }}
+      pending={pending}
+      context={panel === "dialogue" ? "dialogue" : panel !== null ? "management" : autoActive ? "combat" : "exploration"}
     />
 
     {groupOpen && <AurionGroupFinder open mode={groupMode} onClose={() => setGroupOpen(false)} />}

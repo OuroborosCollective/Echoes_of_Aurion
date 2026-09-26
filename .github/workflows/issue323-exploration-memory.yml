@@ -9,6 +9,7 @@ on:
       - "drizzle/0061_aurion_exploration_memory.sql"
       - "drizzle/0062_aurion_world_director.sql"
       - "drizzle/0063_aurion_npc_information_ecology.sql"
+      - "drizzle/0064_aurion_world_entity_foundation.sql"
       - "drizzle/meta/_journal.json"
       - "config/aurion-migration-wave-manifest.json"
       - "server/routers.ts"

@@ -2020,3 +2020,6 @@ export const aurionWorldDirectorReceipts = mysqlTable("aurionWorldDirectorReceip
   index("aurionWorldDirectorReceipts_causal_idx").on(table.causalReceiptHash),
   index("aurionWorldDirectorReceipts_decision_idx").on(table.decisionHash),
 ]);
+
+/** Classless world-entity foundation definitions (professions, activities, recipes, world bosses). */
+export * from "./aurionWorldFoundationSchema";

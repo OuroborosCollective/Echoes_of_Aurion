@@ -130,7 +130,7 @@ jobs:
           import fs from "node:fs";
           import mysql from "mysql2/promise";
           const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
-          const lastLate = journal.entries.find(entry => entry.tag === "0063_aurion_npc_information_ecology");
+          const lastLate = journal.entries.find(entry => entry.tag === "0064_aurion_world_entity_foundation");
           if (!lastLate || !Number.isSafeInteger(Number(lastLate.when))) throw new Error("late journal timestamp missing");
           const legacyWatermark = Number(lastLate.when) + 10_000_000;
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
@@ -198,6 +198,7 @@ jobs:
             "0061_aurion_exploration_memory",
             "0062_aurion_world_director",
     "0063_aurion_npc_information_ecology",
+    "0064_aurion_world_entity_foundation",
           ];
           if (receipt.state !== "APPLY_SUCCEEDED") throw new Error(`unexpected apply state: ${receipt.state}`);
           if (receipt.preflight?.absentCount !== tags.length || receipt.preflight?.driftCount !== 0) throw new Error("unexpected preflight state");

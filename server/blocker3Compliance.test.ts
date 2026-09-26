@@ -17,11 +17,11 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
       idx: 49,
       tag: "0049_aurion_causal_receipt_v2",
     });
-    expect(journal.entries).toHaveLength(64);
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 63, tag: "0063_aurion_npc_information_ecology" });
-    expect(manifest.waveId).toBe("aurion-production-0021-0063");
+    expect(journal.entries).toHaveLength(65);
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 64, tag: "0064_aurion_world_entity_foundation" });
+    expect(manifest.waveId).toBe("aurion-production-0021-0064");
     expect(manifest.migrations.some((migration: { tag: string }) => migration.tag === "0049_aurion_causal_receipt_v2")).toBe(true);
-    expect(manifest.migrations.at(-1)?.tag).toBe("0063_aurion_npc_information_ecology");
+    expect(manifest.migrations.at(-1)?.tag).toBe("0064_aurion_world_entity_foundation");
 
     expect(sql).toContain("ADD COLUMN `receiptSchema`");
     expect(sql).toContain("ADD COLUMN `stageReceiptsJson`");
@@ -30,6 +30,17 @@ describe("Blocker 9 compliance repair for Blocker 3", () => {
     expect(persistence).toContain("CAUSAL_V2_STAGE_EVIDENCE_MISSING");
     expect(persistence).toContain("CAUSAL_PERSISTED_RECEIPT_HASH_MISMATCH");
     expect(AURION_ACTIVE_CAUSAL_TICK_SCHEMA).toBe(AURION_CAUSAL_TICK_SCHEMA_V2);
+  });
+
+  it("keeps generated 0064 seed hashes valid SQL string literals", () => {
+    const generator = readFileSync("scripts/seed-aurion-world-foundation.mjs", "utf8");
+    const seed = readFileSync("drizzle/seed_0064_aurion_world_foundation.sql", "utf8");
+    expect(generator).toContain("esc(hash(p))");
+    expect(generator).toContain("esc(hash(a))");
+    expect(generator).toContain("esc(hash(r))");
+    expect(generator).toContain("esc(hash(b))");
+    expect(seed).not.toMatch(/, [0-9a-f]{64}, 1\)/);
+    expect(seed.match(/, '[0-9a-f]{64}', 1\)/g)?.length).toBeGreaterThan(0);
   });
 
   it("keeps 0048 immutable while 0049 is additive", () => {
