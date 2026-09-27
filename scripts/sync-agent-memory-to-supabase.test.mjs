@@ -41,6 +41,7 @@ function fakeFetchFactory({ existingEntry = null } = {}) {
       method: options.method ?? "GET",
       body: options.body ?? null,
       authorization: options.headers?.Authorization ?? options.headers?.authorization ?? null,
+      apikey: options.headers?.apikey ?? options.headers?.Apikey ?? null,
     });
     const parsed = new URL(url);
     const path = parsed.pathname + parsed.search;
@@ -89,7 +90,7 @@ function emptyResponse() {
 
 const env = {
   SUPABASE_URL: "https://ggwyphkhxnzurregdkql.supabase.co",
-  SUPABASE_API_KEY: "test-only-not-a-real-secret",
+  SUPABASE_API_KEY: "sb_secret_test-only",
   GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
   GITHUB_REF_NAME: "main",
   GITHUB_REPOSITORY: "OuroborosCollective/Echoes_of_Aurion",
@@ -109,7 +110,8 @@ const env = {
         call.url.endsWith("/rest/v1/memory_entries"),
     ),
   );
-  assert.ok(calls.every((call) => call.authorization === "Bearer test-only-not-a-real-secret"));
+  assert.ok(calls.every((call) => call.authorization === null));
+  assert.ok(calls.every((call) => call.apikey === "sb_secret_test-only"));
 }
 
 {
@@ -143,3 +145,22 @@ const env = {
 
 assert.notEqual(gitBlobSha1(memory), sha256(memory));
 console.log("agent memory sync regression: PASS");
+
+{
+  const existingEntry = {
+    id: "memory-legacy",
+    content: memory,
+    metadata: {
+      source_blob_sha: gitBlobSha1(memory),
+      content_sha256: sha256(memory),
+    },
+  };
+  const legacyEnv = {
+    ...env,
+    SUPABASE_API_KEY: "eyJhbGciOiJub25lIn0.legacy-service-role-test",
+  };
+  const { fetchImpl, calls } = fakeFetchFactory({ existingEntry });
+  await syncMemory({ content: memory, env: legacyEnv, fetchImpl });
+  assert.ok(calls.every((call) => call.authorization === "Bearer eyJhbGciOiJub25lIn0.legacy-service-role-test"));
+  assert.ok(calls.every((call) => call.apikey === "eyJhbGciOiJub25lIn0.legacy-service-role-test"));
+}
