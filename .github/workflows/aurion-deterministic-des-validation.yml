@@ -39,4 +39,4 @@ jobs:
       - name: Typecheck
         run: pnpm check
       - name: Deterministic DES validation
-        run: pnpm des:validate
+        run: pnpm exec vitest run server/validation/deterministicDesValidationHarness.test.ts server/validation/clockworkExecutionBoundary.test.ts
