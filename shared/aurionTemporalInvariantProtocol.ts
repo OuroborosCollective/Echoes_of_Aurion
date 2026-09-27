@@ -2,6 +2,7 @@ import { canonicalSha256 } from "./aurionCanonicalHash";
 
 export const AURION_TEMPORAL_PROPERTY_PROTOCOL = "aurion.temporal-property.v1" as const;
 export const AURION_TEMPORAL_PROPERTY_VERSION = "aurion.temporal-property.v1" as const;
+export const AURION_TEMPORAL_MAX_EVENTS = 4096 as const;
 
 export const aurionTemporalPropertyIds = [
   "AURION.NPC.NO_UNGROUNDED_ACTION",
@@ -118,6 +119,7 @@ export function normalizeAurionTemporalTrace(trace: AurionTemporalTrace): Aurion
   assertNonNegativeSafeInteger(trace.endTick, "AURION_TEMPORAL_TRACE_END_INVALID");
   if (trace.endTick < trace.startTick) throw new Error("AURION_TEMPORAL_TRACE_RANGE_INVALID");
   if (trace.events.length === 0) throw new Error("AURION_TEMPORAL_TRACE_EMPTY");
+  if (trace.events.length > AURION_TEMPORAL_MAX_EVENTS) throw new Error("AURION_TEMPORAL_TRACE_TOO_LARGE");
 
   const normalized = trace.events
     .map(normalizeEvent)
