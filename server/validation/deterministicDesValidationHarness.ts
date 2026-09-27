@@ -1,15 +1,14 @@
 import { performance } from "node:perf_hooks";
 import type WebSocket from "ws";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
-import { orderCanonicalZoneIntents, hashCanonicalIntents, sanitizeIntentForHash } from "../../shared/aurionZoneIntentContract";
+import { orderCanonicalZoneIntents, sanitizeIntentForHash } from "../../shared/aurionZoneIntentContract";
 import { AURION_CAUSAL_TICK_SCHEMA_V2, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import { buildSimulationWorkPlan, canonicalizeSimulationWork, partitionSimulationWork, type SimulationWorkItem } from "../../shared/aurionSimulationWorkOrderProtocol";
-import { AURION_REPLAY_VERDICT_SCHEMA, type ReplayVerdict } from "../../shared/aurionReplayContract";
+import type { ReplayVerdict } from "../../shared/aurionReplayContract";
 import { AurionTickRecorder, type PersistedCheckpoint, type RecordedTickEntry } from "../causality/tickRecorder";
 import { AurionHeadlessCausalOracle } from "../causality/headlessCausalOracle";
 import { replayZoneTick } from "../causality/replayZoneTick";
 import { hashCanonicalZoneState, type CanonicalZoneState } from "../causality/zoneCanonicalState";
-import { globalTickRecorder } from "../causality/tickRecorder";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import type { ZoneId } from "../zoneProtocol";
 
@@ -166,7 +165,8 @@ export async function executeDeterministicDesScenario(input: Readonly<{
   const tickCount = input.tickCount ?? 2;
   if (!Number.isSafeInteger(tickCount) || tickCount < 1 || tickCount > MAX_TICKS) throw new Error("AURION_DES_TICK_BOUND_INVALID");
   const zoneId = (input.zoneId ?? ("observatory_threshold:des-" + canonicalSha256({ scenarioId: input.scenarioId, seed: input.seed }).slice(7, 31))) as ZoneId;
-  const evidenceRecorder = new AurionTickRecorder(256);\n  const zone = new AuthoritativeMovementZone(zoneId, evidenceRecorder);
+  const evidenceRecorder = new AurionTickRecorder(256);
+  const zone = new AuthoritativeMovementZone(zoneId, evidenceRecorder);
   zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
   zone.sourceRevisionOverride = input.sourceRevision;
   const socket = { readyState: 1, OPEN: 1, send() {}, close() {} } as unknown as WebSocket;
