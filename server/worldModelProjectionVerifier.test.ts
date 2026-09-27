@@ -71,9 +71,21 @@ const materializationBase = {
   },
 };
 
-function projectionContract(assetKeys = ["tower_stone"]) {
+function projectionContract(
+  assetKeys = ["tower_stone"],
+  stateHash = worldStateHash,
+) {
+  const projectionIdentity = {
+    ...identity,
+    confirmedChunkAuthorityStateHash: stateHash,
+  };
+  const projectionObservationKey = canonicalSha256({
+    domain: "aurion.structure-observation-key.v1",
+    identity: projectionIdentity,
+  });
   const materialization = {
     ...materializationBase,
+    observationKey: projectionObservationKey,
     presentation: {
       ...materializationBase.presentation,
       assetKeys,
@@ -82,6 +94,7 @@ function projectionContract(assetKeys = ["tower_stone"]) {
       domain: "aurion.structure-materialization.v1",
       materialization: {
         ...materializationBase,
+        observationKey: projectionObservationKey,
         presentation: {
           ...materializationBase.presentation,
           assetKeys,
@@ -91,7 +104,7 @@ function projectionContract(assetKeys = ["tower_stone"]) {
   };
 
   return createStructureProjectionContract({
-    identity,
+    identity: projectionIdentity,
     recipeHash: materialization.recipeHash,
     materialization,
   });
@@ -99,6 +112,7 @@ function projectionContract(assetKeys = ["tower_stone"]) {
 
 const canonicalProjection = projectionContract();
 const presentationVariant = projectionContract(["tower_stone", "tower_detail_lod"]);
+const changedStateProjection = projectionContract(["tower_stone", "tower_detail_lod"], wrongStateHash);
 
 function inputFor(contract: ReturnType<typeof projectionContract>, overrides: Record<string, unknown> = {}) {
   return {
@@ -136,7 +150,7 @@ describe("worldModelProjectionVerifier", () => {
   it("detects canonical world-state changes before treating the difference as presentation-only", () => {
     const result = compareWorldModelProjections(
       inputFor(canonicalProjection),
-      inputFor(presentationVariant, { worldStateHash: wrongStateHash }),
+      inputFor(changedStateProjection),
     );
 
     expect(result.status).toBe("FIRST_DIVERGENCE");
