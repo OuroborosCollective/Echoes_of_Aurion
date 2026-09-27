@@ -1460,7 +1460,12 @@ export async function recordWorldChunkDelta(input: {
             const footprintZ = typeof input.payload.footprintZmm === "number" && Number.isSafeInteger(input.payload.footprintZmm) ? input.payload.footprintZmm : 1_000;
             const halfX = Math.floor(Math.max(1, footprintX) / 2);
             const halfZ = Math.floor(Math.max(1, footprintZ) / 2);
-            for (const row of currentRows.filter(row => row.kind === "structure_placed")) {
+            const activePlacements = new Map<string, typeof currentRows[number]>();
+            for (const row of currentRows.filter(row => row.kind === "structure_placed" || row.kind === "structure_removed")) {
+              if (row.kind === "structure_removed") activePlacements.delete(row.targetId);
+              else activePlacements.set(row.targetId, row);
+            }
+            for (const row of activePlacements.values()) {
               let existingPayload: Record<string, unknown>;
               try { existingPayload = JSON.parse(row.payloadJson) as Record<string, unknown>; } catch { throw new Error("Vorhandenes Strukturreceipt ist ungültig."); }
               const existingX = existingPayload.xMm;
