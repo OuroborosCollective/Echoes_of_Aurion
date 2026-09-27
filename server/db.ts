@@ -1451,7 +1451,31 @@ export async function recordWorldChunkDelta(input: {
           const current = materializeWorldChunk(base, currentRows.map(parseWorldChunkDelta));
           if (input.kind === "structure_placed") {
             if (current.structures.length >= WORLD_CHUNK_STRUCTURE_MAXIMUM) throw new Error("Strukturlimit des Chunks ist erreicht.");
-            if (current.structures.some(structure => structure.positionMm.x === input.payload.xMm && structure.positionMm.z === input.payload.zMm)) throw new Error("Strukturziel ist bereits besetzt.");
+            const xMm = input.payload.xMm;
+            const zMm = input.payload.zMm;
+            if (typeof xMm !== "number" || !Number.isSafeInteger(xMm) || typeof zMm !== "number" || !Number.isSafeInteger(zMm)) {
+              throw new Error("Strukturposition ist ungültig.");
+            }
+            const footprintX = typeof input.payload.footprintXmm === "number" && Number.isSafeInteger(input.payload.footprintXmm) ? input.payload.footprintXmm : 1_000;
+            const footprintZ = typeof input.payload.footprintZmm === "number" && Number.isSafeInteger(input.payload.footprintZmm) ? input.payload.footprintZmm : 1_000;
+            const halfX = Math.floor(Math.max(1, footprintX) / 2);
+            const halfZ = Math.floor(Math.max(1, footprintZ) / 2);
+            for (const row of currentRows.filter(row => row.kind === "structure_placed")) {
+              let existingPayload: Record<string, unknown>;
+              try { existingPayload = JSON.parse(row.payloadJson) as Record<string, unknown>; } catch { throw new Error("Vorhandenes Strukturreceipt ist ungültig."); }
+              const existingX = existingPayload.xMm;
+              const existingZ = existingPayload.zMm;
+              const existingFootprintX = typeof existingPayload.footprintXmm === "number" && Number.isSafeInteger(existingPayload.footprintXmm) ? existingPayload.footprintXmm : 1_000;
+              const existingFootprintZ = typeof existingPayload.footprintZmm === "number" && Number.isSafeInteger(existingPayload.footprintZmm) ? existingPayload.footprintZmm : 1_000;
+              if (typeof existingX !== "number" || !Number.isSafeInteger(existingX) || typeof existingZ !== "number" || !Number.isSafeInteger(existingZ)) {
+                throw new Error("Vorhandene Strukturposition ist ungültig.");
+              }
+              const existingHalfX = Math.floor(Math.max(1, existingFootprintX) / 2);
+              const existingHalfZ = Math.floor(Math.max(1, existingFootprintZ) / 2);
+              const overlaps = Math.abs(existingX - xMm) < existingHalfX + halfX &&
+                Math.abs(existingZ - zMm) < existingHalfZ + halfZ;
+              if (overlaps) throw new Error("Struktur-Footprints überschneiden sich.");
+            }
           }
           if (input.kind === "road_built" && current.roads.length >= WORLD_CHUNK_ROAD_MAXIMUM) throw new Error("Straßenlimit des Chunks ist erreicht.");
         }
