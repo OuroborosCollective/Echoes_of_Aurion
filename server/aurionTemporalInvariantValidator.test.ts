@@ -304,6 +304,7 @@ describe("AIM-618 temporal invariant validator", () => {
 
     const duplicateId: AurionTemporalTrace = {
       ...trace,
+      endTick: 13,
       events: [
         ...trace.events,
         { ...trace.events[0]!, tick: 13, sequence: 0 },
