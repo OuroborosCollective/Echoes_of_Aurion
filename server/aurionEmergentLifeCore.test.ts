@@ -3,7 +3,7 @@ import {
   applyEmergentLifeImpacts,
   normalizeEmergentLifeImpacts,
   resolveEmergentLifeStep,
-} from "./aurionEmergentLifeCore";
+} from "../shared/aurionEmergentLifeCore";
 
 const baseNeeds = {
   safety: 8_000,
