@@ -65,7 +65,7 @@ describe("Aurion systemic quest opportunity compiler", () => {
     expect(second).toEqual(first);
     expect(first.opportunities.opportunities.length).toBeGreaterThan(0);
     expect(first.opportunities.opportunities.length).toBeLessThanOrEqual(8);
-    expect(first.candidateSetHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(first.opportunities.candidateSetHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.opportunities.opportunities.every(item =>
       item.sourceReceiptIds.length === 1 &&
       item.sourceReceiptIds[0] === decision.causalReceiptHash &&
