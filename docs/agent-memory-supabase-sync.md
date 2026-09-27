@@ -36,4 +36,4 @@ For compatibility, it also accepts the legacy repository secret name:
 
 `SUPABASE_SERVICE_ROLE_KEY`.
 
-The credential is never committed to the repository and is only supplied to the workflow process through GitHub Actions secrets.
+The credential is never committed to the repository and is only supplied to the workflow process through GitHub Actions secrets. Current Supabase `sb_secret_...` keys are sent only in the `apikey` header; the legacy `SUPABASE_SERVICE_ROLE_KEY` path additionally uses the JWT bearer header.
