@@ -79,7 +79,7 @@ describeReal("AIM-595 systemic quest opportunities — real MariaDB source recei
       maxCandidates: 8,
     });
 
-    expect(compilation.opportunities.every(opportunity => opportunity.sourceReceiptIds.includes(persisted.causalReceiptHash))).toBe(true);
+    expect(compilation.opportunities.opportunities.every(opportunity => opportunity.sourceReceiptIds.includes(persisted.causalReceiptHash))).toBe(true);
     expect(compilation.candidateSetHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   }, 30_000);
 });
