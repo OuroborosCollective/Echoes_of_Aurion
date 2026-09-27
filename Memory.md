@@ -1439,3 +1439,23 @@ Status: IMPLEMENTED; exact-head CI and merge verification pending.
 Change: Added a pure `aurion.zone-network-delay-simulation.v1` validation lane with explicit delay schedules, canonical delivery ordering, duplicate idempotency, causal-receipt binding, forged/late-message rejection and replay comparison across multiple cross-zone schedules. The simulator reports transport-dependent delivery evidence separately from the canonical receipt-bound gameplay verdict and does not alter production WebSocket semantics or persistence.
 
 Evidence: Focused deterministic scenario tests and `pnpm check` are required before PR creation; exact-head GitHub validation remains required after this memory-bearing commit.
+
+
+### 2026-09-27 — Issue #590 deterministic world-model projection boundary verifier
+Status: VERIFIED source design; final exact-head gate pending
+Task: Add the missing Aurion-native evidence adapter for the world-model → projection boundary without introducing a second world authority.
+Decisions:
+- Reuse the existing `StructureProjectionContract` and `canonicalSha256` encoding.
+- Require exact `sourceRevision` and confirmed canonical chunk-state hash before reporting `MATCH`.
+- Detached or tampered projection contracts remain `UNPROVABLE`.
+- Separate presentation-only projection changes from canonical revision/state/identity divergence.
+Touched surfaces:
+- `server/worldModelProjectionVerifier.ts`
+- `server/worldModelProjectionVerifier.test.ts`
+Evidence:
+- Current main baseline before this integration: `7ad1c2783c4a7fcf5f33eee1d3bd4e553f337bc9`.
+- The implementation was previously exercised on the same source/test pair before this main rebase; exact-head Runtime Candidate, Runtime Container Proof, Local Test Pack and AIM-292 MariaDB/AX1 lanes completed successfully on the corrected pre-memory code head.
+- A real regression was found and fixed: the canonical-state-change fixture initially supplied evidence inconsistent with the projection contract; the regression was changed to bind the candidate evidence to its actual changed canonical identity.
+Learned: Projection hashes alone are insufficient provenance. The verifier must validate the actual canonical projection contract against the authoritative revision/state boundary before treating a visual difference as presentation-only.
+Open: Final exact-head gates must be regenerated on this main-rebased, Memory-bearing revision before merge.
+Next safe step: run the final exact-head regression/runtime gates, then merge the green PR.
