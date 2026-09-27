@@ -153,6 +153,26 @@ describe("AIM-618 temporal invariant validator", () => {
     expect(report.reportHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
+  it("is invariant to event input ordering", () => {
+    const trace = liveTrace();
+    const reversed = { ...trace, events: [...trace.events].reverse() };
+    expect(aurionTemporalTraceHash(reversed)).toBe(aurionTemporalTraceHash(trace));
+
+    const expected = aurionTemporalTraceHash(trace);
+    const first = validateAurionTemporalTrace(
+      reversed,
+      property("AURION.REPLAY.STABLE_HASH", { expectedTraceHash: expected }),
+    );
+    const second = validateAurionTemporalTrace(
+      trace,
+      property("AURION.REPLAY.STABLE_HASH", { expectedTraceHash: expected }),
+    );
+
+    expect(first.status).toBe("PASS");
+    expect(second.status).toBe("PASS");
+    expect(first.observedTraceHash).toBe(second.observedTraceHash);
+  });
+
   it("produces the same first failing tick and verdict on repeated runs", () => {
     const trace: AurionTemporalTrace = {
       ...liveTrace(),
