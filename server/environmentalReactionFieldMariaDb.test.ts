@@ -124,12 +124,16 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
     expect(fielded.decision.decisionHash).not.toBe(neutral.decision.decisionHash);
 
     const source = await readConfirmedMerchantActionSource(merchantNpcId);
-    expect(source).toEqual({ receiptId: fielded.decision.receiptId, resolutionIndex: 1 });
+    expect(source?.resolutionIndex).toBe(1);
+    const [fieldedReceipts] = await pool.query<RowDataPacket[]>("SELECT id,decisionHash FROM aurionNpcDecisionReceipts WHERE npcId=? AND resolutionIndex=1",[merchantNpcId]);
+    expect(fieldedReceipts).toHaveLength(1);
+    expect(source?.receiptId).toBe(fieldedReceipts[0].id);
+    expect(fieldedReceipts[0].decisionHash).toBe(fielded.decision.decisionHash);
 
     const action = await executeConfirmedMerchantAction({
       worldSeed: "aim592-db-world",
       homeHubId: homeHub,
-      sourceDecisionReceiptId: source.receiptId,
+      sourceDecisionReceiptId: source!.receiptId,
     });
     expect(action.status).toBe("committed");
     if (action.status !== "committed") return;
@@ -144,7 +148,7 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
     expect(rows[0].sourceGoalHash).toMatch(/^[a-f0-9]{64}$/);
 
     const [readbacks] = await pool.query<RowDataPacket[]>(
-      "SELECT effectsHash,sourceRevision FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",
+      "SELECT id,effectsHash,sourceRevision FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",
       [action.actionReceiptId],
     );
     const [links] = await pool.query<RowDataPacket[]>(
@@ -159,7 +163,7 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
     expect(links[0].memoryReceiptId).toMatch(/^npm4_/);
   });
 
-  it("keeps the same field stable across retries and rejects presentation-only divergence", async () => {
+  it("keeps the same field stable across retries and ignores presentation-only divergence", async () => {
     const world = await resolveAndRecordWorld({
       worldSeed: "aim592-db-world",
       regionId: homeHub,
