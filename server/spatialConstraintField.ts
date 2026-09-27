@@ -8,11 +8,11 @@ import {
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import type { WorldChunkCoordinate } from "../shared/worldChunkProtocol";
 import { worldNatureCollision } from "./worldNatureCollision";
-import {
-  resolveNpcUtilityDecision,
-  type NpcUtilityCandidate,
-  type NpcUtilityDecision,
-  type NpcUtilityPlannerContext,
+import { resolveNpcUtilityDecision } from "./npcUtilityPlanner";
+import type {
+  NpcUtilityCandidate,
+  NpcUtilityDecision,
+  NpcUtilityPlannerContext,
 } from "../shared/npcUtilityPlannerProtocol";
 
 export type SpatialNpcCandidateRoute = Readonly<{
