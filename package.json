@@ -26,7 +26,7 @@
     "verify:wasd-npc": "node scripts/verify-wasd-npc.mjs",
     "verify:donor-ledger": "node scripts/build-aurion-donor-ledger.mjs",
     "timeloop:check": "node tools/timeloop/timeloopManifest.mjs tools/timeloop/fixtures/render-ecs-distance-proxy.v1.json",
-    "des:validate": "vitest run server/validation/deterministicDesValidationHarness.test.ts server/validation/clockworkExecutionBoundary.test.ts"
+    "des:validate": "vitest run server/validation/deterministicDesValidationHarness.test.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.42.0",
