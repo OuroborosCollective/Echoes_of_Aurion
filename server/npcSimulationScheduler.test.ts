@@ -10,7 +10,11 @@ import {
 import {
   createStructureProjectionContract,
 } from "../shared/structureProjectionProtocol";
-import { NpcSimulationScheduler, planNpcSimulationTick } from "./npcSimulationScheduler";
+import {
+  NpcSimulationScheduler,
+  planNpcSimulationTick,
+  planNpcSimulationTickWithCausalBudget,
+} from "./npcSimulationScheduler";
 
 const identity = {
   protocol: "aurion.structure-observation.v1" as const,
@@ -165,5 +169,35 @@ describe("AIM-485 deterministic multi-timescale scheduler", () => {
       lastConfirmedEpoch: 7,
       structureObservations: [future],
     })).toThrow("NPC_STRUCTURE_OBSERVATION_FUTURE_TICK");
+  });
+
+  it("feeds the deterministic causal budget into the existing scheduler without creating a second scheduler", () => {
+    const result = planNpcSimulationTickWithCausalBudget({
+      causalBudget: {
+        npcId: "npc-causal-1",
+        importance: 0,
+        hasCriticalDependency: false,
+        hasLocalDependency: true,
+        hasRegionalDependency: false,
+        requiredGuarantee: "LOCAL_SOCIAL_ECONOMY",
+        simulationInterest: false,
+        networkInterest: false,
+        presentationInterest: false,
+        lastResolutionIndex: 4,
+        currentResolutionIndex: 4,
+        sourceRevision: identity.sourceRevision,
+        maxCatchupSteps: 8,
+      },
+      currentTick: 100,
+      lastEvaluationTick: 99,
+      epoch: 7,
+      lastConfirmedEpoch: 7,
+    });
+    expect(result.npcId).toBe("npc-causal-1");
+    expect(result.causalBudget.tier).toBe("REDUCED");
+    expect(result.schedule.evaluation.mode).toBe("REDUCED");
+    expect(result.schedule.evaluation.intervalTicks).toBe(
+      DEFAULT_NPC_SIMULATION_CADENCE.reducedIntervalTicks,
+    );
   });
 });
