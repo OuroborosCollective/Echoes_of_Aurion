@@ -116,8 +116,8 @@ const changedStateProjection = projectionContract(["tower_stone", "tower_detail_
 
 function inputFor(contract: ReturnType<typeof projectionContract>, overrides: Record<string, unknown> = {}) {
   return {
-    worldRevision,
-    worldStateHash,
+    worldRevision: contract.identity.sourceRevision,
+    worldStateHash: contract.identity.confirmedChunkAuthorityStateHash,
     projectionHash: contract.projectionHash,
     recipeHash: contract.recipeHash,
     observationKey: contract.observationKey,
