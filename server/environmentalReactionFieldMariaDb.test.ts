@@ -143,7 +143,7 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
       [action.actionReceiptId],
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].sourceDecisionReceiptId).toBe(fielded.decision.receiptId);
+    expect(rows[0].sourceDecisionReceiptId).toBe(fieldedReceipts[0].id);
     expect(rows[0].sourceGoal).toBe("seek_safety");
     expect(rows[0].sourceGoalHash).toMatch(/^[a-f0-9]{64}$/);
 
