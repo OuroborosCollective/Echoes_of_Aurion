@@ -1426,3 +1426,9 @@ Insight: Temporal validation is strongest as a bounded, local evidence layer ove
 
 Evidence: Exact PR head `fe96cf9dcfac90d44910019e5e9b4daf20eb7eb1` passed Aurion Local Test Pack, Runtime Candidate, Runtime Container Proof and AIM-292 MariaDB/AX1 regression. A real Local Test Pack regression on the prior head was fixed: the duplicate-ID test fixture had placed the duplicate outside the trace scope, so canonical normalization correctly filtered it. Final exact-head revalidation is required for this new memory-bearing revision before merge.
 
+### 2026-09-27 — Issue #602 World-Generation Evidence Passport
+Status: IMPLEMENTED; exact-head CI and merge verification pending.
+
+Change: Added `aurion.world-generation.evidence-passport.v1` with canonical binding for world-generation revision, generator/ruleset/grammar/seed-policy identity, canonical graph, chunk projections, terrain and structure invariants, CAG request/response/result hashes, verification verdict and test-suite evidence. Added a fail-closed `RULESET_CANDIDATE` -> `RULESET_ACTIVE` promotion receipt; CAG divergence or unprovable evidence never promotes and no runtime/persistence authority is mutated.
+
+Evidence: 22/22 focused tests passed across the new passport plus existing world-generation evidence/gate contracts; `pnpm check` passed. Exact-head GitHub validation remains required after the append-only memory commit.
