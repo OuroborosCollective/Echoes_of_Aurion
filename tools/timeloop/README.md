@@ -28,6 +28,7 @@ The companion Accelergy/Timeloop infrastructure repository is not imported into 
 
 ## Running the bridge
 pnpm timeloop:check
+node tools/timeloop/verify-manifest.mjs
 pnpm exec vitest run tools/timeloop/timeloopManifest.test.mjs
 
 This only validates the deterministic manifest/provenance boundary. It does not execute the upstream Timeloop mapper.
