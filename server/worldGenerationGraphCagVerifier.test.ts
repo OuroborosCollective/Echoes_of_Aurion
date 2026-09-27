@@ -96,10 +96,9 @@ describe("deterministicWorldGraphGrammarCompiler", () => {
     expect(() =>
       compileDeterministicWorldGraphGrammar({
         ...base,
-        nodes: [
-          { ...base.nodes[1]!, parentId: "missing" },
-          base.nodes[0]!,
-        ],
+        nodes: base.nodes.map((node, index) =>
+          index === 1 ? { ...node, parentId: "missing" } : node,
+        ),
       }),
     ).toThrow("PARENT_REFERENCE_MISSING");
 
