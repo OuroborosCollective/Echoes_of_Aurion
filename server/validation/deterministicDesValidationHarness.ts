@@ -1,9 +1,9 @@
 import { performance } from "node:perf_hooks";
 import type WebSocket from "ws";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
-import { orderCanonicalZoneIntents, hashCanonicalIntents, type AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
+import { orderCanonicalZoneIntents, hashCanonicalIntents, sanitizeIntentForHash } from "../../shared/aurionZoneIntentContract";
 import { AURION_CAUSAL_TICK_SCHEMA_V2, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
-import { buildSimulationWorkPlan, partitionSimulationWork, type SimulationWorkItem } from "../../shared/aurionSimulationWorkOrderProtocol";
+import { buildSimulationWorkPlan, canonicalizeSimulationWork, partitionSimulationWork, type SimulationWorkItem } from "../../shared/aurionSimulationWorkOrderProtocol";
 import { AURION_REPLAY_VERDICT_SCHEMA, type ReplayVerdict } from "../../shared/aurionReplayContract";
 import type { PersistedCheckpoint, RecordedTickEntry } from "../causality/tickRecorder";
 import { AurionHeadlessCausalOracle } from "../causality/headlessCausalOracle";
@@ -189,8 +189,7 @@ export async function executeDeterministicDesScenario(input: Readonly<{
   const firstEntry = entries[0]!;
   const terminal = entries.at(-1)!.postState ?? zone.getCanonicalZoneState();
   const startState = firstEntry.preState!;
-  const inputSet = entries.flatMap(entry => entry.intents ?? []).map(intent => ({ ...intent, connectionId: undefined }));
-  const inputSetHash = canonicalSha256({ domain: "aurion.des-validation.input-set.v1", intents: orderCanonicalZoneIntents(structuredClone(inputSet)) });
+  const inputSetHash = canonicalSha256({ domain: "aurion.des-validation.input-set.v1", intents: orderCanonicalZoneIntents(entries.flatMap(entry => entry.intents ?? [])).map(sanitizeIntentForHash) });
   const scenarioManifestHash = manifestHash({ scenarioId: input.scenarioId, seed: input.seed, sourceRevision: input.sourceRevision, rulesetVersion: receipts[0]!.rulesetVersion, startStateHash: hashCanonicalZoneState(startState), inputSetHash });
   const replayVerdicts: ReplayVerdict[] = [];
   for (const entry of entries) replayVerdicts.push(replayZoneTick({ preState: entry.preState!, intents: entry.intents!, expectedReceipt: entry.receipt }));
@@ -198,7 +197,7 @@ export async function executeDeterministicDesScenario(input: Readonly<{
   const workItems = buildWorkItems(entries);
   const serialPlan = buildSimulationWorkPlan({ sourceRevision: input.sourceRevision, logicalTick: tickCount, workItems, maxWorkItems: Math.max(1, workItems.length) });
   const partitions = partitionSimulationWork(workItems, 4);
-  const recombined = partitions.flat().sort((a,b) => a.phase.localeCompare(b.phase) || a.resolutionIndex - b.resolutionIndex || a.entityId.localeCompare(b.entityId) || a.actionId.localeCompare(b.actionId) || a.workId.localeCompare(b.workId));
+  const recombined = canonicalizeSimulationWork(partitions.flat());
   const parallelPlan = buildSimulationWorkPlan({ sourceRevision: input.sourceRevision, logicalTick: tickCount, workItems: recombined, maxWorkItems: Math.max(1, workItems.length) });
   const schedulerEquivalence = serialPlan.planHash === parallelPlan.planHash ? "PASS" : "FAIL";
   const oracle = new AurionHeadlessCausalOracle(memoryPersistence({ id: "des:" + input.scenarioId, worldId: startState.worldId, zoneId, tick: 0, snapshotHash: hashCanonicalZoneState(startState), state: startState, reconciled: 1 }, entries));
