@@ -45,6 +45,44 @@ describeWithWorldDatabase("World chunk action receipts E2E", () => {
     if (db) expect(await db.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.chunkX, coordinate.x))).toHaveLength(2);
   }, 30_000);
 
+  it("persists an open-world homestead footprint and rejects overlapping placement", async () => {
+    const homestead = {
+      actorUserId: ACTOR_ID,
+      coordinate,
+      baseRevision: 1,
+      kind: "structure_placed" as const,
+      targetId: "structure:2146999980:world-e2e:homestead-1",
+      idempotencyKey: "world-e2e:homestead-0001",
+      payload: {
+        assetKey: "aurion_open_world_homestead",
+        xMm: 32_000,
+        zMm: 32_000,
+        rotationQuarterTurns: 0,
+        footprintXmm: 6_000,
+        footprintZmm: 5_000,
+        placeKind: "homestead",
+        ownerId: String(ACTOR_ID),
+        sourceRevision: "0123456789abcdef0123456789abcdef01234567",
+        placementHash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      },
+    };
+    const first = await recordWorldChunkDelta(homestead);
+    expect(first.delta.payload.assetKey).toBe("aurion_open_world_homestead");
+    await expect(recordWorldChunkDelta({
+      ...homestead,
+      targetId: "structure:2146999980:world-e2e:homestead-2",
+      idempotencyKey: "world-e2e:homestead-0002",
+      payload: { ...homestead.payload, xMm: 34_000, zMm: 32_000 },
+    })).rejects.toThrow("Footprints");
+    const db = await getDb();
+    expect(db).not.toBeNull();
+    if (db) {
+      const rows = await db.select().from(aurionWorldChunkDeltas).where(eq(aurionWorldChunkDeltas.chunkX, coordinate.x));
+      expect(rows).toHaveLength(1);
+      expect(JSON.parse(rows[0]!.payloadJson)).toMatchObject({ assetKey: "aurion_open_world_homestead", footprintXmm: 6_000, footprintZmm: 5_000 });
+    }
+  }, 30_000);
+
   it("permits a removal only for the placing actor and only once", async () => {
     const targetId = "structure:2146999980:world-e2e:owned-place";
     await recordWorldChunkDelta(placeInput(ACTOR_ID, "world-e2e:owned-place", targetId));

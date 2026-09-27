@@ -52,12 +52,28 @@ export function buildConfirmedChunkMeshes(payload: ChunkAssetPayload, terrain: (
   try {
     for (const structure of payload.structures) {
       const marker = structure.assetKey === "aurion_tripo_starpath_marker";
-      if (!marker && structure.assetKey !== "aurion_tripo_garden_border") throw Error("PROJECTION_STRUCTURE_POLICY_UNSUPPORTED");
+      const gardenBorder = structure.assetKey === "aurion_tripo_garden_border";
+      const homestead = structure.assetKey === "aurion_open_world_homestead";
+      if (!marker && !gardenBorder && !homestead) throw Error("PROJECTION_STRUCTURE_POLICY_UNSUPPORTED");
+      const p = point(structure.positionMm);
+      if (homestead) {
+        const house = new THREE.Group();
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(5.5, 2.6, 4.5), new THREE.MeshStandardMaterial({ color: 0x8f7a62 }));
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(3.8, 2.4, 4), new THREE.MeshStandardMaterial({ color: 0x4a3b34 }));
+        wall.position.y = 1.3;
+        roof.position.y = 3.8;
+        roof.rotation.y = Math.PI / 4;
+        house.add(wall, roof);
+        house.name = structure.id;
+        house.position.set(p.x, terrain(p.x, p.z), p.z);
+        group.add(house);
+        continue;
+      }
       const height = marker ? 1.5 : 0.3;
       const geometry = marker ? new THREE.CylinderGeometry(0.15, 0.3, height, 6) : new THREE.BoxGeometry(2, height, 0.3);
       const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: marker ? 0xc6a459 : 0x566a3b }));
       mesh.name = structure.id; group.add(mesh);
-      const p = point(structure.positionMm); mesh.position.set(p.x, terrain(p.x, p.z) + height / 2, p.z);
+      mesh.position.set(p.x, terrain(p.x, p.z) + height / 2, p.z);
     }
     for (const road of payload.roads) {
       const a = point(road.fromMm), b = point(road.toMm), length = Math.hypot(b.x - a.x, b.z - a.z);

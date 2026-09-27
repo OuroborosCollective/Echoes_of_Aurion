@@ -1,4 +1,5 @@
-import { splitWorldChunkPositionMm } from "../shared/worldChunkProtocol";
+import { isBaseChunkRoadTile, splitWorldChunkPositionMm } from "../shared/worldChunkProtocol";
+import { footprintForOpenWorldPlace, resolveOpenWorldPlacement } from "../shared/aurionOpenWorldPlaceProtocol";
 import {
   WORLD_CHUNK_BASE_REVISION,
   WORLD_CHUNK_SIZE_MM,
@@ -14,7 +15,7 @@ export const WORLD_CHUNK_ROAD_MAXIMUM = 32 as const;
 
 export type WorldChunkActionIntent =
   | { kind: "harvest_resource"; coordinate: WorldChunkCoordinate; expectedBaseRevision: number; expectedBaseHash: string; resourceId: string; idempotencyKey: string }
-  | { kind: "place_structure"; coordinate: WorldChunkCoordinate; expectedBaseRevision: number; expectedBaseHash: string; assetKey: "aurion_tripo_starpath_marker" | "aurion_tripo_garden_border"; xMm: number; zMm: number; idempotencyKey: string }
+  | { kind: "place_structure"; coordinate: WorldChunkCoordinate; expectedBaseRevision: number; expectedBaseHash: string; assetKey: "aurion_tripo_starpath_marker" | "aurion_tripo_garden_border" | "aurion_open_world_homestead"; xMm: number; zMm: number; rotationQuarterTurns?: number; sourceRevision?: string; idempotencyKey: string }
   | { kind: "remove_structure"; coordinate: WorldChunkCoordinate; expectedBaseRevision: number; expectedBaseHash: string; structureId: string; xMm: number; zMm: number; idempotencyKey: string }
   | { kind: "build_road"; coordinate: WorldChunkCoordinate; expectedBaseRevision: number; expectedBaseHash: string; fromXmm: number; fromZmm: number; toXmm: number; toZmm: number; idempotencyKey: string };
 
@@ -90,9 +91,59 @@ export function resolveWorldChunkAction(input: {
     assertInChunk(intent.xMm, "structure xMm");
     assertInChunk(intent.zMm, "structure zMm");
     assertReachable(actorLocal, { x: intent.xMm, z: intent.zMm });
+    const targetId = derivedTargetId("structure", input.actorUserId, intent.idempotencyKey);
+    if (intent.assetKey === "aurion_open_world_homestead") {
+      if (!intent.sourceRevision) throw new Error("Open-world homestead placement requires the confirmed source revision");
+      const footprintMm = footprintForOpenWorldPlace("homestead");
+      const placement = resolveOpenWorldPlacement({
+        worldId: input.worldId,
+        sourceRevision: intent.sourceRevision,
+        chunkCoordinate: intent.coordinate,
+        structureId: targetId,
+        ownerId: String(input.actorUserId),
+        kind: "homestead",
+        xMm: intent.xMm,
+        zMm: intent.zMm,
+        rotationQuarterTurns: intent.rotationQuarterTurns ?? 0,
+        footprintMm,
+      });
+      const halfX = Math.floor(footprintMm.x / 2);
+      const halfZ = Math.floor(footprintMm.z / 2);
+      const intersectsResource = base.resources.some(resource =>
+        resource.positionMm.x >= placement.xMm - halfX &&
+        resource.positionMm.x <= placement.xMm + halfX &&
+        resource.positionMm.z >= placement.zMm - halfZ &&
+        resource.positionMm.z <= placement.zMm + halfZ,
+      );
+      if (intersectsResource) throw new Error("Open-world homestead footprint intersects an authoritative world resource");
+      const tileSizeMm = WORLD_CHUNK_SIZE_MM / 16;
+      const centerTile = base.tiles.find(tile =>
+        tile.x === Math.floor(placement.xMm / tileSizeMm) &&
+        tile.z === Math.floor(placement.zMm / tileSizeMm),
+      );
+      if (centerTile && isBaseChunkRoadTile(centerTile)) {
+        throw new Error("Open-world homestead cannot be placed on an authoritative road surface");
+      }
+      return Object.freeze({
+        kind: "structure_placed",
+        targetId,
+        payload: Object.freeze({
+          assetKey: intent.assetKey,
+          xMm: placement.xMm,
+          zMm: placement.zMm,
+          rotationQuarterTurns: placement.rotationQuarterTurns,
+          footprintXmm: footprintMm.x,
+          footprintZmm: footprintMm.z,
+          placeKind: placement.kind,
+          ownerId: placement.ownerId,
+          sourceRevision: placement.sourceRevision,
+          placementHash: placement.placementHash,
+        }),
+      });
+    }
     return Object.freeze({
       kind: "structure_placed",
-      targetId: derivedTargetId("structure", input.actorUserId, intent.idempotencyKey),
+      targetId,
       payload: Object.freeze({ assetKey: intent.assetKey, xMm: intent.xMm, zMm: intent.zMm }),
     });
   }
