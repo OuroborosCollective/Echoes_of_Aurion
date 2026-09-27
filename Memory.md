@@ -1469,3 +1469,13 @@ Change: Added Aurion-native `aurion-game-theory-ir.v1` and a bounded compiler th
 Insight: Game Theory is useful as a compact policy/model layer only when its output is evidence-bound and downstream of canonical observations; final gameplay authority must remain on the existing planner -> Action Gateway -> Causal/Effect receipt path. Wolfram/GameTheoryData remains an offline research/model source, not runtime truth.
 
 Evidence: Pre-memory exact head `d2576ceb6a3426216fd85c1baa849cb9d1dfa713` passed Runtime Candidate #1091, Runtime Container Proof #1090, Local Test Pack #1652 and AIM-292 MariaDB/AX1 Proof #1444, all with successful conclusions. MariaDB journal apply, transaction/replay/readback, production build, autonomous tick, browser three-screen projection, typecheck, repository regression and offline evidence-pack stages completed successfully. Memory-bearing exact-head revalidation is mandatory before merge; no production database mutation was performed.
+
+
+### 2026-09-27 — PR #628 / Issue #556 canonical simulation work ordering
+Status: IMPLEMENTATION COMPLETE; memory-bearing exact-head revalidation required.
+
+Change: Added `aurion.simulation-work-order.v1` as the bounded cross-phase ordering layer above the existing Causal Tick. It defines the canonical phase order WORLD_IMPACT -> ECOLOGY -> VITAL_NEEDS -> HOUSEHOLD -> LOCAL_ECONOMY -> SOCIAL_GROUP -> FACTION_TERRITORY -> GOVERNANCE -> LONG_HORIZON, deterministic tie-breaks, revision/tick/hash validation, bounded overflow as explicit deferred work, and deterministic worker partition/recombination. #485 NPC cadence remains the existing scheduler authority; no second scheduler or persistence authority was introduced.
+
+Insight: Deterministic cadence and deterministic commit order are separate concerns. Cadence may select when an NPC is eligible; the work-order contract must still make cross-producer execution independent of input arrival, Promise completion order, worker partitioning, wall-clock and host state. Deferred work must be explicit and hash-bound rather than silently dropped.
+
+Evidence: Pre-memory exact head `55e9df390a189b17f95073774304ade9f9207260` passed Runtime Candidate #1093, Runtime Container Proof #1092 and Local Test Pack #1655, all successfully. Local Pack completed migration/ownership/replay/Causal-Wave/World-Generation/TypeScript/repository regression plus exact offline-pack hashing/upload; Container Proof built and booted the revision-bound artifact against pinned MariaDB; Runtime Candidate completed exact-source/authority/world-generation and immutable runtime proof. No production database mutation was performed. Memory-bearing exact-head revalidation is mandatory before merge.
