@@ -85,7 +85,7 @@ export function compileEnvironmentalReactionFieldFromSignals(input: {
  * environmental state can influence NPC needs, while NPC state cannot rewrite it.
  */
 export function environmentalReactionNeedEvents(field: EnvironmentalReactionField): readonly NpcNeedEvent[] {
-  if (!/^[a-f0-9]{64}$/.test(field.fieldHash) || !/^[a-f0-9]{64}$/.test(field.sourceStateHash)) {
+  if (!/^sha256:[a-f0-9]{64}$/.test(field.fieldHash) || !/^[a-f0-9]{64}$/.test(field.sourceStateHash)) {
     throw new Error("ENVIRONMENTAL_REACTION_FIELD_IDENTITY_INVALID");
   }
   const safetyDeltaBps = -Math.floor(q16ToBps(field.hazardQ16) * 70 / 100);
