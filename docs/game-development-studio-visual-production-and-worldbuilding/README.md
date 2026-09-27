@@ -173,7 +173,7 @@ Der Merge beweist Repository-/Candidate-Integration. Ein Produktions-Deploy oder
 
 Für Authoring-Integrationen gilt weiterhin:
 
-`Memory.md lesen → Integration → Runtime/Regression/Evidence → genau ein kurzer Memory.md-Eintrag → erst dann Merge → Post-Merge-Readback`
+`Memory.md lesen → Integration → Runtime/Regression/Evidence → Exact-Head-Gates → Merge → automatischer Memory.md-Eintrag → Post-Merge-Readback`
 
 Für Content gilt zusätzlich:
 
