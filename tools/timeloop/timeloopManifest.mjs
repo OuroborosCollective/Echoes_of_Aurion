@@ -29,6 +29,12 @@ function assertIdentifier(value, field) {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("TIMELOOP_MANIFEST_INVALID_" + field.toUpperCase());
 }
 
+function assertRepositoryPath(value, field) {
+  if (typeof value !== "string" || value.length < 1 || value.startsWith("/") || value.includes("..") || value.includes("\\") || !/^[A-Za-z0-9._/-]+$/.test(value)) {
+    throw new Error("TIMELOOP_MANIFEST_INVALID_" + field.toUpperCase());
+  }
+}
+
 export function normalizeTimeloopManifest(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("TIMELOOP_MANIFEST_INVALID_ROOT");
   assertNoForbiddenFields(input);
@@ -38,7 +44,7 @@ export function normalizeTimeloopManifest(input) {
   assertIdentifier(input.workloadId, "workload_id"); assertIdentifier(input.scenarioId, "scenario_id");
   if (!SHA1_RE.test(input.sourceRevision)) throw new Error("TIMELOOP_MANIFEST_SOURCE_REVISION_INVALID");
   if (!input.sourceEvidence || typeof input.sourceEvidence !== "object") throw new Error("TIMELOOP_MANIFEST_SOURCE_EVIDENCE_REQUIRED");
-  assertIdentifier(input.sourceEvidence.path, "source_path");
+  assertRepositoryPath(input.sourceEvidence.path, "source_path");
   if (!SHA1_RE.test(input.sourceEvidence.blobSha)) throw new Error("TIMELOOP_MANIFEST_SOURCE_BLOB_SHA_INVALID");
   if (input.sourceEvidence.kind !== "STATIC_REPOSITORY_PROVENANCE") throw new Error("TIMELOOP_MANIFEST_SOURCE_EVIDENCE_KIND_INVALID");
   if (input.timeloop?.repository !== AURION_TIMELOOP_UPSTREAM.repository) throw new Error("TIMELOOP_MANIFEST_UPSTREAM_REPOSITORY_INVALID");
