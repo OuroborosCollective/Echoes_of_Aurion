@@ -123,7 +123,7 @@ export function deriveOpenWorldSocialPlace(input: OpenWorldSocialPlaceInput): Op
   const placeId = identifier(input.placeId, "place_id");
   const sourceRevision = identifier(input.sourceRevision, "source_revision");
   if (!/^[a-f0-9]{40}$/.test(sourceRevision)) throw new Error("OPEN_WORLD_SOCIAL_PLACE_SOURCE_REVISION_INVALID");
-  const residentIds = Array.from(new Set(input.residentIds.map(identifier).filter(Boolean))).sort(compare);
+  const residentIds = Array.from(new Set(input.residentIds.map(value => identifier(value, "resident_id")))).sort(compare);
   assertNonNegative(input.householdCount, "household_count");
   assertNonNegative(input.activeWorkers, "active_workers");
   assertNonNegative(input.infrastructureLevel, "infrastructure_level");
