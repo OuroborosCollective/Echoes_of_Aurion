@@ -1459,3 +1459,14 @@ Evidence:
 Learned: Projection hashes alone are insufficient provenance. The verifier must validate the actual canonical projection contract against the authoritative revision/state boundary before treating a visual difference as presentation-only.
 Open: Final exact-head gates must be regenerated on this main-rebased, Memory-bearing revision before merge.
 Next safe step: run the final exact-head regression/runtime gates, then merge the green PR.
+
+### 2026-09-27 — Issue #592 deterministic Environmental Reaction Field
+Status: IMPLEMENTED; final exact-head gates passed before this append-only memory revision; revalidation required after memory update.
+
+Change: Added Aurion-owned `aurion.environmental-reaction-field.v1` as a deterministic, fixed-point projection of confirmed `WorldReaction` state into bounded hazard/opportunity/traversal/resource-pressure values. The field can contribute one-way, receipt-bound NPC Need evidence through the existing `resolveNpcNeeds` / `decideNpcGoal` path and then continue through the existing MariaDB-backed NPC action gateway; no second planner, world authority, migration or persistence authority was introduced.
+
+Insight: Derived environmental state must remain subordinate to confirmed world evidence: the field carries the originating reaction hash/receipt and resolution index, uses the repository's canonical `sha256:<64hex>` encoding, and presentation-only data does not alter the gameplay field hash. The integration tests exposed and fixed three real contract/fixture errors before the final green run: canonical hash-format mismatch, fixed-point need-delta conversion, and confusing an effect readback hash with the action effect-set hash.
+
+Evidence: Final code head `c185d0019ecbc4974ac62caf32da6591de26596e` passed the dedicated Deterministic field contract and real MariaDB NPC gateway proof, plus exact-head immutable Runtime Candidate, candidate Container Proof, Local Test Pack/offline pack, MariaDB receipts/restart/AX1 projection, AIM-292, AIM-294, real group-instance, capsule rebuild and profession regression lanes; Supabase Preview was skipped by workflow configuration. No production schema mutation was performed.
+
+Open: Revalidate the same exact-head gates for this Memory-bearing commit before merging #626.
