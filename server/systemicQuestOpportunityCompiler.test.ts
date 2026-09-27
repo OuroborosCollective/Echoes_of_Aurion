@@ -105,7 +105,6 @@ describe("Aurion systemic quest opportunity compiler", () => {
     });
     const registry = new QuestTemplateRegistry([template]);
     const facts = new WorldFactEngine();
-    const runtime = new QuestRuntimeEngine(undefined, undefined as never);
 
     const firstEngine = new QuestRuntimeEngine(facts, registry);
     const first = compileSystemicQuestIntoExistingRuntime({
