@@ -67,7 +67,7 @@ export function WorldMapModal({ open, onClose, world, position, remotePlayers, s
 }
 
 export function ClassSelectModal({ open, onClose, tracks, state }: { open: boolean; onClose: () => void; tracks?: readonly Readonly<{ trackKind: string; trackId: string; levelExact: string }>[]; state: Ax1ProjectionState }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id="disciplines" title="Disziplinen & Pfade" eyebrow="AX1 Classless Progression" state={state}>
+  return <Ax1ProjectionModal open={open} onClose={onClose} id="disciplines" title="Disziplinen & Pfade" eyebrow="Aurion Classless Progression" state={state}>
     <p className="ax1-notice">Aurion ist die kanonische Spielfläche. Feste Klassen werden nicht lokal gesetzt; bestätigte Waffen- und Skillpfade formen die Spielfigur.</p>
     <SurfaceCards entries={(tracks?.length ? tracks : [{ trackKind: "weapon", trackId: "—", levelExact: "—" }]).map(track => ({ title: track.trackKind === "weapon" ? "Waffenpfad" : "Skillpfad", value: track.trackId, note: `Bestätigte Stufe ${track.levelExact}`, icon: <Swords size={14} /> }))} />
   </Ax1ProjectionModal>;
