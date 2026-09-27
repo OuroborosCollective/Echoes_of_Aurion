@@ -69,10 +69,12 @@ describeReal("AIM-595 systemic quest opportunities — real MariaDB source recei
 
     const persisted = await readWorldDirectorReceiptAt("echoes-of-aurion-global", zoneId, causalReceipt!.tick);
     if (!persisted) throw new Error("SYSTEMIC_QUEST_SOURCE_RECEIPT_READBACK_REQUIRED");
+    const replayedDecision = JSON.parse(persisted.decisionJson) as Parameters<typeof compileSystemicQuestOpportunities>[0]["decision"];
+    expect(replayedDecision.decisionHash).toBe(persisted.decisionHash);
     const compilation = compileSystemicQuestOpportunities({
       worldId: persisted.worldId,
       sourceRevision: persisted.sourceRevision,
-      decision: persisted,
+      decision: replayedDecision,
       confirmedActors: [{ actorId: "player:2146999984", regionId: zoneId }],
       maxCandidates: 8,
     });
