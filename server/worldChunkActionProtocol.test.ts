@@ -28,6 +28,34 @@ describe("worldChunkActionProtocol", () => {
     expect(result).toEqual({ kind: "structure_placed", targetId: "structure:11:5a075821ac97bcd9", payload: { assetKey: "aurion_tripo_starpath_marker", xMm: 32_000, zMm: 32_000 } });
   });
 
+  it("resolves a homestead as an open-world building with deterministic footprint metadata", () => {
+    const result = resolveWorldChunkAction({ ...common(), actorPosition: { x: -24_000, z: -24_000 }, intent: {
+      kind: "place_structure",
+      coordinate,
+      expectedBaseRevision: 1,
+      expectedBaseHash: base.deterministicHash,
+      assetKey: "aurion_open_world_homestead",
+      xMm: 8_000,
+      zMm: 8_000,
+      rotationQuarterTurns: 0,
+      sourceRevision: "0123456789abcdef0123456789abcdef01234567",
+      idempotencyKey: "homestead:place:0001",
+    } });
+    expect(result.kind).toBe("structure_placed");
+    expect(result.targetId).toMatch(/^structure:11:[0-9a-f]{16}$/);
+    expect(result.payload).toMatchObject({
+      assetKey: "aurion_open_world_homestead",
+      placeKind: "homestead",
+      xMm: 8_000,
+      zMm: 8_000,
+      footprintXmm: 6_000,
+      footprintZmm: 5_000,
+      rotationQuarterTurns: 0,
+      sourceRevision: "0123456789abcdef0123456789abcdef01234567",
+    });
+    expect(result.payload.placementHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
   it("keeps the deterministic structure target below the persistence limit for a maximal key", () => {
     const result = resolveWorldChunkAction({ ...common(), actorPosition: { x: 0, z: 0 }, intent: {
       kind: "place_structure", coordinate, expectedBaseRevision: 1, expectedBaseHash: base.deterministicHash, assetKey: "aurion_tripo_garden_border", xMm: 32_000, zMm: 32_000, idempotencyKey: `a${"x".repeat(127)}`,
