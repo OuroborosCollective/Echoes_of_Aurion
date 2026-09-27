@@ -96,7 +96,7 @@ export function normalizeEmergentLifeImpacts(
 export function applyEmergentLifeImpacts(
   needs: EmergentLifeNeedState,
   impacts: readonly EmergentLifeImpact[],
-): Readonly<Record<NpcNeedKey, number>> {
+): EmergentLifeNeedState {
   const next: Record<EmergentLifeNeedKind, number> = {
     safety: clampBps(needs.safety),
     resources: clampBps(needs.resources),
@@ -120,7 +120,7 @@ export function resolveEmergentLifeStep(input: {
   entityId: string;
   regionId: string;
   resolutionIndex: number;
-  currentNeeds: Readonly<Record<NpcNeedKey, number>>;
+  currentNeeds: EmergentLifeNeedState;
   impacts: readonly EmergentLifeImpact[];
   candidates: readonly EmergentLifeActionCandidate[];
 }): EmergentLifeResolution {
