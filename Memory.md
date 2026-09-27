@@ -1416,3 +1416,13 @@ Change: Added Aurion-owned `aurion.emergent-life.v1` as a pure deterministic bri
 Insight: Emergent life should be composed from already-confirmed evidence rather than introduced as a second simulation engine; explicit resolution indices, canonical ordering and effect-intent identity make the Impact -> Need -> Action -> Impact loop replayable and auditable.
 
 Evidence: PR #614 exact head `fc4b2409b7335f2b0cd00bd8332cd326d64e4463` passed Aurion Local Test Pack, Runtime Candidate, Runtime Container Proof and AIM-292 MariaDB/AX1 regression before this memory-only revision. The first regression found on an earlier head was a real test import-path error and was fixed; no unverified runtime success was claimed. Exact-head revalidation is required for the new memory-bearing commit before merge.
+
+### 2026-09-27 — PR #619 / Issue #618 deterministic temporal invariant validation
+Status: INTEGRATION COMPLETE; exact-head revalidation required after memory update.
+
+Change: Added Aurion-owned `aurion.temporal-property.v1` bounded temporal trace/property validation with deterministic PASS/FAIL/UNPROVABLE semantics, first-failure tick reporting, source/ruleset binding, order-invariant canonical hashing and a 4096-event evidence bound. The validator reuses the merged Emergent Life Core as a real Aurion-derived trace source and introduces no second runtime, persistence or causal authority.
+
+Insight: Temporal validation is strongest as a bounded, local evidence layer over already-canonical Aurion traces; missing or unverifiable evidence must remain UNPROVABLE rather than PASS, and canonical ordering must be locale-independent.
+
+Evidence: Exact PR head `fe96cf9dcfac90d44910019e5e9b4daf20eb7eb1` passed Aurion Local Test Pack, Runtime Candidate, Runtime Container Proof and AIM-292 MariaDB/AX1 regression. A real Local Test Pack regression on the prior head was fixed: the duplicate-ID test fixture had placed the duplicate outside the trace scope, so canonical normalization correctly filtered it. Final exact-head revalidation is required for this new memory-bearing revision before merge.
+
