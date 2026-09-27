@@ -26,7 +26,7 @@ describe("AIM-592 environmental reaction field", () => {
     const first = compileEnvironmentalReactionField(reaction(signals));
     const shuffled = compileEnvironmentalReactionField(reaction([...signals].reverse()));
     expect(first).toEqual(shuffled);
-    expect(first.fieldHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.fieldHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it("derives bounded hazard/opportunity/traversal/resource-pressure values from confirmed reaction", () => {
