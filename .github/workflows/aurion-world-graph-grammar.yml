@@ -1,0 +1,35 @@
+name: aurion-world-graph-grammar
+
+on:
+  pull_request:
+    paths:
+      - "shared/deterministicWorldGraphGrammarProtocol.ts"
+      - "server/deterministicWorldGraphGrammarCompiler.ts"
+      - "server/worldGenerationGraphCagVerifier.ts"
+      - "server/worldGenerationGraphCagVerifier.test.ts"
+      - "docs/aurion-world-graph-grammar-compiler.md"
+      - ".github/workflows/aurion-world-graph-grammar.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-world-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prove exact checked-out head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - run: pnpm check
+      - run: pnpm exec vitest run server/deterministicWorldGraphGrammarCompiler.test.ts server/worldGenerationGraphCagVerifier.test.ts
