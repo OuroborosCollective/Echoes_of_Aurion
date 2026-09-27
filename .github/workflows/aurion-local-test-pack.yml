@@ -138,6 +138,13 @@ jobs:
           effect_id="$(cat .aurion-local-test-pack/evidence/wave2-step24-effect-id.txt)"
           pnpm exec tsx scripts/read-aurion-effect-intent.ts --effect-id "$effect_id" 2>&1 | tee .aurion-local-test-pack/evidence/wave2-step24-effect-readback.log
 
+      - name: Verify Issue #616 deterministic DES validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aurion-local-test-pack/evidence
+          env -u DATABASE_URL pnpm exec vitest run server/validation/deterministicDesValidationHarness.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/issue-616-des-contract.log
+          NODE_ENV=test AURION_DES_E2E=1 pnpm exec vitest run server/validation/deterministicDesValidationMariaDb.test.ts 2>&1 | tee .aurion-local-test-pack/evidence/issue-616-des-mariadb.log
       - name: Verify Wave 2 Step 25 headless causal oracle
         shell: bash
         run: |
