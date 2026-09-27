@@ -125,7 +125,7 @@ describe("Aurion systemic quest opportunity compiler", () => {
       playerUserId: 7,
     });
 
-    expect(first.event.payloadHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(first.event.payloadHash).toMatch(/^[a-f0-9]{64}$/);
     expect(first.instance.triggerEventId).toBe(first.event.id);
     expect(first.instance.planHash).toBe(second.instance.planHash);
     expect(first.instance.id).toBe(second.instance.id);
