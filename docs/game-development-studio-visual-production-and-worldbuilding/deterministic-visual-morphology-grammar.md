@@ -523,3 +523,32 @@ Memory.md lesen
 ```
 
 Ein grüner Test ohne Kausal-/Runtime-Readback gilt nicht als Produktionsbeweis.
+
+## Current implementation slice — #603
+
+The first production slice now lives directly in the existing presentation compiler chain:
+
+```
+confirmed VisualItemDescriptor
+        |
+        v
+VisualItemMorphologyCompiler
+        |
+        +--> versioned, bounded recipe
+        +--> deterministic recipe fingerprint
+        |
+        v
+VisualItemGeometryCompiler
+        |
+        +--> existing Three.js primitives
+        +--> morphology-derived bounded transforms
+        +--> LOD
+```
+
+The recipe is presentation-only. It binds to the existing descriptor's confirmed deterministic/context hashes and visual seed; it does not create or modify item, loot, equipment, gameplay or persistence truth.
+
+The current implementation uses bounded basis-point parameters for identity and computes renderer transforms only at the geometry boundary. Affixes are canonicalized before binding, and no clock, host identifier or random source participates.
+
+The geometry result now carries `morphologyRecipeHash` and `morphologyGrammarVersion` in its presentation evidence. The existing geometry fingerprint includes the recipe hash, so replay of the same descriptor remains bound to the same morphology recipe.
+
+Negative coverage includes malformed visual seeds; differential coverage verifies distinct seeds and grammar revisions produce distinct recipe fingerprints; geometry coverage verifies distinct seeds are visible through the existing compiler rather than only in a detached static recipe.

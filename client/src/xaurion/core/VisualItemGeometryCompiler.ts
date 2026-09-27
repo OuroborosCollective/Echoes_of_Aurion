@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
+import { compileVisualMorphologyRecipe, visualMorphologyTransform, type VisualMorphologyRecipe } from "./VisualItemMorphologyCompiler";
 
 export type VisualItemLod = 0 | 1 | 2;
 export const visualWeaponFamilies = ["blade", "axe", "mace", "spear", "dagger", "bow", "staff", "wand", "hammer", "scythe", "shield", "focus"] as const;
@@ -15,6 +16,8 @@ export type GeneratedVisualItemGeometry = Readonly<{
   triangleCount: number;
   structuralFingerprint: string;
   dispose: () => void;
+  morphologyRecipeHash: string;
+  morphologyGrammarVersion: string;
 }>;
 export type UnsupportedVisualItemGeometry = Readonly<{
   kind: "unsupported";
@@ -139,15 +142,26 @@ function primitiveGeometry(recipe: PartRecipe, lod: VisualItemLod): THREE.Buffer
   }
 }
 
-function buildRecipe(parts: readonly PartRecipe[], lod: VisualItemLod, material: THREE.Material): THREE.Group {
+function buildRecipe(parts: readonly PartRecipe[], lod: VisualItemLod, material: THREE.Material, morphology: VisualMorphologyRecipe): THREE.Group {
   const root = new THREE.Group();
   for (const part of parts) {
     if ((part.maxLod ?? 2) < lod) continue;
     const mesh = new THREE.Mesh(primitiveGeometry(part, lod), material);
     mesh.name = part.name;
-    if (part.position) mesh.position.set(...part.position);
+    const transform = visualMorphologyTransform(part.name, morphology);
+    if (part.position) {
+      mesh.position.set(
+        part.position[0] * transform.positionScale[0],
+        part.position[1] * transform.positionScale[1],
+        part.position[2] * transform.positionScale[2],
+      );
+    }
+    mesh.scale.set(
+      (part.scale?.[0] ?? 1) * transform.scale[0],
+      (part.scale?.[1] ?? 1) * transform.scale[1],
+      (part.scale?.[2] ?? 1) * transform.scale[2],
+    );
     if (part.rotation) mesh.rotation.set(...part.rotation);
-    if (part.scale) mesh.scale.set(...part.scale);
     root.add(mesh);
   }
   return root;
@@ -212,8 +226,8 @@ function fnv1a32(value: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
-export function visualGeometryFingerprint(root: THREE.Object3D, geometryKey: string, lod: VisualItemLod): string {
-  const parts = [`v1:${geometryKey}:${lod}`];
+export function visualGeometryFingerprint(root: THREE.Object3D, geometryKey: string, lod: VisualItemLod, morphologyRecipeHash = "-"): string {
+  const parts = ["v2:" + geometryKey + ":" + lod + ":" + morphologyRecipeHash];
   root.updateMatrixWorld(true);
   root.traverse(node => {
     if (!(node as THREE.Mesh).isMesh) return;
@@ -248,6 +262,7 @@ export function compileVisualItemGeometry(descriptor: VisualItemDescriptor, lod:
   if (descriptor.category !== "weapon" && descriptor.category !== "armor") {
     return Object.freeze({ kind: "unsupported", lod, reason: "CATEGORY_UNSUPPORTED" });
   }
+  const morphology = compileVisualMorphologyRecipe(descriptor);
   const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
   let root: THREE.Group;
   let geometryKey: string;
@@ -257,7 +272,7 @@ export function compileVisualItemGeometry(descriptor: VisualItemDescriptor, lod:
       return Object.freeze({ kind: "unsupported", lod, reason: "WEAPON_FAMILY_UNSUPPORTED" });
     }
     const family = descriptor.familyId as VisualWeaponFamily;
-    root = buildRecipe(weaponRecipes[family], lod, material);
+    root = buildRecipe(weaponRecipes[family], lod, material, morphology);
     geometryKey = `weapon:${family}`;
   } else {
     const slot = descriptor.equipmentSlot;
@@ -265,12 +280,30 @@ export function compileVisualItemGeometry(descriptor: VisualItemDescriptor, lod:
       material.dispose();
       return Object.freeze({ kind: "unsupported", lod, reason: "ARMOR_SLOT_UNSUPPORTED" });
     }
-    root = buildRecipe(armorRecipe(slot as GeneratedArmorSlot, descriptor.familyId), lod, material);
+    root = buildRecipe(armorRecipe(slot as GeneratedArmorSlot, descriptor.familyId), lod, material, morphology);
     geometryKey = `armor:${descriptor.familyId}:${slot}`;
   }
   root.name = `aurion-generated-item:${geometryKey}:lod${lod}`;
   const triangleCount = countObjectTriangles(root);
-  const structuralFingerprint = visualGeometryFingerprint(root, geometryKey, lod);
-  root.userData.visualItem = Object.freeze({ version: descriptor.version, itemDefinitionId: descriptor.itemDefinitionId, geometryKey, lod, structuralFingerprint });
-  return Object.freeze({ kind: "generated", root, lod, geometryKey, triangleCount, structuralFingerprint, dispose: () => disposeGenerated(root) });
+  const structuralFingerprint = visualGeometryFingerprint(root, geometryKey, lod, morphology.recipeHash);
+  root.userData.visualItem = Object.freeze({
+    version: descriptor.version,
+    itemDefinitionId: descriptor.itemDefinitionId,
+    geometryKey,
+    lod,
+    structuralFingerprint,
+    morphologyRecipeHash: morphology.recipeHash,
+    morphologyGrammarVersion: morphology.grammarVersion,
+  });
+  return Object.freeze({
+    kind: "generated",
+    root,
+    lod,
+    geometryKey,
+    triangleCount,
+    structuralFingerprint,
+    morphologyRecipeHash: morphology.recipeHash,
+    morphologyGrammarVersion: morphology.grammarVersion,
+    dispose: () => disposeGenerated(root),
+  });
 }

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { visualItemDescriptorSchema, type VisualItemDescriptor } from "@shared/visualItemProtocol";
+import { compileVisualMorphologyRecipe, VISUAL_MORPHOLOGY_GRAMMAR_VERSION } from "./VisualItemMorphologyCompiler";
 import {
   compileVisualItemGeometry,
   countObjectTriangles,
@@ -131,5 +132,70 @@ describe("VisualItemGeometryCompiler", () => {
     geometrySpies.forEach(spy => expect(spy).toHaveBeenCalledTimes(1));
     materialSpies.forEach(spy => expect(spy).toHaveBeenCalledTimes(1));
     expect(result.root.children).toHaveLength(0);
+  });
+});
+
+
+describe("VisualItemMorphologyCompiler", () => {
+  it("produces the same canonical recipe when affix submission order changes", () => {
+    const first = compileVisualMorphologyRecipe(descriptor({
+      affixes: [
+        { id: "prefix-star", slot: "prefix", groupId: "metal" },
+        { id: "suffix-ember", slot: "suffix", groupId: "ember" },
+      ],
+    }));
+    const reversed = compileVisualMorphologyRecipe(descriptor({
+      affixes: [
+        { id: "suffix-ember", slot: "suffix", groupId: "ember" },
+        { id: "prefix-star", slot: "prefix", groupId: "metal" },
+      ],
+    }));
+    expect(reversed).toEqual(first);
+    expect(first.grammarVersion).toBe(VISUAL_MORPHOLOGY_GRAMMAR_VERSION);
+    expect(first.proportionXbp).toBeGreaterThanOrEqual(960);
+    expect(first.proportionXbp).toBeLessThanOrEqual(1040);
+    expect(first.proportionYbp).toBeGreaterThanOrEqual(960);
+    expect(first.proportionYbp).toBeLessThanOrEqual(1040);
+    expect(first.proportionZbp).toBeGreaterThanOrEqual(960);
+    expect(first.proportionZbp).toBeLessThanOrEqual(1040);
+    expect(first.accentBp).toBeGreaterThanOrEqual(940);
+    expect(first.accentBp).toBeLessThanOrEqual(1060);
+  });
+
+  it("changes the recipe deterministically when seed or grammar revision changes", () => {
+    const base = descriptor({ visualSeed: hash("a") });
+    const alternateSeed = descriptor({ visualSeed: hash("b") });
+    const baseRecipe = compileVisualMorphologyRecipe(base);
+    const alternateRecipe = compileVisualMorphologyRecipe(alternateSeed);
+    const revisedRecipe = compileVisualMorphologyRecipe(base, VISUAL_MORPHOLOGY_GRAMMAR_VERSION + ".2");
+    expect(alternateRecipe.recipeHash).not.toBe(baseRecipe.recipeHash);
+    expect(revisedRecipe.recipeHash).not.toBe(baseRecipe.recipeHash);
+    expect(revisedRecipe.grammarVersion).toBe(VISUAL_MORPHOLOGY_GRAMMAR_VERSION + ".2");
+  });
+
+  it("fails closed on malformed visual seed", () => {
+    expect(() => compileVisualMorphologyRecipe({
+      ...descriptor(),
+      visualSeed: "invalid",
+    } as unknown as VisualItemDescriptor)).toThrow("VISUAL_MORPHOLOGY_SEED_INVALID");
+  });
+
+  it("makes different seeds materially visible in the existing geometry compiler", () => {
+    const first = expectGenerated(compileVisualItemGeometry(descriptor({
+      itemDefinitionId: "weapon-spear-variant-a",
+      visualSeed: hash("a"),
+    }), 0));
+    const second = expectGenerated(compileVisualItemGeometry(descriptor({
+      itemDefinitionId: "weapon-spear-variant-b",
+      visualSeed: hash("b"),
+    }), 0));
+    expect(first.morphologyRecipeHash).not.toBe(second.morphologyRecipeHash);
+    expect(first.structuralFingerprint).not.toBe(second.structuralFingerprint);
+    const firstMarker = first.root.userData.visualItem as Record<string, unknown>;
+    const secondMarker = second.root.userData.visualItem as Record<string, unknown>;
+    expect(firstMarker.morphologyRecipeHash).toBe(first.morphologyRecipeHash);
+    expect(secondMarker.morphologyGrammarVersion).toBe(VISUAL_MORPHOLOGY_GRAMMAR_VERSION);
+    first.dispose();
+    second.dispose();
   });
 });
