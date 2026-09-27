@@ -516,8 +516,9 @@ Externe Designreferenz: https://www.revenblade.com/devlog
 Memory.md lesen
  -> Integration
  -> Runtime / Regression / Evidence
- -> genau ein Memory.md-Eintrag
+ -> Exact-Head-Gates
  -> Merge
+ -> automatischer Memory.md-Eintrag
  -> Post-Merge Readback
 ```
 
