@@ -96,7 +96,7 @@ function templateFor(type: SystemicQuestType): string {
   return `tpl_systemic_${type.toLowerCase()}`;
 }
 
-export function createQuestOpportunity(input: Omit<QuestOpportunity, "version"|"opportunityHash">): QuestOpportunity {
+export function createQuestOpportunity(input: Omit<QuestOpportunity, "version"|"opportunityHash"|"expirationPolicyVersion">): QuestOpportunity {
   const sourceReceiptIds = [...input.sourceReceiptIds].map(value => receipt(value)).sort();
   if (sourceReceiptIds.length < 1 || new Set(sourceReceiptIds).size !== sourceReceiptIds.length) {
     throw new Error("SYSTEMIC_QUEST_SOURCE_RECEIPTS_INVALID");
