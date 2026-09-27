@@ -91,13 +91,16 @@ export function resolveOpenWorldPlacement(input: OpenWorldPlacementInput): OpenW
   if (!Number.isSafeInteger(input.footprintMm.x) || input.footprintMm.x < 1 || input.footprintMm.x > OPEN_WORLD_CHUNK_SIZE_MM) throw new Error("OPEN_WORLD_PLACE_FOOTPRINT_X_INVALID");
   if (!Number.isSafeInteger(input.footprintMm.z) || input.footprintMm.z < 1 || input.footprintMm.z > OPEN_WORLD_CHUNK_SIZE_MM) throw new Error("OPEN_WORLD_PLACE_FOOTPRINT_Z_INVALID");
   if (!["homestead", "workshop", "public"].includes(input.kind)) throw new Error("OPEN_WORLD_PLACE_KIND_INVALID");
-  const halfX = Math.floor(input.footprintMm.x / 2);
-  const halfZ = Math.floor(input.footprintMm.z / 2);
+  const rotationQuarterTurns = input.rotationQuarterTurns;
+  const rotateFootprint = rotationQuarterTurns % 2 === 1;
+  const footprintMm = rotateFootprint
+    ? { x: input.footprintMm.z, z: input.footprintMm.x }
+    : { x: input.footprintMm.x, z: input.footprintMm.z };
+  const halfX = Math.floor(footprintMm.x / 2);
+  const halfZ = Math.floor(footprintMm.z / 2);
   if (input.xMm - halfX < 0 || input.xMm + halfX >= OPEN_WORLD_CHUNK_SIZE_MM || input.zMm - halfZ < 0 || input.zMm + halfZ >= OPEN_WORLD_CHUNK_SIZE_MM) {
     throw new Error("OPEN_WORLD_PLACE_FOOTPRINT_OUTSIDE_CHUNK");
   }
-  const rotationQuarterTurns = ((input.rotationQuarterTurns % OPEN_WORLD_PLACE_QUARTER_TURNS) + OPEN_WORLD_PLACE_QUARTER_TURNS) % OPEN_WORLD_PLACE_QUARTER_TURNS;
-  const rotateFootprint = rotationQuarterTurns % 2 === 1;
   const canonical = {
     protocol: AURION_OPEN_WORLD_PLACE_PROTOCOL,
     worldId,
@@ -109,9 +112,7 @@ export function resolveOpenWorldPlacement(input: OpenWorldPlacementInput): OpenW
     xMm: input.xMm,
     zMm: input.zMm,
     rotationQuarterTurns,
-    footprintMm: rotateFootprint
-      ? { x: input.footprintMm.z, z: input.footprintMm.x }
-      : { x: input.footprintMm.x, z: input.footprintMm.z },
+    footprintMm,
   } as const;
   return Object.freeze({
     ...canonical,
