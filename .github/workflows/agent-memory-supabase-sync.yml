@@ -21,17 +21,17 @@ jobs:
     timeout-minutes: 10
     env:
       SUPABASE_URL: https://ggwyphkhxnzurregdkql.supabase.co
-      SUPABASE_API_KEY: \${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_API_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_MEMORY_WORKSPACE_SLUG: echoes-of-aurion-agent-memory
-      GITHUB_REPOSITORY: \${{ github.repository }}
-      GITHUB_SHA: \${{ github.sha }}
-      GITHUB_REF_NAME: \${{ github.ref_name }}
-      GITHUB_RUN_ID: \${{ github.run_id }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_SHA: ${{ github.sha }}
+      GITHUB_REF_NAME: ${{ github.ref_name }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
     steps:
       - name: Checkout exact main revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
