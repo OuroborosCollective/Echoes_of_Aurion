@@ -907,6 +907,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/core/VisualItemMorphologyCompiler.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/core/VisualItemGlbOverrideResolver.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
