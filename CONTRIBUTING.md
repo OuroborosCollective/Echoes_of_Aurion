@@ -14,4 +14,4 @@ AX1 and WASD are historical projects whose useful code has been migrated into Au
 4. Never let client/rendering state become gameplay truth.
 5. Never create a second database or state authority to support a legacy path.
 6. Require exact-head regression and runtime/readback evidence for non-trivial integrations.
-7. Preserve the Memory.md → integration → evidence → merge → main readback workflow.
+7. Preserve the Memory.md → integration → evidence → merge → automated post-merge Memory/readback workflow.
