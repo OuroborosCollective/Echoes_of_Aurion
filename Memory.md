@@ -1406,3 +1406,13 @@ Insight: The coordination law must constrain admissibility against explicit rese
 
 Evidence: Exact final head `3a7da6bc613188a92fa437bf2ee16077bdeae4bd` passed 20/20 executable current GitHub checks, including the dedicated AIM-588 deterministic coordination benchmark suite, exact-head runtime/container, real MariaDB gateway/readback, reconciliation, offline-pack, browser/asset/world and replay/regression lanes; only Supabase Preview was skipped by workflow configuration. PatchMon runtime was independently healthy with 4/4 expected containers running/healthy and no boundary violations. No production database mutation was performed.
 
+
+
+### 2026-09-27 — PR #614 / Issue #544 deterministic Emergent Life Core
+Status: INTEGRATION COMPLETE; exact-head revalidation required after memory update.
+
+Change: Added Aurion-owned `aurion.emergent-life.v1` as a pure deterministic bridge from receipt-bound world impacts to integer basis-point Need transitions, stable Action Candidate ordering, canonical Action Intent binding and a hashable next Impact. The implementation adds no second persistence/gameplay authority and keeps actual mutation on the existing Aurion effect/gateway paths.
+
+Insight: Emergent life should be composed from already-confirmed evidence rather than introduced as a second simulation engine; explicit resolution indices, canonical ordering and effect-intent identity make the Impact -> Need -> Action -> Impact loop replayable and auditable.
+
+Evidence: PR #614 exact head `fc4b2409b7335f2b0cd00bd8332cd326d64e4463` passed Aurion Local Test Pack, Runtime Candidate, Runtime Container Proof and AIM-292 MariaDB/AX1 regression before this memory-only revision. The first regression found on an earlier head was a real test import-path error and was fixed; no unverified runtime success was claimed. Exact-head revalidation is required for the new memory-bearing commit before merge.
