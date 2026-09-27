@@ -1,4 +1,4 @@
-import { canonicalSha256 } from "../shared/aurionCanonicalHash";
+import { computeCanonicalHash } from "../shared/aurionQuestCanonicalHash";
 import type { WorldDirectorDecision } from "../shared/worldPressureProtocol";
 import {
   deriveSystemicQuestOpportunities,
@@ -30,7 +30,7 @@ export function compileSystemicQuestOpportunities(input: Readonly<{
     .map(opportunityToWorldEvent)
     .map(raw => Object.freeze({
       ...raw,
-      payloadHash: canonicalSha256({ domain: "aurion.world.event.v1", payload: raw.data ?? {} }),
+      payloadHash: computeCanonicalHash("aurion.world.event.v1", raw.data ?? {}),
     } satisfies WorldEvent))
     .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)));
   return Object.freeze({ opportunities, events });
@@ -50,7 +50,7 @@ export function compileSystemicQuestIntoExistingRuntime(input: Readonly<{
 }>): Readonly<{ event: WorldEvent; instance: QuestInstance; plan: QuestPlan }> {
   const event = Object.freeze({
     ...opportunityToWorldEvent(input.opportunity),
-    payloadHash: canonicalSha256({ domain: "aurion.world.event.v1", payload: opportunityToWorldEvent(input.opportunity).data ?? {} }),
+    payloadHash: computeCanonicalHash("aurion.world.event.v1", opportunityToWorldEvent(input.opportunity).data ?? {}),
   } satisfies WorldEvent);
   input.worldFacts.ingestCanonicalEvent(event);
   const { instance, plan } = input.questRuntime.compileAndOfferQuest({
