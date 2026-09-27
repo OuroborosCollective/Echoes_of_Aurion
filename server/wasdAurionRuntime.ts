@@ -176,7 +176,7 @@ export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: 
         if (environmentalField.regionId !== raw.regionId || environmentalField.resolutionIndex !== raw.resolutionIndex) {
           throw new Error("NPC_ENVIRONMENTAL_FIELD_SCOPE_MISMATCH");
         }
-        if (!/^[a-f0-9]{64}$/.test(environmentalField.sourceStateHash) || !/^[a-f0-9]{64}$/.test(environmentalField.fieldHash)) {
+        if (!/^[a-f0-9]{64}$/.test(environmentalField.sourceStateHash) || !/^sha256:[a-f0-9]{64}$/.test(environmentalField.fieldHash)) {
           throw new Error("NPC_ENVIRONMENTAL_FIELD_IDENTITY_INVALID");
         }
         const environmentalEvents = environmentalReactionNeedEvents(environmentalField);
