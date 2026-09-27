@@ -4,8 +4,12 @@ on:
   push:
     branches:
       - main
+  pull_request:
     paths:
       - "Memory.md"
+      - "scripts/sync-agent-memory-to-supabase.mjs"
+      - "scripts/sync-agent-memory-to-supabase.test.mjs"
+      - ".github/workflows/agent-memory-supabase-sync.yml"
   workflow_dispatch:
 
 concurrency:
@@ -16,7 +20,32 @@ permissions:
   contents: read
 
 jobs:
+  contract-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Verify Node script syntax
+        run: |
+          node --check scripts/sync-agent-memory-to-supabase.mjs
+          node --check scripts/sync-agent-memory-to-supabase.test.mjs
+
+      - name: Run sync contract regression
+        run: node scripts/sync-agent-memory-to-supabase.test.mjs
+
   sync-agent-memory:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -28,7 +57,7 @@ jobs:
       GITHUB_REF_NAME: ${{ github.ref_name }}
       GITHUB_RUN_ID: ${{ github.run_id }}
     steps:
-      - name: Checkout exact main revision
+      - name: Checkout exact repository revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
@@ -49,13 +78,8 @@ jobs:
             exit 78
           fi
 
-      - name: Verify Node script syntax
-        run: |
-          node --check scripts/sync-agent-memory-to-supabase.mjs
-          node --check scripts/sync-agent-memory-to-supabase.test.mjs
-
-      - name: Run sync contract regression
-        run: node scripts/sync-agent-memory-to-supabase.test.mjs
+      - name: Verify Node sync script syntax
+        run: node --check scripts/sync-agent-memory-to-supabase.mjs
 
       - name: Synchronize Memory.md and independently read it back
         run: node scripts/sync-agent-memory-to-supabase.mjs
