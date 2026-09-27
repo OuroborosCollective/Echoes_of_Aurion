@@ -27,6 +27,23 @@ describe("aurion open-world place protocol", () => {
     expect(placement.placementHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
+  it("normalizes a 90-degree rotation by swapping the canonical footprint axes", () => {
+    const placement = resolveOpenWorldPlacement({
+      worldId: "aurion",
+      sourceRevision: REVISION,
+      chunkCoordinate: { x: 1, z: 1 },
+      structureId: "structure:83:house-rotated",
+      ownerId: "83",
+      kind: "homestead",
+      xMm: 32_000,
+      zMm: 32_000,
+      rotationQuarterTurns: 1,
+      footprintMm: OPEN_WORLD_HOMESTEAD_FOOTPRINT_MM,
+    });
+    expect(placement.rotationQuarterTurns).toBe(1);
+    expect(placement.footprintMm).toEqual({ x: 5_000, z: 6_000 });
+  });
+
   it("rejects an open-world building footprint that would leave its chunk", () => {
     expect(() => resolveOpenWorldPlacement({
       worldId: "aurion",
