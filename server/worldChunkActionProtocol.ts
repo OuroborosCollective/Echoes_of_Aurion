@@ -1,4 +1,4 @@
-import { splitWorldChunkPositionMm } from "../shared/worldChunkProtocol";
+import { isBaseChunkRoadTile, splitWorldChunkPositionMm } from "../shared/worldChunkProtocol";
 import { footprintForOpenWorldPlace, resolveOpenWorldPlacement } from "../shared/aurionOpenWorldPlaceProtocol";
 import {
   WORLD_CHUNK_BASE_REVISION,
@@ -116,12 +116,12 @@ export function resolveWorldChunkAction(input: {
         resource.positionMm.z <= placement.zMm + halfZ,
       );
       if (intersectsResource) throw new Error("Open-world homestead footprint intersects an authoritative world resource");
-      const tileSizeMm = WORLD_CHUNK_SIZE_MM / 8;
+      const tileSizeMm = WORLD_CHUNK_SIZE_MM / 16;
       const centerTile = base.tiles.find(tile =>
         tile.x === Math.floor(placement.xMm / tileSizeMm) &&
         tile.z === Math.floor(placement.zMm / tileSizeMm),
       );
-      if (centerTile && (centerTile.surface === "stone" || centerTile.surface === "ruin_path")) {
+      if (centerTile && isBaseChunkRoadTile(centerTile)) {
         throw new Error("Open-world homestead cannot be placed on an authoritative road surface");
       }
       return Object.freeze({
