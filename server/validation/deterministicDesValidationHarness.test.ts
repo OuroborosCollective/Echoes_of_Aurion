@@ -31,8 +31,8 @@ describe("Aurion deterministic DES validation harness (#616)", () => {
 
   it("keeps wall-clock performance measurements observational and outside the canonical result hash", async () => {
     const first = await executeDeterministicDesScenario({ scenarioId: "des-616-observational", seed, sourceRevision: revision });
-    const canonical = { ...first.scenario, observationalMetrics: undefined };
-    expect(canonical.canonicalResultHash).toBe(first.scenario.canonicalResultHash);
+    const { observationalMetrics: _observationalMetrics, canonicalResultHash, ...canonicalResult } = first.scenario;
+    expect(canonicalSha256(canonicalResult)).toBe(canonicalResultHash);
     expect(first.scenario.observationalMetrics.ticksPerSecond).toBeGreaterThanOrEqual(0);
   });
 
