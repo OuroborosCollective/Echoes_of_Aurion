@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
-import { planNpcCausalCatchup } from "./npcCausalBudget";
+import { planNpcCausalCatchup } from "../shared/npcCausalBudgetProtocol";
 
 const revision = "c".repeat(40);
 const stateHash = canonicalSha256({ npc: "npc-replay", value: 11 });
