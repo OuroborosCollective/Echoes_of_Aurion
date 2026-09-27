@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { requireWolframCagClient, wolframCagConfigurationStatus, type WolframCagClient, type WolframCagEvidence } from "./wolframCag";
 import { normalizeWolframComputeResult } from "./aurionCagDesignOracle";
-import type { CanonicalWorldGraph, WorldGraphConstraintDiagnostic, WorldGraphConstraintReport } from "@shared/deterministicWorldGraphGrammarProtocol";
+import { WORLD_GRAPH_LAYERS, type CanonicalWorldGraph, type WorldGraphConstraintDiagnostic, type WorldGraphConstraintReport } from "@shared/deterministicWorldGraphGrammarProtocol";
 export const AURION_WORLD_GRAPH_CAG_VERIFIER_PROTOCOL = "aurion.world-graph-cag-verifier.v1" as const;
 export type WorldGraphCagVerificationStatus = "MATCH" | "FALSIFIED" | "NOT_CONFIGURED" | "PROVIDER_FAILED";
 function sha256(value: string): string { return "sha256:" + createHash("sha256").update(value, "utf8").digest("hex"); }
@@ -9,9 +9,10 @@ function canonical(value: unknown): string { if (value === null || value === und
 function cmp(a: string, b: string): number { return a < b ? -1 : a > b ? 1 : 0; }
 export function evaluateWorldGraphConstraints(graph: CanonicalWorldGraph): WorldGraphConstraintReport {
   const diagnostics: WorldGraphConstraintDiagnostic[] = []; const nodes = new Map(graph.nodes.map(node => [node.nodeId, node] as const)); const edgeKeys = new Set<string>(); let mask = 0;
-  for (const node of graph.nodes) { if (node.parentId && !nodes.has(node.parentId)) { mask |= 1; diagnostics.push({ code: "PARENT_REFERENCE_INVALID", nodeId: node.nodeId }); } if (node.parentId) { const parent = nodes.get(node.parentId); if (parent && parent.layer !== graph.nodes.find(candidate => candidate.nodeId === node.nodeId)!.layer && parent.layer === node.layer) { mask |= 2; diagnostics.push({ code: "PARENT_LAYER_ANOMALY", nodeId: node.nodeId }); } } }
+  const layerRank = new Map(WORLD_GRAPH_LAYERS.map((layer, index) => [layer, index] as const));
+  for (const node of graph.nodes) { if (node.parentId && !nodes.has(node.parentId)) { mask |= 1; diagnostics.push({ code: "PARENT_REFERENCE_INVALID", nodeId: node.nodeId }); } if (node.parentId) { const parent = nodes.get(node.parentId); if (parent && (layerRank.get(parent.layer)! >= layerRank.get(node.layer)!)) { mask |= 2; diagnostics.push({ code: "PARENT_LAYER_ORDER_INVALID", nodeId: node.nodeId }); } } }
   for (const edge of graph.edges) { if (!nodes.has(edge.fromNodeId) || !nodes.has(edge.toNodeId)) { mask |= 4; diagnostics.push({ code: "EDGE_REFERENCE_INVALID", edgeId: edge.edgeId }); continue; } if (edge.fromNodeId === edge.toNodeId) { mask |= 8; diagnostics.push({ code: "SELF_EDGE", edgeId: edge.edgeId }); } const key = edge.kind + "::" + edge.fromNodeId + "::" + edge.toNodeId; if (edgeKeys.has(key)) { mask |= 16; diagnostics.push({ code: "DUPLICATE_EDGE", edgeId: edge.edgeId }); } edgeKeys.add(key); }
-  const nodeOrder = graph.nodes.map(node => node.nodeId); if (nodeOrder.join("|") !== [...nodeOrder].sort(cmp).join("|")) { mask |= 32; diagnostics.push({ code: "NODE_ORDER_NOT_CANONICAL" }); }
+  const nodeOrder = graph.nodes.map(node => node.layer + "::" + node.nodeId); const expectedOrder = [...nodeOrder].sort((a, b) => { const [al, an] = a.split("::"); const [bl, bn] = b.split("::"); return layerRank.get(al as never)! - layerRank.get(bl as never)! || cmp(an!, bn!); }); if (nodeOrder.join("|") !== expectedOrder.join("|")) { mask |= 32; diagnostics.push({ code: "NODE_ORDER_NOT_CANONICAL" }); }
   const sortedDiagnostics = diagnostics.sort((a, b) => cmp(a.code, b.code) || cmp(a.nodeId ?? "", b.nodeId ?? "") || cmp(a.edgeId ?? "", b.edgeId ?? ""));
   return Object.freeze({ protocol: "aurion.world-graph-constraints.v1", mask, diagnostics: Object.freeze(sortedDiagnostics), resultHash: sha256(canonical({ protocol: "aurion.world-graph-constraints.v1", mask, diagnostics: sortedDiagnostics })), mutationAuthority: "none" });
 }
