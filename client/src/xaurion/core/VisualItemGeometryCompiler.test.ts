@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { visualItemDescriptorSchema, type VisualItemDescriptor } from "@shared/visualItemProtocol";
+import { compileVisualMorphologyRecipe, VISUAL_MORPHOLOGY_GRAMMAR_VERSION } from "./VisualItemMorphologyCompiler";
 import {
   compileVisualItemGeometry,
   countObjectTriangles,
