@@ -1,0 +1,140 @@
+import { describe, expect, it } from "vitest";
+import {
+  AURION_WORLD_GRAPH_GRAMMAR_PROTOCOL,
+  AURION_WORLD_GRAPH_GRAMMAR_COMPILER_VERSION,
+  type DeterministicWorldGraphGrammarCompilerInput,
+} from "@shared/deterministicWorldGraphGrammarProtocol";
+import { compileDeterministicWorldGraphGrammar } from "./deterministicWorldGraphGrammarCompiler";
+import {
+  evaluateWorldGraphConstraints,
+  verifyWorldGraphWithCag,
+} from "./worldGenerationGraphCagVerifier";
+
+const SHA = (digit: string) => "sha256:" + digit.repeat(64);
+const REVISION = "a".repeat(40);
+
+function input(
+  overrides: Partial<DeterministicWorldGraphGrammarCompilerInput> = {},
+): DeterministicWorldGraphGrammarCompilerInput {
+  return {
+    worldId: "echoes-of-aurion-global",
+    worldSeedHash: SHA("1"),
+    worldGenerationRevision: REVISION,
+    rulesetHash: SHA("2"),
+    sourceRevision: REVISION,
+    grammar: {
+      grammarId: "aurion-world",
+      grammarVersion: "1.0.0",
+      rootLayer: "macro",
+      rules: [
+        { id: "macro-root", layer: "macro", maxChildren: 8 },
+        { id: "zone", layer: "zone", parentLayer: "macro", maxChildren: 64 },
+        { id: "biome", layer: "biome", parentLayer: "zone", maxChildren: 128 },
+        { id: "travel", layer: "travel", parentLayer: "biome", maxChildren: 128 },
+        { id: "settlement", layer: "settlement", parentLayer: "zone", maxChildren: 64 },
+        { id: "structure", layer: "structure", parentLayer: "settlement", maxChildren: 256 },
+        { id: "chunk", layer: "chunk", parentLayer: "structure", maxChildren: 4096 },
+      ],
+    },
+    nodes: [
+      { nodeId: "world", layer: "macro", ruleId: "macro-root", coordinate: { x: 0, z: 0 }, tags: ["root"] },
+      { nodeId: "zone-0", layer: "zone", ruleId: "zone", parentId: "world", coordinate: { x: 0, z: 0 }, tags: ["temperate"] },
+      { nodeId: "biome-0", layer: "biome", ruleId: "biome", parentId: "zone-0", coordinate: { x: 10, z: 4 }, tags: ["forest"] },
+      { nodeId: "settlement-0", layer: "settlement", ruleId: "settlement", parentId: "zone-0", coordinate: { x: 12, z: 4 }, tags: ["village"] },
+      { nodeId: "structure-0", layer: "structure", ruleId: "structure", parentId: "settlement-0", coordinate: { x: 12, z: 4 }, tags: ["inn"] },
+      { nodeId: "chunk-0", layer: "chunk", ruleId: "chunk", parentId: "structure-0", coordinate: { x: 12, z: 4 }, tags: ["chunk"] },
+    ],
+    edges: [
+      { edgeId: "contains-0", kind: "contains", fromNodeId: "world", toNodeId: "zone-0" },
+      { edgeId: "contains-1", kind: "contains", fromNodeId: "zone-0", toNodeId: "biome-0" },
+      { edgeId: "contains-2", kind: "contains", fromNodeId: "zone-0", toNodeId: "settlement-0" },
+      { edgeId: "contains-3", kind: "contains", fromNodeId: "settlement-0", toNodeId: "structure-0" },
+      { edgeId: "contains-4", kind: "contains", fromNodeId: "structure-0", toNodeId: "chunk-0" },
+    ],
+    ...overrides,
+  };
+}
+
+describe("deterministicWorldGraphGrammarCompiler", () => {
+  it("produces canonical multilevel graph, stable streams and parent hashes", () => {
+    const base = input();
+    const first = compileDeterministicWorldGraphGrammar(base);
+    const reversed = compileDeterministicWorldGraphGrammar({
+      ...base,
+      nodes: [...base.nodes].reverse(),
+      edges: [...base.edges].reverse(),
+      grammar: { ...base.grammar, rules: [...base.grammar.rules].reverse() },
+    });
+
+    expect(first.canonicalGraph.protocol).toBe(AURION_WORLD_GRAPH_GRAMMAR_PROTOCOL);
+    expect(first.canonicalGraph.compilerVersion).toBe(AURION_WORLD_GRAPH_GRAMMAR_COMPILER_VERSION);
+    expect(first.canonicalGraphHash).toBe(reversed.canonicalGraphHash);
+    expect(first.streamRootHash).toBe(reversed.streamRootHash);
+    expect(first.canonicalGraph.layerHashes).toEqual(reversed.canonicalGraph.layerHashes);
+    expect(first.canonicalGraph.parentHashes).toEqual(reversed.canonicalGraph.parentHashes);
+  });
+
+  it("changes identity when revision or seed changes", () => {
+    const base = compileDeterministicWorldGraphGrammar(input());
+    const revision = compileDeterministicWorldGraphGrammar(
+      input({
+        worldGenerationRevision: "b".repeat(40),
+        sourceRevision: "b".repeat(40),
+      }),
+    );
+    const seed = compileDeterministicWorldGraphGrammar(input({ worldSeedHash: SHA("3") }));
+
+    expect(revision.canonicalGraphHash).not.toBe(base.canonicalGraphHash);
+    expect(revision.streamRootHash).not.toBe(base.streamRootHash);
+    expect(seed.canonicalGraphHash).not.toBe(base.canonicalGraphHash);
+    expect(seed.streamRootHash).not.toBe(base.streamRootHash);
+  });
+
+  it("fails closed on missing parent, duplicate node and budget overflow", () => {
+    const base = input();
+
+    expect(() =>
+      compileDeterministicWorldGraphGrammar({
+        ...base,
+        nodes: base.nodes.map((node, index) =>
+          index === 1 ? { ...node, parentId: "missing" } : node,
+        ),
+      }),
+    ).toThrow();
+
+    expect(() =>
+      compileDeterministicWorldGraphGrammar({
+        ...base,
+        nodes: [...base.nodes, base.nodes[1]!],
+      }),
+    ).toThrow("DUPLICATE_NODE");
+
+    expect(() =>
+      compileDeterministicWorldGraphGrammar({
+        ...base,
+        maxNodes: 3,
+      }),
+    ).toThrow("NODE_BUDGET_EXCEEDED");
+  });
+
+  it("keeps the CAG lane non-authoritative and bounded", async () => {
+    const compiled = compileDeterministicWorldGraphGrammar(input());
+    const report = evaluateWorldGraphConstraints(compiled.canonicalGraph);
+
+    expect(report.mask).toBe(0);
+    expect(report.mutationAuthority).toBe("none");
+
+    const noProvider = await verifyWorldGraphWithCag(compiled.canonicalGraph, {
+      environment: { WOLFRAM_CAG_API_KEY: "" },
+    });
+    expect(["NOT_CONFIGURED", "PROVIDER_FAILED"]).toContain(noProvider.status);
+  });
+
+  it("does not embed provider concepts into world truth", () => {
+    const compiled = compileDeterministicWorldGraphGrammar(input());
+    const value = JSON.stringify(compiled.canonicalGraph);
+
+    expect(value).not.toContain("Wolfram");
+    expect(value).not.toContain("CAG");
+  });
+});
