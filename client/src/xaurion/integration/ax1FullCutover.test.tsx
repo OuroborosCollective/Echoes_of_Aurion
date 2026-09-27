@@ -32,7 +32,7 @@ describe("AX1 full visible cutover contract", () => {
     expect(adapter).not.toContain("ax1-micro-menu");
     expect(shell).toContain('id="game-hud-root"');
     expect(shell).toContain('id="player-unit-frame"');
-    expect(shell).toContain('data-source="ax1-f24-visible-shell"');
+    expect(shell).toContain('data-source="aurion-confirmed-runtime-ui"');
     expect(shell).toContain("Realm Chat");
     expect(shell).toContain("BESTÄTIGTE COMBAT METRICS");
     expect(characterAdapter).not.toContain("currentClassId");
