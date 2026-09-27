@@ -125,4 +125,4 @@ Ein grüner Legacy-Check kann daher nie einen kanonischen Aurion-Readback ersetz
 
 ## Arbeits- und Merge-Gate
 
-`Memory.md lesen → aktuellen main-Head prüfen → isolierter Branch → Implementierung → gezielte Regression → volle Regression → Runtime/DB/Evidence → genau ein Memory.md-Eintrag → Exact-Head prüfen → Merge → main-Readback`
+`Memory.md lesen → aktuellen main-Head prüfen → isolierter Branch → Implementierung → gezielte Regression → volle Regression → Runtime/DB/Evidence → Exact-Head prüfen → Merge → automatischer Post-Merge-Memory-Eintrag → main-Readback`

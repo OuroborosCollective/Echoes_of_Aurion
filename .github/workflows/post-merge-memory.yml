@@ -1,0 +1,105 @@
+name: Post-merge Memory recorder
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+concurrency:
+  group: post-merge-memory-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  record-memory:
+    if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      MERGED_AT: ${{ github.event.pull_request.merged_at }}
+      SUPABASE_URL: https://ggwyphkhxnzurregdkql.supabase.co
+      SUPABASE_API_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_MEMORY_WORKSPACE_SLUG: echoes-of-aurion-agent-memory
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Verify generator syntax and regression
+        run: |
+          node --check scripts/append-post-merge-memory.mjs
+          node --check scripts/append-post-merge-memory.test.mjs
+          node scripts/append-post-merge-memory.test.mjs
+
+      - name: Resolve changed files for merged PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > merged-pr-files.txt
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" \
+            --jq '.[].filename' > merged-pr-files.txt
+          test -s merged-pr-files.txt || {
+            echo "::error::Merged PR file list could not be resolved."
+            exit 1
+          }
+
+      - name: Append deterministic post-merge Memory.md entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            node scripts/append-post-merge-memory.mjs
+            if git diff --quiet -- Memory.md; then
+              echo "Memory marker already present; no duplicate entry will be created."
+              break
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Memory.md
+            git commit -m "docs(memory): record merged PR #$PR_NUMBER [skip ci]"
+            if git push origin HEAD:main; then
+              echo "Post-merge Memory.md commit pushed."
+              break
+            fi
+            if [[ "$attempt" == "3" ]]; then
+              echo "::error::Could not push the post-merge Memory.md commit after three attempts."
+              exit 1
+            fi
+            echo "main advanced while recording Memory.md; retrying on the latest main."
+          done
+
+      - name: Synchronize final Memory.md snapshot and independently read it back
+        if: ${{ env.SUPABASE_API_KEY != '' }}
+        run: |
+          MEMORY_COMMIT_SHA="$(git rev-parse HEAD)"
+          GITHUB_SHA="$MEMORY_COMMIT_SHA" \
+            GITHUB_REF_NAME="main" \
+            GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            node scripts/sync-agent-memory-to-supabase.mjs
+
+      - name: Fail closed when Supabase credential is missing
+        if: ${{ env.SUPABASE_API_KEY == '' }}
+        run: |
+          echo "::error::Configure repository secret SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY."
+          exit 78

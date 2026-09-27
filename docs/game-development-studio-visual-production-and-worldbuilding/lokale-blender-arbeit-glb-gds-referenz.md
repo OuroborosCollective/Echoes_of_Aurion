@@ -50,4 +50,4 @@ Provider-Aufrufe bleiben davon getrennt und erfordern ihre eigene Freigabe/Spend
 
 ## Integrationsregel
 
-`Memory.md lesen → Integration → Runtime/Regression/Evidence → genau ein kurzer Memory.md-Eintrag mit Änderung + Erkenntnis + Evidence → erst dann Merge`
+`Memory.md lesen → Integration → Runtime/Regression/Evidence → Exact-Head-Gates → Merge → automatischer Memory.md-Eintrag mit Änderung + Erkenntnis + Evidence`
