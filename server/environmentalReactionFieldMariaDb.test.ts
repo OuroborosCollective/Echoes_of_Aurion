@@ -139,7 +139,7 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
     if (action.status !== "committed") return;
 
     const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT sourceDecisionReceiptId,sourceGoal,sourceGoalHash FROM aurionNpcActionReceipts WHERE id=?",
+      "SELECT sourceDecisionReceiptId,sourceGoal,sourceGoalHash,effectsHash FROM aurionNpcActionReceipts WHERE id=?",
       [action.actionReceiptId],
     );
     expect(rows).toHaveLength(1);
@@ -148,7 +148,7 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
     expect(rows[0].sourceGoalHash).toMatch(/^[a-f0-9]{64}$/);
 
     const [readbacks] = await pool.query<RowDataPacket[]>(
-      "SELECT id,effectsHash,sourceRevision FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",
+      "SELECT id,effectsHash,readbackHash,sourceRevision FROM aurionNpcActionEffectReadbacks WHERE actionReceiptId=?",
       [action.actionReceiptId],
     );
     const [links] = await pool.query<RowDataPacket[]>(
@@ -156,7 +156,8 @@ suite("AIM-592 environmental reaction field MariaDB integration", () => {
       [action.actionReceiptId],
     );
     expect(readbacks).toHaveLength(1);
-    expect(readbacks[0].effectsHash).toBe(action.effectReadbackHash);
+    expect(readbacks[0].effectsHash).toBe(rows[0].effectsHash);
+    expect(readbacks[0].readbackHash).toBe(action.effectReadbackHash);
     expect(readbacks[0].sourceRevision).toBe(pin.sourceRevision);
     expect(links).toHaveLength(1);
     expect(links[0].effectReadbackId).toBe(readbacks[0].id);
