@@ -2,15 +2,19 @@ import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import {
   planNpcCausalCatchup,
   resolveNpcCausalBudget,
-  type NpcCausalBudgetInput,
   type NpcCausalBudgetDecision,
+  type NpcCausalBudgetInput,
   type NpcCausalCatchupPlan,
+  type NpcCausalInputEvidence,
 } from "../shared/npcCausalBudgetProtocol";
 
-export type NpcCausalBudgetRuntimeInput = Readonly<NpcCausalBudgetInput & {
-  stateHash: string;
-  boundedCausalInputHashes: readonly string[];
-}>;
+export type NpcCausalBudgetRuntimeInput = Readonly<
+  NpcCausalBudgetInput & {
+    stateHash: string;
+    reducedModelVersion: string;
+    boundedCausalInputs: readonly NpcCausalInputEvidence[];
+  }
+>;
 
 export type NpcCausalBudgetRuntimePlan = Readonly<{
   decision: NpcCausalBudgetDecision;
@@ -18,17 +22,20 @@ export type NpcCausalBudgetRuntimePlan = Readonly<{
   runtimeHash: string;
 }>;
 
-export function planNpcCausalBudget(input: NpcCausalBudgetRuntimeInput): NpcCausalBudgetRuntimePlan {
+export function planNpcCausalBudget(
+  input: NpcCausalBudgetRuntimeInput,
+): NpcCausalBudgetRuntimePlan {
   const decision = resolveNpcCausalBudget(input);
   const catchup = decision.catchupRequired
     ? planNpcCausalCatchup({
         npcId: decision.npcId,
         tier: decision.tier,
         stateHash: input.stateHash,
+        reducedModelVersion: input.reducedModelVersion,
         lastResolutionIndex: decision.catchupFromResolutionIndex,
         currentResolutionIndex: decision.catchupToResolutionIndex,
         sourceRevision: decision.sourceRevision,
-        boundedCausalInputHashes: input.boundedCausalInputHashes,
+        boundedCausalInputs: input.boundedCausalInputs,
         maxSteps: input.maxCatchupSteps,
       })
     : null;
