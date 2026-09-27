@@ -8,6 +8,12 @@ import {
   type NpcSimulationMode,
 } from "../shared/npcSimulationCadenceProtocol";
 import {
+  npcCausalBudgetInputSchema,
+  resolveNpcCausalBudget,
+  type NpcCausalBudgetDecision,
+  type NpcCausalBudgetInput,
+} from "../shared/npcCausalBudgetProtocol";
+import {
   npcStructureObservationInputSchema,
   type NpcStructureObservationInput,
 } from "../shared/npcStructureObservationProtocol";
@@ -94,6 +100,43 @@ export function planNpcSimulationTick(input: {
     evaluation,
     structureObservationKeys,
     structureEvidenceHash,
+  });
+}
+
+export type NpcCausalSimulationScheduleDecision = Readonly<{
+  npcId: string;
+  causalBudget: NpcCausalBudgetDecision;
+  schedule: NpcSimulationScheduleDecision;
+}>;
+
+export function planNpcSimulationTickWithCausalBudget(input: {
+  causalBudget: NpcCausalBudgetInput;
+  currentTick: number;
+  lastEvaluationTick: number | null;
+  epoch: number;
+  lastConfirmedEpoch: number | null;
+  structureObservations?: readonly NpcStructureObservationInput[];
+  cadence?: NpcSimulationCadenceContract;
+}): NpcCausalSimulationScheduleDecision {
+  const causalBudget = npcCausalBudgetInputSchema.parse(input.causalBudget);
+  const decision = resolveNpcCausalBudget(causalBudget);
+  const schedule = planNpcSimulationTick({
+    npcId: causalBudget.npcId,
+    mode: decision.tier,
+    currentTick: input.currentTick,
+    lastEvaluationTick: input.lastEvaluationTick,
+    epoch: input.epoch,
+    lastConfirmedEpoch: input.lastConfirmedEpoch,
+    structureObservations: input.structureObservations,
+    cadence: input.cadence,
+  });
+  if (schedule.evaluation.mode !== decision.tier) {
+    throw new Error("NPC_CAUSAL_BUDGET_SCHEDULER_MODE_DRIFT");
+  }
+  return Object.freeze({
+    npcId: schedule.npcId,
+    causalBudget: decision,
+    schedule,
   });
 }
 
