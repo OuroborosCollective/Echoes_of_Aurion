@@ -12,27 +12,27 @@
 
 ## Automation
 
-`.github/workflows/agent-memory-supabase-sync.yml` runs on every `main` push and can also be started manually. Pull requests run the secret-free contract regression.
+The repository now creates the one Memory.md entry for a completed merge automatically.
 
-The job:
+`.github/workflows/post-merge-memory.yml` runs only when a pull request is actually merged into `main`. It resolves the merged PR metadata and changed-file list, appends one deterministic structured entry, prevents duplicates with a PR/merge-SHA marker, commits only `Memory.md` with `[skip ci]`, and immediately runs the Supabase synchronization/readback against the resulting Memory commit.
 
-1. checks out the exact `github.sha`;
-2. computes the Git blob SHA-1 and SHA-256 content hash;
-3. resolves the dedicated `echoes-of-aurion-agent-memory` workspace;
-4. inserts a new snapshot only when that exact `Memory.md` blob has not already been stored;
-5. creates an agent session and event;
-6. records a verified `agent_readback_history` row;
-7. reads both the memory entry and history row back from Supabase and verifies their identities/hashes.
+This removes the manual post-merge Memory.md editing step. The merge still has to pass the repository's normal required checks; the Memory bookkeeping happens afterward and does not restart the large Main CI/deploy workflow set.
 
-No Memory content or Supabase credential is printed to the workflow log.
+The existing `.github/workflows/agent-memory-supabase-sync.yml` remains the lower-level Memory-to-Supabase synchronization lane. Its automatic `main` trigger is limited to actual `Memory.md` changes, while pull requests continue to run the secret-free contract regression.
+
+## Evidence semantics
+
+The generated entry is repository-level merge evidence only. It records the PR URL, PR head SHA, merge commit SHA, exact changed paths and relevant `Decisions`, `Boundary`, `Learned`, `Open` and `Next safe step` sections from the merged PR body when present. It intentionally does not invent runtime/deployment/database evidence.
+
+The generator excludes the PR body's `Secret` section and redacts common token patterns before writing to `Memory.md`.
 
 ## One-time GitHub secret
 
-The workflow needs one repository Actions secret:
+The workflows need one repository Actions secret:
 
 `SUPABASE_SECRET_KEY` (preferred current Supabase secret-key format).
 
-For compatibility, it also accepts the legacy repository secret name:
+For compatibility, they also accept the legacy repository secret name:
 
 `SUPABASE_SERVICE_ROLE_KEY`.
 
