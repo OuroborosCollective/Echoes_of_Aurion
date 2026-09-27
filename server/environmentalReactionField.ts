@@ -8,13 +8,14 @@ import {
 } from "../shared/environmentalReactionFieldProtocol";
 
 const clampUnit = (value: number): number => Math.max(0, Math.min(1, value));
-const clampQ16 = (value: number): number =>
-  Math.max(0, Math.min(ENVIRONMENTAL_REACTION_Q16_MAX, Math.round(value)));
-const toQ16 = (value: number): number => clampQ16(clampUnit(value) * ENVIRONMENTAL_REACTION_Q16_MAX);
-const fromQ16 = (value: number): number => value / ENVIRONMENTAL_REACTION_Q16_MAX;
-const roundNeedDelta = (value: number): number => Math.round(Math.max(-1, Math.min(1, value)) * 10_000) / 10_000;
-const weatherRisk = (tone: WorldReaction["weatherTone"]): number =>
-  tone === "ashfall" ? 1 : tone === "storm" ? 0.8 : tone === "rain" ? 0.45 : 0;
+const clampQ16 = (value: number): number => Math.max(0, Math.min(ENVIRONMENTAL_REACTION_Q16_MAX, Math.round(value)));
+const toBps = (value: number): number => Math.max(0, Math.min(10_000, Math.round(clampUnit(value) * 10_000)));
+const bpsToQ16 = (bps: number): number => Math.floor((bps * ENVIRONMENTAL_REACTION_Q16_MAX + 5_000) / 10_000);
+const q16ToBps = (value: number): number => Math.floor((clampQ16(value) * 10_000 + ENVIRONMENTAL_REACTION_Q16_MAX / 2) / ENVIRONMENTAL_REACTION_Q16_MAX);
+const roundNeedDeltaFromBps = (valueBps: number): number => q16ToBps(valueBps) / 10_000;
+const weatherRiskBps = (tone: WorldReaction["weatherTone"]): number =>
+  tone === "ashfall" ? 10_000 : tone === "storm" ? 8_000 : tone === "rain" ? 4_500 : 0;
+const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 
 function assertReaction(reaction: WorldReaction): void {
   if (!reaction.regionId || !reaction.id || !/^[a-f0-9]{64}$/.test(reaction.deterministicHash)) {
