@@ -276,6 +276,21 @@ describe("AIM-618 temporal invariant validator", () => {
     expect(result.firstFailureTick).toBe(12);
   });
 
+  it("rejects unbounded trace evidence beyond the protocol cap", () => {
+    const trace = liveTrace();
+    const oversized: AurionTemporalTrace = {
+      ...trace,
+      events: Array.from({ length: 4097 }, (_, index) => ({
+        ...trace.events[index % trace.events.length]!,
+        tick: 12 + index,
+        sequence: 0,
+        eventId: "oversized:" + index,
+      })),
+      endTick: 4108,
+    };
+    expect(() => aurionTemporalTraceHash(oversized)).toThrow("AURION_TEMPORAL_TRACE_TOO_LARGE");
+  });
+
   it("rejects duplicate event positions and event identifiers", () => {
     const trace = liveTrace();
     const duplicatePosition: AurionTemporalTrace = {
