@@ -12,7 +12,7 @@ const toBps = (value: number): number => Math.max(0, Math.min(10_000, Math.round
 const bpsToQ16 = (bps: number): number => Math.floor((bps * ENVIRONMENTAL_REACTION_Q16_MAX + 5_000) / 10_000);
 const q16ToBps = (value: number): number =>
   Math.floor((clampQ16(value) * 10_000 + ENVIRONMENTAL_REACTION_Q16_MAX / 2) / ENVIRONMENTAL_REACTION_Q16_MAX);
-const roundNeedDeltaFromBps = (valueBps: number): number => q16ToBps(Math.abs(valueBps)) / 10_000 * (valueBps < 0 ? -1 : 1);
+const roundNeedDeltaFromBps = (valueBps: number): number => Math.max(-1, Math.min(1, Math.round(valueBps) / 10_000));
 const weatherRiskBps = (tone: WorldReaction["weatherTone"]): number =>
   tone === "ashfall" ? 10_000 : tone === "storm" ? 8_000 : tone === "rain" ? 4_500 : 0;
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
