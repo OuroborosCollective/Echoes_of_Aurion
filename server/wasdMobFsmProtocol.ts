@@ -51,7 +51,24 @@ export function initialMobRuntimeState(definition: MobDefinition, tick = 0): Mob
 
 export function nearestAggroTarget(definition: MobDefinition, position: WasdMobPosition, presences: readonly ConfirmedZonePresence[]): ConfirmedZonePresence | null {
   const limit = wasdMobAggroRadiusFixed(definition), limitSquared = limit * limit;
-  return presences.filter(presence => distanceSquared(position, presence.position) <= limitSquared).slice().sort((left, right) => distanceSquared(position, left.position) - distanceSquared(position, right.position) || compareText(left.entityId, right.entityId))[0] ?? null;
+  let nearest: ConfirmedZonePresence | null = null;
+  let nearestDist = Number.MAX_VALUE;
+
+  for (let i = 0; i < presences.length; i++) {
+    const presence = presences[i]!;
+    const dist = distanceSquared(position, presence.position);
+    if (dist <= limitSquared) {
+      if (dist < nearestDist) {
+        nearest = presence;
+        nearestDist = dist;
+      } else if (dist === nearestDist && nearest !== null) {
+        if (compareText(presence.entityId, nearest.entityId) < 0) {
+          nearest = presence;
+        }
+      }
+    }
+  }
+  return nearest;
 }
 
 export function resolveMobFsmTick(input: Readonly<{ current: MobRuntimeState; presences: readonly ConfirmedZonePresence[]; tick: number; resolveMovement?: (from: WasdMobPosition, desired: WasdMobPosition) => WasdMobPosition }>): MobRuntimeState {
