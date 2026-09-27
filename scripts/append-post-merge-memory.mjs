@@ -11,17 +11,26 @@ function required(value, name) {
 function redact(value) {
   return String(value ?? "")
     .replace(/sb_secret_[A-Za-z0-9_-]+/g, "[REDACTED]")
-    .replace(/Bearer\\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]")
-    .replace(/\\beyJ[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b/g, "[REDACTED]");
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]")
+    .replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[REDACTED]");
 }
 
 function section(body, headings) {
-  const source = String(body ?? "").replace(/\r/g, "");
+  const lines = String(body ?? "").replace(/\r/g, "").split("\n");
   for (const heading of headings) {
-    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\\\$&");
-    const match = source.match(new RegExp("^##\\\\s+" + escaped + "\\\\s*$([\\\\s\\\\S]*?)(?=^##\\\\s+|\\\\Z)", "mi"));
-    if (match?.[1]?.trim()) {
-      return redact(match[1].trim()).replace(/^\\s*[-*]\\s+/gm, "- ").replace(/\\n{3,}/g, "\\n\\n").trim();
+    const wanted = heading.trim().toLowerCase();
+    const start = lines.findIndex((line) => /^##\s+/.test(line) && line.replace(/^##\s+/, "").trim().toLowerCase() === wanted);
+    if (start < 0) continue;
+    let end = lines.length;
+    for (let index = start + 1; index < lines.length; index += 1) {
+      if (/^##\s+/.test(lines[index])) {
+        end = index;
+        break;
+      }
+    }
+    const value = lines.slice(start + 1, end).join("\n").trim();
+    if (value) {
+      return redact(value).replace(/^\s*[-*]\s+/gm, "- ").replace(/\n{3,}/g, "\n\n").trim();
     }
   }
   return "";
