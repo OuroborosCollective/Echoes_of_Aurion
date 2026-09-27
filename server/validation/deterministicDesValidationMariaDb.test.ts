@@ -6,7 +6,6 @@ import { getDb } from "../db";
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { AurionHeadlessCausalOracle } from "../causality/headlessCausalOracle";
 import { globalTickRecorder } from "../causality/tickRecorder";
-import { hashCanonicalZoneState } from "../causality/zoneCanonicalState";
 
 const enabled = process.env.NODE_ENV === "test" && process.env.AURION_DES_E2E === "1" && Boolean(process.env.DATABASE_URL);
 const suite = enabled ? describe : describe.skip;
