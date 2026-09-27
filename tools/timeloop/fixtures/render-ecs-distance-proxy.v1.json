@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "aurion.timeloop-workload.v1",
+  "workloadId": "render-ecs-distance-proxy-v1",
+  "scenarioId": "issue-616-prospective-analysis",
+  "authority": "NON_AUTHORITATIVE_OFFLINE_ANALYSIS",
+  "analysisStatus": "PROSPECTIVE_PROXY",
+  "sourceRevision": "6b1b5941da2ffc1abba3868b81073ea2376f6e52",
+  "sourceEvidence": {
+    "kind": "STATIC_REPOSITORY_PROVENANCE",
+    "path": "client/src/xaurion/spatial/RenderEcsPilot.ts",
+    "blobSha": "29f2971828c76b82c6eca226b0dc65e026564917"
+  },
+  "kernel": {
+    "class": "VECTOR_ELEMENTWISE_PROXY",
+    "entityCount": 2000,
+    "sourceMapping": "RenderEcsPilot.benchmark",
+    "authoritativeEquivalent": false
+  },
+  "timeloop": {
+    "repository": "https://github.com/NVlabs/timeloop",
+    "commit": "32370826fdf1aa3c8deb0c93e6b2a2fc7cf053aa"
+  },
+  "notes": "This manifest is a bounded analysis seam derived from the existing presentation benchmark. It does not claim that the JavaScript loop is a tensor-algebra workload, does not claim hardware equivalence, and cannot alter Aurion runtime truth."
+}

@@ -26,7 +26,7 @@ import {
   hashCanonicalZoneState,
 } from "./causality/zoneCanonicalState";
 import { computeRngRootHash, resolveAddressableRandomU32, type RngEventRecord } from "./determinism/aurionAddressableRandom";
-import { globalTickRecorder } from "./causality/tickRecorder";
+import { globalTickRecorder, AurionTickRecorder } from "./causality/tickRecorder";
 import { globalCausalPersistence } from "./causality/persistence";
 import { activeProvenance } from "./aurionProvenance";
 import {
@@ -140,7 +140,7 @@ export class AuthoritativeMovementZone {
     | typeof AURION_CAUSAL_TICK_SCHEMA_V2
     | null = null;
 
-  constructor(readonly zoneId: ZoneId) {}
+  constructor(readonly zoneId: ZoneId, private readonly evidenceRecorder: AurionTickRecorder = globalTickRecorder) {}
 
   enqueueIntent(intent: AurionZoneIntent): void { this.pendingIntents.push(intent); }
   getPendingIntents(): readonly AurionZoneIntent[] { return this.pendingIntents; }
@@ -655,7 +655,7 @@ export class AuthoritativeMovementZone {
     } as AurionCausalTickReceipt;
     this.previousReceiptHash = receipt.receiptHash;
     this.lastReceipt = receipt;
-    if (!this.isReplay) globalTickRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
+    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
 
     // 09 projection/transport. Replay emits no socket or persistence side effects.
     if (!this.isReplay) {
