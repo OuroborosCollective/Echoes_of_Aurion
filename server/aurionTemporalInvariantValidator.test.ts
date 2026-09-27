@@ -11,7 +11,7 @@ import {
   validateAurionTemporalTraceSet,
 } from "./aurionTemporalInvariantValidator";
 
-const SOURCE_REVISION = "3dfea464f8e072c50bf53745fbb1f7cef446997c";
+const SOURCE_REVISION = "cd53ace168a4a602a11d3cf670d68d57f3823ec4"; // merged Emergent Life Core source revision
 const RULESET = "aurion-emergent-life-test.v1";
 
 function property(
@@ -246,6 +246,18 @@ describe("AIM-618 temporal invariant validator", () => {
     };
 
     expect(() => aurionTemporalTraceHash(trace)).toThrow("AURION_TEMPORAL_EVENT_REVISION_DRIFT");
+  });
+
+  it("returns UNPROVABLE when the property is bound to another source revision", () => {
+    const result = validateAurionTemporalTrace(
+      liveTrace(),
+      property("AURION.REPLAY.STABLE_HASH", {
+        sourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        expectedTraceHash: aurionTemporalTraceHash(liveTrace()),
+      }),
+    );
+    expect(result.status).toBe("UNPROVABLE");
+    expect(result.reasonCode).toBe("TRACE_BINDING_MISMATCH");
   });
 
   it("fails closed on an impact-depth bound violation", () => {
