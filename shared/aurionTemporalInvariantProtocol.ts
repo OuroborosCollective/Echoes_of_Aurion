@@ -122,7 +122,7 @@ export function normalizeAurionTemporalTrace(trace: AurionTemporalTrace): Aurion
   const normalized = trace.events
     .map(normalizeEvent)
     .filter((event) => event.tick >= trace.startTick && event.tick <= trace.endTick)
-    .sort((a, b) => a.tick - b.tick || a.sequence - b.sequence || a.eventId.localeCompare(b.eventId));
+    .sort((a, b) => a.tick - b.tick || a.sequence - b.sequence || (a.eventId < b.eventId ? -1 : a.eventId > b.eventId ? 1 : 0));
 
   if (normalized.length === 0) throw new Error("AURION_TEMPORAL_TRACE_SCOPE_EMPTY");
 
