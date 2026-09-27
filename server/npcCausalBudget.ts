@@ -1,5 +1,6 @@
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import {
+  npcCausalBudgetInputSchema,
   planNpcCausalCatchup,
   resolveNpcCausalBudget,
   type NpcCausalBudgetDecision,
@@ -25,18 +26,27 @@ export type NpcCausalBudgetRuntimePlan = Readonly<{
 export function planNpcCausalBudget(
   input: NpcCausalBudgetRuntimeInput,
 ): NpcCausalBudgetRuntimePlan {
-  const decision = resolveNpcCausalBudget(input);
+  const {
+    stateHash,
+    reducedModelVersion,
+    boundedCausalInputs,
+    ...causalBudgetInput
+  } = input;
+
+  const causalBudget = npcCausalBudgetInputSchema.parse(causalBudgetInput);
+  const decision = resolveNpcCausalBudget(causalBudget);
+
   const catchup = decision.catchupRequired
     ? planNpcCausalCatchup({
         npcId: decision.npcId,
         tier: decision.tier,
-        stateHash: input.stateHash,
-        reducedModelVersion: input.reducedModelVersion,
+        stateHash,
+        reducedModelVersion,
         lastResolutionIndex: decision.catchupFromResolutionIndex,
         currentResolutionIndex: decision.catchupToResolutionIndex,
         sourceRevision: decision.sourceRevision,
-        boundedCausalInputs: input.boundedCausalInputs,
-        maxSteps: input.maxCatchupSteps,
+        boundedCausalInputs,
+        maxSteps: causalBudget.maxCatchupSteps,
       })
     : null;
 
