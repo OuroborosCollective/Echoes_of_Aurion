@@ -1432,3 +1432,10 @@ Status: IMPLEMENTED; exact-head CI and merge verification pending.
 Change: Added `aurion.world-generation.evidence-passport.v1` with canonical binding for world-generation revision, generator/ruleset/grammar/seed-policy identity, canonical graph, chunk projections, terrain and structure invariants, CAG request/response/result hashes, verification verdict and test-suite evidence. Added a fail-closed `RULESET_CANDIDATE` -> `RULESET_ACTIVE` promotion receipt; CAG divergence or unprovable evidence never promotes and no runtime/persistence authority is mutated.
 
 Evidence: 22/22 focused tests passed across the new passport plus existing world-generation evidence/gate contracts; `pnpm check` passed. Exact-head GitHub validation remains required after the append-only memory commit.
+
+### 2026-09-27 — Issue #617 deterministic Zone Network Delay Simulation
+Status: IMPLEMENTED; exact-head CI and merge verification pending.
+
+Change: Added a pure `aurion.zone-network-delay-simulation.v1` validation lane with explicit delay schedules, canonical delivery ordering, duplicate idempotency, causal-receipt binding, forged/late-message rejection and replay comparison across multiple cross-zone schedules. The simulator reports transport-dependent delivery evidence separately from the canonical receipt-bound gameplay verdict and does not alter production WebSocket semantics or persistence.
+
+Evidence: Focused deterministic scenario tests and `pnpm check` are required before PR creation; exact-head GitHub validation remains required after this memory-bearing commit.
