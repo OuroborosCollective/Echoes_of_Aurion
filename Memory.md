@@ -1444,7 +1444,7 @@ Evidence:
 - Final pre-memory code head `cad54c689bf2ebaceadaf5ea1118aaccea2e4d8d`.
 - Exact-head Runtime Container Proof: success.
 - Exact-head Runtime Candidate: success.
-- Exact-head Local Test Pack: success (`329` test files / `1586` tests passed in the corrected rerun).
+- Exact-head Local Test Pack: success on the corrected head.
 - AIM-292 source reproduction and real MariaDB/AX1 browser projection lane: success.
 - A real regression was caught in the first run: the state-change fixture supplied a canonical-contract mismatch; the test was corrected to bind both candidate contract and evidence to the changed canonical state before green revalidation.
 Learned: A matching projection hash string is not sufficient provenance. The actual canonical projection contract must be validated against the authoritative revision/state boundary before a visual difference can be classified as presentation-only.
