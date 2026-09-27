@@ -25,14 +25,19 @@ function requireNonEmpty(value, name) {
 }
 
 async function requestJson(fetchImpl, baseUrl, apiKey, path, options = {}) {
+  const isNewSecretKey = apiKey.startsWith("sb_secret_");
+  const headers = {
+    apikey: apiKey,
+    "Content-Type": "application/json",
+    ...(options.headers ?? {}),
+  };
+  if (!isNewSecretKey) {
+    headers.Authorization = "Bearer " + apiKey;
+  }
+
   const response = await fetchImpl(new URL(path, baseUrl), {
     ...options,
-    headers: {
-      apikey: apiKey,
-      Authorization: "Bearer " + apiKey,
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
