@@ -1,5 +1,4 @@
-import type { WorldReaction, WorldSignal } from "./wasdAurionProtocol";
-import { decideNpcGoal, resolveNpcNeeds, type NpcNeedEvent } from "./wasdAurionProtocol";
+import { decideNpcGoal, resolveNpcNeeds, type NpcNeedEvent, type WorldReaction } from "./wasdAurionProtocol";
 import {
   ENVIRONMENTAL_REACTION_FIELD_VERSION,
   ENVIRONMENTAL_REACTION_Q16_MAX,
@@ -11,8 +10,9 @@ const clampUnit = (value: number): number => Math.max(0, Math.min(1, value));
 const clampQ16 = (value: number): number => Math.max(0, Math.min(ENVIRONMENTAL_REACTION_Q16_MAX, Math.round(value)));
 const toBps = (value: number): number => Math.max(0, Math.min(10_000, Math.round(clampUnit(value) * 10_000)));
 const bpsToQ16 = (bps: number): number => Math.floor((bps * ENVIRONMENTAL_REACTION_Q16_MAX + 5_000) / 10_000);
-const q16ToBps = (value: number): number => Math.floor((clampQ16(value) * 10_000 + ENVIRONMENTAL_REACTION_Q16_MAX / 2) / ENVIRONMENTAL_REACTION_Q16_MAX);
-const roundNeedDeltaFromBps = (valueBps: number): number => q16ToBps(valueBps) / 10_000;
+const q16ToBps = (value: number): number =>
+  Math.floor((clampQ16(value) * 10_000 + ENVIRONMENTAL_REACTION_Q16_MAX / 2) / ENVIRONMENTAL_REACTION_Q16_MAX);
+const roundNeedDeltaFromBps = (valueBps: number): number => q16ToBps(Math.abs(valueBps)) / 10_000 * (valueBps < 0 ? -1 : 1);
 const weatherRiskBps = (tone: WorldReaction["weatherTone"]): number =>
   tone === "ashfall" ? 10_000 : tone === "storm" ? 8_000 : tone === "rain" ? 4_500 : 0;
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
@@ -32,22 +32,18 @@ function assertReaction(reaction: WorldReaction): void {
 export function compileEnvironmentalReactionField(reaction: WorldReaction): EnvironmentalReactionField {
   assertReaction(reaction);
 
-  const hazardQ16 = toQ16(Math.max(reaction.threatDelta, weatherRisk(reaction.weatherTone)));
-  const opportunityQ16 = toQ16(Math.max(0, reaction.resourceDelta));
-  const resourcePressureQ16 = toQ16(Math.max(0, -reaction.resourceDelta));
+  const hazardBps = Math.max(toBps(reaction.threatDelta), weatherRiskBps(reaction.weatherTone));
+  const opportunityBps = toBps(Math.max(0, reaction.resourceDelta));
+  const resourcePressureBps = toBps(Math.max(0, -reaction.resourceDelta));
+  const hazardQ16 = bpsToQ16(hazardBps);
+  const opportunityQ16 = bpsToQ16(opportunityBps);
+  const resourcePressureQ16 = bpsToQ16(resourcePressureBps);
+  const weatherQ16 = bpsToQ16(weatherRiskBps(reaction.weatherTone));
   const traversalRiskQ16 = clampQ16(
-    hazardQ16 * 0.75 +
-    toQ16(weatherRisk(reaction.weatherTone)) * 0.15 +
-    resourcePressureQ16 * 0.10,
+    Math.floor((hazardQ16 * 75 + weatherQ16 * 15 + resourcePressureQ16 * 10 + 50) / 100),
   );
 
-  const identity = [
-    reaction.regionId,
-    String(reaction.resolutionIndex),
-    reaction.id,
-    reaction.deterministicHash.slice(0, 24),
-  ].join(":");
-  const fieldId = `envf:${identity}`;
+  const fieldId = `envf:${reaction.regionId}:${reaction.resolutionIndex}:${reaction.id}:${reaction.deterministicHash.slice(0, 24)}`;
   const withoutHash = Object.freeze({
     version: ENVIRONMENTAL_REACTION_FIELD_VERSION,
     fieldId,
@@ -70,13 +66,13 @@ export function compileEnvironmentalReactionField(reaction: WorldReaction): Envi
 
 export function compileEnvironmentalReactionFieldFromSignals(input: {
   reaction: WorldReaction;
-  signals: readonly WorldSignal[];
+  signals: readonly { id: string; kind: string; regionId: string; resolutionIndex: number }[];
 }): EnvironmentalReactionField {
   const ordered = input.signals.slice().sort(
     (left, right) => left.resolutionIndex - right.resolutionIndex
-      || left.regionId.localeCompare(right.regionId)
-      || left.kind.localeCompare(right.kind)
-      || left.id.localeCompare(right.id),
+      || compareText(left.regionId, right.regionId)
+      || compareText(left.kind, right.kind)
+      || compareText(left.id, right.id),
   );
   if (ordered.some(signal => signal.regionId !== input.reaction.regionId || signal.resolutionIndex > input.reaction.resolutionIndex)) {
     throw new Error("ENVIRONMENTAL_REACTION_SIGNAL_SCOPE_INVALID");
@@ -85,48 +81,57 @@ export function compileEnvironmentalReactionFieldFromSignals(input: {
 }
 
 /**
- * Convert a confirmed field into bounded NPC need evidence. This adapter is
- * intentionally one-way: environmental state can constrain NPC needs, but NPC
- * state cannot rewrite the field.
+ * Convert a confirmed field into bounded NPC need evidence. This is one-way:
+ * environmental state can influence NPC needs, while NPC state cannot rewrite it.
  */
 export function environmentalReactionNeedEvents(field: EnvironmentalReactionField): readonly NpcNeedEvent[] {
-  const safetyDelta = roundNeedDelta(-fromQ16(field.hazardQ16) * 0.70);
-  const resourceDelta = roundNeedDelta(fromQ16(field.opportunityQ16) * 0.25 - fromQ16(field.resourcePressureQ16) * 0.35);
-  const wealthDelta = roundNeedDelta(fromQ16(field.opportunityQ16) * 0.20 - fromQ16(field.resourcePressureQ16) * 0.25);
-  const belongingDelta = roundNeedDelta(-fromQ16(field.traversalRiskQ16) * 0.05);
+  if (!/^[a-f0-9]{64}$/.test(field.fieldHash) || !/^[a-f0-9]{64}$/.test(field.sourceStateHash)) {
+    throw new Error("ENVIRONMENTAL_REACTION_FIELD_IDENTITY_INVALID");
+  }
+  const safetyDeltaBps = -Math.floor(q16ToBps(field.hazardQ16) * 70 / 100);
+  const resourceDeltaBps = Math.floor(q16ToBps(field.opportunityQ16) * 25 / 100) - Math.floor(q16ToBps(field.resourcePressureQ16) * 35 / 100);
+  const wealthDeltaBps = Math.floor(q16ToBps(field.opportunityQ16) * 20 / 100) - Math.floor(q16ToBps(field.resourcePressureQ16) * 25 / 100);
+  const belongingDeltaBps = -Math.floor(q16ToBps(field.traversalRiskQ16) * 5 / 100);
 
   const events: NpcNeedEvent[] = [];
-  const push = (need: NpcNeedEvent["need"], delta: number, suffix: string) => {
-    if (delta !== 0) {
+  const push = (need: NpcNeedEvent["need"], deltaBps: number, suffix: string) => {
+    if (deltaBps !== 0) {
       events.push({
         id: `environment:${field.fieldHash.slice(0, 24)}:${suffix}`,
         need,
-        delta,
+        delta: roundNeedDeltaFromBps(deltaBps),
         sourceReceiptId: field.sourceReceiptId,
         resolutionIndex: field.resolutionIndex,
       });
     }
   };
-  push("safety", safetyDelta, "safety");
-  push("resources", resourceDelta, "resources");
-  push("wealth", wealthDelta, "wealth");
-  push("belonging", belongingDelta, "belonging");
-  return Object.freeze(events.sort((left, right) => left.need.localeCompare(right.need) || left.id.localeCompare(right.id)));
+  push("safety", safetyDeltaBps, "safety");
+  push("resources", resourceDeltaBps, "resources");
+  push("wealth", wealthDeltaBps, "wealth");
+  push("belonging", belongingDeltaBps, "belonging");
+  return Object.freeze(events.sort(
+    (left, right) => compareText(left.need, right.need) || compareText(left.id, right.id),
+  ));
 }
 
 /**
- * Observable deterministic decision adapter used by tests/readback surfaces.
- * The actual NPC mutation remains in resolveAndRecordNpc and the existing
- * gateway; this helper only demonstrates the field's influence on the
- * already-existing need/goal resolver.
+ * Deterministic decision adapter for contract/runtime evidence. Mutation stays
+ * in resolveAndRecordNpc and the existing action gateway.
  */
 export function resolveEnvironmentalNpcGoal(input: {
   npcId: string;
   baseNeeds: Parameters<typeof resolveNpcNeeds>[0]["current"];
   observationIds: readonly string[];
   field: EnvironmentalReactionField;
-}): Readonly<{ goal: ReturnType<typeof decideNpcGoal>["goal"]; decisionHash: string; needs: ReturnType<typeof resolveNpcNeeds> }> {
-  const needs = resolveNpcNeeds({ current: input.baseNeeds, events: environmentalReactionNeedEvents(input.field) });
+}): Readonly<{
+  goal: ReturnType<typeof decideNpcGoal>["goal"];
+  decisionHash: string;
+  needs: ReturnType<typeof resolveNpcNeeds>;
+}> {
+  const needs = resolveNpcNeeds({
+    current: input.baseNeeds,
+    events: environmentalReactionNeedEvents(input.field),
+  });
   const decision = decideNpcGoal({
     npcId: input.npcId,
     needs,
