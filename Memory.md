@@ -1426,3 +1426,27 @@ Insight: Temporal validation is strongest as a bounded, local evidence layer ove
 
 Evidence: Exact PR head `fe96cf9dcfac90d44910019e5e9b4daf20eb7eb1` passed Aurion Local Test Pack, Runtime Candidate, Runtime Container Proof and AIM-292 MariaDB/AX1 regression. A real Local Test Pack regression on the prior head was fixed: the duplicate-ID test fixture had placed the duplicate outside the trace scope, so canonical normalization correctly filtered it. Final exact-head revalidation is required for this new memory-bearing revision before merge.
 
+
+
+### 2026-09-27 — Issue #590 deterministic world-model projection boundary verifier
+Status: VERIFIED exact-head source/regression/runtime candidate
+Task: Add the missing Aurion-native evidence adapter for the world-model → projection boundary without introducing a second world authority.
+Decisions:
+- Reused the existing `StructureProjectionContract` and canonical SHA-256 encoding.
+- Require exact `sourceRevision` and confirmed canonical chunk state before a projection can be `MATCH`.
+- Detached or tampered projection contracts remain `UNPROVABLE`.
+- Presentation-only changes are reported separately from canonical-world changes; revision/state/identity drift is classified as `FIRST_DIVERGENCE`.
+Touched surfaces:
+- `server/worldModelProjectionVerifier.ts`
+- `server/worldModelProjectionVerifier.test.ts`
+Evidence:
+- Baseline main `7290cf7d48c5e8431b149156300b9141892ebc1c`.
+- Final pre-memory code head `cad54c689bf2ebaceadaf5ea1118aaccea2e4d8d`.
+- Exact-head Runtime Container Proof: success.
+- Exact-head Runtime Candidate: success.
+- Exact-head Local Test Pack: success (`329` test files / `1586` tests passed in the corrected rerun).
+- AIM-292 source reproduction and real MariaDB/AX1 browser projection lane: success.
+- A real regression was caught in the first run: the state-change fixture supplied a canonical-contract mismatch; the test was corrected to bind both candidate contract and evidence to the changed canonical state before green revalidation.
+Learned: A matching projection hash string is not sufficient provenance. The actual canonical projection contract must be validated against the authoritative revision/state boundary before a visual difference can be classified as presentation-only.
+Open: No code-side integration gap remains in this slice; merge must use the exact post-memory head and its fresh exact-head gates.
+Next safe step: Re-run the exact-head gates for this memory-bearing revision, then merge #621 to main on the verified head.
