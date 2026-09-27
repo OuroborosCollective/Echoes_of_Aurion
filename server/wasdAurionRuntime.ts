@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { advanceNpcMemory, createNpcLifeSnapshot, decodeNpcReceipt, encodeNpcLifeReceipt, NPC_LIFE_RECEIPT_VERSION, normalizeNpcRequest, npcHash, npcNeedsSchema, npcReceiptVersion, npcRequestHash, parseNpcJson, parseNpcMemory, type NpcRequest, type NpcSnapshot } from "./npcPersistenceProtocol";
 import { aurionDialogueReceipts, aurionNpcDecisionReceipts, aurionNpcStates, aurionPolityStates, aurionWorldResolutions } from "../drizzle/schema";
 import { getDb } from "./db";
+import { environmentalReactionNeedEvents, type EnvironmentalReactionField } from "./environmentalReactionField";
 import { appendNpcMultiMemory, readNpcMultiMemoryForDecision, readPreviousNpcMultiMemory } from "./npcMultiMemoryPersistence";
 import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import type { NpcMemoryV4 } from "./wasdNpcCapsule";
@@ -168,8 +169,22 @@ export async function readConfirmedNpcState(npcId: string): Promise<NpcSnapshot 
 }
 
 /** Applies bounded needs and stores exactly one versioned life decision per NPC and resolution. */
-export async function resolveAndRecordNpc(raw: NpcRequest): Promise<AurionNpcReadModel> {
-  const input = normalizeNpcRequest(raw);
+export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: EnvironmentalReactionField): Promise<AurionNpcReadModel> {
+  const enriched = environmentalField
+    ? (() => {
+        if (environmentalField.regionId !== raw.regionId || environmentalField.resolutionIndex !== raw.resolutionIndex) {
+          throw new Error("NPC_ENVIRONMENTAL_FIELD_SCOPE_MISMATCH");
+        }
+        if (!/^[a-f0-9]{64}$/.test(environmentalField.sourceStateHash) || !/^[a-f0-9]{64}$/.test(environmentalField.fieldHash)) {
+          throw new Error("NPC_ENVIRONMENTAL_FIELD_IDENTITY_INVALID");
+        }
+        const environmentalEvents = environmentalReactionNeedEvents(environmentalField);
+        const observationIds = [...raw.observationIds, `environmental-field:${environmentalField.fieldHash}`];
+        const needEvents = [...raw.needEvents, ...environmentalEvents];
+        return { ...raw, observationIds, needEvents };
+      })()
+    : raw;
+  const input = normalizeNpcRequest(enriched);
   const v3RequestHash = npcRequestHash(input,NPC_LIFE_RECEIPT_VERSION);
   const db = await getDb();
   if (!db) throw new Error("Die Aurion-Spielerdatenbank ist nicht verfügbar.");
