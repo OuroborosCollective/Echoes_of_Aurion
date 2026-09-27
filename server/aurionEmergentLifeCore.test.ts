@@ -53,6 +53,17 @@ describe("AIM-544 Emergent Life Core", () => {
     expect(() => normalizeEmergentLifeImpacts([impact("hazard",100,4), impact("hazard",200,4)],"npc-1",4)).toThrow("EMERGENT_LIFE_DUPLICATE_IMPACT");
   });
 
+  it("binds a selected action to the canonical effect-intent contract", () => {
+    const result = resolveEmergentLifeStep({
+      entityId:"npc-1", regionId:"observatory_threshold", resolutionIndex:10,
+      currentNeeds:baseNeeds, impacts:[impact("hazard",500,10)], candidates,
+    });
+    expect(result.effectIntent).not.toBeNull();
+    expect(result.effectIntent?.effectType).toBe("emergent-life-action-intent");
+    expect(result.effectIntent?.authorityReceiptHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(result.effectIntent?.effectId).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
   it("excludes future impacts from the current resolution", () => {
     const result = resolveEmergentLifeStep({ entityId:"npc-1", regionId:"observatory_threshold", resolutionIndex:10, currentNeeds:baseNeeds, impacts:[impact("hazard",500,11)], candidates:[] });
     expect(result.inputImpactIds).toEqual([]);
