@@ -5,7 +5,7 @@ import { orderCanonicalZoneIntents, hashCanonicalIntents, sanitizeIntentForHash 
 import { AURION_CAUSAL_TICK_SCHEMA_V2, type AurionCausalTickReceipt } from "../../shared/aurionCausalTickContract";
 import { buildSimulationWorkPlan, canonicalizeSimulationWork, partitionSimulationWork, type SimulationWorkItem } from "../../shared/aurionSimulationWorkOrderProtocol";
 import { AURION_REPLAY_VERDICT_SCHEMA, type ReplayVerdict } from "../../shared/aurionReplayContract";
-import type { PersistedCheckpoint, RecordedTickEntry } from "../causality/tickRecorder";
+import { AurionTickRecorder, type PersistedCheckpoint, type RecordedTickEntry } from "../causality/tickRecorder";
 import { AurionHeadlessCausalOracle } from "../causality/headlessCausalOracle";
 import { replayZoneTick } from "../causality/replayZoneTick";
 import { hashCanonicalZoneState, type CanonicalZoneState } from "../causality/zoneCanonicalState";
@@ -166,7 +166,7 @@ export async function executeDeterministicDesScenario(input: Readonly<{
   const tickCount = input.tickCount ?? 2;
   if (!Number.isSafeInteger(tickCount) || tickCount < 1 || tickCount > MAX_TICKS) throw new Error("AURION_DES_TICK_BOUND_INVALID");
   const zoneId = (input.zoneId ?? ("observatory_threshold:des-" + canonicalSha256({ scenarioId: input.scenarioId, seed: input.seed }).slice(7, 31))) as ZoneId;
-  const zone = new AuthoritativeMovementZone(zoneId);
+  const evidenceRecorder = new AurionTickRecorder(256);\n  const zone = new AuthoritativeMovementZone(zoneId, evidenceRecorder);
   zone.receiptSchemaOverride = AURION_CAUSAL_TICK_SCHEMA_V2;
   zone.sourceRevisionOverride = input.sourceRevision;
   const socket = { readyState: 1, OPEN: 1, send() {}, close() {} } as unknown as WebSocket;
@@ -183,8 +183,8 @@ export async function executeDeterministicDesScenario(input: Readonly<{
     zone.tick();
   }
   const elapsedMs = performance.now() - started;
-  const receipts = globalTickRecorder.getReceiptChain(zoneId, 1, tickCount);
-  const entries = receipts.map(receipt => globalTickRecorder.getEntry(zoneId, receipt.tick)!).filter(Boolean);
+  const receipts = evidenceRecorder.getReceiptChain(zoneId, 1, tickCount);
+  const entries = receipts.map(receipt => evidenceRecorder.getEntry(zoneId, receipt.tick)!).filter(Boolean);
   if (entries.length !== tickCount) throw new Error("AURION_DES_RECORDED_TICKS_MISSING");
   const firstEntry = entries[0]!;
   const terminal = entries.at(-1)!.postState ?? zone.getCanonicalZoneState();
