@@ -403,3 +403,52 @@
     max-width:calc(100vw - 56px);
   }
 }
+
+
+/* 2026-09-28 Mobile evidence/UI hardening — appended after legacy/AIM-584 rules so these invariants are the final cascade. */
+@media (max-width:720px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col{
+    position:static;
+    width:auto;
+    max-width:100%;
+    align-items:flex-end;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav{
+    width:auto;
+    max-width:calc(100vw - 16px);
+    justify-content:flex-end;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    position:absolute;
+    top:clamp(150px,29vh,360px);
+    right:8px;
+    left:auto;
+    width:min(240px,calc(100vw - 16px));
+    max-width:calc(100vw - 16px);
+    max-height:min(26vh,220px);
+    z-index:3;
+    pointer-events:auto;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker h2{
+    font-size:14px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker > div:last-child > section[aria-label="Nearby objectives"]{
+    display:none;
+  }
+}
+@media (max-width:420px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    top:clamp(136px,27vh,250px);
+    width:min(220px,calc(100vw - 16px));
+    max-height:min(24vh,190px);
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker h2{
+    font-size:13px;
+  }
+}
+@media (max-height:700px) and (orientation:portrait){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    top:132px;
+    max-height:26vh;
+  }
+}
