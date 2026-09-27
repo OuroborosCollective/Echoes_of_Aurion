@@ -200,7 +200,8 @@ export async function executeDeterministicDesScenario(input: Readonly<{
   const recombined = canonicalizeSimulationWork(partitions.flat());
   const parallelPlan = buildSimulationWorkPlan({ sourceRevision: input.sourceRevision, logicalTick: tickCount, workItems: recombined, maxWorkItems: Math.max(1, workItems.length) });
   const schedulerEquivalence = serialPlan.planHash === parallelPlan.planHash ? "PASS" : "FAIL";
-  const oracle = new AurionHeadlessCausalOracle(memoryPersistence({ id: "des:" + input.scenarioId, worldId: startState.worldId, zoneId, tick: 0, snapshotHash: hashCanonicalZoneState(startState), state: startState, reconciled: 1 }, entries));
+  const oracleCheckpoint: PersistedCheckpoint = { id: "des:" + input.scenarioId, worldId: startState.worldId, zoneId, tick: startState.tick, snapshotHash: hashCanonicalZoneState(startState), state: startState, reconciled: 1 };
+  const oracle = new AurionHeadlessCausalOracle(memoryPersistence(oracleCheckpoint, entries));
   const oracleResult = await oracle.replayRange({ zoneId, fromTick: 1, toTick: tickCount });
   const replayEquality = oracleResult.status === "MATCH" && replayVerdicts.every(v => v.status === "MATCH");
   const firstDivergence = replayVerdicts.find(v => v.status === "FIRST_DIVERGENCE");
