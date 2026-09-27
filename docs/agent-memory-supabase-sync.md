@@ -12,7 +12,7 @@
 
 ## Automation
 
-`.github/workflows/agent-memory-supabase-sync.yml` runs on every `main` push that changes `Memory.md` and can also be started manually.
+`.github/workflows/agent-memory-supabase-sync.yml` runs on every `main` push and can also be started manually. Pull requests run the secret-free contract regression.
 
 The job:
 
