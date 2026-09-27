@@ -55,6 +55,15 @@ Do not:
 - After an integration/fix, run the relevant regression and runtime/readback checks.
 - Follow the repository's exact-head Memory.md → integration → evidence → merge → main-readback workflow.
 
+## Agent working-memory readback
+
+GitHub `Memory.md` is the canonical repository memory document. The Supabase project `Echoes_of_Aurion` is only an agent-working-memory mirror and readback history.
+
+- Never treat the Supabase memory workspace as Aurion gameplay/world/persistence truth.
+- The automated `agent-memory-supabase-sync.yml` job stores append-only Memory snapshots and revision-bound readback evidence after `main` Memory changes.
+- Supabase readback can confirm what was stored, but it does not elevate a snapshot above the GitHub source or canonical Aurion runtime evidence.
+- Never place Supabase credentials or secrets into `Memory.md`, logs, tests, or repository files.
+
 <!-- gitbook-agent-instructions:start -->
 
 ## GitBook Documentation Editing
