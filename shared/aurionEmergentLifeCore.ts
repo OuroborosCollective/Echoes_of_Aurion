@@ -1,5 +1,4 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
-import type { NpcNeedKey } from "../server/wasdNpcCapsule";
 
 export const AURION_EMERGENT_LIFE_PROTOCOL = "aurion.emergent-life.v1" as const;
 
@@ -9,6 +8,11 @@ export const emergentLifeActionKinds = [
   "explore", "defend", "negotiate", "raid", "fight", "make_peace",
 ] as const;
 export type EmergentLifeActionKind = (typeof emergentLifeActionKinds)[number];
+
+export const emergentLifeNeedKinds = ["safety", "resources", "belonging", "status", "wealth", "power"] as const;
+export type EmergentLifeNeedKind = (typeof emergentLifeNeedKinds)[number];
+
+export type EmergentLifeNeedState = Readonly<Record<EmergentLifeNeedKind, number>>;
 
 export type EmergentLifeImpact = Readonly<{
   sourceReceiptId: string;
@@ -90,10 +94,10 @@ export function normalizeEmergentLifeImpacts(
 }
 
 export function applyEmergentLifeImpacts(
-  needs: Readonly<Record<NpcNeedKey, number>>,
+  needs: EmergentLifeNeedState,
   impacts: readonly EmergentLifeImpact[],
 ): Readonly<Record<NpcNeedKey, number>> {
-  const next: Record<NpcNeedKey, number> = {
+  const next: Record<EmergentLifeNeedKind, number> = {
     safety: clampBps(needs.safety),
     resources: clampBps(needs.resources),
     belonging: clampBps(needs.belonging),
