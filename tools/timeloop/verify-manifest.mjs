@@ -7,8 +7,7 @@ const fixturePath = new URL("./fixtures/render-ecs-distance-proxy.v1.json", impo
 const input = JSON.parse(await readFile(fixturePath, "utf8"));
 const manifest = normalizeTimeloopManifest(input);
 
-function git(args) { return execFileSync("git", args, { encoding: "utf8" }).trim(); }
-function sha1Blob(data) { return createHash("sha1").update(data).digest("hex"); }
+function git(args, options = {}) { return execFileSync("git", args, { encoding: "utf8", ...options }).trim(); }
 
 git(["cat-file", "-e", manifest.sourceRevision + "^{commit}"]);
 const sourceBytes = execFileSync("git", ["show", manifest.sourceRevision + ":" + manifest.sourceEvidence.path]);
