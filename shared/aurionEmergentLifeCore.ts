@@ -1,4 +1,5 @@
 import { canonicalSha256 } from "./aurionCanonicalHash";
+import { createEffectIntent, type AurionEffectIntent } from "./aurionEffectIntentContract";
 
 export const AURION_EMERGENT_LIFE_PROTOCOL = "aurion.emergent-life.v1" as const;
 
@@ -47,6 +48,7 @@ export type EmergentLifeResolution = Readonly<{
   selectedAction: EmergentLifeActionCandidate | null;
   actionIntentHash: string;
   nextImpact: EmergentLifeImpact | null;
+  effectIntent: AurionEffectIntent | null;
   resolutionHash: string;
 }>;
 
@@ -172,6 +174,13 @@ export function resolveEmergentLifeStep(input: {
     resolutionIndex: input.resolutionIndex,
     selectedAction,
   });
+  const effectIntent = selectedAction ? createEffectIntent({
+    authorityReceiptHash: canonicalSha256({ entityId: input.entityId, regionId: input.regionId, resolutionIndex: input.resolutionIndex, inputImpactIds: normalizedImpacts.map(value => value.sourceReceiptId) }),
+    effectType: "emergent-life-action-intent",
+    subjectId: input.entityId,
+    ordinal: input.resolutionIndex,
+    payload: { action: selectedAction, nextImpact },
+  }) : null;
   const resolutionHash = canonicalSha256({
     protocol: AURION_EMERGENT_LIFE_PROTOCOL,
     entityId: input.entityId,
@@ -183,6 +192,7 @@ export function resolveEmergentLifeStep(input: {
     candidateSetHash,
     actionIntentHash,
     nextImpact,
+    effectIntent: effectIntent ? { effectId: effectIntent.effectId, payloadHash: effectIntent.payloadHash } : null,
   });
   return Object.freeze({
     protocol: AURION_EMERGENT_LIFE_PROTOCOL,
@@ -196,6 +206,7 @@ export function resolveEmergentLifeStep(input: {
     selectedAction,
     actionIntentHash,
     nextImpact,
+    effectIntent,
     resolutionHash,
   });
 }
