@@ -52,6 +52,7 @@ const inputSchema = z.strictObject({
   projectionHash: SHA256,
   recipeHash: BARE_SHA256.optional(),
   observationKey: SHA256.optional(),
+  projectionContract: z.unknown().optional(),
 });
 
 function canonicalBoundaryEvidence(value: {
