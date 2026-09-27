@@ -1459,3 +1459,13 @@ Evidence:
 Learned: Projection hashes alone are insufficient provenance. The verifier must validate the actual canonical projection contract against the authoritative revision/state boundary before treating a visual difference as presentation-only.
 Open: Final exact-head gates must be regenerated on this main-rebased, Memory-bearing revision before merge.
 Next safe step: run the final exact-head regression/runtime gates, then merge the green PR.
+
+
+### 2026-09-27 — PR #627 / Issue #591 deterministic Game-Theory compiler
+Status: IMPLEMENTATION COMPLETE; memory-bearing exact-head revalidation required.
+
+Change: Added Aurion-native `aurion-game-theory-ir.v1` and a bounded compiler that canonically binds model, source receipt/revision, observation, seed and NPC candidate evidence, adjusts candidates through deterministic payoff bounds, then delegates final scoring/tie-breaks to the existing Utility Planner and optional Coordination Law. No second planner, persistence authority, CAG client, RNG, wall-clock or runtime LLM/RL dependency was introduced.
+
+Insight: Game Theory is useful as a compact policy/model layer only when its output is evidence-bound and downstream of canonical observations; final gameplay authority must remain on the existing planner -> Action Gateway -> Causal/Effect receipt path. Wolfram/GameTheoryData remains an offline research/model source, not runtime truth.
+
+Evidence: Pre-memory exact head `d2576ceb6a3426216fd85c1baa849cb9d1dfa713` passed Runtime Candidate #1091, Runtime Container Proof #1090, Local Test Pack #1652 and AIM-292 MariaDB/AX1 Proof #1444, all with successful conclusions. MariaDB journal apply, transaction/replay/readback, production build, autonomous tick, browser three-screen projection, typecheck, repository regression and offline evidence-pack stages completed successfully. Memory-bearing exact-head revalidation is mandatory before merge; no production database mutation was performed.
