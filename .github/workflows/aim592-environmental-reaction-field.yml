@@ -1,0 +1,103 @@
+name: AIM-592 Environmental Reaction Field
+
+on:
+  pull_request:
+    paths:
+      - "server/environmentalReactionField.ts"
+      - "server/environmentalReactionField.test.ts"
+      - "server/environmentalReactionFieldMariaDb.test.ts"
+      - "server/wasdAurionRuntime.ts"
+      - "shared/environmentalReactionFieldProtocol.ts"
+      - ".github/workflows/aim592-environmental-reaction-field.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "drizzle/**"
+      - "vendor/wasd-npc/**"
+      - "config/wasd-npc-capsule.json"
+  push:
+    branches: [main]
+    paths:
+      - "server/environmentalReactionField.ts"
+      - "server/environmentalReactionField.test.ts"
+      - "server/environmentalReactionFieldMariaDb.test.ts"
+      - "server/wasdAurionRuntime.ts"
+      - "shared/environmentalReactionFieldProtocol.ts"
+      - ".github/workflows/aim592-environmental-reaction-field.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aim592-environmental-reaction-field-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-contract:
+    name: Deterministic field contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          pnpm check
+          pnpm exec vitest run --no-file-parallelism server/environmentalReactionField.test.ts --reporter=verbose
+          git diff --check
+
+  mariadb-gateway:
+    name: Real MariaDB NPC gateway proof
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4.13
+        env:
+          MARIADB_ROOT_PASSWORD: aurion-aim592-proof
+          MARIADB_DATABASE: aurion_aim592_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -paurion-aim592-proof --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:aurion-aim592-proof@127.0.0.1:3306/aurion_aim592_test
+      AURION_NPC_ACTION_E2E: "1"
+      AURION_NPC_E2E: "1"
+      AURION_E2E_ISOLATED: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aurion-disposable-aim592-signing-key-never-production
+      VITE_APP_ID: aurion-isolated-aim592
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply exact-head schema
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          node scripts/verify-wasd-npc.mjs
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Prove field-to-decision-to-gateway readback
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run --no-file-parallelism server/environmentalReactionField.test.ts server/environmentalReactionFieldMariaDb.test.ts --reporter=verbose
+          AURION_RECONCILIATION_SOURCE_SHA="$AURION_RELEASE_SHA" node --import tsx scripts/reconcile-aurion-production-schema.ts --require-match
+          git diff --check
