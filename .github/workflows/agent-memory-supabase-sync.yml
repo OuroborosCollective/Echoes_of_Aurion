@@ -1,0 +1,56 @@
+name: Agent Memory → Supabase sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Memory.md"
+  workflow_dispatch:
+
+concurrency:
+  group: agent-memory-supabase-sync-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync-agent-memory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: https://ggwyphkhxnzurregdkql.supabase.co
+      SUPABASE_API_KEY: \${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_MEMORY_WORKSPACE_SLUG: echoes-of-aurion-agent-memory
+      GITHUB_REPOSITORY: \${{ github.repository }}
+      GITHUB_SHA: \${{ github.sha }}
+      GITHUB_REF_NAME: \${{ github.ref_name }}
+      GITHUB_RUN_ID: \${{ github.run_id }}
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: \${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Verify Supabase credential is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "\${SUPABASE_API_KEY:-}" ]]; then
+            echo "::error::Configure repository secret SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY."
+            exit 78
+          fi
+
+      - name: Run sync contract regression
+        run: node scripts/sync-agent-memory-to-supabase.test.mjs
+
+      - name: Synchronize Memory.md and independently read it back
+        run: node scripts/sync-agent-memory-to-supabase.mjs
