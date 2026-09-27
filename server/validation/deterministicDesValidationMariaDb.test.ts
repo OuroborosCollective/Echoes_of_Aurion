@@ -54,7 +54,7 @@ suite("Aurion #616 deterministic DES MariaDB readback", () => {
     expect(result.finalStateHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     const receipt = await globalTickRecorder.getLatestReceipt(ZONE);
     expect(receipt).toBeDefined();
-    expect(hashCanonicalZoneState(result.finalStateHash as any)).toBeDefined();
+    expect(receipt!.postStateHash).toBe(result.finalStateHash);
     const after = await counts();
     expect(after).toEqual(before);
     const repeated = await oracle.replayRange({ zoneId: ZONE, fromTick: 1, toTick: 4 });
