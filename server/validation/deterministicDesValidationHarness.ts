@@ -134,7 +134,7 @@ function buildWorkItems(entries: readonly RecordedTickEntry[]): readonly Simulat
 function memoryPersistence(checkpoint: PersistedCheckpoint, entries: readonly RecordedTickEntry[]) {
   return {
     async getCheckpointAtOrBefore() { return structuredClone(checkpoint); },
-    async getTicksInRange(_zoneId: string, _from: number, _to: number) { return structuredClone(entries); },
+    async getTicksInRange(_zoneId: string, _from: number, _to: number): Promise<RecordedTickEntry[]> { return structuredClone(entries) as RecordedTickEntry[]; },
   };
 }
 
