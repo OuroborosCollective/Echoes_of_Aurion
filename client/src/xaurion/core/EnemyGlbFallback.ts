@@ -153,7 +153,6 @@ export function selectEnemyGlb(
   const eligible = enemyFallbackVariants(catalog)
     .map((variant, index) => Object.freeze({
       variant,
-      index,
       score: matchScore(variant.key, archetype),
       physical: variant.entries.filter(candidate => fitsTier(candidate.entry, tier)),
     }))
@@ -163,12 +162,18 @@ export function selectEnemyGlb(
   const bestScore = Math.min(...eligible.map(candidate => candidate.score));
   const ranked = eligible.filter(candidate => candidate.score === bestScore);
   const selected = ranked[enemyVisualIdentityHash(entityIdentity) % ranked.length]!;
-  const physical = selectPhysical(selected.physical[0]!.entry, preferredLod, tier);
+  const candidates = selected.physical.slice().sort((left, right) => {
+    const leftLod = left.lod ?? Number.MAX_SAFE_INTEGER;
+    const rightLod = right.lod ?? Number.MAX_SAFE_INTEGER;
+    const rank = (level: number) => level >= preferredLod ? level - preferredLod : 10 + preferredLod - level;
+    return rank(leftLod) - rank(rightLod) || left.entry.sha256.localeCompare(right.entry.sha256);
+  });
+  const physical = candidates[0];
   if (!physical) return null;
   return Object.freeze({
     entry: physical.entry,
     variantKey: selected.variant.key,
-    lod: physical.lod,
+    lod: (physical.lod ?? 0) as GlbLodLevel,
     tier,
   });
 }
