@@ -369,6 +369,7 @@ export function GameHUD(props: GameHUDProps) {
           <div className="ax1-minimap-shell origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
 
           <section data-collapsed={objectivesCollapsed} className="ax1-objective-tracker w-[min(340px,78vw)] rounded-[6px] border border-amber-300/20 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+            {objectivesCollapsed && primaryObjective ? <span className="sr-only" data-testid="collapsed-primary-objective">{primaryObjective.label}</span> : null}
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <div className="flex items-center gap-1.5">
                 <Award className="h-3.5 w-3.5 text-amber-200" aria-hidden />
