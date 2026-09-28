@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import type { AurionCagProbe } from "../shared/aurionCagDesignProtocol";
 import type { WolframCagClient, WolframCagEvidence } from "./wolframCag";
 
-export const AURION_CAG_DESIGN_ORACLE_VERSION = "aurion.cag-design-oracle-receipt.v1" as const;
+export const AURION_CAG_DESIGN_ORACLE_VERSION =
+  "aurion.cag-design-oracle-receipt.v1" as const;
 
 export type AurionCagDesignOracleReceipt = Readonly<{
   version: typeof AURION_CAG_DESIGN_ORACLE_VERSION;
@@ -15,6 +16,9 @@ export type AurionCagDesignOracleReceipt = Readonly<{
   providerUuidSha256: string | null;
   providerCode: number | null;
   failureFamily: string | null;
+  inputSha256: string;
+  resultSha256: string | null;
+  rulesetPromotion: "eligible" | "blocked";
   truthNotice: string;
   mutationPerformed: false;
   secretValuesReturned: false;
@@ -27,11 +31,15 @@ function sha256(value: string): string {
 /** Accept only bounded numeric Wolfram output (integer or integer list), optionally wrapped by Out[n]=. */
 export function normalizeWolframComputeResult(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed || trimmed.length > 4096 || /[\r\n]/.test(trimmed)) throw new Error("CAG_RESULT_BOUNDS");
+  if (!trimmed || trimmed.length > 4096 || /[\r\n]/.test(trimmed))
+    throw new Error("CAG_RESULT_BOUNDS");
   const match = /^(?:Out\[[0-9]{1,9}\]\s*=\s*)?(.+)$/.exec(trimmed);
   if (!match?.[1]) throw new Error("CAG_RESULT_FORMAT");
   const compact = match[1].replace(/\s+/g, "");
-  if (!/^-?[0-9]+$/.test(compact) && !/^\{-?[0-9]+(?:,-?[0-9]+)*\}$/.test(compact)) {
+  if (
+    !/^-?[0-9]+$/.test(compact) &&
+    !/^\{-?[0-9]+(?:,-?[0-9]+)*\}$/.test(compact)
+  ) {
     throw new Error("CAG_RESULT_FORMAT");
   }
   return compact;
@@ -43,27 +51,35 @@ function safeFailureFamily(error: unknown): string {
   if (/^WOLFRAM_CAG_HTTP_[0-9]{3}$/.test(message)) return message.toLowerCase();
   if (/^WOLFRAM_CAG_[A-Z0-9_]+$/.test(message)) return message.toLowerCase();
   if (/^CAG_[A-Z0-9_]+$/.test(message)) return message.toLowerCase();
-  if (error.name === "AbortError" || error.name === "TimeoutError") return "provider_timeout";
+  if (error.name === "AbortError" || error.name === "TimeoutError")
+    return "provider_timeout";
   if (error instanceof TypeError) return "provider_unreachable";
   return "provider_failure_unclassified";
 }
 
 function receiptFromEvidence(
   probe: AurionCagProbe,
-  evidence: WolframCagEvidence,
+  evidence: WolframCagEvidence
 ): AurionCagDesignOracleReceipt {
   const observedExact = normalizeWolframComputeResult(evidence.result);
   return Object.freeze({
     version: AURION_CAG_DESIGN_ORACLE_VERSION,
     kind: probe.kind,
-    verdict: observedExact === probe.expectedExact ? "SUPPORTED" : "CONTRADICTED",
+    verdict:
+      observedExact === probe.expectedExact ? "SUPPORTED" : "CONTRADICTED",
     expectedExact: probe.expectedExact,
     observedExact,
     requestSha256: evidence.requestSha256,
     responseSha256: evidence.responseSha256,
-    providerUuidSha256: evidence.providerUuid ? sha256(evidence.providerUuid) : null,
+    providerUuidSha256: evidence.providerUuid
+      ? sha256(evidence.providerUuid)
+      : null,
     providerCode: evidence.providerCode,
     failureFamily: null,
+    inputSha256: sha256(probe.code),
+    resultSha256: sha256(observedExact),
+    rulesetPromotion:
+      observedExact === probe.expectedExact ? "eligible" : "blocked",
     truthNotice: `${probe.truthNotice} A non-SUPPORTED verdict never mutates authoritative Aurion state.`,
     mutationPerformed: false,
     secretValuesReturned: false,
@@ -72,7 +88,7 @@ function receiptFromEvidence(
 
 export async function verifyAurionCagDesignProbe(
   probe: AurionCagProbe,
-  client: WolframCagClient,
+  client: WolframCagClient
 ): Promise<AurionCagDesignOracleReceipt> {
   try {
     const evidence = await client.languageCompute({
@@ -93,6 +109,9 @@ export async function verifyAurionCagDesignProbe(
       providerUuidSha256: null,
       providerCode: null,
       failureFamily: safeFailureFamily(error),
+      inputSha256: sha256(probe.code),
+      resultSha256: null,
+      rulesetPromotion: "blocked",
       truthNotice: `${probe.truthNotice} Provider failure is non-authoritative and cannot change already-confirmed gameplay or world state.`,
       mutationPerformed: false,
       secretValuesReturned: false,
@@ -100,11 +119,24 @@ export async function verifyAurionCagDesignProbe(
   }
 }
 
+export function assertCagRulesetPromotionAllowed(
+  receipt: AurionCagDesignOracleReceipt
+): void {
+  if (
+    receipt.verdict !== "SUPPORTED" ||
+    receipt.rulesetPromotion !== "eligible" ||
+    receipt.resultSha256 === null
+  ) {
+    throw new Error("CAG_RULESET_PROMOTION_BLOCKED");
+  }
+}
+
 export async function verifyAurionCagDesignSuite(
   probes: readonly AurionCagProbe[],
-  client: WolframCagClient,
+  client: WolframCagClient
 ): Promise<readonly AurionCagDesignOracleReceipt[]> {
   const receipts: AurionCagDesignOracleReceipt[] = [];
-  for (const probe of probes) receipts.push(await verifyAurionCagDesignProbe(probe, client));
+  for (const probe of probes)
+    receipts.push(await verifyAurionCagDesignProbe(probe, client));
   return Object.freeze(receipts);
 }
