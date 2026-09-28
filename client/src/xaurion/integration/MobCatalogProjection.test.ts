@@ -39,7 +39,7 @@ async function step(p: MobCatalogProjection, dt=.5) { p.update(dt); await Promis
 
 describe("approved confirmed mob GLB presentation", () => {
   it("uses the exact catalog binding and confirmed archetype, retaining the placeholder until loading completes", async () => {
-    const s=setup(3); s.mobs[1]!.data.type="aether_wisp";s.mobs[2]!.group.userData.aurionConfirmedMob=false;
+    const s=setup(3); s.mobs[1]!.data.type="aether_wisp";s.mobs[1]!.group.userData.aurionConfirmedMob=false;s.mobs[2]!.group.userData.aurionConfirmedMob=false;
     let resolve!: (v: ReturnType<typeof loaded>)=>void;
     const p=new MobCatalogProjection(s.engine as never,()=>new Promise(r=>{resolve=r;}));p.setCatalog(catalog);p.update(.5);
     expect(s.mobs[0]!.body.visible).toBe(true);
