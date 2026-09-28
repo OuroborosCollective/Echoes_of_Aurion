@@ -92,9 +92,6 @@ const baseProps = (): GameHUDProps => ({
   onToggleAutoAttack: vi.fn(),
   onAttack: vi.fn(),
   onCastSkill: vi.fn(),
-
-
-
 });
 
 describe("GameHUD", () => {
@@ -259,9 +256,7 @@ describe("GameHUD", () => {
       value: vi.fn(() => ({ matches: true, media: "(max-width: 720px)", onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
     });
     try {
-      const { getByText, getByText: _getByText } = render(<GameHUD {...baseProps()} />);
-      void getByText;
-      void _getByText;
+      render(<GameHUD {...baseProps()} />);
       const tracker = document.querySelector(".ax1-objective-tracker");
       expect(tracker?.getAttribute("data-collapsed")).toBe("true");
       expect(screen.getByText("Find the Observatory")).toBeTruthy();
