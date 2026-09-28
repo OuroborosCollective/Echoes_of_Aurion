@@ -9,6 +9,8 @@ import {
 import { aurionLootCatalogV2 } from "../aurionLootCatalog";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 
+const canonicalProbe = (value:unknown) => canonicalSha256(value);
+
 const seed = (label:string) => createHash("sha256").update(`aim540:${label}`, "utf8").digest("hex");
 const context = (overrides:Partial<ServerConfirmedLootContext> = {}):ServerConfirmedLootContext => Object.freeze({
   worldId:"echoes-of-aurion-global",
