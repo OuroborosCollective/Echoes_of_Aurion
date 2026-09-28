@@ -1,0 +1,41 @@
+name: Game Development Studio — Aurion Adapter
+
+on:
+  pull_request:
+    paths:
+      - ".game-dev/adapter.json"
+      - "scripts/game-dev-aurion-adapter.mjs"
+      - "server/gameDevelopmentStudioAurionAdapter.test.ts"
+      - ".github/workflows/game-development-studio-aurion-adapter.yml"
+      - "shared/worldAssetCatalog.json"
+      - "shared/aurionReturnStoneContract.ts"
+      - "scripts/install-game-development-studio.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-aurion-gds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+      - name: Install pinned Game Development Studio
+        run: node scripts/install-game-development-studio.mjs
+      - name: Prove Aurion adapter contract
+        run: |
+          set -euo pipefail
+          game-dev adapter inspect --project . --json
+          game-dev scenario run aurion-contract --project . --confirm --jsonl
+          game-dev scenario run starting-village-plan --project . --confirm --jsonl
+          game-dev scenario run starting-village-authoring --project . --confirm --jsonl
+      - name: Run Aurion adapter regression test
+        run: pnpm exec vitest run server/gameDevelopmentStudioAurionAdapter.test.ts
+      - name: Validate adapter files
+        run: node scripts/game-dev-aurion-adapter.mjs --plan --scene starting-village >/tmp/aurion-starting-village-plan.json
