@@ -547,7 +547,7 @@
     height:36px;
     padding:2px;
   }
-  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions button:nth-last-child(-n+2){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions button:last-child{
     display:none;
   }
   .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone{
