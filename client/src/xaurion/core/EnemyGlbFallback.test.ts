@@ -32,11 +32,14 @@ const catalog = (entries: GlbRuntimeCatalog["entries"]): GlbRuntimeCatalog => ({
 describe("deterministic generic enemy GLB fallback selection", () => {
   it("only admits explicitly marked unassigned enemy fallback entries", () => {
     const fallback = enemy("glb_golem", "a", "Enemy Fallback · Corrupted Golem LOD0");
-    const plain = { ...fallback, purpose: "auto" as const };
+    const approvedAuto = { ...fallback, purpose: "auto" as const, displayName: "Aurion Clockwork Stalker · Fantasy 1600 v1" };
+    const plain = { ...fallback, purpose: "auto" as const, displayName: "Unmarked Enemy" };
     const assigned = { ...fallback, assetId: "glb_assigned", targetKey: "starter_spider" as const };
-    expect(enemyFallbackPool(catalog([plain, assigned, fallback]))).toHaveLength(1);
+    expect(enemyFallbackPool(catalog([approvedAuto, assigned, fallback]))).toHaveLength(2);
     expect(isEnemyFallbackCatalogEntry(fallback)).toBe(true);
-    expect(isEnemyFallbackCatalogEntry(plain)).toBe(false);
+    expect(isEnemyFallbackCatalogEntry(approvedAuto)).toBe(true);
+    expect(isEnemyFallbackCatalogEntry(plain)).toBe(true);
+    expect(isEnemyFallbackCatalogEntry(assigned)).toBe(false);
     expect(isEnemyFallbackCatalogEntry(assigned)).toBe(false);
   });
 
