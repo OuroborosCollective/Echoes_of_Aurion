@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { selectGlbCatalogLod, type GlbCatalogLodVariant, type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
 import { validConfirmedZoneCombatEvent, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
@@ -7,12 +8,14 @@ import { glbManager } from "../core/GLBModelManager";
 import { releaseGlbTree } from "../core/GlbModelLease";
 import { ACTOR_LOD_MID_MAX_METERS, ACTOR_LOD_NEAR_MAX_METERS } from "../core/actorLod";
 import { subscribeConfirmedMobCombat } from "./zoneCombatBridge";
+import { selectEnemyGlb } from "../core/EnemyGlbFallback";
 
 type MobVisual = MMOEngine["mobManager"]["mobs"][number];
 type Loaded = Awaited<ReturnType<typeof glbManager.loadModel>>;
-type Projected = { visual: MobVisual; actor: AnimatedGlbActor; sha256: string; lodLevel: GlbLodLevel; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number };
+type Projected = { visual: MobVisual; actor: AnimatedGlbActor; assetId: string; variantKey: string; sha256: string; lodLevel: GlbLodLevel; oldBodyVisible: boolean; lastPosition: THREE.Vector3; sampleTime: number; speed: number; deadSeconds: number | null; lastAttackSequence: number };
 /** Exact authored presentation binding. Catalog approval/revocation remains
  * mandatory; a filename or a legacy occupied starter target cannot claim it. */
+/** Legacy fixture identity retained for tests/asset provenance only; runtime selection is generic. */
 export const CLOCKWORK_STALKER_GLB_SHA = "94a98c7a1f2c38d8933d8c70d4f27f20d3df7e090a281f7aec48c826354c7b4a";
 
 export class MobCatalogProjection {
@@ -20,7 +23,7 @@ export class MobCatalogProjection {
   private readonly projected = new Map<string, Projected>();
   private readonly pending = new Map<string, number>();
   private readonly wanted = new Map<string, MobVisual>();
-  private readonly failures = new Map<string, { attempts: number; retryAt: number }>();
+  private readonly failures = new Map<string, { attempts: number; retryAt: number; reason: string; tier: AssetTier }>();
   private disposed = false;
   private clock = 0;
   private generation = 0;
@@ -32,37 +35,43 @@ export class MobCatalogProjection {
     this.detach = subscribeConfirmedMobCombat(event => this.acceptCombat(event));
   }
 
-  private entry() {
-    return this.catalog?.entries.find(e => e.purpose === "auto" && e.assetType === "enemy" && e.sha256 === CLOCKWORK_STALKER_GLB_SHA);
+  private presentationTier(): AssetTier {
+    return assetTier(typeof window === "undefined" ? 1200 : window.innerWidth);
   }
 
-  private variant(visual: MobVisual): GlbCatalogLodVariant | null {
-    const entry = this.entry();
-    if (!entry) return null;
+  private preferredLod(visual: MobVisual): GlbLodLevel {
     const distance = Math.hypot(visual.data.x - this.engine.player.position.x, visual.data.z - this.engine.player.position.z);
-    const preferred = distance < ACTOR_LOD_NEAR_MAX_METERS ? 0 : distance < ACTOR_LOD_MID_MAX_METERS ? 1 : 2;
-    return selectGlbCatalogLod(entry, preferred);
+    return distance < ACTOR_LOD_NEAR_MAX_METERS ? 0 : distance < ACTOR_LOD_MID_MAX_METERS ? 1 : 2;
+  }
+
+  private selection(visual: MobVisual) {
+    return selectEnemyGlb(
+      this.catalog,
+      visual.data.type,
+      this.preferredLod(visual),
+      this.presentationTier(),
+      `${visual.data.type}:${visual.data.id}`,
+    );
   }
 
   setCatalog(catalog: GlbRuntimeCatalog): void {
     this.catalog = catalog;
-    if (!this.entry()) {
-      this.wanted.clear(); this.pending.clear();
-      for (const id of [...this.projected.keys()]) this.remove(id);
-    }
     this.elapsed = 1;
   }
 
   private async acquire(visual: MobVisual): Promise<void> {
-    const id = visual.data.id, entry = this.entry(), variant = this.variant(visual), failure = this.failures.get(id);
-    if (!entry || !variant || this.pending.has(id) || this.projected.has(id) || (failure && (failure.attempts >= 3 || this.clock < failure.retryAt))) return;
+    const id = visual.data.id, selection = this.selection(visual), failure = this.failures.get(id);
+    if (!selection || this.pending.has(id) || this.projected.has(id) || (failure && (failure.attempts >= 3 || this.clock < failure.retryAt))) {
+      if (!selection && this.catalog) this.failures.set(id, { attempts: failure?.attempts ?? 0, retryAt: this.clock + 5, reason: "NO_COMPATIBLE_FALLBACK", tier: this.presentationTier() });
+      return;
+    }
     const token = ++this.generation; this.pending.set(id, token);
     let loaded: Loaded | null = null;
     let actor: AnimatedGlbActor | null = null;
     try {
-      loaded = await this.load(variant.storageUrl);
-      const currentVariant = this.variant(visual);
-      if (this.disposed || this.pending.get(id) !== token || this.wanted.get(id) !== visual || !this.entry() || currentVariant?.sha256 !== variant.sha256 || visual.data.hp <= 0) return;
+      loaded = await this.load(selection.entry.storageUrl);
+      const currentSelection = this.selection(visual);
+      if (this.disposed || this.pending.get(id) !== token || this.wanted.get(id) !== visual || !currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256 || visual.data.hp <= 0) return;
       let triangles = 0, bones = 0;
       loaded.scene.traverse(node => {
         if ((node as THREE.Bone).isBone) bones++;
@@ -72,13 +81,15 @@ export class MobCatalogProjection {
       actor = new AnimatedGlbActor(loaded.scene, loaded.animations, 1.65); loaded = null;
       for (const pose of ["idle", "walk", "run", "attack", "death"] as const) if (!actor.hasAnimatedPose(pose)) throw Error("MOB_GLB_MOVING_CLIPS_REQUIRED");
       actor.group.name = `aurion-confirmed-mob-glb:${id}`;
-      actor.group.userData.catalogLod = Object.freeze({ assetId: entry.assetId, physicalSha256: variant.sha256, level: variant.level });
+      actor.group.userData.catalogLod = Object.freeze({ assetId: selection.entry.assetId, physicalSha256: selection.entry.sha256, level: selection.lod });
       actor.group.position.copy(visual.group.position);
       this.engine.scene.add(actor.group);
-      this.projected.set(id, { visual, actor, sha256: variant.sha256, lodLevel: variant.level, oldBodyVisible: visual.body.visible, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
+      this.failures.delete(id);
+      this.projected.set(id, { visual, actor, assetId: selection.entry.assetId, variantKey: selection.variantKey, sha256: selection.entry.sha256, lodLevel: selection.lod, oldBodyVisible: visual.body.visible, lastPosition: visual.group.position.clone(), sampleTime: 0, speed: 0, deadSeconds: null, lastAttackSequence: 0 });
       visual.body.visible = false; actor = null;
-    } catch {
-      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 5 });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
+      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 5, reason, tier: this.presentationTier() });
     } finally {
       actor?.dispose(); if (loaded) releaseGlbTree(loaded.scene);
       if (this.pending.get(id) === token) this.pending.delete(id);
@@ -100,9 +111,9 @@ export class MobCatalogProjection {
     const byId = new Map(mobs.map(v => [v.data.id, v]));
     for (const [id, p] of [...this.projected]) {
       const v = byId.get(id);
-      if (v !== p.visual || !this.entry() || v.group.userData.aurionConfirmedMob !== true) { this.remove(id); continue; }
-      const desiredVariant = this.variant(v);
-      if (v.data.hp > 0 && desiredVariant && desiredVariant.sha256 !== p.sha256) { this.remove(id); continue; }
+      if (v !== p.visual || v.group.userData.aurionConfirmedMob !== true) { this.remove(id); continue; }
+      const desiredSelection = this.selection(v);
+      if (v.data.hp > 0 && (!desiredSelection || desiredSelection.entry.sha256 !== p.sha256)) { this.remove(id); continue; }
       if (v.data.hp <= 0) {
         if (p.deadSeconds === null) { p.deadSeconds = 0; p.actor.playOnce("death"); }
         p.deadSeconds += delta;
@@ -127,10 +138,10 @@ export class MobCatalogProjection {
     }
     if (this.elapsed < .5) return;
     this.elapsed = 0; this.wanted.clear();
-    if (!this.entry()) return;
+    if (!this.catalog) return;
     const player = this.engine.player.position;
     const limit = typeof window !== "undefined" && window.innerWidth < 768 ? 8 : 12;
-    const near = mobs.filter(v => v.data.type === "clockwork_stalker" && v.group.userData.aurionConfirmedMob === true && v.data.hp > 0)
+    const near = mobs.filter(v => v.group.userData.aurionConfirmedMob === true && v.data.hp > 0)
       .map(v => ({ v, distance: Math.hypot(v.data.x - player.x, v.data.z - player.z) }))
       .filter(t => t.distance < 65).sort((a, b) => a.distance - b.distance || a.v.data.id.localeCompare(b.v.data.id));
     const corpses = [...this.projected.values()].filter(p => p.deadSeconds !== null).length;
@@ -144,7 +155,19 @@ export class MobCatalogProjection {
     for (const id of this.failures.keys()) if (!byId.has(id)) this.failures.delete(id);
   }
 
-  evidence() { return { sha256: this.entry()?.sha256 ?? null, projected: this.projected.size, pending: this.pending.size, failed: this.failures.size, trianglesPerModel: 1300, physicalLods: [...this.projected].map(([id, p]) => ({ id, level: p.lodLevel, sha256: p.sha256 })), lastAttackSequences: [...this.projected].map(([id, p]) => ({ id, sequence: p.lastAttackSequence })) }; }
+  evidence() {
+    return {
+      projected: this.projected.size,
+      pending: this.pending.size,
+      failed: this.failures.size,
+      fallbackCandidates: this.catalog ? this.catalog.entries.filter(entry => entry.purpose === "enemy-fallback" && entry.assetType === "enemy" && entry.targetKey === null).length : 0,
+      budgetRejected: [...this.failures.values()].filter(failure => failure.reason.includes("BUDGET") || failure.reason === "GLB_NETWORK_BUDGET").length,
+      noCompatibleFallback: [...this.failures.values()].filter(failure => failure.reason === "NO_COMPATIBLE_FALLBACK").length,
+      physicalLods: [...this.projected].map(([id, p]) => ({ id, assetId: p.assetId, variantKey: p.variantKey, level: p.lodLevel, sha256: p.sha256, tier: this.presentationTier(), loadState: "loaded" as const })),
+      rejected: [...this.failures].map(([id, failure]) => ({ id, tier: failure.tier, reason: failure.reason, loadState: "rejected" as const })),
+      lastAttackSequences: [...this.projected].map(([id, p]) => ({ id, sequence: p.lastAttackSequence })),
+    };
+  }
   private remove(id: string): void {
     const p = this.projected.get(id); if (!p) return;
     p.visual.body.visible = p.oldBodyVisible; p.actor.group.removeFromParent(); p.actor.dispose(); this.projected.delete(id);
