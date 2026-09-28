@@ -1,4 +1,4 @@
-import { ENEMY_FALLBACK_DISPLAY_PREFIX, glbCatalogLods, type GlbCatalogLodVariant, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { ENEMY_FALLBACK_DISPLAY_PREFIX, glbCatalogLods, type GlbLodLevel, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { assetBudgets, type AssetTier } from "@shared/glbPresentationBudget";
 import type { ZoneMobArchetype } from "@shared/zoneMobContract";
 
@@ -7,7 +7,7 @@ export type EnemyGlbCatalogEntry = GlbRuntimeCatalog["entries"][number];
 export type EnemyGlbSelection = Readonly<{
   entry: EnemyGlbCatalogEntry;
   variantKey: string;
-  lod: number | null;
+  lod: GlbLodLevel;
   tier: AssetTier;
 }>;
 
@@ -105,7 +105,7 @@ function fitsTier(entry: EnemyGlbCatalogEntry, tier: AssetTier): boolean {
 
 function selectPhysical(
   entry: EnemyGlbCatalogEntry,
-  preferredLod: number,
+  preferredLod: GlbLodLevel,
   tier: AssetTier,
 ): Readonly<{ entry: EnemyGlbCatalogEntry; lod: number | null }> | null {
   const variants = glbCatalogLods(entry)
