@@ -159,7 +159,14 @@ export function selectNpcGlb(
 
   const fallbackIndex = npcVisualIdentityHash(npcIdentity) % variants.length;
   const selected = variants[fallbackIndex]!;
-  const physical = selectPhysicalVariant(selected.physical[0]!.entry, preferredLod, tier);
+  const compatible = selected.physical.slice().sort((left, right) => {
+    const leftLod = left.lod ?? Number.MAX_SAFE_INTEGER;
+    const rightLod = right.lod ?? Number.MAX_SAFE_INTEGER;
+    if (preferredLod === null) return leftLod - rightLod || left.entry.sha256.localeCompare(right.entry.sha256);
+    const rank = (level: number) => level >= preferredLod ? level - preferredLod : 10 + preferredLod - level;
+    return rank(leftLod) - rank(rightLod) || left.entry.sha256.localeCompare(right.entry.sha256);
+  });
+  const physical = compatible[0];
   if (!physical) return null;
   return Object.freeze({
     entry: physical.entry,
