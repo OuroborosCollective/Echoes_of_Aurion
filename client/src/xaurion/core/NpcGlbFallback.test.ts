@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { NPC_FALLBACK_DISPLAY_PREFIX } from "@shared/glbImportContract";
+import { assetBudgets } from "@shared/glbPresentationBudget";
 import { isNpcFallbackCatalogEntry, npcFallbackPool, npcFallbackVariants, npcVisualIdentityHash, npcVisualTargetKey, selectNpcGlb } from "./NpcGlbFallback";
 
 const entry = (assetId: string, sha: string, displayName: string, targetKey: string | null = null) => ({
@@ -90,4 +91,30 @@ describe("deterministic NPC GLB fallback selection", () => {
     expect(selectNpcGlb(catalog([entry("glb_player", "a", "Player", "starter_player")]), "npc:none")).toBeNull();
     expect(selectNpcGlb(null, "npc:none")).toBeNull();
   });
+  it("skips over a phone-incompatible high LOD when a smaller physical LOD exists", () => {
+    const logical = {
+      ...entry("glb_long_lod0", "a", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Male Long`),
+      purpose: "npc-fallback" as const,
+      lods: [
+        { level: 0 as const, assetId: "glb_long_lod0", sha256: "a".repeat(64), bytes: assetBudgets.phone.assetBytes + 1, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null },
+        { level: 1 as const, assetId: "glb_long_lod1", sha256: "b".repeat(64), bytes: 1_000_000, storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null },
+      ],
+    };
+    const selected = selectNpcGlb(catalog([logical]), "npc:mobile", null, 0, "phone");
+    expect(selected?.entry.assetId).toBe("glb_long_lod1");
+    expect(selected?.lod).toBe(1);
+  });
+
+  it("fails closed when every physical NPC LOD exceeds the selected device tier", () => {
+    const logical = {
+      ...entry("glb_long_lod0", "a", `${NPC_FALLBACK_DISPLAY_PREFIX}Universal Male Long`),
+      purpose: "npc-fallback" as const,
+      lods: [
+        { level: 0 as const, assetId: "glb_long_lod0", sha256: "a".repeat(64), bytes: assetBudgets.phone.assetBytes + 1, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null },
+        { level: 1 as const, assetId: "glb_long_lod1", sha256: "b".repeat(64), bytes: assetBudgets.phone.assetBytes + 2, storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null },
+      ],
+    };
+    expect(selectNpcGlb(catalog([logical]), "npc:mobile", null, 0, "phone")).toBeNull();
+  });
+
 });
