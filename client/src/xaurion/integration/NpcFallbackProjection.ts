@@ -7,6 +7,7 @@ import type { MMOEngine } from "../core/MMOEngine";
 import { AnimatedGlbActor } from "../core/AnimatedGlbActor";
 import { actorLodBand, actorUsesSkinnedVisual, emptyActorLodCounts, shouldUpdateActorAnimation, type ActorLodBand, type ActorLodCounts } from "../core/actorLod";
 import { glbManager } from "../core/GLBModelManager";
+import { assetTier, type AssetTier } from "@shared/glbPresentationBudget";
 import { selectNpcGlb } from "../core/NpcGlbFallback";
 import { UploadedWorldCatalogProjection } from "./UploadedWorldCatalogProjection";
 import { RemotePublicAppearanceProjection } from "./RemotePublicAppearanceProjection";
@@ -16,6 +17,7 @@ import { MobCatalogProjection } from "./MobCatalogProjection";
 
 type ProjectedNpc = {
   sha256: string;
+  assetId: string;
   actor: AnimatedGlbActor;
   proceduralMeshes: readonly THREE.Object3D[];
   accumulatedAnimationDelta: number;
@@ -51,6 +53,7 @@ export class NpcFallbackProjection {
   private catalog: GlbRuntimeCatalog | null = null;
   private readonly projected = new Map<string, ProjectedNpc>();
   private readonly pending = new Set<string>();
+  private readonly failures = new Map<string, Readonly<{ reason: string; tier: AssetTier }>>();
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
   private readonly equipment: EquipmentCatalogProjection;
@@ -121,6 +124,10 @@ export class NpcFallbackProjection {
     this.projected.delete(npcId);
   }
 
+  private presentationTier(): AssetTier {
+    return assetTier(typeof window === "undefined" ? 1200 : window.innerWidth);
+  }
+
   private distanceToCamera(npc: NPCCharacter): number {
     return Math.hypot(npc.x - this.engine.camera.position.x, npc.z - this.engine.camera.position.z);
   }
@@ -134,8 +141,14 @@ export class NpcFallbackProjection {
 
   private async project(npc: NPCCharacter): Promise<void> {
     if (this.disposed || this.pending.has(npc.id)) return;
-    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc));
-    if (!selection || selection.source !== "fallback") { this.restoreNpc(npc.id); return; }
+    const tier = this.presentationTier();
+    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
+    if (!selection || selection.source !== "fallback") {
+      if (!selection && this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier }));
+      else if (!this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier }));
+      this.restoreNpc(npc.id);
+      return;
+    }
     const existing = this.projected.get(npc.id);
     if (existing?.sha256 === selection.entry.sha256) return;
     const procedural = findProceduralNpcVisual(this.engine.scene, npc);
@@ -147,7 +160,7 @@ export class NpcFallbackProjection {
       const loaded = await glbManager.loadModel(selection.entry.storageUrl);
       unowned = loaded.scene;
       if (this.disposed) return;
-      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc));
+      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
       if (!currentSelection || currentSelection.source !== "fallback" || currentSelection.entry.sha256 !== selection.entry.sha256) return;
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
@@ -161,15 +174,19 @@ export class NpcFallbackProjection {
       const veryFar = band === "very_far";
       actor.group.visible = !veryFar;
       currentVisual.body.forEach(mesh => { mesh.visible = veryFar; });
+      this.failures.delete(npc.id);
       this.projected.set(npc.id, {
         sha256: selection.entry.sha256,
+        assetId: selection.entry.assetId,
         actor,
         proceduralMeshes: Object.freeze(currentVisual.body.slice()),
         accumulatedAnimationDelta: 0,
         lod: band,
       });
       unowned = undefined;
-    } catch {
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
+      this.failures.set(npc.id, Object.freeze({ reason, tier }));
       // Fail visibly to the existing procedural NPC. No GLB success is claimed.
     } finally {
       if (unowned) releaseGlbTree(unowned);
@@ -259,13 +276,26 @@ export class NpcFallbackProjection {
   evidence(): readonly Readonly<{ npcId: string; sha256: string; lod: ActorLodBand; presentation: ReturnType<AnimatedGlbActor["evidence"]> }>[] {
     return Object.freeze([...this.projected.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([npcId, projected]) => Object.freeze({
       npcId,
+      assetId: projected.assetId,
       sha256: projected.sha256,
       lod: projected.lod,
+      loadState: "loaded" as const,
       presentation: projected.actor.evidence(),
     })));
   }
 
+  fallbackEvidence() {
+    return Object.freeze([...this.failures.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([npcId, failure]) => Object.freeze({
+      npcId,
+      tier: failure.tier,
+      loadState: "rejected" as const,
+      reason: failure.reason,
+    })));
+  }
+
   crowdEvidence() {
+    const budgetRejected = [...this.failures.values()].filter(failure => failure.reason.includes("BUDGET") || failure.reason === "GLB_NETWORK_BUDGET" || failure.reason === "GLB_TEXTURE_BUDGET").length;
+    const noCompatibleFallback = [...this.failures.values()].filter(failure => failure.reason === "NO_COMPATIBLE_FALLBACK").length;
     const activeSkinnedActors = [...this.projected.values()].filter(projected => projected.actor.group.visible && actorUsesSkinnedVisual(projected.lod)).length;
     const staticGlbActors = [...this.projected.values()].filter(projected => projected.actor.group.visible && projected.lod === "far").length;
     return Object.freeze({
@@ -274,6 +304,9 @@ export class NpcFallbackProjection {
       staticGlbActors,
       instancedVeryFarProxies: this.farProxyCount,
       proxyOverflowFallbacks: this.farProxyOverflow,
+      fallbackFailures: this.failures.size,
+      budgetRejected,
+      noCompatibleFallback,
       lod: this.lodCounts,
       mixerUpdatesLastFrame: this.mixerUpdatesLastFrame,
       mixerUpdatesTotal: this.mixerUpdatesTotal,
