@@ -47,3 +47,4 @@
 * [AIM-599 — Deterministische Terrain-Pipeline](aim-599-deterministische-terrain-pipeline.md)
 * [AIM-600 — Deterministic Structure Placement](aim-600-deterministic-structure-placement.md)
 * [Emergent Life Core](emergent-life-core.md)
+* [Deterministic World Generation & CAG](deterministic-world-generation-and-cag.md)
