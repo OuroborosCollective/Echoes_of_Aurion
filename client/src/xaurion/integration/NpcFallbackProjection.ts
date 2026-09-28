@@ -53,7 +53,7 @@ export class NpcFallbackProjection {
   private catalog: GlbRuntimeCatalog | null = null;
   private readonly projected = new Map<string, ProjectedNpc>();
   private readonly pending = new Set<string>();
-  private readonly failures = new Map<string, Readonly<{ reason: string; tier: AssetTier }>>();
+  private readonly failures = new Map<string, Readonly<{ reason: string; tier: AssetTier; attempts: number }>>();
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
   private readonly equipment: EquipmentCatalogProjection;
@@ -141,13 +141,17 @@ export class NpcFallbackProjection {
   }
 
   private async project(npc: NPCCharacter): Promise<void> {
-    if (this.disposed || this.pending.has(npc.id) || this.failures.has(npc.id)) return;
+    if (this.disposed || this.pending.has(npc.id)) return;
     const tier = this.presentationTier();
-    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
-    if (!selection || selection.source !== "fallback") {
-      if (!selection && this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier }));
-      else if (!this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier }));
-      this.restoreNpc(npc.id);
+    const failure = this.failures.get(npc.id);
+    if (failure && failure.attempts >= 6) return;
+    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
+    if (!selection) {
+      if (this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier, attempts: failure?.attempts ?? 0 }));
+      else this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier, attempts: failure?.attempts ?? 0 }));
+      // Never resurrect the primitive body merely because a visual asset is loading.
+      const proceduralMissing = findProceduralNpcVisual(this.engine.scene, npc);
+      proceduralMissing?.body.forEach(mesh => { mesh.visible = false; });
       return;
     }
     const existing = this.projected.get(npc.id);
@@ -167,7 +171,7 @@ export class NpcFallbackProjection {
       unowned = loaded.scene;
       if (this.disposed) return;
       const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
-      if (!currentSelection || currentSelection.source !== "fallback" || currentSelection.entry.sha256 !== selection.entry.sha256) return;
+      if (!currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256) return;
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
 
@@ -192,8 +196,9 @@ export class NpcFallbackProjection {
       unowned = undefined;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
-      this.failures.set(npc.id, Object.freeze({ reason, tier }));
-      // Fail visibly to the existing procedural NPC. No GLB success is claimed.
+      this.failures.set(npc.id, Object.freeze({ reason, tier, attempts: (failure?.attempts ?? 0) + 1 }));
+      // Do not fall back to cylinders/spheres. The next deterministic catalog variant
+      // is retried on the next projection tick; presentation never becomes fake geometry.
     } finally {
       if (unowned) releaseGlbTree(unowned);
       this.pending.delete(npc.id);
