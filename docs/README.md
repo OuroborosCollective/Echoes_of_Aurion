@@ -4,18 +4,19 @@ description: Kanonischer Index der aktuellen technischen Dokumentation.
 
 # Technische Dokumentation
 
-Die aktuelle Dokumentation folgt der Single-Owner-Architektur aus [ARCHITECTURE_OWNERSHIP](../ARCHITECTURE_OWNERSHIP.md).
+Die aktuelle Dokumentation folgt der Single-Owner-Architektur aus ARCHITECTURE\_OWNERSHIP.
 
 ## Kanonisch
 
-1. [Architektur — Aurion Single Authority](../ARCHITECTURE_OWNERSHIP.md)
-2. [Naturkollision und weltweite Bewegung](world-nature-collision.md)
-3. [Balancing v2](balancing/AIM265_BALANCING_V2.md)
-4. [Kanonischer World Causal Root](aurion-world-causal-root.md)
-5. [Cross-Zone Handover V2](aurion-cross-zone-handover-v2.md)
-6. [Effect Intent Journal](aurion-effect-intent-journal.md)
+1. Architektur — Aurion Single Authority
+2. Naturkollision und weltweite Bewegung
+3. Balancing v2
+4. Kanonischer World Causal Root
+5. Cross-Zone Handover V2
+6. Effect Intent Journal
 7. [Headless Causal Oracle V2](aurion-headless-causal-oracle-v2.md)
-8. [AIM-599 — Deterministische Terrain-Pipeline](aurion-deterministic-terrain-pipeline-aim599.md)
+8. AIM-599 — Deterministische Terrain-Pipeline
+9. AIM-600 — Deterministic Structure Placement
 
 ## Aktive Architektur
 
@@ -35,7 +36,7 @@ Datiertes Material unter `guardian/`, `qa/` und `docs/migrations/` darf für Her
 
 Bei einem Widerspruch gilt:
 
-```text
+```
 aktueller Aurion-Code
 → aktuelle Aurion-Tests
 → Runtime-/DB-/Receipt-Readback
