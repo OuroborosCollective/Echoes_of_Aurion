@@ -1488,3 +1488,13 @@ Change: Added a deterministic, non-authoritative Timeloop analysis/provenance bo
 Insight: Timeloop is useful here as an offline mapping/cost-analysis projection only. The current Aurion code does not expose a live tensor-algebra gameplay kernel, so treating the existing JS presentation benchmark as hardware/tensor truth would be false evidence. A real CI regression first exposed that repository paths need path-specific validation rather than identifier validation; the fix was applied before final local readback.
 
 Evidence: Base source revision `6b1b5941da2ffc1abba3868b81073ea2376f6e52`; `RenderEcsPilot.ts` source blob `29f2971828c76b82c6eca226b0dc65e026564917`; NVLabs Timeloop commit pin `32370826fdf1aa3c8deb0c93e6b2a2fc7cf053aa`. Local executable gate passed with manifest hash `sha256:71c7c5964f7048753f72fed3531e71a9b48093ab158837b8569b524ec87e7f97`, exact source blob SHA readback, object-order invariance and fail-closed negative cases. PR #637 contains the bridge and CI readback workflow; its first CI run failed only on the path-validation defect and was not treated as green. The private Sovereign workspace-preparation lane returned HTTP 429, so no unavailable runtime result is claimed.
+
+### 2026-09-28 — Deterministischer Item-Manipulationsvertrag (Issue #535)
+Status: VERIFIED repository implementation
+Task: Aurion-only Contract V2 für craft, reforge, augment, upgrade, socket, shaping, salvage und repair ergänzen.
+Decisions: Alle Rolls sind an receiptId + kanonisch sortierte inputItemHashes + recipeVersion + operationIndex gebunden; Rezeptmaterialien, Fähigkeiten, Affix-Pools, Slots, Level-Caps und Salvage-Yields fail-closed validiert. Reforge wählt ausschließlich aus dem erlaubten Rezept-Pool. Keine Wall-Clock-/Host-/Process- oder Client-RNG-Abhängigkeit und keine zweite Gameplay-Authority.
+Touched surfaces: server/aurionItemManipulationProtocol.ts; server/aurionItemManipulationProtocol.test.ts.
+Evidence: `pnpm check` grün; fokussierte Loot-/Manipulations-Regression grün mit 3 Testdateien und 14 Tests; Wolfram-Language-Evaluation bestätigte die exakte Bound `5*6*5*4*3*2 = 3600` mit Faktorisierung `2^4*3^2*5^2` für fünf Affix-Slots. Deterministische Item-, Receipt- und Source-Evidence-Hashes sind SHA-256/kanonisches JSON.
+Learned: Die bestehende Loot-V2-Auflösung bleibt der einzige Variantengenerator; Manipulationen bilden nur eine deterministische, receipt-gebundene Schicht darüber.
+Open: MariaDB-Runtime-Readback benötigt eine explizit konfigurierte isolierte Datenbank; ohne DATABASE_URL konnten nur Compile- und reine Vertrags-Tests ausgeführt werden.
+Next safe step: Draft-PR gegen `main` mit exact-head CI und ggf. isolierter MariaDB-Evidence prüfen.
