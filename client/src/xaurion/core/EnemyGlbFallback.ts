@@ -50,7 +50,9 @@ export function enemyFallbackPool(catalog: GlbRuntimeCatalog | null | undefined)
 }
 
 function descriptor(entry: EnemyGlbCatalogEntry): { variantKey: string; lod: number | null } {
-  const raw = entry.displayName.slice(ENEMY_FALLBACK_DISPLAY_PREFIX.length).trim();
+  const raw = (entry.displayName.startsWith(ENEMY_FALLBACK_DISPLAY_PREFIX)
+    ? entry.displayName.slice(ENEMY_FALLBACK_DISPLAY_PREFIX.length)
+    : entry.displayName).trim();
   const lodMatch = raw.match(/(?:^|\s)LOD\s*([0-9]+)(?=\s|$)/i);
   const lod = lodMatch ? Number.parseInt(lodMatch[1]!, 10) : null;
   const variantKey = raw
