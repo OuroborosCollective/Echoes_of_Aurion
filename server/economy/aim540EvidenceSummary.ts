@@ -39,9 +39,8 @@ export function createAim540EvidenceSummary(input:Readonly<{
     assertHash(step.evidenceHash,"STEP");
     return Object.freeze(step);
   });
-  for(let i=1;i<steps.length;i+=1){
-    if(steps[i-1]!.kind===steps[i]!.kind&&steps[i-1]!.receiptId===steps[i]!.receiptId) throw new Error("AIM540_DUPLICATE_STEP");
-  }
+  const seen=new Set(steps.map(step=>`${step.kind}:${step.receiptId}`));
+  if(seen.size!==steps.length) throw new Error("AIM540_DUPLICATE_STEP");
   const unprovable=[...(input.unprovable??[])].sort();
   const contradictions=[...(input.contradictions??[])].sort();
   if(input.status==="MATCH"&&(unprovable.length||contradictions.length)) throw new Error("AIM540_MATCH_WITH_FAILURES");
