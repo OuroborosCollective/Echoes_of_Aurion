@@ -37,6 +37,8 @@ jobs:
           game-dev scenario run starting-village-authoring --project . --confirm --jsonl
       - name: Enable Corepack
         run: corepack enable
+      - name: Install exact Aurion dependency graph
+        run: pnpm install --frozen-lockfile
       - name: Run Aurion adapter regression test
         run: pnpm exec vitest run server/gameDevelopmentStudioAurionAdapter.test.ts
       - name: Validate adapter files
