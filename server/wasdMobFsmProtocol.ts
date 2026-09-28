@@ -76,6 +76,7 @@ export function resolveMobFsmTick(input: Readonly<{ current: MobRuntimeState; pr
   if (current.health <= 0) return current.state === "dead" && current.targetEntityId === null ? current : Object.freeze({ ...current, state: "dead", targetEntityId: null, health: 0 });
   const definition = current.definition, resolveMovement = input.resolveMovement ?? ((_from, desired) => desired);
   const move = (desired: WasdMobPosition) => { const resolved = resolveMovement(current.position, desired); if (!validWorldPosition(resolved)) throw new Error("WASD_MOB_FSM_MOVEMENT_INVALID"); return Object.freeze({ x: resolved.x, z: resolved.z }); };
+
   if (current.state === "evading") {
     if (mobDistance(current.position, definition.homePosition) <= WASD_MOB_EVADE_RETURN_DISTANCE_FIXED) return Object.freeze({ ...current, state: "idle", position: definition.homePosition, targetEntityId: null, idleUntilTick: tick + idleDurationTicks(definition.entityId, tick), health: definition.maxHealth, stamina: 100 });
     return Object.freeze({ ...current, targetEntityId: null, position: move(stepToward(current.position, definition.homePosition, 750)) });
