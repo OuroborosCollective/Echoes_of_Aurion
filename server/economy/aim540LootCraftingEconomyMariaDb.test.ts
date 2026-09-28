@@ -1,8 +1,8 @@
 import { createPool, type Pool } from "mysql2/promise";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { aurionItemInstancesV2, aurionLootDropReceiptsV2, aurionCausalTickReceipts, playerProfiles } from "../../drizzle/schema";
-import { createValidatedAurionLootDropV2, getDb, recordValidatedExpeditionResult, sellItemToSystem } from "../db";
+import { aurionItemInstancesV2, aurionLootDropReceiptsV2, playerProfiles } from "../../drizzle/schema";
+import { createValidatedAurionLootDropV2, getDb, recordValidatedExpeditionResult } from "../db";
 import { AURION_LOOT_CONTENT_VERSION, aurionLootCatalogV2 } from "../aurionLootCatalog";
 import { collectPlayerLoot } from "../playerUiPersistence";
 import { readConfirmedEquipmentVisuals } from "../confirmedEquipmentVisualReadback";
