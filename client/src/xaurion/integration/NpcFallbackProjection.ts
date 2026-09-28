@@ -96,6 +96,7 @@ export class NpcFallbackProjection {
       const catalog = glbRuntimeCatalogSchema.parse(await response.json());
       if (!this.disposed) {
         this.catalog = catalog;
+        this.failures.clear();
         this.uploadedWorld.setCatalog(catalog);
         this.remotePublic.setCatalog(catalog);
         this.equipment.setCatalog(catalog);
@@ -140,7 +141,7 @@ export class NpcFallbackProjection {
   }
 
   private async project(npc: NPCCharacter): Promise<void> {
-    if (this.disposed || this.pending.has(npc.id)) return;
+    if (this.disposed || this.pending.has(npc.id) || this.failures.has(npc.id)) return;
     const tier = this.presentationTier();
     const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
     if (!selection || selection.source !== "fallback") {
