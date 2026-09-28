@@ -59,7 +59,7 @@ jobs:
           node_file="$(grep -oE "node-v[0-9.]+-linux-$GDS_TARGET_ARCH[.]tar[.]xz" "$root/vendor/SHASUMS256.txt" | head -n1)"
           test -n "$node_file"
           curl -fsSL "$base/$node_file" -o "$root/vendor/$node_file"
-          grep " $node_file$" "$root/vendor/SHASUMS256.txt" | sha256sum -c -
+          (cd "$root/vendor" && grep " $node_file$" SHASUMS256.txt | sha256sum -c -)
           grep " $node_file$" "$root/vendor/SHASUMS256.txt" | awk '{print $1 "  " $2}' > "$root/vendor/node.SHA256SUMS"
 
           tar -czf "$root/vendor/cli-linux-$GDS_TARGET_ARCH.tar.gz" -C .game-dev/runtime node_modules
