@@ -1,5 +1,5 @@
 import { createPool, type Pool } from "mysql2/promise";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { aurionItemInstancesV2, aurionLootDropReceiptsV2, playerProfiles } from "../../drizzle/schema";
 import { createValidatedAurionLootDropV2, getDb, recordValidatedExpeditionResult } from "../db";
@@ -73,8 +73,8 @@ suite("AIM-540 real MariaDB end-to-end reward/economy proof",()=>{
     expect(replay).toMatchObject({applied:false,receipt:{id:first.receipt.id},item:{id:first.item.id}});
 
     await collectPlayerLoot(USER_ID,{itemId:first.item.id,lootReceiptId:first.receipt.id} as any);
-    const visual=await readConfirmedEquipmentVisuals(USER_ID).catch(()=>null);
-    if(visual) expect(visual.version).toBe("aurion-equipment-visuals.v2");
+    const visual=await readConfirmedEquipmentVisuals(USER_ID);
+    expect(visual.version).toBe("aurion-equipment-visuals.v2");
 
     const stored=(await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id,first.item.id)).limit(1))[0];
     expect(stored?.deterministicHash).toBe(first.receipt.deterministicHash);
@@ -102,7 +102,5 @@ suite("AIM-540 real MariaDB end-to-end reward/economy proof",()=>{
     const all=(await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId,USER_ID)));
     expect(all.filter(item=>item.lootReceiptId===first.receipt.id)).toHaveLength(1);
 
-    // Legacy system-sale path remains separately authoritative and is intentionally not invoked on the V2-only item.
-    expect(await sellItemToSystem).toBeTypeOf("function");
   },30_000);
 });
