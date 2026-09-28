@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
+import { resolveAurionDerivedStats, type AurionModifier } from "./aurionModifierProtocol";
 
 /**
  * Data-driven deterministic loot resolver for server-confirmed Aurion encounters.
@@ -247,7 +249,8 @@ export function estimateLootVariantUpperBound(input: Readonly<{ baseItemCount: n
 /** Set bonuses derive from equipped, confirmed pieces; inventory ownership alone is insufficient. */
 export function resolveEquippedSetBonuses(input: Readonly<{ equippedBaseItemIds: readonly string[]; sets: readonly LootSetDefinition[] }>): Readonly<Record<string, number>> {
   const equipped = new Set(input.equippedBaseItemIds.filter(Boolean));
-  const totals = new Map<string, number>();
+  const canonicalEquipped = Object.freeze(Array.from(equipped).sort(textCompare));
+  const modifiers: AurionModifier[] = [];
   for (const definition of stableDefinitions(input.sets)) {
     const pieces = definition.pieceBaseItemIds.filter(piece => equipped.has(piece)).length;
     const thresholds = Object.entries(definition.bonusesByPieces)
@@ -255,11 +258,21 @@ export function resolveEquippedSetBonuses(input: Readonly<{ equippedBaseItemIds:
       .sort((left, right) => left.threshold - right.threshold);
     for (const { threshold, bonuses } of thresholds) {
       if (!Number.isSafeInteger(threshold) || threshold < 1 || pieces < threshold) continue;
+      const evidenceHash = canonicalSha256({ domain: "aurion.equipment-set.modifier-source.v1", rulesetVersion: AURION_LOOT_RULESET_VERSION, setId: definition.id, threshold, equippedBaseItemIds: canonicalEquipped });
       for (const [stat, amount] of Object.entries(bonuses).sort(([left], [right]) => textCompare(left, right))) {
         if (!Number.isSafeInteger(amount)) throw new Error(`set ${definition.id} has a non-integer bonus`);
-        totals.set(stat, (totals.get(stat) ?? 0) + amount);
+        modifiers.push({
+          modifierId: `equipment-set:${definition.id}:${threshold}:${stat}`,
+          source: { kind: "equipment", id: definition.id, revision: AURION_LOOT_RULESET_VERSION, evidenceHash },
+          stat,
+          operation: "add",
+          amount,
+          priority: 0,
+          stackingGroup: `set:${definition.id}:${threshold}`,
+          stacking: "sum",
+        });
       }
     }
   }
-  return Object.freeze(Object.fromEntries(Array.from(totals.entries()).sort(([left], [right]) => textCompare(left, right))));
+  return resolveAurionDerivedStats({ baseStats: {}, modifiers, logicalTick: 0 }).stats;
 }
