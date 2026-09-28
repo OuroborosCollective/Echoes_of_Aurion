@@ -139,8 +139,8 @@ describe("GameHUD", () => {
   it("renders one dominant primary objective and a compact nearby layer", () => {
     render(<GameHUD {...baseProps()} />);
 
-    expect(screen.getByRole("button", { name: "Ziele öffnen" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Ziele öffnen" }));
+    expect(screen.getByRole("button", { name: "Ziele schließen" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ziele schließen" }));
     expect(screen.getByRole("region", { name: "Hauptziel" })).toBeTruthy();
     expect(screen.getByText("PRIMARY · SERVER PROJECTION")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Nearby objectives" })).toBeTruthy();
