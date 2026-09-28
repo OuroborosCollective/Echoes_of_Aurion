@@ -36,7 +36,6 @@ export const uiItemSchema = itemReferenceSchema.extend({
 export type UiItem = z.infer<typeof uiItemSchema>;
 export const playerUiReadbackSchema = z.object({
   version: z.literal(PLAYER_UI_VERSION), userId: z.number().int().positive(),
-  inventoryHash: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
   settings: controlSettingsSchema,
   items: z.array(uiItemSchema).max(500),
   equipment: z.array(z.object({ slot: z.enum(uiSlots), id: z.string(), version: itemRecordVersionSchema })).max(12),

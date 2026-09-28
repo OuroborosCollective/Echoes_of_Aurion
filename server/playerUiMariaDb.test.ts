@@ -59,8 +59,6 @@ suite("AX1 real MariaDB item ownership, equipment and controls", () => {
     const state = await readPlayerUi(owner);
     expect(state.items).toHaveLength(2);
     expect(state.items.every(i => i.status === "owned")).toBe(true);
-    expect(state.inventoryHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect((await readPlayerUi(owner)).inventoryHash).toBe(state.inventoryHash);
     expect(state.items.map(i => [i.id, i.receiptId, i.stats, i.levelExact])).toEqual(initial.items.map(i => [i.id, i.receiptId, i.stats, i.levelExact]));
     await expect(collectPlayerLoot(ids[1]!, ref())).rejects.toThrow("OWNED_ITEM_REQUIRED");
   });

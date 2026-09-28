@@ -1,8 +1,7 @@
 import type WebSocket from "ws";
 import { ZONE_MAX_PRESENCES, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { ZONE_COMBAT_CONTRACT_VERSION, ZONE_COMBAT_MAX_STAMINA, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
-import { AX1_BLADE_SKILL_SOURCE_REVISION, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
-import { AURION_BLADE_SKILL_CATALOG_HASH, AURION_BLADE_SKILL_CATALOG_VERSION, resolveAurionBladeSkill } from "@shared/aurionSkillCatalogProtocol";
+import { AX1_BLADE_SKILL_SOURCE_REVISION, ax1BladeSkillById, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 import {
   AURION_ACTIVE_CAUSAL_TICK_SCHEMA,
   AURION_CAUSAL_TICK_SCHEMA_V1,
@@ -427,17 +426,15 @@ export class AuthoritativeMovementZone {
     if (!peer) return "missing";
     if (skill.clientSeq <= peer.lastReceivedClientSeq) return "stale";
     if (peer.health <= 0) return "dead";
-    let resolved: ReturnType<typeof resolveAurionBladeSkill>;
-    try { resolved = resolveAurionBladeSkill({ skillId: skill.skillId, catalogVersion: skill.catalogVersion }); } catch { return "invalid_skill"; }
-    const definition = resolved.definition;
-    if (peer.weaponTrack !== definition.prerequisites.weaponTrack || definition.execution !== "melee") return "invalid_skill";
+    const definition = ax1BladeSkillById(skill.skillId);
+    if (peer.weaponTrack !== "blade" || !definition || definition.skillId !== "k_strike" || definition.kind !== "melee") return "invalid_skill";
     if (this.tickNumber < (peer.skillCooldownUntilTick.get(skill.skillId) ?? 0)) return "cooldown";
     const mob = this.mobRuntime.stateFor(skill.targetEntityId);
     if (!mob || mob.health <= 0) return "invalid_target";
     if (mobDistance(peer.position, mob.position) > definition.rangeFixed) return "out_of_range";
     if (!this.admitSequence(peer, skill.clientSeq)) return "stale";
     this.inputAcknowledgementPending = true;
-    this.pendingIntents.push({ type: "skill", connectionId, entityId: `player:${peer.userId}`, clientSeq: skill.clientSeq, arrivalSeq: ++this.arrivalSequence, skillId: resolved.intent.skillId, catalogVersion: resolved.intent.catalogVersion, catalogHash: resolved.intent.catalogHash, targetEntityId: skill.targetEntityId });
+    this.pendingIntents.push({ type: "skill", connectionId, entityId: `player:${peer.userId}`, clientSeq: skill.clientSeq, arrivalSeq: ++this.arrivalSequence, skillId: skill.skillId, targetEntityId: skill.targetEntityId });
     return "accepted";
   }
 
@@ -573,11 +570,9 @@ export class AuthoritativeMovementZone {
           rngEvents.push(...resolution.rngEvents);
         }
       } else if (intent.type === "skill") {
-        let resolved: ReturnType<typeof resolveAurionBladeSkill>;
-        try { resolved = resolveAurionBladeSkill({ skillId: intent.skillId, catalogVersion: intent.catalogVersion }); } catch { continue; }
-        if (intent.catalogHash !== resolved.intent.catalogHash || peer.weaponTrack !== resolved.definition.prerequisites.weaponTrack || resolved.definition.execution !== "melee") continue;
-        const definition = resolved.definition;
-        const skillId = resolved.intent.skillId as Ax1BladeSkillId;
+        const definition = ax1BladeSkillById(intent.skillId as Ax1BladeSkillId);
+        if (!definition || peer.weaponTrack !== "blade") continue;
+        const skillId = intent.skillId as Ax1BladeSkillId;
         if (this.tickNumber < (peer.skillCooldownUntilTick.get(skillId) ?? 0)) continue;
         const resolution = this.resolvePlayerMelee(peer, intent.targetEntityId, skillId, definition.rangeFixed, ++actionIndex);
         if (resolution.result === "accepted" && resolution.event) {
@@ -709,8 +704,6 @@ export class AuthoritativeMovementZone {
       action: "melee",
       skillId,
       skillSourceRevision: skillId ? AX1_BLADE_SKILL_SOURCE_REVISION : null,
-      skillCatalogVersion: skillId ? AURION_BLADE_SKILL_CATALOG_VERSION : null,
-      skillCatalogHash: skillId ? AURION_BLADE_SKILL_CATALOG_HASH : null,
       attackerEntityId: delta.attackerId,
       defenderEntityId: delta.defenderId,
       hit: delta.result.hit,
