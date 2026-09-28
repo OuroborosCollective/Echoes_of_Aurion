@@ -58,6 +58,13 @@ describe("AIM-540 deterministic Loot/Crafting/Economy evidence",()=>{
       expect(fixture.result.quality).toBe(quality);
       expect(fixture.result.affixes.length).toBeGreaterThanOrEqual(quality==="rare"||quality==="set"?3:4);
     }
+    const distribution=Object.fromEntries(["normal","magic","rare","set","unique","mythic"].map(quality=>[quality,0])) as Record<string,number>;
+    for(let resolutionIndex=0;resolutionIndex<10_000;resolutionIndex+=1){
+      const result=resolved({resolutionIndex,luckBps:5_000,monsterArchetypeId:"aim540-distribution"});
+      distribution[result.quality]!+=1;
+    }
+    expect(Object.values(distribution).reduce((sum,value)=>sum+value,0)).toBe(10_000);
+    expect(Object.values(distribution).every(value=>value>0)).toBe(true);
   });
 
   it("proves multi-affix uniqueness, set semantics and order-invariant replay",()=>{
