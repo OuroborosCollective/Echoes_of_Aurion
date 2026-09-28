@@ -45,8 +45,8 @@ describe("AX1 full visible cutover contract", () => {
   it("keeps new AX1 world surfaces projection-only and free of local authority shortcuts", () => {
     const source = readFileSync(join(process.cwd(), "client/src/xaurion/components/Ax1WorldSurfaces.tsx"), "utf8");
     for (const forbidden of ["Math.random", "Date.now", "performance.now", "crypto.randomUUID", "hero_player_1", "localStorage", "sessionStorage", "onSelectClass"]) expect(source).not.toContain(forbidden);
-    expect(source).toContain("AX1 Classless Progression");
-    expect(source).toContain("Feste Aurion-Klassen werden nicht gewählt");
+    expect(source).toContain("Aurion Classless Progression");
+    expect(source).toContain("Feste Klassen werden nicht lokal gesetzt");
     expect(source).toContain("Bestätigter Readback ausstehend");
     expect(source).toContain("Research beobachtet bestätigte Spielzustände");
   });

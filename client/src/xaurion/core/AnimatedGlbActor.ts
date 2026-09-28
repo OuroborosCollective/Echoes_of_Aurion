@@ -1,4 +1,6 @@
 import { releaseGlbTree } from "./GlbModelLease";
+import { extractCanonicalAvatarProfile } from "./CanonicalAvatarProfile";
+import type { CanonicalAvatarProfile } from "@shared/aurionCanonicalAvatarContract";
 import * as THREE from "three";
 import type { GlbEquipmentSlot } from "@shared/glbImportContract";
 import { equipmentAnchorAliases, equipmentAttachmentOffset, equipmentLocalScale } from "./EquipmentAttachmentSizing";
@@ -64,8 +66,10 @@ export class AnimatedGlbActor {
   private readonly bounds = new THREE.Box3();
   private readonly worldOrigin = new THREE.Vector3();
   private readonly worldScale = new THREE.Vector3();
+  readonly canonicalAvatarProfile: CanonicalAvatarProfile | null;
+  readonly canonicalAvatarProfileError: string | null;
 
-  constructor(private readonly model: THREE.Group, animations: readonly THREE.AnimationClip[], heightMeters = 2) {
+  constructor(private readonly model: THREE.Group, animations: readonly THREE.AnimationClip[], heightMeters = 2, avatarProfileId = "glb-runtime") {
     if (!Number.isFinite(heightMeters) || heightMeters < 0.25 || heightMeters > 10) throw new Error("GLB_ACTOR_HEIGHT_INVALID");
     model.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(model, true);
@@ -77,6 +81,15 @@ export class AnimatedGlbActor {
     pivot.add(model);
     this.group.name = "aurion-glb-actor";
     this.group.scale.setScalar(heightMeters / height);
+    let canonicalAvatarProfile: CanonicalAvatarProfile | null = null;
+    let canonicalAvatarProfileError: string | null = null;
+    try {
+      canonicalAvatarProfile = extractCanonicalAvatarProfile(model, { avatarProfileId });
+    } catch (error) {
+      canonicalAvatarProfileError = error instanceof Error ? error.message : "CANONICAL_AVATAR_PROFILE_UNSUPPORTED";
+    }
+    this.canonicalAvatarProfile = canonicalAvatarProfile;
+    this.canonicalAvatarProfileError = canonicalAvatarProfileError;
     this.group.add(pivot);
     this.heightMeters = heightMeters;
     model.traverse(node => {
@@ -330,6 +343,9 @@ export class AnimatedGlbActor {
       fallbackPoses: supportedPoses.filter(candidate => !animatedPoses.includes(candidate) && (candidate === "idle" || candidate === "walk" || candidate === "run")),
       animationNames: [...this.clips.values()].map(clip => clip.name).sort(),
       equipmentSlots: [...this.attachments.keys()].sort(),
+      canonicalAvatarProfileFingerprint: this.canonicalAvatarProfile?.profileFingerprint ?? null,
+      canonicalAvatarProfileStatus: this.canonicalAvatarProfile ? "valid" : "unsupported",
+      canonicalAvatarProfileError: this.canonicalAvatarProfileError,
     };
   }
 
