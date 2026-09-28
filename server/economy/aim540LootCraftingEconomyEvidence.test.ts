@@ -9,8 +9,6 @@ import {
 import { aurionLootCatalogV2 } from "../aurionLootCatalog";
 import { canonicalSha256 } from "../../shared/aurionCanonicalHash";
 
-const canonicalProbe = (value:unknown) => canonicalSha256(value);
-
 const seed = (label:string) => createHash("sha256").update(`aim540:${label}`, "utf8").digest("hex");
 const context = (overrides:Partial<ServerConfirmedLootContext> = {}):ServerConfirmedLootContext => Object.freeze({
   worldId:"echoes-of-aurion-global",
@@ -40,7 +38,7 @@ function resolved(input:Partial<ServerConfirmedLootContext> = {}) {
 function qualityFixture(quality:"rare"|"set"|"unique"|"mythic") {
   for (let resolutionIndex=0;resolutionIndex<10_000;resolutionIndex+=1) {
     const result=resolved({resolutionIndex,luckBps:5_000,monsterArchetypeId:`aim540-${quality}`});
-    if(result.quality===quality) return result;
+    if(result.quality===quality && (quality!=="set" || Boolean(result.setId))) return Object.freeze({resolutionIndex,result});
   }
   throw new Error(`AIM540_QUALITY_FIXTURE_NOT_FOUND:${quality}`);
 }
@@ -56,14 +54,15 @@ describe("AIM-540 deterministic Loot/Crafting/Economy evidence",()=>{
       expect(a.deterministicHash).toMatch(/^[a-f0-9]{64}$/);
     }
     for(const quality of ["rare","set","unique","mythic"] as const){
-      const result=qualityFixture(quality);
-      expect(result.quality).toBe(quality);
-      expect(result.affixes.length).toBeGreaterThanOrEqual(quality==="rare"||quality==="set"?3:4);
+      const fixture=qualityFixture(quality);
+      expect(fixture.result.quality).toBe(quality);
+      expect(fixture.result.affixes.length).toBeGreaterThanOrEqual(quality==="rare"||quality==="set"?3:4);
     }
   });
 
   it("proves multi-affix uniqueness, set semantics and order-invariant replay",()=>{
-    const result=qualityFixture("set");
+    const fixture=qualityFixture("set");
+    const result=fixture.result;
     expect(new Set(result.affixes.map(a=>a.groupId)).size).toBe(result.affixes.length);
     expect(result.setId).toBeTruthy();
 
@@ -111,7 +110,7 @@ describe("AIM-540 deterministic Loot/Crafting/Economy evidence",()=>{
     const loot=resolved({resolutionIndex:123,serverSeedDigest:seed("chain")});
     const chain=[
       {kind:"encounter",id:context({resolutionIndex:123,serverSeedDigest:seed("chain")}).encounterReceiptId,hash:canonicalSha256(context({resolutionIndex:123,serverSeedDigest:seed("chain")}))},
-      {kind:"loot",id:loot.itemDefinitionId,hash:loot.deterministicHash},
+      {kind:"loot",id:loot.itemDefinitionId,hash:`sha256:${loot.deterministicHash}`},
       {kind:"visual",id:"aurion-equipment-visuals.v2",hash:canonicalSha256({itemDefinitionId:loot.itemDefinitionId,deterministicHash:loot.deterministicHash})},
     ];
     const evidenceHash=canonicalSha256(chain);
