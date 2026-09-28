@@ -166,14 +166,20 @@ export class MobCatalogProjection {
   }
 
   evidence() {
+    const typeSet = new Set((this.engine.mobManager?.mobs ?? []).map(v => v.data.type));
+    const diagnostics = [...typeSet].sort().map(archetype => Object.freeze({
+      archetype,
+      ...enemyFallbackDiagnostics(this.catalog, archetype, this.presentationTier()),
+    }));
     return {
       projected: this.projected.size,
       pending: this.pending.size,
       failed: this.failures.size,
-      fallbackCandidates: this.catalog ? enemyFallbackDiagnostics(this.catalog, (mobs[0]?.data.type ?? "clockwork_stalker") as MobVisual["data"]["type"], this.presentationTier()).fallbackCandidates : 0,
+      fallbackCandidates: diagnostics.reduce((sum, entry) => sum + entry.fallbackCandidates, 0),
       budgetRejected: [...this.failures.values()].reduce((sum, failure) => sum + failure.budgetRejectedCandidates, 0),
       noCompatibleFallback: [...this.failures.values()].filter(failure => failure.reason === "NO_COMPATIBLE_FALLBACK").length,
       physicalLods: [...this.projected].map(([id, p]) => ({ id, assetId: p.assetId, variantKey: p.variantKey, level: p.lodLevel, sha256: p.sha256, tier: this.presentationTier(), loadState: "loaded" as const })),
+      fallbackDiagnostics: diagnostics,
       rejected: [...this.failures].map(([id, failure]) => ({ id, tier: failure.tier, reason: failure.reason, fallbackCandidates: failure.fallbackCandidates, budgetRejectedCandidates: failure.budgetRejectedCandidates, loadState: "rejected" as const })),
       lastAttackSequences: [...this.projected].map(([id, p]) => ({ id, sequence: p.lastAttackSequence })),
     };
