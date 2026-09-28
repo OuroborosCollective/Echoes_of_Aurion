@@ -211,13 +211,15 @@ export class NpcFallbackProjection {
     let overflow = 0;
     for (const projected of candidates) {
       if (count >= NPC_VERY_FAR_PROXY_CAPACITY) {
-        projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+        projected.actor.group.visible = true;
         overflow += 1;
         continue;
       }
       const parent = projected.actor.group.parent;
       if (!parent) {
-        projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+        projected.actor.group.visible = true;
         overflow += 1;
         continue;
       }
@@ -249,9 +251,9 @@ export class NpcFallbackProjection {
       counts[band] += 1;
       projected.lod = band;
       if (band === "very_far") {
-        projected.actor.group.visible = false;
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+        projected.actor.group.visible = true;
         projected.accumulatedAnimationDelta = 0;
-        veryFarCandidates.push(projected);
         continue;
       }
 
@@ -269,7 +271,12 @@ export class NpcFallbackProjection {
       }
     }
 
-    this.projectVeryFarInstances(veryFarCandidates);
+    // Very-far NPCs keep the approved catalog GLB as their presentation.
+    // The legacy instanced capsule proxy is intentionally kept empty.
+    this.farProxyMesh.count = 0;
+    this.farProxyMesh.instanceMatrix.needsUpdate = true;
+    this.farProxyCount = 0;
+    this.farProxyOverflow = 0;
     this.lodCounts = Object.freeze({ ...counts });
     this.mixerUpdatesLastFrame = mixerUpdates;
     this.mixerUpdatesTotal += mixerUpdates;
