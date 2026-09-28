@@ -1,9 +1,10 @@
 name: Game Development Studio Smoke
-
 on:
   pull_request:
     paths:
       - "scripts/install-game-development-studio.mjs"
+      - ".game-dev/adapter.json"
+      - "scripts/game-dev-aurion-adapter.mjs"
       - ".github/workflows/game-development-studio-smoke.yml"
       - "server/gameDevelopmentStudioRuntime.ts"
       - "server/gameDevelopmentStudioRuntime.test.ts"
@@ -29,10 +30,8 @@ on:
       - "pnpm-lock.yaml"
       - ".gitignore"
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   verify-game-dev:
     runs-on: ubuntu-24.04
@@ -46,6 +45,12 @@ jobs:
           node-version: "22.16.0"
       - name: Install and verify pinned Game Development Studio
         run: node scripts/install-game-development-studio.mjs
+      - name: Verify Aurion GDS adapter contract
+        run: |
+          game-dev adapter inspect --project "$GITHUB_WORKSPACE" --json
+          game-dev scenario list --project "$GITHUB_WORKSPACE" --json
+          game-dev scenario plan world-contract --project "$GITHUB_WORKSPACE" --json
+          game-dev scenario plan starting-village-plan --project "$GITHUB_WORKSPACE" --json
       - name: Install exact Aurion dependency graph
         run: |
           corepack enable
