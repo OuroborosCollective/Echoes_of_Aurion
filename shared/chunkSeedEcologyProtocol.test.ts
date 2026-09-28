@@ -97,6 +97,18 @@ describe("AIM-545 Chunk-Seed Ecology & Resource Renewal", () => {
         expect(def.structureObservationKey).toBeNull();
       }
     });
+
+    it("changes the ecological resource field when confirmed structure context changes", () => {
+      const withoutStructure = makeDefinitions(null);
+      const withStructure = makeDefinitions(STRUCTURE_OBSERVATION_KEY);
+      expect(withStructure).not.toEqual(withoutStructure);
+      expect(withStructure.some((node, index) => node.nodeId !== withoutStructure[index]?.nodeId || node.capacity !== withoutStructure[index]?.capacity)).toBe(true);
+    });
+
+    it("rejects malformed structure context and non-integer chunk coordinates", () => {
+      expect(() => deriveEcologyNodeDefinitions({ worldSeed: WORLD_SEED, coordinate: { x: 1.5, z: 0 }, biome: BIOME })).toThrow();
+      expect(() => deriveEcologyNodeDefinitions({ worldSeed: WORLD_SEED, coordinate: COORDINATE, biome: BIOME, structureObservationKey: "not-a-sha256" })).toThrow();
+    });
   });
 
   describe("initial snapshot", () => {

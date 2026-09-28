@@ -101,11 +101,17 @@ export const chunkSeedEcologyNodeDefinitionSchema = z.strictObject({
 
 const CHUNK_SIZE_MM = 64_000;
 
-function weightedResourceKind(biome: ChunkBiome, slot: number): ChunkSeedEcologyResourceKind {
+function weightedResourceKind(
+  biome: ChunkBiome,
+  worldSeed: string,
+  coordinate: Readonly<{ x: number; z: number }>,
+  structureObservationKey: string | null,
+  slot: number,
+): ChunkSeedEcologyResourceKind {
   const weights = BIOME_RESOURCE_WEIGHTS[biome];
   const entries = Object.entries(weights) as [ChunkSeedEcologyResourceKind, number][];
   const totalWeight = entries.reduce((sum, [, w]) => sum + w, 0);
-  let hash = hash32("ecology-kind", biome, String(slot)) % totalWeight;
+  let hash = hash32("ecology-kind", worldSeed, String(coordinate.x), String(coordinate.z), biome, structureObservationKey ?? "none", String(slot)) % totalWeight;
   for (const [kind, weight] of entries) {
     if (hash < weight) return kind;
     hash -= weight;
@@ -128,18 +134,21 @@ export function deriveEcologyNodeDefinitions(input: Readonly<{
   structureObservationKey?: string | null;
 }>): readonly ChunkSeedEcologyNodeDefinition[] {
   if (!input.worldSeed.trim()) throw new Error("ECOLOGY_WORLD_SEED_REQUIRED");
+  coordinate.parse(input.coordinate);
   const structureKey = input.structureObservationKey ?? null;
+  if (structureKey !== null) sha256.parse(structureKey);
+  const context = structureKey ?? "none";
   const nodes: ChunkSeedEcologyNodeDefinition[] = [];
 
   for (let slot = 0; slot < ECOLOGY_MAX_NODES_PER_CHUNK; slot += 1) {
-    const activation = hash32(input.worldSeed, "ecology-activation", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % 100;
+    const activation = hash32(input.worldSeed, context, "ecology-activation", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % 100;
     if (activation >= 60) continue;
 
-    const kind = weightedResourceKind(input.biome, slot);
-    const capacityBase = 100 + hash32(input.worldSeed, "ecology-capacity", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % 901;
-    const regenBase = 500 + hash32(input.worldSeed, "ecology-regen", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % 4501;
-    const posX = 2_000 + hash32(input.worldSeed, "ecology-x", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % (CHUNK_SIZE_MM - 4_000);
-    const posZ = 2_000 + hash32(input.worldSeed, "ecology-z", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % (CHUNK_SIZE_MM - 4_000);
+    const kind = weightedResourceKind(input.biome, input.worldSeed, input.coordinate, structureKey, slot);
+    const capacityBase = 100 + hash32(input.worldSeed, context, "ecology-capacity", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % 901;
+    const regenBase = 500 + hash32(input.worldSeed, context, "ecology-regen", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % 4501;
+    const posX = 2_000 + hash32(input.worldSeed, context, "ecology-x", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % (CHUNK_SIZE_MM - 4_000);
+    const posZ = 2_000 + hash32(input.worldSeed, context, "ecology-z", String(input.coordinate.x), String(input.coordinate.z), String(slot)) % (CHUNK_SIZE_MM - 4_000);
 
     nodes.push(Object.freeze({
       nodeId: `eco:${input.coordinate.x}:${input.coordinate.z}:${slot}`,
