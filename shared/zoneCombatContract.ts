@@ -1,4 +1,5 @@
-import { AX1_BLADE_SKILL_SOURCE_REVISION, isAx1BladeSkillId, type Ax1BladeSkillId } from "./ax1BladeSkillProtocol";
+import { AX1_BLADE_SKILL_SOURCE_REVISION, type Ax1BladeSkillId } from "./ax1BladeSkillProtocol";
+import { AURION_BLADE_SKILL_CATALOG_HASH, AURION_BLADE_SKILL_CATALOG_VERSION } from "./aurionSkillCatalogProtocol";
 
 export const ZONE_COMBAT_CONTRACT_VERSION = "wasd-zone-combat.v2" as const;
 export const ZONE_COMBAT_MAX_STAMINA = 100 as const;
@@ -23,6 +24,8 @@ export type ConfirmedZoneCombatEvent = Readonly<{
   action: "melee";
   skillId: Ax1BladeSkillId | null;
   skillSourceRevision: typeof AX1_BLADE_SKILL_SOURCE_REVISION | null;
+  skillCatalogVersion: typeof AURION_BLADE_SKILL_CATALOG_VERSION | null;
+  skillCatalogHash: typeof AURION_BLADE_SKILL_CATALOG_HASH | null;
   attackerEntityId: string;
   defenderEntityId: string;
   hit: boolean;
@@ -58,8 +61,8 @@ export function validConfirmedZoneCombatEvent(value: unknown): value is Confirme
   if (!value || typeof value !== "object") return false;
   const event = value as ConfirmedZoneCombatEvent;
   const skillIdentityValid = event.skillId === null
-    ? event.skillSourceRevision === null
-    : isAx1BladeSkillId(event.skillId) && event.skillSourceRevision === AX1_BLADE_SKILL_SOURCE_REVISION;
+    ? event.skillSourceRevision === null && event.skillCatalogVersion === null && event.skillCatalogHash === null
+    : typeof event.skillId === "string" && event.skillSourceRevision === AX1_BLADE_SKILL_SOURCE_REVISION && event.skillCatalogVersion === AURION_BLADE_SKILL_CATALOG_VERSION && event.skillCatalogHash === AURION_BLADE_SKILL_CATALOG_HASH;
   return event.type === "combat" && event.contractVersion === ZONE_COMBAT_CONTRACT_VERSION && event.action === "melee" && skillIdentityValid
     && Number.isSafeInteger(event.tick) && event.tick >= 0 && Number.isSafeInteger(event.sequence) && event.sequence >= 1
     && validEntityId(event.attackerEntityId) && validEntityId(event.defenderEntityId) && event.attackerEntityId !== event.defenderEntityId

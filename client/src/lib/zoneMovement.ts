@@ -3,7 +3,8 @@ import { validConfirmedZoneMobs, type ConfirmedZoneMob } from "@shared/zoneMobCo
 import { validConfirmedZoneCombatants, validConfirmedZoneCombatEvent, type ConfirmedZoneCombatant, type ConfirmedZoneCombatEvent } from "@shared/zoneCombatContract";
 import { validConfirmedZoneResourceSnapshot, type ConfirmedZoneResourceSnapshot } from "@shared/zoneResourceContract";
 import { validConfirmedZoneTelegraphEvent, type ConfirmedZoneTelegraphEvent } from "@shared/zoneTelegraphContract";
-import { isAx1BladeSkillId, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
+import { type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
+import { AURION_BLADE_SKILL_CATALOG_VERSION, isAurionBladeSkillId } from "@shared/aurionSkillCatalogProtocol";
 import { acceptConfirmedZoneCombat, attachZoneCombatTransport, projectConfirmedZoneSnapshot, rejectPendingZoneAttack } from "@/xaurion/integration/zoneCombatBridge";
 import { emitConfirmedZoneResourceReadback } from "./zoneResourceReadback";
 import { emitConfirmedZoneTelegraphReadback, emitConfirmedZoneTickReadback } from "./zoneTelegraphReadback";
@@ -29,6 +30,6 @@ export class ZoneMovementClient{
   }
   sendMovement(input:ZoneMovementInput):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN)return false;this.socket.send(JSON.stringify({type:"move",clientSeq:this.nextClientSeq++,input}));return true;}
   sendAttack(targetEntityId:string):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN||!/^mob_[1-9][0-9]{0,2}$/.test(targetEntityId))return false;this.socket.send(JSON.stringify({type:"attack",clientSeq:this.nextClientSeq++,targetEntityId}));return true;}
-  sendSkill(skillId:Ax1BladeSkillId,targetEntityId:string):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN||!isAx1BladeSkillId(skillId)||!/^mob_[1-9][0-9]{0,2}$/.test(targetEntityId))return false;this.socket.send(JSON.stringify({type:"skill",clientSeq:this.nextClientSeq++,skillId,targetEntityId}));return true;}
+  sendSkill(skillId:Ax1BladeSkillId,targetEntityId:string):boolean{if(!this.socket||this.socket.readyState!==WebSocket.OPEN||!isAurionBladeSkillId(skillId)||!/^mob_[1-9][0-9]{0,2}$/.test(targetEntityId))return false;this.socket.send(JSON.stringify({type:"skill",clientSeq:this.nextClientSeq++,skillId,catalogVersion:AURION_BLADE_SKILL_CATALOG_VERSION,targetEntityId}));return true;}
   close():void{this.connectionId=null;this.detachCombatTransport?.();this.detachCombatTransport=null;this.selfEntityId=null;const socket=this.socket;this.socket=null;if(socket&&(socket.readyState===WebSocket.CONNECTING||socket.readyState===WebSocket.OPEN))socket.close(1000,"zone client closed");}
 }
