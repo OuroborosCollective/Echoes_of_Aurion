@@ -140,7 +140,6 @@ describe("GameHUD", () => {
     render(<GameHUD {...baseProps()} />);
 
     expect(screen.getByRole("button", { name: "Ziele schließen" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Ziele schließen" }));
     expect(screen.getByRole("region", { name: "Hauptziel" })).toBeTruthy();
     expect(screen.getByText("PRIMARY · SERVER PROJECTION")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Nearby objectives" })).toBeTruthy();
