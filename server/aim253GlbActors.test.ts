@@ -23,9 +23,9 @@ async function geometryAndRig(file: string) {
 }
 
 describe("owner-supplied Aurion actors", () => {
-  it("assigns the smith independently of the player without using the upload filename", () => {
-    const smith = buildGlbImportPlan(readFileSync("test/fixtures/aurion-glb/blacksmith-npc.glb").toString("base64"));
-    const player = buildGlbImportPlan(readFileSync("test/fixtures/aurion-glb/aurion-player-standard.glb").toString("base64"));
+  it("assigns the smith independently of the player without using the upload filename", async () => {
+    const smith = await buildGlbImportPlan(readFileSync("test/fixtures/aurion-glb/blacksmith-npc.glb").toString("base64"));
+    const player = await buildGlbImportPlan(readFileSync("test/fixtures/aurion-glb/aurion-player-standard.glb").toString("base64"));
     expect(smith.targetKey).toBe("npc_blacksmith");
     expect(player.targetKey).toBe("starter_player");
     expect(smith.classification.animationNames).toEqual(["Idle", "ShopInteract"]);

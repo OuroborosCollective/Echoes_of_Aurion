@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GlbCatalogEntry, GlbRuntimeCatalog } from "@shared/glbImportContract";
 import { visualItemDescriptorSchema, type VisualItemDescriptor } from "@shared/visualItemProtocol";
 import { resolveVisualItemRenderSource } from "./VisualItemGlbOverrideResolver";
+import { glbNormalizationTestFixture } from "./GlbNormalizationTestFixture.test";
 
 const sha = (char: string) => char.repeat(64);
 
@@ -35,9 +36,9 @@ function descriptor(overrides: Partial<VisualItemDescriptor> = {}): VisualItemDe
   });
 }
 
-function entry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
+function entry(overrides: any = {}): GlbCatalogEntry {
   const digest = overrides.sha256 ?? sha("d");
-  return {
+  const result = {
     assetId: "glb_exact_weapon",
     sha256: digest,
     displayName: "Equipment · weapon · Exact Spear",
@@ -48,6 +49,13 @@ function entry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
     subcategory: "weapon",
     equipmentSlot: "weapon",
     ...overrides,
+  };
+  return {
+    ...result,
+    normalization: glbNormalizationTestFixture(result.sha256),
+    ...(result.lods
+      ? { lods: result.lods.map((variant: any) => ({ ...variant, normalization: glbNormalizationTestFixture(variant.sha256, variant.level) })) }
+      : {}),
   };
 }
 
@@ -140,7 +148,7 @@ describe("VisualItemGlbOverrideResolver", () => {
       ["ASSET_TARGET_KEY_FORBIDDEN", [entry({ targetKey: "weapon_spear" })], "ASSET_TARGET_KEY_FORBIDDEN"],
       ["ASSET_SLOT_MISMATCH", [entry({ assetType: "armor", equipmentSlot: "helmet", displayName: "Equipment · helmet · Wrong slot" })], "ASSET_SLOT_MISMATCH"],
       ["ASSET_TYPE_MISMATCH", [entry({ assetType: "armor", equipmentSlot: "weapon", displayName: "Equipment · weapon · Wrong type" })], "ASSET_TYPE_MISMATCH"],
-      ["ASSET_STORAGE_MISMATCH", [entry({ storageUrl: `/api/assets/glb/${sha("e")}.glb` })], "ASSET_STORAGE_MISMATCH"],
+      ["CATALOG_INVALID", [entry({ storageUrl: `/api/assets/glb/${sha("e")}.glb` })], "CATALOG_INVALID"],
     ];
     for (const [, entries, expectedReason] of cases) {
       const result = expectProcedural(resolveVisualItemRenderSource(descriptor(), 0, catalog(entries)), expectedReason);
@@ -152,7 +160,7 @@ describe("VisualItemGlbOverrideResolver", () => {
     const duplicate = entry();
     const ambiguous = expectProcedural(resolveVisualItemRenderSource(descriptor(), 0, catalog([
       duplicate,
-      { ...duplicate, sha256: sha("e"), storageUrl: `/api/assets/glb/${sha("e")}.glb` },
+      entry({ ...duplicate, sha256: sha("e"), storageUrl: `/api/assets/glb/${sha("e")}.glb` }),
     ])), "ASSET_ID_AMBIGUOUS");
     ambiguous.geometry.dispose();
 

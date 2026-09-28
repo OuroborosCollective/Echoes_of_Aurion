@@ -25,7 +25,7 @@ function universalFixture() {
 }
 
 describe("NPC fallback GLB normalization", () => {
-  it("drops duplicate clip/accessor baggage while preserving a valid fallback-only import plan", () => {
+  it("drops duplicate clip/accessor baggage while preserving a valid fallback-only import plan", async () => {
     const source = universalFixture();
     const normalized = normalizeNpcFallbackGlb(source);
     expect(normalized.originalAnimationCount).toBe(14);
@@ -37,7 +37,7 @@ describe("NPC fallback GLB normalization", () => {
 
     const parsed = parseGlbBytes(normalized.bytes);
     expect(parsed.json.animations.map((animation: { name: string }) => animation.name)).toEqual(NPC_FALLBACK_ANIMATIONS);
-    const plan = buildGlbImportPlan(normalized.bytes.toString("base64"), "npc-fallback");
+    const plan = await buildGlbImportPlan(normalized.bytes.toString("base64"), "npc-fallback");
     expect(plan).toMatchObject({ purpose: "npc-fallback", assetType: "character", targetKey: null });
   });
 });

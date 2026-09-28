@@ -334,7 +334,7 @@ async function resolveOpenSource3dFallbackPlan(rawInput: Os3aPlanInput, deps: Os
   });
   const sourceMetadataSha256 = canonicalSha256(metadataIdentity);
   const liveAsset = assetInput(downloaded.candidate, input.purpose, downloaded.bytes.toString("base64"));
-  const aurionPreview = buildGlbImportPlan(liveAsset.contentBase64, input.purpose, liveAsset.fileName);
+  const aurionPreview = await buildGlbImportPlan(liveAsset.contentBase64, input.purpose, liveAsset.fileName);
   const gameDevPlan = await (deps.gameDevPlanner ?? planGameDevelopmentStudioLiveAsset)(liveAsset);
   if (gameDevPlan.sourceSha256 !== downloaded.sha256 || gameDevPlan.aurionPlanSha256 !== aurionPreview.planSha256) throw new Error("OS3A_GDS_SOURCE_IDENTITY_MISMATCH");
   if (!gameDevPlan.validationPassed) throw new Error("OS3A_GDS_VALIDATION_BLOCKED");

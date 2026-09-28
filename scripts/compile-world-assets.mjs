@@ -12,11 +12,11 @@ for(const family of ['city','nature']){
  const manifest=JSON.parse(await readFile(path.join(input,family,'lod_manifest.json'),'utf8'));
  for(const asset of manifest.assets.toSorted((a,b)=>a.asset<b.asset?-1:1)){
   const id=family+'-'+asset.asset.toLowerCase().replaceAll(/[^a-z0-9]+/g,'-'),lods=[];let bound;
-  for(let level=0;level<3;level++){const entry=asset.lods.find(l=>l.name===`LOD${level}`),content=await readFile(path.join(input,family,entry.file)),report=audit(content,[1600,800,300][level]);
+  for(let level=0;level<3;level++){const entry=asset.lods.find(l=>l.name===`LOD${level}`),content=await readFile(path.join(input,family,entry.file)),report=await audit(content,[1600,800,300][level]);
    if(level===0)bound=report.bounds;
    const file=`${family}/${id}/lod${level}.glb`;files.push({path:file,sha256:sha(content),bytes:content.length,content});lods.push({url:'/world-assets/'+file,sha256:sha(content),bytes:content.length,triangles:report.triangles,bounds:report.bounds,textureHashes:report.textureHashes});}
   let collider=null;
-  if(family==='nature'){const content=await readFile(path.join(input,family,asset.asset,asset.asset+'_Collider.glb'));const colliderReport=audit(content,64);const file=`${family}/${id}/collider.glb`;files.push({path:file,sha256:sha(content),bytes:content.length,content});collider={bounds:colliderReport.bounds,url:'/world-assets/'+file,sha256:sha(content),bytes:content.length};}
+  if(family==='nature'){const content=await readFile(path.join(input,family,asset.asset,asset.asset+'_Collider.glb'));const colliderReport=await audit(content,64);const file=`${family}/${id}/collider.glb`;files.push({path:file,sha256:sha(content),bytes:content.length,content});collider={bounds:colliderReport.bounds,url:'/world-assets/'+file,sha256:sha(content),bytes:content.length};}
   const name=asset.asset;const category=family==='city'?/Hut|Market/.test(name)?'building':/Bridge|Foundation/.test(name)?'structure':'prop':/^Tree_/.test(name)?'tree':/^Mountain_/.test(name)?'mountain':/^Rock_|^Log_|^Stump_|^Timber_/.test(name)?'rock':'plant';
   const rawSize=bound.max.map((n,i)=>n-bound.min[i]);const target={building:11,structure:8,prop:2,tree:7,mountain:18,rock:2,plant:1}[category];const scale=target/Math.max(...rawSize);
   assets.push({id,name,family,category,scale:Number(scale.toFixed(8)),bounds:bound,lods,collider});

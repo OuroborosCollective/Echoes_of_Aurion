@@ -5,6 +5,7 @@ import { visualItemDescriptorSchema, type VisualItemDescriptor } from "@shared/v
 import { AnimatedGlbActor } from "./AnimatedGlbActor";
 import { AurionVisualClock } from "./VisualItemMaterialCompiler";
 import { VisualItemAttachmentController, type VisualItemModelLoader } from "./VisualItemAttachmentController";
+import { glbNormalizationTestFixture } from "./GlbNormalizationTestFixture.test";
 
 const sha = (char: string) => char.repeat(64);
 const anchorNames: Readonly<Record<GlbEquipmentSlot, string>> = Object.freeze({
@@ -67,9 +68,9 @@ function descriptor(values: {
   });
 }
 
-function entry(values: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
+function entry(values: any = {}): GlbCatalogEntry {
   const digest = values.sha256 ?? sha("d");
-  return {
+  const result = {
     assetId: "glb_exact_weapon",
     sha256: digest,
     displayName: "Equipment · weapon · exact",
@@ -81,6 +82,7 @@ function entry(values: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
     equipmentSlot: "weapon",
     ...values,
   };
+  return { ...result, normalization: glbNormalizationTestFixture(result.sha256) };
 }
 
 function catalog(entries: GlbCatalogEntry[] = []): GlbRuntimeCatalog {

@@ -41,9 +41,9 @@ function convexHull(points) {
   };
   return [...chain(sorted), ...chain([...sorted].reverse())];
 }
-const colliders = catalog.assets
+const colliders = await Promise.all(catalog.assets
   .filter(a => a.collider)
-  .map(asset => {
+  .map(async asset => {
     const bytes = files.get(asset.collider.url.replace("/world-assets/", ""));
     if (
       !bytes ||
@@ -51,7 +51,7 @@ const colliders = catalog.assets
       bytes.length !== asset.collider.bytes
     )
       throw Error("COLLIDER_SOURCE_MISMATCH");
-    const geometry = audit(bytes, 64);
+    const geometry = await audit(bytes, 64);
     if (
       JSON.stringify(geometry.bounds) !== JSON.stringify(asset.collider.bounds)
     )
@@ -77,7 +77,7 @@ const colliders = catalog.assets
       blocksMovement: /^(Tree_|Rock_|Mountain_)/.test(asset.name),
       hullMm,
     };
-  });
+  }));
 if (colliders.length !== 112) throw Error("COLLIDER_COUNT_MISMATCH");
 const payload = {
   version: "aurion-nature-collision.v2",

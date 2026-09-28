@@ -55,7 +55,7 @@ function zip(entries: readonly Readonly<{ name: string; bytes: Buffer }>[]): Buf
 
 function successfulDependencies() {
   const ingest = vi.fn<GlbZipUploadDependencies["ingest"]>(async (_userId, input) => {
-    const plan = buildGlbImportPlan(input.contentBase64, input.purpose, input.fileName);
+    const plan = await buildGlbImportPlan(input.contentBase64, input.purpose, input.fileName);
     expect(plan.planSha256).toBe(input.expectedPlanSha256);
     return {
       version: GLB_IMPORT_VERSION,

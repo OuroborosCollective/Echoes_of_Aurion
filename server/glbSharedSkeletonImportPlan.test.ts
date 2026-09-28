@@ -48,8 +48,8 @@ function selfContainedSharedRigGlb(): string {
 }
 
 describe("shared-skeleton GLB import plan", () => {
-  it("binds exact rig identity into an equipment plan", () => {
-    const plan = buildGlbImportPlan(
+  it("binds exact rig identity into an equipment plan", async () => {
+    const plan = await buildGlbImportPlan(
       selfContainedSharedRigGlb(),
       "equipment",
       "Aurion_Equipment_arms_Female_Ranger_Arms_LOD0.glb",

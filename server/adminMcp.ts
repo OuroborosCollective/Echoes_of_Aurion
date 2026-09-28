@@ -246,7 +246,7 @@ function createAdminMcpServer(actor: AdminActor) {
 
   if (actor.scopes.includes(AURION_ADMIN_GLB_WRITE_SCOPE)) {
     const payload = z.string().min(16).max(MAX_GLB_BASE64_CHARS);
-    server.registerTool("aurion_admin_glb_plan", { description: "Validate GLB bytes without publishing.", inputSchema: z.object({ contentBase64: payload }) }, async input => content(buildGlbImportPlan(input.contentBase64)));
+    server.registerTool("aurion_admin_glb_plan", { description: "Validate GLB bytes without publishing.", inputSchema: z.object({ contentBase64: payload }) }, async input => content(await buildGlbImportPlan(input.contentBase64)));
     server.registerTool("aurion_admin_glb_import", { description: "Import one visual GLB using the exact plan hash; no gameplay mutation.", inputSchema: z.object({ displayName: z.string().trim().min(3).max(120), contentBase64: payload, expectedPlanSha256: z.string().regex(/^[a-f0-9]{64}$/) }) }, async input => content(await glbImportStore().ingest(actor.userId, input)));
     server.registerTool("aurion_admin_glb_catalog", { description: "Read approved GLB catalog and visual assignments.", inputSchema: z.object({}) }, async () => content(await glbImportStore().catalog()));
     server.registerTool("aurion_admin_glb_assign", { description: "Compare-and-set one visual assignment.", inputSchema: z.object({ assetId: z.string().min(8).max(64), targetType: z.enum(["character", "enemy", "weapon", "armor", "arena"]), targetKey: z.string().min(2).max(120), expectedActiveAssetId: z.string().min(8).max(64).nullable() }) }, async input => content(await glbImportStore().assign(actor.userId, input)));

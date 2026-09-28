@@ -147,7 +147,7 @@ export function createGlbSmartUploadHandler(dependencies: GlbSmartUploadDependen
     let classification: GlbAssetClassification;
     try {
       classification = classifyGlbBase64(contentBase64, fileName);
-      buildGlbImportPlan(contentBase64, purpose, fileName);
+      await buildGlbImportPlan(contentBase64, purpose, fileName);
     } catch (error) {
       response.status(422).json({ error: error instanceof Error ? error.message : "GLB classification failed" });
       return;
