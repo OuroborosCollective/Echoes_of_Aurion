@@ -1,0 +1,228 @@
+name: Game Development Studio Node Packer
+
+on:
+  push:
+    branches:
+      - main
+      - feat/game-development-studio-nodepacker
+    paths:
+      - ".github/workflows/game-development-studio-nodepacker.yml"
+      - "scripts/install-game-development-studio.mjs"
+  pull_request:
+    paths:
+      - ".github/workflows/game-development-studio-nodepacker.yml"
+      - "scripts/install-game-development-studio.mjs"
+  workflow_dispatch:
+
+concurrency:
+  group: game-development-studio-nodepacker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build offline Linux bundle (${{ matrix.target_arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        target_arch: [x64, arm64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GDS_TARGET_ARCH: ${{ matrix.target_arch }}
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Install and verify pinned Game Development Studio
+        run: node scripts/install-game-development-studio.mjs
+
+      - name: Stage official Node.js runtime for target architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="dist-game-dev-offline-$GDS_TARGET_ARCH/game-dev-linux-offline-$GDS_TARGET_ARCH"
+          mkdir -p "$root/vendor"
+          base="https://nodejs.org/dist/latest-v22.x"
+
+          curl -fsSL "$base/SHASUMS256.txt" -o "$root/vendor/SHASUMS256.txt"
+          node_file="$(grep -oE "node-v[0-9.]+-linux-$GDS_TARGET_ARCH[.]tar[.]xz" "$root/vendor/SHASUMS256.txt" | head -n1)"
+          test -n "$node_file"
+          curl -fsSL "$base/$node_file" -o "$root/vendor/$node_file"
+          (cd "$root/vendor" && grep " $node_file$" SHASUMS256.txt | sha256sum -c -)
+          grep " $node_file$" "$root/vendor/SHASUMS256.txt" | awk '{print $1 "  " $2}' > "$root/vendor/node.SHA256SUMS"
+
+          tar -czf "$root/vendor/cli-linux-$GDS_TARGET_ARCH.tar.gz" -C .game-dev/runtime node_modules
+          test -s "$root/vendor/cli-linux-$GDS_TARGET_ARCH.tar.gz"
+
+          if find .game-dev/runtime/node_modules -type f -name '*.node' -print -quit | grep -q .; then
+            echo "Native Node addon found; refusing cross-architecture bundle." >&2
+            exit 1
+          fi
+
+          printf '%s  %s\n' "$(sha256sum "$root/vendor/cli-linux-$GDS_TARGET_ARCH.tar.gz" | awk '{print $1}')" "cli-linux-$GDS_TARGET_ARCH.tar.gz" > "$root/vendor/cli.SHA256SUMS"
+          (cd "$root/vendor" && sha256sum -c node.SHA256SUMS && sha256sum -c cli.SHA256SUMS)
+
+      - name: Execute bundled x64 CLI proof
+        if: matrix.target_arch == 'x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="dist-game-dev-offline-$GDS_TARGET_ARCH/game-dev-linux-offline-$GDS_TARGET_ARCH"
+          node_file="$(find "$root/vendor" -maxdepth 1 -type f -name 'node-v*-linux-x64.tar.xz' -print -quit)"
+          mkdir -p "$RUNNER_TEMP/gds-node"
+          tar -xJf "$node_file" -C "$RUNNER_TEMP/gds-node" --strip-components=1
+          node_bin="$RUNNER_TEMP/gds-node/bin/node"
+          cli="$GITHUB_WORKSPACE/.game-dev/runtime/node_modules/.bin/game-dev"
+          version="$("$node_bin" "$cli" --version)"
+          printf '%s\n' "$version" | grep -Fq "1.0.2"
+          "$node_bin" "$cli" capabilities --output-dir "$root/validation" --json > /dev/null
+
+      - name: Validate arm64 package closure
+        if: matrix.target_arch == 'arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="dist-game-dev-offline-$GDS_TARGET_ARCH/game-dev-linux-offline-$GDS_TARGET_ARCH"
+          (cd "$root/vendor" && sha256sum -c node.SHA256SUMS && sha256sum -c cli.SHA256SUMS)
+          tar -tzf "$root/vendor/cli-linux-arm64.tar.gz" > "$RUNNER_TEMP/cli-arm64-listing.txt"
+          grep -Fq "node_modules/@theisegoria/game-development-studio/dist/cli.js" "$RUNNER_TEMP/cli-arm64-listing.txt"
+
+      - name: Write offline provisioner and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="dist-game-dev-offline-$GDS_TARGET_ARCH/game-dev-linux-offline-$GDS_TARGET_ARCH"
+          vendor="$root/vendor"
+          node_file="$(find "$vendor" -maxdepth 1 -type f -name "node-v*-linux-$GDS_TARGET_ARCH.tar.xz" -print -quit)"
+          node_basename="$(basename "$node_file")"
+          node_version="$(printf '%s\n' "$node_basename" | sed -E 's/^node-v([0-9.]+)-.*$/\1/')"
+          node_sha="$(sha256sum "$node_file" | awk '{print $1}')"
+          cli_sha="$(sha256sum "$vendor/cli-linux-$GDS_TARGET_ARCH.tar.gz" | awk '{print $1}')"
+
+          cat > "$root/provision.sh" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          HERE="$(cd "$(dirname "$0")" && pwd)"
+          PREFIX="$HOME/.local/share/game-dev"
+          BIN_DIR="$HOME/.local/bin"
+          BUNDLE_ARCH="__BUNDLE_ARCH__"
+
+          fail() { echo "Fehler: $*" >&2; exit 1; }
+
+          case "$(uname -m)" in
+            x86_64|amd64) SYSTEM_ARCH=x64 ;;
+            aarch64|arm64) SYSTEM_ARCH=arm64 ;;
+            *) fail "Architektur nicht unterstützt: $(uname -m)" ;;
+          esac
+          [ "$SYSTEM_ARCH" = "$BUNDLE_ARCH" ] || fail "Bundle ist für $BUNDLE_ARCH, System ist $SYSTEM_ARCH"
+
+          mkdir -p "$PREFIX" "$BIN_DIR" "$PREFIX/workspace"
+
+          node_file="$(find "$HERE/vendor" -maxdepth 1 -type f -name "node-v*-linux-$BUNDLE_ARCH.tar.xz" -print -quit)"
+          [ -n "$node_file" ] || fail "Bundled Node archive fehlt"
+          (cd "$HERE/vendor" && sha256sum -c node.SHA256SUMS)
+
+          rm -rf "$PREFIX/node"
+          mkdir -p "$PREFIX/node"
+          tar -xJf "$node_file" -C "$PREFIX/node" --strip-components=1
+
+          cli_archive="$HERE/vendor/cli-linux-$BUNDLE_ARCH.tar.gz"
+          [ -f "$cli_archive" ] || fail "Bundled game-dev CLI fehlt"
+          (cd "$HERE/vendor" && sha256sum -c cli.SHA256SUMS)
+
+          rm -rf "$PREFIX/runtime"
+          mkdir -p "$PREFIX/runtime"
+          tar -xzf "$cli_archive" -C "$PREFIX/runtime"
+          [ -x "$PREFIX/runtime/node_modules/.bin/game-dev" ] || fail "Bundled game-dev CLI fehlt"
+
+          cat > "$BIN_DIR/game-dev" <<WRAPPER
+          #!/usr/bin/env bash
+          set -euo pipefail
+          export PATH="$PREFIX/node/bin:\$PATH"
+          exec "$PREFIX/node/bin/node" "$PREFIX/runtime/node_modules/.bin/game-dev" "\$@"
+          WRAPPER
+          chmod +x "$BIN_DIR/game-dev"
+
+          version="$("$BIN_DIR/game-dev" --version)"
+          printf '%s\n' "$version" | grep -Eq '(^|[^0-9])1[.]0[.]2([^0-9]|$)' || fail "Falsche game-dev Version: $version"
+          "$BIN_DIR/game-dev" capabilities --output-dir "$PREFIX/workspace" --json > "$PREFIX/workspace/capabilities.json"
+          if "$BIN_DIR/game-dev" doctor --output-dir "$PREFIX/workspace" --json > "$PREFIX/workspace/doctor.json"; then
+            echo "OK      game-dev doctor"
+          else
+            echo "WARN    game-dev doctor meldet optionale Befunde."
+          fi
+          echo "OK      Game Development Studio 1.0.2 offline provisioniert"
+          echo "PATH: export PATH=$BIN_DIR:\$PATH"
+          SH
+
+          sed -i "s/__BUNDLE_ARCH__/$GDS_TARGET_ARCH/g" "$root/provision.sh"
+          chmod +x "$root/provision.sh"
+
+          cat > "$root/bundle-manifest.json" <<EOF
+          {
+            "schemaVersion": "aurion.game-development-studio.offline-bundle.v1",
+            "package": "@theisegoria/game-development-studio",
+            "version": "1.0.2",
+            "sourceRepository": "https://github.com/theisegoria/game-development-studio.git",
+            "sourceRevision": "96a0b4f34b979279ab983e9547af43133e85f310",
+            "targetArch": "$GDS_TARGET_ARCH",
+            "node": {
+              "version": "$node_version",
+              "archive": "vendor/$node_basename",
+              "sha256": "$node_sha"
+            },
+            "cli": {
+              "archive": "vendor/cli-linux-$GDS_TARGET_ARCH.tar.gz",
+              "sha256": "$cli_sha",
+              "nativeAddons": 0
+            },
+            "providerCalls": false,
+            "credentialsIncluded": false,
+            "workflow": ".github/workflows/game-development-studio-nodepacker.yml",
+            "sourceCommit": "$GITHUB_SHA",
+            "runId": "$GITHUB_RUN_ID"
+          }
+          EOF
+
+          cat > "$root/README.md" <<EOF
+          # Game Development Studio — Offline Linux Bundle
+
+          Package: @theisegoria/game-development-studio@1.0.2
+          Source revision: 96a0b4f34b979279ab983e9547af43133e85f310
+          Target architecture: $GDS_TARGET_ARCH
+          Node.js: $node_version
+
+          Install:
+
+          \`\`\`bash
+          tar xzf game-dev-linux-offline-$GDS_TARGET_ARCH.tar.gz
+          cd game-dev-linux-offline-$GDS_TARGET_ARCH
+          ./provision.sh
+          \`\`\`
+
+          No provider credentials are included and provisioning performs no provider calls.
+          EOF
+
+          mkdir -p dist-game-dev-offline-$GDS_TARGET_ARCH/validation
+          (cd "dist-game-dev-offline-$GDS_TARGET_ARCH" && tar -czf "../game-dev-linux-offline-$GDS_TARGET_ARCH.tar.gz" "game-dev-linux-offline-$GDS_TARGET_ARCH")
+          sha256sum "game-dev-linux-offline-$GDS_TARGET_ARCH.tar.gz"
+
+      - name: Upload offline Linux bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: game-dev-linux-offline-${{ matrix.target_arch }}-${{ github.sha }}
+          path: game-dev-linux-offline-${{ matrix.target_arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
