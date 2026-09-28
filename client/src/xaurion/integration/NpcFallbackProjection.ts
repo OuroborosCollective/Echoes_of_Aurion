@@ -170,7 +170,7 @@ export class NpcFallbackProjection {
       const loaded = await glbManager.loadModel(selection.entry.storageUrl);
       unowned = loaded.scene;
       if (this.disposed) return;
-      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
+      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
       if (!currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256) return;
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
@@ -182,8 +182,10 @@ export class NpcFallbackProjection {
       currentVisual.group.add(actor.group);
       const band = actorLodBand(this.distanceToCamera(npc));
       const veryFar = band === "very_far";
-      actor.group.visible = !veryFar;
-      currentVisual.body.forEach(mesh => { mesh.visible = veryFar; });
+      // LOD3/very-far still uses the approved GLB family. Never substitute a
+      // capsule/cylinder proxy for an NPC model.
+      actor.group.visible = true;
+      currentVisual.body.forEach(mesh => { mesh.visible = false; });
       this.failures.delete(npc.id);
       this.projected.set(npc.id, {
         sha256: selection.entry.sha256,
