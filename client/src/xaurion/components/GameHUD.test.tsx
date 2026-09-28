@@ -92,6 +92,8 @@ const baseProps = (): GameHUDProps => ({
   onToggleAutoAttack: vi.fn(),
   onAttack: vi.fn(),
   onCastSkill: vi.fn(),
+
+
   it("collapses the objective tracker on phone widths without removing confirmed objective semantics", () => {
     const originalMatchMedia = window.matchMedia;
     Object.defineProperty(window, "matchMedia", {
