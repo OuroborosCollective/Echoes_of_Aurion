@@ -181,7 +181,6 @@ export class NpcFallbackProjection {
       actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, variantKey: selection.variantKey, lod: selection.lod, source: "catalog" });
       currentVisual.group.add(actor.group);
       const band = actorLodBand(this.distanceToCamera(npc));
-      const veryFar = band === "very_far";
       // LOD3/very-far still uses the approved GLB family. Never substitute a
       // capsule/cylinder proxy for an NPC model.
       actor.group.visible = true;
