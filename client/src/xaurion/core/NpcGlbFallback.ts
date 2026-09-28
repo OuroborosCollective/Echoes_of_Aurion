@@ -152,7 +152,7 @@ export function selectNpcGlb(
   const variants = npcFallbackVariants(catalog)
     .map(variant => Object.freeze({
       variant,
-      physical: variant.entries.filter(candidate => candidate.entry.bytes === null || tier === null || candidate.entry.bytes <= assetBudgets[tier].assetBytes),
+      physical: variant.entries.filter(candidate => (candidate.entry as NpcGlbCatalogEntry & { bytes?: number | null }).bytes === null || tier === null || (candidate.entry as NpcGlbCatalogEntry & { bytes?: number | null }).bytes === undefined || (candidate.entry as NpcGlbCatalogEntry & { bytes?: number | null }).bytes! <= assetBudgets[tier].assetBytes),
     }))
     .filter(candidate => candidate.physical.length > 0);
   if (!variants.length) return null;
