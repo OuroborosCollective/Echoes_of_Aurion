@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameHUD, type GameHUDProps } from "./GameHUD";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
@@ -95,6 +95,16 @@ const baseProps = (): GameHUDProps => ({
 });
 
 describe("GameHUD", () => {
+  const originalMatchMedia = window.matchMedia;
+  beforeEach(() => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: false, media: "(max-width: 720px)", onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
+    });
+  });
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+  });
   it("presents explicit player/world projection states instead of color-only status", async () => {
     const props = baseProps();
     props.playerState = "stale";
