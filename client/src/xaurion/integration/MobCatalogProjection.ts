@@ -57,6 +57,10 @@ export class MobCatalogProjection {
   setCatalog(catalog: GlbRuntimeCatalog): void {
     this.catalog = catalog;
     this.elapsed = 1;
+    for (const [id, projected] of this.projected) {
+      const selected = this.selection(projected.visual);
+      if (!selected || selected.entry.sha256 !== projected.sha256) this.remove(id);
+    }
   }
 
   private async acquire(visual: MobVisual): Promise<void> {
