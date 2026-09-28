@@ -93,8 +93,15 @@ export function npcFallbackVariants(catalog: GlbRuntimeCatalog | null | undefine
     })));
 }
 
+type CatalogEntryWithBytes = NpcGlbCatalogEntry & Readonly<{ bytes?: number | null }>;
+
 function catalogVariantFitsTier(candidate: GlbCatalogLodVariant, tier: AssetTier | null): boolean {
-  return tier === null || candidate.bytes === null || candidate.bytes <= assetBudgets[tier].assetBytes;
+  return tier === null || candidate.bytes == null || candidate.bytes <= assetBudgets[tier].assetBytes;
+}
+
+function catalogEntryFitsTier(entry: NpcGlbCatalogEntry, tier: AssetTier | null): boolean {
+  const bytes = (entry as CatalogEntryWithBytes).bytes;
+  return tier === null || bytes == null || bytes <= assetBudgets[tier].assetBytes;
 }
 
 function selectPhysicalVariant(
@@ -152,7 +159,7 @@ export function selectNpcGlb(
   const variants = npcFallbackVariants(catalog)
     .map(variant => Object.freeze({
       variant,
-      physical: variant.entries.filter(candidate => (candidate.entry as NpcGlbCatalogEntry & { bytes?: number | null }).bytes === null || tier === null || (candidate.entry as NpcGlbCatalogEntry & { bytes?: number | null }).bytes === undefined || (candidate.entry as NpcGlbCatalogEntry & { bytes?: number | null }).bytes! <= assetBudgets[tier].assetBytes),
+      physical: variant.entries.filter(candidate => catalogEntryFitsTier(candidate.entry, tier)),
     }))
     .filter(candidate => candidate.physical.length > 0);
   if (!variants.length) return null;
