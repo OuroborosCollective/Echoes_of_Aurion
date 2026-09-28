@@ -92,14 +92,63 @@ describe("approved confirmed mob GLB presentation", () => {
       const load=vi.fn(async()=>{throw Error("decode failure");});const q=new MobCatalogProjection(setup().engine as never,load);q.setCatalog(catalog);for(let i=0;i<12;i++)await step(q,6);expect(load).toHaveBeenCalledTimes(3);expect(q.evidence().projected).toBe(0);q.dispose();
     } finally {Object.defineProperty(window,"innerWidth",{value:old,configurable:true});}
   });
-  it("projects every current mob archetype through the generic enemy fallback lane", () => {
+  it("projects every current mob archetype through a matching generic fallback family", async () => {
     const archetypes = ["clockwork_stalker", "corrupted_golem", "aether_wisp", "steam_drake", "centurion_elite", "titan_boss"] as const;
+    const shaFor = (n: number) => n.toString(16).padStart(64, "0");
+    const oldWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 412, configurable: true });
+    try {
+    const entries = archetypes.map((archetype, index) => ({
+      assetId: `glb_${archetype}`,
+      sha256: shaFor(index + 1),
+      displayName: `Enemy Fallback · ${archetype.replaceAll("_", " ")}`,
+      assetType: "enemy" as const,
+      storageUrl: `/api/assets/glb/${shaFor(index + 1)}.glb`,
+      targetKey: null,
+      purpose: "enemy-fallback" as const,
+      subcategory: null,
+      equipmentSlot: null,
+      lods: undefined,
+    }));
+    const genericCatalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "e".repeat(64), entries };
     for (const archetype of archetypes) {
       const s = setup();
       s.mobs[0]!.data.type = archetype;
       const p = new MobCatalogProjection(s.engine as never, async () => loaded());
-      p.setCatalog(catalog);
-      expect(() => p.update(.5)).not.toThrow();
+      p.setCatalog(genericCatalog);
+      await step(p);
+      expect(p.evidence().projected).toBe(1);
+      expect(p.evidence().physicalLods[0]).toMatchObject({ variantKey: archetype.replaceAll("_", " ") });
+      expect(p.evidence().physicalLods[0]!.tier).toBe("phone");
+      p.dispose();
+    }
+    } finally {
+      Object.defineProperty(window, "innerWidth", { value: oldWidth, configurable: true });
+    }
+  });
+
+  it("records the exact no-compatible path when every matching physical LOD exceeds the phone asset budget", async () => {
+    const oversized = {
+      ...catalog.entries[0]!,
+      lods: [
+        { level: 0 as const, assetId: "glb_oversized0", sha256: "a".repeat(64), bytes: 8 * 1024 * 1024 + 1, storageUrl: `/api/assets/glb/${"a".repeat(64)}.glb`, targetKey: null },
+        { level: 1 as const, assetId: "glb_oversized1", sha256: "b".repeat(64), bytes: 8 * 1024 * 1024 + 2, storageUrl: `/api/assets/glb/${"b".repeat(64)}.glb`, targetKey: null },
+      ],
+    };
+    const s = setup();
+    const p = new MobCatalogProjection(s.engine as never, async () => loaded());
+    const old = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 412, configurable: true });
+    try {
+      p.setCatalog({ ...catalog, entries: [oversized] });
+      await step(p);
+      const evidence = p.evidence();
+      expect(evidence.projected).toBe(0);
+      expect(evidence.noCompatibleFallback).toBe(1);
+      expect(evidence.budgetRejected).toBe(2);
+      expect(evidence.rejected[0]).toMatchObject({ reason: "NO_COMPATIBLE_FALLBACK", fallbackCandidates: 1, budgetRejectedCandidates: 2, loadState: "rejected" });
+    } finally {
+      Object.defineProperty(window, "innerWidth", { value: old, configurable: true });
       p.dispose();
     }
   });

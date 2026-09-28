@@ -112,6 +112,42 @@ function fitsTier(entry: EnemyGlbCatalogEntry & Readonly<{ bytes: number | null 
   return entry.bytes === null || entry.bytes <= assetBudgets[tier].assetBytes;
 }
 
+export type EnemyFallbackDiagnostics = Readonly<{
+  fallbackCandidates: number;
+  matchedCandidates: number;
+  budgetRejected: number;
+  compatibleCandidates: number;
+  bestMatchScore: number | null;
+}>;
+
+/**
+ * Returns the same candidate accounting used by selectEnemyGlb without making
+ * a visual claim or touching gameplay state. Counts physical candidates, so a
+ * fallback family with several LOD members is visible as several budget checks.
+ */
+export function enemyFallbackDiagnostics(
+  catalog: GlbRuntimeCatalog | null | undefined,
+  archetype: ZoneMobArchetype,
+  tier: AssetTier,
+): EnemyFallbackDiagnostics {
+  const variants = enemyFallbackVariants(catalog);
+  const evaluated = variants.map(variant => ({
+    score: matchScore(variant.key, archetype),
+    physical: variant.entries,
+  }));
+  const bestMatchScore = evaluated.length ? Math.min(...evaluated.map(candidate => candidate.score)) : null;
+  const matched = bestMatchScore === null ? [] : evaluated.filter(candidate => candidate.score === bestMatchScore);
+  const physical = matched.flatMap(candidate => candidate.physical);
+  const compatibleCandidates = physical.filter(candidate => fitsTier(candidate.entry, tier)).length;
+  return Object.freeze({
+    fallbackCandidates: variants.length,
+    matchedCandidates: matched.length,
+    budgetRejected: physical.length - compatibleCandidates,
+    compatibleCandidates,
+    bestMatchScore,
+  });
+}
+
 function matchScore(key: string, archetype: ZoneMobArchetype): number {
   const normalized = key.replace(/[^a-z0-9]+/g, " ");
   const aliases = CATEGORY_ALIASES[archetype];

@@ -8,7 +8,7 @@ import { glbManager } from "../core/GLBModelManager";
 import { releaseGlbTree } from "../core/GlbModelLease";
 import { ACTOR_LOD_MID_MAX_METERS, ACTOR_LOD_NEAR_MAX_METERS } from "../core/actorLod";
 import { subscribeConfirmedMobCombat } from "./zoneCombatBridge";
-import { selectEnemyGlb } from "../core/EnemyGlbFallback";
+import { enemyFallbackDiagnostics, selectEnemyGlb } from "../core/EnemyGlbFallback";
 
 type MobVisual = MMOEngine["mobManager"]["mobs"][number];
 type Loaded = Awaited<ReturnType<typeof glbManager.loadModel>>;
@@ -23,7 +23,7 @@ export class MobCatalogProjection {
   private readonly projected = new Map<string, Projected>();
   private readonly pending = new Map<string, number>();
   private readonly wanted = new Map<string, MobVisual>();
-  private readonly failures = new Map<string, { attempts: number; retryAt: number; reason: string; tier: AssetTier }>();
+  private readonly failures = new Map<string, { attempts: number; retryAt: number; reason: string; tier: AssetTier; fallbackCandidates: number; budgetRejectedCandidates: number }>();
   private disposed = false;
   private clock = 0;
   private generation = 0;
@@ -66,9 +66,9 @@ export class MobCatalogProjection {
   }
 
   private async acquire(visual: MobVisual): Promise<void> {
-    const id = visual.data.id, failure = this.failures.get(id), selection = this.selection(visual, failure?.attempts ?? 0);
+    const id = visual.data.id, failure = this.failures.get(id), tier = this.presentationTier(), diagnostics = enemyFallbackDiagnostics(this.catalog, visual.data.type, tier), selection = this.selection(visual, failure?.attempts ?? 0);
     if (!selection || this.pending.has(id) || this.projected.has(id) || (failure && (failure.attempts >= 3 || this.clock < failure.retryAt))) {
-      if (!selection && this.catalog) this.failures.set(id, { attempts: failure?.attempts ?? 0, retryAt: this.clock + 5, reason: "NO_COMPATIBLE_FALLBACK", tier: this.presentationTier() });
+      if (!selection && this.catalog) this.failures.set(id, { attempts: failure?.attempts ?? 0, retryAt: this.clock + 5, reason: diagnostics.fallbackCandidates === 0 ? "NO_FALLBACK_CANDIDATES" : diagnostics.compatibleCandidates === 0 ? "NO_COMPATIBLE_FALLBACK" : "NO_FALLBACK_SELECTION", tier, fallbackCandidates: diagnostics.fallbackCandidates, budgetRejectedCandidates: diagnostics.budgetRejected });
       if (!selection && this.catalog) visual.body.visible = false;
       return;
     }
@@ -99,7 +99,7 @@ export class MobCatalogProjection {
       visual.body.visible = false; actor = null;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
-      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 0.25, reason, tier: this.presentationTier() });
+      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 0.25, reason, tier, fallbackCandidates: diagnostics.fallbackCandidates, budgetRejectedCandidates: diagnostics.budgetRejected });
     } finally {
       actor?.dispose(); if (loaded) releaseGlbTree(loaded.scene);
       if (this.pending.get(id) === token) this.pending.delete(id);
@@ -166,15 +166,21 @@ export class MobCatalogProjection {
   }
 
   evidence() {
+    const typeSet = new Set((this.engine.mobManager?.mobs ?? []).map(v => v.data.type));
+    const diagnostics = [...typeSet].sort().map(archetype => Object.freeze({
+      archetype,
+      ...enemyFallbackDiagnostics(this.catalog, archetype, this.presentationTier()),
+    }));
     return {
       projected: this.projected.size,
       pending: this.pending.size,
       failed: this.failures.size,
-      fallbackCandidates: this.catalog ? this.catalog.entries.filter(entry => entry.purpose === "enemy-fallback" && entry.assetType === "enemy" && entry.targetKey === null).length : 0,
-      budgetRejected: [...this.failures.values()].filter(failure => failure.reason.includes("BUDGET") || failure.reason === "GLB_NETWORK_BUDGET").length,
+      fallbackCandidates: diagnostics.reduce((sum, entry) => sum + entry.fallbackCandidates, 0),
+      budgetRejected: [...this.failures.values()].reduce((sum, failure) => sum + failure.budgetRejectedCandidates, 0),
       noCompatibleFallback: [...this.failures.values()].filter(failure => failure.reason === "NO_COMPATIBLE_FALLBACK").length,
       physicalLods: [...this.projected].map(([id, p]) => ({ id, assetId: p.assetId, variantKey: p.variantKey, level: p.lodLevel, sha256: p.sha256, tier: this.presentationTier(), loadState: "loaded" as const })),
-      rejected: [...this.failures].map(([id, failure]) => ({ id, tier: failure.tier, reason: failure.reason, loadState: "rejected" as const })),
+      fallbackDiagnostics: diagnostics,
+      rejected: [...this.failures].map(([id, failure]) => ({ id, tier: failure.tier, reason: failure.reason, fallbackCandidates: failure.fallbackCandidates, budgetRejectedCandidates: failure.budgetRejectedCandidates, loadState: "rejected" as const })),
       lastAttackSequences: [...this.projected].map(([id, p]) => ({ id, sequence: p.lastAttackSequence })),
     };
   }
