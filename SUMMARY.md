@@ -45,3 +45,4 @@
 * [Deterministic Socioeconomic Impact-Wave Graph](deterministic-socioeconomic-impact-wave-graph.md)
 * [MMORPG Research Integration Wave — 26.09.2026](mmorpg-research-integration-wave-26.09.2026.md)
 * [AIM-548 — Deterministic Settlement Emergence](aim-548-deterministic-settlement-emergence.md)
+* [AIM-599 — Deterministische Terrain-Pipeline](aim-599-deterministische-terrain-pipeline.md)
