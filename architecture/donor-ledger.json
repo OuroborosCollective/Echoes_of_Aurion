@@ -817,6 +817,12 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/core/CanonicalAvatarProfile.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "SUPPORT"
+    },
+    {
       "path": "client/src/xaurion/core/EnemyGlbFallback.ts",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
