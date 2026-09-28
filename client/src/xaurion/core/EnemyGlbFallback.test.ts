@@ -40,7 +40,6 @@ describe("deterministic generic enemy GLB fallback selection", () => {
     expect(isEnemyFallbackCatalogEntry(approvedAuto)).toBe(true);
     expect(isEnemyFallbackCatalogEntry(plain)).toBe(true);
     expect(isEnemyFallbackCatalogEntry(assigned)).toBe(false);
-    expect(isEnemyFallbackCatalogEntry(assigned)).toBe(false);
   });
 
   it("prefers an archetype-matching family and preserves the requested physical LOD", () => {
@@ -74,5 +73,14 @@ describe("deterministic generic enemy GLB fallback selection", () => {
     };
     expect(selectEnemyGlb(catalog([family]), "clockwork_stalker", 0, "phone")).toBeNull();
     expect(enemyFallbackVariants(catalog([family]))).toHaveLength(1);
+  });
+
+  it("selects deterministically regardless of catalog order", () => {
+    const a = enemy("glb_a", "a", "Enemy Fallback · Generic Beast");
+    const b = enemy("glb_b", "b", "Enemy Fallback · Generic Insect");
+    const first = selectEnemyGlb(catalog([a, b]), "steam_drake", 0, "phone", "steam_drake:42");
+    const second = selectEnemyGlb(catalog([b, a]), "steam_drake", 0, "phone", "steam_drake:42");
+    expect(second?.entry.sha256).toBe(first?.entry.sha256);
+    expect(second?.variantKey).toBe(first?.variantKey);
   });
 });
