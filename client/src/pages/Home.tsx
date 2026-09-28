@@ -183,8 +183,9 @@ export default function Home() {
                   aria-haspopup="dialog"
                   disabled={loading}
                   aria-busy={loading}
+                  title={loading ? "Ladevorgang läuft..." : undefined}
                   onClick={openAccountAccess}
-                  className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 shadow-lg shadow-amber-950/20 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95"
+                  className="group min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 shadow-lg shadow-amber-950/20 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
                 >
                   <ShieldCheck className="mr-2 inline size-4" />
                   {loading ? "WIRD GELADEN..." : "KONTO ANLEGEN / ANMELDEN"}
@@ -426,7 +427,7 @@ export default function Home() {
                 className="min-h-12 rounded-xl bg-amber-200 px-6 font-bold text-slate-950 transition-all hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95 disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100"
               >
                 <ShieldCheck className="mr-2 inline size-4" />
-                ZUGANG ERSTELLEN
+                {loading ? "WIRD GELADEN..." : "ZUGANG ERSTELLEN"}
               </button>
             )}
           </div>
