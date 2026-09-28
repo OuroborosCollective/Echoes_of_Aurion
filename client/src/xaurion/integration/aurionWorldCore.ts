@@ -13,6 +13,11 @@ type WorldCoreMetrics = Readonly<{
   triangles: number;
   vegetationInstances: number;
   npcFallbacks: number;
+  npcFallbackRejected: number;
+  npcFallbackBudgetRejected: number;
+  mobGlbProjected: number;
+  mobGlbRejected: number;
+  mobGlbBudgetRejected: number;
   lod: Readonly<{ high: number; medium: number; low: number; culled: number }>;
   occlusion: Readonly<{ tested: number; occluded: number }>;
   particles: Readonly<{ tier: string; budget: number; active: number; pooled: number; reused: number; droppedBursts: number; tickRate: number }> | null;
@@ -284,6 +289,11 @@ export class AurionWorldCore {
         triangles: this.engine.renderer.info.render.triangles,
         vegetationInstances: this.vegetation.instanceCount,
         npcFallbacks: this.npcFallbacks.evidence().length,
+        npcFallbackRejected: this.npcFallbacks.fallbackEvidence().length,
+        npcFallbackBudgetRejected: this.npcFallbacks.crowdEvidence().budgetRejected,
+        mobGlbProjected: this.npcFallbacks.uploadedWorldEvidence().mobReplacements.projected,
+        mobGlbRejected: this.npcFallbacks.uploadedWorldEvidence().mobReplacements.failed,
+        mobGlbBudgetRejected: this.npcFallbacks.uploadedWorldEvidence().mobReplacements.budgetRejected,
         lod: Object.freeze({ ...this.lod.stats }),
         occlusion: Object.freeze({ tested: this.occlusion.stats.tested, occluded: this.occlusion.stats.occluded }),
         particles: this.engine.particleSystem?.metrics ?? null,
