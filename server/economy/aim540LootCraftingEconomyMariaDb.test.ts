@@ -96,6 +96,8 @@ suite("AIM-540 real MariaDB end-to-end reward/economy proof",()=>{
     const source=(await db.select({id:aurionLootDropReceiptsV2.id}).from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.id,first.receipt.id)).limit(1))[0];
     expect(source?.id).toBe(first.receipt.id);
 
+    const receiptReplayHash=canonicalSha256(first.receipt);
+    expect(receiptReplayHash).toBe(chain[1]!.evidenceHash);
     // The authoritative V2 path is append-only/idempotent; repeated materialization cannot create a second item.
     const all=(await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId,USER_ID)));
     expect(all.filter(item=>item.lootReceiptId===first.receipt.id)).toHaveLength(1);
