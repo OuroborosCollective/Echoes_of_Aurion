@@ -95,7 +95,8 @@ jobs:
           set -euo pipefail
           root="dist-game-dev-offline-$GDS_TARGET_ARCH/game-dev-linux-offline-$GDS_TARGET_ARCH"
           (cd "$root/vendor" && sha256sum -c node.SHA256SUMS && sha256sum -c cli.SHA256SUMS)
-          tar -tzf "$root/vendor/cli-linux-arm64.tar.gz" | grep -Fq "node_modules/@theisegoria/game-development-studio/dist/cli.js"
+          tar -tzf "$root/vendor/cli-linux-arm64.tar.gz" > "$RUNNER_TEMP/cli-arm64-listing.txt"
+          grep -Fq "node_modules/@theisegoria/game-development-studio/dist/cli.js" "$RUNNER_TEMP/cli-arm64-listing.txt"
 
       - name: Write offline provisioner and manifest
         shell: bash
