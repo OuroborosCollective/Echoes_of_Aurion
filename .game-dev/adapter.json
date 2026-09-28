@@ -5,34 +5,46 @@
   "version": "1.0.0",
   "scenarios": [
     {
-      "id": "world-contract",
-      "title": "Aurion world contract validation",
-      "description": "Validates the deterministic GDS↔Aurion world-authoring contract without launching the game.",
-      "command": {"executable":"scripts/game-dev-aurion-adapter.mjs","arguments":["--contract"],"workingDirectory":"."},
+      "id": "aurion-contract",
+      "title": "Aurion GDS authoring contract",
+      "description": "Validates the GDS↔Aurion scene-authoring boundary without launching the game.",
+      "command": {
+        "executable": "scripts/game-dev-aurion-adapter.mjs",
+        "arguments": ["--contract"],
+        "workingDirectory": "."
+      },
       "timeoutSeconds": 120,
       "capabilities": ["cpu"],
       "parameters": {},
-      "outputs": {"format":"none"}
+      "outputs": {"format": "none"}
     },
     {
       "id": "starting-village-plan",
-      "title": "Plan deterministic starting village",
-      "description": "Builds and validates the starting-village authoring plan from canonical Aurion contracts and the approved world asset catalog.",
-      "command": {"executable":"scripts/game-dev-aurion-adapter.mjs","arguments":["--plan","--scene","starting-village","--output","{run_dir}/staging"],"workingDirectory":"."},
+      "title": "Deterministic starting-village plan",
+      "description": "Builds a deterministic starting-village authoring plan from Aurion-owned contracts and the approved asset catalog.",
+      "command": {
+        "executable": "scripts/game-dev-aurion-adapter.mjs",
+        "arguments": ["--plan", "--scene", "starting-village", "--output", "{run_dir}/staging"],
+        "workingDirectory": "."
+      },
       "timeoutSeconds": 180,
       "capabilities": ["cpu"],
       "parameters": {},
-      "outputs": {"format":"none"}
+      "outputs": {"format": "none"}
     },
     {
       "id": "starting-village-authoring",
-      "title": "Author starting village scene",
-      "description": "Materializes the deterministic starting-village scene package into the GDS run bundle for Aurion runtime handoff. It does not mutate gameplay state or bypass Aurion authority.",
-      "command": {"executable":"scripts/game-dev-aurion-adapter.mjs","arguments":["--author","--scene","starting-village","--output","{run_dir}/staging"],"workingDirectory":"."},
+      "title": "Author starting-village staging package",
+      "description": "Materializes the deterministic scene package into the GDS run bundle for Aurion authoring handoff. It never writes gameplay deltas directly.",
+      "command": {
+        "executable": "scripts/game-dev-aurion-adapter.mjs",
+        "arguments": ["--author", "--scene", "starting-village", "--output", "{run_dir}/staging"],
+        "workingDirectory": "."
+      },
       "timeoutSeconds": 300,
-      "capabilities": ["cpu","project-write"],
+      "capabilities": ["cpu", "project-write"],
       "parameters": {},
-      "outputs": {"format":"none"}
+      "outputs": {"format": "none"}
     }
   ]
 }
