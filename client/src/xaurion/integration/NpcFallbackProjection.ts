@@ -273,7 +273,7 @@ export class NpcFallbackProjection {
     for (const npc of this.engine.npcs) void this.project(npc);
   }
 
-  evidence(): readonly Readonly<{ npcId: string; sha256: string; lod: ActorLodBand; presentation: ReturnType<AnimatedGlbActor["evidence"]> }>[] {
+  evidence() {
     return Object.freeze([...this.projected.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([npcId, projected]) => Object.freeze({
       npcId,
       assetId: projected.assetId,
