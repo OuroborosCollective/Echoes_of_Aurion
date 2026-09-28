@@ -1498,3 +1498,13 @@ Evidence: `pnpm check` grün; fokussierte Loot-/Manipulations-Regression grün m
 Learned: Die bestehende Loot-V2-Auflösung bleibt der einzige Variantengenerator; Manipulationen bilden nur eine deterministische, receipt-gebundene Schicht darüber.
 Open: MariaDB-Runtime-Readback benötigt eine explizit konfigurierte isolierte Datenbank; ohne DATABASE_URL konnten nur Compile- und reine Vertrags-Tests ausgeführt werden.
 Next safe step: Draft-PR gegen `main` mit exact-head CI und ggf. isolierter MariaDB-Evidence prüfen.
+
+### 2026-09-28 — Chunk-Seed Ecology & Resource Renewal (Issue #545)
+Status: VERIFIED deterministic contract hardening
+Task: Ecology muss aus World/Chunk-Seed und bestätigtem Structure-Context entstehen, Ressourcenentnahme und modellbasierte Erholung deterministisch abbilden und Replay erlauben.
+Decisions: `structureObservationKey` ist nun kausaler Input für Aktivierung, Ressourcenart, Kapazität, Regenerationsrate und Position; die Node-ID bleibt als `chunk/slot` stabil. Koordinaten, Structure-Hash, Snapshot-Hash und Revision werden fail-closed validiert. Regeneration bleibt epoch/tick-basiert und wall-clock-frei; season multipliers und Overuse-Penalty sind ganzzahlig/bounded.
+Touched surfaces: `shared/chunkSeedEcologyProtocol.ts`; `shared/chunkSeedEcologyProtocol.test.ts`.
+Evidence: `pnpm check` grün; Ecology + World-Chunk + Epoch-Regressionen grün: 4 Testdateien, 45 Tests; vollständige Vitest-Suite grün mit 346 Testdateien, 1,688 Tests bestanden und 50 Dateien/191 Tests wegen fehlender externer Runtime-Konfiguration übersprungen. Ergänzte Edge Gates decken rückläufige Node-Ticks, doppelte Epoch-Regeneration, Definition-Set-Mismatch, Duplicate Node IDs und Chunk-Grenzen ab. Wolfram-Language: `{Floor[1000*4500/10000], Floor[Floor[1000*4500/10000]*120/100], Floor[Floor[1000*4500/10000]*100/100], Floor[Floor[1000*4500/10000]*40/100], Floor[Floor[1000*4500/10000]/2]}` -> `{450,540,450,180,225}`, matching base/spring/summer/winter/overuse bounds.
+Learned: Eine referenzierte Structure-Observation reicht nicht als Link-Metadatum; sie muss in die deterministische Ableitung eingehen, sonst kann derselbe Chunk trotz unterschiedlichem bestätigtem Structure-State identische Ökologie behaupten.
+Open: Keine neue MariaDB-Tabelle eingeführt, weil der bestehende Issue-545-Vertrag als reiner Hash-/State-Vertrag arbeitet; persistente Snapshot-Readback-Evidence hängt vom vorhandenen World-State-Gateway ab.
+Next safe step: Draft-PR #647 für Review und anschließende Runtime-Integration gegen #546/#555.

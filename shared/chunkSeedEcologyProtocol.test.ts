@@ -97,6 +97,19 @@ describe("AIM-545 Chunk-Seed Ecology & Resource Renewal", () => {
         expect(def.structureObservationKey).toBeNull();
       }
     });
+
+    it("changes the ecological resource field when confirmed structure context changes", () => {
+      const withoutStructure = makeDefinitions(null);
+      const withStructure = makeDefinitions(STRUCTURE_OBSERVATION_KEY);
+      expect(withStructure).not.toEqual(withoutStructure);
+      expect(withStructure.some((node, index) => node.nodeId !== withoutStructure[index]?.nodeId || node.capacity !== withoutStructure[index]?.capacity)).toBe(true);
+    });
+
+    it("rejects malformed structure context and non-integer chunk coordinates", () => {
+      expect(() => deriveEcologyNodeDefinitions({ worldSeed: WORLD_SEED, coordinate: { x: 1.5, z: 0 }, biome: BIOME })).toThrow();
+      expect(() => deriveEcologyNodeDefinitions({ worldSeed: WORLD_SEED, coordinate: { x: 1_000_001, z: 0 }, biome: BIOME })).toThrow();
+      expect(() => deriveEcologyNodeDefinitions({ worldSeed: WORLD_SEED, coordinate: COORDINATE, biome: BIOME, structureObservationKey: "not-a-sha256" })).toThrow();
+    });
   });
 
   describe("initial snapshot", () => {
@@ -117,6 +130,15 @@ describe("AIM-545 Chunk-Seed Ecology & Resource Renewal", () => {
     it("produces a valid canonical hash", () => {
       const snapshot = makeInitialSnapshot();
       expect(() => assertEcologySnapshot(snapshot)).not.toThrow();
+    });
+
+    it("rejects duplicate resource node identities", () => {
+      const definitions = makeDefinitions();
+      expect(() => createInitialEcologySnapshot({
+        worldId: "world-545", chunkCoordinate: COORDINATE, epoch: 1, sourceRevision: SOURCE_REVISION,
+        sourceCausalRoot: SOURCE_CAUSAL_ROOT, confirmedChunkHash: CONFIRMED_CHUNK_HASH,
+        structureObservationKey: STRUCTURE_OBSERVATION_KEY, season: "summer", definitions: [...definitions, definitions[0]],
+      })).toThrow("ECOLOGY_NODE_ID_DUPLICATE");
     });
 
     it("produces identical snapshots for identical inputs", () => {
@@ -209,6 +231,12 @@ describe("AIM-545 Chunk-Seed Ecology & Resource Renewal", () => {
         causeTag: "forage",
         actorEntityId: "npc-1",
       })).toThrow("ECOLOGY_NODE_NOT_FOUND");
+    });
+
+    it("rejects an action tick that moves backwards for a node", () => {
+      const firstNode = makeInitialSnapshot().nodes[0];
+      const consumed = applyEcologyConsumption(makeInitialSnapshot(), { nodeId: firstNode.nodeId, amount: 1, tick: 5, causeTag: "forage", actorEntityId: "npc-1" });
+      expect(() => applyEcologyConsumption(consumed, { nodeId: firstNode.nodeId, amount: 1, tick: 4, causeTag: "forage", actorEntityId: "npc-1" })).toThrow("ECOLOGY_CONSUMPTION_TICK_BEFORE_NODE");
     });
   });
 
@@ -335,6 +363,17 @@ describe("AIM-545 Chunk-Seed Ecology & Resource Renewal", () => {
       const regenNode = regenerated.nodes.find(n => n.nodeId === firstDef.nodeId)!;
       expect(regenNode.remaining).toBeGreaterThan(0);
       expect(regenNode.depleted).toBe(false);
+    });
+
+    it("rejects applying regeneration twice to the same epoch tick", () => {
+      expect(() => applyEcologyRegeneration(makeInitialSnapshot(), makeDefinitions(), 1)).toThrow("ECOLOGY_REGENERATION_TICK_NOT_ADVANCED");
+    });
+
+    it("rejects incomplete or duplicate regeneration definitions", () => {
+      const defs = makeDefinitions();
+      const snapshot = makeInitialSnapshot(defs);
+      expect(() => applyEcologyRegeneration(snapshot, defs.slice(1), 2)).toThrow("ECOLOGY_DEFINITION_SET_MISMATCH");
+      expect(() => applyEcologyRegeneration(snapshot, [...defs, defs[0]], 2)).toThrow("ECOLOGY_DEFINITION_SET_MISMATCH");
     });
   });
 
