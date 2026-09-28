@@ -16,6 +16,7 @@ Die aktuelle Dokumentation folgt der Single-Owner-Architektur aus [ARCHITECTURE_
 6. [Effect Intent Journal](aurion-effect-intent-journal.md)
 7. [Headless Causal Oracle V2](aurion-headless-causal-oracle-v2.md)
 8. [AIM-599 — Deterministische Terrain-Pipeline](aurion-deterministic-terrain-pipeline-aim599.md)
+9. [AIM-600 — Deterministic Structure Placement](aurion-structure-placement-aim600.md)
 
 ## Aktive Architektur
 
