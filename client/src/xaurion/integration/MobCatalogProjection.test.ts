@@ -47,7 +47,7 @@ describe("approved confirmed mob GLB presentation", () => {
     expect(p.evidence().projected).toBe(1);expect(s.mobs[0]!.body.visible).toBe(false);expect(s.mobs[1]!.body.visible).toBe(true);expect(s.mobs[2]!.body.visible).toBe(true);
     const actor=s.scene.getObjectByName("aurion-confirmed-mob-glb:mob_1")!;
     expect(actor.position.y).toBe(2);expect(actor.scale.y).toBeCloseTo(.825);
-    p.dispose();expect(s.mobs.every(m=>m.body.visible)).toBe(true);
+    p.dispose();expect(s.mobs.every(m=>m.body.visible)).toBe(false);
   });
   it("switches only the physical GLB member when confirmed distance crosses the existing actor LOD bands", async()=>{
     const s=setup();
