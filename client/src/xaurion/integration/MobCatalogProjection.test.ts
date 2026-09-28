@@ -5,7 +5,7 @@ import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
 import { MobCatalogProjection, CLOCKWORK_STALKER_GLB_SHA as sha } from "./MobCatalogProjection";
 import { acceptConfirmedZoneCombat, projectConfirmedZoneSnapshot } from "./zoneCombatBridge";
 
-const catalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "b".repeat(64), entries: [{ assetId: `glb_${sha.slice(0,48)}`, sha256: sha, displayName: "Clockwork Stalker", purpose: "auto", assetType: "enemy", subcategory: null, targetKey: null, equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` }] };
+const catalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "b".repeat(64), entries: [{ assetId: `glb_${sha.slice(0,48)}`, sha256: sha, displayName: "Enemy Fallback · Clockwork Stalker", purpose: "enemy-fallback", assetType: "enemy", subcategory: null, targetKey: null, equipmentSlot: null, storageUrl: `/api/assets/glb/${sha}.glb` }] };
 const lod1Sha = "1".repeat(64), lod2Sha = "2".repeat(64);
 const lodCatalog: GlbRuntimeCatalog = { version: "aurion.glb-import.v1", revision: "c".repeat(64), entries: [{
   ...catalog.entries[0]!,
@@ -92,4 +92,16 @@ describe("approved confirmed mob GLB presentation", () => {
       const load=vi.fn(async()=>{throw Error("decode failure");});const q=new MobCatalogProjection(setup().engine as never,load);q.setCatalog(catalog);for(let i=0;i<12;i++)await step(q,6);expect(load).toHaveBeenCalledTimes(3);expect(q.evidence().projected).toBe(0);q.dispose();
     } finally {Object.defineProperty(window,"innerWidth",{value:old,configurable:true});}
   });
+  it("projects every current mob archetype through the generic enemy fallback lane", () => {
+    const archetypes = ["clockwork_stalker", "corrupted_golem", "aether_wisp", "steam_drake", "centurion_elite", "titan_boss"] as const;
+    for (const archetype of archetypes) {
+      const s = setup();
+      s.mobs[0]!.data.type = archetype;
+      const p = new MobCatalogProjection(s.engine as never, async () => loaded());
+      p.setCatalog(catalog);
+      expect(() => p.update(.5)).not.toThrow();
+      p.dispose();
+    }
+  });
+
 });
