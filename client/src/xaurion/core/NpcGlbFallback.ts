@@ -152,10 +152,7 @@ export function selectNpcGlb(
   const variants = npcFallbackVariants(catalog)
     .map(variant => Object.freeze({
       variant,
-      physical: variant.entries.filter(candidate => catalogVariantFitsTier(
-        glbCatalogLods(candidate.entry)[0]!,
-        tier,
-      )),
+      physical: variant.entries.filter(candidate => candidate.entry.bytes === null || tier === null || candidate.entry.bytes <= assetBudgets[tier].assetBytes),
     }))
     .filter(candidate => candidate.physical.length > 0);
   if (!variants.length) return null;
