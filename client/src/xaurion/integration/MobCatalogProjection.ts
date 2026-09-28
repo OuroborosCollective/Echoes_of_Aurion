@@ -70,6 +70,9 @@ export class MobCatalogProjection {
       return;
     }
     const token = ++this.generation; this.pending.set(id, token);
+    // A compatible approved enemy GLB suppresses the legacy red capsule immediately;
+    // the catalog actor becomes visible only after its rig/animation checks pass.
+    visual.body.visible = false;
     let loaded: Loaded | null = null;
     let actor: AnimatedGlbActor | null = null;
     try {
