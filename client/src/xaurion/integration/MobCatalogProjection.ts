@@ -44,18 +44,20 @@ export class MobCatalogProjection {
     return distance < ACTOR_LOD_NEAR_MAX_METERS ? 0 : distance < ACTOR_LOD_MID_MAX_METERS ? 1 : 2;
   }
 
-  private selection(visual: MobVisual) {
+  private selection(visual: MobVisual, fallbackOffset = 0) {
     return selectEnemyGlb(
       this.catalog,
       visual.data.type,
       this.preferredLod(visual),
       this.presentationTier(),
       `${visual.data.type}:${visual.data.id}`,
+      fallbackOffset,
     );
   }
 
   setCatalog(catalog: GlbRuntimeCatalog): void {
     this.catalog = catalog;
+    this.failures.clear();
     this.elapsed = 1;
     for (const [id, projected] of this.projected) {
       const selected = this.selection(projected.visual);
@@ -64,9 +66,10 @@ export class MobCatalogProjection {
   }
 
   private async acquire(visual: MobVisual): Promise<void> {
-    const id = visual.data.id, selection = this.selection(visual), failure = this.failures.get(id);
+    const id = visual.data.id, failure = this.failures.get(id), selection = this.selection(visual, failure?.attempts ?? 0);
     if (!selection || this.pending.has(id) || this.projected.has(id) || (failure && (failure.attempts >= 3 || this.clock < failure.retryAt))) {
       if (!selection && this.catalog) this.failures.set(id, { attempts: failure?.attempts ?? 0, retryAt: this.clock + 5, reason: "NO_COMPATIBLE_FALLBACK", tier: this.presentationTier() });
+      if (!selection && this.catalog) visual.body.visible = false;
       return;
     }
     const token = ++this.generation; this.pending.set(id, token);
@@ -77,7 +80,7 @@ export class MobCatalogProjection {
     let actor: AnimatedGlbActor | null = null;
     try {
       loaded = await this.load(selection.entry.storageUrl);
-      const currentSelection = this.selection(visual);
+      const currentSelection = this.selection(visual, failure?.attempts ?? 0);
       if (this.disposed || this.pending.get(id) !== token || this.wanted.get(id) !== visual || !currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256 || visual.data.hp <= 0) return;
       let triangles = 0, bones = 0;
       loaded.scene.traverse(node => {
@@ -96,7 +99,7 @@ export class MobCatalogProjection {
       visual.body.visible = false; actor = null;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
-      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 5, reason, tier: this.presentationTier() });
+      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 0.25, reason, tier: this.presentationTier() });
     } finally {
       actor?.dispose(); if (loaded) releaseGlbTree(loaded.scene);
       if (this.pending.get(id) === token) this.pending.delete(id);
