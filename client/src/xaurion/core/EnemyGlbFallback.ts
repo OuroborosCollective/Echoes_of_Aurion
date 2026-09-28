@@ -108,7 +108,7 @@ export function enemyFallbackVariants(catalog: GlbRuntimeCatalog | null | undefi
     })));
 }
 
-function fitsTier(entry: EnemyGlbCatalogEntry, tier: AssetTier): boolean {
+function fitsTier(entry: EnemyGlbCatalogEntry & Readonly<{ bytes: number | null }>, tier: AssetTier): boolean {
   return entry.bytes === null || entry.bytes <= assetBudgets[tier].assetBytes;
 }
 
