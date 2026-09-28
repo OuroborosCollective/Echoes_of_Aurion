@@ -18,6 +18,7 @@ export const ECOLOGY_GENERATOR_VERSION = "aurion.ecology-generator.v1" as const;
 export const ECOLOGY_MAX_NODES_PER_CHUNK = 32;
 export const ECOLOGY_REGENERATION_OVERUSE_THRESHOLD_BPS = 2_500;
 export const ECOLOGY_REGENERATION_OVERUSE_PENALTY_DIVISOR = 2;
+export const ECOLOGY_MAX_CHUNK_COORDINATE = 1_000_000;
 
 export const chunkSeedEcologyResourceKinds = [
   "food", "water", "wood", "stone", "ore",
@@ -34,7 +35,10 @@ const identifier = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const sha256 = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const bareSha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const revision = z.string().regex(/^[a-f0-9]{40}$/);
-const coordinate = z.strictObject({ x: z.number().int(), z: z.number().int() });
+const coordinate = z.strictObject({
+  x: z.number().int().min(-ECOLOGY_MAX_CHUNK_COORDINATE).max(ECOLOGY_MAX_CHUNK_COORDINATE),
+  z: z.number().int().min(-ECOLOGY_MAX_CHUNK_COORDINATE).max(ECOLOGY_MAX_CHUNK_COORDINATE),
+});
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const nonNegativeInteger = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const resourceKind = z.enum(chunkSeedEcologyResourceKinds);
@@ -256,6 +260,7 @@ export function createInitialEcologySnapshot(input: Readonly<{
       lastModifiedTick: 0,
     });
   });
+  if (new Set(nodes.map(node => node.nodeId)).size !== nodes.length) throw new Error("ECOLOGY_NODE_ID_DUPLICATE");
 
   const snapshot = {
     protocol: AURION_CHUNK_SEED_ECOLOGY_PROTOCOL,
@@ -315,6 +320,7 @@ export function applyEcologyConsumption(
   if (nodeIndex === -1) throw new Error("ECOLOGY_NODE_NOT_FOUND");
 
   const node = prior.nodes[nodeIndex];
+  if (consumption.tick < node.lastModifiedTick) throw new Error("ECOLOGY_CONSUMPTION_TICK_BEFORE_NODE");
   if (node.depleted) throw new Error("ECOLOGY_NODE_DEPLETED");
   if (consumption.amount > node.remaining) throw new Error("ECOLOGY_CONSUMPTION_EXCEEDS_REMAINING");
 
@@ -370,8 +376,13 @@ export function applyEcologyRegeneration(
   const prior = chunkSeedEcologySnapshotSchema.parse(snapshot);
   if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("ECOLOGY_REGENERATION_TICK_INVALID");
   if (tick < prior.epoch) throw new Error("ECOLOGY_REGENERATION_TICK_BEFORE_EPOCH");
+  if (tick === prior.epoch) throw new Error("ECOLOGY_REGENERATION_TICK_NOT_ADVANCED");
 
-  const defById = new Map(definitions.map(d => [d.nodeId, d] as const));
+  const parsedDefinitions = definitions.map(definition => chunkSeedEcologyNodeDefinitionSchema.parse(definition));
+  const defById = new Map(parsedDefinitions.map(d => [d.nodeId, d] as const));
+  if (defById.size !== parsedDefinitions.length || defById.size !== prior.nodes.length || prior.nodes.some(node => !defById.has(node.nodeId))) {
+    throw new Error("ECOLOGY_DEFINITION_SET_MISMATCH");
+  }
   const seasonMultiplierBps = SEASON_REGENERATION_MULTIPLIER_BPS[prior.season];
 
   const results: ChunkSeedEcologyRegenerationResult[] = [];
