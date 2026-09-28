@@ -95,6 +95,9 @@ describe("approved confirmed mob GLB presentation", () => {
   it("projects every current mob archetype through a matching generic fallback family", async () => {
     const archetypes = ["clockwork_stalker", "corrupted_golem", "aether_wisp", "steam_drake", "centurion_elite", "titan_boss"] as const;
     const shaFor = (n: number) => n.toString(16).padStart(64, "0");
+    const oldWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 412, configurable: true });
+    try {
     const entries = archetypes.map((archetype, index) => ({
       assetId: `glb_${archetype}`,
       sha256: shaFor(index + 1),
@@ -118,6 +121,9 @@ describe("approved confirmed mob GLB presentation", () => {
       expect(p.evidence().physicalLods[0]).toMatchObject({ variantKey: archetype.replaceAll("_", " ") });
       expect(p.evidence().physicalLods[0]!.tier).toBe("phone");
       p.dispose();
+    }
+    } finally {
+      Object.defineProperty(window, "innerWidth", { value: oldWidth, configurable: true });
     }
   });
 
