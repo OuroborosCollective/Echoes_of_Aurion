@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Activity, BrainCircuit, Castle, Coins, Compass, Crown, Database, FlaskConical, Hammer, Languages, MapPin, ScrollText, Shield, Sparkles, Swords, Users } from "lucide-react";
 import type { ConfirmedZonePresence } from "@shared/zonePresenceContract";
 import type { ConfirmedCombatMetrics } from "../integration/combatPresentation";
-import { AX1_VISIBLE_SOURCE_REVISION } from "../integration/ax1SourceManifest";
 import { Ax1ProjectionModal, type Ax1ProjectionState, UnknownValue } from "./Ax1ProjectionModal";
 
 export type Ax1WorldPoi = Readonly<{ 
@@ -54,7 +53,7 @@ export function WorldMapModal({ open, onClose, world, position, remotePlayers, s
   open: boolean; onClose: () => void; world?: Ax1ConfirmedWorld; position?: { x: number; z: number };
   remotePlayers: readonly ConfirmedZonePresence[]; state: "waiting" | "live" | "empty" | "stale" | "error";
 }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id="worldmap" title="Weltatlas" eyebrow="AX1 Dynamic World" state={mapState(state)} footer={`AX1 ${AX1_VISIBLE_SOURCE_REVISION.slice(0, 12)} · keine Client-Chunk- oder Spawn-Authority`}>
+  return <Ax1ProjectionModal open={open} onClose={onClose} id="worldmap" title="Weltatlas" eyebrow="Aurion Dynamic World" state={mapState(state)} footer="Aurion Runtime-Projektion · keine Client-Chunk- oder Spawn-Authority">
     <div className="ax1-world-map-canvas" aria-label="Bestätigte Weltprojektion">
       <div className="ax1-world-map-center"><Compass /><b>{world?.displayName ?? "—"}</b><span>{position ? `${(position.x / 1000).toFixed(2)} / ${(position.z / 1000).toFixed(2)}` : "—"}</span></div>
       {world?.pointsOfInterest.map((poi, index) => <article key={poi.id} className="ax1-world-map-poi" style={{ left: `${12 + index % 4 * 24}%`, top: `${18 + Math.floor(index / 4) * 30}%` }}><MapPin size={14} /><span>{poi.label}</span><small>{poi.kind} · {poi.state}</small></article>)}
@@ -68,27 +67,27 @@ export function WorldMapModal({ open, onClose, world, position, remotePlayers, s
 }
 
 export function ClassSelectModal({ open, onClose, tracks, state }: { open: boolean; onClose: () => void; tracks?: readonly Readonly<{ trackKind: string; trackId: string; levelExact: string }>[]; state: Ax1ProjectionState }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id="disciplines" title="Disziplinen & Pfade" eyebrow="AX1 Classless Progression" state={state}>
-    <p className="ax1-notice">AX1 ist das Hauptspiel. Feste Aurion-Klassen werden nicht gewählt; bestätigte Waffen- und Skillpfade formen die Spielfigur.</p>
+  return <Ax1ProjectionModal open={open} onClose={onClose} id="disciplines" title="Disziplinen & Pfade" eyebrow="Aurion Classless Progression" state={state}>
+    <p className="ax1-notice">Aurion ist die kanonische Spielfläche. Feste Klassen werden nicht lokal gesetzt; bestätigte Waffen- und Skillpfade formen die Spielfigur.</p>
     <SurfaceCards entries={(tracks?.length ? tracks : [{ trackKind: "weapon", trackId: "—", levelExact: "—" }]).map(track => ({ title: track.trackKind === "weapon" ? "Waffenpfad" : "Skillpfad", value: track.trackId, note: `Bestätigte Stufe ${track.levelExact}`, icon: <Swords size={14} /> }))} />
   </Ax1ProjectionModal>;
 }
 
 function ContractPendingModal({ open, onClose, id, title, eyebrow, icon, cards }: { open: boolean; onClose: () => void; id: string; title: string; eyebrow: string; icon: ReactNode; cards: readonly string[] }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id={id} title={title} eyebrow={eyebrow} state="unavailable" footer="Die Oberfläche ist vollständig AX1; fachliche Aktionen bleiben bis zum bestätigten AX1/WASD-Vertrag deaktiviert.">
+  return <Ax1ProjectionModal open={open} onClose={onClose} id={id} title={title} eyebrow={eyebrow} state="unavailable" footer="Aurion-Präsentationsfläche; fachliche Aktionen bleiben bis zum bestätigten Aurion-Readback deaktiviert.">
     <div className="mb-3 flex items-center gap-3 rounded-xl border border-cyan-900 bg-black/40 p-4 text-cyan-200">{icon}<p className="text-xs">Keine lokalen Starterwerte, Belohnungen, Preise oder Erfolgszustände.</p></div>
     <SurfaceCards entries={cards.map(title => ({ title, value: "—", note: "Bestätigter Readback ausstehend" }))} />
     <button type="button" className="ax1-primary mt-4" disabled>Aktion nicht verfügbar</button>
   </Ax1ProjectionModal>;
 }
 
-export const GuildManagementModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="guild" title="Gildenverwaltung" eyebrow="AX1 Guild & Leylines" icon={<Crown />} cards={["Gilde", "Mitglieder", "Schatzkammer", "Leylinien"]} />;
-export const NPCEconomyModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="economy" title="Lebendige Ökonomie" eyebrow="AX1 Merchant Economy" icon={<Coins />} cards={["Marktregion", "Währung", "Händlerbeziehung", "Buyback"]} />;
-export const TerritoryPoliticsModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="territory" title="Territorium & Politik" eyebrow="AX1 Realm Governance" icon={<Shield />} cards={["Gebiet", "Eigentümer", "Stabilität", "Verteidigung"]} />;
-export const HomesteadBuilderModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="homestead" title="Homestead Builder" eyebrow="AX1 Housing" icon={<Hammer />} cards={["Parzelle", "Bauplan", "Materialien", "Platzierung"]} />;
+export const GuildManagementModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="guild" title="Gildenverwaltung" eyebrow="Aurion Guild & Leylines" icon={<Crown />} cards={["Gilde", "Mitglieder", "Schatzkammer", "Leylinien"]} />;
+export const NPCEconomyModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="economy" title="Lebendige Ökonomie" eyebrow="Aurion Merchant Economy" icon={<Coins />} cards={["Marktregion", "Währung", "Händlerbeziehung", "Buyback"]} />;
+export const TerritoryPoliticsModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="territory" title="Territorium & Politik" eyebrow="Aurion Realm Governance" icon={<Shield />} cards={["Gebiet", "Eigentümer", "Stabilität", "Verteidigung"]} />;
+export const HomesteadBuilderModal = (props: { open: boolean; onClose: () => void }) => <ContractPendingModal {...props} id="homestead" title="Homestead Builder" eyebrow="Aurion Housing" icon={<Hammer />} cards={["Parzelle", "Bauplan", "Materialien", "Platzierung"]} />;
 
 export function NPCDialogueModal({ open, onClose, contacts, state }: { open: boolean; onClose: () => void; contacts: ReactNode; state: Ax1ProjectionState }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id="dialogue" title="Dialoge & Beziehungen" eyebrow="AX1 Arelorian Lingua" state={state}>
+  return <Ax1ProjectionModal open={open} onClose={onClose} id="dialogue" title="Dialoge & Beziehungen" eyebrow="Aurion Arelorian Lingua" state={state}>
     <div className="grid gap-4 md:grid-cols-[1fr_1.4fr]"><SurfaceCards entries={[
       { title: "Semantische Beobachtung", value: state === "confirmed" ? "Receipt-gebunden" : undefined, note: "Lingua kann Kontext beschreiben, aber keine Beziehung oder Preise mutieren.", icon: <Languages size={14} /> },
       { title: "NPC-Antwort", value: state === "confirmed" ? "Bestätigter Readback" : undefined, note: "Entscheidung und Memory werden serverseitig gelesen.", icon: <ScrollText size={14} /> },
@@ -97,18 +96,18 @@ export function NPCDialogueModal({ open, onClose, contacts, state }: { open: boo
 }
 
 export function DeterminismDebugOverlay({ open, onClose, world, metrics, state }: { open: boolean; onClose: () => void; world?: Ax1ConfirmedWorld; metrics: ConfirmedCombatMetrics; state: Ax1ProjectionState }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id="determinism" title="Determinismus & Evidence" eyebrow="AX1 Observation Side-Channel" state={state}>
+  return <Ax1ProjectionModal open={open} onClose={onClose} id="determinism" title="Determinismus & Evidence" eyebrow="Aurion Observation Side-Channel" state={state}>
     <SurfaceCards entries={[
       { title: "World Hash", value: world?.deterministicHash, note: "Bestätigter Aurion-Persistenzreadback", icon: <Database size={14} /> },
       { title: "Letzter Combat-Tick", value: metrics.lastTick, note: "WASD/Zone-bestätigte Ereignisse", icon: <Activity size={14} /> },
       { title: "Combat Events", value: metrics.eventCount, note: "Dedupliziert nach bestätigter Sequenz", icon: <Swords size={14} /> },
-      { title: "AX1 Source", value: AX1_VISIBLE_SOURCE_REVISION.slice(0, 12), note: "Revisionsgebundene UI-Quelle", icon: <Castle size={14} /> },
+      { title: "UI-Lane", value: "Aurion", note: "Präsentation ohne Gameplay-Authority", icon: <Castle size={14} /> },
     ]} />
   </Ax1ProjectionModal>;
 }
 
 export function ResearchModal({ open, onClose, onOpenCompanion, onOpenEvidence }: { open: boolean; onClose: () => void; onOpenCompanion: () => void; onOpenEvidence: () => void }) {
-  return <Ax1ProjectionModal open={open} onClose={onClose} id="research" title="Research & Learning" eyebrow="AX1 Research Lane" state="confirmed" footer="Research beobachtet bestätigte Spielzustände; Ausfall oder Modelloutput verändert keine Gameplay-Wahrheit.">
+  return <Ax1ProjectionModal open={open} onClose={onClose} id="research" title="Research & Learning" eyebrow="Aurion Research Lane" state="confirmed" footer="Research beobachtet bestätigte Spielzustände; Ausfall oder Modelloutput verändert keine Gameplay-Wahrheit.">
     <div className="ax1-projection-grid">
       <article className="ax1-projection-card"><h4 className="flex items-center gap-2"><BrainCircuit size={15} />Companion Learning</h4><p>Learn / Record, Go / Play und Stop / Despawn bleiben als begrenzte Beobachtungs- und Aktionsspur erhalten.</p><button type="button" className="ax1-tab mt-3" onClick={onOpenCompanion}>Companion-Lane öffnen</button></article>
       <article className="ax1-projection-card"><h4 className="flex items-center gap-2"><FlaskConical size={15} />Wolfram CAG</h4><p>Mathematische Analyse und Balancing-Evidence bleiben serverseitige Research-Werkzeuge, nie Runtime-Authority.</p><UnknownValue>Receipt-gebundene Provider-Lane</UnknownValue></article>

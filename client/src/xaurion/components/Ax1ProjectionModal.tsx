@@ -8,7 +8,7 @@ const labels: Record<Ax1ProjectionState, string> = {
   loading: "Bestätigte Daten werden geladen …",
   confirmed: "Serverbestätigter Stand",
   stale: "Stand ist veraltet · Aktualisierung ausstehend",
-  unavailable: "Noch kein bestätigter WASD-Vertrag verfügbar",
+  unavailable: "Noch kein bestätigter Aurion-Readback verfügbar",
 };
 
 export function Ax1ProjectionModal({ open, onClose, id, title, eyebrow, state, children, footer }: {

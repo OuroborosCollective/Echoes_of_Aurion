@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { toast } from "sonner";
 import { Ax1HpMeter } from "./Ax1HpMeter";
 import {
   Activity,
@@ -139,34 +138,41 @@ export function GameHUD(props: GameHUDProps) {
   const [partyCollapsed, setPartyCollapsed] = useState(false);
   const [objectivesCollapsed, setObjectivesCollapsed] = useState(false);
   const [combatOpen, setCombatOpen] = useState(false);
-  const prevObjectivesRef = useRef<readonly Ax1HudObjective[]>([]);
+  const prevObjectivesRef = useRef<readonly Ax1HudObjective[] | null>(null);
   const [activeEffects, setActiveEffects] = useState<Map<string, 'shake' | 'pulse'>>(new Map());
   const [completedLedger, setCompletedLedger] = useState<Ax1HudObjective[]>([]);
 
   useEffect(() => {
     const nextEffects = new Map<string, 'shake' | 'pulse'>();
     const newlyCompleted: Ax1HudObjective[] = [];
+    const previousObjectives = prevObjectivesRef.current;
 
+    // The first confirmed objective snapshot is a baseline, not a new quest event.
+    // Subsequent snapshots may arrive as fresh array instances during polling; compare
+    // by stable objective id and content instead of array identity.
     props.objectives.forEach(obj => {
-      const prev = prevObjectivesRef.current.find(p => p.id === obj.id);
-      
-      // Sound trigger
-      if (obj.completed && (!prev || !prev.completed)) {
+      const prev = previousObjectives?.find(p => p.id === obj.id);
+
+      if (previousObjectives && obj.completed && !prev?.completed) {
         window.dispatchEvent(new CustomEvent("aurion:audio-cue", { detail: { cue: "progression.quest_complete", category: "progression" } }));
         newlyCompleted.push(obj);
       }
 
+      if (!previousObjectives) {
+        return;
+      }
+
       if (!prev) {
-        nextEffects.set(obj.id, 'shake'); // NEW - SHAKE
-        if (obj.kind === "primary") toast.success(`Neues Hauptziel: ${obj.label}`);
-      } else if (prev.label !== obj.label || prev.detail !== obj.detail) {
-        nextEffects.set(obj.id, 'pulse'); // UPDATED - PULSE
-        if (obj.kind === "primary") toast.success(`Hauptziel aktualisiert: ${obj.label}`);
+        nextEffects.set(obj.id, "shake");
+      } else if (prev.label !== obj.label || prev.detail !== obj.detail || prev.progress !== obj.progress || prev.completed !== obj.completed) {
+        nextEffects.set(obj.id, "pulse");
       }
     });
 
+    prevObjectivesRef.current = props.objectives;
+
     if (newlyCompleted.length > 0) {
-        setCompletedLedger(prev => [...newlyCompleted, ...prev].slice(0, 5));
+      setCompletedLedger(prev => [...newlyCompleted, ...prev].slice(0, 5));
     }
 
     if (nextEffects.size > 0) {
@@ -174,7 +180,6 @@ export function GameHUD(props: GameHUDProps) {
       const timer = setTimeout(() => setActiveEffects(new Map()), 1500);
       return () => clearTimeout(timer);
     }
-    prevObjectivesRef.current = props.objectives;
   }, [props.objectives]);
 
   useEffect(() => {
@@ -206,7 +211,7 @@ export function GameHUD(props: GameHUDProps) {
     <div
       id="game-hud-root"
       data-testid="ax1-game-hud"
-      data-source="ax1-f24-visible-shell"
+      data-source="aurion-confirmed-runtime-ui"
       data-density={props.context ?? "exploration"}
       aria-live="polite"
       className="xaurion-game-hud absolute inset-0 z-20 pointer-events-none select-none overflow-hidden text-white sm:opacity-100 opacity-95 transition-opacity duration-500"
@@ -367,7 +372,7 @@ export function GameHUD(props: GameHUDProps) {
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <div className="flex items-center gap-1.5">
                 <Award className="h-3.5 w-3.5 text-amber-200" aria-hidden />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100">World Objectives</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100">Weltziele</span>
               </div>
               <button
                 type="button"
