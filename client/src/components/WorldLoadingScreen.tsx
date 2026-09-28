@@ -82,7 +82,9 @@ export function WorldLoadingScreen(props: {
   worldAssets: WorldAssetLoadingEvidence | null;
 }) {
   const state = deriveWorldLoadingState(props);
-  if (state.ready && !state.degraded) return null;
+  // Evidence continues to be captured in the runtime readback, but once renderer and
+  // character gates are usable the presentation must never cover the playable horizon.
+  if (!state.blocking) return null;
 
   const chunkLabel = props.chunks
     ? `${props.chunks.count} bestätigt / ${props.chunks.desiredCount} erwartet${props.chunks.failedCount ? ` · ${props.chunks.failedCount} fail-closed` : ""}`
