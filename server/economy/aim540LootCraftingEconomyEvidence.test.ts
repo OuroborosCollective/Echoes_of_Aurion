@@ -82,24 +82,19 @@ describe("AIM-540 deterministic Loot/Crafting/Economy evidence",()=>{
   });
 
   it("fuzzes deterministic replay, input binding and bounded variant planning without gameplay mutation",()=>{
-    const vectors=Array.from({length:256},(_,i)=>resolved({
-      resolutionIndex:i,
-      zoneId:i%2===0?"windhollow":"emberfall",
-      monsterArchetypeId:i%3===0?"common_monster":i%3===1?"elite_rare":"dungeon_boss",
-      luckBps:(i*137)%5_001,
-      serverSeedDigest:seed(String(i)),
-    }));
-    for(const first of vectors){
-      const replay=resolved({
-        resolutionIndex:first.contextHash===first.contextHash ? Number.parseInt(first.contextHash.slice(0,4),16)%256 : 0,
-        zoneId:undefined,
-      } as never);
-      void replay;
-    }
-    for(let i=0;i<64;i+=1){
-      const input={resolutionIndex:i,serverSeedDigest:seed(String(i)),luckBps:(i*79)%5_001};
-      expect(resolved(input)).toEqual(resolved(input));
-      expect(resolved({...input,resolutionIndex:i+1}).contextHash).not.toBe(resolved(input).contextHash);
+    for(let i=0;i<256;i+=1){
+      const input={
+        resolutionIndex:i,
+        zoneId:i%2===0?"windhollow":"emberfall",
+        monsterArchetypeId:i%3===0?"common_monster":i%3===1?"elite_rare":"dungeon_boss",
+        luckBps:(i*137)%5_001,
+        serverSeedDigest:seed(String(i)),
+      };
+      const first=resolved(input);
+      expect(resolved(input)).toEqual(first);
+      expect(resolved({...input,resolutionIndex:i+1}).contextHash).not.toBe(first.contextHash);
+      expect(resolved({...input,monsterArchetypeId:`${input.monsterArchetypeId}:tampered`}).contextHash).not.toBe(first.contextHash);
+      expect(resolved({...input,serverSeedDigest:seed(`${i}:tampered`)}).contextHash).not.toBe(first.contextHash);
     }
     expect(estimateLootVariantUpperBound({
       baseItemCount:48,
