@@ -1497,4 +1497,4 @@ Touched surfaces: `shared/chunkSeedEcologyProtocol.ts`; `shared/chunkSeedEcology
 Evidence: `pnpm check` grün; Ecology + World-Chunk + Epoch-Regressionen grün: 3 Testdateien, 35 Tests. Wolfram-Language: `{Floor[1000*4500/10000], Floor[Floor[1000*4500/10000]*120/100], Floor[Floor[1000*4500/10000]*100/100], Floor[Floor[1000*4500/10000]*40/100], Floor[Floor[1000*4500/10000]/2]}` -> `{450,540,450,180,225}`, matching base/spring/summer/winter/overuse bounds.
 Learned: Eine referenzierte Structure-Observation reicht nicht als Link-Metadatum; sie muss in die deterministische Ableitung eingehen, sonst kann derselbe Chunk trotz unterschiedlichem bestätigtem Structure-State identische Ökologie behaupten.
 Open: Keine neue MariaDB-Tabelle eingeführt, weil der bestehende Issue-545-Vertrag als reiner Hash-/State-Vertrag arbeitet; persistente Snapshot-Readback-Evidence hängt vom vorhandenen World-State-Gateway ab.
-Next safe step: Draft-PR # für Review und anschließende Runtime-Integration gegen #546/#555.
+Next safe step: Draft-PR #647 für Review und anschließende Runtime-Integration gegen #546/#555.
