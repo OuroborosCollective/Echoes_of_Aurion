@@ -154,6 +154,11 @@ export class NpcFallbackProjection {
     const procedural = findProceduralNpcVisual(this.engine.scene, npc);
     if (!procedural) return;
 
+    // Once an approved catalog fallback exists, never keep the legacy cylinder/head
+    // visible while the real GLB is loading. A persistent primitive is not a valid
+    // NPC presentation; the catalog is the only visual source once available.
+    procedural.body.forEach(mesh => { mesh.visible = false; });
+
     this.pending.add(npc.id);
     let unowned: THREE.Group | undefined;
     try {
