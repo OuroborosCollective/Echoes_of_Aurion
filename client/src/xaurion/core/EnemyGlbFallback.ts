@@ -35,10 +35,10 @@ export function enemyVisualIdentityHash(identity: string): number {
 }
 
 export function isEnemyFallbackCatalogEntry(entry: EnemyGlbCatalogEntry): boolean {
-  return entry.assetType === "enemy"
-    && entry.targetKey === null
-    && entry.purpose === "enemy-fallback"
-    && entry.displayName.startsWith(ENEMY_FALLBACK_DISPLAY_PREFIX);
+  if (entry.assetType !== "enemy" || entry.targetKey !== null) return false;
+  return entry.purpose === "enemy-fallback"
+    ? entry.displayName.startsWith(ENEMY_FALLBACK_DISPLAY_PREFIX)
+    : entry.purpose === "auto";
 }
 
 export function enemyFallbackPool(catalog: GlbRuntimeCatalog | null | undefined): EnemyGlbCatalogEntry[] {
@@ -101,37 +101,6 @@ export function enemyFallbackVariants(catalog: GlbRuntimeCatalog | null | undefi
 
 function fitsTier(entry: EnemyGlbCatalogEntry, tier: AssetTier): boolean {
   return entry.bytes === null || entry.bytes <= assetBudgets[tier].assetBytes;
-}
-
-function selectPhysical(
-  entry: EnemyGlbCatalogEntry,
-  preferredLod: GlbLodLevel,
-  tier: AssetTier,
-): Readonly<{ entry: EnemyGlbCatalogEntry; lod: number | null }> | null {
-  const variants = glbCatalogLods(entry)
-    .slice()
-    .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256))
-    .filter(candidate => candidate.bytes === null || candidate.bytes <= assetBudgets[tier].assetBytes);
-  if (!variants.length) return null;
-  const ordered = variants.slice().sort((left, right) => {
-    const rank = (level: number) => level >= preferredLod ? level - preferredLod : 10 + preferredLod - level;
-    return rank(left.level) - rank(right.level)
-      || left.level - right.level
-      || left.sha256.localeCompare(right.sha256);
-  });
-  const candidate = ordered[0]!;
-  return Object.freeze({
-    entry: Object.freeze({
-      ...entry,
-      assetId: candidate.assetId,
-      sha256: candidate.sha256,
-      bytes: candidate.bytes,
-      storageUrl: candidate.storageUrl,
-      targetKey: candidate.targetKey,
-      lods: [],
-    }),
-    lod: candidate.level,
-  });
 }
 
 function matchScore(key: string, archetype: ZoneMobArchetype): number {
