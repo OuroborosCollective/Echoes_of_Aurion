@@ -1,0 +1,90 @@
+name: AIM-540 Loot Crafting Economy Evidence
+
+on:
+  pull_request:
+    paths:
+      - "server/aurionLootProtocol.ts"
+      - "server/aurionLootCatalog.ts"
+      - "server/economy/aim540*.ts"
+      - "server/economy/aim540*.test.ts"
+      - "server/aurionLootV2.e2e.test.ts"
+      - "server/craftingProtocol.ts"
+      - "server/craftingReceipt.e2e.test.ts"
+      - "server/tradeCraftingReceiptPersistence.ts"
+      - "server/confirmedEquipmentVisualReadback.ts"
+      - "server/confirmedEquipmentVisualReadback.mariadb.test.ts"
+      - "scripts/reconcile-aurion-economic-ledger.ts"
+      - "scripts/read-aurion-economic-audit.ts"
+      - "drizzle/0057_aurion_economic_ledger_v2.sql"
+      - "drizzle/0037_aurion_trade_crafting_receipts.sql"
+      - "drizzle/aurionCausalitySchema.ts"
+      - ".github/workflows/aim540-loot-crafting-economy-evidence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/aurionLootProtocol.ts"
+      - "server/aurionLootCatalog.ts"
+      - "server/economy/aim540*.ts"
+      - "server/economy/aim540*.test.ts"
+      - "server/craftingProtocol.ts"
+      - "server/tradeCraftingReceiptPersistence.ts"
+      - ".github/workflows/aim540-loot-crafting-economy-evidence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_aim540_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim540_test
+      NODE_ENV: test
+      AURION_AIM540_E2E: "1"
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aim540-ci-disposable-never-production
+      VITE_APP_ID: aim540-ci
+      AURION_WAVE3_ECONOMIC_E2E: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prove exact head and migration chain
+        run: |
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Deterministic loot vectors and fuzz
+        run: pnpm exec vitest run server/economy/aim540LootCraftingEconomyEvidence.test.ts server/economy/aim540EvidenceSummary.test.ts --no-file-parallelism
+      - name: Real MariaDB reward and visual readback
+        run: pnpm exec vitest run server/economy/aim540LootCraftingEconomyMariaDb.test.ts server/aurionLootV2.e2e.test.ts server/confirmedEquipmentVisualReadback.mariadb.test.ts server/craftingReceipt.e2e.test.ts --no-file-parallelism
+      - name: Existing economic ledger proof
+        run: pnpm exec vitest run server/economy/economicLedgerContract.test.ts server/economy/economicLedgerMariaDb.test.ts --no-file-parallelism
+      - name: Fresh-process economic audit
+        run: |
+          pnpm exec tsx scripts/reconcile-aurion-economic-ledger.ts --world echoes-of-aurion-global --confirm RECONCILE_ECONOMIC_EVIDENCE || test "$?" = 2
+          pnpm exec tsx scripts/read-aurion-economic-audit.ts --world echoes-of-aurion-global
+      - name: TypeScript and build
+        run: |
+          pnpm check
+          pnpm build
