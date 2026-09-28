@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
