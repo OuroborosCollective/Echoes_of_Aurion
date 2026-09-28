@@ -136,7 +136,7 @@ const utilityButton = "flex min-h-11 min-w-11 flex-col items-center justify-cent
 export function GameHUD(props: GameHUDProps) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [partyCollapsed, setPartyCollapsed] = useState(false);
-  const [objectivesCollapsed, setObjectivesCollapsed] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
+  const [objectivesCollapsed, setObjectivesCollapsed] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches);
   const [combatOpen, setCombatOpen] = useState(false);
   const prevObjectivesRef = useRef<readonly Ax1HudObjective[] | null>(null);
   const [activeEffects, setActiveEffects] = useState<Map<string, 'shake' | 'pulse'>>(new Map());
