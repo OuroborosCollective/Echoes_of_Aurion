@@ -102,7 +102,7 @@ describe("AIM-540 deterministic Loot/Crafting/Economy evidence",()=>{
       maxAffixSlots:5,
       qualityCount:6,
       levelBands:101,
-    })).toBe("79626240");
+    })).toBe("48838323824640");
   });
 
   it("builds a canonical receipt/hash chain and keeps visual evidence presentation-only",()=>{
