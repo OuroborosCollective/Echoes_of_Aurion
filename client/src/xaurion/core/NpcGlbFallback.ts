@@ -1,4 +1,5 @@
-import { NPC_FALLBACK_DISPLAY_PREFIX, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { glbCatalogLods, NPC_FALLBACK_DISPLAY_PREFIX, type GlbCatalogLodVariant, type GlbRuntimeCatalog } from "@shared/glbImportContract";
+import { assetBudgets, type AssetTier } from "@shared/glbPresentationBudget";
 
 export type NpcGlbCatalogEntry = GlbRuntimeCatalog["entries"][number];
 export type NpcGlbSelection = Readonly<{
@@ -68,6 +69,7 @@ function physicalFamilyEntries(entry: NpcGlbCatalogEntry): readonly Readonly<{ e
         ...entry,
         assetId: lod.assetId,
         sha256: lod.sha256,
+        bytes: lod.bytes,
         storageUrl: lod.storageUrl,
         targetKey: lod.targetKey,
         lods: [],
@@ -91,29 +93,82 @@ export function npcFallbackVariants(catalog: GlbRuntimeCatalog | null | undefine
     })));
 }
 
+function catalogVariantFitsTier(candidate: GlbCatalogLodVariant, tier: AssetTier | null): boolean {
+  return tier === null || candidate.bytes === null || candidate.bytes <= assetBudgets[tier].assetBytes;
+}
+
+function selectPhysicalVariant(
+  entry: NpcGlbCatalogEntry,
+  preferredLod: number | null,
+  tier: AssetTier | null,
+): Readonly<{ entry: NpcGlbCatalogEntry; lod: number | null }> | null {
+  const variants = glbCatalogLods(entry)
+    .slice()
+    .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256))
+    .filter(candidate => catalogVariantFitsTier(candidate, tier));
+  if (!variants.length) return null;
+  const ordered = variants.slice().sort((left, right) => {
+    if (preferredLod === null) return left.level - right.level || left.sha256.localeCompare(right.sha256);
+    const rank = (level: number) => level >= preferredLod ? level - preferredLod : 10 + preferredLod - level;
+    return rank(left.level) - rank(right.level) || left.level - right.level || left.sha256.localeCompare(right.sha256);
+  });
+  const candidate = ordered[0]!;
+  return Object.freeze({
+    entry: Object.freeze({
+      ...entry,
+      assetId: candidate.assetId,
+      sha256: candidate.sha256,
+      bytes: candidate.bytes,
+      storageUrl: candidate.storageUrl,
+      targetKey: candidate.targetKey,
+      lods: [],
+    }),
+    lod: candidate.level,
+  });
+}
+
 export function selectNpcGlb(
   catalog: GlbRuntimeCatalog | null | undefined,
   npcIdentity: string,
   preferredTargetKey?: string | null,
   preferredLod: number | null = null,
+  tier: AssetTier | null = null,
 ): NpcGlbSelection | null {
   if (!catalog || !npcIdentity) return null;
   const exactTargetKey = preferredTargetKey ?? npcVisualTargetKey(npcIdentity);
   const assigned = catalog.entries.find(entry => entry.assetType === "character" && entry.targetKey === exactTargetKey);
   if (assigned) {
-    const descriptor = assigned.displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? npcFallbackDescriptor(assigned) : { variantKey: null, lod: null };
-    return Object.freeze({ entry: assigned, source: "assigned", fallbackIndex: null, variantKey: descriptor.variantKey, lod: descriptor.lod });
+    const physical = selectPhysicalVariant(assigned, preferredLod, tier);
+    if (!physical) return null;
+    return Object.freeze({
+      entry: physical.entry,
+      source: "assigned",
+      fallbackIndex: null,
+      variantKey: assigned.displayName.startsWith(NPC_FALLBACK_DISPLAY_PREFIX) ? npcFallbackDescriptor(assigned).variantKey : null,
+      lod: physical.lod,
+    });
   }
-  const variants = npcFallbackVariants(catalog);
+
+  const variants = npcFallbackVariants(catalog)
+    .map(variant => Object.freeze({
+      variant,
+      physical: variant.entries.filter(candidate => catalogVariantFitsTier(
+        glbCatalogLods(candidate.entry)[0]!,
+        tier,
+      )),
+    }))
+    .filter(candidate => candidate.physical.length > 0);
   if (!variants.length) return null;
+
   const fallbackIndex = npcVisualIdentityHash(npcIdentity) % variants.length;
-  const variant = variants[fallbackIndex]!;
-  const preferred = preferredLod === null ? undefined : variant.entries.find(candidate => candidate.lod === preferredLod);
-  const candidate = preferred
-    ?? variant.entries.find(candidate => candidate.lod === 0)
-    ?? variant.entries.find(candidate => candidate.lod === 1)
-    ?? variant.entries.find(candidate => candidate.lod === 2)
-    ?? variant.entries.find(candidate => candidate.lod === 3)
-    ?? variant.entries[0]!;
-  return Object.freeze({ entry: candidate.entry, source: "fallback", fallbackIndex, variantKey: variant.key, lod: candidate.lod });
+  const selected = variants[fallbackIndex]!;
+  const physical = selectPhysicalVariant(selected.physical[0]!.entry, preferredLod, tier);
+  if (!physical) return null;
+  return Object.freeze({
+    entry: physical.entry,
+    source: "fallback",
+    fallbackIndex,
+    variantKey: selected.variant.key,
+    lod: physical.lod,
+  });
 }
