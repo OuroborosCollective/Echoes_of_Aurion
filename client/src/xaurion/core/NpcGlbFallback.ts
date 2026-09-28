@@ -140,6 +140,7 @@ export function selectNpcGlb(
   preferredTargetKey?: string | null,
   preferredLod: number | null = null,
   tier: AssetTier | null = null,
+  fallbackOffset = 0,
 ): NpcGlbSelection | null {
   if (!catalog || !npcIdentity) return null;
   const exactTargetKey = preferredTargetKey ?? npcVisualTargetKey(npcIdentity);
@@ -164,7 +165,7 @@ export function selectNpcGlb(
     .filter(candidate => candidate.physical.length > 0);
   if (!variants.length) return null;
 
-  const fallbackIndex = npcVisualIdentityHash(npcIdentity) % variants.length;
+  const fallbackIndex = (npcVisualIdentityHash(npcIdentity) + Math.max(0, Math.trunc(fallbackOffset))) % variants.length;
   const selected = variants[fallbackIndex]!;
   const compatible = selected.physical.slice().sort((left, right) => {
     const leftLod = left.lod ?? Number.MAX_SAFE_INTEGER;

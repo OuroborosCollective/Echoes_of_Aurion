@@ -44,37 +44,43 @@ export class MobCatalogProjection {
     return distance < ACTOR_LOD_NEAR_MAX_METERS ? 0 : distance < ACTOR_LOD_MID_MAX_METERS ? 1 : 2;
   }
 
-  private selection(visual: MobVisual) {
+  private selection(visual: MobVisual, fallbackOffset = 0) {
     return selectEnemyGlb(
       this.catalog,
       visual.data.type,
       this.preferredLod(visual),
       this.presentationTier(),
       `${visual.data.type}:${visual.data.id}`,
+      fallbackOffset,
     );
   }
 
   setCatalog(catalog: GlbRuntimeCatalog): void {
     this.catalog = catalog;
+    this.failures.clear();
     this.elapsed = 1;
     for (const [id, projected] of this.projected) {
       const selected = this.selection(projected.visual);
-      if (!selected || selected.entry.sha256 !== projected.sha256) this.remove(id);
+      if (!selected || selected.entry.sha256 !== projected.sha256) this.remove(id, false);
     }
   }
 
   private async acquire(visual: MobVisual): Promise<void> {
-    const id = visual.data.id, selection = this.selection(visual), failure = this.failures.get(id);
+    const id = visual.data.id, failure = this.failures.get(id), selection = this.selection(visual, failure?.attempts ?? 0);
     if (!selection || this.pending.has(id) || this.projected.has(id) || (failure && (failure.attempts >= 3 || this.clock < failure.retryAt))) {
       if (!selection && this.catalog) this.failures.set(id, { attempts: failure?.attempts ?? 0, retryAt: this.clock + 5, reason: "NO_COMPATIBLE_FALLBACK", tier: this.presentationTier() });
+      if (!selection && this.catalog) visual.body.visible = false;
       return;
     }
     const token = ++this.generation; this.pending.set(id, token);
+    // A compatible approved enemy GLB suppresses the legacy red capsule immediately;
+    // the catalog actor becomes visible only after its rig/animation checks pass.
+    visual.body.visible = false;
     let loaded: Loaded | null = null;
     let actor: AnimatedGlbActor | null = null;
     try {
       loaded = await this.load(selection.entry.storageUrl);
-      const currentSelection = this.selection(visual);
+      const currentSelection = this.selection(visual, failure?.attempts ?? 0);
       if (this.disposed || this.pending.get(id) !== token || this.wanted.get(id) !== visual || !currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256 || visual.data.hp <= 0) return;
       let triangles = 0, bones = 0;
       loaded.scene.traverse(node => {
@@ -93,7 +99,7 @@ export class MobCatalogProjection {
       visual.body.visible = false; actor = null;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
-      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 5, reason, tier: this.presentationTier() });
+      this.failures.set(id, { attempts: (failure?.attempts ?? 0) + 1, retryAt: this.clock + 0.25, reason, tier: this.presentationTier() });
     } finally {
       actor?.dispose(); if (loaded) releaseGlbTree(loaded.scene);
       if (this.pending.get(id) === token) this.pending.delete(id);
@@ -115,7 +121,7 @@ export class MobCatalogProjection {
     const byId = new Map(mobs.map(v => [v.data.id, v]));
     for (const [id, p] of [...this.projected]) {
       const v = byId.get(id);
-      if (v !== p.visual || v.group.userData.aurionConfirmedMob !== true) { this.remove(id); continue; }
+      if (v !== p.visual || v.group.userData.aurionConfirmedMob !== true) { this.remove(id, false); continue; }
       const desiredSelection = this.selection(v);
       if (v.data.hp > 0 && (!desiredSelection || desiredSelection.entry.sha256 !== p.sha256)) { this.remove(id); continue; }
       if (v.data.hp <= 0) {
@@ -150,7 +156,7 @@ export class MobCatalogProjection {
       .filter(t => t.distance < 65).sort((a, b) => a.distance - b.distance || a.v.data.id.localeCompare(b.v.data.id));
     const corpses = [...this.projected.values()].filter(p => p.deadSeconds !== null).length;
     for (const { v } of near.slice(0, Math.max(0, limit - corpses))) this.wanted.set(v.data.id, v);
-    for (const [id, p] of this.projected) if (!this.wanted.has(id) && p.deadSeconds === null) this.remove(id);
+    for (const [id, p] of this.projected) if (!this.wanted.has(id) && p.deadSeconds === null) this.remove(id, false);
     for (const id of this.pending.keys()) if (!this.wanted.has(id)) this.pending.delete(id);
     for (const [id, v] of this.wanted) {
       if (this.pending.size >= 2) break;
@@ -172,9 +178,9 @@ export class MobCatalogProjection {
       lastAttackSequences: [...this.projected].map(([id, p]) => ({ id, sequence: p.lastAttackSequence })),
     };
   }
-  private remove(id: string): void {
+  private remove(id: string, restoreBody = false): void {
     const p = this.projected.get(id); if (!p) return;
-    p.visual.body.visible = p.oldBodyVisible; p.actor.group.removeFromParent(); p.actor.dispose(); this.projected.delete(id);
+    p.visual.body.visible = restoreBody ? p.oldBodyVisible : false; p.actor.group.removeFromParent(); p.actor.dispose(); this.projected.delete(id);
   }
-  dispose(): void { this.disposed = true; this.detach(); this.pending.clear(); this.wanted.clear(); for (const id of [...this.projected.keys()]) this.remove(id); }
+  dispose(): void { this.disposed = true; this.detach(); this.pending.clear(); this.wanted.clear(); for (const id of [...this.projected.keys()]) this.remove(id, true); }
 }

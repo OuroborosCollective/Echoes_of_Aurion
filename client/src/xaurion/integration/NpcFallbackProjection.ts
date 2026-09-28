@@ -53,7 +53,7 @@ export class NpcFallbackProjection {
   private catalog: GlbRuntimeCatalog | null = null;
   private readonly projected = new Map<string, ProjectedNpc>();
   private readonly pending = new Set<string>();
-  private readonly failures = new Map<string, Readonly<{ reason: string; tier: AssetTier }>>();
+  private readonly failures = new Map<string, Readonly<{ reason: string; tier: AssetTier; attempts: number }>>();
   private readonly uploadedWorld: UploadedWorldCatalogProjection;
   private readonly remotePublic: RemotePublicAppearanceProjection;
   private readonly equipment: EquipmentCatalogProjection;
@@ -96,6 +96,7 @@ export class NpcFallbackProjection {
       const catalog = glbRuntimeCatalogSchema.parse(await response.json());
       if (!this.disposed) {
         this.catalog = catalog;
+        this.failures.clear();
         this.uploadedWorld.setCatalog(catalog);
         this.remotePublic.setCatalog(catalog);
         this.equipment.setCatalog(catalog);
@@ -142,11 +143,15 @@ export class NpcFallbackProjection {
   private async project(npc: NPCCharacter): Promise<void> {
     if (this.disposed || this.pending.has(npc.id)) return;
     const tier = this.presentationTier();
-    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
-    if (!selection || selection.source !== "fallback") {
-      if (!selection && this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier }));
-      else if (!this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier }));
-      this.restoreNpc(npc.id);
+    const failure = this.failures.get(npc.id);
+    if (failure && failure.attempts >= 6) return;
+    const selection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
+    if (!selection) {
+      if (this.catalog) this.failures.set(npc.id, Object.freeze({ reason: "NO_COMPATIBLE_FALLBACK", tier, attempts: failure?.attempts ?? 0 }));
+      else this.failures.set(npc.id, Object.freeze({ reason: "GLB_CATALOG_UNAVAILABLE", tier, attempts: failure?.attempts ?? 0 }));
+      // Never resurrect the primitive body merely because a visual asset is loading.
+      const proceduralMissing = findProceduralNpcVisual(this.engine.scene, npc);
+      proceduralMissing?.body.forEach(mesh => { mesh.visible = false; });
       return;
     }
     const existing = this.projected.get(npc.id);
@@ -154,14 +159,19 @@ export class NpcFallbackProjection {
     const procedural = findProceduralNpcVisual(this.engine.scene, npc);
     if (!procedural) return;
 
+    // Once an approved catalog fallback exists, never keep the legacy cylinder/head
+    // visible while the real GLB is loading. A persistent primitive is not a valid
+    // NPC presentation; the catalog is the only visual source once available.
+    procedural.body.forEach(mesh => { mesh.visible = false; });
+
     this.pending.add(npc.id);
     let unowned: THREE.Group | undefined;
     try {
       const loaded = await glbManager.loadModel(selection.entry.storageUrl);
       unowned = loaded.scene;
       if (this.disposed) return;
-      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier);
-      if (!currentSelection || currentSelection.source !== "fallback" || currentSelection.entry.sha256 !== selection.entry.sha256) return;
+      const currentSelection = selectNpcGlb(this.catalog, npc.id, null, this.preferredLod(npc), tier, failure?.attempts ?? 0);
+      if (!currentSelection || currentSelection.entry.sha256 !== selection.entry.sha256) return;
       const currentVisual = findProceduralNpcVisual(this.engine.scene, npc);
       if (!currentVisual) return;
 
@@ -171,9 +181,10 @@ export class NpcFallbackProjection {
       actor.group.userData.npcFallback = Object.freeze({ npcId: npc.id, assetId: selection.entry.assetId, sha256: selection.entry.sha256, variantKey: selection.variantKey, lod: selection.lod, source: "catalog" });
       currentVisual.group.add(actor.group);
       const band = actorLodBand(this.distanceToCamera(npc));
-      const veryFar = band === "very_far";
-      actor.group.visible = !veryFar;
-      currentVisual.body.forEach(mesh => { mesh.visible = veryFar; });
+      // LOD3/very-far still uses the approved GLB family. Never substitute a
+      // capsule/cylinder proxy for an NPC model.
+      actor.group.visible = true;
+      currentVisual.body.forEach(mesh => { mesh.visible = false; });
       this.failures.delete(npc.id);
       this.projected.set(npc.id, {
         sha256: selection.entry.sha256,
@@ -186,8 +197,9 @@ export class NpcFallbackProjection {
       unowned = undefined;
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/[^A-Z0-9_:-]/gi, "_").slice(0, 160) || "GLB_LOAD_FAILED" : "GLB_LOAD_FAILED";
-      this.failures.set(npc.id, Object.freeze({ reason, tier }));
-      // Fail visibly to the existing procedural NPC. No GLB success is claimed.
+      this.failures.set(npc.id, Object.freeze({ reason, tier, attempts: (failure?.attempts ?? 0) + 1 }));
+      // Do not fall back to cylinders/spheres. The next deterministic catalog variant
+      // is retried on the next projection tick; presentation never becomes fake geometry.
     } finally {
       if (unowned) releaseGlbTree(unowned);
       this.pending.delete(npc.id);
@@ -199,13 +211,15 @@ export class NpcFallbackProjection {
     let overflow = 0;
     for (const projected of candidates) {
       if (count >= NPC_VERY_FAR_PROXY_CAPACITY) {
-        projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+        projected.actor.group.visible = true;
         overflow += 1;
         continue;
       }
       const parent = projected.actor.group.parent;
       if (!parent) {
-        projected.proceduralMeshes.forEach(mesh => { mesh.visible = true; });
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+        projected.actor.group.visible = true;
         overflow += 1;
         continue;
       }
@@ -237,9 +251,9 @@ export class NpcFallbackProjection {
       counts[band] += 1;
       projected.lod = band;
       if (band === "very_far") {
-        projected.actor.group.visible = false;
+        projected.proceduralMeshes.forEach(mesh => { mesh.visible = false; });
+        projected.actor.group.visible = true;
         projected.accumulatedAnimationDelta = 0;
-        veryFarCandidates.push(projected);
         continue;
       }
 
@@ -257,7 +271,12 @@ export class NpcFallbackProjection {
       }
     }
 
-    this.projectVeryFarInstances(veryFarCandidates);
+    // Very-far NPCs keep the approved catalog GLB as their presentation.
+    // The legacy instanced capsule proxy is intentionally kept empty.
+    this.farProxyMesh.count = 0;
+    this.farProxyMesh.instanceMatrix.needsUpdate = true;
+    this.farProxyCount = 0;
+    this.farProxyOverflow = 0;
     this.lodCounts = Object.freeze({ ...counts });
     this.mixerUpdatesLastFrame = mixerUpdates;
     this.mixerUpdatesTotal += mixerUpdates;

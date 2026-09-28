@@ -136,7 +136,7 @@ const utilityButton = "flex min-h-11 min-w-11 flex-col items-center justify-cent
 export function GameHUD(props: GameHUDProps) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [partyCollapsed, setPartyCollapsed] = useState(false);
-  const [objectivesCollapsed, setObjectivesCollapsed] = useState(false);
+  const [objectivesCollapsed, setObjectivesCollapsed] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches);
   const [combatOpen, setCombatOpen] = useState(false);
   const prevObjectivesRef = useRef<readonly Ax1HudObjective[] | null>(null);
   const [activeEffects, setActiveEffects] = useState<Map<string, 'shake' | 'pulse'>>(new Map());
@@ -366,9 +366,10 @@ export function GameHUD(props: GameHUDProps) {
             </section>
           )}
 
-          <div className="origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
+          <div className="ax1-minimap-shell origin-top-right scale-[.72] sm:scale-100">{props.miniMap}</div>
 
-          <section className="ax1-objective-tracker w-[min(340px,78vw)] rounded-[6px] border border-amber-300/20 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+          <section data-collapsed={objectivesCollapsed} className="ax1-objective-tracker w-[min(340px,78vw)] rounded-[6px] border border-amber-300/20 bg-black/72 p-1.5 shadow-xl backdrop-blur-xl">
+            {objectivesCollapsed && primaryObjective ? <span className="sr-only" data-testid="collapsed-primary-objective">{primaryObjective.label}</span> : null}
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <div className="flex items-center gap-1.5">
                 <Award className="h-3.5 w-3.5 text-amber-200" aria-hidden />
@@ -494,7 +495,7 @@ export function GameHUD(props: GameHUDProps) {
       </div>
 
       <div className="ax1-combat-lane pointer-events-auto absolute bottom-2 right-2 sm:bottom-4 sm:right-4 flex max-w-[72vw] flex-col items-end gap-2">
-        <div className="flex flex-wrap justify-end gap-1.5">
+        <div className="ax1-combat-utility-actions flex flex-wrap justify-end gap-1.5">
           <button type="button" disabled={props.controlsDisabled} onClick={props.onToggleAutoLoot} aria-pressed={props.autoLoot} aria-label="Auto-Loot umschalten" className={`${utilityButton} ${props.autoLoot ? "border-emerald-400 bg-emerald-950/80 text-emerald-300" : "border-gray-700 bg-black/80 text-gray-500"}`} title="Auto-Loot"><Sparkles className="h-4 w-4" /><span>A-LOOT</span></button>
           <button type="button" disabled={props.actionsDisabled} onClick={props.onInteract} aria-label="Interaktion" className={`${utilityButton} border-amber-400/70 bg-black/85 text-amber-300`} title="Interaktion [F]"><Hand className="h-4 w-4" /><span>ACTION</span></button>
           <button type="button" disabled={props.actionsDisabled} onClick={props.onToggleAutoAttack} aria-pressed={props.autoAttack} aria-label="Auto-Angriff umschalten" className={`${utilityButton} ${props.autoAttack ? "border-red-400 bg-red-950/80 text-red-300" : "border-gray-700 bg-black/80 text-gray-300"}`} title="Auto-Angriff"><Repeat className="h-4 w-4" /><span>{props.autoAttack ? "AUTO AN" : "AUTO"}</span></button>
@@ -502,7 +503,7 @@ export function GameHUD(props: GameHUDProps) {
           <button type="button" onClick={props.onOpenParty} aria-label="Gruppe öffnen" className={`${utilityButton} border-sky-500/60 bg-black/85 text-sky-300`} title="Gruppe"><ShieldCheck className="h-4 w-4" /><span>GROUP</span></button>
         </div>
 
-        <div className="ax1-combat-cluster ax1-combat-cluster-phone flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-[6px] border border-amber-300/25 bg-black/78 p-1.5 shadow-2xl backdrop-blur-xl">
+        <div className="ax1-combat-cluster ax1-combat-cluster-phone flex max-w-full flex-nowrap overflow-x-auto items-center justify-end gap-1.5 rounded-[6px] border border-amber-300/25 bg-black/78 p-1.5 shadow-2xl backdrop-blur-xl">
           <button type="button" disabled={props.actionsDisabled} onClick={props.onAttack} className="relative min-h-14 min-w-14 h-14 w-14 sm:h-16 sm:w-16 rounded-[6px] border border-amber-400 bg-gradient-to-br from-amber-600/30 to-black text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] active:scale-90" title="Angriff [R]" aria-label="Angriff [R]">
             <Swords className="mx-auto h-6 w-6" /><kbd className="absolute -left-1 -top-1 rounded bg-black px-1 text-[8px] text-amber-300">R</kbd><span className="block text-[7px] font-bold">ANGRIFF</span>
           </button>

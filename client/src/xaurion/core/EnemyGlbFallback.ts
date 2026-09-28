@@ -127,6 +127,7 @@ export function selectEnemyGlb(
   preferredLod: number,
   tier: AssetTier,
   entityIdentity: string = archetype,
+  fallbackOffset = 0,
 ): EnemyGlbSelection | null {
   const eligible = enemyFallbackVariants(catalog)
     .map((variant, index) => Object.freeze({
@@ -139,7 +140,7 @@ export function selectEnemyGlb(
 
   const bestScore = Math.min(...eligible.map(candidate => candidate.score));
   const ranked = eligible.filter(candidate => candidate.score === bestScore);
-  const selected = ranked[enemyVisualIdentityHash(entityIdentity) % ranked.length]!;
+  const selected = ranked[(enemyVisualIdentityHash(entityIdentity) + Math.max(0, Math.trunc(fallbackOffset))) % ranked.length]!;
   const candidates = selected.physical.slice().sort((left, right) => {
     const leftLod = left.lod ?? Number.MAX_SAFE_INTEGER;
     const rightLod = right.lod ?? Number.MAX_SAFE_INTEGER;

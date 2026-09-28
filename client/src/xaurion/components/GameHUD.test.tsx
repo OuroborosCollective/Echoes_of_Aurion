@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameHUD, type GameHUDProps } from "./GameHUD";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
@@ -95,6 +95,16 @@ const baseProps = (): GameHUDProps => ({
 });
 
 describe("GameHUD", () => {
+  const originalMatchMedia = window.matchMedia;
+  beforeEach(() => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: false, media: "(max-width: 720px)", onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
+    });
+  });
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+  });
   it("presents explicit player/world projection states instead of color-only status", async () => {
     const props = baseProps();
     props.playerState = "stale";
@@ -129,6 +139,7 @@ describe("GameHUD", () => {
   it("renders one dominant primary objective and a compact nearby layer", () => {
     render(<GameHUD {...baseProps()} />);
 
+    expect(screen.getByRole("button", { name: "Ziele schließen" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Hauptziel" })).toBeTruthy();
     expect(screen.getByText("PRIMARY · SERVER PROJECTION")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Nearby objectives" })).toBeTruthy();
@@ -247,5 +258,21 @@ describe("GameHUD", () => {
     expect(more).toBeTruthy();
     fireEvent.click(more);
     expect(screen.getByRole("dialog", { name: "Weitere Menüs" })).toBeTruthy();
+  });
+
+  it("collapses the objective tracker on phone widths without removing confirmed objective semantics", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true, media: "(max-width: 720px)", onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
+    });
+    try {
+      render(<GameHUD {...baseProps()} />);
+      const tracker = document.querySelector(".ax1-objective-tracker");
+      expect(tracker?.getAttribute("data-collapsed")).toBe("true");
+      expect(screen.getByText("Find the Observatory")).toBeTruthy();
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+    }
   });
 });
