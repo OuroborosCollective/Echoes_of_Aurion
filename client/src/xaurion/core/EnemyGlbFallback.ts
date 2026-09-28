@@ -11,9 +11,13 @@ export type EnemyGlbSelection = Readonly<{
   tier: AssetTier;
 }>;
 
+type PhysicalEnemyCandidate = Readonly<{
+  entry: EnemyGlbCatalogEntry & Readonly<{ bytes: number | null }>;
+  lod: GlbLodLevel;
+}>;
 type EnemyFallbackVariant = Readonly<{
   key: string;
-  entries: readonly Readonly<{ entry: EnemyGlbCatalogEntry; lod: number | null }>[];
+  entries: readonly PhysicalEnemyCandidate[];
 }>;
 
 const CATEGORY_ALIASES: Readonly<Record<ZoneMobArchetype, readonly string[]>> = Object.freeze({
@@ -63,8 +67,11 @@ function descriptor(entry: EnemyGlbCatalogEntry): { variantKey: string; lod: num
   return { variantKey: variantKey || raw.toLowerCase(), lod };
 }
 
-function physicalFamilyEntries(entry: EnemyGlbCatalogEntry): readonly Readonly<{ entry: EnemyGlbCatalogEntry; lod: number | null }>[] {
-  if (!entry.lods?.length) return Object.freeze([{ entry, lod: descriptor(entry).lod }]);
+function physicalFamilyEntries(entry: EnemyGlbCatalogEntry): readonly PhysicalEnemyCandidate[] {
+  if (!entry.lods?.length) return Object.freeze([{
+    lod: (descriptor(entry).lod ?? 0) as GlbLodLevel,
+    entry: Object.freeze({ ...entry, bytes: null }),
+  }]);
   return Object.freeze(entry.lods
     .slice()
     .sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256))
@@ -83,7 +90,7 @@ function physicalFamilyEntries(entry: EnemyGlbCatalogEntry): readonly Readonly<{
 }
 
 export function enemyFallbackVariants(catalog: GlbRuntimeCatalog | null | undefined): readonly EnemyFallbackVariant[] {
-  const grouped = new Map<string, Array<{ entry: EnemyGlbCatalogEntry; lod: number | null }>>();
+  const grouped = new Map<string, PhysicalEnemyCandidate[]>();
   for (const entry of enemyFallbackPool(catalog)) {
     const key = descriptor(entry).variantKey;
     const current = grouped.get(key) ?? [];
@@ -119,7 +126,7 @@ export function selectEnemyGlb(
   archetype: ZoneMobArchetype,
   preferredLod: number,
   tier: AssetTier,
-  entityIdentity = archetype,
+  entityIdentity: string = archetype,
 ): EnemyGlbSelection | null {
   const eligible = enemyFallbackVariants(catalog)
     .map((variant, index) => Object.freeze({
