@@ -452,3 +452,191 @@
     max-height:26vh;
   }
 }
+
+/* 2026-09-28 small-screen HUD correction.
+ * Keep the playable horizon unobstructed; evidence is read-only presentation and
+ * must never become a persistent blocking layer once renderer + character are usable.
+ */
+@media (max-width:720px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-top-bar{
+    display:block;
+    padding:8px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-left-col{
+    width:min(214px,calc(100vw - 156px));
+    max-width:214px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col{
+    position:absolute;
+    top:8px;
+    right:8px;
+    width:auto;
+    max-width:150px;
+    align-items:flex-end;
+    gap:5px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav{
+    display:grid;
+    grid-template-columns:repeat(4,34px);
+    gap:4px;
+    width:auto;
+    max-width:150px;
+    padding:4px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav button{
+    min-width:34px;
+    width:34px;
+    min-height:34px;
+    height:34px;
+    padding:2px;
+    border-radius:8px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav button > span:last-child{
+    display:none;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-minimap-shell{
+    display:none;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    position:absolute;
+    top:80px;
+    right:0;
+    width:150px;
+    max-width:calc(100vw - 16px);
+    max-height:38px;
+    overflow:hidden;
+    padding:3px;
+    border-radius:9px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker[data-collapsed="true"]{
+    max-height:38px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker[data-collapsed="false"]{
+    width:min(250px,calc(100vw - 16px));
+    max-height:42vh;
+    overflow:auto;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker > div:not(:first-child){
+    max-height:calc(42vh - 42px);
+    overflow:auto;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker > div:first-child{
+    min-height:30px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker > div:first-child button{
+    min-width:30px;
+    min-height:30px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-lane{
+    left:8px;
+    right:8px;
+    bottom:max(8px,env(safe-area-inset-bottom));
+    width:auto;
+    max-width:none;
+    gap:4px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions{
+    flex-wrap:nowrap;
+    gap:4px;
+    width:auto;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions button{
+    min-width:36px;
+    width:36px;
+    min-height:36px;
+    height:36px;
+    padding:2px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions button:nth-last-child(-n+2){
+    display:none;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone{
+    width:auto;
+    max-width:100%;
+    min-width:0;
+    padding:4px;
+    gap:4px;
+    border-radius:9px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button{
+    flex:0 0 42px;
+    width:42px;
+    min-width:42px;
+    height:42px;
+    min-height:42px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button:first-child{
+    flex-basis:46px;
+    width:46px;
+    min-width:46px;
+    height:46px;
+    min-height:46px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button span{
+    font-size:6px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone::-webkit-scrollbar{
+    height:2px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-metrics{
+    top:auto!important;
+    bottom:118px!important;
+    left:auto!important;
+    right:8px!important;
+    transform:none!important;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-bottom-left{
+    bottom:max(8px,env(safe-area-inset-bottom));
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-bottom-left > div{
+    max-width:104px;
+  }
+}
+@media (max-width:420px){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-left-col{
+    width:190px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col{
+    max-width:142px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav{
+    grid-template-columns:repeat(4,32px);
+    max-width:142px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-hud-right-col > nav button{
+    width:32px;
+    min-width:32px;
+    height:32px;
+    min-height:32px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker{
+    top:74px;
+    width:138px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-utility-actions button{
+    width:34px;
+    min-width:34px;
+    height:34px;
+    min-height:34px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button{
+    flex-basis:40px;
+    width:40px;
+    min-width:40px;
+    height:40px;
+    min-height:40px;
+  }
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-combat-cluster-phone > button:first-child{
+    flex-basis:44px;
+    width:44px;
+    min-width:44px;
+    height:44px;
+    min-height:44px;
+  }
+}
+@media (max-height:500px) and (orientation:landscape){
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-objective-tracker,
+  .xaurion-runtime .ax1-authority-shell .xaurion-game-hud .ax1-minimap-shell{
+    display:none;
+  }
+}
