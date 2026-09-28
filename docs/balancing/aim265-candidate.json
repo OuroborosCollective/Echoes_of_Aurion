@@ -12,7 +12,7 @@
       "d356881538dae23c3aa97364a5596d48b6ac3079"
     ],
     "targetBaseRevision": "c3596b4fdb358b14e58526d8f19893b08b01fb22",
-    "catalogSha256": "3b43448719f3a1d6a5251ea664ad7dc393199ea09806f169c8f2794b5e9e0243",
+    "catalogSha256": "7c2a0f6b51b7e49ac97ad872b50bf4868cebc46966b401b1264a56b9aff5e621",
     "files": [
       {
         "path": "server/wasdAurionSkillProgressionProtocol.ts",
@@ -64,11 +64,11 @@
       },
       {
         "path": "server/aurionAx1ContentCatalog.ts",
-        "sha256": "7bdd4c5997b753af42f74aad4dc59a1aeae096d1a3607af6073ba4b4edf22e0b"
+        "sha256": "447952afbe03d1874327501baec1f61fa28834bab136f3ab3e299b9af8d5f5b8"
       },
       {
         "path": "shared/aurionAx1ContentCatalog.json",
-        "sha256": "044e69ce648e39cf583eb361312215587db205ca94dab083a55eca80617164f0"
+        "sha256": "6863870b6eeb21007fb4610a7a6b3e5f5f2e415bfdd407436171179750f3e8f4"
       },
       {
         "path": "shared/aurionRegionProgressionCatalog.json",
@@ -76,7 +76,7 @@
       },
       {
         "path": "shared/worldChunkProtocol.ts",
-        "sha256": "0810a61689bdcfe07b347ae9b220d564d4aaa6b38e191f3daebe7df09d254324"
+        "sha256": "2b62e0c511536746e97bb60b149450bfd0410437d3d89296f7dc6ebd164ccda2"
       },
       {
         "path": "shared/worldChunkStreamingProtocol.ts",
@@ -6228,61 +6228,61 @@
         "x": -1,
         "z": -1
       },
-      "hash": "fnv1a-3f888b08",
+      "hash": "fnv1a-e870defb",
       "resources": [
         {
           "id": "base:-1:-1:resource:1",
-          "kind": "herb",
+          "kind": "tree",
           "positionMm": {
             "x": 10390,
             "z": 9536
           },
-          "yieldKey": "herbs"
+          "yieldKey": "wood"
         },
         {
           "id": "base:-1:-1:resource:2",
-          "kind": "tree",
+          "kind": "herb",
           "positionMm": {
             "x": 28453,
             "z": 44331
           },
-          "yieldKey": "wood"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:-1:-1:resource:3",
-          "kind": "herb",
+          "kind": "water",
           "positionMm": {
             "x": 50664,
             "z": 48878
           },
-          "yieldKey": "herbs"
+          "yieldKey": "water"
         },
         {
           "id": "base:-1:-1:resource:4",
-          "kind": "water",
+          "kind": "tree",
           "positionMm": {
             "x": 54071,
             "z": 47521
           },
-          "yieldKey": "water"
+          "yieldKey": "wood"
         },
         {
           "id": "base:-1:-1:resource:5",
-          "kind": "herb",
+          "kind": "tree",
           "positionMm": {
             "x": 43962,
             "z": 4772
           },
-          "yieldKey": "herbs"
+          "yieldKey": "wood"
         },
         {
           "id": "base:-1:-1:resource:7",
-          "kind": "herb",
+          "kind": "water",
           "positionMm": {
             "x": 4620,
             "z": 20498
           },
-          "yieldKey": "herbs"
+          "yieldKey": "water"
         }
       ],
       "roadCells": [
@@ -6417,7 +6417,7 @@
         "x": -1,
         "z": 0
       },
-      "hash": "fnv1a-9a77a598",
+      "hash": "fnv1a-a56c790b",
       "resources": [
         {
           "id": "base:-1:0:resource:0",
@@ -6588,7 +6588,7 @@
         "x": -1,
         "z": 1
       },
-      "hash": "fnv1a-0a8411c6",
+      "hash": "fnv1a-424f89a4",
       "resources": [
         {
           "id": "base:-1:1:resource:0",
@@ -6768,7 +6768,7 @@
         "x": 0,
         "z": -1
       },
-      "hash": "fnv1a-0a046006",
+      "hash": "fnv1a-6ef4e4a3",
       "resources": [
         {
           "id": "base:0:-1:resource:0",
@@ -6790,12 +6790,12 @@
         },
         {
           "id": "base:0:-1:resource:2",
-          "kind": "tree",
+          "kind": "ore",
           "positionMm": {
             "x": 50403,
             "z": 9357
           },
-          "yieldKey": "wood"
+          "yieldKey": "ore"
         },
         {
           "id": "base:0:-1:resource:3",
@@ -6808,12 +6808,12 @@
         },
         {
           "id": "base:0:-1:resource:6",
-          "kind": "tree",
+          "kind": "ore",
           "positionMm": {
             "x": 27975,
             "z": 22321
           },
-          "yieldKey": "wood"
+          "yieldKey": "ore"
         },
         {
           "id": "base:0:-1:resource:7",
@@ -6957,25 +6957,25 @@
         "x": 0,
         "z": 0
       },
-      "hash": "fnv1a-c73381ba",
+      "hash": "fnv1a-4760b780",
       "resources": [
         {
           "id": "base:0:0:resource:3",
-          "kind": "herb",
+          "kind": "water",
           "positionMm": {
             "x": 31810,
             "z": 15944
           },
-          "yieldKey": "herbs"
+          "yieldKey": "water"
         },
         {
           "id": "base:0:0:resource:4",
-          "kind": "water",
+          "kind": "ore",
           "positionMm": {
             "x": 10605,
             "z": 4695
           },
-          "yieldKey": "water"
+          "yieldKey": "ore"
         },
         {
           "id": "base:0:0:resource:5",
@@ -6988,21 +6988,21 @@
         },
         {
           "id": "base:0:0:resource:6",
-          "kind": "tree",
+          "kind": "ore",
           "positionMm": {
             "x": 55643,
             "z": 44969
           },
-          "yieldKey": "wood"
+          "yieldKey": "ore"
         },
         {
           "id": "base:0:0:resource:7",
-          "kind": "herb",
+          "kind": "water",
           "positionMm": {
             "x": 39582,
             "z": 43564
           },
-          "yieldKey": "herbs"
+          "yieldKey": "water"
         }
       ],
       "roadCells": [
@@ -7137,16 +7137,16 @@
         "x": 0,
         "z": 1
       },
-      "hash": "fnv1a-208eb542",
+      "hash": "fnv1a-fcc894d5",
       "resources": [
         {
           "id": "base:0:1:resource:0",
-          "kind": "tree",
+          "kind": "herb",
           "positionMm": {
             "x": 23344,
             "z": 59634
           },
-          "yieldKey": "wood"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:0:1:resource:1",
@@ -7159,21 +7159,21 @@
         },
         {
           "id": "base:0:1:resource:3",
-          "kind": "water",
+          "kind": "herb",
           "positionMm": {
             "x": 58139,
             "z": 48321
           },
-          "yieldKey": "water"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:0:1:resource:4",
-          "kind": "tree",
+          "kind": "herb",
           "positionMm": {
             "x": 59924,
             "z": 49678
           },
-          "yieldKey": "wood"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:0:1:resource:5",
@@ -7186,12 +7186,12 @@
         },
         {
           "id": "base:0:1:resource:7",
-          "kind": "water",
+          "kind": "herb",
           "positionMm": {
             "x": 26751,
             "z": 11741
           },
-          "yieldKey": "water"
+          "yieldKey": "herbs"
         }
       ],
       "roadCells": [
@@ -7326,61 +7326,61 @@
         "x": 1,
         "z": -1
       },
-      "hash": "fnv1a-4a1b2c55",
+      "hash": "fnv1a-a23e6ab8",
       "resources": [
         {
           "id": "base:1:-1:resource:0",
-          "kind": "tree",
+          "kind": "ore",
           "positionMm": {
             "x": 12922,
             "z": 43104
           },
-          "yieldKey": "wood"
+          "yieldKey": "ore"
         },
         {
           "id": "base:1:-1:resource:2",
-          "kind": "herb",
+          "kind": "tree",
           "positionMm": {
             "x": 29580,
             "z": 17422
           },
-          "yieldKey": "herbs"
+          "yieldKey": "wood"
         },
         {
           "id": "base:1:-1:resource:3",
-          "kind": "water",
+          "kind": "herb",
           "positionMm": {
             "x": 33993,
             "z": 51211
           },
-          "yieldKey": "water"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:1:-1:resource:4",
-          "kind": "tree",
+          "kind": "ore",
           "positionMm": {
             "x": 35350,
             "z": 38340
           },
-          "yieldKey": "wood"
+          "yieldKey": "ore"
         },
         {
           "id": "base:1:-1:resource:6",
-          "kind": "herb",
+          "kind": "tree",
           "positionMm": {
             "x": 19624,
             "z": 27378
           },
-          "yieldKey": "herbs"
+          "yieldKey": "wood"
         },
         {
           "id": "base:1:-1:resource:7",
-          "kind": "water",
+          "kind": "herb",
           "positionMm": {
             "x": 53413,
             "z": 31791
           },
-          "yieldKey": "water"
+          "yieldKey": "herbs"
         }
       ],
       "roadCells": [
@@ -7515,61 +7515,61 @@
         "x": 1,
         "z": 0
       },
-      "hash": "fnv1a-510dcf9d",
+      "hash": "fnv1a-2bf8870b",
       "resources": [
         {
           "id": "base:1:0:resource:0",
-          "kind": "herb",
+          "kind": "ore",
           "positionMm": {
             "x": 39348,
             "z": 13974
           },
-          "yieldKey": "herbs"
+          "yieldKey": "ore"
         },
         {
           "id": "base:1:0:resource:1",
-          "kind": "tree",
+          "kind": "herb",
           "positionMm": {
             "x": 8433,
             "z": 47763
           },
-          "yieldKey": "wood"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:1:0:resource:4",
-          "kind": "herb",
+          "kind": "ore",
           "positionMm": {
             "x": 35408,
             "z": 47546
           },
-          "yieldKey": "herbs"
+          "yieldKey": "ore"
         },
         {
           "id": "base:1:0:resource:5",
-          "kind": "tree",
+          "kind": "herb",
           "positionMm": {
             "x": 45517,
             "z": 28343
           },
-          "yieldKey": "wood"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:1:0:resource:6",
-          "kind": "water",
+          "kind": "ore",
           "positionMm": {
             "x": 9790,
             "z": 34892
           },
-          "yieldKey": "water"
+          "yieldKey": "ore"
         },
         {
           "id": "base:1:0:resource:7",
-          "kind": "herb",
+          "kind": "water",
           "positionMm": {
             "x": 22907,
             "z": 12617
           },
-          "yieldKey": "herbs"
+          "yieldKey": "water"
         }
       ],
       "roadCells": [
@@ -7704,70 +7704,70 @@
         "x": 1,
         "z": 1
       },
-      "hash": "fnv1a-13bf81f3",
+      "hash": "fnv1a-bbc81270",
       "resources": [
         {
           "id": "base:1:1:resource:0",
-          "kind": "ore",
+          "kind": "herb",
           "positionMm": {
             "x": 20725,
             "z": 33719
           },
-          "yieldKey": "ore"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:1:1:resource:1",
-          "kind": "herb",
+          "kind": "tree",
           "positionMm": {
             "x": 10616,
             "z": 55930
           },
-          "yieldKey": "herbs"
+          "yieldKey": "wood"
         },
         {
           "id": "base:1:1:resource:3",
-          "kind": "water",
+          "kind": "herb",
           "positionMm": {
             "x": 55654,
             "z": 25612
           },
-          "yieldKey": "water"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:1:1:resource:4",
-          "kind": "ore",
+          "kind": "herb",
           "positionMm": {
             "x": 54297,
             "z": 38483
           },
-          "yieldKey": "ore"
+          "yieldKey": "herbs"
         },
         {
           "id": "base:1:1:resource:5",
-          "kind": "herb",
+          "kind": "tree",
           "positionMm": {
             "x": 14556,
             "z": 4694
           },
-          "yieldKey": "herbs"
+          "yieldKey": "wood"
         },
         {
           "id": "base:1:1:resource:6",
-          "kind": "tree",
+          "kind": "water",
           "positionMm": {
             "x": 4999,
             "z": 49445
           },
-          "yieldKey": "wood"
+          "yieldKey": "water"
         },
         {
           "id": "base:1:1:resource:7",
-          "kind": "water",
+          "kind": "herb",
           "positionMm": {
             "x": 50890,
             "z": 15656
           },
-          "yieldKey": "water"
+          "yieldKey": "herbs"
         }
       ],
       "roadCells": [

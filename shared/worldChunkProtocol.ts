@@ -1,3 +1,5 @@
+import { generateDeterministicTerrainChunk } from "./deterministicTerrainPipelineProtocol";
+
 export const AURION_WORLD_CHUNK_RULESET = "aurion-world-chunk.v1" as const;
 export const WORLD_CHUNK_SIZE_MM = 64_000 as const;
 export const WORLD_CHUNK_GRID_SIZE = 16 as const;
@@ -157,20 +159,6 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function biomeFor(worldSeed: string, coordinate: WorldChunkCoordinate): ChunkBiome {
-  const index = hash32(worldSeed, "biome", String(coordinate.x), String(coordinate.z)) % 6;
-  return (["forest", "riverland", "plains", "highland", "ashland", "ruins"] as const)[index]!;
-}
-
-function surfaceFor(biome: ChunkBiome, x: number, z: number, road: boolean): ChunkSurface {
-  if (road) return biome === "ruins" ? "ruin_path" : "stone";
-  if (biome === "forest") return "forest_floor";
-  if (biome === "riverland") return "riverbank";
-  if (biome === "ashland") return "ash";
-  if (biome === "highland") return "stone";
-  return "grass";
-}
-
 function resourceKindFor(biome: ChunkBiome, slot: number): ChunkResourceKind {
   const byBiome: Record<ChunkBiome, readonly ChunkResourceKind[]> = {
     forest: ["tree", "tree", "herb", "water"],
@@ -190,17 +178,13 @@ function yieldFor(kind: ChunkResourceKind): BaseChunkResource["yieldKey"] {
   return "water";
 }
 
-function buildTiles(worldSeed: string, coordinate: WorldChunkCoordinate, biome: ChunkBiome): readonly BaseChunkTile[] {
-  const tiles: BaseChunkTile[] = [];
-  for (let z = 0; z < WORLD_CHUNK_GRID_SIZE; z += 1) {
-    for (let x = 0; x < WORLD_CHUNK_GRID_SIZE; x += 1) {
-      const noise = hash32(worldSeed, "height", String(coordinate.x), String(coordinate.z), String(x), String(z)) % 4_001;
-      const ridge = (Math.abs(coordinate.x) + Math.abs(coordinate.z)) % 11 * 40;
-      const road = isBaseChunkRoadTile({ x, z });
-      tiles.push({ x, z, heightMm: noise - 2_000 + ridge, surface: surfaceFor(biome, x, z, road) });
-    }
-  }
-  return tiles;
+function buildTiles(terrain: ReturnType<typeof generateDeterministicTerrainChunk>): readonly BaseChunkTile[] {
+  return terrain.tiles.map(tile => ({
+    x: tile.x,
+    z: tile.z,
+    heightMm: tile.heightMm,
+    surface: tile.material === "water" ? "riverbank" : tile.material,
+  }));
 }
 
 function buildResources(worldSeed: string, coordinate: WorldChunkCoordinate, biome: ChunkBiome): readonly BaseChunkResource[] {
@@ -221,10 +205,18 @@ function buildResources(worldSeed: string, coordinate: WorldChunkCoordinate, bio
   return resources;
 }
 
-export function generateBaseWorldChunk(input: { worldId: string; worldSeed: string; coordinate: WorldChunkCoordinate }): BaseWorldChunk {
+const DEFAULT_WORLD_GENERATION_REVISION = "0000000000000000000000000000000000000001";
+
+export function generateBaseWorldChunk(input: { worldId: string; worldSeed: string; coordinate: WorldChunkCoordinate; worldGenerationRevision?: string }): BaseWorldChunk {
   if (!input.worldId.trim() || !input.worldSeed.trim()) throw new Error("worldId and worldSeed are required");
   assertCoordinate(input.coordinate);
-  const biome = biomeFor(input.worldSeed, input.coordinate);
+  const terrain = generateDeterministicTerrainChunk({
+    worldId: input.worldId,
+    worldSeed: input.worldSeed,
+    worldGenerationRevision: input.worldGenerationRevision ?? DEFAULT_WORLD_GENERATION_REVISION,
+    coordinate: input.coordinate,
+  });
+  const biome = terrain.biome;
   const snapshot = {
     worldId: input.worldId,
     worldSeedDigest: worldSeedDigest(input.worldId, input.worldSeed),
@@ -232,7 +224,7 @@ export function generateBaseWorldChunk(input: { worldId: string; worldSeed: stri
     coordinate: { ...input.coordinate },
     baseRevision: WORLD_CHUNK_BASE_REVISION,
     biome,
-    tiles: buildTiles(input.worldSeed, input.coordinate, biome),
+    tiles: buildTiles(terrain),
     resources: buildResources(input.worldSeed, input.coordinate, biome),
   };
   return Object.freeze({ ...snapshot, deterministicHash: hashDigest(snapshot) });
