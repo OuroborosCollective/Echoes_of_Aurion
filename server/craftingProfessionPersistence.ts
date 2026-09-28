@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
+import { AURION_MODIFIER_RULESET_VERSION, resolveAurionDerivedStats } from "./aurionModifierProtocol";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { aurionProfessionOutputBatches, aurionProfessionReceipts, aurionScopedMasteryEvents } from "../drizzle/professionPersistenceSchema";
 import type { getDb } from "./db";
 import type { CraftingAffix, CraftingItemQuality, CraftingPlan } from "./craftingProtocol";
 import { stableCatalogStringify } from "./aurionAx1ContentCatalog";
 import { canonicalScopedMasteryKey, masteryKeys, resolveCoupledMasteries, type ScopedMasteryEvent, type ScopedMasteryKey } from "./scopedMasteryProtocol";
-import { professionMasteryKeys, professionOutputOriginAt, resolveProfessionMasteryOperation, type AurionProfessionId, type ProfessionOperationEnvelope } from "./professionMasteryProtocol";
+import { AURION_PROFESSION_MASTERY_CONTENT_VERSION, AURION_PROFESSION_MASTERY_RULESET_VERSION, professionMasteryKeys, professionOutputOriginAt, resolveProfessionMasteryOperation, type AurionProfessionId, type ProfessionOperationEnvelope } from "./professionMasteryProtocol";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 type Reader = Pick<Database, "select">;
@@ -13,7 +15,8 @@ type Writer = Pick<Database, "select" | "insert" | "update">;
 const digest = (value: unknown) => createHash("sha256").update(stableCatalogStringify(value)).digest("hex");
 const actor = (userId: number) => `player:${userId}`;
 
-export type CraftingOutputTemplate = { baseItemKey: string; quality: "normal" | "magic" | "rare" | "set" | "unique"; itemLevel: number; affixes: CraftingAffix[] };
+export type CraftingModifierProof = Readonly<{ schema: "aurion.crafting-profession.modifier-proof.v1"; baseStatsHash: string; sourceSetHash: string; derivedStatsHash: string }>;
+export type CraftingOutputTemplate = { baseItemKey: string; quality: "normal" | "magic" | "rare" | "set" | "unique"; itemLevel: number; affixes: CraftingAffix[]; modifierProof?: CraftingModifierProof };
 export type CraftingProfessionInputItem = Readonly<{ id: string; baseItemKey: string; itemLevel: number }>;
 export type CraftingProfessionPlan = Readonly<{
   professionId: AurionProfessionId;
@@ -72,6 +75,30 @@ function normalizeCraftingProfessionPlan(input: CraftingPreparationInput): Craft
   });
 }
 
+const CRAFTING_MODIFIER_PROOF_SCHEMA = "aurion.crafting-profession.modifier-proof.v1" as const;
+const SHA256 = /^sha256:[a-f0-9]{64}$/;
+export function resolveProfessionCraftingAffixes(input: Readonly<{ affixes: readonly CraftingAffix[]; envelope: ProfessionOperationEnvelope }>): Readonly<{ affixes: CraftingAffix[]; modifierProof: CraftingModifierProof }> {
+  const baseStatsHash = canonicalSha256({ domain: "aurion.crafting-profession.modifier-base-stats.v1", affixes: input.affixes.map((affix, index) => ({ index, key: affix.key, slot: affix.slot, stats: affix.stats })) });
+  const sourceEvidenceHash = canonicalSha256({ domain: "aurion.crafting-profession.quality-source.v1", rulesetVersion: AURION_PROFESSION_MASTERY_RULESET_VERSION, contentVersion: AURION_PROFESSION_MASTERY_CONTENT_VERSION, operationId: input.envelope.operationId, receiptId: input.envelope.receiptId, sourceReceiptId: input.envelope.sourceReceiptId, sourceEvidenceDigest: input.envelope.sourceEvidenceDigest, resolutionIndex: input.envelope.resolutionIndex, qualityPowerBps: input.envelope.modifiers.qualityPowerBps });
+  const sourceSetHash = canonicalSha256({ domain: "aurion.crafting-profession.modifier-source-set.v1", modifierRulesetVersion: AURION_MODIFIER_RULESET_VERSION, sourceEvidenceHash, baseStatsHash, qualityPowerBps: input.envelope.modifiers.qualityPowerBps });
+  const affixes = input.affixes.map((affix, index) => ({ ...affix, stats: Object.fromEntries(Object.keys(affix.stats).sort().map(stat => {
+    const derived = resolveAurionDerivedStats({
+      baseStats: { [stat]: affix.stats[stat]! }, logicalTick: input.envelope.resolutionIndex,
+      modifiers: [{ modifierId: `profession-quality:${input.envelope.receiptId}:${index}:${stat}`, source: { kind: "skill", id: `profession:${input.envelope.professionId}`, revision: `${AURION_PROFESSION_MASTERY_RULESET_VERSION}:${AURION_PROFESSION_MASTERY_CONTENT_VERSION}`, evidenceHash: sourceEvidenceHash }, stat, operation: "scale_bps", amount: input.envelope.modifiers.qualityPowerBps - 10_000, priority: 0, stackingGroup: "profession-quality", stacking: "sum" }],
+    });
+    return [stat, derived.stats[stat]!];
+  })) }));
+  const derivedStatsHash = canonicalSha256({ domain: "aurion.crafting-profession.modifier-derived-stats.v1", sourceSetHash, affixes: affixes.map((affix, index) => ({ index, key: affix.key, slot: affix.slot, stats: affix.stats })) });
+  return Object.freeze({ affixes, modifierProof: Object.freeze({ schema: CRAFTING_MODIFIER_PROOF_SCHEMA, baseStatsHash, sourceSetHash, derivedStatsHash }) });
+}
+function assertCraftingModifierProof(template: CraftingOutputTemplate): void {
+  const proof = template.modifierProof;
+  if (!proof) return;
+  if (proof.schema !== CRAFTING_MODIFIER_PROOF_SCHEMA || !SHA256.test(proof.baseStatsHash) || !SHA256.test(proof.sourceSetHash) || !SHA256.test(proof.derivedStatsHash)) throw new Error("PROFESSION_STORED_CONTENT_CORRUPT");
+  const expected = canonicalSha256({ domain: "aurion.crafting-profession.modifier-derived-stats.v1", sourceSetHash: proof.sourceSetHash, affixes: template.affixes.map((affix, index) => ({ index, key: affix.key, slot: affix.slot, stats: affix.stats })) });
+  if (expected !== proof.derivedStatsHash) throw new Error("PROFESSION_STORED_CONTENT_CORRUPT");
+}
+
 /**
  * Called only inside craftItemForUser's locked MariaDB transaction before input consumption.
  * The legacy one-item plan and AX1 multi-material plans both normalize into this one profession
@@ -96,11 +123,13 @@ export async function prepareCraftingProfession(tx: Reader, input: CraftingPrepa
     xp: { professionXpExact: plan.xpExact, activityXpExact: plan.xpExact, itemXpExact: plan.xpExact, qualityGainExact: "1" },
     currentByKey: Object.fromEntries(current.map(state => [canonicalScopedMasteryKey(state.key), state])),
   });
+  const modifierResolution = resolveProfessionCraftingAffixes({ affixes: plan.affixes, envelope: resolved.envelope });
   const template: CraftingOutputTemplate = {
     baseItemKey: plan.outputItemId,
     quality: plan.quality,
     itemLevel: plan.outputItemLevel,
-    affixes: plan.affixes.map(affix => ({ ...affix, stats: Object.fromEntries(Object.entries(affix.stats).map(([key, value]) => [key, Math.floor(value * resolved.envelope.modifiers.qualityPowerBps / 10_000)])) })),
+    affixes: modifierResolution.affixes,
+    modifierProof: modifierResolution.modifierProof,
   };
   return { ...resolved, template, outputId: professionOutputOriginAt(resolved.envelope, "0") };
 }
@@ -137,6 +166,7 @@ function verifyStoredCraftingOutput(row: typeof aurionProfessionReceipts.$inferS
   if (row.userId !== userId || envelope.receiptId !== row.id || envelope.actorId !== actor(userId) || envelope.operationId !== row.operationId || envelope.sourceReceiptId !== row.sourceCraftingReceiptId) throw new Error("PROFESSION_RECEIPT_CORRUPT");
   if (!batch || batch.ownerUserId !== userId || batch.professionReceiptId !== row.id || batch.sourceCraftingReceiptId !== row.sourceCraftingReceiptId || batch.totalQuantityExact !== envelope.yield.totalQuantityExact || !/^[1-9][0-9]*$/.test(batch.totalQuantityExact) || !/^[1-9][0-9]*$/.test(batch.nextOutputIndexExact) || BigInt(batch.nextOutputIndexExact) > BigInt(batch.totalQuantityExact)) throw new Error("PROFESSION_OUTPUT_BATCH_CORRUPT");
   const template = JSON.parse(batch.templateJson) as CraftingOutputTemplate;
+  assertCraftingModifierProof(template);
   if (digest({ envelope, template }) !== row.commitHash) throw new Error("PROFESSION_STORED_CONTENT_CORRUPT");
   return { envelope, remainingQuantityExact: (BigInt(batch.totalQuantityExact) - BigInt(batch.nextOutputIndexExact)).toString(), nextOutputIndexExact: batch.nextOutputIndexExact };
 }
