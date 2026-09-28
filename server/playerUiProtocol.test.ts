@@ -24,6 +24,6 @@ describe("AX1 controls and confirmed paperdoll contract", () => {
     const slot = { id: item.id, version: item.version, slot: item.slot };
     const state = { version: PLAYER_UI_VERSION, userId: 1, settings: { revision: 0, autoLoot: true, analyticsConsent: false, hotbar: defaultHotbar, movementMode: "joystick" as const }, items: [item], equipment: [slot] };
     expect(playerUiReadbackSchema.safeParse(state).success).toBe(true);
-    for (const invalid of [{ ...state, equipment: [] }, { ...state, items: [] }, { ...state, items: [item, item] }, { ...state, equipment: [slot, slot] }, { ...state, equipment: [{ ...slot, version: "aurion_v2" }] }, { ...state, items: [{ ...item, receiptId: null }] }, { ...state, items: [{ ...item, status: "owned" }] }]) expect(playerUiReadbackSchema.safeParse(invalid).success).toBe(false);
+    for (const invalid of [{ ...state, equipment: [] }, { ...state, items: [] }, { ...state, items: [item, item] }, { ...state, equipment: [slot, slot] }, { ...state, equipment: [{ ...slot, version: "aurion_v2" }] }, { ...state, items: [{ ...item, receiptId: null }] }, { ...state, items: [{ ...item, status: "owned" }] }, { ...state, inventoryHash: "not-a-canonical-hash" }]) expect(playerUiReadbackSchema.safeParse(invalid).success).toBe(false);
   });
 });

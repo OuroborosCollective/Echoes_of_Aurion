@@ -75,7 +75,7 @@ describe("approved confirmed mob GLB presentation", () => {
   });
   it("accepts only valid increasing server combat sequences for the loaded attacker", async()=>{
     const s=setup(),p=new MobCatalogProjection(s.engine as never,async()=>loaded());p.setCatalog(catalog);await step(p);
-    const event={type:"combat",contractVersion:ZONE_COMBAT_CONTRACT_VERSION,tick:2,sequence:3,action:"melee",skillId:null,skillSourceRevision:null,attackerEntityId:"mob_1",defenderEntityId:"player:1",hit:true,damage:4,crit:false,killed:false,defenderHealth:96,attackerStamina:100,gameplaySourceRevision:"a".repeat(40)} as const;
+    const event={type:"combat",contractVersion:ZONE_COMBAT_CONTRACT_VERSION,tick:2,sequence:3,action:"melee",skillId:null,skillSourceRevision:null,skillCatalogVersion:null,skillCatalogHash:null,attackerEntityId:"mob_1",defenderEntityId:"player:1",hit:true,damage:4,crit:false,killed:false,defenderHealth:96,attackerStamina:100,gameplaySourceRevision:"a".repeat(40)} as const;
     p.acceptCombat({...event,sequence:-1});expect(p.evidence().lastAttackSequences[0]!.sequence).toBe(0);
     projectConfirmedZoneSnapshot({selfEntityId:"player:1",mobs:[],combatants:[]});
     acceptConfirmedZoneCombat(event);acceptConfirmedZoneCombat({...event,sequence:2});expect(p.evidence().lastAttackSequences[0]!.sequence).toBe(3);p.dispose();
