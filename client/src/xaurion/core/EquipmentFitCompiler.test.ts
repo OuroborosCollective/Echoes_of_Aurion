@@ -174,8 +174,10 @@ describe("EquipmentFitCompiler", () => {
     const geometry = compileVisualItemGeometry(armorDescriptor(), 0);
     if (geometry.kind !== "generated") throw new Error("expected generated geometry");
 
+    const unsupportedInput = profileInput("avatar-unsupported");
     const unsupported = createCanonicalAvatarProfile({
-      ...profileInput("avatar-unsupported"),
+      ...unsupportedInput,
+      attachmentSockets: unsupportedInput.attachmentSockets.filter(value => value.equipmentSlot === "helmet"),
       supportedEquipmentSlots: ["helmet"],
     });
     expect(() => fitGeneratedEquipment(armorDescriptor(), geometry, unsupported)).toThrow(/PROFILE_SLOT_UNSUPPORTED/);
