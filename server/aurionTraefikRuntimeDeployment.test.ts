@@ -105,8 +105,8 @@ describe("Aurion labelled Traefik runtime deployment", () => {
     expect(workflow).toContain('body.resource!=="https://arelogic.space/admin-mcp"');
     expect(workflow).toContain('"aurion.admin.assets.write"');
     expect(workflow).toContain('"aurion.admin.authoring.write"');
-    expect(runtimeCandidateWorkflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 120");
-    expect(runtimeCandidateWorkflow.match(/--retry-all-errors --connect-timeout 10 --max-time 120/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(runtimeCandidateWorkflow).toContain("--retry-all-errors --connect-timeout 10 --max-time 300");
+    expect(runtimeCandidateWorkflow.match(/--retry-all-errors --connect-timeout 10 --max-time 300/g)?.length).toBeGreaterThanOrEqual(2);
     expect(workflow).toContain('health.revision!==process.argv[1]');
     expect(workflow).toContain("node --check deploy/verify-aurion-runtime-database.mjs");
   });

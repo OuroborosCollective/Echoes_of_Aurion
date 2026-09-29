@@ -21,8 +21,16 @@ export { mobCollisionSubsteps };
 const NO_FROZEN_MOBS: ReadonlySet<string> = new Set<string>();
 const CANONICAL_MOB_STATES = new Set<ZoneMobState>(["idle", "patrolling", "combat", "evading", "dead"]);
 
-function sameMob(left: ConfirmedZoneMob, right: ConfirmedZoneMob): boolean {
-  return left.entityId === right.entityId && left.state === right.state && left.position.x === right.position.x && left.position.z === right.position.z && left.targetEntityId === right.targetEntityId && left.health === right.health && left.maxHealth === right.maxHealth;
+function sameMobState(left: MobRuntimeState, right: MobRuntimeState): boolean {
+  return left === right || (
+    left.definition.entityId === right.definition.entityId &&
+    left.state === right.state &&
+    left.position.x === right.position.x &&
+    left.position.z === right.position.z &&
+    left.targetEntityId === right.targetEntityId &&
+    left.health === right.health &&
+    left.maxHealth === right.maxHealth
+  );
 }
 
 export function resolveMobCollisionMovement(from: Readonly<{ x: number; z: number }>, desired: Readonly<{ x: number; z: number }>) {
@@ -60,10 +68,9 @@ export class ZoneMobRuntime {
     let changed = false;
     for (const entityId of this.orderedEntityIds) {
       const current = this.states.get(entityId)!;
-      const before = publicMobSnapshot(current);
       const next = frozenEntityIds.has(entityId) ? current : resolveMobFsmTick({ current, presences, tick, resolveMovement: resolveMobCollisionMovement });
       this.updateState(entityId, next);
-      if (!sameMob(before, publicMobSnapshot(next))) changed = true;
+      if (!sameMobState(current, next)) changed = true;
     }
     return changed;
   }

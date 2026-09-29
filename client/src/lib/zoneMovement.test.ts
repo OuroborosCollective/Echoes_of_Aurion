@@ -1,6 +1,5 @@
 import { ZONE_POSITION_LIMIT, ZONE_PROTOCOL_VERSION } from "@shared/zonePresenceContract";
 import { AX1_BLADE_SKILL_SOURCE_REVISION } from "@shared/ax1BladeSkillProtocol";
-import { AURION_BLADE_SKILL_CATALOG_HASH, AURION_BLADE_SKILL_CATALOG_VERSION } from "@shared/aurionSkillCatalogProtocol";
 import { AX1_ECOLOGY_SOURCE_REVISION } from "@shared/ax1ResourceEcologyProtocol";
 import { ZONE_COMBAT_CONTRACT_VERSION } from "@shared/zoneCombatContract";
 import { ZONE_RESOURCE_CONTRACT_VERSION } from "@shared/zoneResourceContract";
@@ -155,7 +154,7 @@ describe("zone movement browser transport", () => {
     const client = new ZoneMovementClient(options); client.connect("fixture-ticket");
     const socket = TestSocket.instances[0]; socket.readyState = TestSocket.OPEN; socket.dispatchEvent(new Event("open")); socket.receive(welcome);
     expect(client.sendSkill("k_strike", "mob_12")).toBe(true);
-    expect(JSON.parse(socket.send.mock.calls.at(-1)![0])).toEqual({ type: "skill", clientSeq: 1, skillId: "k_strike", catalogVersion: AURION_BLADE_SKILL_CATALOG_VERSION, targetEntityId: "mob_12" });
+    expect(JSON.parse(socket.send.mock.calls.at(-1)![0])).toEqual({ type: "skill", clientSeq: 1, skillId: "k_strike", targetEntityId: "mob_12" });
     expect(client.sendSkill("k_strike", "not-a-mob")).toBe(false);
     client.close();
   });
@@ -165,7 +164,7 @@ describe("zone movement browser transport", () => {
     const options = { onStatus: vi.fn(), onSnapshot: vi.fn(), onReject: vi.fn(), onCombat: vi.fn() };
     const client = new ZoneMovementClient(options); client.connect("fixture-ticket");
     const socket = TestSocket.instances[0]; socket.readyState = TestSocket.OPEN; socket.dispatchEvent(new Event("open")); socket.receive(welcome);
-    const event = { type: "combat", contractVersion: ZONE_COMBAT_CONTRACT_VERSION, tick: 1, sequence: 1, action: "melee", skillId: "k_strike", skillSourceRevision: AX1_BLADE_SKILL_SOURCE_REVISION, skillCatalogVersion: AURION_BLADE_SKILL_CATALOG_VERSION, skillCatalogHash: AURION_BLADE_SKILL_CATALOG_HASH, attackerEntityId: "player:1", defenderEntityId: "mob_12", hit: true, damage: 11, crit: false, killed: false, defenderHealth: 89, attackerStamina: 92, gameplaySourceRevision: "a".repeat(40) };
+    const event = { type: "combat", contractVersion: ZONE_COMBAT_CONTRACT_VERSION, tick: 1, sequence: 1, action: "melee", skillId: "k_strike", skillSourceRevision: AX1_BLADE_SKILL_SOURCE_REVISION, attackerEntityId: "player:1", defenderEntityId: "mob_12", hit: true, damage: 11, crit: false, killed: false, defenderHealth: 89, attackerStamina: 92, gameplaySourceRevision: "a".repeat(40) };
     socket.receive(event);
     expect(options.onCombat).toHaveBeenCalledTimes(1);
     expect(options.onCombat).toHaveBeenCalledWith(event);

@@ -54,8 +54,6 @@ export interface AurionAttackIntent extends OperationalIntentMetadata {
 export interface AurionSkillIntent extends OperationalIntentMetadata {
   type: "skill";
   skillId: string;
-  catalogVersion: string;
-  catalogHash: string;
   targetEntityId: string;
 }
 export interface AurionResourceInteractIntent extends OperationalIntentMetadata {
@@ -104,7 +102,7 @@ export function sanitizeIntentForHash(intent: AurionZoneIntent): Record<string, 
     case "attack":
       return { ...base, targetEntityId: intent.targetEntityId };
     case "skill":
-      return { ...base, skillId: intent.skillId, catalogVersion: intent.catalogVersion, catalogHash: intent.catalogHash, targetEntityId: intent.targetEntityId };
+      return { ...base, skillId: intent.skillId, targetEntityId: intent.targetEntityId };
     case "resource_interact":
       return { ...base, nodeId: intent.nodeId };
     case "mob_trigger":

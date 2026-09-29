@@ -19,7 +19,6 @@ import {
   ax1StarterItemId,
 } from "./ax1StarterEquipmentPersistence";
 import { aurionLootBaseCatalog } from "./aurionLootCatalog";
-import { canonicalizeAurionInventoryReadback, resolveAurionEquipTransition, resolveAurionPickupTransition, resolveAurionUnequipTransition } from "./aurionInventoryProtocol";
 import { getDb } from "./db";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -82,8 +81,7 @@ async function readUi(tx: UiTransaction, userId: number) {
   if (starter?.status === "equipped" && equipment.some(e => e.slot === AX1_STARTER_ITEM_SLOT)) throw new Error("AX1_STARTER_EQUIPMENT_CONFLICT");
   const projectedEquipment = equipment.map(e => ({ slot: e.slot, id: e.itemId, version: e.itemRecordVersion as "legacy" | "aurion_v2" | "ax1_starter" }));
   if (starter?.status === "equipped") projectedEquipment.push({ slot: AX1_STARTER_ITEM_SLOT, id: starter.id, version: AX1_STARTER_ITEM_RECORD_VERSION });
-  const inventory = canonicalizeAurionInventoryReadback({ userId, items: [...legacy.map(legacyView), ...v2.map(v2View), ...(starter ? [starter] : [])], equipment: projectedEquipment });
-  return playerUiReadbackSchema.parse({ version: PLAYER_UI_VERSION, userId, inventoryHash: inventory.stateHash, settings, items: inventory.items, equipment: inventory.equipment });
+  return playerUiReadbackSchema.parse({ version: PLAYER_UI_VERSION, userId, settings, items: [...legacy.map(legacyView), ...v2.map(v2View), ...(starter ? [starter] : [])], equipment: projectedEquipment });
 }
 export async function readPlayerUi(userId: number) {
   const db = await getDb(); if (!db) throw new Error("DATABASE_UNAVAILABLE");
@@ -143,8 +141,7 @@ export async function collectPlayerLoot(userId: number, ref: ItemRef) {
     await lockPlayer(tx, userId);
     const item = await ownedItem(tx, userId, ref);
     // Replay of a confirmed pickup cannot generate another item or another reward.
-    const resolution = resolveAurionPickupTransition({ item });
-    for (const change of resolution.itemTransitions) await setStatus(tx, userId, item, change.toStatus);
+    if (item.status === "pending_pickup") await setStatus(tx, userId, item, "owned");
     return readUi(tx, userId);
   });
 }
@@ -153,25 +150,26 @@ export async function equipPlayerItem(userId: number, ref: ItemRef, expectedItem
   return db.transaction(async tx => {
     await lockPlayer(tx, userId);
     const item = await ownedItem(tx, userId, ref);
-    const prior = item.slot ? (await tx.select().from(aurionEquipmentSlots).where(and(eq(aurionEquipmentSlots.userId, userId), eq(aurionEquipmentSlots.slot, item.slot))).for("update"))[0] : undefined;
+    if (!item.slot || item.status === "pending_pickup") throw new Error("COLLECTED_EQUIPMENT_REQUIRED");
+    const prior = (await tx.select().from(aurionEquipmentSlots).where(and(eq(aurionEquipmentSlots.userId, userId), eq(aurionEquipmentSlots.slot, item.slot))).for("update"))[0];
     const starter = item.slot === AX1_STARTER_ITEM_SLOT ? await starterView(tx, userId, true) : null;
     const equippedStarter = starter?.status === "equipped" ? starter : null;
     if (prior && equippedStarter) throw new Error("AX1_STARTER_EQUIPMENT_CONFLICT");
-    const previous = prior ? await ownedItem(tx, userId, { id: prior.itemId, version: prior.itemRecordVersion }) : equippedStarter;
-    const resolution = resolveAurionEquipTransition({ target: item, current: previous ?? null, expectedCurrent: expectedItem });
-    if (!resolution.itemTransitions.length) return readUi(tx, userId);
-    for (const change of resolution.itemTransitions) {
-      const source = change.item.id === item.id && change.item.version === item.version ? item : previous;
-      if (!source || source.status !== change.fromStatus) throw new Error("AURION_INVENTORY_EQUIPMENT_SLOT_CORRUPT");
-      await setStatus(tx, userId, source, change.toStatus);
+    const current = prior ? { id: prior.itemId, version: prior.itemRecordVersion as ItemRef["version"] } : equippedStarter ? { id: equippedStarter.id, version: equippedStarter.version } : null;
+    if (current?.id === item.id && current.version === item.version) return readUi(tx, userId);
+    if ((current?.id ?? null) !== (expectedItem?.id ?? null) || (current?.version ?? null) !== (expectedItem?.version ?? null)) throw new Error("EQUIPMENT_SLOT_STALE");
+    if (prior) {
+      const previous = await ownedItem(tx, userId, { id: prior.itemId, version: prior.itemRecordVersion });
+      if (previous.status !== "equipped" || previous.slot !== item.slot) throw new Error("EQUIPMENT_SLOT_CORRUPT");
+      await setStatus(tx, userId, previous, "owned");
     }
+    if (equippedStarter && equippedStarter.id !== item.id) await setStatus(tx, userId, equippedStarter, "owned");
+    await setStatus(tx, userId, item, "equipped");
     if (item.version === AX1_STARTER_ITEM_RECORD_VERSION) {
       if (prior) await tx.delete(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.id, prior.id));
     } else {
-      const binding = resolution.equipment!;
-      const recordVersion = item.version as "legacy" | "aurion_v2";
-      const row = { id: `equipment:${userId}:${binding.slot}`, userId, slot: binding.slot, itemId: binding.id, itemRecordVersion: recordVersion };
-      await tx.insert(aurionEquipmentSlots).values(row).onDuplicateKeyUpdate({ set: { itemId: binding.id, itemRecordVersion: recordVersion } });
+      const row = { id: `equipment:${userId}:${item.slot}`, userId, slot: item.slot, itemId: item.id, itemRecordVersion: item.version };
+      await tx.insert(aurionEquipmentSlots).values(row).onDuplicateKeyUpdate({ set: { itemId: item.id, itemRecordVersion: item.version } });
     }
     return readUi(tx, userId);
   });
@@ -182,14 +180,14 @@ export async function unequipPlayerItem(userId: number, ref: ItemRef) {
     await lockPlayer(tx, userId);
     const item = await ownedItem(tx, userId, ref);
     if (item.version === AX1_STARTER_ITEM_RECORD_VERSION) {
-      const resolution = resolveAurionUnequipTransition({ item, binding: item.slot ? { slot: item.slot, id: item.id, version: item.version } : null });
-      await setStatus(tx, userId, item, resolution.itemTransitions[0]!.toStatus);
+      if (item.status !== "equipped") throw new Error("EQUIPMENT_SLOT_STALE");
+      await setStatus(tx, userId, item, "owned");
       return readUi(tx, userId);
     }
     const prior = (await tx.select().from(aurionEquipmentSlots).where(and(eq(aurionEquipmentSlots.userId, userId), eq(aurionEquipmentSlots.itemId, item.id), eq(aurionEquipmentSlots.itemRecordVersion, item.version))).for("update"))[0];
-    const resolution = resolveAurionUnequipTransition({ item, binding: prior ? { slot: prior.slot, id: prior.itemId, version: prior.itemRecordVersion as ItemRef["version"] } : null });
-    await tx.delete(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.id, prior!.id));
-    await setStatus(tx, userId, item, resolution.itemTransitions[0]!.toStatus);
+    if (!prior || item.status !== "equipped") throw new Error("EQUIPMENT_SLOT_STALE");
+    await tx.delete(aurionEquipmentSlots).where(eq(aurionEquipmentSlots.id, prior.id));
+    await setStatus(tx, userId, item, "owned");
     return readUi(tx, userId);
   });
 }

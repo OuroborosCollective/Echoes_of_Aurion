@@ -19,8 +19,6 @@ function combatEvent(values: Partial<ConfirmedZoneCombatEvent> & Pick<ConfirmedZ
     action: "melee",
     skillId: null,
     skillSourceRevision: null,
-    skillCatalogVersion: null,
-    skillCatalogHash: null,
     attackerEntityId: values.attackerEntityId,
     defenderEntityId: values.defenderEntityId,
     hit: values.hit ?? values.damage > 0,

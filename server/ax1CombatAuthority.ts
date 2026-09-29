@@ -1,9 +1,5 @@
-import { canonicalSha256 } from "../shared/aurionCanonicalHash";
-import { resolveAurionDerivedStats, type AurionModifier } from "./aurionModifierProtocol";
-
 export const AURION_AX1_COMBAT_TICK_RATE = 10 as const;
 export const AURION_AX1_LAG_WINDOW_TICKS = 10 as const;
-export const AURION_COMBAT_BUFF_RULESET_VERSION = "aurion-combat-buff.v1" as const;
 
 export type Vec3 = Readonly<{ x: number; y: number; z: number }>;
 export type Capsule3D = Readonly<{ base: Vec3; top: Vec3; radius: number }>;
@@ -242,34 +238,16 @@ export class NavGrid {
 }
 
 export type Buff = Readonly<{ id: string; stat: "attack" | "defense" | "speed" | "regen"; magnitudeBps: number; expiresAtTick: number }>;
-type ActiveBuff = Readonly<Buff & { startsAtTick: number }>;
 export class BuffDebuffSystem {
-  private readonly buffs = new Map<string, ActiveBuff>();
+  private readonly buffs = new Map<string, Buff>();
   apply(buff: Buff, currentTick: number): void {
-    if (!Number.isSafeInteger(currentTick) || currentTick < 0 || !buff.id || !Number.isSafeInteger(buff.magnitudeBps) || !Number.isSafeInteger(buff.expiresAtTick) || buff.expiresAtTick <= currentTick) throw new Error("invalid buff");
-    for (const [id, active] of this.buffs) if (active.expiresAtTick <= currentTick) this.buffs.delete(id);
-    this.buffs.set(buff.id, Object.freeze({ ...buff, startsAtTick: currentTick }));
+    if (!buff.id || !Number.isSafeInteger(buff.magnitudeBps) || !Number.isSafeInteger(buff.expiresAtTick) || buff.expiresAtTick <= currentTick) throw new Error("invalid buff");
+    this.buffs.set(buff.id, Object.freeze({ ...buff }));
   }
   multiplier(stat: Buff["stat"], tick: number): number {
-    if (!Number.isSafeInteger(tick) || tick < 0) throw new Error("invalid buff tick");
-    const capEvidenceHash = canonicalSha256({ domain: "aurion.combat-buff.cap.v1", rulesetVersion: AURION_COMBAT_BUFF_RULESET_VERSION, stat });
-    const modifiers: AurionModifier[] = [
-      ...Array.from(this.buffs.values()).filter(buff => buff.stat === stat).map(buff => ({
-        modifierId: `combat-buff:${buff.id}`,
-        source: { kind: "effect" as const, id: `combat-buff:${buff.id}`, revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: canonicalSha256({ domain: "aurion.combat-buff.source.v1", rulesetVersion: AURION_COMBAT_BUFF_RULESET_VERSION, buff }) },
-        stat: buff.stat,
-        operation: "add" as const,
-        amount: buff.magnitudeBps,
-        priority: 0,
-        stackingGroup: "combat-buffs",
-        stacking: "sum" as const,
-        startsAtTick: buff.startsAtTick,
-        expiresAtTick: buff.expiresAtTick,
-      })),
-      { modifierId: `combat-buff-cap-min:${stat}`, source: { kind: "rule", id: "combat-buff-cap", revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: capEvidenceHash }, stat, operation: "min", amount: 1_000, priority: 10_000, stackingGroup: "combat-buff-cap", stacking: "highest" },
-      { modifierId: `combat-buff-cap-max:${stat}`, source: { kind: "rule", id: "combat-buff-cap", revision: AURION_COMBAT_BUFF_RULESET_VERSION, evidenceHash: capEvidenceHash }, stat, operation: "max", amount: 30_000, priority: 10_000, stackingGroup: "combat-buff-cap", stacking: "lowest" },
-    ];
-    return resolveAurionDerivedStats({ baseStats: { [stat]: 10_000 }, modifiers, logicalTick: tick }).stats[stat]! / 10_000;
+    for (const [id, buff] of this.buffs) if (buff.expiresAtTick <= tick) this.buffs.delete(id);
+    const totalBps = Array.from(this.buffs.values()).filter(buff => buff.stat === stat).reduce((sum, buff) => sum + buff.magnitudeBps, 0);
+    return Math.max(0.1, Math.min(3, 1 + totalBps / 10_000));
   }
 }
 

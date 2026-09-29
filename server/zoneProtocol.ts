@@ -6,7 +6,7 @@ import type { ConfirmedZoneCombatant, ConfirmedZoneCombatEvent } from "@shared/z
 import type { ConfirmedZoneResourceSnapshot } from "@shared/zoneResourceContract";
 import type { ConfirmedZoneTelegraphEvent } from "@shared/zoneTelegraphContract";
 import { ZONE_TICK_MS } from "@shared/zoneTimingContract";
-import { AURION_BLADE_SKILL_CATALOG_VERSION, resolveAurionBladeSkill, type AurionBladeSkillId } from "@shared/aurionSkillCatalogProtocol";
+import { isAx1BladeSkillId, type Ax1BladeSkillId } from "@shared/ax1BladeSkillProtocol";
 
 export { ZONE_TICK_MS };
 export const zoneIdSchema=z.literal("observatory_threshold");
@@ -18,8 +18,8 @@ export const zoneMoveSchema=z.object({type:z.literal("move"),clientSeq:z.number(
 export type ZoneMove=z.infer<typeof zoneMoveSchema>;
 export const zoneAttackSchema=z.object({type:z.literal("attack"),clientSeq:z.number().int().min(1).max(2_147_483_647),targetEntityId:z.string().regex(/^mob_[1-9][0-9]{0,2}$/)});
 export type ZoneAttack=z.infer<typeof zoneAttackSchema>;
-export const zoneSkillSchema=z.object({type:z.literal("skill"),clientSeq:z.number().int().min(1).max(2_147_483_647),skillId:z.string().min(1).max(64),catalogVersion:z.string().min(1).max(96).optional(),targetEntityId:z.string().regex(/^mob_[1-9][0-9]{0,2}$/)});
-export type ZoneSkill=Readonly<{type:"skill";clientSeq:number;skillId:AurionBladeSkillId;catalogVersion:typeof AURION_BLADE_SKILL_CATALOG_VERSION;targetEntityId:string}>;
+export const zoneSkillSchema=z.object({type:z.literal("skill"),clientSeq:z.number().int().min(1).max(2_147_483_647),skillId:z.string().min(1).max(64),targetEntityId:z.string().regex(/^mob_[1-9][0-9]{0,2}$/)});
+export type ZoneSkill=Readonly<{type:"skill";clientSeq:number;skillId:Ax1BladeSkillId;targetEntityId:string}>;
 export type ZonePosition={x:number;z:number};
 export type ZonePresence={entityId:string;userId:number;position:ZonePosition;lastAcceptedClientSeq:number};
 export type ZoneWelcome={type:"welcome";protocolVersion:typeof ZONE_PROTOCOL_VERSION;connectionId:string;selfEntityId:string;zoneId:ZoneId;snapshotSeq:number;tick:number;presences:ZonePresence[];mobs:readonly ConfirmedZoneMob[];combatants:readonly ConfirmedZoneCombatant[];resources:ConfirmedZoneResourceSnapshot};
@@ -31,6 +31,6 @@ export function digestZoneTicket(ticket:string):string{return createHash("sha256
 export function parseZoneHello(value:unknown):ZoneHello|null{const parsed=zoneHelloSchema.safeParse(value);return parsed.success?parsed.data:null;}
 export function parseZoneMove(value:unknown):ZoneMove|null{const parsed=zoneMoveSchema.safeParse(value);return parsed.success?parsed.data:null;}
 export function parseZoneAttack(value:unknown):ZoneAttack|null{const parsed=zoneAttackSchema.safeParse(value);return parsed.success?parsed.data:null;}
-export function parseZoneSkill(value:unknown):ZoneSkill|null{const parsed=zoneSkillSchema.safeParse(value);if(!parsed.success)return null;try{const resolved=resolveAurionBladeSkill({skillId:parsed.data.skillId,catalogVersion:parsed.data.catalogVersion});return {type:"skill",clientSeq:parsed.data.clientSeq,skillId:resolved.intent.skillId,catalogVersion:resolved.intent.catalogVersion,targetEntityId:parsed.data.targetEntityId};}catch{return null;}}
+export function parseZoneSkill(value:unknown):ZoneSkill|null{const parsed=zoneSkillSchema.safeParse(value);return parsed.success&&isAx1BladeSkillId(parsed.data.skillId)?parsed.data as ZoneSkill:null;}
 export function isAllowedZoneOrigin(origin:string|undefined,environment=process.env.NODE_ENV):boolean{if(!origin)return false;try{const url=new URL(origin);const localhost=url.hostname==="localhost"||url.hostname==="127.0.0.1";if(localhost)return url.protocol==="http:"||url.protocol==="https:";if(url.protocol!=="https:")return false;if(url.hostname==="arelogic.space")return true;return environment==="development"&&url.hostname.endsWith(".manus.computer");}catch{return false;}}
 export function makeZoneConnectionId():string{return `zone_peer_${randomBytes(12).toString("base64url")}`;}
