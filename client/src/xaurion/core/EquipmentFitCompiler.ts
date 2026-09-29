@@ -26,6 +26,7 @@ export type EquipmentFitContract = Readonly<{
   morphologyRecipeHash: string;
   avatarProfileFingerprint: string;
   avatarProfileVersion: string;
+  avatarHeightMillimeters: number;
   equipmentSlot: GlbEquipmentSlot;
   regionIds: readonly CanonicalAvatarBodyRegionId[];
   sourceBounds: Readonly<{
