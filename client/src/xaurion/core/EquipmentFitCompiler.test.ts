@@ -139,10 +139,11 @@ describe("EquipmentFitCompiler", () => {
     const geometryB = compileVisualItemGeometry(descriptor, 0);
     if (geometryA.kind !== "generated" || geometryB.kind !== "generated") throw new Error("expected generated geometry");
 
-    const fitA = fitGeneratedEquipment(descriptor, geometryA, profileA);
-    const fitB = fitGeneratedEquipment(descriptor, geometryB, profileB);
+    const fitA = fitGeneratedEquipment(descriptor, geometryA, profileA, 2.0);
+    const fitB = fitGeneratedEquipment(descriptor, geometryB, profileB, 1.86);
 
     expect(fitA.avatarProfileFingerprint).not.toBe(fitB.avatarProfileFingerprint);
+    expect(fitA.avatarHeightMillimeters).not.toBe(fitB.avatarHeightMillimeters);
     expect(fitA.fitFingerprint).not.toBe(fitB.fitFingerprint);
     expect(fitA.descriptorHash).toBe(fitB.descriptorHash);
     expect(fitA.visualSeed).toBe(fitB.visualSeed);
