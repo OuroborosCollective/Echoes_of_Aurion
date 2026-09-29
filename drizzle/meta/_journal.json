@@ -456,6 +456,13 @@
       "when": 1790319600000,
       "tag": "0064_aurion_world_entity_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790596809783,
+      "tag": "0065_aurion_glb_asset_normalization",
+      "breakpoints": true
     }
   ]
 }

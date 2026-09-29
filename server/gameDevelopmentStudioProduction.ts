@@ -187,7 +187,7 @@ export async function planGameDevelopmentStudioLiveAsset(
 ): Promise<GameDevelopmentStudioLivePlan> {
   const input = gameDevelopmentStudioLiveAssetInputSchema.parse(rawInput);
   const decoded = decodeValidatedGlbBase64(input.contentBase64);
-  const aurionPlan = buildGlbImportPlan(input.contentBase64, input.purpose, input.fileName);
+  const aurionPlan = await buildGlbImportPlan(input.contentBase64, input.purpose, input.fileName);
   if (aurionPlan.sha256 !== decoded.sha256) throw new Error("GAME_DEV_AURION_PLAN_SOURCE_MISMATCH");
 
   const workspace = gameDevelopmentStudioWorkspaceRoot();

@@ -17,6 +17,7 @@ import {
 } from "@shared/visualItemProtocol";
 import { compileVisualItemGeometry } from "../core/VisualItemGeometryCompiler";
 import { resolveVisualItemRenderSource } from "../core/VisualItemGlbOverrideResolver";
+import { glbNormalizationTestFixture } from "../core/GlbNormalizationTestFixture.test";
 
 const hex = (char: string) => `sha256:${char.repeat(64)}`;
 const profileInput = (id: string): CanonicalAvatarProfileInput => ({
@@ -125,9 +126,9 @@ function descriptor(
   });
 }
 
-function entry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
+function entry(overrides: any = {}): GlbCatalogEntry {
   const sha256 = overrides.sha256 ?? "d".repeat(64);
-  return {
+  const result = {
     assetId: "glb-proof-spear",
     sha256,
     displayName: "Equipment · weapon · Proof Spear",
@@ -138,6 +139,10 @@ function entry(overrides: Partial<GlbCatalogEntry> = {}): GlbCatalogEntry {
     subcategory: "weapon",
     equipmentSlot: "weapon",
     ...overrides,
+  };
+  return {
+    ...result,
+    normalization: glbNormalizationTestFixture(result.sha256),
   };
 }
 

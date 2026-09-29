@@ -69,6 +69,7 @@ on:
       - "drizzle/0062_aurion_world_director.sql"
       - "drizzle/0063_aurion_npc_information_ecology.sql"
       - "drizzle/0064_aurion_world_entity_foundation.sql"
+      - "drizzle/0065_aurion_glb_asset_normalization.sql"
   push:
     branches: [main]
     paths:

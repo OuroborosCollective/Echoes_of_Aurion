@@ -13,7 +13,7 @@ describe("agent GLB import client", () => {
     const root = await mkdtemp(path.join(tmpdir(), "glb-cli-"));
     try {
       const file = path.join(root, "spear.glb"), bytes = testGlb(); await writeFile(file, bytes);
-      const plan = buildGlbImportPlan(bytes.toString("base64"));
+      const plan = await buildGlbImportPlan(bytes.toString("base64"));
       const calls: string[] = [];
       const fetcher = async (url: string, init: RequestInit) => {
         calls.push(url); expect(init.redirect).toBe("error");
@@ -44,7 +44,7 @@ describe("agent GLB import client", () => {
         animations: ["Attack 2", "Cast Spell", "Death", "Fight", "Idle", "Run", "Walk"].map(name => ({ name, channels: [], samplers: [] })),
       });
       const file = path.join(root, "universal-female.glb"); await writeFile(file, bytes);
-      const plan = buildGlbImportPlan(bytes.toString("base64"), "npc-fallback");
+      const plan = await buildGlbImportPlan(bytes.toString("base64"), "npc-fallback");
       expect(plan).toMatchObject({ purpose: "npc-fallback", assetType: "character", targetKey: null });
       const fetcher = async (url: string, init: RequestInit) => {
         const body = JSON.parse(String(init.body));

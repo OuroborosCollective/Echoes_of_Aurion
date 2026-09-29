@@ -1,13 +1,28 @@
-import { glbCatalogLods, glbRuntimeCatalogSchema, type GlbCatalogEntry, type GlbCatalogLodVariant, type GlbEquipmentSlot, type GlbImportPurpose } from "@shared/glbImportContract";
+import {
+  glbCatalogLods,
+  glbRuntimeCatalogSchema,
+  type GlbCatalogEntry,
+  type GlbCatalogLodVariant,
+  type GlbEquipmentSlot,
+  type GlbImportPurpose,
+} from "@shared/glbImportContract";
+import type { GlbNormalizationManifest } from "@shared/glbNormalizationContract";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { RPGItem, WeaponType, ItemRarity } from '../types';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { fetchVerifiedGlb, glbResourcePool, inspectGlbAllocation } from './GlbResourceBudget';
-import { disposeGlbSource, registerGlbLease, releaseGlbTree } from './GlbModelLease';
-import { requireDecodedMaterialTextures } from './GlbTextureEvidence';
-import { ACTOR_LOD_FAR_MAX_METERS, ACTOR_LOD_MID_MAX_METERS, ACTOR_LOD_NEAR_MAX_METERS } from './actorLod';
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { RPGItem, WeaponType, ItemRarity } from "../types";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+import {
+  fetchVerifiedGlb,
+  glbResourcePool,
+  inspectGlbAllocation,
+} from "./GlbResourceBudget";
+import {
+  disposeGlbSource,
+  registerGlbLease,
+  releaseGlbTree,
+} from "./GlbModelLease";
+import { requireDecodedMaterialTextures } from "./GlbTextureEvidence";
 
 export interface GLBModelEntry {
   id: string;
@@ -16,23 +31,24 @@ export interface GLBModelEntry {
   relativePath?: string;
   url: string;
   category:
-    | 'character_avatar'
-    | 'mob'
-    | 'mount'
-    | 'weapon'
-    | 'shield'
-    | 'offhand'
-    | 'helmet'
-    | 'chest'
-    | 'shoulders'
-    | 'arms'
-    | 'legs'
-    | 'boots'
-    | 'prop'
-    | 'architecture';
+    | "character_avatar"
+    | "mob"
+    | "mount"
+    | "weapon"
+    | "shield"
+    | "offhand"
+    | "helmet"
+    | "chest"
+    | "shoulders"
+    | "arms"
+    | "legs"
+    | "boots"
+    | "prop"
+    | "architecture";
   purpose?: GlbImportPurpose;
   subcategory?: string | null;
   equipmentSlot?: GlbEquipmentSlot | null;
+  normalization: GlbNormalizationManifest;
   lods?: readonly GlbCatalogLodVariant[];
   equipSlot?: string;
   weaponType?: WeaponType;
@@ -62,7 +78,14 @@ export interface GLBModelEntry {
 export interface WatcherEvent {
   id: string;
   timestamp: string;
-  type: 'added' | 'modified' | 'deleted' | 'scanned' | 'synced' | 'watcher_started' | 'watcher_stopped';
+  type:
+    | "added"
+    | "modified"
+    | "deleted"
+    | "scanned"
+    | "synced"
+    | "watcher_started"
+    | "watcher_stopped";
   fileName: string;
   modelId?: string;
   category?: string;
@@ -81,26 +104,29 @@ export interface WatchStatus {
   recentEvents: WatcherEvent[];
 }
 
-function runtimeCategory(entry: ReturnType<typeof glbRuntimeCatalogSchema.parse>["entries"][number]): GLBModelEntry["category"] {
-  if (entry.purpose === "world-environment") return 'architecture';
-  if (entry.purpose === "world-nature") return 'prop';
-  if (entry.purpose === "equipment" && entry.equipmentSlot) return entry.equipmentSlot;
-  if (entry.assetType === 'character') return 'character_avatar';
-  if (entry.assetType === 'enemy') return 'mob';
-  if (entry.assetType === 'arena') return 'architecture';
-  if (entry.assetType === 'weapon') return 'weapon';
-  return 'prop';
+function runtimeCategory(
+  entry: ReturnType<typeof glbRuntimeCatalogSchema.parse>["entries"][number]
+): GLBModelEntry["category"] {
+  if (entry.purpose === "world-environment") return "architecture";
+  if (entry.purpose === "world-nature") return "prop";
+  if (entry.purpose === "equipment" && entry.equipmentSlot)
+    return entry.equipmentSlot;
+  if (entry.assetType === "character") return "character_avatar";
+  if (entry.assetType === "enemy") return "mob";
+  if (entry.assetType === "arena") return "architecture";
+  if (entry.assetType === "weapon") return "weapon";
+  return "prop";
 }
 
-const CATALOG_LOD_DISTANCE: Readonly<Record<0 | 1 | 2 | 3, number>> = Object.freeze({
-  0: 0,
-  1: ACTOR_LOD_NEAR_MAX_METERS,
-  2: ACTOR_LOD_MID_MAX_METERS,
-  3: ACTOR_LOD_FAR_MAX_METERS,
-});
 const CATALOG_LOD_HYSTERESIS = 0.1;
 
-type CachedModel = { scene: THREE.Group; animations: THREE.AnimationClip[]; users: number; access: number; release: () => void };
+type CachedModel = {
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
+  users: number;
+  access: number;
+  release: () => void;
+};
 
 export class GLBModelManager {
   private static instance: GLBModelManager;
@@ -116,90 +142,184 @@ export class GLBModelManager {
   private constructor() {}
 
   public static getInstance(): GLBModelManager {
-    if (!GLBModelManager.instance) GLBModelManager.instance = new GLBModelManager();
+    if (!GLBModelManager.instance)
+      GLBModelManager.instance = new GLBModelManager();
     return GLBModelManager.instance;
   }
 
   public async fetchCatalog(): Promise<GLBModelEntry[]> {
-    const response = await fetch('/api/game/glb-catalog', { credentials: 'same-origin' });
-    if (!response.ok) throw new Error('GLB_CATALOG_UNAVAILABLE');
+    const response = await fetch("/api/game/glb-catalog", {
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error("GLB_CATALOG_UNAVAILABLE");
     const catalog = glbRuntimeCatalogSchema.parse(await response.json());
-    this.setAuthoritativeCatalog(catalog.entries.map(entry => ({
-      id: entry.assetId,
-      name: entry.displayName,
-      fileName: `${entry.sha256}.glb`,
-      url: entry.storageUrl,
-      category: runtimeCategory(entry),
-      purpose: entry.purpose,
-      subcategory: entry.subcategory,
-      equipmentSlot: entry.equipmentSlot,
-      lods: entry.lods,
-      equipSlot: entry.equipmentSlot ?? undefined,
-      status: 'approved',
-      animations: [],
-      description: `Aurion catalog: ${entry.purpose}:${entry.subcategory ?? entry.targetKey ?? entry.assetType}`,
-    })));
+    this.setAuthoritativeCatalog(
+      catalog.entries.map(entry => ({
+        id: entry.assetId,
+        name: entry.displayName,
+        fileName: `${entry.sha256}.glb`,
+        url: entry.storageUrl,
+        category: runtimeCategory(entry),
+        purpose: entry.purpose,
+        subcategory: entry.subcategory,
+        equipmentSlot: entry.equipmentSlot,
+        normalization: entry.normalization,
+        lods: entry.lods,
+        equipSlot: entry.equipmentSlot ?? undefined,
+        status: "approved",
+        animations: [],
+        description: `Aurion catalog: ${entry.purpose}:${entry.subcategory ?? entry.targetKey ?? entry.assetType}`,
+      }))
+    );
     return this.catalog;
   }
 
-  public setAuthoritativeCatalog(models: GLBModelEntry[]): void { this.catalog = Array.isArray(models) ? models.slice() : []; }
-  public getCachedCatalog(): GLBModelEntry[] { return this.catalog; }
-
-  public async scanExternalDirectory(directoryPath?: string): Promise<{ success: boolean; scannedDirectory: string; totalModels: number; models: GLBModelEntry[]; watchStatus?: WatchStatus }> {
-    return { success: false, scannedDirectory: directoryPath || 'Aurion server-authoritative asset catalog', totalModels: this.catalog.length, models: this.catalog.slice(), watchStatus: (await this.getWatchStatus()) || undefined };
+  public setAuthoritativeCatalog(models: GLBModelEntry[]): void {
+    this.catalog = Array.isArray(models) ? models.slice() : [];
   }
-  public async getWatchStatus(): Promise<WatchStatus | null> { return { isWatching: false, watchedDirectories: [], totalModels: this.catalog.length, activeDirectory: 'Aurion authority', lastScanTime: null, lastEventTime: null, recentEvents: [] }; }
-  public async toggleFileWatcher(_active: boolean, _directory?: string): Promise<boolean> { return false; }
-  public subscribeToWatchEvents(onEvent: (event: WatcherEvent) => void): () => void { this.eventListeners.add(onEvent); return () => { this.eventListeners.delete(onEvent); }; }
+  public getCachedCatalog(): GLBModelEntry[] {
+    return this.catalog;
+  }
+
+  public async scanExternalDirectory(
+    directoryPath?: string
+  ): Promise<{
+    success: boolean;
+    scannedDirectory: string;
+    totalModels: number;
+    models: GLBModelEntry[];
+    watchStatus?: WatchStatus;
+  }> {
+    return {
+      success: false,
+      scannedDirectory:
+        directoryPath || "Aurion server-authoritative asset catalog",
+      totalModels: this.catalog.length,
+      models: this.catalog.slice(),
+      watchStatus: (await this.getWatchStatus()) || undefined,
+    };
+  }
+  public async getWatchStatus(): Promise<WatchStatus | null> {
+    return {
+      isWatching: false,
+      watchedDirectories: [],
+      totalModels: this.catalog.length,
+      activeDirectory: "Aurion authority",
+      lastScanTime: null,
+      lastEventTime: null,
+      recentEvents: [],
+    };
+  }
+  public async toggleFileWatcher(
+    _active: boolean,
+    _directory?: string
+  ): Promise<boolean> {
+    return false;
+  }
+  public subscribeToWatchEvents(
+    onEvent: (event: WatcherEvent) => void
+  ): () => void {
+    this.eventListeners.add(onEvent);
+    return () => {
+      this.eventListeners.delete(onEvent);
+    };
+  }
 
   public convertToRpgItem(_model: GLBModelEntry): RPGItem {
-    throw new Error('GLB_VISUAL_CATALOG_CANNOT_GRANT_ITEMS');
+    throw new Error("GLB_VISUAL_CATALOG_CANNOT_GRANT_ITEMS");
   }
 
   /** Idle cache entries can be evicted; resources used by a live clone cannot. */
   public trimIdle(): void {
-    for (const [url, entry] of [...this.cache].sort((a, b) => a[1].access - b[1].access)) {
+    for (const [url, entry] of [...this.cache].sort(
+      (a, b) => a[1].access - b[1].access
+    )) {
       if (entry.users || this.pending.has(url)) continue;
-      this.cache.delete(url); disposeGlbSource(entry.scene); entry.release();
+      this.cache.delete(url);
+      disposeGlbSource(entry.scene);
+      entry.release();
     }
   }
 
   private async decode(url: string, sha256: string): Promise<CachedModel> {
     return glbResourcePool.job(glbResourcePool.limits.assetBytes, async () => {
       const signal = AbortSignal.timeout(20_000);
-      const bytes = await fetchVerifiedGlb({url, sha256}, signal);
-      const {allocation, json} = inspectGlbAllocation(bytes);
+      const bytes = await fetchVerifiedGlb({ url, sha256 }, signal);
+      const { allocation, json } = inspectGlbAllocation(bytes);
       let release = glbResourcePool.reserve(allocation);
-      if (!release) { this.trimIdle(); release = glbResourcePool.reserve(allocation); }
-      if (!release) throw Error('GLB_DECODED_BUDGET');
+      if (!release) {
+        this.trimIdle();
+        release = glbResourcePool.reserve(allocation);
+      }
+      if (!release) throw Error("GLB_DECODED_BUDGET");
       const started = performance.now();
-      let retired = false, abort: (() => void) | undefined, decoded: THREE.Group | undefined;
-      const parse = this.loader.parseAsync(bytes, '').then(gltf => {
-        if (retired || signal.aborted) { disposeGlbSource(gltf.scene); throw Error('GLB_DECODE_RETIRED'); }
+      let retired = false,
+        abort: (() => void) | undefined,
+        decoded: THREE.Group | undefined;
+      const parse = this.loader.parseAsync(bytes, "").then(gltf => {
+        if (retired || signal.aborted) {
+          disposeGlbSource(gltf.scene);
+          throw Error("GLB_DECODE_RETIRED");
+        }
         return gltf;
       });
       try {
         signal.throwIfAborted();
-        const gltf = await Promise.race([parse, new Promise<never>((_, reject) => {
-          abort = () => reject(signal.reason); signal.addEventListener('abort', abort, {once: true});
-        })]);
+        const gltf = await Promise.race([
+          parse,
+          new Promise<never>((_, reject) => {
+            abort = () => reject(signal.reason);
+            signal.addEventListener("abort", abort, { once: true });
+          }),
+        ]);
         decoded = gltf.scene;
         requireDecodedMaterialTextures(gltf, json);
-        gltf.scene.traverse(node => { if ((node as THREE.Mesh).isMesh) { node.castShadow = true; node.receiveShadow = true; } });
+        gltf.scene.traverse(node => {
+          if ((node as THREE.Mesh).isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+          }
+        });
         glbResourcePool.decodedModel(performance.now() - started);
-        const entry = {scene: gltf.scene, animations: gltf.animations, users: 0, access: ++this.access, release};
+        const entry = {
+          scene: gltf.scene,
+          animations: gltf.animations,
+          users: 0,
+          access: ++this.access,
+          release,
+        };
         this.cache.set(url, entry);
         return entry;
-      } catch (error) { if (decoded) disposeGlbSource(decoded); release(); throw error; }
-      finally { retired = true; if (abort) signal.removeEventListener('abort', abort); }
+      } catch (error) {
+        if (decoded) disposeGlbSource(decoded);
+        release();
+        throw error;
+      } finally {
+        retired = true;
+        if (abort) signal.removeEventListener("abort", abort);
+      }
     });
   }
 
-  public async loadModel(urlOrId: string): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
-    const found = this.catalog.find(entry => entry.id === urlOrId);
-    const url = found?.url ?? urlOrId;
+  public async loadModel(
+    urlOrId: string,
+    normalizationOverride?: GlbNormalizationManifest
+  ): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
+    const found = this.catalog.find(
+      entry =>
+        entry.id === urlOrId ||
+        entry.url === urlOrId ||
+        entry.lods?.some(lod => lod.storageUrl === urlOrId)
+    );
+    const variant = found?.lods?.find(lod => lod.storageUrl === urlOrId);
+    const url = found?.id === urlOrId ? found.url : urlOrId;
     const match = /^\/api\/assets\/glb\/([a-f0-9]{64})\.glb$/.exec(url);
-    if (!match) throw Error('GLB_SOURCE_HASH_REQUIRED');
+    if (!match) throw Error("GLB_SOURCE_HASH_REQUIRED");
+    const normalization =
+      normalizationOverride ?? variant?.normalization ?? found?.normalization;
+    if (!normalization) throw Error("GLB_NORMALIZATION_REQUIRED");
+    if (normalization.sourceSha256 !== match[1])
+      throw Error("GLB_NORMALIZATION_SOURCE_IDENTITY");
     let entry = this.cache.get(url);
     if (!entry) {
       let pending = this.pending.get(url);
@@ -207,26 +327,66 @@ export class GLBModelManager {
         pending = this.decode(url, match[1]!);
         this.pending.set(url, pending);
       }
-      try { entry = await pending; }
-      finally { if (this.pending.get(url) === pending) this.pending.delete(url); }
+      try {
+        entry = await pending;
+      } finally {
+        if (this.pending.get(url) === pending) this.pending.delete(url);
+      }
     }
-    const releaseActor = glbResourcePool.actor(Math.min(entry.animations.length, 2));
-    if (!releaseActor) throw Error('GLB_ACTOR_BUDGET');
-    entry.users++; entry.access = ++this.access;
+    const releaseActor = glbResourcePool.actor(
+      Math.min(entry.animations.length, 2)
+    );
+    if (!releaseActor) throw Error("GLB_ACTOR_BUDGET");
+    entry.users++;
+    entry.access = ++this.access;
     let scene: THREE.Group;
-    try { scene = cloneSkeleton(entry.scene) as THREE.Group; }
-    catch (error) { entry.users--; releaseActor(); throw error; }
+    try {
+      scene = cloneSkeleton(entry.scene) as THREE.Group;
+    } catch (error) {
+      entry.users--;
+      releaseActor();
+      throw error;
+    }
+    scene.scale.setScalar(normalization.scaleE8 / 100_000_000);
+    scene.position.set(
+      normalization.translationMm[0] / 1000,
+      normalization.translationMm[1] / 1000,
+      normalization.translationMm[2] / 1000
+    );
+    scene.userData.aurionNormalization = Object.freeze({
+      revision: normalization.revision,
+      sourceSha256: normalization.sourceSha256,
+      transformSha256: normalization.transformSha256,
+      manifestSha256: normalization.manifestSha256,
+    });
     const borrowed = entry;
-    registerGlbLease(scene, () => { releaseActor(); borrowed.users--; });
-    return {scene, animations: entry.animations};
+    registerGlbLease(scene, () => {
+      releaseActor();
+      borrowed.users--;
+    });
+    return { scene, animations: entry.animations };
   }
 
   /** Builds one presentation-only Three.js LOD node from one logical catalog model.
    * Physical variants stay hash-verified and share the normal decoded-model cache. */
-  public async loadStaticLodFamily(entry: GlbCatalogEntry): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[]; lodLevels: readonly number[] }> {
-    const variants = glbCatalogLods(entry).slice().sort((left, right) => left.level - right.level || left.sha256.localeCompare(right.sha256));
+  public async loadStaticLodFamily(
+    entry: GlbCatalogEntry
+  ): Promise<{
+    scene: THREE.Group;
+    animations: THREE.AnimationClip[];
+    lodLevels: readonly number[];
+  }> {
+    const variants = glbCatalogLods(entry)
+      .slice()
+      .sort(
+        (left, right) =>
+          left.level - right.level || left.sha256.localeCompare(right.sha256)
+      );
     if (variants.length === 1) {
-      const loaded = await this.loadModel(variants[0]!.storageUrl);
+      const loaded = await this.loadModel(
+        variants[0]!.storageUrl,
+        variants[0]!.normalization
+      );
       return { ...loaded, lodLevels: Object.freeze([variants[0]!.level]) };
     }
     const root = new THREE.Group();
@@ -236,37 +396,83 @@ export class GLBModelManager {
     const borrowed: THREE.Group[] = [];
     try {
       for (const variant of variants) {
-        const loaded = await this.loadModel(variant.storageUrl);
+        if (
+          variant.normalization.lod.level !== variant.level ||
+          variant.normalization.sourceSha256 !== variant.sha256
+        )
+          throw Error("GLB_LOD_MANIFEST_IDENTITY_MISMATCH");
+        const loaded = await this.loadModel(
+          variant.storageUrl,
+          variant.normalization
+        );
         borrowed.push(loaded.scene);
-        if (loaded.animations.length) throw Error('GLB_STATIC_LOD_ANIMATIONS_FORBIDDEN');
-        lod.addLevel(loaded.scene, CATALOG_LOD_DISTANCE[variant.level], CATALOG_LOD_HYSTERESIS);
+        if (loaded.animations.length)
+          throw Error("GLB_STATIC_LOD_ANIMATIONS_FORBIDDEN");
+        lod.addLevel(
+          loaded.scene,
+          variant.normalization.lod.maxRenderDistanceMm / 1000,
+          CATALOG_LOD_HYSTERESIS
+        );
       }
       root.add(lod);
-      root.userData.aurionCatalogLod = Object.freeze({ assetId: entry.assetId, levels: Object.freeze(variants.map(variant => variant.level)), hysteresis: CATALOG_LOD_HYSTERESIS });
-      return { scene: root, animations: [], lodLevels: Object.freeze(variants.map(variant => variant.level)) };
+      root.userData.aurionCatalogLod = Object.freeze({
+        assetId: entry.assetId,
+        levels: Object.freeze(variants.map(variant => variant.level)),
+        maxRenderDistancesMeters: Object.freeze(
+          variants.map(
+            variant => variant.normalization.lod.maxRenderDistanceMm / 1000
+          )
+        ),
+        hysteresis: CATALOG_LOD_HYSTERESIS,
+      });
+      return {
+        scene: root,
+        animations: [],
+        lodLevels: Object.freeze(variants.map(variant => variant.level)),
+      };
     } catch (error) {
       for (const scene of borrowed) releaseGlbTree(scene);
       throw error;
     }
   }
 
-  public async loadEquipmentMesh(modelIdOrUrl: string, slot: string): Promise<THREE.Group | null> {
+  public async loadEquipmentMesh(
+    modelIdOrUrl: string,
+    slot: string
+  ): Promise<THREE.Group | null> {
     try {
       const { scene } = await this.loadModel(modelIdOrUrl);
-      const container = new THREE.Group(); container.name = `glb_socket_${slot}_${modelIdOrUrl}`;
-      const box = new THREE.Box3().setFromObject(scene); const size = new THREE.Vector3(); box.getSize(size); const maxDim = Math.max(size.x, size.y, size.z);
-      let targetScale = 1.0;
-      if (slot === 'weapon') { targetScale = maxDim > 0 ? 1.4 / maxDim : 1.0; scene.position.set(0, 0, 0); scene.rotation.set(0, 0, 0); }
-      else if (slot === 'shield' || slot === 'offhand') { targetScale = maxDim > 0 ? 1.1 / maxDim : 1.0; scene.position.set(0, 0, 0); }
-      else if (slot === 'helmet' || slot === 'head') { targetScale = maxDim > 0 ? 0.9 / maxDim : 1.0; scene.position.set(0, 0, 0); }
-      else if (slot === 'chest') { targetScale = maxDim > 0 ? 1.2 / maxDim : 1.0; scene.position.set(0, 0, 0); }
-      scene.scale.set(targetScale, targetScale, targetScale); container.add(scene); return container;
-    } catch (err) { console.warn(`Could not load GLB equipment socket for ${modelIdOrUrl}:`, err); return null; }
+      const container = new THREE.Group();
+      container.name = `glb_socket_${slot}_${modelIdOrUrl}`;
+      scene.position.set(0, 0, 0);
+      scene.rotation.set(0, 0, 0);
+      container.add(scene);
+      return container;
+    } catch (err) {
+      console.warn(
+        `Could not load GLB equipment socket for ${modelIdOrUrl}:`,
+        err
+      );
+      return null;
+    }
   }
 
-  public async uploadModelExternal(fileName: string, _base64Data: string, metadata: Partial<GLBModelEntry>) {
-    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('aurion:xaurion-glb-upload-request', { detail: { fileName, metadata } }));
-    return { success: false, delegated: true, reason: 'AURION_ASSET_AUTHORITY_REQUIRED' };
+  public async uploadModelExternal(
+    fileName: string,
+    _base64Data: string,
+    metadata: Partial<GLBModelEntry>
+  ) {
+    if (typeof window !== "undefined")
+      window.dispatchEvent(
+        new CustomEvent("aurion:xaurion-glb-upload-request", {
+          detail: { fileName, metadata },
+        })
+      );
+    return {
+      success: false,
+      delegated: true,
+      reason: "AURION_ASSET_AUTHORITY_REQUIRED",
+    };
   }
 }
 

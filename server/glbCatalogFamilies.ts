@@ -6,6 +6,7 @@ import {
   type GlbCatalogEntry,
   type GlbCatalogLodVariant,
 } from "../shared/glbImportContract";
+import type { GlbNormalizationManifest } from "../shared/glbNormalizationContract";
 
 export type PhysicalGlbCatalogRow = Readonly<{
   assetId: string;
@@ -15,9 +16,15 @@ export type PhysicalGlbCatalogRow = Readonly<{
   assetType: GlbCatalogEntry["assetType"];
   storageUrl: string;
   targetKey: string | null;
+  normalization: GlbNormalizationManifest;
 }>;
 
-type Physical = GlbCatalogEntry & Readonly<{ bytes: number; explicitLod: number | null; baseDisplayName: string }>;
+type Physical = GlbCatalogEntry &
+  Readonly<{
+    bytes: number;
+    explicitLod: number | null;
+    baseDisplayName: string;
+  }>;
 
 function physical(row: PhysicalGlbCatalogRow): Physical {
   const descriptor = glbLodDescriptor(row.displayName);
@@ -28,6 +35,7 @@ function physical(row: PhysicalGlbCatalogRow): Physical {
     assetType: row.assetType,
     storageUrl: row.storageUrl,
     targetKey: row.targetKey,
+    normalization: row.normalization,
     purpose: glbPurposeFromDisplayName(row.displayName),
     subcategory: glbSubcategoryFromDisplayName(row.displayName),
     equipmentSlot: glbEquipmentSlotFromDisplayName(row.displayName),
@@ -49,8 +57,45 @@ function familyKey(entry: Physical): string {
 }
 
 function standalone(entry: Physical): GlbCatalogEntry {
-  const { bytes: _bytes, explicitLod: _explicitLod, baseDisplayName: _baseDisplayName, ...catalog } = entry;
+  const {
+    bytes: _bytes,
+    explicitLod: _explicitLod,
+    baseDisplayName: _baseDisplayName,
+    ...catalog
+  } = entry;
   return Object.freeze(catalog);
+}
+
+function compatibleLodFamily(members: readonly Physical[]): boolean {
+  const ordered = members
+    .slice()
+    .sort((left, right) => left.explicitLod! - right.explicitLod!);
+  for (let index = 0; index < ordered.length; index++) {
+    const current = ordered[index]!;
+    if (current.normalization.lod.level !== current.explicitLod) return false;
+    if (index === 0) continue;
+    const previous = ordered[index - 1]!;
+    if (
+      current.normalization.lod.maxRenderDistanceMm <=
+      previous.normalization.lod.maxRenderDistanceMm
+    )
+      return false;
+    if (
+      current.normalization.lod.triangleCount >
+      previous.normalization.lod.triangleCount
+    )
+      return false;
+    const previousBounds = previous.normalization.normalizedBoundsMm;
+    const currentBounds = current.normalization.normalizedBoundsMm;
+    for (let axis = 0; axis < 3; axis++) {
+      const previousExtent =
+        previousBounds.max[axis]! - previousBounds.min[axis]!;
+      const currentExtent = currentBounds.max[axis]! - currentBounds.min[axis]!;
+      const tolerance = Math.max(50, Math.floor(previousExtent / 10));
+      if (Math.abs(currentExtent - previousExtent) > tolerance) return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -58,7 +103,9 @@ function standalone(entry: Physical): GlbCatalogEntry {
  * Rows without an explicit LOD token remain independent. Duplicate levels fail
  * visibly by remaining separate rather than silently hiding one physical asset.
  */
-export function groupGlbCatalogRows(rows: readonly PhysicalGlbCatalogRow[]): readonly GlbCatalogEntry[] {
+export function groupGlbCatalogRows(
+  rows: readonly PhysicalGlbCatalogRow[]
+): readonly GlbCatalogEntry[] {
   const singles: GlbCatalogEntry[] = [];
   const families = new Map<string, Physical[]>();
 
@@ -76,14 +123,29 @@ export function groupGlbCatalogRows(rows: readonly PhysicalGlbCatalogRow[]): rea
 
   for (const members of families.values()) {
     const levelCounts = new Map<number, number>();
-    for (const member of members) levelCounts.set(member.explicitLod!, (levelCounts.get(member.explicitLod!) ?? 0) + 1);
+    for (const member of members)
+      levelCounts.set(
+        member.explicitLod!,
+        (levelCounts.get(member.explicitLod!) ?? 0) + 1
+      );
     if ([...levelCounts.values()].some(count => count !== 1)) {
       singles.push(...members.map(standalone));
       continue;
     }
 
-    const sorted = members.slice().sort((left, right) => left.explicitLod! - right.explicitLod! || left.sha256.localeCompare(right.sha256));
-    const primary = sorted.find(member => member.explicitLod === 0) ?? sorted[0]!;
+    const sorted = members
+      .slice()
+      .sort(
+        (left, right) =>
+          left.explicitLod! - right.explicitLod! ||
+          left.sha256.localeCompare(right.sha256)
+      );
+    if (!compatibleLodFamily(sorted)) {
+      singles.push(...members.map(standalone));
+      continue;
+    }
+    const primary =
+      sorted.find(member => member.explicitLod === 0) ?? sorted[0]!;
     const lods: GlbCatalogLodVariant[] = sorted.map(member => ({
       level: member.explicitLod! as 0 | 1 | 2 | 3,
       assetId: member.assetId,
@@ -91,20 +153,30 @@ export function groupGlbCatalogRows(rows: readonly PhysicalGlbCatalogRow[]): rea
       bytes: member.bytes,
       storageUrl: member.storageUrl,
       targetKey: member.targetKey,
+      normalization: member.normalization,
     }));
-    singles.push(Object.freeze({
-      assetId: primary.assetId,
-      sha256: primary.sha256,
-      displayName: primary.baseDisplayName,
-      assetType: primary.assetType,
-      storageUrl: primary.storageUrl,
-      targetKey: primary.targetKey,
-      purpose: primary.purpose,
-      subcategory: primary.subcategory,
-      equipmentSlot: primary.equipmentSlot,
-      lods,
-    }));
+    singles.push(
+      Object.freeze({
+        assetId: primary.assetId,
+        sha256: primary.sha256,
+        displayName: primary.baseDisplayName,
+        assetType: primary.assetType,
+        storageUrl: primary.storageUrl,
+        targetKey: primary.targetKey,
+        normalization: primary.normalization,
+        purpose: primary.purpose,
+        subcategory: primary.subcategory,
+        equipmentSlot: primary.equipmentSlot,
+        lods,
+      })
+    );
   }
 
-  return Object.freeze(singles.sort((left, right) => left.displayName.localeCompare(right.displayName) || left.assetId.localeCompare(right.assetId)));
+  return Object.freeze(
+    singles.sort(
+      (left, right) =>
+        left.displayName.localeCompare(right.displayName) ||
+        left.assetId.localeCompare(right.assetId)
+    )
+  );
 }

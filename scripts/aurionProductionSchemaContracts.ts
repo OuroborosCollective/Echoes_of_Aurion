@@ -10,11 +10,11 @@ export const legacyContractTags = [
 
 export async function readProductionSchemaContracts(root: string): Promise<ExpectedMigration[]> {
   const sources = await Promise.all(legacyContractTags.map(tag => readFile(path.join(root, "drizzle", `${tag}.sql`), "utf8")));
-  // Only the two legacy tables evolved by 0030/0031 are prerequisites. All of
+  // Only the legacy tables evolved by late migrations are prerequisites. All of
   // their real CREATE, ALTER and index statements are retained in source order.
   const legacySql = sources.flatMap(sql => sql.split("--> statement-breakpoint")).filter(statement =>
-    /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts)`/i.test(statement)
-      || /(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts)`/i.test(statement),
+    /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts|glbAssets)`/i.test(statement)
+      || /(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts|glbAssets)`/i.test(statement),
   ).join("\n");
   const baseline = parseLateMigrationSql(lateAurionMigrationTags[0], legacySql);
   const state = new Map<string, ExpectedTable>(baseline.tables.map(table => [table.name, table]));

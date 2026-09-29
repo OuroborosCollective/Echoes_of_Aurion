@@ -1,29 +1,54 @@
 import { createHash } from "node:crypto";
 import { decodeValidatedGlbBase64 } from "./adminProtocol";
-import { classifyGlbBase64, type GlbAssetClassification } from "./glbAssetClassifier";
-import { GLB_IMPORT_VERSION, type GlbImportPurpose } from "../shared/glbImportContract";
+import {
+  classifyGlbBase64,
+  type GlbAssetClassification,
+} from "./glbAssetClassifier";
+import {
+  GLB_IMPORT_VERSION,
+  type GlbImportPurpose,
+} from "../shared/glbImportContract";
+import { buildGlbNormalizationManifest } from "./glbNormalization";
 
 type Json = Record<string, any>;
-function integer(value: unknown, fallback = -1): number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : fallback; }
+function integer(value: unknown, fallback = -1): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : fallback;
+}
 function offset(value: unknown, fallback = 0): number {
   if (value === undefined) return fallback;
-  const n = integer(value); if (n < 0) throw new Error("GLB_BUFFER_BOUNDS"); return n;
+  const n = integer(value);
+  if (n < 0) throw new Error("GLB_BUFFER_BOUNDS");
+  return n;
 }
 function index(value: unknown, entries: unknown[], code: string) {
-  const n = integer(value); if (n < 0 || n >= entries.length) throw new Error(code); return n;
+  const n = integer(value);
+  if (n < 0 || n >= entries.length) throw new Error(code);
+  return n;
 }
 
 /** Uploads are self-contained render data, never external fetch instructions. */
 export function validateImportGeometry(bytes: Buffer): void {
-  if (bytes.length < 28 || bytes.readUInt32LE(16) !== 0x4e4f534a) throw new Error("GLB_JSON_FIRST_REQUIRED");
+  if (bytes.length < 28 || bytes.readUInt32LE(16) !== 0x4e4f534a)
+    throw new Error("GLB_JSON_FIRST_REQUIRED");
   const jsonLength = bytes.readUInt32LE(12);
-  if (jsonLength % 4 || jsonLength < 2 || 20 + jsonLength + 8 > bytes.length) throw new Error("GLB_CHUNK_INVALID");
+  if (jsonLength % 4 || jsonLength < 2 || 20 + jsonLength + 8 > bytes.length)
+    throw new Error("GLB_CHUNK_INVALID");
   const binaryHeader = 20 + jsonLength;
   const binaryLength = bytes.readUInt32LE(binaryHeader);
-  if (binaryLength % 4 || bytes.readUInt32LE(binaryHeader + 4) !== 0x004e4942 || binaryHeader + 8 + binaryLength !== bytes.length) throw new Error("GLB_BINARY_CHUNK_INVALID");
-  const json = JSON.parse(bytes.subarray(20, binaryHeader).toString("utf8").trim()) as Json;
+  if (
+    binaryLength % 4 ||
+    bytes.readUInt32LE(binaryHeader + 4) !== 0x004e4942 ||
+    binaryHeader + 8 + binaryLength !== bytes.length
+  )
+    throw new Error("GLB_BINARY_CHUNK_INVALID");
+  const json = JSON.parse(
+    bytes.subarray(20, binaryHeader).toString("utf8").trim()
+  ) as Json;
   if (json.asset?.version !== "2.0") throw new Error("GLB_VERSION_UNSUPPORTED");
-  const pending: unknown[] = [json]; let visited = 0;
+  const pending: unknown[] = [json];
+  let visited = 0;
   while (pending.length) {
     if (++visited > 250_000) throw new Error("GLB_COMPLEXITY_LIMIT");
     const value = pending.pop();
@@ -34,58 +59,197 @@ export function validateImportGeometry(bytes: Buffer): void {
     }
   }
   const required = json.extensionsRequired ?? [];
-  const supported = new Set(["KHR_materials_unlit", "KHR_materials_clearcoat", "KHR_materials_transmission", "KHR_materials_ior", "KHR_materials_specular", "KHR_texture_transform", "KHR_mesh_quantization"]);
-  if (!Array.isArray(required) || required.some((name: unknown) => typeof name !== "string" || !supported.has(name))) throw new Error("GLB_REQUIRED_EXTENSION_UNSUPPORTED");
+  const supported = new Set([
+    "KHR_materials_unlit",
+    "KHR_materials_clearcoat",
+    "KHR_materials_transmission",
+    "KHR_materials_ior",
+    "KHR_materials_specular",
+    "KHR_texture_transform",
+    "KHR_mesh_quantization",
+  ]);
+  if (
+    !Array.isArray(required) ||
+    required.some(
+      (name: unknown) => typeof name !== "string" || !supported.has(name)
+    )
+  )
+    throw new Error("GLB_REQUIRED_EXTENSION_UNSUPPORTED");
   const buffers: Json[] = json.buffers ?? [];
   const views: Json[] = json.bufferViews ?? [];
   const accessors: Json[] = json.accessors ?? [];
   const meshes: Json[] = json.meshes ?? [];
   const nodes: Json[] = json.nodes ?? [];
   const scenes: Json[] = json.scenes ?? [];
-  for (const list of [buffers, views, accessors, meshes, nodes, scenes]) if (!Array.isArray(list) || list.some(entry => !entry || typeof entry !== "object" || Array.isArray(entry))) throw new Error("GLB_STRUCTURE_INVALID");
-  if (buffers.length !== 1 || !meshes.length || !nodes.length || !scenes.length || nodes.length > 4096 || meshes.length > 512 || accessors.length > 8192 || views.length > 8192) throw new Error("GLB_COMPLEXITY_LIMIT");
+  for (const list of [buffers, views, accessors, meshes, nodes, scenes])
+    if (
+      !Array.isArray(list) ||
+      list.some(
+        entry => !entry || typeof entry !== "object" || Array.isArray(entry)
+      )
+    )
+      throw new Error("GLB_STRUCTURE_INVALID");
+  if (
+    buffers.length !== 1 ||
+    !meshes.length ||
+    !nodes.length ||
+    !scenes.length ||
+    nodes.length > 4096 ||
+    meshes.length > 512 ||
+    accessors.length > 8192 ||
+    views.length > 8192
+  )
+    throw new Error("GLB_COMPLEXITY_LIMIT");
   const declared = integer(buffers[0]!.byteLength);
-  if (declared < 1 || declared > binaryLength || binaryLength - declared > 3) throw new Error("GLB_BUFFER_BOUNDS");
-  for (const view of views) if (view.buffer !== 0 || offset(view.byteOffset) + integer(view.byteLength, declared + 1) > declared || offset(view.byteOffset) < 0 || integer(view.byteLength) < 1) throw new Error("GLB_BUFFER_BOUNDS");
-  const sizes: Record<number, number> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
-  const widths: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16 };
+  if (declared < 1 || declared > binaryLength || binaryLength - declared > 3)
+    throw new Error("GLB_BUFFER_BOUNDS");
+  for (const view of views)
+    if (
+      view.buffer !== 0 ||
+      offset(view.byteOffset) + integer(view.byteLength, declared + 1) >
+        declared ||
+      offset(view.byteOffset) < 0 ||
+      integer(view.byteLength) < 1
+    )
+      throw new Error("GLB_BUFFER_BOUNDS");
+  const sizes: Record<number, number> = {
+    5120: 1,
+    5121: 1,
+    5122: 2,
+    5123: 2,
+    5125: 4,
+    5126: 4,
+  };
+  const widths: Record<string, number> = {
+    SCALAR: 1,
+    VEC2: 2,
+    VEC3: 3,
+    VEC4: 4,
+    MAT2: 4,
+    MAT3: 9,
+    MAT4: 16,
+  };
   for (const accessor of accessors) {
     if (accessor.sparse) throw new Error("GLB_SPARSE_ACCESSOR_UNSUPPORTED");
-    const view = views[index(accessor.bufferView, views, "GLB_ACCESSOR_BOUNDS")]!;
-    const elementSize = (sizes[accessor.componentType] ?? 0) * (widths[accessor.type] ?? 0);
+    const view =
+      views[index(accessor.bufferView, views, "GLB_ACCESSOR_BOUNDS")]!;
+    const elementSize =
+      (sizes[accessor.componentType] ?? 0) * (widths[accessor.type] ?? 0);
     const count = integer(accessor.count);
     const stride = offset(view.byteStride, elementSize);
-    if (!elementSize || count < 1 || count > 1_000_000 || stride < elementSize || stride > 252 || offset(accessor.byteOffset) + (count - 1) * stride + elementSize > view.byteLength) throw new Error("GLB_ACCESSOR_BOUNDS");
+    if (
+      !elementSize ||
+      count < 1 ||
+      count > 1_000_000 ||
+      stride < elementSize ||
+      stride > 252 ||
+      offset(accessor.byteOffset) + (count - 1) * stride + elementSize >
+        view.byteLength
+    )
+      throw new Error("GLB_ACCESSOR_BOUNDS");
   }
   let vertexBudget = 0;
   for (const mesh of meshes) {
-    if (!Array.isArray(mesh.primitives) || !mesh.primitives.length || mesh.primitives.length > 256) throw new Error("GLB_MESH_INVALID");
+    if (
+      !Array.isArray(mesh.primitives) ||
+      !mesh.primitives.length ||
+      mesh.primitives.length > 256
+    )
+      throw new Error("GLB_MESH_INVALID");
     for (const primitive of mesh.primitives) {
-      if (!primitive?.attributes || typeof primitive.attributes !== "object") throw new Error("GLB_MESH_INVALID");
-      const position = accessors[index(primitive.attributes.POSITION, accessors, "GLB_POSITION_REQUIRED")]!;
+      if (!primitive?.attributes || typeof primitive.attributes !== "object")
+        throw new Error("GLB_MESH_INVALID");
+      const position =
+        accessors[
+          index(
+            primitive.attributes.POSITION,
+            accessors,
+            "GLB_POSITION_REQUIRED"
+          )
+        ]!;
       vertexBudget += position.count;
       if (vertexBudget > 2_000_000) throw new Error("GLB_COMPLEXITY_LIMIT");
       if (position.type !== "VEC3") throw new Error("GLB_POSITION_REQUIRED");
-      for (const value of Object.values(primitive.attributes)) index(value, accessors, "GLB_ATTRIBUTE_INVALID");
-      if (primitive.indices !== undefined) index(primitive.indices, accessors, "GLB_INDICES_INVALID");
+      for (const value of Object.values(primitive.attributes))
+        index(value, accessors, "GLB_ATTRIBUTE_INVALID");
+      if (primitive.indices !== undefined)
+        index(primitive.indices, accessors, "GLB_INDICES_INVALID");
     }
   }
   const parents = new Set<number>();
   const skins: Json[] = json.skins ?? [];
-  if (!Array.isArray(skins) || skins.length > 256) throw new Error("GLB_SKIN_INVALID");
+  if (!Array.isArray(skins) || skins.length > 256)
+    throw new Error("GLB_SKIN_INVALID");
   for (const skin of skins) {
-    if (!Array.isArray(skin?.joints) || !skin.joints.length || skin.joints.length > 256) throw new Error("GLB_SKIN_INVALID");
+    if (
+      !Array.isArray(skin?.joints) ||
+      !skin.joints.length ||
+      skin.joints.length > 256
+    )
+      throw new Error("GLB_SKIN_INVALID");
     for (const joint of skin.joints) index(joint, nodes, "GLB_SKIN_INVALID");
-    if (skin.skeleton !== undefined) index(skin.skeleton, nodes, "GLB_SKIN_INVALID");
+    if (skin.skeleton !== undefined)
+      index(skin.skeleton, nodes, "GLB_SKIN_INVALID");
     if (skin.inverseBindMatrices !== undefined) {
-      const accessor = accessors[index(skin.inverseBindMatrices, accessors, "GLB_SKIN_INVALID")]!;
-      if (accessor.type !== "MAT4" || accessor.componentType !== 5126 || accessor.count < skin.joints.length) throw new Error("GLB_SKIN_INVALID");
+      const accessor =
+        accessors[
+          index(skin.inverseBindMatrices, accessors, "GLB_SKIN_INVALID")
+        ]!;
+      if (
+        accessor.type !== "MAT4" ||
+        accessor.componentType !== 5126 ||
+        accessor.count < skin.joints.length
+      )
+        throw new Error("GLB_SKIN_INVALID");
     }
   }
   for (const node of nodes) {
     if (node.skin !== undefined) index(node.skin, skins, "GLB_SKIN_INVALID");
-    for (const [key, length] of [["translation", 3], ["rotation", 4], ["scale", 3], ["matrix", 16]] as const) {
-      if (node[key] !== undefined && (!Array.isArray(node[key]) || node[key].length !== length || node[key].some((n: unknown) => typeof n !== "number" || !Number.isFinite(n)))) throw new Error("GLB_TRANSFORM_INVALID");
+    for (const [key, length] of [
+      ["translation", 3],
+      ["rotation", 4],
+      ["scale", 3],
+      ["matrix", 16],
+    ] as const) {
+      if (
+        node[key] !== undefined &&
+        (!Array.isArray(node[key]) ||
+          node[key].length !== length ||
+          node[key].some(
+            (n: unknown) => typeof n !== "number" || !Number.isFinite(n)
+          ))
+      )
+        throw new Error("GLB_TRANSFORM_INVALID");
+    }
+    if (
+      node.matrix !== undefined &&
+      (node.translation !== undefined ||
+        node.rotation !== undefined ||
+        node.scale !== undefined)
+    )
+      throw new Error("GLB_TRANSFORM_AMBIGUOUS");
+    if (node.rotation !== undefined) {
+      const normSquared = (node.rotation as number[]).reduce(
+        (sum, component) => sum + component * component,
+        0
+      );
+      if (Math.abs(normSquared - 1) > 1e-5)
+        throw new Error("GLB_ROTATION_QUATERNION_INVALID");
+    }
+    if (
+      node.scale !== undefined &&
+      (node.scale as number[]).some(component => component <= 0)
+    )
+      throw new Error("GLB_SCALE_NONPOSITIVE");
+    if (node.matrix !== undefined) {
+      const matrix = node.matrix as number[];
+      if (
+        matrix[3] !== 0 ||
+        matrix[7] !== 0 ||
+        matrix[11] !== 0 ||
+        matrix[15] !== 1
+      )
+        throw new Error("GLB_MATRIX_NON_AFFINE");
     }
     for (const child of node.children ?? []) {
       const n = index(child, nodes, "GLB_NODE_INVALID");
@@ -99,60 +263,148 @@ export function validateImportGeometry(bytes: Buffer): void {
     if (colors[n] === 2) return;
     colors[n] = 1;
     const node = nodes[n]!;
-    if (node.mesh !== undefined) index(node.mesh, meshes, "GLB_NODE_MESH_INVALID");
-    if (node.children !== undefined && !Array.isArray(node.children)) throw new Error("GLB_NODE_INVALID");
-    for (const child of node.children ?? []) visit(index(child, nodes, "GLB_NODE_INVALID"), depth + 1);
+    if (node.mesh !== undefined)
+      index(node.mesh, meshes, "GLB_NODE_MESH_INVALID");
+    if (node.children !== undefined && !Array.isArray(node.children))
+      throw new Error("GLB_NODE_INVALID");
+    for (const child of node.children ?? [])
+      visit(index(child, nodes, "GLB_NODE_INVALID"), depth + 1);
     colors[n] = 2;
   }
   nodes.forEach((_, n) => visit(n, 0));
   for (const scene of scenes) {
-    if (!Array.isArray(scene.nodes) || !scene.nodes.length) throw new Error("GLB_SCENE_INVALID");
+    if (!Array.isArray(scene.nodes) || !scene.nodes.length)
+      throw new Error("GLB_SCENE_INVALID");
     for (const node of scene.nodes) index(node, nodes, "GLB_SCENE_INVALID");
   }
   if (json.scene !== undefined) index(json.scene, scenes, "GLB_SCENE_INVALID");
-  for (const image of json.images ?? []) { if (image.mimeType !== "image/png" && image.mimeType !== "image/jpeg") throw new Error("GLB_IMAGE_TYPE_UNSUPPORTED"); index(image.bufferView, views, "GLB_IMAGE_INVALID"); }
+  for (const image of json.images ?? []) {
+    if (image.mimeType !== "image/png" && image.mimeType !== "image/jpeg")
+      throw new Error("GLB_IMAGE_TYPE_UNSUPPORTED");
+    index(image.bufferView, views, "GLB_IMAGE_INVALID");
+  }
 }
 
-export function automaticGlbTarget(classification: GlbAssetClassification): string | null {
-  if (classification.assetType === "character" && classification.subcategory === "blacksmith-npc") return "npc_blacksmith";
+export function automaticGlbTarget(
+  classification: GlbAssetClassification
+): string | null {
+  if (
+    classification.assetType === "character" &&
+    classification.subcategory === "blacksmith-npc"
+  )
+    return "npc_blacksmith";
   if (classification.assetType === "character") return "starter_player";
   if (classification.assetType === "enemy") {
     if (classification.subcategory === "spider") return "starter_spider";
-    if (classification.lod !== null && classification.lod >= 0 && classification.lod <= 3) return `starter_beast_lod${classification.lod}`;
+    if (
+      classification.lod !== null &&
+      classification.lod >= 0 &&
+      classification.lod <= 3
+    )
+      return `starter_beast_lod${classification.lod}`;
     return classification.lod === null ? "starter_beast_lod0" : null;
   }
   if (classification.assetType === "arena") return "asterion_courtyard";
   const names = classification.nodeNames.join(" ").toLowerCase();
-  const rules = classification.assetType === "weapon"
-    ? { blade: /sword|blade|dagger|axe/, spear: /spear|lance|polearm/, staff: /staff|wand/, focus: /focus|orb|tome/, marksmanship: /bow|rifle|pistol/, heavy_tech: /cannon|hammer/ }
-    : { head: /helm|hat/, chest: /chest|cuirass/, arms: /gauntlet|bracer|glove/, legs: /leg|greave/, boots: /boot|shoe/, shoulders: /shoulder|pauldron/ };
-  const matches = Object.entries(rules).filter(([, expression]) => expression.test(names));
-  return matches.length === 1 ? `${classification.assetType}_${matches[0]![0]}` : null;
+  const rules =
+    classification.assetType === "weapon"
+      ? {
+          blade: /sword|blade|dagger|axe/,
+          spear: /spear|lance|polearm/,
+          staff: /staff|wand/,
+          focus: /focus|orb|tome/,
+          marksmanship: /bow|rifle|pistol/,
+          heavy_tech: /cannon|hammer/,
+        }
+      : {
+          head: /helm|hat/,
+          chest: /chest|cuirass/,
+          arms: /gauntlet|bracer|glove/,
+          legs: /leg|greave/,
+          boots: /boot|shoe/,
+          shoulders: /shoulder|pauldron/,
+        };
+  const matches = Object.entries(rules).filter(([, expression]) =>
+    expression.test(names)
+  );
+  return matches.length === 1
+    ? `${classification.assetType}_${matches[0]![0]}`
+    : null;
 }
 
-function assertPurpose(classification: GlbAssetClassification, purpose: GlbImportPurpose): void {
-  if (purpose === "npc-fallback" && classification.assetType !== "character") throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
-  if (purpose === "enemy-fallback" && classification.assetType !== "enemy") throw new Error("GLB_ENEMY_FALLBACK_ENEMY_REQUIRED");
-  if (purpose === "world-environment" && (classification.assetType !== "arena" || classification.worldFamily !== "environment")) throw new Error("GLB_WORLD_ENVIRONMENT_REQUIRED");
-  if (purpose === "world-nature" && (classification.assetType !== "arena" || classification.worldFamily !== "nature")) throw new Error("GLB_WORLD_NATURE_REQUIRED");
-  if (purpose === "equipment" && !(["weapon", "armor"] as const).includes(classification.assetType as "weapon" | "armor") ) throw new Error("GLB_EQUIPMENT_REQUIRED");
-  if (purpose === "equipment" && !classification.equipmentSlot) throw new Error("GLB_EQUIPMENT_SLOT_REQUIRED");
+function assertPurpose(
+  classification: GlbAssetClassification,
+  purpose: GlbImportPurpose
+): void {
+  if (purpose === "npc-fallback" && classification.assetType !== "character")
+    throw new Error("GLB_NPC_FALLBACK_CHARACTER_REQUIRED");
+  if (purpose === "enemy-fallback" && classification.assetType !== "enemy")
+    throw new Error("GLB_ENEMY_FALLBACK_ENEMY_REQUIRED");
+  if (
+    purpose === "world-environment" &&
+    (classification.assetType !== "arena" ||
+      classification.worldFamily !== "environment")
+  )
+    throw new Error("GLB_WORLD_ENVIRONMENT_REQUIRED");
+  if (
+    purpose === "world-nature" &&
+    (classification.assetType !== "arena" ||
+      classification.worldFamily !== "nature")
+  )
+    throw new Error("GLB_WORLD_NATURE_REQUIRED");
+  if (
+    purpose === "equipment" &&
+    !(["weapon", "armor"] as const).includes(
+      classification.assetType as "weapon" | "armor"
+    )
+  )
+    throw new Error("GLB_EQUIPMENT_REQUIRED");
+  if (purpose === "equipment" && !classification.equipmentSlot)
+    throw new Error("GLB_EQUIPMENT_SLOT_REQUIRED");
   if (purpose === "player-public") {
-    if (classification.assetType !== "character") throw new Error("GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED");
-    const animations = new Set(classification.animationNames.map(name => name.toLowerCase().replace(/[^a-z0-9]/g, "")));
-    const hasIdle = animations.has("idle") || animations.has("standingidle") || animations.has("breathingidle");
-    const hasLocomotion = animations.has("walk") || animations.has("run") || animations.has("walking") || animations.has("running");
-    const hasAttack = animations.has("attack") || animations.has("attack2") || animations.has("fight") || animations.has("attackcombo");
-    if (!hasIdle || !hasLocomotion || !hasAttack) throw new Error("GLB_PUBLIC_PLAYER_ANIMATIONS_REQUIRED");
+    if (classification.assetType !== "character")
+      throw new Error("GLB_PUBLIC_PLAYER_CHARACTER_REQUIRED");
+    const animations = new Set(
+      classification.animationNames.map(name =>
+        name.toLowerCase().replace(/[^a-z0-9]/g, "")
+      )
+    );
+    const hasIdle =
+      animations.has("idle") ||
+      animations.has("standingidle") ||
+      animations.has("breathingidle");
+    const hasLocomotion =
+      animations.has("walk") ||
+      animations.has("run") ||
+      animations.has("walking") ||
+      animations.has("running");
+    const hasAttack =
+      animations.has("attack") ||
+      animations.has("attack2") ||
+      animations.has("fight") ||
+      animations.has("attackcombo");
+    if (!hasIdle || !hasLocomotion || !hasAttack)
+      throw new Error("GLB_PUBLIC_PLAYER_ANIMATIONS_REQUIRED");
   }
 }
 
-export function buildGlbImportPlan(contentBase64: string, purpose: GlbImportPurpose = "auto", sourceName = "") {
+export async function buildGlbImportPlan(
+  contentBase64: string,
+  purpose: GlbImportPurpose = "auto",
+  sourceName = ""
+) {
   const payload = decodeValidatedGlbBase64(contentBase64);
   validateImportGeometry(payload.bytes);
   const classification = classifyGlbBase64(contentBase64, sourceName);
   assertPurpose(classification, purpose);
-  const targetKey = purpose === "auto" ? automaticGlbTarget(classification) : null;
+  const targetKey =
+    purpose === "auto" ? automaticGlbTarget(classification) : null;
+  const normalization = await buildGlbNormalizationManifest(
+    payload.bytes,
+    payload.sha256,
+    classification,
+    purpose
+  );
   const identity = {
     version: GLB_IMPORT_VERSION,
     purpose,
@@ -164,6 +416,16 @@ export function buildGlbImportPlan(contentBase64: string, purpose: GlbImportPurp
     worldFamily: classification.worldFamily,
     rigContract: classification.rigContract,
     targetKey,
+    normalizationRevision: normalization.revision,
+    normalizationSha256: normalization.manifestSha256,
   };
-  return { ...identity, classification, assetId: `glb_${payload.sha256.slice(0, 48)}`, planSha256: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
+  return {
+    ...identity,
+    classification,
+    normalization,
+    assetId: `glb_${payload.sha256.slice(0, 48)}`,
+    planSha256: createHash("sha256")
+      .update(JSON.stringify(identity))
+      .digest("hex"),
+  };
 }
