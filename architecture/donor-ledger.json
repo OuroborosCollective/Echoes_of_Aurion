@@ -595,12 +595,6 @@
   ],
   "surfaceInventory": [
     {
-      "path": ".github/workflows/aim519-equipment-fit.yml",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "SUPPORT"
-    },
-    {
       "path": ".github/workflows/aurion-wasd-migration-ledger.yml",
       "donor": "WASD",
       "capabilityId": "world.reaction-rules",
