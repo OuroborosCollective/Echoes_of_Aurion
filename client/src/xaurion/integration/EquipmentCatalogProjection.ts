@@ -222,6 +222,16 @@ export class EquipmentCatalogProjection {
           return;
         }
         try {
+          // Generated armor is fitted in canonical avatar-root space, not in a socket's local space.
+          // The holder is identity-transformed, so reparenting preserves the procedural visual
+          // coordinates while making the fit target and source bounds share one coordinate system.
+          holder.removeFromParent();
+          this.engine.player.glbAvatarGroup.add(holder);
+          holder.position.set(0, 0, 0);
+          holder.quaternion.identity();
+          holder.scale.setScalar(1);
+          holder.updateMatrixWorld(true);
+
           const profile = extractCanonicalAvatarProfile(this.engine.player.glbAvatarGroup, {
             avatarProfileId: this.avatarIdentity,
           });
