@@ -160,9 +160,11 @@ function fitEquipmentGroupInternal(
   root: THREE.Group,
   morphologyRecipeHash: string,
   profile: CanonicalAvatarProfile,
+  avatarHeightMeters: number,
 ): EquipmentFitContract {
   if (descriptor.category !== "armor") throw new Error("EQUIPMENT_FIT_CATEGORY_UNSUPPORTED");
   if (!verifyCanonicalAvatarProfile(profile)) throw new Error("EQUIPMENT_FIT_AVATAR_PROFILE_INVALID");
+  if (!Number.isFinite(avatarHeightMeters) || avatarHeightMeters <= 0.1) throw new Error("EQUIPMENT_FIT_AVATAR_HEIGHT_INVALID");
 
   const glbSlot = VISUAL_SLOT_TO_GLb[descriptor.equipmentSlot ?? ""];
   if (!glbSlot) throw new Error("EQUIPMENT_FIT_VISUAL_SLOT_UNSUPPORTED");
@@ -171,8 +173,12 @@ function fitEquipmentGroupInternal(
   }
 
   const regionSet = regionForSlot(glbSlot);
-  const targetBounds = aggregateRegionBounds(profile, regionSet.regionIds);
-  const clearance = aggregateClearance(profile, regionSet.regionIds);
+  const normalizedTargetBounds = aggregateRegionBounds(profile, regionSet.regionIds);
+  const targetBounds = Object.freeze({
+    min: normalizedTargetBounds.min.map(value => value * avatarHeightMeters) as [number, number, number],
+    max: normalizedTargetBounds.max.map(value => value * avatarHeightMeters) as [number, number, number],
+  });
+  const clearance = aggregateClearance(profile, regionSet.regionIds) * avatarHeightMeters;
 
   root.updateMatrixWorld(true);
   const sourceBounds = new THREE.Box3().setFromObject(root, true);
@@ -230,6 +236,7 @@ function fitEquipmentGroupInternal(
     morphologyRecipeHash: morphologyRecipeHash,
     avatarProfileFingerprint: profile.profileFingerprint,
     avatarProfileVersion: profile.avatarProfileVersion,
+    avatarHeightMillimeters: quantize(avatarHeightMeters, TRANSLATION_QUANTUM),
     equipmentSlot: glbSlot,
     regionIds: Object.freeze([...regionSet.regionIds]),
     sourceBounds: Object.freeze({
@@ -260,9 +267,10 @@ export function fitGeneratedEquipment(
   descriptor: VisualItemDescriptor,
   geometry: GeneratedVisualItemGeometry,
   profile: CanonicalAvatarProfile,
+  avatarHeightMeters = 1,
 ): EquipmentFitContract {
   if (geometry.kind !== "generated") throw new Error("EQUIPMENT_FIT_GEOMETRY_UNSUPPORTED");
-  return fitEquipmentGroupInternal(descriptor, geometry.root, geometry.morphologyRecipeHash, profile);
+  return fitEquipmentGroupInternal(descriptor, geometry.root, geometry.morphologyRecipeHash, profile, avatarHeightMeters);
 }
 
 export function fitEquipmentGroup(
@@ -270,6 +278,7 @@ export function fitEquipmentGroup(
   root: THREE.Group,
   morphologyRecipeHash: string,
   profile: CanonicalAvatarProfile,
+  avatarHeightMeters = 1,
 ): EquipmentFitContract {
-  return fitEquipmentGroupInternal(descriptor, root, morphologyRecipeHash, profile);
+  return fitEquipmentGroupInternal(descriptor, root, morphologyRecipeHash, profile, avatarHeightMeters);
 }
