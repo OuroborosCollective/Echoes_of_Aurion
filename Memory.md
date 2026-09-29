@@ -1508,3 +1508,13 @@ Evidence: `pnpm check` grün; Ecology + World-Chunk + Epoch-Regressionen grün: 
 Learned: Eine referenzierte Structure-Observation reicht nicht als Link-Metadatum; sie muss in die deterministische Ableitung eingehen, sonst kann derselbe Chunk trotz unterschiedlichem bestätigtem Structure-State identische Ökologie behaupten.
 Open: Keine neue MariaDB-Tabelle eingeführt, weil der bestehende Issue-545-Vertrag als reiner Hash-/State-Vertrag arbeitet; persistente Snapshot-Readback-Evidence hängt vom vorhandenen World-State-Gateway ab.
 Next safe step: Draft-PR #647 für Review und anschließende Runtime-Integration gegen #546/#555.
+
+### 2026-09-29 — Deterministic Atlas tranche closed (Issue #505)
+Status: VERIFIED repository merge; issue closure
+Task: Close the deterministic atlas packing/content-dedupe/locality-aware multipage tranche after its implementation was merged into `main`.
+Decisions: Keep the existing AIM-276 atlas runtime contract; #505 remains presentation/build tooling only; no gameplay, collision, NPC, quest, loot, inventory or world-truth authority was introduced.
+Touched surfaces: deterministic atlas planner/compositor, generated-world admission/provenance tests and CI proof path already merged by PR #571/#573/#612.
+Evidence: PR #612 merged into `main` as merge commit `9845857bd598c6d41eb7a8c36e651e32080d5480`; PR verification recorded 7/7 binary atlas tests, 12/12 TypeScript atlas admission/provenance tests, `pnpm check` clean, 14/14 existing client atlas regressions, byte-identical compositor rebuild, and verified source-hash/manifest provenance.
+Learned: The atlas lane is already materially present on the current Aurion mainline; the remaining visual/performance questions must not be silently converted into gameplay truth.
+Open: The newly uploaded visual reference sheets are asset inputs for a subsequent intake/manifest step, not evidence that those exact image bytes are already shipped in production.
+Next safe step: Add the uploaded sources through the canonical Aurion asset-intake/catalog lane, then perform runtime/browser readback before claiming live use.
