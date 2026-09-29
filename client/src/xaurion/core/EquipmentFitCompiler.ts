@@ -44,17 +44,17 @@ export type EquipmentFitContract = Readonly<{
 }>;
 
 const ARMOR_REGION_SETS: readonly FitRegionSet[] = Object.freeze([
-  Object.freeze({ equipmentSlot: "helmet", regionIds: ["head"] }),
-  Object.freeze({ equipmentSlot: "chest", regionIds: ["torso_front", "torso_back"] }),
+  Object.freeze({ equipmentSlot: "helmet", regionIds: ["head"] as const }),
+  Object.freeze({ equipmentSlot: "chest", regionIds: ["torso_front", "torso_back"] as const }),
   Object.freeze({
     equipmentSlot: "arms",
-    regionIds: ["upper_arm_left", "upper_arm_right", "forearm_left", "forearm_right", "hand_left", "hand_right"],
+    regionIds: ["upper_arm_left", "upper_arm_right", "forearm_left", "forearm_right", "hand_left", "hand_right"] as const,
   }),
   Object.freeze({
     equipmentSlot: "legs",
-    regionIds: ["thigh_left", "thigh_right", "shin_left", "shin_right"],
+    regionIds: ["thigh_left", "thigh_right", "shin_left", "shin_right"] as const,
   }),
-  Object.freeze({ equipmentSlot: "boots", regionIds: ["foot_left", "foot_right"] }),
+  Object.freeze({ equipmentSlot: "boots", regionIds: ["foot_left", "foot_right"] as const }),
 ]);
 
 const VISUAL_SLOT_TO_GLb = Object.freeze({
@@ -167,8 +167,11 @@ function fitEquipmentGroupInternal(
   if (!verifyCanonicalAvatarProfile(profile)) throw new Error("EQUIPMENT_FIT_AVATAR_PROFILE_INVALID");
   if (!Number.isFinite(avatarHeightMeters) || avatarHeightMeters <= 0.1) throw new Error("EQUIPMENT_FIT_AVATAR_HEIGHT_INVALID");
 
-  const glbSlot = VISUAL_SLOT_TO_GLb[descriptor.equipmentSlot ?? ""];
-  if (!glbSlot) throw new Error("EQUIPMENT_FIT_VISUAL_SLOT_UNSUPPORTED");
+  const visualSlot = descriptor.equipmentSlot;
+  if (!visualSlot || !(visualSlot in VISUAL_SLOT_TO_GLb)) {
+    throw new Error("EQUIPMENT_FIT_VISUAL_SLOT_UNSUPPORTED");
+  }
+  const glbSlot = VISUAL_SLOT_TO_GLb[visualSlot as keyof typeof VISUAL_SLOT_TO_GLb];
   if (!profile.supportedEquipmentSlots.includes(glbSlot)) {
     throw new Error("EQUIPMENT_FIT_PROFILE_SLOT_UNSUPPORTED");
   }
