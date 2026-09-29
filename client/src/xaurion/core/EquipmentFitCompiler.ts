@@ -155,13 +155,13 @@ function buildFitFingerprint(
  * Renderer transforms are derived from those integers plus the generated mesh
  * bounds. No gameplay/state/persistence values are mutated.
  */
-export function fitGeneratedEquipment(
+function fitEquipmentGroupInternal(
   descriptor: VisualItemDescriptor,
-  geometry: GeneratedVisualItemGeometry,
+  root: THREE.Group,
+  morphologyRecipeHash: string,
   profile: CanonicalAvatarProfile,
 ): EquipmentFitContract {
   if (descriptor.category !== "armor") throw new Error("EQUIPMENT_FIT_CATEGORY_UNSUPPORTED");
-  if (geometry.kind !== "generated") throw new Error("EQUIPMENT_FIT_GEOMETRY_UNSUPPORTED");
   if (!verifyCanonicalAvatarProfile(profile)) throw new Error("EQUIPMENT_FIT_AVATAR_PROFILE_INVALID");
 
   const glbSlot = VISUAL_SLOT_TO_GLb[descriptor.equipmentSlot ?? ""];
@@ -174,8 +174,8 @@ export function fitGeneratedEquipment(
   const targetBounds = aggregateRegionBounds(profile, regionSet.regionIds);
   const clearance = aggregateClearance(profile, regionSet.regionIds);
 
-  geometry.root.updateMatrixWorld(true);
-  const sourceBounds = new THREE.Box3().setFromObject(geometry.root, true);
+  root.updateMatrixWorld(true);
+  const sourceBounds = new THREE.Box3().setFromObject(root, true);
   assertFiniteBounds(sourceBounds, "EQUIPMENT_FIT_SOURCE_BOUNDS_INVALID");
 
   const sourceSize = sourceBounds.getSize(new THREE.Vector3());
@@ -214,20 +214,20 @@ export function fitGeneratedEquipment(
     quantize(translation.z, TRANSLATION_QUANTUM),
   ];
 
-  geometry.root.scale.setScalar(quantizedScale);
-  geometry.root.position.set(
+  root.scale.setScalar(quantizedScale);
+  root.position.set(
     translationMillimeters[0] / TRANSLATION_QUANTUM,
     translationMillimeters[1] / TRANSLATION_QUANTUM,
     translationMillimeters[2] / TRANSLATION_QUANTUM,
   );
-  geometry.root.updateMatrixWorld(true);
+  root.updateMatrixWorld(true);
 
   const contractWithoutFingerprint: Omit<EquipmentFitContract, "fitFingerprint"> = Object.freeze({
     protocol: EQUIPMENT_FIT_PROTOCOL,
     version: EQUIPMENT_FIT_VERSION,
     descriptorHash: descriptor.source.deterministicHash,
     visualSeed: descriptor.visualSeed,
-    morphologyRecipeHash: geometry.morphologyRecipeHash,
+    morphologyRecipeHash: morphologyRecipeHash,
     avatarProfileFingerprint: profile.profileFingerprint,
     avatarProfileVersion: profile.avatarProfileVersion,
     equipmentSlot: glbSlot,
@@ -253,4 +253,23 @@ export function fitGeneratedEquipment(
       contract: contractWithoutFingerprint,
     }),
   });
+}
+
+
+export function fitGeneratedEquipment(
+  descriptor: VisualItemDescriptor,
+  geometry: GeneratedVisualItemGeometry,
+  profile: CanonicalAvatarProfile,
+): EquipmentFitContract {
+  if (geometry.kind !== "generated") throw new Error("EQUIPMENT_FIT_GEOMETRY_UNSUPPORTED");
+  return fitEquipmentGroupInternal(descriptor, geometry.root, geometry.morphologyRecipeHash, profile);
+}
+
+export function fitEquipmentGroup(
+  descriptor: VisualItemDescriptor,
+  root: THREE.Group,
+  morphologyRecipeHash: string,
+  profile: CanonicalAvatarProfile,
+): EquipmentFitContract {
+  return fitEquipmentGroupInternal(descriptor, root, morphologyRecipeHash, profile);
 }
