@@ -30,6 +30,21 @@ describe("CommunityOverlay", () => {
     expect(screen.queryByRole("heading", { name: /Sternwartenschmiede/i })).toBeNull();
   });
 
+  it("exposes deterministic accessibility state for community dock and icon-only controls", async () => {
+    const user = userEvent.setup();
+    render(<RealClientHarness><CommunityOverlay isAuthenticated /></RealClientHarness>);
+    const chat = screen.getByRole("button", { name: "Expeditionschat öffnen" });
+    const forum = screen.getByRole("button", { name: "Forum öffnen" });
+    const assets = screen.getByRole("button", { name: "Asset-Katalog öffnen" });
+    expect(chat.getAttribute("aria-pressed")).toBe("false");
+    expect(forum.getAttribute("aria-pressed")).toBe("false");
+    expect(assets.getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(forum);
+    expect(screen.getByRole("button", { name: "Forum öffnen" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Community-Konsole schließen" }).getAttribute("title")).toBe("Community-Konsole schließen");
+  });
+
   it("keeps events in the forum-backed community surface", async () => {
     const user = userEvent.setup();
     render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
