@@ -120,15 +120,6 @@ function canonicalBoneIndices(
   return result;
 }
 
-function restBonePositionInAvatarRoot(
-  avatarRoot: THREE.Object3D,
-  boneInverse: THREE.Matrix4,
-): THREE.Vector3 {
-  const bindWorld = boneInverse.clone().invert();
-  const position = new THREE.Vector3().setFromMatrixPosition(bindWorld);
-  return avatarRoot.worldToLocal(position);
-}
-
 function reconstructNormalizationOrigin(
   avatarRoot: THREE.Object3D,
   profile: CanonicalAvatarProfile,
@@ -374,7 +365,7 @@ export function compileEquipmentSkinning(
     profile,
     host.skeleton,
     boneIndices,
-    avatarHeightMeters,
+    canonicalHeightMeters,
   );
   if (!origin) return null;
   const segments = buildSegments(profile, boneIndices);
@@ -386,6 +377,9 @@ export function compileEquipmentSkinning(
   });
   if (!meshes.length) return null;
 
+  const avatarHeightMillimeters = Math.round(avatarHeightMeters * 1000);
+  if (avatarHeightMillimeters <= 0) return null;
+  const canonicalHeightMeters = avatarHeightMillimeters / 1000;
   const fingerprintParts: string[] = [
     descriptor.source.deterministicHash,
     descriptor.visualSeed,
@@ -393,7 +387,7 @@ export function compileEquipmentSkinning(
     profile.profileFingerprint,
     profile.skeletonRevision,
     EQUIPMENT_SKINNING_VERSION,
-    String(avatarHeightMeters),
+    String(avatarHeightMillimeters),
   ];
   const meshEvidence: EquipmentSkinningMeshEvidence[] = [];
   let vertexCount = 0;
@@ -405,7 +399,7 @@ export function compileEquipmentSkinning(
       mesh,
       avatarRoot,
       origin,
-      avatarHeightMeters,
+      canonicalHeightMeters,
       segments,
       fingerprintParts,
     );
