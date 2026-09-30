@@ -40,7 +40,7 @@ case "$command_name" in
   copy-utility)
     (($# == 0)) || fail "GLB_BACKFILL_ARGUMENTS"
     # Read the bundle from stdin; never accept an arbitrary source or destination.
-    exec docker exec -i "$CONTAINER" sh -ceu \
+    exec docker exec -i -u 0 "$CONTAINER" sh -ceu \
       'cat > "$1" && chmod 0755 "$1"' sh "$UTILITY"
     ;;
   run)
@@ -54,7 +54,7 @@ case "$command_name" in
     ;;
   cleanup)
     (($# == 0)) || fail "GLB_BACKFILL_ARGUMENTS"
-    exec docker exec "$CONTAINER" rm -f "$UTILITY"
+    exec docker exec -u 0 "$CONTAINER" rm -f "$UTILITY"
     ;;
   *)
     fail "GLB_BACKFILL_COMMAND"
