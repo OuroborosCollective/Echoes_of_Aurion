@@ -58,7 +58,7 @@ jobs:
           cache: pnpm
 
       - name: Install exact dependencies for the bound utility bundle
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=1
 
       - name: Build deterministic backfill utility bundle
         run: |
