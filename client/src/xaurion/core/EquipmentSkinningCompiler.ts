@@ -133,37 +133,44 @@ function reconstructNormalizationOrigin(
   avatarHeightMeters: number,
 ): THREE.Vector3 | null {
   if (!Number.isFinite(avatarHeightMeters) || avatarHeightMeters <= 0) return null;
+  const rootBone = profile.bones.find(bone => bone.boneId === "root");
+  const rootIndex = rootBone ? boneIndices.get(rootBone.boneId) : undefined;
+  if (rootIndex === undefined) return null;
   const rootInverse = avatarRoot.matrixWorld.clone().invert();
-  const offsets: THREE.Vector3[] = [];
+  const rootInverseBind = skeleton.boneInverses[rootIndex];
+  if (!rootInverseBind) return null;
+  const rootRestWorld = rootInverseBind.clone().invert();
+  const rootRestAvatar = new THREE.Vector3().setFromMatrixPosition(
+    rootRestWorld.premultiply(rootInverse),
+  );
+  if (!finiteVector(rootRestAvatar)) return null;
+
+  const expectedRoot = new THREE.Vector3(
+    rootBone!.restPositionNormalized[0] * avatarHeightMeters,
+    rootBone!.restPositionNormalized[1] * avatarHeightMeters,
+    rootBone!.restPositionNormalized[2] * avatarHeightMeters,
+  );
+  const origin = rootRestAvatar.clone().sub(expectedRoot);
+
+  let maxResidual = 0;
   for (const bone of profile.bones) {
     const index = boneIndices.get(bone.boneId);
     if (index === undefined) return null;
     const inverseBind = skeleton.boneInverses[index];
     if (!inverseBind) return null;
-    const bindWorld = inverseBind.clone().invert();
-    bindWorld.premultiply(rootInverse);
-    const actual = new THREE.Vector3().setFromMatrixPosition(bindWorld);
-    if (!finiteVector(actual)) return null;
-    offsets.push(
-      actual.sub(
-        new THREE.Vector3(
-          bone.restPositionNormalized[0] * avatarHeightMeters,
-          bone.restPositionNormalized[1] * avatarHeightMeters,
-          bone.restPositionNormalized[2] * avatarHeightMeters,
-        ),
-      ),
+    const restAvatar = new THREE.Vector3().setFromMatrixPosition(
+      inverseBind.clone().invert().premultiply(rootInverse),
     );
+    if (!finiteVector(restAvatar)) return null;
+    const expected = new THREE.Vector3(
+      bone.restPositionNormalized[0] * avatarHeightMeters,
+      bone.restPositionNormalized[1] * avatarHeightMeters,
+      bone.restPositionNormalized[2] * avatarHeightMeters,
+    ).add(origin);
+    maxResidual = Math.max(maxResidual, restAvatar.distanceTo(expected));
   }
-  if (!offsets.length) return null;
-  const origin = offsets.reduce(
-    (sum, value) => sum.add(value),
-    new THREE.Vector3(),
-  ).multiplyScalar(1 / offsets.length);
-  const residual = offsets.reduce(
-    (max, value) => Math.max(max, value.distanceTo(origin)),
-    0,
-  );
-  return residual <= avatarHeightMeters * PROFILE_RECONSTRUCTION_TOLERANCE ? origin : null;
+
+  return maxResidual <= avatarHeightMeters * 0.05 ? origin : null;
 }
 
 function pointSegmentDistance(point: Vec3, start: Vec3, end: Vec3): number {
@@ -316,24 +323,35 @@ function rebindMeshToHostSkeleton(
   source: THREE.Mesh,
   hostMesh: THREE.SkinnedMesh,
 ): THREE.SkinnedMesh {
-  const sourceGeometry = source.geometry;
-  const geometry = sourceGeometry.clone();
+  const parent = source.parent;
+  if (!parent) throw new Error("AURION_EQUIPMENT_SKINNING_SOURCE_PARENT_MISSING");
+  parent.updateMatrixWorld(true);
+  hostMesh.updateMatrixWorld(true);
+
+  const geometry = source.geometry.clone();
+  const sourceToHostLocal = hostMesh.matrixWorld.clone().invert().multiply(source.matrixWorld);
+  geometry.applyMatrix4(sourceToHostLocal);
+
   const skinned = new THREE.SkinnedMesh(geometry, source.material);
   skinned.name = source.name;
   skinned.visible = source.visible;
   skinned.castShadow = false;
   skinned.receiveShadow = true;
-  skinned.position.copy(source.position);
-  skinned.quaternion.copy(source.quaternion);
-  skinned.scale.copy(source.scale);
+
+  const hostWorld = hostMesh.matrixWorld.clone();
+  const parentInverse = parent.matrixWorld.clone().invert();
+  const hostLocal = parentInverse.multiply(hostWorld);
+  skinned.matrix.copy(hostLocal);
+  skinned.matrixAutoUpdate = false;
   skinned.bind(hostMesh.skeleton, hostMesh.bindMatrix.clone());
   skinned.userData.aurionEquipmentSkinning = Object.freeze({
     version: EQUIPMENT_SKINNING_VERSION,
     sourceMesh: source.name,
   });
-  source.parent?.add(skinned);
+
+  parent.add(skinned);
   source.removeFromParent();
-  sourceGeometry.dispose();
+  source.geometry.dispose();
   return skinned;
 }
 
