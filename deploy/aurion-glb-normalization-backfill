@@ -31,7 +31,7 @@ case "$command_name" in
     ;;
   inspect-volume)
     (($# == 0)) || fail "GLB_BACKFILL_ARGUMENTS"
-    exec docker inspect --format '{{range .Mounts}}{{println .Name ":" .Destination}}{{end}}' "$CONTAINER"
+    exec docker inspect --format '{{range .Mounts}}{{.Name}}:{{.Destination}}{{"\\n"}}{{end}}' "$CONTAINER"
     ;;
   inspect-release-sha)
     (($# == 0)) || fail "GLB_BACKFILL_ARGUMENTS"
