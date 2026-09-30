@@ -1,7 +1,7 @@
 import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { glbImportStore } from "./glbImportStore";
 import { buildGlbImportPlan } from "./glbImportPlan";
-import { readStoredGlb, glbStorageRoot } from "./glbFileStore";
+import { glbStorageRoot, persistGlbBytes } from "./glbFileStore";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { readControlSettings } from "./playerUiPersistence";
 import { shouldAutoCollect } from "../shared/playerUiProtocol";
@@ -25,7 +25,7 @@ import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayPro
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
 import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
 import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQuality } from "./marketProtocol";
-import { storagePut } from "./storage";
+import { storageGetSignedUrl, storagePut } from "./storage";
 import { aurionEncounters, aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { AURION_FACTION_QUESTLINE_CONTENT_VERSION, AURION_FACTION_QUESTLINE_RULESET_VERSION, factionQuestlineDecisionHash, factionQuestlineNextResolutionIndex, factionQuestlineOathHash, isFactionQuestDecisionAvailable, mayPledgeFaction, permanentFactionChoices, resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineOathReceipt, type FactionQuestlineStateInput, type PermanentAurionFaction } from "./aurionFactionQuestlineProtocol";
 import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
@@ -2553,15 +2553,20 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
     }
 
     const assetId = newEndgameId("glb");
-    if (
-      submission.storageKey !== "local-glb/" + submission.sha256 + ".glb" ||
-      !/^[a-f0-9]{64}$/.test(submission.sha256)
-    ) {
+    if (!/^[a-f0-9]{64}$/.test(submission.sha256))
       throw new Error("GLB_APPROVAL_STORAGE_IDENTITY_INVALID");
-    }
-    const storedBytes = await readStoredGlb(submission.sha256, glbStorageRoot());
+
+    const signedUrl = await storageGetSignedUrl(submission.storageKey);
+    const sourceResponse = await fetch(signedUrl, {
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!sourceResponse.ok)
+      throw new Error("GLB_APPROVAL_SOURCE_READ_FAILED");
+    const storedBytes = Buffer.from(await sourceResponse.arrayBuffer());
     if (storedBytes.length !== submission.bytes)
       throw new Error("GLB_APPROVAL_BYTE_LENGTH_MISMATCH");
+
     const importPlan = await buildGlbImportPlan(
       storedBytes.toString("base64"),
       "auto",
@@ -2574,12 +2579,22 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
     ) {
       throw new Error("GLB_APPROVAL_IMPORT_IDENTITY_MISMATCH");
     }
+
+    await persistGlbBytes(
+      storedBytes,
+      importPlan.sha256,
+      glbStorageRoot(),
+    );
+    const canonicalStorageKey = "local-glb/" + importPlan.sha256 + ".glb";
+    const canonicalStorageUrl = "/api/assets/glb/" + importPlan.sha256 + ".glb";
     await tx.insert(glbAssets).values({
       id: assetId,
-      displayName: submission.displayName,
+      displayName: importPlan.classification.assetType === submission.assetType
+        ? submission.displayName
+        : `GLB approval asset ${importPlan.sha256.slice(0, 12)}`,
       assetType: submission.assetType,
-      storageKey: submission.storageKey,
-      storageUrl: submission.storageUrl,
+      storageKey: canonicalStorageKey,
+      storageUrl: canonicalStorageUrl,
       sha256: submission.sha256,
       normalizationRevision: importPlan.normalization.revision,
       normalizationSha256: importPlan.normalization.manifestSha256,
