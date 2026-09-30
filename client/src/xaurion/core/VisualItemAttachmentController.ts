@@ -4,6 +4,7 @@ import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContr
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
 import { glbManager } from "./GLBModelManager";
 import { type VisualItemLod } from "./VisualItemGeometryCompiler";
+import { VisualConstructionRuntimeCache, type VisualConstructionCacheStats } from "./VisualConstructionRuntimeCache";
 import { resolveVisualItemRenderSource, visualItemEquipmentSlot } from "./VisualItemGlbOverrideResolver";
 import { AurionVisualClock, createVisualItemMaterialBundle } from "./VisualItemMaterialCompiler";
 
@@ -79,6 +80,7 @@ function detachWithoutDisposingSharedGlb(visual: THREE.Group): void {
 export class VisualItemAttachmentController {
   private readonly generations = new Map<GlbEquipmentSlot, number>();
   private readonly attached = new Map<GlbEquipmentSlot, OwnedAttachment>();
+  private readonly constructionCache = new VisualConstructionRuntimeCache(128);
   private disposed = false;
 
   constructor(
@@ -114,7 +116,14 @@ export class VisualItemAttachmentController {
     const slot = visualItemEquipmentSlot(descriptor);
     if (this.disposed || !slot) return Object.freeze({ status: "unsupported", slot, identity, source: null, detail: "ITEM_SLOT_UNSUPPORTED" });
     const generation = this.nextGeneration(slot);
-    const resolved = resolveVisualItemRenderSource(descriptor, lod, catalog);
+    const resolved = resolveVisualItemRenderSource(descriptor, lod, catalog, {
+      morphologyCacheContext: {
+        cache: this.constructionCache,
+        avatarProfileVersion: "aurion-avatar-profile.v1",
+        fitVersion: "aurion-equipment-fit.v1",
+        lod,
+      },
+    });
     if (resolved.kind === "unsupported") return Object.freeze({ status: "unsupported", slot, identity, source: null, detail: resolved.reason });
 
     if (resolved.kind === "procedural") {
@@ -185,6 +194,10 @@ export class VisualItemAttachmentController {
     previous?.dispose();
   }
 
+  constructionCacheEvidence(): VisualConstructionCacheStats {
+    return this.constructionCache.stats();
+  }
+
   evidence(): readonly Readonly<{ slot: GlbEquipmentSlot; identity: string; source: "glb" | "procedural" }>[] {
     return Object.freeze([...this.attached.entries()]
       .map(([slot, value]) => Object.freeze({ slot, identity: value.identity, source: value.source }))
@@ -196,5 +209,6 @@ export class VisualItemAttachmentController {
     for (const slot of [...this.attached.keys()]) this.detach(slot);
     this.disposed = true;
     this.generations.clear();
+    this.constructionCache.clear();
   }
 }
