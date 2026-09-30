@@ -68,6 +68,11 @@ function finiteVector(value: THREE.Vector3): boolean {
   return Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z);
 }
 
+function failSkinning(visualRoot: THREE.Group, reason: string): null {
+  visualRoot.userData.aurionEquipmentSkinningFailure = reason;
+  return null;
+}
+
 function skeletonBoneMap(skeleton: THREE.Skeleton): Map<string, number> | null {
   const result = new Map<string, number>();
   skeleton.bones.forEach((bone, index) => {
@@ -346,22 +351,20 @@ export function compileEquipmentSkinning(
   profile: CanonicalAvatarProfile,
   avatarHeightMeters: number,
 ): EquipmentSkinningContract | null {
-  if (
-    descriptor.category !== "armor"
-    || !verifyCanonicalAvatarProfile(profile)
-    || !morphologyRecipeHash.trim()
-    || !visualRoot.children.length
-  ) return null;
-  if (profile.deformationMode === "rigid") return null;
+  if (descriptor.category !== "armor") return failSkinning(visualRoot, "DESCRIPTOR_NOT_ARMOR");
+  if (!verifyCanonicalAvatarProfile(profile)) return failSkinning(visualRoot, "PROFILE_INVALID");
+  if (!morphologyRecipeHash.trim()) return failSkinning(visualRoot, "MORPHOLOGY_HASH_INVALID");
+  if (!visualRoot.children.length) return failSkinning(visualRoot, "VISUAL_ROOT_EMPTY");
+  if (profile.deformationMode === "rigid") return failSkinning(visualRoot, "AVATAR_RIGID");
 
   avatarRoot.updateMatrixWorld(true);
   visualRoot.updateMatrixWorld(true);
   const host = resolveHostSkeleton(avatarRoot);
-  if (!host) return null;
+  if (!host) return failSkinning(visualRoot, "HOST_SKELETON_MISSING");
   const boneIndices = canonicalBoneIndices(profile, host.skeleton);
-  if (!boneIndices) return null;
+  if (!boneIndices) return failSkinning(visualRoot, "CANONICAL_BONE_MAPPING_INVALID");
   const avatarHeightMillimeters = Math.round(avatarHeightMeters * 1000);
-  if (avatarHeightMillimeters <= 0) return null;
+  if (avatarHeightMillimeters <= 0) return failSkinning(visualRoot, "AVATAR_HEIGHT_INVALID");
   const canonicalHeightMeters = avatarHeightMillimeters / 1000;
   const origin = reconstructNormalizationOrigin(
     avatarRoot,
@@ -370,7 +373,7 @@ export function compileEquipmentSkinning(
     boneIndices,
     canonicalHeightMeters,
   );
-  if (!origin) return null;
+  if (!origin) return failSkinning(visualRoot, "REST_FRAME_UNPROVABLE");
   const segments = buildSegments(profile, boneIndices);
   const meshes: THREE.Mesh[] = [];
   visualRoot.traverse(node => {
@@ -378,7 +381,7 @@ export function compileEquipmentSkinning(
       meshes.push(node as THREE.Mesh);
     }
   });
-  if (!meshes.length) return null;
+  if (!meshes.length) return failSkinning(visualRoot, "STATIC_ARMOR_MESHES_MISSING");
 
   const fingerprintParts: string[] = [
     descriptor.source.deterministicHash,
@@ -393,7 +396,7 @@ export function compileEquipmentSkinning(
   let vertexCount = 0;
   for (const mesh of meshes) {
     const evidenceVertexCount = mesh.geometry.getAttribute("position")?.count ?? 0;
-    if (!evidenceVertexCount) return null;
+    if (!evidenceVertexCount) return failSkinning(visualRoot, "VERTEX_BUFFER_MISSING");
     const influencedVertices = setSkinAttributes(
       mesh.geometry,
       mesh,
@@ -403,7 +406,7 @@ export function compileEquipmentSkinning(
       segments,
       fingerprintParts,
     );
-    if (influencedVertices !== evidenceVertexCount) return null;
+    if (influencedVertices !== evidenceVertexCount) return failSkinning(visualRoot, "VERTEX_WEIGHTS_UNPROVABLE");
     const skinned = rebindMeshToHostSkeleton(mesh, host.mesh);
     meshEvidence.push(Object.freeze({
       meshName: skinned.name,
