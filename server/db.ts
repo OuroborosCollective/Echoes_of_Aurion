@@ -1,5 +1,7 @@
 import { GLOBAL_WORLD_ID, GLOBAL_WORLD_SEED } from "../shared/worldIdentity";
 import { glbImportStore } from "./glbImportStore";
+import { buildGlbImportPlan } from "./glbImportPlan";
+import { glbStorageRoot, persistGlbBytes } from "./glbFileStore";
 import { operationalNow, operationalDate } from "../shared/operationalClock";
 import { readControlSettings } from "./playerUiPersistence";
 import { shouldAutoCollect } from "../shared/playerUiProtocol";
@@ -23,7 +25,7 @@ import { isGatewayGrantActive, isStrictlyIncreasingSequence } from "./gatewayPro
 import { decodeValidatedGlbBase64, normalizeSafePlacementConfiguration, USER_GLB_MAX_BYTES } from "./adminProtocol";
 import { activeTeamMemberKey, assertDistinctTeammates, type ForumCategory } from "./communityProtocol";
 import { assertMarketPrice, assertNotOwnListing, systemSaleValue, type MarketQuality } from "./marketProtocol";
-import { storagePut } from "./storage";
+import { storageGetSignedUrl, storagePut } from "./storage";
 import { aurionEncounters, aurionQuestline, damageForMcpAction, dungeonCompletionReward, getEncounter, getQuest, mayEnterDungeon, mcpActionFromCommand, resolveQuestState, type EncounterKey, type QuestKey } from "./gameplayProtocol";
 import { AURION_FACTION_QUESTLINE_CONTENT_VERSION, AURION_FACTION_QUESTLINE_RULESET_VERSION, factionQuestlineDecisionHash, factionQuestlineNextResolutionIndex, factionQuestlineOathHash, isFactionQuestDecisionAvailable, mayPledgeFaction, permanentFactionChoices, resolveFactionQuestline, type FactionQuestlineDecisionReceipt, type FactionQuestlineOathReceipt, type FactionQuestlineStateInput, type PermanentAurionFaction } from "./aurionFactionQuestlineProtocol";
 import type { AurionFaction, QuestApproach } from "./aurionQuestlineProtocol";
@@ -2549,8 +2551,58 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
       await tx.update(glbAssetSubmissions).set({ status: "rejected", reviewNote: values.reviewNote ?? null, reviewedByUserId: values.reviewedByUserId, reviewedAt }).where(eq(glbAssetSubmissions.id, submission.id));
       return { approved: false as const, assetId: null };
     }
+
     const assetId = newEndgameId("glb");
-    await tx.insert(glbAssets).values({ id: assetId, displayName: submission.displayName, assetType: submission.assetType, storageKey: submission.storageKey, storageUrl: submission.storageUrl, sha256: submission.sha256, bytes: submission.bytes, status: "approved", createdByUserId: submission.submittedByUserId, reviewedByUserId: values.reviewedByUserId, reviewedAt });
+    if (!/^[a-f0-9]{64}$/.test(submission.sha256))
+      throw new Error("GLB_APPROVAL_STORAGE_IDENTITY_INVALID");
+
+    const signedUrl = await storageGetSignedUrl(submission.storageKey);
+    const sourceResponse = await fetch(signedUrl, {
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!sourceResponse.ok)
+      throw new Error("GLB_APPROVAL_SOURCE_READ_FAILED");
+    const storedBytes = Buffer.from(await sourceResponse.arrayBuffer());
+    if (storedBytes.length !== submission.bytes)
+      throw new Error("GLB_APPROVAL_BYTE_LENGTH_MISMATCH");
+
+    const importPlan = await buildGlbImportPlan(
+      storedBytes.toString("base64"),
+      "auto",
+      submission.displayName,
+    );
+    if (
+      importPlan.sha256 !== submission.sha256 ||
+      importPlan.bytes !== submission.bytes ||
+      importPlan.assetType !== submission.assetType
+    ) {
+      throw new Error("GLB_APPROVAL_IMPORT_IDENTITY_MISMATCH");
+    }
+
+    await persistGlbBytes(
+      storedBytes,
+      importPlan.sha256,
+      glbStorageRoot(),
+    );
+    const canonicalStorageKey = "local-glb/" + importPlan.sha256 + ".glb";
+    const canonicalStorageUrl = "/api/assets/glb/" + importPlan.sha256 + ".glb";
+    await tx.insert(glbAssets).values({
+      id: assetId,
+      displayName: submission.displayName,
+      assetType: submission.assetType,
+      storageKey: canonicalStorageKey,
+      storageUrl: canonicalStorageUrl,
+      sha256: submission.sha256,
+      normalizationRevision: importPlan.normalization.revision,
+      normalizationSha256: importPlan.normalization.manifestSha256,
+      normalizationManifest: JSON.stringify(importPlan.normalization),
+      bytes: submission.bytes,
+      status: "approved",
+      createdByUserId: submission.submittedByUserId,
+      reviewedByUserId: values.reviewedByUserId,
+      reviewedAt,
+    });
     if (submission.assetType === "character") {
       const existingAppearance = (await tx.select({ userId: playerCharacterAppearances.userId }).from(playerCharacterAppearances).where(eq(playerCharacterAppearances.userId, submission.submittedByUserId)).limit(1))[0];
       if (!existingAppearance) await tx.insert(playerCharacterAppearances).values({ userId: submission.submittedByUserId, assetId, visibility: submission.visibility });

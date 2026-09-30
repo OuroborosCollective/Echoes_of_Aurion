@@ -495,6 +495,172 @@ export class GlbImportStore {
     });
   }
 
+
+  private async collectMissingNormalization(
+    connection: PoolConnection,
+    expectedMissingCount?: number,
+  ) {
+    const [rows] = await connection.query<RowDataPacket[]>(
+      "SELECT id, sha256, bytes, assetType, displayName, storageKey, storageUrl, " +
+        "normalizationRevision, normalizationSha256, normalizationManifest " +
+        "FROM glbAssets " +
+        "WHERE status = 'approved' " +
+        "AND storageKey LIKE 'local-glb/%' " +
+        "AND (normalizationRevision IS NULL OR normalizationSha256 IS NULL OR normalizationManifest IS NULL) " +
+        "ORDER BY sha256 FOR UPDATE",
+    );
+    if (
+      expectedMissingCount !== undefined &&
+      rows.length !== expectedMissingCount
+    )
+      throw new Error(
+        "GLB_NORMALIZATION_BACKFILL_COUNT_CHANGED:" + rows.length,
+      );
+
+    const partiallyNormalized = rows.filter(row => {
+      const values = [
+        row.normalizationRevision,
+        row.normalizationSha256,
+        row.normalizationManifest,
+      ];
+      return (
+        values.some(value => value !== null && value !== undefined) &&
+        !values.every(value => value !== null && value !== undefined)
+      );
+    });
+    if (partiallyNormalized.length)
+      throw new Error("GLB_NORMALIZATION_BACKFILL_PARTIAL_STATE");
+
+    const prepared = [];
+    for (const row of rows) {
+      const sha256 = String(row.sha256);
+      const expectedStorageKey = "local-glb/" + sha256 + ".glb";
+      if (String(row.storageKey) !== expectedStorageKey)
+        throw new Error("GLB_NORMALIZATION_BACKFILL_STORAGE_KEY_MISMATCH");
+
+      const bytes = await readStoredGlb(sha256, this.storageRoot);
+      if (bytes.length !== Number(row.bytes))
+        throw new Error("GLB_NORMALIZATION_BACKFILL_BYTE_LENGTH_MISMATCH");
+
+      const purpose = glbPurposeFromDisplayName(String(row.displayName));
+      const plan = await buildGlbImportPlan(
+        bytes.toString("base64"),
+        purpose,
+        String(row.displayName),
+      );
+      if (
+        plan.sha256 !== sha256 ||
+        plan.bytes !== Number(row.bytes) ||
+        plan.assetType !== row.assetType
+      )
+        throw new Error("GLB_NORMALIZATION_BACKFILL_SOURCE_IDENTITY_MISMATCH");
+
+      prepared.push(
+        Object.freeze({
+          assetId: String(row.id),
+          sha256,
+          bytes: Number(row.bytes),
+          normalizationRevision: plan.normalization.revision,
+          normalizationSha256: plan.normalization.manifestSha256,
+          normalizationManifest: JSON.stringify(plan.normalization),
+        }),
+      );
+    }
+    return prepared;
+  }
+
+  async inspectMissingNormalization(
+    actorUserId: number,
+    expectedMissingCount?: number,
+  ) {
+    return this.locked(actorUserId, async connection => {
+      const prepared = await this.collectMissingNormalization(
+        connection,
+        expectedMissingCount,
+      );
+      const identity = prepared.map(entry => ({
+        assetId: entry.assetId,
+        sha256: entry.sha256,
+        bytes: entry.bytes,
+        normalizationRevision: entry.normalizationRevision,
+        normalizationSha256: entry.normalizationSha256,
+      }));
+      return Object.freeze({
+        scanned: prepared.length,
+        updated: 0,
+        physicalCatalogEligible: 0,
+        receiptSha256: createHash("sha256")
+          .update(JSON.stringify(identity))
+          .digest("hex"),
+      });
+    });
+  }
+
+  async backfillMissingNormalization(
+    actorUserId: number,
+    expectedMissingCount?: number,
+  ) {
+    return this.locked(actorUserId, async connection => {
+      const prepared = await this.collectMissingNormalization(
+        connection,
+        expectedMissingCount,
+      );
+      for (const entry of prepared) {
+        await connection.execute(
+          "UPDATE glbAssets SET normalizationRevision = ?, normalizationSha256 = ?, normalizationManifest = ? " +
+            "WHERE id = ? AND sha256 = ? AND normalizationRevision IS NULL AND normalizationSha256 IS NULL AND normalizationManifest IS NULL",
+          [
+            entry.normalizationRevision,
+            entry.normalizationSha256,
+            entry.normalizationManifest,
+            entry.assetId,
+            entry.sha256,
+          ],
+        );
+      }
+      const identity = prepared.map(entry => ({
+        assetId: entry.assetId,
+        sha256: entry.sha256,
+        bytes: entry.bytes,
+        normalizationRevision: entry.normalizationRevision,
+        normalizationSha256: entry.normalizationSha256,
+      }));
+      const [readback] = await connection.query<RowDataPacket[]>(
+        "SELECT id, sha256, bytes, normalizationRevision, normalizationSha256, normalizationManifest " +
+          "FROM glbAssets " +
+          "WHERE status = 'approved' AND storageKey LIKE 'local-glb/%' " +
+          "AND (normalizationRevision IS NULL OR normalizationSha256 IS NULL OR normalizationManifest IS NULL) " +
+          "ORDER BY sha256",
+      );
+      if (readback.length !== 0)
+        throw new Error("GLB_NORMALIZATION_BACKFILL_READBACK_INCOMPLETE");
+
+      for (const entry of prepared) {
+        const [rows] = await connection.query<RowDataPacket[]>(
+          "SELECT id, sha256, bytes, normalizationRevision, normalizationSha256, normalizationManifest " +
+            "FROM glbAssets WHERE id = ? AND sha256 = ? LIMIT 1",
+          [entry.assetId, entry.sha256],
+        );
+        const row = rows[0];
+        if (!row || Number(row.bytes) !== entry.bytes)
+          throw new Error("GLB_NORMALIZATION_BACKFILL_READBACK_FAILED");
+        if (
+          storedNormalization(row).manifestSha256 !==
+          entry.normalizationSha256
+        )
+          throw new Error("GLB_NORMALIZATION_BACKFILL_READBACK_FAILED");
+      }
+      return Object.freeze({
+        scanned: prepared.length,
+        updated: prepared.length,
+        physicalCatalogEligible: prepared.length,
+        receiptSha256: createHash("sha256")
+          .update(JSON.stringify(identity))
+          .digest("hex"),
+      });
+    });
+  }
+
   async catalog() {
     const [rows] = await this.pool.query<
       RowDataPacket[]
