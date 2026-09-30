@@ -1549,3 +1549,13 @@ Learned: The original PR bundled a useful UI change with an unrelated runtime-ga
 Open: CI verification and merge.
 Next safe step: Merge when the clean PR evidence is complete, then stop this cleanup batch.
 
+### 2026-09-30 — HUD clockwork woods schema alignment (cleanup)
+Status: VERIFIED candidate integration; merge pending
+Task: Keep the Aurion HUD readback schema aligned with the authoritative open-world zone protocol.
+Decision: Add only the missing `clockwork_woods` zone to the presentation/readback Zod enum; no gameplay or persistence authority changes.
+Touched surfaces: `client/src/xaurion/integration/AurionAuthorityHud.tsx`.
+Evidence: Fresh branch created from current `main`; source-of-truth search confirms `clockwork_woods` in the server open-world protocol and regression fixtures.
+Learned: The stale original PR required rebasing before merge; extracting the one-line schema fix onto current main avoids carrying obsolete history or metadata.
+Open: CI verification and merge.
+Next safe step: Merge the clean PR and stop this cleanup batch.
+
