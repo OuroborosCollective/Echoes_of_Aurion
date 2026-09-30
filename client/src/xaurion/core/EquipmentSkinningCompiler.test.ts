@@ -7,7 +7,7 @@ import {
 import { visualItemDescriptorSchema } from "@shared/visualItemProtocol";
 import { compileEquipmentSkinning } from "./EquipmentSkinningCompiler";
 
-const hash = (char: string) => `sha256:${char.repeat(64)}`;
+const hash = (char: string) => char.repeat(64);
 
 const bones = [
   { boneId: "chest", sourceName: "Chest", parentBoneId: "spine", restPositionNormalized: [0, 0.65, 0] as const, restQuaternion: [0, 0, 0, 1] as const },
