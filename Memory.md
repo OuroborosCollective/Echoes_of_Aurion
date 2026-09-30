@@ -1539,4 +1539,13 @@ Evidence: Exact candidate head `e717d4af692e779403ae97bcfc12ee22d1acd837`; AIM-5
 Learned: Deterministic skinning must use the same canonical avatar coordinate frame as deterministic fitting; separating the weight fingerprint from gameplay/persistence authority keeps skinning reproducible without creating a second truth owner.
 Open: Merge PR #690 and stop this workstream.
 Next safe step: No new integration work after #690; leave the repository at the merged mainline and wait for the next explicit task.
+### 2026-09-30 — HUD clockwork woods schema alignment
+Status: VERIFIED candidate integration; merge pending
+Task: Keep the Aurion HUD readback schema aligned with the authoritative open-world zone protocol.
+Decision: Add only the missing `clockwork_woods` zone to the presentation/readback Zod enum; no gameplay or persistence authority changes.
+Touched surfaces: `client/src/xaurion/integration/AurionAuthorityHud.tsx`.
+Evidence: Clean branch was based directly on current `main`; source-of-truth search confirms `clockwork_woods` in `server/openWorldProtocol.ts`, region catalog, routers and regression fixtures.
+Learned: A strict client readback enum can reject a valid authoritative zone even when the backend contract is already correct.
+Open: CI verification and merge.
+Next safe step: Merge when the clean PR evidence is complete, then stop this cleanup batch.
 
