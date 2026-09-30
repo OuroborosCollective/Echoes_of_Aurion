@@ -1,1 +1,5 @@
 - For accessibility and UX on Landing Pages and Overlays: Ensure interactive elements have explicit focus/hover states (e.g. `focus-visible:ring-2`) and use `aria-busy` attributes paired with textual cues (e.g. 'Wird geladen...') when asynchronous network actions (like login, chat submit, forum posts) are processed.
+
+## 2026-09-30 - Enhance icon-only buttons with tooltips and loading states
+**Learning:** While `aria-label` is great for screen readers on icon-only buttons, sighted users navigating via mouse or keyboard benefit from visual tooltips provided by `title` attributes. Also, dynamically changing states like connecting or loading should be correctly communicated with `aria-busy` and explicit `title` attributes when the button is disabled during these actions.
+**Action:** Always verify that icon-only buttons provide a `title` attribute along with their `aria-label`. Ensure any loading states on buttons are communicated through `aria-busy` and, if disabled, an appropriate tooltip like `title="Wird geladen..."` (in German for this app context).
