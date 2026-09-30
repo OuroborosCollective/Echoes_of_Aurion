@@ -1539,4 +1539,13 @@ Evidence: Exact candidate head `e717d4af692e779403ae97bcfc12ee22d1acd837`; AIM-5
 Learned: Deterministic skinning must use the same canonical avatar coordinate frame as deterministic fitting; separating the weight fingerprint from gameplay/persistence authority keeps skinning reproducible without creating a second truth owner.
 Open: Merge PR #690 and stop this workstream.
 Next safe step: No new integration work after #690; leave the repository at the merged mainline and wait for the next explicit task.
+### 2026-09-30 — Community overlay accessibility cleanup
+Status: VERIFIED candidate integration; merge pending
+Task: Improve accessibility semantics for the Aurion community overlay without touching gameplay or runtime evidence gates.
+Decision: Add `aria-pressed` to community dock toggles, add titles to icon-only controls, and cover the state in focused regression tests; do not weaken runtime validation or add placeholder live catalog data.
+Touched surfaces: `client/src/components/CommunityOverlay.tsx`, `client/src/components/CommunityOverlay.test.tsx`.
+Evidence: Clean branch is based directly on current `main`; Home loading accessibility changes are already present in main and were not duplicated.
+Learned: The original PR bundled a useful UI change with an unrelated runtime-gate relaxation, so the safe unit is the UI/accessibility slice only.
+Open: CI verification and merge.
+Next safe step: Merge when the clean PR evidence is complete, then stop this cleanup batch.
 
