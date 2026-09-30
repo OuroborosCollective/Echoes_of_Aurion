@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
-import { compileVisualMorphologyRecipe, visualMorphologyTransform, type VisualMorphologyRecipe } from "./VisualItemMorphologyCompiler";
+import {
+  compileVisualMorphologyRecipe,
+  visualMorphologyTransform,
+  type VisualMorphologyCacheContext,
+  type VisualMorphologyRecipe,
+} from "./VisualItemMorphologyCompiler";
 
 export type VisualItemLod = 0 | 1 | 2;
 export const visualWeaponFamilies = ["blade", "axe", "mace", "spear", "dagger", "bow", "staff", "wand", "hammer", "scythe", "shield", "focus"] as const;
@@ -23,6 +28,9 @@ export type UnsupportedVisualItemGeometry = Readonly<{
   kind: "unsupported";
   lod: VisualItemLod;
   reason: "CATEGORY_UNSUPPORTED" | "WEAPON_FAMILY_UNSUPPORTED" | "ARMOR_SLOT_UNSUPPORTED";
+}>;
+export type VisualItemGeometryCompileOptions = Readonly<{
+  morphologyCacheContext?: VisualMorphologyCacheContext;
 }>;
 export type VisualItemGeometryCompileResult = GeneratedVisualItemGeometry | UnsupportedVisualItemGeometry;
 
@@ -258,11 +266,21 @@ function disposeGenerated(root: THREE.Object3D): void {
   root.clear();
 }
 
-export function compileVisualItemGeometry(descriptor: VisualItemDescriptor, lod: VisualItemLod): VisualItemGeometryCompileResult {
+export function compileVisualItemGeometry(
+  descriptor: VisualItemDescriptor,
+  lod: VisualItemLod,
+  options?: VisualItemGeometryCompileOptions,
+): VisualItemGeometryCompileResult {
   if (descriptor.category !== "weapon" && descriptor.category !== "armor") {
     return Object.freeze({ kind: "unsupported", lod, reason: "CATEGORY_UNSUPPORTED" });
   }
-  const morphology = compileVisualMorphologyRecipe(descriptor);
+  const morphology = compileVisualMorphologyRecipe(
+    descriptor,
+    undefined,
+    options?.morphologyCacheContext
+      ? { ...options.morphologyCacheContext, lod }
+      : undefined,
+  );
   const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
   let root: THREE.Group;
   let geometryKey: string;
