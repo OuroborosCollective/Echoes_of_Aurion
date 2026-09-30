@@ -1,4 +1,5 @@
 name: AIM-520 Equipment Skinning
+# Exact-head deterministic regression gate for generated armor skinning.
 
 on:
   pull_request:
