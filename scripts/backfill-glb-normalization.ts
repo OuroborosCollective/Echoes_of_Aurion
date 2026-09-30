@@ -37,13 +37,7 @@ async function main(): Promise<void> {
   if (!databaseUrl) throw new Error("DATABASE_URL_REQUIRED");
 
   const args = parseBackfillArgs(process.argv.slice(2));
-  const pool = createPool({
-    uri: databaseUrl,
-    connectionLimit: 2,
-    waitForConnections: true,
-    queueLimit: 4,
-    connectTimeout: 8000,
-  });
+  const pool = createPool(databaseUrl);
   const store = glbImportStore();
 
   try {
