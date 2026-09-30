@@ -1,1 +1,4 @@
 - For accessibility and UX on Landing Pages and Overlays: Ensure interactive elements have explicit focus/hover states (e.g. `focus-visible:ring-2`) and use `aria-busy` attributes paired with textual cues (e.g. 'Wird geladen...') when asynchronous network actions (like login, chat submit, forum posts) are processed.
+## 2026-09-30 - Optimize UI disabled tactile feedback
+**Learning:** When using tactile feedback animations (e.g., `motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95`), disabled states must explicitly cancel these animations to prevent unintended interactive feel.
+**Action:** Always append `disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100` alongside standard opacity and cursor changes. Also, ensure a descriptive `title` attribute is added for accessibility.
