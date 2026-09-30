@@ -456,7 +456,7 @@ describe("AIM-526 Visual Construction Property/Fuzz Suite", () => {
     );
 
     expect(contract).toBeNull();
-    expect(geometry.root.userData.aurionEquipmentSkinningFailure).toBe("PROFILE_INVALID");
+    expect(geometry.root.userData.aurionEquipmentSkinningFailure).toBe("AVATAR_RIGID");
     expect(gameplayMarkerKeys(geometry.root.userData)).toEqual([]);
     geometry.dispose();
   });
