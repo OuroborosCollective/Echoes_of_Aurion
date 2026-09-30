@@ -143,8 +143,11 @@ describe("EquipmentSkinningCompiler", () => {
     const second = rig();
     const firstResult = compileEquipmentSkinning(descriptor(), first.visualRoot, "morph-a", first.avatarRoot, profile(), 2);
     const secondResult = compileEquipmentSkinning(descriptor(), second.visualRoot, "morph-a", second.avatarRoot, profile(), 2);
-    expect(firstResult).not.toBeNull();
-    expect(secondResult).not.toBeNull();
+    if (!firstResult || !secondResult) {
+      throw new Error(
+        `SKINNING_NULL:${first.visualRoot.userData.aurionEquipmentSkinningFailure ?? "-"}:${second.visualRoot.userData.aurionEquipmentSkinningFailure ?? "-"}`,
+      );
+    }
     expect(firstResult?.skinningFingerprint).toBe(secondResult?.skinningFingerprint);
     expect(firstResult?.weightFingerprint).toBe(secondResult?.weightFingerprint);
     expect(firstSkinWeights(first.visualRoot).indices).toEqual(firstSkinWeights(second.visualRoot).indices);
@@ -154,7 +157,12 @@ describe("EquipmentSkinningCompiler", () => {
   it("replaces static armor meshes with shared-skeleton SkinnedMesh projections", () => {
     const value = rig();
     const result = compileEquipmentSkinning(descriptor(), value.visualRoot, "morph-a", value.avatarRoot, profile(), 2);
-    expect(result?.policy).toBe("surface-skin");
+    if (!result) {
+      throw new Error(
+        `SKINNING_NULL:${value.visualRoot.userData.aurionEquipmentSkinningFailure ?? "-"}`,
+      );
+    }
+    expect(result.policy).toBe("surface-skin");
     expect(result?.maxInfluences).toBe(4);
     expect(result?.vertexCount).toBeGreaterThan(0);
     expect(value.visualRoot.children).toHaveLength(1);
@@ -175,7 +183,11 @@ describe("EquipmentSkinningCompiler", () => {
   it("keeps zero-sum padding deterministic and every vertex fully weighted", () => {
     const value = rig();
     const result = compileEquipmentSkinning(descriptor(), value.visualRoot, "morph-a", value.avatarRoot, profile(), 2);
-    expect(result).not.toBeNull();
+    if (!result) {
+      throw new Error(
+        `SKINNING_NULL:${value.visualRoot.userData.aurionEquipmentSkinningFailure ?? "-"}`,
+      );
+    }
     const { weights } = firstSkinWeights(value.visualRoot);
     for (let index = 0; index < weights.length; index += 4)
       expect(Number(weights.slice(index, index + 4).reduce((sum, current) => sum + current, 0).toFixed(6))).toBe(1);
