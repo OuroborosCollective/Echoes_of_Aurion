@@ -12,6 +12,7 @@ import { glbManager } from "../core/GLBModelManager";
 import { equipmentAnchorAliases, equipmentLocalScale } from "../core/EquipmentAttachmentSizing";
 import { extractCanonicalAvatarProfile } from "../core/CanonicalAvatarProfile";
 import { fitEquipmentGroup } from "../core/EquipmentFitCompiler";
+import { compileEquipmentSkinning } from "../core/EquipmentSkinningCompiler";
 import { rebindSharedHumanoidRigVisual } from "../core/SharedHumanoidRig";
 import { selectEquipmentCatalogAsset } from "../core/UploadedAssetRuntime";
 import { VisualItemAttachmentController, type VisualItemAttachmentTarget } from "../core/VisualItemAttachmentController";
@@ -214,6 +215,7 @@ export class EquipmentCatalogProjection {
       if (!holder) return;
 
       let fitEvidence: ReturnType<typeof fitEquipmentGroup> | null = null;
+      let skinningEvidence: ReturnType<typeof compileEquipmentSkinning> | null = null;
       if (outcome.source === "procedural" && binding.visualDescriptor.category === "armor") {
         const visual = holder.children[0];
         const morphology = visual?.userData?.visualItem as { morphologyRecipeHash?: string } | undefined;
@@ -243,6 +245,15 @@ export class EquipmentCatalogProjection {
             profile,
             avatarHeightMeters,
           );
+          skinningEvidence = compileEquipmentSkinning(
+            binding.visualDescriptor,
+            visual,
+            morphology.morphologyRecipeHash,
+            this.engine.player.glbAvatarGroup,
+            profile,
+            avatarHeightMeters,
+          );
+          if (!skinningEvidence) throw new Error("EQUIPMENT_SKINNING_UNPROVABLE");
         } catch {
           // A fitted procedural armor projection is fail-closed when the canonical avatar surface cannot be proven.
           this.v2Controller.detach(binding.equipmentSlot);
@@ -261,6 +272,11 @@ export class EquipmentCatalogProjection {
           fitFingerprint: fitEvidence.fitFingerprint,
           fitVersion: fitEvidence.version,
           avatarProfileFingerprint: fitEvidence.avatarProfileFingerprint,
+        } : {}),
+        ...(skinningEvidence ? {
+          skinningFingerprint: skinningEvidence.skinningFingerprint,
+          skinningVersion: skinningEvidence.version,
+          skinningWeightFingerprint: skinningEvidence.weightFingerprint,
         } : {}),
       });
     }
