@@ -1529,3 +1529,14 @@ Evidence: Exact candidate head `06856df8d4d61a8c16cb66a6e43826abc155c054`; AIM-5
 Learned: Equipment scale becomes deterministic only when source geometry and target avatar bounds share the canonical avatar coordinate space; keeping the fit fingerprint downstream of confirmed descriptor identity preserves the Aurion authority boundary.
 Open: Merge candidate, then continue with the next highest-value open architecture slice while keeping broader pre-existing workflow failures explicitly separate from new regressions.
 Next safe step: Merge PR #688 at this exact head, then select the next open issue by architecture gain and verify it with the same Memory → integration → regression/runtime/evidence → one-entry → merge cycle.
+
+### 2026-09-30 — Deterministic equipment skinning compiler (AIM-520)
+Status: VERIFIED candidate integration; merge ready
+Task: Bind generated armor to the canonical avatar skeleton with deterministic, presentation-only skinning evidence.
+Decisions: Reuse the AIM-519 canonical avatar-root frame; derive at most four influences per vertex; quantize weights to 16-bit units; fingerprint the exact mapping; rebind generated armor to the live shared skeleton; fail closed when canonical skinning evidence is missing or invalid.
+Touched surfaces: `client/src/xaurion/core/EquipmentSkinningCompiler.ts`, `EquipmentCatalogProjection.ts`, focused regression suite, AIM-520 workflow and donor ledger.
+Evidence: Exact candidate head `e717d4af692e779403ae97bcfc12ee22d1acd837`; AIM-520 workflow run `36733099967` passed; Aurion Local Test Pack `36733100011` passed; Aurion PR Runtime Container Proof `36733100015` passed. Broader legacy workflows still report unrelated live/browser regressions, including `RETURN_STONE_LIVE_CATALOG_MISSING` and the existing GLB/V2 browser `glb-model-status=failed` path; they do not fail the AIM-520 focused gate.
+Learned: Deterministic skinning must use the same canonical avatar coordinate frame as deterministic fitting; separating the weight fingerprint from gameplay/persistence authority keeps skinning reproducible without creating a second truth owner.
+Open: Merge PR #690 and stop this workstream.
+Next safe step: No new integration work after #690; leave the repository at the merged mainline and wait for the next explicit task.
+
