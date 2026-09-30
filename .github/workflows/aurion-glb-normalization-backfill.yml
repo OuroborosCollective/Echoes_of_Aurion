@@ -57,13 +57,10 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install exact dependencies for the bound utility bundle
-        run: pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=1
-
       - name: Build deterministic backfill utility bundle
         run: |
           set -euo pipefail
-          pnpm exec esbuild scripts/backfill-glb-normalization.ts \
+          npm exec --yes --package=esbuild@0.25.0 -- esbuild scripts/backfill-glb-normalization.ts \
             --bundle \
             --packages=external \
             --platform=node \
