@@ -25,6 +25,10 @@ describe("worldChunkProtocol", () => {
     const adjacent = generateBaseWorldChunk({ ...baseInput, coordinate: { x: -2, z: 7 } });
     expect(first).toEqual(replay);
     expect(first.deterministicHash).toBe(replay.deterministicHash);
+    expect(first.worldGenerationRevision).toBe("0000000000000000000000000000000000000001");
+    const revised = generateBaseWorldChunk({ ...baseInput, worldGenerationRevision: "0000000000000000000000000000000000000002" });
+    expect(revised.worldGenerationRevision).toBe("0000000000000000000000000000000000000002");
+    expect(revised.deterministicHash).not.toBe(first.deterministicHash);
     expect(adjacent.deterministicHash).not.toBe(first.deterministicHash);
     expect(first.tiles).toHaveLength(256);
     expect(first.tiles.every(tile => Number.isSafeInteger(tile.heightMm))).toBe(true);

@@ -53,6 +53,7 @@ export type BaseChunkResource = {
 export type BaseWorldChunk = {
   worldId: string;
   worldSeedDigest: string;
+  worldGenerationRevision: string;
   ruleSetVersion: typeof AURION_WORLD_CHUNK_RULESET;
   coordinate: WorldChunkCoordinate;
   baseRevision: typeof WORLD_CHUNK_BASE_REVISION;
@@ -220,6 +221,7 @@ export function generateBaseWorldChunk(input: { worldId: string; worldSeed: stri
   const snapshot = {
     worldId: input.worldId,
     worldSeedDigest: worldSeedDigest(input.worldId, input.worldSeed),
+    worldGenerationRevision: input.worldGenerationRevision ?? DEFAULT_WORLD_GENERATION_REVISION,
     ruleSetVersion: AURION_WORLD_CHUNK_RULESET,
     coordinate: { ...input.coordinate },
     baseRevision: WORLD_CHUNK_BASE_REVISION,
