@@ -4,7 +4,7 @@
 set -euo pipefail
 
 readonly CONTAINER="echoes-of-aurion-aurion-1"
-readonly UTILITY="/tmp/aurion-glb-normalization-backfill.mjs"
+readonly UTILITY="/app/.aurion-glb-normalization-backfill.mjs"
 
 fail() {
   printf '%s\n' "$1" >&2
