@@ -3,7 +3,7 @@
 # GLB normalization workflow. Keep this file root-owned and mode 0755 after install.
 set -euo pipefail
 
-readonly CONTAINER="aurion"
+readonly CONTAINER="echoes-of-aurion-aurion-1"
 readonly UTILITY="/tmp/aurion-glb-normalization-backfill.mjs"
 
 fail() {
