@@ -125,54 +125,6 @@ function canonicalBoneIndices(
   return result;
 }
 
-function reconstructNormalizationOrigin(
-  avatarRoot: THREE.Object3D,
-  profile: CanonicalAvatarProfile,
-  skeleton: THREE.Skeleton,
-  boneIndices: Map<string, number>,
-  avatarHeightMeters: number,
-): THREE.Vector3 | null {
-  if (!Number.isFinite(avatarHeightMeters) || avatarHeightMeters <= 0) return null;
-  const rootBone = profile.bones.find(bone => bone.boneId === "root");
-  const rootIndex = rootBone ? boneIndices.get(rootBone.boneId) : undefined;
-  if (rootIndex === undefined) return null;
-  const rootInverse = avatarRoot.matrixWorld.clone().invert();
-  const rootInverseBind = skeleton.boneInverses[rootIndex];
-  if (!rootInverseBind) return null;
-  const rootRestWorld = rootInverseBind.clone().invert();
-  const rootRestAvatar = new THREE.Vector3().setFromMatrixPosition(
-    rootRestWorld.premultiply(rootInverse),
-  );
-  if (!finiteVector(rootRestAvatar)) return null;
-
-  const expectedRoot = new THREE.Vector3(
-    rootBone!.restPositionNormalized[0] * avatarHeightMeters,
-    rootBone!.restPositionNormalized[1] * avatarHeightMeters,
-    rootBone!.restPositionNormalized[2] * avatarHeightMeters,
-  );
-  const origin = rootRestAvatar.clone().sub(expectedRoot);
-
-  let maxResidual = 0;
-  for (const bone of profile.bones) {
-    const index = boneIndices.get(bone.boneId);
-    if (index === undefined) return null;
-    const inverseBind = skeleton.boneInverses[index];
-    if (!inverseBind) return null;
-    const restAvatar = new THREE.Vector3().setFromMatrixPosition(
-      inverseBind.clone().invert().premultiply(rootInverse),
-    );
-    if (!finiteVector(restAvatar)) return null;
-    const expected = new THREE.Vector3(
-      bone.restPositionNormalized[0] * avatarHeightMeters,
-      bone.restPositionNormalized[1] * avatarHeightMeters,
-      bone.restPositionNormalized[2] * avatarHeightMeters,
-    ).add(origin);
-    maxResidual = Math.max(maxResidual, restAvatar.distanceTo(expected));
-  }
-
-  return maxResidual <= avatarHeightMeters * 0.05 ? origin : null;
-}
-
 function pointSegmentDistance(point: Vec3, start: Vec3, end: Vec3): number {
   const px = point[0] - start[0];
   const py = point[1] - start[1];
@@ -384,14 +336,11 @@ export function compileEquipmentSkinning(
   const avatarHeightMillimeters = Math.round(avatarHeightMeters * 1000);
   if (avatarHeightMillimeters <= 0) return failSkinning(visualRoot, "AVATAR_HEIGHT_INVALID");
   const canonicalHeightMeters = avatarHeightMillimeters / 1000;
-  const origin = reconstructNormalizationOrigin(
-    avatarRoot,
-    profile,
-    host.skeleton,
-    boneIndices,
-    canonicalHeightMeters,
-  );
-  if (!origin) return failSkinning(visualRoot, "REST_FRAME_UNPROVABLE");
+  // EquipmentFitCompiler uses the avatar-root canonical frame directly:
+  // normalized profile coordinates are multiplied by avatar height with no hidden
+  // origin offset. Reuse that exact frame for skinning so animation state cannot
+  // influence the weight identity.
+  const origin = new THREE.Vector3();
   const segments = buildSegments(profile, boneIndices);
   const meshes: THREE.Mesh[] = [];
   visualRoot.traverse(node => {
