@@ -74,21 +74,21 @@ jobs:
       - name: Verify the running production container and persistent GLB volume
         run: |
           set -euo pipefail
-          test "$(docker inspect --format '{{.State.Running}}' aurion)" = "true"
-          test "$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' aurion)" = "${GITHUB_SHA}"
-          docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' aurion \
+          test "$(sudo docker inspect --format '{{.State.Running}}' aurion)" = "true"
+          test "$(sudo docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' aurion)" = "${GITHUB_SHA}"
+          sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' aurion \
             | grep -Fxq 'AURION_GLB_STORAGE_DIR=/var/lib/aurion/glb'
-          docker inspect --format '{{range .Mounts}}{{println .Name ":" .Destination}}{{end}}' aurion \
+          sudo docker inspect --format '{{range .Mounts}}{{println .Name ":" .Destination}}{{end}}' aurion \
             | grep -Fxq 'echoes-of-aurion-glb-assets:/var/lib/aurion/glb'
-          test "$(docker exec aurion printenv AURION_RELEASE_SHA)" = "${GITHUB_SHA}"
+          test "$(sudo docker exec aurion printenv AURION_RELEASE_SHA)" = "${GITHUB_SHA}"
 
       - name: Copy utility into the exact production container
-        run: docker cp /tmp/aurion-glb-normalization-backfill.mjs aurion:/tmp/aurion-glb-normalization-backfill.mjs
+        run: sudo docker cp /tmp/aurion-glb-normalization-backfill.mjs aurion:/tmp/aurion-glb-normalization-backfill.mjs
 
       - name: Read-only audit of the exact missing set
         run: |
           set -euo pipefail
-          docker exec aurion node /tmp/aurion-glb-normalization-backfill.mjs \
+          sudo docker exec aurion node /tmp/aurion-glb-normalization-backfill.mjs \
             --mode audit \
             --expected-missing-count "${EXPECTED_MISSING_COUNT}" \
             | tee glb-normalization-audit.json
@@ -105,7 +105,7 @@ jobs:
         if: ${{ inputs.mode == 'apply' }}
         run: |
           set -euo pipefail
-          docker exec aurion node /tmp/aurion-glb-normalization-backfill.mjs \
+          sudo docker exec aurion node /tmp/aurion-glb-normalization-backfill.mjs \
             --mode apply \
             --expected-missing-count "${EXPECTED_MISSING_COUNT}" \
             | tee glb-normalization-apply.json
@@ -115,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ inputs.mode }}" = "apply" ]; then
-            docker exec aurion node /tmp/aurion-glb-normalization-backfill.mjs \
+            sudo docker exec aurion node /tmp/aurion-glb-normalization-backfill.mjs \
               --mode readback \
               --expected-missing-count 0 \
               | tee glb-normalization-readback.json
@@ -133,7 +133,7 @@ jobs:
 
       - name: Remove temporary utility from production container
         if: always()
-        run: docker exec aurion rm -f /tmp/aurion-glb-normalization-backfill.mjs || true
+        run: sudo docker exec aurion rm -f /tmp/aurion-glb-normalization-backfill.mjs || true
 
       - uses: actions/upload-artifact@v4
         if: always()
