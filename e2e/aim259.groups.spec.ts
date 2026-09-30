@@ -54,8 +54,10 @@ async function launchAx1AndOpenGroups(page: Page) {
   }, { timeout: 45_000, intervals: [50, 100, 250, 500] }).not.toBe("waiting");
 
   if (await publicAvatar.isVisible().catch(() => false)) {
+    await publicAvatar.scrollIntoViewIfNeeded();
     await publicAvatar.click();
     const selectionReply = page.waitForResponse(response => response.url().endsWith("/api/game/public-player-characters/select") && response.request().method() === "POST");
+    await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).scrollIntoViewIfNeeded();
     await gate.getByRole("button", { name: "Dauerhaft wählen", exact: true }).click();
     const selected = await selectionReply;
     expect(selected.status()).toBe(200);

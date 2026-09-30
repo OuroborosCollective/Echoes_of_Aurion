@@ -153,7 +153,7 @@ export class AuthoritativeMovementZone {
 
     const players = new Array<CanonicalPlayerState>(this.sortedPeersByEntityId.length);
     for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
-      const peer = this.sortedPeersByEntityId[i];
+      const peer = this.sortedPeersByEntityId[i]!;
       const skillCooldowns: Record<string, number> = {};
       for (const [skillId, tick] of peer.skillCooldownUntilTick) {
         skillCooldowns[skillId] = tick;
@@ -747,7 +747,7 @@ export class AuthoritativeMovementZone {
     this.refreshPeerOrder();
     // ⚡ Bolt: Iterate over cached objects to avoid creating new ZonePresence objects on every tick
     for (let i = 0; i < this.sortedPeersByEntityId.length; i++) {
-      const peer = this.sortedPeersByEntityId[i];
+      const peer = this.sortedPeersByEntityId[i]!;
       peer.presence.position = peer.position;
       peer.presence.lastAcceptedClientSeq = peer.lastAcceptedClientSeq;
     }
