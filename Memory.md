@@ -1559,3 +1559,14 @@ Learned: The stale original PR required rebasing before merge; extracting the on
 Open: CI verification and merge.
 Next safe step: Merge the clean PR and stop this cleanup batch.
 
+
+
+### 2026-09-30 — GLB catalog normalization repair (production incident)
+Status: IMPLEMENTED; production repair pending
+Task: Restore catalog eligibility for the existing approved local GLB population after live MariaDB readback showed 86 approved/local assets but zero normalization-complete rows.
+Decisions: Recompute normalization only from the stored bytes through the canonical `buildGlbImportPlan()`; fail closed on SHA/byte/storage-key/partial-state drift; update only missing normalization fields; never fabricate manifests or invoke destructive reconciliation.
+Touched surfaces: `server/glbImportStore.ts`, `server/db.ts`, `server/glbImportMariaDb.test.ts`, `scripts/backfill-glb-normalization.ts`, `.github/workflows/aurion-glb-normalization-backfill.yml`, `server/glbNormalizationBackfillContract.test.ts`.
+Evidence: Candidate head `fa1cdd6865af894f9773f4982ffadc1fd6626025`. AIM-240 GLB regression: 13 test files / 59 tests passed, including 6 real MariaDB tests, plus `pnpm check` and `pnpm build`; its browser upload/render step still fails at the previously known `glb-model-status=failed` path. Aurion Local Test Pack run `36746402528` passed. Aurion PR Runtime Container Proof run `36746402420` passed. Aurion PR Runtime Candidate run `36746402449` remains blocked by the live `RETURN_STONE_LIVE_CATALOG_MISSING` readback, which is the production symptom this repair targets.
+Learned: The persistent volume and approved DB rows were healthy; catalog emptiness was caused entirely by missing normalization metadata, so the correct recovery is canonical byte-derived backfill with exact readback, not metadata guessing or gate relaxation.
+Open: Merge the repair after exact-head evidence review, then execute the explicit production `apply` workflow for the observed 86-row set and verify the public catalog.
+Next safe step: Run the production-bound audit first, apply only when the audited count is exactly 86, then capture final MariaDB/public catalog readback and re-run the live Return Stone candidate check.
