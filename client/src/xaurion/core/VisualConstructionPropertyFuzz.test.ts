@@ -81,7 +81,7 @@ function canonicalProfile(id: string, supportedSlots: readonly GlbEquipmentSlot[
       normalizedBounds: { min: value.min, max: value.max },
       clearanceRadiusNormalized: regionId.startsWith("torso") ? 0.04 : 0.02,
     };
-  });
+  }).sort((left, right) => left.regionId.localeCompare(right.regionId));
 
   const sockets = supportedSlots.map(equipmentSlot => ({
     equipmentSlot,
