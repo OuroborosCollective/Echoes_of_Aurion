@@ -1,0 +1,3 @@
+## 2023-10-24 - Pre-allocating Cached Arrays For Iterations
+**Learning:** For dynamic collection conversions in high-frequency game loops (like maps being processed dynamically on every tick), avoid `Array.from().sort()` or chained higher-order operations. Instead, resize an already existing cached array `cachedArray.length = collection.size`, repopulate it using `for...of`, and call `sort()` on the array to eliminate garbage collection overhead.
+**Action:** Apply this pattern dynamically during high frequency updates for arrays tracking items from `Maps`/`Sets` (e.g., sorting clients or processing zones dynamically per tick).
