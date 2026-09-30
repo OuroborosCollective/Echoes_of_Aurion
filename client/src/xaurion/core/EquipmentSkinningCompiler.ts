@@ -259,25 +259,6 @@ function quantizeInfluences(
     }));
 }
 
-function vertexAvatarNormalized(
-  avatarRoot: THREE.Object3D,
-  mesh: THREE.Mesh,
-  index: number,
-  origin: THREE.Vector3,
-  avatarHeightMeters: number,
-): Vec3 | null {
-  const position = mesh.geometry.getAttribute("position");
-  if (!position) return null;
-  const vertex = new THREE.Vector3(position.getX(index), position.getY(index), position.getZ(index));
-  vertex.applyMatrix4(mesh.matrixWorld);
-  vertex.sub(avatarRoot.localToWorld(new THREE.Vector3()));
-  return [
-    vertex.x - origin.x,
-    vertex.y - origin.y,
-    vertex.z - origin.z,
-  ].map(value => value / avatarHeightMeters) as Vec3;
-}
-
 function setSkinAttributes(
   geometry: THREE.BufferGeometry,
   mesh: THREE.Mesh,
@@ -335,30 +316,26 @@ function setSkinAttributes(
   return influenced;
 }
 
-function bakeMeshIntoHostSpace(
+function rebindMeshToHostSkeleton(
   source: THREE.Mesh,
   hostMesh: THREE.SkinnedMesh,
 ): THREE.SkinnedMesh {
-  const hostParent = hostMesh.parent;
-  if (!hostParent) throw new Error("AURION_EQUIPMENT_SKINNING_HOST_PARENT_MISSING");
   const sourceGeometry = source.geometry;
   const geometry = sourceGeometry.clone();
-  const toHostMeshLocal = hostMesh.matrixWorld.clone().invert().multiply(source.matrixWorld);
-  geometry.applyMatrix4(toHostMeshLocal);
-
   const skinned = new THREE.SkinnedMesh(geometry, source.material);
   skinned.name = source.name;
   skinned.visible = source.visible;
   skinned.castShadow = false;
   skinned.receiveShadow = true;
-  skinned.matrix.copy(hostMesh.matrix);
-  skinned.matrixAutoUpdate = false;
+  skinned.position.copy(source.position);
+  skinned.quaternion.copy(source.quaternion);
+  skinned.scale.copy(source.scale);
   skinned.bind(hostMesh.skeleton, hostMesh.bindMatrix.clone());
   skinned.userData.aurionEquipmentSkinning = Object.freeze({
     version: EQUIPMENT_SKINNING_VERSION,
     sourceMesh: source.name,
   });
-  hostParent.add(skinned);
+  source.parent?.add(skinned);
   source.removeFromParent();
   sourceGeometry.dispose();
   return skinned;
