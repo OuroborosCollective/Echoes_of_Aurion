@@ -133,8 +133,8 @@ function descriptor(index = 0, overrides: Partial<VisualItemDescriptor> = {}): V
     },
     source: {
       lootReceiptId: `fuzz-receipt-${index}`,
-      contextHash: sha(String.fromCharCode(97 + (index % 20))),
-      deterministicHash: sha(String.fromCharCode(65 + (index % 20))),
+      contextHash: sha((index % 16).toString(16)),
+      deterministicHash: sha(((index + 1) % 16).toString(16)),
       visualEventIndex: index,
     },
     visualSeed: seedHex.repeat(32),
@@ -385,6 +385,12 @@ describe("AIM-526 Visual Construction Property/Fuzz Suite", () => {
 
   it("uses the runtime-generated presentation path through a real AnimatedGlbActor anchor", async () => {
     const model = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 1.8, 0.35),
+      new THREE.MeshBasicMaterial(),
+    );
+    bodyMesh.position.y = 0.9;
+    model.add(bodyMesh);
     const anchor = new THREE.Group();
     anchor.name = "socketchest";
     model.add(anchor);
