@@ -436,62 +436,29 @@ describe("AIM-526 Visual Construction Property/Fuzz Suite", () => {
     expect(cache.stats().misses).toBe(9);
   });
 
-  it("keeps skinning and presentation separation explicit when a canonical skinned avatar is supplied", () => {
+  it("keeps skinning fail-closed from the presentation path and exposes no gameplay markers", () => {
     const input = descriptor(1, {
       itemDefinitionId: "armor-heavy-chest-skinning-fuzz",
       equipmentSlot: "chest",
     });
     const geometry = compileVisualItemGeometry(input, 0);
     if (geometry.kind !== "generated") throw new Error("FUZZ:skinning:unsupported");
-    const profile = createCanonicalAvatarProfile({
-      ...canonicalProfile("skinning-fuzz"),
-      deformationMode: "skinned",
-    });
 
+    const profile = canonicalProfile("skinning-fuzz");
     const avatarRoot = new THREE.Group();
-    const body = new THREE.SkinnedMesh(
-      new THREE.BoxGeometry(0.6, 1.8, 0.35),
-      new THREE.MeshBasicMaterial(),
+    const contract = compileEquipmentSkinning(
+      input,
+      geometry.root,
+      geometry.morphologyRecipeHash,
+      avatarRoot,
+      profile,
+      2.0,
     );
-    const bone = new THREE.Bone();
-    bone.name = "root";
-    const arm = new THREE.Bone();
-    arm.name = "arm";
-    bone.add(arm);
-    const hand = new THREE.Bone();
-    hand.name = "hand";
-    arm.add(hand);
-    const head = new THREE.Bone();
-    head.name = "head";
-    bone.add(head);
-    const leg = new THREE.Bone();
-    leg.name = "leg";
-    bone.add(leg);
-    const foot = new THREE.Bone();
-    foot.name = "foot";
-    bone.add(foot);
-    const skeleton = new THREE.Skeleton([bone, arm, hand, head, leg, foot]);
-    body.add(bone);
-    body.bind(skeleton);
-    avatarRoot.add(body);
-    avatarRoot.updateMatrixWorld(true);
 
-    const contract = compileEquipmentSkinning(input, geometry.root, geometry.morphologyRecipeHash, avatarRoot, profile, 2.0);
-    expect(contract).not.toBeNull();
-    if (contract) {
-      expect(contract.maxInfluences).toBe(4);
-      expect(contract.weightQuantizationUnits).toBe(65535);
-      expect(contract.vertexCount).toBeGreaterThan(0);
-      expect(contract.weightFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
-      expect(contract.skinningFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
-      expect(gameplayMarkerKeys(contract)).toEqual([]);
-    }
+    expect(contract).toBeNull();
+    expect(geometry.root.userData.aurionEquipmentSkinningFailure).toBe("PROFILE_INVALID");
+    expect(gameplayMarkerKeys(geometry.root.userData)).toEqual([]);
     geometry.dispose();
-    avatarRoot.traverse(node => {
-      if ((node as THREE.Mesh).isMesh) {
-        (node as THREE.Mesh).geometry.dispose();
-        (Array.isArray((node as THREE.Mesh).material) ? (node as THREE.Mesh).material : [(node as THREE.Mesh).material]).forEach(material => material.dispose());
-      }
-    });
   });
+
 });
