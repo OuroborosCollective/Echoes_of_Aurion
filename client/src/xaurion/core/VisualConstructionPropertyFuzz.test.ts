@@ -22,11 +22,8 @@ import {
   compileVisualMorphologyRecipe,
   VISUAL_MORPHOLOGY_GRAMMAR_VERSION,
 } from "./VisualItemMorphologyCompiler";
-import { createVisualItemMaterialBundle, visualItemMaterialProfile } from "./VisualItemMaterialCompiler";
-import {
-  resolveVisualItemRenderSource,
-  type VisualItemRenderSource,
-} from "./VisualItemGlbOverrideResolver";
+import { AurionVisualClock, createVisualItemMaterialBundle, visualItemMaterialProfile } from "./VisualItemMaterialCompiler";
+import { resolveVisualItemRenderSource } from "./VisualItemGlbOverrideResolver";
 import { VisualItemAttachmentController } from "./VisualItemAttachmentController";
 import { glbNormalizationTestFixture } from "./GlbNormalizationTestFixture.test";
 
@@ -283,7 +280,7 @@ describe("AIM-526 Visual Construction Property/Fuzz Suite", () => {
   it("binds avatar fit to canonical profile changes and keeps loot identity untouched", () => {
     const input = descriptor(1, { equipmentSlot: "chest", itemDefinitionId: "armor-heavy-chest-fuzz-fit" });
     const profileA = canonicalProfile("fit-a");
-    const profileBInput = profileA as unknown as CanonicalAvatarProfileInput;
+    const { protocol: _protocol, profileFingerprint: _fingerprint, ...profileBInput } = profileA;
     const profileB = createCanonicalAvatarProfile({
       ...profileBInput,
       avatarProfileId: "fit-b",
@@ -332,7 +329,7 @@ describe("AIM-526 Visual Construction Property/Fuzz Suite", () => {
         expect(gameplayMarkerKeys(profile)).toEqual([]);
         const geometry = compileVisualItemGeometry(input, lod);
         if (geometry.kind !== "generated") throw new Error(`FUZZ:material:${materialId}:lod${lod}`);
-        const bundle = createVisualItemMaterialBundle(input, lod, new (class extends (require("./VisualItemMaterialCompiler").AurionVisualClock) {})());
+        const bundle = createVisualItemMaterialBundle(input, lod, new AurionVisualClock());
         bundle.apply(geometry);
         geometry.root.traverse(node => {
           if (!(node as THREE.Mesh).isMesh) return;
@@ -392,7 +389,7 @@ describe("AIM-526 Visual Construction Property/Fuzz Suite", () => {
     anchor.name = "socketchest";
     model.add(anchor);
     const actor = new AnimatedGlbActor(model, [], 2);
-    const controller = new VisualItemAttachmentController(actor, new (class extends (require("./VisualItemMaterialCompiler").AurionVisualClock) {})());
+    const controller = new VisualItemAttachmentController(actor, new AurionVisualClock());
     const item = descriptor(1, {
       itemDefinitionId: "armor-heavy-chest-runtime-fuzz",
       equipmentSlot: "chest",
