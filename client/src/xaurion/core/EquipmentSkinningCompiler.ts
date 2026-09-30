@@ -360,6 +360,9 @@ export function compileEquipmentSkinning(
   if (!host) return null;
   const boneIndices = canonicalBoneIndices(profile, host.skeleton);
   if (!boneIndices) return null;
+  const avatarHeightMillimeters = Math.round(avatarHeightMeters * 1000);
+  if (avatarHeightMillimeters <= 0) return null;
+  const canonicalHeightMeters = avatarHeightMillimeters / 1000;
   const origin = reconstructNormalizationOrigin(
     avatarRoot,
     profile,
@@ -377,9 +380,6 @@ export function compileEquipmentSkinning(
   });
   if (!meshes.length) return null;
 
-  const avatarHeightMillimeters = Math.round(avatarHeightMeters * 1000);
-  if (avatarHeightMillimeters <= 0) return null;
-  const canonicalHeightMeters = avatarHeightMillimeters / 1000;
   const fingerprintParts: string[] = [
     descriptor.source.deterministicHash,
     descriptor.visualSeed,
@@ -404,7 +404,7 @@ export function compileEquipmentSkinning(
       fingerprintParts,
     );
     if (influencedVertices !== evidenceVertexCount) return null;
-    const skinned = bakeMeshIntoHostSpace(mesh, host.mesh);
+    const skinned = rebindMeshToHostSkeleton(mesh, host.mesh);
     meshEvidence.push(Object.freeze({
       meshName: skinned.name,
       vertexCount: evidenceVertexCount,
