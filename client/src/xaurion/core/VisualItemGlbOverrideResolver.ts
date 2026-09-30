@@ -1,6 +1,12 @@
 import { glbRuntimeCatalogSchema, selectGlbCatalogLod, type GlbCatalogEntry, type GlbEquipmentSlot, type GlbRuntimeCatalog } from "@shared/glbImportContract";
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
-import { compileVisualItemGeometry, type GeneratedVisualItemGeometry, type UnsupportedVisualItemGeometry, type VisualItemLod } from "./VisualItemGeometryCompiler";
+import {
+  compileVisualItemGeometry,
+  type GeneratedVisualItemGeometry,
+  type UnsupportedVisualItemGeometry,
+  type VisualItemGeometryCompileOptions,
+  type VisualItemLod,
+} from "./VisualItemGeometryCompiler";
 
 export type VisualItemGlbFallbackReason =
   | "NO_CONFIRMED_GLB_BINDING"
@@ -68,8 +74,13 @@ function expectedAssetType(slot: GlbEquipmentSlot): "weapon" | "armor" {
   return slot === "weapon" ? "weapon" : "armor";
 }
 
-function fallback(descriptor: VisualItemDescriptor, lod: VisualItemLod, reason: VisualItemGlbFallbackReason): VisualItemProceduralSource | VisualItemUnsupportedSource {
-  const geometry = compileVisualItemGeometry(descriptor, lod);
+function fallback(
+  descriptor: VisualItemDescriptor,
+  lod: VisualItemLod,
+  reason: VisualItemGlbFallbackReason,
+  options?: VisualItemGeometryCompileOptions,
+): VisualItemProceduralSource | VisualItemUnsupportedSource {
+  const geometry = compileVisualItemGeometry(descriptor, lod, options);
   if (geometry.kind === "generated") return Object.freeze({ kind: "procedural", lod, reason, geometry });
   return Object.freeze({ kind: "unsupported", lod, reason: geometry.reason === "CATEGORY_UNSUPPORTED" || geometry.reason === "ARMOR_SLOT_UNSUPPORTED" || geometry.reason === "WEAPON_FAMILY_UNSUPPORTED" ? geometry.reason : reason, geometry });
 }
@@ -85,28 +96,29 @@ export function resolveVisualItemRenderSource(
   descriptor: VisualItemDescriptor,
   lod: VisualItemLod,
   catalog: GlbRuntimeCatalog,
+  options?: VisualItemGeometryCompileOptions,
 ): VisualItemRenderSource {
   const slot = visualItemEquipmentSlot(descriptor);
-  if (!slot) return fallback(descriptor, lod, "ITEM_SLOT_UNSUPPORTED");
+  if (!slot) return fallback(descriptor, lod, "ITEM_SLOT_UNSUPPORTED", options);
 
   const assetId = descriptor.visual?.glbAssetId ?? null;
-  if (!assetId) return fallback(descriptor, lod, "NO_CONFIRMED_GLB_BINDING");
+  if (!assetId) return fallback(descriptor, lod, "NO_CONFIRMED_GLB_BINDING", options);
 
   const parsedCatalog = glbRuntimeCatalogSchema.safeParse(catalog);
-  if (!parsedCatalog.success) return fallback(descriptor, lod, "CATALOG_INVALID");
+  if (!parsedCatalog.success) return fallback(descriptor, lod, "CATALOG_INVALID", options);
 
   const matches = parsedCatalog.data.entries.filter(entry => entry.assetId === assetId);
-  if (matches.length === 0) return fallback(descriptor, lod, "ASSET_NOT_IN_CATALOG");
-  if (matches.length !== 1) return fallback(descriptor, lod, "ASSET_ID_AMBIGUOUS");
+  if (matches.length === 0) return fallback(descriptor, lod, "ASSET_NOT_IN_CATALOG", options);
+  if (matches.length !== 1) return fallback(descriptor, lod, "ASSET_ID_AMBIGUOUS", options);
   const entry = matches[0]!;
 
-  if (entry.purpose !== "equipment") return fallback(descriptor, lod, "ASSET_PURPOSE_MISMATCH");
-  if (entry.targetKey !== null) return fallback(descriptor, lod, "ASSET_TARGET_KEY_FORBIDDEN");
-  if (entry.equipmentSlot !== slot) return fallback(descriptor, lod, "ASSET_SLOT_MISMATCH");
-  if (entry.assetType !== expectedAssetType(slot)) return fallback(descriptor, lod, "ASSET_TYPE_MISMATCH");
+  if (entry.purpose !== "equipment") return fallback(descriptor, lod, "ASSET_PURPOSE_MISMATCH", options);
+  if (entry.targetKey !== null) return fallback(descriptor, lod, "ASSET_TARGET_KEY_FORBIDDEN", options);
+  if (entry.equipmentSlot !== slot) return fallback(descriptor, lod, "ASSET_SLOT_MISMATCH", options);
+  if (entry.assetType !== expectedAssetType(slot)) return fallback(descriptor, lod, "ASSET_TYPE_MISMATCH", options);
 
   const variant = selectGlbCatalogLod(entry, lod);
-  if (variant.targetKey !== null || variant.storageUrl !== `/api/assets/glb/${variant.sha256}.glb`) return fallback(descriptor, lod, "ASSET_STORAGE_MISMATCH");
+  if (variant.targetKey !== null || variant.storageUrl !== `/api/assets/glb/${variant.sha256}.glb`) return fallback(descriptor, lod, "ASSET_STORAGE_MISMATCH", options);
 
   const safeEntry = Object.freeze({ ...entry, sha256: variant.sha256, storageUrl: variant.storageUrl });
   return Object.freeze({

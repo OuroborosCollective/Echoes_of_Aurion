@@ -1,4 +1,9 @@
 import type { VisualItemDescriptor } from "@shared/visualItemProtocol";
+import {
+  visualConstructionCacheKey,
+  type VisualConstructionLod,
+  type VisualConstructionRuntimeCache,
+} from "./VisualConstructionRuntimeCache";
 
 export const VISUAL_MORPHOLOGY_PROTOCOL = "aurion.visual-morphology.v1" as const;
 export const VISUAL_MORPHOLOGY_GRAMMAR_VERSION = "aurion-visual-morphology.v1" as const;
@@ -24,6 +29,13 @@ export type VisualMorphologyRecipe = Readonly<{
 export type VisualMorphologyTransform = Readonly<{
   positionScale: readonly [number, number, number];
   scale: readonly [number, number, number];
+}>;
+
+export type VisualMorphologyCacheContext = Readonly<{
+  cache: VisualConstructionRuntimeCache<VisualMorphologyRecipe>;
+  avatarProfileVersion: string;
+  fitVersion: string;
+  lod: VisualConstructionLod;
 }>;
 
 const HEX64 = /^[a-f0-9]{64}$/;
@@ -68,17 +80,10 @@ function bindingText(descriptor: VisualItemDescriptor, grammarVersion: string): 
   ].join("::");
 }
 
-export function compileVisualMorphologyRecipe(
+function compileUncachedRecipe(
   descriptor: VisualItemDescriptor,
-  grammarVersion: string = VISUAL_MORPHOLOGY_GRAMMAR_VERSION,
+  grammarVersion: string,
 ): VisualMorphologyRecipe {
-  if (!HEX64.test(descriptor.visualSeed)) {
-    throw new Error("VISUAL_MORPHOLOGY_SEED_INVALID");
-  }
-  if (!grammarVersion.trim()) {
-    throw new Error("VISUAL_MORPHOLOGY_GRAMMAR_VERSION_REQUIRED");
-  }
-
   const silhouetteVariant = seedByte(descriptor.visualSeed, 0) % 16;
   const proportionXbp = BP_MIN + (seedByte(descriptor.visualSeed, 1) % ((BP_MAX - BP_MIN) + 1));
   const proportionYbp = BP_MIN + (seedByte(descriptor.visualSeed, 2) % ((BP_MAX - BP_MIN) + 1));
@@ -105,6 +110,31 @@ export function compileVisualMorphologyRecipe(
     ornamentVariant,
     recipeHash,
   });
+}
+
+export function compileVisualMorphologyRecipe(
+  descriptor: VisualItemDescriptor,
+  grammarVersion: string = VISUAL_MORPHOLOGY_GRAMMAR_VERSION,
+  cacheContext?: VisualMorphologyCacheContext,
+): VisualMorphologyRecipe {
+  if (!HEX64.test(descriptor.visualSeed)) {
+    throw new Error("VISUAL_MORPHOLOGY_SEED_INVALID");
+  }
+  if (!grammarVersion.trim()) {
+    throw new Error("VISUAL_MORPHOLOGY_GRAMMAR_VERSION_REQUIRED");
+  }
+
+  const build = () => compileUncachedRecipe(descriptor, grammarVersion);
+  if (!cacheContext) return build();
+
+  const key = visualConstructionCacheKey({
+    descriptorHash: descriptor.source.deterministicHash,
+    grammarVersion,
+    avatarProfileVersion: cacheContext.avatarProfileVersion,
+    fitVersion: cacheContext.fitVersion,
+    lod: cacheContext.lod,
+  });
+  return cacheContext.cache.getOrCreate(key, build);
 }
 
 function stablePartBias(partName: string, recipe: VisualMorphologyRecipe): readonly [number, number, number] {

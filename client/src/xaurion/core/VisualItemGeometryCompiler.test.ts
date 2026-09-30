@@ -10,6 +10,7 @@ import {
   type GeneratedVisualItemGeometry,
   type VisualItemLod,
 } from "./VisualItemGeometryCompiler";
+import { VisualConstructionRuntimeCache } from "./VisualConstructionRuntimeCache";
 
 const hash = (char: string) => char.repeat(64);
 const lods: readonly VisualItemLod[] = [0, 1, 2];
@@ -113,6 +114,32 @@ describe("VisualItemGeometryCompiler", () => {
       first.dispose();
       replay.dispose();
     }
+  });
+
+
+
+  it("reuses the canonical morphology recipe without changing geometry fingerprints", () => {
+    const cache = new VisualConstructionRuntimeCache<ReturnType<typeof compileVisualMorphologyRecipe>>(8);
+    const input = descriptor({ itemDefinitionId: "weapon-spear-cache-v2", familyId: "spear" });
+    const cacheContext = {
+      cache,
+      avatarProfileVersion: "aurion-avatar-profile.v1",
+      fitVersion: "aurion-equipment-fit.v1",
+      lod: 0 as const,
+    };
+
+    const uncached = expectGenerated(compileVisualItemGeometry(input, 0));
+    const cachedA = expectGenerated(compileVisualItemGeometry(input, 0, { morphologyCacheContext: cacheContext }));
+    const cachedB = expectGenerated(compileVisualItemGeometry(input, 0, { morphologyCacheContext: cacheContext }));
+
+    expect(cachedA.morphologyRecipeHash).toBe(uncached.morphologyRecipeHash);
+    expect(cachedA.structuralFingerprint).toBe(uncached.structuralFingerprint);
+    expect(cachedB.structuralFingerprint).toBe(cachedA.structuralFingerprint);
+    expect(cache.stats()).toMatchObject({ size: 1, hits: 1, misses: 1, evictions: 0 });
+
+    uncached.dispose();
+    cachedA.dispose();
+    cachedB.dispose();
   });
 
   it("disposes every generated geometry and shared placeholder material exactly once", () => {

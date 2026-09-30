@@ -835,6 +835,12 @@
       "role": "CAPABILITY"
     },
     {
+      "path": "client/src/xaurion/core/EquipmentSkinningCompiler.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "CAPABILITY"
+    },
+    {
       "path": "client/src/xaurion/core/GLBModelManager.ts",
       "donor": "AX1",
       "capabilityId": "client.renderer-runtime",
@@ -923,6 +929,12 @@
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",
       "role": "SUPPORT"
+    },
+    {
+      "path": "client/src/xaurion/core/VisualConstructionRuntimeCache.ts",
+      "donor": "AX1",
+      "capabilityId": "client.visible-runtime",
+      "role": "CAPABILITY"
     },
     {
       "path": "client/src/xaurion/core/VisualItemAttachmentController.ts",
@@ -1595,12 +1607,6 @@
       "donor": "WASD",
       "capabilityId": "npc.mob-fsm",
       "role": "SUPPORT"
-    },
-    {
-      "path": "client/src/xaurion/core/EquipmentSkinningCompiler.ts",
-      "donor": "AX1",
-      "capabilityId": "client.visible-runtime",
-      "role": "CAPABILITY"
     }
   ],
   "surfaceInventoryRevision": "19dd2dd24641c64b1adb58a1a1c3055a9c838540",
