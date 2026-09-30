@@ -1518,3 +1518,14 @@ Evidence: PR #612 merged into `main` as merge commit `9845857bd598c6d41eb7a8c36e
 Learned: The atlas lane is already materially present on the current Aurion mainline; the remaining visual/performance questions must not be silently converted into gameplay truth.
 Open: The newly uploaded visual reference sheets are asset inputs for a subsequent intake/manifest step, not evidence that those exact image bytes are already shipped in production.
 Next safe step: Add the uploaded sources through the canonical Aurion asset-intake/catalog lane, then perform runtime/browser readback before claiming live use.
+
+
+### 2026-09-30 — Deterministic equipment fit compiler (AIM-519)
+Status: VERIFIED candidate integration; merge pending
+Task: Bind procedural armor presentation to the canonical avatar surface through deterministic, fail-closed equipment fitting.
+Decisions: Keep equipment fitting presentation-only; derive target bounds from the canonical avatar profile; quantify scale in basis points and translation in millimeters; bind the result to the VisualItemDescriptor, morphology recipe and avatar profile fingerprints; reject unsupported avatar profiles or non-armor descriptors instead of inventing fallback identity.
+Touched surfaces: `client/src/xaurion/core/EquipmentFitCompiler.ts`, `EquipmentCatalogProjection.ts`, focused regression suite and AIM-519 workflow; donor ledger updated only for the classified runtime surface.
+Evidence: Exact candidate head `06856df8d4d61a8c16cb66a6e43826abc155c054`; AIM-519 workflow run `36624287817` passed its focused tests, `pnpm check` and `pnpm build`; Aurion Local Test Pack `36624287888` passed; Aurion PR Runtime Container Proof `36624287721` passed. Broader legacy visual/runtime workflows still report unrelated failures, including the existing Return Stone live-catalog readback failure, so those are not treated as AIM-519 proof.
+Learned: Equipment scale becomes deterministic only when source geometry and target avatar bounds share the canonical avatar coordinate space; keeping the fit fingerprint downstream of confirmed descriptor identity preserves the Aurion authority boundary.
+Open: Merge candidate, then continue with the next highest-value open architecture slice while keeping broader pre-existing workflow failures explicitly separate from new regressions.
+Next safe step: Merge PR #688 at this exact head, then select the next open issue by architecture gain and verify it with the same Memory → integration → regression/runtime/evidence → one-entry → merge cycle.

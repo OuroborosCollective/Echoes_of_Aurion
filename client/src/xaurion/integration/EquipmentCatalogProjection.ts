@@ -10,6 +10,8 @@ import type { GlbEquipmentSlot, GlbRuntimeCatalog } from "@shared/glbImportContr
 import type { MMOEngine } from "../core/MMOEngine";
 import { glbManager } from "../core/GLBModelManager";
 import { equipmentAnchorAliases, equipmentLocalScale } from "../core/EquipmentAttachmentSizing";
+import { extractCanonicalAvatarProfile } from "../core/CanonicalAvatarProfile";
+import { fitEquipmentGroup } from "../core/EquipmentFitCompiler";
 import { rebindSharedHumanoidRigVisual } from "../core/SharedHumanoidRig";
 import { selectEquipmentCatalogAsset } from "../core/UploadedAssetRuntime";
 import { VisualItemAttachmentController, type VisualItemAttachmentTarget } from "../core/VisualItemAttachmentController";
@@ -209,13 +211,57 @@ export class EquipmentCatalogProjection {
     if (outcome.status === "attached") {
       this.removeCompat(binding.equipmentSlot);
       const holder = this.holders.get(binding.equipmentSlot);
-      if (holder) holder.userData.confirmedEquipment = Object.freeze({
+      if (!holder) return;
+
+      let fitEvidence: ReturnType<typeof fitEquipmentGroup> | null = null;
+      if (outcome.source === "procedural" && binding.visualDescriptor.category === "armor") {
+        const visual = holder.children[0];
+        const morphology = visual?.userData?.visualItem as { morphologyRecipeHash?: string } | undefined;
+        if (!(visual instanceof THREE.Group) || !morphology?.morphologyRecipeHash) {
+          this.v2Controller.detach(binding.equipmentSlot);
+          return;
+        }
+        try {
+          // Generated armor is fitted in canonical avatar-root space, not in a socket's local space.
+          // The holder is identity-transformed, so reparenting preserves the procedural visual
+          // coordinates while making the fit target and source bounds share one coordinate system.
+          holder.removeFromParent();
+          this.engine.player.glbAvatarGroup.add(holder);
+          holder.position.set(0, 0, 0);
+          holder.quaternion.identity();
+          holder.scale.setScalar(1);
+          holder.updateMatrixWorld(true);
+
+          const profile = extractCanonicalAvatarProfile(this.engine.player.glbAvatarGroup, {
+            avatarProfileId: this.avatarIdentity,
+          });
+          const avatarHeightMeters = this.engine.player.glbPresentationEvidence?.()?.heightMeters ?? 2;
+          fitEvidence = fitEquipmentGroup(
+            binding.visualDescriptor,
+            visual,
+            morphology.morphologyRecipeHash,
+            profile,
+            avatarHeightMeters,
+          );
+        } catch {
+          // A fitted procedural armor projection is fail-closed when the canonical avatar surface cannot be proven.
+          this.v2Controller.detach(binding.equipmentSlot);
+          return;
+        }
+      }
+
+      holder.userData.confirmedEquipment = Object.freeze({
         slot: binding.equipmentSlot,
         itemId: binding.itemId,
         version: binding.version,
         receiptId: binding.receiptId,
         descriptorHash: binding.visualDescriptor.source.deterministicHash,
         source: outcome.source,
+        ...(fitEvidence ? {
+          fitFingerprint: fitEvidence.fitFingerprint,
+          fitVersion: fitEvidence.version,
+          avatarProfileFingerprint: fitEvidence.avatarProfileFingerprint,
+        } : {}),
       });
     }
   }
