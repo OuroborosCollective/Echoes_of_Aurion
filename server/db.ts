@@ -2589,9 +2589,7 @@ export async function reviewPlayerGlbSubmission(values: { submissionId: string; 
     const canonicalStorageUrl = "/api/assets/glb/" + importPlan.sha256 + ".glb";
     await tx.insert(glbAssets).values({
       id: assetId,
-      displayName: importPlan.classification.assetType === submission.assetType
-        ? submission.displayName
-        : `GLB approval asset ${importPlan.sha256.slice(0, 12)}`,
+      displayName: submission.displayName,
       assetType: submission.assetType,
       storageKey: canonicalStorageKey,
       storageUrl: canonicalStorageUrl,
