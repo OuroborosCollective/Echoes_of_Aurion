@@ -130,6 +130,27 @@ describe("VisualItemAttachmentController", () => {
     actor.dispose();
   });
 
+
+  it("reuses the bounded morphology cache across repeated procedural construction", async () => {
+    const { actor } = makeActor(["weapon"]);
+    const controller = new VisualItemAttachmentController(actor, new AurionVisualClock(), vi.fn());
+    const item = descriptor({ receipt: "cache-receipt" });
+
+    expect((await controller.apply(item, 0, catalog())).status).toBe("attached");
+    expect((await controller.apply(item, 0, catalog())).status).toBe("attached");
+
+    expect(controller.constructionCacheEvidence()).toMatchObject({
+      size: 1,
+      hits: 1,
+      misses: 1,
+      evictions: 0,
+      capacity: 128,
+    });
+    controller.dispose();
+    expect(controller.constructionCacheEvidence().size).toBe(0);
+    actor.dispose();
+  });
+
   it("loads an exact catalog GLB clone and attaches it without disposing shared loader resources", async () => {
     const { actor } = makeActor(["weapon"]);
     const scene = loadedVisual();
