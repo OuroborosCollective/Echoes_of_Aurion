@@ -347,6 +347,66 @@ describe.skipIf(!enabled)(
       expect(Number(active[0].count)).toBe(0);
     }, 45_000);
 
+
+    it("repairs a legacy approved local GLB with missing normalization metadata without changing asset identity", async () => {
+      const bytes = testGlb("Aurion_Legacy_Backfill_Spear_Weapon");
+      const contentBase64 = bytes.toString("base64");
+      const plan = await buildGlbImportPlan(
+        contentBase64,
+        "auto",
+        "Aurion_Legacy_Backfill_Spear_Weapon.glb",
+      );
+      const assetId = "legacy-glb-normalization-case";
+      await pool.execute(
+        "INSERT INTO glbAssets (id, displayName, assetType, storageKey, storageUrl, sha256, bytes, status, createdByUserId, reviewedByUserId, reviewedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          assetId,
+          "Aurion Legacy Backfill Spear",
+          plan.assetType,
+          "local-glb/" + plan.sha256 + ".glb",
+          "/api/assets/glb/" + plan.sha256 + ".glb",
+          plan.sha256,
+          bytes.length,
+          "approved",
+          admin,
+          admin,
+          new Date(),
+        ],
+      );
+      await writeFile(path.join(root, plan.sha256 + ".glb"), bytes);
+
+      const audit = await store.inspectMissingNormalization(admin, 1);
+      expect(audit).toMatchObject({ scanned: 1, updated: 0 });
+
+      const repaired = await store.backfillMissingNormalization(admin, 1);
+      expect(repaired).toMatchObject({ scanned: 1, updated: 1 });
+
+      const [persisted] = await pool.query<RowDataPacket[]>(
+        "SELECT id, sha256, bytes, normalizationRevision, normalizationSha256, normalizationManifest FROM glbAssets WHERE id = ?",
+        [assetId],
+      );
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0]).toMatchObject({
+        id: assetId,
+        sha256: plan.sha256,
+        bytes: bytes.length,
+        normalizationRevision: plan.normalization.revision,
+        normalizationSha256: plan.normalization.manifestSha256,
+      });
+      expect(JSON.parse(String(persisted[0]!.normalizationManifest))).toEqual(plan.normalization);
+      expect(await store.approvedBytes(plan.sha256)).toEqual(bytes);
+      const catalog = await store.catalog();
+      expect(catalog.entries.some(entry => entry.assetId === assetId)).toBe(true);
+
+      const second = await store.inspectMissingNormalization(admin, 0);
+      expect(second).toMatchObject({ scanned: 0, updated: 0 });
+      const idempotent = await store.backfillMissingNormalization(admin, 0);
+      expect(idempotent).toMatchObject({ scanned: 0, updated: 0 });
+
+      await pool.execute("DELETE FROM glbAssets WHERE id = ?", [assetId]);
+      await rm(path.join(root, plan.sha256 + ".glb"), { force: true });
+    }, 45_000);
+
     it("persists normalization manifests and rejects catalog/reconciliation drift", async () => {
       const bytes = testGlb("Aurion_Normalization_Spear_Weapon");
       const contentBase64 = bytes.toString("base64");
