@@ -197,6 +197,56 @@ describe("bounded, verified GLB ownership", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
+  it("binds the authoritative catalog before loading a confirmed storage URL", async () => {
+    vi.stubGlobal("crypto", webcrypto);
+    const bytes = testAnimatedPlayerGlb("catalog-bound-public-player", true);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const plan = await buildGlbImportPlan(
+      bytes.toString("base64"),
+      "player-public",
+      "catalog-bound-public-player.glb"
+    );
+    const url = `/api/assets/glb/${sha256}.glb`;
+    const fetch = vi.fn(async (request: string) => {
+      if (request === "/api/game/glb-catalog") {
+        return new Response(
+          JSON.stringify({
+            version: "aurion.glb-import.v1",
+            revision: "c".repeat(64),
+            entries: [
+              {
+                assetId: plan.assetId,
+                sha256,
+                displayName: "Catalog-bound public player",
+                assetType: "character",
+                storageUrl: url,
+                targetKey: null,
+                purpose: "player-public",
+                subcategory: "rigged-character",
+                equipmentSlot: null,
+                normalization: plan.normalization,
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      return new Response(bytes, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    const loaded = await glbManager.loadModel(url);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/game/glb-catalog",
+      expect.anything()
+    );
+    expect(fetch).toHaveBeenNthCalledWith(2, url, expect.anything());
+    expect(loaded.scene.userData.aurionNormalization.sourceSha256).toBe(sha256);
+    releaseGlbTree(loaded.scene);
+  });
+
   it("loads each physical LOD with its own verified normalization and manifest distance", async () => {
     vi.stubGlobal("crypto", webcrypto);
     const physical = await Promise.all(

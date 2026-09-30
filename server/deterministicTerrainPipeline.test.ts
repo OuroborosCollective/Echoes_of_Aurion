@@ -122,6 +122,7 @@ describe("AIM-599 deterministic terrain pipeline", () => {
       ...input(-3, 7),
     });
     const terrain = generateDeterministicTerrainChunk(input(-3, 7));
+    expect(base.worldGenerationRevision).toBe(terrain.worldGenerationRevision);
     expect(base.tiles.map(tile => tile.heightMm)).toEqual(
       terrain.tiles.map(tile => tile.heightMm)
     );

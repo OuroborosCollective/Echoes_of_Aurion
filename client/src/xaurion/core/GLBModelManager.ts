@@ -305,12 +305,29 @@ export class GLBModelManager {
     urlOrId: string,
     normalizationOverride?: GlbNormalizationManifest
   ): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
-    const found = this.catalog.find(
+    let found = this.catalog.find(
       entry =>
         entry.id === urlOrId ||
         entry.url === urlOrId ||
         entry.lods?.some(lod => lod.storageUrl === urlOrId)
     );
+    // Runtime consumers may receive a confirmed storage URL before the
+    // operational catalog hook has completed. Bind the server-authoritative
+    // catalog before decoding so normalization is never guessed or omitted.
+    if (
+      !found &&
+      this.catalog.length === 0 &&
+      !normalizationOverride &&
+      /^\/api\/assets\/glb\/[a-f0-9]{64}\.glb$/.test(urlOrId)
+    ) {
+      await this.fetchCatalog();
+      found = this.catalog.find(
+        entry =>
+          entry.id === urlOrId ||
+          entry.url === urlOrId ||
+          entry.lods?.some(lod => lod.storageUrl === urlOrId)
+      );
+    }
     const variant = found?.lods?.find(lod => lod.storageUrl === urlOrId);
     const url = found?.id === urlOrId ? found.url : urlOrId;
     const match = /^\/api\/assets\/glb\/([a-f0-9]{64})\.glb$/.exec(url);

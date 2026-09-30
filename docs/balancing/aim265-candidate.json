@@ -76,7 +76,7 @@
       },
       {
         "path": "shared/worldChunkProtocol.ts",
-        "sha256": "2b62e0c511536746e97bb60b149450bfd0410437d3d89296f7dc6ebd164ccda2"
+        "sha256": "4c3f05eec30cd9ca994acb249132ba7af6102cda50ed3155f8cf445882b04da4"
       },
       {
         "path": "shared/worldChunkStreamingProtocol.ts",
@@ -6228,7 +6228,7 @@
         "x": -1,
         "z": -1
       },
-      "hash": "fnv1a-e870defb",
+      "hash": "fnv1a-14428b71",
       "resources": [
         {
           "id": "base:-1:-1:resource:1",
@@ -6417,7 +6417,7 @@
         "x": -1,
         "z": 0
       },
-      "hash": "fnv1a-a56c790b",
+      "hash": "fnv1a-03e5fb61",
       "resources": [
         {
           "id": "base:-1:0:resource:0",
@@ -6588,7 +6588,7 @@
         "x": -1,
         "z": 1
       },
-      "hash": "fnv1a-424f89a4",
+      "hash": "fnv1a-db7fcca4",
       "resources": [
         {
           "id": "base:-1:1:resource:0",
@@ -6768,7 +6768,7 @@
         "x": 0,
         "z": -1
       },
-      "hash": "fnv1a-6ef4e4a3",
+      "hash": "fnv1a-1b4f7a09",
       "resources": [
         {
           "id": "base:0:-1:resource:0",
@@ -6957,7 +6957,7 @@
         "x": 0,
         "z": 0
       },
-      "hash": "fnv1a-4760b780",
+      "hash": "fnv1a-cb018ce8",
       "resources": [
         {
           "id": "base:0:0:resource:3",
@@ -7137,7 +7137,7 @@
         "x": 0,
         "z": 1
       },
-      "hash": "fnv1a-fcc894d5",
+      "hash": "fnv1a-a9908b3f",
       "resources": [
         {
           "id": "base:0:1:resource:0",
@@ -7326,7 +7326,7 @@
         "x": 1,
         "z": -1
       },
-      "hash": "fnv1a-a23e6ab8",
+      "hash": "fnv1a-fc91c050",
       "resources": [
         {
           "id": "base:1:-1:resource:0",
@@ -7515,7 +7515,7 @@
         "x": 1,
         "z": 0
       },
-      "hash": "fnv1a-2bf8870b",
+      "hash": "fnv1a-6830a561",
       "resources": [
         {
           "id": "base:1:0:resource:0",
@@ -7704,7 +7704,7 @@
         "x": 1,
         "z": 1
       },
-      "hash": "fnv1a-bbc81270",
+      "hash": "fnv1a-7819c438",
       "resources": [
         {
           "id": "base:1:1:resource:0",
