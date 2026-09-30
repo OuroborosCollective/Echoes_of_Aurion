@@ -29,7 +29,7 @@ const panelHotkeys: Record<string, Panel> = { i: "inventory", b: "inventory", c:
 const community = (panel: "chat" | "market" | "guild") => window.dispatchEvent(new CustomEvent("aurion:open-community", { detail: { panel } }));
 const ax1WorldHudSchema = worldReadbackSchema.extend({
   revision: z.literal(1),
-  zoneId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "sunwatch_bastion"]),
+  zoneId: z.enum(["observatory_threshold", "windhollow", "emberfall", "cinder_vault", "starfall_crater", "clockwork_woods", "sunwatch_bastion"]),
   displayName: z.string().min(1).max(160),
   primaryEncounter: z.object({
     id: z.string().min(1).max(160),
