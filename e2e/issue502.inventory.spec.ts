@@ -15,6 +15,10 @@ async function rpc<T>(page: Page, procedure: string, input?: unknown): Promise<T
 }
 
 test("authenticated inventory projection preserves quantities, equipment, and stale revision rejection", async ({ page }) => {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl || (!dbUrl.includes("/aurion_ui_test") && !dbUrl.includes("/aurion_group_test"))) {
+    throw new Error(`Isolated MariaDB database required, got: ${dbUrl}`);
+  }
   const pool = createPool(process.env.DATABASE_URL!);
   try {
     await page.goto("/");
@@ -25,6 +29,7 @@ test("authenticated inventory projection preserves quantities, equipment, and st
     await auth.getByLabel("Rufname", { exact: true }).fill(handle);
     await auth.getByLabel("Passwort", { exact: true }).fill("Aurion-isolated-ui-regression!");
     await auth.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
+    await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
 
     const initial = await rpc<{ userId: number; items: Array<{ id: string; quantityExact?: string }> }>(page, "player.ui");
     const userId = initial.userId;
@@ -80,12 +85,36 @@ test("authenticated inventory projection preserves quantities, equipment, and st
     const projection = await rpc<{ items: Array<{ id: string; quantityExact?: string }> }>(page, "player.ui");
     expect(projection.items.find(item => item.id === sourceId)?.quantityExact).toBe("6");
     expect(projection.items.some(item => item.quantityExact === "4")).toBe(true);
+
+    const splitStack = applied.state.stacks.find(stack => stack.id !== sourceId);
+    expect(splitStack).toBeDefined();
+
+    const beforeMerge = await rpc<{ revisionExact: string; stateHash: string; stacks: Array<{ id: string; quantityExact: string }> }>(page, "player.inventoryState");
+    const mergeCommand = {
+      operation: "merge",
+      sourceStackId: splitStack!.id,
+      targetStackId: sourceId,
+      quantityExact: "4",
+      idempotencyKey: `issue502-merge-${Date.now()}`,
+      expectedRevisionExact: beforeMerge.revisionExact,
+      expectedStateHash: beforeMerge.stateHash,
+    };
+    const mergeApplied = await rpc<{ status: string; state: typeof beforeMerge }>(page, "player.inventoryTransaction", mergeCommand);
+    expect(mergeApplied.status).toBe("applied");
+    expect(mergeApplied.state.stacks.find(stack => stack.id === sourceId)?.quantityExact).toBe("10");
+
+    const mergeReplay = await rpc<{ status: string; state: typeof beforeMerge }>(page, "player.inventoryTransaction", mergeCommand);
+    expect(mergeReplay.status).toBe("replay");
+    expect(mergeReplay.state.stacks.find(stack => stack.id === sourceId)?.quantityExact).toBe("10");
+
     await rpc(page, "player.equipItem", { id: equipmentId, version: "aurion_v2", expectedItem: null });
     expect((await rpc<{ items: Array<{ id: string; status: string }> }>(page, "player.ui")).items.find(item => item.id === equipmentId)?.status).toBe("equipped");
     await rpc(page, "player.unequipItem", { id: equipmentId, version: "aurion_v2" });
     expect((await rpc<{ items: Array<{ id: string; status: string }> }>(page, "player.ui")).items.find(item => item.id === equipmentId)?.status).toBe("owned");
 
     await expect(rpc(page, "player.inventoryTransaction", { ...command, idempotencyKey: `issue502-stale-${Date.now()}` })).rejects.toThrow();
+
+    await page.screenshot({ path: "test-results/issue-502-authenticated-inventory.png", fullPage: true });
   } finally {
     await pool.end();
   }

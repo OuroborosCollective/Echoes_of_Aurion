@@ -8,6 +8,7 @@ export type AurionInventoryRecordVersion = (typeof aurionInventoryRecordVersions
 
 const exactPattern = /^(0|[1-9][0-9]*)$/;
 const tokenPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
+const idempotencyKeyPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 export type AurionInventoryStack = Readonly<{
   id: string;
@@ -67,6 +68,11 @@ export type AurionInventoryTransactionResult = Readonly<{
 
 function token(value: unknown, label: string): string {
   if (typeof value !== "string" || !tokenPattern.test(value)) throw new Error(`${label}_INVALID`);
+  return value;
+}
+
+function idempotencyToken(value: unknown, label: string): string {
+  if (typeof value !== "string" || !idempotencyKeyPattern.test(value)) throw new Error(`${label}_INVALID`);
   return value;
 }
 
@@ -147,7 +153,7 @@ function replaceStacks(state: AurionInventoryState, replacements: readonly Aurio
 }
 
 function receiptFor(input: Readonly<{ idempotencyKey: string; command: AurionInventoryCommand; before: AurionInventoryState; after: AurionInventoryState }>): AurionInventoryReceipt {
-  const idempotencyKey = token(input.idempotencyKey, "IDEMPOTENCY_KEY");
+  const idempotencyKey = idempotencyToken(input.idempotencyKey, "IDEMPOTENCY_KEY");
   const commandDigest = commandHash(input.command);
   const beforeStateHash = aurionInventoryStateHash(input.before);
   const afterStateHash = aurionInventoryStateHash(input.after);
@@ -231,10 +237,23 @@ export function resolveAurionInventoryTransaction(input: Readonly<{
 }>): AurionInventoryTransactionResult {
   const before = canonicalState(input.before);
   const normalizedCommand = normalizeCommand(input.command);
-  const normalizedKey = token(input.idempotencyKey, "IDEMPOTENCY_KEY");
+  const normalizedKey = idempotencyToken(input.idempotencyKey, "IDEMPOTENCY_KEY");
 
   if (input.priorReceipt) {
-    if (input.priorReceipt.idempotencyKey !== normalizedKey || input.priorReceipt.commandHash !== commandHash(normalizedCommand)) {
+    const expectedCommandHash = commandHash(normalizedCommand);
+    const expectedResultHash = canonicalSha256({
+      domain: "aurion.inventory.result.v1",
+      operation: normalizedCommand.operation,
+      commandHash: expectedCommandHash,
+      beforeStateHash: input.priorReceipt.beforeStateHash,
+      afterStateHash: input.priorReceipt.afterStateHash,
+    });
+    if (
+      input.priorReceipt.idempotencyKey !== normalizedKey ||
+      input.priorReceipt.commandHash !== expectedCommandHash ||
+      input.priorReceipt.operation !== normalizedCommand.operation ||
+      input.priorReceipt.resultHash !== expectedResultHash
+    ) {
       throw new Error("INVENTORY_IDEMPOTENCY_CONFLICT");
     }
     return Object.freeze({ status: "replay", effectApplied: false, state: input.priorReceipt.after, receipt: input.priorReceipt });

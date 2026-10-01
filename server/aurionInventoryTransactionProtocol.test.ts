@@ -112,4 +112,28 @@ describe("aurion inventory transaction protocol", () => {
       idempotencyKey: "split-bad",
     })).toThrow("SPLIT_REQUIRES_TWO_NON_EMPTY_STACKS");
   });
+
+  it("enforces idempotency key max length of 128 characters", () => {
+    const before = state(stack("source", "10"));
+    const command = { operation: "consume" as const, sourceStackId: "source", quantityExact: "1" };
+    const validKey = "k".repeat(128);
+    const valid = resolveAurionInventoryTransaction({ before, command, idempotencyKey: validKey });
+    expect(valid.status).toBe("applied");
+
+    const invalidKey = "k".repeat(129);
+    expect(() => resolveAurionInventoryTransaction({ before, command, idempotencyKey: invalidKey })).toThrow("IDEMPOTENCY_KEY_INVALID");
+  });
+
+  it("rejects replay when prior receipt resultHash does not match", () => {
+    const before = state(stack("source", "10"));
+    const command = { operation: "consume" as const, sourceStackId: "source", quantityExact: "2" };
+    const first = resolveAurionInventoryTransaction({ before, command, idempotencyKey: "tamper-key" });
+    const tamperedReceipt = { ...first.receipt, resultHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000" };
+    expect(() => resolveAurionInventoryTransaction({
+      before: first.state,
+      command,
+      idempotencyKey: "tamper-key",
+      priorReceipt: tamperedReceipt,
+    })).toThrow("INVENTORY_IDEMPOTENCY_CONFLICT");
+  });
 });
