@@ -74,98 +74,23 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Diagnose migration statement inside one MariaDB transaction
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from "node:fs/promises";
-          import path from "node:path";
-          import mysql from "mysql2/promise";
-
-          const files = (await fs.readdir("drizzle"))
-            .filter(name => /^0[0-9]+_.*\.sql$/.test(name))
-            .sort();
-          const connection = await mysql.createConnection(process.env.DATABASE_URL);
-          let currentFile = null;
-          let statementIndex = 0;
-          let currentSql = null;
-          try {
-            await connection.beginTransaction();
-            for (const file of files) {
-              currentFile = file;
-              const sql = await fs.readFile(path.join("drizzle", file), "utf8");
-              const statements = sql.split("--> statement-breakpoint").map(s => s.trim()).filter(Boolean);
-              for (let index = 0; index < statements.length; index += 1) {
-                statementIndex = index + 1;
-                currentSql = statements[index];
-                try {
-                  await connection.query(currentSql);
-                } catch (error) {
-                  console.error(JSON.stringify({
-                    recordType: "aurion_migration_transaction_failure",
-                    file: currentFile,
-                    statementIndex,
-                    sql: currentSql,
-                    name: error?.name ?? null,
-                    message: error?.message ?? null,
-                    code: error?.code ?? null,
-                    errno: error?.errno ?? null,
-                    sqlState: error?.sqlState ?? null,
-                    sqlMessage: error?.sqlMessage ?? null,
-                  }, null, 2));
-                  await connection.rollback();
-                  process.exit(2);
-                }
-              }
-            }
-            await connection.rollback();
-            console.log("AURION_TRANSACTIONAL_MIGRATION_DIAGNOSTIC=PASS");
-          } finally {
-            await connection.end();
-          }
-          NODE
       - name: Apply canonical Drizzle migration chain
         run: |
           set -euo pipefail
           pnpm verify:migrations
-          node --import tsx <<'NODE'
-          import { drizzle } from "drizzle-orm/mysql2";
-          import { migrate } from "drizzle-orm/mysql2/migrator";
-
-          try {
-            const db = drizzle(process.env.DATABASE_URL);
-            await migrate(db, { migrationsFolder: "./drizzle" });
-            console.log("AURION_502_DRIZZLE_MIGRATE=PASS");
-          } catch (error) {
-            console.error("AURION_502_DRIZZLE_MIGRATE=FAIL");
-            const e = error as { message?: unknown; stack?: unknown; cause?: unknown; code?: unknown; errno?: unknown; sqlState?: unknown; sqlMessage?: unknown; query?: unknown; params?: unknown };
-            console.error(JSON.stringify({
-              name: error instanceof Error ? error.name : typeof error,
-              message: e.message ?? null,
-              code: e.code ?? null,
-              errno: e.errno ?? null,
-              sqlState: e.sqlState ?? null,
-              sqlMessage: e.sqlMessage ?? null,
-              query: e.query ?? null,
-              params: e.params ?? null,
-              cause: e.cause instanceof Error ? { name: e.cause.name, message: e.cause.message, stack: e.cause.stack } : e.cause ?? null,
-              stack: e.stack ?? null,
-            }, null, 2));
-            process.exit(1);
-          }
-          NODE
+          pnpm exec drizzle-kit migrate
           node --input-type=module <<'NODE'
           import mysql from "mysql2/promise";
           const connection = await mysql.createConnection(process.env.DATABASE_URL);
           try {
             const [dbRows] = await connection.query("SELECT DATABASE() AS databaseName");
-            const [tableRows] = await connection.query("SHOW TABLES LIKE 'itemInstances'");
+            const [itemRows] = await connection.query("SHOW TABLES LIKE 'itemInstances'");
             const [v2Rows] = await connection.query("SHOW TABLES LIKE 'aurionItemInstancesV2'");
             const [receiptRows] = await connection.query("SHOW TABLES LIKE 'aurionInventoryReceipts'");
-            if (!dbRows?.[0]?.databaseName || tableRows.length !== 1 || v2Rows.length !== 1 || receiptRows.length !== 1) {
+            if (!dbRows?.[0]?.databaseName || itemRows.length !== 1 || v2Rows.length !== 1 || receiptRows.length !== 1) {
               throw new Error(JSON.stringify({
                 database: dbRows?.[0]?.databaseName ?? null,
-                itemInstances: tableRows.length,
+                itemInstances: itemRows.length,
                 aurionItemInstancesV2: v2Rows.length,
                 aurionInventoryReceipts: receiptRows.length,
               }));
@@ -174,7 +99,7 @@ jobs:
               recordType: "aurion_502_schema_readback",
               ok: true,
               database: dbRows[0].databaseName,
-              itemInstances: tableRows.length,
+              itemInstances: itemRows.length,
               aurionItemInstancesV2: v2Rows.length,
               aurionInventoryReceipts: receiptRows.length,
             }));
