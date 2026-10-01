@@ -72,11 +72,41 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify migration chain and apply complete schema
+      - name: Verify migration chain and diagnose exact SQL statement
         run: |
           set -euo pipefail
           pnpm verify:migrations
-          pnpm exec drizzle-kit migrate
+          node --input-type=module <<'NODE'
+          import fs from "node:fs/promises";
+          import path from "node:path";
+          import mysql from "mysql2/promise";
+
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          const entries = (await fs.readdir("drizzle")).filter(name => /^0[0-9]+_.*\\.sql$/.test(name)).sort();
+          for (const file of entries) {
+            const sql = await fs.readFile(path.join("drizzle", file), "utf8");
+            const statements = sql.split(/--> statement-breakpoint/).map(s => s.trim()).filter(Boolean);
+            for (let i = 0; i < statements.length; i++) {
+              try {
+                await connection.query(statements[i]);
+              } catch (error) {
+                console.error(JSON.stringify({
+                  stage: file === "0066_aurion_inventory_transaction_kernel.sql" ? "issue-502" : "baseline",
+                  file,
+                  statementIndex: i + 1,
+                  error: error instanceof Error ? error.message : String(error),
+                  sql: statements[i],
+                }, null, 2));
+                if (file === "0066_aurion_inventory_transaction_kernel.sql") process.exitCode = 2;
+                else process.exitCode = 3;
+                await connection.end();
+                process.exit(process.exitCode);
+              }
+            }
+          }
+          await connection.end();
+          console.log("AURION_502_SQL_DIAGNOSTIC=PASS");
+          NODE
       - name: Verify real inventory concurrency and rollback
         run: pnpm exec vitest run server/aurionInventoryBackendAdapter.mariadb.test.ts --no-file-parallelism
       - name: Verify existing UI/equipment database regressions
