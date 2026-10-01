@@ -61,7 +61,7 @@ export function lootV2SourceEvidenceHash(
     ruleSetVersion:string;contentVersion:string;idempotencyKey:string;
   }>,
   item:Readonly<{
-    id:string;ownerUserId:number;lootReceiptId:string;baseItemDefinitionId:string;category:string;equipmentSlot:string|null;
+    id:string;ownerUserId:number;lootReceiptId:string|null;baseItemDefinitionId:string;category:string;equipmentSlot:string|null;
     quality:string;itemLevelExact:string;affixesJson:string;setId:string|null;itemPower:number;deterministicHash:string;status:string;
   }>,
 ):string{
