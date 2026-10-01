@@ -109,7 +109,8 @@ export class SDKServer {
     )
       return "microsoft";
     if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
-    const first = Array.from(set)[0];
+    // Using iterator instead of Array.from avoids O(N) array allocation overhead
+    const first = set.values().next().value;
     return first ? first.toLowerCase() : null;
   }
 
