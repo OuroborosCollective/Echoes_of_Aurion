@@ -463,6 +463,13 @@
       "when": 1790596809783,
       "tag": "0065_aurion_glb_asset_normalization",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790816583000,
+      "tag": "0066_aurion_inventory_transaction_kernel",
+      "breakpoints": true
     }
   ]
 }
