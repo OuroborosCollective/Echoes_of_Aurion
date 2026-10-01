@@ -105,8 +105,14 @@ export default function CausalStudioDashboard() {
                   <Label className="text-xs">Tick</Label>
                   <Input type="number" min={0} value={tickNumber} onChange={event => setTickNumber(Math.max(0, Number.parseInt(event.target.value, 10) || 0))} className="mt-1 h-8 text-xs" />
                 </div>
-                <Button className="h-8 w-full text-xs" onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}>
-                  Verify Tick
+                <Button
+                  className="h-8 w-full text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => setRequestedReplay({ zoneId, tick: tickNumber })}
+                  disabled={replayQuery.isFetching || !zoneId}
+                  title={replayQuery.isFetching ? "Verifying..." : undefined}
+                  aria-busy={replayQuery.isFetching}
+                >
+                  {replayQuery.isFetching ? "Verifying..." : "Verify Tick"}
                 </Button>
               </section>
             </div>

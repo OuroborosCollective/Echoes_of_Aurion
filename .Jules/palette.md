@@ -1,1 +1,4 @@
 - For accessibility and UX on Landing Pages and Overlays: Ensure interactive elements have explicit focus/hover states (e.g. `focus-visible:ring-2`) and use `aria-busy` attributes paired with textual cues (e.g. 'Wird geladen...') when asynchronous network actions (like login, chat submit, forum posts) are processed.
+## 2023-10-01 - Loading states and Disabled affordances
+**Learning:** Hardcoded translation directives in memory (e.g., German translations) should be contextualized. While many UI elements require German translation, some admin/internal dashboards like CausalStudioDashboard are strictly in English. Applying a German translation string here creates a jarring UX mismatch.
+**Action:** When adding labels or loading texts to elements, always check the surrounding components and the page context for the correct localization language rather than blindly following a global language directive.
