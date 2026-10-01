@@ -32,6 +32,7 @@ export const uiItemSchema = itemReferenceSchema.extend({
   quality: z.enum(["normal", "magic", "rare", "set", "unique", "mythic"]),
   slot: z.enum(uiSlots).nullable(), status: z.enum(["owned", "equipped", "pending_pickup"]),
   stats: z.record(z.string(), z.number().finite()), receiptId: z.string().min(1),
+  quantityExact: z.string().regex(/^(0|[1-9][0-9]*)$/).optional(), maxQuantityExact: z.string().regex(/^[1-9][0-9]*$/).optional(),
 });
 export type UiItem = z.infer<typeof uiItemSchema>;
 export const playerUiReadbackSchema = z.object({
