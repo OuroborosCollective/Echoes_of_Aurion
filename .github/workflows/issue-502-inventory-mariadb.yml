@@ -1,0 +1,115 @@
+name: AIM-502 Inventory MariaDB Concurrency
+
+on:
+  pull_request:
+    paths:
+      - "server/aurionInventoryBackendAdapter.ts"
+      - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
+      - "server/aurionInventoryTransactionProtocol.ts"
+      - "server/aurionInventoryStackIdentity.ts"
+      - "server/playerUiPersistence.ts"
+      - "server/confirmedEquipmentVisualReadback.ts"
+      - "server/confirmedEquipmentVisualReadback.mariadb.test.ts"
+      - "server/playerUiMariaDb.test.ts"
+      - "server/routers.ts"
+      - "server/db.ts"
+      - "shared/playerUiProtocol.ts"
+      - "drizzle/**"
+      - ".github/workflows/issue-502-inventory-mariadb.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/aurionInventoryBackendAdapter.ts"
+      - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
+      - "server/aurionInventoryTransactionProtocol.ts"
+      - "server/aurionInventoryStackIdentity.ts"
+      - "server/playerUiPersistence.ts"
+      - "drizzle/**"
+      - ".github/workflows/issue-502-inventory-mariadb.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  mariadb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_issue502_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_issue502_test
+      NODE_ENV: test
+      JWT_SECRET: issue502-ci-disposable-never-production
+      VITE_APP_ID: issue502-ci
+      AURION_INVENTORY_DB_E2E: "1"
+      AURION_UI_E2E: "1"
+      AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AURION_TEST_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_TEST_SOURCE_SHA"
+      - name: Enable project package manager
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+          pnpm --version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify migration chain and diagnose exact SQL statement
+        run: |
+          set -euo pipefail
+          pnpm verify:migrations
+          node --input-type=module <<'NODE'
+          import fs from "node:fs/promises";
+          import path from "node:path";
+          import mysql from "mysql2/promise";
+
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          const entries = (await fs.readdir("drizzle")).filter(name => /^0[0-9]+_.*\\.sql$/.test(name)).sort();
+          for (const file of entries) {
+            const sql = await fs.readFile(path.join("drizzle", file), "utf8");
+            const statements = sql.split(/--> statement-breakpoint/).map(s => s.trim()).filter(Boolean);
+            for (let i = 0; i < statements.length; i++) {
+              try {
+                await connection.query(statements[i]);
+              } catch (error) {
+                console.error(JSON.stringify({
+                  stage: file === "0066_aurion_inventory_transaction_kernel.sql" ? "issue-502" : "baseline",
+                  file,
+                  statementIndex: i + 1,
+                  error: error instanceof Error ? error.message : String(error),
+                  sql: statements[i],
+                }, null, 2));
+                if (file === "0066_aurion_inventory_transaction_kernel.sql") process.exitCode = 2;
+                else process.exitCode = 3;
+                await connection.end();
+                process.exit(process.exitCode);
+              }
+            }
+          }
+          await connection.end();
+          console.log("AURION_502_SQL_DIAGNOSTIC=PASS");
+          NODE
+      - name: Verify real inventory concurrency and rollback
+        run: pnpm exec vitest run server/aurionInventoryBackendAdapter.mariadb.test.ts --no-file-parallelism
+      - name: Verify existing UI/equipment database regressions
+        run: pnpm exec vitest run server/playerUiMariaDb.test.ts server/confirmedEquipmentVisualReadback.mariadb.test.ts --no-file-parallelism
