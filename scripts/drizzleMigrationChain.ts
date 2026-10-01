@@ -66,6 +66,7 @@ export function inspectDrizzleMigrationChain(repositoryRoot: string): MigrationC
 
   const trailingStatementBreakpoints = stable(
     entries
+      .filter(entry => fs.existsSync(path.join(drizzleDir, `${entry.tag}.sql`)))
       .map(entry => ({
         tag: entry.tag,
         sql: fs.readFileSync(path.join(drizzleDir, `${entry.tag}.sql`), "utf8"),
@@ -75,7 +76,9 @@ export function inspectDrizzleMigrationChain(repositoryRoot: string): MigrationC
   );
   const emptyStatementSegments = stable(
     entries.flatMap(entry => {
-      const sql = fs.readFileSync(path.join(drizzleDir, `${entry.tag}.sql`), "utf8");
+      const file = path.join(drizzleDir, `${entry.tag}.sql`);
+      if (!fs.existsSync(file)) return [];
+      const sql = fs.readFileSync(file, "utf8");
       return sql
         .split("--> statement-breakpoint")
         .map(segment => segment.trim())
@@ -83,7 +86,6 @@ export function inspectDrizzleMigrationChain(repositoryRoot: string): MigrationC
         .filter((value): value is string => value !== null);
     })
   );
-
   const journalIndicesSequential = entries.every((entry, index) => entry.idx === index);
   const ok =
     unjournaledSqlTags.length === 0 &&
