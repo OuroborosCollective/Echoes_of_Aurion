@@ -39,8 +39,8 @@ describe("GLB normalization backfill utility", () => {
     expect(workflow).toContain(
       "echoes-of-aurion-glb-assets:/var/lib/aurion/glb",
     );
-    expect(workflow).toContain("--mode audit");
-    expect(workflow).toContain("--mode apply");
+    expect(workflow).toContain("run audit");
+    expect(workflow).toContain("run apply");
     expect(workflow).toContain("if: ${{ inputs.mode == 'apply' }}");
   });
 });

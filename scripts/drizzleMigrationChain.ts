@@ -16,6 +16,8 @@ export type MigrationChainInspection = Readonly<{
   missingSqlTags: readonly string[];
   duplicateNumericPrefixes: readonly string[];
   duplicateJournalTags: readonly string[];
+  trailingStatementBreakpoints: readonly string[];
+  emptyStatementSegments: readonly string[];
   journalIndicesSequential: boolean;
   ok: boolean;
 }>;
@@ -62,12 +64,36 @@ export function inspectDrizzleMigrationChain(repositoryRoot: string): MigrationC
     [...journalTagCounts.entries()].filter(([, count]) => count > 1).map(([tag]) => tag)
   );
 
+  const trailingStatementBreakpoints = stable(
+    entries
+      .filter(entry => fs.existsSync(path.join(drizzleDir, `${entry.tag}.sql`)))
+      .map(entry => ({
+        tag: entry.tag,
+        sql: fs.readFileSync(path.join(drizzleDir, `${entry.tag}.sql`), "utf8"),
+      }))
+      .filter(({ sql }) => /--> statement-breakpoint\\s*$/u.test(sql))
+      .map(({ tag }) => tag)
+  );
+  const emptyStatementSegments = stable(
+    entries.flatMap(entry => {
+      const file = path.join(drizzleDir, `${entry.tag}.sql`);
+      if (!fs.existsSync(file)) return [];
+      const sql = fs.readFileSync(file, "utf8");
+      return sql
+        .split("--> statement-breakpoint")
+        .map(segment => segment.trim())
+        .map((segment, index) => segment === "" ? `${entry.tag}#${index + 1}` : null)
+        .filter((value): value is string => value !== null);
+    })
+  );
   const journalIndicesSequential = entries.every((entry, index) => entry.idx === index);
   const ok =
     unjournaledSqlTags.length === 0 &&
     missingSqlTags.length === 0 &&
     duplicateNumericPrefixes.length === 0 &&
     duplicateJournalTags.length === 0 &&
+    trailingStatementBreakpoints.length === 0 &&
+    emptyStatementSegments.length === 0 &&
     journalIndicesSequential;
 
   return {
@@ -77,6 +103,8 @@ export function inspectDrizzleMigrationChain(repositoryRoot: string): MigrationC
     missingSqlTags,
     duplicateNumericPrefixes,
     duplicateJournalTags,
+    trailingStatementBreakpoints,
+    emptyStatementSegments,
     journalIndicesSequential,
     ok,
   };

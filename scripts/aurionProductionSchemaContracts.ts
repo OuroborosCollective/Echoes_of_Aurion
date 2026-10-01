@@ -13,7 +13,7 @@ export async function readProductionSchemaContracts(root: string): Promise<Expec
   // Only the legacy tables evolved by late migrations are prerequisites. All of
   // their real CREATE, ALTER and index statements are retained in source order.
   const legacySql = sources.flatMap(sql => sql.split("--> statement-breakpoint")).filter(statement =>
-    /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts|glbAssets)`/i.test(statement)
+    /(?:CREATE\s+TABLE|ALTER\s+TABLE)\s+`(?:itemInstances|craftingReceipts|glbAssets|playerProfiles)`/i.test(statement)
       || /(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+`[^`]+`\s+ON\s+`(?:itemInstances|craftingReceipts|glbAssets)`/i.test(statement),
   ).join("\n");
   const baseline = parseLateMigrationSql(lateAurionMigrationTags[0], legacySql);

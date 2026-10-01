@@ -31,6 +31,7 @@ export const lateAurionMigrationTags = [
   "0063_aurion_npc_information_ecology",
   "0064_aurion_world_entity_foundation",
   "0065_aurion_glb_asset_normalization",
+  "0066_aurion_inventory_transaction_kernel",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];

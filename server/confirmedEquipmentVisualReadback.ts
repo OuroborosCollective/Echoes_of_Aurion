@@ -135,7 +135,7 @@ export async function readConfirmedEquipmentVisuals(userId: number): Promise<Con
         inArray(aurionItemInstancesV2.id, v2Ids),
       ))
     : [];
-  const receiptIds = v2Rows.map(row => row.lootReceiptId);
+  const receiptIds = v2Rows.map(row => row.lootReceiptId).filter((id): id is string => id !== null);
   const receipts = receiptIds.length
     ? await db.select().from(aurionLootDropReceiptsV2).where(and(
         eq(aurionLootDropReceiptsV2.userId, userId),

@@ -12,6 +12,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { controlSettingsSchema, itemReferenceSchema } from "../shared/playerUiProtocol";
+import { executeAurionInventoryTransaction, readAurionInventorySnapshot } from "./aurionInventoryBackendAdapter";
 import { readPlayerUi, savePlayerControls, collectPlayerLoot, equipPlayerItem, unequipPlayerItem } from "./playerUiPersistence";
 import { groupCommandSchema } from "../shared/groupInstanceProtocol";
 import { commandGroupForUser, readGroupForUser } from "./groupInstancePersistence";
@@ -67,6 +68,16 @@ import { aurionContextRouter } from "./routes/aurionContextRouter";
 import { causalityRouter } from "./routes/causalityRouter";
 import { sessionLogRouter } from "./routes/sessionLogRouter";
 
+const exactInventoryRevisionSchema = z.string().regex(/^(0|[1-9][0-9]*)$/).max(128);
+const inventoryStateHashSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+const inventoryIdempotencyKeySchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
+const inventoryStackIdSchema = z.string().min(8).max(64);
+const inventoryQuantitySchema = z.string().regex(/^[1-9][0-9]*$/).max(128);
+const aurionInventoryTransactionInputSchema = z.discriminatedUnion("operation", [
+  z.object({ operation: z.literal("merge"), sourceStackId: inventoryStackIdSchema, targetStackId: inventoryStackIdSchema, quantityExact: inventoryQuantitySchema, idempotencyKey: inventoryIdempotencyKeySchema, expectedRevisionExact: exactInventoryRevisionSchema, expectedStateHash: inventoryStateHashSchema }).strict(),
+  z.object({ operation: z.literal("split"), sourceStackId: inventoryStackIdSchema, quantityExact: inventoryQuantitySchema, idempotencyKey: inventoryIdempotencyKeySchema, expectedRevisionExact: exactInventoryRevisionSchema, expectedStateHash: inventoryStateHashSchema }).strict(),
+  z.object({ operation: z.literal("consume"), sourceStackId: inventoryStackIdSchema, quantityExact: inventoryQuantitySchema, idempotencyKey: inventoryIdempotencyKeySchema, expectedRevisionExact: exactInventoryRevisionSchema, expectedStateHash: inventoryStateHashSchema }).strict(),
+]);
 export const aurionMcpBrokerUrl = "https://arelogic.space/mcp";
 
 /** Aurion issues pairing sessions for the separately operated ChatGPT broker only. */
@@ -192,6 +203,17 @@ export const appRouter = router({
     collectLoot: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => collectPlayerLoot(ctx.user.id, input)),
     equipItem: protectedProcedure.input(itemReferenceSchema.extend({ expectedItem: itemReferenceSchema.nullable() }).strict()).mutation(({ ctx, input }) => equipPlayerItem(ctx.user.id, input, input.expectedItem)),
     unequipItem: protectedProcedure.input(itemReferenceSchema).mutation(({ ctx, input }) => unequipPlayerItem(ctx.user.id, input)),
+    inventoryState: protectedProcedure.query(({ ctx }) => readAurionInventorySnapshot(ctx.user.id)),
+    inventoryTransaction: protectedProcedure.input(aurionInventoryTransactionInputSchema).mutation(async ({ ctx, input }) => {
+      const result = await executeAurionInventoryTransaction({
+        userId: ctx.user.id,
+        command: input,
+        idempotencyKey: input.idempotencyKey,
+        expectedRevisionExact: input.expectedRevisionExact,
+        expectedStateHash: input.expectedStateHash,
+      });
+      return { ...result, ui: await readPlayerUi(ctx.user.id) };
+    }),
     me: protectedProcedure.query(async ({ ctx }) => {
       const profile = await db.getOrCreatePlayerProfile(ctx.user.id);
       return {

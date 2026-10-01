@@ -40,14 +40,14 @@ export async function readControlSettings(tx: Database | UiTransaction, userId: 
 function legacyView(row: typeof itemInstances.$inferSelect): UiItem {
   return uiItemSchema.parse({ id: row.id, version: "legacy", name: legacyWeapons[row.baseItemKey] ?? row.baseItemKey.replaceAll("_", " "), definition: row.baseItemKey,
     levelExact: String(row.itemLevel), quality: row.quality, slot: legacyWeapons[row.baseItemKey] ? "main_hand" : null,
-    status: row.status, stats: statsFrom(row.affixesJson), receiptId: row.lootReceiptId ?? row.craftingReceiptId });
+    status: row.status, stats: statsFrom(row.affixesJson), receiptId: row.lootReceiptId ?? row.craftingReceiptId, quantityExact: row.quantityExact || "1", maxQuantityExact: row.maxQuantityExact || "1" });
 }
 function v2View(row: typeof aurionItemInstancesV2.$inferSelect): UiItem {
   const definition = aurionLootBaseCatalog.find(d => d.id === row.baseItemDefinitionId);
   if (!definition || (definition.equipmentSlot ?? null) !== row.equipmentSlot) throw new Error("UI_ITEM_CATALOG_MISMATCH");
   return uiItemSchema.parse({ id: row.id, version: "aurion_v2", name: row.baseItemDefinitionId.replace(/-v2$/, "").replaceAll("-", " "), definition: row.baseItemDefinitionId,
     levelExact: row.itemLevelExact, quality: row.quality, slot: row.equipmentSlot, status: row.status,
-    stats: statsFrom(row.affixesJson, definition.baseStats), receiptId: row.lootReceiptId });
+    stats: statsFrom(row.affixesJson, definition.baseStats), receiptId: row.lootReceiptId ?? row.inventoryReceiptId ?? "" , quantityExact: row.quantityExact, maxQuantityExact: row.maxQuantityExact });
 }
 async function starterView(tx: UiTransaction, userId: number, lock = false): Promise<UiItem | null> {
   const stateRows = lock
@@ -69,6 +69,8 @@ async function starterView(tx: UiTransaction, userId: number, lock = false): Pro
     status: state.status,
     stats: { attack: AX1_STARTER_BLADE_ATTACK_BONUS, maxHealth: AX1_STARTER_BLADE_MAX_HP_BONUS },
     receiptId: receipt.id,
+    quantityExact: "1",
+    maxQuantityExact: "1",
   });
 }
 async function readUi(tx: UiTransaction, userId: number) {

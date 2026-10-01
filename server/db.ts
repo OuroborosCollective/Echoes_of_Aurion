@@ -44,6 +44,7 @@ import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgres
 import { aurionEthosAxes, aurionMasteryDisciplineIds, aurionMasterySources, resolveEthosAura, resolveMasteryReadmodel, type AurionEthosAxis, type AurionMasteryDisciplineId, type AurionMasterySource } from "./aurionMasteryEthosProtocol";
 import { aurionLootCatalogV2 } from "./aurionLootCatalog";
 import { resolveDeterministicLoot, type ServerConfirmedLootContext } from "./aurionLootProtocol";
+import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "./aurionInventoryStackIdentity";
 import { createZoneTicket, digestZoneTicket, type ZoneId } from "./zoneProtocol";
 import { activeProvenance } from "./aurionProvenance";
 import { AURION_ZONE_RULESET_VERSION } from "../shared/aurionCausalTickContract";
@@ -1137,9 +1138,21 @@ export async function createValidatedAurionLootDropV2(values: {
       deterministicHash: resolved.deterministicHash, ruleSetVersion: values.context.ruleSetVersion, contentVersion: values.context.contentVersion, idempotencyKey: values.idempotencyKey,
     });
     await tx.insert(aurionItemInstancesV2).values({
-      id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, baseItemDefinitionId: resolved.itemDefinitionId, category: resolved.category,
+      id: itemId, ownerUserId: values.userId, lootReceiptId: receiptId, inventoryReceiptId: null, originItemId: null,
+      baseItemDefinitionId: resolved.itemDefinitionId, category: resolved.category,
       equipmentSlot: resolved.equipmentSlot ?? null, quality: resolved.quality, itemLevelExact: resolved.itemLevelExact, affixesJson: JSON.stringify(resolved.affixes),
       setId: resolved.setId ?? null, itemPower: resolved.itemPower, deterministicHash: resolved.deterministicHash,
+      quantityExact: "1", maxQuantityExact: inventoryMaxQuantityExact({ category: resolved.category, equipmentSlot: resolved.equipmentSlot ?? null }),
+      mergeKey: inventoryMergeKey({
+        definitionId: resolved.itemDefinitionId, category: resolved.category, equipmentSlot: resolved.equipmentSlot ?? null,
+        quality: resolved.quality, levelExact: resolved.itemLevelExact, affixesJson: JSON.stringify(resolved.affixes),
+        setId: resolved.setId ?? null, itemPower: resolved.itemPower,
+      }),
+      provenanceHash: inventoryItemShapeHash({
+        definitionId: resolved.itemDefinitionId, category: resolved.category, equipmentSlot: resolved.equipmentSlot ?? null,
+        quality: resolved.quality, levelExact: resolved.itemLevelExact, affixesJson: JSON.stringify(resolved.affixes),
+        setId: resolved.setId ?? null, itemPower: resolved.itemPower,
+      }),
       status: shouldAutoCollect(resolved.quality, (await readControlSettings(tx, values.userId)).autoLoot) ? "owned" : "pending_pickup",
     });
     const receipt = (await tx.select().from(aurionLootDropReceiptsV2).where(eq(aurionLootDropReceiptsV2.id, receiptId)).limit(1))[0];
