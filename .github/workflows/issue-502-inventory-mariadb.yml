@@ -74,6 +74,56 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Diagnose migration statement inside one MariaDB transaction
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs/promises";
+          import path from "node:path";
+          import mysql from "mysql2/promise";
+
+          const files = (await fs.readdir("drizzle"))
+            .filter(name => /^0[0-9]+_.*\.sql$/.test(name))
+            .sort();
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          let currentFile = null;
+          let statementIndex = 0;
+          let currentSql = null;
+          try {
+            await connection.beginTransaction();
+            for (const file of files) {
+              currentFile = file;
+              const sql = await fs.readFile(path.join("drizzle", file), "utf8");
+              const statements = sql.split("--> statement-breakpoint").map(s => s.trim()).filter(Boolean);
+              for (let index = 0; index < statements.length; index += 1) {
+                statementIndex = index + 1;
+                currentSql = statements[index];
+                try {
+                  await connection.query(currentSql);
+                } catch (error) {
+                  console.error(JSON.stringify({
+                    recordType: "aurion_migration_transaction_failure",
+                    file: currentFile,
+                    statementIndex,
+                    sql: currentSql,
+                    name: error?.name ?? null,
+                    message: error?.message ?? null,
+                    code: error?.code ?? null,
+                    errno: error?.errno ?? null,
+                    sqlState: error?.sqlState ?? null,
+                    sqlMessage: error?.sqlMessage ?? null,
+                  }, null, 2));
+                  await connection.rollback();
+                  process.exit(2);
+                }
+              }
+            }
+            await connection.rollback();
+            console.log("AURION_TRANSACTIONAL_MIGRATION_DIAGNOSTIC=PASS");
+          } finally {
+            await connection.end();
+          }
+          NODE
       - name: Apply canonical Drizzle migration chain
         run: |
           set -euo pipefail
