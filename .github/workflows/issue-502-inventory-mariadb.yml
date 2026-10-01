@@ -88,7 +88,19 @@ jobs:
             console.log("AURION_502_DRIZZLE_MIGRATE=PASS");
           } catch (error) {
             console.error("AURION_502_DRIZZLE_MIGRATE=FAIL");
-            console.error(error instanceof Error ? error.stack ?? error.message : error);
+            const e = error as { message?: unknown; stack?: unknown; cause?: unknown; code?: unknown; errno?: unknown; sqlState?: unknown; sqlMessage?: unknown; query?: unknown; params?: unknown };
+            console.error(JSON.stringify({
+              name: error instanceof Error ? error.name : typeof error,
+              message: e.message ?? null,
+              code: e.code ?? null,
+              errno: e.errno ?? null,
+              sqlState: e.sqlState ?? null,
+              sqlMessage: e.sqlMessage ?? null,
+              query: e.query ?? null,
+              params: e.params ?? null,
+              cause: e.cause instanceof Error ? { name: e.cause.name, message: e.cause.message, stack: e.cause.stack } : e.cause ?? null,
+              stack: e.stack ?? null,
+            }, null, 2));
             process.exit(1);
           }
           NODE
