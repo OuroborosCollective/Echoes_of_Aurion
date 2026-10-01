@@ -49,7 +49,7 @@ jobs:
         run: |
           game-dev adapter inspect --project "$GITHUB_WORKSPACE" --json
           game-dev scenario list --project "$GITHUB_WORKSPACE" --json
-          game-dev scenario plan world-contract --project "$GITHUB_WORKSPACE" --json
+          game-dev scenario plan aurion-contract --project "$GITHUB_WORKSPACE" --json
           game-dev scenario plan starting-village-plan --project "$GITHUB_WORKSPACE" --json
       - name: Install exact Aurion dependency graph
         run: |
