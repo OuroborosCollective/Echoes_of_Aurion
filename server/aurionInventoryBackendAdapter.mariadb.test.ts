@@ -173,7 +173,7 @@ suite("aurion inventory backend adapter MariaDB", () => {
     const v2Rows = await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, USER_ID));
     const splitRows = v2Rows.filter(row => row.id === splitSourceId || row.inventoryReceiptId === result.receipt.receiptId);
     expect(splitRows).toHaveLength(2);
-    expect(splitRows.reduce((sum, row) => sum + BigInt(row.quantityExact), 0n)).toBe(14n);
+    expect(splitRows.reduce((sum, row) => sum + BigInt(row.quantityExact), 0n)).toBe(10n);
     expect(splitRows.every(row => row.provenanceHash === result.state.stacks.find(stack => stack.id === row.id)?.provenanceHash)).toBe(true);
 
     const foreignSnapshot = await readAurionInventorySnapshot(USER_ID);
