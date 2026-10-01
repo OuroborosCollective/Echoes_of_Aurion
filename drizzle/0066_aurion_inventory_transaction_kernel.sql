@@ -15,10 +15,12 @@ UPDATE `aurionItemInstancesV2` SET `mergeKey`=`id`, `provenanceHash`=CONCAT('sha
 ALTER TABLE `playerProfiles` ADD CONSTRAINT `playerProfiles_inventory_revision_ck` CHECK (`inventoryRevisionExact` REGEXP '^(0|[1-9][0-9]*)$');--> statement-breakpoint
 ALTER TABLE `itemInstances` ADD CONSTRAINT `itemInstances_quantity_exact_ck` CHECK (`quantityExact` REGEXP '^(0|[1-9][0-9]*)$');--> statement-breakpoint
 ALTER TABLE `itemInstances` ADD CONSTRAINT `itemInstances_max_quantity_exact_ck` CHECK (`maxQuantityExact` REGEXP '^[1-9][0-9]*$');--> statement-breakpoint
+ALTER TABLE `itemInstances` ADD CONSTRAINT `itemInstances_quantity_le_capacity_ck` CHECK (CHAR_LENGTH(`quantityExact`) < CHAR_LENGTH(`maxQuantityExact`) OR (CHAR_LENGTH(`quantityExact`) = CHAR_LENGTH(`maxQuantityExact`) AND BINARY `quantityExact` <= BINARY `maxQuantityExact`));--> statement-breakpoint
 ALTER TABLE `aurionItemInstancesV2` ADD CONSTRAINT `aurionItemInstancesV2_exactly_one_provenance_ck` CHECK ((`lootReceiptId` IS NOT NULL AND `inventoryReceiptId` IS NULL) OR (`lootReceiptId` IS NULL AND `inventoryReceiptId` IS NOT NULL));--> statement-breakpoint
 ALTER TABLE `aurionItemInstancesV2` ADD CONSTRAINT `aurionItemInstancesV2_inventory_origin_ck` CHECK (`inventoryReceiptId` IS NULL OR `originItemId` IS NOT NULL);--> statement-breakpoint
 ALTER TABLE `aurionItemInstancesV2` ADD CONSTRAINT `aurionItemInstancesV2_quantity_exact_ck` CHECK (`quantityExact` REGEXP '^(0|[1-9][0-9]*)$');--> statement-breakpoint
 ALTER TABLE `aurionItemInstancesV2` ADD CONSTRAINT `aurionItemInstancesV2_max_quantity_exact_ck` CHECK (`maxQuantityExact` REGEXP '^[1-9][0-9]*$');--> statement-breakpoint
+ALTER TABLE `aurionItemInstancesV2` ADD CONSTRAINT `aurionItemInstancesV2_quantity_le_capacity_ck` CHECK (CHAR_LENGTH(`quantityExact`) < CHAR_LENGTH(`maxQuantityExact`) OR (CHAR_LENGTH(`quantityExact`) = CHAR_LENGTH(`maxQuantityExact`) AND BINARY `quantityExact` <= BINARY `maxQuantityExact`));--> statement-breakpoint
 CREATE TABLE `aurionInventoryReceipts` (
   `id` varchar(64) NOT NULL,
   `userId` int NOT NULL,

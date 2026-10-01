@@ -10,6 +10,7 @@ on:
       - "server/playerUiPersistence.ts"
       - "server/confirmedEquipmentVisualReadback.ts"
       - "server/confirmedEquipmentVisualReadback.mariadb.test.ts"
+      - "e2e/issue502.inventory.spec.ts"
       - "server/playerUiMariaDb.test.ts"
       - "server/routers.ts"
       - "server/db.ts"
@@ -24,6 +25,7 @@ on:
       - "server/aurionInventoryTransactionProtocol.ts"
       - "server/aurionInventoryStackIdentity.ts"
       - "server/playerUiPersistence.ts"
+      - "e2e/issue502.inventory.spec.ts"
       - "drizzle/**"
       - ".github/workflows/issue-502-inventory-mariadb.yml"
 
@@ -39,7 +41,7 @@ jobs:
         image: mariadb:11.4
         env:
           MARIADB_ROOT_PASSWORD: auriontest
-          MARIADB_DATABASE: aurion_issue502_test
+          MARIADB_DATABASE: aurion_ui_test
         ports:
           - 3306:3306
         options: >-
@@ -48,7 +50,7 @@ jobs:
           --health-timeout=3s
           --health-retries=30
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_issue502_test
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_ui_test
       NODE_ENV: test
       JWT_SECRET: issue502-ci-disposable-never-production
       VITE_APP_ID: issue502-ci
@@ -84,3 +86,19 @@ jobs:
         run: pnpm exec vitest run server/aurionInventoryBackendAdapter.mariadb.test.ts --no-file-parallelism
       - name: Verify existing UI/equipment database regressions
         run: pnpm exec vitest run server/playerUiMariaDb.test.ts server/confirmedEquipmentVisualReadback.mariadb.test.ts --no-file-parallelism
+      - name: Build exact browser runtime
+        run: pnpm build
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start exact browser runtime
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/issue-502-browser.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/issue-502-browser.log
+          exit 1
+      - name: Verify authenticated browser inventory evidence
+        run: pnpm exec playwright test e2e/issue502.inventory.spec.ts --workers=1
