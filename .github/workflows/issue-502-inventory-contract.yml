@@ -1,0 +1,71 @@
+name: AIM-502 Inventory Transaction Contract
+
+on:
+  pull_request:
+    paths:
+      - "server/aurionInventoryTransactionProtocol.ts"
+      - "server/aurionInventoryTransactionProtocol.test.ts"
+      - "server/aurionInventoryStackIdentity.ts"
+      - "server/aurionInventoryBackendAdapter.ts"
+      - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
+      - "shared/playerUiProtocol.ts"
+      - "server/playerUiPersistence.ts"
+      - "server/routers.ts"
+      - "server/db.ts"
+      - "drizzle/schema.ts"
+      - "drizzle/0066_aurion_inventory_transaction_kernel.sql"
+      - "drizzle/meta/_journal.json"
+      - ".github/workflows/issue-502-inventory-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/aurionInventoryTransactionProtocol.ts"
+      - "server/aurionInventoryTransactionProtocol.test.ts"
+      - "server/aurionInventoryStackIdentity.ts"
+      - "server/aurionInventoryBackendAdapter.ts"
+      - "server/aurionInventoryBackendAdapter.mariadb.test.ts"
+      - "shared/playerUiProtocol.ts"
+      - "server/playerUiPersistence.ts"
+      - "server/routers.ts"
+      - "server/db.ts"
+      - "drizzle/schema.ts"
+      - "drizzle/0066_aurion_inventory_transaction_kernel.sql"
+      - "drizzle/meta/_journal.json"
+      - ".github/workflows/issue-502-inventory-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AURION_TEST_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$AURION_TEST_SOURCE_SHA"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify migration chain and deterministic inventory vectors
+        run: |
+          set -euo pipefail
+          pnpm verify:migrations
+          pnpm exec vitest run server/aurionInventoryTransactionProtocol.test.ts --no-file-parallelism
+      - name: TypeScript and production build
+        run: |
+          set -euo pipefail
+          pnpm check
+          pnpm build
