@@ -85,25 +85,25 @@ export default function CommunityOverlay({ isAuthenticated, currentUserId }: { i
       <button type="button" aria-pressed={panel === "chat"} className={panel === "chat" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
         isAuthenticated ? setPanel("chat") : setMessage("Bitte anmelden, um den Signalraum zu verwenden.");
-      }} aria-label="Expeditionschat öffnen"><MessageCircle size={16}/><span>CHAT</span></button>
+      }} title="Expeditionschat öffnen"><MessageCircle size={16}/><span>CHAT</span></button>
       <button type="button" aria-pressed={panel === "forum"} className={panel === "forum" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
         setPanel("forum");
         setForumCategory("announcements");
-      }} aria-label="Forum öffnen"><FileText size={16}/><span>FORUM</span></button>
+      }} title="Forum öffnen"><FileText size={16}/><span>FORUM</span></button>
       <button type="button" aria-pressed={panel === "events"} className={panel === "events" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
         setPanel("events");
         setForumCategory("events");
-      }} aria-label="Community-Events öffnen"><CalendarDays size={16}/><span>EVENTS</span></button>
+      }} title="Community-Events öffnen"><CalendarDays size={16}/><span>EVENTS</span></button>
       <button type="button" aria-pressed={panel === "guild"} className={panel === "guild" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
         isAuthenticated ? setPanel("guild") : setMessage("Bitte anmelden, um deine Gildenzugehörigkeit zu lesen.");
-      }} aria-label="Gildenzugehörigkeit öffnen"><UsersRound size={16}/><span>GILDE</span></button>
+      }} title="Gildenzugehörigkeit öffnen"><UsersRound size={16}/><span>GILDE</span></button>
       <button type="button" aria-pressed={panel === "assets"} className={panel === "assets" ? "community-dock-button active" : "community-dock-button"} onClick={() => {
         soundSynth.playUiClick();
         setPanel("assets");
-      }} aria-label="Asset-Katalog öffnen"><Box size={16}/><span>ASSETS</span></button>
+      }} title="Asset-Katalog öffnen"><Box size={16}/><span>ASSETS</span></button>
     </div>
 
     {message && !panel && <p className="community-feedback"><BellRing size={13}/>{message}</p>}

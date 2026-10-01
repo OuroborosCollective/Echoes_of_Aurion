@@ -8,16 +8,16 @@ import { RealClientHarness } from "@/test/realClientHarness";
 describe("CommunityOverlay", () => {
   it("offers only Aurion social/read-only areas and no gameplay economy controls", () => {
     render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
-    expect(screen.getByRole("button", { name: "Forum öffnen" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Community-Events öffnen" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Asset-Katalog öffnen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "FORUM" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "EVENTS" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "ASSETS" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Schmiede|Handel|Partnergesuche|Auktionshaus/i })).toBeNull();
   });
 
   it("shows the public asset catalog as read-only", async () => {
     const user = userEvent.setup();
     render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
-    await user.click(screen.getByRole("button", { name: "Asset-Katalog öffnen" }));
+    await user.click(screen.getByRole("button", { name: "ASSETS" }));
     expect(await screen.findByText(/Öffentlicher Aurion-Katalog · nur lesend/)).toBeTruthy();
     expect(screen.queryByLabelText(/Datei auswählen/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /Als Charakter wählen|Ausrüsten|Hochladen/i })).toBeNull();
@@ -33,23 +33,23 @@ describe("CommunityOverlay", () => {
   it("exposes deterministic accessibility state for community dock and icon-only controls", async () => {
     const user = userEvent.setup();
     render(<RealClientHarness><CommunityOverlay isAuthenticated /></RealClientHarness>);
-    const chat = screen.getByRole("button", { name: "Expeditionschat öffnen" });
-    const forum = screen.getByRole("button", { name: "Forum öffnen" });
-    const assets = screen.getByRole("button", { name: "Asset-Katalog öffnen" });
+    const chat = screen.getByRole("button", { name: "CHAT" });
+    const forum = screen.getByRole("button", { name: "FORUM" });
+    const assets = screen.getByRole("button", { name: "ASSETS" });
     expect(chat.getAttribute("aria-pressed")).toBe("false");
     expect(forum.getAttribute("aria-pressed")).toBe("false");
     expect(assets.getAttribute("aria-pressed")).toBe("false");
 
     await user.click(forum);
-    expect(screen.getByRole("button", { name: "Forum öffnen" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "FORUM" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Community-Konsole schließen" }).getAttribute("title")).toBe("Community-Konsole schließen");
   });
 
   it("keeps events in the forum-backed community surface", async () => {
     const user = userEvent.setup();
     render(<RealClientHarness><CommunityOverlay isAuthenticated={false} /></RealClientHarness>);
-    await user.click(screen.getByRole("button", { name: "Community-Events öffnen" }));
+    await user.click(screen.getByRole("button", { name: "EVENTS" }));
     expect(await screen.findByRole("heading", { name: "Community-Events" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Events" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "EVENTS" }).getAttribute("aria-pressed")).toBe("true");
   });
 });

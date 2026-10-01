@@ -1,1 +1,5 @@
 - For accessibility and UX on Landing Pages and Overlays: Ensure interactive elements have explicit focus/hover states (e.g. `focus-visible:ring-2`) and use `aria-busy` attributes paired with textual cues (e.g. 'Wird geladen...') when asynchronous network actions (like login, chat submit, forum posts) are processed.
+
+## 2026-10-01 - ARIA Label overwrites and Disabled Button States
+**Learning:** Avoid using `aria-label` on buttons that already contain visible text (e.g., inside `<span>` tags), as it overrides the accessible name and behaves as an anti-pattern for assistive technologies. Also, ensure buttons that are disabled during network requests convey their state visually using tactile classes like `disabled:motion-safe:hover:translate-y-0 disabled:motion-safe:active:scale-100` and functionally using `aria-busy` combined with a descriptive `title`.
+**Action:** Use `title` instead of `aria-label` when the button already has screen-readable text, providing a tooltip without overriding the accessible name. Always pair visual tactile-disabled states with appropriate ARIA attributes for loading states.
