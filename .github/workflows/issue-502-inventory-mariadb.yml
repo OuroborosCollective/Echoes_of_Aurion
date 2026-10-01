@@ -39,7 +39,7 @@ jobs:
         image: mariadb:11.4
         env:
           MARIADB_ROOT_PASSWORD: auriontest
-          MARIADB_DATABASE: aurion_issue502_test
+          MARIADB_DATABASE: aurion_ui_test
         ports:
           - 3306:3306
         options: >-
@@ -48,7 +48,7 @@ jobs:
           --health-timeout=3s
           --health-retries=30
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_issue502_test
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_ui_test
       NODE_ENV: test
       JWT_SECRET: issue502-ci-disposable-never-production
       VITE_APP_ID: issue502-ci
