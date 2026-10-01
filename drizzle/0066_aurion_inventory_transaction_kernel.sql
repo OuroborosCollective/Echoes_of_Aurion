@@ -42,4 +42,4 @@ CREATE TABLE `aurionInventoryReceipts` (
   KEY `aurionInventoryReceipts_user_created_idx` (`userId`,`createdAt`),
   KEY `aurionInventoryReceipts_after_state_idx` (`afterStateHash`)
 );--> statement-breakpoint
-ALTER TABLE `aurionItemInstancesV2` ADD UNIQUE KEY `aurionItemInstancesV2_inventory_receipt_uq` (`inventoryReceiptId`);--> statement-breakpoint
+ALTER TABLE `aurionItemInstancesV2` ADD UNIQUE KEY `aurionItemInstancesV2_inventory_receipt_uq` (`inventoryReceiptId`);
