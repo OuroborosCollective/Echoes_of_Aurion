@@ -94,7 +94,6 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
-          node scripts/verify-wasd-npc.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
           pnpm exec vitest run --no-file-parallelism             server/aim293NpcActionGatewayContract.test.ts             server/aim293NpcActionGatewayMariaDb.test.ts             server/aim245LivingWorld.test.ts             server/npcCoordinationGatewayBoundary.test.ts

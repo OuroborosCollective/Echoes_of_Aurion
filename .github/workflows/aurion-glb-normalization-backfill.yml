@@ -85,7 +85,7 @@ jobs:
       - name: Read-only audit of the exact missing set
         run: |
           set -euo pipefail
-          sudo -n /usr/local/sbin/aurion-glb-normalization-backfill run audit "${EXPECTED_MISSING_COUNT}" \
+          sudo -n /usr/local/sbin/aurion-glb-normalization-backfill run --mode audit "${EXPECTED_MISSING_COUNT}" \
             | tee glb-normalization-audit.json
           node --input-type=module -e '
             import fs from "node:fs";
@@ -100,7 +100,7 @@ jobs:
         if: ${{ inputs.mode == 'apply' }}
         run: |
           set -euo pipefail
-          sudo -n /usr/local/sbin/aurion-glb-normalization-backfill run apply "${EXPECTED_MISSING_COUNT}" \
+          sudo -n /usr/local/sbin/aurion-glb-normalization-backfill run --mode apply "${EXPECTED_MISSING_COUNT}" \
             | tee glb-normalization-apply.json
 
       - name: Final production readback
@@ -108,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ inputs.mode }}" = "apply" ]; then
-            sudo -n /usr/local/sbin/aurion-glb-normalization-backfill run readback 0 \
+            sudo -n /usr/local/sbin/aurion-glb-normalization-backfill run --mode readback 0 \
               | tee glb-normalization-readback.json
             curl --fail --silent --show-error https://arelogic.space/api/game/glb-catalog > glb-public-catalog.json
             EXPECTED_PHYSICAL="${EXPECTED_MISSING_COUNT}" node --input-type=module -e '

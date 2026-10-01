@@ -4,7 +4,7 @@ import * as bound from "./wasdNpcCapsule";
 import * as legacy from "./npcPersistenceProtocol";
 import { resolveNpcNeeds } from "./wasdAurionProtocol";
 import { appRouter } from "./routers";
-import pin from "../config/wasd-npc-capsule.json";
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import { decodeOwnedNpcMultiMemory } from "../shared/npcMultiMemoryReadmodel";
 import { decodeOwnedNpcActions } from "../shared/npcActionReadmodel";
 import { decodeOwnedNpcSemanticGraphs } from "../shared/npcSemanticGraphReadmodel";

@@ -706,6 +706,28 @@ export const aurionNpcDecisionReceipts = mysqlTable("aurionNpcDecisionReceipts",
   index("aurionNpcDecisionReceipts_region_created_idx").on(table.regionId, table.createdAt),
 ]);
 
+/** Append-only NPC decision log from the native Aurion resolveNpcLife system, for impact analysis. */
+export const aurionNpcDecisionLog = mysqlTable("aurionNpcDecisionLog", {
+  id: varchar("id", { length: 96 }).primaryKey(),
+  npcId: varchar("npcId", { length: 96 }).notNull(),
+  regionId: varchar("regionId", { length: 96 }).notNull(),
+  resolutionIndex: int("resolutionIndex").notNull(),
+  goal: varchar("goal", { length: 64 }).notNull(),
+  longTermGoal: varchar("longTermGoal", { length: 64 }).notNull(),
+  planStatus: varchar("planStatus", { length: 32 }).notNull(),
+  planHash: varchar("planHash", { length: 64 }).notNull(),
+  decisionHash: varchar("decisionHash", { length: 64 }).notNull(),
+  utilityBpsJson: text("utilityBpsJson").notNull(),
+  needsJson: text("needsJson").notNull(),
+  observationIdsJson: text("observationIdsJson").notNull(),
+  sourceReceiptId: varchar("sourceReceiptId", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionNpcDecisionLog_npc_index_uq").on(table.npcId, table.resolutionIndex),
+  index("aurionNpcDecisionLog_region_created_idx").on(table.regionId, table.createdAt),
+  index("aurionNpcDecisionLog_goal_idx").on(table.goal, table.createdAt),
+]);
+
 /** Append-only WASD-derived multi-memory; old decision and account-memory receipts retain their formats. */
 export const aurionNpcMemoryReceiptsV4 = mysqlTable("aurionNpcMemoryReceiptsV4", {
   id: varchar("id", { length: 64 }).primaryKey(),

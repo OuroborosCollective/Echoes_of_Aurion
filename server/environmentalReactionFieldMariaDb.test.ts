@@ -1,6 +1,6 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import { merchantBootstrapMarkets, merchantInventoryStateHash, merchantMarketStateHash, merchantPolityStateHash, npcIdentity, type HubId } from "./wasdNpcCapsule";
 import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence";
 import { compileEnvironmentalReactionField } from "./environmentalReactionField";

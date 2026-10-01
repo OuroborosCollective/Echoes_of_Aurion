@@ -6,7 +6,7 @@ import {
   listVisibleRuins,
   getActiveCivilization,
 } from "./aurionCivilizationHistoryPersistence";
-import { orchestrateCivilizationLoop } from "./wasdAurionCivilizationService";
+import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { publicProcedure, adminProcedure, router } from "./_core/trpc";
 
 export const civilizationHistoryRouter = router({

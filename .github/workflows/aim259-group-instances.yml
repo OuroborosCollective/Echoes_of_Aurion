@@ -159,7 +159,7 @@ jobs:
       - name: Real groups and AX1 inventory, healer, controls and combat on phone/tablet/desktop
         run: pnpm exec playwright test --config playwright.aurion-groups.config.ts
       - name: Verify autonomous NPC life health against confirmed receipts
-        run: node scripts/verify-autonomous-npc-life-runtime.mjs
+        run: pnpm exec tsx scripts/verify-autonomous-npc-life-runtime.mjs
       - name: Upload revision-bound evidence and screenshots
         if: always()
         uses: actions/upload-artifact@v4

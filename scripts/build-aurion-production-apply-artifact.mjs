@@ -43,6 +43,7 @@ const tags = [
   "0064_aurion_world_entity_foundation",
   "0065_aurion_glb_asset_normalization",
   "0066_aurion_inventory_transaction_kernel",
+  "0067_aurion_npc_decision_log",
 ];
 const contractTags = [...tags, "0001_shocking_doctor_octopus", "0009_rainy_multiple_man", "0019_wasd_aurion_crafting_receipt_inventory"];
 const deployFiles = [

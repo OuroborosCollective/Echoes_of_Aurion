@@ -3,7 +3,7 @@ import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { aurionNpcMemoryReceiptsV4 } from "../drizzle/schema";
-import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import { getDb } from "./db";
 import { executeConfirmedMerchantAction, readConfirmedMerchantActionSource } from "./npcActionGatewayPersistence";
 import { readNpcMultiMemoryForDecision, readPreviousNpcMultiMemory } from "./npcMultiMemoryPersistence";

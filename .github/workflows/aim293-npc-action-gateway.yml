@@ -11,10 +11,6 @@ on:
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "e2e/aim292.npcMemory.spec.ts"
       - "scripts/seed-aim293-browser-evidence.ts"
-      - "vendor/wasd-npc/**"
-      - "config/wasd-npc-capsule.json"
-      - "scripts/*wasd-npc*"
-      - "scripts/vendor/verify-wasd-npc-capsule.mjs"
       - "drizzle/**"
       - ".github/workflows/aim293-npc-action-gateway.yml"
   push:
@@ -25,8 +21,6 @@ on:
       - "server/autonomousNpcLifeRuntime.ts"
       - "server/aim293NpcActionGateway*.test.ts"
       - "shared/npcActionReadmodel.ts"
-      - "vendor/wasd-npc/**"
-      - "config/wasd-npc-capsule.json"
       - "drizzle/**"
       - ".github/workflows/aim293-npc-action-gateway.yml"
   workflow_dispatch:
@@ -39,55 +33,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  source-reproduction:
-    name: Exact merged WASD action capsule
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Verify reviewed Aurion pin and expose source revision
-        id: pin
-        run: |
-          set -euo pipefail
-          node scripts/verify-wasd-npc.mjs
-          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
-          import fs from 'node:fs';
-          const pin=JSON.parse(fs.readFileSync('config/wasd-npc-capsule.json','utf8'));
-          console.log(`source_revision=${pin.sourceRevision}`);
-          console.log(`manifest_sha=${pin.manifestSha256}`);
-          NODE
-      - uses: actions/checkout@v4
-        with:
-          repository: OuroborosCollective/Wasd
-          ref: ${{ steps.pin.outputs.source_revision }}
-          path: wasd-source
-          persist-credentials: false
-      - name: Rebuild exact capsule twice and compare checked-in bytes
-        working-directory: wasd-source
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ steps.pin.outputs.source_revision }}"
-          npm exec --yes --package=pnpm@11.8.0 -- pnpm install --frozen-lockfile --filter @wasd/server...
-          node scripts/build-aurion-npc-capsule.mjs /tmp/aim293-a
-          node scripts/build-aurion-npc-capsule.mjs /tmp/aim293-b
-          diff --recursive /tmp/aim293-a /tmp/aim293-b
-          node scripts/verify-aurion-npc-capsule.mjs /tmp/aim293-a "${{ steps.pin.outputs.source_revision }}" "${{ steps.pin.outputs.manifest_sha }}"
-          WASD_NPC_CAPSULE_DIR=/tmp/aim293-a node --test scripts/__tests__/aurion-npc-capsule.test.mjs
-          diff --recursive ../vendor/wasd-npc /tmp/aim293-a
-          cmp ../scripts/vendor/verify-wasd-npc-capsule.mjs scripts/verify-aurion-npc-capsule.mjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: aim293-source-${{ github.event.pull_request.head.sha || github.sha }}
-          path: /tmp/aim293-a
-          if-no-files-found: error
-          retention-days: 14
-
   transaction-proof:
     name: Real MariaDB rollback retry and memory-after-readback
     runs-on: ubuntu-24.04
@@ -125,7 +70,6 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
-          node scripts/verify-wasd-npc.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
       - name: Read back exact 0053 bootstrap epochs

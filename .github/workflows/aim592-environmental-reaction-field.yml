@@ -12,8 +12,6 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "drizzle/**"
-      - "vendor/wasd-npc/**"
-      - "config/wasd-npc-capsule.json"
   push:
     branches: [main]
     paths:
@@ -92,7 +90,6 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
-          node scripts/verify-wasd-npc.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
       - name: Prove field-to-decision-to-gateway readback

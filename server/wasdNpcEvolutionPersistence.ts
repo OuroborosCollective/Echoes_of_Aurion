@@ -7,7 +7,7 @@ import {
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { npcHash, stableCatalogStringify } from "./wasdNpcCapsule";
-import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export type NpcTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];

@@ -1,6 +1,6 @@
 import type { EncounterKey, QuestKey } from "./gameplayProtocol";
 import { decideNpcGoal, resolveNpcNeeds, resolvePolityState, resolveWorldReaction, type NpcNeedKey, type PolityState, type WorldReaction, type WorldSignal } from "./wasdAurionProtocol";
-import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { resolveAggressionHazard, resolveCaravanMissions, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveScarcityForecast, resolveSettlement } from "./aurion/civilizationProtocol";
 import { resolveCombatStrike, resolveExpeditionLayout, resolveMonsterSpawn, resolveSpellCast } from "./wasdAurionExpeditionProtocol";
 import { resolveAchievements, resolveAge, resolveFamilyRecord, resolvePartyAction, resolveRelationship } from "./wasdAurionSocietyProtocol";
 import { resolveConstructionQueue, resolveFaith, resolveFarmPlot, resolveGate, resolveHouse, resolveStructureDamage } from "./wasdAurionStewardshipProtocol";
