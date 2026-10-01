@@ -31,6 +31,29 @@ export function inventoryItemShapeHash(input: Readonly<{
   });
 }
 
+export function inventoryMergeKey(input: Readonly<{
+  definitionId: string;
+  category: string;
+  equipmentSlot: string | null;
+  quality: string;
+  levelExact: string;
+  affixesJson: string;
+  setId: string | null;
+  itemPower: number;
+}>): string {
+  return canonicalSha256({
+    domain: "aurion.inventory.merge-key.v1",
+    definitionId: input.definitionId,
+    category: input.category,
+    equipmentSlot: input.equipmentSlot,
+    quality: input.quality,
+    levelExact: input.levelExact,
+    affixesJson: input.affixesJson,
+    setId: input.setId,
+    itemPower: input.itemPower,
+  });
+}
+
 export function inventoryMaxQuantityExact(input: Readonly<{ category: string; equipmentSlot?: string | null }>): string {
   return isAurionInventoryStackable(input) ? "1000000" : "1";
 }
