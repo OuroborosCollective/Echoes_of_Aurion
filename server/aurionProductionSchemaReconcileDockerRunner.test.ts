@@ -330,8 +330,7 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect((core.match(/0065_aurion_glb_asset_normalization/g) ?? [])).toHaveLength(2);
     expect((core.match(/0066_aurion_inventory_transaction_kernel/g) ?? [])).toHaveLength(2);
     expect((core.match(/0067_aurion_npc_decision_log/g) ?? [])).toHaveLength(2);
-    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n      "0065_aurion_glb_asset_normalization",\n      "0066_aurion_inventory_transaction_kernel",
-    "0067_aurion_npc_decision_log",\n    ];');
+    expect(core).toContain('"0062_aurion_world_director",\\n      "0063_aurion_npc_information_ecology",\\n      "0064_aurion_world_entity_foundation",\\n      "0065_aurion_glb_asset_normalization",\\n      "0066_aurion_inventory_transaction_kernel",\\n      "0067_aurion_npc_decision_log",\\n    ];');
     expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation", "0065_aurion_glb_asset_normalization", "0066_aurion_inventory_transaction_kernel", "0067_aurion_npc_decision_log"]');
   });
 });
