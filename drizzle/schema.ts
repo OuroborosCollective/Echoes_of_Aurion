@@ -466,7 +466,7 @@ export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
   id: varchar("id", { length: 64 }).primaryKey(),
   ownerUserId: int("ownerUserId").notNull(),
   lootReceiptId: varchar("lootReceiptId", { length: 64 }).unique(),
-  inventoryReceiptId: varchar("inventoryReceiptId", { length: 64 }).unique(),
+  inventoryReceiptId: varchar("inventoryReceiptId", { length: 64 }),
   originItemId: varchar("originItemId", { length: 64 }),
   baseItemDefinitionId: varchar("baseItemDefinitionId", { length: 96 }).notNull(),
   category: mysqlEnum("category", ["weapon", "armor", "accessory", "focus", "relic", "crafting_component", "shaping_component"]).notNull(),
