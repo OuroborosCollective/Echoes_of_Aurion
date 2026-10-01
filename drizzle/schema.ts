@@ -90,6 +90,7 @@ export const playerProfiles = mysqlTable("playerProfiles", {
   aurionPoints: int("aurionPoints").default(0).notNull(),
   victories: int("victories").default(0).notNull(),
   seasonPoints: int("seasonPoints").default(0).notNull(),
+  inventoryRevisionExact: varchar("inventoryRevisionExact", { length: 128 }).default("0").notNull(),
   selectedClass: mysqlEnum("selectedClass", ["unbound", "vanguard", "seer", "warden"]).default("unbound").notNull(),
   classChosenAt: timestamp("classChosenAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -464,7 +465,9 @@ export const aurionLootDropReceiptsV2 = mysqlTable("aurionLootDropReceiptsV2", {
 export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
   id: varchar("id", { length: 64 }).primaryKey(),
   ownerUserId: int("ownerUserId").notNull(),
-  lootReceiptId: varchar("lootReceiptId", { length: 64 }).notNull().unique(),
+  lootReceiptId: varchar("lootReceiptId", { length: 64 }),
+  inventoryReceiptId: varchar("inventoryReceiptId", { length: 64 }),
+  originItemId: varchar("originItemId", { length: 64 }),
   baseItemDefinitionId: varchar("baseItemDefinitionId", { length: 96 }).notNull(),
   category: mysqlEnum("category", ["weapon", "armor", "accessory", "focus", "relic", "crafting_component", "shaping_component"]).notNull(),
   equipmentSlot: mysqlEnum("equipmentSlot", ["main_hand", "off_hand", "head", "chest", "hands", "legs", "feet", "belt", "ring", "amulet", "focus", "relic"]),
@@ -474,11 +477,46 @@ export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
   setId: varchar("setId", { length: 96 }),
   itemPower: int("itemPower").notNull(),
   deterministicHash: varchar("deterministicHash", { length: 64 }).notNull(),
+  quantityExact: varchar("quantityExact", { length: 128 }).default("1").notNull(),
+  maxQuantityExact: varchar("maxQuantityExact", { length: 128 }).default("1").notNull(),
+  mergeKey: varchar("mergeKey", { length: 96 }).default("").notNull(),
+  provenanceHash: varchar("provenanceHash", { length: 96 }).default("").notNull(),
   status: mysqlEnum("status", ["owned", "listed", "sold", "consumed", "guild_custody", "pending_pickup", "equipped"]).default("owned").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   uniqueIndex("aurionItemInstancesV2_loot_receipt_uq").on(table.lootReceiptId),
+  uniqueIndex("aurionItemInstancesV2_inventory_receipt_uq").on(table.inventoryReceiptId),
   index("aurionItemInstancesV2_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt),
+  check("aurionItemInstancesV2_exactly_one_provenance_ck", sql`(${table.lootReceiptId} IS NOT NULL AND ${table.inventoryReceiptId} IS NULL) OR (${table.lootReceiptId} IS NULL AND ${table.inventoryReceiptId} IS NOT NULL)`),
+  check("aurionItemInstancesV2_inventory_origin_ck", sql`${table.inventoryReceiptId} IS NULL OR ${table.originItemId} IS NOT NULL`),
+  check("aurionItemInstancesV2_quantity_exact_ck", sql`${table.quantityExact} REGEXP '^(0|[1-9][0-9]*)$'`),
+  check("aurionItemInstancesV2_max_quantity_exact_ck", sql`${table.maxQuantityExact} REGEXP '^[1-9][0-9]*$'`),
+  check("aurionItemInstancesV2_quantity_le_capacity_ck", sql`CHAR_LENGTH(${table.quantityExact}) < CHAR_LENGTH(${table.maxQuantityExact}) OR (CHAR_LENGTH(${table.quantityExact}) = CHAR_LENGTH(${table.maxQuantityExact}) AND BINARY ${table.quantityExact} <= BINARY ${table.maxQuantityExact})`),
+]);
+
+/** Append-only evidence for deterministic inventory transitions; item tables remain the canonical state. */
+export const aurionInventoryReceipts = mysqlTable("aurionInventoryReceipts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  operation: mysqlEnum("operation", ["merge", "split", "consume"]).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+  commandHash: varchar("commandHash", { length: 96 }).notNull(),
+  beforeRevisionExact: varchar("beforeRevisionExact", { length: 128 }).notNull(),
+  afterRevisionExact: varchar("afterRevisionExact", { length: 128 }).notNull(),
+  beforeStateHash: varchar("beforeStateHash", { length: 96 }).notNull(),
+  afterStateHash: varchar("afterStateHash", { length: 96 }).notNull(),
+  beforeStateJson: text("beforeStateJson").notNull(),
+  afterStateJson: text("afterStateJson").notNull(),
+  resultJson: text("resultJson").notNull(),
+  resultHash: varchar("resultHash", { length: 96 }).notNull(),
+  receiptHash: varchar("receiptHash", { length: 96 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("aurionInventoryReceipts_user_idempotency_uq").on(table.userId, table.idempotencyKey),
+  uniqueIndex("aurionInventoryReceipts_user_after_revision_uq").on(table.userId, table.afterRevisionExact),
+  uniqueIndex("aurionInventoryReceipts_receipt_hash_uq").on(table.receiptHash),
+  index("aurionInventoryReceipts_user_created_idx").on(table.userId, table.createdAt),
+  index("aurionInventoryReceipts_after_state_idx").on(table.afterStateHash),
 ]);
 
 /** Immutable, versioned world resolution evidence. Effects are rendered only after this row is confirmed. */
@@ -1196,11 +1234,18 @@ export const itemInstances = mysqlTable("itemInstances", {
   affixesJson: text("affixesJson").notNull(),
   setKey: varchar("setKey", { length: 96 }),
   status: mysqlEnum("status", ["owned", "listed", "sold", "consumed", "guild_custody", "pending_pickup", "equipped"]).default("owned").notNull(),
+  quantityExact: varchar("quantityExact", { length: 128 }).default("1").notNull(),
+  maxQuantityExact: varchar("maxQuantityExact", { length: 128 }).default("1").notNull(),
+  mergeKey: varchar("mergeKey", { length: 96 }).default("").notNull(),
+  provenanceHash: varchar("provenanceHash", { length: 96 }).default("").notNull(),
   soldAt: timestamp("soldAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [
   index("itemInstances_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt),
   uniqueIndex("itemInstances_crafting_output_uq").on(table.craftingReceiptId, table.craftingOutputKey),
+  check("itemInstances_quantity_exact_ck", sql`${table.quantityExact} REGEXP '^(0|[1-9][0-9]*)$'`),
+  check("itemInstances_max_quantity_exact_ck", sql`${table.maxQuantityExact} REGEXP '^[1-9][0-9]*$'`),
+  check("itemInstances_quantity_le_capacity_ck", sql`CHAR_LENGTH(${table.quantityExact}) < CHAR_LENGTH(${table.maxQuantityExact}) OR (CHAR_LENGTH(${table.quantityExact}) = CHAR_LENGTH(${table.maxQuantityExact}) AND BINARY ${table.quantityExact} <= BINARY ${table.maxQuantityExact})`),
   check("itemInstances_exactly_one_provenance_ck", sql`(${table.sourceKind} = 'loot' AND ${table.lootReceiptId} IS NOT NULL AND ${table.craftingReceiptId} IS NULL) OR (${table.sourceKind} = 'crafting' AND ${table.lootReceiptId} IS NULL AND ${table.craftingReceiptId} IS NOT NULL)`),
 ]);
 
