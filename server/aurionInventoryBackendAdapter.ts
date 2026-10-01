@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { aurionInventoryReceipts, aurionItemInstancesV2, itemInstances, playerProfiles, type AurionInventoryReceipt as AurionInventoryReceiptRow } from "../drizzle/schema";
+import { aurionInventoryReceipts, aurionItemInstancesV2, itemInstances, playerProfiles } from "../drizzle/schema";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import {
   aurionInventoryStateHash,
