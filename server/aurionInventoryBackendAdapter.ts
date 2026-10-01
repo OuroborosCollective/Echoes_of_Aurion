@@ -11,7 +11,7 @@ import {
   type AurionInventoryTransactionResult,
 } from "./aurionInventoryTransactionProtocol";
 import { getDb } from "./db";
-import { inventoryItemShapeHash, legacyInventoryMergeKey, legacyInventoryProvenanceHash } from "./aurionInventoryStackIdentity";
+import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey, legacyInventoryMergeKey, legacyInventoryProvenanceHash } from "./aurionInventoryStackIdentity";
 
 type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export type InventoryTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -100,9 +100,8 @@ async function readCanonicalInventoryState(tx: InventoryTransaction, userId: num
   const v2Query = tx.select().from(aurionItemInstancesV2).where(
     and(eq(aurionItemInstancesV2.ownerUserId, userId), inArray(aurionItemInstancesV2.status, [...visibleStatuses])),
   ).orderBy(asc(aurionItemInstancesV2.id));
-  const [legacy, v2] = lock
-    ? await Promise.all([legacyQuery.for("update"), v2Query.for("update")])
-    : await Promise.all([legacyQuery, v2Query]);
+  const legacy = lock ? await legacyQuery.for("update") : await legacyQuery;
+  const v2 = lock ? await v2Query.for("update") : await v2Query;
 
   const ids = new Set<string>();
   const stacks: AurionInventoryStack[] = [];
@@ -123,6 +122,17 @@ async function readPlayerRevision(tx: InventoryTransaction, userId: number) {
   const profile = (await tx.select().from(playerProfiles).where(eq(playerProfiles.userId, userId)).for("update"))[0];
   if (!profile) throw new Error("PLAYER_PROFILE_REQUIRED");
   return normalizeStateRevision(profile.inventoryRevisionExact || "0");
+}
+
+function assertV2InventoryIdentity(row: typeof aurionItemInstancesV2.$inferSelect): void {
+  const shape = {
+    definitionId: row.baseItemDefinitionId, category: row.category, equipmentSlot: row.equipmentSlot,
+    quality: row.quality, levelExact: row.itemLevelExact, affixesJson: row.affixesJson,
+    setId: row.setId, itemPower: row.itemPower,
+  };
+  if (row.provenanceHash !== inventoryItemShapeHash(shape)) throw new Error("INVENTORY_SOURCE_PROVENANCE_MISMATCH");
+  if (row.mergeKey !== inventoryMergeKey(shape)) throw new Error("INVENTORY_SOURCE_MERGE_KEY_MISMATCH");
+  if (row.maxQuantityExact !== inventoryMaxQuantityExact({ category: row.category, equipmentSlot: row.equipmentSlot })) throw new Error("INVENTORY_SOURCE_CAPACITY_MISMATCH");
 }
 
 function dbItemForLegacy(row: typeof itemInstances.$inferSelect): DbItem {
@@ -154,10 +164,8 @@ function dbItemForV2(row: typeof aurionItemInstancesV2.$inferSelect): DbItem {
 }
 
 async function findOwnedItem(tx: InventoryTransaction, userId: number, id: string): Promise<{ item: DbItem; v2?: typeof aurionItemInstancesV2.$inferSelect; legacy?: typeof itemInstances.$inferSelect }> {
-  const [legacyRows, v2Rows] = await Promise.all([
-    tx.select().from(itemInstances).where(and(eq(itemInstances.id, id), eq(itemInstances.ownerUserId, userId), inArray(itemInstances.status, [...visibleStatuses]))).for("update"),
-    tx.select().from(aurionItemInstancesV2).where(and(eq(aurionItemInstancesV2.id, id), eq(aurionItemInstancesV2.ownerUserId, userId), inArray(aurionItemInstancesV2.status, [...visibleStatuses]))).for("update"),
-  ]);
+  const legacyRows = await tx.select().from(itemInstances).where(and(eq(itemInstances.id, id), eq(itemInstances.ownerUserId, userId), inArray(itemInstances.status, [...visibleStatuses]))).for("update");
+  const v2Rows = await tx.select().from(aurionItemInstancesV2).where(and(eq(aurionItemInstancesV2.id, id), eq(aurionItemInstancesV2.ownerUserId, userId), inArray(aurionItemInstancesV2.status, [...visibleStatuses]))).for("update");
   if (legacyRows.length && v2Rows.length) throw new Error("INVENTORY_ITEM_ID_COLLISION");
   if (legacyRows[0]) return { item: dbItemForLegacy(legacyRows[0]), legacy: legacyRows[0] };
   if (v2Rows[0]) return { item: dbItemForV2(v2Rows[0]), v2: v2Rows[0] };
@@ -165,10 +173,8 @@ async function findOwnedItem(tx: InventoryTransaction, userId: number, id: strin
 }
 
 async function assertSplitIdFree(tx: InventoryTransaction, id: string): Promise<void> {
-  const [legacy, v2] = await Promise.all([
-    tx.select({ id: itemInstances.id }).from(itemInstances).where(eq(itemInstances.id, id)).limit(1),
-    tx.select({ id: aurionItemInstancesV2.id }).from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id, id)).limit(1),
-  ]);
+  const legacy = await tx.select({ id: itemInstances.id }).from(itemInstances).where(eq(itemInstances.id, id)).limit(1);
+  const v2 = await tx.select({ id: aurionItemInstancesV2.id }).from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.id, id)).limit(1);
   if (legacy.length || v2.length) throw new Error("INVENTORY_SPLIT_ID_COLLISION");
 }
 
@@ -271,6 +277,7 @@ async function applyDatabaseTransition(
     if (!split) throw new Error("INVENTORY_SPLIT_RESULT_MISSING");
     await assertSplitIdFree(tx, split.id);
     const source = sourceRecord.v2;
+    assertV2InventoryIdentity(source);
     const expectedIdentity = inventoryItemShapeHash({
       definitionId: source.baseItemDefinitionId,
       category: source.category,
@@ -309,10 +316,7 @@ async function applyDatabaseTransition(
     return;
   }
 
-  const quantity = parseExact(command.quantityExact, "CONSUME_QUANTITY");
-  const sourceQuantity = parseExact(command.quantityExact, "CONSUME_QUANTITY");
-  void quantity;
-  void sourceQuantity;
+
   if (sourceRecord.item.status !== "owned") throw new Error("INVENTORY_ITEM_NOT_USABLE");
   if (!sourceAfter) {
     if (sourceRecord.v2) await updateV2Item(tx, sourceRecord.v2, "0", true);
@@ -380,10 +384,6 @@ export async function executeAurionInventoryTransaction(input: Readonly<{
       if (input.command.targetStackId === input.command.sourceStackId) throw new Error("MERGE_SELF_REFERENCE");
       targetRecord = await findOwnedItem(tx, input.userId, input.command.targetStackId);
       if (targetRecord.item.status !== "owned") throw new Error("INVENTORY_ITEM_NOT_TRANSITIONABLE");
-      const ordered = [sourceRecord, targetRecord].sort((a, b) => a.item.id.localeCompare(b.item.id));
-      if (ordered[0] === targetRecord) {
-        targetRecord = await findOwnedItem(tx, input.userId, input.command.targetStackId);
-      }
     }
 
     const resolved = resolveAurionInventoryTransaction({
