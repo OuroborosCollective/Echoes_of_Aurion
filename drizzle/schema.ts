@@ -491,6 +491,7 @@ export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
   check("aurionItemInstancesV2_inventory_origin_ck", sql`${table.inventoryReceiptId} IS NULL OR ${table.originItemId} IS NOT NULL`),
   check("aurionItemInstancesV2_quantity_exact_ck", sql`${table.quantityExact} REGEXP '^(0|[1-9][0-9]*)$'`),
   check("aurionItemInstancesV2_max_quantity_exact_ck", sql`${table.maxQuantityExact} REGEXP '^[1-9][0-9]*$'`),
+  check("aurionItemInstancesV2_quantity_le_capacity_ck", sql`CHAR_LENGTH(${table.quantityExact}) < CHAR_LENGTH(${table.maxQuantityExact}) OR (CHAR_LENGTH(${table.quantityExact}) = CHAR_LENGTH(${table.maxQuantityExact}) AND BINARY ${table.quantityExact} <= BINARY ${table.maxQuantityExact})`),
 ]);
 
 /** Append-only evidence for deterministic inventory transitions; item tables remain the canonical state. */
@@ -1242,9 +1243,10 @@ export const itemInstances = mysqlTable("itemInstances", {
 }, table => [
   index("itemInstances_owner_status_created_idx").on(table.ownerUserId, table.status, table.createdAt),
   uniqueIndex("itemInstances_crafting_output_uq").on(table.craftingReceiptId, table.craftingOutputKey),
-  check("itemInstances_exactly_one_provenance_ck", sql`(${table.sourceKind} = 'loot' AND ${table.lootReceiptId} IS NOT NULL AND ${table.craftingReceiptId} IS NULL) OR (${table.sourceKind} = 'crafting' AND ${table.lootReceiptId} IS NULL AND ${table.craftingReceiptId} IS NOT NULL)`),
   check("itemInstances_quantity_exact_ck", sql`${table.quantityExact} REGEXP '^(0|[1-9][0-9]*)$'`),
   check("itemInstances_max_quantity_exact_ck", sql`${table.maxQuantityExact} REGEXP '^[1-9][0-9]*$'`),
+  check("itemInstances_quantity_le_capacity_ck", sql`CHAR_LENGTH(${table.quantityExact}) < CHAR_LENGTH(${table.maxQuantityExact}) OR (CHAR_LENGTH(${table.quantityExact}) = CHAR_LENGTH(${table.maxQuantityExact}) AND BINARY ${table.quantityExact} <= BINARY ${table.maxQuantityExact})`),
+  check("itemInstances_exactly_one_provenance_ck", sql`(${table.sourceKind} = 'loot' AND ${table.lootReceiptId} IS NOT NULL AND ${table.craftingReceiptId} IS NULL) OR (${table.sourceKind} = 'crafting' AND ${table.lootReceiptId} IS NULL AND ${table.craftingReceiptId} IS NOT NULL)`),
 ]);
 
 /** Immutable evidence for a server-authoritative recipe resolution. */

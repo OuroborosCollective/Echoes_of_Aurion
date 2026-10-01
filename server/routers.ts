@@ -70,7 +70,7 @@ import { sessionLogRouter } from "./routes/sessionLogRouter";
 
 const exactInventoryRevisionSchema = z.string().regex(/^(0|[1-9][0-9]*)$/).max(128);
 const inventoryStateHashSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
-const inventoryIdempotencyKeySchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/);
+const inventoryIdempotencyKeySchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const inventoryStackIdSchema = z.string().min(8).max(64);
 const inventoryQuantitySchema = z.string().regex(/^[1-9][0-9]*$/).max(128);
 const aurionInventoryTransactionInputSchema = z.discriminatedUnion("operation", [

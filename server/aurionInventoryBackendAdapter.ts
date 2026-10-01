@@ -36,7 +36,7 @@ function parseExact(value: string, label: string): bigint {
 }
 
 function normalizeIdempotencyKey(value: string): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value)) throw new Error("IDEMPOTENCY_KEY_INVALID");
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new Error("IDEMPOTENCY_KEY_INVALID");
   return value;
 }
 
@@ -183,9 +183,11 @@ function receiptHash(receipt: AurionInventoryReceipt): string {
     domain: "aurion.inventory.receipt.v1",
     id: receipt.receiptId,
     idempotencyKey: receipt.idempotencyKey,
+    operation: receipt.operation,
     commandHash: receipt.commandHash,
     beforeStateHash: receipt.beforeStateHash,
     afterStateHash: receipt.afterStateHash,
+    operation: receipt.operation,
     resultHash: receipt.resultHash,
   });
 }
@@ -222,6 +224,14 @@ function receiptFromRow(row: typeof aurionInventoryReceipts.$inferSelect): Aurio
 function resultHashMatches(row: typeof aurionInventoryReceipts.$inferSelect, receipt: AurionInventoryReceipt): void {
   const resultJson = JSON.parse(row.resultJson) as { stateHash?: string; receiptId?: string };
   if (resultJson.receiptId !== receipt.receiptId || resultJson.stateHash !== receipt.afterStateHash) throw new Error("INVENTORY_RESULT_READBACK_MISMATCH");
+  const expectedResultHash = canonicalSha256({
+    domain: "aurion.inventory.result.v1",
+    operation: receipt.operation,
+    commandHash: receipt.commandHash,
+    beforeStateHash: receipt.beforeStateHash,
+    afterStateHash: receipt.afterStateHash,
+  });
+  if (expectedResultHash !== row.resultHash) throw new Error("INVENTORY_RESULT_HASH_MISMATCH");
 }
 
 async function loadPriorReceipt(tx: InventoryTransaction, userId: number, key: string): Promise<typeof aurionInventoryReceipts.$inferSelect | null> {
@@ -435,6 +445,8 @@ export function replayAurionInventoryReceipts(rows: readonly {
   afterStateHash: string;
   beforeStateJson: string;
   afterStateJson: string;
+  operation: AurionInventoryReceipt["operation"];
+  commandHash: string;
   resultHash: string;
 }[]): AurionInventoryState {
   let previousAfter: AurionInventoryState | null = null;
@@ -455,10 +467,12 @@ export function replayAurionInventoryReceipts(rows: readonly {
     finalState = previousAfter;
     const expectedResultHash = canonicalSha256({
       domain: "aurion.inventory.result.v1",
+      operation: row.operation,
+      commandHash: row.commandHash,
+      beforeStateHash: row.beforeStateHash,
       afterStateHash: row.afterStateHash,
-      resultHash: row.resultHash,
     });
-    void expectedResultHash;
+    if (expectedResultHash !== row.resultHash) throw new Error("INVENTORY_REPLAY_RESULT_HASH_MISMATCH");
   }
   if (!finalState) throw new Error("INVENTORY_REPLAY_EMPTY");
   return finalState;

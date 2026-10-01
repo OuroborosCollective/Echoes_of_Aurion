@@ -10,6 +10,7 @@ on:
       - "server/playerUiPersistence.ts"
       - "server/confirmedEquipmentVisualReadback.ts"
       - "server/confirmedEquipmentVisualReadback.mariadb.test.ts"
+      - "e2e/issue502.inventory.spec.ts"
       - "server/playerUiMariaDb.test.ts"
       - "server/routers.ts"
       - "server/db.ts"
@@ -24,6 +25,7 @@ on:
       - "server/aurionInventoryTransactionProtocol.ts"
       - "server/aurionInventoryStackIdentity.ts"
       - "server/playerUiPersistence.ts"
+      - "e2e/issue502.inventory.spec.ts"
       - "drizzle/**"
       - ".github/workflows/issue-502-inventory-mariadb.yml"
 
@@ -74,7 +76,7 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Apply canonical Drizzle migration chain
+      - name: Verify migration chain and apply complete schema
         run: |
           set -euo pipefail
           pnpm verify:migrations
@@ -88,26 +90,31 @@ jobs:
             const [v2Rows] = await connection.query("SHOW TABLES LIKE 'aurionItemInstancesV2'");
             const [receiptRows] = await connection.query("SHOW TABLES LIKE 'aurionInventoryReceipts'");
             if (!dbRows?.[0]?.databaseName || itemRows.length !== 1 || v2Rows.length !== 1 || receiptRows.length !== 1) {
-              throw new Error(JSON.stringify({
-                database: dbRows?.[0]?.databaseName ?? null,
-                itemInstances: itemRows.length,
-                aurionItemInstancesV2: v2Rows.length,
-                aurionInventoryReceipts: receiptRows.length,
-              }));
+              throw new Error(JSON.stringify({ database: dbRows?.[0]?.databaseName ?? null, itemInstances: itemRows.length, aurionItemInstancesV2: v2Rows.length, aurionInventoryReceipts: receiptRows.length }));
             }
-            console.log(JSON.stringify({
-              recordType: "aurion_502_schema_readback",
-              ok: true,
-              database: dbRows[0].databaseName,
-              itemInstances: itemRows.length,
-              aurionItemInstancesV2: v2Rows.length,
-              aurionInventoryReceipts: receiptRows.length,
-            }));
+            console.log(JSON.stringify({ recordType: "aurion_502_schema_readback", ok: true, database: dbRows[0].databaseName, itemInstances: itemRows.length, aurionItemInstancesV2: v2Rows.length, aurionInventoryReceipts: receiptRows.length }));
           } finally {
             await connection.end();
           }
           NODE
+
       - name: Verify real inventory concurrency and rollback
         run: pnpm exec vitest run server/aurionInventoryBackendAdapter.mariadb.test.ts --no-file-parallelism
       - name: Verify existing UI/equipment database regressions
         run: pnpm exec vitest run server/playerUiMariaDb.test.ts server/confirmedEquipmentVisualReadback.mariadb.test.ts --no-file-parallelism
+      - name: Build exact browser runtime
+        run: pnpm build
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start exact browser runtime
+        run: |
+          set -euo pipefail
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js >/tmp/issue-502-browser.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/issue-502-browser.log
+          exit 1
+      - name: Verify authenticated browser inventory evidence
+        run: pnpm exec playwright test e2e/issue502.inventory.spec.ts --workers=1
