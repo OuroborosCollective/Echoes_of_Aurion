@@ -187,6 +187,7 @@ function receiptHash(receipt: AurionInventoryReceipt): string {
     commandHash: receipt.commandHash,
     beforeStateHash: receipt.beforeStateHash,
     afterStateHash: receipt.afterStateHash,
+    operation: receipt.operation,
     resultHash: receipt.resultHash,
   });
 }
