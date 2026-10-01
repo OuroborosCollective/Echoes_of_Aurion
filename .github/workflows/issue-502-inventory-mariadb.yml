@@ -74,40 +74,51 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify migration chain and diagnose exact SQL statement
+      - name: Apply canonical Drizzle migration chain
         run: |
           set -euo pipefail
           pnpm verify:migrations
-          node --input-type=module <<'NODE'
-          import fs from "node:fs/promises";
-          import path from "node:path";
-          import mysql from "mysql2/promise";
+          node --import tsx <<'NODE'
+          import { drizzle } from "drizzle-orm/mysql2";
+          import { migrate } from "drizzle-orm/mysql2/migrator";
 
-          const connection = await mysql.createConnection(process.env.DATABASE_URL);
-          const entries = (await fs.readdir("drizzle")).filter(name => /^0[0-9]+_.*\\.sql$/.test(name)).sort();
-          for (const file of entries) {
-            const sql = await fs.readFile(path.join("drizzle", file), "utf8");
-            const statements = sql.split(/--> statement-breakpoint/).map(s => s.trim()).filter(Boolean);
-            for (let i = 0; i < statements.length; i++) {
-              try {
-                await connection.query(statements[i]);
-              } catch (error) {
-                console.error(JSON.stringify({
-                  stage: file === "0066_aurion_inventory_transaction_kernel.sql" ? "issue-502" : "baseline",
-                  file,
-                  statementIndex: i + 1,
-                  error: error instanceof Error ? error.message : String(error),
-                  sql: statements[i],
-                }, null, 2));
-                if (file === "0066_aurion_inventory_transaction_kernel.sql") process.exitCode = 2;
-                else process.exitCode = 3;
-                await connection.end();
-                process.exit(process.exitCode);
-              }
-            }
+          try {
+            const db = drizzle(process.env.DATABASE_URL);
+            await migrate(db, { migrationsFolder: "./drizzle" });
+            console.log("AURION_502_DRIZZLE_MIGRATE=PASS");
+          } catch (error) {
+            console.error("AURION_502_DRIZZLE_MIGRATE=FAIL");
+            console.error(error instanceof Error ? error.stack ?? error.message : error);
+            process.exit(1);
           }
-          await connection.end();
-          console.log("AURION_502_SQL_DIAGNOSTIC=PASS");
+          NODE
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [dbRows] = await connection.query("SELECT DATABASE() AS databaseName");
+            const [tableRows] = await connection.query("SHOW TABLES LIKE 'itemInstances'");
+            const [v2Rows] = await connection.query("SHOW TABLES LIKE 'aurionItemInstancesV2'");
+            const [receiptRows] = await connection.query("SHOW TABLES LIKE 'aurionInventoryReceipts'");
+            if (!dbRows?.[0]?.databaseName || tableRows.length !== 1 || v2Rows.length !== 1 || receiptRows.length !== 1) {
+              throw new Error(JSON.stringify({
+                database: dbRows?.[0]?.databaseName ?? null,
+                itemInstances: tableRows.length,
+                aurionItemInstancesV2: v2Rows.length,
+                aurionInventoryReceipts: receiptRows.length,
+              }));
+            }
+            console.log(JSON.stringify({
+              recordType: "aurion_502_schema_readback",
+              ok: true,
+              database: dbRows[0].databaseName,
+              itemInstances: tableRows.length,
+              aurionItemInstancesV2: v2Rows.length,
+              aurionInventoryReceipts: receiptRows.length,
+            }));
+          } finally {
+            await connection.end();
+          }
           NODE
       - name: Verify real inventory concurrency and rollback
         run: pnpm exec vitest run server/aurionInventoryBackendAdapter.mariadb.test.ts --no-file-parallelism
