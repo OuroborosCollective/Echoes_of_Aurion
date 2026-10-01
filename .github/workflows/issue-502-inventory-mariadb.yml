@@ -62,10 +62,12 @@ jobs:
           persist-credentials: false
       - name: Verify exact source revision
         run: test "$(git rev-parse HEAD)" = "$AURION_TEST_SOURCE_SHA"
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
-          run_install: false
+      - name: Enable project package manager
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+          pnpm --version
       - uses: actions/setup-node@v4
         with:
           node-version: 22
