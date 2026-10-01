@@ -43,5 +43,3 @@ CREATE TABLE `aurionInventoryReceipts` (
   KEY `aurionInventoryReceipts_after_state_idx` (`afterStateHash`)
 );--> statement-breakpoint
 ALTER TABLE `aurionItemInstancesV2` ADD UNIQUE KEY `aurionItemInstancesV2_inventory_receipt_uq` (`inventoryReceiptId`);--> statement-breakpoint
-CREATE TRIGGER `aurionInventoryReceipts_no_update` BEFORE UPDATE ON `aurionInventoryReceipts` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='AURION_INVENTORY_RECEIPTS_APPEND_ONLY';--> statement-breakpoint
-CREATE TRIGGER `aurionInventoryReceipts_no_delete` BEFORE DELETE ON `aurionInventoryReceipts` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='AURION_INVENTORY_RECEIPTS_APPEND_ONLY';--> statement-breakpoint
