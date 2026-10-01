@@ -166,6 +166,7 @@ jobs:
             "0063_aurion_npc_information_ecology",
             "0064_aurion_world_entity_foundation",
             "0065_aurion_glb_asset_normalization",
+            "0066_aurion_inventory_transaction_kernel",
                 ];
                 if(migrations.length!==expectedTags.length||migrations.map(m=>m.tag).sort().join(",")!==expectedTags.join(",")) throw new Error("production migration receipt is incomplete");
                 const allowedMigrationStates=new Set(["PRESENT_SCHEMA_MATCH","ABSENT_APPLY_REQUIRED","PRESENT_SCHEMA_DRIFT"]);
