@@ -3,12 +3,15 @@ import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 export const AURION_INVENTORY_TRANSACTION_RULESET_VERSION = "aurion.inventory.transaction.v1" as const;
 export const aurionInventoryOperations = ["merge", "split", "consume"] as const;
 export type AurionInventoryOperation = (typeof aurionInventoryOperations)[number];
+export const aurionInventoryRecordVersions = ["legacy", "aurion_v2"] as const;
+export type AurionInventoryRecordVersion = (typeof aurionInventoryRecordVersions)[number];
 
 const exactPattern = /^(0|[1-9][0-9]*)$/;
 const tokenPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 
 export type AurionInventoryStack = Readonly<{
   id: string;
+  version: AurionInventoryRecordVersion;
   definitionId: string;
   provenanceHash: string;
   mergeKey: string;
@@ -79,6 +82,8 @@ function userId(value: unknown): number {
 
 function canonicalStack(stack: AurionInventoryStack): AurionInventoryStack {
   const id = token(stack.id, "STACK_ID");
+  const version = stack.version;
+  if (!aurionInventoryRecordVersions.includes(version)) throw new Error("STACK_VERSION_INVALID");
   const definitionId = token(stack.definitionId, "DEFINITION_ID");
   const provenanceHash = token(stack.provenanceHash, "PROVENANCE_HASH");
   const mergeKey = token(stack.mergeKey, "MERGE_KEY");
@@ -87,6 +92,7 @@ function canonicalStack(stack: AurionInventoryStack): AurionInventoryStack {
   if (maximum < 1n || quantity < 1n || quantity > maximum) throw new Error("STACK_QUANTITY_OUT_OF_RANGE");
   return Object.freeze({
     id,
+    version,
     definitionId,
     provenanceHash,
     mergeKey,
