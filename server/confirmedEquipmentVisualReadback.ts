@@ -59,8 +59,10 @@ export function projectConfirmedEquipmentVisualReadback(
       throw new Error("EQUIPMENT_VISUAL_V2_UI_MISMATCH");
     }
 
-    const receipt = receiptsById.get(row.lootReceiptId);
-    if (!receipt || receipt.userId !== ui.userId || receipt.id !== row.lootReceiptId) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_MISSING");
+    const lootReceiptId = row.lootReceiptId;
+    if (!lootReceiptId) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_MISSING");
+    const receipt = receiptsById.get(lootReceiptId);
+    if (!receipt || receipt.userId !== ui.userId || receipt.id !== lootReceiptId) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_MISSING");
     const resolved = parseStoredDeterministicLootResult(receipt.resolvedJson);
     const definition = aurionLootBaseCatalog.find(candidate => candidate.id === row.baseItemDefinitionId);
     if (!definition) throw new Error("EQUIPMENT_VISUAL_V2_DEFINITION_MISSING");
