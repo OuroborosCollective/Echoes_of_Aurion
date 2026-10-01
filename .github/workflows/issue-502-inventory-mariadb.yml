@@ -81,6 +81,22 @@ jobs:
           set -euo pipefail
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
+          node --input-type=module <<'NODE'
+          import mysql from "mysql2/promise";
+          const connection = await mysql.createConnection(process.env.DATABASE_URL);
+          try {
+            const [dbRows] = await connection.query("SELECT DATABASE() AS databaseName");
+            const [itemRows] = await connection.query("SHOW TABLES LIKE 'itemInstances'");
+            const [v2Rows] = await connection.query("SHOW TABLES LIKE 'aurionItemInstancesV2'");
+            const [receiptRows] = await connection.query("SHOW TABLES LIKE 'aurionInventoryReceipts'");
+            if (!dbRows?.[0]?.databaseName || itemRows.length !== 1 || v2Rows.length !== 1 || receiptRows.length !== 1) {
+              throw new Error(JSON.stringify({ database: dbRows?.[0]?.databaseName ?? null, itemInstances: itemRows.length, aurionItemInstancesV2: v2Rows.length, aurionInventoryReceipts: receiptRows.length }));
+            }
+            console.log(JSON.stringify({ recordType: "aurion_502_schema_readback", ok: true, database: dbRows[0].databaseName, itemInstances: itemRows.length, aurionItemInstancesV2: v2Rows.length, aurionInventoryReceipts: receiptRows.length }));
+          } finally {
+            await connection.end();
+          }
+          NODE
 
       - name: Verify real inventory concurrency and rollback
         run: pnpm exec vitest run server/aurionInventoryBackendAdapter.mariadb.test.ts --no-file-parallelism

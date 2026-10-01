@@ -15,6 +15,8 @@ console.log(
       missingSqlTags: inspection.missingSqlTags,
       duplicateNumericPrefixes: inspection.duplicateNumericPrefixes,
       duplicateJournalTags: inspection.duplicateJournalTags,
+      trailingStatementBreakpoints: inspection.trailingStatementBreakpoints,
+      emptyStatementSegments: inspection.emptyStatementSegments,
       journalIndicesSequential: inspection.journalIndicesSequential,
     },
     null,
