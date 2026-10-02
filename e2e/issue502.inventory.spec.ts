@@ -31,6 +31,8 @@ test("authenticated inventory projection preserves quantities, equipment, and st
     await auth.getByRole("button", { name: "Aurion-Konto erstellen", exact: true }).click();
     await expect(page.getByRole("button", { name: "SPIEL BETRETEN", exact: true })).toBeVisible({ timeout: 30_000 });
 
+    // Establish the profile through the canonical account read before inventory commands.
+    await rpc(page, "player.me");
     const initial = await rpc<{ userId: number; items: Array<{ id: string; quantityExact?: string }> }>(page, "player.ui");
     const userId = initial.userId;
     const sourceId = `issue502-${Date.now()}-source`;
@@ -80,13 +82,14 @@ test("authenticated inventory projection preserves quantities, equipment, and st
     const command = { operation: "split", sourceStackId: sourceId, quantityExact: "4", idempotencyKey: `issue502-${Date.now()}`, expectedRevisionExact: before.revisionExact, expectedStateHash: before.stateHash };
     const applied = await rpc<{ status: string; state: typeof before }>(page, "player.inventoryTransaction", command);
     expect(applied.status).toBe("applied");
-    expect(applied.state.stacks.reduce((sum, stack) => sum + BigInt(stack.quantityExact), 0n)).toBe(10n);
+    expect(before.stacks.reduce((sum, stack) => sum + BigInt(stack.quantityExact), 0n)).toBe(11n);
+    expect(applied.state.stacks.reduce((sum, stack) => sum + BigInt(stack.quantityExact), 0n)).toBe(11n);
 
     const projection = await rpc<{ items: Array<{ id: string; quantityExact?: string }> }>(page, "player.ui");
     expect(projection.items.find(item => item.id === sourceId)?.quantityExact).toBe("6");
     expect(projection.items.some(item => item.quantityExact === "4")).toBe(true);
 
-    const splitStack = applied.state.stacks.find(stack => stack.id !== sourceId);
+    const splitStack = applied.state.stacks.find(stack => stack.id !== sourceId && stack.id !== equipmentId && stack.quantityExact === "4");
     expect(splitStack).toBeDefined();
 
     const beforeMerge = await rpc<{ revisionExact: string; stateHash: string; stacks: Array<{ id: string; quantityExact: string }> }>(page, "player.inventoryState");
