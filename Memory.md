@@ -145,3 +145,70 @@ Evidence:
 Learned: Post-merge automation must receive the same syntax and contract coverage before merge; testing only the mirror sync allowed a broken recorder test to remain unnoticed.  Follow-up to #535 and #726; gameplay and migration contents remain the verified #726 merge tree.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+
+### 2026-10-02 — PR #726 — feat: complete AIM-535 atomic crafting and item manipulation
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=726 merge=58f27a3340e03542478f75f58e786d54b1da70dd -->
+Task: Merge PR #726 into `main` — feat: complete AIM-535 atomic crafting and item manipulation.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/aim535-item-manipulation-runtime.yml`
+- `.github/workflows/aurion-journal-watermark-regression.yml`
+- `.github/workflows/aurion-production-schema-readback.yml`
+- `.github/workflows/aurion-root-reconciliation-artifact-proof.yml`
+- `.github/workflows/aurion-root-schema-apply-artifact-proof.yml`
+- `.github/workflows/aurion-schema-reconciliation-proof.yml`
+- `Memory.md`
+- `architecture/donor-ledger.json`
+- `client/src/xaurion/components/Ax1InventoryModal.tsx`
+- `client/src/xaurion/components/CraftingModal.tsx`
+- `client/src/xaurion/components/InventoryModal.tsx`
+- `client/src/xaurion/components/ItemManipulationPanel.test.tsx`
+- `client/src/xaurion/components/ItemManipulationPanel.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.test.tsx`
+- `client/src/xaurion/integration/AurionAuthorityHud.tsx`
+- `config/aurion-migration-wave-manifest.json`
+- `deploy/aurion-production-schema-apply-core`
+- `deploy/verify-aurion-production-schema-apply-artifact.mjs`
+- `deploy/verify-aurion-production-schema-reconcile-artifact.mjs`
+- `docs/balancing/aim265-candidate.json`
+- `drizzle/0068_aurion_item_manipulation_runtime.sql`
+- `drizzle/meta/_journal.json`
+- `drizzle/schema.ts`
+- `e2e/issue502.inventory.spec.ts`
+- `scripts/aurionProductionSchemaReconciliation.ts`
+- `scripts/build-aurion-production-apply-artifact.mjs`
+- `scripts/build-aurion-production-reconcile-artifact.mjs`
+- `scripts/dispatch-aurion-schema-plan.mjs`
+- `server/aurion/npc/npcLifeProtocol.ts`
+- `server/aurion/npc/semanticMemoryGraph.ts`
+- `server/aurionInventoryBackendAdapter.ts`
+- `server/aurionItemManipulationAllocation.test.ts`
+- `server/aurionItemManipulationAllocation.ts`
+- `server/aurionItemManipulationCatalog.ts`
+- `server/aurionItemManipulationHttp.test.ts`
+- `server/aurionItemManipulationMariaDb.test.ts`
+- `server/aurionItemManipulationPersistence.ts`
+- `server/aurionItemManipulationProtocol.test.ts`
+- `server/aurionItemManipulationProtocol.ts`
+- `server/aurionLootProtocol.ts`
+- `server/aurionNpcSemanticIdentityRegression.test.ts`
+- `server/aurionProductionSchemaReconcileDockerRunner.test.ts`
+- `server/blocker3Compliance.test.ts`
+- `server/causality/causalReceiptV2Persistence.test.ts`
+- `server/confirmedEquipmentVisualReadback.ts`
+- `server/economy/economicSourceEvidence.ts`
+- `server/glbNormalizationBackfillContract.test.ts`
+- `server/playerUiPersistence.ts`
+- `server/routers.ts`
+- `shared/playerUiProtocol.ts`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/726
+- Merge commit: `58f27a3340e03542478f75f58e786d54b1da70dd`
+- PR head: `eab9c8da378a04dbf986557c6dd92bb5f6087a4e`
+- Merged at: 2026-10-02T11:21:09Z
+- Post-merge workflow run: 37000532936
+Learned: Deterministic item rolls must commit to the paid material allocation, while retry keys remain transport metadata. Canonical aggregation preserves the same cause when identical materials are split. Receipts and confirmed UI readbacks must expose every consumed identity and persisted effect; recipe membership order and migration-wave bounds must remain canonical across neighboring proofs.  Memory.md records change, insight and verified isolated effects; automated post-merge recording will bind the merge and final head. [GitBook preview](https://ouroboroscollective.gitbook.io/ouroboroscollective-docs/~/revisions/89QgYhx4HK7VM7HqxfOe/).  Fixes #535.  NPC neighbor CI exposed a pre-existing synchronous identity remap cycle in the canonical Aurion semantic graph: identical node evidence registered an ID-to-itself mapping. Only changed IDs are now remapped. A bounded fresh-process regression reproduces the previous timeout and proves deterministic graph compilation with valid edge endpoints after the fix. The original MariaDB NPC and container gates passed at this final head.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
