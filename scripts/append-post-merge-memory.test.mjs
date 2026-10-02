@@ -59,7 +59,7 @@ const entry2 = buildEntry({
   body: "",
 });
 
-assert.match(entry2, /Aurion remains the sole active gameplay\\/world\\/persistence authority/);
+assert.ok(entry2.includes("Aurion remains the sole active gameplay/world/persistence authority"));
 assert.match(entry2, /Changed-file list unavailable/);
 
 console.log("post-merge memory entry regression: PASS");
