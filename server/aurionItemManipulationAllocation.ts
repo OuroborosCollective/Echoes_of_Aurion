@@ -28,6 +28,7 @@ export function allocatedManipulationMaterialEvidence(allocation: ReturnType<typ
   return [...groups.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, value]) => value);
 }
 
-export function manipulationReceiptId(cause: Readonly<{ userId: number; operationIndex: number; recipe: unknown; sourceItemHash?: string; craftingStateHash: string; materials: ReturnType<typeof allocatedManipulationMaterialEvidence> }>) {
-  return `craft_${canonicalSha256({ domain: "aurion.manipulation.paid-cause.v2", ...cause }).slice(7, 55)}`;
+export function manipulationReceiptId(cause: Readonly<{ userId: number; operationIndex: number; recipe: Readonly<{ id: string; version: string; allowedCategories: readonly string[]; allowedAffixIds: readonly string[] }>; sourceItemHash?: string; craftingStateHash: string; materials: ReturnType<typeof allocatedManipulationMaterialEvidence> }>) {
+  const recipe = { ...cause.recipe, allowedCategories: [...cause.recipe.allowedCategories].sort(), allowedAffixIds: [...cause.recipe.allowedAffixIds].sort() };
+  return `craft_${canonicalSha256({ domain: "aurion.manipulation.paid-cause.v2", ...cause, recipe }).slice(7, 55)}`;
 }
