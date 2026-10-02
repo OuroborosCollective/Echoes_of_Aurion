@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import {
   aurionNpcActionConsentReceipts,
   aurionNpcActionEffectReadbacks,

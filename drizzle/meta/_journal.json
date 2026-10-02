@@ -470,6 +470,13 @@
       "when": 1790816583000,
       "tag": "0066_aurion_inventory_transaction_kernel",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790816584000,
+      "tag": "0067_aurion_npc_decision_log",
+      "breakpoints": true
     }
   ]
 }

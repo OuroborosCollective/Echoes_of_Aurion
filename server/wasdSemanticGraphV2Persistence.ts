@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, lt, lte } from "drizzle-orm";
-import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 import {
   aurionNpcActionEffectReadbacks,
   aurionNpcActionMemoryLinks,

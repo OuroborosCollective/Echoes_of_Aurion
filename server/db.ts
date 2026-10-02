@@ -37,7 +37,7 @@ import { createWorldChunkDelta, generateBaseWorldChunk, materializeWorldChunk, t
 import { WORLD_CHUNK_ROAD_MAXIMUM, WORLD_CHUNK_STRUCTURE_MAXIMUM, resolveWorldChunkAction, type WorldChunkActionIntent } from "./worldChunkActionProtocol";
 import { WORLD_CHUNK_STREAM_PAGE_LIMIT, orderedWorldChunkWindow, worldChunkStreamingBudget, type WorldChunkStreamingTier } from "../shared/worldChunkStreamingProtocol";
 import { resolveWorldEpochReaction, type WorldEpochReaction } from "./worldEpochReactionProtocol";
-import { orchestrateCivilizationLoop } from "./wasdAurionCivilizationService";
+import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
 import { resolveDialogueQuestIntent, type DialogueQuestActionKind, type DialogueQuestIntentResolution } from "./wasdAurionDialogueQuestIntentProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { resolveSkillProgressionReadmodel, type AurionSkillId, type SkillProgressionEvent } from "./wasdAurionSkillProgressionProtocol";

@@ -15,7 +15,7 @@ import {
   type WasdMutationReceipt 
 } from "./wasdNpcEvolutionPersistence";
 import { npcHash } from "./wasdNpcCapsule";
-import pin from "../config/wasd-npc-capsule.json" with { type: "json" };
+import { npcCapsulePin as pin } from "./aurion/npc/authority.js";
 
 const suite = process.env.AURION_NPC_E2E === "1" && process.env.DATABASE_URL ? describe : describe.skip;
 const npcId = "aim295:test-npc";

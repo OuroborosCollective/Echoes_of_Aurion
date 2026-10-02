@@ -1,0 +1,16 @@
+// Native Aurion NPC module barrel.
+// Migrated from WASD provenance; active implementation is Aurion-owned.
+
+export * from "./authority.js";
+export * from "./canonical.js";
+export * from "./npcNeeds.js";
+export * from "./npcLifeProtocol.js";
+export * from "./npcPersistenceProtocol.js";
+export * from "./ax1LivingWorldProtocol.js";
+export { merchantBootstrapMarkets, npcIdentity, confirmedNpcEconomy } from "./merchantRules.js";
+export type { MerchantDecisionRequests } from "./merchantRules.js";
+export * from "./multiMemory.js";
+export * from "./worldPolityRules.js";
+export * from "./actionGateway.js";
+export * from "./semanticMemoryGraph.js";
+export * from "./npcEmergencyRules.js";

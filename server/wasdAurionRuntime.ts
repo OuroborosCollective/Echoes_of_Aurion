@@ -9,6 +9,9 @@ import type { EnvironmentalReactionField } from "../shared/environmentalReaction
 import { appendNpcMultiMemory, readNpcMultiMemoryForDecision, readPreviousNpcMultiMemory } from "./npcMultiMemoryPersistence";
 import { appendNpcSemanticGraphV2 } from "./wasdSemanticGraphV2Persistence";
 import type { NpcMemoryV4 } from "./wasdNpcCapsule";
+import { recordNpcDecisionLog } from "./aurion/npcDecisionLog";
+import { orchestrateCivilizationLoop } from "./aurion/civilizationService";
+import { GLOBAL_WORLD_ID } from "../shared/worldIdentity";
 import {
   AURION_WASD_CONTENT_VERSION,
   AURION_WASD_RULESET_VERSION,
@@ -235,6 +238,32 @@ export async function resolveAndRecordNpc(raw: NpcRequest, environmentalField?: 
     const readback = decodeNpcReceipt(row.observationIdsJson, { ...row, requestHash: v3RequestHash });
     const confirmedMemory = await appendNpcMultiMemory(tx,row,previousMultiMemory);
     await appendNpcSemanticGraphV2(tx,confirmedMemory);
+
+    // Log NPC decision for impact analysis (native Aurion system).
+    // This runs outside the transaction so a logging failure never blocks the NPC decision.
+    void recordNpcDecisionLog({
+      npcId: input.npcId,
+      regionId: input.regionId,
+      resolutionIndex: input.resolutionIndex,
+      goal: snapshot.decision.goal,
+      longTermGoal: snapshot.decision.longTermGoal ?? snapshot.decision.goal,
+      planStatus: snapshot.decision.plan?.status ?? "planned",
+      planHash: snapshot.decision.plan?.planHash ?? "",
+      decisionHash: snapshot.decision.decisionHash,
+      utilityBpsJson: JSON.stringify(snapshot.decision.utilityBps ?? {}),
+      needsJson: JSON.stringify(snapshot.needs),
+      observationIdsJson: JSON.stringify(snapshot.decision.observationIds ?? []),
+      sourceReceiptId: id,
+    }).catch((error) => {
+      console.warn("[NpcDecisionLog] Failed to log NPC decision:", error);
+    });
+
+    // Trigger Living History Loop (Issue #323) — integrate civilization orchestration
+    // into the active NPC runtime cycle so NPC history is properly managed.
+    void orchestrateCivilizationLoop(GLOBAL_WORLD_ID, input.resolutionIndex, id).catch((error) => {
+      console.warn("[LivingHistoryLoop] Civilization orchestration failed:", error);
+    });
+
     return Object.freeze({ ...readback, source: "created" as const, multiMemory:confirmedMemory.memory });
   });
 }
@@ -321,7 +350,7 @@ export async function readConfirmedNpcPacket(userId: number) {
       if(!receipt) throw new Error("NPC_STATE_RECEIPT_REQUIRED");
       const snapshot=decodeNpcReceipt(receipt.observationIdsJson,receipt);
       assertNpcStateMatchesReceipt(state,snapshot);
-      projection.push({npcId:snapshot.npcId,regionId:snapshot.regionId,resolutionIndex:snapshot.decision.resolutionIndex,goal:snapshot.decision.goal,needs:snapshot.needs,memoryCount:snapshot.memory.length,decisionHash:snapshot.decision.decisionHash});
+      projection.push({npcId:snapshot.npcId,regionId:snapshot.regionId,resolutionIndex:snapshot.decision.resolutionIndex,goal:snapshot.decision.goal as PublicNpcSnapshot["goal"],needs:snapshot.needs,memoryCount:snapshot.memory.length,decisionHash:snapshot.decision.decisionHash});
     }
     return Object.freeze({userId,format:"aurion-public-npc.v2" as const,data:Buffer.from(encodeNpcSnapshot(projection)).toString("base64")});
   });

@@ -4,12 +4,8 @@ on:
     paths:
       - "server/**"
       - "shared/npc*"
-      - "vendor/wasd-npc/**"
-      - "config/wasd-npc-capsule.json"
-      - "scripts/*wasd-npc*"
       - "scripts/autonomous-npc-life-readback-contract*"
       - "scripts/verify-autonomous-npc-life-runtime.mjs"
-      - "scripts/vendor/verify-wasd-npc-capsule.mjs"
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx"
       - "client/src/xaurion/integration/aurionOpenWorldRuntime.css"
@@ -25,12 +21,8 @@ on:
     paths:
       - "server/**"
       - "shared/npc*"
-      - "vendor/wasd-npc/**"
-      - "config/wasd-npc-capsule.json"
-      - "scripts/*wasd-npc*"
       - "scripts/autonomous-npc-life-readback-contract*"
       - "scripts/verify-autonomous-npc-life-runtime.mjs"
-      - "scripts/vendor/verify-wasd-npc-capsule.mjs"
       - "client/src/xaurion/integration/NpcDecisionPanel*"
       - "client/src/xaurion/integration/AurionOpenWorldRuntime.tsx"
       - "client/src/xaurion/integration/aurionOpenWorldRuntime.css"
@@ -48,60 +40,6 @@ concurrency:
   group: aim292-npc-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  source-reproduction:
-    name: Rebuild the exact merged WASD capsule
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - name: Guard repository scope
-        run: |
-          set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "${{ github.repository }}"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Validate reviewed capsule and source pin before execution
-        id: pin
-        run: |
-          node scripts/verify-wasd-npc.mjs
-          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
-          import fs from 'node:fs';
-          const pin=JSON.parse(fs.readFileSync('config/wasd-npc-capsule.json','utf8'));
-          if(!/^[a-f0-9]{40}$/.test(pin.sourceRevision))throw Error('SOURCE_REVISION_REQUIRED');
-          console.log(`source_revision=${pin.sourceRevision}`);
-          NODE
-      - uses: actions/checkout@v4
-        with:
-          repository: OuroborosCollective/Wasd
-          ref: ${{ steps.pin.outputs.source_revision }}
-          path: wasd-source
-          persist-credentials: false
-          sparse-checkout: |
-            server
-            packages
-            scripts
-            patches
-      - name: Install exact WASD validation/compiler dependencies
-        working-directory: wasd-source
-        run: npm exec --yes --package=pnpm@11.8.0 -- pnpm install --frozen-lockfile --filter @wasd/server...
-      - name: Rebuild, compare every byte and run the actual compiled source tests
-        run: |
-          test "$(git -C wasd-source rev-parse HEAD)" = "${{ steps.pin.outputs.source_revision }}"
-          node wasd-source/scripts/build-aurion-npc-capsule.mjs /tmp/aim292-rebuilt
-          diff --recursive vendor/wasd-npc /tmp/aim292-rebuilt
-          cmp scripts/vendor/verify-wasd-npc-capsule.mjs wasd-source/scripts/verify-aurion-npc-capsule.mjs
-          WASD_NPC_CAPSULE_DIR=/tmp/aim292-rebuilt node --test wasd-source/scripts/__tests__/aurion-npc-capsule.test.mjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: aim292-wasd-capsule-${{ github.event.pull_request.head.sha || github.sha }}
-          path: /tmp/aim292-rebuilt
-          if-no-files-found: error
-          retention-days: 14
-
   persistence-and-browser:
     name: Real MariaDB receipts, restart and AX1 projection
     runs-on: ubuntu-24.04
@@ -142,10 +80,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prove exact source and apply the complete journal to actual MariaDB
+      - name: Apply the complete journal to actual MariaDB
         run: |
           test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
-          node scripts/verify-wasd-npc.mjs
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
       - name: Prove same-transaction persistence, rollback, replay and fresh-process readback
@@ -175,7 +112,7 @@ jobs:
       - name: Prove actual authenticated memory projection on three screen sizes
         run: pnpm exec playwright test --config=playwright.aim292.config.ts
       - name: Read back the actual autonomous decision and memory receipts
-        run: node scripts/verify-autonomous-npc-life-runtime.mjs
+        run: pnpm exec tsx scripts/verify-autonomous-npc-life-runtime.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

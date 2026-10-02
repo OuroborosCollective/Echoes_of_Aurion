@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { advanceCivilizationEpoch, getTerritoryChunkKey, resolveAggressionHazard, resolveCaravanMissions, resolveCollapseQualification, resolveCraft, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveRuinTransformation, resolveScarcityForecast, resolveSettlement } from "./wasdAurionCivilizationProtocol";
+import { advanceCivilizationEpoch, getTerritoryChunkKey, resolveAggressionHazard, resolveCaravanMissions, resolveCollapseQualification, resolveCraft, resolveGuild, resolveGuildTerritoryEffect, resolveMarketPrices, resolveRuinTransformation, resolveScarcityForecast, resolveSettlement } from "./aurion/civilizationProtocol";
 
-describe("wasdAurionCivilizationProtocol", () => {
+describe("aurion civilization protocol (native)", () => {
   it("binds settlements to stable identity and resolution rather than wall time", () => {
     const first = resolveSettlement({ id: "windhollow", kind: "village", ownerId: "asterion", regionId: "windhollow", foundedResolutionIndex: 9, prosperity: 0.62, stability: 0.81 });
     const second = resolveSettlement({ id: "windhollow", kind: "village", ownerId: "asterion", regionId: "windhollow", foundedResolutionIndex: 9, prosperity: 0.62, stability: 0.81 });
@@ -74,7 +74,7 @@ describe("wasdAurionCivilizationProtocol", () => {
       locationIdentity: "chunk:12:34",
       worldEpoch: 1,
       collapseReceiptHash: "hash-collapse-123",
-      rulesetVersion: "wasd-v1.0.0",
+      rulesetVersion: "aurion:civ:v1",
       generationSeed: "seed-vales-epoch-1",
     });
     const ruinB = resolveRuinTransformation({
@@ -83,7 +83,7 @@ describe("wasdAurionCivilizationProtocol", () => {
       locationIdentity: "chunk:12:34",
       worldEpoch: 1,
       collapseReceiptHash: "hash-collapse-123",
-      rulesetVersion: "wasd-v1.0.0",
+      rulesetVersion: "aurion:civ:v1",
       generationSeed: "seed-vales-epoch-1",
     });
     expect(ruinA).toEqual(ruinB);
@@ -98,7 +98,7 @@ describe("wasdAurionCivilizationProtocol", () => {
       locationIdentity: "chunk:12:34",
       worldEpoch: 1,
       collapseReceiptHash: "hash-collapse-123",
-      rulesetVersion: "wasd-v1.0.0",
+      rulesetVersion: "aurion:civ:v1",
       generationSeed: "seed-vales-epoch-1",
     });
 

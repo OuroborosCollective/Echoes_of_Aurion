@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { GlobalWorldPlan, GlobalWorldSector, WorldMigration, WorldPolity, WorldProfession, WorldQuestKind, WorldResources } from "./globalWorldProtocol";
-import { resolveMarketPrices, type MarketPrice, type ScarcitySignal } from "./wasdAurionCivilizationProtocol";
+import { resolveMarketPrices, type MarketPrice, type ScarcitySignal } from "./aurion/civilizationProtocol";
 import { AURION_WASD_CONTENT_VERSION, AURION_WASD_RULESET_VERSION } from "./wasdAurionProtocol";
 import type { WorldChunkDelta } from "./worldChunkProtocol";
 import type { WorldPresenceLease } from "./worldPresenceProtocol";

@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import { mkdir } from "node:fs/promises";
 import mysql from "mysql2/promise";
-import { npcHash, npcMemoryReceiptIds, parseNpcMemoryV4, projectNpcMemoryV4, verifyConfirmedNpcDecision, verifyNpcMemoryEvidence } from "../vendor/wasd-npc/index.js";
+import { npcCapsulePin, npcHash, npcMemoryReceiptIds, parseNpcMemoryV4, projectNpcMemoryV4, verifyConfirmedNpcDecision, verifyNpcMemoryEvidence } from "../server/aurion/npc/index.ts";
 import { verifyAutonomousNpcStateReadback } from "./autonomous-npc-life-readback-contract.mjs";
-const npcPin = JSON.parse(fs.readFileSync("config/wasd-npc-capsule.json","utf8"));
+const npcPin = npcCapsulePin;
 
 const expectedRevision = process.env.AURION_RELEASE_SHA?.trim().toLowerCase();
 if (!expectedRevision || !/^[a-f0-9]{40}$/.test(expectedRevision)) throw new Error("AURION_RELEASE_SHA_REQUIRED");

@@ -36,7 +36,7 @@ export function normalizeCivilizationHistoryEvent(input: CivilizationHistoryEven
 
   const eventPayloadHash = hash(["civilization-history-payload", parsed.eventPayloadJson]);
   const eventHash = hash([
-    "wasd:civ-history-event:v1",
+    "aurion:civ-history-event:v1",
     parsed.eventId,
     parsed.civilizationId,
     parsed.worldId,
