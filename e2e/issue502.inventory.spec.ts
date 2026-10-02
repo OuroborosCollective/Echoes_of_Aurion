@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createPool } from "mysql2/promise";
+import { createHash } from "node:crypto";
+import { aurionLootCatalogV2 } from "../server/aurionLootCatalog";
+import { lootItemPower } from "../server/aurionLootProtocol";
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "../server/aurionInventoryStackIdentity";
 
 test.skip(process.env.AURION_UI_E2E !== "1", "Isolated authenticated runtime required");
@@ -36,15 +39,16 @@ test("authenticated inventory projection preserves quantities, equipment, and st
     const initial = await rpc<{ userId: number; items: Array<{ id: string; quantityExact?: string }> }>(page, "player.ui");
     const userId = initial.userId;
     const sourceId = `issue502-${Date.now()}-source`;
+    const materialDefinition = aurionLootCatalogV2.baseItems.find(base => base.id === "component-craft-star-iron-v2")!;
     const shape = {
-      definitionId: "aurion-oak-component-v2",
-      category: "crafting_component",
+      definitionId: materialDefinition.id,
+      category: materialDefinition.category,
       equipmentSlot: null,
       quality: "normal",
       levelExact: "1",
       affixesJson: "[]",
       setId: null,
-      itemPower: 1,
+      itemPower: lootItemPower(materialDefinition, []),
     };
     await pool.execute(
       `INSERT INTO aurionItemInstancesV2
@@ -53,10 +57,11 @@ test("authenticated inventory projection preserves quantities, equipment, and st
         mergeKey, provenanceHash, status)
        VALUES (?, ?, ?, NULL, NULL, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'owned')`,
       [sourceId, userId, `issue502-loot-${Date.now()}`, shape.definitionId, shape.category, shape.quality, shape.levelExact,
-        shape.affixesJson, shape.itemPower, `hash-${sourceId}`, "10", inventoryMaxQuantityExact(shape),
+        shape.affixesJson, shape.itemPower, createHash("sha256").update(sourceId).digest("hex"), "10", inventoryMaxQuantityExact(shape),
         inventoryMergeKey(shape), inventoryItemShapeHash(shape)],
     );
     const equipmentId = `issue502-${Date.now()}-equipment`;
+    const equipmentDefinition = aurionLootCatalogV2.baseItems.find(base => base.id === "weapon-blade-v2")!;
     const equipmentShape = {
       definitionId: "weapon-blade-v2",
       category: "weapon" as const,
@@ -65,7 +70,7 @@ test("authenticated inventory projection preserves quantities, equipment, and st
       levelExact: "1",
       affixesJson: "[]",
       setId: null,
-      itemPower: 1,
+      itemPower: lootItemPower(equipmentDefinition, []),
     };
     await pool.execute(
       `INSERT INTO aurionItemInstancesV2
@@ -75,7 +80,7 @@ test("authenticated inventory projection preserves quantities, equipment, and st
        VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, NULL, ?, ?, '1', '1', ?, ?, 'owned')`,
       [equipmentId, userId, `issue502-equipment-loot-${Date.now()}`, equipmentShape.definitionId, equipmentShape.category,
         equipmentShape.equipmentSlot, equipmentShape.quality, equipmentShape.levelExact, equipmentShape.affixesJson,
-        equipmentShape.itemPower, `hash-${equipmentId}`, inventoryMergeKey(equipmentShape), inventoryItemShapeHash(equipmentShape)],
+        equipmentShape.itemPower, createHash("sha256").update(equipmentId).digest("hex"), inventoryMergeKey(equipmentShape), inventoryItemShapeHash(equipmentShape)],
     );
 
     const before = await rpc<{ revisionExact: string; stateHash: string; stacks: Array<{ id: string; quantityExact: string }> }>(page, "player.inventoryState");
