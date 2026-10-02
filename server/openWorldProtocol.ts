@@ -262,7 +262,7 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: "emberfall-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein Emberfall" },
       { id: "orun-emberfall", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
       { id: "solarium-route", kind: "encounter" as const, state: "available" as const, label: "Solarium der letzten Flamme" },
-      { id: "cinder-vault-gate", kind: "portal" as const, state: "locked" as const, label: "Tor zum Aschengewölbe" },
+      { id: "cinder-vault-gate", kind: "portal" as const, state: input.canEnterDungeon ? "available" as const : "locked" as const, label: "Tor zum Aschengewölbe" },
     ] },
     cinder_vault: { tier: 3 as const, displayName: "Aschengewölbe", narrative: "Der Glutschlüssel entzündet uralte Runen; hinter dem Tor wartet der Glutwächter auf den ersten Setfund.", pois: [
       { id: "vault-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein des Gewölbes" },
