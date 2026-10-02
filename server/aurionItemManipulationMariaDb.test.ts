@@ -1,3 +1,4 @@
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { aurionItemInstancesV2, craftingReceipts, playerProfiles } from "../drizzle/schema";
@@ -128,7 +129,7 @@ suite("AIM-535 real MariaDB atomic manipulation", () => {
   it("returns the most recent 100 receipts after the bounded window fills", async () => {
     const db = (await getDb())!;
     await db.insert(craftingReceipts).values(Array.from({ length: 101 }, (_, index) => ({
-      id: `${prefix}-window-${index}`, userId: USER, recipeKey: "aurion-craft-v2", recipeDigest: "b".repeat(64), ruleSetVersion: "aurion-item-manipulation.v2", contentVersion: "test-only", inputItemId: `${prefix}-iron`, receiptDigest: "b".repeat(64), resolutionIndex: 1000 + index, idempotencyKey: `${prefix}-window-${index}`,
+      id: `${prefix}-window-${index}`, userId: USER, recipeKey: "aurion-craft-v2", recipeDigest: "b".repeat(64), ruleSetVersion: "aurion-item-manipulation.v2", contentVersion: "test-only", inputItemId: `${prefix}-iron`, receiptDigest: canonicalSha256({ fixture: prefix, index }).slice(7), resolutionIndex: 1000 + index, idempotencyKey: `${prefix}-window-${index}`,
     })));
     const receipts = (await readAurionItemManipulation(USER)).receipts;
     expect(receipts).toHaveLength(100);
