@@ -533,7 +533,9 @@ function buildNpcSemanticMemoryGraph(input: NpcSemanticGraphBuildInput): NpcSema
         memory.npcId,
       );
       nodeByIdentity.set(identity, updated);
-      nodeIdRemap.set(existing.id, updated.id);
+      // Identical evidence keeps the same content id. A self-remap would make
+      // resolveNodeId loop forever while compiling a confirmed NPC decision.
+      if (existing.id !== updated.id) nodeIdRemap.set(existing.id, updated.id);
       const index = nodes.indexOf(existing);
       if (index >= 0) nodes[index] = updated;
       else nodes.push(updated);
