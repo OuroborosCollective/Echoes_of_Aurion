@@ -126,3 +126,22 @@ Evidence: PR #726; exact initial candidate `94ac5df0bfb2fc189eeb45c12c4f52445c89
 Learned: Migration-wave artifact lists and isolated UI database names must advance together; crafting replay hashes must normalize persisted JSON dates.
 Open: Final exact-head HTTP, full regression and merge/main readback.
 Next safe step: Require final candidate evidence, merge PR #726 and verify Issue #535 closure.
+
+
+### 2026-10-02 — PR #727 — fix: restore post-merge Memory recorder regression
+Status: VERIFIED repository merge
+<!-- auto-memory: pr=727 merge=8b8da44b2b8870ed18241671b40fa6a8f090ab9b -->
+Task: Merge PR #727 into `main` — fix: restore post-merge Memory recorder regression.
+Decisions: The merge was accepted through the repository's configured PR gates; Aurion remains the sole active gameplay/world/persistence authority.
+Touched surfaces:
+- `.github/workflows/agent-memory-supabase-sync.yml`
+- `scripts/append-post-merge-memory.test.mjs`
+Evidence:
+- Pull request: https://github.com/OuroborosCollective/Echoes_of_Aurion/pull/727
+- Merge commit: `8b8da44b2b8870ed18241671b40fa6a8f090ab9b`
+- PR head: `83abba0453028035154b090e9d3a1a8f666c2639`
+- Merged at: 2026-10-02T11:31:13Z
+- Post-merge workflow run: 37001457260
+Learned: Post-merge automation must receive the same syntax and contract coverage before merge; testing only the mirror sync allowed a broken recorder test to remain unnoticed.  Follow-up to #535 and #726; gameplay and migration contents remain the verified #726 merge tree.
+Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
+Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
