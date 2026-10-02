@@ -45,9 +45,13 @@ jobs:
         run: |
           node --check scripts/sync-agent-memory-to-supabase.mjs
           node --check scripts/sync-agent-memory-to-supabase.test.mjs
+          node --check scripts/append-post-merge-memory.mjs
+          node --check scripts/append-post-merge-memory.test.mjs
 
       - name: Run sync contract regression
-        run: node scripts/sync-agent-memory-to-supabase.test.mjs
+        run: |
+          node scripts/sync-agent-memory-to-supabase.test.mjs
+          node scripts/append-post-merge-memory.test.mjs
 
   sync-agent-memory:
     if: ${{ github.event_name != 'pull_request' }}
