@@ -1,5 +1,8 @@
+import { canonicalSha256 } from "../shared/aurionCanonicalHash";
+import { manipulationOutputMatchesRow } from "./aurionItemManipulationPersistence";
+import type { ItemManipulationResult } from "./aurionItemManipulationProtocol";
 import { and, eq, inArray } from "drizzle-orm";
-import { aurionItemInstancesV2, aurionLootDropReceiptsV2 } from "../drizzle/schema";
+import { aurionItemInstancesV2, aurionLootDropReceiptsV2, craftingReceipts } from "../drizzle/schema";
 import {
   CONFIRMED_EQUIPMENT_VISUAL_VERSION,
   confirmedEquipmentVisualReadbackSchema,
@@ -27,6 +30,7 @@ export function projectConfirmedEquipmentVisualReadback(
   ui: PlayerUiReadback,
   v2Rows: readonly V2ItemRow[],
   receipts: readonly V2ReceiptRow[],
+  crafts: readonly (typeof craftingReceipts.$inferSelect)[] = [],
 ): ConfirmedEquipmentVisualReadback {
   if (new Set(v2Rows.map(row => row.id)).size !== v2Rows.length) throw new Error("EQUIPMENT_VISUAL_V2_ITEM_DUPLICATE");
   if (new Set(receipts.map(receipt => receipt.id)).size !== receipts.length) throw new Error("EQUIPMENT_VISUAL_V2_RECEIPT_DUPLICATE");
@@ -55,8 +59,27 @@ export function projectConfirmedEquipmentVisualReadback(
 
     const row = rowsById.get(binding.id);
     if (!row || row.ownerUserId !== ui.userId || row.status !== "equipped") throw new Error("EQUIPMENT_VISUAL_V2_ITEM_MISSING");
-    if (row.lootReceiptId !== uiItem.receiptId || row.baseItemDefinitionId !== uiItem.definition || row.equipmentSlot !== binding.slot || row.quality !== uiItem.quality) {
+    if ((row.lootReceiptId ?? row.craftingReceiptId) !== uiItem.receiptId || row.baseItemDefinitionId !== uiItem.definition || row.equipmentSlot !== binding.slot || row.quality !== uiItem.quality) {
       throw new Error("EQUIPMENT_VISUAL_V2_UI_MISMATCH");
+    }
+
+    if (row.craftingReceiptId) {
+      const craft = crafts.find(receipt => receipt.id === row.craftingReceiptId);
+      if (!craft || !craft.resultJson) throw new Error("EQUIPMENT_VISUAL_CRAFT_RECEIPT_MISSING");
+      const stored = JSON.parse(craft.resultJson) as { result: ItemManipulationResult };
+      const output = stored.result.output;
+      // Receipts retain the creator; current item ownership may change via confirmed transfers.
+      if (canonicalSha256(stored).slice(7) !== craft.receiptDigest || !output || !output.contextHash || stored.result.receiptId !== craft.id || !manipulationOutputMatchesRow(output, row)) throw new Error("EQUIPMENT_VISUAL_CRAFT_RECEIPT_MISMATCH");
+      const definition = aurionLootBaseCatalog.find(base => base.id === row.baseItemDefinitionId);
+      if (!definition) throw new Error("EQUIPMENT_VISUAL_V2_DEFINITION_MISSING");
+      const visualDescriptor = visualItemDescriptorSchema.parse(projectConfirmedLootToVisualItem({
+        loot: { itemDefinitionId: output.baseItemDefinitionId, category: output.category, equipmentSlot: output.equipmentSlot,
+          quality: output.quality, itemLevelExact: output.itemLevelExact, affixes: output.affixes, setId: output.setId,
+          itemPower: output.itemPower, contextHash: output.contextHash, deterministicHash: output.deterministicHash },
+        baseDefinition: definition, lootReceiptId: craft.id, visualEventIndex: 0, visual: null,
+      }));
+      equipment.push({ uiSlot: binding.slot, equipmentSlot, itemId: binding.id, version: "aurion_v2", definition: uiItem.definition, receiptId: craft.id, visualDescriptor });
+      continue;
     }
 
     const lootReceiptId = row.lootReceiptId;
@@ -144,5 +167,7 @@ export async function readConfirmedEquipmentVisuals(userId: number): Promise<Con
         inArray(aurionLootDropReceiptsV2.id, receiptIds),
       ))
     : [];
-  return projectConfirmedEquipmentVisualReadback(ui, v2Rows, receipts);
+  const craftIds = v2Rows.map(row => row.craftingReceiptId).filter((id): id is string => id !== null);
+  const crafts = craftIds.length ? await db.select().from(craftingReceipts).where(inArray(craftingReceipts.id, craftIds)) : [];
+  return projectConfirmedEquipmentVisualReadback(ui, v2Rows, receipts, crafts);
 }

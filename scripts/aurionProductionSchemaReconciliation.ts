@@ -33,6 +33,7 @@ export const lateAurionMigrationTags = [
   "0065_aurion_glb_asset_normalization",
   "0066_aurion_inventory_transaction_kernel",
   "0067_aurion_npc_decision_log",
+  "0068_aurion_item_manipulation_runtime",
 ] as const;
 
 export type LateAurionMigrationTag = (typeof lateAurionMigrationTags)[number];
@@ -347,6 +348,12 @@ export function parseLateMigrationSql(tag: LateAurionMigrationTag, sourceSql: st
     if (/^DROP\s+PRIMARY\s+KEY$/i.test(clause)) {
       if (!table.indexes.some(entry => entry.name === "PRIMARY")) throw new Error(`${tag}: missing DROP primary key`);
       table.indexes = table.indexes.filter(entry => entry.name !== "PRIMARY");
+      continue;
+    }
+    const dropCheck = clause.match(/^DROP\s+CONSTRAINT\s+`([^`]+)`$/i);
+    if (dropCheck) {
+      if (!table.checks?.some(check => check.name === dropCheck[1])) throw new Error(`${tag}: missing DROP constraint ${dropCheck[1]}`);
+      table.checks = table.checks.filter(check => check.name !== dropCheck[1]);
       continue;
     }
     const check = clause.match(/^ADD\s+CONSTRAINT\s+`([^`]+)`\s+CHECK\s*\(([\s\S]+)\)$/i);

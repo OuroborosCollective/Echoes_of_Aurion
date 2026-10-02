@@ -214,7 +214,6 @@ export const planSchema = z
     planHash: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict();
-export { planSchema as npcLifePlanSchema };
 
 // Compatibility alias for the previous capsule API name.
 export const npcLifePlanSchema = planSchema;

@@ -1,0 +1,83 @@
+name: AIM-535 Item Manipulation Runtime
+
+on:
+  pull_request:
+    paths: ["server/**", "shared/**", "drizzle/**", "scripts/aurionProductionSchema*", ".github/workflows/aim535-item-manipulation-runtime.yml"]
+  push:
+    branches: [main]
+    paths: ["server/aurionItemManipulation*", "drizzle/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: auriontest
+          MARIADB_DATABASE: aurion_aim540_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim540_test
+      NODE_ENV: test
+      AURION_MANIPULATION_DB_E2E: "1"
+      AURION_CRAFTING_E2E: "1"
+      AURION_INVENTORY_DB_E2E: "1"
+      AURION_UI_E2E: "1"
+      AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      JWT_SECRET: aim540-ci-disposable-never-production
+      VITE_APP_ID: aim540-ci
+      AURION_WAVE3_ECONOMIC_E2E: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prove exact head and migration chain
+        run: |
+          test "$(git rev-parse HEAD)" = "$AURION_RELEASE_SHA"
+          pnpm verify:migrations
+          pnpm exec drizzle-kit migrate
+      - name: Deterministic crafting and loot regressions
+        run: pnpm exec vitest run server/aurionItemManipulationProtocol.test.ts server/aurionLootProtocol.test.ts server/aurionLootCatalog.test.ts server/craftingProtocol.test.ts --no-file-parallelism
+      - name: Real MariaDB atomic effects, rollback, concurrent replay and equipment readback
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/aurionItemManipulationMariaDb.test.ts server/aurionInventoryBackendAdapter.mariadb.test.ts server/craftingReceipt.e2e.test.ts server/confirmedEquipmentVisualReadback.mariadb.test.ts --no-file-parallelism --reporter=verbose | tee aim535-runtime-evidence.log
+      - name: TypeScript and executable runtime build
+        run: |
+          pnpm check
+          pnpm build
+      - name: Start exact executable runtime and read health
+        run: |
+          HOST=127.0.0.1 PORT=3000 STRICT_PORT=true NODE_ENV=production node dist/index.js > /tmp/aim535-server.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/healthz; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/aim535-server.log
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aim535-runtime-${{ env.AURION_RELEASE_SHA }}
+          path: |
+            aim535-runtime-evidence.log
+            /tmp/aim535-server.log

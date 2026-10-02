@@ -72,6 +72,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
   const worldQuery = trpc.gameplay.openWorld.useQuery(undefined, options);
   const uiQuery = trpc.player.ui.useQuery(undefined, options);
   const groupQuery = trpc.groups.read.useQuery(undefined, options);
+  const manipulationQuery = trpc.crafting.manipulationRead.useQuery(undefined, { ...options, enabled: panel === "crafting" });
+  const manipulate = trpc.crafting.manipulate.useMutation();
   const craftingQuery = trpc.crafting.read.useQuery(undefined, { ...options, enabled: panel === "crafting" });
   const player = projectPlayerReadback(playerQuery, userId);
   const world = projectReadback(ax1WorldHudSchema, worldQuery);
@@ -104,12 +106,12 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
     setPanel(value);
   }, [auto, onMove]);
   const refresh = useCallback(async () => {
-    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch()]);
+    const results = await Promise.all([playerQuery.refetch(), uiQuery.refetch(), groupQuery.refetch(), craftingQuery.refetch(), manipulationQuery.refetch()]);
     if (results.some(result => result.isError)) throw new Error("UI_READBACK_UNAVAILABLE");
     const parsed = playerUiReadbackSchema.parse(results[1].data);
     if (parsed.userId !== userId) throw new Error("UI_READBACK_OWNER_MISMATCH");
     await utils.gameplay.relationshipStanding.invalidate();
-  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, utils, userId]);
+  }, [playerQuery.refetch, uiQuery.refetch, groupQuery.refetch, craftingQuery.refetch, manipulationQuery.refetch, utils, userId]);
   const act = async (operation: () => Promise<unknown>, ready = fresh) => {
     if (!ready || busy.current) return;
     busy.current = true;
@@ -384,6 +386,8 @@ export function AurionAuthorityHud({ userId, connected, position, remotePlayers 
       readback={!craftingQuery.isError ? craftingQuery.data : undefined}
       pending={!fresh || craftingQuery.isFetching || craftingQuery.isError}
       message={message}
+      manipulation={!manipulationQuery.isError ? manipulationQuery.data : undefined}
+      onManipulate={command => { void act(() => manipulate.mutateAsync(command)); }}
       onCraft={inputItemId => { void act(() => craft.mutateAsync({ recipeKey: "temper_aurion_spear", inputItemId })); }}
       onBonus={batch => { void act(() => bonus.mutateAsync({ receiptId: batch.receiptId, expectedOutputIndexExact: batch.nextOutputIndexExact, count: Math.min(10, Number(batch.remainingQuantityExact)) })); }}
     />
