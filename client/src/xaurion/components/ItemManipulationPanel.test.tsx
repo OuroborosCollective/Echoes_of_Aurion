@@ -15,6 +15,17 @@ describe("server-confirmed item workbench", () => {
     expect(onManipulate).not.toHaveBeenCalled();
     expect(screen.getByText("Es fehlen Materialien.")).toBeTruthy();
   });
+  it("reads confirmed sockets and durability and disables full-durability repair", () => {
+    const onManipulate = vi.fn();
+    const repair: NonNullable<Props["readback"]> = { ...readback!, recipes: [readback!.recipes[0]!, { ...readback!.recipes[0]!, id: "aurion-repair-v2", operation: "repair" as const }] };
+    const items = inventory("2");
+    items.items.push({ ...items.items[0]!, id: "weapon-item", name: "Klinge", definition: "weapon-blade-v2", slot: "main_hand", socketCount: 2, durabilityBps: 10000 });
+    render(<ItemManipulationPanel readback={repair} inventory={items} pending={false} onManipulate={onManipulate} />);
+    fireEvent.change(screen.getByLabelText("Item-Bearbeitung"), { target: { value: "aurion-repair-v2" } });
+    expect(screen.getByLabelText("Bestätigter Item-Zustand").textContent).toContain("Sockel: 2 · Haltbarkeit: 100%");
+    fireEvent.click(screen.getByRole("button", { name: "Reparieren" }));
+    expect(onManipulate).not.toHaveBeenCalled();
+  });
   it("sends only intent and revision guards, never client-generated items or stats", () => {
     const onManipulate = vi.fn();
     render(<ItemManipulationPanel readback={readback} inventory={inventory("2")} pending={false} onManipulate={onManipulate} />);

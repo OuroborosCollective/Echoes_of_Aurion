@@ -47,7 +47,7 @@ function v2View(row: typeof aurionItemInstancesV2.$inferSelect): UiItem {
   if (!definition || (definition.equipmentSlot ?? null) !== row.equipmentSlot) throw new Error("UI_ITEM_CATALOG_MISMATCH");
   return uiItemSchema.parse({ id: row.id, version: "aurion_v2", name: row.baseItemDefinitionId.replace(/-v2$/, "").replaceAll("-", " "), definition: row.baseItemDefinitionId,
     levelExact: row.itemLevelExact, quality: row.quality, slot: row.equipmentSlot, status: row.status,
-    stats: statsFrom(row.affixesJson, definition.baseStats), receiptId: row.lootReceiptId ?? row.inventoryReceiptId ?? row.craftingReceiptId ?? "" , quantityExact: row.quantityExact, maxQuantityExact: row.maxQuantityExact });
+    stats: statsFrom(row.affixesJson, definition.baseStats), receiptId: row.lootReceiptId ?? row.inventoryReceiptId ?? row.craftingReceiptId ?? "" , socketCount: row.socketCount, durabilityBps: row.durabilityBps, quantityExact: row.quantityExact, maxQuantityExact: row.maxQuantityExact });
 }
 async function starterView(tx: UiTransaction, userId: number, lock = false): Promise<UiItem | null> {
   const stateRows = lock

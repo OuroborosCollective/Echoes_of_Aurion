@@ -1,9 +1,10 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { aurionItemInstancesV2, craftingReceipts, playerProfiles } from "../drizzle/schema";
 import { canonicalSha256 } from "../shared/aurionCanonicalHash";
 import { readCraftingMastery } from "./craftingProfessionPersistence";
 import { getDb } from "./db";
+import { allocateManipulationMaterials, allocatedManipulationMaterialEvidence, manipulationReceiptId } from "./aurionItemManipulationAllocation";
 import { assertV2InventoryIdentity, readCanonicalInventoryState } from "./aurionInventoryBackendAdapter";
 import { aurionInventoryStateHash } from "./aurionInventoryTransactionProtocol";
 import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "./aurionInventoryStackIdentity";
@@ -78,20 +79,18 @@ export async function executeAurionItemManipulation(userId: number, raw: ItemMan
     const count = (await tx.select({ count: sql<number>`count(*)` }).from(craftingReceipts).where(eq(craftingReceipts.userId, userId)))[0]?.count ?? 0;
     const operationIndex = Number(count) + 1;
     if (!Number.isSafeInteger(operationIndex) || operationIndex > 2_147_483_647) throw new Error("AURION_ITEM_OPERATION_INDEX_OVERFLOW");
-    const receiptId = `craft_${canonicalSha256({ userId, key, commandHash, operationIndex, recipe }).slice(7, 55)}`;
+    const allocation = allocateManipulationMaterials(recipe.materialRequirements, materials);
+    const materialEvidence = allocatedManipulationMaterialEvidence(allocation);
     const mastery = await readCraftingMastery(tx, userId, { professionId: "blacksmith", activityId: recipe.id, outputItemId: recipe.outputItemDefinitionId ?? source!.baseItemDefinitionId });
     const craftingStateHash = canonicalSha256({ capability: "personal-workbench", tools: "aurion-basic-hand-tools.v1", playerLevel: profile.level, mastery });
+    const receiptId = manipulationReceiptId({ userId, operationIndex, recipe, sourceItemHash: source?.deterministicHash, craftingStateHash, materials: materialEvidence });
     const result = resolveAurionItemManipulation({ operation: recipe.operation, receiptId, recipe, operationIndex, craftingStateHash,
-      inputItemHashes: source ? [source.deterministicHash] : [], materialItemHashes: materials.map(row => row.deterministicHash),
+      inputItemHashes: source ? [source.deterministicHash] : [], materialItemHashes: [...new Set(materialEvidence.map(row => row.deterministicHash))].sort(),
       sourceItem: source ? manipulationItemFromRow(source) : undefined, materials: available, stationCapability: "personal-workbench" });
     // Validate the entire plan before any writes. Material allocation follows canonical stack IDs.
-    const remaining = { ...result.consumedMaterials };
-    for (const row of materials) {
-      const needed = remaining[row.baseItemDefinitionId] ?? 0;
-      const used = BigInt(needed) < BigInt(row.quantityExact) ? BigInt(needed) : BigInt(row.quantityExact);
-      remaining[row.baseItemDefinitionId] = needed - Number(used);
-      if (!used) continue;
-      const quantity = BigInt(row.quantityExact) - used;
+    for (const planned of allocation) {
+      const row = materials.find(row => row.id === planned.id)!;
+      const quantity = BigInt(row.quantityExact) - BigInt(planned.usedQuantityExact);
       await tx.update(aurionItemInstancesV2).set({ quantityExact: String(quantity), status: quantity ? "owned" : "consumed" }).where(eq(aurionItemInstancesV2.id, row.id));
     }
     if (source) await tx.update(aurionItemInstancesV2).set({ quantityExact: "0", status: "consumed" }).where(eq(aurionItemInstancesV2.id, source.id));
@@ -136,6 +135,6 @@ export async function readAurionItemManipulation(userId: number) {
   if (!db) throw new Error("DATABASE_UNAVAILABLE");
   const { readAurionInventorySnapshot } = await import("./aurionInventoryBackendAdapter");
   const { aurionItemManipulationRecipes } = await import("./aurionItemManipulationCatalog");
-  const receipts = await db.select().from(craftingReceipts).where(and(eq(craftingReceipts.userId, userId), eq(craftingReceipts.ruleSetVersion, AURION_ITEM_MANIPULATION_RULESET_VERSION))).orderBy(craftingReceipts.resolutionIndex).limit(100);
+  const receipts = await db.select().from(craftingReceipts).where(and(eq(craftingReceipts.userId, userId), eq(craftingReceipts.ruleSetVersion, AURION_ITEM_MANIPULATION_RULESET_VERSION))).orderBy(desc(craftingReceipts.resolutionIndex)).limit(100);
   return { recipes: aurionItemManipulationRecipes, inventory: await readAurionInventorySnapshot(userId), receipts };
 }

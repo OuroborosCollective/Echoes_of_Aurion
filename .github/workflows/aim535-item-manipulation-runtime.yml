@@ -55,7 +55,7 @@ jobs:
           pnpm verify:migrations
           pnpm exec drizzle-kit migrate
       - name: Deterministic crafting and loot regressions
-        run: pnpm exec vitest run server/aurionItemManipulationProtocol.test.ts server/aurionLootProtocol.test.ts server/aurionLootCatalog.test.ts server/craftingProtocol.test.ts --no-file-parallelism
+        run: pnpm exec vitest run server/aurionItemManipulationAllocation.test.ts server/aurionItemManipulationProtocol.test.ts server/aurionLootProtocol.test.ts server/aurionLootCatalog.test.ts server/craftingProtocol.test.ts --no-file-parallelism
       - name: Real MariaDB atomic effects, rollback, concurrent replay and equipment readback
         run: |
           set -euo pipefail

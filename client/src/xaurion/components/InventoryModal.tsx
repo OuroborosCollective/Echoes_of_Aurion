@@ -43,6 +43,7 @@ function projectItem(item: UiItem): Ax1InventoryItem {
     paperdollSlot: item.slot ? PAPERDOLL_BY_AURION_SLOT[item.slot] ?? null : null,
     category: item.slot ? "gear" : "unclassified",
     stats: { ...item.stats },
+    socketCount: item.socketCount, durabilityBps: item.durabilityBps,
     icon: itemIcon(item),
   };
 }

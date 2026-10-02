@@ -20,13 +20,16 @@ export function ItemManipulationPanel({ readback, inventory, pending, onManipula
   const requirements = Object.entries(recipe.materialRequirements);
   const materials = items.filter(item => requirements.some(([id]) => id === item.definition));
   const enough = requirements.every(([id, required]) => materials.filter(item => item.definition === id).reduce((sum, item) => sum + BigInt(item.quantityExact ?? "1"), 0n) >= BigInt(required));
-  const ready = !pending && enough && (recipe.operation === "craft" || Boolean(source));
+  const repairNeeded = recipe.operation !== "repair" || (source?.durabilityBps !== undefined && source.durabilityBps < 10000);
+  const ready = !pending && enough && repairNeeded && (recipe.operation === "craft" || Boolean(source));
   return <section aria-label="Item-Werkbank" className="p-4 border border-cyan-700 rounded-xl space-y-3">
     <h4 className="font-serif text-cyan-300">Item-Werkbank</h4>
     <label className="block">Bearbeitung<select aria-label="Item-Bearbeitung" value={recipeId} disabled={pending} onChange={event => setRecipeId(event.target.value)} className="block w-full">{readback.recipes.map(recipe => <option key={recipe.id} value={recipe.id}>{labels[recipe.operation]}</option>)}</select></label>
     {recipe.operation !== "craft" && <label className="block">Gegenstand<select aria-label="Werkbank-Gegenstand" value={source?.id ?? ""} disabled={pending} onChange={event => setSourceId(event.target.value)} className="block w-full">{!sources.length && <option value="">Kein geeigneter Gegenstand</option>}{sources.map(item => <option key={item.id} value={item.id}>{item.name} · Stufe {item.levelExact}</option>)}</select></label>}
     <p className="text-xs">{requirements.length ? requirements.map(([id, quantity]) => `${quantity} × ${id.includes("echo-clay") ? "Echoton" : "Sterneisen"}`).join(", ") : "Gewinnt 1 Sterneisen zurück."}</p>
     {recipe.operation !== "craft" && <p className="text-xs text-gray-400">Der gewählte Gegenstand wird durch das bestätigte Ergebnis ersetzt. Lege ausgerüstete Gegenstände vorher ab.</p>}
+    {source && recipe.operation !== "craft" && <p aria-label="Bestätigter Item-Zustand">Sockel: {source.socketCount ?? "unbekannt"} · Haltbarkeit: {source.durabilityBps === undefined ? "unbekannt" : `${source.durabilityBps / 100}%`}</p>}
+    {!repairNeeded && <p role="status">Keine Reparatur erforderlich.</p>}
     {!enough && <p role="status">Es fehlen Materialien.</p>}
     <button className="ax1-primary" disabled={!ready} onClick={() => onManipulate({ recipeId, sourceItemId: recipe.operation === "craft" ? undefined : source?.id,
       materialItemIds: materials.map(item => item.id).sort(), expectedRevisionExact: readback.inventory.revisionExact,

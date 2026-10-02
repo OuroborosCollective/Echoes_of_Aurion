@@ -123,6 +123,7 @@ function outputFor(input: ItemManipulationInput): ItemManipulationItem | undefin
   if (source && (!input.recipe.allowedCategories.includes(source.category))) throw new Error("AURION_ITEM_CATEGORY_NOT_ALLOWED");
   if (source && (input.inputItemHashes.length !== 1 || input.inputItemHashes[0] !== source.deterministicHash)) throw new Error("AURION_ITEM_SOURCE_HASH_MISMATCH");
   if (source && (!Number.isSafeInteger(source.socketCount) || source.socketCount < 0 || source.socketCount > 5 || !Number.isSafeInteger(source.durabilityBps) || source.durabilityBps < 0 || source.durabilityBps > 10_000 || !Number.isSafeInteger(source.itemPower) || source.itemPower < 0)) throw new Error("AURION_ITEM_SOURCE_STATE_INVALID");
+  if (input.operation === "repair" && source?.durabilityBps === 10_000) throw new Error("AURION_ITEM_REPAIR_NOT_REQUIRED");
   const level = source ? exact(source.itemLevelExact, "AURION_ITEM_SOURCE_LEVEL") : 1n;
   if (level < 1n) throw new Error("AURION_ITEM_SOURCE_LEVEL_INVALID");
   const nextLevel = input.operation === "upgrade" ? level + 1n : level;
@@ -172,5 +173,5 @@ export function resolveAurionItemManipulation(input: ItemManipulationInput): Ite
     consumedItemHashes: [...input.inputItemHashes, ...(input.materialItemHashes ?? [])].sort(textCompare), consumedMaterials,
     output: output ?? null, salvageYield: salvageYield ?? null });
   const deterministicHash = canonicalSha256({ domain: "aurion.item-manipulation.receipt.v2", ruleSetVersion: AURION_ITEM_MANIPULATION_RULESET_VERSION, sourceEvidenceHash, rollSeed: seed(input, "operation") });
-  return Object.freeze({ operation: input.operation, receiptId: input.receiptId, recipeId: input.recipe.id, recipeVersion: input.recipe.version, consumedMaterials, consumedItemHashes: Object.freeze([...input.inputItemHashes].sort(textCompare)), output, salvageYield, sourceEvidenceHash, deterministicHash });
+  return Object.freeze({ operation: input.operation, receiptId: input.receiptId, recipeId: input.recipe.id, recipeVersion: input.recipe.version, consumedMaterials, consumedItemHashes: Object.freeze([...input.inputItemHashes, ...(input.materialItemHashes ?? [])].sort(textCompare)), output, salvageYield, sourceEvidenceHash, deterministicHash });
 }

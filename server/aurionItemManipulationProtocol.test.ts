@@ -50,6 +50,12 @@ describe("Aurion item manipulation contract", () => {
     expect(() => resolveAurionItemManipulation(request("socket", { recipe: recipe("socket", { maxAffixSlots: 0 }), sourceItem: { ...source, affixes: [] } }))).toThrow("AURION_ITEM_SOCKET_CAP");
   });
 
+  it("returns material identities and rejects full-durability repairs", () => {
+    const materialItemHashes = ["b".repeat(64)];
+    expect(resolveAurionItemManipulation(request("craft", { materialItemHashes })).consumedItemHashes).toEqual(materialItemHashes);
+    expect(() => resolveAurionItemManipulation(request("repair", { sourceItem: { ...source, durabilityBps: 10000 } }))).toThrow("AURION_ITEM_REPAIR_NOT_REQUIRED");
+  });
+
   it("returns only the configured salvage yield and binds the source", () => {
     const result = resolveAurionItemManipulation(request("salvage"));
     expect(result.output).toBeUndefined();
