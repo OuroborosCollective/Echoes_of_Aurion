@@ -745,6 +745,13 @@
       "role": "SUPPORT"
     },
     {
+      "path": "client/src/xaurion/components/ItemManipulationPanel.tsx",
+      "donor": "AX1",
+      "capabilityId": "crafting.catalog-rules",
+      "role": "SUPPORT",
+      "note": "Aurion-native extension of the migrated workbench; no donor runtime authority."
+    },
+    {
       "path": "client/src/xaurion/components/MobileMovementController.tsx",
       "donor": "AX1",
       "capabilityId": "client.visible-runtime",

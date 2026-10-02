@@ -19,13 +19,13 @@ jobs:
         image: mariadb:11.4
         env:
           MARIADB_ROOT_PASSWORD: auriontest
-          MARIADB_DATABASE: aurion_aim540_test
+          MARIADB_DATABASE: aurion_ui_test
         ports: ["3306:3306"]
         options: >-
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -pauriontest --silent"
           --health-interval=5s --health-timeout=3s --health-retries=30
     env:
-      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_aim540_test
+      DATABASE_URL: mysql://root:auriontest@127.0.0.1:3306/aurion_ui_test
       NODE_ENV: test
       AURION_MANIPULATION_DB_E2E: "1"
       AURION_CRAFTING_E2E: "1"
@@ -33,9 +33,8 @@ jobs:
       AURION_UI_E2E: "1"
       AURION_TEST_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       AURION_RELEASE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      JWT_SECRET: aim540-ci-disposable-never-production
-      VITE_APP_ID: aim540-ci
-      AURION_WAVE3_ECONOMIC_E2E: "1"
+      JWT_SECRET: aim535-ci-disposable-never-production
+      VITE_APP_ID: aim535-ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -74,6 +73,8 @@ jobs:
           done
           cat /tmp/aim535-server.log
           exit 1
+      - name: Authenticated HTTP crafting effect and independent readback
+        run: AURION_MANIPULATION_HTTP_E2E=1 pnpm exec vitest run server/aurionItemManipulationHttp.test.ts --reporter=verbose
       - uses: actions/upload-artifact@v4
         if: always()
         with:
