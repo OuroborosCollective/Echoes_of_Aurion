@@ -93,7 +93,7 @@ function stateFromStacks(userId: number, revisionExact: string, stacks: readonly
   });
 }
 
-async function readCanonicalInventoryState(tx: InventoryTransaction, userId: number, revisionExact: string, lock = true): Promise<AurionInventoryState> {
+export async function readCanonicalInventoryState(tx: InventoryTransaction, userId: number, revisionExact: string, lock = true): Promise<AurionInventoryState> {
   const legacyQuery = tx.select().from(itemInstances).where(
     and(eq(itemInstances.ownerUserId, userId), inArray(itemInstances.status, [...visibleStatuses])),
   ).orderBy(asc(itemInstances.id));
@@ -124,7 +124,7 @@ async function readPlayerRevision(tx: InventoryTransaction, userId: number) {
   return normalizeStateRevision(profile.inventoryRevisionExact || "0");
 }
 
-function assertV2InventoryIdentity(row: typeof aurionItemInstancesV2.$inferSelect): void {
+export function assertV2InventoryIdentity(row: typeof aurionItemInstancesV2.$inferSelect): void {
   const shape = {
     definitionId: row.baseItemDefinitionId, category: row.category, equipmentSlot: row.equipmentSlot,
     quality: row.quality, levelExact: row.itemLevelExact, affixesJson: row.affixesJson,

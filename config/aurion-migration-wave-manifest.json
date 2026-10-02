@@ -1,7 +1,7 @@
 {
   "schemaVersion": "aurion.migration-wave-manifest.v2",
   "recordType": "aurion_migration_wave_manifest",
-  "waveId": "aurion-production-0021-0067",
+  "waveId": "aurion-production-0021-0068",
   "migrations": [
     {
       "tag": "0021_aurion_global_world_state",
@@ -189,6 +189,10 @@
     },
     {
       "tag": "0067_aurion_npc_decision_log",
+      "source": "aurion"
+    },
+    {
+      "tag": "0068_aurion_item_manipulation_runtime",
       "source": "aurion"
     }
   ],

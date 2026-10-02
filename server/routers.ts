@@ -1,3 +1,4 @@
+import { executeAurionItemManipulation, itemManipulationCommandSchema, readAurionItemManipulation } from "./aurionItemManipulationPersistence";
 import { readConfirmedNpcMultiMemoryPacket } from "./npcMultiMemoryPersistence";
 import { readConfirmedNpcActionPacket } from "./npcActionGatewayPersistence";
 import { readConfirmedNpcProjectionProvenancePacket, readConfirmedNpcSemanticGraphPacket } from "./wasdSemanticGraphV2Persistence";
@@ -418,6 +419,8 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({ name: z.string().trim().min(3).max(48).regex(/^[^<>]+$/), tag: z.string().trim().toUpperCase().min(2).max(8).regex(/^[A-Z0-9]+$/) })).mutation(({ ctx, input }) => db.createGuildForFounder({ userId: ctx.user.id, ...input })),
   }),
   crafting: router({
+    manipulationRead: protectedProcedure.query(({ ctx }) => readAurionItemManipulation(ctx.user.id)),
+    manipulate: protectedProcedure.input(itemManipulationCommandSchema).mutation(({ ctx, input }) => executeAurionItemManipulation(ctx.user.id, input)),
     read: protectedProcedure.query(({ ctx }) => db.getCraftingReadmodel(ctx.user.id)),
     craft: protectedProcedure.input(z.object({ recipeKey: z.literal("temper_aurion_spear"), inputItemId: z.string().min(8).max(64) })).mutation(({ ctx, input }) => db.craftItemForUser({ userId: ctx.user.id, ...input })),
     materializeBonus: protectedProcedure.input(z.object({ receiptId: z.string().min(8).max(64), expectedOutputIndexExact: z.string().min(1).max(128).regex(/^[1-9][0-9]*$/), count: z.number().int().min(1).max(50) }).strict()).mutation(({ ctx, input }) => db.materializeCraftingBonusForUser({ userId: ctx.user.id, ...input })),

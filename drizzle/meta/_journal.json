@@ -477,6 +477,13 @@
       "when": 1790816584000,
       "tag": "0067_aurion_npc_decision_log",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1790816585000,
+      "tag": "0068_aurion_item_manipulation_runtime",
+      "breakpoints": true
     }
   ]
 }

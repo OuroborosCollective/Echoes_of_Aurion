@@ -117,3 +117,12 @@ Evidence: Final exact PR head `9e98a4651b336d14b2104344c7ef27c2767f92e3`; 30/30 
 Learned: Drizzle MySQL migrations must not end with a trailing `statement-breakpoint`; the migration-chain verifier now rejects both trailing and empty segments. Production schema reconciliation must include legacy `playerProfiles` when late migrations extend that table. Historical 0065 watermarks and proof assertions must advance coherently when 0066 is introduced.
 Open: PR #718 merge/readback only; no new implementation blocker remains on the candidate head.
 Next safe step: Merge PR #718 and verify the resulting `main` head plus closed Issue #502.
+
+### 2026-10-02 — Atomic crafting and item manipulation runtime (AIM-535)
+Status: VERIFIED isolated MariaDB effects; final candidate CI pending
+Task: Complete all eight manipulations through Aurion's existing inventory, item and crafting receipt authority.
+Decisions: Share Loot V2 affix rules; serialize owner transactions; bind recipe, materials, tools/mastery and exact state guards; expose confirmed receipts through the workbench and equipment readback.
+Evidence: PR #726; exact initial candidate `94ac5df0bfb2fc189eeb45c12c4f52445c89f732`, workflow `36990383331`: all eight operations plus concurrent replay, insufficient/foreign input rejection and real database rollback passed; existing inventory/legacy crafting tests passed. Migration 0068 extends existing tables.
+Learned: Migration-wave artifact lists and isolated UI database names must advance together; crafting replay hashes must normalize persisted JSON dates.
+Open: Final exact-head HTTP, full regression and merge/main readback.
+Next safe step: Require final candidate evidence, merge PR #726 and verify Issue #535 closure.

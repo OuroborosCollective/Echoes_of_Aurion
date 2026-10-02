@@ -234,6 +234,45 @@ export function resolveDeterministicLoot(input: Readonly<{
   return Object.freeze({ itemDefinitionId: base.id, category: base.category, equipmentSlot: base.equipmentSlot, quality, itemLevelExact: itemLevel.toString(10), affixes: resolvedAffixes, setId, itemPower, contextHash: resolvedContextHash, deterministicHash });
 }
 
+/** Crafting shares Loot V2 eligibility, group constraints, labelled rolls and stat ranges. */
+export function resolveLootAffixesForManipulation(input: Readonly<{
+  context: ServerConfirmedLootContext; base: LootBaseDefinition; levelExact: string;
+  catalog: readonly LootAffixDefinition[]; count: number; retained?: readonly ResolvedLootAffix[];
+}>): readonly ResolvedLootAffix[] {
+  assertContext(input.context);
+  const level = parseExact(input.levelExact, "manipulation level");
+  if (!validBase(input.base, level)) throw new Error("AURION_ITEM_BASE_LEVEL_INVALID");
+  const selected = [...(input.retained ?? [])];
+  if (!Number.isSafeInteger(input.count) || input.count < 0 || selected.length + input.count > 5) throw new Error("AURION_ITEM_AFFIX_SLOT_BOUND_INVALID");
+  const catalog = stableDefinitions(input.catalog);
+  const groups = new Set<string>();
+  for (const affix of selected) {
+    const definition = catalog.find(candidate => candidate.id === affix.id);
+    if (!definition || !validAffix(definition, input.base, level, groups) || definition.slot !== affix.slot || definition.groupId !== affix.groupId) throw new Error("AURION_ITEM_RETAINED_AFFIX_INVALID");
+    for (const [stat, range] of Object.entries(definition.statRanges)) {
+      const value = affix.stats[stat];
+      if (!Number.isSafeInteger(value) || value < range.min || value > range.max) throw new Error("AURION_ITEM_RETAINED_STAT_INVALID");
+    }
+    if (Object.keys(affix.stats).length !== Object.keys(definition.statRanges).length) throw new Error("AURION_ITEM_RETAINED_STAT_INVALID");
+    groups.add(affix.groupId);
+  }
+  for (let index = 0; index < input.count; index++) {
+    const candidates = catalog.filter(candidate => validAffix(candidate, input.base, level, groups)
+      && !selected.some(prior => catalog.find(d => d.id === prior.id)?.excludesGroupIds?.includes(candidate.groupId)));
+    if (!candidates.length) throw new Error("AURION_ITEM_AFFIX_POOL_EMPTY");
+    const definition = candidates[deterministicRoll(input.context, `manipulation-affix:${index}`, candidates.length)]!;
+    groups.add(definition.groupId);
+    selected.push(Object.freeze({ id: definition.id, slot: definition.slot, groupId: definition.groupId, stats: resolveAffixStats(input.context, definition, index) }));
+  }
+  return Object.freeze(selected.sort((a, b) => textCompare(a.slot, b.slot) || textCompare(a.id, b.id)));
+}
+
+export function lootItemPower(base: LootBaseDefinition, affixes: readonly ResolvedLootAffix[]): number {
+  const power = sumStats(base.baseStats) + affixes.reduce((sum, affix) => sum + sumStats(affix.stats), 0);
+  if (!Number.isSafeInteger(power) || power > 2_147_483_647) throw new Error("AURION_ITEM_POWER_OVERFLOW");
+  return power;
+}
+
 /** Counts configuration paths without rolling a reward; useful for content-budget and combinatorics checks. */
 export function estimateLootVariantUpperBound(input: Readonly<{ baseItemCount: number; affixGroupCount: number; maxAffixSlots: number; qualityCount?: number; levelBands: number }>): string {
   for (const value of [input.baseItemCount, input.affixGroupCount, input.maxAffixSlots, input.levelBands]) if (!Number.isSafeInteger(value) || value < 0) throw new Error("loot variant inputs must be non-negative safe integers");

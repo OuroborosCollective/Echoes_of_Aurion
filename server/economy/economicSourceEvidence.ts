@@ -114,3 +114,8 @@ export function progressionPointsSourceEvidenceHash(row:Readonly<{
   if(row.kind!=="points") throw new Error("ECONOMIC_PROGRESSION_SOURCE_KIND_INVALID");
   return canonicalSha256({schema:"aurion.economic-source.progression-points.v1",...row});
 }
+
+/** V2 crafting/manipulation effects bind the complete recipe and immutable outputs. */
+export function itemManipulationSourceEvidenceHash(evidence: Readonly<Record<string, unknown>>): string {
+  return canonicalSha256({ schema: "aurion.economic-source.item-manipulation.v2", ...evidence });
+}

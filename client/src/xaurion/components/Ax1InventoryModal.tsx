@@ -29,6 +29,8 @@ export type Ax1InventoryItem = {
   sourceSlot: string | null;
   paperdollSlot: Ax1PaperdollSlot | null;
   category: Ax1InventoryCategory;
+  socketCount?: number;
+  durabilityBps?: number;
   stats: Record<string, number>;
   icon: string;
 };
@@ -217,6 +219,8 @@ export function Ax1InventoryModal({
             <div className={`rounded-xl border p-4 text-center ax1-quality-${selectedItem.quality}`}><span className="text-4xl">{selectedItem.icon}</span><h4 className="font-serif font-bold mt-2">{selectedItem.name}</h4><small>{QUALITY_LABEL[selectedItem.quality]} · Stufe {selectedItem.levelExact}</small></div>
             <p className="text-[10px] text-gray-400 mt-2">{selectedItem.sourceSlot ? SOURCE_SLOT_LABEL[selectedItem.sourceSlot] ?? selectedItem.sourceSlot : "Keine bestätigte Gegenstandskategorie"}</p>
             <p className="text-xs text-gray-500 mt-2">Keine bestätigte Gegenstandsbeschreibung.</p>
+            {selectedItem.socketCount !== undefined && <p>Sockel: {selectedItem.socketCount}</p>}
+            {selectedItem.durabilityBps !== undefined && <p>Haltbarkeit: {selectedItem.durabilityBps / 100}%</p>}
             <dl className="py-3 text-xs space-y-2">{Object.entries(selectedItem.stats).sort(([a], [b]) => compareText(a, b)).map(([name, value]) => <div className="flex justify-between" key={name}><dt>{name}</dt><dd className="text-amber-300">{value}</dd></div>)}</dl>
             <div className="flex items-center justify-between text-[10px] border-t border-gray-800 pt-2 mb-3"><span className="flex items-center gap-1 text-gray-400"><Tag className="w-3 h-3" /> Händlerwert</span><span className="text-amber-300">— Gold</span></div>
             {selectedItem.status === "pending_pickup" ? <button type="button" className="ax1-primary" disabled={pending} onClick={() => onCollect(selectedItem.key)}>Beute einsammeln</button> : selectedItem.status === "equipped" ? <button type="button" className="ax1-primary" disabled={pending} onClick={() => onUnequip(selectedItem.key)}>Ablegen</button> : selectedItem.category === "gear" ? <button type="button" className="ax1-primary" disabled={pending} onClick={() => onEquip(selectedItem.key)}>Ausrüsten</button> : null}
