@@ -12,7 +12,7 @@ import { buildGlobalWorldPlan, toGlobalWorldClientDescriptor, type GlobalWorldCl
 import type { WorldEpochReaction } from "./worldEpochReactionProtocol";
 import { worldServiceNpcs, type WorldServiceNpc } from "../shared/worldServiceNpcs";
 
-export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault" | "starfall_crater" | "clockwork_woods" | "sunwatch_bastion";
+export type OpenWorldZoneKey = "observatory_threshold" | "windhollow" | "emberfall" | "cinder_vault" | "starfall_crater" | "clockwork_woods" | "sunwatch_bastion" | "abyssal_depths";
 export type OpenWorldCommand = "move" | "attack" | "interact" | "return_to_tower";
 export type PointOfInterestKind = "portal" | "npc" | "encounter" | "landmark";
 export type TerrainSurfaceKey = "grass" | "flower_meadow" | "earth" | "farmland" | "garden_parcels" | "starpath" | "starpath_crossing";
@@ -44,7 +44,7 @@ export type OpenWorldProfile = {
 export type OpenWorldSnapshot = {
   revision: 1;
   zoneId: OpenWorldZoneKey;
-  zoneTier: 0 | 1 | 2 | 3 | 4 | 5;
+  zoneTier: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   displayName: string;
   entryNarrative: string;
   encounter: { activeCount: number; budget: number; maximumVisible: number };
@@ -161,10 +161,15 @@ function propsForZone(zoneId: OpenWorldZoneKey): OpenWorldSnapshot["props"] {
   if (zoneId === "sunwatch_bastion") return [
     { kind: "starpath_marker", tileX: 4, tileZ: 4, rotationY: 0, scale: 1 },
   ];
+  if (zoneId === "abyssal_depths") return [
+    { kind: "starpath_marker", tileX: 5, tileZ: 5, rotationY: 0, scale: 1 },
+  ];
   return [{ kind: "starpath_marker", tileX: 3, tileZ: 4, rotationY: 0, scale: 1 }];
 }
 
 export function zoneForOpenWorldProgress(input: OpenWorldProfile): OpenWorldZoneKey {
+  if (input.activeQuest === "abyssal_depths") return "abyssal_depths";
+  if (input.completed.includes("abyssal_depths")) return "abyssal_depths";
   if (input.activeQuest === "clockwork_core") return "clockwork_woods";
   if (input.activeQuest === "sunwatch_vanguard") return "sunwatch_bastion";
   if (input.completed.includes("clockwork_core")) return "clockwork_woods";
@@ -219,7 +224,7 @@ function npcReadModels(input: OpenWorldProfile, reaction: WorldReaction) {
 
 function worldSignalsFor(input: OpenWorldProfile, zoneId: OpenWorldZoneKey, resolutionIndex: number, epochReaction?: WorldEpochReaction): WorldSignal[] {
   const signals: WorldSignal[] = [];
-  const epochSector = epochReaction?.sectors[({ observatory_threshold: 0, windhollow: 1, emberfall: 2, cinder_vault: 3, starfall_crater: 4, clockwork_woods: 5, sunwatch_bastion: 6 } as const)[zoneId] % Math.max(1, epochReaction?.sectors.length ?? 1)];
+  const epochSector = epochReaction?.sectors[({ observatory_threshold: 0, windhollow: 1, emberfall: 2, cinder_vault: 3, starfall_crater: 4, clockwork_woods: 5, sunwatch_bastion: 6, abyssal_depths: 7 } as const)[zoneId] % Math.max(1, epochReaction?.sectors.length ?? 1)];
   if (epochSector) {
     signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:ecology`, kind: "ecology", regionId: zoneId, magnitude: epochSector.resources.forestHealth - 0.5, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
     signals.push({ id: `${epochReaction!.receiptId}:${epochSector.sectorId}:economy`, kind: "economy", regionId: zoneId, magnitude: epochSector.resources.food - 0.5, sourceReceiptId: epochReaction!.receiptId, resolutionIndex });
@@ -239,6 +244,7 @@ function primaryEncounterFor(input: OpenWorldProfile): OpenWorldSnapshot["primar
   if (input.activeQuest === "starfall_resonance") return { id: "starfall-guardian", label: "Sternenfall-Wächter", encounterKey: "starfall_crater", narrative: "Die Resonanz des Kraters beschwört den Wächter." };
   if (input.activeQuest === "clockwork_core") return { id: "rootgear-foundry", label: "Rootgear-Kernwächter", encounterKey: "rootgear_foundry", narrative: "Das Uhrwerk erwacht nur durch die bestätigte Questbegegnung." };
   if (input.activeQuest === "sunwatch_vanguard") return { id: "sunwatch-commander", label: "Sonnenwacht-Kommandant", encounterKey: "sunwatch_bastion", narrative: "Der gefallene Kommandant verteidigt die Ruinen der Bastion." };
+  if (input.activeQuest === "abyssal_depths") return { id: "abyssal-guardian", label: "Abgründiger Wächter", encounterKey: "abyssal_depths", narrative: "Tief in den Ruinen lauert der Abgründige Wächter." };
   if (input.canEnterDungeon) return { id: "cinder-guardian", label: "Glutwächter", encounterKey: "cinder_vault", narrative: "Der geborgene Schlüssel erlaubt den Eintritt ins Aschengewölbe." };
   return null;
 }
@@ -282,6 +288,11 @@ export function buildOpenWorldSnapshot(input: OpenWorldProfile): OpenWorldSnapsh
       { id: "sunwatch-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein Sonnenwacht" },
       { id: "orun-sunwatch", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
       { id: "sunwatch-commander", kind: "encounter" as const, state: "available" as const, label: "Sonnenwacht-Kommandant" },
+    ] },
+    abyssal_depths: { tier: 6 as const, displayName: "Abgründige Tiefen", narrative: "Dunkle Mächte sammeln sich in den tiefen Ruinen.", pois: [
+      { id: "abyssal-return", kind: "portal" as const, state: "available" as const, label: "Rückkehrstein Abgrund" },
+      { id: "orun-abyssal", kind: "npc" as const, state: "available" as const, label: "Orun, Archivhüter" },
+      { id: "abyssal-guardian", kind: "encounter" as const, state: "available" as const, label: "Abgründiger Wächter" },
     ] },
   }[zoneId];
   // Quest progress changes the projected zone as soon as the Ember Key is turned in.
