@@ -700,17 +700,18 @@
 .xaurion-runtime .virtual-joystick[data-active="true"]{
   border-color:rgba(103,232,249,.72);
   background:rgba(3,19,30,.62);
-  box-shadow:0 0 calc(16px + 18px * var(--joystick-intensity)) rgba(34,211,238,.18),inset 0 0 22px rgba(34,211,238,.07);
+  box-shadow:0 0 28px rgba(34,211,238,.24),inset 0 0 22px rgba(34,211,238,.07);
 }
 .xaurion-runtime .virtual-joystick__halo{
   position:absolute;
   inset:13%;
   border:1px solid rgba(103,232,249,.16);
   border-radius:50%;
-  opacity:calc(.25 + .55 * var(--joystick-intensity));
-  transform:scale(calc(.92 + .08 * var(--joystick-intensity)));
+  opacity:.3;
+  transform:scale(.92);
   transition:transform .1s ease,opacity .1s ease;
 }
+.xaurion-runtime .virtual-joystick[data-active="true"] .virtual-joystick__halo{opacity:.82;transform:scale(1)}
 .xaurion-runtime .virtual-joystick__axis{position:absolute;color:rgba(148,163,184,.42);font:700 7px/1 monospace;pointer-events:none}
 .xaurion-runtime .virtual-joystick__axis--north{top:8px;left:50%;transform:translateX(-50%)}
 .xaurion-runtime .virtual-joystick__axis--east{right:8px;top:50%;transform:translateY(-50%)}
