@@ -187,6 +187,11 @@ export async function resolveQuestCausalAnchor(input: {
     if (evidence.eventId !== input.command.sourceEvidenceId || evidence.evidenceHash !== input.command.sourceEvidenceDigest) {
       throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_IDENTITY_MISMATCH");
     }
+  } else if (input.command.sourceEvidenceId === `evt_combat_quest_complete_${input.instance.id}`) {
+    const evidence = await (await import("./pilotCombatCompletionEvidence")).readPilotCombatCompletionEvidence(input.instance);
+    if (evidence.id !== input.command.sourceEvidenceId || evidence.digest !== input.command.sourceEvidenceDigest) {
+      throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_IDENTITY_MISMATCH");
+    }
   } else {
     throw new Error("QUEST_CAUSAL_SOURCE_EVIDENCE_UNPROVABLE");
   }

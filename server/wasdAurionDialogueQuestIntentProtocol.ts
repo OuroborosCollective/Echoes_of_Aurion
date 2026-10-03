@@ -2,10 +2,12 @@ import type { QuestKey, QuestState } from "./gameplayProtocol";
 import type { DialogueInterpretation } from "./wasdAurionProtocol";
 import { aurionQuestNpcForGiver, isAurionQuestNpcId, type AurionQuestGiverName, type AurionQuestNpcId } from "./aurionStarterVillageContract";
 
+export type DialogueQuestKey = QuestKey | "starter-wolves-6";
+
 export type DialogueQuestActionKind = "offer_quest" | "request_turn_in";
 
 export type DialogueQuestReadModel = {
-  readonly key: QuestKey;
+  readonly key: DialogueQuestKey;
   readonly giver: AurionQuestGiverName;
   readonly state: QuestState;
   readonly readyToTurnIn: boolean;
@@ -15,14 +17,14 @@ export type DialogueQuestIntentResolution =
   | {
       readonly state: "offer_available_quest";
       readonly actionKind: "offer_quest";
-      readonly questKey: QuestKey;
+      readonly questKey: DialogueQuestKey;
       readonly npcId: AurionQuestNpcId;
       readonly reason: "accepted_quest_request";
     }
   | {
       readonly state: "turn_in_available";
       readonly actionKind: "request_turn_in";
-      readonly questKey: QuestKey;
+      readonly questKey: DialogueQuestKey;
       readonly npcId: AurionQuestNpcId;
       readonly reason: "accepted_turn_in_request";
     }

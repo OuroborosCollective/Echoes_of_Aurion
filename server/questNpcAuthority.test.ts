@@ -14,6 +14,19 @@ const valid = {
 };
 
 describe("canonical Aurion quest NPC authority", () => {
+  it("binds pilot hand-in to the north guard, matching action and current AOI", () => {
+    const guard = aurionStarterVillageQuestNpcs.starter_village_north_gate_guard;
+    const pilot = {
+      userId, questKey: "starter-wolves-6" as const, kind: "complete" as const,
+      command: { id: "pilot-turn-in", userId, npcId: guard.id, questKey: "starter-wolves-6", actionKind: "request_turn_in" as const },
+      presence: { userId, zoneId: guard.zoneId, position: guard.position },
+    };
+    expect(assertQuestNpcAuthorityEvidence(pilot).npcId).toBe(guard.id);
+    expect(() => assertQuestNpcAuthorityEvidence({ ...pilot, command: { ...pilot.command, npcId: "lyra" } })).toThrow("QUEST_GIVER_MISMATCH");
+    expect(() => assertQuestNpcAuthorityEvidence({ ...pilot, command: { ...pilot.command, actionKind: "offer_quest" } })).toThrow("QUEST_DIALOGUE_ACTION_MISMATCH");
+    expect(() => assertQuestNpcAuthorityEvidence({ ...pilot, presence: undefined })).toThrow("QUEST_WORLD_PRESENCE_REQUIRED");
+    expect(() => assertQuestNpcAuthorityEvidence({ ...pilot, presence: { ...pilot.presence, position: { x: 0, z: 8_000 } } })).toThrow("QUEST_GIVER_OUT_OF_RANGE");
+  });
   it("keeps the north-gate guard identity and fixed starter-village anchor in the typed contract", () => {
     expect(aurionStarterVillageQuestNpcs.starter_village_north_gate_guard.position).toBe(AURION_STARTER_VILLAGE_GATES[0].position);
     expect(aurionStarterVillageQuestNpcs.starter_village_north_gate_guard).toEqual({

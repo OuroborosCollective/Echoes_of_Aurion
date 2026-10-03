@@ -387,13 +387,13 @@ export const appRouter = router({
     requestQuestActionFromDialogue: protectedProcedure.input(z.object({
       dialogueReceiptId: z.string().trim().min(8).max(64),
       actionKind: z.enum(["offer_quest", "request_turn_in"]),
-      questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard"]),
+      questKey: z.enum(["astral_call", "archive_of_echoes", "ember_key", "starfall_resonance", "clockwork_core", "sunwatch_vanguard", "starter-wolves-6"]),
       idempotencyKey: z.string().trim().min(16).max(128),
     })).mutation(({ ctx, input }) => db.requestQuestActionFromDialogue({
       userId: ctx.user.id,
       dialogueReceiptId: input.dialogueReceiptId,
       actionKind: input.actionKind,
-      questKey: input.questKey as QuestKey,
+      questKey: input.questKey,
       idempotencyKey: input.idempotencyKey,
     })),
   }),

@@ -428,3 +428,11 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Authenticated pilot hand-in and durable causal closure
+Status: PARTIAL — real database/dialogue/closure verified; playable wolf content still absent
+Task: Connect pilot offer, acceptance and hand-in to owned dialogue commands, canonical north-guard AOI and durable six-victory evidence.
+Decisions: Admit the pilot key only in the authored dialogue lane, preserving legacy quest enums. Bind the offer to its exact dialogue event instead of the last unrelated global event. Independently re-read the six consumed combat receipts and reject wrong species/owner/plan. Restore the accepted zone projection from its durable acceptance after restart, require a living player and confirmed zone hand-in, then use the existing world-epoch authority and causal closure. Server sequence allocation accounts for accepted and pending intents. Completed replay reuses the persisted closure.
+Evidence:90 focused tests passed,1 DB case skipped in the default run; TypeScript passed. A fresh MariaDB run completed real dialogue confirmation, guarded offer/accept, injected lost projection acknowledgment, service recreation, six unique evidence rows, causal world-root/hand-in closure and idempotent completion replay. Tampered species is rejected. Its initial position and combat evidence are explicit fixtures: this is not an HTTP movement or real wolf-combat claim.
+Open: No active wolf archetype/model was found; the existing expedition generator and audio cues alone do not provide a playable zone creature. Final browser journey and reward integration remain pending.
+Next safe step: Integrate reward dependency, verify the exact item and restart readback, and resolve the missing creature content before merging a complete pilot.

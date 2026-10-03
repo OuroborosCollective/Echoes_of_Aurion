@@ -1,6 +1,7 @@
+import type { DialogueQuestKey } from "./wasdAurionDialogueQuestIntentProtocol";
 import { and, desc, eq } from "drizzle-orm";
 import { aurionDialogueCommandReceipts } from "../drizzle/schema";
-import { getQuest, type QuestKey } from "./gameplayProtocol";
+import { getQuest } from "./gameplayProtocol";
 import { getDb, listActiveWorldPresence } from "./db";
 import {
   aurionQuestNpcForGiver,
@@ -27,7 +28,11 @@ type QuestWorldPresenceEvidence = Readonly<{
   position: Readonly<{ x: number; z: number }>;
 }>;
 
-function canonicalQuest(questKey: QuestKey) {
+function canonicalQuest(questKey: DialogueQuestKey) {
+  if (questKey === "starter-wolves-6") {
+    const npc = aurionStarterVillageQuestNpcs.starter_village_north_gate_guard;
+    return { npcId: npc.id, giver: npc.displayName, zoneId: npc.zoneId, position: npc.position };
+  }
   const quest = getQuest(questKey);
   const npc = aurionQuestNpcForGiver(quest.giver);
   if (!npc) throw new Error("QUEST_GIVER_UNSUPPORTED");
@@ -40,7 +45,7 @@ function actionKindFor(kind: QuestMutationKind) {
 
 export function assertQuestNpcAuthorityEvidence(values: {
   userId: number;
-  questKey: QuestKey;
+  questKey: DialogueQuestKey;
   kind: QuestMutationKind;
   command?: QuestDialogueAuthorityEvidence;
   presence?: QuestWorldPresenceEvidence;
@@ -73,7 +78,7 @@ export function assertQuestNpcAuthorityEvidence(values: {
  */
 export async function assertQuestNpcAuthority(values: {
   userId: number;
-  questKey: QuestKey;
+  questKey: DialogueQuestKey;
   kind: QuestMutationKind;
   clientGiver?: string;
 }): Promise<{ npcId: AurionQuestNpcId; dialogueCommandReceiptId: string }> {

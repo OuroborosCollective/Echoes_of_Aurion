@@ -348,7 +348,8 @@ export class AuthoritativeMovementZone {
   nextClientSequenceForUser(userId: number): number {
     const peer = this.peersByEntityId.get(`player:${userId}`);
     if (!peer) throw new Error("ZONE_USER_NOT_CONNECTED");
-    return peer.lastReceivedClientSeq + 1;
+    return Math.max(peer.lastReceivedClientSeq, peer.lastAcceptedClientSeq,
+      ...this.pendingIntents.filter(intent => intent.entityId === `player:${userId}`).map(intent => intent.clientSeq)) + 1;
   }
 
   nextArrivalSequence(): number {
