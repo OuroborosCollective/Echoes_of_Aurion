@@ -21,7 +21,7 @@ import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldCo
 import { operationalDate } from "../../shared/operationalClock";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
 import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContract";
-import { persistAurionCombatVictoryEvidence } from "../aurionCombatVictoryPersistence";
+import { drainCombatQuestProjections, persistAurionCombatVictoryEvidence } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
@@ -100,11 +100,10 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     }
     for (const victory of combatVictories ?? []) {
       await persistAurionCombatVictoryEvidence(victory);
-      // Project only after durable evidence; the service independently reads the
-      // stored receipt and applies the existing quest idempotency/state guards.
-      const { adminQuestService } = await import("../routes/aurionQuestRouter");
-      await adminQuestService.applyConfirmedCombatVictory(victory.playerUserId, victory.receiptId);
     }
+    const { adminQuestService } = await import("../routes/aurionQuestRouter");
+    await drainCombatQuestProjections((userId, receiptId, instanceIds) =>
+      adminQuestService.applyConfirmedCombatVictory(userId, receiptId, instanceIds));
   }
 
   async saveCheckpoint(zoneId: string, tick: number, stateHash: string, state: CanonicalZoneState): Promise<void> {

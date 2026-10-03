@@ -378,3 +378,11 @@ Evidence: Four node dispatch-contract tests passed; 50 schema/readback/apply/rec
 Learned: Journal/manifest updates alone do not advance the operational apply bundle.
 Open: Real 0069 schema readback, restart-safe victory projection, genuine wolf content and authorized pilot completion remain required.
 Next safe step: Run isolated MariaDB and exact-head CI, preserving failure evidence.
+
+### 2026-10-03 — PR 736 durable combat projection recovery
+Status: PARTIAL — durable observer replay verified; full pilot hand-in integration pending
+Task: Recover persisted combat victories after projection failure or restart without counting them for quests accepted later.
+Decisions: Persist original active quest target IDs with victory evidence and a projection acknowledgment. Drain unacknowledged evidence on subsequent persisted ticks, including after restart. Acknowledgment follows all target commits; existing receipt idempotency absorbs lost acknowledgments. Repeated offers preserve existing progress instead of overwriting the deterministic instance.
+Evidence: Real isolated MariaDB test passes after injected post-commit failure and service re-creation, proving one increment and no credit to a subsequently accepted quest. Focused suite:76 passed,1 skipped; full suite:381 files/1856 tests passed,208 skipped; TypeScript passed. CI Local Test Pack now explicitly executes the real outbox test. Migration0069 remains unmerged and is extended with outbox metadata.
+Open: Actual wolf content and the authenticated pilot hand-in causal chain remain to be integrated. No deployment or complete-pilot claim.
+Next safe step: Integrate the updated main baseline and finish authenticated integration before merge.

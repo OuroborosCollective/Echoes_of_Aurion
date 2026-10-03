@@ -266,6 +266,11 @@ export class AdminQuestStudioService {
       triggerEventId: event.id,
       requestedTemplateId: params.templateId,
     });
+    const existing = await this.persistenceEngine.getInstance(instance.id);
+    if (existing) {
+      if (existing.planHash !== plan.planHash || existing.playerUserId !== params.playerUserId) throw new Error("QUEST_OFFER_IDENTITY_CONFLICT");
+      return { instance: existing, planHash: existing.planHash, graphHash: existing.graphHash };
+    }
     await this.persistenceEngine.savePlan(plan);
     await this.persistenceEngine.saveInstance(instance);
     return { instance, planHash: plan.planHash, graphHash: plan.graphHash };
@@ -414,12 +419,13 @@ export class AdminQuestStudioService {
   }
 
   /** Progresses combat objectives only after an authoritative MariaDB evidence readback. */
-  public async applyConfirmedCombatVictory(userId: number, receiptId: string) {
+  public async applyConfirmedCombatVictory(userId: number, receiptId: string, targetInstanceIds?: readonly string[]) {
     const evidence = await this.combatEvidenceReader(receiptId);
     if (!evidence) throw new Error("QUEST_COMBAT_RECEIPT_UNKNOWN");
     const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
     const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean; replayed: boolean }> = [];
     for (const listed of instances) {
+      if (targetInstanceIds && !targetInstanceIds.includes(listed.id)) continue;
       const instance = await this.persistenceEngine.getInstance(listed.id);
       if (!instance || instance.state !== "active") continue;
       const plan = await this.persistenceEngine.getPlan(instance.planHash);
