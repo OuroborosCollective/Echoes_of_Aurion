@@ -655,7 +655,25 @@ export class AuthoritativeMovementZone {
     } as AurionCausalTickReceipt;
     this.previousReceiptHash = receipt.receiptHash;
     this.lastReceipt = receipt;
-    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess);
+    const combatVictories = combatEvents.flatMap(event => {
+      if (!event.killed || !event.attackerEntityId.startsWith("player:")) return [];
+      const opponent = this.mobRuntime.stateFor(event.defenderEntityId);
+      if (!opponent) return [];
+      const playerUserId = Number(event.attackerEntityId.slice("player:".length));
+      const identity = canonicalSha256({ receiptHash: receipt.receiptHash, combatSequence: event.sequence });
+      return [{
+        schema: "aurion.combat.victory.v1" as const,
+        eventId: `combat-event-${identity.slice("sha256:".length, "sha256:".length + 32)}`,
+        receiptId: `combat-receipt-${identity.slice("sha256:".length, "sha256:".length + 32)}`,
+        logicalRevision: event.sequence,
+        playerUserId,
+        opponentEntityId: event.defenderEntityId,
+        opponentSpecies: opponent.definition.archetype,
+        outcome: "victory" as const,
+        confirmed: true as const,
+      }];
+    });
+    if (!this.isReplay) this.evidenceRecorder.enqueueTick(receipt, postState, preState, intentsToProcess, combatVictories);
 
     // 09 projection/transport. Replay emits no socket or persistence side effects.
     if (!this.isReplay) {

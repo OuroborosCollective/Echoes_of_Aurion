@@ -309,6 +309,56 @@ Learned: Repository memory is now recorded automatically from the completed merg
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
 
+### 2026-10-03 — Deterministic Aurion starter-village layout
+Status: VERIFIED repository regression
+Task: Replace seed/catalog-cyclic starter-village placement with an Aurion-owned fixed-point layout while preserving the established spawn and return-stone position.
+Decisions: Reference the immutable return-stone position directly; define the centre, ring road, four cardinal axes and exactly four gate anchors in millimetres; mark the pilot as a partial set and fail closed for any future closed-wall plan without all four geometric openings. Use only admitted world-catalog IDs and keep the client as a view-only projection of the authenticated server region.
+Touched surfaces: `shared/aurionStarterVillageContract.ts`, `shared/worldAssetProtocol.ts`, `server/aurionStarterVillageContract.test.ts`, `server/worldAssetProtocol.test.ts`, `client/src/xaurion/integration/WorldAssetProjection.ts`.
+Evidence: `pnpm vitest run server/aurionStarterVillageContract.test.ts server/worldAssetProtocol.test.ts server/worldNatureCollision.test.ts` passed 17 tests; `pnpm check` passed; `pnpm test` passed 378 files / 1,841 tests with 55 files / 207 environment-dependent tests skipped. Browser screenshot capture was attempted after installing the matching Playwright Chromium but the container lacks `libatk-1.0.so.0`, so no screenshot is claimed.
+Learned: The origin chunk must be selected from a named Aurion geometry contract before the generic seeded catalog lane; the renderer can then remain generic and cannot invent or close village geometry.
+Open: No deployment, native GPU, persistence or production-runtime claim is made. Visual browser readback remains unavailable in this container because the installed Chromium cannot start without the system ATK library.
+Next safe step: Review and merge the exact tested revision, then use the automated post-merge Memory/readback workflow; obtain browser/native visual evidence in an image that includes Chromium runtime libraries if required.
+
+### 2026-10-03 — PR 734 geometric review corrections
+Status: PARTIAL — local regressions verified; exact-head CI pending
+Task: Review ac86c6e7c74db7ab0ce015e70688725d4829a492 and repair demonstrated layout and browser-count regressions.
+Decisions: Reserve the 16–20 m ring corridor using all-LOD catalog bounds; move the four landmarks to fixed ±22 m anchors. The ring is a reserved layout corridor, not a rendered road surface. Reject every closed-wall request until geometric passage evidence exists; four caller-supplied IDs are not evidence. Retain the explicit decorative partial set and existing non-colliding city-asset policy.
+Touched surfaces: Starter-village contract/tests, world-asset JSON import attributes for native ESM test loading, exact server-plan browser assertion and relevant workflow path filters.
+Evidence: Original source-bound GLB audit found 1,341 market and 72 southeast-hut LOD0 vertices inside the ring corridor. Original collision readback returned zero origin obstacles and clear four-axis sweeps; no blocked gate is claimed. Corrected focused tests: 18 passed. Full suite: 378 files / 1,842 tests passed, 55 files / 207 environment-dependent tests skipped. Typecheck passed before final ESM-only adjustment; final check recorded in review logs. Playwright discovers all three phone/tablet/desktop cases; real runtime execution remains CI evidence, not a local claim.
+Learned: Placement-center tests miss footprint intersections; a catalog ID and a named open gate do not prove collision geometry.
+Open: Real MariaDB/browser CI must pass on the final head. No production, native GPU, closed-wall or rendered-ring claim.
+Next safe step: Push this reviewed correction, inspect exact-head CI and only then decide merge.
+
+### 2026-10-03 — Canonical starter-village quest NPC contract
+Status: VERIFIED repository regression
+Task: Add the north-gate guard to Aurion's canonical NPC/quest-giver boundary without introducing a parallel authority.
+Decisions: A typed Aurion starter-village contract now owns the allowlisted quest NPC identities, display names, zones and fixed-point positions. Dialogue routing and command persistence consume that allowlist; quest mutation authorization still requires the owned dialogue-command receipt and server-confirmed AOI presence. Aurion remains the sole quest/combat owner; WASD is historical provenance only.
+Touched surfaces: `server/aurionStarterVillageContract.ts`, `server/questNpcAuthority.ts`, `server/questNpcAuthority.test.ts`, `server/wasdAurionDialogueQuestIntentProtocol.ts`, `server/wasdAurionDialogueQuestIntentProtocol.test.ts`, `server/routers.ts`, `server/db.ts`, `Memory.md`.
+Evidence: `pnpm vitest run server/questNpcAuthority.test.ts server/wasdAurionDialogueQuestIntentProtocol.test.ts server/dialogueQuestIntent.e2e.test.ts` passed 13 executable tests; the 3 MariaDB-dependent E2E cases were skipped because `DATABASE_URL` is unset. `pnpm check` passed. `pnpm test` passed the full local suite; environment-dependent database cases remained skipped. The focused regressions reject a wrong guard, player, quest, action, zone and out-of-radius position and reject arbitrary client NPC IDs.
+Learned: Quest NPC identity, display-name mapping, zone and AOI anchor must be one typed Aurion contract; widening only the transport schema would admit unowned identities or leave persistence and authorization divergent.
+Open: No production deployment or MariaDB runtime claim is made. The repository environment had no `DATABASE_URL`, so the existing real dialogue persistence E2E suite remained skipped.
+Next safe step: Run the existing dialogue intent MariaDB E2E lane against the exact committed head before deployment and retain the contract as the only source for future starter-village quest givers.
+
+### 2026-10-03 — PR 735 shares the reviewed north-gate anchor
+Status: VERIFIED focused repository regression
+Task: Integrate the corrected PR 734 layout before the NPC identity contract.
+Decisions: Preserve all append-only Memory entries; reference the north gate point directly instead of retaining the separate -12 m guard anchor 18 m away. Existing Lyra/Orun authority stays unchanged.
+Touched surfaces: server/aurionStarterVillageContract.ts and server/questNpcAuthority.test.ts.
+Evidence: 19 focused tests passed; 3 real-MariaDB tests skipped locally; nonincremental TypeScript check passed. Identity-by-reference regression binds the guard position to the shared north gate.
+Learned: A named north-gate NPC needs the same fixed-point anchor as the actual village contract.
+Open: Dependent exact-head CI and real dialogue persistence readback remain pending; this NPC contract alone does not implement the wolf quest.
+Next safe step: Push and verify CI; merge only after PR 734.
+
+### 2026-10-03 — Receipt-bound pilot wolf quest
+Status: VERIFIED repository regression; runtime deployment pending
+Task: Publish the versioned north-gate pilot quest through the canonical quest compiler and derive its six-victory objective only from persisted Aurion combat evidence.
+Decisions: Register `starter-wolves-6` v1 with stable giver `guard-north`; add no quest state machine; bind one increment to one unique persisted combat receipt whose event, player, opponent identity/species, confirmed victory and logical revision pass the strict shared contract; preserve the existing quest receipt/instance persistence transition.
+Touched surfaces: Quest contract, event matcher, pilot template/role catalog, admin service, combat-victory persistence schema/migration and focused regressions.
+Evidence: Focused quest/validator/migration-boundary suite passed 13 tests; `pnpm check`, `pnpm verify:migrations` (70 SQL / 70 journal entries) and `git diff --check` passed. The focused admin regression proves unknown, mismatched-player/species and duplicate receipts cannot increment; exactly six receipts complete, and a seventh leaves progress at six.
+Learned: Objective quantity is safe only when the server reads a unique durable combat receipt and supplies the fixed increment itself; a client event payload cannot be permitted to select species or amount.
+Open: No production deployment or live MariaDB readback is claimed by this repository candidate.
+Next safe step: Run exact-head CI/container and an isolated migrated MariaDB readback before merge or deployment claims.
+
 ### 2026-10-03 — Receipt-bound authored quest item reward
 Status: VERIFIED repository regression; real MariaDB execution unavailable in this workspace
 Task: Grant one approved catalog item exactly once when the canonical authored caravan quest is turned in.

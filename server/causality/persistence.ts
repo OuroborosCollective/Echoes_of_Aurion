@@ -20,6 +20,8 @@ import type { AurionZoneIntent } from "../../shared/aurionZoneIntentContract";
 import type { GlobalWorldCanonicalState } from "../../shared/aurionGlobalWorldContract";
 import { operationalDate } from "../../shared/operationalClock";
 import type { CanonicalZoneState } from "./zoneCanonicalState";
+import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContract";
+import { persistAurionCombatVictoryEvidence } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
 function stableJson(value: unknown): string { return JSON.stringify(value); }
@@ -60,7 +62,7 @@ export function causalCheckpointPersistenceId(
 }
 
 export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter {
-  async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[]): Promise<void> {
+  async saveReceipt(receipt: AurionCausalTickReceipt, intents?: AurionZoneIntent[], combatVictories?: readonly AurionCombatVictoryEvidence[]): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
     const id = causalReceiptPersistenceId(receipt);
@@ -95,6 +97,13 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
         existing.rngRootHash === receipt.rngRootHash && existing.postStateHash === receipt.postStateHash &&
         existing.previousReceiptHash === receipt.previousReceiptHash && existing.receiptHash === receipt.receiptHash;
       if (!same) throw new Error(`CAUSAL_RECEIPT_CONFLICT:${id}`);
+    }
+    for (const victory of combatVictories ?? []) {
+      await persistAurionCombatVictoryEvidence(victory);
+      // Project only after durable evidence; the service independently reads the
+      // stored receipt and applies the existing quest idempotency/state guards.
+      const { adminQuestService } = await import("../routes/aurionQuestRouter");
+      await adminQuestService.applyConfirmedCombatVictory(victory.playerUserId, victory.receiptId);
     }
   }
 

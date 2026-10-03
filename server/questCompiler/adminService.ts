@@ -7,6 +7,7 @@ import {
   type QuestReplayReceipt,
   type QuestTemplateVersion,
   type WorldFact,
+  type AurionCombatVictoryEvidence,
 } from "../../shared/aurionQuestContract";
 import { computeCanonicalHash, computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import { type AuthoringReceipt } from "../../shared/aurionAuthoringContract";
@@ -25,6 +26,9 @@ import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandC
 import { readQuestCausalAnchorByReceiptId, resolveQuestCausalAnchor } from "./causalAnchor";
 import { buildQuestCausalClosure } from "./causalClosure";
 import { LEGACY_CANONICAL_QUEST_TEMPLATES } from "./legacyQuestTemplate";
+import { PILOT_WOLF_QUEST_TEMPLATE } from "./pilotQuestTemplate";
+import { readAurionCombatVictoryEvidence } from "../aurionCombatVictoryPersistence";
+import { matchesQuestObjectiveEvent } from "./eventBindingMatcher";
 import { getLegacyQuestBridge } from "../legacyQuestBridge";
 import { assertQuestNpcAuthority } from "../questNpcAuthority";
 import { readEncounterCompletionEvidence } from "../encounterCompletionEvidence";
@@ -58,13 +62,17 @@ export class AdminQuestStudioService {
   private readonly replayEngine: QuestReplayEngine;
   private hydrated = false;
 
-  constructor(private clock: OperationalClock = hostOperationalClock) {
+  constructor(
+    private clock: OperationalClock = hostOperationalClock,
+    private readonly combatEvidenceReader: (receiptId: string) => Promise<AurionCombatVictoryEvidence | null> = readAurionCombatVictoryEvidence,
+  ) {
     this.worldFactEngine = new WorldFactEngine();
     this.templateRegistry = new QuestTemplateRegistry();
     this.runtimeEngine = new QuestRuntimeEngine(this.worldFactEngine, this.templateRegistry, this.clock);
     this.persistenceEngine = new QuestPersistenceEngine();
     this.replayEngine = new QuestReplayEngine(this.templateRegistry, this.clock);
     for (const template of LEGACY_CANONICAL_QUEST_TEMPLATES) this.templateRegistry.registerTemplate(template);
+    this.templateRegistry.registerTemplate(PILOT_WOLF_QUEST_TEMPLATE);
     this.seedInitialRun();
   }
 
@@ -401,6 +409,41 @@ export class AdminQuestStudioService {
         completedNode: result.completedNode,
         replayed: committed.replayed,
       });
+    }
+    return Object.freeze(updates);
+  }
+
+  /** Progresses combat objectives only after an authoritative MariaDB evidence readback. */
+  public async applyConfirmedCombatVictory(userId: number, receiptId: string) {
+    const evidence = await this.combatEvidenceReader(receiptId);
+    if (!evidence) throw new Error("QUEST_COMBAT_RECEIPT_UNKNOWN");
+    const instances = await this.persistenceEngine.listInstances({ playerUserId: userId });
+    const updates: Array<{ instanceId: string; receiptId: string; completedNode: boolean; replayed: boolean }> = [];
+    for (const listed of instances) {
+      const instance = await this.persistenceEngine.getInstance(listed.id);
+      if (!instance || instance.state !== "active") continue;
+      const plan = await this.persistenceEngine.getPlan(instance.planHash);
+      const objective = plan?.nodes.find(node => node.id === instance.currentNodeId)?.objective;
+      if (!objective || !matchesQuestObjectiveEvent(objective, evidence, userId)) continue;
+      const idempotencyKey = `combat-victory:${instance.id}:${evidence.receiptId}`;
+      const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(idempotencyKey);
+      if (prior) {
+        updates.push({ instanceId: instance.id, receiptId: prior.id, completedNode: false, replayed: true });
+        continue;
+      }
+      const expectedStateHash = computeQuestStateHash(instance);
+      const eventSequence = (await this.persistenceEngine.getReceiptsForInstance(instance.id))
+        .reduce((max, receipt) => Math.max(max, receipt.eventSequence), 0) + 1;
+      const result = this.runtimeEngine.executeDomainCommand(materializeQuestDomainCommand(instance, plan!, {
+        kind: "progress", instanceId: instance.id, planHash: instance.planHash, graphHash: instance.graphHash,
+        expectedStateHash, idempotencyKey, eventSequence, objectiveKey: objective.key, amount: 1,
+      }), instance, plan!);
+      if (result.kind !== "progress") throw new Error("QUEST_DOMAIN_COMMAND_KIND_MISMATCH");
+      const committed = await this.persistenceEngine.commitObjectiveTransition({
+        instanceId: instance.id, expectedStateHash, idempotencyKey,
+        receipt: result.receipt, updatedInstance: result.updatedInstance,
+      });
+      updates.push({ instanceId: instance.id, receiptId: committed.receipt.id, completedNode: result.completedNode, replayed: committed.replayed });
     }
     return Object.freeze(updates);
   }
