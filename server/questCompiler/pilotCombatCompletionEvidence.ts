@@ -22,7 +22,7 @@ export async function readPilotCombatCompletionEvidence(instance: QuestInstance)
   const victories = [];
   for (const receipt of consumed) {
     const evidence = await readAurionCombatVictoryEvidence(receipt.idempotencyKey.slice(prefix.length));
-    if (!evidence || evidence.playerUserId !== instance.playerUserId || evidence.opponentSpecies !== "wolf"
+    if (!evidence || evidence.playerUserId !== instance.playerUserId || evidence.opponentSpecies !== "clockwork_stalker"
       || receipt.planHash !== instance.planHash || receipt.graphHash !== instance.graphHash) {
       throw new Error("QUEST_PILOT_VICTORY_IDENTITY_MISMATCH");
     }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { observatoryMobDefinitions } from "../ax1MobContent";
 import { AurionCombatVictoryEvidenceSchema } from "../../shared/aurionQuestContract";
 import { QuestRuntimeEngine } from "./runtime";
 import { QuestTemplateRegistry } from "./templateRegistry";
@@ -14,7 +15,7 @@ const evidence = (overrides: Record<string, unknown> = {}) => ({
   logicalRevision: 41,
   playerUserId: 7,
   opponentEntityId: "wolf-entity-1",
-  opponentSpecies: "wolf",
+  opponentSpecies: "clockwork_stalker",
   outcome: "victory",
   confirmed: true,
   ...overrides,
@@ -27,6 +28,8 @@ describe("versioned pilot wolf quest", () => {
       subjectField: "id", operator: "eq", expectedValue: "starter_village_north_gate_guard",
     });
     expect(objective).toMatchObject({ key: "wolf_victories", targetValue: 6 });
+    const targets = observatoryMobDefinitions.filter(mob => mob.archetype === objective.eventBinding?.matchValue);
+    expect(targets.map(mob => mob.entityId)).toEqual(["mob_1", "mob_10", "mob_12", "mob_14", "mob_16", "mob_8"]);
   });
 
   it("accepts only confirmed, player-bound wolf victories with complete evidence identity", () => {
