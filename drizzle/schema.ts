@@ -504,7 +504,7 @@ export const aurionItemInstancesV2 = mysqlTable("aurionItemInstancesV2", {
 export const aurionInventoryReceipts = mysqlTable("aurionInventoryReceipts", {
   id: varchar("id", { length: 64 }).primaryKey(),
   userId: int("userId").notNull(),
-  operation: mysqlEnum("operation", ["merge", "split", "consume"]).notNull(),
+  operation: mysqlEnum("operation", ["merge", "split", "consume", "grant"]).notNull(),
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
   commandHash: varchar("commandHash", { length: 96 }).notNull(),
   beforeRevisionExact: varchar("beforeRevisionExact", { length: 128 }).notNull(),

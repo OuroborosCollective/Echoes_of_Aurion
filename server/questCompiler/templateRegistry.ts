@@ -68,6 +68,8 @@ export const DEFAULT_SEED_TEMPLATES: QuestTemplateVersion[] = [
         rewards: [
           { type: 'xp', amount: 500 },
           { type: 'gold', amount: 150 },
+          // Existing approved Aurion Loot V2 catalog entry; never a provider asset identity.
+          { type: 'item', amount: 1, targetId: 'component-craft-star-iron-v2' },
         ],
         narrativeKey: 'narrative.caravan_investigation.outcome',
       },

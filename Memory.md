@@ -308,3 +308,12 @@ Evidence:
 Learned: Repository memory is now recorded automatically from the completed merge instead of requiring a manual post-merge Memory.md edit.
 Open: Runtime, deployment and independent readback claims remain governed by their respective evidence lanes; this entry records the repository merge only.
 Next safe step: Use the new main revision as the canonical baseline for the next integration and require independent runtime/readback evidence where applicable.
+
+### 2026-10-03 — Receipt-bound authored quest item reward
+Status: VERIFIED repository regression; real MariaDB execution unavailable in this workspace
+Task: Grant one approved catalog item exactly once when the canonical authored caravan quest is turned in.
+Change: The quest definition records `component-craft-star-iron-v2` from the existing Aurion Loot V2 catalog. `causalClosure.ts` now derives a deterministic inventory grant bound to quest instance, completion receipt, player and reward definition; the quest and inventory receipt/item writes share one MariaDB transaction. Inventory `grant` uses the existing owner revision, state hash, receipt and `(userId,idempotencyKey)` uniqueness contract, with migration 0069 extending the operation enum. The protected turn-in requires the confirmed giver identity.
+Evidence: TypeScript passed; migration-chain verification passed with 70 SQL/journal entries; focused quest/inventory/turn-in tests passed. Full local regression reached 1,837 passing tests and exposed one production-readback allowlist failure, which was repaired and its 24 focused readback/artifact tests then passed. The new real-MariaDB regression covers atomic receipt/item readback, lost-response replay and two concurrent turn-ins, but was skipped because this environment has neither Docker nor a configured isolated MariaDB.
+Learned: Item reward identity must be established before persistence from stable catalog content and completion causality; transport retry keys alone are insufficient. The inventory receipt unique key and owner serialization make retry and concurrent completion read back the same effect.
+Open: Run `causalClosureMariaDb.test.ts` in the isolated MariaDB CI lane and verify the final exact-head workflow before merge; no production deployment claim is made.
+Next safe step: Require the MariaDB lane to prove one quest receipt, one inventory receipt, one item and matching independent quest/inventory readbacks under concurrent turn-in.

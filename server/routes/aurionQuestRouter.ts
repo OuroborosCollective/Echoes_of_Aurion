@@ -67,8 +67,8 @@ export const aurionQuestRouter = router({
     }).strict())
     .mutation(({ ctx, input }) => adminQuestService.chooseQuestBranch(ctx.user.id, input.instanceId, input.edgeId)),
   complete: protectedProcedure
-    .input(z.object({ instanceId: z.string().min(8).max(128) }).strict())
-    .mutation(({ ctx, input }) => adminQuestService.completeQuest(ctx.user.id, input.instanceId)),
+    .input(z.object({ instanceId: z.string().min(8).max(128), giverNpcId: z.string().min(1).max(96) }).strict())
+    .mutation(({ ctx, input }) => adminQuestService.completeQuest(ctx.user.id, input.instanceId, undefined, input.giverNpcId)),
   visualSupport: adminProcedure
     .input(
       z.object({

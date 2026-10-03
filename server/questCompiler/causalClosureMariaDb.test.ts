@@ -6,7 +6,7 @@ import {
   aurionQuestCausalAnchors,
   aurionTemporalEvents,
 } from "../../drizzle/aurionCausalitySchema";
-import { aurionQuestInstances, aurionQuestReceipts } from "../../drizzle/schema";
+import { aurionInventoryReceipts, aurionItemInstancesV2, aurionQuestInstances, aurionQuestReceipts } from "../../drizzle/schema";
 import { computeQuestStateHash } from "../../shared/aurionQuestCanonicalHash";
 import type { QuestInstance } from "../../shared/aurionQuestContract";
 import type { QuestCompleteSource } from "../../shared/aurionQuestDomainCommandContract";
@@ -28,6 +28,7 @@ import { acceptGameplayQuest, applyGameplayAction, getDb, resolveAndRecordGlobal
 import { AuthoritativeMovementZone } from "../zoneRuntime";
 import { globalTickRecorder } from "../causality/tickRecorder";
 import { readTemporalEventById } from "../history/aurionTemporalEventPersistence";
+import { readAurionInventorySnapshot } from "../aurionInventoryBackendAdapter";
 
 const describeReal = process.env.DATABASE_URL && process.env.NODE_ENV === "test" && process.env.AURION_QUEST_CAUSAL_E2E === "1" && process.env.AURION_ENCOUNTER_E2E === "1" ? describe : describe.skip;
 const TEST_USER_ID = 2_146_999_991;
@@ -263,15 +264,20 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     expect(await db.select().from(aurionEffectIntents).where(eq(aurionEffectIntents.effectId, poisonedClosure.effectIntents.at(-1)!.effectId))).toHaveLength(0);
 
     // 7. Successful atomic commit after the rollback proof.
-    const committed = await persistence.commitObjectiveTransition({
+    const completionInput = {
       instanceId: progressedCommitted.updatedInstance.id,
       expectedStateHash: computeQuestStateHash(progressedCommitted.updatedInstance),
       idempotencyKey: completionCommand.idempotencyKey,
       receipt: completion.receipt,
       updatedInstance: completion.updatedInstance,
       causalClosure: closure,
-    });
-    expect(committed.replayed).toBe(false);
+    };
+    const competingPersistence = new QuestPersistenceEngine();
+    const concurrent = await Promise.all([
+      persistence.commitObjectiveTransition(completionInput),
+      competingPersistence.commitObjectiveTransition(completionInput),
+    ]);
+    expect(concurrent.map(result => result.replayed).sort()).toEqual([false, true]);
 
     // 8. Physical readback of every authority and replay verification.
     const storedAnchor = await readQuestCausalAnchorByReceiptId(completion.receipt.id);
@@ -292,6 +298,16 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
 
     const temporalRows = await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, closure.temporalEvent.eventId));
     expect(temporalRows).toHaveLength(1);
+    const inventoryReward = closure.inventoryRewards[0]!;
+    const inventoryRows = await db.select().from(aurionInventoryReceipts).where(eq(aurionInventoryReceipts.idempotencyKey, inventoryReward.idempotencyKey));
+    expect(inventoryRows).toHaveLength(1);
+    const itemRows = await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.inventoryReceiptId, inventoryRows[0]!.id));
+    expect(itemRows).toHaveLength(1);
+    expect(itemRows[0]).toMatchObject({ ownerUserId: TEST_USER_ID, baseItemDefinitionId: "component-craft-star-iron-v2", quantityExact: "1" });
+    const inventoryReadback = await readAurionInventorySnapshot(TEST_USER_ID);
+    expect(inventoryReadback).toMatchObject({ revisionExact: "1", stateHash: inventoryRows[0]!.afterStateHash });
+    expect((await persistence.getInstance(offered.instance.id))?.state).toBe("completed");
+    expect((await persistence.getReceiptByIdempotencyKey(completionCommand.idempotencyKey))?.id).toBe(completion.receipt.id);
 
     // 9. Exact duplicate retry = one durable closure.
     const replayed = await persistence.commitObjectiveTransition({
@@ -305,5 +321,7 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     expect(replayed.replayed).toBe(true);
     expect(await db.select().from(aurionQuestCausalAnchors).where(eq(aurionQuestCausalAnchors.questReceiptId, completion.receipt.id))).toHaveLength(1);
     expect(await db.select().from(aurionTemporalEvents).where(eq(aurionTemporalEvents.eventId, closure.temporalEvent.eventId))).toHaveLength(1);
+    expect(await db.select().from(aurionInventoryReceipts).where(eq(aurionInventoryReceipts.idempotencyKey, inventoryReward.idempotencyKey))).toHaveLength(1);
+    expect(await db.select().from(aurionItemInstancesV2).where(eq(aurionItemInstancesV2.ownerUserId, TEST_USER_ID))).toHaveLength(1);
   });
 });

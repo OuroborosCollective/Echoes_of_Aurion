@@ -132,6 +132,7 @@ function makeArtifact() {
     "0066_aurion_inventory_transaction_kernel",
     "0067_aurion_npc_decision_log",
     "0068_aurion_item_manipulation_runtime",
+    "0069_aurion_quest_inventory_rewards",
   ];
   fs.mkdirSync(path.join(directory, "bin"), { recursive: true });
   fs.mkdirSync(path.join(directory, "drizzle"), { recursive: true });
@@ -324,15 +325,16 @@ describe("Aurion production schema reconcile Docker runner contract", () => {
     expect(runner).toContain("environmentMountedReadOnly:true");
   });
 
-  it("keeps the backup/recovery/apply core migration allowlists aligned through 0068", () => {
+  it("keeps the backup/recovery/apply core migration allowlists aligned through 0069", () => {
     const core = read("deploy/aurion-production-schema-apply-core");
     expect((core.match(/0063_aurion_npc_information_ecology/g) ?? [])).toHaveLength(2);
     expect((core.match(/0064_aurion_world_entity_foundation/g) ?? [])).toHaveLength(2);
     expect((core.match(/0065_aurion_glb_asset_normalization/g) ?? [])).toHaveLength(2);
     expect((core.match(/0066_aurion_inventory_transaction_kernel/g) ?? [])).toHaveLength(2);
     expect((core.match(/0068_aurion_item_manipulation_runtime/g) ?? [])).toHaveLength(2);
+    expect((core.match(/0069_aurion_quest_inventory_rewards/g) ?? [])).toHaveLength(2);
     expect((core.match(/0067_aurion_npc_decision_log/g) ?? [])).toHaveLength(2);
-    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n      "0065_aurion_glb_asset_normalization",\n      "0066_aurion_inventory_transaction_kernel",\n      "0067_aurion_npc_decision_log",\n      "0068_aurion_item_manipulation_runtime",\n    ];');
-    expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation", "0065_aurion_glb_asset_normalization", "0066_aurion_inventory_transaction_kernel", "0067_aurion_npc_decision_log", "0068_aurion_item_manipulation_runtime"]');
+    expect(core).toContain('"0062_aurion_world_director",\n      "0063_aurion_npc_information_ecology",\n      "0064_aurion_world_entity_foundation",\n      "0065_aurion_glb_asset_normalization",\n      "0066_aurion_inventory_transaction_kernel",\n      "0067_aurion_npc_decision_log",\n      "0068_aurion_item_manipulation_runtime",\n      "0069_aurion_quest_inventory_rewards",\n    ];');
+    expect(core).toContain('"0062_aurion_world_director", "0063_aurion_npc_information_ecology", "0064_aurion_world_entity_foundation", "0065_aurion_glb_asset_normalization", "0066_aurion_inventory_transaction_kernel", "0067_aurion_npc_decision_log", "0068_aurion_item_manipulation_runtime", "0069_aurion_quest_inventory_rewards"]');
   });
 });

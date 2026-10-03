@@ -7,6 +7,8 @@ export async function cleanupQuestRegressionUser(userId: number) {
   try {
     const [rows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS name");
     if (rows[0]?.name !== url.pathname.slice(1)) throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    await pool.query("DELETE FROM aurionItemInstancesV2 WHERE ownerUserId=?", [userId]);
+    await pool.query("DELETE FROM aurionInventoryReceipts WHERE userId=?", [userId]);
     await pool.query("DELETE FROM itemInstances WHERE ownerUserId=?", [userId]);
     for (const table of ["aurionScopedMasteryEvents","skillProgressionEvents","weaponMasteryReceipts","lootDropReceipts","expeditionResultReceipts","progressionLedger","gameplayActionReceipts","gameplaySessions","gameplayQuestProgress","gameplayDungeonKeys","weaponLoadouts","weaponMasteries","playerProfiles"]) await pool.query(`DELETE FROM ${table} WHERE userId=?`,[userId]);
   } finally { await pool.end(); }

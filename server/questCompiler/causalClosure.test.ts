@@ -53,7 +53,7 @@ const plan = {
       value: true,
       effectType: "assert_fact",
     }],
-    rewards: [{ type: "xp", amount: 50 }],
+    rewards: [{ type: "xp", amount: 50 }, { type: "item", amount: 1, targetId: "component-craft-star-iron-v2" }],
   }],
 } as unknown as QuestPlan;
 
@@ -131,10 +131,19 @@ describe("Quest causal closure", () => {
     expect(closure.worldEvent.source).toBe("aurion_quest_runtime");
     expect(closure.worldEvent.data?.causalReceiptHash).toBe(anchor.causalReceiptHash);
     expect(closure.temporalEvent.sourceReceiptHash).toBe(anchor.causalReceiptHash);
-    expect(closure.effectIntents).toHaveLength(2);
+    expect(closure.effectIntents).toHaveLength(3);
     expect(closure.effectIntents.map(effect => effect.authorityReceiptHash)).toEqual([
       anchor.causalReceiptHash,
       anchor.causalReceiptHash,
+      anchor.causalReceiptHash,
     ]);
+    expect(closure.inventoryRewards).toHaveLength(1);
+    expect(closure.inventoryRewards[0]?.command).toMatchObject({
+      operation: "grant", questInstanceId: instance.id, questReceiptId: receipt.id,
+      playerUserId: instance.playerUserId,
+      stack: { definitionId: "component-craft-star-iron-v2", quantityExact: "1" },
+    });
+    expect(buildQuestCausalClosure({ instance, plan, command, receipt, anchor }).inventoryRewards)
+      .toEqual(closure.inventoryRewards);
   });
 });

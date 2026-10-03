@@ -113,7 +113,12 @@ export type QuestEdge = z.infer<typeof QuestEdgeSchema>;
 export const QuestRewardSchema = z.object({
   type: z.enum(['xp', 'gold', 'item', 'reputation', 'standing', 'aurion_points', 'season_points', 'victory']),
   amount: z.number().int().positive(),
+  /** Stable canonical catalog identity; item rewards must always name one. */
   targetId: z.string().optional(),
+}).superRefine((reward, ctx) => {
+  if (reward.type === 'item' && !reward.targetId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'QUEST_ITEM_REWARD_CATALOG_ID_REQUIRED', path: ['targetId'] });
+  }
 });
 
 export type QuestReward = z.infer<typeof QuestRewardSchema>;

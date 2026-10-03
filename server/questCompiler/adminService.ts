@@ -595,11 +595,12 @@ export class AdminQuestStudioService {
     return { updatedInstance: committed.updatedInstance, receipt: committed.receipt };
   }
 
-  public async completeQuest(userId: number, instanceId: string, source?: QuestCompleteSource) {
-    if (!source) throw new Error("QUEST_CAUSAL_SOURCE_REQUIRED");
+  public async completeQuest(userId: number, instanceId: string, source?: QuestCompleteSource, turnInGiverNpcId?: string) {
     const { instance, plan } = await this.ownedInstance(userId, instanceId);
+    if (turnInGiverNpcId !== undefined && turnInGiverNpcId !== instance.giverNpcId) throw new Error("QUEST_TURN_IN_GIVER_MISMATCH");
     const current = plan.nodes.find(node => node.id === instance.currentNodeId);
     if (!current || current.type !== "end") throw new Error("QUEST_END_NODE_REQUIRED");
+    if (!source) throw new Error("QUEST_CAUSAL_SOURCE_REQUIRED");
     const idempotencyKey = `complete:${instance.id}`;
     const prior = await this.persistenceEngine.getReceiptByIdempotencyKey(idempotencyKey);
     if (prior) {

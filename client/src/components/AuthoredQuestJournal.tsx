@@ -115,7 +115,7 @@ export function AuthoredQuestJournal() {
           {selected.instance.state === "active" && currentNode?.type === "end" && <button
             className="ax1-primary"
             disabled={busy}
-            onClick={async () => { await complete.mutateAsync({ instanceId: selected.instance.id }); await refresh(selected.instance.id); }}
+            onClick={async () => { await complete.mutateAsync({ instanceId: selected.instance.id, giverNpcId: selected.instance.giverNpcId }); await refresh(selected.instance.id); }}
           >Quest abschließen</button>}
         </>}
         {(offer.error || accept.error || choose.error || complete.error || details.error) && <p role="alert" className="text-xs text-red-300">Aktion nicht bestätigt. Der aktuelle Aurion-Stand wurde nicht verändert.</p>}

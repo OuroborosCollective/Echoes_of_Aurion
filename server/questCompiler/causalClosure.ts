@@ -11,12 +11,21 @@ import {
 import { type QuestInstance, type QuestPlan, type QuestReceipt, type WorldEvent } from "../../shared/aurionQuestContract";
 import { type QuestDomainCommand } from "../../shared/aurionQuestDomainCommandContract";
 import { type QuestCausalAnchor } from "../../shared/aurionQuestCausalAnchorContract";
+import { aurionLootBaseCatalog } from "../aurionLootCatalog";
+import { inventoryItemShapeHash, inventoryMaxQuantityExact, inventoryMergeKey } from "../aurionInventoryStackIdentity";
+import type { GrantCommand } from "../aurionInventoryTransactionProtocol";
+
+export interface QuestInventoryRewardOperation {
+  readonly idempotencyKey: string;
+  readonly command: GrantCommand;
+}
 
 export interface QuestCausalClosure {
   anchor: QuestCausalAnchor;
   worldEvent: WorldEvent;
   temporalEvent: AurionTemporalEvent;
   effectIntents: readonly AurionEffectIntent[];
+  inventoryRewards: readonly QuestInventoryRewardOperation[];
 }
 
 export function buildQuestCausalClosure(input: {
@@ -101,6 +110,7 @@ export function buildQuestCausalClosure(input: {
   });
 
   const effects: AurionEffectIntent[] = [];
+  const inventoryRewards: QuestInventoryRewardOperation[] = [];
   let ordinal = 0;
   for (const effect of outcome.factEffects) {
     effects.push(createEffectIntent({
@@ -118,7 +128,7 @@ export function buildQuestCausalClosure(input: {
       }),
     }));
   }
-  for (const reward of outcome.rewards) {
+  for (const [rewardIndex, reward] of outcome.rewards.entries()) {
     effects.push(createEffectIntent({
       authorityReceiptHash: input.anchor.causalReceiptHash,
       effectType: `quest.reward.${reward.type}`,
@@ -134,6 +144,40 @@ export function buildQuestCausalClosure(input: {
         ...(reward.targetId !== undefined ? { targetId: reward.targetId } : {}),
       }),
     }));
+    if (reward.type === "item") {
+      const definition = aurionLootBaseCatalog.find(item => item.id === reward.targetId);
+      if (!definition) throw new Error("QUEST_ITEM_REWARD_CATALOG_ENTRY_REQUIRED");
+      const rewardDefinitionHash = canonicalSha256({
+        schema: "aurion.quest.item-reward-definition.v1", outcomeId: outcome.id, rewardIndex, reward,
+        catalogContent: definition,
+      });
+      const identity = canonicalSha256({
+        schema: "aurion.quest.item-reward-instance.v1", instanceId: input.instance.id,
+        questReceiptId: input.receipt.id, playerUserId: input.instance.playerUserId, rewardDefinitionHash,
+      });
+      const itemPower = Object.values(definition.baseStats).reduce((sum, value) => sum + value, 0);
+      const shape = {
+        definitionId: definition.id, category: definition.category, equipmentSlot: definition.equipmentSlot ?? null,
+        quality: "normal" as const, levelExact: "1", affixesJson: "[]", setId: null, itemPower,
+      };
+      inventoryRewards.push(Object.freeze({
+        idempotencyKey: `qreward:${identity.slice(7, 55)}`,
+        command: Object.freeze({
+          operation: "grant" as const,
+          stack: Object.freeze({
+            id: identity.slice(7), version: "aurion_v2" as const, definitionId: definition.id,
+            provenanceHash: inventoryItemShapeHash(shape), mergeKey: inventoryMergeKey(shape),
+            quantityExact: String(reward.amount),
+            maxQuantityExact: inventoryMaxQuantityExact({ category: definition.category, equipmentSlot: definition.equipmentSlot ?? null }),
+          }),
+          item: Object.freeze({ category: definition.category, equipmentSlot: definition.equipmentSlot ?? null,
+            quality: "normal" as const, itemLevelExact: "1" as const, affixesJson: "[]" as const,
+            itemPower, deterministicHash: identity.slice(7) }),
+          questInstanceId: input.instance.id, questReceiptId: input.receipt.id, rewardDefinitionHash,
+          playerUserId: input.instance.playerUserId,
+        }),
+      }));
+    }
   }
 
   return Object.freeze({
@@ -141,5 +185,6 @@ export function buildQuestCausalClosure(input: {
     worldEvent,
     temporalEvent,
     effectIntents: Object.freeze(effects),
+    inventoryRewards: Object.freeze(inventoryRewards),
   });
 }

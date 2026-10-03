@@ -24,6 +24,22 @@ const state = (...stacks: AurionInventoryStack[]): AurionInventoryState => ({
 });
 
 describe("aurion inventory transaction protocol", () => {
+  it("grants one receipt-bound catalog stack deterministically and replays without a second item", () => {
+    const granted = stack("quest-item", "1", { definitionId: "component-craft-star-iron-v2" });
+    const command = {
+      operation: "grant" as const, stack: granted,
+      item: { category: "crafting_component" as const, equipmentSlot: null, quality: "normal" as const,
+        itemLevelExact: "1" as const, affixesJson: "[]" as const, itemPower: 5, deterministicHash: "a".repeat(64) },
+      questInstanceId: "quest-instance", questReceiptId: "quest-receipt", playerUserId: 7,
+      rewardDefinitionHash: `sha256:${"b".repeat(64)}`,
+    };
+    const first = resolveAurionInventoryTransaction({ before: state(), command, idempotencyKey: "quest-reward" });
+    expect(first.state.stacks).toEqual([granted]);
+    const replay = resolveAurionInventoryTransaction({ before: first.state, command, idempotencyKey: "quest-reward", priorReceipt: first.receipt });
+    expect(replay).toMatchObject({ status: "replay", effectApplied: false });
+    expect(replay.state.stacks).toEqual([granted]);
+  });
+
   it("merges compatible stacks deterministically and conserves quantity", () => {
     const resolved = resolveAurionInventoryTransaction({
       before: state(stack("b", "5"), stack("a", "7")),
