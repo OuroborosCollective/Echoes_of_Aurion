@@ -593,4 +593,10 @@ export class QuestPersistenceEngine {
       createdAt: row.createdAt.toISOString(),
     }));
   }
+
+  /** Returns the canonical next event revision from the durable receipt chain. */
+  public async getNextEventSequence(instanceId: string): Promise<number> {
+    const receipts = await this.getReceiptsForInstance(instanceId);
+    return receipts.reduce((max, receipt) => Math.max(max, receipt.eventSequence), 0) + 1;
+  }
 }
