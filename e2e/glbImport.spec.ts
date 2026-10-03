@@ -129,6 +129,15 @@ test("admin upload persists bytes and assignment, deduplicates, scrolls on mobil
     expect(fetched.length).toBeGreaterThan(0);
     await expect(page.locator('#three-viewport canvas')).toBeVisible();
     await page.locator('#three-viewport canvas').screenshot({ path: testInfo.outputPath('imported-avatar.png') });
-    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
+    // Direct administrator uploads have no public community-submission row.
+    // The in-game admin must still show these persisted assets through its own route.
+    const adminCatalogReply = page.waitForResponse(response => response.url().includes('/api/trpc/admin.assets.list'));
+    await page.getByRole('button', { name: 'GLB-Admin öffnen', exact: true }).click();
+    expect((await adminCatalogReply).status()).toBe(200);
+    await expect(page.getByTestId(`admin-glb-asset-${receipt.assetId}`)).toBeVisible();
+    await expect(page.getByTestId(`admin-glb-asset-${publicReceipt.assetId}`)).toBeVisible();
+    await page.getByTestId(`admin-glb-asset-${receipt.assetId}`).click();
+    await expect(page.getByText('Katalog serverbestätigt', { exact: true })).toBeVisible();
+    await testInfo.attach('glb-persistence-render-evidence', { body: JSON.stringify({ revision: process.env.AURION_RELEASE_SHA, starterReceipt: receipt, publicReceipt, db: rows[0], byteReadback: true, adminCatalogReadback: true, publicSelectionReadback: true, rendererLoaded: true, mobileScroll: scrollMetrics, animationContract: ['Idle', 'Attack'], launchRoute: 'portal-confirmed-public-character-then-ax1' }), contentType: 'application/json' });
   } finally { await pool.end(); }
 });
