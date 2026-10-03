@@ -90,7 +90,7 @@ jobs:
           pnpm verify:migrations | tee .aurion-local-test-pack/evidence/migrations-verify.log
           node --test scripts/dispatch-aurion-schema-plan.test.mjs 2>&1 | tee .aurion-local-test-pack/evidence/schema-dispatch-contract.log
           pnpm exec drizzle-kit migrate 2>&1 | tee .aurion-local-test-pack/evidence/migrations-apply.log
-      - name: Verify atomic outbox and combat on separate MariaDB databases
+      - name: Verify archive, atomic outbox and combat on separate MariaDB databases
         env:
           NODE_ENV: test
         shell: bash
@@ -104,6 +104,7 @@ jobs:
           name: aurion-isolated-combat-${{ env.AURION_RELEASE_SHA }}
           path: |
             .aurion-local-test-pack/evidence/isolated-combat-harness.log
+            .aurion-local-test-pack/evidence/causal-archive-packets-*.log
             .aurion-local-test-pack/evidence/combat-outbox-atomic-*.log
             .aurion-local-test-pack/evidence/combat-continuity-equipment-*.log
           if-no-files-found: warn

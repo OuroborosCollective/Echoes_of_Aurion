@@ -24,6 +24,8 @@ import type { AurionCombatVictoryEvidence } from "../../shared/aurionQuestContra
 import { drainCombatQuestProjections, persistAurionCombatVictoryEvidenceInTransaction } from "../aurionCombatVictoryPersistence";
 import type { CausalPersistenceAdapter, PersistedCheckpoint, RecordedTickEntry } from "./tickRecorder";
 
+import { archiveReceiptPayload, causalArchiveHash, packCausalArchivePayloads, type ArchiveReceiptPayload } from "./archivePacking";
+
 function stableJson(value: unknown): string { return JSON.stringify(value); }
 
 // Replay-run IDs are persistence identities only; canonical run dimensions remain
@@ -221,29 +223,62 @@ export class MariaDBCausalPersistenceAdapter implements CausalPersistenceAdapter
     return rows.map(row => ({ receipt: this.mapReceipt(row), intents: row.inputJson ? JSON.parse(row.inputJson) as AurionZoneIntent[] : undefined }));
   }
 
-  async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string } | null> {
-    const db = await getDb(); if (!db) return null;
-    const rows = await db.select().from(aurionCausalTickReceipts).where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), lt(aurionCausalTickReceipts.tick, beforeTick))).orderBy(aurionCausalTickReceipts.tick);
-    if (rows.length === 0) return null;
-    const startTick = rows[0].tick, endTick = rows[rows.length - 1].tick;
-    const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
-    const payload = rows.map(row => ({
-      id: row.id, worldId: row.worldId, zoneId: row.zoneId, tick: row.tick, revision: row.revision,
-      rulesetVersion: row.rulesetVersion, receiptSchema: row.receiptSchema,
-      preStateHash: row.preStateHash, inputHash: row.inputHash,
-      inputJson: row.inputJson, stageReceiptsJson: row.stageReceiptsJson,
-      transitionHash: row.transitionHash, rngRootHash: row.rngRootHash,
-      postStateHash: row.postStateHash, previousReceiptHash: row.previousReceiptHash, receiptHash: row.receiptHash,
-    }));
-    const payloadJson = stableJson(payload);
-    const archiveHash = createHash("sha256").update(payloadJson, "utf8").digest("hex");
-    const [existing] = await db.select().from(aurionCausalArchive).where(eq(aurionCausalArchive.id, archiveId)).limit(1);
-    if (existing) {
-      if (existing.archiveHash !== archiveHash || existing.payloadJson !== payloadJson) throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archiveId}`);
-      return { archivedCount: rows.length, archiveId };
-    }
-    await db.insert(aurionCausalArchive).values({ id: archiveId, worldId: rows[0].worldId, zoneId, startTick, endTick, receiptCount: rows.length, archiveHash, payloadJson });
-    return { archivedCount: rows.length, archiveId };
+  async archiveOldReceipts(zoneId: string, beforeTick: number): Promise<{ archivedCount: number; archiveId: string; archiveIds: string[]; startTick: number; endTick: number } | null> {
+    const db = await getDb(); if (!db) throw new Error("CAUSAL_DATABASE_UNAVAILABLE");
+    if (!Number.isSafeInteger(beforeTick) || beforeTick < 1) throw new Error("CAUSAL_ARCHIVE_THRESHOLD_INVALID");
+    if (beforeTick === 1) return null;
+    return db.transaction(async tx => {
+      // Lock the retained prefix to serialize overlapping backup requests. No source rows are deleted.
+      const rows = await tx.select().from(aurionCausalTickReceipts)
+        .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), lt(aurionCausalTickReceipts.tick, beforeTick)))
+        .orderBy(aurionCausalTickReceipts.tick).for("update");
+      if (rows.length === 0) return null;
+      if (rows.length !== beforeTick - 1 || rows.some((row, index) => row.tick !== index + 1 || row.worldId !== rows[0].worldId)) {
+        throw new Error("CAUSAL_ARCHIVE_SOURCE_COVERAGE_INCOMPLETE");
+      }
+      for (const row of rows) this.mapReceipt(row);
+      const existing = await tx.select().from(aurionCausalArchive)
+        .where(and(eq(aurionCausalArchive.zoneId, zoneId), lt(aurionCausalArchive.startTick, beforeTick)))
+        .orderBy(aurionCausalArchive.startTick).for("update");
+      const archiveIds: string[] = [];
+      let coveredUntil = 0;
+      for (const archive of existing) {
+        if (archive.worldId !== rows[0].worldId || archive.startTick !== coveredUntil + 1 || archive.endTick < archive.startTick) {
+          throw new Error(`CAUSAL_ARCHIVE_COVERAGE_CONFLICT:${archive.id}`);
+        }
+        // A previous larger backup may already cover beyond this request. Verify that whole packet.
+        const source = await tx.select().from(aurionCausalTickReceipts)
+          .where(and(eq(aurionCausalTickReceipts.zoneId, zoneId), gt(aurionCausalTickReceipts.tick, archive.startTick - 1), lte(aurionCausalTickReceipts.tick, archive.endTick)))
+          .orderBy(aurionCausalTickReceipts.tick);
+        for (const row of source) this.mapReceipt(row);
+        const expected = stableJson(source.map(archiveReceiptPayload));
+        if (source.length !== archive.endTick - archive.startTick + 1 || archive.receiptCount !== source.length
+          || source.some(row => row.worldId !== archive.worldId)
+          || archive.payloadJson !== expected || archive.archiveHash !== causalArchiveHash(expected)) {
+          throw new Error(`CAUSAL_ARCHIVE_CONFLICT:${archive.id}`);
+        }
+        archiveIds.push(archive.id);
+        coveredUntil = archive.endTick;
+      }
+      // Keep persisted packet boundaries unchanged; append only the uncovered suffix.
+      const packets = packCausalArchivePayloads(rows.filter(row => row.tick > coveredUntil).map(archiveReceiptPayload));
+      for (const payloadJson of packets) {
+        const packet = JSON.parse(payloadJson) as ArchiveReceiptPayload[];
+        const startTick = packet[0].tick, endTick = packet[packet.length - 1].tick;
+        const archiveId = `arch_${zoneId}_${startTick}_${endTick}`;
+        const archiveHash = causalArchiveHash(payloadJson);
+        await tx.insert(aurionCausalArchive).values({ id: archiveId, worldId: rows[0].worldId, zoneId, startTick, endTick, receiptCount: packet.length, archiveHash, payloadJson });
+        const [readback] = await tx.select().from(aurionCausalArchive).where(eq(aurionCausalArchive.id, archiveId)).limit(1);
+        if (!readback || readback.archiveHash !== archiveHash || readback.payloadJson !== payloadJson
+          || readback.receiptCount !== packet.length || readback.startTick !== startTick || readback.endTick !== endTick) {
+          throw new Error(`CAUSAL_ARCHIVE_READBACK_MISMATCH:${archiveId}`);
+        }
+        archiveIds.push(archiveId);
+        coveredUntil = endTick;
+      }
+      if (coveredUntil < beforeTick - 1) throw new Error("CAUSAL_ARCHIVE_CHECKPOINT_NOT_COVERED");
+      return { archivedCount: coveredUntil, archiveId: archiveIds[archiveIds.length - 1], archiveIds, startTick: 1, endTick: coveredUntil };
+    });
   }
 
   async getArchiveStats(zoneId: string): Promise<{ totalArchives: number; totalArchivedReceipts: number }> {

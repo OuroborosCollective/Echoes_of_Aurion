@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { createPool } from "mysql2/promise";
 import {
   aurionCausalTickReceipts,
   aurionEffectIntents,
@@ -39,6 +40,40 @@ function testSocket() {
 }
 
 describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
+  let baseUrl: string;
+  let fixtureDatabase: string;
+  let fixtureCreated = false;
+  beforeAll(async () => {
+    baseUrl = process.env.DATABASE_URL!;
+    const url = new URL(baseUrl);
+    const sourceDatabase = url.pathname.slice(1);
+    fixtureDatabase = `${sourceDatabase}_closure_test`;
+    if (url.hostname !== "127.0.0.1" || !sourceDatabase.endsWith("_test") || !/^[a-zA-Z0-9_]+$/.test(fixtureDatabase)) {
+      throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+    }
+    // Earlier CI suites own independent zone histories at the same canonical
+    // world/zone/tick. Copy their migrated schema, never their runtime rows.
+    const admin = createPool(baseUrl);
+    try {
+      await admin.query(`DROP DATABASE IF EXISTS \`${fixtureDatabase}\``);
+      await admin.query(`CREATE DATABASE \`${fixtureDatabase}\``);
+      fixtureCreated = true;
+      const [tables] = await admin.query("SHOW TABLES");
+      for (const row of tables as Record<string, string>[]) {
+        const table = Object.values(row)[0];
+        if (!/^[a-zA-Z0-9_]+$/.test(table)) throw new Error("INVALID_FIXTURE_TABLE");
+        await admin.query(`CREATE TABLE \`${fixtureDatabase}\`.\`${table}\` LIKE \`${sourceDatabase}\`.\`${table}\``);
+      }
+    } finally { await admin.end(); }
+    url.pathname = `/${fixtureDatabase}`;
+    process.env.DATABASE_URL = url.toString();
+  });
+  afterAll(async () => {
+    if (!fixtureCreated) return;
+    const admin = createPool(baseUrl);
+    try { await admin.query(`DROP DATABASE IF EXISTS \`${fixtureDatabase}\``); }
+    finally { await admin.end(); process.env.DATABASE_URL = baseUrl; }
+  });
   beforeEach(() => cleanupQuestRegressionUser(TEST_USER_ID));
   afterEach(() => cleanupQuestRegressionUser(TEST_USER_ID));
 
@@ -179,6 +214,7 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     });
     zone.tick();
     await globalTickRecorder.flushPersistence();
+    expect(globalTickRecorder.getPersistenceStatus()).toMatchObject({ failures: 0, lastError: null });
 
     zone.enqueueIntent({
       type: "quest_hand_in",
@@ -206,6 +242,7 @@ describeReal("AIM-298 Quest causal closure — real MariaDB", () => {
     });
     zone.tick();
     await globalTickRecorder.flushPersistence();
+    expect(globalTickRecorder.getPersistenceStatus()).toMatchObject({ failures: 0, lastError: null });
     const epoch = await resolveAndRecordGlobalWorldEpoch({
       requestedByUserId: TEST_USER_ID,
       idempotencyKey: `aim298:quest:epoch:${offered.instance.id}`,
